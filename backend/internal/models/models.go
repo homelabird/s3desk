@@ -1,0 +1,227 @@
+package models
+
+type ErrorResponse struct {
+	Error APIError `json:"error"`
+}
+
+type APIError struct {
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+type Profile struct {
+	ID                    string `json:"id"`
+	Name                  string `json:"name"`
+	Endpoint              string `json:"endpoint"`
+	Region                string `json:"region"`
+	ForcePathStyle        bool   `json:"forcePathStyle"`
+	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
+	CreatedAt             string `json:"createdAt"`
+	UpdatedAt             string `json:"updatedAt"`
+}
+
+type ProfileSecrets struct {
+	ID                    string  `json:"-"`
+	Name                  string  `json:"-"`
+	Endpoint              string  `json:"-"`
+	Region                string  `json:"-"`
+	ForcePathStyle        bool    `json:"-"`
+	TLSInsecureSkipVerify bool    `json:"-"`
+	AccessKeyID           string  `json:"-"`
+	SecretAccessKey       string  `json:"-"`
+	SessionToken          *string `json:"-"`
+}
+
+type ProfileCreateRequest struct {
+	Name                  string  `json:"name"`
+	Endpoint              string  `json:"endpoint"`
+	Region                string  `json:"region"`
+	AccessKeyID           string  `json:"accessKeyId"`
+	SecretAccessKey       string  `json:"secretAccessKey"`
+	SessionToken          *string `json:"sessionToken"`
+	ForcePathStyle        bool    `json:"forcePathStyle"`
+	TLSInsecureSkipVerify bool    `json:"tlsInsecureSkipVerify"`
+}
+
+type ProfileUpdateRequest struct {
+	Name                  *string `json:"name,omitempty"`
+	Endpoint              *string `json:"endpoint,omitempty"`
+	Region                *string `json:"region,omitempty"`
+	AccessKeyID           *string `json:"accessKeyId,omitempty"`
+	SecretAccessKey       *string `json:"secretAccessKey,omitempty"`
+	SessionToken          *string `json:"sessionToken,omitempty"`
+	ForcePathStyle        *bool   `json:"forcePathStyle,omitempty"`
+	TLSInsecureSkipVerify *bool   `json:"tlsInsecureSkipVerify,omitempty"`
+}
+
+type ProfileTestResponse struct {
+	OK      bool           `json:"ok"`
+	Message string         `json:"message,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+type Bucket struct {
+	Name      string `json:"name"`
+	CreatedAt string `json:"createdAt,omitempty"`
+}
+
+type BucketCreateRequest struct {
+	Name   string `json:"name"`
+	Region string `json:"region,omitempty"`
+}
+
+type ObjectItem struct {
+	Key          string `json:"key"`
+	Size         int64  `json:"size"`
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"lastModified"`
+	StorageClass string `json:"storageClass,omitempty"`
+}
+
+type ListObjectsResponse struct {
+	Bucket                string       `json:"bucket"`
+	Prefix                string       `json:"prefix"`
+	Delimiter             string       `json:"delimiter"`
+	CommonPrefixes        []string     `json:"commonPrefixes"`
+	Items                 []ObjectItem `json:"items"`
+	NextContinuationToken *string      `json:"nextContinuationToken,omitempty"`
+	IsTruncated           bool         `json:"isTruncated"`
+}
+
+type SearchObjectsResponse struct {
+	Bucket     string       `json:"bucket"`
+	Query      string       `json:"query"`
+	Prefix     string       `json:"prefix,omitempty"`
+	Items      []ObjectItem `json:"items"`
+	NextCursor *string      `json:"nextCursor,omitempty"`
+}
+
+type ObjectIndexSummaryResponse struct {
+	Bucket      string   `json:"bucket"`
+	Prefix      string   `json:"prefix,omitempty"`
+	ObjectCount int64    `json:"objectCount"`
+	TotalBytes  int64    `json:"totalBytes"`
+	SampleKeys  []string `json:"sampleKeys"`
+	IndexedAt   *string  `json:"indexedAt,omitempty"`
+}
+
+type LocalEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"isDir"`
+}
+
+type ListLocalEntriesResponse struct {
+	BasePath string       `json:"basePath,omitempty"`
+	Entries  []LocalEntry `json:"entries"`
+}
+
+type ObjectMeta struct {
+	Key          string            `json:"key"`
+	Size         int64             `json:"size"`
+	ETag         string            `json:"etag,omitempty"`
+	LastModified string            `json:"lastModified,omitempty"`
+	ContentType  string            `json:"contentType,omitempty"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+}
+
+type PresignedURLResponse struct {
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type CreateFolderRequest struct {
+	Key string `json:"key"`
+}
+
+type CreateFolderResponse struct {
+	Key string `json:"key"`
+}
+
+type DeleteObjectsRequest struct {
+	Keys []string `json:"keys"`
+}
+
+type DeleteObjectsResponse struct {
+	Deleted int `json:"deleted"`
+}
+
+type UploadCreateRequest struct {
+	Bucket string `json:"bucket"`
+	Prefix string `json:"prefix,omitempty"`
+}
+
+type UploadCreateResponse struct {
+	UploadID  string `json:"uploadId"`
+	MaxBytes  *int64 `json:"maxBytes,omitempty"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type JobStatus string
+
+const (
+	JobStatusQueued    JobStatus = "queued"
+	JobStatusRunning   JobStatus = "running"
+	JobStatusSucceeded JobStatus = "succeeded"
+	JobStatusFailed    JobStatus = "failed"
+	JobStatusCanceled  JobStatus = "canceled"
+)
+
+type JobProgress struct {
+	ObjectsDone      *int64 `json:"objectsDone,omitempty"`
+	ObjectsTotal     *int64 `json:"objectsTotal,omitempty"`
+	ObjectsPerSecond *int64 `json:"objectsPerSecond,omitempty"`
+	BytesDone        *int64 `json:"bytesDone,omitempty"`
+	BytesTotal       *int64 `json:"bytesTotal,omitempty"`
+	SpeedBps         *int64 `json:"speedBps,omitempty"`
+	EtaSeconds       *int   `json:"etaSeconds,omitempty"`
+}
+
+type Job struct {
+	ID         string         `json:"id"`
+	Type       string         `json:"type"`
+	Status     JobStatus      `json:"status"`
+	Payload    map[string]any `json:"payload"`
+	Progress   *JobProgress   `json:"progress,omitempty"`
+	Error      *string        `json:"error,omitempty"`
+	CreatedAt  string         `json:"createdAt"`
+	StartedAt  *string        `json:"startedAt,omitempty"`
+	FinishedAt *string        `json:"finishedAt,omitempty"`
+}
+
+type JobCreateRequest struct {
+	Type    string         `json:"type"`
+	Payload map[string]any `json:"payload"`
+}
+
+type JobCreatedResponse struct {
+	JobID string `json:"jobId"`
+}
+
+type JobsListResponse struct {
+	Items      []Job   `json:"items"`
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+type MetaResponse struct {
+	Version                 string    `json:"version"`
+	ServerAddr              string    `json:"serverAddr"`
+	DataDir                 string    `json:"dataDir"`
+	StaticDir               string    `json:"staticDir"`
+	APITokenEnabled         bool      `json:"apiTokenEnabled"`
+	EncryptionEnabled       bool      `json:"encryptionEnabled"`
+	AllowedLocalDirs        []string  `json:"allowedLocalDirs,omitempty"`
+	JobConcurrency          int       `json:"jobConcurrency"`
+	JobLogMaxBytes          *int64    `json:"jobLogMaxBytes,omitempty"`
+	JobRetentionSeconds     *int64    `json:"jobRetentionSeconds,omitempty"`
+	UploadSessionTTLSeconds int64     `json:"uploadSessionTTLSeconds"`
+	UploadMaxBytes          *int64    `json:"uploadMaxBytes,omitempty"`
+	S5Cmd                   S5CmdInfo `json:"s5cmd"`
+}
+
+type S5CmdInfo struct {
+	Available bool   `json:"available"`
+	Path      string `json:"path,omitempty"`
+	Version   string `json:"version,omitempty"`
+}

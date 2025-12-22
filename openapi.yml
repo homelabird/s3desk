@@ -1,0 +1,1517 @@
+openapi: 3.0.3
+info:
+  title: Local Object Storage Dashboard API
+  version: 0.1.0
+  description: |
+    Draft API spec for a local-only (127.0.0.1) dashboard targeting S3-compatible object storage.
+    - Metadata/browsing uses S3 APIs (AWS SDK).
+    - Bulk transfers run as Jobs powered by `s5cmd`.
+servers:
+  - url: http://127.0.0.1:8080/api/v1
+    description: Default local server
+tags:
+  - name: Profiles
+  - name: Buckets
+  - name: Objects
+  - name: Uploads
+  - name: Jobs
+  - name: Events
+  - name: System
+paths:
+  /ws:
+    get:
+      tags: [Events]
+      summary: WebSocket event stream
+      description: |
+        Upgrades to a WebSocket and streams `job.*` events.
+
+        If `API_TOKEN` is configured, browsers should pass it via query `?apiToken=...` (WebSocket cannot set custom headers).
+
+        Optional: `afterSeq` can be used to replay buffered (non-log) events after a given sequence number.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - name: apiToken
+          in: query
+          required: false
+          schema: { type: string }
+        - name: afterSeq
+          in: query
+          required: false
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: includeLogs
+          in: query
+          required: false
+          description: Whether to include `job.log` events in the stream.
+          schema: { type: boolean, default: true }
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /events:
+    get:
+      tags: [Events]
+      summary: Server-sent events (SSE) stream
+      description: |
+        Streams `job.*` events using `text/event-stream` (one JSON event per `data:` line).
+
+        If `API_TOKEN` is configured, browsers should pass it via query `?apiToken=...` (EventSource cannot set custom headers).
+
+        Each message includes an SSE `id:` equal to the server-side event `seq`. When reconnecting, clients may send `Last-Event-ID` (or `afterSeq`) to receive buffered (non-log) events that were missed.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - name: apiToken
+          in: query
+          required: false
+          schema: { type: string }
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: afterSeq
+          in: query
+          required: false
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: includeLogs
+          in: query
+          required: false
+          description: Whether to include `job.log` events in the stream.
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /meta:
+    get:
+      tags: [System]
+      summary: Server metadata
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /profiles:
+    get:
+      tags: [Profiles]
+      summary: List profiles
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+    post:
+      tags: [Profiles]
+      summary: Create profile
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /profiles/{profileId}:
+    patch:
+      tags: [Profiles]
+      summary: Update profile
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Profiles]
+      summary: Delete profile
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /profiles/{profileId}/test:
+    post:
+      tags: [Profiles]
+      summary: Test connectivity/credentials for a profile
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileTestResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets:
+    get:
+      tags: [Buckets]
+      summary: List buckets
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bucket"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [Buckets]
+      summary: Create bucket
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bucket"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}:
+    delete:
+      tags: [Buckets]
+      summary: Delete bucket
+      description: |
+        Deletes an empty bucket. If the bucket is not empty, the server returns `409 bucket_not_empty`.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects:
+    get:
+      tags: [Objects]
+      summary: List objects and common prefixes (folder-like browsing)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: prefix
+          in: query
+          schema: { type: string, default: "" }
+        - name: delimiter
+          in: query
+          schema: { type: string, default: "/" }
+        - name: maxKeys
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 500 }
+        - name: continuationToken
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListObjectsResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Objects]
+      summary: Delete objects (batch)
+      description: For large batches, prefer using a Job.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteObjectsRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteObjectsResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/search:
+    get:
+      tags: [Objects]
+      summary: Search objects (indexed)
+      description: |
+        Searches a locally stored index of object keys for the given bucket.
+        If the index has not been created yet, the server returns `409 not_indexed`.
+        Create the index using the `s3_index_objects` job type.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: prefix
+          in: query
+          required: false
+          schema: { type: string, default: "" }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+        - name: ext
+          in: query
+          required: false
+          schema: { type: string, description: "File extension filter (without dot)" }
+        - name: minSize
+          in: query
+          required: false
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: maxSize
+          in: query
+          required: false
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: modifiedAfter
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: modifiedBefore
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchObjectsResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/index-summary:
+    get:
+      tags: [Objects]
+      summary: Get object index summary for a prefix
+      description: |
+        Returns an estimate of impact (count/bytes/sample) using the local object index.
+        If the index has not been created yet, the server returns `409 not_indexed`.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: prefix
+          in: query
+          required: false
+          schema: { type: string, default: "" }
+        - name: sampleLimit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, maximum: 100, default: 10 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectIndexSummaryResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/meta:
+    get:
+      tags: [Objects]
+      summary: Get object metadata (HEAD)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectMeta"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/folder:
+    post:
+      tags: [Objects]
+      summary: Create a folder (prefix marker)
+      description: |
+        Creates a zero-byte object whose key ends with `/` so the prefix shows up as a folder in list operations.
+        If the object already exists, the server returns `409 already_exists`.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFolderRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateFolderResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/download:
+    get:
+      tags: [Objects]
+      summary: Download an object (server proxy)
+      description: |
+        Streams an object through this server as an attachment download.
+        Useful for same-origin downloads (progress/ETA in the UI) and to avoid S3 CORS configuration.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/download-url:
+    get:
+      tags: [Objects]
+      summary: Get a presigned download URL (GET object)
+      description: |
+        Returns a presigned URL for downloading an object directly from S3.
+        This does not verify the object exists; the S3 request may still return 404.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: expiresSeconds
+          in: query
+          required: false
+          schema: { type: integer, minimum: 60, maximum: 3600, default: 900 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignedURLResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads:
+    post:
+      tags: [Uploads]
+      summary: Create a staging upload session
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadCreateResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads/{uploadId}/files:
+    post:
+      tags: [Uploads]
+      summary: Upload files to staging (multipart/form-data)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "204":
+          description: No Content
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads/{uploadId}/commit:
+    post:
+      tags: [Uploads]
+      summary: Commit staged files to S3 (creates a Job)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCreatedResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads/{uploadId}:
+    delete:
+      tags: [Uploads]
+      summary: Cancel upload session and cleanup staging
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      summary: List jobs
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/JobStatus" }
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobsListResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [Jobs]
+      summary: Create job (bulk transfer/sync/etc.)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      summary: Get job
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Jobs]
+      summary: Delete job record (and its log file)
+      description: Only allowed for non-active jobs (succeeded/failed/canceled). Cancel queued/running jobs first.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}/artifact:
+    get:
+      tags: [Jobs]
+      summary: Download job artifact (zip)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}/logs:
+    get:
+      tags: [Jobs]
+      summary: Get job logs (tail or incremental)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/JobId"
+        - name: afterOffset
+          in: query
+          required: false
+          description: |
+            If set, reads the log file starting from this byte offset (0-based) and returns up to `maxBytes`.
+            Response header `X-Log-Next-Offset` can be used as the next `afterOffset` value.
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: maxBytes
+          in: query
+          required: false
+          description: Maximum number of bytes to read when using `afterOffset`.
+          schema: { type: integer, minimum: 1, maximum: 1048576, default: 65536 }
+        - name: tailBytes
+          in: query
+          required: false
+          description: Number of bytes to read from the end of the log file.
+          schema: { type: integer, minimum: 1, maximum: 1048576, default: 65536 }
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Log-Next-Offset:
+              description: Next byte offset to use as `afterOffset`.
+              schema: { type: integer, format: int64 }
+          content:
+            text/plain:
+              schema: { type: string }
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}/retry:
+    post:
+      tags: [Jobs]
+      summary: Retry job (creates a new queued job)
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /jobs/{jobId}/cancel:
+    post:
+      tags: [Jobs]
+      summary: Cancel job
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /local/entries:
+    get:
+      tags: [Local]
+      summary: List local directory entries (allowed roots only)
+      description: |
+        Lists directories under `ALLOWED_LOCAL_DIRS` for safe local-path selection.
+        If `path` is omitted, returns the allowed roots.
+        If `ALLOWED_LOCAL_DIRS` is not configured, the server returns `400 not_configured`.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - name: path
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 2000 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLocalEntriesResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+components:
+  parameters:
+    XProfileId:
+      name: X-Profile-Id
+      in: header
+      required: true
+      schema: { type: string, minLength: 1 }
+    XApiToken:
+      name: X-Api-Token
+      in: header
+      required: false
+      description: Optional local API token to mitigate localhost/CSRF style attacks.
+      schema: { type: string }
+    ProfileId:
+      name: profileId
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    BucketName:
+      name: bucket
+      in: path
+      required: true
+      schema: { type: string, minLength: 3 }
+    UploadId:
+      name: uploadId
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+
+  responses:
+    ErrorResponse:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+
+    Profile:
+      type: object
+      required: [id, name, endpoint, region, forcePathStyle, tlsInsecureSkipVerify, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        endpoint: { type: string }
+        region: { type: string }
+        forcePathStyle: { type: boolean }
+        tlsInsecureSkipVerify: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProfileCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, tlsInsecureSkipVerify]
+      properties:
+        name: { type: string }
+        endpoint: { type: string }
+        region: { type: string }
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        sessionToken: { type: string, nullable: true }
+        forcePathStyle: { type: boolean, default: false }
+        tlsInsecureSkipVerify: { type: boolean, default: false }
+
+    ProfileUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        endpoint: { type: string }
+        region: { type: string }
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        sessionToken:
+          type: string
+          nullable: true
+          description: Set to empty string to clear; omit to keep unchanged.
+        forcePathStyle: { type: boolean }
+        tlsInsecureSkipVerify: { type: boolean }
+
+    ProfileTestResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+
+    Bucket:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    BucketCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string }
+        region: { type: string }
+
+    ObjectItem:
+      type: object
+      required: [key, size, lastModified]
+      properties:
+        key: { type: string }
+        size: { type: integer, format: int64 }
+        etag: { type: string }
+        lastModified: { type: string, format: date-time }
+        storageClass: { type: string }
+
+    ListObjectsResponse:
+      type: object
+      required: [bucket, prefix, delimiter, commonPrefixes, items, isTruncated]
+      properties:
+        bucket: { type: string }
+        prefix: { type: string }
+        delimiter: { type: string }
+        commonPrefixes:
+          type: array
+          items: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ObjectItem" }
+        nextContinuationToken: { type: string, nullable: true }
+        isTruncated: { type: boolean }
+
+    SearchObjectsResponse:
+      type: object
+      required: [bucket, query, items]
+      properties:
+        bucket: { type: string }
+        query: { type: string }
+        prefix: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ObjectItem" }
+        nextCursor: { type: string, nullable: true }
+
+    ObjectIndexSummaryResponse:
+      type: object
+      required: [bucket, objectCount, totalBytes, sampleKeys]
+      properties:
+        bucket: { type: string }
+        prefix: { type: string }
+        objectCount: { type: integer, format: int64 }
+        totalBytes: { type: integer, format: int64 }
+        sampleKeys:
+          type: array
+          items: { type: string }
+        indexedAt: { type: string, format: date-time, nullable: true }
+
+    LocalEntry:
+      type: object
+      required: [name, path, isDir]
+      properties:
+        name: { type: string }
+        path: { type: string }
+        isDir: { type: boolean }
+
+    ListLocalEntriesResponse:
+      type: object
+      required: [entries]
+      properties:
+        basePath: { type: string }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/LocalEntry" }
+
+    ObjectMeta:
+      type: object
+      required: [key]
+      properties:
+        key: { type: string }
+        size: { type: integer, format: int64 }
+        etag: { type: string }
+        lastModified: { type: string, format: date-time }
+        contentType: { type: string }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+
+    PresignedURLResponse:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+
+    CreateFolderRequest:
+      type: object
+      additionalProperties: false
+      required: [key]
+      properties:
+        key: { type: string, minLength: 1, description: Object key ending with `/` }
+
+    CreateFolderResponse:
+      type: object
+      additionalProperties: false
+      required: [key]
+      properties:
+        key: { type: string }
+
+    DeleteObjectsRequest:
+      type: object
+      additionalProperties: false
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: { type: string, minLength: 1 }
+
+    DeleteObjectsResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+          minimum: 0
+
+    UploadCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [bucket]
+      properties:
+        bucket: { type: string }
+        prefix: { type: string, default: "" }
+
+    UploadCreateResponse:
+      type: object
+      required: [uploadId, expiresAt]
+      properties:
+        uploadId: { type: string }
+        maxBytes: { type: integer, format: int64, nullable: true }
+        expiresAt: { type: string, format: date-time }
+
+    JobStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, canceled]
+
+    JobType:
+      type: string
+      description: Supported job types.
+      enum:
+        - s5cmd_sync_local_to_s3
+        - s5cmd_sync_staging_to_s3
+        - s5cmd_sync_s3_to_local
+        - s5cmd_rm_prefix
+        - s3_zip_prefix
+        - s3_zip_objects
+        - s3_delete_objects
+        - s3_index_objects
+        - s5cmd_cp_s3_to_s3
+        - s5cmd_mv_s3_to_s3
+        - s5cmd_cp_s3_to_s3_batch
+        - s5cmd_mv_s3_to_s3_batch
+        - s5cmd_cp_s3_prefix_to_s3_prefix
+        - s5cmd_mv_s3_prefix_to_s3_prefix
+
+    S5CmdSyncLocalToS3Payload:
+      type: object
+      additionalProperties: false
+      required: [bucket, localPath]
+      properties:
+        bucket: { type: string, minLength: 1 }
+        prefix: { type: string, default: "" }
+        localPath: { type: string, minLength: 1 }
+        deleteExtraneous: { type: boolean, default: false }
+        include:
+          type: array
+          items: { type: string }
+        exclude:
+          type: array
+          items: { type: string }
+        dryRun: { type: boolean, default: false }
+
+    S5CmdSyncStagingToS3Payload:
+      type: object
+      additionalProperties: false
+      required: [uploadId]
+      properties:
+        uploadId: { type: string, minLength: 1 }
+
+    S5CmdSyncS3ToLocalPayload:
+      type: object
+      additionalProperties: false
+      required: [bucket, localPath]
+      properties:
+        bucket: { type: string, minLength: 1 }
+        prefix: { type: string, default: "" }
+        localPath: { type: string, minLength: 1, description: Local destination directory path }
+        deleteExtraneous: { type: boolean, default: false, description: Delete local files that are not in S3 (s5cmd --delete) }
+        include:
+          type: array
+          items: { type: string }
+        exclude:
+          type: array
+          items: { type: string }
+        dryRun: { type: boolean, default: false }
+
+    S5CmdRmPrefixPayload:
+      type: object
+      additionalProperties: false
+      required: [bucket]
+      description: |
+        Either provide `prefix` (recommended to end with `/`) or set `deleteAll=true` to delete all objects in the bucket.
+      properties:
+        bucket: { type: string, minLength: 1 }
+        prefix: { type: string, default: "" }
+        deleteAll: { type: boolean, default: false }
+        allowUnsafePrefix: { type: boolean, default: false }
+        include:
+          type: array
+          items: { type: string }
+        exclude:
+          type: array
+          items: { type: string }
+        dryRun: { type: boolean, default: false }
+
+    S3ZipPrefixPayload:
+      type: object
+      additionalProperties: false
+      required: [bucket]
+      properties:
+        bucket: { type: string, minLength: 1 }
+        prefix: { type: string, default: "", description: Prefix to zip (optional). }
+
+    S3ZipObjectsPayload:
+      type: object
+      additionalProperties: false
+      required: [bucket, keys]
+      properties:
+        bucket: { type: string, minLength: 1 }
+        keys:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items: { type: string, minLength: 1 }
+        stripPrefix:
+          type: string
+          default: ""
+          description: If set, removes this prefix from object keys inside the zip.
+
+    S3DeleteObjectsPayload:
+      type: object
+      additionalProperties: false
+      required: [bucket, keys]
+      properties:
+        bucket: { type: string, minLength: 1 }
+        keys:
+          type: array
+          minItems: 1
+          maxItems: 50000
+          items: { type: string, minLength: 1 }
+
+    S3IndexObjectsPayload:
+      type: object
+      additionalProperties: false
+      required: [bucket]
+      properties:
+        bucket: { type: string, minLength: 1 }
+        prefix: { type: string, default: "" }
+        fullReindex: { type: boolean, default: true, description: Clear existing index entries for this bucket/prefix before indexing. }
+
+    S5CmdCpS3ToS3Payload:
+      type: object
+      additionalProperties: false
+      required: [srcBucket, srcKey, dstBucket, dstKey]
+      properties:
+        srcBucket: { type: string, minLength: 1 }
+        srcKey: { type: string, minLength: 1 }
+        dstBucket: { type: string, minLength: 1 }
+        dstKey: { type: string, minLength: 1 }
+        dryRun: { type: boolean, default: false }
+
+    S5CmdMvS3ToS3Payload:
+      type: object
+      additionalProperties: false
+      required: [srcBucket, srcKey, dstBucket, dstKey]
+      properties:
+        srcBucket: { type: string, minLength: 1 }
+        srcKey: { type: string, minLength: 1 }
+        dstBucket: { type: string, minLength: 1 }
+        dstKey: { type: string, minLength: 1 }
+        dryRun: { type: boolean, default: false }
+
+    S5CmdCpMvS3ToS3BatchItem:
+      type: object
+      additionalProperties: false
+      required: [srcKey, dstKey]
+      properties:
+        srcKey: { type: string, minLength: 1 }
+        dstKey: { type: string, minLength: 1 }
+
+    S5CmdCpS3ToS3BatchPayload:
+      type: object
+      additionalProperties: false
+      required: [srcBucket, dstBucket, items]
+      properties:
+        srcBucket: { type: string, minLength: 1 }
+        dstBucket: { type: string, minLength: 1 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items: { $ref: "#/components/schemas/S5CmdCpMvS3ToS3BatchItem" }
+        dryRun: { type: boolean, default: false }
+
+    S5CmdMvS3ToS3BatchPayload:
+      type: object
+      additionalProperties: false
+      required: [srcBucket, dstBucket, items]
+      properties:
+        srcBucket: { type: string, minLength: 1 }
+        dstBucket: { type: string, minLength: 1 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items: { $ref: "#/components/schemas/S5CmdCpMvS3ToS3BatchItem" }
+        dryRun: { type: boolean, default: false }
+
+    S5CmdCpS3PrefixToS3PrefixPayload:
+      type: object
+      additionalProperties: false
+      required: [srcBucket, srcPrefix, dstBucket]
+      properties:
+        srcBucket: { type: string, minLength: 1 }
+        srcPrefix: { type: string, minLength: 1, description: Must end with `/` }
+        dstBucket: { type: string, minLength: 1 }
+        dstPrefix: { type: string, default: "" }
+        include:
+          type: array
+          items: { type: string }
+        exclude:
+          type: array
+          items: { type: string }
+        dryRun: { type: boolean, default: false }
+
+    S5CmdMvS3PrefixToS3PrefixPayload:
+      type: object
+      additionalProperties: false
+      required: [srcBucket, srcPrefix, dstBucket]
+      properties:
+        srcBucket: { type: string, minLength: 1 }
+        srcPrefix: { type: string, minLength: 1, description: Must end with `/` }
+        dstBucket: { type: string, minLength: 1 }
+        dstPrefix: { type: string, default: "" }
+        include:
+          type: array
+          items: { type: string }
+        exclude:
+          type: array
+          items: { type: string }
+        dryRun: { type: boolean, default: false }
+
+    JobCreateRequestS5CmdSyncLocalToS3:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_sync_local_to_s3] }
+        payload: { $ref: "#/components/schemas/S5CmdSyncLocalToS3Payload" }
+
+    JobCreateRequestS5CmdSyncStagingToS3:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_sync_staging_to_s3] }
+        payload: { $ref: "#/components/schemas/S5CmdSyncStagingToS3Payload" }
+
+    JobCreateRequestS5CmdSyncS3ToLocal:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_sync_s3_to_local] }
+        payload: { $ref: "#/components/schemas/S5CmdSyncS3ToLocalPayload" }
+
+    JobCreateRequestS5CmdRmPrefix:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_rm_prefix] }
+        payload: { $ref: "#/components/schemas/S5CmdRmPrefixPayload" }
+
+    JobCreateRequestS3ZipPrefix:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s3_zip_prefix] }
+        payload: { $ref: "#/components/schemas/S3ZipPrefixPayload" }
+
+    JobCreateRequestS3ZipObjects:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s3_zip_objects] }
+        payload: { $ref: "#/components/schemas/S3ZipObjectsPayload" }
+
+    JobCreateRequestS3DeleteObjects:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s3_delete_objects] }
+        payload: { $ref: "#/components/schemas/S3DeleteObjectsPayload" }
+
+    JobCreateRequestS3IndexObjects:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s3_index_objects] }
+        payload: { $ref: "#/components/schemas/S3IndexObjectsPayload" }
+
+    JobCreateRequestS5CmdCpS3ToS3:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_cp_s3_to_s3] }
+        payload: { $ref: "#/components/schemas/S5CmdCpS3ToS3Payload" }
+
+    JobCreateRequestS5CmdMvS3ToS3:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_mv_s3_to_s3] }
+        payload: { $ref: "#/components/schemas/S5CmdMvS3ToS3Payload" }
+
+    JobCreateRequestS5CmdCpS3ToS3Batch:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_cp_s3_to_s3_batch] }
+        payload: { $ref: "#/components/schemas/S5CmdCpS3ToS3BatchPayload" }
+
+    JobCreateRequestS5CmdMvS3ToS3Batch:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_mv_s3_to_s3_batch] }
+        payload: { $ref: "#/components/schemas/S5CmdMvS3ToS3BatchPayload" }
+
+    JobCreateRequestS5CmdCpS3PrefixToS3Prefix:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_cp_s3_prefix_to_s3_prefix] }
+        payload: { $ref: "#/components/schemas/S5CmdCpS3PrefixToS3PrefixPayload" }
+
+    JobCreateRequestS5CmdMvS3PrefixToS3Prefix:
+      type: object
+      additionalProperties: false
+      required: [type, payload]
+      properties:
+        type: { type: string, enum: [s5cmd_mv_s3_prefix_to_s3_prefix] }
+        payload: { $ref: "#/components/schemas/S5CmdMvS3PrefixToS3PrefixPayload" }
+
+    JobProgress:
+      type: object
+      properties:
+        objectsDone: { type: integer, format: int64 }
+        objectsTotal: { type: integer, format: int64, nullable: true }
+        objectsPerSecond: { type: integer, format: int64, nullable: true }
+        bytesDone: { type: integer, format: int64 }
+        bytesTotal: { type: integer, format: int64, nullable: true }
+        speedBps: { type: integer, format: int64, nullable: true }
+        etaSeconds: { type: integer, nullable: true }
+
+    Job:
+      type: object
+      required: [id, type, status, payload, createdAt]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/JobType" }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        payload:
+          type: object
+          additionalProperties: true
+        progress: { $ref: "#/components/schemas/JobProgress" }
+        error: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    JobCreateRequest:
+      oneOf:
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdSyncLocalToS3"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdSyncStagingToS3"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdSyncS3ToLocal"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdRmPrefix"
+        - $ref: "#/components/schemas/JobCreateRequestS3ZipPrefix"
+        - $ref: "#/components/schemas/JobCreateRequestS3ZipObjects"
+        - $ref: "#/components/schemas/JobCreateRequestS3DeleteObjects"
+        - $ref: "#/components/schemas/JobCreateRequestS3IndexObjects"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3Batch"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3Batch"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdCpS3PrefixToS3Prefix"
+        - $ref: "#/components/schemas/JobCreateRequestS5CmdMvS3PrefixToS3Prefix"
+      discriminator:
+        propertyName: type
+        mapping:
+          s5cmd_sync_local_to_s3: "#/components/schemas/JobCreateRequestS5CmdSyncLocalToS3"
+          s5cmd_sync_staging_to_s3: "#/components/schemas/JobCreateRequestS5CmdSyncStagingToS3"
+          s5cmd_sync_s3_to_local: "#/components/schemas/JobCreateRequestS5CmdSyncS3ToLocal"
+          s5cmd_rm_prefix: "#/components/schemas/JobCreateRequestS5CmdRmPrefix"
+          s3_zip_prefix: "#/components/schemas/JobCreateRequestS3ZipPrefix"
+          s3_zip_objects: "#/components/schemas/JobCreateRequestS3ZipObjects"
+          s3_delete_objects: "#/components/schemas/JobCreateRequestS3DeleteObjects"
+          s3_index_objects: "#/components/schemas/JobCreateRequestS3IndexObjects"
+          s5cmd_cp_s3_to_s3: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3"
+          s5cmd_mv_s3_to_s3: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3"
+          s5cmd_cp_s3_to_s3_batch: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3Batch"
+          s5cmd_mv_s3_to_s3_batch: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3Batch"
+          s5cmd_cp_s3_prefix_to_s3_prefix: "#/components/schemas/JobCreateRequestS5CmdCpS3PrefixToS3Prefix"
+          s5cmd_mv_s3_prefix_to_s3_prefix: "#/components/schemas/JobCreateRequestS5CmdMvS3PrefixToS3Prefix"
+
+    JobCreatedResponse:
+      type: object
+      required: [jobId]
+      properties:
+        jobId: { type: string }
+
+    JobsListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Job" }
+        nextCursor: { type: string, nullable: true }
+
+    MetaResponse:
+      type: object
+      required:
+        - version
+        - serverAddr
+        - dataDir
+        - staticDir
+        - apiTokenEnabled
+        - encryptionEnabled
+        - jobConcurrency
+        - uploadSessionTTLSeconds
+        - s5cmd
+      properties:
+        version: { type: string }
+        serverAddr: { type: string }
+        dataDir: { type: string }
+        staticDir: { type: string }
+        apiTokenEnabled: { type: boolean }
+        encryptionEnabled: { type: boolean }
+        allowedLocalDirs:
+          type: array
+          items: { type: string }
+        jobConcurrency: { type: integer }
+        jobLogMaxBytes: { type: integer, format: int64, nullable: true }
+        jobRetentionSeconds: { type: integer, format: int64, nullable: true }
+        uploadSessionTTLSeconds: { type: integer, format: int64 }
+        uploadMaxBytes: { type: integer, format: int64, nullable: true }
+        s5cmd:
+          type: object
+          required: [available]
+          properties:
+            available: { type: boolean }
+            path: { type: string }
+            version: { type: string }

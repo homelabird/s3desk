@@ -1,0 +1,46 @@
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, RefObject } from 'react'
+
+import styles from './objects.module.css'
+import { ObjectsListSection } from './ObjectsListSection'
+
+type ObjectsListSectionContainerProps = {
+	controls: ReactNode
+	alerts?: ReactNode
+	selectionBar: ReactNode
+	listHeader: ReactNode
+	listContent: ReactNode
+	listScrollerRef: RefObject<HTMLDivElement | null>
+	listScrollerTabIndex?: number
+	onListScrollerClick?: (e: MouseEvent<HTMLDivElement>) => void
+	onListScrollerKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void
+	uploadDropActive: boolean
+	uploadDropLabel: string
+	onUploadDragEnter: (e: DragEvent) => void
+	onUploadDragLeave: (e: DragEvent) => void
+	onUploadDragOver: (e: DragEvent) => void
+	onUploadDrop: (e: DragEvent) => void
+}
+
+export function ObjectsListSectionContainer(props: ObjectsListSectionContainerProps) {
+	return (
+		<div className={`${styles.layoutPane} ${styles.layoutListPane}`}>
+			<ObjectsListSection
+				controls={props.controls}
+				alerts={props.alerts}
+				selectionBar={props.selectionBar}
+				listHeader={props.listHeader}
+				listContent={props.listContent}
+				listScrollerRef={props.listScrollerRef}
+				listScrollerTabIndex={props.listScrollerTabIndex}
+				onListScrollerClick={props.onListScrollerClick}
+				onListScrollerKeyDown={props.onListScrollerKeyDown}
+				uploadDropActive={props.uploadDropActive}
+				uploadDropLabel={props.uploadDropLabel}
+				onUploadDragEnter={props.onUploadDragEnter}
+				onUploadDragLeave={props.onUploadDragLeave}
+				onUploadDragOver={props.onUploadDragOver}
+				onUploadDrop={props.onUploadDrop}
+			/>
+		</div>
+	)
+}
