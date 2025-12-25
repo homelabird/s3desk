@@ -64,8 +64,15 @@ export function ProfilesPage(props: Props) {
 		mutationFn: (id: string) => api.testProfile(id),
 		onMutate: (id) => setTestingProfileId(id),
 		onSuccess: (resp) => {
-			if (resp.ok) message.success('Profile test OK')
-			else message.warning(resp.message ?? 'Profile test failed')
+			const details = resp.details ?? {}
+			const storageType = typeof details.storageType === 'string' ? details.storageType : ''
+			const buckets = typeof details.buckets === 'number' ? details.buckets : null
+			const suffixParts: string[] = []
+			if (storageType) suffixParts.push(`type: ${storageType}`)
+			if (typeof buckets === 'number') suffixParts.push(`buckets: ${buckets}`)
+			const suffix = suffixParts.length ? ` (${suffixParts.join(', ')})` : ''
+			if (resp.ok) message.success(`Profile test OK${suffix}`)
+			else message.warning(`${resp.message ?? 'Profile test failed'}${suffix}`)
 		},
 		onSettled: (_, __, id) => setTestingProfileId((prev) => (prev === id ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),
@@ -290,7 +297,7 @@ function ProfileModal(props: {
 					rules={props.editMode ? [] : [{ required: true }]}
 					style={{ flex: '1 1 260px', minWidth: 0 }}
 				>
-					<Input autoComplete="off" />
+					<Input autoComplete="username" />
 				</Form.Item>
 				<Form.Item
 					name="secretAccessKey"
@@ -298,7 +305,7 @@ function ProfileModal(props: {
 					rules={props.editMode ? [] : [{ required: true }]}
 					style={{ flex: '1 1 260px', minWidth: 0 }}
 				>
-					<Input.Password autoComplete="off" />
+					<Input.Password autoComplete="new-password" />
 				</Form.Item>
 			</Space>
 
