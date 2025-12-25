@@ -22,11 +22,14 @@ podman run --rm -p 8080:8080 \
   -e ADDR=0.0.0.0:8080 \
   -e ALLOW_REMOTE=true \
   -e API_TOKEN=change-me \
+  -e ALLOWED_HOSTS=object-storage.local \
   -e JOB_QUEUE_CAPACITY=256 \
   -e JOB_LOG_MAX_LINE_BYTES=262144 \
   -v object-storage-data:/data \
   object-storage:local
 ```
+
+- 로컬 도메인(예: `object-storage.local`)으로 접속하는 경우 `ALLOWED_HOSTS`에 호스트를 추가해야 Host/Origin 검사에서 차단되지 않습니다.
 
 ## 3) Profile 만들기 (S3/CEPH 접속 정보)
 
@@ -50,6 +53,15 @@ Profile 생성 후 **상단(Profile Select)** 에서 해당 Profile을 선택하
 
 > 보안 주의: Profile 자격증명은 `DATA_DIR/object-storage.db`에 저장됩니다(ENCRYPTION_KEY 설정 시 암호화).
 > 이 DB는 로컬 전용으로만 보관하고 커밋/공유하지 마세요. 유출 가능성이 있으면 즉시 키를 회전하세요.
+
+### mTLS (클라이언트 인증서) 설정
+
+- mTLS 설정은 **서버에 `ENCRYPTION_KEY`가 설정되어 있어야** 활성화됩니다. 없으면 UI에서 비활성화됩니다.
+- Profile 생성/수정 → **Advanced TLS (mTLS)**:
+  - Client Certificate / Client Key (PEM) 필수
+  - CA Certificate 선택
+  - Server Name (SNI) 선택(인증서의 CN/SAN과 일치하도록 지정)
+- `tlsInsecureSkipVerify`는 서버 인증서 검증을 건너뛰므로 가급적 끄는 것을 권장합니다.
 
 ## 4) 브라우징 / 업로드 / Job 흐름
 

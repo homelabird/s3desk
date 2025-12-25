@@ -14,6 +14,7 @@ import (
 const encryptedPrefix = "enc:"
 
 var ErrEncryptedCredentials = errors.New("profile credentials are encrypted; configure ENCRYPTION_KEY (or --encryption-key)")
+var ErrEncryptionKeyRequired = errors.New("encryption key is required; configure ENCRYPTION_KEY (or --encryption-key)")
 
 type profileCrypto struct {
 	gcm cipher.AEAD

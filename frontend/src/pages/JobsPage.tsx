@@ -24,11 +24,12 @@ import { DeleteOutlined, DownloadOutlined, PlusOutlined, RedoOutlined, ReloadOut
 import { useLocation } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
-import { LocalPathBrowseModal } from '../components/LocalPathBrowseModal'
-import { LocalPathInput } from '../components/LocalPathInput'
+import { LocalDevicePathInput } from '../components/LocalDevicePathInput'
 import { useTransfers } from '../components/useTransfers'
 import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../api/types'
 import { withJobQueueRetry } from '../lib/jobQueue'
+import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath } from '../lib/deviceFs'
+import { listAllObjects } from '../lib/objects'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 
 type Props = {
@@ -48,6 +49,8 @@ export function JobsPage(props: Props) {
 	const transfers = useTransfers()
 	const location = useLocation()
 	const screens = Grid.useBreakpoint()
+	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
+	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
 
 	const createJobWithRetry = useCallback(
 		(req: JobCreateRequest) => {
@@ -71,6 +74,8 @@ export function JobsPage(props: Props) {
 	const [createOpen, setCreateOpen] = useState(false)
 	const [createDeleteOpen, setCreateDeleteOpen] = useState(() => deleteJobInitialPrefill !== null)
 	const [createDownloadOpen, setCreateDownloadOpen] = useState(false)
+	const [deviceUploadLoading, setDeviceUploadLoading] = useState(false)
+	const [deviceDownloadLoading, setDeviceDownloadLoading] = useState(false)
 	const [logsOpen, setLogsOpen] = useState(false)
 	const [activeLogJobId, setActiveLogJobId] = useState<string | null>(null)
 	const [logByJobId, setLogByJobId] = useState<Record<string, string[]>>({})
@@ -90,7 +95,6 @@ export function JobsPage(props: Props) {
 	const [retryingJobId, setRetryingJobId] = useState<string | null>(null)
 	const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
 	const [deleteJobPrefill, setDeleteJobPrefill] = useState<DeleteJobPrefill | null>(() => deleteJobInitialPrefill)
-	const [downloadLocalPath, setDownloadLocalPath] = useLocalStorageState<string>('jobsDownloadLocalPath', '')
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
@@ -120,29 +124,88 @@ export function JobsPage(props: Props) {
 		refetchInterval: eventsConnected ? false : 5000,
 	})
 
-	const createMutation = useMutation({
-		mutationFn: (payload: { bucket: string; prefix: string; localPath: string; deleteExtraneous: boolean; include: string[]; exclude: string[]; dryRun: boolean }) =>
-			createJobWithRetry({ type: 's5cmd_sync_local_to_s3', payload }),
-		onSuccess: async (job) => {
-			message.success(`Job created: ${job.id}`)
-			setCreateOpen(false)
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+	const handleDeviceUpload = useCallback(
+		async (args: {
+			bucket: string
+			prefix: string
+			dirHandle: FileSystemDirectoryHandle
+			label?: string
+			moveAfterUpload?: boolean
+			cleanupEmptyDirs?: boolean
+		}) => {
+			if (!props.profileId) return
+			setDeviceUploadLoading(true)
+			try {
+				const files = await collectFilesFromDirectoryHandle(args.dirHandle)
+				if (files.length === 0) {
+					message.info('No files found in the selected folder')
+					return
+				}
+				const relPaths = files
+					.map((file) => {
+						const fileWithPath = file as File & { relativePath?: string; webkitRelativePath?: string }
+						const relPath = (fileWithPath.relativePath ?? fileWithPath.webkitRelativePath ?? file.name).trim()
+						return normalizeRelativePath(relPath || file.name)
+					})
+					.filter(Boolean)
+				transfers.queueUploadFiles({
+					profileId: props.profileId,
+					bucket: args.bucket,
+					prefix: args.prefix,
+					files,
+					label: args.label,
+					moveSource: args.moveAfterUpload
+						? {
+								rootHandle: args.dirHandle,
+								relPaths,
+								label: args.label ?? args.dirHandle.name,
+								cleanupEmptyDirs: args.cleanupEmptyDirs,
+							}
+						: undefined,
+				})
+				setCreateOpen(false)
+			} catch (err) {
+				message.error(formatErr(err))
+			} finally {
+				setDeviceUploadLoading(false)
+			}
 		},
-		onError: (err) => message.error(formatErr(err)),
-	})
+		[props.profileId, transfers],
+	)
 
-	const createDownloadMutation = useMutation({
-		mutationFn: (payload: { bucket: string; prefix: string; localPath: string; deleteExtraneous: boolean; include: string[]; exclude: string[]; dryRun: boolean }) =>
-			createJobWithRetry({ type: 's5cmd_sync_s3_to_local', payload }),
-		onSuccess: async (job) => {
-			message.success(`Job created: ${job.id}`)
-			setCreateDownloadOpen(false)
-			setDetailsJobId(job.id)
-			setDetailsOpen(true)
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+	const handleDeviceDownload = useCallback(
+		async (args: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => {
+			if (!props.profileId) return
+			setDeviceDownloadLoading(true)
+			try {
+				const normPrefix = normalizePrefix(args.prefix)
+				const items = await listAllObjects({
+					api,
+					profileId: props.profileId,
+					bucket: args.bucket,
+					prefix: normPrefix,
+				})
+				if (items.length === 0) {
+					message.info('No objects found under this prefix')
+					return
+				}
+				transfers.queueDownloadObjectsToDevice({
+					profileId: props.profileId,
+					bucket: args.bucket,
+					items: items.map((item) => ({ key: item.key, size: item.size })),
+					targetDirHandle: args.dirHandle,
+					targetLabel: args.label ?? args.dirHandle.name,
+					prefix: normPrefix,
+				})
+				setCreateDownloadOpen(false)
+			} catch (err) {
+				message.error(formatErr(err))
+			} finally {
+				setDeviceDownloadLoading(false)
+			}
 		},
-		onError: (err) => message.error(formatErr(err)),
-	})
+		[api, props.profileId, transfers],
+	)
 
 	const createDeleteMutation = useMutation({
 		mutationFn: (payload: {
@@ -442,10 +505,10 @@ export function JobsPage(props: Props) {
 						{eventsConnected ? `Realtime: ${(eventsTransport ?? 'unknown').toUpperCase()}` : 'Realtime disconnected'}
 					</Tag>
 					<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-						New Sync Job
+						Upload folder (device)
 					</Button>
 					<Button icon={<DownloadOutlined />} onClick={() => setCreateDownloadOpen(true)}>
-						New Download Job
+						Download folder (device)
 						</Button>
 						<Button
 							danger
@@ -649,31 +712,31 @@ export function JobsPage(props: Props) {
 			) : null}
 
 			<CreateJobModal
-				api={api}
 				profileId={props.profileId}
 				open={createOpen}
 				onCancel={() => setCreateOpen(false)}
-				onSubmit={(values) => createMutation.mutate(values)}
-				loading={createMutation.isPending}
+				onSubmit={(values) => handleDeviceUpload(values)}
+				loading={deviceUploadLoading}
 				bucket={bucket}
 				setBucket={setBucket}
 				bucketOptions={bucketOptions}
+				defaultMoveAfterUpload={moveAfterUploadDefault}
+				defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
+				onDefaultsChange={(values) => {
+					setMoveAfterUploadDefault(values.moveAfterUpload)
+					setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
+				}}
 			/>
 
 			<DownloadJobModal
-				api={api}
 				profileId={props.profileId}
 				open={createDownloadOpen}
 				onCancel={() => setCreateDownloadOpen(false)}
-				onSubmit={(values) => {
-					setDownloadLocalPath(values.localPath)
-					createDownloadMutation.mutate(values)
-				}}
-				loading={createDownloadMutation.isPending}
+				onSubmit={(values) => handleDeviceDownload(values)}
+				loading={deviceDownloadLoading}
 				bucket={bucket}
 				setBucket={setBucket}
 				bucketOptions={bucketOptions}
-				defaultLocalPath={downloadLocalPath}
 			/>
 
 				<DeletePrefixJobModal
@@ -1028,213 +1091,71 @@ function getString(payload: Record<string, unknown>, key: string): string | null
 		return parts.join('/') + '/'
 	}
 
-	function CreateJobModal(props: {
-	api: APIClient
+function CreateJobModal(props: {
 	profileId: string | null
 	open: boolean
 	onCancel: () => void
 	onSubmit: (payload: {
 		bucket: string
 		prefix: string
-		localPath: string
-		deleteExtraneous: boolean
-		include: string[]
-		exclude: string[]
-		dryRun: boolean
+		dirHandle: FileSystemDirectoryHandle
+		label?: string
+		moveAfterUpload?: boolean
+		cleanupEmptyDirs?: boolean
 	}) => void
 	loading: boolean
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
+	defaultMoveAfterUpload: boolean
+	defaultCleanupEmptyDirs: boolean
+	onDefaultsChange?: (values: { moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => void
 }) {
 	const screens = Grid.useBreakpoint()
 	const drawerWidth = screens.md ? 520 : '100%'
 	const [form] = Form.useForm<{
 		bucket: string
 		prefix: string
-		localPath: string
-		deleteExtraneous: boolean
-		include: string
-		exclude: string
-		dryRun: boolean
+		localFolder: string
+		moveAfterUpload: boolean
+		cleanupEmptyDirs: boolean
 	}>()
-	const [browseOpen, setBrowseOpen] = useState(false)
+	const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
+	const [dirLabel, setDirLabel] = useState('')
+	const support = getDevicePickerSupport()
+
+	const canSubmit = !!dirHandle && support.ok
 
 	return (
 		<Drawer
 			open={props.open}
-			onClose={() => {
-				setBrowseOpen(false)
-				props.onCancel()
-			}}
-			title="Create s5cmd sync job (local → S3)"
+			onClose={props.onCancel}
+			title="Upload local folder (device → S3)"
 			width={drawerWidth}
+			destroyOnClose
 			extra={
 				<Space>
-					<Button
-						onClick={() => {
-							setBrowseOpen(false)
-							props.onCancel()
-						}}
-					>
-						Close
-					</Button>
-					<Button type="primary" loading={props.loading} onClick={() => form.submit()}>
-						Create
+					<Button onClick={props.onCancel}>Close</Button>
+					<Button type="primary" loading={props.loading} onClick={() => form.submit()} disabled={!canSubmit}>
+						Upload
 					</Button>
 				</Space>
 			}
 		>
-			<Form
-				form={form}
-				layout="vertical"
-				initialValues={{
-					bucket: props.bucket,
-					prefix: '',
-					localPath: '',
-					deleteExtraneous: false,
-					include: '',
-					exclude: '',
-					dryRun: false,
-				}}
-				onFinish={(values) => {
-					setBrowseOpen(false)
-					props.setBucket(values.bucket)
-					props.onSubmit({
-						bucket: values.bucket,
-						prefix: values.prefix,
-						localPath: values.localPath,
-						deleteExtraneous: values.deleteExtraneous,
-						include: splitLines(values.include),
-						exclude: splitLines(values.exclude),
-						dryRun: values.dryRun,
-					})
-				}}
-			>
-				<Form.Item name="bucket" label="Bucket" rules={[{ required: true }]}>
-					<AutoComplete
-						options={props.bucketOptions}
-						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-					>
-						<Input placeholder="my-bucket" />
-					</AutoComplete>
-				</Form.Item>
-				<Form.Item name="prefix" label="Prefix (optional)">
-					<Input placeholder="path/" />
-				</Form.Item>
-				<Form.Item name="localPath" label="Local Path" rules={[{ required: true }]}>
-					<LocalPathInput
-						api={props.api}
-						profileId={props.profileId}
-						placeholder="/path/to/folder"
-						onBrowse={() => setBrowseOpen(true)}
-						disabled={!props.profileId}
-						browseDisabled={!props.profileId}
-					/>
-				</Form.Item>
-				<Form.Item name="deleteExtraneous" label="Delete Extraneous (s5cmd --delete)" valuePropName="checked">
-					<Switch />
-				</Form.Item>
-				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch />
-				</Form.Item>
-				<Form.Item name="include" label="Include patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="*.log" />
-				</Form.Item>
-				<Form.Item name="exclude" label="Exclude patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="tmp_*" />
-				</Form.Item>
-			</Form>
-
-			<LocalPathBrowseModal
-				api={props.api}
-				profileId={props.profileId}
-				open={browseOpen && props.open}
-				onCancel={() => setBrowseOpen(false)}
-				onSelect={(path) => {
-					form.setFieldsValue({ localPath: path })
-					setBrowseOpen(false)
-				}}
-			/>
-		</Drawer>
-	)
-}
-
-function DownloadJobModal(props: {
-	api: APIClient
-	profileId: string | null
-	open: boolean
-	onCancel: () => void
-	onSubmit: (payload: {
-		bucket: string
-		prefix: string
-		localPath: string
-		deleteExtraneous: boolean
-		include: string[]
-		exclude: string[]
-		dryRun: boolean
-	}) => void
-	loading: boolean
-	bucket: string
-	setBucket: (v: string) => void
-	bucketOptions: { label: string; value: string }[]
-	defaultLocalPath: string
-}) {
-	const screens = Grid.useBreakpoint()
-	const drawerWidth = screens.md ? 520 : '100%'
-	const [form] = Form.useForm<{
-		bucket: string
-		prefix: string
-		localPath: string
-		deleteExtraneous: boolean
-		include: string
-		exclude: string
-		dryRun: boolean
-	}>()
-	const [browseOpen, setBrowseOpen] = useState(false)
-
-	useEffect(() => {
-		if (!props.open) return
-		const currentPath = form.getFieldValue('localPath') as string | undefined
-		if (!currentPath && props.defaultLocalPath) {
-			form.setFieldsValue({ localPath: props.defaultLocalPath })
-		}
-		const currentBucket = form.getFieldValue('bucket') as string | undefined
-		if (!currentBucket && props.bucket) {
-			form.setFieldsValue({ bucket: props.bucket })
-		}
-	}, [form, props.bucket, props.defaultLocalPath, props.open])
-
-	return (
-		<Drawer
-			open={props.open}
-			onClose={() => {
-				setBrowseOpen(false)
-				props.onCancel()
-			}}
-			title="Create s5cmd sync job (S3 → local)"
-			width={drawerWidth}
-			extra={
-				<Space>
-					<Button
-						onClick={() => {
-							setBrowseOpen(false)
-							props.onCancel()
-						}}
-					>
-						Close
-					</Button>
-					<Button type="primary" loading={props.loading} onClick={() => form.submit()}>
-						Create
-					</Button>
-				</Space>
-			}
-		>
+			{!support.ok ? (
+				<Alert
+					type="warning"
+					showIcon
+					message="Local folder access is not available"
+					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
+					style={{ marginBottom: 12 }}
+				/>
+			) : null}
 			<Alert
 				type="info"
 				showIcon
-				message="Downloads objects via s5cmd sync"
-				description="This syncs S3 objects under the given prefix to a local directory on the server."
+				message="Uploads from this device"
+				description="Files are uploaded by the browser and appear in Transfers (not as server jobs)."
 				style={{ marginBottom: 12 }}
 			/>
 
@@ -1244,23 +1165,29 @@ function DownloadJobModal(props: {
 				initialValues={{
 					bucket: props.bucket,
 					prefix: '',
-					localPath: '',
-					deleteExtraneous: false,
-					include: '',
-					exclude: '',
-					dryRun: false,
+					localFolder: '',
+					moveAfterUpload: props.defaultMoveAfterUpload,
+					cleanupEmptyDirs: props.defaultCleanupEmptyDirs,
 				}}
 				onFinish={(values) => {
-					setBrowseOpen(false)
+					if (!dirHandle) {
+						message.info('Select a local folder first')
+						return
+					}
 					props.setBucket(values.bucket)
 					props.onSubmit({
 						bucket: values.bucket,
 						prefix: values.prefix,
-						localPath: values.localPath,
-						deleteExtraneous: values.deleteExtraneous,
-						include: splitLines(values.include),
-						exclude: splitLines(values.exclude),
-						dryRun: values.dryRun,
+						dirHandle,
+						label: dirLabel || dirHandle.name,
+						moveAfterUpload: values.moveAfterUpload,
+						cleanupEmptyDirs: values.cleanupEmptyDirs,
+					})
+				}}
+				onValuesChange={(_, values) => {
+					props.onDefaultsChange?.({
+						moveAfterUpload: values.moveAfterUpload,
+						cleanupEmptyDirs: values.cleanupEmptyDirs,
 					})
 				}}
 			>
@@ -1275,40 +1202,131 @@ function DownloadJobModal(props: {
 				<Form.Item name="prefix" label="Prefix (optional)">
 					<Input placeholder="path/" />
 				</Form.Item>
-				<Form.Item name="localPath" label="Local destination path" rules={[{ required: true }]}>
-					<LocalPathInput
-						api={props.api}
-						profileId={props.profileId}
-						placeholder="/path/to/folder"
-						onBrowse={() => setBrowseOpen(true)}
-						disabled={!props.profileId}
-						browseDisabled={!props.profileId}
+				<Form.Item name="localFolder" label="Local folder" rules={[{ required: true }]}>
+					<LocalDevicePathInput
+						placeholder="Select a folder"
+						disabled={!support.ok}
+						onPick={(handle) => {
+							setDirHandle(handle)
+							setDirLabel(handle.name)
+						}}
 					/>
 				</Form.Item>
-				<Form.Item name="deleteExtraneous" label="Delete extraneous local files (s5cmd --delete)" valuePropName="checked">
-					<Switch />
+				<Form.Item name="moveAfterUpload" valuePropName="checked">
+					<Checkbox>Move after upload (delete local files after the job succeeds)</Checkbox>
 				</Form.Item>
-				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch />
-				</Form.Item>
-				<Form.Item name="include" label="Include patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="*.log" />
-				</Form.Item>
-				<Form.Item name="exclude" label="Exclude patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="tmp_*" />
+				<Form.Item shouldUpdate={(prev, next) => prev.moveAfterUpload !== next.moveAfterUpload} noStyle>
+					{({ getFieldValue }) => (
+						<Form.Item name="cleanupEmptyDirs" valuePropName="checked">
+							<Checkbox disabled={!getFieldValue('moveAfterUpload')}>Auto-clean empty folders</Checkbox>
+						</Form.Item>
+					)}
 				</Form.Item>
 			</Form>
+		</Drawer>
+	)
+}
 
-			<LocalPathBrowseModal
-				api={props.api}
-				profileId={props.profileId}
-				open={browseOpen && props.open}
-				onCancel={() => setBrowseOpen(false)}
-				onSelect={(path) => {
-					form.setFieldsValue({ localPath: path })
-					setBrowseOpen(false)
-				}}
+function DownloadJobModal(props: {
+	profileId: string | null
+	open: boolean
+	onCancel: () => void
+	onSubmit: (payload: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
+	loading: boolean
+	bucket: string
+	setBucket: (v: string) => void
+	bucketOptions: { label: string; value: string }[]
+}) {
+	const screens = Grid.useBreakpoint()
+	const drawerWidth = screens.md ? 520 : '100%'
+	const [form] = Form.useForm<{
+		bucket: string
+		prefix: string
+		localFolder: string
+	}>()
+	const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
+	const [dirLabel, setDirLabel] = useState('')
+	const support = getDevicePickerSupport()
+
+	const canSubmit = !!dirHandle && support.ok
+
+	return (
+		<Drawer
+			open={props.open}
+			onClose={props.onCancel}
+			title="Download folder (S3 → device)"
+			width={drawerWidth}
+			destroyOnClose
+			extra={
+				<Space>
+					<Button onClick={props.onCancel}>Close</Button>
+					<Button type="primary" loading={props.loading} onClick={() => form.submit()} disabled={!canSubmit}>
+						Download
+					</Button>
+				</Space>
+			}
+		>
+			{!support.ok ? (
+				<Alert
+					type="warning"
+					showIcon
+					message="Local folder access is not available"
+					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
+					style={{ marginBottom: 12 }}
+				/>
+			) : null}
+			<Alert
+				type="info"
+				showIcon
+				message="Downloads to this device"
+				description="Files are saved by the browser and appear in Transfers (not as server jobs)."
+				style={{ marginBottom: 12 }}
 			/>
+
+			<Form
+				form={form}
+				layout="vertical"
+				initialValues={{
+					bucket: props.bucket,
+					prefix: '',
+					localFolder: '',
+				}}
+				onFinish={(values) => {
+					if (!dirHandle) {
+						message.info('Select a local folder first')
+						return
+					}
+					props.setBucket(values.bucket)
+					props.onSubmit({
+						bucket: values.bucket,
+						prefix: values.prefix,
+						dirHandle,
+						label: dirLabel || dirHandle.name,
+					})
+				}}
+			>
+				<Form.Item name="bucket" label="Bucket" rules={[{ required: true }]}>
+					<AutoComplete
+						options={props.bucketOptions}
+						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
+					>
+						<Input placeholder="my-bucket" />
+					</AutoComplete>
+				</Form.Item>
+				<Form.Item name="prefix" label="Prefix (optional)">
+					<Input placeholder="path/" />
+				</Form.Item>
+				<Form.Item name="localFolder" label="Local destination folder" rules={[{ required: true }]}>
+					<LocalDevicePathInput
+						placeholder="Select a folder"
+						disabled={!support.ok}
+						onPick={(handle) => {
+							setDirHandle(handle)
+							setDirLabel(handle.name)
+						}}
+					/>
+				</Form.Item>
+			</Form>
 		</Drawer>
 	)
 }
@@ -1534,6 +1552,13 @@ function splitLines(v: string): string[] {
 		.split('\n')
 		.map((s) => s.trim())
 		.filter(Boolean)
+}
+
+function normalizePrefix(value: string): string {
+	const trimmed = value.trim()
+	if (!trimmed) return ''
+	const normalized = trimmed.replace(/\\/g, '/')
+	return normalized.endsWith('/') ? normalized : `${normalized}/`
 }
 
 function formatProgress(p?: JobProgress | null): string {

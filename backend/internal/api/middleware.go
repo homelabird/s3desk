@@ -97,7 +97,7 @@ func (s *server) requireLocalHost(next http.Handler) http.Handler {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
-		if !isAllowedHost(host, s.cfg.AllowRemote) {
+		if !isAllowedHost(host, s.cfg.AllowRemote, s.cfg.AllowedHosts) {
 			msg := "host must be localhost"
 			if s.cfg.AllowRemote {
 				msg = "host must be localhost or private"
@@ -113,7 +113,7 @@ func (s *server) requireLocalHost(next http.Handler) http.Handler {
 				return
 			}
 			oh := strings.ToLower(u.Hostname())
-			if !isAllowedHost(oh, s.cfg.AllowRemote) {
+			if !isAllowedHost(oh, s.cfg.AllowRemote, s.cfg.AllowedHosts) {
 				msg := "origin must be localhost"
 				if s.cfg.AllowRemote {
 					msg = "origin must be localhost or private"
@@ -132,8 +132,16 @@ func (s *server) requireLocalHost(next http.Handler) http.Handler {
 	})
 }
 
-func isAllowedHost(host string, allowRemote bool) bool {
-	host = strings.ToLower(strings.TrimSpace(host))
+func isAllowedHost(host string, allowRemote bool, allowedHosts []string) bool {
+	host = normalizeHost(host)
+	if host == "" {
+		return false
+	}
+	for _, allowed := range allowedHosts {
+		if host == allowed {
+			return true
+		}
+	}
 	if host == "127.0.0.1" || host == "localhost" || host == "::1" {
 		return true
 	}
@@ -142,6 +150,15 @@ func isAllowedHost(host string, allowRemote bool) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsPrivate()
+}
+
+func normalizeHost(host string) string {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return ""
+	}
+	host = strings.Trim(host, "[]")
+	return strings.TrimSuffix(host, ".")
 }
 
 func (s *server) requireProfile(next http.Handler) http.Handler {
@@ -156,6 +173,10 @@ func (s *server) requireProfile(next http.Handler) http.Handler {
 		if err != nil {
 			if errors.Is(err, store.ErrEncryptedCredentials) {
 				writeError(w, http.StatusBadRequest, "encrypted_credentials", err.Error(), nil)
+				return
+			}
+			if errors.Is(err, store.ErrEncryptionKeyRequired) {
+				writeError(w, http.StatusBadRequest, "encryption_required", err.Error(), nil)
 				return
 			}
 			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load profile", nil)

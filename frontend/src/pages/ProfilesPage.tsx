@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Form, Input, Modal, Space, Switch, Table, Typography, message } from 'antd'
+import { Alert, Button, Checkbox, Divider, Form, Input, Modal, Select, Space, Switch, Table, Typography, message } from 'antd'
 import { useMemo, useState } from 'react'
 
 import { APIClient, APIError } from '../api/client'
-import type { Profile, ProfileCreateRequest, ProfileUpdateRequest } from '../api/types'
+import type { MetaResponse, Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileTLSStatus, ProfileUpdateRequest } from '../api/types'
 
 type Props = {
 	apiToken: string
@@ -25,22 +25,71 @@ export function ProfilesPage(props: Props) {
 		queryFn: () => api.listProfiles(),
 	})
 
+	const metaQuery = useQuery({
+		queryKey: ['meta', props.apiToken],
+		queryFn: () => api.getMeta(),
+	})
+
+	const tlsCapability = metaQuery.data?.capabilities?.profileTls
+	const tlsCapabilityEnabled = tlsCapability?.enabled ?? true
+
+	const profileTLSQuery = useQuery({
+		queryKey: ['profileTls', editProfile?.id, props.apiToken],
+		enabled: !!editProfile && tlsCapabilityEnabled,
+		queryFn: () => api.getProfileTLS(editProfile!.id),
+	})
+
+	const applyTLSUpdate = async (profileId: string, values: ProfileFormValues, mode: 'create' | 'edit') => {
+		if (mode === 'create') {
+			if (!values.tlsEnabled) return
+			const tlsConfig = buildTLSConfigFromValues(values)
+			if (!tlsConfig) throw new Error('mTLS requires client certificate and key')
+			await api.updateProfileTLS(profileId, tlsConfig)
+			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
+			return
+		}
+
+		const action = values.tlsAction ?? 'keep'
+		if (action === 'keep') return
+		if (action === 'disable') {
+			await api.deleteProfileTLS(profileId)
+			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
+			return
+		}
+		if (action === 'enable') {
+			const tlsConfig = buildTLSConfigFromValues(values)
+			if (!tlsConfig) throw new Error('mTLS requires client certificate and key')
+			await api.updateProfileTLS(profileId, tlsConfig)
+			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
+		}
+	}
+
 	const createMutation = useMutation({
-		mutationFn: (req: ProfileCreateRequest) => api.createProfile(req),
-		onSuccess: async (created) => {
+		mutationFn: (values: ProfileFormValues) => api.createProfile(toCreateRequest(values)),
+		onSuccess: async (created, values) => {
 			message.success('Profile created')
 			props.setProfileId(created.id)
 			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+			try {
+				await applyTLSUpdate(created.id, values, 'create')
+			} catch (err) {
+				message.error(`mTLS update failed: ${formatErr(err)}`)
+			}
 			setCreateOpen(false)
 		},
 		onError: (err) => message.error(formatErr(err)),
 	})
 
 	const updateMutation = useMutation({
-		mutationFn: (args: { id: string; req: ProfileUpdateRequest }) => api.updateProfile(args.id, args.req),
-		onSuccess: async () => {
+		mutationFn: (args: { id: string; values: ProfileFormValues }) => api.updateProfile(args.id, toUpdateRequest(args.values)),
+		onSuccess: async (_, args) => {
 			message.success('Profile updated')
 			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+			try {
+				await applyTLSUpdate(args.id, args.values, 'edit')
+			} catch (err) {
+				message.error(`mTLS update failed: ${formatErr(err)}`)
+			}
 			setEditProfile(null)
 		},
 		onError: (err) => message.error(formatErr(err)),
@@ -66,10 +115,14 @@ export function ProfilesPage(props: Props) {
 		onSuccess: (resp) => {
 			const details = resp.details ?? {}
 			const storageType = typeof details.storageType === 'string' ? details.storageType : ''
+			const storageSource = typeof details.storageTypeSource === 'string' ? details.storageTypeSource : ''
 			const buckets = typeof details.buckets === 'number' ? details.buckets : null
+			const errorDetail = typeof details.error === 'string' ? details.error : ''
 			const suffixParts: string[] = []
 			if (storageType) suffixParts.push(`type: ${storageType}`)
+			if (storageSource) suffixParts.push(`source: ${storageSource}`)
 			if (typeof buckets === 'number') suffixParts.push(`buckets: ${buckets}`)
+			if (errorDetail && !resp.ok) suffixParts.push(`error: ${errorDetail}`)
 			const suffix = suffixParts.length ? ` (${suffixParts.join(', ')})` : ''
 			if (resp.ok) message.success(`Profile test OK${suffix}`)
 			else message.warning(`${resp.message ?? 'Profile test failed'}${suffix}`)
@@ -166,8 +219,9 @@ export function ProfilesPage(props: Props) {
 				title="Create Profile"
 				okText="Create"
 				onCancel={() => setCreateOpen(false)}
-				onSubmit={(values) => createMutation.mutate(toCreateRequest(values))}
+				onSubmit={(values) => createMutation.mutate(values)}
 				loading={createMutation.isPending}
+				tlsCapability={tlsCapability ?? null}
 			/>
 
 			<ProfileModal
@@ -177,8 +231,7 @@ export function ProfilesPage(props: Props) {
 				onCancel={() => setEditProfile(null)}
 				onSubmit={(values) => {
 					if (!editProfile) return
-					const patch = toUpdateRequest(values)
-					updateMutation.mutate({ id: editProfile.id, req: patch })
+					updateMutation.mutate({ id: editProfile.id, values })
 				}}
 				loading={updateMutation.isPending}
 				initialValues={{
@@ -189,6 +242,10 @@ export function ProfilesPage(props: Props) {
 					tlsInsecureSkipVerify: editProfile?.tlsInsecureSkipVerify,
 				}}
 				editMode
+				tlsCapability={tlsCapability ?? null}
+				tlsStatus={profileTLSQuery.data ?? null}
+				tlsStatusLoading={profileTLSQuery.isFetching}
+				tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
 			/>
 		</Space>
 	)
@@ -198,6 +255,23 @@ function formatErr(err: unknown): string {
 	if (err instanceof APIError) return `${err.code}: ${err.message}`
 	if (err instanceof Error) return err.message
 	return 'unknown error'
+}
+
+function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig | null {
+	const clientCertPem = values.tlsClientCertPem?.trim() ?? ''
+	const clientKeyPem = values.tlsClientKeyPem?.trim() ?? ''
+	if (!clientCertPem || !clientKeyPem) return null
+	const caCertPem = values.tlsCaCertPem?.trim() ?? ''
+	const serverName = values.tlsServerName?.trim() ?? ''
+
+	const cfg: ProfileTLSConfig = {
+		mode: 'mtls',
+		clientCertPem,
+		clientKeyPem,
+	}
+	if (caCertPem) cfg.caCertPem = caCertPem
+	if (serverName) cfg.serverName = serverName
+	return cfg
 }
 
 type ProfileFormValues = {
@@ -210,7 +284,16 @@ type ProfileFormValues = {
 	clearSessionToken: boolean
 	forcePathStyle: boolean
 	tlsInsecureSkipVerify: boolean
+	tlsEnabled?: boolean
+	tlsAction?: TLSAction
+	tlsClientCertPem?: string
+	tlsClientKeyPem?: string
+	tlsCaCertPem?: string
+	tlsServerName?: string
 }
+
+type TLSAction = 'keep' | 'enable' | 'disable'
+type TLSCapability = MetaResponse['capabilities']['profileTls']
 
 function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest {
 	const out: ProfileUpdateRequest = {
@@ -249,9 +332,20 @@ function ProfileModal(props: {
 	loading: boolean
 	initialValues?: Partial<ProfileFormValues>
 	editMode?: boolean
+	tlsCapability?: TLSCapability | null
+	tlsStatus?: ProfileTLSStatus | null
+	tlsStatusLoading?: boolean
+	tlsStatusError?: string | null
 }) {
 	const [form] = Form.useForm<ProfileFormValues>()
 	const clearSessionToken = Form.useWatch('clearSessionToken', form)
+	const tlsEnabled = Form.useWatch('tlsEnabled', form)
+	const tlsAction = Form.useWatch('tlsAction', form)
+	const tlsUnavailable = props.tlsCapability?.enabled === false
+	const tlsDisabledReason = props.tlsCapability?.reason ?? 'mTLS is disabled on the server.'
+	const showTLSFields = !tlsUnavailable && (props.editMode ? tlsAction === 'enable' : !!tlsEnabled)
+	const tlsStatusLabel = tlsUnavailable ? 'unavailable' : props.tlsStatusLoading ? 'loading…' : props.tlsStatus?.mode === 'mtls' ? 'enabled' : 'disabled'
+	const showTLSStatusError = !tlsUnavailable && props.tlsStatusError
 
 	return (
 		<Modal
@@ -276,6 +370,12 @@ function ProfileModal(props: {
 					clearSessionToken: false,
 					forcePathStyle: false,
 					tlsInsecureSkipVerify: false,
+					tlsEnabled: false,
+					tlsAction: 'keep',
+					tlsClientCertPem: '',
+					tlsClientKeyPem: '',
+					tlsCaCertPem: '',
+					tlsServerName: '',
 					...props.initialValues,
 				}}
 				onFinish={(values) => props.onSubmit(values)}
@@ -325,6 +425,77 @@ function ProfileModal(props: {
 					<Form.Item name="tlsInsecureSkipVerify" label="TLS Insecure Skip Verify" valuePropName="checked">
 						<Switch />
 					</Form.Item>
+				</Space>
+
+				<Divider />
+
+				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+					<Typography.Text strong>Advanced TLS (mTLS)</Typography.Text>
+					{tlsUnavailable ? <Alert type="warning" showIcon message="mTLS is disabled" description={tlsDisabledReason} /> : null}
+					{props.editMode ? (
+						<>
+							<Typography.Text type="secondary">
+								Current: {tlsStatusLabel}
+							</Typography.Text>
+							{showTLSStatusError ? (
+								<Alert type="warning" showIcon message="Failed to load TLS status" description={showTLSStatusError} />
+							) : null}
+							<Form.Item name="tlsAction" label="mTLS action">
+								<Select
+									disabled={tlsUnavailable}
+									options={[
+										{ label: 'Keep current', value: 'keep' },
+										{ label: 'Enable or update', value: 'enable' },
+										{ label: 'Disable', value: 'disable' },
+									]}
+								/>
+							</Form.Item>
+							{tlsAction === 'disable' ? (
+								<Typography.Text type="secondary">mTLS will be removed for this profile.</Typography.Text>
+							) : null}
+						</>
+					) : (
+						<Form.Item name="tlsEnabled" label="Enable mTLS" valuePropName="checked">
+							<Switch disabled={tlsUnavailable} />
+						</Form.Item>
+					)}
+
+					{showTLSFields ? (
+						<>
+							<Form.Item
+								name="tlsClientCertPem"
+								label="Client Certificate (PEM)"
+								rules={[{ required: true, message: 'Client certificate is required' }]}
+							>
+								<Input.TextArea
+									disabled={tlsUnavailable}
+									autoSize={{ minRows: 4, maxRows: 8 }}
+									placeholder="-----BEGIN CERTIFICATE-----"
+								/>
+							</Form.Item>
+							<Form.Item
+								name="tlsClientKeyPem"
+								label="Client Key (PEM)"
+								rules={[{ required: true, message: 'Client key is required' }]}
+							>
+								<Input.TextArea
+									disabled={tlsUnavailable}
+									autoSize={{ minRows: 4, maxRows: 8 }}
+									placeholder="-----BEGIN PRIVATE KEY-----"
+								/>
+							</Form.Item>
+							<Form.Item name="tlsCaCertPem" label="CA Certificate (optional)">
+								<Input.TextArea
+									disabled={tlsUnavailable}
+									autoSize={{ minRows: 3, maxRows: 6 }}
+									placeholder="-----BEGIN CERTIFICATE-----"
+								/>
+							</Form.Item>
+							<Form.Item name="tlsServerName" label="Server Name (SNI, optional)">
+								<Input disabled={tlsUnavailable} placeholder="s3.example.com" />
+							</Form.Item>
+						</>
+					) : null}
 				</Space>
 			</Form>
 		</Modal>

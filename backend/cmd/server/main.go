@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -51,9 +52,20 @@ func main() {
 		allowDirs = append(allowDirs, dir)
 	}
 	flag.Var(&allowDirs, "allow-local-dir", "allowed local directory for sync jobs (repeatable); when set, localPath must be under one of these")
+
+	allowHosts := stringSliceFlag{}
+	for _, host := range strings.Split(getEnv("ALLOWED_HOSTS", ""), ",") {
+		host = normalizeHost(host)
+		if host == "" {
+			continue
+		}
+		allowHosts = append(allowHosts, host)
+	}
+	flag.Var(&allowHosts, "allow-host", "allowed hostnames for Host/Origin checks (repeatable)")
 	flag.Parse()
 
 	cfg.AllowedLocalDirs = allowDirs
+	cfg.AllowedHosts = normalizeHosts(allowHosts)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -91,6 +103,35 @@ func defaultStaticDir() string {
 func hasIndexHTML(dir string) bool {
 	info, err := os.Stat(filepath.Join(dir, "index.html"))
 	return err == nil && !info.IsDir()
+}
+
+func normalizeHosts(hosts []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(hosts))
+	for _, host := range hosts {
+		host = normalizeHost(host)
+		if host == "" {
+			continue
+		}
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		out = append(out, host)
+	}
+	return out
+}
+
+func normalizeHost(host string) string {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return ""
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	return strings.TrimSuffix(host, ".")
 }
 
 func getEnv(key, defaultValue string) string {

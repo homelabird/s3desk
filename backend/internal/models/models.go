@@ -22,15 +22,17 @@ type Profile struct {
 }
 
 type ProfileSecrets struct {
-	ID                    string  `json:"-"`
-	Name                  string  `json:"-"`
-	Endpoint              string  `json:"-"`
-	Region                string  `json:"-"`
-	ForcePathStyle        bool    `json:"-"`
-	TLSInsecureSkipVerify bool    `json:"-"`
-	AccessKeyID           string  `json:"-"`
-	SecretAccessKey       string  `json:"-"`
-	SessionToken          *string `json:"-"`
+	ID                    string            `json:"-"`
+	Name                  string            `json:"-"`
+	Endpoint              string            `json:"-"`
+	Region                string            `json:"-"`
+	ForcePathStyle        bool              `json:"-"`
+	TLSInsecureSkipVerify bool              `json:"-"`
+	AccessKeyID           string            `json:"-"`
+	SecretAccessKey       string            `json:"-"`
+	SessionToken          *string           `json:"-"`
+	TLSConfig             *ProfileTLSConfig `json:"-"`
+	TLSConfigUpdatedAt    string            `json:"-"`
 }
 
 type ProfileCreateRequest struct {
@@ -61,6 +63,30 @@ type ProfileTestResponse struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
+type ProfileTLSMode string
+
+const (
+	ProfileTLSModeDisabled ProfileTLSMode = "disabled"
+	ProfileTLSModeMTLS     ProfileTLSMode = "mtls"
+)
+
+type ProfileTLSConfig struct {
+	Mode          ProfileTLSMode `json:"mode"`
+	ClientCertPEM string         `json:"clientCertPem,omitempty"`
+	ClientKeyPEM  string         `json:"clientKeyPem,omitempty"`
+	CACertPEM     string         `json:"caCertPem,omitempty"`
+	ServerName    string         `json:"serverName,omitempty"`
+}
+
+type ProfileTLSStatus struct {
+	Mode          ProfileTLSMode `json:"mode"`
+	HasClientCert bool           `json:"hasClientCert"`
+	HasClientKey  bool           `json:"hasClientKey"`
+	HasCACert     bool           `json:"hasCa"`
+	ServerName    string         `json:"serverName,omitempty"`
+	UpdatedAt     string         `json:"updatedAt,omitempty"`
+}
+
 type Bucket struct {
 	Name      string `json:"name"`
 	CreatedAt string `json:"createdAt,omitempty"`
@@ -77,6 +103,26 @@ type ObjectItem struct {
 	ETag         string `json:"etag,omitempty"`
 	LastModified string `json:"lastModified"`
 	StorageClass string `json:"storageClass,omitempty"`
+}
+
+type ObjectFavorite struct {
+	Key       string `json:"key"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type ObjectFavoriteCreateRequest struct {
+	Key string `json:"key"`
+}
+
+type FavoriteObjectItem struct {
+	ObjectItem
+	CreatedAt string `json:"createdAt"`
+}
+
+type ObjectFavoritesResponse struct {
+	Bucket string               `json:"bucket"`
+	Prefix string               `json:"prefix,omitempty"`
+	Items  []FavoriteObjectItem `json:"items"`
 }
 
 type ListObjectsResponse struct {
@@ -204,20 +250,30 @@ type JobsListResponse struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+type FeatureCapability struct {
+	Enabled bool   `json:"enabled"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+type MetaCapabilities struct {
+	ProfileTLS FeatureCapability `json:"profileTls"`
+}
+
 type MetaResponse struct {
-	Version                 string    `json:"version"`
-	ServerAddr              string    `json:"serverAddr"`
-	DataDir                 string    `json:"dataDir"`
-	StaticDir               string    `json:"staticDir"`
-	APITokenEnabled         bool      `json:"apiTokenEnabled"`
-	EncryptionEnabled       bool      `json:"encryptionEnabled"`
-	AllowedLocalDirs        []string  `json:"allowedLocalDirs,omitempty"`
-	JobConcurrency          int       `json:"jobConcurrency"`
-	JobLogMaxBytes          *int64    `json:"jobLogMaxBytes,omitempty"`
-	JobRetentionSeconds     *int64    `json:"jobRetentionSeconds,omitempty"`
-	UploadSessionTTLSeconds int64     `json:"uploadSessionTTLSeconds"`
-	UploadMaxBytes          *int64    `json:"uploadMaxBytes,omitempty"`
-	S5Cmd                   S5CmdInfo `json:"s5cmd"`
+	Version                 string           `json:"version"`
+	ServerAddr              string           `json:"serverAddr"`
+	DataDir                 string           `json:"dataDir"`
+	StaticDir               string           `json:"staticDir"`
+	APITokenEnabled         bool             `json:"apiTokenEnabled"`
+	EncryptionEnabled       bool             `json:"encryptionEnabled"`
+	Capabilities            MetaCapabilities `json:"capabilities"`
+	AllowedLocalDirs        []string         `json:"allowedLocalDirs,omitempty"`
+	JobConcurrency          int              `json:"jobConcurrency"`
+	JobLogMaxBytes          *int64           `json:"jobLogMaxBytes,omitempty"`
+	JobRetentionSeconds     *int64           `json:"jobRetentionSeconds,omitempty"`
+	UploadSessionTTLSeconds int64            `json:"uploadSessionTTLSeconds"`
+	UploadMaxBytes          *int64           `json:"uploadMaxBytes,omitempty"`
+	S5Cmd                   S5CmdInfo        `json:"s5cmd"`
 }
 
 type S5CmdInfo struct {

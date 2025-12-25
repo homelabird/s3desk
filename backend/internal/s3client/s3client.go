@@ -3,9 +3,13 @@ package s3client
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -14,6 +18,20 @@ import (
 
 	"object-storage/internal/models"
 )
+
+type cachedTLSMaterial struct {
+	updatedAt  string
+	cert       tls.Certificate
+	roots      *x509.CertPool
+	serverName string
+}
+
+var tlsMaterialCache = struct {
+	mu      sync.Mutex
+	entries map[string]cachedTLSMaterial
+}{
+	entries: make(map[string]cachedTLSMaterial),
+}
 
 func New(ctx context.Context, p models.ProfileSecrets) (*s3.Client, error) {
 	if p.Region == "" {
@@ -26,9 +44,13 @@ func New(ctx context.Context, p models.ProfileSecrets) (*s3.Client, error) {
 	}
 
 	var httpClient aws.HTTPClient
-	if p.TLSInsecureSkipVerify {
+	tlsConfig, err := buildTLSConfig(p)
+	if err != nil {
+		return nil, err
+	}
+	if tlsConfig != nil {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+		transport.TLSClientConfig = tlsConfig
 		httpClient = &http.Client{Transport: transport}
 	}
 
@@ -68,4 +90,106 @@ func stringOrEmpty(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func buildTLSConfig(p models.ProfileSecrets) (*tls.Config, error) {
+	if p.TLSConfig == nil && !p.TLSInsecureSkipVerify {
+		return nil, nil
+	}
+
+	mode := models.ProfileTLSModeDisabled
+	if p.TLSConfig != nil {
+		mode = normalizeTLSMode(p.TLSConfig.Mode)
+	}
+	if mode == models.ProfileTLSModeDisabled && !p.TLSInsecureSkipVerify {
+		return nil, nil
+	}
+
+	cfg := &tls.Config{InsecureSkipVerify: p.TLSInsecureSkipVerify} //nolint:gosec
+	if p.TLSConfig == nil || mode == models.ProfileTLSModeDisabled {
+		return cfg, nil
+	}
+	if mode != models.ProfileTLSModeMTLS {
+		return nil, fmt.Errorf("unsupported tls mode: %s", mode)
+	}
+
+	material, err := resolveTLSMaterial(p.ID, p.TLSConfigUpdatedAt, *p.TLSConfig)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Certificates = []tls.Certificate{material.cert}
+	if material.roots != nil {
+		cfg.RootCAs = material.roots
+	}
+	if material.serverName != "" {
+		cfg.ServerName = material.serverName
+	}
+	return cfg, nil
+}
+
+func normalizeTLSMode(mode models.ProfileTLSMode) models.ProfileTLSMode {
+	raw := strings.ToLower(strings.TrimSpace(string(mode)))
+	switch raw {
+	case "", "disabled":
+		return models.ProfileTLSModeDisabled
+	case "mtls":
+		return models.ProfileTLSModeMTLS
+	default:
+		return models.ProfileTLSMode(raw)
+	}
+}
+
+func resolveTLSMaterial(profileID, updatedAt string, cfg models.ProfileTLSConfig) (cachedTLSMaterial, error) {
+	if profileID != "" && updatedAt != "" {
+		if cached, ok := getCachedTLSMaterial(profileID, updatedAt); ok {
+			return cached, nil
+		}
+	}
+
+	certPEM := strings.TrimSpace(cfg.ClientCertPEM)
+	keyPEM := strings.TrimSpace(cfg.ClientKeyPEM)
+	if certPEM == "" || keyPEM == "" {
+		return cachedTLSMaterial{}, errors.New("mtls requires client certificate and key")
+	}
+	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if err != nil {
+		return cachedTLSMaterial{}, err
+	}
+
+	var roots *x509.CertPool
+	caPEM := strings.TrimSpace(cfg.CACertPEM)
+	if caPEM != "" {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(caPEM)) {
+			return cachedTLSMaterial{}, errors.New("invalid CA certificate")
+		}
+		roots = pool
+	}
+
+	entry := cachedTLSMaterial{
+		updatedAt:  updatedAt,
+		cert:       cert,
+		roots:      roots,
+		serverName: strings.TrimSpace(cfg.ServerName),
+	}
+	if profileID != "" && updatedAt != "" {
+		setCachedTLSMaterial(profileID, entry)
+	}
+	return entry, nil
+}
+
+func getCachedTLSMaterial(profileID, updatedAt string) (cachedTLSMaterial, bool) {
+	tlsMaterialCache.mu.Lock()
+	defer tlsMaterialCache.mu.Unlock()
+	entry, ok := tlsMaterialCache.entries[profileID]
+	if !ok || entry.updatedAt != updatedAt {
+		return cachedTLSMaterial{}, false
+	}
+	return entry, true
+}
+
+func setCachedTLSMaterial(profileID string, entry cachedTLSMaterial) {
+	tlsMaterialCache.mu.Lock()
+	tlsMaterialCache.entries[profileID] = entry
+	tlsMaterialCache.mu.Unlock()
 }

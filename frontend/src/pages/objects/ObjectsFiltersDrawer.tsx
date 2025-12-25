@@ -1,5 +1,5 @@
 import type { SelectProps } from 'antd'
-import { Button, DatePicker, Drawer, InputNumber, Select, Space, Typography } from 'antd'
+import { Button, DatePicker, Drawer, InputNumber, Select, Space, Switch, Typography } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 
 import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
@@ -10,6 +10,8 @@ type ObjectsFiltersDrawerProps = {
 	isAdvanced: boolean
 	typeFilter: ObjectTypeFilter
 	onTypeFilterChange: (value: ObjectTypeFilter) => void
+	favoritesOnly: boolean
+	onFavoritesOnlyChange: (value: boolean) => void
 	extFilter: string
 	extOptions: SelectProps['options']
 	onExtFilterChange: (value: string) => void
@@ -53,6 +55,11 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 			width="90%"
 		>
 			<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+					<Typography.Text type="secondary">Favorites</Typography.Text>
+					<Switch checked={props.favoritesOnly} onChange={props.onFavoritesOnlyChange} />
+				</Space>
+
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text type="secondary">Type</Typography.Text>
 					<Select

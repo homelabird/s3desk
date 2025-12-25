@@ -299,6 +299,15 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 	if session.Valid {
 		profile.SessionToken = &session.String
 	}
+
+	tlsCfg, updatedAt, found, err := s.GetProfileTLSConfig(ctx, profileID)
+	if err != nil {
+		return models.ProfileSecrets{}, false, err
+	}
+	if found {
+		profile.TLSConfig = &tlsCfg
+		profile.TLSConfigUpdatedAt = updatedAt
+	}
 	return profile, true, nil
 }
 

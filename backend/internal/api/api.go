@@ -54,6 +54,9 @@ func New(dep Dependencies) http.Handler {
 			r.Patch("/", api.handleUpdateProfile)
 			r.Delete("/", api.handleDeleteProfile)
 			r.Post("/test", api.handleTestProfile)
+			r.Get("/tls", api.handleGetProfileTLS)
+			r.Put("/tls", api.handlePutProfileTLS)
+			r.Delete("/tls", api.handleDeleteProfileTLS)
 		})
 	})
 
@@ -76,6 +79,10 @@ func New(dep Dependencies) http.Handler {
 		r.Post("/buckets/{bucket}/objects/folder", api.handleCreateFolder)
 		r.Get("/buckets/{bucket}/objects/download", api.handleDownloadObject)
 		r.Get("/buckets/{bucket}/objects/download-url", api.handleGetObjectDownloadURL)
+		r.Get("/buckets/{bucket}/objects/favorites", api.handleListObjectFavorites)
+		r.Post("/buckets/{bucket}/objects/favorites", api.handleCreateObjectFavorite)
+		r.Delete("/buckets/{bucket}/objects/favorites", api.handleDeleteObjectFavorite)
+		r.Get("/buckets/{bucket}/objects/thumbnail", api.handleGetObjectThumbnail)
 
 		r.Get("/local/entries", api.handleListLocalEntries)
 

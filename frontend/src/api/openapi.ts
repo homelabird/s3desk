@@ -1844,6 +1844,13 @@ export interface components {
             items: components["schemas"]["Job"][];
             nextCursor?: string | null;
         };
+        FeatureCapability: {
+            enabled: boolean;
+            reason?: string;
+        };
+        MetaCapabilities: {
+            profileTls: components["schemas"]["FeatureCapability"];
+        };
         MetaResponse: {
             version: string;
             serverAddr: string;
@@ -1851,6 +1858,7 @@ export interface components {
             staticDir: string;
             apiTokenEnabled: boolean;
             encryptionEnabled: boolean;
+            capabilities: components["schemas"]["MetaCapabilities"];
             allowedLocalDirs?: string[];
             jobConcurrency: number;
             /** Format: int64 */

@@ -1,8 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Descriptions, Divider, Drawer, Form, Grid, Input, Space, Spin, Tag, Typography } from 'antd'
+import {
+	Alert,
+	Button,
+	Descriptions,
+	Divider,
+	Drawer,
+	Form,
+	Grid,
+	Input,
+	InputNumber,
+	Space,
+	Spin,
+	Switch,
+	Tag,
+	Tooltip,
+	Typography,
+} from 'antd'
 import { useMemo } from 'react'
 
 import { APIClient, APIError } from '../api/client'
+import { InfoCircleOutlined } from '@ant-design/icons'
+import { useLocalStorageState } from '../lib/useLocalStorageState'
+import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
 
 type Props = {
 	open: boolean
@@ -17,6 +36,19 @@ export function SettingsDrawer(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const screens = Grid.useBreakpoint()
 	const drawerWidth = screens.md ? 480 : '100%'
+	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
+	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>(
+		'cleanupEmptyDirsDefault',
+		false,
+	)
+	const [moveCleanupFilenameTemplate, setMoveCleanupFilenameTemplate] = useLocalStorageState<string>(
+		'moveCleanupFilenameTemplate',
+		MOVE_CLEANUP_FILENAME_TEMPLATE,
+	)
+	const [moveCleanupFilenameMaxLen, setMoveCleanupFilenameMaxLen] = useLocalStorageState<number>(
+		'moveCleanupFilenameMaxLen',
+		MOVE_CLEANUP_FILENAME_MAX_LEN,
+	)
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
@@ -24,6 +56,17 @@ export function SettingsDrawer(props: Props) {
 		enabled: props.open,
 		retry: false,
 	})
+	const tlsCapability = metaQuery.data?.capabilities?.profileTls
+	const tlsEnabled = tlsCapability?.enabled ?? false
+	const tlsReason = tlsCapability?.reason ?? ''
+	const mtlsLabel = (
+		<Space size={4}>
+			<span>mTLS (client cert)</span>
+			<Tooltip title="Requires ENCRYPTION_KEY to store client certificates at rest.">
+				<InfoCircleOutlined />
+			</Tooltip>
+		</Space>
+	)
 
 	return (
 		<Drawer
@@ -59,6 +102,41 @@ export function SettingsDrawer(props: Props) {
 							Clear
 						</Button>
 					</Space.Compact>
+				</Form.Item>
+				<Form.Item
+					label="Default: Move after upload"
+					extra="Applies to folder uploads from this device."
+				>
+					<Switch checked={moveAfterUploadDefault} onChange={setMoveAfterUploadDefault} />
+				</Form.Item>
+				<Form.Item
+					label="Default: Auto-clean empty folders"
+					extra="Used only when move-after-upload is enabled."
+				>
+					<Switch
+						checked={cleanupEmptyDirsDefault}
+						onChange={setCleanupEmptyDirsDefault}
+						disabled={!moveAfterUploadDefault}
+					/>
+				</Form.Item>
+				<Form.Item
+					label="Move cleanup report filename template"
+					extra="Available tokens: {bucket} {prefix} {label} {timestamp}"
+				>
+					<Input
+						value={moveCleanupFilenameTemplate}
+						onChange={(e) => setMoveCleanupFilenameTemplate(e.target.value)}
+						placeholder={MOVE_CLEANUP_FILENAME_TEMPLATE}
+					/>
+				</Form.Item>
+				<Form.Item label="Move cleanup report filename max length">
+					<InputNumber
+						min={40}
+						max={200}
+						value={moveCleanupFilenameMaxLen}
+						onChange={(value) => setMoveCleanupFilenameMaxLen(typeof value === 'number' ? value : MOVE_CLEANUP_FILENAME_MAX_LEN)}
+						style={{ width: '100%' }}
+					/>
 				</Form.Item>
 			</Form>
 
@@ -101,6 +179,12 @@ export function SettingsDrawer(props: Props) {
 						<Tag color={metaQuery.data.encryptionEnabled ? 'success' : 'default'}>
 							{metaQuery.data.encryptionEnabled ? 'enabled' : 'disabled'}
 						</Tag>
+					</Descriptions.Item>
+					<Descriptions.Item label={mtlsLabel}>
+						<Space direction="vertical" size={0}>
+							<Tag color={tlsEnabled ? 'success' : 'default'}>{tlsEnabled ? 'enabled' : 'disabled'}</Tag>
+							{!tlsEnabled && tlsReason ? <Typography.Text type="secondary">{tlsReason}</Typography.Text> : null}
+						</Space>
 					</Descriptions.Item>
 					<Descriptions.Item label="Allowed Local Dirs">
 						{metaQuery.data.allowedLocalDirs?.length ? (

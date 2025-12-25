@@ -1,0 +1,9 @@
+{
+	auto_https disable_redirects
+}
+
+https://object-storage.local:8443, https://localhost:8443 {
+	tls internal
+	reverse_proxy 127.0.0.1:8080
+	encode gzip
+}

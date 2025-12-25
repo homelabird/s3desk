@@ -48,6 +48,14 @@ func migrate(db *sql.DB) error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS profile_connection_options (
+			profile_id TEXT PRIMARY KEY,
+			schema_version INTEGER NOT NULL,
+			options_enc TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+		);`,
 		`CREATE TABLE IF NOT EXISTS jobs (
 			id TEXT PRIMARY KEY,
 			profile_id TEXT NOT NULL,
@@ -94,6 +102,16 @@ func migrate(db *sql.DB) error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_object_index_profile_bucket_key ON object_index(profile_id, bucket, object_key);`,
 		`CREATE INDEX IF NOT EXISTS idx_object_index_profile_bucket_indexed_at ON object_index(profile_id, bucket, indexed_at);`,
+
+		`CREATE TABLE IF NOT EXISTS object_favorites (
+			profile_id TEXT NOT NULL,
+			bucket TEXT NOT NULL,
+			object_key TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY(profile_id, bucket, object_key),
+			FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_object_favorites_profile_bucket_created_at ON object_favorites(profile_id, bucket, created_at);`,
 	}
 
 	for _, stmt := range stmts {

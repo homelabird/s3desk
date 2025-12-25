@@ -8,6 +8,7 @@ type Config struct {
 	StaticDir        string
 	APIToken         string
 	AllowRemote      bool
+	AllowedHosts     []string
 	EncryptionKey    string
 	AllowedLocalDirs []string
 	JobConcurrency   int

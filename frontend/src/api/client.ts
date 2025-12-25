@@ -19,7 +19,12 @@ import type {
 	Profile,
 	ProfileCreateRequest,
 	ProfileTestResponse,
+	ProfileTLSConfig,
+	ProfileTLSStatus,
 	ProfileUpdateRequest,
+	ObjectFavorite,
+	ObjectFavoriteCreateRequest,
+	ObjectFavoritesResponse,
 	UploadCreateRequest,
 	UploadCreateResponse,
 } from './types'
@@ -127,6 +132,26 @@ export class APIClient {
 		return res
 	}
 
+	private async fetchOrThrowRaw(path: string, init: RequestInit, options: RequestOptions = {}): Promise<Response> {
+		const headers = new Headers(init.headers ?? {})
+		const profileId = options.profileId ?? this.requestDefaults.profileId
+		if (profileId) {
+			headers.set('X-Profile-Id', profileId)
+		}
+		if (this.apiToken) {
+			headers.set('X-Api-Token', this.apiToken)
+		}
+
+		const res = await fetch(this.baseUrl + path, {
+			...init,
+			headers,
+		})
+
+		if (res.ok) return res
+		const bodyText = await res.text().catch(() => null)
+		throw parseAPIError(res.status, bodyText)
+	}
+
 	private async request<T>(path: string, init: RequestInit, options: RequestOptions = {}): Promise<T> {
 		const res = await this.fetchOrThrow(path, init, options)
 		if (res.status === 204) {
@@ -173,6 +198,22 @@ export class APIClient {
 
 	testProfile(profileId: string): Promise<ProfileTestResponse> {
 		return this.request(`/profiles/${encodeURIComponent(profileId)}/test`, { method: 'POST' })
+	}
+
+	getProfileTLS(profileId: string): Promise<ProfileTLSStatus> {
+		return this.request(`/profiles/${encodeURIComponent(profileId)}/tls`, { method: 'GET' })
+	}
+
+	updateProfileTLS(profileId: string, req: ProfileTLSConfig): Promise<ProfileTLSStatus> {
+		return this.request(`/profiles/${encodeURIComponent(profileId)}/tls`, {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(req),
+		})
+	}
+
+	deleteProfileTLS(profileId: string): Promise<void> {
+		return this.request(`/profiles/${encodeURIComponent(profileId)}/tls`, { method: 'DELETE' })
 	}
 
 	listBuckets(profileId: string): Promise<Bucket[]> {
@@ -317,6 +358,40 @@ export class APIClient {
 		)
 	}
 
+	listObjectFavorites(args: { profileId: string; bucket: string; prefix?: string }): Promise<ObjectFavoritesResponse> {
+		const params = new URLSearchParams()
+		if (args.prefix) params.set('prefix', args.prefix)
+		const qs = params.toString()
+		return this.request(
+			`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites${qs ? `?${qs}` : ''}`,
+			{ method: 'GET' },
+			{ profileId: args.profileId },
+		)
+	}
+
+	createObjectFavorite(args: { profileId: string; bucket: string; key: string }): Promise<ObjectFavorite> {
+		const payload: ObjectFavoriteCreateRequest = { key: args.key }
+		return this.request(
+			`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites`,
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload),
+			},
+			{ profileId: args.profileId },
+		)
+	}
+
+	deleteObjectFavorite(args: { profileId: string; bucket: string; key: string }): Promise<void> {
+		const params = new URLSearchParams()
+		params.set('key', args.key)
+		return this.request(
+			`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites?${params.toString()}`,
+			{ method: 'DELETE' },
+			{ profileId: args.profileId },
+		)
+	}
+
 	createUpload(profileId: string, req: UploadCreateRequest): Promise<UploadCreateResponse> {
 		return this.request(
 			'/uploads',
@@ -415,6 +490,51 @@ export class APIClient {
 					resolve({
 						blob: xhr.response,
 						contentDisposition: xhr.getResponseHeader('content-disposition'),
+						contentType: xhr.getResponseHeader('content-type'),
+					})
+					return
+				}
+
+				const bodyText = await blobToTextSafe(xhr.response)
+				reject(parseAPIError(xhr.status, bodyText))
+			}
+			xhr.onerror = () => reject(new Error('network error'))
+			xhr.onabort = () => reject(new RequestAbortedError())
+		})
+
+		xhr.send()
+		return { promise, abort: () => xhr.abort() }
+	}
+
+	downloadObjectStream(args: { profileId: string; bucket: string; key: string; signal?: AbortSignal }): Promise<Response> {
+		const params = new URLSearchParams()
+		params.set('key', args.key)
+		return this.fetchOrThrowRaw(
+			`/buckets/${encodeURIComponent(args.bucket)}/objects/download?${params.toString()}`,
+			{ method: 'GET', signal: args.signal },
+			{ profileId: args.profileId },
+		)
+	}
+
+	downloadObjectThumbnail(
+		args: { profileId: string; bucket: string; key: string; size?: number },
+	): { promise: Promise<{ blob: Blob; contentType: string | null }>; abort: () => void } {
+		const params = new URLSearchParams()
+		params.set('key', args.key)
+		if (args.size) params.set('size', String(args.size))
+
+		const xhr = new XMLHttpRequest()
+		xhr.open('GET', this.baseUrl + `/buckets/${encodeURIComponent(args.bucket)}/objects/thumbnail?${params.toString()}`)
+		xhr.responseType = 'blob'
+
+		xhr.setRequestHeader('X-Profile-Id', args.profileId)
+		if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+
+		const promise = new Promise<{ blob: Blob; contentType: string | null }>((resolve, reject) => {
+			xhr.onload = async () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					resolve({
+						blob: xhr.response,
 						contentType: xhr.getResponseHeader('content-type'),
 					})
 					return

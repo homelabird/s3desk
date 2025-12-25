@@ -7,6 +7,23 @@ export type ProfileCreateRequest = components['schemas']['ProfileCreateRequest']
 export type ProfileUpdateRequest = components['schemas']['ProfileUpdateRequest']
 export type ProfileTestResponse = components['schemas']['ProfileTestResponse']
 
+export type ProfileTLSMode = 'disabled' | 'mtls'
+export type ProfileTLSConfig = {
+	mode: ProfileTLSMode
+	clientCertPem?: string
+	clientKeyPem?: string
+	caCertPem?: string
+	serverName?: string
+}
+export type ProfileTLSStatus = {
+	mode: ProfileTLSMode
+	hasClientCert: boolean
+	hasClientKey: boolean
+	hasCa: boolean
+	serverName?: string
+	updatedAt?: string
+}
+
 export type Bucket = components['schemas']['Bucket']
 export type BucketCreateRequest = components['schemas']['BucketCreateRequest']
 
@@ -18,6 +35,22 @@ export type ObjectMeta = components['schemas']['ObjectMeta']
 export type PresignedURLResponse = components['schemas']['PresignedURLResponse']
 export type CreateFolderRequest = components['schemas']['CreateFolderRequest']
 export type CreateFolderResponse = components['schemas']['CreateFolderResponse']
+
+export type ObjectFavorite = {
+	key: string
+	createdAt: string
+}
+export type ObjectFavoriteCreateRequest = {
+	key: string
+}
+export type FavoriteObjectItem = ObjectItem & {
+	createdAt: string
+}
+export type ObjectFavoritesResponse = {
+	bucket: string
+	prefix?: string
+	items: FavoriteObjectItem[]
+}
 
 export type DeleteObjectsRequest = components['schemas']['DeleteObjectsRequest']
 export type DeleteObjectsResponse = components['schemas']['DeleteObjectsResponse']

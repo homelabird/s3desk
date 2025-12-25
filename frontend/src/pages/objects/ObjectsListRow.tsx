@@ -1,6 +1,6 @@
 import type { MenuProps } from 'antd'
 import { Button, Checkbox, Dropdown, Tooltip, Typography } from 'antd'
-import { EllipsisOutlined, FolderOutlined } from '@ant-design/icons'
+import { EllipsisOutlined, FolderOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 import type { DragEvent, MouseEvent, ReactNode } from 'react'
 
 import styles from './objects.module.css'
@@ -27,6 +27,8 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	sizeLabel: string
 	timeLabel: string
 	isSelected: boolean
+	isFavorite: boolean
+	favoriteDisabled?: boolean
 	highlightText: (value: string) => ReactNode
 	menu: MenuProps
 	onClick: (e: MouseEvent) => void
@@ -34,6 +36,8 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	onCheckboxClick: (e: MouseEvent) => void
 	onDragStart: (e: DragEvent) => void
 	onDragEnd: () => void
+	onToggleFavorite: () => void
+	thumbnail?: ReactNode
 }
 
 const rowBaseStyle = {
@@ -123,6 +127,20 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 
 					<div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
 						<div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+							{props.thumbnail ? <div style={{ display: 'flex', alignItems: 'center' }}>{props.thumbnail}</div> : null}
+							<Tooltip title={props.isFavorite ? 'Remove favorite' : 'Add favorite'}>
+								<Button
+									type="text"
+									size="small"
+									icon={props.isFavorite ? <StarFilled style={{ color: '#faad14' }} /> : <StarOutlined />}
+									onClick={(e) => {
+										e.stopPropagation()
+										props.onToggleFavorite()
+									}}
+									disabled={props.favoriteDisabled}
+									aria-label={props.isFavorite ? 'Remove favorite' : 'Add favorite'}
+								/>
+							</Tooltip>
 							<Tooltip title={props.objectKey}>
 								<Typography.Text
 									style={{

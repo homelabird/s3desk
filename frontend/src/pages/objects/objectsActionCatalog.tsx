@@ -26,6 +26,7 @@ type ObjectsActionDeps = {
 	onGoForward: () => void
 	onGoUp: () => void
 	onDownload: (key: string, size?: number) => void
+	onDownloadToDevice: (key: string, size?: number) => void
 	onPresign: (key: string) => void
 	onCopy: (value: string) => void
 	onOpenDetailsForKey: (key: string) => void
@@ -76,6 +77,16 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			keywords: 'download client save',
 			enabled: canUseObjectActions,
 			run: () => deps.onDownload(objectKey, objectSize),
+		}
+		const downloadDeviceAction: UIAction = {
+			id: 'download_device',
+			label: 'Download to folder…',
+			shortLabel: 'Download to folder',
+			icon: <DownloadOutlined />,
+			keywords: 'download folder local device',
+			enabled: canUseObjectActions,
+			audience: 'advanced',
+			run: () => deps.onDownloadToDevice(objectKey, objectSize),
 		}
 		const presignAction: UIAction = {
 			id: 'presign',
@@ -146,6 +157,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 
 		return [
 			downloadAction,
+			downloadDeviceAction,
 			presignAction,
 			copyAction,
 			detailsAction,
@@ -227,10 +239,10 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 				run: () => deps.onOpenCopyPrefix('move', targetPrefix),
 			},
 			{
-				id: 'downloadToServer',
-				label: 'Download to server (backup)…',
+				id: 'downloadToDevice',
+				label: 'Download to folder…',
 				icon: <DownloadOutlined />,
-				keywords: 'download sync local backup server',
+				keywords: 'download folder device local',
 				enabled: canUsePrefixActions,
 				audience: 'advanced',
 				run: () => deps.onOpenDownloadPrefix(targetPrefix),
@@ -265,10 +277,10 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 	const selectionActionsAll: UIAction[] = [
 		{
 			id: 'download_selected',
-			label: selectionIsBulk ? 'Download selection (zip)' : 'Download (client)',
-			shortLabel: selectionIsBulk ? 'Download zip' : 'Download',
+			label: selectionIsBulk ? 'Download selection…' : 'Download (client)',
+			shortLabel: 'Download',
 			icon: <DownloadOutlined />,
-			keywords: selectionIsBulk ? 'zip download selection' : 'download client',
+			keywords: selectionIsBulk ? 'download selection folder' : 'download client',
 			enabled: canUseSelectionActions && deps.selectedCount > 0,
 			run: () => deps.onDownloadSelected(),
 		},

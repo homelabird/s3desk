@@ -2036,9 +2036,22 @@ func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok 
 	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	out, err := client.ListBuckets(callCtx, &s3.ListBucketsInput{})
-	if err != nil {
-		return false, map[string]any{"error": err.Error()}, nil
+	capture := responseHeadersCapture{}
+	out, err := client.ListBuckets(callCtx, &s3.ListBucketsInput{}, func(o *s3.Options) {
+		o.APIOptions = append(o.APIOptions, captureResponseHeaders(&capture))
+	})
+	storageType, storageSource := detectStorageType(profileSecrets.Endpoint, capture.Headers)
+	details = map[string]any{}
+	if storageType != "" {
+		details["storageType"] = storageType
 	}
-	return true, map[string]any{"buckets": len(out.Buckets)}, nil
+	if storageSource != "" {
+		details["storageTypeSource"] = storageSource
+	}
+	if err != nil {
+		details["error"] = err.Error()
+		return false, details, nil
+	}
+	details["buckets"] = len(out.Buckets)
+	return true, details, nil
 }

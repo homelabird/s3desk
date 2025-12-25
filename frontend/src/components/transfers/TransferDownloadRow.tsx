@@ -48,7 +48,12 @@ export function TransferDownloadRow(props: TransferDownloadRowProps) {
 				: `${formatBytes(t.loadedBytes)}${t.totalBytes != null ? `/${formatBytes(t.totalBytes)}` : ''} · ${
 						t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'
 					} · ${t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'}`
-	const subtitle = t.kind === 'object' ? `s3://${t.bucket}/${t.key}` : `job ${t.jobId} artifact`
+	const subtitle =
+		t.kind === 'object'
+			? `s3://${t.bucket}/${t.key}`
+			: t.kind === 'object_device'
+				? `s3://${t.bucket}/${t.key} → ${(t.targetLabel ?? 'device')}/${t.targetPath}`
+				: `job ${t.jobId} artifact`
 
 	return (
 		<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 12, background: '#fff' }}>

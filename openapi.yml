@@ -199,6 +199,59 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
 
+  /profiles/{profileId}/tls:
+    get:
+      tags: [Profiles]
+      summary: Get TLS configuration status
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileTLSStatus"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Profiles]
+      summary: Set TLS configuration
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileTLSConfig"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileTLSStatus"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Profiles]
+      summary: Delete TLS configuration
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "204":
+          description: No Content
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
   /buckets:
     get:
       tags: [Buckets]
@@ -511,6 +564,99 @@ paths:
               schema:
                 $ref: "#/components/schemas/PresignedURLResponse"
         "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/favorites:
+    get:
+      tags: [Objects]
+      summary: List favorite objects
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: prefix
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectFavoritesResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    post:
+      tags: [Objects]
+      summary: Add an object favorite
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ObjectFavoriteCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectFavorite"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Objects]
+      summary: Remove an object favorite
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "204":
+          description: No Content
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/objects/thumbnail:
+    get:
+      tags: [Objects]
+      summary: Get an image thumbnail
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+        - name: key
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 24, maximum: 512, default: 96 }
+      responses:
+        "200":
+          description: OK
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/ErrorResponse"
+        "415":
           $ref: "#/components/responses/ErrorResponse"
 
   /uploads:
@@ -919,7 +1065,44 @@ components:
       properties:
         ok: { type: boolean }
         message: { type: string }
-        details: { type: object, additionalProperties: true }
+        details:
+          type: object
+          additionalProperties: true
+          description: |
+            Additional test metadata.
+            Known keys:
+              - buckets: number of buckets returned by ListBuckets.
+              - storageType: detected storage type (ceph, aws-s3, s3-compatible, unknown).
+              - storageTypeSource: detection source (server-header, endpoint, default, none).
+              - error: error string when ok=false.
+
+    ProfileTLSMode:
+      type: string
+      enum: [disabled, mtls]
+
+    ProfileTLSConfig:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          $ref: "#/components/schemas/ProfileTLSMode"
+        clientCertPem: { type: string }
+        clientKeyPem: { type: string }
+        caCertPem: { type: string }
+        serverName: { type: string }
+
+    ProfileTLSStatus:
+      type: object
+      required: [mode, hasClientCert, hasClientKey, hasCa]
+      properties:
+        mode:
+          $ref: "#/components/schemas/ProfileTLSMode"
+        hasClientCert: { type: boolean }
+        hasClientKey: { type: boolean }
+        hasCa: { type: boolean }
+        serverName: { type: string }
+        updatedAt: { type: string, format: date-time }
 
     Bucket:
       type: object
@@ -945,6 +1128,38 @@ components:
         etag: { type: string }
         lastModified: { type: string, format: date-time }
         storageClass: { type: string }
+
+    ObjectFavorite:
+      type: object
+      required: [key, createdAt]
+      properties:
+        key: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    ObjectFavoriteCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [key]
+      properties:
+        key: { type: string }
+
+    FavoriteObjectItem:
+      allOf:
+        - $ref: "#/components/schemas/ObjectItem"
+        - type: object
+          required: [createdAt]
+          properties:
+            createdAt: { type: string, format: date-time }
+
+    ObjectFavoritesResponse:
+      type: object
+      required: [bucket, items]
+      properties:
+        bucket: { type: string }
+        prefix: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FavoriteObjectItem" }
 
     ListObjectsResponse:
       type: object
@@ -1490,6 +1705,7 @@ components:
         - staticDir
         - apiTokenEnabled
         - encryptionEnabled
+        - capabilities
         - jobConcurrency
         - uploadSessionTTLSeconds
         - s5cmd
@@ -1500,6 +1716,7 @@ components:
         staticDir: { type: string }
         apiTokenEnabled: { type: boolean }
         encryptionEnabled: { type: boolean }
+        capabilities: { $ref: "#/components/schemas/MetaCapabilities" }
         allowedLocalDirs:
           type: array
           items: { type: string }
@@ -1515,3 +1732,16 @@ components:
             available: { type: boolean }
             path: { type: string }
             version: { type: string }
+
+    MetaCapabilities:
+      type: object
+      required: [profileTls]
+      properties:
+        profileTls: { $ref: "#/components/schemas/FeatureCapability" }
+
+    FeatureCapability:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        reason: { type: string }

@@ -8,11 +8,12 @@ import { useNavigate } from 'react-router-dom'
 import { APIClient, APIError, RequestAbortedError } from '../api/client'
 import type { InputRef } from 'antd'
 import type { DataNode, EventDataNode } from 'antd/es/tree'
-import type { Bucket, Job, JobCreateRequest, ListObjectsResponse, ObjectItem } from '../api/types'
+import type { Bucket, Job, JobCreateRequest, ListObjectsResponse, ObjectFavoritesResponse, ObjectItem } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
-import { LocalPathBrowseModal } from '../components/LocalPathBrowseModal'
 import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
+import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath, pickDirectory } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
+import { listAllObjects } from '../lib/objects'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { formatBytes } from '../lib/transfer'
 import styles from './objects/objects.module.css'
@@ -36,6 +37,7 @@ import { ObjectsListContent } from './objects/ObjectsListContent'
 import { ObjectsListHeader } from './objects/ObjectsListHeader'
 import { ObjectsObjectRow, ObjectsPrefixRow } from './objects/ObjectsListRow'
 import { ObjectsListSectionContainer } from './objects/ObjectsListSectionContainer'
+import { ObjectThumbnail } from './objects/ObjectThumbnail'
 import { ObjectsSelectionBarSection } from './objects/ObjectsSelectionBarSection'
 import { ObjectsToolbarSection } from './objects/ObjectsToolbarSection'
 import { ObjectsTreeSection } from './objects/ObjectsTreeSection'
@@ -61,6 +63,10 @@ const ObjectsDeletePrefixConfirmModal = lazy(async () => {
 const ObjectsDownloadPrefixModal = lazy(async () => {
 	const m = await import('./objects/ObjectsDownloadPrefixModal')
 	return { default: m.ObjectsDownloadPrefixModal }
+})
+const ObjectsUploadFolderModal = lazy(async () => {
+	const m = await import('./objects/ObjectsUploadFolderModal')
+	return { default: m.ObjectsUploadFolderModal }
 })
 const ObjectsFiltersDrawer = lazy(async () => {
 	const m = await import('./objects/ObjectsFiltersDrawer')
@@ -186,6 +192,7 @@ export function ObjectsPage(props: Props) {
 	const [indexPrefix, setIndexPrefix] = useState('')
 	const [indexFullReindex, setIndexFullReindex] = useState(true)
 	const [typeFilter, setTypeFilter] = useLocalStorageState<ObjectTypeFilter>('objectsTypeFilter', 'all')
+	const [favoritesOnly, setFavoritesOnly] = useLocalStorageState<boolean>('objectsFavoritesOnly', false)
 	const [extFilter, setExtFilter] = useLocalStorageState<string>('objectsExtFilter', '')
 	const [minSize, setMinSize] = useLocalStorageState<number | null>('objectsMinSize', null)
 	const [maxSize, setMaxSize] = useLocalStorageState<number | null>('objectsMaxSize', null)
@@ -211,7 +218,9 @@ export function ObjectsPage(props: Props) {
 	const [preview, setPreview] = useState<ObjectPreview | null>(null)
 	const previewAbortRef = useRef<(() => void) | null>(null)
 	const previewURLRef = useRef<string | null>(null)
+	const thumbnailCacheRef = useRef<Map<string, string>>(new Map())
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
+	const [favoritePendingKeys, setFavoritePendingKeys] = useState<Set<string>>(() => new Set())
 	const [lastSelectedObjectKey, setLastSelectedObjectKey] = useState<string | null>(null)
 	const uploadDragCounterRef = useRef(0)
 	const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
@@ -255,9 +264,17 @@ export function ObjectsPage(props: Props) {
 	const [renameSource, setRenameSource] = useState<string | null>(null)
 	const [renameForm] = Form.useForm<{ name: string }>()
 	const [downloadPrefixOpen, setDownloadPrefixOpen] = useState(false)
-	const [downloadPrefixForm] = Form.useForm<{ localPath: string; deleteExtraneous: boolean; dryRun: boolean }>()
-	const [downloadPrefixLocalPath, setDownloadPrefixLocalPath] = useLocalStorageState<string>('downloadPrefixLocalPath', '')
-	const [localBrowseOpen, setLocalBrowseOpen] = useState(false)
+	const [downloadPrefixForm] = Form.useForm<{ localFolder: string }>()
+	const [downloadPrefixFolderLabel, setDownloadPrefixFolderLabel] = useState('')
+	const [downloadPrefixFolderHandle, setDownloadPrefixFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
+	const [downloadPrefixSubmitting, setDownloadPrefixSubmitting] = useState(false)
+	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
+	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
+	const [uploadFolderOpen, setUploadFolderOpen] = useState(false)
+	const [uploadFolderForm] = Form.useForm<{ localFolder: string; moveAfterUpload: boolean; cleanupEmptyDirs: boolean }>()
+	const [uploadFolderHandle, setUploadFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
+	const [uploadFolderLabel, setUploadFolderLabel] = useState('')
+	const [uploadFolderSubmitting, setUploadFolderSubmitting] = useState(false)
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
@@ -371,11 +388,6 @@ export function ObjectsPage(props: Props) {
 
 
 	useEffect(() => {
-		if (downloadPrefixOpen) return
-		setLocalBrowseOpen(false)
-	}, [downloadPrefixOpen])
-
-	useEffect(() => {
 		if (deletePrefixConfirmOpen) return
 		setDeletePrefixConfirmText('')
 		setDeletePrefixConfirmPrefix('')
@@ -400,6 +412,15 @@ export function ObjectsPage(props: Props) {
 			return lastPage.nextContinuationToken ?? undefined
 		},
 	})
+
+	const favoritesQueryKey = ['objectFavorites', props.profileId, bucket, props.apiToken]
+	const favoritesQuery = useQuery({
+		queryKey: favoritesQueryKey,
+		enabled: !!props.profileId && !!bucket,
+		queryFn: () => api.listObjectFavorites({ profileId: props.profileId!, bucket }),
+	})
+	const favoriteItems = favoritesQuery.data?.items ?? []
+	const favoriteKeys = useMemo(() => new Set(favoriteItems.map((item) => item.key)), [favoriteItems])
 
 	const globalSearchQueryText = globalSearch.trim()
 	const globalSearchPrefixNormalized = normalizePrefix(globalSearchPrefix)
@@ -568,39 +589,6 @@ export function ObjectsPage(props: Props) {
 		onError: (err) => message.error(formatErr(err)),
 	})
 
-	const downloadPrefixJobMutation = useMutation({
-		mutationFn: (args: { prefix: string; localPath: string; deleteExtraneous: boolean; dryRun: boolean }) =>
-			createJobWithRetry({
-				type: 's5cmd_sync_s3_to_local',
-				payload: {
-					bucket,
-					prefix: args.prefix,
-					localPath: args.localPath,
-					deleteExtraneous: args.deleteExtraneous,
-					include: [],
-					exclude: [],
-					dryRun: args.dryRun,
-				},
-			}),
-		onSuccess: async (job: Job) => {
-			setDownloadPrefixOpen(false)
-			message.open({
-				type: 'success',
-				content: (
-					<Space>
-						<Typography.Text>Download task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-							Open Jobs
-						</Button>
-					</Space>
-				),
-				duration: 6,
-			})
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
 	const zipPrefixJobMutation = useMutation({
 		mutationFn: async (args: { prefix: string }) => {
 			if (!props.profileId) throw new Error('profile is required')
@@ -725,13 +713,13 @@ export function ObjectsPage(props: Props) {
 		onSuccess: async (job: Job) => {
 			message.open({
 				type: 'success',
-					content: (
-						<Space>
-							<Typography.Text>Index task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-								Open Jobs
-							</Button>
-						</Space>
+				content: (
+					<Space>
+						<Typography.Text>Index task started: {job.id}</Typography.Text>
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							Open Jobs
+						</Button>
+					</Space>
 				),
 				duration: 6,
 			})
@@ -758,247 +746,245 @@ export function ObjectsPage(props: Props) {
 		})
 	}
 
-		const openDownloadPrefix = (srcPrefixOverride?: string) => {
-			if (!props.profileId || !bucket) return
-			const srcPrefix = normalizePrefix(srcPrefixOverride ?? prefix)
-			if (!srcPrefix) return
+	const openDownloadPrefix = (srcPrefixOverride?: string) => {
+		if (!props.profileId || !bucket) return
+		const srcPrefix = normalizePrefix(srcPrefixOverride ?? prefix)
+		if (!srcPrefix) return
 
-			setDownloadPrefixOpen(true)
-			downloadPrefixForm.setFieldsValue({
-				localPath: downloadPrefixLocalPath,
-				deleteExtraneous: false,
-				dryRun: false,
+		setDownloadPrefixFolderHandle(null)
+		setDownloadPrefixFolderLabel('')
+		setDownloadPrefixOpen(true)
+		downloadPrefixForm.setFieldsValue({ localFolder: '' })
+	}
+
+	const openNewFolder = () => {
+		if (!props.profileId || !bucket) return
+		setNewFolderOpen(true)
+		newFolderForm.setFieldsValue({ name: '' })
+		window.setTimeout(() => {
+			const el = document.getElementById('objectsNewFolderInput') as HTMLInputElement | null
+			el?.focus()
+		}, 0)
+	}
+
+	const openRenameObject = (key: string) => {
+		if (!props.profileId || !bucket) return
+		setRenameKind('object')
+		setRenameSource(key)
+		renameForm.setFieldsValue({ name: fileNameFromKey(key) })
+		setRenameOpen(true)
+		window.setTimeout(() => {
+			const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
+			el?.focus()
+		}, 0)
+	}
+
+	const openRenamePrefix = (srcPrefix: string) => {
+		if (!props.profileId || !bucket) return
+		setRenameKind('prefix')
+		setRenameSource(srcPrefix)
+		renameForm.setFieldsValue({ name: folderLabelFromPrefix(srcPrefix) })
+		setRenameOpen(true)
+		window.setTimeout(() => {
+			const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
+			el?.focus()
+		}, 0)
+	}
+
+	const copyMoveMutation = useMutation({
+		mutationFn: (args: { mode: 'copy' | 'move'; srcKey: string; dstBucket: string; dstKey: string; dryRun: boolean }) => {
+			const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3' : 's5cmd_mv_s3_to_s3'
+			return createJobWithRetry({
+				type,
+				payload: {
+					srcBucket: bucket,
+					srcKey: args.srcKey,
+					dstBucket: args.dstBucket,
+					dstKey: args.dstKey,
+					dryRun: args.dryRun,
+				},
 			})
-		}
+		},
+		onSuccess: (job, args) => {
+			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
+			setCopyMoveOpen(false)
+			setCopyMoveSrcKey(null)
+		},
+		onError: (err) => message.error(formatErr(err)),
+	})
 
-		const openNewFolder = () => {
-			if (!props.profileId || !bucket) return
-			setNewFolderOpen(true)
-			newFolderForm.setFieldsValue({ name: '' })
-			window.setTimeout(() => {
-				const el = document.getElementById('objectsNewFolderInput') as HTMLInputElement | null
-				el?.focus()
-			}, 0)
-		}
+	const createFolderMutation = useMutation({
+		mutationFn: async (args: { name: string }) => {
+			if (!props.profileId) throw new Error('profile is required')
+			if (!bucket) throw new Error('bucket is required')
+			const raw = args.name.trim().replace(/\/+$/, '')
+			if (!raw) throw new Error('folder name is required')
+			if (raw === '.' || raw === '..') throw new Error('invalid folder name')
+			if (raw.includes('/')) throw new Error("folder name must not contain '/'")
+			if (raw.includes('\u0000')) throw new Error('invalid folder name')
 
-		const openRenameObject = (key: string) => {
-			if (!props.profileId || !bucket) return
-			setRenameKind('object')
-			setRenameSource(key)
-			renameForm.setFieldsValue({ name: fileNameFromKey(key) })
-			setRenameOpen(true)
-			window.setTimeout(() => {
-				const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
-				el?.focus()
-			}, 0)
-		}
+			const key = `${normalizePrefix(prefix)}${raw}/`
+			return api.createFolder({ profileId: props.profileId, bucket, key })
+		},
+		onSuccess: async (resp) => {
+			message.success(`Folder created: ${resp.key}`)
+			setNewFolderOpen(false)
+			newFolderForm.resetFields()
+			await queryClient.invalidateQueries({ queryKey: ['objects'] })
+			const parentKey = normalizePrefix(prefix) || '/'
+			treeLoadedKeysRef.current.delete(parentKey)
+			void loadTreeChildren(parentKey)
+		},
+		onError: (err) => message.error(formatErr(err)),
+	})
 
-		const openRenamePrefix = (srcPrefix: string) => {
-			if (!props.profileId || !bucket) return
-			setRenameKind('prefix')
-			setRenameSource(srcPrefix)
-			renameForm.setFieldsValue({ name: folderLabelFromPrefix(srcPrefix) })
-			setRenameOpen(true)
-			window.setTimeout(() => {
-				const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
-				el?.focus()
-			}, 0)
-		}
+	const renameMutation = useMutation({
+		mutationFn: async (args: { kind: 'object' | 'prefix'; src: string; name: string }) => {
+			if (!props.profileId) throw new Error('profile is required')
+			if (!bucket) throw new Error('bucket is required')
+			const raw = args.name.trim().replace(/\/+$/, '')
+			if (!raw) throw new Error('name is required')
+			if (raw === '.' || raw === '..') throw new Error('invalid name')
+			if (raw.includes('/')) throw new Error("name must not contain '/'")
+			if (raw.includes('\u0000')) throw new Error('invalid name')
 
-		const copyMoveMutation = useMutation({
-			mutationFn: (args: { mode: 'copy' | 'move'; srcKey: string; dstBucket: string; dstKey: string; dryRun: boolean }) => {
-				const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3' : 's5cmd_mv_s3_to_s3'
+			if (args.kind === 'prefix') {
+				const srcPrefix = normalizePrefix(args.src)
+				const parent = parentPrefixFromKey(srcPrefix.replace(/\/+$/, ''))
+				const dstPrefix = `${parent}${raw}/`
+				if (dstPrefix === srcPrefix) throw new Error('already in destination')
+				if (dstPrefix.startsWith(srcPrefix)) throw new Error('destination must not be under source prefix')
 				return createJobWithRetry({
-					type,
+					type: 's5cmd_mv_s3_prefix_to_s3_prefix',
 					payload: {
 						srcBucket: bucket,
-						srcKey: args.srcKey,
-						dstBucket: args.dstBucket,
-						dstKey: args.dstKey,
-						dryRun: args.dryRun,
-					},
-				})
-			},
-			onSuccess: (job, args) => {
-				message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
-				setCopyMoveOpen(false)
-				setCopyMoveSrcKey(null)
-			},
-			onError: (err) => message.error(formatErr(err)),
-		})
-
-		const createFolderMutation = useMutation({
-			mutationFn: async (args: { name: string }) => {
-				if (!props.profileId) throw new Error('profile is required')
-				if (!bucket) throw new Error('bucket is required')
-				const raw = args.name.trim().replace(/\/+$/, '')
-				if (!raw) throw new Error('folder name is required')
-				if (raw === '.' || raw === '..') throw new Error('invalid folder name')
-				if (raw.includes('/')) throw new Error("folder name must not contain '/'")
-				if (raw.includes('\u0000')) throw new Error('invalid folder name')
-
-				const key = `${normalizePrefix(prefix)}${raw}/`
-				return api.createFolder({ profileId: props.profileId, bucket, key })
-			},
-			onSuccess: async (resp) => {
-				message.success(`Folder created: ${resp.key}`)
-				setNewFolderOpen(false)
-				newFolderForm.resetFields()
-				await queryClient.invalidateQueries({ queryKey: ['objects'] })
-				const parentKey = normalizePrefix(prefix) || '/'
-				treeLoadedKeysRef.current.delete(parentKey)
-				void loadTreeChildren(parentKey)
-			},
-			onError: (err) => message.error(formatErr(err)),
-		})
-
-		const renameMutation = useMutation({
-			mutationFn: async (args: { kind: 'object' | 'prefix'; src: string; name: string }) => {
-				if (!props.profileId) throw new Error('profile is required')
-				if (!bucket) throw new Error('bucket is required')
-				const raw = args.name.trim().replace(/\/+$/, '')
-				if (!raw) throw new Error('name is required')
-				if (raw === '.' || raw === '..') throw new Error('invalid name')
-				if (raw.includes('/')) throw new Error("name must not contain '/'")
-				if (raw.includes('\u0000')) throw new Error('invalid name')
-
-				if (args.kind === 'prefix') {
-					const srcPrefix = normalizePrefix(args.src)
-					const parent = parentPrefixFromKey(srcPrefix.replace(/\/+$/, ''))
-					const dstPrefix = `${parent}${raw}/`
-					if (dstPrefix === srcPrefix) throw new Error('already in destination')
-					if (dstPrefix.startsWith(srcPrefix)) throw new Error('destination must not be under source prefix')
-					return createJobWithRetry({
-						type: 's5cmd_mv_s3_prefix_to_s3_prefix',
-						payload: {
-							srcBucket: bucket,
-							srcPrefix,
-							dstBucket: bucket,
-							dstPrefix,
-							include: [],
-							exclude: [],
-							dryRun: false,
-						},
-					})
-				}
-
-				const srcKey = args.src.trim().replace(/^\/+/, '')
-				const parent = parentPrefixFromKey(srcKey)
-				const dstKey = `${parent}${raw}`
-				if (dstKey === srcKey) throw new Error('already in destination')
-				return createJobWithRetry({
-					type: 's5cmd_mv_s3_to_s3',
-					payload: {
-						srcBucket: bucket,
-						srcKey,
+						srcPrefix,
 						dstBucket: bucket,
-						dstKey,
+						dstPrefix,
+						include: [],
+						exclude: [],
 						dryRun: false,
 					},
 				})
-			},
-			onSuccess: async (job) => {
-				message.open({
-					type: 'success',
-					content: (
-						<Space>
-							<Typography.Text>Rename task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-								Open Jobs
-							</Button>
-						</Space>
-					),
-					duration: 6,
-				})
-				setRenameOpen(false)
-				setRenameSource(null)
-				renameForm.resetFields()
-				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-			},
-			onError: (err) => message.error(formatErr(err)),
-		})
+			}
 
-		const pasteObjectsMutation = useMutation({
-			mutationFn: async (args: { mode: 'copy' | 'move'; srcBucket: string; srcPrefix: string; keys: string[]; dstBucket: string; dstPrefix: string }) => {
-				if (!props.profileId) throw new Error('profile is required')
-				if (!bucket) throw new Error('bucket is required')
+			const srcKey = args.src.trim().replace(/^\/+/, '')
+			const parent = parentPrefixFromKey(srcKey)
+			const dstKey = `${parent}${raw}`
+			if (dstKey === srcKey) throw new Error('already in destination')
+			return createJobWithRetry({
+				type: 's5cmd_mv_s3_to_s3',
+				payload: {
+					srcBucket: bucket,
+					srcKey,
+					dstBucket: bucket,
+					dstKey,
+					dryRun: false,
+				},
+			})
+		},
+		onSuccess: async (job) => {
+			message.open({
+				type: 'success',
+				content: (
+					<Space>
+						<Typography.Text>Rename task started: {job.id}</Typography.Text>
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							Open Jobs
+						</Button>
+					</Space>
+				),
+				duration: 6,
+			})
+			setRenameOpen(false)
+			setRenameSource(null)
+			renameForm.resetFields()
+			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+		},
+		onError: (err) => message.error(formatErr(err)),
+	})
 
-				const srcBucket = args.srcBucket.trim()
-				const dstBucket = args.dstBucket.trim()
-				if (!srcBucket) throw new Error('source bucket is required')
-				if (!dstBucket) throw new Error('destination bucket is required')
+	const pasteObjectsMutation = useMutation({
+		mutationFn: async (args: { mode: 'copy' | 'move'; srcBucket: string; srcPrefix: string; keys: string[]; dstBucket: string; dstPrefix: string }) => {
+			if (!props.profileId) throw new Error('profile is required')
+			if (!bucket) throw new Error('bucket is required')
 
-				const srcPrefix = normalizePrefix(args.srcPrefix)
-				const dstPrefix = normalizePrefix(args.dstPrefix)
+			const srcBucket = args.srcBucket.trim()
+			const dstBucket = args.dstBucket.trim()
+			if (!srcBucket) throw new Error('source bucket is required')
+			if (!dstBucket) throw new Error('destination bucket is required')
 
-				const uniqueKeys = Array.from(new Set(args.keys.map((k) => k.trim()).filter(Boolean)))
-				if (uniqueKeys.length === 0) throw new Error('no keys to paste')
-				if (uniqueKeys.length > 50_000) throw new Error('too many keys to paste; use a prefix job instead')
+			const srcPrefix = normalizePrefix(args.srcPrefix)
+			const dstPrefix = normalizePrefix(args.dstPrefix)
 
-				const items: { srcKey: string; dstKey: string }[] = []
-				const dstSet = new Set<string>()
+			const uniqueKeys = Array.from(new Set(args.keys.map((k) => k.trim()).filter(Boolean)))
+			if (uniqueKeys.length === 0) throw new Error('no keys to paste')
+			if (uniqueKeys.length > 50_000) throw new Error('too many keys to paste; use a prefix job instead')
 
-				for (const srcKeyRaw of uniqueKeys) {
-					const srcKey = srcKeyRaw.replace(/^\/+/, '')
-					if (!srcKey) continue
+			const items: { srcKey: string; dstKey: string }[] = []
+			const dstSet = new Set<string>()
 
-					let rel: string
-					if (srcPrefix && srcKey.startsWith(srcPrefix)) {
-						rel = srcKey.slice(srcPrefix.length)
-					} else {
-						rel = fileNameFromKey(srcKey)
-					}
-					rel = rel.replace(/^\/+/, '')
-					if (!rel) rel = fileNameFromKey(srcKey)
+			for (const srcKeyRaw of uniqueKeys) {
+				const srcKey = srcKeyRaw.replace(/^\/+/, '')
+				if (!srcKey) continue
 
-					const dstKey = `${dstPrefix}${rel}`
-					if (srcBucket === dstBucket && dstKey === srcKey) continue
-
-					if (dstSet.has(dstKey)) {
-						throw new Error(`multiple keys map to the same destination: ${dstKey}`)
-					}
-					dstSet.add(dstKey)
-					items.push({ srcKey, dstKey })
+				let rel: string
+				if (srcPrefix && srcKey.startsWith(srcPrefix)) {
+					rel = srcKey.slice(srcPrefix.length)
+				} else {
+					rel = fileNameFromKey(srcKey)
 				}
+				rel = rel.replace(/^\/+/, '')
+				if (!rel) rel = fileNameFromKey(srcKey)
 
-				if (items.length === 0) throw new Error('nothing to paste (already in destination)')
+				const dstKey = `${dstPrefix}${rel}`
+				if (srcBucket === dstBucket && dstKey === srcKey) continue
 
-				const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3_batch' : 's5cmd_mv_s3_to_s3_batch'
-				return createJobWithRetry({
-					type,
-					payload: {
-						srcBucket,
-						dstBucket,
-						items,
-						dryRun: false,
-					},
-				})
-			},
-			onSuccess: async (job, args) => {
-					message.open({
-						type: 'success',
-						content: (
-							<Space>
-								<Typography.Text>{args.mode === 'copy' ? 'Paste copy task' : 'Paste move task'} started: {job.id}</Typography.Text>
-								<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-									Open Jobs
-								</Button>
-							</Space>
-					),
-					duration: 6,
-				})
-				if (args.mode === 'move') {
-					setClipboardObjects(null)
+				if (dstSet.has(dstKey)) {
+					throw new Error(`multiple keys map to the same destination: ${dstKey}`)
 				}
-				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-			},
-			onError: (err) => message.error(formatErr(err)),
-		})
+				dstSet.add(dstKey)
+				items.push({ srcKey, dstKey })
+			}
 
-		const openCopyMove = (mode: 'copy' | 'move', key: string) => {
-			if (!props.profileId || !bucket) return
-			setCopyMoveMode(mode)
-			setCopyMoveSrcKey(key)
+			if (items.length === 0) throw new Error('nothing to paste (already in destination)')
+
+			const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3_batch' : 's5cmd_mv_s3_to_s3_batch'
+			return createJobWithRetry({
+				type,
+				payload: {
+					srcBucket,
+					dstBucket,
+					items,
+					dryRun: false,
+				},
+			})
+		},
+		onSuccess: async (job, args) => {
+			message.open({
+				type: 'success',
+				content: (
+					<Space>
+						<Typography.Text>{args.mode === 'copy' ? 'Paste copy task' : 'Paste move task'} started: {job.id}</Typography.Text>
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							Open Jobs
+						</Button>
+					</Space>
+				),
+				duration: 6,
+			})
+			if (args.mode === 'move') {
+				setClipboardObjects(null)
+			}
+			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+		},
+		onError: (err) => message.error(formatErr(err)),
+	})
+
+	const openCopyMove = (mode: 'copy' | 'move', key: string) => {
+		if (!props.profileId || !bucket) return
+		setCopyMoveMode(mode)
+		setCopyMoveSrcKey(key)
 		setCopyMoveOpen(true)
 		copyMoveForm.setFieldsValue({ dstBucket: bucket, dstKey: key, dryRun: false })
 	}
@@ -1011,6 +997,74 @@ export function ObjectsPage(props: Props) {
 			setPresignOpen(true)
 		},
 		onSettled: (_, __, key) => setPresignKey((prev) => (prev === key ? null : prev)),
+		onError: (err) => message.error(formatErr(err)),
+	})
+
+	const buildFavoriteItem = useCallback(
+		(key: string, createdAt: string) => {
+			let found: ObjectItem | undefined
+			for (const page of objectsQuery.data?.pages ?? []) {
+				found = page.items.find((item) => item.key === key)
+				if (found) break
+			}
+			if (!found) {
+				found = favoriteItems.find((item) => item.key === key)
+			}
+			return {
+				key,
+				size: found?.size ?? 0,
+				etag: found?.etag ?? '',
+				lastModified: found?.lastModified ?? '',
+				storageClass: found?.storageClass ?? '',
+				createdAt,
+			}
+		},
+		[favoriteItems, objectsQuery.data],
+	)
+
+	const addFavoriteMutation = useMutation({
+		mutationFn: (key: string) => api.createObjectFavorite({ profileId: props.profileId!, bucket, key }),
+		onMutate: (key) => {
+			setFavoritePendingKeys((prev) => new Set(prev).add(key))
+		},
+		onSuccess: (fav) => {
+			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoritesQueryKey, (prev) => {
+				const item = buildFavoriteItem(fav.key, fav.createdAt)
+				if (!prev) {
+					return { bucket, items: [item] }
+				}
+				const items = Array.isArray(prev.items) ? prev.items.filter((entry) => entry.key !== fav.key) : []
+				return { ...prev, items: [item, ...items] }
+			})
+		},
+		onSettled: (_, __, key) => {
+			setFavoritePendingKeys((prev) => {
+				const next = new Set(prev)
+				next.delete(key)
+				return next
+			})
+		},
+		onError: (err) => message.error(formatErr(err)),
+	})
+
+	const removeFavoriteMutation = useMutation({
+		mutationFn: (key: string) => api.deleteObjectFavorite({ profileId: props.profileId!, bucket, key }),
+		onMutate: (key) => {
+			setFavoritePendingKeys((prev) => new Set(prev).add(key))
+		},
+		onSuccess: (_, key) => {
+			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoritesQueryKey, (prev) => {
+				if (!prev || !Array.isArray(prev.items)) return prev
+				return { ...prev, items: prev.items.filter((entry) => entry.key !== key) }
+			})
+		},
+		onSettled: (_, __, key) => {
+			setFavoritePendingKeys((prev) => {
+				const next = new Set(prev)
+				next.delete(key)
+				return next
+			})
+		},
 		onError: (err) => message.error(formatErr(err)),
 	})
 
@@ -1054,8 +1108,11 @@ export function ObjectsPage(props: Props) {
 
 	const rows = useMemo(() => {
 		const pages = objectsQuery.data?.pages ?? []
-		const prefixes = uniquePrefixes(pages)
-		const items = pages.flatMap((p) => p.items)
+		const activePrefix = normalizePrefix(prefix)
+		const prefixes = favoritesOnly ? [] : uniquePrefixes(pages)
+		const items = favoritesOnly
+			? favoriteItems.filter((item) => (activePrefix ? item.key.startsWith(activePrefix) : true))
+			: pages.flatMap((p) => p.items)
 
 		const match = (value: string) => matchesSearchTokens(value, searchTokens, searchTokensNormalized)
 
@@ -1117,7 +1174,21 @@ export function ObjectsPage(props: Props) {
 		for (const p of sortedPrefixes) out.push({ kind: 'prefix', prefix: p })
 		for (const obj of sortedItems) out.push({ kind: 'object', object: obj })
 		return out
-	}, [extFilter, maxModifiedMs, maxSize, minModifiedMs, minSize, objectsQuery.data, prefix, searchTokens, searchTokensNormalized, sort, typeFilter])
+	}, [
+		extFilter,
+		favoriteItems,
+		favoritesOnly,
+		maxModifiedMs,
+		maxSize,
+		minModifiedMs,
+		minSize,
+		objectsQuery.data,
+		prefix,
+		searchTokens,
+		searchTokensNormalized,
+		sort,
+		typeFilter,
+	])
 
 	const rowIndexByObjectKey = useMemo(() => {
 		const out = new Map<string, number>()
@@ -1131,12 +1202,17 @@ export function ObjectsPage(props: Props) {
 	}, [rows])
 
 	const { rawPrefixCount, rawFileCount } = useMemo(() => {
+		if (favoritesOnly) {
+			const activePrefix = normalizePrefix(prefix)
+			const items = activePrefix ? favoriteItems.filter((item) => item.key.startsWith(activePrefix)) : favoriteItems
+			return { rawPrefixCount: 0, rawFileCount: items.length }
+		}
 		const pages = objectsQuery.data?.pages ?? []
 		return {
 			rawPrefixCount: uniquePrefixes(pages).length,
 			rawFileCount: pages.reduce((sum, p) => sum + p.items.length, 0),
 		}
-	}, [objectsQuery.data])
+	}, [favoriteItems, favoritesOnly, objectsQuery.data, prefix])
 	const rawTotalCount = rawPrefixCount + rawFileCount
 	const emptyKind = rawTotalCount === 0 ? 'empty' : rows.length === 0 ? 'noresults' : null
 
@@ -1190,7 +1266,7 @@ export function ObjectsPage(props: Props) {
 
 	useEffect(() => {
 		parentRef.current?.scrollTo({ top: 0 })
-	}, [bucket, extFilter, maxModifiedMs, maxSize, minModifiedMs, minSize, prefix, search, sort, typeFilter])
+	}, [bucket, extFilter, favoritesOnly, maxModifiedMs, maxSize, minModifiedMs, minSize, prefix, search, sort, typeFilter])
 
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
 	const extOptions = useMemo(() => {
@@ -1345,6 +1421,22 @@ export function ObjectsPage(props: Props) {
 		})
 	}
 
+	const toggleFavorite = (key: string) => {
+		if (!props.profileId) {
+			message.info('Select a profile first')
+			return
+		}
+		if (!bucket) {
+			message.info('Select a bucket first')
+			return
+		}
+		if (favoriteKeys.has(key)) {
+			removeFavoriteMutation.mutate(key)
+			return
+		}
+		addFavoriteMutation.mutate(key)
+	}
+
 	const canGoUp = !!bucket && !!prefix && prefix.includes('/')
 	const onUp = () => {
 		if (!bucket) return
@@ -1369,7 +1461,11 @@ export function ObjectsPage(props: Props) {
 	}
 
 	const refresh = async () => {
-		await objectsQuery.refetch()
+		if (favoritesOnly) {
+			await favoritesQuery.refetch()
+			return
+		}
+		await Promise.all([objectsQuery.refetch(), favoritesQuery.refetch()])
 	}
 
 	const toggleSortColumn = (col: 'name' | 'size' | 'time') => {
@@ -1421,6 +1517,15 @@ export function ObjectsPage(props: Props) {
 	}, [])
 
 	useEffect(() => {
+		return () => {
+			for (const url of thumbnailCacheRef.current.values()) {
+				URL.revokeObjectURL(url)
+			}
+			thumbnailCacheRef.current.clear()
+		}
+	}, [bucket, props.profileId])
+
+	useEffect(() => {
 		treeEpochRef.current++
 		treeLoadedKeysRef.current.clear()
 		treeLoadingKeysRef.current.clear()
@@ -1455,7 +1560,7 @@ export function ObjectsPage(props: Props) {
 			for (const k of ancestors) {
 				await loadTreeChildren(k)
 			}
-	})()
+		})()
 	}, [prefix, loadTreeChildren])
 
 	const indexedSearchItems = indexedSearchQuery.data?.pages.flatMap((p) => p.items) ?? []
@@ -1465,11 +1570,15 @@ export function ObjectsPage(props: Props) {
 	const selectedCount = selectedKeys.size
 	const objectByKey = useMemo(() => {
 		const out = new Map<string, ObjectItem>()
+		if (favoritesOnly) {
+			for (const obj of favoriteItems) out.set(obj.key, obj)
+			return out
+		}
 		for (const p of objectsQuery.data?.pages ?? []) {
 			for (const obj of p.items) out.set(obj.key, obj)
 		}
 		return out
-	}, [objectsQuery.data])
+	}, [favoriteItems, favoritesOnly, objectsQuery.data])
 	const singleSelectedKey = selectedCount === 1 ? Array.from(selectedKeys)[0] : null
 	const singleSelectedItem = singleSelectedKey ? objectByKey.get(singleSelectedKey) : undefined
 
@@ -1603,11 +1712,18 @@ export function ObjectsPage(props: Props) {
 	const isCompactList =
 		!screens.lg || !isAdvanced || (isDesktop && (listViewportWidthPx <= 0 || listViewportWidthPx < compactListMinWidth))
 	const hasActiveFilters =
-		typeFilter !== 'all' || !!extFilter.trim() || minSize != null || maxSize != null || minModifiedMs != null || maxModifiedMs != null
+		typeFilter !== 'all' ||
+		favoritesOnly ||
+		!!extFilter.trim() ||
+		minSize != null ||
+		maxSize != null ||
+		minModifiedMs != null ||
+		maxModifiedMs != null
 	const hasNonDefaultSort = sort !== 'name_asc'
 	const hasActiveView = hasActiveFilters || hasNonDefaultSort
 	const resetFilters = () => {
 		setTypeFilter('all')
+		setFavoritesOnly(false)
 		setExtFilter('')
 		setMinSize(null)
 		setMaxSize(null)
@@ -1683,7 +1799,14 @@ export function ObjectsPage(props: Props) {
 		}
 
 		const openUploadFilesPicker = () => uploadFilesInputRef.current?.click()
-		const openUploadFolderPicker = () => uploadFolderInputRef.current?.click()
+		const openUploadFolderPicker = () => {
+			const support = getDevicePickerSupport()
+			if (support.ok) {
+				setUploadFolderOpen(true)
+				return
+			}
+			uploadFolderInputRef.current?.click()
+		}
 
 		const onUploadDragEnter = (e: React.DragEvent) => {
 			if (!props.profileId || !bucket) return
@@ -2251,18 +2374,102 @@ export function ObjectsPage(props: Props) {
 		setDeletePrefixConfirmOpen(false)
 	}
 
-	const handleDownloadPrefixSubmit = (values: { localPath: string; deleteExtraneous: boolean; dryRun: boolean }) => {
+	const handleDownloadPrefixSubmit = async (values: { localFolder: string }) => {
+		void values
 		if (!props.profileId || !bucket) return
 		const srcPrefix = normalizePrefix(prefix)
 		if (!srcPrefix) return
-		const localPath = values.localPath.trim()
-		setDownloadPrefixLocalPath(localPath)
-		downloadPrefixJobMutation.mutate({
-			prefix: srcPrefix,
-			localPath,
-			deleteExtraneous: values.deleteExtraneous,
-			dryRun: values.dryRun,
-		})
+		if (!downloadPrefixFolderHandle) {
+			message.info('Select a local folder first')
+			return
+		}
+
+		setDownloadPrefixSubmitting(true)
+		try {
+			const items = await listAllObjects({
+				api,
+				profileId: props.profileId,
+				bucket,
+				prefix: srcPrefix,
+			})
+			if (items.length === 0) {
+				message.info('No objects found under this prefix')
+				return
+			}
+
+			transfers.queueDownloadObjectsToDevice({
+				profileId: props.profileId,
+				bucket,
+				items: items.map((item) => ({ key: item.key, size: item.size })),
+				targetDirHandle: downloadPrefixFolderHandle,
+				targetLabel: downloadPrefixFolderLabel || downloadPrefixFolderHandle.name,
+				prefix: srcPrefix,
+			})
+			setDownloadPrefixOpen(false)
+			setDownloadPrefixFolderHandle(null)
+			setDownloadPrefixFolderLabel('')
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setDownloadPrefixSubmitting(false)
+		}
+	}
+
+	const handleUploadFolderSubmit = async (values: { localFolder: string; moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => {
+		void values
+		if (!props.profileId) {
+			message.info('Select a profile first')
+			return
+		}
+		if (!bucket) {
+			message.info('Select a bucket first')
+			return
+		}
+		if (!uploadFolderHandle) {
+			message.info('Select a local folder first')
+			return
+		}
+
+		setUploadFolderSubmitting(true)
+		try {
+			const files = await collectFilesFromDirectoryHandle(uploadFolderHandle)
+			if (files.length === 0) {
+				message.info('No files found in the selected folder')
+				return
+			}
+			const relPaths = files
+				.map((file) => {
+					const fileWithPath = file as File & { relativePath?: string; webkitRelativePath?: string }
+					const relPath = (fileWithPath.relativePath ?? fileWithPath.webkitRelativePath ?? file.name).trim()
+					return normalizeRelativePath(relPath || file.name)
+				})
+				.filter(Boolean)
+
+			const label = uploadFolderLabel || uploadFolderHandle.name
+			transfers.queueUploadFiles({
+				profileId: props.profileId,
+				bucket,
+				prefix,
+				files,
+				label,
+				moveSource: values.moveAfterUpload
+					? {
+							rootHandle: uploadFolderHandle,
+							relPaths,
+							label,
+							cleanupEmptyDirs: values.cleanupEmptyDirs,
+						}
+					: undefined,
+			})
+			setUploadFolderOpen(false)
+			setUploadFolderHandle(null)
+			setUploadFolderLabel('')
+			uploadFolderForm.resetFields()
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setUploadFolderSubmitting(false)
+		}
 	}
 
 	const handleCopyPrefixSubmit = (values: {
@@ -2950,6 +3157,38 @@ export function ObjectsPage(props: Props) {
 		})
 	}
 
+	const onDownloadToDevice = async (key: string, expectedBytes?: number) => {
+		if (!props.profileId) {
+			message.info('Select a profile first')
+			return
+		}
+		if (!bucket) {
+			message.info('Select a bucket first')
+			return
+		}
+
+		const support = getDevicePickerSupport()
+		if (!support.ok) {
+			message.warning(support.reason ?? 'Directory picker is not available.')
+			return
+		}
+		try {
+			const dirHandle = await pickDirectory()
+			transfers.queueDownloadObjectsToDevice({
+				profileId: props.profileId,
+				bucket,
+				items: [{ key, size: expectedBytes }],
+				targetDirHandle: dirHandle,
+				targetLabel: dirHandle.name,
+				prefix: normalizePrefix(prefix),
+			})
+		} catch (err) {
+			const error = err as Error
+			if (error?.name === 'AbortError') return
+			message.error(error?.message ?? 'Failed to select a local folder.')
+		}
+	}
+
 	const loadPreview = async () => {
 		if (!props.profileId || !bucket || !detailsMeta) return
 		if (preview?.status === 'loading') return
@@ -3014,23 +3253,25 @@ export function ObjectsPage(props: Props) {
 	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
 	const searchAutoScanCap = isAdvanced ? 20_000 : 5_000
 	useEffect(() => {
+		if (favoritesOnly) return
 		if (!props.profileId || !bucket) return
 		const last = virtualItems[virtualItems.length - 1]
 		if (!last) return
 		if (last.index >= rows.length - 10 && hasNextPage && !isFetchingNextPage) {
 			fetchNextPage().catch(() => {})
 		}
-	}, [bucket, fetchNextPage, hasNextPage, isFetchingNextPage, props.profileId, rows.length, virtualItems])
+	}, [bucket, favoritesOnly, fetchNextPage, hasNextPage, isFetchingNextPage, props.profileId, rows.length, virtualItems])
 
 	useEffect(() => {
+		if (favoritesOnly) return
 		if (!props.profileId || !bucket) return
 		if (!search.trim()) return
 		if (!hasNextPage || isFetchingNextPage) return
 		if (rawTotalCount >= searchAutoScanCap) return
 		fetchNextPage().catch(() => {})
-	}, [bucket, fetchNextPage, hasNextPage, isFetchingNextPage, props.profileId, rawTotalCount, search, searchAutoScanCap])
+	}, [bucket, favoritesOnly, fetchNextPage, hasNextPage, isFetchingNextPage, props.profileId, rawTotalCount, search, searchAutoScanCap])
 
-	const handleDownloadSelected = () => {
+	const handleDownloadSelected = async () => {
 		if (selectedCount <= 0) {
 			message.info('Select objects first')
 			return
@@ -3042,7 +3283,28 @@ export function ObjectsPage(props: Props) {
 			onDownload(key, item?.size)
 			return
 		}
-		zipObjectsJobMutation.mutate({ keys })
+
+		const support = getDevicePickerSupport()
+		if (!support.ok) {
+			message.warning(support.reason ?? 'Directory picker is not available.')
+			zipObjectsJobMutation.mutate({ keys })
+			return
+		}
+		try {
+			const dirHandle = await pickDirectory()
+			transfers.queueDownloadObjectsToDevice({
+				profileId: props.profileId!,
+				bucket,
+				items: keys.map((key) => ({ key, size: objectByKey.get(key)?.size })),
+				targetDirHandle: dirHandle,
+				targetLabel: dirHandle.name,
+				prefix: normalizePrefix(prefix),
+			})
+		} catch (err) {
+			const error = err as Error
+			if (error?.name === 'AbortError') return
+			message.error(error?.message ?? 'Failed to select a local folder.')
+		}
 	}
 
 	const commandPrefix = normalizePrefix(prefix)
@@ -3063,6 +3325,7 @@ export function ObjectsPage(props: Props) {
 		onGoForward: goForward,
 		onGoUp: onUp,
 		onDownload,
+		onDownloadToDevice,
 		onPresign: (key) => presignMutation.mutate(key),
 		onCopy,
 		onOpenDetailsForKey: openDetailsForKey,
@@ -3254,6 +3517,20 @@ export function ObjectsPage(props: Props) {
 		const objectMenu = buildActionMenu(objectMenuActions, isAdvanced)
 		const sizeLabel = formatBytes(object.size)
 		const timeLabel = formatDateTime(object.lastModified)
+		const thumbnailSize = isCompactList ? 24 : 32
+		const canShowThumbnail = isImageKey(key)
+		const thumbnail =
+			canShowThumbnail && props.profileId && bucket ? (
+				<ObjectThumbnail
+					key={`${bucket}:${key}:${thumbnailSize}`}
+					api={api}
+					profileId={props.profileId}
+					bucket={bucket}
+					objectKey={key}
+					size={thumbnailSize}
+					cache={thumbnailCacheRef.current}
+				/>
+			) : null
 
 		return (
 			<ObjectsObjectRow
@@ -3264,6 +3541,8 @@ export function ObjectsPage(props: Props) {
 				sizeLabel={sizeLabel}
 				timeLabel={timeLabel}
 				isSelected={selectedKeys.has(key)}
+				isFavorite={favoriteKeys.has(key)}
+				favoriteDisabled={favoritePendingKeys.has(key)}
 				isCompact={isCompactList}
 				listGridClassName={listGridClassName}
 				canDragDrop={canDragDrop}
@@ -3274,9 +3553,13 @@ export function ObjectsPage(props: Props) {
 				onCheckboxClick={(e) => selectObjectFromCheckboxEvent(e, key)}
 				onDragStart={(e) => onRowDragStartObjects(e, key)}
 				onDragEnd={() => setDndHoverPrefix(null)}
+				onToggleFavorite={() => toggleFavorite(key)}
+				thumbnail={thumbnail}
 			/>
 		)
 	}
+	const listIsFetching = favoritesOnly ? favoritesQuery.isFetching : objectsQuery.isFetching
+	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
 	const listContent = (
 		<ObjectsListContent
 			rows={rows}
@@ -3284,8 +3567,8 @@ export function ObjectsPage(props: Props) {
 			totalSize={totalSize}
 			hasProfile={!!props.profileId}
 			hasBucket={!!bucket}
-			isFetching={objectsQuery.isFetching}
-			isFetchingNextPage={objectsQuery.isFetchingNextPage}
+			isFetching={listIsFetching}
+			isFetchingNextPage={listIsFetchingNextPage}
 			emptyKind={emptyKind}
 			canClearSearch={canClearSearch}
 			onClearSearch={handleClearSearch}
@@ -3319,7 +3602,7 @@ export function ObjectsPage(props: Props) {
 		actionToMenuItem(currentPrefixActionMap.get('rename'), undefined, isAdvanced),
 		{ type: 'divider' as const },
 		actionToMenuItem(currentPrefixActionMap.get('downloadZip'), undefined, isAdvanced),
-		actionToMenuItem(currentPrefixActionMap.get('downloadToServer'), undefined, isAdvanced),
+		actionToMenuItem(currentPrefixActionMap.get('downloadToDevice'), undefined, isAdvanced),
 		{ type: 'divider' as const },
 		actionToMenuItem(currentPrefixActionMap.get('delete'), undefined, isAdvanced),
 		actionToMenuItem(currentPrefixActionMap.get('deleteDry'), undefined, isAdvanced),
@@ -3459,7 +3742,7 @@ export function ObjectsPage(props: Props) {
 					uploadMenu: uploadButtonMenu,
 					onUploadFiles: openUploadFilesPicker,
 					onRefresh: refresh,
-					isRefreshing: objectsQuery.isFetching,
+					isRefreshing: listIsFetching,
 					topMoreMenu,
 					showPrimaryActions: !isAdvanced,
 					primaryDownloadAction: downloadSelectionAction,
@@ -3521,8 +3804,8 @@ export function ObjectsPage(props: Props) {
 							visiblePrefixCount={visiblePrefixCount}
 							visibleFileCount={visibleFileCount}
 							search={search}
-							hasNextPage={objectsQuery.hasNextPage}
-							isFetchingNextPage={objectsQuery.isFetchingNextPage}
+							hasNextPage={favoritesOnly ? false : objectsQuery.hasNextPage}
+							isFetchingNextPage={favoritesOnly ? false : objectsQuery.isFetchingNextPage}
 							rawTotalCount={rawTotalCount}
 							searchAutoScanCap={searchAutoScanCap}
 							onOpenGlobalSearch={() => {
@@ -3534,7 +3817,11 @@ export function ObjectsPage(props: Props) {
 					}
 					alerts={
 						<>
-							{objectsQuery.isError ? (
+							{favoritesOnly ? (
+								favoritesQuery.isError ? (
+									<Alert type="error" showIcon message="Failed to load favorites" description={formatErr(favoritesQuery.error)} />
+								) : null
+							) : objectsQuery.isError ? (
 								<Alert type="error" showIcon message="Failed to list objects" description={formatErr(objectsQuery.error)} />
 							) : null}
 							{bucket ? null : <Alert type="info" showIcon message="Select a bucket to browse objects." />}
@@ -3635,6 +3922,8 @@ export function ObjectsPage(props: Props) {
 					isAdvanced={isAdvanced}
 					typeFilter={typeFilter}
 					onTypeFilterChange={(value) => setTypeFilter(value)}
+					favoritesOnly={favoritesOnly}
+					onFavoritesOnlyChange={setFavoritesOnly}
 					extFilter={extFilter}
 					extOptions={extOptions}
 					onExtFilterChange={(value) => setExtFilter(value)}
@@ -3985,26 +4274,45 @@ export function ObjectsPage(props: Props) {
 
 				<ObjectsDownloadPrefixModal
 					open={downloadPrefixOpen}
-					api={api}
-					profileId={props.profileId}
-					hasProfile={!!props.profileId}
 					sourceLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}*` : '-'}
 					form={downloadPrefixForm}
-					isSubmitting={downloadPrefixJobMutation.isPending}
-					onCancel={() => setDownloadPrefixOpen(false)}
-					onBrowse={() => setLocalBrowseOpen(true)}
+					isSubmitting={downloadPrefixSubmitting}
+					onCancel={() => {
+						setDownloadPrefixOpen(false)
+						setDownloadPrefixFolderHandle(null)
+						setDownloadPrefixFolderLabel('')
+					}}
 					onFinish={handleDownloadPrefixSubmit}
+					onPickFolder={(handle) => {
+						setDownloadPrefixFolderHandle(handle)
+						setDownloadPrefixFolderLabel(handle.name)
+					}}
+					canSubmit={!!downloadPrefixFolderHandle}
 				/>
 
-				<LocalPathBrowseModal
-					api={api}
-					profileId={props.profileId}
-					open={localBrowseOpen}
-					onCancel={() => setLocalBrowseOpen(false)}
-					onSelect={(path) => {
-						downloadPrefixForm.setFieldsValue({ localPath: path })
-						setLocalBrowseOpen(false)
+				<ObjectsUploadFolderModal
+					open={uploadFolderOpen}
+					destinationLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
+					form={uploadFolderForm}
+					defaultMoveAfterUpload={moveAfterUploadDefault}
+					defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
+					isSubmitting={uploadFolderSubmitting}
+					onCancel={() => {
+						setUploadFolderOpen(false)
+						setUploadFolderHandle(null)
+						setUploadFolderLabel('')
+						uploadFolderForm.resetFields()
 					}}
+					onDefaultsChange={(values) => {
+						setMoveAfterUploadDefault(values.moveAfterUpload)
+						setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
+					}}
+					onFinish={handleUploadFolderSubmit}
+					onPickFolder={(handle) => {
+						setUploadFolderHandle(handle)
+						setUploadFolderLabel(handle.name)
+					}}
+					canSubmit={!!uploadFolderHandle}
 				/>
 
 				<ObjectsCopyPrefixModal
@@ -4263,6 +4571,11 @@ function suggestCopyPrefix(srcPrefix: string): string {
 		const idx = base.lastIndexOf('.')
 		if (idx <= 0 || idx === base.length - 1) return ''
 		return base.slice(idx + 1).toLowerCase()
+	}
+
+	function isImageKey(key: string): boolean {
+		const ext = fileExtensionFromKey(key)
+		return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)
 	}
 
 	function guessPreviewKind(contentType: string | null | undefined, key: string): 'image' | 'text' | 'json' | 'unsupported' {

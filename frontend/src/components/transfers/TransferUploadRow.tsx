@@ -20,11 +20,11 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 			? 'exception'
 			: t.status === 'succeeded'
 				? 'success'
-				: t.status === 'staging' || t.status === 'commit'
+				: t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job' || t.status === 'cleanup'
 					? 'active'
 					: 'normal'
 	const tagColor =
-		t.status === 'staging' || t.status === 'commit'
+		t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job' || t.status === 'cleanup'
 			? 'processing'
 			: t.status === 'queued'
 				? 'default'
@@ -40,11 +40,15 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 				? 'Uploading'
 				: t.status === 'commit'
 					? 'Committing'
-					: t.status === 'succeeded'
-						? 'Done'
-						: t.status === 'failed'
-							? 'Failed'
-							: 'Canceled'
+					: t.status === 'waiting_job'
+						? 'Waiting'
+						: t.status === 'cleanup'
+							? 'Cleaning'
+							: t.status === 'succeeded'
+								? 'Done'
+								: t.status === 'failed'
+									? 'Failed'
+									: 'Canceled'
 	const progressText =
 		t.status === 'staging'
 			? `${formatBytes(t.loadedBytes)}/${formatBytes(t.totalBytes)} · ${t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'} · ${
@@ -52,6 +56,10 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 				}`
 			: t.status === 'commit'
 				? 'Committing...'
+				: t.status === 'waiting_job'
+					? 'Waiting for upload job...'
+					: t.status === 'cleanup'
+						? 'Removing local files...'
 				: null
 	const subtitle = `s3://${t.bucket}/${normalizePrefix(t.prefix)}`
 
@@ -64,6 +72,7 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 							{t.label}
 						</Typography.Text>
 						<Tag color={tagColor}>{tagText}</Tag>
+						{t.moveAfterUpload ? <Tag color="gold">Move</Tag> : null}
 						{t.jobId ? <Tag>{t.jobId}</Tag> : null}
 					</Space>
 					<div style={{ marginTop: 4 }}>

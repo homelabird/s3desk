@@ -26,6 +26,12 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		v := s.cfg.UploadMaxBytes
 		uploadMaxBytes = &v
 	}
+	tlsCapability := models.FeatureCapability{
+		Enabled: s.cfg.EncryptionKey != "",
+	}
+	if !tlsCapability.Enabled {
+		tlsCapability.Reason = "ENCRYPTION_KEY is required to store mTLS material"
+	}
 	resp := models.MetaResponse{
 		Version:                 version.Version,
 		ServerAddr:              s.serverAddr,
@@ -33,6 +39,7 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		StaticDir:               s.cfg.StaticDir,
 		APITokenEnabled:         s.cfg.APIToken != "",
 		EncryptionEnabled:       s.cfg.EncryptionKey != "",
+		Capabilities:            models.MetaCapabilities{ProfileTLS: tlsCapability},
 		AllowedLocalDirs:        s.cfg.AllowedLocalDirs,
 		JobConcurrency:          s.cfg.JobConcurrency,
 		JobLogMaxBytes:          jobLogMaxBytes,
