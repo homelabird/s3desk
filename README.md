@@ -199,3 +199,7 @@ The UI can download objects via a presigned URL from `GET /api/v1/buckets/{bucke
 - The server sets basic security headers (anti-clickjacking + hardening): `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
 - Jobs require `s5cmd` on `PATH` (or `S5CMD_PATH`).
 - OpenAPI draft: `openapi.yml`
+
+## License
+
+GPL-3.0-only. See `LICENSE`.
