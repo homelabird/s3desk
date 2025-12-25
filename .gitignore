@@ -5,6 +5,7 @@ backend/data/
 *.db-wal
 *.db-shm
 *.log
+dist/
 
 frontend/node_modules/
 frontend/dist/
