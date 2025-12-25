@@ -12,6 +12,7 @@ import type { Bucket, Job, JobCreateRequest, ListObjectsResponse, ObjectItem } f
 import { useTransfers } from '../components/useTransfers'
 import { LocalPathBrowseModal } from '../components/LocalPathBrowseModal'
 import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
+import { withJobQueueRetry } from '../lib/jobQueue'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { formatBytes } from '../lib/transfer'
 import styles from './objects/objects.module.css'
@@ -120,6 +121,15 @@ export function ObjectsPage(props: Props) {
 	const transfers = useTransfers()
 	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
+
+	const createJobWithRetry = useCallback(
+		(req: JobCreateRequest) => {
+			if (!props.profileId) throw new Error('profile is required')
+			return withJobQueueRetry(() => api.createJob(props.profileId!, req))
+		},
+		[api, props.profileId],
+	)
+
 	const isDesktop = !!screens.lg
 	const isWideDesktop = !!screens.xl
 	const canDragDrop = !!screens.lg
@@ -506,7 +516,7 @@ export function ObjectsPage(props: Props) {
 			if (keys.length < 1) throw new Error('select objects first')
 			if (keys.length > 50_000) throw new Error('too many keys; use a prefix delete job instead')
 			if (keys.length > 1000) {
-				const job = await api.createJob(props.profileId!, {
+				const job = await createJobWithRetry({
 					type: 's3_delete_objects',
 					payload: { bucket, keys },
 				})
@@ -542,7 +552,7 @@ export function ObjectsPage(props: Props) {
 
 	const deletePrefixJobMutation = useMutation({
 		mutationFn: (args: { prefix: string; dryRun: boolean }) =>
-			api.createJob(props.profileId!, {
+			createJobWithRetry({
 				type: 's5cmd_rm_prefix',
 				payload: {
 					bucket,
@@ -560,7 +570,7 @@ export function ObjectsPage(props: Props) {
 
 	const downloadPrefixJobMutation = useMutation({
 		mutationFn: (args: { prefix: string; localPath: string; deleteExtraneous: boolean; dryRun: boolean }) =>
-			api.createJob(props.profileId!, {
+			createJobWithRetry({
 				type: 's5cmd_sync_s3_to_local',
 				payload: {
 					bucket,
@@ -595,7 +605,7 @@ export function ObjectsPage(props: Props) {
 		mutationFn: async (args: { prefix: string }) => {
 			if (!props.profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
-			return api.createJob(props.profileId, {
+			return createJobWithRetry({
 				type: 's3_zip_prefix',
 				payload: { bucket, prefix: normalizePrefix(args.prefix) },
 			})
@@ -636,7 +646,7 @@ export function ObjectsPage(props: Props) {
 			if (!bucket) throw new Error('bucket is required')
 			if (args.keys.length < 1) throw new Error('select objects first')
 			if (args.keys.length > 10_000) throw new Error('too many keys (max 10000)')
-			return api.createJob(props.profileId, {
+			return createJobWithRetry({
 				type: 's3_zip_objects',
 				payload: {
 					bucket,
@@ -676,7 +686,7 @@ export function ObjectsPage(props: Props) {
 
 	const copyPrefixJobMutation = useMutation({
 		mutationFn: (args: { mode: 'copy' | 'move'; srcPrefix: string; dstBucket: string; dstPrefix: string; include: string[]; exclude: string[]; dryRun: boolean }) =>
-			api.createJob(props.profileId!, {
+			createJobWithRetry({
 				type: args.mode === 'copy' ? 's5cmd_cp_s3_prefix_to_s3_prefix' : 's5cmd_mv_s3_prefix_to_s3_prefix',
 				payload: {
 					srcBucket: bucket,
@@ -703,7 +713,7 @@ export function ObjectsPage(props: Props) {
 			const p = normalizePrefix(args.prefix)
 			if (p.includes('*')) throw new Error('wildcards are not allowed')
 
-			return api.createJob(props.profileId, {
+			return createJobWithRetry({
 				type: 's3_index_objects',
 				payload: {
 					bucket,
@@ -798,22 +808,22 @@ export function ObjectsPage(props: Props) {
 		const copyMoveMutation = useMutation({
 			mutationFn: (args: { mode: 'copy' | 'move'; srcKey: string; dstBucket: string; dstKey: string; dryRun: boolean }) => {
 				const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3' : 's5cmd_mv_s3_to_s3'
-				return api.createJob(props.profileId!, {
-				type,
-				payload: {
-					srcBucket: bucket,
-					srcKey: args.srcKey,
-					dstBucket: args.dstBucket,
-					dstKey: args.dstKey,
-					dryRun: args.dryRun,
-				},
-			})
-		},
-		onSuccess: (job, args) => {
-			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
-			setCopyMoveOpen(false)
-			setCopyMoveSrcKey(null)
-		},
+				return createJobWithRetry({
+					type,
+					payload: {
+						srcBucket: bucket,
+						srcKey: args.srcKey,
+						dstBucket: args.dstBucket,
+						dstKey: args.dstKey,
+						dryRun: args.dryRun,
+					},
+				})
+			},
+			onSuccess: (job, args) => {
+				message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
+				setCopyMoveOpen(false)
+				setCopyMoveSrcKey(null)
+			},
 			onError: (err) => message.error(formatErr(err)),
 		})
 
@@ -858,7 +868,7 @@ export function ObjectsPage(props: Props) {
 					const dstPrefix = `${parent}${raw}/`
 					if (dstPrefix === srcPrefix) throw new Error('already in destination')
 					if (dstPrefix.startsWith(srcPrefix)) throw new Error('destination must not be under source prefix')
-					return api.createJob(props.profileId, {
+					return createJobWithRetry({
 						type: 's5cmd_mv_s3_prefix_to_s3_prefix',
 						payload: {
 							srcBucket: bucket,
@@ -876,7 +886,7 @@ export function ObjectsPage(props: Props) {
 				const parent = parentPrefixFromKey(srcKey)
 				const dstKey = `${parent}${raw}`
 				if (dstKey === srcKey) throw new Error('already in destination')
-				return api.createJob(props.profileId, {
+				return createJobWithRetry({
 					type: 's5cmd_mv_s3_to_s3',
 					payload: {
 						srcBucket: bucket,
@@ -954,7 +964,7 @@ export function ObjectsPage(props: Props) {
 				if (items.length === 0) throw new Error('nothing to paste (already in destination)')
 
 				const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3_batch' : 's5cmd_mv_s3_to_s3_batch'
-				return api.createJob(props.profileId, {
+				return createJobWithRetry({
 					type,
 					payload: {
 						srcBucket,
@@ -1846,7 +1856,7 @@ export function ObjectsPage(props: Props) {
 
 			const createJobAndNotify = async (req: JobCreateRequest) => {
 				if (!props.profileId) throw new Error('profile is required')
-				const job = await api.createJob(props.profileId, req)
+				const job = await createJobWithRetry(req)
 					message.open({
 						type: 'success',
 						content: (
@@ -2816,7 +2826,7 @@ export function ObjectsPage(props: Props) {
 				etaSeconds: 0,
 			}))
 	
-			const resp = await api.commitUpload(profileId, uploadId)
+			const resp = await commitUploadWithRetry(profileId, uploadId)
 			committed = true
 			delete uploadItemsByTaskIdRef.current[taskId]
 			updateUploadTask(taskId, (t) => ({

@@ -19,7 +19,7 @@ import {
 	message,
 	Switch,
 } from 'antd'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeleteOutlined, DownloadOutlined, PlusOutlined, RedoOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useLocation } from 'react-router-dom'
 
@@ -27,7 +27,8 @@ import { APIClient, APIError } from '../api/client'
 import { LocalPathBrowseModal } from '../components/LocalPathBrowseModal'
 import { LocalPathInput } from '../components/LocalPathInput'
 import { useTransfers } from '../components/useTransfers'
-import type { Bucket, Job, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../api/types'
+import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../api/types'
+import { withJobQueueRetry } from '../lib/jobQueue'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 
 type Props = {
@@ -47,6 +48,14 @@ export function JobsPage(props: Props) {
 	const transfers = useTransfers()
 	const location = useLocation()
 	const screens = Grid.useBreakpoint()
+
+	const createJobWithRetry = useCallback(
+		(req: JobCreateRequest) => {
+			if (!props.profileId) throw new Error('profile is required')
+			return withJobQueueRetry(() => api.createJob(props.profileId!, req))
+		},
+		[api, props.profileId],
+	)
 
 	const deleteJobInitialPrefill: DeleteJobPrefill | null = (() => {
 		if (!location.state || typeof location.state !== 'object') return null
@@ -113,7 +122,7 @@ export function JobsPage(props: Props) {
 
 	const createMutation = useMutation({
 		mutationFn: (payload: { bucket: string; prefix: string; localPath: string; deleteExtraneous: boolean; include: string[]; exclude: string[]; dryRun: boolean }) =>
-			api.createJob(props.profileId!, { type: 's5cmd_sync_local_to_s3', payload }),
+			createJobWithRetry({ type: 's5cmd_sync_local_to_s3', payload }),
 		onSuccess: async (job) => {
 			message.success(`Job created: ${job.id}`)
 			setCreateOpen(false)
@@ -124,7 +133,7 @@ export function JobsPage(props: Props) {
 
 	const createDownloadMutation = useMutation({
 		mutationFn: (payload: { bucket: string; prefix: string; localPath: string; deleteExtraneous: boolean; include: string[]; exclude: string[]; dryRun: boolean }) =>
-			api.createJob(props.profileId!, { type: 's5cmd_sync_s3_to_local', payload }),
+			createJobWithRetry({ type: 's5cmd_sync_s3_to_local', payload }),
 		onSuccess: async (job) => {
 			message.success(`Job created: ${job.id}`)
 			setCreateDownloadOpen(false)
@@ -144,7 +153,7 @@ export function JobsPage(props: Props) {
 			include: string[]
 			exclude: string[]
 			dryRun: boolean
-		}) => api.createJob(props.profileId!, { type: 's5cmd_rm_prefix', payload }),
+		}) => createJobWithRetry({ type: 's5cmd_rm_prefix', payload }),
 		onSuccess: async (job) => {
 			message.success(`Delete job created: ${job.id}`)
 			setCreateDeleteOpen(false)
@@ -166,7 +175,7 @@ export function JobsPage(props: Props) {
 	})
 
 	const retryMutation = useMutation({
-		mutationFn: (jobId: string) => api.retryJob(props.profileId!, jobId),
+		mutationFn: (jobId: string) => withJobQueueRetry(() => api.retryJob(props.profileId!, jobId)),
 		onMutate: (jobId) => setRetryingJobId(jobId),
 		onSuccess: async (job) => {
 			message.success(`Retry queued: ${job.id}`)

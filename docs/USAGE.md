@@ -22,6 +22,8 @@ podman run --rm -p 8080:8080 \
   -e ADDR=0.0.0.0:8080 \
   -e ALLOW_REMOTE=true \
   -e API_TOKEN=change-me \
+  -e JOB_QUEUE_CAPACITY=256 \
+  -e JOB_LOG_MAX_LINE_BYTES=262144 \
   -v object-storage-data:/data \
   object-storage:local
 ```
@@ -82,6 +84,8 @@ podman run --rm --network host \
   -v object-storage-data:/data \
   -v "$(command -v s5cmd)":/usr/local/bin/s5cmd:ro \
   -e S5CMD_PATH=/usr/local/bin/s5cmd \
+  -e JOB_QUEUE_CAPACITY=256 \
+  -e JOB_LOG_MAX_LINE_BYTES=262144 \
   object-storage:local
 ```
 
@@ -95,3 +99,15 @@ Settings → Server 섹션의 `s5cmd` 항목에서 감지 상태/경로를 확�
   - Commit 업로드 또는 s5cmd 기반 Job 실행 시 서버에서 `s5cmd`를 찾지 못했습니다. `S5CMD_PATH`/마운트를 확인하세요.
 - WSL2에서 `127.0.0.1`로 접속이 안 됨:
   - 포트 매핑/바인딩 설정에 따라 달라질 수 있습니다. 우선 `http://localhost:8080` 를 시도하고, 안 되면 `http://<WSL2 IP>:8080` 로 접속해보세요.
+
+## 7) 운영 튜닝 (Job 큐/로그)
+
+- `JOB_QUEUE_CAPACITY`: Job 큐 최대 대기 수. 꽉 차면 API가 429로 응답합니다.
+- `JOB_LOG_MAX_LINE_BYTES`: Job 로그에서 한 줄 최대 길이(초과 시 잘림).
+
+추천 값:
+
+```bash
+JOB_QUEUE_CAPACITY=256
+JOB_LOG_MAX_LINE_BYTES=262144
+```

@@ -8,6 +8,7 @@ import { APIClient, APIError, RequestAbortedError, type UploadFileItem } from '.
 import { TransfersContext, useTransfers } from './useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { TransferEstimator } from '../lib/transfer'
+import { withJobQueueRetry } from '../lib/jobQueue'
 import { TransfersDrawer } from './transfers/TransfersDrawer'
 import type {
 	DownloadTask,
@@ -400,7 +401,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 					etaSeconds: 0,
 				}))
 
-				const resp = await api.commitUpload(current.profileId, uploadId)
+				const resp = await withJobQueueRetry(() => api.commitUpload(current.profileId, uploadId))
 				committed = true
 				delete uploadItemsByTaskIdRef.current[taskId]
 				updateUploadTask(taskId, (t) => ({

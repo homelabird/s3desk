@@ -156,8 +156,26 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.jobs.Enqueue(job.ID); err != nil {
+		if errors.Is(err, jobs.ErrJobQueueFull) {
+			_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+			stats := s.jobs.QueueStats()
+			w.Header().Set("Retry-After", "2")
+			writeError(
+				w,
+				http.StatusTooManyRequests,
+				"job_queue_full",
+				"job queue is full; try again later",
+				map[string]any{"queueDepth": stats.Depth, "queueCapacity": stats.Capacity},
+			)
+			return
+		}
+		_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue job", nil)
+		return
+	}
+
 	s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
-	s.jobs.Enqueue(job.ID)
 	writeJSON(w, http.StatusCreated, job)
 }
 
@@ -386,8 +404,26 @@ func (s *server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.jobs.Enqueue(newJob.ID); err != nil {
+		if errors.Is(err, jobs.ErrJobQueueFull) {
+			_, _ = s.store.DeleteJob(r.Context(), profileID, newJob.ID)
+			stats := s.jobs.QueueStats()
+			w.Header().Set("Retry-After", "2")
+			writeError(
+				w,
+				http.StatusTooManyRequests,
+				"job_queue_full",
+				"job queue is full; try again later",
+				map[string]any{"queueDepth": stats.Depth, "queueCapacity": stats.Capacity},
+			)
+			return
+		}
+		_, _ = s.store.DeleteJob(r.Context(), profileID, newJob.ID)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue job", nil)
+		return
+	}
+
 	s.hub.Publish(ws.Event{Type: "job.created", JobID: newJob.ID, Payload: map[string]any{"job": newJob}})
-	s.jobs.Enqueue(newJob.ID)
 	writeJSON(w, http.StatusCreated, newJob)
 }
 

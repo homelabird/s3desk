@@ -221,8 +221,26 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.jobs.Enqueue(job.ID); err != nil {
+		if errors.Is(err, jobs.ErrJobQueueFull) {
+			_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+			stats := s.jobs.QueueStats()
+			w.Header().Set("Retry-After", "2")
+			writeError(
+				w,
+				http.StatusTooManyRequests,
+				"job_queue_full",
+				"job queue is full; try again later",
+				map[string]any{"queueDepth": stats.Depth, "queueCapacity": stats.Capacity},
+			)
+			return
+		}
+		_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue job", nil)
+		return
+	}
+
 	s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
-	s.jobs.Enqueue(job.ID)
 
 	writeJSON(w, http.StatusCreated, models.JobCreatedResponse{JobID: job.ID})
 }

@@ -43,6 +43,15 @@ const (
 	JobTypeS3IndexObjects            = "s3_index_objects"
 )
 
+const (
+	defaultJobQueueCapacity = 256
+	defaultMaxLogLineBytes  = 256 * 1024
+	logReadBufferSize       = 64 * 1024
+	jobProgressTick         = 2 * time.Second
+)
+
+var ErrJobQueueFull = errors.New("job queue is full")
+
 type Config struct {
 	Store            *store.Store
 	DataDir          string
@@ -71,13 +80,19 @@ type Manager struct {
 	uploadTTL time.Duration
 
 	allowedLocalDirs []string
+	logLineMaxBytes  int
 
-	s5cmdTuneEnabled       bool
-	s5cmdMaxNumWorkers     int
-	s5cmdMaxConcurrency    int
-	s5cmdMinPartSizeMiB    int
-	s5cmdMaxPartSizeMiB    int
+	s5cmdTuneEnabled        bool
+	s5cmdMaxNumWorkers      int
+	s5cmdMaxConcurrency     int
+	s5cmdMinPartSizeMiB     int
+	s5cmdMaxPartSizeMiB     int
 	s5cmdDefaultPartSizeMiB int
+}
+
+type QueueStats struct {
+	Depth    int
+	Capacity int
 }
 
 type s3KeyPair struct {
@@ -89,6 +104,16 @@ func NewManager(cfg Config) *Manager {
 	concurrency := cfg.Concurrency
 	if concurrency <= 0 {
 		concurrency = 1
+	}
+
+	queueCapacity := envInt("JOB_QUEUE_CAPACITY", defaultJobQueueCapacity)
+	if queueCapacity < 1 {
+		queueCapacity = defaultJobQueueCapacity
+	}
+
+	logLineMaxBytes := envInt("JOB_LOG_MAX_LINE_BYTES", defaultMaxLogLineBytes)
+	if logLineMaxBytes < 1 {
+		logLineMaxBytes = defaultMaxLogLineBytes
 	}
 
 	cpu := runtime.NumCPU()
@@ -123,7 +148,7 @@ func NewManager(cfg Config) *Manager {
 		hub:          cfg.Hub,
 		logMaxBytes:  cfg.JobLogMaxBytes,
 		jobRetention: cfg.JobRetention,
-		queue:        make(chan string, 1024),
+		queue:        make(chan string, queueCapacity),
 		sem:          make(chan struct{}, concurrency),
 		cancels:      make(map[string]context.CancelFunc),
 		pids:         make(map[string]int),
@@ -143,6 +168,7 @@ func NewManager(cfg Config) *Manager {
 			return out
 		}(),
 
+		logLineMaxBytes:         logLineMaxBytes,
 		s5cmdTuneEnabled:        envBool("S5CMD_TUNE", true),
 		s5cmdMaxNumWorkers:      envInt("S5CMD_MAX_NUMWORKERS", defaultMaxNumWorkers),
 		s5cmdMaxConcurrency:     envInt("S5CMD_MAX_CONCURRENCY", defaultMaxConcurrency),
@@ -324,8 +350,15 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	for _, id := range queuedIDs {
-		m.Enqueue(id)
+	for i, id := range queuedIDs {
+		if err := m.Enqueue(id); err != nil {
+			if errors.Is(err, ErrJobQueueFull) {
+				remaining := append([]string(nil), queuedIDs[i:]...)
+				go m.enqueueBlocking(ctx, remaining)
+				break
+			}
+			return err
+		}
 	}
 	return nil
 }
@@ -503,11 +536,29 @@ func (m *Manager) Run(ctx context.Context) {
 	}
 }
 
-func (m *Manager) Enqueue(jobID string) {
+func (m *Manager) QueueStats() QueueStats {
+	return QueueStats{
+		Depth:    len(m.queue),
+		Capacity: cap(m.queue),
+	}
+}
+
+func (m *Manager) Enqueue(jobID string) error {
 	select {
 	case m.queue <- jobID:
+		return nil
 	default:
-		go func() { m.queue <- jobID }()
+		return ErrJobQueueFull
+	}
+}
+
+func (m *Manager) enqueueBlocking(ctx context.Context, ids []string) {
+	for _, id := range ids {
+		select {
+		case <-ctx.Done():
+			return
+		case m.queue <- id:
+		}
 	}
 }
 
@@ -1568,11 +1619,11 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pipeLogs(ctx, stdout, logWriter, m.hub, jobID, "info", progressCh)
+		pipeLogs(ctx, stdout, logWriter, m.hub, jobID, "info", progressCh, m.logLineMaxBytes)
 	}()
 	go func() {
 		defer wg.Done()
-		pipeLogs(ctx, stderr, logWriter, m.hub, jobID, "error", nil)
+		pipeLogs(ctx, stderr, logWriter, m.hub, jobID, "error", nil, m.logLineMaxBytes)
 	}()
 
 	waitErr := cmd.Wait()
@@ -1586,7 +1637,7 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 }
 
 func (m *Manager) trackProgress(ctx context.Context, jobID string, progress <-chan progressDelta) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(jobProgressTick)
 	defer ticker.Stop()
 
 	var (
@@ -1718,18 +1769,83 @@ func (m *Manager) trackProgress(ctx context.Context, jobID string, progress <-ch
 	}
 }
 
-func pipeLogs(ctx context.Context, r io.Reader, w io.Writer, hub *ws.Hub, jobID, level string, progressCh chan<- progressDelta) {
-	scanner := bufio.NewScanner(r)
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+func readLogLine(r *bufio.Reader, maxBytes int) (string, bool, error) {
+	var out strings.Builder
+	if maxBytes > 0 {
+		if maxBytes < logReadBufferSize {
+			out.Grow(maxBytes)
+		} else {
+			out.Grow(logReadBufferSize)
+		}
+	}
 
-	for scanner.Scan() {
+	truncated := false
+	for {
+		chunk, err := r.ReadString('\n')
+		if len(chunk) > 0 {
+			if maxBytes <= 0 {
+				out.WriteString(chunk)
+			} else {
+				remaining := maxBytes - out.Len()
+				switch {
+				case remaining <= 0:
+					truncated = true
+				case len(chunk) <= remaining:
+					out.WriteString(chunk)
+				default:
+					out.WriteString(chunk[:remaining])
+					truncated = true
+				}
+			}
+		}
+
+		if err != nil {
+			if errors.Is(err, bufio.ErrBufferFull) {
+				truncated = true
+				continue
+			}
+			if errors.Is(err, io.EOF) {
+				if out.Len() == 0 {
+					return "", truncated, io.EOF
+				}
+				break
+			}
+			return strings.TrimRight(out.String(), "\r\n"), truncated, err
+		}
+		break
+	}
+
+	line := strings.TrimRight(out.String(), "\r\n")
+	if truncated {
+		return line, true, bufio.ErrTooLong
+	}
+	return line, false, nil
+}
+
+func pipeLogs(ctx context.Context, r io.Reader, w io.Writer, hub *ws.Hub, jobID, level string, progressCh chan<- progressDelta, maxLineBytes int) {
+	reader := bufio.NewReaderSize(r, logReadBufferSize)
+
+	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
-		line := scanner.Text()
+
+		line, truncated, err := readLogLine(reader, maxLineBytes)
+		if err != nil && !errors.Is(err, bufio.ErrTooLong) && !errors.Is(err, io.EOF) {
+			return
+		}
+		if line == "" {
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			continue
+		}
+		if truncated {
+			line = line + " [truncated]"
+		}
+
 		rendered, delta := formatS5CmdJSONLine(line)
 		if rendered == "" {
 			rendered = line
@@ -1757,6 +1873,10 @@ func pipeLogs(ctx context.Context, r io.Reader, w io.Writer, hub *ws.Hub, jobID,
 				"message": rendered,
 			},
 		})
+
+		if errors.Is(err, io.EOF) {
+			return
+		}
 	}
 }
 

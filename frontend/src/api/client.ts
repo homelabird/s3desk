@@ -28,13 +28,15 @@ export class APIError extends Error {
 	status: number
 	code: string
 	details?: Record<string, unknown>
+	retryAfterSeconds?: number
 
-	constructor(args: { status: number; code: string; message: string; details?: Record<string, unknown> }) {
+	constructor(args: { status: number; code: string; message: string; details?: Record<string, unknown>; retryAfterSeconds?: number }) {
 		super(args.message)
 		this.name = 'APIError'
 		this.status = args.status
 		this.code = args.code
 		this.details = args.details
+		this.retryAfterSeconds = args.retryAfterSeconds
 	}
 }
 
@@ -94,6 +96,7 @@ export class APIClient {
 
 		const contentType = res.headers.get('content-type') ?? ''
 		const isJSON = contentType.includes('application/json')
+		const retryAfterSeconds = parseRetryAfterSeconds(res.headers.get('Retry-After'))
 
 		if (!res.ok) {
 			let body: unknown = null
@@ -110,12 +113,14 @@ export class APIClient {
 					code: er.error?.code ?? 'error',
 					message: er.error?.message ?? res.statusText,
 					details: er.error?.details,
+					retryAfterSeconds,
 				})
 			}
 			throw new APIError({
 				status: res.status,
 				code: 'http_error',
 				message: typeof body === 'string' && body ? body : res.statusText,
+				retryAfterSeconds,
 			})
 		}
 
@@ -536,6 +541,21 @@ export class APIClient {
 	retryJob(profileId: string, jobId: string): Promise<Job> {
 		return this.request(`/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' }, { profileId })
 	}
+}
+
+function parseRetryAfterSeconds(value: string | null): number | undefined {
+	if (!value) return undefined
+	const seconds = Number.parseInt(value, 10)
+	if (Number.isFinite(seconds)) {
+		return Math.max(0, seconds)
+	}
+	const parsedDate = Date.parse(value)
+	if (!Number.isNaN(parsedDate)) {
+		const diffMs = parsedDate - Date.now()
+		if (diffMs <= 0) return 0
+		return Math.ceil(diffMs / 1000)
+	}
+	return undefined
 }
 
 function parseAPIError(status: number, bodyText: string | null): APIError {
