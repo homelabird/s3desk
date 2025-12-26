@@ -6,10 +6,12 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -33,6 +35,17 @@ var tlsMaterialCache = struct {
 	entries: make(map[string]cachedTLSMaterial),
 }
 
+const (
+	s3DialTimeout           = 10 * time.Second
+	s3KeepAlive             = 30 * time.Second
+	s3TLSHandshakeTimeout   = 10 * time.Second
+	s3ResponseHeaderTimeout = 30 * time.Second
+	s3IdleConnTimeout       = 90 * time.Second
+	s3MaxIdleConns          = 100
+	s3MaxIdleConnsPerHost   = 20
+	s3ExpectContinueTimeout = 1 * time.Second
+)
+
 func New(ctx context.Context, p models.ProfileSecrets) (*s3.Client, error) {
 	if p.Region == "" {
 		return nil, errors.New("region is required")
@@ -43,16 +56,11 @@ func New(ctx context.Context, p models.ProfileSecrets) (*s3.Client, error) {
 		}
 	}
 
-	var httpClient aws.HTTPClient
 	tlsConfig, err := buildTLSConfig(p)
 	if err != nil {
 		return nil, err
 	}
-	if tlsConfig != nil {
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.TLSClientConfig = tlsConfig
-		httpClient = &http.Client{Transport: transport}
-	}
+	httpClient := newHTTPClient(tlsConfig)
 
 	resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...any) (aws.Endpoint, error) {
 		if service == s3.ServiceID && p.Endpoint != "" {
@@ -70,9 +78,7 @@ func New(ctx context.Context, p models.ProfileSecrets) (*s3.Client, error) {
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(p.AccessKeyID, p.SecretAccessKey, stringOrEmpty(p.SessionToken))),
 		config.WithEndpointResolverWithOptions(resolver),
 	}
-	if httpClient != nil {
-		loadOptions = append(loadOptions, config.WithHTTPClient(httpClient))
-	}
+	loadOptions = append(loadOptions, config.WithHTTPClient(httpClient))
 
 	cfg, err := config.LoadDefaultConfig(ctx, loadOptions...)
 	if err != nil {
@@ -83,6 +89,23 @@ func New(ctx context.Context, p models.ProfileSecrets) (*s3.Client, error) {
 		o.UsePathStyle = p.ForcePathStyle
 	})
 	return client, nil
+}
+
+func newHTTPClient(tlsConfig *tls.Config) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsConfig
+	transport.DialContext = (&net.Dialer{
+		Timeout:   s3DialTimeout,
+		KeepAlive: s3KeepAlive,
+	}).DialContext
+	transport.TLSHandshakeTimeout = s3TLSHandshakeTimeout
+	transport.ResponseHeaderTimeout = s3ResponseHeaderTimeout
+	transport.IdleConnTimeout = s3IdleConnTimeout
+	transport.MaxIdleConns = s3MaxIdleConns
+	transport.MaxIdleConnsPerHost = s3MaxIdleConnsPerHost
+	transport.ExpectContinueTimeout = s3ExpectContinueTimeout
+
+	return &http.Client{Transport: transport}
 }
 
 func stringOrEmpty(s *string) string {

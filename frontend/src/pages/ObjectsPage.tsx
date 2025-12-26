@@ -15,6 +15,7 @@ import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelat
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { listAllObjects } from '../lib/objects'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
+import { useIsOffline } from '../lib/useIsOffline'
 import { formatBytes } from '../lib/transfer'
 import styles from './objects/objects.module.css'
 import type { CommandItem, UIAction, UIActionOrDivider } from './objects/objectsActions'
@@ -127,6 +128,7 @@ export function ObjectsPage(props: Props) {
 	const transfers = useTransfers()
 	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
+	const isOffline = useIsOffline()
 
 	const createJobWithRetry = useCallback(
 		(req: JobCreateRequest) => {
@@ -138,7 +140,7 @@ export function ObjectsPage(props: Props) {
 
 	const isDesktop = !!screens.lg
 	const isWideDesktop = !!screens.xl
-	const canDragDrop = !!screens.lg
+	const canDragDrop = !!screens.lg && !isOffline
 
 	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
 	const [prefix, setPrefix] = useLocalStorageState<string>('prefix', '')
@@ -193,6 +195,9 @@ export function ObjectsPage(props: Props) {
 	const [indexFullReindex, setIndexFullReindex] = useState(true)
 	const [typeFilter, setTypeFilter] = useLocalStorageState<ObjectTypeFilter>('objectsTypeFilter', 'all')
 	const [favoritesOnly, setFavoritesOnly] = useLocalStorageState<boolean>('objectsFavoritesOnly', false)
+	const [favoritesFirst, setFavoritesFirst] = useLocalStorageState<boolean>('objectsFavoritesFirst', false)
+	const [favoritesSearch, setFavoritesSearch] = useLocalStorageState<string>('objectsFavoritesSearch', '')
+	const [favoritesOpenDetails, setFavoritesOpenDetails] = useLocalStorageState<boolean>('objectsFavoritesOpenDetails', false)
 	const [extFilter, setExtFilter] = useLocalStorageState<string>('objectsExtFilter', '')
 	const [minSize, setMinSize] = useLocalStorageState<number | null>('objectsMinSize', null)
 	const [maxSize, setMaxSize] = useLocalStorageState<number | null>('objectsMaxSize', null)
@@ -222,6 +227,7 @@ export function ObjectsPage(props: Props) {
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
 	const [favoritePendingKeys, setFavoritePendingKeys] = useState<Set<string>>(() => new Set())
 	const [lastSelectedObjectKey, setLastSelectedObjectKey] = useState<string | null>(null)
+	const pendingSelectRef = useRef<{ key: string; openDetails: boolean } | null>(null)
 	const uploadDragCounterRef = useRef(0)
 	const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
 	const uploadFolderInputRef = useRef<HTMLInputElement | null>(null)
@@ -367,7 +373,8 @@ export function ObjectsPage(props: Props) {
 		setMinSize(null)
 		setMaxSize(null)
 		setSort('name_asc')
-	}, [setExtFilter, setMaxSize, setMinSize, setSort, uiMode])
+		setFavoritesFirst(false)
+	}, [setExtFilter, setFavoritesFirst, setMaxSize, setMinSize, setSort, uiMode])
 
 	useEffect(() => {
 		if (uiMode !== 'simple') return
@@ -1169,14 +1176,31 @@ export function ObjectsPage(props: Props) {
 					return a.key.localeCompare(b.key)
 			}
 		})
+		const orderedItems = favoritesFirst
+			? sortedItems.reduce<{ favorites: ObjectItem[]; rest: ObjectItem[] }>(
+					(acc, item) => {
+						if (favoriteKeys.has(item.key)) acc.favorites.push(item)
+						else acc.rest.push(item)
+						return acc
+					},
+					{ favorites: [], rest: [] },
+				)
+			: null
 
 		const out: Row[] = []
 		for (const p of sortedPrefixes) out.push({ kind: 'prefix', prefix: p })
-		for (const obj of sortedItems) out.push({ kind: 'object', object: obj })
+		if (orderedItems) {
+			for (const obj of orderedItems.favorites) out.push({ kind: 'object', object: obj })
+			for (const obj of orderedItems.rest) out.push({ kind: 'object', object: obj })
+		} else {
+			for (const obj of sortedItems) out.push({ kind: 'object', object: obj })
+		}
 		return out
 	}, [
 		extFilter,
+		favoriteKeys,
 		favoriteItems,
+		favoritesFirst,
 		favoritesOnly,
 		maxModifiedMs,
 		maxSize,
@@ -1266,7 +1290,7 @@ export function ObjectsPage(props: Props) {
 
 	useEffect(() => {
 		parentRef.current?.scrollTo({ top: 0 })
-	}, [bucket, extFilter, favoritesOnly, maxModifiedMs, maxSize, minModifiedMs, minSize, prefix, search, sort, typeFilter])
+	}, [bucket, extFilter, favoritesFirst, favoritesOnly, maxModifiedMs, maxSize, minModifiedMs, minSize, prefix, search, sort, typeFilter])
 
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
 	const extOptions = useMemo(() => {
@@ -1342,6 +1366,40 @@ export function ObjectsPage(props: Props) {
 			if (closeDrawer) setTreeDrawerOpen(false)
 		},
 		[bucket, navigateToLocation],
+	)
+
+	const handleFavoriteSelect = useCallback(
+		(key: string, closeDrawer: boolean) => {
+			if (!bucket) return
+			const targetPrefix = parentPrefixFromKey(key)
+			const normalizedCurrent = normalizePrefix(prefix)
+			const normalizedTarget = normalizePrefix(targetPrefix)
+
+			if (normalizedCurrent === normalizedTarget) {
+				setSelectedKeys(new Set([key]))
+				setLastSelectedObjectKey(key)
+				if (favoritesOpenDetails) {
+					setDetailsOpen(true)
+					setDetailsDrawerOpen(true)
+				}
+				if (closeDrawer) setTreeDrawerOpen(false)
+				return
+			}
+
+			pendingSelectRef.current = { key, openDetails: favoritesOpenDetails }
+			navigateToLocation(bucket, targetPrefix, { recordHistory: true })
+			if (closeDrawer) setTreeDrawerOpen(false)
+		},
+		[
+			bucket,
+			favoritesOpenDetails,
+			navigateToLocation,
+			prefix,
+			setDetailsDrawerOpen,
+			setDetailsOpen,
+			setLastSelectedObjectKey,
+			setSelectedKeys,
+		],
 	)
 
 	const canGoBack = !!activeTab && activeTab.historyIndex > 0
@@ -1502,10 +1560,28 @@ export function ObjectsPage(props: Props) {
 		return null
 	}
 
-	useEffect(() => {
-		setSelectedKeys(new Set())
-		setLastSelectedObjectKey(null)
-	}, [bucket, prefix, props.profileId])
+useEffect(() => {
+	setSelectedKeys(new Set())
+	setLastSelectedObjectKey(null)
+}, [bucket, prefix, props.profileId])
+
+useEffect(() => {
+	pendingSelectRef.current = null
+}, [bucket])
+
+useEffect(() => {
+	const pending = pendingSelectRef.current
+	if (!pending) return
+	const expectedPrefix = normalizePrefix(parentPrefixFromKey(pending.key))
+	if (normalizePrefix(prefix) !== expectedPrefix) return
+	pendingSelectRef.current = null
+	setSelectedKeys(new Set([pending.key]))
+	setLastSelectedObjectKey(pending.key)
+	if (pending.openDetails) {
+		setDetailsOpen(true)
+		setDetailsDrawerOpen(true)
+	}
+}, [prefix, setDetailsDrawerOpen, setDetailsOpen])
 
 	const cleanupPreview = useCallback(() => {
 		previewAbortRef.current?.()
@@ -1719,11 +1795,12 @@ export function ObjectsPage(props: Props) {
 		maxSize != null ||
 		minModifiedMs != null ||
 		maxModifiedMs != null
-	const hasNonDefaultSort = sort !== 'name_asc'
+	const hasNonDefaultSort = sort !== 'name_asc' || favoritesFirst
 	const hasActiveView = hasActiveFilters || hasNonDefaultSort
 	const resetFilters = () => {
 		setTypeFilter('all')
 		setFavoritesOnly(false)
+		setFavoritesFirst(false)
 		setExtFilter('')
 		setMinSize(null)
 		setMaxSize(null)
@@ -1785,6 +1862,10 @@ export function ObjectsPage(props: Props) {
 	}
 
 		const startUploadFromFiles = (files: File[]) => {
+			if (isOffline) {
+				message.warning('Offline: uploads are disabled.')
+				return
+			}
 			if (!props.profileId) {
 				message.info('Select a profile first')
 				return
@@ -1798,8 +1879,18 @@ export function ObjectsPage(props: Props) {
 			transfers.queueUploadFiles({ profileId: props.profileId, bucket, prefix, files: cleanedFiles })
 		}
 
-		const openUploadFilesPicker = () => uploadFilesInputRef.current?.click()
+		const openUploadFilesPicker = () => {
+			if (isOffline) {
+				message.warning('Offline: uploads are disabled.')
+				return
+			}
+			uploadFilesInputRef.current?.click()
+		}
 		const openUploadFolderPicker = () => {
+			if (isOffline) {
+				message.warning('Offline: uploads are disabled.')
+				return
+			}
 			const support = getDevicePickerSupport()
 			if (support.ok) {
 				setUploadFolderOpen(true)
@@ -1809,7 +1900,7 @@ export function ObjectsPage(props: Props) {
 		}
 
 		const onUploadDragEnter = (e: React.DragEvent) => {
-			if (!props.profileId || !bucket) return
+			if (!props.profileId || !bucket || isOffline) return
 			if (!e.dataTransfer.types.includes('Files')) return
 			e.preventDefault()
 			uploadDragCounterRef.current += 1
@@ -1817,7 +1908,7 @@ export function ObjectsPage(props: Props) {
 		}
 
 		const onUploadDragLeave = (e: React.DragEvent) => {
-			if (!props.profileId || !bucket) return
+			if (!props.profileId || !bucket || isOffline) return
 			if (!e.dataTransfer.types.includes('Files')) return
 			e.preventDefault()
 			uploadDragCounterRef.current -= 1
@@ -1828,7 +1919,7 @@ export function ObjectsPage(props: Props) {
 		}
 
 			const onUploadDragOver = (e: React.DragEvent) => {
-				if (!props.profileId || !bucket) return
+				if (!props.profileId || !bucket || isOffline) return
 				if (!e.dataTransfer.types.includes('Files')) return
 				e.preventDefault()
 				e.dataTransfer.dropEffect = 'copy'
@@ -1901,6 +1992,10 @@ export function ObjectsPage(props: Props) {
 
 			const onUploadDrop = (e: React.DragEvent) => {
 				if (!props.profileId || !bucket) return
+				if (isOffline) {
+					message.warning('Offline: uploads are disabled.')
+					return
+				}
 				if (!e.dataTransfer.types.includes('Files')) return
 				e.preventDefault()
 				setUploadDropActive(false)
@@ -3310,6 +3405,7 @@ export function ObjectsPage(props: Props) {
 	const commandPrefix = normalizePrefix(prefix)
 	const { getObjectActions, getPrefixActions, selectionActionsAll, globalActionsAll } = buildObjectsActionCatalog({
 		isAdvanced,
+		isOffline,
 		profileId: props.profileId,
 		bucket,
 		prefix,
@@ -3441,7 +3537,7 @@ export function ObjectsPage(props: Props) {
 	const clearSelectionAction = selectionActionMap.get('clear_selection')
 	const deleteSelectionAction = selectionActionMap.get('delete_selected')
 	const downloadSelectionAction = selectionActionMap.get('download_selected')
-	const showUploadDropOverlay = uploadDropActive && !!props.profileId && !!bucket
+	const showUploadDropOverlay = uploadDropActive && !!props.profileId && !!bucket && !isOffline
 	const uploadDropLabel = bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'
 	const listKeydownHandler = useObjectsListKeydown({
 		selectedCount,
@@ -3542,7 +3638,9 @@ export function ObjectsPage(props: Props) {
 				timeLabel={timeLabel}
 				isSelected={selectedKeys.has(key)}
 				isFavorite={favoriteKeys.has(key)}
-				favoriteDisabled={favoritePendingKeys.has(key)}
+				favoriteDisabled={
+					favoritePendingKeys.has(key) || isOffline || !props.profileId || !bucket
+				}
 				isCompact={isCompactList}
 				listGridClassName={listGridClassName}
 				canDragDrop={canDragDrop}
@@ -3560,6 +3658,7 @@ export function ObjectsPage(props: Props) {
 	}
 	const listIsFetching = favoritesOnly ? favoritesQuery.isFetching : objectsQuery.isFetching
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
+	const canInteract = !!props.profileId && !!bucket && !isOffline
 	const listContent = (
 		<ObjectsListContent
 			rows={rows}
@@ -3727,6 +3826,7 @@ export function ObjectsPage(props: Props) {
 					isDesktop: !!screens.lg,
 					showLabels: !!screens.sm,
 					isAdvanced,
+					isOffline,
 					hasProfile: !!props.profileId,
 					bucket,
 					selectedCount,
@@ -3769,6 +3869,17 @@ export function ObjectsPage(props: Props) {
 					treeDrawerOpen={treeDrawerOpen}
 					hasProfile={!!props.profileId}
 					hasBucket={!!bucket}
+					favorites={favoriteItems}
+					favoritesSearch={favoritesSearch}
+					onFavoritesSearchChange={setFavoritesSearch}
+					favoritesOnly={favoritesOnly}
+					onFavoritesOnlyChange={setFavoritesOnly}
+					favoritesOpenDetails={favoritesOpenDetails}
+					onFavoritesOpenDetailsChange={setFavoritesOpenDetails}
+					onSelectFavorite={(key) => handleFavoriteSelect(key, false)}
+					onSelectFavoriteFromDrawer={(key) => handleFavoriteSelect(key, true)}
+					favoritesLoading={favoritesQuery.isFetching}
+					favoritesError={favoritesQuery.isError ? formatErr(favoritesQuery.error) : null}
 					treeData={treeData}
 					onLoadData={onTreeLoadData}
 					selectedKeys={treeSelectedKeys}
@@ -3812,11 +3923,12 @@ export function ObjectsPage(props: Props) {
 								if (!isAdvanced) setUiMode('advanced')
 								setGlobalSearchOpen(true)
 							}}
-							canInteract={!!props.profileId && !!bucket}
+							canInteract={canInteract}
 						/>
 					}
 					alerts={
 						<>
+							{isOffline ? <Alert type="warning" showIcon message="Offline: object actions are disabled." /> : null}
 							{favoritesOnly ? (
 								favoritesQuery.isError ? (
 									<Alert type="error" showIcon message="Failed to load favorites" description={formatErr(favoritesQuery.error)} />
@@ -3924,6 +4036,8 @@ export function ObjectsPage(props: Props) {
 					onTypeFilterChange={(value) => setTypeFilter(value)}
 					favoritesOnly={favoritesOnly}
 					onFavoritesOnlyChange={setFavoritesOnly}
+					favoritesFirst={favoritesFirst}
+					onFavoritesFirstChange={setFavoritesFirst}
 					extFilter={extFilter}
 					extOptions={extOptions}
 					onExtFilterChange={(value) => setExtFilter(value)}

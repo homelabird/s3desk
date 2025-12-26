@@ -1,0 +1,20 @@
+stages:
+  - audit
+
+dev_license_audit:
+  stage: audit
+  image: golang:1.23
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends nodejs npm python3 ca-certificates curl
+  script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - cd ..
+    - python3 scripts/generate_third_party_notices.py --include-dev
+  artifacts:
+    when: always
+    paths:
+      - THIRD_PARTY_NOTICES.md
+      - third_party/licenses/
+    expire_in: 7 days

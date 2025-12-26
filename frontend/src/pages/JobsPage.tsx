@@ -31,6 +31,7 @@ import { withJobQueueRetry } from '../lib/jobQueue'
 import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath } from '../lib/deviceFs'
 import { listAllObjects } from '../lib/objects'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
+import { useIsOffline } from '../lib/useIsOffline'
 
 type Props = {
 	apiToken: string
@@ -49,6 +50,7 @@ export function JobsPage(props: Props) {
 	const transfers = useTransfers()
 	const location = useLocation()
 	const screens = Grid.useBreakpoint()
+	const isOffline = useIsOffline()
 	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
 	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
 
@@ -85,16 +87,39 @@ export function JobsPage(props: Props) {
 	const logsContainerRef = useRef<HTMLDivElement | null>(null)
 	const logOffsetsRef = useRef<Record<string, number>>({})
 	const logRemaindersRef = useRef<Record<string, string>>({})
+	const logPollDelayRef = useRef<number>(1500)
+	const logPollFailuresRef = useRef<number>(0)
+	const [logPollFailures, setLogPollFailures] = useState(0)
+	const [logPollPaused, setLogPollPaused] = useState(false)
+	const [logPollRetryToken, setLogPollRetryToken] = useState(0)
 	const lastSeqRef = useRef<number>(0)
 	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
 	const [eventsConnected, setEventsConnected] = useState(false)
 	const [eventsTransport, setEventsTransport] = useState<'ws' | 'sse' | null>(null)
+	const [eventsRetryCount, setEventsRetryCount] = useState(0)
+	const [eventsManualRetryToken, setEventsManualRetryToken] = useState(0)
 	const [statusFilter, setStatusFilter] = useLocalStorageState<JobStatus | 'all'>('jobsStatusFilter', 'all')
 	const [typeFilter, setTypeFilter] = useLocalStorageState('jobsTypeFilter', '')
 	const [cancelingJobId, setCancelingJobId] = useState<string | null>(null)
 	const [retryingJobId, setRetryingJobId] = useState<string | null>(null)
 	const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
 	const [deleteJobPrefill, setDeleteJobPrefill] = useState<DeleteJobPrefill | null>(() => deleteJobInitialPrefill)
+	const logPollBaseMs = 1500
+	const logPollMaxMs = 20_000
+	const logPollPauseAfter = 3
+	const eventsRetryThreshold = 3
+
+	const resetLogPolling = useCallback(() => {
+		logPollFailuresRef.current = 0
+		logPollDelayRef.current = logPollBaseMs
+		setLogPollFailures(0)
+		setLogPollPaused(false)
+	}, [logPollBaseMs])
+
+	const resumeLogPolling = useCallback(() => {
+		resetLogPolling()
+		setLogPollRetryToken((prev) => prev + 1)
+	}, [resetLogPolling])
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
@@ -290,10 +315,46 @@ export function JobsPage(props: Props) {
 	})
 
 	useEffect(() => {
+		if (!logsOpen || !followLogs || !activeLogJobId) {
+			resetLogPolling()
+		}
+	}, [activeLogJobId, followLogs, logsOpen, resetLogPolling])
+
+	useEffect(() => {
 		if (!props.profileId) return
 		if (!logsOpen || !followLogs || !activeLogJobId) return
+		if (logPollPaused) return
 
 		const jobId = activeLogJobId
+		let stopped = false
+		let timer: number | null = null
+
+		const scheduleNext = () => {
+			if (stopped || logPollPaused) return
+			timer = window.setTimeout(() => {
+				tick().catch(() => {})
+			}, logPollDelayRef.current)
+		}
+
+		const recordSuccess = () => {
+			if (stopped) return
+			if (logPollFailuresRef.current === 0) return
+			logPollFailuresRef.current = 0
+			logPollDelayRef.current = logPollBaseMs
+			setLogPollFailures(0)
+		}
+
+		const recordFailure = () => {
+			if (stopped) return
+			logPollFailuresRef.current += 1
+			const failures = logPollFailuresRef.current
+			setLogPollFailures(failures)
+			logPollDelayRef.current = Math.min(logPollMaxMs, logPollBaseMs * Math.pow(2, failures - 1))
+			if (failures >= logPollPauseAfter) {
+				setLogPollPaused(true)
+			}
+		}
+
 		const tick = async () => {
 			const offset = logOffsetsRef.current[jobId] ?? 0
 			try {
@@ -302,6 +363,7 @@ export function JobsPage(props: Props) {
 					logOffsetsRef.current[jobId] = nextOffset
 					logRemaindersRef.current[jobId] = ''
 				}
+				recordSuccess()
 				if (nextOffset === offset || !text) return
 				logOffsetsRef.current[jobId] = nextOffset
 
@@ -325,16 +387,31 @@ export function JobsPage(props: Props) {
 					return next
 				})
 			} catch {
-				// ignore
+				recordFailure()
+			} finally {
+				if (!stopped && !logPollPaused && logPollFailuresRef.current < logPollPauseAfter) {
+					scheduleNext()
+				}
 			}
 		}
 
 		tick().catch(() => {})
-		const id = window.setInterval(() => {
-			tick().catch(() => {})
-		}, 1500)
-		return () => window.clearInterval(id)
-	}, [activeLogJobId, api, followLogs, logsOpen, props.profileId])
+		return () => {
+			stopped = true
+			if (timer) window.clearTimeout(timer)
+		}
+	}, [
+		activeLogJobId,
+		api,
+		followLogs,
+		logPollBaseMs,
+		logPollMaxMs,
+		logPollPauseAfter,
+		logPollPaused,
+		logPollRetryToken,
+		logsOpen,
+		props.profileId,
+	])
 
 	useEffect(() => {
 		if (!logsOpen || !followLogs || !activeLogJobId) return
@@ -349,6 +426,51 @@ export function JobsPage(props: Props) {
 		let ws: WebSocket | null = null
 		let es: EventSource | null = null
 		let stopped = false
+		let currentTransport: 'ws' | 'sse' | null = null
+		let reconnectTimer: number | null = null
+		let wsProbeTimer: number | null = null
+		let reconnectAttempt = 0
+
+		const setTransport = (next: 'ws' | 'sse' | null) => {
+			currentTransport = next
+			setEventsTransport(next)
+		}
+
+		const clearReconnectTimer = () => {
+			if (reconnectTimer) {
+				window.clearTimeout(reconnectTimer)
+				reconnectTimer = null
+			}
+		}
+
+		const clearWsProbeTimer = () => {
+			if (wsProbeTimer) {
+				window.clearTimeout(wsProbeTimer)
+				wsProbeTimer = null
+			}
+		}
+
+		const scheduleReconnect = () => {
+			if (stopped || reconnectTimer) return
+			const jitter = Math.floor(Math.random() * 250)
+			const delay = Math.min(20_000, 1000 * Math.pow(2, reconnectAttempt) + jitter)
+			reconnectAttempt += 1
+			setEventsRetryCount(reconnectAttempt)
+			reconnectTimer = window.setTimeout(() => {
+				reconnectTimer = null
+				if (stopped) return
+				connectWS()
+			}, delay)
+		}
+
+		const scheduleWSProbe = () => {
+			if (stopped || wsProbeTimer) return
+			wsProbeTimer = window.setTimeout(() => {
+				wsProbeTimer = null
+				if (stopped) return
+				if (currentTransport !== 'ws') connectWS()
+			}, 15_000)
+		}
 
 		const handleEvent = (data: string) => {
 			try {
@@ -416,24 +538,47 @@ export function JobsPage(props: Props) {
 		}
 
 		const connectSSE = () => {
-			if (stopped || es) return
+			if (stopped) return
+			if (es) {
+				try {
+					es.close()
+				} catch {
+					// ignore
+				}
+			}
 			try {
 				es = new EventSource(buildSSEURL(props.apiToken, lastSeqRef.current))
 			} catch {
+				scheduleReconnect()
 				return
 			}
 			es.onopen = () => {
-				setEventsTransport('sse')
+				setTransport('sse')
 				setEventsConnected(true)
+				setEventsRetryCount(0)
+				reconnectAttempt = 0
+				scheduleWSProbe()
 			}
 			es.onerror = () => {
-				setEventsTransport('sse')
+				setTransport('sse')
 				setEventsConnected(false)
+				scheduleReconnect()
 			}
 			es.onmessage = (ev) => handleEvent(ev.data)
 		}
 
 		const connectWS = () => {
+			if (stopped) return
+			clearReconnectTimer()
+			clearWsProbeTimer()
+			if (ws) {
+				try {
+					ws.close()
+				} catch {
+					// ignore
+				}
+				ws = null
+			}
 			ws = new WebSocket(buildWSURL(props.apiToken, lastSeqRef.current))
 
 			let opened = false
@@ -445,21 +590,35 @@ export function JobsPage(props: Props) {
 					// ignore
 				}
 				connectSSE()
+				scheduleWSProbe()
 			}, 1500)
 
 			ws.onopen = () => {
 				opened = true
 				window.clearTimeout(fallbackTimer)
-				setEventsTransport('ws')
+				setTransport('ws')
 				setEventsConnected(true)
+				setEventsRetryCount(0)
+				reconnectAttempt = 0
+				clearWsProbeTimer()
+				clearReconnectTimer()
+				if (es) {
+					try {
+						es.close()
+					} catch {
+						// ignore
+					}
+					es = null
+				}
 			}
 
 			const onDisconnect = () => {
 				window.clearTimeout(fallbackTimer)
 				if (stopped) return
-				setEventsTransport(null)
+				setTransport(null)
 				setEventsConnected(false)
 				connectSSE()
+				scheduleReconnect()
 			}
 			ws.onclose = onDisconnect
 			ws.onerror = onDisconnect
@@ -469,6 +628,8 @@ export function JobsPage(props: Props) {
 		connectWS()
 		return () => {
 			stopped = true
+			clearWsProbeTimer()
+			clearReconnectTimer()
 			try {
 				ws?.close()
 			} catch {
@@ -476,7 +637,7 @@ export function JobsPage(props: Props) {
 			}
 			es?.close()
 		}
-	}, [props.apiToken, props.profileId, queryClient])
+	}, [eventsManualRetryToken, props.apiToken, props.profileId, queryClient])
 
 	if (!props.profileId) {
 		return <Alert type="warning" showIcon message="Select a profile first" />
@@ -504,24 +665,32 @@ export function JobsPage(props: Props) {
 					<Tag color={eventsConnected ? 'success' : 'default'}>
 						{eventsConnected ? `Realtime: ${(eventsTransport ?? 'unknown').toUpperCase()}` : 'Realtime disconnected'}
 					</Tag>
-					<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+					{!eventsConnected && eventsRetryCount >= eventsRetryThreshold ? (
+						<Button size="small" onClick={() => setEventsManualRetryToken((prev) => prev + 1)} disabled={isOffline}>
+							Retry realtime
+						</Button>
+					) : null}
+					<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
 						Upload folder (device)
 					</Button>
-					<Button icon={<DownloadOutlined />} onClick={() => setCreateDownloadOpen(true)}>
+					<Button icon={<DownloadOutlined />} onClick={() => setCreateDownloadOpen(true)} disabled={isOffline}>
 						Download folder (device)
-						</Button>
-						<Button
-							danger
-							icon={<DeleteOutlined />}
-							onClick={() => {
-								setDeleteJobPrefill(null)
-								setCreateDeleteOpen(true)
-							}}
-						>
-							New Delete Job
-						</Button>
-					</Space>
+					</Button>
+					<Button
+						danger
+						icon={<DeleteOutlined />}
+						onClick={() => {
+							setDeleteJobPrefill(null)
+							setCreateDeleteOpen(true)
+						}}
+						disabled={isOffline}
+					>
+						New Delete Job
+					</Button>
+				</Space>
 			</div>
+
+			{isOffline ? <Alert type="warning" showIcon message="Offline: job actions are disabled." /> : null}
 
 			<Space wrap style={{ width: '100%' }}>
 				<Select
@@ -544,7 +713,7 @@ export function JobsPage(props: Props) {
 					style={{ width: screens.md ? 360 : '100%', maxWidth: '100%' }}
 					allowClear
 				/>
-				<Button icon={<ReloadOutlined />} onClick={() => jobsQuery.refetch()} loading={jobsQuery.isFetching}>
+				<Button icon={<ReloadOutlined />} onClick={() => jobsQuery.refetch()} loading={jobsQuery.isFetching} disabled={isOffline}>
 					Refresh
 				</Button>
 				<Typography.Text type="secondary">{jobs.length ? `${jobs.length} jobs` : ''}</Typography.Text>
@@ -619,7 +788,7 @@ export function JobsPage(props: Props) {
 									<Button
 										size="small"
 										icon={<DownloadOutlined />}
-										disabled={!canDownloadArtifact}
+										disabled={isOffline || !canDownloadArtifact}
 										onClick={() =>
 											transfers.queueDownloadJobArtifact({
 												profileId: props.profileId!,
@@ -638,6 +807,7 @@ export function JobsPage(props: Props) {
 										setDetailsJobId(row.id)
 										setDetailsOpen(true)
 									}}
+									disabled={isOffline}
 								>
 									Details
 								</Button>
@@ -649,6 +819,7 @@ export function JobsPage(props: Props) {
 										logsMutation.mutate(row.id)
 									}}
 									loading={logsMutation.isPending && activeLogJobId === row.id}
+									disabled={isOffline}
 								>
 									Logs
 								</Button>
@@ -656,7 +827,7 @@ export function JobsPage(props: Props) {
 									size="small"
 									danger
 									icon={<StopOutlined />}
-									disabled={row.status !== 'queued' && row.status !== 'running'}
+									disabled={isOffline || (row.status !== 'queued' && row.status !== 'running')}
 									loading={cancelMutation.isPending && cancelingJobId === row.id}
 									onClick={() => cancelMutation.mutate(row.id)}
 								>
@@ -665,7 +836,7 @@ export function JobsPage(props: Props) {
 								<Button
 									size="small"
 									icon={<RedoOutlined />}
-									disabled={row.status !== 'failed' && row.status !== 'canceled'}
+									disabled={isOffline || (row.status !== 'failed' && row.status !== 'canceled')}
 									loading={retryMutation.isPending && retryingJobId === row.id}
 									onClick={() => retryMutation.mutate(row.id)}
 								>
@@ -675,7 +846,7 @@ export function JobsPage(props: Props) {
 									size="small"
 									danger
 									icon={<DeleteOutlined />}
-									disabled={row.status === 'queued' || row.status === 'running'}
+									disabled={isOffline || row.status === 'queued' || row.status === 'running'}
 									loading={deleteJobMutation.isPending && deletingJobId === row.id}
 									onClick={() => {
 										Modal.confirm({
@@ -706,7 +877,11 @@ export function JobsPage(props: Props) {
 			/>
 
 			{jobsQuery.hasNextPage ? (
-				<Button onClick={() => jobsQuery.fetchNextPage()} loading={jobsQuery.isFetchingNextPage} disabled={!jobsQuery.hasNextPage}>
+				<Button
+					onClick={() => jobsQuery.fetchNextPage()}
+					loading={jobsQuery.isFetchingNextPage}
+					disabled={!jobsQuery.hasNextPage || isOffline}
+				>
 					Load more
 				</Button>
 			) : null}
@@ -717,6 +892,7 @@ export function JobsPage(props: Props) {
 				onCancel={() => setCreateOpen(false)}
 				onSubmit={(values) => handleDeviceUpload(values)}
 				loading={deviceUploadLoading}
+				isOffline={isOffline}
 				bucket={bucket}
 				setBucket={setBucket}
 				bucketOptions={bucketOptions}
@@ -734,6 +910,7 @@ export function JobsPage(props: Props) {
 				onCancel={() => setCreateDownloadOpen(false)}
 				onSubmit={(values) => handleDeviceDownload(values)}
 				loading={deviceDownloadLoading}
+				isOffline={isOffline}
 				bucket={bucket}
 				setBucket={setBucket}
 				bucketOptions={bucketOptions}
@@ -747,6 +924,7 @@ export function JobsPage(props: Props) {
 					}}
 					onSubmit={(values) => createDeleteMutation.mutate(values)}
 					loading={createDeleteMutation.isPending}
+					isOffline={isOffline}
 					bucket={deleteJobPrefill?.bucket ?? bucket}
 					setBucket={setBucket}
 					bucketOptions={bucketOptions}
@@ -762,7 +940,7 @@ export function JobsPage(props: Props) {
 					<Space>
 						<Button
 							icon={<ReloadOutlined />}
-							disabled={!detailsJobId}
+							disabled={!detailsJobId || isOffline}
 							loading={jobDetailsQuery.isFetching}
 							onClick={() => jobDetailsQuery.refetch()}
 						>
@@ -770,7 +948,12 @@ export function JobsPage(props: Props) {
 						</Button>
 						<Button
 							danger
-							disabled={!detailsJobId || jobDetailsQuery.data?.status === 'queued' || jobDetailsQuery.data?.status === 'running'}
+							disabled={
+								isOffline ||
+								!detailsJobId ||
+								jobDetailsQuery.data?.status === 'queued' ||
+								jobDetailsQuery.data?.status === 'running'
+							}
 							loading={deleteJobMutation.isPending && deletingJobId === detailsJobId}
 							onClick={() => {
 								if (!detailsJobId) return
@@ -795,7 +978,7 @@ export function JobsPage(props: Props) {
 							Delete
 						</Button>
 						<Button
-							disabled={!detailsJobId}
+							disabled={!detailsJobId || isOffline}
 							onClick={() => {
 								if (!detailsJobId) return
 								setDetailsOpen(false)
@@ -899,11 +1082,27 @@ export function JobsPage(props: Props) {
 				}
 			>
 				{activeLogJobId ? (
-					<div ref={logsContainerRef} style={{ maxHeight: '75vh', overflow: 'auto' }}>
-						<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
-							{(logByJobId[activeLogJobId] ?? []).join('\n')}
-						</pre>
-					</div>
+					<>
+						{logPollPaused ? (
+							<Alert
+								type="warning"
+								showIcon
+								message="Log polling paused"
+								description={`Paused after ${logPollFailures} failed attempts. Click retry to resume polling.`}
+								action={
+									<Button size="small" onClick={resumeLogPolling}>
+										Retry
+									</Button>
+								}
+								style={{ marginBottom: 12 }}
+							/>
+						) : null}
+						<div ref={logsContainerRef} style={{ maxHeight: '75vh', overflow: 'auto' }}>
+							<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
+								{(logByJobId[activeLogJobId] ?? []).join('\n')}
+							</pre>
+						</div>
+					</>
 				) : (
 					<Typography.Text type="secondary">Select a job</Typography.Text>
 				)}
@@ -1104,6 +1303,7 @@ function CreateJobModal(props: {
 		cleanupEmptyDirs?: boolean
 	}) => void
 	loading: boolean
+	isOffline: boolean
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
@@ -1124,7 +1324,7 @@ function CreateJobModal(props: {
 	const [dirLabel, setDirLabel] = useState('')
 	const support = getDevicePickerSupport()
 
-	const canSubmit = !!dirHandle && support.ok
+	const canSubmit = !!dirHandle && support.ok && !props.isOffline
 
 	return (
 		<Drawer
@@ -1205,7 +1405,7 @@ function CreateJobModal(props: {
 				<Form.Item name="localFolder" label="Local folder" rules={[{ required: true }]}>
 					<LocalDevicePathInput
 						placeholder="Select a folder"
-						disabled={!support.ok}
+						disabled={!support.ok || props.isOffline}
 						onPick={(handle) => {
 							setDirHandle(handle)
 							setDirLabel(handle.name)
@@ -1233,6 +1433,7 @@ function DownloadJobModal(props: {
 	onCancel: () => void
 	onSubmit: (payload: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
 	loading: boolean
+	isOffline: boolean
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
@@ -1248,7 +1449,7 @@ function DownloadJobModal(props: {
 	const [dirLabel, setDirLabel] = useState('')
 	const support = getDevicePickerSupport()
 
-	const canSubmit = !!dirHandle && support.ok
+	const canSubmit = !!dirHandle && support.ok && !props.isOffline
 
 	return (
 		<Drawer
@@ -1319,7 +1520,7 @@ function DownloadJobModal(props: {
 				<Form.Item name="localFolder" label="Local destination folder" rules={[{ required: true }]}>
 					<LocalDevicePathInput
 						placeholder="Select a folder"
-						disabled={!support.ok}
+						disabled={!support.ok || props.isOffline}
 						onPick={(handle) => {
 							setDirHandle(handle)
 							setDirLabel(handle.name)
@@ -1344,6 +1545,7 @@ function DeletePrefixJobModal(props: {
 		dryRun: boolean
 	}) => void
 	loading: boolean
+	isOffline: boolean
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
@@ -1393,7 +1595,7 @@ function DeletePrefixJobModal(props: {
 			extra={
 				<Space>
 					<Button onClick={props.onCancel}>Close</Button>
-					<Button type="primary" danger loading={props.loading} onClick={() => form.submit()}>
+					<Button type="primary" danger loading={props.loading} onClick={() => form.submit()} disabled={props.isOffline}>
 						Create
 					</Button>
 				</Space>

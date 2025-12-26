@@ -51,7 +51,7 @@ UI에서의 대응은 다음과 같습니다.
 
 Profile 생성 후 **상단(Profile Select)** 에서 해당 Profile을 선택하면 이후 API 호출에 사용됩니다.
 
-> 보안 주의: Profile 자격증명은 `DATA_DIR/object-storage.db`에 저장됩니다(ENCRYPTION_KEY 설정 시 암호화).
+> 보안 주의: Profile 자격증명은 `DB_BACKEND=sqlite`일 때 `DATA_DIR/object-storage.db`에 저장됩니다(ENCRYPTION_KEY 설정 시 암호화).
 > 이 DB는 로컬 전용으로만 보관하고 커밋/공유하지 마세요. 유출 가능성이 있으면 즉시 키를 회전하세요.
 
 ### mTLS (클라이언트 인증서) 설정
@@ -62,6 +62,22 @@ Profile 생성 후 **상단(Profile Select)** 에서 해당 Profile을 선택하
   - CA Certificate 선택
   - Server Name (SNI) 선택(인증서의 CN/SAN과 일치하도록 지정)
 - `tlsInsecureSkipVerify`는 서버 인증서 검증을 건너뛰므로 가급적 끄는 것을 권장합니다.
+- Settings → Server → **mTLS (client cert)** 항목에서 서버 활성 여부/사유를 확인할 수 있습니다.
+
+#### mTLS 운영/회전 팁
+
+- `ENCRYPTION_KEY`는 **32바이트 base64 키**여야 합니다.
+- `ENCRYPTION_KEY`를 변경하면 기존 mTLS 데이터 복호화가 불가하므로 **각 Profile에서 인증서를 다시 등록**해야 합니다.
+- `DB_BACKEND=sqlite`에서 `DATA_DIR/object-storage.db` 백업/복사 시 인증서와 키가 함께 이동되므로 **권한을 엄격히 제한**하세요.
+
+### DB backend 선택 (SQLite/Postgres)
+
+- `DB_BACKEND=sqlite` (기본값)
+  - 로컬 파일(`DATA_DIR/object-storage.db`)에 저장됩니다.
+  - **SQLite는 1 replica 사용을 권장**합니다.
+- `DB_BACKEND=postgres`
+  - 외부 DB(`DATABASE_URL`)에 저장됩니다.
+  - **Postgres는 multi-replica 구성이 가능**합니다.
 
 ## 4) 브라우징 / 업로드 / Job 흐름
 

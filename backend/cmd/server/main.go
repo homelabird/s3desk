@@ -32,7 +32,9 @@ func main() {
 	var cfg config.Config
 
 	flag.StringVar(&cfg.Addr, "addr", getEnv("ADDR", "127.0.0.1:8080"), "listen address")
-	flag.StringVar(&cfg.DataDir, "data-dir", getEnv("DATA_DIR", "./data"), "data directory (db, staging, logs)")
+	flag.StringVar(&cfg.DataDir, "data-dir", getEnv("DATA_DIR", "./data"), "data directory (sqlite db, staging, logs)")
+	flag.StringVar(&cfg.DBBackend, "db-backend", getEnv("DB_BACKEND", "sqlite"), "database backend (sqlite or postgres)")
+	flag.StringVar(&cfg.DatabaseURL, "database-url", getEnv("DATABASE_URL", ""), "postgres connection string (required when db-backend=postgres)")
 	flag.StringVar(&cfg.StaticDir, "static-dir", defaultStaticDir(), "static files directory (frontend build output)")
 	flag.StringVar(&cfg.APIToken, "api-token", getEnv("API_TOKEN", ""), "optional local API token (X-Api-Token)")
 	flag.BoolVar(&cfg.AllowRemote, "allow-remote", getEnvBool("ALLOW_REMOTE", false), "allow non-local bind and accept private remote clients (requires API_TOKEN when using a non-loopback addr)")

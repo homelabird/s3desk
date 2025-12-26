@@ -10,6 +10,7 @@ export type ObjectsToolbarProps = {
 	isDesktop: boolean
 	showLabels: boolean
 	isAdvanced: boolean
+	isOffline: boolean
 	hasProfile: boolean
 	bucket: string
 	selectedCount: number
@@ -37,10 +38,12 @@ export type ObjectsToolbarProps = {
 }
 
 export function ObjectsToolbar(props: ObjectsToolbarProps) {
-	const canUseBucket = props.hasProfile
-	const canUpload = props.hasProfile && !!props.bucket
+	const canUseBucket = props.hasProfile && !props.isOffline
+	const canUpload = props.hasProfile && !!props.bucket && !props.isOffline
 	const downloadDisabledReason = !props.hasProfile
 		? 'Select a profile first'
+		: props.isOffline
+			? 'Offline: check your network connection'
 		: !props.bucket
 			? 'Select a bucket first'
 			: props.selectedCount === 0
@@ -48,6 +51,8 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				: 'Download to your browser'
 	const deleteDisabledReason = !props.hasProfile
 		? 'Select a profile first'
+		: props.isOffline
+			? 'Offline: check your network connection'
 		: !props.bucket
 			? 'Select a bucket first'
 			: props.selectedCount === 0
@@ -77,13 +82,13 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					{props.isAdvanced ? (
 						<>
 							<Tooltip title="Back">
-								<Button icon={<LeftOutlined />} disabled={!props.hasProfile || !props.canGoBack} onClick={props.onGoBack} />
+								<Button icon={<LeftOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoBack} onClick={props.onGoBack} />
 							</Tooltip>
 							<Tooltip title="Forward">
-								<Button icon={<RightOutlined />} disabled={!props.hasProfile || !props.canGoForward} onClick={props.onGoForward} />
+								<Button icon={<RightOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoForward} onClick={props.onGoForward} />
 							</Tooltip>
 							<Tooltip title="Up">
-								<Button icon={<UpOutlined />} disabled={!props.hasProfile || !props.canGoUp} onClick={props.onGoUp} />
+								<Button icon={<UpOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoUp} onClick={props.onGoUp} />
 							</Tooltip>
 						</>
 					) : null}
@@ -133,12 +138,12 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 								icon={<ReloadOutlined />}
 								onClick={props.onRefresh}
 								loading={props.isRefreshing}
-								disabled={!props.hasProfile || !props.bucket}
+								disabled={!props.hasProfile || props.isOffline || !props.bucket}
 							/>
 						</Tooltip>
 					) : null}
 					<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-						<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} data-testid="objects-toolbar-more">
+						<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile || props.isOffline} data-testid="objects-toolbar-more">
 							More
 						</Button>
 					</Dropdown>
@@ -154,12 +159,12 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					{props.isAdvanced ? (
 						<>
 							<Tooltip title="Back">
-								<Button icon={<LeftOutlined />} disabled={!props.hasProfile || !props.canGoBack} onClick={props.onGoBack} />
+								<Button icon={<LeftOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoBack} onClick={props.onGoBack} />
 							</Tooltip>
 							<Tooltip title="Forward">
-								<Button icon={<RightOutlined />} disabled={!props.hasProfile || !props.canGoForward} onClick={props.onGoForward} />
+								<Button icon={<RightOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoForward} onClick={props.onGoForward} />
 							</Tooltip>
-							<Button icon={<UpOutlined />} disabled={!props.hasProfile || !props.canGoUp} onClick={props.onGoUp}>
+							<Button icon={<UpOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoUp} onClick={props.onGoUp}>
 								Up
 							</Button>
 						</>
@@ -185,19 +190,19 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						</>
 					) : null}
 					{props.isAdvanced && !props.dockTree ? (
-						<Button icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile}>
+						<Button icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile || props.isOffline}>
 							{props.showLabels ? 'Folders' : null}
 						</Button>
 					) : null}
 					{props.isAdvanced && !props.dockDetails ? (
-						<Button icon={<InfoCircleOutlined />} onClick={props.onOpenDetails} disabled={!props.hasProfile}>
+						<Button icon={<InfoCircleOutlined />} onClick={props.onOpenDetails} disabled={!props.hasProfile || props.isOffline}>
 							{props.showLabels ? 'Details' : null}
 						</Button>
 					) : null}
 				</Space>
 
 				<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-					<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} data-testid="objects-toolbar-more">
+					<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile || props.isOffline} data-testid="objects-toolbar-more">
 						{props.showLabels ? 'Actions' : null}
 					</Button>
 				</Dropdown>

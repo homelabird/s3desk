@@ -11,6 +11,7 @@ export type ClipboardObjects = {
 
 type ObjectsActionDeps = {
 	isAdvanced: boolean
+	isOffline: boolean
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -68,7 +69,7 @@ export type ObjectsActionCatalog = {
 
 export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActionCatalog {
 	const getObjectActions = (objectKey: string, objectSize?: number): UIActionOrDivider[] => {
-		const canUseObjectActions = !!deps.profileId && !!deps.bucket
+		const canUseObjectActions = !!deps.profileId && !!deps.bucket && !deps.isOffline
 		const downloadAction: UIAction = {
 			id: 'download',
 			label: 'Download (client)',
@@ -170,7 +171,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 	}
 
 	const getPrefixActions = (targetPrefix: string): UIActionOrDivider[] => {
-		const canUsePrefixActions = !!deps.profileId && !!deps.bucket
+		const canUsePrefixActions = !!deps.profileId && !!deps.bucket && !deps.isOffline
 		const openAction: UIAction = {
 			id: 'open',
 			label: 'Open',
@@ -272,7 +273,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		]
 	}
 
-	const canUseSelectionActions = !!deps.profileId && !!deps.bucket
+	const canUseSelectionActions = !!deps.profileId && !!deps.bucket && !deps.isOffline
 	const selectionIsBulk = deps.selectedCount > 1
 	const selectionActionsAll: UIAction[] = [
 		{
@@ -340,7 +341,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Back',
 			icon: <LeftOutlined />,
 			keywords: 'history',
-			enabled: !!deps.profileId && deps.canGoBack,
+			enabled: !!deps.profileId && !deps.isOffline && deps.canGoBack,
 			audience: 'advanced',
 			run: () => deps.onGoBack(),
 		},
@@ -349,7 +350,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Forward',
 			icon: <RightOutlined />,
 			keywords: 'history',
-			enabled: !!deps.profileId && deps.canGoForward,
+			enabled: !!deps.profileId && !deps.isOffline && deps.canGoForward,
 			audience: 'advanced',
 			run: () => deps.onGoForward(),
 		},
@@ -358,7 +359,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Go up',
 			icon: <UpOutlined />,
 			keywords: 'parent folder backspace',
-			enabled: !!deps.profileId && !!deps.bucket && deps.canGoUp,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.canGoUp,
 			audience: 'advanced',
 			run: () => deps.onGoUp(),
 		},
@@ -367,7 +368,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: deps.detailsVisible ? 'Hide details' : 'Show details',
 			icon: <InfoCircleOutlined />,
 			keywords: 'details preview panel',
-			enabled: !!deps.profileId,
+			enabled: !!deps.profileId && !deps.isOffline,
 			audience: 'advanced',
 			run: () => deps.onToggleDetails(),
 		},
@@ -385,7 +386,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Refresh',
 			icon: <ReloadOutlined />,
 			keywords: 'reload refetch',
-			enabled: !!deps.profileId && !!deps.bucket,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
 			run: () => deps.onRefresh(),
 		},
 		{
@@ -393,7 +394,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Go to path… (Ctrl+L)',
 			icon: <SearchOutlined />,
 			keywords: 'ctrl+l address prefix jump',
-			enabled: !!deps.profileId && !!deps.bucket,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
 			audience: 'advanced',
 			run: () => deps.onOpenPathModal(),
 		},
@@ -402,7 +403,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Upload files',
 			icon: <CloudUploadOutlined />,
 			keywords: 'upload files',
-			enabled: !!deps.profileId && !!deps.bucket,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
 			run: () => deps.onOpenUploadFiles(),
 		},
 		{
@@ -410,7 +411,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Upload folder',
 			icon: <FolderOutlined />,
 			keywords: 'upload folder',
-			enabled: !!deps.profileId && !!deps.bucket,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
 			run: () => deps.onOpenUploadFolder(),
 		},
 		{
@@ -418,7 +419,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'New folder',
 			icon: <FolderAddOutlined />,
 			keywords: 'mkdir folder',
-			enabled: !!deps.profileId && !!deps.bucket,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
 			run: () => deps.onOpenNewFolder(),
 		},
 		{
@@ -462,7 +463,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Global search',
 			icon: <SearchOutlined />,
 			keywords: 'index search',
-			enabled: !!deps.profileId && !!deps.bucket,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
 			audience: 'advanced',
 			run: () => deps.onOpenGlobalSearch(),
 		},

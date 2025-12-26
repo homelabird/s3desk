@@ -12,6 +12,8 @@ type ObjectsFiltersDrawerProps = {
 	onTypeFilterChange: (value: ObjectTypeFilter) => void
 	favoritesOnly: boolean
 	onFavoritesOnlyChange: (value: boolean) => void
+	favoritesFirst: boolean
+	onFavoritesFirstChange: (value: boolean) => void
 	extFilter: string
 	extOptions: SelectProps['options']
 	onExtFilterChange: (value: string) => void
@@ -56,8 +58,17 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 		>
 			<Space direction="vertical" size="middle" style={{ width: '100%' }}>
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>
-					<Typography.Text type="secondary">Favorites</Typography.Text>
+					<Typography.Text type="secondary">Favorites only</Typography.Text>
 					<Switch checked={props.favoritesOnly} onChange={props.onFavoritesOnlyChange} />
+				</Space>
+
+				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+					<Typography.Text type="secondary">Favorites first</Typography.Text>
+					<Switch
+						checked={props.favoritesFirst}
+						onChange={props.onFavoritesFirstChange}
+						disabled={props.favoritesOnly}
+					/>
 				</Space>
 
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>

@@ -91,6 +91,8 @@ Verify everything:
 ./scripts/check.sh
 ```
 
+`scripts/check.sh` also regenerates runtime-only third-party notices/licenses.
+
 Build output:
 - `dist/object-storage-server`
 - `dist/ui/` (packaged frontend)
@@ -137,6 +139,8 @@ Cleanup:
 Backend flags/env:
 - `--addr` / `ADDR` (default `127.0.0.1:8080`)
 - `--data-dir` / `DATA_DIR` (default `./data`)
+- `--db-backend` / `DB_BACKEND` (default `sqlite`; `sqlite` uses `DATA_DIR/object-storage.db`, `postgres` uses `DATABASE_URL`)
+- `--database-url` / `DATABASE_URL` (required when `DB_BACKEND=postgres`)
 - `--static-dir` / `STATIC_DIR` (default `../frontend/dist`)
 - `--api-token` / `API_TOKEN` (optional; UI Settings sets it)
 - `--allow-remote` / `ALLOW_REMOTE` (default `false`; allow non-loopback bind and accept private remote clients (including `Host`/`Origin`); requires `API_TOKEN` when binding non-loopback; useful for WSL2 / container port mapping)
@@ -198,4 +202,11 @@ The UI can download objects via a presigned URL from `GET /api/v1/buckets/{bucke
 - The API blocks browser cross-site requests via Fetch Metadata (`Sec-Fetch-Site: cross-site`) when present.
 - The server sets basic security headers (anti-clickjacking + hardening): `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`.
 - Jobs require `s5cmd` on `PATH` (or `S5CMD_PATH`).
+
+## License
+
+- Project license: MPL-2.0 (`LICENSE`)
+- Third-party notices: `THIRD_PARTY_NOTICES.md`
+- Third-party license texts: `third_party/licenses/`
+- Source file headers: not added retroactively; use `LICENSE_HEADER.txt` for new files when desired.
 - OpenAPI draft: `openapi.yml`

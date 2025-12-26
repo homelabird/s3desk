@@ -30,5 +30,7 @@ echo "[check] frontend"
   npm run build
 )
 
-echo "[check] ok"
+echo "[check] third-party notices"
+python3 "${ROOT}/scripts/generate_third_party_notices.py"
 
+echo "[check] ok"

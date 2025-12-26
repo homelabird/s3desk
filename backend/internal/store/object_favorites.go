@@ -15,7 +15,7 @@ func (s *Store) ListObjectFavorites(ctx context.Context, profileID, bucket strin
 		return nil, errors.New("bucket is required")
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.query(ctx, `
 		SELECT object_key, created_at
 		FROM object_favorites
 		WHERE profile_id = ? AND bucket = ?
@@ -51,15 +51,16 @@ func (s *Store) AddObjectFavorite(ctx context.Context, profileID, bucket, key st
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if _, err := s.db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO object_favorites (profile_id, bucket, object_key, created_at)
+	if _, err := s.exec(ctx, `
+		INSERT INTO object_favorites (profile_id, bucket, object_key, created_at)
 		VALUES (?, ?, ?, ?)
+		ON CONFLICT(profile_id, bucket, object_key) DO NOTHING
 	`, profileID, bucket, key, now); err != nil {
 		return models.ObjectFavorite{}, err
 	}
 
 	var createdAt string
-	if err := s.db.QueryRowContext(ctx, `
+	if err := s.queryRow(ctx, `
 		SELECT created_at FROM object_favorites WHERE profile_id = ? AND bucket = ? AND object_key = ?
 	`, profileID, bucket, key).Scan(&createdAt); err != nil {
 		return models.ObjectFavorite{}, err
@@ -78,7 +79,7 @@ func (s *Store) DeleteObjectFavorite(ctx context.Context, profileID, bucket, key
 		return false, errors.New("key is required")
 	}
 
-	res, err := s.db.ExecContext(ctx, `
+	res, err := s.exec(ctx, `
 		DELETE FROM object_favorites WHERE profile_id = ? AND bucket = ? AND object_key = ?
 	`, profileID, bucket, key)
 	if err != nil {

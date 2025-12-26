@@ -8,6 +8,7 @@ import { APIClient, APIError } from '../api/client'
 import type { Bucket } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
+import { useIsOffline } from '../lib/useIsOffline'
 
 type Props = {
 	apiToken: string
@@ -18,6 +19,7 @@ export function UploadsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const transfers = useTransfers()
 	const screens = Grid.useBreakpoint()
+	const isOffline = useIsOffline()
 
 	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
 	const [prefix, setPrefix] = useLocalStorageState<string>('uploadPrefix', '')
@@ -40,6 +42,10 @@ export function UploadsPage(props: Props) {
 		.filter((file): file is NonNullable<typeof file> => !!file)
 
 	const queueUpload = () => {
+		if (isOffline) {
+			message.warning('Offline: uploads are disabled.')
+			return
+		}
 		if (!bucket) {
 			message.info('Select a bucket first')
 			return
@@ -58,6 +64,8 @@ export function UploadsPage(props: Props) {
 				Uploads
 			</Typography.Title>
 
+			{isOffline ? <Alert type="warning" showIcon message="Offline: uploads are disabled." /> : null}
+
 			{bucketsQuery.isError ? (
 				<Alert type="error" showIcon message="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
 			) : null}
@@ -72,16 +80,18 @@ export function UploadsPage(props: Props) {
 					loading={bucketsQuery.isFetching}
 					onChange={(v) => setBucket(v)}
 					optionFilterProp="label"
+					disabled={isOffline}
 				/>
 				<Input
 					placeholder="prefix (optional)"
 					style={{ width: screens.md ? 420 : '100%', maxWidth: '100%' }}
 					value={prefix}
 					onChange={(e) => setPrefix(e.target.value)}
+					disabled={isOffline}
 				/>
 				<Space>
 					<Typography.Text type="secondary">Folder mode</Typography.Text>
-					<Switch checked={folderMode} onChange={setFolderMode} />
+					<Switch checked={folderMode} onChange={setFolderMode} disabled={isOffline} />
 				</Space>
 			</Space>
 
@@ -91,12 +101,15 @@ export function UploadsPage(props: Props) {
 				beforeUpload={() => false}
 				fileList={fileList}
 				onChange={({ fileList: next }) => setFileList(next)}
+				disabled={isOffline}
 				>
-					<Button icon={<UploadOutlined />}>{folderMode ? 'Select folder' : 'Select files'}</Button>
+					<Button icon={<UploadOutlined />} disabled={isOffline}>
+						{folderMode ? 'Select folder' : 'Select files'}
+					</Button>
 				</Upload>
 
 			<Space wrap>
-				<Button type="primary" onClick={queueUpload} disabled={!bucket || files.length === 0}>
+				<Button type="primary" onClick={queueUpload} disabled={isOffline || !bucket || files.length === 0}>
 					Queue upload
 				</Button>
 				<Button onClick={() => transfers.openTransfers('uploads')}>Open Transfers</Button>

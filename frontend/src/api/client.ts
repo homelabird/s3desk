@@ -28,6 +28,7 @@ import type {
 	UploadCreateRequest,
 	UploadCreateResponse,
 } from './types'
+import { clearNetworkStatus, publishNetworkStatus } from '../lib/networkStatus'
 
 export class APIError extends Error {
 	status: number
@@ -52,8 +53,20 @@ export class RequestAbortedError extends Error {
 	}
 }
 
+export class RequestTimeoutError extends Error {
+	timeoutMs: number
+	constructor(timeoutMs: number, message = `request timed out after ${timeoutMs}ms`) {
+		super(message)
+		this.name = 'RequestTimeoutError'
+		this.timeoutMs = timeoutMs
+	}
+}
+
 type RequestOptions = {
 	profileId?: string
+	timeoutMs?: number
+	retries?: number
+	retryDelayMs?: number
 }
 
 export type UploadFileItem = {
@@ -94,10 +107,10 @@ export class APIClient {
 			headers.set('X-Api-Token', this.apiToken)
 		}
 
-		const res = await fetch(this.baseUrl + path, {
+		const res = await fetchWithRetry(this.baseUrl + path, {
 			...init,
 			headers,
-		})
+		}, options)
 
 		const contentType = res.headers.get('content-type') ?? ''
 		const isJSON = contentType.includes('application/json')
@@ -142,10 +155,10 @@ export class APIClient {
 			headers.set('X-Api-Token', this.apiToken)
 		}
 
-		const res = await fetch(this.baseUrl + path, {
+		const res = await fetchWithRetry(this.baseUrl + path, {
 			...init,
 			headers,
-		})
+		}, options)
 
 		if (res.ok) return res
 		const bodyText = await res.text().catch(() => null)
@@ -197,7 +210,7 @@ export class APIClient {
 	}
 
 	testProfile(profileId: string): Promise<ProfileTestResponse> {
-		return this.request(`/profiles/${encodeURIComponent(profileId)}/test`, { method: 'POST' })
+		return this.request(`/profiles/${encodeURIComponent(profileId)}/test`, { method: 'POST' }, { timeoutMs: defaultTimeoutMs })
 	}
 
 	getProfileTLS(profileId: string): Promise<ProfileTLSStatus> {
@@ -448,12 +461,19 @@ export class APIClient {
 		const promise = new Promise<void>((resolve, reject) => {
 			xhr.onload = () => {
 				if (xhr.status >= 200 && xhr.status < 300) {
+					clearNetworkStatus()
 					resolve()
 					return
 				}
+				if (xhr.status >= 500 || xhr.status === 0) {
+					publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
+				}
 				reject(parseAPIError(xhr.status, xhr.responseText))
 			}
-			xhr.onerror = () => reject(new Error('network error'))
+			xhr.onerror = () => {
+				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+				reject(new Error('network error'))
+			}
 			xhr.onabort = () => reject(new RequestAbortedError())
 		})
 
@@ -487,6 +507,7 @@ export class APIClient {
 		const promise = new Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>((resolve, reject) => {
 			xhr.onload = async () => {
 				if (xhr.status >= 200 && xhr.status < 300) {
+					clearNetworkStatus()
 					resolve({
 						blob: xhr.response,
 						contentDisposition: xhr.getResponseHeader('content-disposition'),
@@ -496,9 +517,15 @@ export class APIClient {
 				}
 
 				const bodyText = await blobToTextSafe(xhr.response)
+				if (xhr.status >= 500 || xhr.status === 0) {
+					publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
+				}
 				reject(parseAPIError(xhr.status, bodyText))
 			}
-			xhr.onerror = () => reject(new Error('network error'))
+			xhr.onerror = () => {
+				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+				reject(new Error('network error'))
+			}
 			xhr.onabort = () => reject(new RequestAbortedError())
 		})
 
@@ -512,7 +539,7 @@ export class APIClient {
 		return this.fetchOrThrowRaw(
 			`/buckets/${encodeURIComponent(args.bucket)}/objects/download?${params.toString()}`,
 			{ method: 'GET', signal: args.signal },
-			{ profileId: args.profileId },
+			{ profileId: args.profileId, timeoutMs: 0, retries: 0 },
 		)
 	}
 
@@ -533,6 +560,7 @@ export class APIClient {
 		const promise = new Promise<{ blob: Blob; contentType: string | null }>((resolve, reject) => {
 			xhr.onload = async () => {
 				if (xhr.status >= 200 && xhr.status < 300) {
+					clearNetworkStatus()
 					resolve({
 						blob: xhr.response,
 						contentType: xhr.getResponseHeader('content-type'),
@@ -541,9 +569,15 @@ export class APIClient {
 				}
 
 				const bodyText = await blobToTextSafe(xhr.response)
+				if (xhr.status >= 500 || xhr.status === 0) {
+					publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
+				}
 				reject(parseAPIError(xhr.status, bodyText))
 			}
-			xhr.onerror = () => reject(new Error('network error'))
+			xhr.onerror = () => {
+				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+				reject(new Error('network error'))
+			}
 			xhr.onabort = () => reject(new RequestAbortedError())
 		})
 
@@ -573,6 +607,7 @@ export class APIClient {
 		const promise = new Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>((resolve, reject) => {
 			xhr.onload = async () => {
 				if (xhr.status >= 200 && xhr.status < 300) {
+					clearNetworkStatus()
 					resolve({
 						blob: xhr.response,
 						contentDisposition: xhr.getResponseHeader('content-disposition'),
@@ -582,9 +617,15 @@ export class APIClient {
 				}
 
 				const bodyText = await blobToTextSafe(xhr.response)
+				if (xhr.status >= 500 || xhr.status === 0) {
+					publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
+				}
 				reject(parseAPIError(xhr.status, bodyText))
 			}
-			xhr.onerror = () => reject(new Error('network error'))
+			xhr.onerror = () => {
+				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+				reject(new Error('network error'))
+			}
 			xhr.onabort = () => reject(new RequestAbortedError())
 		})
 
@@ -660,6 +701,100 @@ export class APIClient {
 
 	retryJob(profileId: string, jobId: string): Promise<Job> {
 		return this.request(`/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' }, { profileId })
+	}
+}
+
+const defaultTimeoutMs = 30_000
+const defaultRetries = 2
+const defaultRetryDelayMs = 600
+const maxRetryDelayMs = 5000
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function isIdempotentMethod(method?: string): boolean {
+	return !method || method.toUpperCase() === 'GET'
+}
+
+function shouldRetryStatus(status: number): boolean {
+	return status === 500 || status === 502 || status === 503 || status === 504
+}
+
+function isRetryableFetchError(err: unknown): boolean {
+	if (err instanceof RequestTimeoutError) return true
+	if (err instanceof RequestAbortedError) return false
+	if (err && typeof err === 'object' && 'name' in err && (err as { name?: string }).name === 'AbortError') return false
+	return err instanceof TypeError
+}
+
+function retryDelayMs(baseDelayMs: number, attempt: number): number {
+	const jitter = Math.floor(Math.random() * 200)
+	const delay = Math.min(baseDelayMs * Math.pow(2, attempt), maxRetryDelayMs)
+	return delay + jitter
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+	if (!timeoutMs || timeoutMs <= 0) {
+		return fetch(url, init)
+	}
+
+	let timedOut = false
+	const controller = new AbortController()
+	const signal = controller.signal
+
+	let cleanup = () => {}
+	if (init.signal) {
+		if (init.signal.aborted) {
+			controller.abort()
+		} else {
+			const onAbort = () => controller.abort()
+			init.signal.addEventListener('abort', onAbort, { once: true })
+			cleanup = () => init.signal?.removeEventListener('abort', onAbort)
+		}
+	}
+
+	const timer = setTimeout(() => {
+		timedOut = true
+		controller.abort()
+	}, timeoutMs)
+
+	try {
+		return await fetch(url, { ...init, signal })
+	} catch (err) {
+		if (timedOut) throw new RequestTimeoutError(timeoutMs)
+		throw err
+	} finally {
+		clearTimeout(timer)
+		cleanup()
+	}
+}
+
+async function fetchWithRetry(url: string, init: RequestInit, options: RequestOptions): Promise<Response> {
+	const idempotent = isIdempotentMethod(init.method)
+	const retries = options.retries ?? (idempotent ? defaultRetries : 0)
+	const timeoutMs = options.timeoutMs ?? (idempotent ? defaultTimeoutMs : 0)
+	const baseDelayMs = options.retryDelayMs ?? defaultRetryDelayMs
+
+	let attempt = 0
+	for (;;) {
+		try {
+			const res = await fetchWithTimeout(url, init, timeoutMs)
+			if (!res.ok && idempotent && attempt < retries && shouldRetryStatus(res.status)) {
+				publishNetworkStatus({ kind: 'unstable', message: `Server unavailable (HTTP ${res.status}). Retrying...` })
+				await sleep(retryDelayMs(baseDelayMs, attempt))
+				attempt += 1
+				continue
+			}
+			if (attempt > 0 && res.ok) clearNetworkStatus()
+			return res
+		} catch (err) {
+			if (idempotent && attempt < retries && isRetryableFetchError(err)) {
+				publishNetworkStatus({ kind: 'unstable', message: 'Network unstable. Retrying...' })
+				await sleep(retryDelayMs(baseDelayMs, attempt))
+				attempt += 1
+				continue
+			}
+			throw err
+		}
 	}
 }
 

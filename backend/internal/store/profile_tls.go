@@ -17,7 +17,7 @@ const profileTLSConfigSchemaVersion = 1
 func (s *Store) GetProfileTLSConfig(ctx context.Context, profileID string) (models.ProfileTLSConfig, string, bool, error) {
 	var schemaVersion int
 	var enc, updatedAt string
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRow(ctx, `
 		SELECT schema_version, options_enc, updated_at
 		FROM profile_connection_options
 		WHERE profile_id = ?
@@ -63,7 +63,7 @@ func (s *Store) UpsertProfileTLSConfig(ctx context.Context, profileID string, cf
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = s.db.ExecContext(ctx, `
+	_, err = s.exec(ctx, `
 		INSERT INTO profile_connection_options (profile_id, schema_version, options_enc, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(profile_id) DO UPDATE SET
@@ -78,7 +78,7 @@ func (s *Store) UpsertProfileTLSConfig(ctx context.Context, profileID string, cf
 }
 
 func (s *Store) DeleteProfileTLSConfig(ctx context.Context, profileID string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `
+	res, err := s.exec(ctx, `
 		DELETE FROM profile_connection_options
 		WHERE profile_id = ?
 	`, profileID)

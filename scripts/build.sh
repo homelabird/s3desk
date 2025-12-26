@@ -23,6 +23,9 @@ echo "[build] frontend"
   npm run build
 )
 
+echo "[build] third-party notices"
+python3 "${ROOT}/scripts/generate_third_party_notices.py"
+
 mkdir -p "${ROOT}/dist"
 
 echo "[build] package ui"

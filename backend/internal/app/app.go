@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -65,17 +66,42 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 
-	dbPath := filepath.Join(cfg.DataDir, "object-storage.db")
-	sqlDB, err := db.Open(dbPath)
+	dbBackend, err := db.ParseBackend(cfg.DBBackend)
+	if err != nil {
+		return err
+	}
+
+	var dbPath string
+	var sqlDB *sql.DB
+	switch dbBackend {
+	case db.BackendSQLite:
+		dbPath = filepath.Join(cfg.DataDir, "object-storage.db")
+		sqlDB, err = db.Open(db.Config{
+			Backend:    dbBackend,
+			SQLitePath: dbPath,
+		})
+	case db.BackendPostgres:
+		sqlDB, err = db.Open(db.Config{
+			Backend:     dbBackend,
+			DatabaseURL: cfg.DatabaseURL,
+		})
+	default:
+		return fmt.Errorf("unsupported db backend %q", dbBackend)
+	}
 	if err != nil {
 		return err
 	}
 	defer func() {
 		_ = sqlDB.Close()
 	}()
-	_ = os.Chmod(dbPath, 0o600)
+	if dbBackend == db.BackendSQLite {
+		_ = os.Chmod(dbPath, 0o600)
+	}
 
-	st, err := store.New(sqlDB, store.Options{EncryptionKey: cfg.EncryptionKey})
+	st, err := store.New(sqlDB, store.Options{
+		EncryptionKey: cfg.EncryptionKey,
+		Backend:       dbBackend,
+	})
 	if err != nil {
 		return err
 	}
@@ -122,6 +148,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 		Addr:              cfg.Addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		ReadTimeout:       0,
+		WriteTimeout:      0,
 	}
 
 	errCh := make(chan error, 1)

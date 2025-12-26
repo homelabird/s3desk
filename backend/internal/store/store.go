@@ -11,24 +11,31 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"object-storage/internal/db"
 	"object-storage/internal/models"
 )
 
 type Store struct {
-	db     *sql.DB
-	crypto *profileCrypto
+	db      *sql.DB
+	crypto  *profileCrypto
+	backend db.Backend
 }
 
 type Options struct {
 	EncryptionKey string
+	Backend       db.Backend
 }
 
-func New(db *sql.DB, opts Options) (*Store, error) {
+func New(sqlDB *sql.DB, opts Options) (*Store, error) {
 	pc, err := newProfileCrypto(opts.EncryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: db, crypto: pc}, nil
+	backend := opts.Backend
+	if backend == "" {
+		backend = db.BackendSQLite
+	}
+	return &Store{db: sqlDB, crypto: pc, backend: backend}, nil
 }
 
 func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateRequest) (models.Profile, error) {
@@ -64,7 +71,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		}
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.exec(ctx, `
 		INSERT INTO profiles (
 			id, name, endpoint, region, force_path_style, tls_insecure_skip_verify,
 			access_key_id, secret_access_key, session_token, created_at, updated_at
@@ -94,7 +101,7 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 		return 0, nil
 	}
 
-	rows, err := s.db.QueryContext(ctx, `SELECT id, access_key_id, secret_access_key, session_token FROM profiles`)
+	rows, err := s.query(ctx, `SELECT id, access_key_id, secret_access_key, session_token FROM profiles`)
 	if err != nil {
 		return 0, err
 	}
@@ -159,7 +166,7 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 		if session.Valid {
 			sessionPtr = &session.String
 		}
-		if _, err := s.db.ExecContext(ctx, `
+		if _, err := s.exec(ctx, `
 			UPDATE profiles
 			SET access_key_id=?, secret_access_key=?, session_token=?, updated_at=?
 			WHERE id=?
@@ -173,7 +180,7 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 }
 
 func (s *Store) ListProfiles(ctx context.Context) ([]models.Profile, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.query(ctx, `
 		SELECT id, name, endpoint, region, force_path_style, tls_insecure_skip_verify, created_at, updated_at
 		FROM profiles
 		ORDER BY created_at DESC
@@ -218,7 +225,7 @@ func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profil
 		force   int
 		tls     int
 	)
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRow(ctx, `
 		SELECT id, name, endpoint, region, force_path_style, tls_insecure_skip_verify, created_at, updated_at
 		FROM profiles
 		WHERE id = ?
@@ -250,7 +257,7 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 		force   int
 		tls     int
 	)
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRow(ctx, `
 		SELECT id, name, endpoint, region, force_path_style, tls_insecure_skip_verify,
 		       access_key_id, secret_access_key, session_token
 		FROM profiles
@@ -376,7 +383,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = s.db.ExecContext(ctx, `
+	_, err = s.exec(ctx, `
 		UPDATE profiles
 		SET name=?, endpoint=?, region=?, force_path_style=?, tls_insecure_skip_verify=?,
 		    access_key_id=?, secret_access_key=?, session_token=?, updated_at=?
@@ -398,7 +405,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 }
 
 func (s *Store) DeleteProfile(ctx context.Context, profileID string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM profiles WHERE id = ?`, profileID)
+	res, err := s.exec(ctx, `DELETE FROM profiles WHERE id = ?`, profileID)
 	if err != nil {
 		return false, err
 	}
@@ -423,7 +430,7 @@ func (s *Store) CreateJob(ctx context.Context, profileID string, in CreateJobInp
 		return models.Job{}, err
 	}
 
-	_, err = s.db.ExecContext(ctx, `
+	_, err = s.exec(ctx, `
 		INSERT INTO jobs (id, profile_id, type, status, payload_json, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, id, profileID, in.Type, string(models.JobStatusQueued), string(payloadJSON), now)
@@ -480,7 +487,7 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 	`, where)
 	args = append(args, limit+1)
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.query(ctx, query, args...)
 	if err != nil {
 		return models.JobsListResponse{}, err
 	}
@@ -567,7 +574,7 @@ func (s *Store) GetJob(ctx context.Context, profileID, jobID string) (models.Job
 		startedAt sql.NullString
 		finished  sql.NullString
 	)
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRow(ctx, `
 		SELECT id, type, status, payload_json, progress_json, error, created_at, started_at, finished_at
 		FROM jobs
 		WHERE profile_id = ? AND id = ?
@@ -615,7 +622,7 @@ func (s *Store) GetJob(ctx context.Context, profileID, jobID string) (models.Job
 }
 
 func (s *Store) DeleteJob(ctx context.Context, profileID, jobID string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM jobs WHERE profile_id = ? AND id = ?`, profileID, jobID)
+	res, err := s.exec(ctx, `DELETE FROM jobs WHERE profile_id = ? AND id = ?`, profileID, jobID)
 	if err != nil {
 		return false, err
 	}
@@ -634,7 +641,7 @@ func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano 
 		limit = 1000
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.query(ctx, `
 		SELECT id
 		FROM jobs
 		WHERE finished_at IS NOT NULL
@@ -679,7 +686,7 @@ func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano 
 	defer func() { _ = tx.Rollback() }()
 
 	for _, id := range ids {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM jobs WHERE id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, s.rebind(`DELETE FROM jobs WHERE id = ?`), id); err != nil {
 			return nil, err
 		}
 	}
@@ -690,7 +697,7 @@ func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano 
 }
 
 func (s *Store) ListJobIDsByProfile(ctx context.Context, profileID string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM jobs WHERE profile_id = ? ORDER BY id ASC`, profileID)
+	rows, err := s.query(ctx, `SELECT id FROM jobs WHERE profile_id = ? ORDER BY id ASC`, profileID)
 	if err != nil {
 		return nil, err
 	}
@@ -711,7 +718,7 @@ func (s *Store) ListJobIDsByProfile(ctx context.Context, profileID string) ([]st
 }
 
 func (s *Store) ListJobIDsByProfileAndStatus(ctx context.Context, profileID string, status models.JobStatus) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM jobs WHERE profile_id = ? AND status = ? ORDER BY id ASC`, profileID, string(status))
+	rows, err := s.query(ctx, `SELECT id FROM jobs WHERE profile_id = ? AND status = ? ORDER BY id ASC`, profileID, string(status))
 	if err != nil {
 		return nil, err
 	}
@@ -733,7 +740,7 @@ func (s *Store) ListJobIDsByProfileAndStatus(ctx context.Context, profileID stri
 
 func (s *Store) JobExists(ctx context.Context, jobID string) (bool, error) {
 	var one int
-	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM jobs WHERE id = ? LIMIT 1`, jobID).Scan(&one)
+	err := s.queryRow(ctx, `SELECT 1 FROM jobs WHERE id = ? LIMIT 1`, jobID).Scan(&one)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -752,7 +759,7 @@ func (s *Store) GetJobByID(ctx context.Context, jobID string) (profileID string,
 		startedAt sql.NullString
 		finished  sql.NullString
 	)
-	err = s.db.QueryRowContext(ctx, `
+	err = s.queryRow(ctx, `
 		SELECT profile_id, id, type, status, payload_json, progress_json, error, created_at, started_at, finished_at
 		FROM jobs
 		WHERE id = ?
@@ -814,7 +821,7 @@ func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models
 		progressJSON = nil
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.exec(ctx, `
 		UPDATE jobs
 		SET status=?,
 		    started_at=COALESCE(?, started_at),
@@ -834,7 +841,7 @@ func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models
 }
 
 func (s *Store) ListJobIDsByStatus(ctx context.Context, status models.JobStatus) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM jobs WHERE status = ? ORDER BY id ASC`, string(status))
+	rows, err := s.query(ctx, `SELECT id FROM jobs WHERE status = ? ORDER BY id ASC`, string(status))
 	if err != nil {
 		return nil, err
 	}
@@ -856,7 +863,7 @@ func (s *Store) ListJobIDsByStatus(ctx context.Context, status models.JobStatus)
 
 func (s *Store) MarkRunningJobsFailed(ctx context.Context, errorMessage string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.exec(ctx, `
 		UPDATE jobs
 		SET status=?, error=?, finished_at=?
 		WHERE status=?
@@ -878,7 +885,7 @@ func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, pref
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := ulid.Make().String()
 
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.exec(ctx, `
 		INSERT INTO upload_sessions (id, profile_id, bucket, prefix, staging_dir, expires_at, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, id, profileID, bucket, prefix, stagingDir, expiresAt, now)
@@ -897,7 +904,7 @@ func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, pref
 }
 
 func (s *Store) SetUploadSessionStagingDir(ctx context.Context, profileID, uploadID, stagingDir string) error {
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.exec(ctx, `
 		UPDATE upload_sessions
 		SET staging_dir = ?
 		WHERE profile_id = ? AND id = ?
@@ -907,7 +914,7 @@ func (s *Store) SetUploadSessionStagingDir(ctx context.Context, profileID, uploa
 
 func (s *Store) GetUploadSession(ctx context.Context, profileID, uploadID string) (UploadSession, bool, error) {
 	var us UploadSession
-	err := s.db.QueryRowContext(ctx, `
+	err := s.queryRow(ctx, `
 		SELECT id, profile_id, bucket, prefix, staging_dir, expires_at, created_at
 		FROM upload_sessions
 		WHERE profile_id = ? AND id = ?
@@ -931,7 +938,7 @@ func (s *Store) GetUploadSession(ctx context.Context, profileID, uploadID string
 
 func (s *Store) UploadSessionExists(ctx context.Context, uploadID string) (bool, error) {
 	var one int
-	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM upload_sessions WHERE id = ? LIMIT 1`, uploadID).Scan(&one)
+	err := s.queryRow(ctx, `SELECT 1 FROM upload_sessions WHERE id = ? LIMIT 1`, uploadID).Scan(&one)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -949,7 +956,7 @@ func (s *Store) ListUploadSessionsByProfile(ctx context.Context, profileID strin
 		limit = 10_000
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.query(ctx, `
 		SELECT id, profile_id, bucket, prefix, staging_dir, expires_at, created_at
 		FROM upload_sessions
 		WHERE profile_id = ?
@@ -976,7 +983,7 @@ func (s *Store) ListUploadSessionsByProfile(ctx context.Context, profileID strin
 }
 
 func (s *Store) DeleteUploadSession(ctx context.Context, profileID, uploadID string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM upload_sessions WHERE profile_id = ? AND id = ?`, profileID, uploadID)
+	res, err := s.exec(ctx, `DELETE FROM upload_sessions WHERE profile_id = ? AND id = ?`, profileID, uploadID)
 	if err != nil {
 		return false, err
 	}
@@ -995,7 +1002,7 @@ func (s *Store) ListExpiredUploadSessions(ctx context.Context, nowRFC3339Nano st
 		limit = 1000
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.query(ctx, `
 		SELECT id, profile_id, bucket, prefix, staging_dir, expires_at, created_at
 		FROM upload_sessions
 		WHERE expires_at < ?

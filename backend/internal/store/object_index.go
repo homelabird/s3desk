@@ -21,11 +21,11 @@ type ObjectIndexEntry struct {
 }
 
 type SearchObjectIndexInput struct {
-	Bucket string
-	Query  string
-	Prefix string
-	Limit  int
-	Cursor *string
+	Bucket         string
+	Query          string
+	Prefix         string
+	Limit          int
+	Cursor         *string
 	Extension      string
 	MinSize        *int64
 	MaxSize        *int64
@@ -44,12 +44,12 @@ func (s *Store) ClearObjectIndex(ctx context.Context, profileID, bucket, prefix 
 	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
 
 	if prefix == "" {
-		_, err := s.db.ExecContext(ctx, `DELETE FROM object_index WHERE profile_id=? AND bucket=?`, profileID, bucket)
+		_, err := s.exec(ctx, `DELETE FROM object_index WHERE profile_id=? AND bucket=?`, profileID, bucket)
 		return err
 	}
 
 	pat := escapeLike(prefix) + "%"
-	_, err := s.db.ExecContext(ctx, `DELETE FROM object_index WHERE profile_id=? AND bucket=? AND object_key LIKE ? ESCAPE '\'`, profileID, bucket, pat)
+	_, err := s.exec(ctx, `DELETE FROM object_index WHERE profile_id=? AND bucket=? AND object_key LIKE ? ESCAPE '\'`, profileID, bucket, pat)
 	return err
 }
 
@@ -67,7 +67,7 @@ func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket st
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.PrepareContext(ctx, `
+	stmt, err := tx.PrepareContext(ctx, s.rebind(`
 		INSERT INTO object_index (profile_id, bucket, object_key, size, etag, last_modified, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(profile_id, bucket, object_key) DO UPDATE SET
@@ -75,7 +75,7 @@ func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket st
 			etag=excluded.etag,
 			last_modified=excluded.last_modified,
 			indexed_at=excluded.indexed_at
-	`)
+	`))
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 	}
 
 	var exists int
-	if err := s.db.QueryRowContext(ctx, `SELECT 1 FROM object_index WHERE profile_id=? AND bucket=? LIMIT 1`, profileID, in.Bucket).Scan(&exists); err != nil {
+	if err := s.queryRow(ctx, `SELECT 1 FROM object_index WHERE profile_id=? AND bucket=? LIMIT 1`, profileID, in.Bucket).Scan(&exists); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.SearchObjectsResponse{}, ErrObjectIndexNotFound
 		}
@@ -179,7 +179,7 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 		args = append(args, *in.Cursor)
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.query(ctx, `
 		SELECT object_key, size, etag, last_modified
 		FROM object_index
 		`+where+`
@@ -199,9 +199,9 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 	}
 
 	var (
-		count    int
-		lastKey  string
-		hasMore  bool
+		count   int
+		lastKey string
+		hasMore bool
 	)
 	for rows.Next() {
 		var (
@@ -258,7 +258,7 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 	}
 
 	var exists int
-	if err := s.db.QueryRowContext(ctx, `SELECT 1 FROM object_index WHERE profile_id=? AND bucket=? LIMIT 1`, profileID, in.Bucket).Scan(&exists); err != nil {
+	if err := s.queryRow(ctx, `SELECT 1 FROM object_index WHERE profile_id=? AND bucket=? LIMIT 1`, profileID, in.Bucket).Scan(&exists); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.ObjectIndexSummaryResponse{}, ErrObjectIndexNotFound
 		}
@@ -273,11 +273,11 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 	}
 
 	var (
-		count    int64
-		total    sql.NullInt64
+		count     int64
+		total     sql.NullInt64
 		indexedAt sql.NullString
 	)
-	if err := s.db.QueryRowContext(ctx, `
+	if err := s.queryRow(ctx, `
 		SELECT COUNT(*), COALESCE(SUM(size), 0), MAX(indexed_at)
 		FROM object_index
 		`+where+`
@@ -285,7 +285,7 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 		return models.ObjectIndexSummaryResponse{}, err
 	}
 
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.query(ctx, `
 		SELECT object_key
 		FROM object_index
 		`+where+`

@@ -5,6 +5,8 @@ import "time"
 type Config struct {
 	Addr             string
 	DataDir          string
+	DBBackend        string
+	DatabaseURL      string
 	StaticDir        string
 	APIToken         string
 	AllowRemote      bool

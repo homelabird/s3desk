@@ -3,14 +3,27 @@ import type { DataNode, EventDataNode } from 'antd/es/tree'
 import type { DragEvent, PointerEvent } from 'react'
 
 import styles from './objects.module.css'
+import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
 import { ObjectsTreePane } from './ObjectsTreePane'
 import { ObjectsTreeView } from './ObjectsTreeView'
+import type { FavoriteObjectItem } from '../../api/types'
 
 type ObjectsTreePanelProps = {
 	dockTree: boolean
 	treeDrawerOpen: boolean
 	hasProfile: boolean
 	hasBucket: boolean
+	favorites: FavoriteObjectItem[]
+	favoritesSearch: string
+	onFavoritesSearchChange: (value: string) => void
+	favoritesOnly: boolean
+	onFavoritesOnlyChange: (value: boolean) => void
+	favoritesOpenDetails: boolean
+	onFavoritesOpenDetailsChange: (value: boolean) => void
+	onSelectFavorite: (key: string) => void
+	onSelectFavoriteFromDrawer: (key: string) => void
+	favoritesLoading: boolean
+	favoritesError?: string | null
 	treeData: DataNode[]
 	expandedKeys: string[]
 	selectedKeys: string[]
@@ -50,12 +63,32 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 		/>
 	)
 
+	const renderPanel = (onSelectKey: (key: string) => void, onSelectFavorite: (key: string) => void) => (
+		<div className={styles.treeStack}>
+			<ObjectsFavoritesPane
+				hasProfile={props.hasProfile}
+				hasBucket={props.hasBucket}
+				favorites={props.favorites}
+				favoritesOnly={props.favoritesOnly}
+				onFavoritesOnlyChange={props.onFavoritesOnlyChange}
+				openDetailsOnClick={props.favoritesOpenDetails}
+				onOpenDetailsOnClickChange={props.onFavoritesOpenDetailsChange}
+				query={props.favoritesSearch}
+				onQueryChange={props.onFavoritesSearchChange}
+				onSelectFavorite={onSelectFavorite}
+				isLoading={props.favoritesLoading}
+				errorMessage={props.favoritesError}
+			/>
+			<ObjectsTreePane title="Folders">{renderTreeView(onSelectKey)}</ObjectsTreePane>
+		</div>
+	)
+
 	return (
 		<>
 			{props.dockTree ? (
 				<>
 					<div className={`${styles.layoutPane} ${styles.layoutTreePane}`}>
-						<ObjectsTreePane title="Folders">{renderTreeView(props.onSelectKey)}</ObjectsTreePane>
+						{renderPanel(props.onSelectKey, props.onSelectFavorite)}
 					</div>
 
 					<div
@@ -73,11 +106,11 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 			<Drawer
 				open={!props.dockTree && props.treeDrawerOpen}
 				onClose={props.onCloseDrawer}
-				title="Folders"
+				title="Browse"
 				placement="left"
 				width="90%"
 			>
-				{renderTreeView(props.onSelectKeyFromDrawer)}
+				{renderPanel(props.onSelectKeyFromDrawer, props.onSelectFavoriteFromDrawer)}
 			</Drawer>
 		</>
 	)

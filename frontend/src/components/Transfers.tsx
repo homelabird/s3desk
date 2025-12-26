@@ -4,10 +4,11 @@ import { DownloadOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError, RequestAbortedError, type UploadFileItem } from '../api/client'
+import { APIClient, APIError, RequestAbortedError, RequestTimeoutError, type UploadFileItem } from '../api/client'
 import { TransfersContext, useTransfers } from './useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { TransferEstimator } from '../lib/transfer'
+import { publishNetworkStatus } from '../lib/networkStatus'
 import {
 	ensureReadWritePermission,
 	getDevicePickerSupport,
@@ -316,6 +317,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 						updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
 						return
 					}
+					maybeReportNetworkError(err)
 					const msg = formatErr(err)
 					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
 					message.error(msg)
@@ -386,6 +388,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 					updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
 					return
 				}
+				maybeReportNetworkError(err)
 				const msg = formatErr(err)
 				updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
 				message.error(msg)
@@ -442,6 +445,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 						}))
 					}
 				} catch (err) {
+					maybeReportNetworkError(err)
 					updateDownloadTask(t.id, (prev) => ({ ...prev, error: formatErr(err) }))
 				}
 			}
@@ -547,6 +551,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 					message.info('Upload canceled')
 					return
 				}
+				maybeReportNetworkError(err)
 				const msg = formatErr(err)
 				updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
 				message.error(msg)
@@ -646,6 +651,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 								delete uploadMoveByTaskIdRef.current[task.id]
 							}
 						} catch (err) {
+							maybeReportNetworkError(err)
 							const msg = formatErr(err)
 							updateUploadTask(task.id, (prev) => ({
 								...prev,
@@ -678,6 +684,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 						delete uploadMoveByTaskIdRef.current[task.id]
 					}
 				} catch (err) {
+					maybeReportNetworkError(err)
 					updateUploadTask(task.id, (prev) => ({ ...prev, error: formatErr(err) }))
 				}
 			}
@@ -1299,6 +1306,27 @@ function saveBlob(blob: Blob, filename: string) {
 	a.click()
 	a.remove()
 	setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+function maybeReportNetworkError(err: unknown) {
+	if (err instanceof RequestAbortedError) return
+	if (err instanceof RequestTimeoutError) {
+		publishNetworkStatus({ kind: 'unstable', message: 'Request timed out. Check your connection.' })
+		return
+	}
+	if (err instanceof APIError) {
+		if (err.status >= 500 || err.status === 0) {
+			publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${err.status}).` })
+		}
+		return
+	}
+	if (err instanceof TypeError) {
+		publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+		return
+	}
+	if (err instanceof Error && /network|failed to fetch|load failed/i.test(err.message)) {
+		publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+	}
 }
 
 function formatErr(err: unknown): string {

@@ -1,3 +1,4 @@
+import { InfoCircleOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import {
 	Alert,
@@ -19,7 +20,6 @@ import {
 import { useMemo } from 'react'
 
 import { APIClient, APIError } from '../api/client'
-import { InfoCircleOutlined } from '@ant-design/icons'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
 

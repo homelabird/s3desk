@@ -2,11 +2,64 @@ package db
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
-func Open(dbPath string) (*sql.DB, error) {
+type Backend string
+
+const (
+	BackendSQLite   Backend = "sqlite"
+	BackendPostgres Backend = "postgres"
+)
+
+type Config struct {
+	Backend     Backend
+	SQLitePath  string
+	DatabaseURL string
+}
+
+func ParseBackend(raw string) (Backend, error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return BackendSQLite, nil
+	}
+	switch raw {
+	case "sqlite":
+		return BackendSQLite, nil
+	case "postgres", "postgresql", "pg":
+		return BackendPostgres, nil
+	default:
+		return "", fmt.Errorf("unsupported db backend %q (expected sqlite or postgres)", raw)
+	}
+}
+
+func Open(cfg Config) (*sql.DB, error) {
+	backend := cfg.Backend
+	if backend == "" {
+		backend = BackendSQLite
+	}
+	switch backend {
+	case BackendSQLite:
+		if strings.TrimSpace(cfg.SQLitePath) == "" {
+			return nil, errors.New("sqlite path is required")
+		}
+		return openSQLite(cfg.SQLitePath)
+	case BackendPostgres:
+		if strings.TrimSpace(cfg.DatabaseURL) == "" {
+			return nil, errors.New("DATABASE_URL is required when DB_BACKEND=postgres")
+		}
+		return openPostgres(cfg.DatabaseURL)
+	default:
+		return nil, fmt.Errorf("unsupported db backend %q", backend)
+	}
+}
+
+func openSQLite(dbPath string) (*sql.DB, error) {
 	sqlDB, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, err
@@ -22,6 +75,20 @@ func Open(dbPath string) (*sql.DB, error) {
 	}
 	if _, err := sqlDB.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
 		_ = sqlDB.Close()
+		return nil, err
+	}
+
+	if err := migrate(sqlDB); err != nil {
+		_ = sqlDB.Close()
+		return nil, err
+	}
+
+	return sqlDB, nil
+}
+
+func openPostgres(databaseURL string) (*sql.DB, error) {
+	sqlDB, err := sql.Open("pgx", databaseURL)
+	if err != nil {
 		return nil, err
 	}
 
@@ -93,7 +160,7 @@ func migrate(db *sql.DB) error {
 			profile_id TEXT NOT NULL,
 			bucket TEXT NOT NULL,
 			object_key TEXT NOT NULL,
-			size INTEGER NOT NULL,
+			size BIGINT NOT NULL,
 			etag TEXT,
 			last_modified TEXT,
 			indexed_at TEXT NOT NULL,

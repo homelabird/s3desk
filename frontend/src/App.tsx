@@ -12,6 +12,7 @@ import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Suspense, lazy, useMemo, useState } from 'react'
 
 import { JobQueueBanner } from './components/JobQueueBanner'
+import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { SettingsDrawer } from './components/SettingsDrawer'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/Transfers'
@@ -132,6 +133,7 @@ export default function App() {
 				>
 					<div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
 						<div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'white' }}>
+							<NetworkStatusBanner />
 							<JobQueueBanner />
 						</div>
 						<Suspense
