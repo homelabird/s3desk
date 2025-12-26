@@ -9,5 +9,6 @@ dist/
 
 frontend/node_modules/
 frontend/dist/
+frontend/.tmp/
 frontend/playwright-report/
 frontend/test-results/

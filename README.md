@@ -79,6 +79,21 @@ podman run --rm --network host \
   object-storage:local
 ```
 
+## Run (Helm/Kubernetes)
+
+The Helm chart lives at `charts/object-storage`.
+
+```bash
+helm install object-storage charts/object-storage \
+  --set image.repository=object-storage \
+  --set image.tag=latest \
+  --set server.apiToken=change-me
+```
+
+Notes:
+- If you expose this via Ingress with a hostname, set `server.allowedHosts` to that hostname (so Host/Origin checks allow it).
+- The chart defaults to `ADDR=0.0.0.0:8080` and `ALLOW_REMOTE=true`, so an API token is required.
+
 ## Build
 
 ```bash
@@ -153,6 +168,12 @@ Backend flags/env:
 - `--job-retention` / `JOB_RETENTION` (default `0` = keep forever; deletes finished jobs older than this duration)
 - `--upload-ttl` / `UPLOAD_TTL` (default `24h`)
 - `--upload-max-bytes` / `UPLOAD_MAX_BYTES` (default `0` = unlimited; max total bytes per upload session)
+- `S5CMD_TUNE` (default `true`; enable s5cmd auto-tuning)
+- `S5CMD_MAX_NUMWORKERS` (default `CPU*32`, min 32, max 512; split across active jobs)
+- `S5CMD_MAX_CONCURRENCY` (default `CPU*2`, min 2, max 64; split across active jobs)
+- `S5CMD_MIN_PART_SIZE_MIB` (default `16`, min 5)
+- `S5CMD_MAX_PART_SIZE_MIB` (default `128`)
+- `S5CMD_DEFAULT_PART_SIZE_MIB` (default `64`)
 
 Generate an encryption key:
 

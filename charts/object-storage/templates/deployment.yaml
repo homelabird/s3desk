@@ -1,0 +1,174 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "object-storage.fullname" . }}
+  labels:
+    {{- include "object-storage.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "object-storage.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "object-storage.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "object-storage.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: object-storage
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: ADDR
+              value: {{ .Values.server.addr | quote }}
+            - name: DATA_DIR
+              value: {{ .Values.dataDir | quote }}
+            - name: DB_BACKEND
+              value: {{ .Values.db.backend | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.server.logFormat | quote }}
+            - name: ALLOW_REMOTE
+              value: {{ .Values.server.allowRemote | quote }}
+            - name: JOB_CONCURRENCY
+              value: {{ .Values.jobs.concurrency | quote }}
+            - name: JOB_QUEUE_CAPACITY
+              value: {{ .Values.jobs.queueCapacity | quote }}
+            - name: JOB_LOG_MAX_BYTES
+              value: {{ .Values.jobs.logMaxBytes | quote }}
+            - name: JOB_LOG_MAX_LINE_BYTES
+              value: {{ .Values.jobs.logMaxLineBytes | quote }}
+            - name: JOB_LOG_EMIT_STDOUT
+              value: {{ .Values.jobs.logEmitStdout | quote }}
+            - name: JOB_RETENTION
+              value: {{ .Values.jobs.retention | quote }}
+            - name: UPLOAD_TTL
+              value: {{ .Values.uploads.ttl | quote }}
+            - name: UPLOAD_MAX_BYTES
+              value: {{ .Values.uploads.maxBytes | quote }}
+            - name: S5CMD_TUNE
+              value: {{ .Values.s5cmd.tune | quote }}
+            {{- if .Values.server.staticDir }}
+            - name: STATIC_DIR
+              value: {{ .Values.server.staticDir | quote }}
+            {{- end }}
+            {{- if .Values.server.allowedHosts }}
+            - name: ALLOWED_HOSTS
+              value: {{ join "," .Values.server.allowedHosts | quote }}
+            {{- end }}
+            {{- if .Values.server.allowedLocalDirs }}
+            - name: ALLOWED_LOCAL_DIRS
+              value: {{ join "," .Values.server.allowedLocalDirs | quote }}
+            {{- end }}
+            {{- if .Values.s5cmd.path }}
+            - name: S5CMD_PATH
+              value: {{ .Values.s5cmd.path | quote }}
+            {{- end }}
+            {{- if not (eq .Values.s5cmd.maxNumWorkers nil) }}
+            - name: S5CMD_MAX_NUMWORKERS
+              value: {{ .Values.s5cmd.maxNumWorkers | quote }}
+            {{- end }}
+            {{- if not (eq .Values.s5cmd.maxConcurrency nil) }}
+            - name: S5CMD_MAX_CONCURRENCY
+              value: {{ .Values.s5cmd.maxConcurrency | quote }}
+            {{- end }}
+            {{- if not (eq .Values.s5cmd.minPartSizeMiB nil) }}
+            - name: S5CMD_MIN_PART_SIZE_MIB
+              value: {{ .Values.s5cmd.minPartSizeMiB | quote }}
+            {{- end }}
+            {{- if not (eq .Values.s5cmd.maxPartSizeMiB nil) }}
+            - name: S5CMD_MAX_PART_SIZE_MIB
+              value: {{ .Values.s5cmd.maxPartSizeMiB | quote }}
+            {{- end }}
+            {{- if not (eq .Values.s5cmd.defaultPartSizeMiB nil) }}
+            - name: S5CMD_DEFAULT_PART_SIZE_MIB
+              value: {{ .Values.s5cmd.defaultPartSizeMiB | quote }}
+            {{- end }}
+            {{- $secretName := default (include "object-storage.fullname" .) .Values.secrets.existingSecret }}
+            {{- $useSecret := or (ne (trim .Values.server.apiToken) "") (ne (trim .Values.server.encryptionKey) "") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
+            {{- if $useSecret }}
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ .Values.secrets.apiTokenKey }}
+                  optional: true
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ .Values.secrets.encryptionKeyKey }}
+                  optional: true
+            {{- end }}
+            {{- if or (eq .Values.db.backend "postgres") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ .Values.secrets.databaseUrlKey }}
+                  optional: true
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.dataDir | quote }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ default (include "object-storage.fullname" .) .Values.persistence.existingClaim }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

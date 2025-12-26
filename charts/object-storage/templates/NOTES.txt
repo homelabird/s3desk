@@ -1,0 +1,15 @@
+Thank you for installing object-storage.
+
+{{- if .Values.ingress.enabled }}
+Ingress hosts:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+Port-forward:
+  kubectl port-forward svc/{{ include "object-storage.fullname" . }} 8080:{{ .Values.service.port }}
+  http://127.0.0.1:8080
+{{- end }}
+
+Remember to set a real API token (`server.apiToken` or `secrets.existingSecret`) for remote access.
+If you use Ingress with a hostname, add it to `server.allowedHosts`.

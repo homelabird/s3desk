@@ -134,6 +134,12 @@ Settings → Server 섹션의 `s5cmd` 항목에서 감지 상태/경로를 확�
 - `JOB_LOG_MAX_LINE_BYTES`: Job 로그에서 한 줄 최대 길이(초과 시 잘림).
 - `LOG_FORMAT=json`: 서버 로그를 JSON Lines로 stdout에 출력합니다(Grafana/Loki/Elastic 수집용).
 - `JOB_LOG_EMIT_STDOUT=true`: Job 로그를 stdout에 JSON Lines로 미러링합니다(파일 로그는 유지).
+- `S5CMD_TUNE=true`: s5cmd 튜닝 활성화(병렬/파트 크기 자동 조정).
+- `S5CMD_MAX_NUMWORKERS`: 전체 워커 수 상한(활성 Job 수로 분배).
+- `S5CMD_MAX_CONCURRENCY`: 전체 동시성 상한(활성 Job 수로 분배).
+- `S5CMD_MIN_PART_SIZE_MIB`: 파트 최소 크기(MiB).
+- `S5CMD_MAX_PART_SIZE_MIB`: 파트 최대 크기(MiB).
+- `S5CMD_DEFAULT_PART_SIZE_MIB`: 평균 오브젝트 크기 추정이 불가할 때 기본 파트 크기(MiB).
 
 추천 값:
 

@@ -1,0 +1,107 @@
+replicaCount: 1
+
+image:
+  repository: object-storage
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: object-storage.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+dataDir: "/data"
+
+server:
+  addr: "0.0.0.0:8080"
+  allowRemote: true
+  apiToken: "change-me"
+  encryptionKey: ""
+  logFormat: "text"
+  staticDir: ""
+  allowedHosts: []
+  allowedLocalDirs: []
+
+db:
+  backend: "sqlite"
+  databaseUrl: ""
+
+jobs:
+  concurrency: 2
+  queueCapacity: 256
+  logMaxBytes: 0
+  logMaxLineBytes: 262144
+  logEmitStdout: false
+  retention: ""
+
+uploads:
+  ttl: "24h"
+  maxBytes: 0
+
+s5cmd:
+  path: ""
+  tune: true
+  maxNumWorkers: null
+  maxConcurrency: null
+  minPartSizeMiB: null
+  maxPartSizeMiB: null
+  defaultPartSizeMiB: null
+
+secrets:
+  existingSecret: ""
+  apiTokenKey: "apiToken"
+  encryptionKeyKey: "encryptionKey"
+  databaseUrlKey: "databaseUrl"
+
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+livenessProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  tcpSocket:
+    port: http
+  initialDelaySeconds: 2
+  periodSeconds: 5
