@@ -372,9 +372,7 @@ export function ObjectsPage(props: Props) {
 		setExtFilter('')
 		setMinSize(null)
 		setMaxSize(null)
-		setSort('name_asc')
-		setFavoritesFirst(false)
-	}, [setExtFilter, setFavoritesFirst, setMaxSize, setMinSize, setSort, uiMode])
+	}, [setExtFilter, setMaxSize, setMinSize, uiMode])
 
 	useEffect(() => {
 		if (uiMode !== 'simple') return

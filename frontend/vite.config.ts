@@ -21,14 +21,26 @@ export default defineConfig({
           if (id.includes('react-router')) return 'router'
           if (id.includes('react')) return 'react'
           if (id.includes('@tanstack')) return 'tanstack'
+          if (id.includes('node_modules/@ant-design/icons') || id.includes('node_modules/@ant-design/icons-svg')) {
+            return 'antd-icons'
+          }
+          if (id.includes('node_modules/antd/es/') || id.includes('node_modules/antd/lib/')) {
+            const base = id.includes('node_modules/antd/es/') ? 'node_modules/antd/es/' : 'node_modules/antd/lib/'
+            const rel = id.split(base)[1]
+            const part = rel?.split('/')[0]
+            if (!part || ['style', 'theme', 'locale', 'version', '_util', 'config-provider'].includes(part)) {
+              return 'antd-core'
+            }
+            return `antd-${part}`
+          }
           if (
-            id.includes('node_modules/antd') ||
-            id.includes('node_modules/@ant-design') ||
             id.includes('node_modules/@rc-component') ||
             id.includes('node_modules/rc-')
           ) {
-            return 'antd'
+            return 'antd-rc'
           }
+          if (id.includes('node_modules/antd')) return 'antd-core'
+          if (id.includes('node_modules/@ant-design')) return 'antd-utils'
           if (id.includes('dayjs')) return 'dayjs'
           return 'vendor'
         },

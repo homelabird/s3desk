@@ -190,8 +190,8 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 
 	const retryUploadTask = useCallback(
 		(taskId: string) => {
-			const movePlan = uploadMoveByTaskIdRef.current[taskId]
 			updateUploadTask(taskId, (t) => {
+				const movePlan = uploadMoveByTaskIdRef.current[taskId]
 				if (t.cleanupFailed && t.moveAfterUpload && t.jobId && movePlan) {
 					return {
 						...t,
