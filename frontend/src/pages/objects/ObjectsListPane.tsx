@@ -25,6 +25,7 @@ export function ObjectsDropZoneCard(props: {
 			onDragOver={props.onDragOver}
 			onDrop={props.onDrop}
 			className={styles.dropZoneCard}
+			data-testid="objects-upload-dropzone"
 		>
 			{props.children}
 		</div>
