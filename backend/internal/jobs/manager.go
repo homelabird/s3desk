@@ -58,17 +58,19 @@ type Config struct {
 	Hub              *ws.Hub
 	Concurrency      int
 	JobLogMaxBytes   int64
+	JobLogEmitStdout bool
 	JobRetention     time.Duration
 	AllowedLocalDirs []string
 	UploadSessionTTL time.Duration
 }
 
 type Manager struct {
-	store        *store.Store
-	dataDir      string
-	hub          *ws.Hub
-	logMaxBytes  int64
-	jobRetention time.Duration
+	store         *store.Store
+	dataDir       string
+	hub           *ws.Hub
+	logMaxBytes   int64
+	logEmitStdout bool
+	jobRetention  time.Duration
 
 	queue chan string
 	sem   chan struct{}
@@ -143,16 +145,17 @@ func NewManager(cfg Config) *Manager {
 	}
 
 	return &Manager{
-		store:        cfg.Store,
-		dataDir:      cfg.DataDir,
-		hub:          cfg.Hub,
-		logMaxBytes:  cfg.JobLogMaxBytes,
-		jobRetention: cfg.JobRetention,
-		queue:        make(chan string, queueCapacity),
-		sem:          make(chan struct{}, concurrency),
-		cancels:      make(map[string]context.CancelFunc),
-		pids:         make(map[string]int),
-		uploadTTL:    cfg.UploadSessionTTL,
+		store:         cfg.Store,
+		dataDir:       cfg.DataDir,
+		hub:           cfg.Hub,
+		logMaxBytes:   cfg.JobLogMaxBytes,
+		logEmitStdout: cfg.JobLogEmitStdout,
+		jobRetention:  cfg.JobRetention,
+		queue:         make(chan string, queueCapacity),
+		sem:           make(chan struct{}, concurrency),
+		cancels:       make(map[string]context.CancelFunc),
+		pids:          make(map[string]int),
+		uploadTTL:     cfg.UploadSessionTTL,
 		allowedLocalDirs: func() []string {
 			if len(cfg.AllowedLocalDirs) == 0 {
 				return nil
@@ -1561,7 +1564,9 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 	defer func() { _ = logWriter.Close() }()
 
 	if tuneOK {
-		_, _ = logWriter.Write([]byte(fmt.Sprintf("[info] s5cmd tune: activeJobs=%d numWorkers=%d concurrency=%d partSizeMiB=%d\n", tune.ActiveJobs, tune.NumWorkers, tune.Concurrency, tune.PartSizeMiB)))
+		tuneMsg := fmt.Sprintf("s5cmd tune: activeJobs=%d numWorkers=%d concurrency=%d partSizeMiB=%d", tune.ActiveJobs, tune.NumWorkers, tune.Concurrency, tune.PartSizeMiB)
+		_, _ = logWriter.Write([]byte("[info] " + tuneMsg + "\n"))
+		m.emitJobLogStdout(jobID, "info", tuneMsg)
 	}
 
 	var (
@@ -1619,11 +1624,11 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		pipeLogs(ctx, stdout, logWriter, m.hub, jobID, "info", progressCh, m.logLineMaxBytes)
+		m.pipeLogs(ctx, stdout, logWriter, jobID, "info", progressCh, m.logLineMaxBytes)
 	}()
 	go func() {
 		defer wg.Done()
-		pipeLogs(ctx, stderr, logWriter, m.hub, jobID, "error", nil, m.logLineMaxBytes)
+		m.pipeLogs(ctx, stderr, logWriter, jobID, "error", nil, m.logLineMaxBytes)
 	}()
 
 	waitErr := cmd.Wait()
@@ -1822,7 +1827,7 @@ func readLogLine(r *bufio.Reader, maxBytes int) (string, bool, error) {
 	return line, false, nil
 }
 
-func pipeLogs(ctx context.Context, r io.Reader, w io.Writer, hub *ws.Hub, jobID, level string, progressCh chan<- progressDelta, maxLineBytes int) {
+func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID, level string, progressCh chan<- progressDelta, maxLineBytes int) {
 	reader := bufio.NewReaderSize(r, logReadBufferSize)
 
 	for {
@@ -1865,7 +1870,7 @@ func pipeLogs(ctx context.Context, r io.Reader, w io.Writer, hub *ws.Hub, jobID,
 				}
 			}
 		}
-		hub.Publish(ws.Event{
+		m.hub.Publish(ws.Event{
 			Type:  "job.log",
 			JobID: jobID,
 			Payload: map[string]any{
@@ -1873,6 +1878,7 @@ func pipeLogs(ctx context.Context, r io.Reader, w io.Writer, hub *ws.Hub, jobID,
 				"message": rendered,
 			},
 		})
+		m.emitJobLogStdout(jobID, level, rendered)
 
 		if errors.Is(err, io.EOF) {
 			return

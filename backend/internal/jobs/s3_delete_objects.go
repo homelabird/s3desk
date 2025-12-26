@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
+	"object-storage/internal/logging"
 	"object-storage/internal/models"
 	"object-storage/internal/s3client"
 	"object-storage/internal/ws"
@@ -154,6 +155,21 @@ func (m *Manager) writeJobLog(w io.Writer, jobID, level, message string) {
 			"level":   level,
 			"message": message,
 		},
+	})
+	m.emitJobLogStdout(jobID, level, message)
+}
+
+func (m *Manager) emitJobLogStdout(jobID, level, message string) {
+	if !m.logEmitStdout {
+		return
+	}
+	logging.WriteJSONLineStdout(map[string]any{
+		"ts":        time.Now().UTC().Format(time.RFC3339Nano),
+		"type":      "job.log",
+		"component": "job",
+		"jobId":     jobID,
+		"level":     level,
+		"msg":       message,
 	})
 }
 

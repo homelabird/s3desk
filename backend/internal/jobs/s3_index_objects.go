@@ -45,7 +45,9 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	defer func() { _ = logWriter.Close() }()
 
 	writeLog := func(format string, args ...any) {
-		_, _ = logWriter.Write([]byte(fmt.Sprintf(format, args...) + "\n"))
+		msg := fmt.Sprintf(format, args...)
+		_, _ = logWriter.Write([]byte(msg + "\n"))
+		m.emitJobLogStdout(jobID, "info", msg)
 	}
 
 	writeLog("Starting index: bucket=%q prefix=%q", bucket, prefix)
@@ -194,4 +196,3 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	writeLog("Index complete: objects=%d bytes=%d indexedAt=%s", objectsDone, bytesDone, indexedAt)
 	return nil
 }
-

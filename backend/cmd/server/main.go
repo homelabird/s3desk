@@ -15,6 +15,7 @@ import (
 
 	"object-storage/internal/app"
 	"object-storage/internal/config"
+	"object-storage/internal/logging"
 )
 
 type stringSliceFlag []string
@@ -35,12 +36,14 @@ func main() {
 	flag.StringVar(&cfg.DataDir, "data-dir", getEnv("DATA_DIR", "./data"), "data directory (sqlite db, staging, logs)")
 	flag.StringVar(&cfg.DBBackend, "db-backend", getEnv("DB_BACKEND", "sqlite"), "database backend (sqlite or postgres)")
 	flag.StringVar(&cfg.DatabaseURL, "database-url", getEnv("DATABASE_URL", ""), "postgres connection string (required when db-backend=postgres)")
+	flag.StringVar(&cfg.LogFormat, "log-format", getEnv("LOG_FORMAT", "text"), "log format (text or json)")
 	flag.StringVar(&cfg.StaticDir, "static-dir", defaultStaticDir(), "static files directory (frontend build output)")
 	flag.StringVar(&cfg.APIToken, "api-token", getEnv("API_TOKEN", ""), "optional local API token (X-Api-Token)")
 	flag.BoolVar(&cfg.AllowRemote, "allow-remote", getEnvBool("ALLOW_REMOTE", false), "allow non-local bind and accept private remote clients (requires API_TOKEN when using a non-loopback addr)")
 	flag.StringVar(&cfg.EncryptionKey, "encryption-key", getEnv("ENCRYPTION_KEY", ""), "optional base64 key to encrypt profile credentials at rest")
 	flag.IntVar(&cfg.JobConcurrency, "job-concurrency", getEnvInt("JOB_CONCURRENCY", 2), "max concurrent jobs")
 	flag.Int64Var(&cfg.JobLogMaxBytes, "job-log-max-bytes", getEnvInt64("JOB_LOG_MAX_BYTES", 0), "max bytes per job log file (0=unlimited)")
+	flag.BoolVar(&cfg.JobLogEmitStdout, "job-log-emit-stdout", getEnvBool("JOB_LOG_EMIT_STDOUT", false), "emit job logs to stdout as JSON lines")
 	flag.DurationVar(&cfg.JobRetention, "job-retention", getEnvDuration("JOB_RETENTION", 0), "delete finished jobs older than this duration (0=keep forever)")
 	flag.DurationVar(&cfg.UploadSessionTTL, "upload-ttl", getEnvDuration("UPLOAD_TTL", 24*time.Hour), "upload session TTL")
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", getEnvInt64("UPLOAD_MAX_BYTES", 0), "max total bytes per upload session (0=unlimited)")
@@ -66,6 +69,10 @@ func main() {
 	flag.Var(&allowHosts, "allow-host", "allowed hostnames for Host/Origin checks (repeatable)")
 	flag.Parse()
 
+	if _, err := logging.Setup(cfg.LogFormat); err != nil {
+		log.Fatalf("invalid LOG_FORMAT %q: %v", cfg.LogFormat, err)
+	}
+
 	cfg.AllowedLocalDirs = allowDirs
 	cfg.AllowedHosts = normalizeHosts(allowHosts)
 
@@ -73,7 +80,7 @@ func main() {
 	defer stop()
 
 	if err := app.Run(ctx, cfg); err != nil {
-		log.Fatalf("server error: %v", err)
+		logging.Fatalf("server error: %v", err)
 	}
 }
 

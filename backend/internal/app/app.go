@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"object-storage/internal/config"
 	"object-storage/internal/db"
 	"object-storage/internal/jobs"
+	"object-storage/internal/logging"
 	"object-storage/internal/store"
 	"object-storage/internal/ws"
 )
@@ -114,7 +114,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			return err
 		}
 		if updated > 0 {
-			log.Printf("encrypted %d profile(s) at rest", updated)
+			logging.Infof("encrypted %d profile(s) at rest", updated)
 		}
 	}
 
@@ -125,6 +125,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		Hub:              hub,
 		Concurrency:      cfg.JobConcurrency,
 		JobLogMaxBytes:   cfg.JobLogMaxBytes,
+		JobLogEmitStdout: cfg.JobLogEmitStdout,
 		JobRetention:     cfg.JobRetention,
 		AllowedLocalDirs: allowedDirs,
 		UploadSessionTTL: cfg.UploadSessionTTL,
@@ -155,7 +156,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("listening on http://%s", cfg.Addr)
+		logging.Infof("listening on http://%s", cfg.Addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
