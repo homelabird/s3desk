@@ -28,6 +28,8 @@ export default defineConfig({
             const base = id.includes('node_modules/antd/es/') ? 'node_modules/antd/es/' : 'node_modules/antd/lib/'
             const rel = id.split(base)[1]
             const part = rel?.split('/')[0]
+            if (part === 'col' || part === 'row' || part === 'grid') return 'antd-grid'
+            if (part === 'index.js' || part === 'index') return 'antd-core'
             if (!part || ['style', 'theme', 'locale', 'version', '_util', 'config-provider'].includes(part)) {
               return 'antd-core'
             }
