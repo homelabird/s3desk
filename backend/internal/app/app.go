@@ -96,6 +96,18 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
+	if cfg.DBMaxOpenConns > 0 {
+		sqlDB.SetMaxOpenConns(cfg.DBMaxOpenConns)
+	}
+	if cfg.DBMaxIdleConns > 0 {
+		sqlDB.SetMaxIdleConns(cfg.DBMaxIdleConns)
+	}
+	if cfg.DBConnMaxLifetime > 0 {
+		sqlDB.SetConnMaxLifetime(cfg.DBConnMaxLifetime)
+	}
+	if cfg.DBConnMaxIdleTime > 0 {
+		sqlDB.SetConnMaxIdleTime(cfg.DBConnMaxIdleTime)
+	}
 	defer func() { _ = sqlDB.Close() }()
 	if dbBackend == db.BackendSQLite {
 		_ = os.Chmod(dbPath, 0o600)

@@ -78,6 +78,7 @@ Profile 생성 후 **상단(Profile Select)** 에서 해당 Profile을 선택하
 - `DB_BACKEND=postgres`
   - 외부 DB(`DATABASE_URL`)에 저장됩니다.
   - **Postgres는 multi-replica 구성이 가능**합니다.
+  - 필요 시 연결 풀을 조정할 수 있습니다: `DB_MAX_OPEN_CONNS`, `DB_MAX_IDLE_CONNS`, `DB_CONN_MAX_LIFETIME`, `DB_CONN_MAX_IDLE_TIME`
 
 ## 4) 브라우징 / 업로드 / Job 흐름
 
@@ -133,6 +134,10 @@ Settings → Server 섹션의 `s5cmd` 항목에서 감지 상태/경로를 확�
 - `JOB_QUEUE_CAPACITY`: Job 큐 최대 대기 수. 꽉 차면 API가 429로 응답합니다.
 - `JOB_LOG_MAX_LINE_BYTES`: Job 로그에서 한 줄 최대 길이(초과 시 잘림).
 - `LOG_FORMAT=json`: 서버 로그를 JSON Lines로 stdout에 출력합니다(Grafana/Loki/Elastic 수집용).
+- `LOG_SERVICE`: 로그에 찍힐 서비스명(기본값: `object-storage`).
+- `LOG_ENV`: 로그에 찍힐 환경명(기본값: `local`).
+- `LOG_VERSION`: 로그에 찍힐 버전 태그(선택).
+- `LOG_COMPONENT`: 기본 component 값(선택, 없으면 `"server"`).
 - `JOB_LOG_EMIT_STDOUT=true`: Job 로그를 stdout에 JSON Lines로 미러링합니다(파일 로그는 유지).
 - `S5CMD_TUNE=true`: s5cmd 튜닝 활성화(병렬/파트 크기 자동 조정).
 - `S5CMD_MAX_NUMWORKERS`: 전체 워커 수 상한(활성 Job 수로 분배).
@@ -146,4 +151,18 @@ Settings → Server 섹션의 `s5cmd` 항목에서 감지 상태/경로를 확�
 ```bash
 JOB_QUEUE_CAPACITY=256
 JOB_LOG_MAX_LINE_BYTES=262144
+```
+
+### 로그 필드 예시(JSON Lines)
+
+HTTP 요청 로그:
+
+```json
+{"ts":"2025-12-26T22:33:45.123Z","level":"info","msg":"http request","service":"object-storage","env":"local","component":"server","event":"http.request","method":"GET","path":"/api/v1/buckets","route":"/buckets","status":200,"duration_ms":12,"bytes":5321,"request_id":"7a2f...","remote_addr":"127.0.0.1","user_agent":"Mozilla/5.0","proto":"HTTP/1.1","profile_id":"p_abc"}
+```
+
+Job 로그:
+
+```json
+{"ts":"2025-12-26T22:34:01.456Z","level":"info","msg":"job completed","service":"object-storage","env":"local","component":"server","event":"job.completed","job_id":"job_123","job_type":"s3_delete_objects","profile_id":"p_abc","status":"succeeded","duration_ms":1534}
 ```

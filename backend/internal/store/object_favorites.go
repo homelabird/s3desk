@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm/clause"
+
 	"object-storage/internal/models"
 )
 
@@ -15,27 +17,18 @@ func (s *Store) ListObjectFavorites(ctx context.Context, profileID, bucket strin
 		return nil, errors.New("bucket is required")
 	}
 
-	rows, err := s.query(ctx, `
-		SELECT object_key, created_at
-		FROM object_favorites
-		WHERE profile_id = ? AND bucket = ?
-		ORDER BY created_at DESC
-	`, profileID, bucket)
-	if err != nil {
+	var rows []objectFavoriteRow
+	if err := s.db.WithContext(ctx).
+		Select("object_key", "created_at").
+		Where("profile_id = ? AND bucket = ?", profileID, bucket).
+		Order("created_at DESC").
+		Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	out := make([]models.ObjectFavorite, 0)
-	for rows.Next() {
-		var key, createdAt string
-		if err := rows.Scan(&key, &createdAt); err != nil {
-			return nil, err
-		}
-		out = append(out, models.ObjectFavorite{Key: key, CreatedAt: createdAt})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	out := make([]models.ObjectFavorite, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, models.ObjectFavorite{Key: row.ObjectKey, CreatedAt: row.CreatedAt})
 	}
 	return out, nil
 }
@@ -51,22 +44,30 @@ func (s *Store) AddObjectFavorite(ctx context.Context, profileID, bucket, key st
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	if _, err := s.exec(ctx, `
-		INSERT INTO object_favorites (profile_id, bucket, object_key, created_at)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(profile_id, bucket, object_key) DO NOTHING
-	`, profileID, bucket, key, now); err != nil {
+	row := objectFavoriteRow{
+		ProfileID: profileID,
+		Bucket:    bucket,
+		ObjectKey: key,
+		CreatedAt: now,
+	}
+	if err := s.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "profile_id"}, {Name: "bucket"}, {Name: "object_key"}},
+			DoNothing: true,
+		}).
+		Create(&row).Error; err != nil {
 		return models.ObjectFavorite{}, err
 	}
 
-	var createdAt string
-	if err := s.queryRow(ctx, `
-		SELECT created_at FROM object_favorites WHERE profile_id = ? AND bucket = ? AND object_key = ?
-	`, profileID, bucket, key).Scan(&createdAt); err != nil {
+	var fetched objectFavoriteRow
+	if err := s.db.WithContext(ctx).
+		Select("created_at").
+		Where("profile_id = ? AND bucket = ? AND object_key = ?", profileID, bucket, key).
+		Take(&fetched).Error; err != nil {
 		return models.ObjectFavorite{}, err
 	}
 
-	return models.ObjectFavorite{Key: key, CreatedAt: createdAt}, nil
+	return models.ObjectFavorite{Key: key, CreatedAt: fetched.CreatedAt}, nil
 }
 
 func (s *Store) DeleteObjectFavorite(ctx context.Context, profileID, bucket, key string) (bool, error) {
@@ -79,11 +80,11 @@ func (s *Store) DeleteObjectFavorite(ctx context.Context, profileID, bucket, key
 		return false, errors.New("key is required")
 	}
 
-	affected, err := s.exec(ctx, `
-		DELETE FROM object_favorites WHERE profile_id = ? AND bucket = ? AND object_key = ?
-	`, profileID, bucket, key)
-	if err != nil {
-		return false, err
+	res := s.db.WithContext(ctx).
+		Where("profile_id = ? AND bucket = ? AND object_key = ?", profileID, bucket, key).
+		Delete(&objectFavoriteRow{})
+	if res.Error != nil {
+		return false, res.Error
 	}
-	return affected > 0, nil
+	return res.RowsAffected > 0, nil
 }

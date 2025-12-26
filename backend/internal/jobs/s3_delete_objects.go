@@ -165,9 +165,9 @@ func (m *Manager) emitJobLogStdout(jobID, level, message string) {
 	}
 	logging.WriteJSONLineStdout(map[string]any{
 		"ts":        time.Now().UTC().Format(time.RFC3339Nano),
-		"type":      "job.log",
+		"event":     "job.log",
 		"component": "job",
-		"jobId":     jobID,
+		"job_id":    jobID,
 		"level":     level,
 		"msg":       message,
 	})

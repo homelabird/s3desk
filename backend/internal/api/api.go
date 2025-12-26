@@ -27,6 +27,7 @@ type Dependencies struct {
 func New(dep Dependencies) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 	r.Use(securityHeaders)

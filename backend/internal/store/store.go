@@ -2,10 +2,8 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -65,16 +63,20 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		}
 	}
 
-	_, err := s.exec(ctx, `
-		INSERT INTO profiles (
-			id, name, endpoint, region, force_path_style, tls_insecure_skip_verify,
-			access_key_id, secret_access_key, session_token, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		id, req.Name, req.Endpoint, req.Region, boolToInt(req.ForcePathStyle), boolToInt(req.TLSInsecureSkipVerify),
-		accessKeyID, secretAccessKey, nullableString(sessionToken), now, now,
-	)
-	if err != nil {
+	row := profileRow{
+		ID:                    id,
+		Name:                  req.Name,
+		Endpoint:              req.Endpoint,
+		Region:                req.Region,
+		ForcePathStyle:        boolToInt(req.ForcePathStyle),
+		TLSInsecureSkipVerify: boolToInt(req.TLSInsecureSkipVerify),
+		AccessKeyID:           accessKeyID,
+		SecretAccessKey:       secretAccessKey,
+		SessionToken:          sessionToken,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return models.Profile{}, err
 	}
 
@@ -95,36 +97,18 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 		return 0, nil
 	}
 
-	rows, err := s.query(ctx, `SELECT id, access_key_id, secret_access_key, session_token FROM profiles`)
-	if err != nil {
+	var profiles []profileRow
+	if err := s.db.WithContext(ctx).
+		Select("id", "access_key_id", "secret_access_key", "session_token").
+		Find(&profiles).Error; err != nil {
 		return 0, err
-	}
-	defer rows.Close()
-
-	type row struct {
-		id      string
-		ak      string
-		sk      string
-		session sql.NullString
-	}
-	profiles := make([]row, 0)
-
-	for rows.Next() {
-		var r row
-		if err := rows.Scan(&r.id, &r.ak, &r.sk, &r.session); err != nil {
-			return updated, err
-		}
-		profiles = append(profiles, r)
-	}
-	if err := rows.Err(); err != nil {
-		return updated, err
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	for _, p := range profiles {
-		ak := p.ak
-		sk := p.sk
-		session := p.session
+		ak := p.AccessKeyID
+		sk := p.SecretAccessKey
+		session := p.SessionToken
 
 		needsUpdate := false
 
@@ -144,27 +128,28 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 			sk = enc
 			needsUpdate = true
 		}
-		if session.Valid && session.String != "" && !strings.HasPrefix(session.String, encryptedPrefix) {
-			enc, err := s.crypto.encryptString(session.String)
+		if session != nil && *session != "" && !strings.HasPrefix(*session, encryptedPrefix) {
+			enc, err := s.crypto.encryptString(*session)
 			if err != nil {
 				return updated, err
 			}
-			session.String = enc
+			*session = enc
 			needsUpdate = true
 		}
 
 		if !needsUpdate {
 			continue
 		}
-		var sessionPtr *string
-		if session.Valid {
-			sessionPtr = &session.String
+		updates := map[string]any{
+			"access_key_id":     ak,
+			"secret_access_key": sk,
+			"session_token":     session,
+			"updated_at":        now,
 		}
-		if _, err := s.exec(ctx, `
-			UPDATE profiles
-			SET access_key_id=?, secret_access_key=?, session_token=?, updated_at=?
-			WHERE id=?
-		`, ak, sk, nullableString(sessionPtr), now, p.id); err != nil {
+		if err := s.db.WithContext(ctx).
+			Model(&profileRow{}).
+			Where("id = ?", p.ID).
+			Updates(updates).Error; err != nil {
 			return updated, err
 		}
 		updated++
@@ -174,109 +159,80 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 }
 
 func (s *Store) ListProfiles(ctx context.Context) ([]models.Profile, error) {
-	rows, err := s.query(ctx, `
-		SELECT id, name, endpoint, region, force_path_style, tls_insecure_skip_verify, created_at, updated_at
-		FROM profiles
-		ORDER BY created_at DESC
-	`)
-	if err != nil {
+	var rows []profileRow
+	if err := s.db.WithContext(ctx).
+		Select("id", "name", "endpoint", "region", "force_path_style", "tls_insecure_skip_verify", "created_at", "updated_at").
+		Order("created_at DESC").
+		Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	out := make([]models.Profile, 0)
-	for rows.Next() {
-		var (
-			profile models.Profile
-			force   int
-			tls     int
-		)
-		if err := rows.Scan(
-			&profile.ID,
-			&profile.Name,
-			&profile.Endpoint,
-			&profile.Region,
-			&force,
-			&tls,
-			&profile.CreatedAt,
-			&profile.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		profile.ForcePathStyle = force != 0
-		profile.TLSInsecureSkipVerify = tls != 0
-		out = append(out, profile)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	out := make([]models.Profile, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, models.Profile{
+			ID:                    row.ID,
+			Name:                  row.Name,
+			Endpoint:              row.Endpoint,
+			Region:                row.Region,
+			ForcePathStyle:        row.ForcePathStyle != 0,
+			TLSInsecureSkipVerify: row.TLSInsecureSkipVerify != 0,
+			CreatedAt:             row.CreatedAt,
+			UpdatedAt:             row.UpdatedAt,
+		})
 	}
 	return out, nil
 }
 
 func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profile, bool, error) {
-	var (
-		profile models.Profile
-		force   int
-		tls     int
-	)
-	err := s.queryRow(ctx, `
-		SELECT id, name, endpoint, region, force_path_style, tls_insecure_skip_verify, created_at, updated_at
-		FROM profiles
-		WHERE id = ?
-	`, profileID).Scan(
-		&profile.ID,
-		&profile.Name,
-		&profile.Endpoint,
-		&profile.Region,
-		&force,
-		&tls,
-		&profile.CreatedAt,
-		&profile.UpdatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var row profileRow
+	if err := s.db.WithContext(ctx).
+		Select("id", "name", "endpoint", "region", "force_path_style", "tls_insecure_skip_verify", "created_at", "updated_at").
+		Where("id = ?", profileID).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Profile{}, false, nil
 		}
 		return models.Profile{}, false, err
 	}
-	profile.ForcePathStyle = force != 0
-	profile.TLSInsecureSkipVerify = tls != 0
+	profile := models.Profile{
+		ID:                    row.ID,
+		Name:                  row.Name,
+		Endpoint:              row.Endpoint,
+		Region:                row.Region,
+		ForcePathStyle:        row.ForcePathStyle != 0,
+		TLSInsecureSkipVerify: row.TLSInsecureSkipVerify != 0,
+		CreatedAt:             row.CreatedAt,
+		UpdatedAt:             row.UpdatedAt,
+	}
 	return profile, true, nil
 }
 
 func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models.ProfileSecrets, bool, error) {
-	var (
-		profile models.ProfileSecrets
-		session sql.NullString
-		force   int
-		tls     int
-	)
-	err := s.queryRow(ctx, `
-		SELECT id, name, endpoint, region, force_path_style, tls_insecure_skip_verify,
-		       access_key_id, secret_access_key, session_token
-		FROM profiles
-		WHERE id = ?
-	`, profileID).Scan(
-		&profile.ID,
-		&profile.Name,
-		&profile.Endpoint,
-		&profile.Region,
-		&force,
-		&tls,
-		&profile.AccessKeyID,
-		&profile.SecretAccessKey,
-		&session,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var row profileRow
+	if err := s.db.WithContext(ctx).
+		Select("id", "name", "endpoint", "region", "force_path_style", "tls_insecure_skip_verify", "access_key_id", "secret_access_key", "session_token").
+		Where("id = ?", profileID).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.ProfileSecrets{}, false, nil
 		}
 		return models.ProfileSecrets{}, false, err
 	}
-	profile.ForcePathStyle = force != 0
-	profile.TLSInsecureSkipVerify = tls != 0
 
-	if strings.HasPrefix(profile.AccessKeyID, encryptedPrefix) || strings.HasPrefix(profile.SecretAccessKey, encryptedPrefix) || (session.Valid && strings.HasPrefix(session.String, encryptedPrefix)) {
+	profile := models.ProfileSecrets{
+		ID:                    row.ID,
+		Name:                  row.Name,
+		Endpoint:              row.Endpoint,
+		Region:                row.Region,
+		ForcePathStyle:        row.ForcePathStyle != 0,
+		TLSInsecureSkipVerify: row.TLSInsecureSkipVerify != 0,
+		AccessKeyID:           row.AccessKeyID,
+		SecretAccessKey:       row.SecretAccessKey,
+	}
+
+	if strings.HasPrefix(profile.AccessKeyID, encryptedPrefix) ||
+		strings.HasPrefix(profile.SecretAccessKey, encryptedPrefix) ||
+		(row.SessionToken != nil && strings.HasPrefix(*row.SessionToken, encryptedPrefix)) {
 		if s.crypto == nil {
 			return models.ProfileSecrets{}, false, ErrEncryptedCredentials
 		}
@@ -289,16 +245,17 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 		if err != nil {
 			return models.ProfileSecrets{}, false, err
 		}
-		if session.Valid {
-			session.String, err = s.crypto.decryptString(session.String)
+		if row.SessionToken != nil {
+			dec, err := s.crypto.decryptString(*row.SessionToken)
 			if err != nil {
 				return models.ProfileSecrets{}, false, err
 			}
+			row.SessionToken = &dec
 		}
 	}
 
-	if session.Valid {
-		profile.SessionToken = &session.String
+	if row.SessionToken != nil {
+		profile.SessionToken = row.SessionToken
 	}
 
 	tlsCfg, updatedAt, found, err := s.GetProfileTLSConfig(ctx, profileID)
@@ -377,17 +334,21 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = s.exec(ctx, `
-		UPDATE profiles
-		SET name=?, endpoint=?, region=?, force_path_style=?, tls_insecure_skip_verify=?,
-		    access_key_id=?, secret_access_key=?, session_token=?, updated_at=?
-		WHERE id=?
-	`,
-		name, endpoint, region, boolToInt(forcePathStyle), boolToInt(tlsInsecureSkipVerify),
-		accessKeyID, secretAccessKey, nullableString(sessionToken), now,
-		profileID,
-	)
-	if err != nil {
+	updates := map[string]any{
+		"name":                     name,
+		"endpoint":                 endpoint,
+		"region":                   region,
+		"force_path_style":         boolToInt(forcePathStyle),
+		"tls_insecure_skip_verify": boolToInt(tlsInsecureSkipVerify),
+		"access_key_id":            accessKeyID,
+		"secret_access_key":        secretAccessKey,
+		"session_token":            sessionToken,
+		"updated_at":               now,
+	}
+	if err := s.db.WithContext(ctx).
+		Model(&profileRow{}).
+		Where("id = ?", profileID).
+		Updates(updates).Error; err != nil {
 		return models.Profile{}, true, err
 	}
 
@@ -399,11 +360,13 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 }
 
 func (s *Store) DeleteProfile(ctx context.Context, profileID string) (bool, error) {
-	affected, err := s.exec(ctx, `DELETE FROM profiles WHERE id = ?`, profileID)
-	if err != nil {
-		return false, err
+	res := s.db.WithContext(ctx).
+		Where("id = ?", profileID).
+		Delete(&profileRow{})
+	if res.Error != nil {
+		return false, res.Error
 	}
-	return affected > 0, nil
+	return res.RowsAffected > 0, nil
 }
 
 type CreateJobInput struct {
@@ -420,11 +383,15 @@ func (s *Store) CreateJob(ctx context.Context, profileID string, in CreateJobInp
 		return models.Job{}, err
 	}
 
-	_, err = s.exec(ctx, `
-		INSERT INTO jobs (id, profile_id, type, status, payload_json, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, profileID, in.Type, string(models.JobStatusQueued), string(payloadJSON), now)
-	if err != nil {
+	row := jobRow{
+		ID:          id,
+		ProfileID:   profileID,
+		Type:        in.Type,
+		Status:      string(models.JobStatusQueued),
+		PayloadJSON: string(payloadJSON),
+		CreatedAt:   now,
+	}
+	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return models.Job{}, err
 	}
 
@@ -453,35 +420,18 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 		limit = 200
 	}
 
-	args := []any{profileID}
-	where := "WHERE profile_id = ?"
+	query := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Where("profile_id = ?", profileID)
 	if f.Status != nil {
-		where += " AND status = ?"
-		args = append(args, string(*f.Status))
+		query = query.Where("status = ?", string(*f.Status))
 	}
 	if f.Type != nil && *f.Type != "" {
-		where += " AND type = ?"
-		args = append(args, *f.Type)
+		query = query.Where("type = ?", *f.Type)
 	}
 	if f.Cursor != nil && *f.Cursor != "" {
-		where += " AND id < ?"
-		args = append(args, *f.Cursor)
+		query = query.Where("id < ?", *f.Cursor)
 	}
-
-	query := fmt.Sprintf(`
-		SELECT id, type, status, payload_json, progress_json, error, created_at, started_at, finished_at
-		FROM jobs
-		%s
-		ORDER BY id DESC
-		LIMIT ?
-	`, where)
-	args = append(args, limit+1)
-
-	rows, err := s.query(ctx, query, args...)
-	if err != nil {
-		return models.JobsListResponse{}, err
-	}
-	defer rows.Close()
 
 	resp := models.JobsListResponse{
 		Items: make([]models.Job, 0),
@@ -490,51 +440,40 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 		jobIDs   []string
 		jobCount int
 	)
+	var rows []jobRow
+	if err := query.
+		Order("id DESC").
+		Limit(limit + 1).
+		Find(&rows).Error; err != nil {
+		return models.JobsListResponse{}, err
+	}
 
-	for rows.Next() {
-		var (
-			job       models.Job
-			statusStr string
-			payload   string
-			progress  sql.NullString
-			errMsg    sql.NullString
-			startedAt sql.NullString
-			finished  sql.NullString
-		)
-		if err := rows.Scan(
-			&job.ID,
-			&job.Type,
-			&statusStr,
-			&payload,
-			&progress,
-			&errMsg,
-			&job.CreatedAt,
-			&startedAt,
-			&finished,
-		); err != nil {
+	for _, row := range rows {
+		job := models.Job{
+			ID:        row.ID,
+			Type:      row.Type,
+			Status:    models.JobStatus(row.Status),
+			Payload:   make(map[string]any),
+			CreatedAt: row.CreatedAt,
+		}
+		if err := json.Unmarshal([]byte(row.PayloadJSON), &job.Payload); err != nil {
 			return models.JobsListResponse{}, err
 		}
-
-		job.Status = models.JobStatus(statusStr)
-		job.Payload = make(map[string]any)
-		if err := json.Unmarshal([]byte(payload), &job.Payload); err != nil {
-			return models.JobsListResponse{}, err
-		}
-		if progress.Valid && progress.String != "" {
+		if row.ProgressJSON != nil && *row.ProgressJSON != "" {
 			var jp models.JobProgress
-			if err := json.Unmarshal([]byte(progress.String), &jp); err != nil {
+			if err := json.Unmarshal([]byte(*row.ProgressJSON), &jp); err != nil {
 				return models.JobsListResponse{}, err
 			}
 			job.Progress = &jp
 		}
-		if errMsg.Valid {
-			job.Error = &errMsg.String
+		if row.Error != nil {
+			job.Error = row.Error
 		}
-		if startedAt.Valid {
-			job.StartedAt = &startedAt.String
+		if row.StartedAt != nil {
+			job.StartedAt = row.StartedAt
 		}
-		if finished.Valid {
-			job.FinishedAt = &finished.String
+		if row.FinishedAt != nil {
+			job.FinishedAt = row.FinishedAt
 		}
 
 		jobCount++
@@ -542,9 +481,6 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 			resp.Items = append(resp.Items, job)
 			jobIDs = append(jobIDs, job.ID)
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return models.JobsListResponse{}, err
 	}
 
 	if len(jobIDs) == limit && jobCount > limit {
@@ -555,68 +491,54 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 }
 
 func (s *Store) GetJob(ctx context.Context, profileID, jobID string) (models.Job, bool, error) {
-	var (
-		job       models.Job
-		statusStr string
-		payload   string
-		progress  sql.NullString
-		errMsg    sql.NullString
-		startedAt sql.NullString
-		finished  sql.NullString
-	)
-	err := s.queryRow(ctx, `
-		SELECT id, type, status, payload_json, progress_json, error, created_at, started_at, finished_at
-		FROM jobs
-		WHERE profile_id = ? AND id = ?
-	`, profileID, jobID).Scan(
-		&job.ID,
-		&job.Type,
-		&statusStr,
-		&payload,
-		&progress,
-		&errMsg,
-		&job.CreatedAt,
-		&startedAt,
-		&finished,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var row jobRow
+	if err := s.db.WithContext(ctx).
+		Where("profile_id = ? AND id = ?", profileID, jobID).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Job{}, false, nil
 		}
 		return models.Job{}, false, err
 	}
 
-	job.Status = models.JobStatus(statusStr)
-	job.Payload = make(map[string]any)
-	if err := json.Unmarshal([]byte(payload), &job.Payload); err != nil {
+	job := models.Job{
+		ID:        row.ID,
+		Type:      row.Type,
+		Status:    models.JobStatus(row.Status),
+		Payload:   make(map[string]any),
+		CreatedAt: row.CreatedAt,
+	}
+	if err := json.Unmarshal([]byte(row.PayloadJSON), &job.Payload); err != nil {
 		return models.Job{}, false, err
 	}
-	if progress.Valid && progress.String != "" {
+	if row.ProgressJSON != nil && *row.ProgressJSON != "" {
 		var jp models.JobProgress
-		if err := json.Unmarshal([]byte(progress.String), &jp); err != nil {
+		if err := json.Unmarshal([]byte(*row.ProgressJSON), &jp); err != nil {
 			return models.Job{}, false, err
 		}
 		job.Progress = &jp
 	}
-	if errMsg.Valid {
-		job.Error = &errMsg.String
+	if row.Error != nil {
+		job.Error = row.Error
 	}
-	if startedAt.Valid {
-		job.StartedAt = &startedAt.String
+	if row.StartedAt != nil {
+		job.StartedAt = row.StartedAt
 	}
-	if finished.Valid {
-		job.FinishedAt = &finished.String
+	if row.FinishedAt != nil {
+		job.FinishedAt = row.FinishedAt
 	}
 
 	return job, true, nil
 }
 
 func (s *Store) DeleteJob(ctx context.Context, profileID, jobID string) (bool, error) {
-	affected, err := s.exec(ctx, `DELETE FROM jobs WHERE profile_id = ? AND id = ?`, profileID, jobID)
-	if err != nil {
-		return false, err
+	res := s.db.WithContext(ctx).
+		Where("profile_id = ? AND id = ?", profileID, jobID).
+		Delete(&jobRow{})
+	if res.Error != nil {
+		return false, res.Error
 	}
-	return affected > 0, nil
+	return res.RowsAffected > 0, nil
 }
 
 func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano string, limit int) ([]string, error) {
@@ -627,221 +549,153 @@ func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano 
 		limit = 1000
 	}
 
-	rows, err := s.query(ctx, `
-		SELECT id
-		FROM jobs
-		WHERE finished_at IS NOT NULL
-		  AND finished_at < ?
-		  AND status IN (?, ?, ?)
-		ORDER BY finished_at ASC
-		LIMIT ?
-	`,
-		beforeRFC3339Nano,
-		string(models.JobStatusSucceeded),
-		string(models.JobStatusFailed),
-		string(models.JobStatusCanceled),
-		limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	ids := make([]string, 0, limit)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		if id == "" {
-			continue
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
+	if err := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Select("id").
+		Where("finished_at IS NOT NULL").
+		Where("finished_at < ?", beforeRFC3339Nano).
+		Where("status IN ?", []string{
+			string(models.JobStatusSucceeded),
+			string(models.JobStatusFailed),
+			string(models.JobStatusCanceled),
+		}).
+		Order("finished_at ASC").
+		Limit(limit).
+		Pluck("id", &ids).Error; err != nil {
 		return nil, err
 	}
 	if len(ids) == 0 {
 		return nil, nil
 	}
 
-	tx := s.db.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return nil, tx.Error
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	for _, id := range ids {
-		if err := tx.Exec(`DELETE FROM jobs WHERE id = ?`, id).Error; err != nil {
-			return nil, err
-		}
-	}
-	if err := tx.Commit().Error; err != nil {
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Where("id IN ?", ids).Delete(&jobRow{}).Error
+	}); err != nil {
 		return nil, err
 	}
+
 	return ids, nil
 }
 
 func (s *Store) ListJobIDsByProfile(ctx context.Context, profileID string) ([]string, error) {
-	rows, err := s.query(ctx, `SELECT id FROM jobs WHERE profile_id = ? ORDER BY id ASC`, profileID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
+	if err := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Select("id").
+		Where("profile_id = ?", profileID).
+		Order("id ASC").
+		Pluck("id", &ids).Error; err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 func (s *Store) ListJobIDsByProfileAndStatus(ctx context.Context, profileID string, status models.JobStatus) ([]string, error) {
-	rows, err := s.query(ctx, `SELECT id FROM jobs WHERE profile_id = ? AND status = ? ORDER BY id ASC`, profileID, string(status))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
+	if err := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Select("id").
+		Where("profile_id = ? AND status = ?", profileID, string(status)).
+		Order("id ASC").
+		Pluck("id", &ids).Error; err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 func (s *Store) JobExists(ctx context.Context, jobID string) (bool, error) {
-	var one int
-	err := s.queryRow(ctx, `SELECT 1 FROM jobs WHERE id = ? LIMIT 1`, jobID).Scan(&one)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Where("id = ?", jobID).
+		Count(&count).Error; err != nil {
 		return false, err
 	}
-	return true, nil
+	return count > 0, nil
 }
 
 func (s *Store) GetJobByID(ctx context.Context, jobID string) (profileID string, job models.Job, ok bool, err error) {
-	var (
-		statusStr string
-		payload   string
-		progress  sql.NullString
-		errMsg    sql.NullString
-		startedAt sql.NullString
-		finished  sql.NullString
-	)
-	err = s.queryRow(ctx, `
-		SELECT profile_id, id, type, status, payload_json, progress_json, error, created_at, started_at, finished_at
-		FROM jobs
-		WHERE id = ?
-	`, jobID).Scan(
-		&profileID,
-		&job.ID,
-		&job.Type,
-		&statusStr,
-		&payload,
-		&progress,
-		&errMsg,
-		&job.CreatedAt,
-		&startedAt,
-		&finished,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var row jobRow
+	if err := s.db.WithContext(ctx).
+		Where("id = ?", jobID).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", models.Job{}, false, nil
 		}
 		return "", models.Job{}, false, err
 	}
 
-	job.Status = models.JobStatus(statusStr)
-	job.Payload = make(map[string]any)
-	if err := json.Unmarshal([]byte(payload), &job.Payload); err != nil {
+	profileID = row.ProfileID
+	job = models.Job{
+		ID:        row.ID,
+		Type:      row.Type,
+		Status:    models.JobStatus(row.Status),
+		Payload:   make(map[string]any),
+		CreatedAt: row.CreatedAt,
+	}
+	if err := json.Unmarshal([]byte(row.PayloadJSON), &job.Payload); err != nil {
 		return "", models.Job{}, false, err
 	}
-	if progress.Valid && progress.String != "" {
+	if row.ProgressJSON != nil && *row.ProgressJSON != "" {
 		var jp models.JobProgress
-		if err := json.Unmarshal([]byte(progress.String), &jp); err != nil {
+		if err := json.Unmarshal([]byte(*row.ProgressJSON), &jp); err != nil {
 			return "", models.Job{}, false, err
 		}
 		job.Progress = &jp
 	}
-	if errMsg.Valid {
-		job.Error = &errMsg.String
+	if row.Error != nil {
+		job.Error = row.Error
 	}
-	if startedAt.Valid {
-		job.StartedAt = &startedAt.String
+	if row.StartedAt != nil {
+		job.StartedAt = row.StartedAt
 	}
-	if finished.Valid {
-		job.FinishedAt = &finished.String
+	if row.FinishedAt != nil {
+		job.FinishedAt = row.FinishedAt
 	}
 
 	return profileID, job, true, nil
 }
 
 func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string) error {
-	var (
-		progressJSON any
-	)
+	var progressJSON *string
 	if progress != nil {
 		bytes, err := json.Marshal(progress)
 		if err != nil {
 			return err
 		}
-		progressJSON = string(bytes)
-	} else {
-		progressJSON = nil
+		val := string(bytes)
+		progressJSON = &val
 	}
 
-	_, err := s.exec(ctx, `
-		UPDATE jobs
-		SET status=?,
-		    started_at=COALESCE(?, started_at),
-		    finished_at=COALESCE(?, finished_at),
-		    progress_json=COALESCE(?, progress_json),
-		    error=?
-		WHERE id=?
-	`,
-		string(status),
-		nullableString(startedAt),
-		nullableString(finishedAt),
-		progressJSON,
-		nullableString(errMsg),
-		jobID,
-	)
-	return err
+	updates := map[string]any{
+		"status": string(status),
+		"error":  errMsg,
+	}
+	if startedAt != nil {
+		updates["started_at"] = *startedAt
+	}
+	if finishedAt != nil {
+		updates["finished_at"] = *finishedAt
+	}
+	if progressJSON != nil {
+		updates["progress_json"] = *progressJSON
+	}
+
+	return s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Where("id = ?", jobID).
+		Updates(updates).Error
 }
 
 func (s *Store) ListJobIDsByStatus(ctx context.Context, status models.JobStatus) ([]string, error) {
-	rows, err := s.query(ctx, `SELECT id FROM jobs WHERE status = ? ORDER BY id ASC`, string(status))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
+	if err := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Select("id").
+		Where("status = ?", string(status)).
+		Order("id ASC").
+		Pluck("id", &ids).Error; err != nil {
 		return nil, err
 	}
 	return ids, nil
@@ -849,12 +703,15 @@ func (s *Store) ListJobIDsByStatus(ctx context.Context, status models.JobStatus)
 
 func (s *Store) MarkRunningJobsFailed(ctx context.Context, errorMessage string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := s.exec(ctx, `
-		UPDATE jobs
-		SET status=?, error=?, finished_at=?
-		WHERE status=?
-	`, string(models.JobStatusFailed), errorMessage, now, string(models.JobStatusRunning))
-	return err
+	updates := map[string]any{
+		"status":      string(models.JobStatusFailed),
+		"error":       errorMessage,
+		"finished_at": now,
+	}
+	return s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Where("status = ?", string(models.JobStatusRunning)).
+		Updates(updates).Error
 }
 
 type UploadSession struct {
@@ -871,11 +728,16 @@ func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, pref
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := ulid.Make().String()
 
-	_, err := s.exec(ctx, `
-		INSERT INTO upload_sessions (id, profile_id, bucket, prefix, staging_dir, expires_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, id, profileID, bucket, prefix, stagingDir, expiresAt, now)
-	if err != nil {
+	row := uploadSessionRow{
+		ID:         id,
+		ProfileID:  profileID,
+		Bucket:     bucket,
+		Prefix:     prefix,
+		StagingDir: stagingDir,
+		ExpiresAt:  expiresAt,
+		CreatedAt:  now,
+	}
+	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return UploadSession{}, err
 	}
 	return UploadSession{
@@ -890,48 +752,42 @@ func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, pref
 }
 
 func (s *Store) SetUploadSessionStagingDir(ctx context.Context, profileID, uploadID, stagingDir string) error {
-	_, err := s.exec(ctx, `
-		UPDATE upload_sessions
-		SET staging_dir = ?
-		WHERE profile_id = ? AND id = ?
-	`, stagingDir, profileID, uploadID)
-	return err
+	return s.db.WithContext(ctx).
+		Model(&uploadSessionRow{}).
+		Where("profile_id = ? AND id = ?", profileID, uploadID).
+		Update("staging_dir", stagingDir).Error
 }
 
 func (s *Store) GetUploadSession(ctx context.Context, profileID, uploadID string) (UploadSession, bool, error) {
-	var us UploadSession
-	err := s.queryRow(ctx, `
-		SELECT id, profile_id, bucket, prefix, staging_dir, expires_at, created_at
-		FROM upload_sessions
-		WHERE profile_id = ? AND id = ?
-	`, profileID, uploadID).Scan(
-		&us.ID,
-		&us.ProfileID,
-		&us.Bucket,
-		&us.Prefix,
-		&us.StagingDir,
-		&us.ExpiresAt,
-		&us.CreatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var row uploadSessionRow
+	if err := s.db.WithContext(ctx).
+		Where("profile_id = ? AND id = ?", profileID, uploadID).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return UploadSession{}, false, nil
 		}
 		return UploadSession{}, false, err
 	}
-	return us, true, nil
+	return UploadSession{
+		ID:         row.ID,
+		ProfileID:  row.ProfileID,
+		Bucket:     row.Bucket,
+		Prefix:     row.Prefix,
+		StagingDir: row.StagingDir,
+		ExpiresAt:  row.ExpiresAt,
+		CreatedAt:  row.CreatedAt,
+	}, true, nil
 }
 
 func (s *Store) UploadSessionExists(ctx context.Context, uploadID string) (bool, error) {
-	var one int
-	err := s.queryRow(ctx, `SELECT 1 FROM upload_sessions WHERE id = ? LIMIT 1`, uploadID).Scan(&one)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Model(&uploadSessionRow{}).
+		Where("id = ?", uploadID).
+		Count(&count).Error; err != nil {
 		return false, err
 	}
-	return true, nil
+	return count > 0, nil
 }
 
 func (s *Store) ListUploadSessionsByProfile(ctx context.Context, profileID string, limit int) ([]UploadSession, error) {
@@ -942,38 +798,38 @@ func (s *Store) ListUploadSessionsByProfile(ctx context.Context, profileID strin
 		limit = 10_000
 	}
 
-	rows, err := s.query(ctx, `
-		SELECT id, profile_id, bucket, prefix, staging_dir, expires_at, created_at
-		FROM upload_sessions
-		WHERE profile_id = ?
-		ORDER BY created_at ASC
-		LIMIT ?
-	`, profileID, limit)
-	if err != nil {
+	var rows []uploadSessionRow
+	if err := s.db.WithContext(ctx).
+		Where("profile_id = ?", profileID).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	sessions := make([]UploadSession, 0)
-	for rows.Next() {
-		var us UploadSession
-		if err := rows.Scan(&us.ID, &us.ProfileID, &us.Bucket, &us.Prefix, &us.StagingDir, &us.ExpiresAt, &us.CreatedAt); err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, us)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	sessions := make([]UploadSession, 0, len(rows))
+	for _, row := range rows {
+		sessions = append(sessions, UploadSession{
+			ID:         row.ID,
+			ProfileID:  row.ProfileID,
+			Bucket:     row.Bucket,
+			Prefix:     row.Prefix,
+			StagingDir: row.StagingDir,
+			ExpiresAt:  row.ExpiresAt,
+			CreatedAt:  row.CreatedAt,
+		})
 	}
 	return sessions, nil
 }
 
 func (s *Store) DeleteUploadSession(ctx context.Context, profileID, uploadID string) (bool, error) {
-	affected, err := s.exec(ctx, `DELETE FROM upload_sessions WHERE profile_id = ? AND id = ?`, profileID, uploadID)
-	if err != nil {
-		return false, err
+	res := s.db.WithContext(ctx).
+		Where("profile_id = ? AND id = ?", profileID, uploadID).
+		Delete(&uploadSessionRow{})
+	if res.Error != nil {
+		return false, res.Error
 	}
-	return affected > 0, nil
+	return res.RowsAffected > 0, nil
 }
 
 func (s *Store) ListExpiredUploadSessions(ctx context.Context, nowRFC3339Nano string, limit int) ([]UploadSession, error) {
@@ -984,28 +840,26 @@ func (s *Store) ListExpiredUploadSessions(ctx context.Context, nowRFC3339Nano st
 		limit = 1000
 	}
 
-	rows, err := s.query(ctx, `
-		SELECT id, profile_id, bucket, prefix, staging_dir, expires_at, created_at
-		FROM upload_sessions
-		WHERE expires_at < ?
-		ORDER BY expires_at ASC
-		LIMIT ?
-	`, nowRFC3339Nano, limit)
-	if err != nil {
+	var rows []uploadSessionRow
+	if err := s.db.WithContext(ctx).
+		Where("expires_at < ?", nowRFC3339Nano).
+		Order("expires_at ASC").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	sessions := make([]UploadSession, 0)
-	for rows.Next() {
-		var us UploadSession
-		if err := rows.Scan(&us.ID, &us.ProfileID, &us.Bucket, &us.Prefix, &us.StagingDir, &us.ExpiresAt, &us.CreatedAt); err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, us)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	sessions := make([]UploadSession, 0, len(rows))
+	for _, row := range rows {
+		sessions = append(sessions, UploadSession{
+			ID:         row.ID,
+			ProfileID:  row.ProfileID,
+			Bucket:     row.Bucket,
+			Prefix:     row.Prefix,
+			StagingDir: row.StagingDir,
+			ExpiresAt:  row.ExpiresAt,
+			CreatedAt:  row.CreatedAt,
+		})
 	}
 	return sessions, nil
 }
@@ -1015,11 +869,4 @@ func boolToInt(v bool) int {
 		return 1
 	}
 	return 0
-}
-
-func nullableString(s *string) any {
-	if s == nil {
-		return nil
-	}
-	return *s
 }

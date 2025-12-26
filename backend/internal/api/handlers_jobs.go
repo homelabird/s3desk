@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"object-storage/internal/jobs"
+	"object-storage/internal/logging"
 	"object-storage/internal/models"
 	"object-storage/internal/store"
 	"object-storage/internal/ws"
@@ -160,6 +161,14 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, jobs.ErrJobQueueFull) {
 			_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
 			stats := s.jobs.QueueStats()
+			logging.ErrorFields("job queue full", map[string]any{
+				"event":          "job.queue_full",
+				"job_id":         job.ID,
+				"job_type":       req.Type,
+				"profile_id":     profileID,
+				"queue_depth":    stats.Depth,
+				"queue_capacity": stats.Capacity,
+			})
 			w.Header().Set("Retry-After", "2")
 			writeError(
 				w,
@@ -176,6 +185,12 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
+	logging.InfoFields("job queued", map[string]any{
+		"event":      "job.queued",
+		"job_id":     job.ID,
+		"job_type":   req.Type,
+		"profile_id": profileID,
+	})
 	writeJSON(w, http.StatusCreated, job)
 }
 

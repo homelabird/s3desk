@@ -2,11 +2,13 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"strings"
 	"time"
 	"unicode"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"object-storage/internal/models"
 )
@@ -43,14 +45,15 @@ func (s *Store) ClearObjectIndex(ctx context.Context, profileID, bucket, prefix 
 	bucket = strings.TrimSpace(bucket)
 	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
 
-	if prefix == "" {
-		_, err := s.exec(ctx, `DELETE FROM object_index WHERE profile_id=? AND bucket=?`, profileID, bucket)
-		return err
+	query := s.db.WithContext(ctx).
+		Where("profile_id = ? AND bucket = ?", profileID, bucket)
+
+	if prefix != "" {
+		pat := escapeLike(prefix) + "%"
+		query = query.Where(`object_key LIKE ? ESCAPE '\'`, pat)
 	}
 
-	pat := escapeLike(prefix) + "%"
-	_, err := s.exec(ctx, `DELETE FROM object_index WHERE profile_id=? AND bucket=? AND object_key LIKE ? ESCAPE '\'`, profileID, bucket, pat)
-	return err
+	return query.Delete(&objectIndexRow{}).Error
 }
 
 func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket string, entries []ObjectIndexEntry, indexedAt string) error {
@@ -61,29 +64,40 @@ func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket st
 		indexedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 
+	rows := make([]objectIndexRow, 0, len(entries))
+	for _, e := range entries {
+		if e.Key == "" {
+			continue
+		}
+		rows = append(rows, objectIndexRow{
+			ProfileID:    profileID,
+			Bucket:       bucket,
+			ObjectKey:    e.Key,
+			Size:         e.Size,
+			ETag:         nonEmptyPtr(e.ETag),
+			LastModified: nonEmptyPtr(e.LastModified),
+			IndexedAt:    indexedAt,
+		})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
 	tx := s.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	query := `
-		INSERT INTO object_index (profile_id, bucket, object_key, size, etag, last_modified, indexed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(profile_id, bucket, object_key) DO UPDATE SET
-			size=excluded.size,
-			etag=excluded.etag,
-			last_modified=excluded.last_modified,
-			indexed_at=excluded.indexed_at
-	`
-
-	for _, e := range entries {
-		if e.Key == "" {
-			continue
-		}
-		if err := tx.Exec(query, profileID, bucket, e.Key, e.Size, nullableString(nonEmptyPtr(e.ETag)), nullableString(nonEmptyPtr(e.LastModified)), indexedAt).Error; err != nil {
-			return err
-		}
+	if err := tx.Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "profile_id"},
+			{Name: "bucket"},
+			{Name: "object_key"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{"size", "etag", "last_modified", "indexed_at"}),
+	}).CreateInBatches(rows, 500).Error; err != nil {
+		return err
 	}
 
 	return tx.Commit().Error
@@ -126,66 +140,51 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 		tokens = []string{in.Query}
 	}
 
-	var exists int
-	if err := s.queryRow(ctx, `SELECT 1 FROM object_index WHERE profile_id=? AND bucket=? LIMIT 1`, profileID, in.Bucket).Scan(&exists); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var probe objectIndexRow
+	if err := s.db.WithContext(ctx).
+		Select("object_key").
+		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket).
+		Limit(1).
+		Take(&probe).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.SearchObjectsResponse{}, ErrObjectIndexNotFound
 		}
 		return models.SearchObjectsResponse{}, err
 	}
 
-	args := []any{profileID, in.Bucket}
-	where := `WHERE profile_id=? AND bucket=?`
+	query := s.db.WithContext(ctx).
+		Model(&objectIndexRow{}).
+		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket)
 	if in.Prefix != "" {
-		where += ` AND object_key LIKE ? ESCAPE '\'`
-		args = append(args, escapeLike(in.Prefix)+"%")
+		query = query.Where(`object_key LIKE ? ESCAPE '\'`, escapeLike(in.Prefix)+"%")
 	}
 	for _, tok := range tokens {
 		if tok == "" {
 			continue
 		}
-		where += ` AND object_key LIKE ? ESCAPE '\'`
-		args = append(args, "%"+escapeLike(tok)+"%")
+		query = query.Where(`object_key LIKE ? ESCAPE '\'`, "%"+escapeLike(tok)+"%")
 	}
 	if in.Extension != "" {
-		where += ` AND object_key LIKE ? ESCAPE '\'`
-		args = append(args, "%."+escapeLike(in.Extension))
+		query = query.Where(`object_key LIKE ? ESCAPE '\'`, "%."+escapeLike(in.Extension))
 	}
 	if in.MinSize != nil {
-		where += ` AND size >= ?`
-		args = append(args, *in.MinSize)
+		query = query.Where("size >= ?", *in.MinSize)
 	}
 	if in.MaxSize != nil {
-		where += ` AND size <= ?`
-		args = append(args, *in.MaxSize)
+		query = query.Where("size <= ?", *in.MaxSize)
 	}
 	if in.ModifiedAfter != "" || in.ModifiedBefore != "" {
-		where += ` AND last_modified IS NOT NULL`
+		query = query.Where("last_modified IS NOT NULL")
 		if in.ModifiedAfter != "" {
-			where += ` AND last_modified >= ?`
-			args = append(args, in.ModifiedAfter)
+			query = query.Where("last_modified >= ?", in.ModifiedAfter)
 		}
 		if in.ModifiedBefore != "" {
-			where += ` AND last_modified <= ?`
-			args = append(args, in.ModifiedBefore)
+			query = query.Where("last_modified <= ?", in.ModifiedBefore)
 		}
 	}
 	if in.Cursor != nil && *in.Cursor != "" {
-		where += ` AND object_key > ?`
-		args = append(args, *in.Cursor)
+		query = query.Where("object_key > ?", *in.Cursor)
 	}
-
-	rows, err := s.query(ctx, `
-		SELECT object_key, size, etag, last_modified
-		FROM object_index
-		`+where+`
-		ORDER BY object_key ASC
-		LIMIT ?
-	`, append(args, limit+1)...)
-	if err != nil {
-		return models.SearchObjectsResponse{}, err
-	}
-	defer rows.Close()
 
 	resp := models.SearchObjectsResponse{
 		Bucket: in.Bucket,
@@ -199,36 +198,33 @@ func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in Sear
 		lastKey string
 		hasMore bool
 	)
-	for rows.Next() {
-		var (
-			key          string
-			size         int64
-			etag         sql.NullString
-			lastModified sql.NullString
-		)
-		if err := rows.Scan(&key, &size, &etag, &lastModified); err != nil {
-			return models.SearchObjectsResponse{}, err
-		}
+	var rows []objectIndexRow
+	if err := query.
+		Select("object_key", "size", "etag", "last_modified").
+		Order("object_key ASC").
+		Limit(limit + 1).
+		Find(&rows).Error; err != nil {
+		return models.SearchObjectsResponse{}, err
+	}
+
+	for _, row := range rows {
 		count++
 		if count <= limit {
 			item := models.ObjectItem{
-				Key:  key,
-				Size: size,
+				Key:  row.ObjectKey,
+				Size: row.Size,
 			}
-			if etag.Valid {
-				item.ETag = etag.String
+			if row.ETag != nil {
+				item.ETag = *row.ETag
 			}
-			if lastModified.Valid {
-				item.LastModified = lastModified.String
+			if row.LastModified != nil {
+				item.LastModified = *row.LastModified
 			}
 			resp.Items = append(resp.Items, item)
-			lastKey = key
+			lastKey = row.ObjectKey
 		} else {
 			hasMore = true
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return models.SearchObjectsResponse{}, err
 	}
 
 	if hasMore && lastKey != "" {
@@ -253,72 +249,60 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 		sampleLimit = 100
 	}
 
-	var exists int
-	if err := s.queryRow(ctx, `SELECT 1 FROM object_index WHERE profile_id=? AND bucket=? LIMIT 1`, profileID, in.Bucket).Scan(&exists); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	base := s.db.WithContext(ctx).
+		Model(&objectIndexRow{}).
+		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket)
+	if in.Prefix != "" {
+		base = base.Where(`object_key LIKE ? ESCAPE '\'`, escapeLike(in.Prefix)+"%")
+	}
+
+	var probe objectIndexRow
+	if err := base.
+		Select("object_key").
+		Limit(1).
+		Take(&probe).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.ObjectIndexSummaryResponse{}, ErrObjectIndexNotFound
 		}
 		return models.ObjectIndexSummaryResponse{}, err
 	}
 
-	args := []any{profileID, in.Bucket}
-	where := `WHERE profile_id=? AND bucket=?`
-	if in.Prefix != "" {
-		where += ` AND object_key LIKE ? ESCAPE '\'`
-		args = append(args, escapeLike(in.Prefix)+"%")
+	var summary struct {
+		Count     int64   `gorm:"column:count"`
+		Total     int64   `gorm:"column:total_bytes"`
+		IndexedAt *string `gorm:"column:indexed_at"`
 	}
-
-	var (
-		count     int64
-		total     sql.NullInt64
-		indexedAt sql.NullString
-	)
-	if err := s.queryRow(ctx, `
-		SELECT COUNT(*), COALESCE(SUM(size), 0), MAX(indexed_at)
-		FROM object_index
-		`+where+`
-	`, args...).Scan(&count, &total, &indexedAt); err != nil {
+	if err := base.
+		Select("COUNT(*) AS count, COALESCE(SUM(size), 0) AS total_bytes, MAX(indexed_at) AS indexed_at").
+		Scan(&summary).Error; err != nil {
 		return models.ObjectIndexSummaryResponse{}, err
 	}
 
-	rows, err := s.query(ctx, `
-		SELECT object_key
-		FROM object_index
-		`+where+`
-		ORDER BY object_key ASC
-		LIMIT ?
-	`, append(args, sampleLimit)...)
-	if err != nil {
+	var sampleRows []objectIndexRow
+	if err := base.
+		Select("object_key").
+		Order("object_key ASC").
+		Limit(sampleLimit).
+		Find(&sampleRows).Error; err != nil {
 		return models.ObjectIndexSummaryResponse{}, err
 	}
-	defer rows.Close()
-
-	sample := make([]string, 0, sampleLimit)
-	for rows.Next() {
-		var k string
-		if err := rows.Scan(&k); err != nil {
-			return models.ObjectIndexSummaryResponse{}, err
+	sample := make([]string, 0, len(sampleRows))
+	for _, row := range sampleRows {
+		if row.ObjectKey != "" {
+			sample = append(sample, row.ObjectKey)
 		}
-		if k != "" {
-			sample = append(sample, k)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return models.ObjectIndexSummaryResponse{}, err
 	}
 
 	resp := models.ObjectIndexSummaryResponse{
 		Bucket:      in.Bucket,
 		Prefix:      in.Prefix,
-		ObjectCount: count,
+		ObjectCount: summary.Count,
 		TotalBytes:  0,
 		SampleKeys:  sample,
 	}
-	if total.Valid {
-		resp.TotalBytes = total.Int64
-	}
-	if indexedAt.Valid && strings.TrimSpace(indexedAt.String) != "" {
-		resp.IndexedAt = &indexedAt.String
+	resp.TotalBytes = summary.Total
+	if summary.IndexedAt != nil && strings.TrimSpace(*summary.IndexedAt) != "" {
+		resp.IndexedAt = summary.IndexedAt
 	}
 	return resp, nil
 }

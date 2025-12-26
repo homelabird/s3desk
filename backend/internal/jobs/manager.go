@@ -20,6 +20,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"object-storage/internal/logging"
 	"object-storage/internal/models"
 	"object-storage/internal/s3client"
 	"object-storage/internal/store"
@@ -610,6 +611,14 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return nil
 	}
 
+	start := time.Now()
+	logging.InfoFields("job started", map[string]any{
+		"event":      "job.started",
+		"job_id":     jobID,
+		"job_type":   job.Type,
+		"profile_id": profileID,
+	})
+
 	ctx, cancel := context.WithCancel(rootCtx)
 	m.mu.Lock()
 	m.cancels[jobID] = cancel
@@ -670,6 +679,14 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 			payload["progress"] = jp
 		}
 		m.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
+		logging.InfoFields("job canceled", map[string]any{
+			"event":       "job.completed",
+			"job_id":      jobID,
+			"job_type":    job.Type,
+			"profile_id":  profileID,
+			"status":      models.JobStatusCanceled,
+			"duration_ms": time.Since(start).Milliseconds(),
+		})
 		return nil
 	}
 	if runErr != nil {
@@ -680,6 +697,15 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 			payload["progress"] = jp
 		}
 		m.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
+		logging.ErrorFields("job failed", map[string]any{
+			"event":       "job.completed",
+			"job_id":      jobID,
+			"job_type":    job.Type,
+			"profile_id":  profileID,
+			"status":      models.JobStatusFailed,
+			"error":       msg,
+			"duration_ms": time.Since(start).Milliseconds(),
+		})
 		return runErr
 	}
 
@@ -689,6 +715,14 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		payload["progress"] = jp
 	}
 	m.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
+	logging.InfoFields("job completed", map[string]any{
+		"event":       "job.completed",
+		"job_id":      jobID,
+		"job_type":    job.Type,
+		"profile_id":  profileID,
+		"status":      models.JobStatusSucceeded,
+		"duration_ms": time.Since(start).Milliseconds(),
+	})
 	return nil
 }
 

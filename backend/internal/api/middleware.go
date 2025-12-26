@@ -7,7 +7,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
+	"object-storage/internal/logging"
 	"object-storage/internal/models"
 	"object-storage/internal/store"
 )
@@ -75,6 +80,81 @@ func isWebSocketUpgrade(r *http.Request) bool {
 
 func isSSERequest(r *http.Request) bool {
 	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream")
+}
+
+func requestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if shouldSkipAccessLog(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+
+		status := ww.Status()
+		if status == 0 {
+			status = http.StatusOK
+		}
+
+		fields := map[string]any{
+			"event":       "http.request",
+			"method":      r.Method,
+			"path":        r.URL.Path,
+			"status":      status,
+			"duration_ms": time.Since(start).Milliseconds(),
+			"bytes":       ww.BytesWritten(),
+			"remote_addr": requestRemoteAddr(r),
+			"user_agent":  r.UserAgent(),
+			"proto":       r.Proto,
+		}
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			fields["request_id"] = reqID
+		}
+		if route := routePattern(r); route != "" {
+			fields["route"] = route
+		}
+		if profileID := r.Header.Get("X-Profile-Id"); profileID != "" {
+			fields["profile_id"] = profileID
+		}
+
+		if status >= http.StatusInternalServerError {
+			logging.ErrorFields("http request failed", fields)
+			return
+		}
+		logging.InfoFields("http request", fields)
+	})
+}
+
+func shouldSkipAccessLog(r *http.Request) bool {
+	return r.URL.Path == "/healthz"
+}
+
+func routePattern(r *http.Request) string {
+	if rctx := chi.RouteContext(r.Context()); rctx != nil {
+		return rctx.RoutePattern()
+	}
+	return ""
+}
+
+func requestRemoteAddr(r *http.Request) string {
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		parts := strings.Split(forwarded, ",")
+		if len(parts) > 0 {
+			if host := strings.TrimSpace(parts[0]); host != "" {
+				return host
+			}
+		}
+	}
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return host
 }
 
 func (s *server) requireLocalHost(next http.Handler) http.Handler {

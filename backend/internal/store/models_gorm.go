@@ -1,0 +1,75 @@
+package store
+
+type profileRow struct {
+	ID                    string  `gorm:"column:id;primaryKey"`
+	Name                  string  `gorm:"column:name"`
+	Endpoint              string  `gorm:"column:endpoint"`
+	Region                string  `gorm:"column:region"`
+	ForcePathStyle        int     `gorm:"column:force_path_style"`
+	TLSInsecureSkipVerify int     `gorm:"column:tls_insecure_skip_verify"`
+	AccessKeyID           string  `gorm:"column:access_key_id"`
+	SecretAccessKey       string  `gorm:"column:secret_access_key"`
+	SessionToken          *string `gorm:"column:session_token"`
+	CreatedAt             string  `gorm:"column:created_at"`
+	UpdatedAt             string  `gorm:"column:updated_at"`
+}
+
+func (profileRow) TableName() string { return "profiles" }
+
+type profileConnectionOptionsRow struct {
+	ProfileID     string `gorm:"column:profile_id;primaryKey"`
+	SchemaVersion int    `gorm:"column:schema_version"`
+	OptionsEnc    string `gorm:"column:options_enc"`
+	CreatedAt     string `gorm:"column:created_at"`
+	UpdatedAt     string `gorm:"column:updated_at"`
+}
+
+func (profileConnectionOptionsRow) TableName() string { return "profile_connection_options" }
+
+type jobRow struct {
+	ID           string  `gorm:"column:id;primaryKey"`
+	ProfileID    string  `gorm:"column:profile_id"`
+	Type         string  `gorm:"column:type"`
+	Status       string  `gorm:"column:status"`
+	PayloadJSON  string  `gorm:"column:payload_json"`
+	ProgressJSON *string `gorm:"column:progress_json"`
+	Error        *string `gorm:"column:error"`
+	CreatedAt    string  `gorm:"column:created_at"`
+	StartedAt    *string `gorm:"column:started_at"`
+	FinishedAt   *string `gorm:"column:finished_at"`
+}
+
+func (jobRow) TableName() string { return "jobs" }
+
+type uploadSessionRow struct {
+	ID         string `gorm:"column:id;primaryKey"`
+	ProfileID  string `gorm:"column:profile_id"`
+	Bucket     string `gorm:"column:bucket"`
+	Prefix     string `gorm:"column:prefix"`
+	StagingDir string `gorm:"column:staging_dir"`
+	ExpiresAt  string `gorm:"column:expires_at"`
+	CreatedAt  string `gorm:"column:created_at"`
+}
+
+func (uploadSessionRow) TableName() string { return "upload_sessions" }
+
+type objectIndexRow struct {
+	ProfileID    string  `gorm:"column:profile_id;primaryKey"`
+	Bucket       string  `gorm:"column:bucket;primaryKey"`
+	ObjectKey    string  `gorm:"column:object_key;primaryKey"`
+	Size         int64   `gorm:"column:size"`
+	ETag         *string `gorm:"column:etag"`
+	LastModified *string `gorm:"column:last_modified"`
+	IndexedAt    string  `gorm:"column:indexed_at"`
+}
+
+func (objectIndexRow) TableName() string { return "object_index" }
+
+type objectFavoriteRow struct {
+	ProfileID string `gorm:"column:profile_id;primaryKey"`
+	Bucket    string `gorm:"column:bucket;primaryKey"`
+	ObjectKey string `gorm:"column:object_key;primaryKey"`
+	CreatedAt string `gorm:"column:created_at"`
+}
+
+func (objectFavoriteRow) TableName() string { return "object_favorites" }

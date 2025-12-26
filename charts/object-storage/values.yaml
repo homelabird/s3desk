@@ -62,6 +62,10 @@ server:
 db:
   backend: "sqlite"
   databaseUrl: ""
+  maxOpenConns: 0
+  maxIdleConns: 0
+  connMaxLifetime: ""
+  connMaxIdleTime: ""
 
 jobs:
   concurrency: 2

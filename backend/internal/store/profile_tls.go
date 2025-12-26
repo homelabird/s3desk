@@ -2,12 +2,14 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"object-storage/internal/models"
 )
@@ -15,26 +17,23 @@ import (
 const profileTLSConfigSchemaVersion = 1
 
 func (s *Store) GetProfileTLSConfig(ctx context.Context, profileID string) (models.ProfileTLSConfig, string, bool, error) {
-	var schemaVersion int
-	var enc, updatedAt string
-	err := s.queryRow(ctx, `
-		SELECT schema_version, options_enc, updated_at
-		FROM profile_connection_options
-		WHERE profile_id = ?
-	`, profileID).Scan(&schemaVersion, &enc, &updatedAt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var row profileConnectionOptionsRow
+	if err := s.db.WithContext(ctx).
+		Select("schema_version", "options_enc", "updated_at").
+		Where("profile_id = ?", profileID).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.ProfileTLSConfig{}, "", false, nil
 		}
 		return models.ProfileTLSConfig{}, "", false, err
 	}
-	if schemaVersion != profileTLSConfigSchemaVersion {
-		return models.ProfileTLSConfig{}, "", false, fmt.Errorf("unsupported tls options schema version: %d", schemaVersion)
+	if row.SchemaVersion != profileTLSConfigSchemaVersion {
+		return models.ProfileTLSConfig{}, "", false, fmt.Errorf("unsupported tls options schema version: %d", row.SchemaVersion)
 	}
 	if s.crypto == nil {
 		return models.ProfileTLSConfig{}, "", false, ErrEncryptionKeyRequired
 	}
-	raw, err := s.crypto.decryptString(enc)
+	raw, err := s.crypto.decryptString(row.OptionsEnc)
 	if err != nil {
 		return models.ProfileTLSConfig{}, "", false, err
 	}
@@ -46,7 +45,7 @@ func (s *Store) GetProfileTLSConfig(ctx context.Context, profileID string) (mode
 	if strings.TrimSpace(string(cfg.Mode)) == "" {
 		cfg.Mode = models.ProfileTLSModeDisabled
 	}
-	return cfg, updatedAt, true, nil
+	return cfg, row.UpdatedAt, true, nil
 }
 
 func (s *Store) UpsertProfileTLSConfig(ctx context.Context, profileID string, cfg models.ProfileTLSConfig) (models.ProfileTLSConfig, string, error) {
@@ -63,27 +62,34 @@ func (s *Store) UpsertProfileTLSConfig(ctx context.Context, profileID string, cf
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = s.exec(ctx, `
-		INSERT INTO profile_connection_options (profile_id, schema_version, options_enc, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(profile_id) DO UPDATE SET
-			schema_version = excluded.schema_version,
-			options_enc = excluded.options_enc,
-			updated_at = excluded.updated_at
-	`, profileID, profileTLSConfigSchemaVersion, enc, now, now)
-	if err != nil {
+	row := profileConnectionOptionsRow{
+		ProfileID:     profileID,
+		SchemaVersion: profileTLSConfigSchemaVersion,
+		OptionsEnc:    enc,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	if err := s.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "profile_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"schema_version",
+				"options_enc",
+				"updated_at",
+			}),
+		}).
+		Create(&row).Error; err != nil {
 		return models.ProfileTLSConfig{}, "", err
 	}
 	return cfg, now, nil
 }
 
 func (s *Store) DeleteProfileTLSConfig(ctx context.Context, profileID string) (bool, error) {
-	affected, err := s.exec(ctx, `
-		DELETE FROM profile_connection_options
-		WHERE profile_id = ?
-	`, profileID)
-	if err != nil {
-		return false, err
+	res := s.db.WithContext(ctx).
+		Where("profile_id = ?", profileID).
+		Delete(&profileConnectionOptionsRow{})
+	if res.Error != nil {
+		return false, res.Error
 	}
-	return affected > 0, nil
+	return res.RowsAffected > 0, nil
 }
