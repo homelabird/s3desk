@@ -330,6 +330,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profiles/{profileId}/tls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get TLS configuration status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    profileId: components["parameters"]["ProfileId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTLSStatus"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Set TLS configuration */
+        put: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    profileId: components["parameters"]["ProfileId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProfileTLSConfig"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTLSStatus"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        /** Delete TLS configuration */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    profileId: components["parameters"]["ProfileId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/buckets": {
         parameters: {
             query?: never;
@@ -826,6 +924,158 @@ export interface paths {
                     };
                 };
                 400: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/objects/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List favorite objects */
+        get: {
+            parameters: {
+                query?: {
+                    prefix?: string;
+                };
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ObjectFavoritesResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        /** Add an object favorite */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ObjectFavoriteCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ObjectFavorite"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Remove an object favorite */
+        delete: {
+            parameters: {
+                query: {
+                    key: string;
+                };
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/objects/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an image thumbnail */
+        get: {
+            parameters: {
+                query: {
+                    key: string;
+                    size?: number;
+                };
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/jpeg": string;
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
+                415: components["responses"]["ErrorResponse"];
             };
         };
         put?: never;
@@ -1451,9 +1701,35 @@ export interface components {
         ProfileTestResponse: {
             ok: boolean;
             message?: string;
+            /**
+             * @description Additional test metadata.
+             *     Known keys:
+             *       - buckets: number of buckets returned by ListBuckets.
+             *       - storageType: detected storage type (ceph, aws-s3, s3-compatible, unknown).
+             *       - storageTypeSource: detection source (server-header, endpoint, default, none).
+             *       - error: error string when ok=false.
+             */
             details?: {
                 [key: string]: unknown;
             };
+        };
+        /** @enum {string} */
+        ProfileTLSMode: "disabled" | "mtls";
+        ProfileTLSConfig: {
+            mode: components["schemas"]["ProfileTLSMode"];
+            clientCertPem?: string;
+            clientKeyPem?: string;
+            caCertPem?: string;
+            serverName?: string;
+        };
+        ProfileTLSStatus: {
+            mode: components["schemas"]["ProfileTLSMode"];
+            hasClientCert: boolean;
+            hasClientKey: boolean;
+            hasCa: boolean;
+            serverName?: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         Bucket: {
             name: string;
@@ -1472,6 +1748,23 @@ export interface components {
             /** Format: date-time */
             lastModified: string;
             storageClass?: string;
+        };
+        ObjectFavorite: {
+            key: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ObjectFavoriteCreateRequest: {
+            key: string;
+        };
+        FavoriteObjectItem: components["schemas"]["ObjectItem"] & {
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ObjectFavoritesResponse: {
+            bucket: string;
+            prefix?: string;
+            items: components["schemas"]["FavoriteObjectItem"][];
         };
         ListObjectsResponse: {
             bucket: string;
@@ -1844,13 +2137,6 @@ export interface components {
             items: components["schemas"]["Job"][];
             nextCursor?: string | null;
         };
-        FeatureCapability: {
-            enabled: boolean;
-            reason?: string;
-        };
-        MetaCapabilities: {
-            profileTls: components["schemas"]["FeatureCapability"];
-        };
         MetaResponse: {
             version: string;
             serverAddr: string;
@@ -1874,6 +2160,13 @@ export interface components {
                 path?: string;
                 version?: string;
             };
+        };
+        MetaCapabilities: {
+            profileTls: components["schemas"]["FeatureCapability"];
+        };
+        FeatureCapability: {
+            enabled: boolean;
+            reason?: string;
         };
     };
     responses: {

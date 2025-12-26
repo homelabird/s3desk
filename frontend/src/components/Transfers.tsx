@@ -525,7 +525,6 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				const resp = await withJobQueueRetry(() => api.commitUpload(current.profileId, uploadId))
 				committed = true
 				delete uploadItemsByTaskIdRef.current[taskId]
-				const movePlan = uploadMoveByTaskIdRef.current[taskId]
 				updateUploadTask(taskId, (t) => ({
 					...t,
 					status: 'waiting_job',

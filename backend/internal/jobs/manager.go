@@ -119,20 +119,20 @@ func NewManager(cfg Config) *Manager {
 	}
 
 	cpu := runtime.NumCPU()
-	defaultMaxNumWorkers := cpu * 64
-	if defaultMaxNumWorkers < 256 {
-		defaultMaxNumWorkers = 256
+	defaultMaxNumWorkers := cpu * 32
+	if defaultMaxNumWorkers < 32 {
+		defaultMaxNumWorkers = 32
 	}
-	if defaultMaxNumWorkers > 2048 {
-		defaultMaxNumWorkers = 2048
+	if defaultMaxNumWorkers > 512 {
+		defaultMaxNumWorkers = 512
 	}
 
-	defaultMaxConcurrency := cpu * 4
-	if defaultMaxConcurrency < 8 {
-		defaultMaxConcurrency = 8
+	defaultMaxConcurrency := cpu * 2
+	if defaultMaxConcurrency < 2 {
+		defaultMaxConcurrency = 2
 	}
-	if defaultMaxConcurrency > 128 {
-		defaultMaxConcurrency = 128
+	if defaultMaxConcurrency > 64 {
+		defaultMaxConcurrency = 64
 	}
 
 	minPartSizeMiB := envInt("S5CMD_MIN_PART_SIZE_MIB", 16)
