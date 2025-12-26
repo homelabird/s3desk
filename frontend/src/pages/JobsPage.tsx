@@ -6,6 +6,7 @@ import {
 	Button,
 	Descriptions,
 	Drawer,
+	Empty,
 	Form,
 	Grid,
 	Input,
@@ -32,6 +33,7 @@ import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelat
 import { listAllObjects } from '../lib/objects'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
+import { SetupCallout } from '../components/SetupCallout'
 
 type Props = {
 	apiToken: string
@@ -640,11 +642,12 @@ export function JobsPage(props: Props) {
 	}, [eventsManualRetryToken, props.apiToken, props.profileId, queryClient])
 
 	if (!props.profileId) {
-		return <Alert type="warning" showIcon message="Select a profile first" />
+		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view jobs" />
 	}
 
 	const jobs = jobsQuery.data?.pages.flatMap((p) => p.items) ?? []
 	const isLoading = jobsQuery.isFetching && !jobsQuery.isFetchingNextPage
+	const showJobsEmpty = !isLoading && jobs.length === 0
 
 	return (
 		<Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -752,6 +755,28 @@ export function JobsPage(props: Props) {
 				dataSource={jobs}
 				pagination={false}
 				scroll={{ x: true }}
+				locale={{
+					emptyText: showJobsEmpty ? (
+						<Empty description="No jobs yet">
+							<Space wrap>
+								<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
+									Upload folder
+								</Button>
+								<Button
+									danger
+									icon={<DeleteOutlined />}
+									onClick={() => {
+										setDeleteJobPrefill(null)
+										setCreateDeleteOpen(true)
+									}}
+									disabled={isOffline}
+								>
+									New delete job
+								</Button>
+							</Space>
+						</Empty>
+					) : null,
+				}}
 				columns={[
 					{ title: 'ID', dataIndex: 'id', width: 220, render: (v: string) => <Typography.Text code>{v}</Typography.Text> },
 					{ title: 'Type', dataIndex: 'type' },

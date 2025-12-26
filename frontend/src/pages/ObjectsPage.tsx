@@ -3814,6 +3814,7 @@ useEffect(() => {
 			/>
 
 			<ObjectsToolbarSection
+				apiToken={props.apiToken}
 				profileId={props.profileId}
 				bucketsErrorMessage={bucketsQuery.isError ? formatErr(bucketsQuery.error) : null}
 				isAdvanced={isAdvanced}

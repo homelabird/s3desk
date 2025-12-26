@@ -2,6 +2,7 @@ import { Alert, Tabs, Typography } from 'antd'
 
 import type { ObjectsToolbarProps } from './ObjectsToolbar'
 import { ObjectsToolbar } from './ObjectsToolbar'
+import { SetupCallout } from '../../components/SetupCallout'
 
 type LocationTab = {
 	id: string
@@ -10,6 +11,7 @@ type LocationTab = {
 }
 
 type ObjectsToolbarSectionProps = {
+	apiToken: string
 	profileId: string | null
 	bucketsErrorMessage: string | null
 	isAdvanced: boolean
@@ -40,7 +42,7 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 
 	return (
 		<>
-			{props.profileId ? null : <Alert type="warning" showIcon message="Select a profile first" />}
+			<SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to browse objects" />
 			{props.bucketsErrorMessage ? (
 				<Alert type="error" showIcon message="Failed to load buckets" description={props.bucketsErrorMessage} />
 			) : null}
