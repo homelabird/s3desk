@@ -161,6 +161,7 @@ Backend flags/env:
 - `--db-conn-max-lifetime` / `DB_CONN_MAX_LIFETIME` (default `0` = unlimited)
 - `--db-conn-max-idle-time` / `DB_CONN_MAX_IDLE_TIME` (default `0` = unlimited)
 - `--log-format` / `LOG_FORMAT` (default `text`; `json` outputs JSON Lines to stdout)
+- `--log-level` / `LOG_LEVEL` (default `info`; `debug`, `info`, `warn`, `error`)
 - `--static-dir` / `STATIC_DIR` (default `../frontend/dist`)
 - `--api-token` / `API_TOKEN` (optional; UI Settings sets it)
 - `--allow-remote` / `ALLOW_REMOTE` (default `false`; allow non-loopback bind and accept private remote clients (including `Host`/`Origin`); requires `API_TOKEN` when binding non-loopback; useful for WSL2 / container port mapping)

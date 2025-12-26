@@ -48,6 +48,8 @@ spec:
               value: {{ .Values.db.backend | quote }}
             - name: LOG_FORMAT
               value: {{ .Values.server.logFormat | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.server.logLevel | quote }}
             - name: ALLOW_REMOTE
               value: {{ .Values.server.allowRemote | quote }}
             - name: JOB_CONCURRENCY

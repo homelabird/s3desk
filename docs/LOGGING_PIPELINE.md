@@ -8,6 +8,7 @@ Set these envs on the server container:
 
 - `LOG_FORMAT=json`
 - `JOB_LOG_EMIT_STDOUT=true`
+- `LOG_LEVEL=info` (optional: `debug`, `info`, `warn`, `error`)
 - Optional: `LOG_SERVICE=object-storage`, `LOG_ENV=prod`, `LOG_VERSION=v0.1.0`, `LOG_COMPONENT=server`
 
 Example (podman):

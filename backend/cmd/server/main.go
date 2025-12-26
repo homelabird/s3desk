@@ -41,6 +41,7 @@ func main() {
 	flag.DurationVar(&cfg.DBConnMaxLifetime, "db-conn-max-lifetime", getEnvDuration("DB_CONN_MAX_LIFETIME", 0), "max db connection lifetime (0=default)")
 	flag.DurationVar(&cfg.DBConnMaxIdleTime, "db-conn-max-idle-time", getEnvDuration("DB_CONN_MAX_IDLE_TIME", 0), "max db connection idle time (0=default)")
 	flag.StringVar(&cfg.LogFormat, "log-format", getEnv("LOG_FORMAT", "text"), "log format (text or json)")
+	flag.StringVar(&cfg.LogLevel, "log-level", getEnv("LOG_LEVEL", "info"), "log level (debug, info, warn, error)")
 	flag.StringVar(&cfg.StaticDir, "static-dir", defaultStaticDir(), "static files directory (frontend build output)")
 	flag.StringVar(&cfg.APIToken, "api-token", getEnv("API_TOKEN", ""), "optional local API token (X-Api-Token)")
 	flag.BoolVar(&cfg.AllowRemote, "allow-remote", getEnvBool("ALLOW_REMOTE", false), "allow non-local bind and accept private remote clients (requires API_TOKEN when using a non-loopback addr)")
@@ -73,9 +74,15 @@ func main() {
 	flag.Var(&allowHosts, "allow-host", "allowed hostnames for Host/Origin checks (repeatable)")
 	flag.Parse()
 
-	if _, err := logging.Setup(cfg.LogFormat); err != nil {
+	logger, err := logging.Setup(cfg.LogFormat)
+	if err != nil {
 		log.Fatalf("invalid LOG_FORMAT %q: %v", cfg.LogFormat, err)
 	}
+	level, err := logging.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		log.Fatalf("invalid LOG_LEVEL %q: %v", cfg.LogLevel, err)
+	}
+	logger.SetLevel(level)
 
 	cfg.AllowedLocalDirs = allowDirs
 	cfg.AllowedHosts = normalizeHosts(allowHosts)

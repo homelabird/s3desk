@@ -123,6 +123,10 @@ func requestLogger(next http.Handler) http.Handler {
 			logging.ErrorFields("http request failed", fields)
 			return
 		}
+		if status >= http.StatusBadRequest {
+			logging.WarnFields("http request warning", fields)
+			return
+		}
 		logging.InfoFields("http request", fields)
 	})
 }

@@ -24,11 +24,21 @@ type Logger struct {
 	text   *log.Logger
 	mu     sync.Mutex
 	base   map[string]any
+	level  Level
 }
 
 var (
 	defaultLogger = New(FormatText)
 	stdoutMu      sync.Mutex
+)
+
+type Level int
+
+const (
+	LevelDebug Level = iota
+	LevelInfo
+	LevelWarn
+	LevelError
 )
 
 func ParseFormat(raw string) (Format, error) {
@@ -66,6 +76,7 @@ func New(format Format) *Logger {
 		out:    out,
 		text:   log.New(out, "", log.LstdFlags),
 		base:   defaultBaseFields(),
+		level:  LevelInfo,
 	}
 }
 
@@ -81,6 +92,20 @@ func Infof(format string, args ...any) {
 		return
 	}
 	defaultLogger.Infof(format, args...)
+}
+
+func Debugf(format string, args ...any) {
+	if defaultLogger == nil {
+		return
+	}
+	defaultLogger.Debugf(format, args...)
+}
+
+func Warnf(format string, args ...any) {
+	if defaultLogger == nil {
+		return
+	}
+	defaultLogger.Warnf(format, args...)
 }
 
 func Errorf(format string, args ...any) {
@@ -104,6 +129,20 @@ func InfoFields(message string, fields map[string]any) {
 	defaultLogger.InfoFields(message, fields)
 }
 
+func DebugFields(message string, fields map[string]any) {
+	if defaultLogger == nil {
+		return
+	}
+	defaultLogger.DebugFields(message, fields)
+}
+
+func WarnFields(message string, fields map[string]any) {
+	if defaultLogger == nil {
+		return
+	}
+	defaultLogger.WarnFields(message, fields)
+}
+
 func ErrorFields(message string, fields map[string]any) {
 	if defaultLogger == nil {
 		return
@@ -112,28 +151,78 @@ func ErrorFields(message string, fields map[string]any) {
 }
 
 func (l *Logger) Infof(format string, args ...any) {
-	l.log("info", fmt.Sprintf(format, args...))
+	l.log(LevelInfo, "info", fmt.Sprintf(format, args...))
 }
 
 func (l *Logger) Errorf(format string, args ...any) {
-	l.log("error", fmt.Sprintf(format, args...))
+	l.log(LevelError, "error", fmt.Sprintf(format, args...))
+}
+
+func (l *Logger) Warnf(format string, args ...any) {
+	l.log(LevelWarn, "warn", fmt.Sprintf(format, args...))
+}
+
+func (l *Logger) Debugf(format string, args ...any) {
+	l.log(LevelDebug, "debug", fmt.Sprintf(format, args...))
 }
 
 func (l *Logger) Fatalf(format string, args ...any) {
-	l.log("error", fmt.Sprintf(format, args...))
+	l.log(LevelError, "error", fmt.Sprintf(format, args...))
 	os.Exit(1)
 }
 
-func (l *Logger) log(level, message string) {
-	l.logWithFields(level, message, nil)
-}
-
 func (l *Logger) InfoFields(message string, fields map[string]any) {
-	l.logWithFields("info", message, fields)
+	l.log(LevelInfo, "info", message, fields)
 }
 
 func (l *Logger) ErrorFields(message string, fields map[string]any) {
-	l.logWithFields("error", message, fields)
+	l.log(LevelError, "error", message, fields)
+}
+
+func (l *Logger) WarnFields(message string, fields map[string]any) {
+	l.log(LevelWarn, "warn", message, fields)
+}
+
+func (l *Logger) DebugFields(message string, fields map[string]any) {
+	l.log(LevelDebug, "debug", message, fields)
+}
+
+func (l *Logger) SetLevel(level Level) {
+	l.level = level
+}
+
+func (l *Logger) Enabled(level Level) bool {
+	return level >= l.level
+}
+
+func ParseLevel(raw string) (Level, error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return LevelInfo, nil
+	}
+	switch raw {
+	case "debug":
+		return LevelDebug, nil
+	case "info":
+		return LevelInfo, nil
+	case "warn", "warning":
+		return LevelWarn, nil
+	case "error":
+		return LevelError, nil
+	default:
+		return LevelInfo, fmt.Errorf("unsupported log level %q (expected debug, info, warn, error)", raw)
+	}
+}
+
+func (l *Logger) log(level Level, label, message string, fields ...map[string]any) {
+	if l == nil || !l.Enabled(level) {
+		return
+	}
+	var extra map[string]any
+	if len(fields) > 0 {
+		extra = fields[0]
+	}
+	l.logWithFields(label, message, extra)
 }
 
 func (l *Logger) logWithFields(level, message string, fields map[string]any) {
@@ -142,10 +231,10 @@ func (l *Logger) logWithFields(level, message string, fields map[string]any) {
 	}
 	if l.format == FormatText {
 		if len(fields) == 0 {
-			l.text.Printf("%s", message)
+			l.text.Printf("[%s] %s", strings.ToUpper(level), message)
 			return
 		}
-		l.text.Printf("%s %s", message, formatFields(fields))
+		l.text.Printf("[%s] %s %s", strings.ToUpper(level), message, formatFields(fields))
 		return
 	}
 

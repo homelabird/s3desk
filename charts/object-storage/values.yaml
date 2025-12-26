@@ -55,6 +55,7 @@ server:
   apiToken: "change-me"
   encryptionKey: ""
   logFormat: "text"
+  logLevel: "info"
   staticDir: ""
   allowedHosts: []
   allowedLocalDirs: []

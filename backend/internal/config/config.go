@@ -12,6 +12,7 @@ type Config struct {
 	DBConnMaxLifetime time.Duration
 	DBConnMaxIdleTime time.Duration
 	LogFormat         string
+	LogLevel          string
 	StaticDir         string
 	APIToken          string
 	AllowRemote       bool

@@ -134,6 +134,7 @@ Settings → Server 섹션의 `s5cmd` 항목에서 감지 상태/경로를 확�
 - `JOB_QUEUE_CAPACITY`: Job 큐 최대 대기 수. 꽉 차면 API가 429로 응답합니다.
 - `JOB_LOG_MAX_LINE_BYTES`: Job 로그에서 한 줄 최대 길이(초과 시 잘림).
 - `LOG_FORMAT=json`: 서버 로그를 JSON Lines로 stdout에 출력합니다(Grafana/Loki/Elastic 수집용).
+- `LOG_LEVEL`: 서버 로그 레벨 (`debug`, `info`, `warn`, `error`), 기본값 `info`.
 - `LOG_SERVICE`: 로그에 찍힐 서비스명(기본값: `object-storage`).
 - `LOG_ENV`: 로그에 찍힐 환경명(기본값: `local`).
 - `LOG_VERSION`: 로그에 찍힐 버전 태그(선택).
