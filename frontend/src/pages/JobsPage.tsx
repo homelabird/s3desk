@@ -691,6 +691,20 @@ export function JobsPage(props: Props) {
 			</div>
 
 			{isOffline ? <Alert type="warning" showIcon message="Offline: job actions are disabled." /> : null}
+			{!eventsConnected && !isOffline ? (
+				<Alert
+					type="warning"
+					showIcon
+					message="Realtime updates disconnected"
+					description={
+						eventsRetryCount >= eventsRetryThreshold
+							? 'Auto-retry paused. Use Retry realtime to reconnect.'
+							: eventsRetryCount > 0
+								? `Reconnecting… attempt ${eventsRetryCount}`
+								: 'Reconnecting…'
+					}
+				/>
+			) : null}
 
 			<Space wrap style={{ width: '100%' }}>
 				<Select
