@@ -508,8 +508,11 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 					},
 				})
 				uploadAbortByTaskIdRef.current[taskId] = handle.abort
-				await handle.promise
+				const result = await handle.promise
 				delete uploadAbortByTaskIdRef.current[taskId]
+				if (result.skipped > 0) {
+					message.warning(`Skipped ${result.skipped} file(s) with invalid paths.`)
+				}
 
 				updateUploadTask(taskId, (t) => ({
 					...t,
@@ -523,11 +526,10 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				committed = true
 				delete uploadItemsByTaskIdRef.current[taskId]
 				const movePlan = uploadMoveByTaskIdRef.current[taskId]
-				const shouldMove = current.moveAfterUpload && !!movePlan
 				updateUploadTask(taskId, (t) => ({
 					...t,
-					status: shouldMove ? 'waiting_job' : 'succeeded',
-					finishedAtMs: shouldMove ? undefined : Date.now(),
+					status: 'waiting_job',
+					finishedAtMs: undefined,
 					jobId: resp.jobId,
 					cleanupFailed: false,
 				}))
@@ -574,15 +576,13 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 		for (const t of toStart) void startUploadTask(t.id)
 	}, [startUploadTask, uploadConcurrency, uploadTasks])
 
-	const hasPendingMoveUploads = uploadTasks.some((t) => t.status === 'waiting_job')
+	const hasPendingUploadJobs = uploadTasks.some((t) => t.status === 'waiting_job')
 	useEffect(() => {
-		if (!hasPendingMoveUploads) return
+		if (!hasPendingUploadJobs) return
 
 		let stopped = false
 		const tick = async () => {
-			const waiting = uploadTasksRef.current.filter(
-				(t) => t.status === 'waiting_job' && t.moveAfterUpload && !!t.jobId,
-			)
+			const waiting = uploadTasksRef.current.filter((t) => t.status === 'waiting_job' && !!t.jobId)
 			for (const task of waiting) {
 				if (stopped) return
 				try {
@@ -590,20 +590,23 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 					if (stopped) return
 					if (job.status === 'succeeded') {
 						const movePlan = uploadMoveByTaskIdRef.current[task.id]
+						if (!task.moveAfterUpload || !movePlan) {
+							updateUploadTask(task.id, (prev) => ({
+								...prev,
+								status: 'succeeded',
+								finishedAtMs: Date.now(),
+								error: undefined,
+								cleanupFailed: false,
+							}))
+							delete uploadMoveByTaskIdRef.current[task.id]
+							continue
+						}
 						updateUploadTask(task.id, (prev) => ({
 							...prev,
 							status: 'cleanup',
 							error: undefined,
 							cleanupFailed: false,
 						}))
-						if (!movePlan) {
-							updateUploadTask(task.id, (prev) => ({
-								...prev,
-								status: 'succeeded',
-								finishedAtMs: Date.now(),
-							}))
-							continue
-						}
 						try {
 							const result = await removeEntriesFromDirectoryHandle({
 								root: movePlan.rootHandle,
@@ -670,6 +673,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 							status: 'failed',
 							finishedAtMs: Date.now(),
 							error: job.error ?? 'upload job failed',
+							cleanupFailed: false,
 						}))
 						delete uploadMoveByTaskIdRef.current[task.id]
 						continue
@@ -680,6 +684,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 							status: 'canceled',
 							finishedAtMs: Date.now(),
 							error: job.error ?? prev.error,
+							cleanupFailed: false,
 						}))
 						delete uploadMoveByTaskIdRef.current[task.id]
 					}
@@ -696,7 +701,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 			stopped = true
 			window.clearInterval(id)
 		}
-	}, [api, hasPendingMoveUploads, updateUploadTask])
+	}, [api, hasPendingUploadJobs, updateUploadTask])
 
 	const queueDownloadObject = useCallback(
 		(args: { profileId: string; bucket: string; key: string; expectedBytes?: number; label?: string; filenameHint?: string }) => {

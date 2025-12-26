@@ -85,6 +85,10 @@ export type UploadFileItem = {
 	relPath?: string
 }
 
+export type UploadFilesResult = {
+	skipped: number
+}
+
 function resolveUploadFilename(item: UploadFileItem): string {
 	const fileWithPath = item.file as File & { webkitRelativePath?: string; relativePath?: string }
 	const relPath = (item.relPath ?? fileWithPath.webkitRelativePath ?? fileWithPath.relativePath ?? '').trim()
@@ -449,7 +453,7 @@ export class APIClient {
 		uploadId: string,
 		files: UploadFileItem[],
 		args: { onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void } = {},
-	): { promise: Promise<void>; abort: () => void } {
+	): { promise: Promise<UploadFilesResult>; abort: () => void } {
 		const form = new FormData()
 		for (const item of files) {
 			form.append('files', item.file, resolveUploadFilename(item))
@@ -469,11 +473,13 @@ export class APIClient {
 			})
 		}
 
-		const promise = new Promise<void>((resolve, reject) => {
+		const promise = new Promise<UploadFilesResult>((resolve, reject) => {
 			xhr.onload = () => {
 				if (xhr.status >= 200 && xhr.status < 300) {
 					clearNetworkStatus()
-					resolve()
+					const skippedRaw = xhr.getResponseHeader('X-Upload-Skipped')
+					const skipped = skippedRaw ? Number.parseInt(skippedRaw, 10) : 0
+					resolve({ skipped: Number.isFinite(skipped) && skipped > 0 ? skipped : 0 })
 					return
 				}
 				if (xhr.status >= 500 || xhr.status === 0) {

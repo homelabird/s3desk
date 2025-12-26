@@ -150,8 +150,8 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 							value={props.sort}
 							style={{ width: '100%' }}
 							options={[
-								{ label: 'Name (A → Z)', value: 'name_asc' },
-								{ label: 'Name (Z → A)', value: 'name_desc' },
+								{ label: 'Name (A -> Z)', value: 'name_asc' },
+								{ label: 'Name (Z -> A)', value: 'name_desc' },
 								{ label: 'Size (smallest)', value: 'size_asc' },
 								{ label: 'Size (largest)', value: 'size_desc' },
 								{ label: 'Last modified (oldest)', value: 'time_asc' },

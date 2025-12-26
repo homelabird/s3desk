@@ -1,8 +1,9 @@
-import type { BreadcrumbProps } from 'antd'
-import { Alert, Button, Breadcrumb, Input, Space, Spin, Tooltip, Typography } from 'antd'
+import type { BreadcrumbProps, SelectProps } from 'antd'
+import { Alert, Button, Breadcrumb, Input, Select, Space, Spin, Switch, Tooltip, Typography } from 'antd'
 import { FilterOutlined, SearchOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import styles from './objects.module.css'
+import type { ObjectSort } from './objectsTypes'
 
 type ObjectsListControlsProps = {
 	breadcrumbItems: BreadcrumbProps['items']
@@ -24,6 +25,12 @@ type ObjectsListControlsProps = {
 	searchAutoScanCap: number
 	onOpenGlobalSearch: () => void
 	canInteract: boolean
+	favoritesOnly: boolean
+	sort: ObjectSort
+	sortOptions: SelectProps['options']
+	onSortChange: (value: ObjectSort) => void
+	favoritesFirst: boolean
+	onFavoritesFirstChange: (value: boolean) => void
 }
 
 export function ObjectsListControls(props: ObjectsListControlsProps) {
@@ -63,6 +70,26 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 				</Typography.Text>
 			)
 		) : null
+	const sortControls = (
+		<Space wrap size="small" align="center">
+			<Select
+				value={props.sort}
+				options={props.sortOptions}
+				style={{ minWidth: 180 }}
+				onChange={(value) => props.onSortChange(value as ObjectSort)}
+				disabled={!props.canInteract}
+			/>
+			<Space size={6} align="center">
+					<Switch
+						size="small"
+						checked={props.favoritesFirst}
+						onChange={props.onFavoritesFirstChange}
+						disabled={!props.canInteract || props.favoritesOnly}
+					/>
+				<Typography.Text type="secondary">Favorites first</Typography.Text>
+			</Space>
+		</Space>
+	)
 
 	return (
 		<>
@@ -119,6 +146,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							</Typography.Text>
 						) : null}
 					</Space>
+					{sortControls}
 					{searchStatus}
 				</Space>
 			) : (

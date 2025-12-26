@@ -124,6 +124,7 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	written := 0
+	skipped := 0
 	for {
 		part, err := reader.NextPart()
 		if err != nil {
@@ -140,6 +141,7 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 
 		relPath := safeUploadPath(part)
 		if relPath == "" {
+			skipped++
 			_ = part.Close()
 			continue
 		}
@@ -184,6 +186,9 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if skipped > 0 {
+		w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

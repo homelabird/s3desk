@@ -1965,10 +1965,13 @@ useEffect(() => {
 
 				const walk = async (entry: WebKitEntry): Promise<void> => {
 					if (entry.isFile) {
-						const fileFn = entry.file
-						if (!fileFn) return
+						if (!entry.file) return
 						const file = await new Promise<File>((resolve, reject) => {
-							fileFn(resolve, reject)
+							try {
+								entry.file?.call(entry, resolve, reject)
+							} catch (err) {
+								reject(err)
+							}
 						})
 						const fullPath = typeof entry.fullPath === 'string' && entry.fullPath ? entry.fullPath : file.name
 						const relPath = fullPath.replace(/^\/+/, '')
@@ -3924,6 +3927,19 @@ useEffect(() => {
 								setGlobalSearchOpen(true)
 							}}
 							canInteract={canInteract}
+							favoritesOnly={favoritesOnly}
+							sort={sort}
+							sortOptions={[
+								{ label: 'Name (A -> Z)', value: 'name_asc' },
+								{ label: 'Name (Z -> A)', value: 'name_desc' },
+								{ label: 'Size (smallest)', value: 'size_asc' },
+								{ label: 'Size (largest)', value: 'size_desc' },
+								{ label: 'Last modified (oldest)', value: 'time_asc' },
+								{ label: 'Last modified (newest)', value: 'time_desc' },
+							]}
+							onSortChange={(value) => setSort(value)}
+							favoritesFirst={favoritesFirst}
+							onFavoritesFirstChange={setFavoritesFirst}
 						/>
 					}
 					alerts={
