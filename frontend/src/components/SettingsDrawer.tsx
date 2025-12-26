@@ -17,7 +17,7 @@ import {
 	Tooltip,
 	Typography,
 } from 'antd'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
 	APIClient,
@@ -31,6 +31,7 @@ import {
 	RETRY_DELAY_MIN_MS,
 	RETRY_DELAY_STORAGE_KEY,
 } from '../api/client'
+import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
 
@@ -62,6 +63,16 @@ export function SettingsDrawer(props: Props) {
 	)
 	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
 	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
+	const [networkLog, setNetworkLog] = useState<NetworkLogEvent[]>(() => getNetworkLog())
+
+	useEffect(() => {
+		return subscribeNetworkLog(
+			(entry) => {
+				setNetworkLog((prev) => [entry, ...prev].slice(0, 50))
+			},
+			() => setNetworkLog([]),
+		)
+	}, [])
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
@@ -181,6 +192,34 @@ export function SettingsDrawer(props: Props) {
 						}
 						style={{ width: '100%' }}
 					/>
+				</Form.Item>
+				<Form.Item label="Network diagnostics" extra="Recent network events and retries (this session).">
+					<Space direction="vertical" size={8} style={{ width: '100%' }}>
+						<Button size="small" onClick={() => clearNetworkLog()} disabled={networkLog.length === 0}>
+							Clear log
+						</Button>
+						<div
+							style={{
+								border: '1px solid rgba(0, 0, 0, 0.08)',
+								borderRadius: 8,
+								padding: 8,
+								maxHeight: 160,
+								overflow: 'auto',
+							}}
+						>
+							<Space direction="vertical" size={4} style={{ width: '100%' }}>
+								{networkLog.length === 0 ? (
+									<Typography.Text type="secondary">No network events yet.</Typography.Text>
+								) : (
+									networkLog.map((entry, index) => (
+										<Typography.Text key={`${entry.ts}-${index}`} type="secondary">
+											{new Date(entry.ts).toLocaleTimeString()} · {entry.kind} · {entry.message}
+										</Typography.Text>
+									))
+								)}
+							</Space>
+						</div>
+					</Space>
 				</Form.Item>
 			</Form>
 

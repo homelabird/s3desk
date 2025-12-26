@@ -28,7 +28,7 @@ import type {
 	UploadCreateRequest,
 	UploadCreateResponse,
 } from './types'
-import { clearNetworkStatus, publishNetworkStatus } from '../lib/networkStatus'
+import { clearNetworkStatus, logNetworkEvent, publishNetworkStatus } from '../lib/networkStatus'
 
 export const RETRY_COUNT_STORAGE_KEY = 'apiRetryCount'
 export const RETRY_DELAY_STORAGE_KEY = 'apiRetryDelayMs'
@@ -791,6 +791,7 @@ async function fetchWithRetry(url: string, init: RequestInit, options: RequestOp
 		try {
 			const res = await fetchWithTimeout(url, init, timeoutMs)
 			if (!res.ok && idempotent && attempt < retries && shouldRetryStatus(res.status)) {
+				logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} after HTTP ${res.status}` })
 				publishNetworkStatus({ kind: 'unstable', message: `Server unavailable (HTTP ${res.status}). Retrying...` })
 				await sleep(retryDelayMs(baseDelayMs, attempt))
 				attempt += 1
@@ -800,6 +801,7 @@ async function fetchWithRetry(url: string, init: RequestInit, options: RequestOp
 			return res
 		} catch (err) {
 			if (idempotent && attempt < retries && isRetryableFetchError(err)) {
+				logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} after network error` })
 				publishNetworkStatus({ kind: 'unstable', message: 'Network unstable. Retrying...' })
 				await sleep(retryDelayMs(baseDelayMs, attempt))
 				attempt += 1
