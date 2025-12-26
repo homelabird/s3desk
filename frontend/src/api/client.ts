@@ -30,6 +30,17 @@ import type {
 } from './types'
 import { clearNetworkStatus, publishNetworkStatus } from '../lib/networkStatus'
 
+export const RETRY_COUNT_STORAGE_KEY = 'apiRetryCount'
+export const RETRY_DELAY_STORAGE_KEY = 'apiRetryDelayMs'
+export const DEFAULT_TIMEOUT_MS = 30_000
+export const DEFAULT_RETRY_COUNT = 2
+export const DEFAULT_RETRY_DELAY_MS = 600
+export const MAX_RETRY_DELAY_MS = 5000
+export const RETRY_COUNT_MIN = 0
+export const RETRY_COUNT_MAX = 5
+export const RETRY_DELAY_MIN_MS = 200
+export const RETRY_DELAY_MAX_MS = 5000
+
 export class APIError extends Error {
 	status: number
 	code: string
@@ -704,10 +715,10 @@ export class APIClient {
 	}
 }
 
-const defaultTimeoutMs = 30_000
-const defaultRetries = 2
-const defaultRetryDelayMs = 600
-const maxRetryDelayMs = 5000
+const defaultTimeoutMs = DEFAULT_TIMEOUT_MS
+const defaultRetries = DEFAULT_RETRY_COUNT
+const defaultRetryDelayMs = DEFAULT_RETRY_DELAY_MS
+const maxRetryDelayMs = MAX_RETRY_DELAY_MS
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -770,9 +781,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 
 async function fetchWithRetry(url: string, init: RequestInit, options: RequestOptions): Promise<Response> {
 	const idempotent = isIdempotentMethod(init.method)
-	const retries = options.retries ?? (idempotent ? defaultRetries : 0)
+	const retryDefaults = readRetryDefaults()
+	const retries = options.retries ?? (idempotent ? retryDefaults.retries : 0)
 	const timeoutMs = options.timeoutMs ?? (idempotent ? defaultTimeoutMs : 0)
-	const baseDelayMs = options.retryDelayMs ?? defaultRetryDelayMs
+	const baseDelayMs = options.retryDelayMs ?? retryDefaults.retryDelayMs
 
 	let attempt = 0
 	for (;;) {
@@ -795,6 +807,29 @@ async function fetchWithRetry(url: string, init: RequestInit, options: RequestOp
 			}
 			throw err
 		}
+	}
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+	if (!Number.isFinite(value)) return min
+	return Math.min(max, Math.max(min, value))
+}
+
+function readRetryDefaults(): { retries: number; retryDelayMs: number } {
+	if (typeof window === 'undefined') {
+		return { retries: defaultRetries, retryDelayMs: defaultRetryDelayMs }
+	}
+	try {
+		const rawRetries = window.localStorage.getItem(RETRY_COUNT_STORAGE_KEY)
+		const rawDelay = window.localStorage.getItem(RETRY_DELAY_STORAGE_KEY)
+		const retries = rawRetries ? Number.parseInt(rawRetries, 10) : defaultRetries
+		const retryDelayMs = rawDelay ? Number.parseInt(rawDelay, 10) : defaultRetryDelayMs
+		return {
+			retries: clampNumber(retries, RETRY_COUNT_MIN, RETRY_COUNT_MAX),
+			retryDelayMs: clampNumber(retryDelayMs, RETRY_DELAY_MIN_MS, RETRY_DELAY_MAX_MS),
+		}
+	} catch {
+		return { retries: defaultRetries, retryDelayMs: defaultRetryDelayMs }
 	}
 }
 

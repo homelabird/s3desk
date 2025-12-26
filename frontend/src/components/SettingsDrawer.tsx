@@ -19,7 +19,18 @@ import {
 } from 'antd'
 import { useMemo } from 'react'
 
-import { APIClient, APIError } from '../api/client'
+import {
+	APIClient,
+	APIError,
+	DEFAULT_RETRY_COUNT,
+	DEFAULT_RETRY_DELAY_MS,
+	RETRY_COUNT_MAX,
+	RETRY_COUNT_MIN,
+	RETRY_COUNT_STORAGE_KEY,
+	RETRY_DELAY_MAX_MS,
+	RETRY_DELAY_MIN_MS,
+	RETRY_DELAY_STORAGE_KEY,
+} from '../api/client'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
 
@@ -49,6 +60,8 @@ export function SettingsDrawer(props: Props) {
 		'moveCleanupFilenameMaxLen',
 		MOVE_CLEANUP_FILENAME_MAX_LEN,
 	)
+	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
+	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
@@ -135,6 +148,37 @@ export function SettingsDrawer(props: Props) {
 						max={200}
 						value={moveCleanupFilenameMaxLen}
 						onChange={(value) => setMoveCleanupFilenameMaxLen(typeof value === 'number' ? value : MOVE_CLEANUP_FILENAME_MAX_LEN)}
+						style={{ width: '100%' }}
+					/>
+				</Form.Item>
+
+				<Divider titlePlacement="left">Network</Divider>
+
+				<Form.Item label="HTTP retry count" extra="Applies to GET and other idempotent requests.">
+					<InputNumber
+						min={RETRY_COUNT_MIN}
+						max={RETRY_COUNT_MAX}
+						precision={0}
+						value={apiRetryCount}
+						onChange={(value) =>
+							setApiRetryCount(typeof value === 'number' ? Math.min(RETRY_COUNT_MAX, Math.max(RETRY_COUNT_MIN, value)) : DEFAULT_RETRY_COUNT)
+						}
+						style={{ width: '100%' }}
+					/>
+				</Form.Item>
+				<Form.Item label="Retry base delay (ms)" extra={`Exponential backoff, capped at ${RETRY_DELAY_MAX_MS}ms.`}>
+					<InputNumber
+						min={RETRY_DELAY_MIN_MS}
+						max={RETRY_DELAY_MAX_MS}
+						step={100}
+						value={apiRetryDelayMs}
+						onChange={(value) =>
+							setApiRetryDelayMs(
+								typeof value === 'number'
+									? Math.min(RETRY_DELAY_MAX_MS, Math.max(RETRY_DELAY_MIN_MS, value))
+									: DEFAULT_RETRY_DELAY_MS,
+							)
+						}
 						style={{ width: '100%' }}
 					/>
 				</Form.Item>
