@@ -3,22 +3,17 @@ package store
 import (
 	"context"
 	"database/sql"
-
-	"object-storage/internal/db"
 )
 
-func (s *Store) rebind(query string) string {
-	return db.Rebind(s.backend, query)
-}
-
-func (s *Store) exec(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return s.db.ExecContext(ctx, s.rebind(query), args...)
+func (s *Store) exec(ctx context.Context, query string, args ...any) (int64, error) {
+	res := s.db.WithContext(ctx).Exec(query, args...)
+	return res.RowsAffected, res.Error
 }
 
 func (s *Store) query(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	return s.db.QueryContext(ctx, s.rebind(query), args...)
+	return s.db.WithContext(ctx).Raw(query, args...).Rows()
 }
 
 func (s *Store) queryRow(ctx context.Context, query string, args ...any) *sql.Row {
-	return s.db.QueryRowContext(ctx, s.rebind(query), args...)
+	return s.db.WithContext(ctx).Raw(query, args...).Row()
 }

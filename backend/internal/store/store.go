@@ -10,32 +10,26 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"gorm.io/gorm"
 
-	"object-storage/internal/db"
 	"object-storage/internal/models"
 )
 
 type Store struct {
-	db      *sql.DB
-	crypto  *profileCrypto
-	backend db.Backend
+	db     *gorm.DB
+	crypto *profileCrypto
 }
 
 type Options struct {
 	EncryptionKey string
-	Backend       db.Backend
 }
 
-func New(sqlDB *sql.DB, opts Options) (*Store, error) {
+func New(sqlDB *gorm.DB, opts Options) (*Store, error) {
 	pc, err := newProfileCrypto(opts.EncryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	backend := opts.Backend
-	if backend == "" {
-		backend = db.BackendSQLite
-	}
-	return &Store{db: sqlDB, crypto: pc, backend: backend}, nil
+	return &Store{db: sqlDB, crypto: pc}, nil
 }
 
 func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateRequest) (models.Profile, error) {
@@ -405,11 +399,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 }
 
 func (s *Store) DeleteProfile(ctx context.Context, profileID string) (bool, error) {
-	res, err := s.exec(ctx, `DELETE FROM profiles WHERE id = ?`, profileID)
-	if err != nil {
-		return false, err
-	}
-	affected, err := res.RowsAffected()
+	affected, err := s.exec(ctx, `DELETE FROM profiles WHERE id = ?`, profileID)
 	if err != nil {
 		return false, err
 	}
@@ -622,11 +612,7 @@ func (s *Store) GetJob(ctx context.Context, profileID, jobID string) (models.Job
 }
 
 func (s *Store) DeleteJob(ctx context.Context, profileID, jobID string) (bool, error) {
-	res, err := s.exec(ctx, `DELETE FROM jobs WHERE profile_id = ? AND id = ?`, profileID, jobID)
-	if err != nil {
-		return false, err
-	}
-	affected, err := res.RowsAffected()
+	affected, err := s.exec(ctx, `DELETE FROM jobs WHERE profile_id = ? AND id = ?`, profileID, jobID)
 	if err != nil {
 		return false, err
 	}
@@ -679,18 +665,18 @@ func (s *Store) DeleteFinishedJobsBefore(ctx context.Context, beforeRFC3339Nano 
 		return nil, nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	for _, id := range ids {
-		if _, err := tx.ExecContext(ctx, s.rebind(`DELETE FROM jobs WHERE id = ?`), id); err != nil {
+		if err := tx.Exec(`DELETE FROM jobs WHERE id = ?`, id).Error; err != nil {
 			return nil, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit().Error; err != nil {
 		return nil, err
 	}
 	return ids, nil
@@ -983,11 +969,7 @@ func (s *Store) ListUploadSessionsByProfile(ctx context.Context, profileID strin
 }
 
 func (s *Store) DeleteUploadSession(ctx context.Context, profileID, uploadID string) (bool, error) {
-	res, err := s.exec(ctx, `DELETE FROM upload_sessions WHERE profile_id = ? AND id = ?`, profileID, uploadID)
-	if err != nil {
-		return false, err
-	}
-	affected, err := res.RowsAffected()
+	affected, err := s.exec(ctx, `DELETE FROM upload_sessions WHERE profile_id = ? AND id = ?`, profileID, uploadID)
 	if err != nil {
 		return false, err
 	}

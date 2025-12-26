@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net"
@@ -10,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"gorm.io/gorm"
 
 	"object-storage/internal/api"
 	"object-storage/internal/config"
@@ -72,16 +73,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 
 	var dbPath string
-	var sqlDB *sql.DB
+	var gormDB *gorm.DB
 	switch dbBackend {
 	case db.BackendSQLite:
 		dbPath = filepath.Join(cfg.DataDir, "object-storage.db")
-		sqlDB, err = db.Open(db.Config{
+		gormDB, err = db.Open(db.Config{
 			Backend:    dbBackend,
 			SQLitePath: dbPath,
 		})
 	case db.BackendPostgres:
-		sqlDB, err = db.Open(db.Config{
+		gormDB, err = db.Open(db.Config{
 			Backend:     dbBackend,
 			DatabaseURL: cfg.DatabaseURL,
 		})
@@ -91,16 +92,17 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = sqlDB.Close()
-	}()
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = sqlDB.Close() }()
 	if dbBackend == db.BackendSQLite {
 		_ = os.Chmod(dbPath, 0o600)
 	}
 
-	st, err := store.New(sqlDB, store.Options{
+	st, err := store.New(gormDB, store.Options{
 		EncryptionKey: cfg.EncryptionKey,
-		Backend:       dbBackend,
 	})
 	if err != nil {
 		return err

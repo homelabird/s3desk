@@ -109,18 +109,21 @@ func TestProfileTLSLifecycle(t *testing.T) {
 func newTestServer(t *testing.T, encryptionKey string) (*store.Store, *httptest.Server) {
 	t.Helper()
 	dataDir := t.TempDir()
-	sqlDB, err := db.Open(db.Config{
+	gormDB, err := db.Open(db.Config{
 		Backend:    db.BackendSQLite,
 		SQLitePath: filepath.Join(dataDir, "object-storage.db"),
 	})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("open sql db: %v", err)
+	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	st, err := store.New(sqlDB, store.Options{
+	st, err := store.New(gormDB, store.Options{
 		EncryptionKey: encryptionKey,
-		Backend:       db.BackendSQLite,
 	})
 	if err != nil {
 		t.Fatalf("new store: %v", err)

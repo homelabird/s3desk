@@ -1,13 +1,13 @@
 package db
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
-	_ "modernc.org/sqlite"
+	"github.com/glebarez/sqlite"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Backend string
@@ -38,7 +38,7 @@ func ParseBackend(raw string) (Backend, error) {
 	}
 }
 
-func Open(cfg Config) (*sql.DB, error) {
+func Open(cfg Config) (*gorm.DB, error) {
 	backend := cfg.Backend
 	if backend == "" {
 		backend = BackendSQLite
@@ -59,48 +59,43 @@ func Open(cfg Config) (*sql.DB, error) {
 	}
 }
 
-func openSQLite(dbPath string) (*sql.DB, error) {
-	sqlDB, err := sql.Open("sqlite", dbPath)
+func openSQLite(dbPath string) (*gorm.DB, error) {
+	sqlDB, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := sqlDB.Exec(`PRAGMA busy_timeout=5000;`); err != nil {
-		_ = sqlDB.Close()
+	if err := sqlDB.Exec(`PRAGMA busy_timeout=5000;`).Error; err != nil {
 		return nil, err
 	}
-	if _, err := sqlDB.Exec(`PRAGMA foreign_keys=ON;`); err != nil {
-		_ = sqlDB.Close()
+	if err := sqlDB.Exec(`PRAGMA foreign_keys=ON;`).Error; err != nil {
 		return nil, err
 	}
-	if _, err := sqlDB.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
-		_ = sqlDB.Close()
+	if err := sqlDB.Exec(`PRAGMA journal_mode=WAL;`).Error; err != nil {
 		return nil, err
 	}
 
 	if err := migrate(sqlDB); err != nil {
-		_ = sqlDB.Close()
 		return nil, err
 	}
 
 	return sqlDB, nil
 }
 
-func openPostgres(databaseURL string) (*sql.DB, error) {
-	sqlDB, err := sql.Open("pgx", databaseURL)
+func openPostgres(databaseURL string) (*gorm.DB, error) {
+	sqlDB, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
 	if err := migrate(sqlDB); err != nil {
-		_ = sqlDB.Close()
 		return nil, err
 	}
 
 	return sqlDB, nil
 }
 
-func migrate(db *sql.DB) error {
+func migrate(db *gorm.DB) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS profiles (
 			id TEXT PRIMARY KEY,
@@ -182,7 +177,7 @@ func migrate(db *sql.DB) error {
 	}
 
 	for _, stmt := range stmts {
-		if _, err := db.Exec(stmt); err != nil {
+		if err := db.Exec(stmt).Error; err != nil {
 			return err
 		}
 	}

@@ -78,14 +78,10 @@ func (s *Store) UpsertProfileTLSConfig(ctx context.Context, profileID string, cf
 }
 
 func (s *Store) DeleteProfileTLSConfig(ctx context.Context, profileID string) (bool, error) {
-	res, err := s.exec(ctx, `
+	affected, err := s.exec(ctx, `
 		DELETE FROM profile_connection_options
 		WHERE profile_id = ?
 	`, profileID)
-	if err != nil {
-		return false, err
-	}
-	affected, err := res.RowsAffected()
 	if err != nil {
 		return false, err
 	}

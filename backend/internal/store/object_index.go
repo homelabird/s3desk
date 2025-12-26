@@ -61,13 +61,13 @@ func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket st
 		indexedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return tx.Error
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.PrepareContext(ctx, s.rebind(`
+	query := `
 		INSERT INTO object_index (profile_id, bucket, object_key, size, etag, last_modified, indexed_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(profile_id, bucket, object_key) DO UPDATE SET
@@ -75,22 +75,18 @@ func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket st
 			etag=excluded.etag,
 			last_modified=excluded.last_modified,
 			indexed_at=excluded.indexed_at
-	`))
-	if err != nil {
-		return err
-	}
-	defer func() { _ = stmt.Close() }()
+	`
 
 	for _, e := range entries {
 		if e.Key == "" {
 			continue
 		}
-		if _, err := stmt.ExecContext(ctx, profileID, bucket, e.Key, e.Size, nullableString(nonEmptyPtr(e.ETag)), nullableString(nonEmptyPtr(e.LastModified)), indexedAt); err != nil {
+		if err := tx.Exec(query, profileID, bucket, e.Key, e.Size, nullableString(nonEmptyPtr(e.ETag)), nullableString(nonEmptyPtr(e.LastModified)), indexedAt).Error; err != nil {
 			return err
 		}
 	}
 
-	return tx.Commit()
+	return tx.Commit().Error
 }
 
 func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in SearchObjectIndexInput) (models.SearchObjectsResponse, error) {

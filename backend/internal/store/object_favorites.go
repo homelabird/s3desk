@@ -79,13 +79,9 @@ func (s *Store) DeleteObjectFavorite(ctx context.Context, profileID, bucket, key
 		return false, errors.New("key is required")
 	}
 
-	res, err := s.exec(ctx, `
+	affected, err := s.exec(ctx, `
 		DELETE FROM object_favorites WHERE profile_id = ? AND bucket = ? AND object_key = ?
 	`, profileID, bucket, key)
-	if err != nil {
-		return false, err
-	}
-	affected, err := res.RowsAffected()
 	if err != nil {
 		return false, err
 	}
