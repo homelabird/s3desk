@@ -8,8 +8,8 @@ import {
 	SettingOutlined,
 	ToolOutlined,
 } from '@ant-design/icons'
-import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
@@ -51,6 +51,7 @@ export default function App() {
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
 	const [settingsOpen, setSettingsOpen] = useState(false)
 	const [navOpen, setNavOpen] = useState(false)
+	const [searchParams, setSearchParams] = useSearchParams()
 
 	const selectedKey = useMemo(() => {
 		if (location.pathname.startsWith('/profiles')) return '/profiles'
@@ -71,6 +72,15 @@ export default function App() {
 		],
 		[],
 	)
+
+	useEffect(() => {
+		const shouldOpen = searchParams.get('settings')
+		if (!shouldOpen) return
+		setSettingsOpen(true)
+		const next = new URLSearchParams(searchParams)
+		next.delete('settings')
+		setSearchParams(next, { replace: true })
+	}, [searchParams, setSearchParams])
 
 	return (
 		<TransfersProvider apiToken={apiToken}>

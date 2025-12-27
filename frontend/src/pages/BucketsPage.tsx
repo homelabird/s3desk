@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Form, Input, Modal, Space, Table, Typography, message } from 'antd'
+import { Alert, Button, Empty, Form, Input, Modal, Space, Table, Typography, message } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { BucketCreateRequest } from '../api/types'
+import { SetupCallout } from '../components/SetupCallout'
 
 type Props = {
 	apiToken: string
@@ -25,6 +26,8 @@ export function BucketsPage(props: Props) {
 		queryFn: () => api.listBuckets(props.profileId!),
 		enabled: !!props.profileId,
 	})
+	const buckets = bucketsQuery.data ?? []
+	const showBucketsEmpty = !bucketsQuery.isFetching && buckets.length === 0
 
 	const createMutation = useMutation({
 		mutationFn: (req: BucketCreateRequest) => api.createBucket(props.profileId!, req),
@@ -80,7 +83,7 @@ export function BucketsPage(props: Props) {
 	})
 
 	if (!props.profileId) {
-		return <Alert type="warning" showIcon message="Select a profile first" />
+		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view buckets" />
 	}
 
 	return (
@@ -101,9 +104,18 @@ export function BucketsPage(props: Props) {
 			<Table
 				rowKey="name"
 				loading={bucketsQuery.isFetching}
-				dataSource={bucketsQuery.data ?? []}
+				dataSource={buckets}
 				pagination={false}
 				scroll={{ x: true }}
+				locale={{
+					emptyText: showBucketsEmpty ? (
+						<Empty description="No buckets yet">
+							<Button type="primary" onClick={() => setCreateOpen(true)}>
+								Create bucket
+							</Button>
+						</Empty>
+					) : null,
+				}}
 				columns={[
 					{ title: 'Name', dataIndex: 'name' },
 					{ title: 'CreatedAt', dataIndex: 'createdAt', render: (v?: string) => v ?? '-' },
@@ -116,14 +128,14 @@ export function BucketsPage(props: Props) {
 								icon={<DeleteOutlined />}
 								loading={deleteMutation.isPending && deletingBucket === row.name}
 								onClick={() => {
-								Modal.confirm({
-									title: `Delete bucket "${row.name}"?`,
-									content: 'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
-									okText: 'Delete',
-									okType: 'danger',
-									onOk: async () => {
-										await deleteMutation.mutateAsync(row.name)
-									},
+									Modal.confirm({
+										title: `Delete bucket "${row.name}"?`,
+										content: 'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
+										okText: 'Delete',
+										okType: 'danger',
+										onOk: async () => {
+											await deleteMutation.mutateAsync(row.name)
+										},
 									})
 								}}
 							>

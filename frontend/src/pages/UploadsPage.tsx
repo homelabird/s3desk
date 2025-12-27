@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Grid, Input, Select, Space, Switch, Typography, Upload, message } from 'antd'
+import { Alert, Button, Empty, Grid, Input, Select, Space, Switch, Typography, Upload, message } from 'antd'
 import type { UploadFile } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { Bucket } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
+import { SetupCallout } from '../components/SetupCallout'
 
 type Props = {
 	apiToken: string
@@ -18,6 +20,7 @@ type Props = {
 export function UploadsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const transfers = useTransfers()
+	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
 	const isOffline = useIsOffline()
 
@@ -33,10 +36,11 @@ export function UploadsPage(props: Props) {
 	})
 
 	if (!props.profileId) {
-		return <Alert type="warning" showIcon message="Select a profile first" />
+		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to upload files" />
 	}
 
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
+	const showBucketsEmpty = bucketsQuery.isFetched && bucketOptions.length === 0
 	const files = fileList
 		.map((f) => attachRelativePath(f))
 		.filter((file): file is NonNullable<typeof file> => !!file)
@@ -65,6 +69,12 @@ export function UploadsPage(props: Props) {
 			</Typography.Title>
 
 			{isOffline ? <Alert type="warning" showIcon message="Offline: uploads are disabled." /> : null}
+
+			{showBucketsEmpty ? (
+				<Empty description="No buckets available">
+					<Button onClick={() => navigate('/buckets')}>Go to Buckets</Button>
+				</Empty>
+			) : null}
 
 			{bucketsQuery.isError ? (
 				<Alert type="error" showIcon message="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
@@ -102,11 +112,11 @@ export function UploadsPage(props: Props) {
 				fileList={fileList}
 				onChange={({ fileList: next }) => setFileList(next)}
 				disabled={isOffline}
-				>
-					<Button icon={<UploadOutlined />} disabled={isOffline}>
-						{folderMode ? 'Select folder' : 'Select files'}
-					</Button>
-				</Upload>
+			>
+				<Button icon={<UploadOutlined />} disabled={isOffline}>
+					{folderMode ? 'Select folder' : 'Select files'}
+				</Button>
+			</Upload>
 
 			<Space wrap>
 				<Button type="primary" onClick={queueUpload} disabled={isOffline || !bucket || files.length === 0}>

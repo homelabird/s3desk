@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Divider, Form, Input, Modal, Select, Space, Switch, Table, Typography, message } from 'antd'
+import { Alert, Button, Checkbox, Divider, Empty, Form, Input, Modal, Select, Space, Switch, Table, Typography, message } from 'antd'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { MetaResponse, Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileTLSStatus, ProfileUpdateRequest } from '../api/types'
@@ -14,6 +15,7 @@ type Props = {
 export function ProfilesPage(props: Props) {
 	const queryClient = useQueryClient()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
+	const navigate = useNavigate()
 
 	const [createOpen, setCreateOpen] = useState(false)
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
@@ -24,6 +26,8 @@ export function ProfilesPage(props: Props) {
 		queryKey: ['profiles', props.apiToken],
 		queryFn: () => api.listProfiles(),
 	})
+	const profiles = profilesQuery.data ?? []
+	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
@@ -148,6 +152,11 @@ export function ProfilesPage(props: Props) {
 					showIcon
 					message="API Token is empty"
 					description="If your backend is started with API_TOKEN, set it in Settings."
+					action={
+						<Button size="small" onClick={() => navigate({ search: '?settings=1' })}>
+							Open Settings
+						</Button>
+					}
 				/>
 			)}
 
@@ -158,9 +167,18 @@ export function ProfilesPage(props: Props) {
 			<Table
 				rowKey="id"
 				loading={profilesQuery.isFetching}
-				dataSource={profilesQuery.data ?? []}
+				dataSource={profiles}
 				pagination={false}
 				scroll={{ x: true }}
+				locale={{
+					emptyText: showProfilesEmpty ? (
+						<Empty description="No profiles yet">
+							<Button type="primary" onClick={() => setCreateOpen(true)}>
+								Create profile
+							</Button>
+						</Empty>
+					) : null,
+				}}
 				columns={[
 					{
 						title: 'Name',
