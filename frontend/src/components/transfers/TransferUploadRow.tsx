@@ -41,7 +41,7 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 				: t.status === 'commit'
 					? 'Committing'
 					: t.status === 'waiting_job'
-						? 'Waiting'
+						? 'Transferring'
 						: t.status === 'cleanup'
 							? 'Cleaning'
 							: t.status === 'succeeded'
@@ -49,15 +49,19 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 								: t.status === 'failed'
 									? 'Failed'
 									: 'Canceled'
+	const transferMetricsText = `${formatBytes(t.loadedBytes)}/${formatBytes(t.totalBytes)} · ${t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'} · ${
+		t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'
+	}`
+	const hasTransferMetrics = t.totalBytes > 0 || t.loadedBytes > 0 || t.speedBps > 0 || t.etaSeconds > 0
 	const progressText =
 		t.status === 'staging'
-			? `${formatBytes(t.loadedBytes)}/${formatBytes(t.totalBytes)} · ${t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'} · ${
-					t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'
-				}`
+			? transferMetricsText
 			: t.status === 'commit'
 				? 'Committing...'
 				: t.status === 'waiting_job'
-					? 'Waiting for upload job...'
+					? hasTransferMetrics
+						? transferMetricsText
+						: 'Starting upload job...'
 					: t.status === 'cleanup'
 						? 'Removing local files...'
 				: null

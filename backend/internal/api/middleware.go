@@ -12,9 +12,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"object-storage/internal/logging"
-	"object-storage/internal/models"
-	"object-storage/internal/store"
+	"s3desk/internal/logging"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
 )
 
 func (s *server) requireAPIToken(next http.Handler) http.Handler {

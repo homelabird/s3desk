@@ -4,11 +4,12 @@ import { DownloadOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError, RequestAbortedError, RequestTimeoutError, type UploadFileItem } from '../api/client'
+import { APIClient, APIError, RequestAbortedError, RequestTimeoutError, type UploadCommitRequest, type UploadFileItem } from '../api/client'
+import type { JobProgress, JobStatus, WSEvent } from '../api/types'
 import { TransfersContext, useTransfers } from './useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { TransferEstimator } from '../lib/transfer'
-import { publishNetworkStatus } from '../lib/networkStatus'
+import { clearNetworkStatus, publishNetworkStatus } from '../lib/networkStatus'
 import {
 	ensureReadWritePermission,
 	getDevicePickerSupport,
@@ -99,6 +100,8 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 		'moveCleanupFilenameMaxLen',
 		MOVE_CLEANUP_FILENAME_MAX_LEN,
 	)
+	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
+	const [uploadEventsConnected, setUploadEventsConnected] = useState(false)
 
 	useEffect(() => {
 		downloadTasksRef.current = downloadTasks
@@ -175,6 +178,171 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 	const updateUploadTask = useCallback((taskId: string, updater: (task: UploadTask) => UploadTask) => {
 		setUploadTasks((prev) => prev.map((t) => (t.id === taskId ? updater(t) : t)))
 	}, [])
+
+	const updateUploadTaskProgressFromJob = useCallback(
+		(taskId: string, progress?: JobProgress | null) => {
+			if (!progress) return
+			updateUploadTask(taskId, (prev) => {
+				const loadedBytes = progress.bytesDone ?? prev.loadedBytes
+				const totalBytes = progress.bytesTotal ?? prev.totalBytes
+				const speedBps = progress.speedBps ?? prev.speedBps
+				const etaSeconds = progress.etaSeconds ?? prev.etaSeconds
+				if (
+					loadedBytes === prev.loadedBytes &&
+					totalBytes === prev.totalBytes &&
+					speedBps === prev.speedBps &&
+					etaSeconds === prev.etaSeconds
+				) {
+					return prev
+				}
+				return {
+					...prev,
+					loadedBytes,
+					totalBytes,
+					speedBps,
+					etaSeconds,
+				}
+			})
+		},
+		[updateUploadTask],
+	)
+
+	const finalizeUploadJob = useCallback(
+		async (taskId: string, status: JobStatus, error?: string | null) => {
+			const current = uploadTasksRef.current.find((t) => t.id === taskId)
+			if (!current || current.status !== 'waiting_job') return
+
+			if (status === 'succeeded') {
+				const movePlan = uploadMoveByTaskIdRef.current[taskId]
+				if (!current.moveAfterUpload || !movePlan) {
+					updateUploadTask(taskId, (prev) => ({
+						...prev,
+						status: 'succeeded',
+						finishedAtMs: Date.now(),
+						error: undefined,
+						cleanupFailed: false,
+						speedBps: 0,
+						etaSeconds: 0,
+						loadedBytes: prev.totalBytes,
+					}))
+					delete uploadMoveByTaskIdRef.current[taskId]
+					return
+				}
+
+				updateUploadTask(taskId, (prev) => ({
+					...prev,
+					status: 'cleanup',
+					error: undefined,
+					cleanupFailed: false,
+				}))
+
+				try {
+					const result = await removeEntriesFromDirectoryHandle({
+						root: movePlan.rootHandle,
+						relPaths: movePlan.relPaths,
+						cleanupEmptyDirs: movePlan.cleanupEmptyDirs,
+					})
+					const summary = formatMoveCleanupSummary(result, movePlan.label ?? '')
+					if (result.failed.length > 0) {
+						updateUploadTask(taskId, (prev) => ({
+							...prev,
+							status: 'failed',
+							finishedAtMs: Date.now(),
+							error: summary,
+							cleanupFailed: true,
+						}))
+						showMoveCleanupReport({
+							title: 'Move completed with errors',
+							label: movePlan.label,
+							bucket: current.bucket,
+							prefix: current.prefix,
+							filenameTemplate: moveCleanupFilenameTemplate,
+							filenameMaxLen: moveCleanupFilenameMaxLen,
+							result,
+						})
+					} else {
+						updateUploadTask(taskId, (prev) => ({
+							...prev,
+							status: 'succeeded',
+							finishedAtMs: Date.now(),
+							speedBps: 0,
+							etaSeconds: 0,
+							loadedBytes: prev.totalBytes,
+						}))
+						const label = movePlan.label ? ` from ${movePlan.label}` : ''
+						message.success(`Moved ${result.removed.length} item(s)${label}`)
+						if (result.skipped.length > 0 || result.removedDirs.length > 0) {
+							showMoveCleanupReport({
+								title: 'Move completed with notes',
+								label: movePlan.label,
+								bucket: current.bucket,
+								prefix: current.prefix,
+								filenameTemplate: moveCleanupFilenameTemplate,
+								filenameMaxLen: moveCleanupFilenameMaxLen,
+								result,
+								kind: 'info',
+							})
+						}
+						delete uploadMoveByTaskIdRef.current[taskId]
+					}
+				} catch (err) {
+					maybeReportNetworkError(err)
+					const msg = formatErr(err)
+					updateUploadTask(taskId, (prev) => ({
+						...prev,
+						status: 'failed',
+						finishedAtMs: Date.now(),
+						error: msg,
+						cleanupFailed: true,
+					}))
+					message.error(msg)
+				}
+				return
+			}
+
+			if (status === 'failed') {
+				updateUploadTask(taskId, (prev) => ({
+					...prev,
+					status: 'failed',
+					finishedAtMs: Date.now(),
+					error: error ?? 'upload job failed',
+					cleanupFailed: false,
+					speedBps: 0,
+					etaSeconds: 0,
+				}))
+				delete uploadMoveByTaskIdRef.current[taskId]
+				return
+			}
+
+			if (status === 'canceled') {
+				updateUploadTask(taskId, (prev) => ({
+					...prev,
+					status: 'canceled',
+					finishedAtMs: Date.now(),
+					error: error ?? prev.error,
+					cleanupFailed: false,
+					speedBps: 0,
+					etaSeconds: 0,
+				}))
+				delete uploadMoveByTaskIdRef.current[taskId]
+			}
+		},
+		[moveCleanupFilenameMaxLen, moveCleanupFilenameTemplate, updateUploadTask],
+	)
+
+	const handleUploadJobUpdate = useCallback(
+		async (taskId: string, job: { status?: JobStatus; progress?: JobProgress | null; error?: string | null }) => {
+			const current = uploadTasksRef.current.find((t) => t.id === taskId)
+			if (!current || current.status !== 'waiting_job') return
+			if (job.progress) {
+				updateUploadTaskProgressFromJob(taskId, job.progress)
+			}
+			if (job.status === 'succeeded' || job.status === 'failed' || job.status === 'canceled') {
+				await finalizeUploadJob(taskId, job.status, job.error ?? null)
+			}
+		},
+		[finalizeUploadJob, updateUploadTaskProgressFromJob],
+	)
 
 	const cancelUploadTask = useCallback(
 		(taskId: string) => {
@@ -328,52 +496,86 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				return
 			}
 
-			const handle =
-				current.kind === 'object'
-					? api.downloadObject(
-							{ profileId: current.profileId, bucket: current.bucket, key: current.key },
-							{
-								onProgress: (p) => {
-									const e = downloadEstimatorByTaskIdRef.current[taskId]
-									if (!e) return
-									const stats = e.update(p.loadedBytes, p.totalBytes)
-									updateDownloadTask(taskId, (t) => ({
-										...t,
-										loadedBytes: stats.loadedBytes,
-										totalBytes: stats.totalBytes ?? t.totalBytes,
-										speedBps: stats.speedBps,
-										etaSeconds: stats.etaSeconds,
-									}))
-								},
-							},
-						)
-					: api.downloadJobArtifact(
-							{ profileId: current.profileId, jobId: current.jobId },
-							{
-								onProgress: (p) => {
-									const e = downloadEstimatorByTaskIdRef.current[taskId]
-									if (!e) return
-									const stats = e.update(p.loadedBytes, p.totalBytes)
-									updateDownloadTask(taskId, (t) => ({
-										...t,
-										loadedBytes: stats.loadedBytes,
-										totalBytes: stats.totalBytes ?? t.totalBytes,
-										speedBps: stats.speedBps,
-										etaSeconds: stats.etaSeconds,
-									}))
-								},
-							},
-						)
+			if (current.kind === 'object') {
+				try {
+					const presigned = await api.getObjectDownloadURL({
+						profileId: current.profileId,
+						bucket: current.bucket,
+						key: current.key,
+						proxy: downloadLinkProxyEnabled,
+					})
+					const latest = downloadTasksRef.current.find((t) => t.id === taskId)
+					if (!latest || latest.status !== 'running') {
+						return
+					}
+					const handle = downloadURLWithProgress(presigned.url, {
+						onProgress: (p) => {
+							const e = downloadEstimatorByTaskIdRef.current[taskId]
+							if (!e) return
+							const stats = e.update(p.loadedBytes, p.totalBytes)
+							updateDownloadTask(taskId, (t) => ({
+								...t,
+								loadedBytes: stats.loadedBytes,
+								totalBytes: stats.totalBytes ?? t.totalBytes,
+								speedBps: stats.speedBps,
+								etaSeconds: stats.etaSeconds,
+							}))
+						},
+					})
+					downloadAbortByTaskIdRef.current[taskId] = handle.abort
+
+					const resp = await handle.promise
+					const fallbackName = defaultFilenameFromKey(current.key)
+					const filename = filenameFromContentDisposition(resp.contentDisposition) ?? (current.filenameHint?.trim() || fallbackName)
+					saveBlob(resp.blob, filename)
+					updateDownloadTask(taskId, (t) => ({
+						...t,
+						status: 'succeeded',
+						finishedAtMs: Date.now(),
+						loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
+						filenameHint: filename,
+					}))
+					message.success(`Downloaded ${filename}`)
+				} catch (err) {
+					if (err instanceof RequestAbortedError) {
+						updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
+						return
+					}
+					maybeReportNetworkError(err)
+					const msg = formatErr(err)
+					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
+					message.error(msg)
+				} finally {
+					delete downloadAbortByTaskIdRef.current[taskId]
+					delete downloadEstimatorByTaskIdRef.current[taskId]
+				}
+				return
+			}
+
+			const handle = api.downloadJobArtifact(
+				{ profileId: current.profileId, jobId: current.jobId },
+				{
+					onProgress: (p) => {
+						const e = downloadEstimatorByTaskIdRef.current[taskId]
+						if (!e) return
+						const stats = e.update(p.loadedBytes, p.totalBytes)
+						updateDownloadTask(taskId, (t) => ({
+							...t,
+							loadedBytes: stats.loadedBytes,
+							totalBytes: stats.totalBytes ?? t.totalBytes,
+							speedBps: stats.speedBps,
+							etaSeconds: stats.etaSeconds,
+						}))
+					},
+				},
+			)
 
 			downloadAbortByTaskIdRef.current[taskId] = handle.abort
 
 			try {
 				const resp = await handle.promise
-				const fallbackName =
-					current.kind === 'object'
-						? defaultFilenameFromKey(current.key)
-						: current.filenameHint?.trim() || `job-${current.jobId}.zip`
-				const filename = filenameFromContentDisposition(resp.contentDisposition) ?? (current.filenameHint?.trim() || fallbackName)
+				const fallbackName = current.filenameHint?.trim() || `job-${current.jobId}.zip`
+				const filename = filenameFromContentDisposition(resp.contentDisposition) ?? fallbackName
 				saveBlob(resp.blob, filename)
 				updateDownloadTask(taskId, (t) => ({
 					...t,
@@ -397,7 +599,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				delete downloadEstimatorByTaskIdRef.current[taskId]
 			}
 		},
-		[api, updateDownloadTask],
+		[api, downloadLinkProxyEnabled, updateDownloadTask],
 	)
 
 	useEffect(() => {
@@ -522,7 +724,8 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 					etaSeconds: 0,
 				}))
 
-				const resp = await withJobQueueRetry(() => api.commitUpload(current.profileId, uploadId))
+				const commitReq = buildUploadCommitRequest(current, items)
+				const resp = await withJobQueueRetry(() => api.commitUpload(current.profileId, uploadId, commitReq))
 				committed = true
 				delete uploadItemsByTaskIdRef.current[taskId]
 				updateUploadTask(taskId, (t) => ({
@@ -531,6 +734,9 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 					finishedAtMs: undefined,
 					jobId: resp.jobId,
 					cleanupFailed: false,
+					loadedBytes: 0,
+					speedBps: 0,
+					etaSeconds: 0,
 				}))
 
 				message.open({
@@ -577,7 +783,171 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 
 	const hasPendingUploadJobs = uploadTasks.some((t) => t.status === 'waiting_job')
 	useEffect(() => {
-		if (!hasPendingUploadJobs) return
+		if (!hasPendingUploadJobs) {
+			setUploadEventsConnected(false)
+			return
+		}
+		if (typeof window === 'undefined') {
+			setUploadEventsConnected(false)
+			return
+		}
+
+		let stopped = false
+		let ws: WebSocket | null = null
+		let es: EventSource | null = null
+		let reconnectTimer: number | null = null
+		let reconnectAttempt = 0
+		let wsFallbackTimer: number | null = null
+		let wsOpened = false
+
+		const clearReconnect = () => {
+			if (reconnectTimer) {
+				window.clearTimeout(reconnectTimer)
+				reconnectTimer = null
+			}
+		}
+
+		const clearWSFallbackTimer = () => {
+			if (wsFallbackTimer) {
+				window.clearTimeout(wsFallbackTimer)
+				wsFallbackTimer = null
+			}
+		}
+
+		const scheduleReconnect = () => {
+			if (stopped || reconnectTimer) return
+			const jitter = Math.floor(Math.random() * 250)
+			const delay = Math.min(20_000, 1000 * Math.pow(2, reconnectAttempt) + jitter)
+			reconnectAttempt += 1
+			reconnectTimer = window.setTimeout(() => {
+				reconnectTimer = null
+				if (stopped) return
+				connect()
+			}, delay)
+		}
+
+		const handleEvent = (data: string) => {
+			try {
+				const msg = JSON.parse(data) as WSEvent
+				if (!msg.jobId || typeof msg.payload !== 'object' || msg.payload === null) return
+				const task = uploadTasksRef.current.find((t) => t.status === 'waiting_job' && t.jobId === msg.jobId)
+				if (!task) return
+				if (msg.type !== 'job.progress' && msg.type !== 'job.completed') return
+				const payload = msg.payload as { status?: JobStatus; progress?: JobProgress; error?: string | null }
+				void handleUploadJobUpdate(task.id, payload)
+			} catch {
+				// ignore malformed events
+			}
+		}
+
+		const closeTransport = () => {
+			if (ws) {
+				try {
+					ws.close()
+				} catch {
+					// ignore
+				}
+				ws = null
+			}
+			if (es) {
+				try {
+					es.close()
+				} catch {
+					// ignore
+				}
+				es = null
+			}
+		}
+
+		const connectSSE = () => {
+			if (stopped || typeof window.EventSource === 'undefined') {
+				setUploadEventsConnected(false)
+				scheduleReconnect()
+				return
+			}
+			clearReconnect()
+			clearWSFallbackTimer()
+			closeTransport()
+			try {
+				es = new EventSource(buildSSEURL(props.apiToken))
+			} catch {
+				setUploadEventsConnected(false)
+				scheduleReconnect()
+				return
+			}
+			es.onopen = () => {
+				setUploadEventsConnected(true)
+				reconnectAttempt = 0
+			}
+			es.onerror = () => {
+				setUploadEventsConnected(false)
+				scheduleReconnect()
+			}
+			es.onmessage = (ev) => handleEvent(ev.data)
+		}
+
+		const connectWS = () => {
+			if (stopped || typeof window.WebSocket === 'undefined') {
+				connectSSE()
+				return
+			}
+			clearReconnect()
+			clearWSFallbackTimer()
+			closeTransport()
+			wsOpened = false
+			try {
+				ws = new WebSocket(buildWSURL(props.apiToken))
+			} catch {
+				connectSSE()
+				return
+			}
+			wsFallbackTimer = window.setTimeout(() => {
+				if (!wsOpened && !stopped) {
+					connectSSE()
+				}
+			}, 1500)
+			ws.onopen = () => {
+				wsOpened = true
+				clearWSFallbackTimer()
+				setUploadEventsConnected(true)
+				reconnectAttempt = 0
+			}
+			ws.onerror = () => {
+				setUploadEventsConnected(false)
+				if (!wsOpened) {
+					clearWSFallbackTimer()
+					connectSSE()
+					return
+				}
+				scheduleReconnect()
+			}
+			ws.onclose = () => {
+				setUploadEventsConnected(false)
+				if (!wsOpened) {
+					clearWSFallbackTimer()
+					connectSSE()
+					return
+				}
+				scheduleReconnect()
+			}
+			ws.onmessage = (ev) => handleEvent(typeof ev.data === 'string' ? ev.data : '')
+		}
+
+		const connect = () => {
+			connectWS()
+		}
+
+		connect()
+		return () => {
+			stopped = true
+			clearReconnect()
+			clearWSFallbackTimer()
+			closeTransport()
+		}
+	}, [handleUploadJobUpdate, hasPendingUploadJobs, props.apiToken])
+
+	useEffect(() => {
+		if (!hasPendingUploadJobs || uploadEventsConnected) return
 
 		let stopped = false
 		const tick = async () => {
@@ -587,106 +957,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				try {
 					const job = await api.getJob(task.profileId, task.jobId as string)
 					if (stopped) return
-					if (job.status === 'succeeded') {
-						const movePlan = uploadMoveByTaskIdRef.current[task.id]
-						if (!task.moveAfterUpload || !movePlan) {
-							updateUploadTask(task.id, (prev) => ({
-								...prev,
-								status: 'succeeded',
-								finishedAtMs: Date.now(),
-								error: undefined,
-								cleanupFailed: false,
-							}))
-							delete uploadMoveByTaskIdRef.current[task.id]
-							continue
-						}
-						updateUploadTask(task.id, (prev) => ({
-							...prev,
-							status: 'cleanup',
-							error: undefined,
-							cleanupFailed: false,
-						}))
-						try {
-							const result = await removeEntriesFromDirectoryHandle({
-								root: movePlan.rootHandle,
-								relPaths: movePlan.relPaths,
-								cleanupEmptyDirs: movePlan.cleanupEmptyDirs,
-							})
-							const summary = formatMoveCleanupSummary(result, movePlan.label ?? '')
-							if (result.failed.length > 0) {
-								updateUploadTask(task.id, (prev) => ({
-									...prev,
-									status: 'failed',
-									finishedAtMs: Date.now(),
-									error: summary,
-									cleanupFailed: true,
-								}))
-								showMoveCleanupReport({
-									title: 'Move completed with errors',
-									label: movePlan.label,
-									bucket: task.bucket,
-									prefix: task.prefix,
-									filenameTemplate: moveCleanupFilenameTemplate,
-									filenameMaxLen: moveCleanupFilenameMaxLen,
-									result,
-								})
-							} else {
-								updateUploadTask(task.id, (prev) => ({
-									...prev,
-									status: 'succeeded',
-									finishedAtMs: Date.now(),
-								}))
-								const label = movePlan.label ? ` from ${movePlan.label}` : ''
-								message.success(`Moved ${result.removed.length} item(s)${label}`)
-								if (result.skipped.length > 0 || result.removedDirs.length > 0) {
-									showMoveCleanupReport({
-										title: 'Move completed with notes',
-										label: movePlan.label,
-										bucket: task.bucket,
-										prefix: task.prefix,
-										filenameTemplate: moveCleanupFilenameTemplate,
-										filenameMaxLen: moveCleanupFilenameMaxLen,
-										result,
-										kind: 'info',
-									})
-								}
-								delete uploadMoveByTaskIdRef.current[task.id]
-							}
-						} catch (err) {
-							maybeReportNetworkError(err)
-							const msg = formatErr(err)
-							updateUploadTask(task.id, (prev) => ({
-								...prev,
-								status: 'failed',
-								finishedAtMs: Date.now(),
-								error: msg,
-								cleanupFailed: true,
-							}))
-							message.error(msg)
-						}
-						continue
-					}
-					if (job.status === 'failed') {
-						updateUploadTask(task.id, (prev) => ({
-							...prev,
-							status: 'failed',
-							finishedAtMs: Date.now(),
-							error: job.error ?? 'upload job failed',
-							cleanupFailed: false,
-						}))
-						delete uploadMoveByTaskIdRef.current[task.id]
-						continue
-					}
-					if (job.status === 'canceled') {
-						updateUploadTask(task.id, (prev) => ({
-							...prev,
-							status: 'canceled',
-							finishedAtMs: Date.now(),
-							error: job.error ?? prev.error,
-							cleanupFailed: false,
-						}))
-						delete uploadMoveByTaskIdRef.current[task.id]
-					}
+					await handleUploadJobUpdate(task.id, job)
 				} catch (err) {
 					maybeReportNetworkError(err)
 					updateUploadTask(task.id, (prev) => ({ ...prev, error: formatErr(err) }))
@@ -700,7 +971,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 			stopped = true
 			window.clearInterval(id)
 		}
-	}, [api, hasPendingUploadJobs, updateUploadTask])
+	}, [api, handleUploadJobUpdate, hasPendingUploadJobs, updateUploadTask, uploadEventsConnected])
 
 	const queueDownloadObject = useCallback(
 		(args: { profileId: string; bucket: string; key: string; expectedBytes?: number; label?: string; filenameHint?: string }) => {
@@ -1008,6 +1279,76 @@ function summarizeDownloadTasks(tasks: DownloadTask[]): string {
 	return parts.join(' · ')
 }
 
+const maxUploadCommitItems = 200
+
+type UploadCommitNormalizedItem = {
+	path: string
+	size: number
+}
+
+function normalizeUploadPath(value: string): string {
+	const trimmed = value.trim()
+	if (!trimmed) return ''
+	const normalized = trimmed.replace(/\\/g, '/').replace(/^\/+/, '')
+	const parts = normalized.split('/').filter(Boolean)
+	const cleaned: string[] = []
+	for (const part of parts) {
+		if (part === '.' || part === '') continue
+		if (part === '..') {
+			if (cleaned.length === 0) return ''
+			cleaned.pop()
+			continue
+		}
+		if (part.includes('\u0000')) return ''
+		cleaned.push(part)
+	}
+	return cleaned.length ? cleaned.join('/') : ''
+}
+
+function deriveUploadRoot(paths: string[]): { rootKind?: 'file' | 'folder' | 'collection'; rootName?: string } {
+	if (paths.length === 0) return {}
+	if (paths.length === 1) {
+		const parts = paths[0].split('/').filter(Boolean)
+		if (parts.length === 1) return { rootKind: 'file', rootName: parts[0] }
+		return { rootKind: 'folder', rootName: parts[0] }
+	}
+	const roots = Array.from(new Set(paths.map((p) => p.split('/')[0]).filter(Boolean)))
+	if (roots.length === 1) {
+		return { rootKind: 'folder', rootName: roots[0] }
+	}
+	return { rootKind: 'collection' }
+}
+
+function buildUploadCommitRequest(task: UploadTask, items: UploadFileItem[]): UploadCommitRequest | undefined {
+	const normalizedItems: UploadCommitNormalizedItem[] = []
+	for (const item of items) {
+		const fileWithPath = item.file as File & { webkitRelativePath?: string; relativePath?: string }
+		const rawPath = (item.relPath ?? fileWithPath.webkitRelativePath ?? fileWithPath.relativePath ?? item.file.name).trim()
+		const path = normalizeUploadPath(rawPath)
+		if (!path) continue
+		const size = Number.isFinite(item.file.size) ? item.file.size : 0
+		normalizedItems.push({ path, size })
+	}
+	if (normalizedItems.length === 0) return undefined
+
+	const totalFiles = normalizedItems.length
+	const totalBytes = normalizedItems.reduce((sum, item) => sum + item.size, 0)
+	const root = deriveUploadRoot(normalizedItems.map((item) => item.path))
+	const sample = normalizedItems.slice(0, maxUploadCommitItems).map((item) => ({ path: item.path, size: item.size }))
+	const itemsTruncated = normalizedItems.length > maxUploadCommitItems
+
+	const label = task.label?.trim()
+	return {
+		label: label || undefined,
+		rootName: root.rootName,
+		rootKind: root.rootKind,
+		totalFiles,
+		totalBytes,
+		items: sample,
+		itemsTruncated: itemsTruncated || undefined,
+	}
+}
+
 function summarizeUploadTasks(tasks: UploadTask[]): string {
 	if (tasks.length === 0) return ''
 	const counts = {
@@ -1052,7 +1393,7 @@ function summarizeUploadTasks(tasks: UploadTask[]): string {
 	if (counts.queued) parts.push(`Queued ${counts.queued}`)
 	if (counts.staging) parts.push(`Uploading ${counts.staging}`)
 	if (counts.commit) parts.push(`Committing ${counts.commit}`)
-	if (counts.waitingJob) parts.push(`Waiting ${counts.waitingJob}`)
+	if (counts.waitingJob) parts.push(`Transferring ${counts.waitingJob}`)
 	if (counts.cleanup) parts.push(`Cleaning ${counts.cleanup}`)
 	if (counts.succeeded) parts.push(`Done ${counts.succeeded}`)
 	if (counts.failed) parts.push(`Failed ${counts.failed}`)
@@ -1067,6 +1408,25 @@ function formatMoveCleanupSummary(result: RemoveEntriesResult, label: string): s
 	if (result.skipped.length) parts.push(`skipped ${result.skipped.length}`)
 	if (result.removedDirs.length) parts.push(`cleaned ${result.removedDirs.length} folder(s)`)
 	return parts.join(' · ')
+}
+
+function buildWSURL(apiToken: string): string {
+	const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+	const base = `${proto}//${window.location.host}/api/v1/ws`
+	const qs = new URLSearchParams()
+	if (apiToken) qs.set('apiToken', apiToken)
+	qs.set('includeLogs', 'false')
+	const q = qs.toString()
+	return q ? `${base}?${q}` : base
+}
+
+function buildSSEURL(apiToken: string): string {
+	const base = `${window.location.protocol}//${window.location.host}/api/v1/events`
+	const qs = new URLSearchParams()
+	if (apiToken) qs.set('apiToken', apiToken)
+	qs.set('includeLogs', 'false')
+	const q = qs.toString()
+	return q ? `${base}?${q}` : base
 }
 
 function buildMoveCleanupReportText(result: RemoveEntriesResult, label: string, bucket?: string, prefix?: string): string {
@@ -1297,6 +1657,67 @@ function normalizeDevicePath(value: string): string {
 	const cleaned = value.replace(/\\/g, '/').replace(/^\/+/, '')
 	const parts = cleaned.split('/').filter(Boolean).filter((part) => part !== '.' && part !== '..')
 	return parts.join('/')
+}
+
+type DownloadHandle = {
+	promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>
+	abort: () => void
+}
+
+function downloadURLWithProgress(
+	url: string,
+	opts: { onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void } = {},
+): DownloadHandle {
+	const xhr = new XMLHttpRequest()
+	xhr.open('GET', url)
+	xhr.responseType = 'blob'
+
+	xhr.onprogress = (e) => {
+		if (!opts.onProgress) return
+		opts.onProgress({
+			loadedBytes: e.loaded,
+			totalBytes: e.lengthComputable ? e.total : undefined,
+		})
+	}
+
+	const promise = new Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>(
+		(resolve, reject) => {
+			xhr.onload = async () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					clearNetworkStatus()
+					resolve({
+						blob: xhr.response,
+						contentDisposition: xhr.getResponseHeader('content-disposition'),
+						contentType: xhr.getResponseHeader('content-type'),
+					})
+					return
+				}
+
+				const bodyText = await blobToTextSafe(xhr.response)
+				const fallback =
+					xhr.status === 0
+						? 'Download failed (network/CORS). Enable server proxy in Settings if needed.'
+						: `Download failed (HTTP ${xhr.status})`
+				reject(new Error(bodyText ? `${fallback}: ${bodyText}` : fallback))
+			}
+			xhr.onerror = () => {
+				reject(new Error('Network error (possible CORS). Enable server proxy in Settings if needed.'))
+			}
+			xhr.onabort = () => reject(new RequestAbortedError())
+		},
+	)
+
+	xhr.send()
+	return { promise, abort: () => xhr.abort() }
+}
+
+async function blobToTextSafe(blob: Blob | null): Promise<string | null> {
+	if (!blob) return null
+	try {
+		return await blob.text()
+	} catch {
+		return null
+	}
 }
 
 function saveBlob(blob: Blob, filename: string) {

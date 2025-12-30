@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"archive/zip"
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -14,11 +15,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	"object-storage/internal/models"
-	"object-storage/internal/s3client"
+	"s3desk/internal/models"
 )
 
 type s3ZipObject struct {
@@ -30,12 +27,12 @@ type s3ZipObject struct {
 
 const maxObjectsForZip = 50_000
 
-func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 
 	bucket = strings.TrimSpace(bucket)
-	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
+	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
 
 	if bucket == "" {
 		return errors.New("payload.bucket is required")
@@ -56,7 +53,7 @@ func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, p
 		return errors.New("profile not found")
 	}
 
-	client, err := s3client.New(ctx, profileSecrets)
+	objs, err := listRcloneZipObjectsForPrefix(ctx, m, profileSecrets, jobID, bucket, prefix, preserveLeadingSlash)
 	if err != nil {
 		return err
 	}
@@ -64,17 +61,17 @@ func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, p
 	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("creating zip from s3://%s/%s", bucket, prefix))
 	artifactName := defaultZipNameFromPrefix(bucket, prefix)
 	return m.writeZipArtifact(ctx, jobID, logFile, artifactName, func(zw *zip.Writer, publish publishZipProgress) error {
-		return zipS3PrefixObjects(ctx, client, bucket, prefix, zw, publish)
+		return zipS3Objects(ctx, m, profileSecrets, jobID, bucket, objs, zw, publish, preserveLeadingSlash)
 	})
 }
 
-func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	bucket, _ := payload["bucket"].(string)
 	rawKeys := stringSlice(payload["keys"])
 	stripPrefix, _ := payload["stripPrefix"].(string)
 
 	bucket = strings.TrimSpace(bucket)
-	stripPrefix = strings.TrimPrefix(strings.TrimSpace(stripPrefix), "/")
+	stripPrefix = normalizeKeyInput(stripPrefix, preserveLeadingSlash)
 
 	keys := trimEmpty(rawKeys)
 	if bucket == "" {
@@ -104,16 +101,11 @@ func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, 
 		return errors.New("profile not found")
 	}
 
-	client, err := s3client.New(ctx, profileSecrets)
-	if err != nil {
-		return err
-	}
-
 	// Normalize + de-dupe keys.
 	seen := make(map[string]struct{}, len(keys))
 	normalized := make([]string, 0, len(keys))
 	for _, k := range keys {
-		k = strings.TrimPrefix(strings.TrimSpace(k), "/")
+		k = normalizeKeyInput(k, preserveLeadingSlash)
 		if k == "" {
 			continue
 		}
@@ -137,13 +129,31 @@ func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, 
 		objs = append(objs, s3ZipObject{Key: key, EntryName: entryName})
 	}
 
+	entries, err := fetchRcloneEntriesForKeys(ctx, m, profileSecrets, jobID, bucket, normalized)
+	if err != nil {
+		return err
+	}
+	for i := range objs {
+		entry, ok := entries[objs[i].Key]
+		if !ok {
+			continue
+		}
+		objs[i].Size = entry.Size
+		if lm := rcloneParseTime(entry.ModTime); lm != "" {
+			if parsed, err := time.Parse(time.RFC3339Nano, lm); err == nil {
+				tm := parsed.UTC()
+				objs[i].LastModified = &tm
+			}
+		}
+	}
+
 	ot := int64(len(objs))
 	m.updateAndPublishProgress(jobID, &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: int64Ptr(0), BytesDone: int64Ptr(0)})
 
 	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("creating zip from %d object(s) in s3://%s", ot, bucket))
 	artifactName := defaultZipNameFromKeys(bucket, stripPrefix, objs)
 	return m.writeZipArtifact(ctx, jobID, logFile, artifactName, func(zw *zip.Writer, publish publishZipProgress) error {
-		return zipS3Objects(ctx, client, bucket, objs, zw, publish)
+		return zipS3Objects(ctx, m, profileSecrets, jobID, bucket, objs, zw, publish, preserveLeadingSlash)
 	})
 }
 
@@ -262,100 +272,124 @@ func (m *Manager) writeZipArtifact(
 	return nil
 }
 
-func zipS3PrefixObjects(ctx context.Context, client *s3.Client, bucket, prefix string, zw *zip.Writer, publish publishZipProgress) error {
-	startedAt := time.Now()
-	var (
-		objectsDone int64
-		bytesDone   int64
-	)
-
-	var (
-		token     *string
-		usedNames = make(map[string]struct{})
-		buf       = make([]byte, 256*1024)
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		resp, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-			Bucket:            aws.String(bucket),
-			Prefix:            aws.String(prefix),
-			ContinuationToken: token,
-			MaxKeys:           aws.Int32(1000),
-		})
-		if err != nil {
-			return err
-		}
-
-		for _, obj := range resp.Contents {
-			key := aws.ToString(obj.Key)
-			if key == "" {
-				continue
-			}
-			size := aws.ToInt64(obj.Size)
-
-			// Skip folder marker objects.
-			if size == 0 && strings.HasSuffix(key, "/") {
-				continue
-			}
-
-			entryName := key
-			if prefix != "" && strings.HasPrefix(key, prefix) {
-				entryName = strings.TrimPrefix(key, prefix)
-			}
-			if strings.TrimSpace(entryName) == "" {
-				continue
-			}
-			if objectsDone >= maxObjectsForZip {
-				return fmt.Errorf("too many objects to zip (>%d); narrow the prefix", maxObjectsForZip)
-			}
-
-			var lm *time.Time
-			if obj.LastModified != nil {
-				t := obj.LastModified.UTC()
-				lm = &t
-			}
-
-			if err := zipS3Object(
-				ctx,
-				client,
-				bucket,
-				s3ZipObject{
-					Key:          key,
-					EntryName:    entryName,
-					Size:         size,
-					LastModified: lm,
-				},
-				zw,
-				usedNames,
-				buf,
-				publish,
-				startedAt,
-				&objectsDone,
-				&bytesDone,
-				0,
-				0,
-			); err != nil {
-				return err
-			}
-		}
-
-		if !aws.ToBool(resp.IsTruncated) || resp.NextContinuationToken == nil || *resp.NextContinuationToken == "" {
-			break
-		}
-		token = resp.NextContinuationToken
+func listRcloneZipObjectsForPrefix(ctx context.Context, m *Manager, profile models.ProfileSecrets, jobID, bucket, prefix string, preserveLeadingSlash bool) ([]s3ZipObject, error) {
+	args := []string{"lsjson", "-R", "--no-mimetype", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
+	proc, err := m.startRcloneCommand(ctx, profile, jobID, args)
+	if err != nil {
+		return nil, err
 	}
 
-	publish(objectsDone, 0, bytesDone, 0, startedAt, true)
-	return nil
+	objs := make([]s3ZipObject, 0, 1024)
+	listErr := decodeRcloneList(proc.stdout, func(obj rcloneListEntry) error {
+		if obj.IsDir {
+			return nil
+		}
+		key := obj.Path
+		if strings.TrimSpace(key) == "" && strings.TrimSpace(obj.Name) != "" {
+			key = obj.Name
+		}
+		key = rcloneObjectKey(prefix, key, preserveLeadingSlash)
+		if key == "" {
+			return nil
+		}
+		if obj.Size == 0 && strings.HasSuffix(key, "/") {
+			return nil
+		}
+		entryName := key
+		if prefix != "" && strings.HasPrefix(key, prefix) {
+			entryName = strings.TrimPrefix(key, prefix)
+		}
+		if strings.TrimSpace(entryName) == "" {
+			return nil
+		}
+		if int64(len(objs)) >= maxObjectsForZip {
+			return fmt.Errorf("too many objects to zip (>%d); narrow the prefix", maxObjectsForZip)
+		}
+
+		var lm *time.Time
+		if ts := rcloneParseTime(obj.ModTime); ts != "" {
+			if parsed, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+				tm := parsed.UTC()
+				lm = &tm
+			}
+		}
+
+		objs = append(objs, s3ZipObject{
+			Key:          key,
+			EntryName:    entryName,
+			Size:         obj.Size,
+			LastModified: lm,
+		})
+		return nil
+	})
+	waitErr := proc.wait()
+	if listErr != nil {
+		return nil, listErr
+	}
+	if waitErr != nil {
+		return nil, fmt.Errorf("rclone lsjson failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
+	}
+
+	return objs, nil
 }
 
-func zipS3Objects(ctx context.Context, client *s3.Client, bucket string, objs []s3ZipObject, zw *zip.Writer, publish publishZipProgress) error {
+func fetchRcloneEntriesForKeys(ctx context.Context, m *Manager, profile models.ProfileSecrets, jobID, bucket string, keys []string) (map[string]rcloneListEntry, error) {
+	entries := make(map[string]rcloneListEntry, len(keys))
+	if len(keys) == 0 {
+		return entries, nil
+	}
+
+	tmpFile, err := os.CreateTemp("", "rclone-zip-keys-*.txt")
+	if err != nil {
+		return nil, err
+	}
+	tmpPath := tmpFile.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	writer := bufio.NewWriter(tmpFile)
+	for _, key := range keys {
+		if _, err := writer.WriteString(key + "\n"); err != nil {
+			_ = tmpFile.Close()
+			return nil, err
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		_ = tmpFile.Close()
+		return nil, err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return nil, err
+	}
+
+	args := []string{"lsjson", "--files-only", "--no-mimetype", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
+	proc, err := m.startRcloneCommand(ctx, profile, jobID, args)
+	if err != nil {
+		return nil, err
+	}
+
+	listErr := decodeRcloneList(proc.stdout, func(entry rcloneListEntry) error {
+		key := entry.Path
+		if strings.TrimSpace(key) == "" && strings.TrimSpace(entry.Name) != "" {
+			key = entry.Name
+		}
+		if key == "" {
+			return nil
+		}
+		entries[key] = entry
+		return nil
+	})
+	waitErr := proc.wait()
+	if listErr != nil {
+		return nil, listErr
+	}
+	if waitErr != nil {
+		return nil, fmt.Errorf("rclone lsjson failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
+	}
+
+	return entries, nil
+}
+
+func zipS3Objects(ctx context.Context, m *Manager, profile models.ProfileSecrets, jobID, bucket string, objs []s3ZipObject, zw *zip.Writer, publish publishZipProgress, preserveLeadingSlash bool) error {
 	startedAt := time.Now()
 	var (
 		objectsDone int64
@@ -372,7 +406,7 @@ func zipS3Objects(ctx context.Context, client *s3.Client, bucket string, objs []
 	buf := make([]byte, 256*1024)
 
 	for _, obj := range objs {
-		if err := zipS3Object(ctx, client, bucket, obj, zw, usedNames, buf, publish, startedAt, &objectsDone, &bytesDone, objectsTotal, bytesTotal); err != nil {
+		if err := zipS3Object(ctx, m, profile, jobID, bucket, obj, zw, usedNames, buf, publish, startedAt, &objectsDone, &bytesDone, objectsTotal, bytesTotal, preserveLeadingSlash); err != nil {
 			return err
 		}
 	}
@@ -383,7 +417,9 @@ func zipS3Objects(ctx context.Context, client *s3.Client, bucket string, objs []
 
 func zipS3Object(
 	ctx context.Context,
-	client *s3.Client,
+	m *Manager,
+	profile models.ProfileSecrets,
+	jobID string,
 	bucket string,
 	obj s3ZipObject,
 	zw *zip.Writer,
@@ -395,6 +431,7 @@ func zipS3Object(
 	bytesDone *int64,
 	objectsTotal int64,
 	bytesTotal int64,
+	preserveLeadingSlash bool,
 ) error {
 	select {
 	case <-ctx.Done():
@@ -423,23 +460,22 @@ func zipS3Object(
 		return err
 	}
 
-	out, err := client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(obj.Key),
-	})
+	proc, err := m.startRcloneCommand(ctx, profile, jobID, []string{"cat", rcloneRemoteObject(bucket, obj.Key, preserveLeadingSlash)})
 	if err != nil {
 		return err
 	}
 
-	n, copyErr := copyWithContext(ctx, w, out.Body, buf, func(delta int64) {
+	n, copyErr := copyWithContext(ctx, w, proc.stdout, buf, func(delta int64) {
 		*bytesDone += delta
 		publish(*objectsDone, objectsTotal, *bytesDone, bytesTotal, startedAt, false)
 	})
-	_ = out.Body.Close()
+	waitErr := proc.wait()
 	if copyErr != nil {
 		return copyErr
 	}
-	// `n` is bytes read from S3; keep it for potential future metrics.
+	if waitErr != nil {
+		return fmt.Errorf("rclone cat failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
+	}
 	_ = n
 
 	*objectsDone++

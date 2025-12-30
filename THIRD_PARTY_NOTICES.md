@@ -173,7 +173,7 @@ Generated at 2025-12-26 08:20:39Z.
 - throttle-debounce@5.0.2 - MIT
 
 ## External tools
-- s5cmd - Apache-2.0 (https://github.com/peak/s5cmd)
+- rclone - MIT (https://github.com/rclone/rclone)
 
 Notes:
 - License identifiers are best-effort and derived from dependency metadata or license files.

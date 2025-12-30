@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
-IMAGE="${IMAGE:-object-storage:local}"
-DATA_VOLUME="${DATA_VOLUME:-object-storage-data}"
+IMAGE="${IMAGE:-s3desk:local}"
+DATA_VOLUME="${DATA_VOLUME:-s3desk-data}"
 JOB_QUEUE_CAPACITY="${JOB_QUEUE_CAPACITY:-256}"
 JOB_LOG_MAX_LINE_BYTES="${JOB_LOG_MAX_LINE_BYTES:-262144}"
 ALLOWED_HOSTS="${ALLOWED_HOSTS:-}"

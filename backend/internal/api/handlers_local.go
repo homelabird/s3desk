@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"object-storage/internal/models"
+	"s3desk/internal/models"
 )
 
 func (s *server) handleListLocalEntries(w http.ResponseWriter, r *http.Request) {

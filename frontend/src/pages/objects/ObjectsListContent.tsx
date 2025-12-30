@@ -18,9 +18,20 @@ type ObjectsListContentProps = {
 	onClearSearch: () => void
 	renderPrefixRow: (prefix: string, offset: number) => ReactNode
 	renderObjectRow: (object: ObjectItem, offset: number) => ReactNode
+	showLoadMore?: boolean
+	loadMoreLabel?: string
+	loadMoreDisabled?: boolean
+	onLoadMore?: () => void
 }
 
 export function ObjectsListContent(props: ObjectsListContentProps) {
+	const loadMoreButton =
+		props.showLoadMore && props.onLoadMore ? (
+			<Button size="small" onClick={props.onLoadMore} disabled={props.loadMoreDisabled}>
+				{props.loadMoreLabel ?? 'Load more'}
+			</Button>
+		) : null
+
 	if (props.rows.length === 0) {
 		return (
 			<div style={{ padding: 24 }}>
@@ -39,6 +50,9 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 						</Empty>
 					)
 				) : null}
+				{loadMoreButton ? (
+					<div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>{loadMoreButton}</div>
+				) : null}
 			</div>
 		)
 	}
@@ -56,6 +70,8 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 				<div style={{ position: 'absolute', left: 0, right: 0, bottom: 8, textAlign: 'center' }}>
 					<Spin />
 				</div>
+			) : loadMoreButton ? (
+				<div style={{ position: 'absolute', left: 0, right: 0, bottom: 8, textAlign: 'center' }}>{loadMoreButton}</div>
 			) : null}
 		</div>
 	)

@@ -1,8 +1,8 @@
 .tools
+.tmp
 dist
 data
 **/*.log
 
 frontend/node_modules
 frontend/dist
-

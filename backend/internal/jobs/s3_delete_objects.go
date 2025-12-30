@@ -1,23 +1,20 @@
 package jobs
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-
-	"object-storage/internal/logging"
-	"object-storage/internal/models"
-	"object-storage/internal/s3client"
-	"object-storage/internal/ws"
+	"s3desk/internal/logging"
+	"s3desk/internal/models"
+	"s3desk/internal/ws"
 )
 
 func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID string, payload map[string]any) error {
@@ -49,22 +46,13 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 		return errors.New("profile not found")
 	}
 
-	client, err := s3client.New(ctx, profileSecrets)
-	if err != nil {
-		return err
-	}
-
 	ot := int64(len(keys))
 	startedAt := time.Now()
 	m.updateAndPublishProgress(jobID, &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: int64Ptr(0)})
 	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("deleting %d object(s) from s3://%s", ot, bucket))
 
 	const batchSize = 1000
-	var (
-		objectsDone  int64
-		totalErrors  int
-		loggedErrors int
-	)
+	var objectsDone int64
 
 	for i := 0; i < len(keys); i += batchSize {
 		select {
@@ -79,39 +67,53 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 		}
 		batch := keys[i:end]
 
-		ids := make([]types.ObjectIdentifier, 0, len(batch))
-		for _, k := range batch {
-			ids = append(ids, types.ObjectIdentifier{Key: aws.String(k)})
-		}
-
-		callCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		out, err := client.DeleteObjects(callCtx, &s3.DeleteObjectsInput{
-			Bucket: aws.String(bucket),
-			Delete: &types.Delete{Objects: ids, Quiet: aws.Bool(true)},
-		})
-		cancel()
+		tmpFile, err := os.CreateTemp("", "rclone-delete-*.txt")
 		if err != nil {
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("DeleteObjects failed: %v", err))
+			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to create delete list: %v", err))
+			return err
+		}
+		tmpPath := tmpFile.Name()
+		writer := bufio.NewWriter(tmpFile)
+		for _, k := range batch {
+			if _, err := writer.WriteString(k + "\n"); err != nil {
+				_ = tmpFile.Close()
+				_ = os.Remove(tmpPath)
+				m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to write delete list: %v", err))
+				return err
+			}
+		}
+		if err := writer.Flush(); err != nil {
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpPath)
+			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to write delete list: %v", err))
+			return err
+		}
+		if err := tmpFile.Close(); err != nil {
+			_ = os.Remove(tmpPath)
+			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to write delete list: %v", err))
 			return err
 		}
 
-		errCount := len(out.Errors)
-		totalErrors += errCount
-		successes := len(ids) - errCount
-		if successes < 0 {
-			successes = 0
+		args := []string{"delete", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
+		proc, err := m.startRcloneCommand(ctx, profileSecrets, jobID, args)
+		if err != nil {
+			_ = os.Remove(tmpPath)
+			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("rclone delete failed: %v", err))
+			return err
 		}
-		objectsDone += int64(successes)
-
-		if errCount > 0 {
-			for _, e := range out.Errors {
-				if loggedErrors >= 20 {
-					break
-				}
-				loggedErrors++
-				m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("delete failed: key=%s code=%s message=%s", aws.ToString(e.Key), aws.ToString(e.Code), aws.ToString(e.Message)))
+		_, _ = io.Copy(io.Discard, proc.stdout)
+		waitErr := proc.wait()
+		_ = os.Remove(tmpPath)
+		if waitErr != nil {
+			msg := strings.TrimSpace(proc.stderr.String())
+			if msg == "" {
+				msg = waitErr.Error()
 			}
+			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("rclone delete failed: %s", msg))
+			return waitErr
 		}
+
+		objectsDone += int64(len(batch))
 
 		od := objectsDone
 		jp := &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: &od}
@@ -135,11 +137,6 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 			}
 		}
 		m.updateAndPublishProgress(jobID, jp)
-	}
-
-	if totalErrors > 0 {
-		m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("completed with %d error(s)", totalErrors))
-		return fmt.Errorf("some objects failed to delete (%d error(s))", totalErrors)
 	}
 
 	m.writeJobLog(logFile, jobID, "info", "completed")

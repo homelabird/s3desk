@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
-  title: Local Object Storage Dashboard API
+  title: S3Desk API
   version: 0.1.0
   description: |
-    Draft API spec for a local-only (127.0.0.1) dashboard targeting S3-compatible object storage.
-    - Metadata/browsing uses S3 APIs (AWS SDK).
-    - Bulk transfers run as Jobs powered by `s5cmd`.
+    Draft API spec for S3Desk, a local-only (127.0.0.1) dashboard targeting S3-compatible object storage.
+    - Metadata/browsing and downloads are powered by `rclone`.
+    - Bulk transfers run as Jobs powered by `rclone`.
 servers:
   - url: http://127.0.0.1:8080/api/v1
     description: Default local server
@@ -542,8 +542,11 @@ paths:
       tags: [Objects]
       summary: Get a presigned download URL (GET object)
       description: |
-        Returns a presigned URL for downloading an object directly from S3.
-        This does not verify the object exists; the S3 request may still return 404.
+        Returns a download URL for an object.
+
+        By default this uses `rclone link`, which may return a direct (backend) URL.
+        If `proxy=true`, the server returns a signed proxy URL that enforces
+        `Content-Disposition` and streams through the backend.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
@@ -556,6 +559,10 @@ paths:
           in: query
           required: false
           schema: { type: integer, minimum: 60, maximum: 3600, default: 900 }
+        - name: proxy
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
       responses:
         "200":
           description: OK
@@ -564,6 +571,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/PresignedURLResponse"
         "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /download-proxy:
+    get:
+      tags: [Objects]
+      summary: Download object via signed proxy URL
+      description: |
+        Signed URL returned from `/buckets/{bucket}/objects/download-url?proxy=true`.
+        This endpoint does not require an API token but validates signature + expiry.
+      servers:
+        - url: http://127.0.0.1:8080
+          description: Default local server (no /api/v1 prefix)
+      parameters:
+        - name: profileId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: bucket
+          in: query
+          required: true
+          schema: { type: string }
+        - name: key
+          in: query
+          required: true
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
           $ref: "#/components/responses/ErrorResponse"
 
   /buckets/{bucket}/objects/favorites:
@@ -720,6 +773,11 @@ paths:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
         - $ref: "#/components/parameters/UploadId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadCommitRequest"
       responses:
         "201":
           description: Job created
@@ -1018,13 +1076,14 @@ components:
 
     Profile:
       type: object
-      required: [id, name, endpoint, region, forcePathStyle, tlsInsecureSkipVerify, createdAt, updatedAt]
+      required: [id, name, endpoint, region, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify, createdAt, updatedAt]
       properties:
         id: { type: string }
         name: { type: string }
         endpoint: { type: string }
         region: { type: string }
         forcePathStyle: { type: boolean }
+        preserveLeadingSlash: { type: boolean }
         tlsInsecureSkipVerify: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -1032,7 +1091,7 @@ components:
     ProfileCreateRequest:
       type: object
       additionalProperties: false
-      required: [name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, tlsInsecureSkipVerify]
+      required: [name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify]
       properties:
         name: { type: string }
         endpoint: { type: string }
@@ -1041,6 +1100,7 @@ components:
         secretAccessKey: { type: string }
         sessionToken: { type: string, nullable: true }
         forcePathStyle: { type: boolean, default: false }
+        preserveLeadingSlash: { type: boolean, default: false }
         tlsInsecureSkipVerify: { type: boolean, default: false }
 
     ProfileUpdateRequest:
@@ -1057,6 +1117,7 @@ components:
           nullable: true
           description: Set to empty string to clear; omit to keep unchanged.
         forcePathStyle: { type: boolean }
+        preserveLeadingSlash: { type: boolean }
         tlsInsecureSkipVerify: { type: boolean }
 
     ProfileTestResponse:
@@ -1288,6 +1349,28 @@ components:
         maxBytes: { type: integer, format: int64, nullable: true }
         expiresAt: { type: string, format: date-time }
 
+    UploadCommitItem:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: { type: string }
+        size: { type: integer, format: int64 }
+
+    UploadCommitRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        label: { type: string }
+        rootName: { type: string }
+        rootKind: { type: string, enum: [file, folder, collection] }
+        totalFiles: { type: integer }
+        totalBytes: { type: integer, format: int64 }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UploadCommitItem" }
+        itemsTruncated: { type: boolean }
+
     JobStatus:
       type: string
       enum: [queued, running, succeeded, failed, canceled]
@@ -1296,22 +1379,22 @@ components:
       type: string
       description: Supported job types.
       enum:
-        - s5cmd_sync_local_to_s3
-        - s5cmd_sync_staging_to_s3
-        - s5cmd_sync_s3_to_local
-        - s5cmd_rm_prefix
+        - transfer_sync_local_to_s3
+        - transfer_sync_staging_to_s3
+        - transfer_sync_s3_to_local
+        - transfer_delete_prefix
         - s3_zip_prefix
         - s3_zip_objects
         - s3_delete_objects
         - s3_index_objects
-        - s5cmd_cp_s3_to_s3
-        - s5cmd_mv_s3_to_s3
-        - s5cmd_cp_s3_to_s3_batch
-        - s5cmd_mv_s3_to_s3_batch
-        - s5cmd_cp_s3_prefix_to_s3_prefix
-        - s5cmd_mv_s3_prefix_to_s3_prefix
+        - transfer_copy_object
+        - transfer_move_object
+        - transfer_copy_batch
+        - transfer_move_batch
+        - transfer_copy_prefix
+        - transfer_move_prefix
 
-    S5CmdSyncLocalToS3Payload:
+    TransferSyncLocalToS3Payload:
       type: object
       additionalProperties: false
       required: [bucket, localPath]
@@ -1328,14 +1411,34 @@ components:
           items: { type: string }
         dryRun: { type: boolean, default: false }
 
-    S5CmdSyncStagingToS3Payload:
+    TransferSyncStagingToS3Payload:
       type: object
       additionalProperties: false
       required: [uploadId]
       properties:
         uploadId: { type: string, minLength: 1 }
+        bucket: { type: string }
+        prefix: { type: string }
+        label: { type: string }
+        rootName: { type: string }
+        rootKind: { type: string, enum: [file, folder, collection] }
+        totalFiles: { type: integer }
+        totalBytes: { type: integer, format: int64 }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TransferSyncStagingToS3Item" }
+        itemsTruncated: { type: boolean }
 
-    S5CmdSyncS3ToLocalPayload:
+    TransferSyncStagingToS3Item:
+      type: object
+      additionalProperties: false
+      required: [path, key]
+      properties:
+        path: { type: string }
+        key: { type: string }
+        size: { type: integer, format: int64 }
+
+    TransferSyncS3ToLocalPayload:
       type: object
       additionalProperties: false
       required: [bucket, localPath]
@@ -1343,7 +1446,7 @@ components:
         bucket: { type: string, minLength: 1 }
         prefix: { type: string, default: "" }
         localPath: { type: string, minLength: 1, description: Local destination directory path }
-        deleteExtraneous: { type: boolean, default: false, description: Delete local files that are not in S3 (s5cmd --delete) }
+        deleteExtraneous: { type: boolean, default: false, description: Delete local files that are not in S3 (sync mode). }
         include:
           type: array
           items: { type: string }
@@ -1352,7 +1455,7 @@ components:
           items: { type: string }
         dryRun: { type: boolean, default: false }
 
-    S5CmdRmPrefixPayload:
+    TransferDeletePrefixPayload:
       type: object
       additionalProperties: false
       required: [bucket]
@@ -1416,7 +1519,7 @@ components:
         prefix: { type: string, default: "" }
         fullReindex: { type: boolean, default: true, description: Clear existing index entries for this bucket/prefix before indexing. }
 
-    S5CmdCpS3ToS3Payload:
+    TransferCopyObjectPayload:
       type: object
       additionalProperties: false
       required: [srcBucket, srcKey, dstBucket, dstKey]
@@ -1427,7 +1530,7 @@ components:
         dstKey: { type: string, minLength: 1 }
         dryRun: { type: boolean, default: false }
 
-    S5CmdMvS3ToS3Payload:
+    TransferMoveObjectPayload:
       type: object
       additionalProperties: false
       required: [srcBucket, srcKey, dstBucket, dstKey]
@@ -1438,7 +1541,7 @@ components:
         dstKey: { type: string, minLength: 1 }
         dryRun: { type: boolean, default: false }
 
-    S5CmdCpMvS3ToS3BatchItem:
+    TransferBatchItem:
       type: object
       additionalProperties: false
       required: [srcKey, dstKey]
@@ -1446,7 +1549,7 @@ components:
         srcKey: { type: string, minLength: 1 }
         dstKey: { type: string, minLength: 1 }
 
-    S5CmdCpS3ToS3BatchPayload:
+    TransferCopyBatchPayload:
       type: object
       additionalProperties: false
       required: [srcBucket, dstBucket, items]
@@ -1457,10 +1560,10 @@ components:
           type: array
           minItems: 1
           maxItems: 5000
-          items: { $ref: "#/components/schemas/S5CmdCpMvS3ToS3BatchItem" }
+          items: { $ref: "#/components/schemas/TransferBatchItem" }
         dryRun: { type: boolean, default: false }
 
-    S5CmdMvS3ToS3BatchPayload:
+    TransferMoveBatchPayload:
       type: object
       additionalProperties: false
       required: [srcBucket, dstBucket, items]
@@ -1471,10 +1574,10 @@ components:
           type: array
           minItems: 1
           maxItems: 5000
-          items: { $ref: "#/components/schemas/S5CmdCpMvS3ToS3BatchItem" }
+          items: { $ref: "#/components/schemas/TransferBatchItem" }
         dryRun: { type: boolean, default: false }
 
-    S5CmdCpS3PrefixToS3PrefixPayload:
+    TransferCopyPrefixPayload:
       type: object
       additionalProperties: false
       required: [srcBucket, srcPrefix, dstBucket]
@@ -1491,7 +1594,7 @@ components:
           items: { type: string }
         dryRun: { type: boolean, default: false }
 
-    S5CmdMvS3PrefixToS3PrefixPayload:
+    TransferMovePrefixPayload:
       type: object
       additionalProperties: false
       required: [srcBucket, srcPrefix, dstBucket]
@@ -1508,37 +1611,37 @@ components:
           items: { type: string }
         dryRun: { type: boolean, default: false }
 
-    JobCreateRequestS5CmdSyncLocalToS3:
+    JobCreateRequestTransferSyncLocalToS3:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_sync_local_to_s3] }
-        payload: { $ref: "#/components/schemas/S5CmdSyncLocalToS3Payload" }
+        type: { type: string, enum: [transfer_sync_local_to_s3] }
+        payload: { $ref: "#/components/schemas/TransferSyncLocalToS3Payload" }
 
-    JobCreateRequestS5CmdSyncStagingToS3:
+    JobCreateRequestTransferSyncStagingToS3:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_sync_staging_to_s3] }
-        payload: { $ref: "#/components/schemas/S5CmdSyncStagingToS3Payload" }
+        type: { type: string, enum: [transfer_sync_staging_to_s3] }
+        payload: { $ref: "#/components/schemas/TransferSyncStagingToS3Payload" }
 
-    JobCreateRequestS5CmdSyncS3ToLocal:
+    JobCreateRequestTransferSyncS3ToLocal:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_sync_s3_to_local] }
-        payload: { $ref: "#/components/schemas/S5CmdSyncS3ToLocalPayload" }
+        type: { type: string, enum: [transfer_sync_s3_to_local] }
+        payload: { $ref: "#/components/schemas/TransferSyncS3ToLocalPayload" }
 
-    JobCreateRequestS5CmdRmPrefix:
+    JobCreateRequestTransferDeletePrefix:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_rm_prefix] }
-        payload: { $ref: "#/components/schemas/S5CmdRmPrefixPayload" }
+        type: { type: string, enum: [transfer_delete_prefix] }
+        payload: { $ref: "#/components/schemas/TransferDeletePrefixPayload" }
 
     JobCreateRequestS3ZipPrefix:
       type: object
@@ -1572,53 +1675,53 @@ components:
         type: { type: string, enum: [s3_index_objects] }
         payload: { $ref: "#/components/schemas/S3IndexObjectsPayload" }
 
-    JobCreateRequestS5CmdCpS3ToS3:
+    JobCreateRequestTransferCopyObject:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_cp_s3_to_s3] }
-        payload: { $ref: "#/components/schemas/S5CmdCpS3ToS3Payload" }
+        type: { type: string, enum: [transfer_copy_object] }
+        payload: { $ref: "#/components/schemas/TransferCopyObjectPayload" }
 
-    JobCreateRequestS5CmdMvS3ToS3:
+    JobCreateRequestTransferMoveObject:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_mv_s3_to_s3] }
-        payload: { $ref: "#/components/schemas/S5CmdMvS3ToS3Payload" }
+        type: { type: string, enum: [transfer_move_object] }
+        payload: { $ref: "#/components/schemas/TransferMoveObjectPayload" }
 
-    JobCreateRequestS5CmdCpS3ToS3Batch:
+    JobCreateRequestTransferCopyBatch:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_cp_s3_to_s3_batch] }
-        payload: { $ref: "#/components/schemas/S5CmdCpS3ToS3BatchPayload" }
+        type: { type: string, enum: [transfer_copy_batch] }
+        payload: { $ref: "#/components/schemas/TransferCopyBatchPayload" }
 
-    JobCreateRequestS5CmdMvS3ToS3Batch:
+    JobCreateRequestTransferMoveBatch:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_mv_s3_to_s3_batch] }
-        payload: { $ref: "#/components/schemas/S5CmdMvS3ToS3BatchPayload" }
+        type: { type: string, enum: [transfer_move_batch] }
+        payload: { $ref: "#/components/schemas/TransferMoveBatchPayload" }
 
-    JobCreateRequestS5CmdCpS3PrefixToS3Prefix:
+    JobCreateRequestTransferCopyPrefix:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_cp_s3_prefix_to_s3_prefix] }
-        payload: { $ref: "#/components/schemas/S5CmdCpS3PrefixToS3PrefixPayload" }
+        type: { type: string, enum: [transfer_copy_prefix] }
+        payload: { $ref: "#/components/schemas/TransferCopyPrefixPayload" }
 
-    JobCreateRequestS5CmdMvS3PrefixToS3Prefix:
+    JobCreateRequestTransferMovePrefix:
       type: object
       additionalProperties: false
       required: [type, payload]
       properties:
-        type: { type: string, enum: [s5cmd_mv_s3_prefix_to_s3_prefix] }
-        payload: { $ref: "#/components/schemas/S5CmdMvS3PrefixToS3PrefixPayload" }
+        type: { type: string, enum: [transfer_move_prefix] }
+        payload: { $ref: "#/components/schemas/TransferMovePrefixPayload" }
 
     JobProgress:
       type: object
@@ -1649,37 +1752,37 @@ components:
 
     JobCreateRequest:
       oneOf:
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdSyncLocalToS3"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdSyncStagingToS3"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdSyncS3ToLocal"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdRmPrefix"
+        - $ref: "#/components/schemas/JobCreateRequestTransferSyncLocalToS3"
+        - $ref: "#/components/schemas/JobCreateRequestTransferSyncStagingToS3"
+        - $ref: "#/components/schemas/JobCreateRequestTransferSyncS3ToLocal"
+        - $ref: "#/components/schemas/JobCreateRequestTransferDeletePrefix"
         - $ref: "#/components/schemas/JobCreateRequestS3ZipPrefix"
         - $ref: "#/components/schemas/JobCreateRequestS3ZipObjects"
         - $ref: "#/components/schemas/JobCreateRequestS3DeleteObjects"
         - $ref: "#/components/schemas/JobCreateRequestS3IndexObjects"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3Batch"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3Batch"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdCpS3PrefixToS3Prefix"
-        - $ref: "#/components/schemas/JobCreateRequestS5CmdMvS3PrefixToS3Prefix"
+        - $ref: "#/components/schemas/JobCreateRequestTransferCopyObject"
+        - $ref: "#/components/schemas/JobCreateRequestTransferMoveObject"
+        - $ref: "#/components/schemas/JobCreateRequestTransferCopyBatch"
+        - $ref: "#/components/schemas/JobCreateRequestTransferMoveBatch"
+        - $ref: "#/components/schemas/JobCreateRequestTransferCopyPrefix"
+        - $ref: "#/components/schemas/JobCreateRequestTransferMovePrefix"
       discriminator:
         propertyName: type
         mapping:
-          s5cmd_sync_local_to_s3: "#/components/schemas/JobCreateRequestS5CmdSyncLocalToS3"
-          s5cmd_sync_staging_to_s3: "#/components/schemas/JobCreateRequestS5CmdSyncStagingToS3"
-          s5cmd_sync_s3_to_local: "#/components/schemas/JobCreateRequestS5CmdSyncS3ToLocal"
-          s5cmd_rm_prefix: "#/components/schemas/JobCreateRequestS5CmdRmPrefix"
+          transfer_sync_local_to_s3: "#/components/schemas/JobCreateRequestTransferSyncLocalToS3"
+          transfer_sync_staging_to_s3: "#/components/schemas/JobCreateRequestTransferSyncStagingToS3"
+          transfer_sync_s3_to_local: "#/components/schemas/JobCreateRequestTransferSyncS3ToLocal"
+          transfer_delete_prefix: "#/components/schemas/JobCreateRequestTransferDeletePrefix"
           s3_zip_prefix: "#/components/schemas/JobCreateRequestS3ZipPrefix"
           s3_zip_objects: "#/components/schemas/JobCreateRequestS3ZipObjects"
           s3_delete_objects: "#/components/schemas/JobCreateRequestS3DeleteObjects"
           s3_index_objects: "#/components/schemas/JobCreateRequestS3IndexObjects"
-          s5cmd_cp_s3_to_s3: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3"
-          s5cmd_mv_s3_to_s3: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3"
-          s5cmd_cp_s3_to_s3_batch: "#/components/schemas/JobCreateRequestS5CmdCpS3ToS3Batch"
-          s5cmd_mv_s3_to_s3_batch: "#/components/schemas/JobCreateRequestS5CmdMvS3ToS3Batch"
-          s5cmd_cp_s3_prefix_to_s3_prefix: "#/components/schemas/JobCreateRequestS5CmdCpS3PrefixToS3Prefix"
-          s5cmd_mv_s3_prefix_to_s3_prefix: "#/components/schemas/JobCreateRequestS5CmdMvS3PrefixToS3Prefix"
+          transfer_copy_object: "#/components/schemas/JobCreateRequestTransferCopyObject"
+          transfer_move_object: "#/components/schemas/JobCreateRequestTransferMoveObject"
+          transfer_copy_batch: "#/components/schemas/JobCreateRequestTransferCopyBatch"
+          transfer_move_batch: "#/components/schemas/JobCreateRequestTransferMoveBatch"
+          transfer_copy_prefix: "#/components/schemas/JobCreateRequestTransferCopyPrefix"
+          transfer_move_prefix: "#/components/schemas/JobCreateRequestTransferMovePrefix"
 
     JobCreatedResponse:
       type: object
@@ -1708,7 +1811,7 @@ components:
         - capabilities
         - jobConcurrency
         - uploadSessionTTLSeconds
-        - s5cmd
+        - transferEngine
       properties:
         version: { type: string }
         serverAddr: { type: string }
@@ -1723,12 +1826,14 @@ components:
         jobConcurrency: { type: integer }
         jobLogMaxBytes: { type: integer, format: int64, nullable: true }
         jobRetentionSeconds: { type: integer, format: int64, nullable: true }
+        jobLogRetentionSeconds: { type: integer, format: int64, nullable: true }
         uploadSessionTTLSeconds: { type: integer, format: int64 }
         uploadMaxBytes: { type: integer, format: int64, nullable: true }
-        s5cmd:
+        transferEngine:
           type: object
-          required: [available]
+          required: [name, available]
           properties:
+            name: { type: string }
             available: { type: boolean }
             path: { type: string }
             version: { type: string }

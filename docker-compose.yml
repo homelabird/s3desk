@@ -1,0 +1,17 @@
+services:
+  s3desk:
+    build:
+      context: .
+      dockerfile: Containerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ADDR: "0.0.0.0:8080"
+      ALLOW_REMOTE: "true"
+      API_TOKEN: "change-me"
+      JOB_QUEUE_CAPACITY: "20"
+    volumes:
+      - s3desk-data:/data
+
+volumes:
+  s3desk-data:

@@ -1,4 +1,4 @@
-module object-storage
+module s3desk
 
 go 1.23.0
 

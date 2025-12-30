@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"object-storage/internal/config"
-	"object-storage/internal/models"
+	"s3desk/internal/config"
+	"s3desk/internal/models"
 )
 
 func TestSecurityHeaders_Default(t *testing.T) {
@@ -197,11 +197,11 @@ func TestRequireLocalHost_RejectsPrivateHostByDefault(t *testing.T) {
 func TestRequireLocalHost_AllowsExplicitAllowedHost(t *testing.T) {
 	t.Parallel()
 
-	s := &server{cfg: config.Config{AllowedHosts: []string{"object-storage.local"}}}
+	s := &server{cfg: config.Config{AllowedHosts: []string{"s3desk.local"}}}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://object-storage.local:8080/api/v1/meta", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://s3desk.local:8080/api/v1/meta", nil)
 	req.RemoteAddr = "127.0.0.1:1234"
-	req.Header.Set("Origin", "http://object-storage.local:8080")
+	req.Header.Set("Origin", "http://s3desk.local:8080")
 
 	s.requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -9,7 +9,7 @@ import {
 	ToolOutlined,
 } from '@ant-design/icons'
 import { Link, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
@@ -49,9 +49,10 @@ export default function App() {
 
 	const [apiToken, setApiToken] = useLocalStorageState('apiToken', '')
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
-	const [settingsOpen, setSettingsOpen] = useState(false)
+	const [settingsOpenState, setSettingsOpenState] = useState(false)
 	const [navOpen, setNavOpen] = useState(false)
 	const [searchParams, setSearchParams] = useSearchParams()
+	const settingsOpen = settingsOpenState || searchParams.has('settings')
 
 	const selectedKey = useMemo(() => {
 		if (location.pathname.startsWith('/profiles')) return '/profiles'
@@ -73,14 +74,14 @@ export default function App() {
 		[],
 	)
 
-	useEffect(() => {
-		const shouldOpen = searchParams.get('settings')
-		if (!shouldOpen) return
-		setSettingsOpen(true)
+	const openSettings = () => setSettingsOpenState(true)
+	const closeSettings = () => {
+		setSettingsOpenState(false)
+		if (!searchParams.has('settings')) return
 		const next = new URLSearchParams(searchParams)
 		next.delete('settings')
 		setSearchParams(next, { replace: true })
-	}, [searchParams, setSearchParams])
+	}
 
 	return (
 		<TransfersProvider apiToken={apiToken}>
@@ -89,7 +90,7 @@ export default function App() {
 				<Sider width={220}>
 					<div style={{ padding: 16 }}>
 						<Typography.Title level={5} style={{ margin: 0, color: 'white' }}>
-							Object Storage
+							S3Desk
 						</Typography.Title>
 						<Typography.Text style={{ color: 'rgba(255,255,255,0.65)' }}>Local Dashboard</Typography.Text>
 					</div>
@@ -128,7 +129,7 @@ export default function App() {
 							apiToken={apiToken}
 						/>
 						<TransfersButton showLabel={!!screens.sm} />
-						<Typography.Link onClick={() => setSettingsOpen(true)}>
+						<Typography.Link onClick={openSettings}>
 							<SettingOutlined /> {screens.sm ? 'Settings' : null}
 						</Typography.Link>
 					</Space>
@@ -141,7 +142,7 @@ export default function App() {
 						flexDirection: 'column',
 					}}
 				>
-					<div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+					<div style={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-scroll-container="app-content">
 						<div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'white' }}>
 							<NetworkStatusBanner />
 							<JobQueueBanner />
@@ -181,7 +182,7 @@ export default function App() {
 			>
 				<div style={{ padding: 16 }}>
 					<Typography.Title level={5} style={{ margin: 0 }}>
-						Object Storage
+						S3Desk
 					</Typography.Title>
 					<Typography.Text type="secondary">Local Dashboard</Typography.Text>
 				</div>
@@ -198,7 +199,7 @@ export default function App() {
 
 			<SettingsDrawer
 				open={settingsOpen}
-				onClose={() => setSettingsOpen(false)}
+				onClose={closeSettings}
 				apiToken={apiToken}
 				setApiToken={setApiToken}
 				profileId={profileId}

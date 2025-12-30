@@ -23,7 +23,7 @@ MANUAL_LICENSES_DIR = REPO_ROOT / "third_party" / "licenses-manual"
 MANUAL_GO_LICENSES_DIR = MANUAL_LICENSES_DIR / "go"
 MANUAL_NPM_LICENSES_DIR = MANUAL_LICENSES_DIR / "npm"
 MANUAL_EXTERNAL_LICENSES_DIR = MANUAL_LICENSES_DIR / "external"
-S5CMD_LICENSE_URL = "https://raw.githubusercontent.com/peak/s5cmd/master/LICENSE"
+RCLONE_LICENSE_URL = "https://raw.githubusercontent.com/rclone/rclone/master/COPYING"
 
 LICENSE_RE = re.compile(r"^(licen[sc]e|copying|notice)(\..*)?$", re.I)
 
@@ -244,7 +244,7 @@ def write_notices(
             lines.append(f"- {pkg['name']}@{pkg['version']} - {license_id}")
         lines.append("")
     lines.append("## External tools")
-    lines.append("- s5cmd - Apache-2.0 (https://github.com/peak/s5cmd)")
+    lines.append("- rclone - MIT (https://github.com/rclone/rclone)")
     lines.append("")
     lines.append("Notes:")
     lines.append("- License identifiers are best-effort and derived from dependency metadata or license files.")
@@ -290,11 +290,11 @@ def copy_license_files(
         shutil.copy2(src, dest)
         seen.add(dest_name)
 
-    s5cmd_license = EXTERNAL_LICENSES_DIR / "s5cmd-LICENSE"
-    if not s5cmd_license.exists():
+    rclone_license = EXTERNAL_LICENSES_DIR / "rclone-LICENSE"
+    if not rclone_license.exists():
         try:
-            content = run(["curl", "-fsSL", S5CMD_LICENSE_URL])
-            s5cmd_license.write_text(content, encoding="utf-8")
+            content = run(["curl", "-fsSL", RCLONE_LICENSE_URL])
+            rclone_license.write_text(content, encoding="utf-8")
         except subprocess.CalledProcessError:
             pass
 

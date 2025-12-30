@@ -14,12 +14,12 @@ import (
 	"testing"
 	"time"
 
-	"object-storage/internal/config"
-	"object-storage/internal/db"
-	"object-storage/internal/jobs"
-	"object-storage/internal/models"
-	"object-storage/internal/store"
-	"object-storage/internal/ws"
+	"s3desk/internal/config"
+	"s3desk/internal/db"
+	"s3desk/internal/jobs"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 func TestJobLogsTailAndOffsets(t *testing.T) {
@@ -128,7 +128,7 @@ func newTestJobsServer(t *testing.T, encryptionKey string) (*store.Store, *jobs.
 	dataDir := t.TempDir()
 	gormDB, err := db.Open(db.Config{
 		Backend:    db.BackendSQLite,
-		SQLitePath: filepath.Join(dataDir, "object-storage.db"),
+		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
 	})
 	if err != nil {
 		t.Fatalf("open db: %v", err)

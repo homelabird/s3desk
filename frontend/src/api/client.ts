@@ -85,6 +85,21 @@ export type UploadFileItem = {
 	relPath?: string
 }
 
+export type UploadCommitItem = {
+	path: string
+	size?: number
+}
+
+export type UploadCommitRequest = {
+	label?: string
+	rootName?: string
+	rootKind?: 'file' | 'folder' | 'collection'
+	totalFiles?: number
+	totalBytes?: number
+	items?: UploadCommitItem[]
+	itemsTruncated?: boolean
+}
+
 export type UploadFilesResult = {
 	skipped: number
 }
@@ -350,10 +365,17 @@ export class APIClient {
 		)
 	}
 
-	getObjectDownloadURL(args: { profileId: string; bucket: string; key: string; expiresSeconds?: number }): Promise<PresignedURLResponse> {
+	getObjectDownloadURL(args: {
+		profileId: string
+		bucket: string
+		key: string
+		expiresSeconds?: number
+		proxy?: boolean
+	}): Promise<PresignedURLResponse> {
 		const params = new URLSearchParams()
 		params.set('key', args.key)
 		if (args.expiresSeconds) params.set('expiresSeconds', String(args.expiresSeconds))
+		if (args.proxy) params.set('proxy', 'true')
 		return this.request(
 			`/buckets/${encodeURIComponent(args.bucket)}/objects/download-url?${params.toString()}`,
 			{ method: 'GET' },
@@ -440,7 +462,18 @@ export class APIClient {
 		return this.request(`/uploads/${encodeURIComponent(uploadId)}/files`, { method: 'POST', body: form }, { profileId })
 	}
 
-	commitUpload(profileId: string, uploadId: string): Promise<JobCreatedResponse> {
+	commitUpload(profileId: string, uploadId: string, req?: UploadCommitRequest): Promise<JobCreatedResponse> {
+		if (req) {
+			return this.request(
+				`/uploads/${encodeURIComponent(uploadId)}/commit`,
+				{
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify(req),
+				},
+				{ profileId },
+			)
+		}
 		return this.request(`/uploads/${encodeURIComponent(uploadId)}/commit`, { method: 'POST' }, { profileId })
 	}
 

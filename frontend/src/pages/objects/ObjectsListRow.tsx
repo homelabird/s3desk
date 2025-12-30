@@ -10,12 +10,20 @@ type BaseRowProps = {
 	listGridClassName: string
 	isCompact: boolean
 	canDragDrop: boolean
+	rowMinHeight: number
 }
 
 type ObjectsPrefixRowProps = BaseRowProps & {
 	displayName: string
 	highlightText: (value: string) => ReactNode
 	menu: MenuProps
+	contextMenuOpen: boolean
+	buttonMenuOpen: boolean
+	contextMenuPlacement?: 'bottomLeft' | 'topLeft'
+	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
+	onContextMenuOpenChange: (open: boolean) => void
+	onButtonMenuOpenChange: (open: boolean) => void
+	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onOpen: () => void
 	onDragStart: (e: DragEvent) => void
 	onDragEnd: () => void
@@ -31,8 +39,14 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	favoriteDisabled?: boolean
 	highlightText: (value: string) => ReactNode
 	menu: MenuProps
+	contextMenuOpen: boolean
+	buttonMenuOpen: boolean
+	contextMenuPlacement?: 'bottomLeft' | 'topLeft'
+	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
+	onContextMenuOpenChange: (open: boolean) => void
+	onButtonMenuOpenChange: (open: boolean) => void
 	onClick: (e: MouseEvent) => void
-	onContextMenu: () => void
+	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onCheckboxClick: (e: MouseEvent) => void
 	onDragStart: (e: DragEvent) => void
 	onDragEnd: () => void
@@ -49,32 +63,65 @@ const rowBaseStyle = {
 	borderBottom: '1px solid #f5f5f5',
 } as const
 
-function rowStyle(offset: number, background?: string) {
+function rowStyle(offset: number, background?: string, minHeight?: number) {
 	return {
 		...rowBaseStyle,
 		transform: `translateY(${offset}px)`,
 		background,
+		minHeight,
 	}
 }
 
-function renderRowMenu(menu: MenuProps) {
+function renderRowMenu(
+	menu: MenuProps,
+	open: boolean,
+	onOpenChange: (open: boolean) => void,
+	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement,
+	label = 'Row actions',
+) {
 	return (
-		<Dropdown trigger={['click']} menu={menu}>
-			<Button size="small" type="text" icon={<EllipsisOutlined />} onClick={(e) => e.stopPropagation()} />
+		<Dropdown
+			trigger={['click']}
+			menu={menu}
+			open={open}
+			onOpenChange={onOpenChange}
+			getPopupContainer={getPopupContainer}
+			autoAdjustOverflow
+		>
+			<Button
+				size="small"
+				type="text"
+				icon={<EllipsisOutlined />}
+				onClick={(e) => e.stopPropagation()}
+				aria-label={label}
+				aria-haspopup="menu"
+				aria-expanded={open}
+			/>
 		</Dropdown>
 	)
 }
 
 export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 	return (
-		<div style={rowStyle(props.offset)}>
-			<Dropdown trigger={['contextMenu']} menu={props.menu}>
+		<div style={rowStyle(props.offset, undefined, props.rowMinHeight)}>
+		<Dropdown
+			trigger={['contextMenu']}
+			menu={props.menu}
+			open={props.contextMenuOpen}
+			onOpenChange={props.onContextMenuOpenChange}
+			placement={props.contextMenuPlacement ?? 'bottomLeft'}
+			getPopupContainer={props.getPopupContainer}
+			autoAdjustOverflow
+		>
 				<div
 					onClick={props.onOpen}
+					onContextMenu={props.onContextMenu}
 					draggable={props.canDragDrop}
 					onDragStart={props.onDragStart}
 					onDragEnd={props.onDragEnd}
 					className={`${styles.listGridBase} ${props.listGridClassName}`}
+					data-objects-row="true"
+					role="listitem"
 					style={{ cursor: props.canDragDrop ? 'grab' : 'pointer' }}
 				>
 					<div />
@@ -86,7 +133,13 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 					</div>
 					{props.isCompact ? (
 						<div style={{ justifySelf: 'end' }} onClick={(e) => e.stopPropagation()}>
-							{renderRowMenu(props.menu)}
+							{renderRowMenu(
+								props.menu,
+								props.buttonMenuOpen,
+								props.onButtonMenuOpenChange,
+								props.getPopupContainer,
+								'Prefix actions',
+							)}
 						</div>
 					) : (
 						<>
@@ -97,7 +150,13 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 								<Typography.Text type="secondary">-</Typography.Text>
 							</div>
 							<div style={{ justifySelf: 'end' }} onClick={(e) => e.stopPropagation()}>
-								{renderRowMenu(props.menu)}
+								{renderRowMenu(
+									props.menu,
+									props.buttonMenuOpen,
+									props.onButtonMenuOpenChange,
+									props.getPopupContainer,
+									'Prefix actions',
+								)}
 							</div>
 						</>
 					)}
@@ -110,8 +169,16 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 	const metaLabel = `${props.sizeLabel} · ${props.timeLabel}`
 	return (
-		<div style={rowStyle(props.offset, props.isSelected ? '#e6f4ff' : undefined)}>
-			<Dropdown trigger={['contextMenu']} menu={props.menu}>
+		<div style={rowStyle(props.offset, props.isSelected ? '#e6f4ff' : undefined, props.rowMinHeight)}>
+		<Dropdown
+			trigger={['contextMenu']}
+			menu={props.menu}
+			open={props.contextMenuOpen}
+			onOpenChange={props.onContextMenuOpenChange}
+			placement={props.contextMenuPlacement ?? 'bottomLeft'}
+			getPopupContainer={props.getPopupContainer}
+			autoAdjustOverflow
+		>
 				<div
 					onClick={props.onClick}
 					onContextMenu={props.onContextMenu}
@@ -119,6 +186,8 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 					onDragStart={props.onDragStart}
 					onDragEnd={props.onDragEnd}
 					className={`${styles.listGridBase} ${props.listGridClassName}`}
+					data-objects-row="true"
+					role="listitem"
 					style={{ cursor: props.canDragDrop ? 'grab' : 'pointer' }}
 				>
 					<div>
@@ -173,7 +242,15 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 						</div>
 					)}
 
-					<div style={{ justifySelf: 'end' }}>{renderRowMenu(props.menu)}</div>
+					<div style={{ justifySelf: 'end' }}>
+						{renderRowMenu(
+							props.menu,
+							props.buttonMenuOpen,
+							props.onButtonMenuOpenChange,
+							props.getPopupContainer,
+							'Object actions',
+						)}
+					</div>
 				</div>
 			</Dropdown>
 		</div>

@@ -6,6 +6,7 @@ type profileRow struct {
 	Endpoint              string  `gorm:"column:endpoint"`
 	Region                string  `gorm:"column:region"`
 	ForcePathStyle        int     `gorm:"column:force_path_style"`
+	PreserveLeadingSlash  int     `gorm:"column:preserve_leading_slash"`
 	TLSInsecureSkipVerify int     `gorm:"column:tls_insecure_skip_verify"`
 	AccessKeyID           string  `gorm:"column:access_key_id"`
 	SecretAccessKey       string  `gorm:"column:secret_access_key"`

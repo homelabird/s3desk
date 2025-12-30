@@ -9,19 +9,19 @@ Set these envs on the server container:
 - `LOG_FORMAT=json`
 - `JOB_LOG_EMIT_STDOUT=true`
 - `LOG_LEVEL=info` (optional: `debug`, `info`, `warn`, `error`)
-- Optional: `LOG_SERVICE=object-storage`, `LOG_ENV=prod`, `LOG_VERSION=v0.1.0`, `LOG_COMPONENT=server`
+- Optional: `LOG_SERVICE=s3desk`, `LOG_ENV=prod`, `LOG_VERSION=v0.1.0`, `LOG_COMPONENT=server`
 
 Example (podman):
 
 ```bash
-podman run -d --name object-storage --network host \
+podman run -d --name s3desk --network host \
   -e LOG_FORMAT=json \
   -e JOB_LOG_EMIT_STDOUT=true \
-  -e LOG_SERVICE=object-storage \
+  -e LOG_SERVICE=s3desk \
   -e LOG_ENV=prod \
   -e LOG_VERSION=v0.1.0 \
-  -v object-storage-data:/data \
-  object-storage:local
+  -v s3desk-data:/data \
+  s3desk:local
 ```
 
 ## 2) Log field schema (JSON Lines)
@@ -63,14 +63,14 @@ clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: object-storage-journal
+  - job_name: s3desk-journal
     journal:
       path: /var/log/journal
       labels:
-        job: object-storage
+        job: s3desk
     relabel_configs:
       - source_labels: ['__journal__systemd_unit']
-        regex: 'podman-.*object-storage.*\\.service'
+        regex: 'podman-.*s3desk.*\\.service'
         action: keep
     pipeline_stages:
       - json:
@@ -103,7 +103,7 @@ scrape_configs:
 Locate the container log file:
 
 ```bash
-podman inspect object-storage --format '{{.Id}}'
+podman inspect s3desk --format '{{.Id}}'
 ```
 
 Typical path (rootful):
@@ -113,11 +113,11 @@ Promtail example:
 
 ```yaml
 scrape_configs:
-  - job_name: object-storage-file
+  - job_name: s3desk-file
     static_configs:
       - targets: [localhost]
         labels:
-          job: object-storage
+          job: s3desk
           __path__: /var/lib/containers/storage/overlay-containers/<ID>/userdata/ctr.log
     pipeline_stages:
       - json:
@@ -150,7 +150,7 @@ scrape_configs:
 ```yaml
 filebeat.inputs:
   - type: filestream
-    id: object-storage
+    id: s3desk
     paths:
       - /var/lib/containers/storage/overlay-containers/<ID>/userdata/ctr.log
     parsers:
@@ -166,7 +166,7 @@ filebeat.inputs:
           when:
             not:
               equals:
-                service: "object-storage"
+                service: "s3desk"
 
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]
@@ -177,25 +177,31 @@ output.elasticsearch:
 ```ini
 [INPUT]
   Name              systemd
-  Tag               object-storage
-  Systemd_Filter    _SYSTEMD_UNIT=podman-object-storage.service
+  Tag               s3desk
+  Systemd_Filter    _SYSTEMD_UNIT=podman-s3desk.service
 
 [OUTPUT]
   Name              es
-  Match             object-storage
+  Match             s3desk
   Host              elasticsearch
   Port              9200
-  Index             object-storage-%Y.%m.%d
+  Index             s3desk-%Y.%m.%d
 ```
 
 ## 5) Recommended Grafana filters
 
-- `service="object-storage"`
+- `service="s3desk"`
 - `event="http.request" | event="job.completed"`
 - `status>=500` (errors)
 - `job_type="s3_delete_objects"` (job diagnostics)
 
-## 6) Notes
+## 6) Job log retention
+
+- `JOB_LOG_MAX_BYTES`: per-job log file size cap (0=unlimited). Older lines are truncated.
+- `JOB_LOG_RETENTION`: delete job log files older than this duration (0=keep forever).
+- `JOB_RETENTION`: delete finished job records older than this duration (also removes related logs/artifacts).
+
+## 7) Notes
 
 - If you run behind a reverse proxy, set `X-Forwarded-For` so `remote_addr` is accurate.
 - Use `LOG_ENV=prod` and `LOG_VERSION` to slice rollouts by version.

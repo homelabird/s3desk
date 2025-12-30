@@ -7,7 +7,7 @@ type StorageSeed = {
 }
 
 const defaultStorage: StorageSeed = {
-	objectsUIMode: 'simple',
+	objectsUIMode: 'advanced',
 	apiToken: 'change-me',
 	profileId: 'playwright-smoke',
 }

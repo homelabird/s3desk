@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	"object-storage/internal/app"
-	"object-storage/internal/config"
-	"object-storage/internal/logging"
+	"s3desk/internal/app"
+	"s3desk/internal/config"
+	"s3desk/internal/logging"
 )
 
 type stringSliceFlag []string
@@ -50,8 +50,12 @@ func main() {
 	flag.Int64Var(&cfg.JobLogMaxBytes, "job-log-max-bytes", getEnvInt64("JOB_LOG_MAX_BYTES", 0), "max bytes per job log file (0=unlimited)")
 	flag.BoolVar(&cfg.JobLogEmitStdout, "job-log-emit-stdout", getEnvBool("JOB_LOG_EMIT_STDOUT", false), "emit job logs to stdout as JSON lines")
 	flag.DurationVar(&cfg.JobRetention, "job-retention", getEnvDuration("JOB_RETENTION", 0), "delete finished jobs older than this duration (0=keep forever)")
+	flag.DurationVar(&cfg.JobLogRetention, "job-log-retention", getEnvDuration("JOB_LOG_RETENTION", 0), "delete job log files older than this duration (0=keep forever)")
 	flag.DurationVar(&cfg.UploadSessionTTL, "upload-ttl", getEnvDuration("UPLOAD_TTL", 24*time.Hour), "upload session TTL")
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", getEnvInt64("UPLOAD_MAX_BYTES", 0), "max total bytes per upload session (0=unlimited)")
+	flag.IntVar(&cfg.RcloneDownloadMultiThreadStreams, "rclone-download-multi-thread-streams", getEnvInt("RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS", 4), "rclone --multi-thread-streams for API downloads (0=use rclone default)")
+	flag.IntVar(&cfg.RcloneDownloadMultiThreadCutoffMiB, "rclone-download-multi-thread-cutoff-mib", getEnvInt("RCLONE_DOWNLOAD_MULTI_THREAD_CUTOFF_MIB", 256), "rclone --multi-thread-cutoff for API downloads, in MiB (0=use rclone default)")
+	flag.IntVar(&cfg.RcloneDownloadBufferSizeMiB, "rclone-download-buffer-size-mib", getEnvInt("RCLONE_DOWNLOAD_BUFFER_SIZE_MIB", 16), "rclone --buffer-size for API downloads, in MiB (0=use rclone default)")
 
 	allowDirs := stringSliceFlag{}
 	for _, dir := range strings.Split(getEnv("ALLOWED_LOCAL_DIRS", ""), ",") {

@@ -197,6 +197,7 @@ export function ProfilesPage(props: Props) {
 						render: (_, row: Profile) => (
 							<Typography.Text type="secondary">
 								{row.forcePathStyle ? 'path-style' : 'virtual-host'} /{' '}
+								{row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash'} /{' '}
 								{row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify'}
 							</Typography.Text>
 						),
@@ -257,6 +258,7 @@ export function ProfilesPage(props: Props) {
 					endpoint: editProfile?.endpoint,
 					region: editProfile?.region,
 					forcePathStyle: editProfile?.forcePathStyle,
+					preserveLeadingSlash: editProfile?.preserveLeadingSlash,
 					tlsInsecureSkipVerify: editProfile?.tlsInsecureSkipVerify,
 				}}
 				editMode
@@ -301,6 +303,7 @@ type ProfileFormValues = {
 	sessionToken?: string
 	clearSessionToken: boolean
 	forcePathStyle: boolean
+	preserveLeadingSlash: boolean
 	tlsInsecureSkipVerify: boolean
 	tlsEnabled?: boolean
 	tlsAction?: TLSAction
@@ -319,6 +322,7 @@ function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest {
 		endpoint: values.endpoint,
 		region: values.region,
 		forcePathStyle: values.forcePathStyle,
+		preserveLeadingSlash: values.preserveLeadingSlash,
 		tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
 	}
 	if (values.accessKeyId) out.accessKeyId = values.accessKeyId
@@ -337,6 +341,7 @@ function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest {
 		secretAccessKey: values.secretAccessKey,
 		sessionToken: values.sessionToken ? values.sessionToken : null,
 		forcePathStyle: values.forcePathStyle,
+		preserveLeadingSlash: values.preserveLeadingSlash,
 		tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
 	}
 }
@@ -387,6 +392,7 @@ function ProfileModal(props: {
 					sessionToken: '',
 					clearSessionToken: false,
 					forcePathStyle: false,
+					preserveLeadingSlash: false,
 					tlsInsecureSkipVerify: false,
 					tlsEnabled: false,
 					tlsAction: 'keep',
@@ -436,8 +442,11 @@ function ProfileModal(props: {
 					</Form.Item>
 				) : null}
 
-				<Space size="large">
+				<Space size="large" wrap>
 					<Form.Item name="forcePathStyle" label="Force Path Style" valuePropName="checked">
+						<Switch />
+					</Form.Item>
+					<Form.Item name="preserveLeadingSlash" label="Preserve Leading Slash" valuePropName="checked">
 						<Switch />
 					</Form.Item>
 					<Form.Item name="tlsInsecureSkipVerify" label="TLS Insecure Skip Verify" valuePropName="checked">

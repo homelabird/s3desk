@@ -18,7 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"object-storage/internal/models"
+	"s3desk/internal/models"
 )
 
 type cachedTLSMaterial struct {

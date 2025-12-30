@@ -38,7 +38,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 					type="warning"
 					showIcon
 					message="Move/Rename is destructive"
-					description="This uses s5cmd mv (copy then delete source)."
+					description="This uses transfer move (copy then delete source)."
 					style={{ marginBottom: 12 }}
 				/>
 			) : (
@@ -46,7 +46,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 					type="info"
 					showIcon
 					message="Copy within S3"
-					description="This uses s5cmd cp (server-side copy)."
+					description="This uses transfer copy (server-side copy)."
 					style={{ marginBottom: 12 }}
 				/>
 			)}

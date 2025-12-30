@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"object-storage/internal/models"
-	"object-storage/internal/store"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
 )
 
 func (s *server) handleGetProfileTLS(w http.ResponseWriter, r *http.Request) {

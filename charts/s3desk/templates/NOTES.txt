@@ -1,4 +1,4 @@
-Thank you for installing object-storage.
+Thank you for installing S3Desk.
 
 {{- if .Values.ingress.enabled }}
 Ingress hosts:
@@ -7,7 +7,7 @@ Ingress hosts:
 {{- end }}
 {{- else }}
 Port-forward:
-  kubectl port-forward svc/{{ include "object-storage.fullname" . }} 8080:{{ .Values.service.port }}
+  kubectl port-forward svc/{{ include "s3desk.fullname" . }} 8080:{{ .Values.service.port }}
   http://127.0.0.1:8080
 {{- end }}
 

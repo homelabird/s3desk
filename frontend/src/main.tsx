@@ -13,7 +13,7 @@ const queryClient = new QueryClient()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ConfigProvider>
+      <ConfigProvider getPopupContainer={() => document.body}>
         <BrowserRouter>
           <App />
         </BrowserRouter>

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"object-storage/internal/models"
+	"s3desk/internal/models"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

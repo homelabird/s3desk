@@ -1,6 +1,6 @@
-# 로컬 Object Storage Dashboard (S3 호환) — 설계 & 로드맵
+# S3Desk (S3 호환) — 설계 & 로드맵
 
-이 문서는 `s5cmd`를 대량 전송 엔진으로 사용하고, **브라우저 기반(로컬 전용)** 대시보드를 만들기 위한 API/Job 설계와 단계별 로드맵 초안이다.
+이 문서는 `rclone`을 대량 전송 엔진으로 사용하고, **브라우저 기반(로컬 전용)** 대시보드를 만들기 위한 API/Job 설계와 단계별 로드맵 초안이다.
 
 ## 1) 목표 / 범위
 
@@ -10,7 +10,7 @@
   - 데이터 주입(업로드/대량 동기화)
   - 데이터 탐색(대규모 목록/가상 스크롤/페이지네이션)
 - 엔터프라이즈급 스케일을 전제로 **prefix 기반 탐색 + continuation token**을 필수로 설계
-- 전송/동기화는 `s5cmd`를 통해 고성능으로 수행하고, UI에서는 Job으로 관측/취소/재시도 가능
+- 전송/동기화는 `rclone`을 통해 고성능으로 수행하고, UI에서는 Job으로 관측/취소/재시도 가능
 
 ### 비목표(초기)
 - IAM/정책 편집, 계정/키 관리 UI
@@ -26,12 +26,12 @@
   - Job 관측: `WebSocket`(대안: SSE)
 - Backend: `Go`
   - 탐색/메타데이터: `AWS SDK for Go v2` (S3 API)
-  - 대량 전송/동기화: `s5cmd` 프로세스 실행/관리(`exec.CommandContext`)
+  - 대량 전송/동기화: `rclone` 프로세스 실행/관리(`exec.CommandContext`)
   - 상태 저장: `SQLite`(jobs/profiles) + 로그 파일 append
 
 ## 3) 아키텍처 개요
 
-- 브라우저(UI) → `Go API(127.0.0.1)` → (A) S3 SDK(탐색/메타데이터) (B) Job Runner(`s5cmd`)
+- 브라우저(UI) → `Go API(127.0.0.1)` → (A) S3 SDK(탐색/메타데이터) (B) Job Runner(`rclone`)
 - UI는 `Go`가 같은 오리진으로 정적 파일을 서빙(권장)하여 CORS/CSRF 공격면을 최소화
 
 권장 디렉터리(예시)
@@ -101,8 +101,8 @@
   - body: `{ "keys": ["a", "b", ...] }`
   - 대량 삭제는 Job으로도 제공 가능
 
-### 5.4 Uploads (브라우저 업로드 → 스테이징 → s5cmd 전송)
-대규모 업로드를 “브라우저에서 바로 S3로” 보내는 것은 네트워크/재시도/성능 측면에서 한계가 있어, 초기엔 서버 스테이징 후 `s5cmd sync`로 전송하는 방식을 권장한다.
+### 5.4 Uploads (브라우저 업로드 → 스테이징 → rclone 전송)
+대규모 업로드를 “브라우저에서 바로 S3로” 보내는 것은 네트워크/재시도/성능 측면에서 한계가 있어, 초기엔 서버 스테이징 후 `rclone copy/sync`로 전송하는 방식을 권장한다.
 
 - `POST /uploads`
   - body: `{ "bucket":"b", "prefix":"p/" }`
@@ -119,9 +119,9 @@
   - query: `status?`, `type?`, `limit?`, `cursor?` (최신순 페이지)
 - `POST /jobs` 생성(대량 전송/동기화/대량 삭제 등)
   - 예1) 로컬 경로 → S3 동기화:
-    - `{ "type":"s5cmd_sync_local_to_s3", "payload":{ "bucket":"b","prefix":"p/","localPath":"...","deleteExtraneous":false,"include":[],"exclude":[] } }`
+    - `{ "type":"transfer_sync_local_to_s3", "payload":{ "bucket":"b","prefix":"p/","localPath":"...","deleteExtraneous":false,"include":[],"exclude":[] } }`
   - 예2) 스테이징 → S3 전송:
-    - `{ "type":"s5cmd_sync_staging_to_s3", "payload":{ "uploadId":"..." } }`
+    - `{ "type":"transfer_sync_staging_to_s3", "payload":{ "uploadId":"..." } }`
 - `GET /jobs/{id}` 단건 조회
 - `POST /jobs/{id}/cancel` 취소(프로세스 kill + 상태 caceled)
 - (옵션) `GET /jobs/{id}/logs?afterSeq=...` 폴링용 로그 조회(WS 미사용 시)
@@ -143,15 +143,15 @@
 progress payload(집계치, 예시)
 - `{ "objectsDone":10, "objectsTotal":null, "bytesDone":1234, "bytesTotal":null, "speedBps":123456, "etaSeconds":null }`
 
-## 7) s5cmd Job 실행 규칙(필수 가드레일)
+## 7) rclone Job 실행 규칙(필수 가드레일)
 
-- 화이트리스트: 허용된 작업 유형만(Job type → 고정된 s5cmd subcommand/flag 조합)
+- 화이트리스트: 허용된 작업 유형만(Job type → 고정된 rclone subcommand/flag 조합)
 - 인자 전달: 쉘 문자열 조립 금지, 반드시 args 배열로 실행(인젝션 방지)
 - 자격증명 주입: env로 전달하고 로그에는 마스킹(AccessKey/Secret 노출 금지)
 - 취소/타임아웃: `exec.CommandContext` + 프로세스 그룹 종료(가능하면 트리 kill)
 - 동시성 제한: 워커풀/세마포어로 Job 동시 실행 수 제한(기본 2~4 권장)
 - 로그 수집: stdout/stderr line 단위로 append + WS로 스트리밍
-- 결과 파싱: 가능하면 `s5cmd`의 구조화 출력 옵션(JSON 등)이 있으면 사용, 없으면 파서 안정성을 위해 “우리만의 고정 포맷”으로 래핑(추후 개선)
+- 결과 파싱: 가능하면 `rclone`의 구조화 출력 옵션(JSON 등)이 있으면 사용, 없으면 파서 안정성을 위해 “우리만의 고정 포맷”으로 래핑(추후 개선)
 
 ## 8) 로컬 전용 보안 지침(권장)
 
@@ -189,17 +189,17 @@ progress payload(집계치, 예시)
 - 프론트: Job 패널(실행중/완료/실패), 로그 뷰어
 
 ### M4. 데이터 주입(업로드/대량 동기화)
-- 브라우저 업로드: 스테이징 세션 → 파일 업로드 → commit(Job 생성) → s5cmd 전송
+- 브라우저 업로드: 스테이징 세션 → 파일 업로드 → commit(Job 생성) → rclone 전송
 - 대량 주입: 로컬 경로 sync(Job) + include/exclude 규칙
 - 재시도 정책(네트워크 오류/권한/충돌)과 사용자 피드백 정교화
 
 ### M5. 하드닝/운영 품질
 - 크리덴셜 저장 강화(OS 키체인 또는 암호화 저장)
 - 성능 튜닝(동시성/버퍼, 큰 로그 처리, UI 가상화 최적화)
-- 패키징 정책 확정(`s5cmd` 번들링/의존성 설치 안내) + 릴리즈 문서화
+- 패키징 정책 확정(`rclone` 번들링/의존성 설치 안내) + 릴리즈 문서화
 - (옵션) OpenAPI 3.0 스펙 작성 및 코드 생성/검증 파이프라인
 
 ## 10) 다음 산출물(제안)
-- OpenAPI 3.0 초안: `docs/object-storage-dashboard/openapi.yaml` (WebSocket 이벤트는 본 문서에 유지)
+- OpenAPI 3.0 스펙: `openapi.yml` (WebSocket 이벤트는 본 문서에 유지)
 - 프론트 화면 설계(버킷/탐색/업로드/Jobs) 와이어프레임
-- `s5cmd` 실제 플래그/출력 포맷 확정(버전 고정 포함)
+- `rclone` 실제 플래그/출력 포맷 확정(버전 고정 포함)

@@ -10,7 +10,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"gorm.io/gorm"
 
-	"object-storage/internal/models"
+	"s3desk/internal/models"
 )
 
 type Store struct {
@@ -69,6 +69,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		Endpoint:              req.Endpoint,
 		Region:                req.Region,
 		ForcePathStyle:        boolToInt(req.ForcePathStyle),
+		PreserveLeadingSlash:  boolToInt(req.PreserveLeadingSlash),
 		TLSInsecureSkipVerify: boolToInt(req.TLSInsecureSkipVerify),
 		AccessKeyID:           accessKeyID,
 		SecretAccessKey:       secretAccessKey,
@@ -86,6 +87,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		Endpoint:              req.Endpoint,
 		Region:                req.Region,
 		ForcePathStyle:        req.ForcePathStyle,
+		PreserveLeadingSlash:  req.PreserveLeadingSlash,
 		TLSInsecureSkipVerify: req.TLSInsecureSkipVerify,
 		CreatedAt:             now,
 		UpdatedAt:             now,
@@ -161,7 +163,7 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 func (s *Store) ListProfiles(ctx context.Context) ([]models.Profile, error) {
 	var rows []profileRow
 	if err := s.db.WithContext(ctx).
-		Select("id", "name", "endpoint", "region", "force_path_style", "tls_insecure_skip_verify", "created_at", "updated_at").
+		Select("id", "name", "endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "created_at", "updated_at").
 		Order("created_at DESC").
 		Find(&rows).Error; err != nil {
 		return nil, err
@@ -175,6 +177,7 @@ func (s *Store) ListProfiles(ctx context.Context) ([]models.Profile, error) {
 			Endpoint:              row.Endpoint,
 			Region:                row.Region,
 			ForcePathStyle:        row.ForcePathStyle != 0,
+			PreserveLeadingSlash:  row.PreserveLeadingSlash != 0,
 			TLSInsecureSkipVerify: row.TLSInsecureSkipVerify != 0,
 			CreatedAt:             row.CreatedAt,
 			UpdatedAt:             row.UpdatedAt,
@@ -186,7 +189,7 @@ func (s *Store) ListProfiles(ctx context.Context) ([]models.Profile, error) {
 func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profile, bool, error) {
 	var row profileRow
 	if err := s.db.WithContext(ctx).
-		Select("id", "name", "endpoint", "region", "force_path_style", "tls_insecure_skip_verify", "created_at", "updated_at").
+		Select("id", "name", "endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "created_at", "updated_at").
 		Where("id = ?", profileID).
 		Take(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -200,6 +203,7 @@ func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profil
 		Endpoint:              row.Endpoint,
 		Region:                row.Region,
 		ForcePathStyle:        row.ForcePathStyle != 0,
+		PreserveLeadingSlash:  row.PreserveLeadingSlash != 0,
 		TLSInsecureSkipVerify: row.TLSInsecureSkipVerify != 0,
 		CreatedAt:             row.CreatedAt,
 		UpdatedAt:             row.UpdatedAt,
@@ -210,7 +214,7 @@ func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profil
 func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models.ProfileSecrets, bool, error) {
 	var row profileRow
 	if err := s.db.WithContext(ctx).
-		Select("id", "name", "endpoint", "region", "force_path_style", "tls_insecure_skip_verify", "access_key_id", "secret_access_key", "session_token").
+		Select("id", "name", "endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "access_key_id", "secret_access_key", "session_token").
 		Where("id = ?", profileID).
 		Take(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -225,6 +229,7 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 		Endpoint:              row.Endpoint,
 		Region:                row.Region,
 		ForcePathStyle:        row.ForcePathStyle != 0,
+		PreserveLeadingSlash:  row.PreserveLeadingSlash != 0,
 		TLSInsecureSkipVerify: row.TLSInsecureSkipVerify != 0,
 		AccessKeyID:           row.AccessKeyID,
 		SecretAccessKey:       row.SecretAccessKey,
@@ -282,6 +287,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 	secretAccessKey := currentSecrets.SecretAccessKey
 	sessionToken := currentSecrets.SessionToken
 	forcePathStyle := currentSecrets.ForcePathStyle
+	preserveLeadingSlash := currentSecrets.PreserveLeadingSlash
 	tlsInsecureSkipVerify := currentSecrets.TLSInsecureSkipVerify
 
 	if req.Name != nil {
@@ -309,6 +315,9 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 	}
 	if req.ForcePathStyle != nil {
 		forcePathStyle = *req.ForcePathStyle
+	}
+	if req.PreserveLeadingSlash != nil {
+		preserveLeadingSlash = *req.PreserveLeadingSlash
 	}
 	if req.TLSInsecureSkipVerify != nil {
 		tlsInsecureSkipVerify = *req.TLSInsecureSkipVerify
@@ -339,6 +348,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		"endpoint":                 endpoint,
 		"region":                   region,
 		"force_path_style":         boolToInt(forcePathStyle),
+		"preserve_leading_slash":   boolToInt(preserveLeadingSlash),
 		"tls_insecure_skip_verify": boolToInt(tlsInsecureSkipVerify),
 		"access_key_id":            accessKeyID,
 		"secret_access_key":        secretAccessKey,

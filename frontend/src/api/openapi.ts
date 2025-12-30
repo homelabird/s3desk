@@ -893,14 +893,18 @@ export interface paths {
         };
         /**
          * Get a presigned download URL (GET object)
-         * @description Returns a presigned URL for downloading an object directly from S3.
-         *     This does not verify the object exists; the S3 request may still return 404.
+         * @description Returns a download URL for an object.
+         *
+         *     By default this uses `rclone link`, which may return a direct (backend) URL.
+         *     If `proxy=true`, the server returns a signed proxy URL that enforces
+         *     `Content-Disposition` and streams through the backend.
          */
         get: {
             parameters: {
                 query: {
                     key: string;
                     expiresSeconds?: number;
+                    proxy?: boolean;
                 };
                 header: {
                     "X-Profile-Id": components["parameters"]["XProfileId"];
@@ -924,6 +928,55 @@ export interface paths {
                     };
                 };
                 400: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/download-proxy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download object via signed proxy URL
+         * @description Signed URL returned from `/buckets/{bucket}/objects/download-url?proxy=true`.
+         *     This endpoint does not require an API token but validates signature + expiry.
+         */
+        get: {
+            parameters: {
+                query: {
+                    profileId: string;
+                    bucket: string;
+                    key: string;
+                    expires: number;
+                    sig: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/octet-stream": string;
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
             };
         };
         put?: never;
@@ -1203,7 +1256,11 @@ export interface paths {
                 };
                 cookie?: never;
             };
-            requestBody?: never;
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["UploadCommitRequest"];
+                };
+            };
             responses: {
                 /** @description Job created */
                 201: {
@@ -1669,6 +1726,7 @@ export interface components {
             endpoint: string;
             region: string;
             forcePathStyle: boolean;
+            preserveLeadingSlash: boolean;
             tlsInsecureSkipVerify: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -1685,6 +1743,8 @@ export interface components {
             /** @default false */
             forcePathStyle: boolean;
             /** @default false */
+            preserveLeadingSlash: boolean;
+            /** @default false */
             tlsInsecureSkipVerify: boolean;
         };
         ProfileUpdateRequest: {
@@ -1696,6 +1756,7 @@ export interface components {
             /** @description Set to empty string to clear; omit to keep unchanged. */
             sessionToken?: string | null;
             forcePathStyle?: boolean;
+            preserveLeadingSlash?: boolean;
             tlsInsecureSkipVerify?: boolean;
         };
         ProfileTestResponse: {
@@ -1845,14 +1906,30 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        UploadCommitItem: {
+            path: string;
+            /** Format: int64 */
+            size?: number;
+        };
+        UploadCommitRequest: {
+            label?: string;
+            rootName?: string;
+            /** @enum {string} */
+            rootKind?: "file" | "folder" | "collection";
+            totalFiles?: number;
+            /** Format: int64 */
+            totalBytes?: number;
+            items?: components["schemas"]["UploadCommitItem"][];
+            itemsTruncated?: boolean;
+        };
         /** @enum {string} */
         JobStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";
         /**
          * @description Supported job types.
          * @enum {string}
          */
-        JobType: "s5cmd_sync_local_to_s3" | "s5cmd_sync_staging_to_s3" | "s5cmd_sync_s3_to_local" | "s5cmd_rm_prefix" | "s3_zip_prefix" | "s3_zip_objects" | "s3_delete_objects" | "s3_index_objects" | "s5cmd_cp_s3_to_s3" | "s5cmd_mv_s3_to_s3" | "s5cmd_cp_s3_to_s3_batch" | "s5cmd_mv_s3_to_s3_batch" | "s5cmd_cp_s3_prefix_to_s3_prefix" | "s5cmd_mv_s3_prefix_to_s3_prefix";
-        S5CmdSyncLocalToS3Payload: {
+        JobType: "transfer_sync_local_to_s3" | "transfer_sync_staging_to_s3" | "transfer_sync_s3_to_local" | "transfer_delete_prefix" | "s3_zip_prefix" | "s3_zip_objects" | "s3_delete_objects" | "s3_index_objects" | "transfer_copy_object" | "transfer_move_object" | "transfer_copy_batch" | "transfer_move_batch" | "transfer_copy_prefix" | "transfer_move_prefix";
+        TransferSyncLocalToS3Payload: {
             bucket: string;
             /** @default  */
             prefix: string;
@@ -1864,17 +1941,34 @@ export interface components {
             /** @default false */
             dryRun: boolean;
         };
-        S5CmdSyncStagingToS3Payload: {
+        TransferSyncStagingToS3Payload: {
             uploadId: string;
+            bucket?: string;
+            prefix?: string;
+            label?: string;
+            rootName?: string;
+            /** @enum {string} */
+            rootKind?: "file" | "folder" | "collection";
+            totalFiles?: number;
+            /** Format: int64 */
+            totalBytes?: number;
+            items?: components["schemas"]["TransferSyncStagingToS3Item"][];
+            itemsTruncated?: boolean;
         };
-        S5CmdSyncS3ToLocalPayload: {
+        TransferSyncStagingToS3Item: {
+            path: string;
+            key: string;
+            /** Format: int64 */
+            size?: number;
+        };
+        TransferSyncS3ToLocalPayload: {
             bucket: string;
             /** @default  */
             prefix: string;
             /** @description Local destination directory path */
             localPath: string;
             /**
-             * @description Delete local files that are not in S3 (s5cmd --delete)
+             * @description Delete local files that are not in S3 (sync mode).
              * @default false
              */
             deleteExtraneous: boolean;
@@ -1884,7 +1978,7 @@ export interface components {
             dryRun: boolean;
         };
         /** @description Either provide `prefix` (recommended to end with `/`) or set `deleteAll=true` to delete all objects in the bucket. */
-        S5CmdRmPrefixPayload: {
+        TransferDeletePrefixPayload: {
             bucket: string;
             /** @default  */
             prefix: string;
@@ -1928,7 +2022,7 @@ export interface components {
              */
             fullReindex: boolean;
         };
-        S5CmdCpS3ToS3Payload: {
+        TransferCopyObjectPayload: {
             srcBucket: string;
             srcKey: string;
             dstBucket: string;
@@ -1936,7 +2030,7 @@ export interface components {
             /** @default false */
             dryRun: boolean;
         };
-        S5CmdMvS3ToS3Payload: {
+        TransferMoveObjectPayload: {
             srcBucket: string;
             srcKey: string;
             dstBucket: string;
@@ -1944,25 +2038,25 @@ export interface components {
             /** @default false */
             dryRun: boolean;
         };
-        S5CmdCpMvS3ToS3BatchItem: {
+        TransferBatchItem: {
             srcKey: string;
             dstKey: string;
         };
-        S5CmdCpS3ToS3BatchPayload: {
+        TransferCopyBatchPayload: {
             srcBucket: string;
             dstBucket: string;
-            items: components["schemas"]["S5CmdCpMvS3ToS3BatchItem"][];
+            items: components["schemas"]["TransferBatchItem"][];
             /** @default false */
             dryRun: boolean;
         };
-        S5CmdMvS3ToS3BatchPayload: {
+        TransferMoveBatchPayload: {
             srcBucket: string;
             dstBucket: string;
-            items: components["schemas"]["S5CmdCpMvS3ToS3BatchItem"][];
+            items: components["schemas"]["TransferBatchItem"][];
             /** @default false */
             dryRun: boolean;
         };
-        S5CmdCpS3PrefixToS3PrefixPayload: {
+        TransferCopyPrefixPayload: {
             srcBucket: string;
             /** @description Must end with `/` */
             srcPrefix: string;
@@ -1974,7 +2068,7 @@ export interface components {
             /** @default false */
             dryRun: boolean;
         };
-        S5CmdMvS3PrefixToS3PrefixPayload: {
+        TransferMovePrefixPayload: {
             srcBucket: string;
             /** @description Must end with `/` */
             srcPrefix: string;
@@ -1986,37 +2080,37 @@ export interface components {
             /** @default false */
             dryRun: boolean;
         };
-        JobCreateRequestS5CmdSyncLocalToS3: {
+        JobCreateRequestTransferSyncLocalToS3: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_sync_local_to_s3";
-            payload: components["schemas"]["S5CmdSyncLocalToS3Payload"];
+            type: "transfer_sync_local_to_s3";
+            payload: components["schemas"]["TransferSyncLocalToS3Payload"];
         };
-        JobCreateRequestS5CmdSyncStagingToS3: {
+        JobCreateRequestTransferSyncStagingToS3: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_sync_staging_to_s3";
-            payload: components["schemas"]["S5CmdSyncStagingToS3Payload"];
+            type: "transfer_sync_staging_to_s3";
+            payload: components["schemas"]["TransferSyncStagingToS3Payload"];
         };
-        JobCreateRequestS5CmdSyncS3ToLocal: {
+        JobCreateRequestTransferSyncS3ToLocal: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_sync_s3_to_local";
-            payload: components["schemas"]["S5CmdSyncS3ToLocalPayload"];
+            type: "transfer_sync_s3_to_local";
+            payload: components["schemas"]["TransferSyncS3ToLocalPayload"];
         };
-        JobCreateRequestS5CmdRmPrefix: {
+        JobCreateRequestTransferDeletePrefix: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_rm_prefix";
-            payload: components["schemas"]["S5CmdRmPrefixPayload"];
+            type: "transfer_delete_prefix";
+            payload: components["schemas"]["TransferDeletePrefixPayload"];
         };
         JobCreateRequestS3ZipPrefix: {
             /**
@@ -2050,53 +2144,53 @@ export interface components {
             type: "s3_index_objects";
             payload: components["schemas"]["S3IndexObjectsPayload"];
         };
-        JobCreateRequestS5CmdCpS3ToS3: {
+        JobCreateRequestTransferCopyObject: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_cp_s3_to_s3";
-            payload: components["schemas"]["S5CmdCpS3ToS3Payload"];
+            type: "transfer_copy_object";
+            payload: components["schemas"]["TransferCopyObjectPayload"];
         };
-        JobCreateRequestS5CmdMvS3ToS3: {
+        JobCreateRequestTransferMoveObject: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_mv_s3_to_s3";
-            payload: components["schemas"]["S5CmdMvS3ToS3Payload"];
+            type: "transfer_move_object";
+            payload: components["schemas"]["TransferMoveObjectPayload"];
         };
-        JobCreateRequestS5CmdCpS3ToS3Batch: {
+        JobCreateRequestTransferCopyBatch: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_cp_s3_to_s3_batch";
-            payload: components["schemas"]["S5CmdCpS3ToS3BatchPayload"];
+            type: "transfer_copy_batch";
+            payload: components["schemas"]["TransferCopyBatchPayload"];
         };
-        JobCreateRequestS5CmdMvS3ToS3Batch: {
+        JobCreateRequestTransferMoveBatch: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_mv_s3_to_s3_batch";
-            payload: components["schemas"]["S5CmdMvS3ToS3BatchPayload"];
+            type: "transfer_move_batch";
+            payload: components["schemas"]["TransferMoveBatchPayload"];
         };
-        JobCreateRequestS5CmdCpS3PrefixToS3Prefix: {
+        JobCreateRequestTransferCopyPrefix: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_cp_s3_prefix_to_s3_prefix";
-            payload: components["schemas"]["S5CmdCpS3PrefixToS3PrefixPayload"];
+            type: "transfer_copy_prefix";
+            payload: components["schemas"]["TransferCopyPrefixPayload"];
         };
-        JobCreateRequestS5CmdMvS3PrefixToS3Prefix: {
+        JobCreateRequestTransferMovePrefix: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "s5cmd_mv_s3_prefix_to_s3_prefix";
-            payload: components["schemas"]["S5CmdMvS3PrefixToS3PrefixPayload"];
+            type: "transfer_move_prefix";
+            payload: components["schemas"]["TransferMovePrefixPayload"];
         };
         JobProgress: {
             /** Format: int64 */
@@ -2129,7 +2223,7 @@ export interface components {
             /** Format: date-time */
             finishedAt?: string | null;
         };
-        JobCreateRequest: components["schemas"]["JobCreateRequestS5CmdSyncLocalToS3"] | components["schemas"]["JobCreateRequestS5CmdSyncStagingToS3"] | components["schemas"]["JobCreateRequestS5CmdSyncS3ToLocal"] | components["schemas"]["JobCreateRequestS5CmdRmPrefix"] | components["schemas"]["JobCreateRequestS3ZipPrefix"] | components["schemas"]["JobCreateRequestS3ZipObjects"] | components["schemas"]["JobCreateRequestS3DeleteObjects"] | components["schemas"]["JobCreateRequestS3IndexObjects"] | components["schemas"]["JobCreateRequestS5CmdCpS3ToS3"] | components["schemas"]["JobCreateRequestS5CmdMvS3ToS3"] | components["schemas"]["JobCreateRequestS5CmdCpS3ToS3Batch"] | components["schemas"]["JobCreateRequestS5CmdMvS3ToS3Batch"] | components["schemas"]["JobCreateRequestS5CmdCpS3PrefixToS3Prefix"] | components["schemas"]["JobCreateRequestS5CmdMvS3PrefixToS3Prefix"];
+        JobCreateRequest: components["schemas"]["JobCreateRequestTransferSyncLocalToS3"] | components["schemas"]["JobCreateRequestTransferSyncStagingToS3"] | components["schemas"]["JobCreateRequestTransferSyncS3ToLocal"] | components["schemas"]["JobCreateRequestTransferDeletePrefix"] | components["schemas"]["JobCreateRequestS3ZipPrefix"] | components["schemas"]["JobCreateRequestS3ZipObjects"] | components["schemas"]["JobCreateRequestS3DeleteObjects"] | components["schemas"]["JobCreateRequestS3IndexObjects"] | components["schemas"]["JobCreateRequestTransferCopyObject"] | components["schemas"]["JobCreateRequestTransferMoveObject"] | components["schemas"]["JobCreateRequestTransferCopyBatch"] | components["schemas"]["JobCreateRequestTransferMoveBatch"] | components["schemas"]["JobCreateRequestTransferCopyPrefix"] | components["schemas"]["JobCreateRequestTransferMovePrefix"];
         JobCreatedResponse: {
             jobId: string;
         };
@@ -2152,10 +2246,13 @@ export interface components {
             /** Format: int64 */
             jobRetentionSeconds?: number | null;
             /** Format: int64 */
+            jobLogRetentionSeconds?: number | null;
+            /** Format: int64 */
             uploadSessionTTLSeconds: number;
             /** Format: int64 */
             uploadMaxBytes?: number | null;
-            s5cmd: {
+            transferEngine: {
+                name: string;
                 available: boolean;
                 path?: string;
                 version?: string;

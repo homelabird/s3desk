@@ -18,30 +18,27 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	"object-storage/internal/logging"
-	"object-storage/internal/models"
-	"object-storage/internal/s3client"
-	"object-storage/internal/store"
-	"object-storage/internal/ws"
+	"s3desk/internal/logging"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 const (
-	JobTypeS5CmdSyncLocalToS3        = "s5cmd_sync_local_to_s3"
-	JobTypeS5CmdSyncStagingToS3      = "s5cmd_sync_staging_to_s3"
-	JobTypeS5CmdSyncS3ToLocal        = "s5cmd_sync_s3_to_local"
-	JobTypeS5CmdRmPrefix             = "s5cmd_rm_prefix"
-	JobTypeS5CmdCpS3ToS3             = "s5cmd_cp_s3_to_s3"
-	JobTypeS5CmdMvS3ToS3             = "s5cmd_mv_s3_to_s3"
-	JobTypeS5CmdCpS3ToS3Batch        = "s5cmd_cp_s3_to_s3_batch"
-	JobTypeS5CmdMvS3ToS3Batch        = "s5cmd_mv_s3_to_s3_batch"
-	JobTypeS5CmdCpS3PrefixToS3Prefix = "s5cmd_cp_s3_prefix_to_s3_prefix"
-	JobTypeS5CmdMvS3PrefixToS3Prefix = "s5cmd_mv_s3_prefix_to_s3_prefix"
-	JobTypeS3ZipPrefix               = "s3_zip_prefix"
-	JobTypeS3ZipObjects              = "s3_zip_objects"
-	JobTypeS3DeleteObjects           = "s3_delete_objects"
-	JobTypeS3IndexObjects            = "s3_index_objects"
+	JobTypeTransferSyncLocalToS3   = "transfer_sync_local_to_s3"
+	JobTypeTransferSyncStagingToS3 = "transfer_sync_staging_to_s3"
+	JobTypeTransferSyncS3ToLocal   = "transfer_sync_s3_to_local"
+	JobTypeTransferDeletePrefix    = "transfer_delete_prefix"
+	JobTypeTransferCopyObject      = "transfer_copy_object"
+	JobTypeTransferMoveObject      = "transfer_move_object"
+	JobTypeTransferCopyBatch       = "transfer_copy_batch"
+	JobTypeTransferMoveBatch       = "transfer_move_batch"
+	JobTypeTransferCopyPrefix      = "transfer_copy_prefix"
+	JobTypeTransferMovePrefix      = "transfer_move_prefix"
+	JobTypeS3ZipPrefix             = "s3_zip_prefix"
+	JobTypeS3ZipObjects            = "s3_zip_objects"
+	JobTypeS3DeleteObjects         = "s3_delete_objects"
+	JobTypeS3IndexObjects          = "s3_index_objects"
 )
 
 const (
@@ -61,17 +58,19 @@ type Config struct {
 	JobLogMaxBytes   int64
 	JobLogEmitStdout bool
 	JobRetention     time.Duration
+	JobLogRetention  time.Duration
 	AllowedLocalDirs []string
 	UploadSessionTTL time.Duration
 }
 
 type Manager struct {
-	store         *store.Store
-	dataDir       string
-	hub           *ws.Hub
-	logMaxBytes   int64
-	logEmitStdout bool
-	jobRetention  time.Duration
+	store           *store.Store
+	dataDir         string
+	hub             *ws.Hub
+	logMaxBytes     int64
+	logEmitStdout   bool
+	jobRetention    time.Duration
+	jobLogRetention time.Duration
 
 	queue chan string
 	sem   chan struct{}
@@ -85,12 +84,12 @@ type Manager struct {
 	allowedLocalDirs []string
 	logLineMaxBytes  int
 
-	s5cmdTuneEnabled        bool
-	s5cmdMaxNumWorkers      int
-	s5cmdMaxConcurrency     int
-	s5cmdMinPartSizeMiB     int
-	s5cmdMaxPartSizeMiB     int
-	s5cmdDefaultPartSizeMiB int
+	rcloneTuneEnabled         bool
+	rcloneMaxTransfers        int
+	rcloneMaxCheckers         int
+	rcloneS3ChunkSizeMiB      int
+	rcloneS3UploadConcurrency int
+	rcloneStatsInterval       time.Duration
 }
 
 type QueueStats struct {
@@ -120,43 +119,40 @@ func NewManager(cfg Config) *Manager {
 	}
 
 	cpu := runtime.NumCPU()
-	defaultMaxNumWorkers := cpu * 32
-	if defaultMaxNumWorkers < 32 {
-		defaultMaxNumWorkers = 32
+	defaultMaxTransfers := cpu * 4
+	if defaultMaxTransfers < 4 {
+		defaultMaxTransfers = 4
 	}
-	if defaultMaxNumWorkers > 512 {
-		defaultMaxNumWorkers = 512
-	}
-
-	defaultMaxConcurrency := cpu * 2
-	if defaultMaxConcurrency < 2 {
-		defaultMaxConcurrency = 2
-	}
-	if defaultMaxConcurrency > 64 {
-		defaultMaxConcurrency = 64
+	if defaultMaxTransfers > 128 {
+		defaultMaxTransfers = 128
 	}
 
-	minPartSizeMiB := envInt("S5CMD_MIN_PART_SIZE_MIB", 16)
-	if minPartSizeMiB < 5 {
-		minPartSizeMiB = 5
+	defaultMaxCheckers := cpu * 8
+	if defaultMaxCheckers < 8 {
+		defaultMaxCheckers = 8
 	}
-	maxPartSizeMiB := envInt("S5CMD_MAX_PART_SIZE_MIB", 128)
-	if maxPartSizeMiB < minPartSizeMiB {
-		maxPartSizeMiB = minPartSizeMiB
+	if defaultMaxCheckers > 256 {
+		defaultMaxCheckers = 256
+	}
+
+	statsInterval := envDuration("RCLONE_STATS_INTERVAL", jobProgressTick)
+	if statsInterval < 500*time.Millisecond {
+		statsInterval = 500 * time.Millisecond
 	}
 
 	return &Manager{
-		store:         cfg.Store,
-		dataDir:       cfg.DataDir,
-		hub:           cfg.Hub,
-		logMaxBytes:   cfg.JobLogMaxBytes,
-		logEmitStdout: cfg.JobLogEmitStdout,
-		jobRetention:  cfg.JobRetention,
-		queue:         make(chan string, queueCapacity),
-		sem:           make(chan struct{}, concurrency),
-		cancels:       make(map[string]context.CancelFunc),
-		pids:          make(map[string]int),
-		uploadTTL:     cfg.UploadSessionTTL,
+		store:           cfg.Store,
+		dataDir:         cfg.DataDir,
+		hub:             cfg.Hub,
+		logMaxBytes:     cfg.JobLogMaxBytes,
+		logEmitStdout:   cfg.JobLogEmitStdout,
+		jobRetention:    cfg.JobRetention,
+		jobLogRetention: cfg.JobLogRetention,
+		queue:           make(chan string, queueCapacity),
+		sem:             make(chan struct{}, concurrency),
+		cancels:         make(map[string]context.CancelFunc),
+		pids:            make(map[string]int),
+		uploadTTL:       cfg.UploadSessionTTL,
 		allowedLocalDirs: func() []string {
 			if len(cfg.AllowedLocalDirs) == 0 {
 				return nil
@@ -172,13 +168,13 @@ func NewManager(cfg Config) *Manager {
 			return out
 		}(),
 
-		logLineMaxBytes:         logLineMaxBytes,
-		s5cmdTuneEnabled:        envBool("S5CMD_TUNE", true),
-		s5cmdMaxNumWorkers:      envInt("S5CMD_MAX_NUMWORKERS", defaultMaxNumWorkers),
-		s5cmdMaxConcurrency:     envInt("S5CMD_MAX_CONCURRENCY", defaultMaxConcurrency),
-		s5cmdMinPartSizeMiB:     minPartSizeMiB,
-		s5cmdMaxPartSizeMiB:     maxPartSizeMiB,
-		s5cmdDefaultPartSizeMiB: envInt("S5CMD_DEFAULT_PART_SIZE_MIB", 64),
+		logLineMaxBytes:           logLineMaxBytes,
+		rcloneTuneEnabled:         envBool("RCLONE_TUNE", true),
+		rcloneMaxTransfers:        envInt("RCLONE_MAX_TRANSFERS", defaultMaxTransfers),
+		rcloneMaxCheckers:         envInt("RCLONE_MAX_CHECKERS", defaultMaxCheckers),
+		rcloneS3ChunkSizeMiB:      envInt("RCLONE_S3_CHUNK_SIZE_MIB", 0),
+		rcloneS3UploadConcurrency: envInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0),
+		rcloneStatsInterval:       statsInterval,
 	}
 }
 
@@ -209,11 +205,23 @@ func envBool(key string, defaultValue bool) bool {
 	}
 }
 
-type s5cmdTune struct {
-	NumWorkers  int
-	Concurrency int
-	PartSizeMiB int
-	ActiveJobs  int
+func envDuration(key string, defaultValue time.Duration) time.Duration {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return defaultValue
+	}
+	parsed, err := time.ParseDuration(val)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
+type rcloneTune struct {
+	Transfers         int
+	Checkers          int
+	UploadConcurrency int
+	ActiveJobs        int
 }
 
 func hasAnyFlag(args []string, flags ...string) bool {
@@ -237,19 +245,19 @@ func clampInt(v, minV, maxV int) int {
 	return v
 }
 
-func (m *Manager) computeS5CmdTune(jobID string, commandArgs []string) (tune s5cmdTune, ok bool) {
-	if !m.s5cmdTuneEnabled {
-		return s5cmdTune{}, false
+func (m *Manager) computeRcloneTune(commandArgs []string) (tune rcloneTune, ok bool) {
+	if !m.rcloneTuneEnabled {
+		return rcloneTune{}, false
 	}
 	if len(commandArgs) == 0 {
-		return s5cmdTune{}, false
+		return rcloneTune{}, false
 	}
 
 	switch commandArgs[0] {
-	case "sync", "cp", "mv":
+	case "sync", "copy", "move", "copyto", "moveto", "delete", "purge":
 		// supported
 	default:
-		return s5cmdTune{}, false
+		return rcloneTune{}, false
 	}
 
 	activeJobs := len(m.sem)
@@ -257,98 +265,98 @@ func (m *Manager) computeS5CmdTune(jobID string, commandArgs []string) (tune s5c
 		activeJobs = 1
 	}
 
-	maxNumWorkers := m.s5cmdMaxNumWorkers
-	if maxNumWorkers <= 0 {
-		maxNumWorkers = 256
+	maxTransfers := m.rcloneMaxTransfers
+	if maxTransfers <= 0 {
+		maxTransfers = 4
 	}
-	maxConcurrency := m.s5cmdMaxConcurrency
-	if maxConcurrency <= 0 {
-		maxConcurrency = 8
-	}
-
-	numWorkers := maxNumWorkers / activeJobs
-	if numWorkers < 32 {
-		numWorkers = 32
-	}
-	if numWorkers > maxNumWorkers {
-		numWorkers = maxNumWorkers
+	maxCheckers := m.rcloneMaxCheckers
+	if maxCheckers <= 0 {
+		maxCheckers = 8
 	}
 
-	concurrency := maxConcurrency / activeJobs
-	if concurrency < 5 {
-		concurrency = 5
+	transfers := maxTransfers / activeJobs
+	if transfers < 1 {
+		transfers = 1
 	}
-	if concurrency > maxConcurrency {
-		concurrency = maxConcurrency
+	if transfers > maxTransfers {
+		transfers = maxTransfers
 	}
 
-	partSizeMiB := m.pickS5CmdPartSizeMiB(jobID)
-	partSizeMiB = clampInt(partSizeMiB, m.s5cmdMinPartSizeMiB, m.s5cmdMaxPartSizeMiB)
+	checkers := maxCheckers / activeJobs
+	if checkers < 1 {
+		checkers = 1
+	}
+	if checkers > maxCheckers {
+		checkers = maxCheckers
+	}
 
-	return s5cmdTune{
-		NumWorkers:  numWorkers,
-		Concurrency: concurrency,
-		PartSizeMiB: partSizeMiB,
-		ActiveJobs:  activeJobs,
+	uploadConcurrency := m.rcloneS3UploadConcurrency
+	if uploadConcurrency > 0 {
+		uploadConcurrency = uploadConcurrency / activeJobs
+		if uploadConcurrency < 1 {
+			uploadConcurrency = 1
+		}
+		if uploadConcurrency > m.rcloneS3UploadConcurrency {
+			uploadConcurrency = m.rcloneS3UploadConcurrency
+		}
+	}
+
+	return rcloneTune{
+		Transfers:         transfers,
+		Checkers:          checkers,
+		UploadConcurrency: uploadConcurrency,
+		ActiveJobs:        activeJobs,
 	}, true
 }
 
-func (m *Manager) pickS5CmdPartSizeMiB(jobID string) int {
-	def := m.s5cmdDefaultPartSizeMiB
-	if def <= 0 {
-		def = 64
+func applyRcloneTune(args []string, tune rcloneTune) []string {
+	if tune.Transfers > 0 && !hasAnyFlag(args, "--transfers") {
+		args = append(args, "--transfers", strconv.Itoa(tune.Transfers))
 	}
-
-	jp := m.loadJobProgress(jobID)
-	if jp == nil || jp.BytesTotal == nil || jp.ObjectsTotal == nil {
-		return def
+	if tune.Checkers > 0 && !hasAnyFlag(args, "--checkers") {
+		args = append(args, "--checkers", strconv.Itoa(tune.Checkers))
 	}
-	bt := *jp.BytesTotal
-	ot := *jp.ObjectsTotal
-	if bt <= 0 || ot <= 0 {
-		return def
+	if tune.UploadConcurrency > 0 && !hasAnyFlag(args, "--s3-upload-concurrency") {
+		args = append(args, "--s3-upload-concurrency", strconv.Itoa(tune.UploadConcurrency))
 	}
-
-	avgMiB := float64(bt) / float64(ot) / (1024 * 1024)
-	switch {
-	case avgMiB <= 64:
-		return 16
-	case avgMiB <= 256:
-		return 32
-	case avgMiB <= 1024:
-		return 64
-	default:
-		return 128
-	}
-}
-
-func applyS5CmdTuneToCommandArgs(commandArgs []string, tune s5cmdTune) []string {
-	if len(commandArgs) == 0 {
-		return commandArgs
-	}
-	cmd := commandArgs[0]
-	switch cmd {
-	case "sync", "cp", "mv":
-		// ok
-	default:
-		return commandArgs
-	}
-
-	out := make([]string, 0, len(commandArgs)+4)
-	out = append(out, cmd)
-	if tune.Concurrency > 0 && !hasAnyFlag(commandArgs, "--concurrency", "-c") {
-		out = append(out, "--concurrency", strconv.Itoa(tune.Concurrency))
-	}
-	if tune.PartSizeMiB > 0 && !hasAnyFlag(commandArgs, "--part-size", "-p") {
-		out = append(out, "--part-size", strconv.Itoa(tune.PartSizeMiB))
-	}
-	out = append(out, commandArgs[1:]...)
-	return out
+	return args
 }
 
 func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
-	if err := m.store.MarkRunningJobsFailed(ctx, "server restarted"); err != nil {
+	runningIDs, err := m.store.ListJobIDsByStatus(ctx, models.JobStatusRunning)
+	if err != nil {
 		return err
+	}
+	if len(runningIDs) > 0 {
+		msg := "server restarted"
+		for _, id := range runningIDs {
+			profileID, job, ok, err := m.store.GetJobByID(ctx, id)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+			if err := m.finalizeJob(id, models.JobStatusFailed, &finishedAt, &msg); err != nil {
+				return err
+			}
+
+			payload := map[string]any{"status": models.JobStatusFailed, "error": msg}
+			if jp := m.loadJobProgress(id); jp != nil {
+				payload["progress"] = jp
+			}
+			m.hub.Publish(ws.Event{Type: "job.completed", JobID: id, Payload: payload})
+
+			logging.ErrorFields("job failed after restart", map[string]any{
+				"event":      "job.completed",
+				"job_id":     id,
+				"job_type":   job.Type,
+				"profile_id": profileID,
+				"status":     models.JobStatusFailed,
+				"error":      msg,
+			})
+		}
 	}
 	queuedIDs, err := m.store.ListJobIDsByStatus(ctx, models.JobStatusQueued)
 	if err != nil {
@@ -371,6 +379,7 @@ func (m *Manager) RunMaintenance(ctx context.Context) {
 	m.cleanupExpiredUploadSessions(ctx)
 	m.cleanupOrphanArtifacts(ctx)
 	m.cleanupOldJobs(ctx)
+	m.cleanupExpiredJobLogs(ctx)
 
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
@@ -382,6 +391,7 @@ func (m *Manager) RunMaintenance(ctx context.Context) {
 			m.cleanupExpiredUploadSessions(ctx)
 			m.cleanupOrphanArtifacts(ctx)
 			m.cleanupOldJobs(ctx)
+			m.cleanupExpiredJobLogs(ctx)
 		}
 	}
 }
@@ -441,6 +451,58 @@ func (m *Manager) cleanupOldJobs(ctx context.Context) {
 		}
 
 		m.hub.Publish(ws.Event{Type: "jobs.deleted", Payload: map[string]any{"jobIds": ids, "reason": "retention"}})
+	}
+}
+
+func (m *Manager) cleanupExpiredJobLogs(ctx context.Context) {
+	if m.jobLogRetention <= 0 {
+		return
+	}
+
+	logDir := filepath.Join(m.dataDir, "logs", "jobs")
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return
+	}
+
+	jobIDs := make(map[string]struct{}, len(entries))
+	for _, ent := range entries {
+		if ent.IsDir() {
+			continue
+		}
+		name := ent.Name()
+		if !(strings.HasSuffix(name, ".log") || strings.HasSuffix(name, ".cmd")) {
+			continue
+		}
+		jobID := strings.TrimSuffix(name, filepath.Ext(name))
+		if jobID == "" {
+			continue
+		}
+		jobIDs[jobID] = struct{}{}
+	}
+	if len(jobIDs) == 0 {
+		return
+	}
+
+	cutoff := time.Now().Add(-m.jobLogRetention)
+	for jobID := range jobIDs {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		callCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, job, ok, err := m.store.GetJobByID(callCtx, jobID)
+		cancel()
+		if err != nil || !ok || job.FinishedAt == nil {
+			continue
+		}
+		finishedAt, err := time.Parse(time.RFC3339Nano, *job.FinishedAt)
+		if err != nil || finishedAt.After(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(logDir, jobID+".log"))
+		_ = os.Remove(filepath.Join(logDir, jobID+".cmd"))
 	}
 }
 
@@ -582,16 +644,16 @@ func (m *Manager) Cancel(jobID string) {
 
 func (m *Manager) IsSupportedJobType(jobType string) bool {
 	switch jobType {
-	case JobTypeS5CmdSyncLocalToS3,
-		JobTypeS5CmdSyncStagingToS3,
-		JobTypeS5CmdSyncS3ToLocal,
-		JobTypeS5CmdRmPrefix,
-		JobTypeS5CmdCpS3ToS3,
-		JobTypeS5CmdMvS3ToS3,
-		JobTypeS5CmdCpS3ToS3Batch,
-		JobTypeS5CmdMvS3ToS3Batch,
-		JobTypeS5CmdCpS3PrefixToS3Prefix,
-		JobTypeS5CmdMvS3PrefixToS3Prefix,
+	case JobTypeTransferSyncLocalToS3,
+		JobTypeTransferSyncStagingToS3,
+		JobTypeTransferSyncS3ToLocal,
+		JobTypeTransferDeletePrefix,
+		JobTypeTransferCopyObject,
+		JobTypeTransferMoveObject,
+		JobTypeTransferCopyBatch,
+		JobTypeTransferMoveBatch,
+		JobTypeTransferCopyPrefix,
+		JobTypeTransferMovePrefix,
 		JobTypeS3ZipPrefix,
 		JobTypeS3ZipObjects,
 		JobTypeS3DeleteObjects,
@@ -611,6 +673,15 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return nil
 	}
 
+	profile, ok, err := m.store.GetProfile(rootCtx, profileID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return errors.New("profile not found")
+	}
+	preserveLeadingSlash := profile.PreserveLeadingSlash
+
 	start := time.Now()
 	logging.InfoFields("job started", map[string]any{
 		"event":      "job.started",
@@ -624,6 +695,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	m.cancels[jobID] = cancel
 	m.mu.Unlock()
 	defer func() {
+		cancel()
 		m.mu.Lock()
 		delete(m.cancels, jobID)
 		delete(m.pids, jobID)
@@ -638,34 +710,34 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 
 	var runErr error
 	switch job.Type {
-	case JobTypeS5CmdSyncStagingToS3:
-		runErr = m.runS5CmdSyncStagingToS3(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdSyncLocalToS3:
-		runErr = m.runS5CmdSyncLocalToS3(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdSyncS3ToLocal:
-		runErr = m.runS5CmdSyncS3ToLocal(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdRmPrefix:
-		runErr = m.runS5CmdRmPrefix(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdCpS3ToS3:
-		runErr = m.runS5CmdCpS3ToS3(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdMvS3ToS3:
-		runErr = m.runS5CmdMvS3ToS3(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdCpS3ToS3Batch:
-		runErr = m.runS5CmdCpS3ToS3Batch(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdMvS3ToS3Batch:
-		runErr = m.runS5CmdMvS3ToS3Batch(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdCpS3PrefixToS3Prefix:
-		runErr = m.runS5CmdCpS3PrefixToS3Prefix(ctx, profileID, jobID, job.Payload)
-	case JobTypeS5CmdMvS3PrefixToS3Prefix:
-		runErr = m.runS5CmdMvS3PrefixToS3Prefix(ctx, profileID, jobID, job.Payload)
+	case JobTypeTransferSyncStagingToS3:
+		runErr = m.runTransferSyncStagingToS3(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferSyncLocalToS3:
+		runErr = m.runTransferSyncLocalToS3(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferSyncS3ToLocal:
+		runErr = m.runTransferSyncS3ToLocal(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferDeletePrefix:
+		runErr = m.runTransferDeletePrefix(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferCopyObject:
+		runErr = m.runTransferCopyObject(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferMoveObject:
+		runErr = m.runTransferMoveObject(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferCopyBatch:
+		runErr = m.runTransferCopyBatch(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferMoveBatch:
+		runErr = m.runTransferMoveBatch(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferCopyPrefix:
+		runErr = m.runTransferCopyPrefix(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
+	case JobTypeTransferMovePrefix:
+		runErr = m.runTransferMovePrefix(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
 	case JobTypeS3ZipPrefix:
-		runErr = m.runS3ZipPrefix(ctx, profileID, jobID, job.Payload)
+		runErr = m.runS3ZipPrefix(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
 	case JobTypeS3ZipObjects:
-		runErr = m.runS3ZipObjects(ctx, profileID, jobID, job.Payload)
+		runErr = m.runS3ZipObjects(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
 	case JobTypeS3DeleteObjects:
 		runErr = m.runS3DeleteObjects(ctx, profileID, jobID, job.Payload)
 	case JobTypeS3IndexObjects:
-		runErr = m.runS3IndexObjects(ctx, profileID, jobID, job.Payload)
+		runErr = m.runS3IndexObjects(ctx, profileID, jobID, job.Payload, preserveLeadingSlash)
 	default:
 		runErr = fmt.Errorf("unsupported job type: %s", job.Type)
 	}
@@ -756,7 +828,7 @@ func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt 
 	return err
 }
 
-func (m *Manager) runS5CmdSyncStagingToS3(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferSyncStagingToS3(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	uploadID, _ := payload["uploadId"].(string)
 	if uploadID == "" {
 		return errors.New("payload.uploadId is required")
@@ -777,16 +849,16 @@ func (m *Manager) runS5CmdSyncStagingToS3(ctx context.Context, profileID, jobID 
 		}
 	}
 
-	// Sync staging dir -> s3://bucket/prefix/
+	// Sync staging dir -> bucket/prefix
 	src := filepath.Clean(us.StagingDir)
-	dst := s3URI(us.Bucket, us.Prefix)
+	dst := rcloneRemoteDir(us.Bucket, us.Prefix, preserveLeadingSlash)
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	if totals, err := computeLocalTotals(preflightCtx, src, nil, nil); err == nil {
 		m.trySetJobTotals(jobID, totals.Objects, totals.Bytes)
 	}
 	cancel()
-	err = m.runS5CmdSync(ctx, profileID, jobID, src, dst, false, nil, nil, false)
+	err = m.runRcloneSync(ctx, profileID, jobID, src, dst, false, nil, nil, false, rcloneProgressTransfers)
 	if err != nil {
 		return err
 	}
@@ -797,7 +869,7 @@ func (m *Manager) runS5CmdSyncStagingToS3(ctx context.Context, profileID, jobID 
 	return nil
 }
 
-func (m *Manager) runS5CmdSyncLocalToS3(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferSyncLocalToS3(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	localPath, _ := payload["localPath"].(string)
@@ -820,11 +892,11 @@ func (m *Manager) runS5CmdSyncLocalToS3(ctx context.Context, profileID, jobID st
 		m.trySetJobTotals(jobID, totals.Objects, totals.Bytes)
 	}
 	cancel()
-	dst := s3URI(bucket, prefix)
-	return m.runS5CmdSync(ctx, profileID, jobID, src, dst, deleteExtraneous, include, exclude, dryRun)
+	dst := rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)
+	return m.runRcloneSync(ctx, profileID, jobID, src, dst, deleteExtraneous, include, exclude, dryRun, rcloneProgressTransfers)
 }
 
-func (m *Manager) runS5CmdSyncS3ToLocal(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferSyncS3ToLocal(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	localPath, _ := payload["localPath"].(string)
@@ -838,7 +910,7 @@ func (m *Manager) runS5CmdSyncS3ToLocal(ctx context.Context, profileID, jobID st
 	exclude := stringSlice(payload["exclude"])
 
 	bucket = strings.TrimSpace(bucket)
-	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
+	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
 	localPath = strings.TrimSpace(localPath)
 
 	if bucket == "" {
@@ -857,33 +929,14 @@ func (m *Manager) runS5CmdSyncS3ToLocal(ctx context.Context, profileID, jobID st
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, bucket, normalizePrefix(prefix), include, exclude)
+	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
-	srcPattern := s3SyncPattern(bucket, prefix)
-
-	args := []string{"sync"}
-	if deleteExtraneous {
-		args = append(args, "--delete")
-	}
-	for _, pat := range include {
-		if pat == "" {
-			continue
-		}
-		args = append(args, "--include", pat)
-	}
-	for _, pat := range exclude {
-		if pat == "" {
-			continue
-		}
-		args = append(args, "--exclude", pat)
-	}
-	args = append(args, srcPattern, dst)
-
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	src := rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)
+	return m.runRcloneSync(ctx, profileID, jobID, src, dst, deleteExtraneous, include, exclude, dryRun, rcloneProgressTransfers)
 }
 
-func (m *Manager) runS5CmdRmPrefix(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	deleteAll, _ := payload["deleteAll"].(bool)
@@ -893,7 +946,7 @@ func (m *Manager) runS5CmdRmPrefix(ctx context.Context, profileID, jobID string,
 	exclude := stringSlice(payload["exclude"])
 
 	bucket = strings.TrimSpace(bucket)
-	prefix = strings.TrimLeft(strings.TrimSpace(prefix), "/")
+	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
 
 	if bucket == "" {
 		return errors.New("payload.bucket is required")
@@ -912,30 +965,37 @@ func (m *Manager) runS5CmdRmPrefix(ctx context.Context, profileID, jobID string,
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobObjectsTotalFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude)
+	m.trySetJobObjectsTotalFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
-	pattern := s3DeletePattern(bucket, prefix)
-
-	args := []string{"rm"}
-	for _, pat := range include {
-		if pat == "" {
-			continue
-		}
-		args = append(args, "--include", pat)
+	cmd := "delete"
+	target := rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)
+	if deleteAll {
+		cmd = "purge"
+		target = rcloneRemoteBucket(bucket)
 	}
-	for _, pat := range exclude {
-		if pat == "" {
-			continue
-		}
-		args = append(args, "--exclude", pat)
-	}
-	args = append(args, pattern)
 
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	args := []string{cmd}
+	if !deleteAll {
+		for _, pat := range include {
+			if pat == "" {
+				continue
+			}
+			args = append(args, "--include", pat)
+		}
+		for _, pat := range exclude {
+			if pat == "" {
+				continue
+			}
+			args = append(args, "--exclude", pat)
+		}
+	}
+	args = append(args, target)
+
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressDeletes})
 }
 
-func (m *Manager) runS5CmdCpS3ToS3(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferCopyObject(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	srcKey, _ := payload["srcKey"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
@@ -943,9 +1003,9 @@ func (m *Manager) runS5CmdCpS3ToS3(ctx context.Context, profileID, jobID string,
 	dryRun, _ := payload["dryRun"].(bool)
 
 	srcBucket = strings.TrimSpace(srcBucket)
-	srcKey = strings.TrimPrefix(strings.TrimSpace(srcKey), "/")
+	srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
 	dstBucket = strings.TrimSpace(dstBucket)
-	dstKey = strings.TrimPrefix(strings.TrimSpace(dstKey), "/")
+	dstKey = normalizeKeyInput(dstKey, preserveLeadingSlash)
 
 	if srcBucket == "" || srcKey == "" || dstBucket == "" || dstKey == "" {
 		return errors.New("payload.srcBucket, payload.srcKey, payload.dstBucket and payload.dstKey are required")
@@ -957,13 +1017,13 @@ func (m *Manager) runS5CmdCpS3ToS3(ctx context.Context, profileID, jobID string,
 		return errors.New("source and destination must be different")
 	}
 
-	m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey)
+	m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey, preserveLeadingSlash)
 
-	args := []string{"cp", s3ObjectURI(srcBucket, srcKey), s3ObjectURI(dstBucket, dstKey)}
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	args := []string{"copyto", rcloneRemoteObject(srcBucket, srcKey, preserveLeadingSlash), rcloneRemoteObject(dstBucket, dstKey, preserveLeadingSlash)}
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
 }
 
-func (m *Manager) runS5CmdMvS3ToS3(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferMoveObject(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	srcKey, _ := payload["srcKey"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
@@ -971,9 +1031,9 @@ func (m *Manager) runS5CmdMvS3ToS3(ctx context.Context, profileID, jobID string,
 	dryRun, _ := payload["dryRun"].(bool)
 
 	srcBucket = strings.TrimSpace(srcBucket)
-	srcKey = strings.TrimPrefix(strings.TrimSpace(srcKey), "/")
+	srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
 	dstBucket = strings.TrimSpace(dstBucket)
-	dstKey = strings.TrimPrefix(strings.TrimSpace(dstKey), "/")
+	dstKey = normalizeKeyInput(dstKey, preserveLeadingSlash)
 
 	if srcBucket == "" || srcKey == "" || dstBucket == "" || dstKey == "" {
 		return errors.New("payload.srcBucket, payload.srcKey, payload.dstBucket and payload.dstKey are required")
@@ -985,13 +1045,13 @@ func (m *Manager) runS5CmdMvS3ToS3(ctx context.Context, profileID, jobID string,
 		return errors.New("source and destination must be different")
 	}
 
-	m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey)
+	m.trySetJobTotalsFromS3Object(ctx, profileID, jobID, srcBucket, srcKey, preserveLeadingSlash)
 
-	args := []string{"mv", s3ObjectURI(srcBucket, srcKey), s3ObjectURI(dstBucket, dstKey)}
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	args := []string{"moveto", rcloneRemoteObject(srcBucket, srcKey, preserveLeadingSlash), rcloneRemoteObject(dstBucket, dstKey, preserveLeadingSlash)}
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
 }
 
-func (m *Manager) runS5CmdCpS3ToS3Batch(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferCopyBatch(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
 	rawItems, _ := payload["items"].([]any)
@@ -1014,8 +1074,8 @@ func (m *Manager) runS5CmdCpS3ToS3Batch(ctx context.Context, profileID, jobID st
 		}
 		srcKey, _ := mm["srcKey"].(string)
 		dstKey, _ := mm["dstKey"].(string)
-		srcKey = strings.TrimPrefix(strings.TrimSpace(srcKey), "/")
-		dstKey = strings.TrimPrefix(strings.TrimSpace(dstKey), "/")
+		srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
+		dstKey = normalizeKeyInput(dstKey, preserveLeadingSlash)
 		if srcKey == "" || dstKey == "" {
 			return fmt.Errorf("payload.items[%d].srcKey and payload.items[%d].dstKey are required", i, i)
 		}
@@ -1033,16 +1093,10 @@ func (m *Manager) runS5CmdCpS3ToS3Batch(ctx context.Context, profileID, jobID st
 
 	m.trySetJobObjectsTotal(jobID, int64(len(pairs)))
 
-	runPath := filepath.Join(m.dataDir, "logs", "jobs", jobID+".cmd")
-	if err := writeS5CmdRunFile(runPath, "cp", srcBucket, dstBucket, pairs); err != nil {
-		return err
-	}
-
-	args := []string{"run", runPath}
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	return m.runTransferBatch(ctx, profileID, jobID, srcBucket, dstBucket, pairs, "copyto", dryRun, preserveLeadingSlash)
 }
 
-func (m *Manager) runS5CmdMvS3ToS3Batch(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferMoveBatch(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
 	rawItems, _ := payload["items"].([]any)
@@ -1065,8 +1119,8 @@ func (m *Manager) runS5CmdMvS3ToS3Batch(ctx context.Context, profileID, jobID st
 		}
 		srcKey, _ := mm["srcKey"].(string)
 		dstKey, _ := mm["dstKey"].(string)
-		srcKey = strings.TrimPrefix(strings.TrimSpace(srcKey), "/")
-		dstKey = strings.TrimPrefix(strings.TrimSpace(dstKey), "/")
+		srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
+		dstKey = normalizeKeyInput(dstKey, preserveLeadingSlash)
 		if srcKey == "" || dstKey == "" {
 			return fmt.Errorf("payload.items[%d].srcKey and payload.items[%d].dstKey are required", i, i)
 		}
@@ -1084,38 +1138,25 @@ func (m *Manager) runS5CmdMvS3ToS3Batch(ctx context.Context, profileID, jobID st
 
 	m.trySetJobObjectsTotal(jobID, int64(len(pairs)))
 
-	runPath := filepath.Join(m.dataDir, "logs", "jobs", jobID+".cmd")
-	if err := writeS5CmdRunFile(runPath, "mv", srcBucket, dstBucket, pairs); err != nil {
-		return err
-	}
-
-	args := []string{"run", runPath}
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	return m.runTransferBatch(ctx, profileID, jobID, srcBucket, dstBucket, pairs, "moveto", dryRun, preserveLeadingSlash)
 }
 
-func writeS5CmdRunFile(path, op, srcBucket, dstBucket string, pairs []s3KeyPair) error {
-	if op != "cp" && op != "mv" {
-		return fmt.Errorf("unsupported op %q", op)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-
-	for _, p := range pairs {
-		if p.SrcKey == "" || p.DstKey == "" {
+func (m *Manager) runTransferBatch(ctx context.Context, profileID, jobID, srcBucket, dstBucket string, pairs []s3KeyPair, op string, dryRun bool, preserveLeadingSlash bool) error {
+	for _, pair := range pairs {
+		if pair.SrcKey == "" || pair.DstKey == "" {
 			continue
 		}
-		if _, err := fmt.Fprintf(f, "%s %s %s\n", op, s3ObjectURI(srcBucket, p.SrcKey), s3ObjectURI(dstBucket, p.DstKey)); err != nil {
+		args := []string{
+			op,
+			rcloneRemoteObject(srcBucket, pair.SrcKey, preserveLeadingSlash),
+			rcloneRemoteObject(dstBucket, pair.DstKey, preserveLeadingSlash),
+		}
+		if err := m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: false, DryRun: dryRun, ProgressMode: rcloneProgressTransfers}); err != nil {
 			return err
 		}
+		m.incrementJobObjectsDone(jobID, 1)
 	}
-	return f.Close()
+	return nil
 }
 
 func (m *Manager) trySetJobTotals(jobID string, objectsTotal, bytesTotal int64) {
@@ -1155,32 +1196,76 @@ func (m *Manager) trySetJobObjectsTotal(jobID string, objectsTotal int64) {
 	})
 }
 
-func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jobID, bucket, key string) {
-	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+func (m *Manager) incrementJobObjectsDone(jobID string, delta int64) {
+	if delta <= 0 {
+		return
+	}
+
+	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	_, job, ok, err := m.store.GetJobByID(updateCtx, jobID)
+	cancel()
 	if err != nil || !ok {
 		return
 	}
 
-	client, err := s3client.New(ctx, profileSecrets)
-	if err != nil {
+	var jp models.JobProgress
+	if job.Progress != nil {
+		jp = *job.Progress
+	}
+
+	done := delta
+	if jp.ObjectsDone != nil {
+		done += *jp.ObjectsDone
+	}
+	jp.ObjectsDone = &done
+
+	updateCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, &jp, nil)
+	cancel()
+
+	m.hub.Publish(ws.Event{
+		Type:  "job.progress",
+		JobID: jobID,
+		Payload: map[string]any{
+			"status":   models.JobStatusRunning,
+			"progress": &jp,
+		},
+	})
+}
+
+func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jobID, bucket, key string, preserveLeadingSlash bool) {
+	key = normalizeKeyInput(key, preserveLeadingSlash)
+
+	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+	if err != nil || !ok {
 		return
 	}
 
 	headCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	out, err := client.HeadObject(headCtx, &s3.HeadObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
-	})
+	proc, err := m.startRcloneCommand(headCtx, profileSecrets, jobID, []string{"lsjson", "--stat", "--no-mimetype", rcloneRemoteObject(bucket, key, preserveLeadingSlash)})
 	if err != nil {
+		return
+	}
+	out, readErr := io.ReadAll(proc.stdout)
+	waitErr := proc.wait()
+	if readErr != nil || waitErr != nil {
+		return
+	}
+	if len(out) == 0 {
+		return
+	}
+
+	var entry rcloneListEntry
+	if err := json.Unmarshal(out, &entry); err != nil {
 		return
 	}
 
 	ot := int64(1)
 	jp := &models.JobProgress{ObjectsTotal: &ot}
-	if out.ContentLength != nil {
-		bt := *out.ContentLength
+	if entry.Size > 0 {
+		bt := entry.Size
 		jp.BytesTotal = &bt
 	}
 
@@ -1198,18 +1283,13 @@ func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jo
 	})
 }
 
-func (m *Manager) trySetJobTotalsFromS3Prefix(ctx context.Context, profileID, jobID, bucket, prefix string, include, exclude []string) {
+func (m *Manager) trySetJobTotalsFromS3Prefix(ctx context.Context, profileID, jobID, bucket, prefix string, include, exclude []string, preserveLeadingSlash bool) {
 	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
 	if err != nil || !ok {
 		return
 	}
 
-	client, err := s3client.New(ctx, profileSecrets)
-	if err != nil {
-		return
-	}
-
-	totals, ok, err := computeS3PrefixTotals(ctx, client, bucket, prefix, include, exclude, 0)
+	totals, ok, err := computeS3PrefixTotals(ctx, m, profileSecrets, jobID, bucket, prefix, include, exclude, 0, preserveLeadingSlash)
 	if err != nil || !ok {
 		return
 	}
@@ -1217,18 +1297,13 @@ func (m *Manager) trySetJobTotalsFromS3Prefix(ctx context.Context, profileID, jo
 	m.trySetJobTotals(jobID, totals.Objects, totals.Bytes)
 }
 
-func (m *Manager) trySetJobObjectsTotalFromS3Prefix(ctx context.Context, profileID, jobID, bucket, prefix string, include, exclude []string) {
+func (m *Manager) trySetJobObjectsTotalFromS3Prefix(ctx context.Context, profileID, jobID, bucket, prefix string, include, exclude []string, preserveLeadingSlash bool) {
 	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
 	if err != nil || !ok {
 		return
 	}
 
-	client, err := s3client.New(ctx, profileSecrets)
-	if err != nil {
-		return
-	}
-
-	totals, ok, err := computeS3PrefixTotals(ctx, client, bucket, prefix, include, exclude, 0)
+	totals, ok, err := computeS3PrefixTotals(ctx, m, profileSecrets, jobID, bucket, prefix, include, exclude, 0, preserveLeadingSlash)
 	if err != nil || !ok {
 		return
 	}
@@ -1236,7 +1311,7 @@ func (m *Manager) trySetJobObjectsTotalFromS3Prefix(ctx context.Context, profile
 	m.trySetJobObjectsTotal(jobID, totals.Objects)
 }
 
-func (m *Manager) runS5CmdCpS3PrefixToS3Prefix(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferCopyPrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	srcPrefix, _ := payload["srcPrefix"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
@@ -1246,9 +1321,9 @@ func (m *Manager) runS5CmdCpS3PrefixToS3Prefix(ctx context.Context, profileID, j
 	exclude := stringSlice(payload["exclude"])
 
 	srcBucket = strings.TrimSpace(srcBucket)
-	srcPrefix = strings.TrimPrefix(strings.TrimSpace(srcPrefix), "/")
+	srcPrefix = normalizeKeyInput(srcPrefix, preserveLeadingSlash)
 	dstBucket = strings.TrimSpace(dstBucket)
-	dstPrefix = strings.TrimPrefix(strings.TrimSpace(dstPrefix), "/")
+	dstPrefix = normalizeKeyInput(dstPrefix, preserveLeadingSlash)
 
 	if srcBucket == "" || dstBucket == "" {
 		return errors.New("payload.srcBucket and payload.dstBucket are required")
@@ -1279,13 +1354,13 @@ func (m *Manager) runS5CmdCpS3PrefixToS3Prefix(ctx context.Context, profileID, j
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude)
+	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
-	srcPattern := fmt.Sprintf("s3://%s/%s*", srcBucket, srcPrefix)
-	dstURI := s3URI(dstBucket, dstPrefix)
+	src := rcloneRemoteDir(srcBucket, srcPrefix, preserveLeadingSlash)
+	dst := rcloneRemoteDir(dstBucket, dstPrefix, preserveLeadingSlash)
 
-	args := []string{"cp"}
+	args := []string{"copy"}
 	for _, pat := range include {
 		if pat == "" {
 			continue
@@ -1298,12 +1373,12 @@ func (m *Manager) runS5CmdCpS3PrefixToS3Prefix(ctx context.Context, profileID, j
 		}
 		args = append(args, "--exclude", pat)
 	}
-	args = append(args, srcPattern, dstURI)
+	args = append(args, src, dst)
 
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
 }
 
-func (m *Manager) runS5CmdMvS3PrefixToS3Prefix(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runTransferMovePrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	srcPrefix, _ := payload["srcPrefix"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
@@ -1313,9 +1388,9 @@ func (m *Manager) runS5CmdMvS3PrefixToS3Prefix(ctx context.Context, profileID, j
 	exclude := stringSlice(payload["exclude"])
 
 	srcBucket = strings.TrimSpace(srcBucket)
-	srcPrefix = strings.TrimPrefix(strings.TrimSpace(srcPrefix), "/")
+	srcPrefix = normalizeKeyInput(srcPrefix, preserveLeadingSlash)
 	dstBucket = strings.TrimSpace(dstBucket)
-	dstPrefix = strings.TrimPrefix(strings.TrimSpace(dstPrefix), "/")
+	dstPrefix = normalizeKeyInput(dstPrefix, preserveLeadingSlash)
 
 	if srcBucket == "" || dstBucket == "" {
 		return errors.New("payload.srcBucket and payload.dstBucket are required")
@@ -1346,13 +1421,13 @@ func (m *Manager) runS5CmdMvS3PrefixToS3Prefix(ctx context.Context, profileID, j
 	}
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude)
+	m.trySetJobTotalsFromS3Prefix(preflightCtx, profileID, jobID, srcBucket, srcPrefix, include, exclude, preserveLeadingSlash)
 	cancel()
 
-	srcPattern := fmt.Sprintf("s3://%s/%s*", srcBucket, srcPrefix)
-	dstURI := s3URI(dstBucket, dstPrefix)
+	src := rcloneRemoteDir(srcBucket, srcPrefix, preserveLeadingSlash)
+	dst := rcloneRemoteDir(dstBucket, dstPrefix, preserveLeadingSlash)
 
-	args := []string{"mv"}
+	args := []string{"move"}
 	for _, pat := range include {
 		if pat == "" {
 			continue
@@ -1365,9 +1440,9 @@ func (m *Manager) runS5CmdMvS3PrefixToS3Prefix(ctx context.Context, profileID, j
 		}
 		args = append(args, "--exclude", pat)
 	}
-	args = append(args, srcPattern, dstURI)
+	args = append(args, src, dst)
 
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
 }
 
 func (m *Manager) ensureLocalPathAllowed(localPath string) error {
@@ -1419,7 +1494,7 @@ func (m *Manager) prepareLocalDestination(localPath string) (string, error) {
 		}
 	}
 
-	// Normalize to a directory target for s5cmd.
+	// Normalize to a directory target for transfer operations.
 	if !strings.HasSuffix(abs, string(os.PathSeparator)) {
 		abs += string(os.PathSeparator)
 	}
@@ -1507,27 +1582,50 @@ func evalSymlinksBestEffort(path string) (string, error) {
 	}
 }
 
-func normalizePrefix(prefix string) string {
-	p := strings.TrimPrefix(prefix, "/")
+func normalizeKeyInput(value string, preserveLeadingSlash bool) string {
+	value = strings.TrimSpace(value)
+	if preserveLeadingSlash {
+		return value
+	}
+	return strings.TrimPrefix(value, "/")
+}
+
+func normalizePrefix(prefix string, preserveLeadingSlash bool) string {
+	p := normalizeKeyInput(prefix, preserveLeadingSlash)
 	if p != "" && !strings.HasSuffix(p, "/") {
 		p += "/"
 	}
 	return p
 }
 
-func s3SyncPattern(bucket, prefix string) string {
-	p := normalizePrefix(prefix)
-	if p == "" {
-		return fmt.Sprintf("s3://%s/*", bucket)
-	}
-	return fmt.Sprintf("s3://%s/%s*", bucket, p)
+const rcloneRemoteName = "remote"
+
+func rcloneRemoteBucket(bucket string) string {
+	return fmt.Sprintf("%s:%s", rcloneRemoteName, bucket)
 }
 
-func (m *Manager) runS5CmdSync(ctx context.Context, profileID, jobID, src, dst string, deleteExtraneous bool, include, exclude []string, dryRun bool) error {
-	args := []string{"sync"}
-	if deleteExtraneous {
-		args = append(args, "--delete")
+func rcloneRemoteDir(bucket, prefix string, preserveLeadingSlash bool) string {
+	p := normalizePrefix(prefix, preserveLeadingSlash)
+	if p == "" {
+		return rcloneRemoteBucket(bucket)
 	}
+	return fmt.Sprintf("%s:%s/%s", rcloneRemoteName, bucket, p)
+}
+
+func rcloneRemoteObject(bucket, key string, preserveLeadingSlash bool) string {
+	k := normalizeKeyInput(key, preserveLeadingSlash)
+	if k == "" {
+		return rcloneRemoteBucket(bucket)
+	}
+	return fmt.Sprintf("%s:%s/%s", rcloneRemoteName, bucket, k)
+}
+
+func (m *Manager) runRcloneSync(ctx context.Context, profileID, jobID, src, dst string, deleteExtraneous bool, include, exclude []string, dryRun bool, mode rcloneProgressMode) error {
+	cmd := "copy"
+	if deleteExtraneous {
+		cmd = "sync"
+	}
+	args := []string{cmd}
 	for _, pat := range include {
 		if pat == "" {
 			continue
@@ -1541,22 +1639,34 @@ func (m *Manager) runS5CmdSync(ctx context.Context, profileID, jobID, src, dst s
 		args = append(args, "--exclude", pat)
 	}
 
-	args = append(args, normalizeSyncSource(src), dst)
-	return m.runS5Cmd(ctx, profileID, jobID, args, runS5CmdOptions{TrackProgress: true, DryRun: dryRun})
+	args = append(args, src, dst)
+	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: mode})
 }
 
-type runS5CmdOptions struct {
+type runRcloneOptions struct {
 	TrackProgress bool
 	DryRun        bool
+	ProgressMode  rcloneProgressMode
 }
 
-type progressDelta struct {
-	Objects int64
-	Bytes   int64
+type rcloneStatsUpdate struct {
+	BytesDone    int64
+	BytesTotal   *int64
+	ObjectsDone  int64
+	ObjectsTotal *int64
+	SpeedBps     *int64
+	EtaSeconds   *int
 }
 
-func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, commandArgs []string, opts runS5CmdOptions) error {
-	s5cmdPath, err := ResolveS5CmdPath()
+type rcloneProgressMode int
+
+const (
+	rcloneProgressTransfers rcloneProgressMode = iota
+	rcloneProgressDeletes
+)
+
+func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, commandArgs []string, opts runRcloneOptions) error {
+	rclonePath, err := ResolveRclonePath()
 	if err != nil {
 		return err
 	}
@@ -1569,24 +1679,42 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 		return errors.New("profile not found")
 	}
 
-	tune, tuneOK := m.computeS5CmdTune(jobID, commandArgs)
-	if tuneOK {
-		commandArgs = applyS5CmdTuneToCommandArgs(commandArgs, tune)
+	configPath, err := m.writeRcloneConfig(jobID, profileSecrets)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(configPath) }()
+
+	tlsArgs, tlsCleanup, err := PrepareRcloneTLSFlags(profileSecrets)
+	if err != nil {
+		return err
+	}
+	defer tlsCleanup()
+
+	statsInterval := m.rcloneStatsInterval
+	if !opts.TrackProgress {
+		statsInterval = 0
 	}
 
-	args := []string{}
-	if profileSecrets.Endpoint != "" {
-		args = append(args, "--endpoint-url", profileSecrets.Endpoint)
+	args := []string{
+		"--config", configPath,
+		"--stats", statsInterval.String(),
+		"--stats-log-level", "NOTICE",
+		"--use-json-log",
 	}
-	if profileSecrets.TLSInsecureSkipVerify {
-		args = append(args, "--no-verify-ssl")
+	if len(tlsArgs) > 0 {
+		args = append(args, tlsArgs...)
 	}
-	if tuneOK && tune.NumWorkers > 0 && !hasAnyFlag(args, "--numworkers") {
-		args = append(args, "--numworkers", strconv.Itoa(tune.NumWorkers))
-	}
-	args = append(args, "--json")
 	if opts.DryRun {
 		args = append(args, "--dry-run")
+	}
+	if m.rcloneS3ChunkSizeMiB > 0 && !hasAnyFlag(args, "--s3-chunk-size") {
+		args = append(args, "--s3-chunk-size", fmt.Sprintf("%dM", m.rcloneS3ChunkSizeMiB))
+	}
+
+	tune, tuneOK := m.computeRcloneTune(commandArgs)
+	if tuneOK {
+		args = applyRcloneTune(args, tune)
 	}
 	args = append(args, commandArgs...)
 
@@ -1598,35 +1726,13 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 	defer func() { _ = logWriter.Close() }()
 
 	if tuneOK {
-		tuneMsg := fmt.Sprintf("s5cmd tune: activeJobs=%d numWorkers=%d concurrency=%d partSizeMiB=%d", tune.ActiveJobs, tune.NumWorkers, tune.Concurrency, tune.PartSizeMiB)
+		tuneMsg := fmt.Sprintf("rclone tune: activeJobs=%d transfers=%d checkers=%d uploadConcurrency=%d", tune.ActiveJobs, tune.Transfers, tune.Checkers, tune.UploadConcurrency)
 		_, _ = logWriter.Write([]byte("[info] " + tuneMsg + "\n"))
 		m.emitJobLogStdout(jobID, "info", tuneMsg)
 	}
 
-	var (
-		progressCh   chan progressDelta
-		progressDone chan struct{}
-	)
-	if opts.TrackProgress {
-		progressCh = make(chan progressDelta, 1024)
-		progressDone = make(chan struct{})
-		go func() {
-			defer close(progressDone)
-			m.trackProgress(ctx, jobID, progressCh)
-		}()
-	}
-
-	cmd := exec.CommandContext(ctx, s5cmdPath, args...)
+	cmd := exec.CommandContext(ctx, rclonePath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Env = append(os.Environ(),
-		"AWS_ACCESS_KEY_ID="+profileSecrets.AccessKeyID,
-		"AWS_SECRET_ACCESS_KEY="+profileSecrets.SecretAccessKey,
-		"AWS_REGION="+profileSecrets.Region,
-		"AWS_DEFAULT_REGION="+profileSecrets.Region,
-	)
-	if profileSecrets.SessionToken != nil && *profileSecrets.SessionToken != "" {
-		cmd.Env = append(cmd.Env, "AWS_SESSION_TOKEN="+*profileSecrets.SessionToken)
-	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -1647,6 +1753,19 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 	}
 	m.mu.Unlock()
 
+	var (
+		progressCh   chan rcloneStatsUpdate
+		progressDone chan struct{}
+	)
+	if opts.TrackProgress {
+		progressCh = make(chan rcloneStatsUpdate, 128)
+		progressDone = make(chan struct{})
+		go func() {
+			defer close(progressDone)
+			m.trackRcloneProgress(ctx, jobID, progressCh)
+		}()
+	}
+
 	go func() {
 		<-ctx.Done()
 		if cmd.Process != nil {
@@ -1658,11 +1777,11 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		m.pipeLogs(ctx, stdout, logWriter, jobID, "info", progressCh, m.logLineMaxBytes)
+		m.pipeLogs(ctx, stdout, logWriter, jobID, "info", progressCh, opts.ProgressMode, m.logLineMaxBytes)
 	}()
 	go func() {
 		defer wg.Done()
-		m.pipeLogs(ctx, stderr, logWriter, jobID, "error", nil, m.logLineMaxBytes)
+		m.pipeLogs(ctx, stderr, logWriter, jobID, "error", progressCh, opts.ProgressMode, m.logLineMaxBytes)
 	}()
 
 	waitErr := cmd.Wait()
@@ -1675,17 +1794,56 @@ func (m *Manager) runS5Cmd(ctx context.Context, profileID, jobID string, command
 	return waitErr
 }
 
-func (m *Manager) trackProgress(ctx context.Context, jobID string, progress <-chan progressDelta) {
-	ticker := time.NewTicker(jobProgressTick)
-	defer ticker.Stop()
+func (m *Manager) writeRcloneConfig(jobID string, profile models.ProfileSecrets) (string, error) {
+	dir := filepath.Join(m.dataDir, "logs", "jobs")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, jobID+".rclone.conf")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
 
+	if _, err := fmt.Fprintf(f, "[%s]\n", rcloneRemoteName); err != nil {
+		return "", err
+	}
+	if _, err := fmt.Fprintln(f, "type = s3"); err != nil {
+		return "", err
+	}
+	if _, err := fmt.Fprintln(f, "provider = Other"); err != nil {
+		return "", err
+	}
+	if profile.Endpoint != "" {
+		if _, err := fmt.Fprintf(f, "endpoint = %s\n", profile.Endpoint); err != nil {
+			return "", err
+		}
+	}
+	if profile.Region != "" {
+		if _, err := fmt.Fprintf(f, "region = %s\n", profile.Region); err != nil {
+			return "", err
+		}
+	}
+	if _, err := fmt.Fprintf(f, "access_key_id = %s\n", profile.AccessKeyID); err != nil {
+		return "", err
+	}
+	if _, err := fmt.Fprintf(f, "secret_access_key = %s\n", profile.SecretAccessKey); err != nil {
+		return "", err
+	}
+	if profile.SessionToken != nil && *profile.SessionToken != "" {
+		if _, err := fmt.Fprintf(f, "session_token = %s\n", *profile.SessionToken); err != nil {
+			return "", err
+		}
+	}
+	if _, err := fmt.Fprintf(f, "force_path_style = %t\n", profile.ForcePathStyle); err != nil {
+		return "", err
+	}
+	return path, f.Close()
+}
+
+func (m *Manager) trackRcloneProgress(ctx context.Context, jobID string, progress <-chan rcloneStatsUpdate) {
 	var (
-		objectsDone  int64
-		bytesDone    int64
-		lastSentOps  int64
-		lastSentB    int64
-		lastSentAt   = time.Now()
-		lastOpsRate  float64
 		objectsTotal *int64
 		bytesTotal   *int64
 	)
@@ -1706,104 +1864,53 @@ func (m *Manager) trackProgress(ctx context.Context, jobID string, progress <-ch
 	}
 	loadTotals()
 
-	flush := func() {
-		if objectsDone == lastSentOps && bytesDone == lastSentB {
-			return
-		}
-		now := time.Now()
-		elapsed := now.Sub(lastSentAt).Seconds()
-		lastSentAt = now
-
-		opsDelta := objectsDone - lastSentOps
-		bytesDelta := bytesDone - lastSentB
-		lastSentOps = objectsDone
-		lastSentB = bytesDone
-
-		od := objectsDone
-		bd := bytesDone
-		if objectsTotal == nil || bytesTotal == nil {
-			loadTotals()
-		}
-
-		jp := &models.JobProgress{
-			ObjectsDone:  &od,
-			BytesDone:    &bd,
-			ObjectsTotal: objectsTotal,
-			BytesTotal:   bytesTotal,
-		}
-		if elapsed > 0 && opsDelta > 0 {
-			lastOpsRate = float64(opsDelta) / elapsed
-			opsPerSecond := int64(math.Round(lastOpsRate))
-			if opsPerSecond < 1 {
-				opsPerSecond = 1
-			}
-			jp.ObjectsPerSecond = &opsPerSecond
-		}
-		if elapsed > 0 && bytesDelta > 0 && opsDelta >= 0 {
-			sp := int64(float64(bytesDelta) / elapsed)
-			if sp < 0 {
-				sp = 0
-			}
-			jp.SpeedBps = &sp
-		}
-		switch {
-		case jp.BytesTotal != nil && jp.SpeedBps != nil && *jp.SpeedBps > 0:
-			remaining := *jp.BytesTotal - bytesDone
-			if remaining > 0 {
-				eta64 := remaining / *jp.SpeedBps
-				if remaining%*jp.SpeedBps != 0 {
-					eta64++
-				}
-				maxInt := int64(int(^uint(0) >> 1))
-				if eta64 > maxInt {
-					eta64 = maxInt
-				}
-				eta := int(eta64)
-				jp.EtaSeconds = &eta
-			}
-		case jp.ObjectsTotal != nil && lastOpsRate > 0:
-			remaining := *jp.ObjectsTotal - objectsDone
-			if remaining > 0 {
-				eta64 := int64(math.Ceil(float64(remaining) / lastOpsRate))
-				maxInt := int64(int(^uint(0) >> 1))
-				if eta64 > maxInt {
-					eta64 = maxInt
-				}
-				if eta64 > 0 {
-					eta := int(eta64)
-					jp.EtaSeconds = &eta
-				}
-			}
-		}
-
-		updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
-		cancel()
-
-		m.hub.Publish(ws.Event{
-			Type:  "job.progress",
-			JobID: jobID,
-			Payload: map[string]any{
-				"status":   models.JobStatusRunning,
-				"progress": jp,
-			},
-		})
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
-			flush()
 			return
-		case d, ok := <-progress:
+		case update, ok := <-progress:
 			if !ok {
-				flush()
 				return
 			}
-			objectsDone += d.Objects
-			bytesDone += d.Bytes
-		case <-ticker.C:
-			flush()
+
+			if update.ObjectsTotal != nil && *update.ObjectsTotal > 0 {
+				objectsTotal = update.ObjectsTotal
+			}
+			if update.BytesTotal != nil && *update.BytesTotal > 0 {
+				bytesTotal = update.BytesTotal
+			}
+
+			od := update.ObjectsDone
+			bd := update.BytesDone
+			if objectsTotal == nil || bytesTotal == nil {
+				loadTotals()
+			}
+
+			jp := &models.JobProgress{
+				ObjectsDone:  &od,
+				BytesDone:    &bd,
+				ObjectsTotal: objectsTotal,
+				BytesTotal:   bytesTotal,
+			}
+			if update.SpeedBps != nil {
+				jp.SpeedBps = update.SpeedBps
+			}
+			if update.EtaSeconds != nil {
+				jp.EtaSeconds = update.EtaSeconds
+			}
+
+			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
+			cancel()
+
+			m.hub.Publish(ws.Event{
+				Type:  "job.progress",
+				JobID: jobID,
+				Payload: map[string]any{
+					"status":   models.JobStatusRunning,
+					"progress": jp,
+				},
+			})
 		}
 	}
 }
@@ -1861,7 +1968,7 @@ func readLogLine(r *bufio.Reader, maxBytes int) (string, bool, error) {
 	return line, false, nil
 }
 
-func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID, level string, progressCh chan<- progressDelta, maxLineBytes int) {
+func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID, level string, progressCh chan<- rcloneStatsUpdate, mode rcloneProgressMode, maxLineBytes int) {
 	reader := bufio.NewReaderSize(r, logReadBufferSize)
 
 	for {
@@ -1885,21 +1992,16 @@ func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID,
 			line = line + " [truncated]"
 		}
 
-		rendered, delta := formatS5CmdJSONLine(line)
+		rendered, stats := formatRcloneJSONLine(line)
 		if rendered == "" {
 			rendered = line
 		}
 
 		_, _ = w.Write([]byte("[" + level + "] " + rendered + "\n"))
-		if progressCh != nil {
-			if delta.Objects == 0 && delta.Bytes == 0 {
-				if isS5CmdOperationLine(line) {
-					delta.Objects = 1
-				}
-			}
-			if delta.Objects != 0 || delta.Bytes != 0 {
+		if progressCh != nil && stats != nil {
+			if update, ok := progressFromStats(stats, mode); ok {
 				select {
-				case progressCh <- delta:
+				case progressCh <- update:
 				default:
 				}
 			}
@@ -1920,102 +2022,72 @@ func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID,
 	}
 }
 
-func isS5CmdOperationLine(line string) bool {
-	return strings.HasPrefix(line, "cp ") || strings.HasPrefix(line, "rm ") || strings.HasPrefix(line, "mv ")
+type rcloneLogLine struct {
+	Msg    string       `json:"msg"`
+	Object string       `json:"object"`
+	Size   *int64       `json:"size"`
+	Stats  *rcloneStats `json:"stats"`
 }
 
-func formatS5CmdJSONLine(line string) (rendered string, delta progressDelta) {
-	var msg map[string]any
+type rcloneStats struct {
+	Bytes          int64    `json:"bytes"`
+	TotalBytes     int64    `json:"totalBytes"`
+	Transfers      int64    `json:"transfers"`
+	TotalTransfers int64    `json:"totalTransfers"`
+	Speed          float64  `json:"speed"`
+	Eta            *float64 `json:"eta"`
+	Deletes        int64    `json:"deletes"`
+}
+
+func formatRcloneJSONLine(line string) (rendered string, stats *rcloneStats) {
+	var msg rcloneLogLine
 	if err := json.Unmarshal([]byte(line), &msg); err != nil {
-		return "", progressDelta{}
+		return "", nil
 	}
 
-	op, _ := msg["operation"].(string)
-	if op == "" {
-		return "", progressDelta{}
+	rendered = strings.TrimSpace(msg.Msg)
+	if msg.Object != "" {
+		if rendered == "" {
+			rendered = msg.Object
+		} else if !strings.Contains(rendered, msg.Object) {
+			rendered = fmt.Sprintf("%s %s", rendered, msg.Object)
+		}
+	}
+	return rendered, msg.Stats
+}
+
+func progressFromStats(stats *rcloneStats, mode rcloneProgressMode) (rcloneStatsUpdate, bool) {
+	if stats == nil {
+		return rcloneStatsUpdate{}, false
+	}
+	update := rcloneStatsUpdate{
+		BytesDone: stats.Bytes,
+	}
+	if stats.TotalBytes > 0 {
+		bt := stats.TotalBytes
+		update.BytesTotal = &bt
 	}
 
-	switch op {
-	case "cp", "mv", "rm", "sync":
-		// supported
+	switch mode {
+	case rcloneProgressDeletes:
+		update.ObjectsDone = stats.Deletes
 	default:
-		return "", progressDelta{}
-	}
-
-	success, hasSuccess := msg["success"].(bool)
-	if !hasSuccess || success {
-		delta.Objects = 1
-
-		// s5cmd JSON uses `object.size` for file operations.
-		if obj, ok := msg["object"].(map[string]any); ok {
-			if size, ok := obj["size"].(float64); ok {
-				if size > 0 {
-					delta.Bytes = int64(size)
-				}
-			}
-		} else if size, ok := msg["size"].(float64); ok {
-			if size > 0 {
-				delta.Bytes = int64(size)
-			}
+		update.ObjectsDone = stats.Transfers
+		if stats.TotalTransfers > 0 {
+			ot := stats.TotalTransfers
+			update.ObjectsTotal = &ot
 		}
 	}
 
-	if cmd, ok := msg["command"].(string); ok && cmd != "" {
-		rendered = cmd
-	} else {
-		src, _ := msg["source"].(string)
-		dst, _ := msg["destination"].(string)
-		switch {
-		case src != "" && dst != "":
-			rendered = fmt.Sprintf("%s %s -> %s", op, src, dst)
-		case src != "":
-			rendered = fmt.Sprintf("%s %s", op, src)
-		default:
-			rendered = op
-		}
+	if stats.Speed > 0 {
+		sp := int64(stats.Speed)
+		update.SpeedBps = &sp
 	}
-
-	if hasSuccess && !success {
-		if errStr, ok := msg["error"].(string); ok && errStr != "" {
-			rendered = fmt.Sprintf("%s (error: %s)", rendered, errStr)
-		}
+	if stats.Eta != nil && *stats.Eta > 0 {
+		eta := int(math.Round(*stats.Eta))
+		update.EtaSeconds = &eta
 	}
-
-	return rendered, delta
-}
-
-func s3DeletePattern(bucket, prefix string) string {
-	p := strings.TrimLeft(strings.TrimSpace(prefix), "/")
-	if p == "" {
-		return fmt.Sprintf("s3://%s/*", bucket)
-	}
-	return fmt.Sprintf("s3://%s/%s*", bucket, p)
-}
-
-func normalizeSyncSource(path string) string {
-	clean := filepath.Clean(path)
-	// Recommend globbing to sync contents of a directory (consistent with s5cmd docs).
-	info, err := os.Stat(clean)
-	if err == nil && info.IsDir() {
-		return filepath.Join(clean, "*")
-	}
-	return clean
-}
-
-func s3URI(bucket, prefix string) string {
-	p := strings.TrimPrefix(prefix, "/")
-	if p != "" && !strings.HasSuffix(p, "/") {
-		p += "/"
-	}
-	if p == "" {
-		return fmt.Sprintf("s3://%s/", bucket)
-	}
-	return fmt.Sprintf("s3://%s/%s", bucket, p)
-}
-
-func s3ObjectURI(bucket, key string) string {
-	k := strings.TrimPrefix(key, "/")
-	return fmt.Sprintf("s3://%s/%s", bucket, k)
+	return update, true
 }
 
 func stringSlice(v any) []string {
@@ -2034,31 +2106,6 @@ func stringSlice(v any) []string {
 	return out
 }
 
-func findLocalS5Cmd() (path string, ok bool) {
-	candidates := []string{}
-	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "s5cmd"),
-			filepath.Join(exeDir, "bin", "s5cmd"),
-		)
-	}
-	candidates = append(candidates,
-		filepath.Join(".tools", "bin", "s5cmd"),
-		filepath.Join("..", ".tools", "bin", "s5cmd"),
-		filepath.Join("dist", "bin", "s5cmd"),
-		filepath.Join("..", "dist", "bin", "s5cmd"),
-	)
-	for _, p := range candidates {
-		info, err := os.Stat(p)
-		if err != nil || info.IsDir() {
-			continue
-		}
-		return p, true
-	}
-	return "", false
-}
-
 func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
 	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)
 	if err != nil {
@@ -2068,19 +2115,25 @@ func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok 
 		return false, nil, errors.New("profile not found")
 	}
 
-	client, err := s3client.New(ctx, profileSecrets)
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	configID := fmt.Sprintf("profile-test-%s-%d", profileID, time.Now().UnixNano())
+	proc, err := m.startRcloneCommand(callCtx, profileSecrets, configID, []string{"lsjson", "--dirs-only", rcloneRemoteBucket("")})
 	if err != nil {
 		return false, nil, err
 	}
 
-	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	capture := responseHeadersCapture{}
-	out, err := client.ListBuckets(callCtx, &s3.ListBucketsInput{}, func(o *s3.Options) {
-		o.APIOptions = append(o.APIOptions, captureResponseHeaders(&capture))
+	bucketCount := 0
+	listErr := decodeRcloneList(proc.stdout, func(entry rcloneListEntry) error {
+		if entry.IsDir || entry.IsBucket {
+			bucketCount++
+		}
+		return nil
 	})
-	storageType, storageSource := detectStorageType(profileSecrets.Endpoint, capture.Headers)
+	waitErr := proc.wait()
+
+	storageType, storageSource := detectStorageType(profileSecrets.Endpoint, nil)
 	details = map[string]any{}
 	if storageType != "" {
 		details["storageType"] = storageType
@@ -2088,10 +2141,18 @@ func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok 
 	if storageSource != "" {
 		details["storageTypeSource"] = storageSource
 	}
-	if err != nil {
-		details["error"] = err.Error()
+	if listErr != nil {
+		details["error"] = listErr.Error()
 		return false, details, nil
 	}
-	details["buckets"] = len(out.Buckets)
+	if waitErr != nil {
+		msg := strings.TrimSpace(proc.stderr.String())
+		if msg == "" {
+			msg = waitErr.Error()
+		}
+		details["error"] = msg
+		return false, details, nil
+	}
+	details["buckets"] = bucketCount
 	return true, details, nil
 }

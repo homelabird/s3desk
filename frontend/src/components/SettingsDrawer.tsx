@@ -61,6 +61,10 @@ export function SettingsDrawer(props: Props) {
 		'moveCleanupFilenameMaxLen',
 		MOVE_CLEANUP_FILENAME_MAX_LEN,
 	)
+	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
+		'downloadLinkProxyEnabled',
+		false,
+	)
 	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
 	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
 	const [networkLog, setNetworkLog] = useState<NetworkLogEvent[]>(() => getNetworkLog())
@@ -80,6 +84,19 @@ export function SettingsDrawer(props: Props) {
 		enabled: props.open,
 		retry: false,
 	})
+	const apiDocsBase = useMemo(() => {
+		const rawAddr = metaQuery.data?.serverAddr?.trim() ?? ''
+		if (!rawAddr) return window.location.origin
+		if (rawAddr.startsWith('http://') || rawAddr.startsWith('https://')) {
+			return rawAddr.replace(/\/+$/, '')
+		}
+		if (rawAddr.startsWith('0.0.0.0') || rawAddr.startsWith('::') || rawAddr.startsWith('[::')) {
+			return window.location.origin
+		}
+		return `${window.location.protocol}//${rawAddr}`.replace(/\/+$/, '')
+	}, [metaQuery.data?.serverAddr])
+	const openapiUrl = `${apiDocsBase}/openapi.yml`
+	const apiDocsUrl = `${apiDocsBase}/docs`
 	const tlsCapability = metaQuery.data?.capabilities?.profileTls
 	const tlsEnabled = tlsCapability?.enabled ?? false
 	const tlsReason = tlsCapability?.reason ?? ''
@@ -114,8 +131,8 @@ export function SettingsDrawer(props: Props) {
 					/>
 					<Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
 						This must match the server's <Typography.Text code>API_TOKEN</Typography.Text> (or{' '}
-						<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials or{' '}
-						<Typography.Text code>s5cmd</Typography.Text>.
+						<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials or the
+						transfer engine.
 					</Typography.Paragraph>
 				</Form.Item>
 
@@ -161,6 +178,15 @@ export function SettingsDrawer(props: Props) {
 						onChange={(value) => setMoveCleanupFilenameMaxLen(typeof value === 'number' ? value : MOVE_CLEANUP_FILENAME_MAX_LEN)}
 						style={{ width: '100%' }}
 					/>
+				</Form.Item>
+
+				<Divider titlePlacement="left">Downloads</Divider>
+
+				<Form.Item
+					label="Downloads: Use server proxy"
+					extra="When enabled, downloads and 'Link...' use /download-proxy for same-origin access and Content-Disposition. When disabled, presigned URLs are used (requires S3 CORS for in-app progress)."
+				>
+					<Switch checked={downloadLinkProxyEnabled} onChange={setDownloadLinkProxyEnabled} />
 				</Form.Item>
 
 				<Divider titlePlacement="left">Network</Divider>
@@ -222,6 +248,19 @@ export function SettingsDrawer(props: Props) {
 					</Space>
 				</Form.Item>
 			</Form>
+
+			<Divider titlePlacement="left">API</Divider>
+			<Space direction="vertical" size={4} style={{ width: '100%' }}>
+				<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
+				<Space wrap>
+					<Button type="link" href={apiDocsUrl} target="_blank" rel="noreferrer">
+						Open API Docs
+					</Button>
+					<Button type="link" href={openapiUrl} target="_blank" rel="noreferrer">
+						OpenAPI YAML
+					</Button>
+				</Space>
+			</Space>
 
 			<Divider titlePlacement="left">Server</Divider>
 
@@ -291,6 +330,13 @@ export function SettingsDrawer(props: Props) {
 							<Typography.Text type="secondary">(keep forever)</Typography.Text>
 						)}
 					</Descriptions.Item>
+					<Descriptions.Item label="Job Log Retention (seconds)">
+						{metaQuery.data.jobLogRetentionSeconds ? (
+							<Typography.Text code>{metaQuery.data.jobLogRetentionSeconds}</Typography.Text>
+						) : (
+							<Typography.Text type="secondary">(keep forever)</Typography.Text>
+						)}
+					</Descriptions.Item>
 					<Descriptions.Item label="Upload Session TTL (seconds)">
 						{metaQuery.data.uploadSessionTTLSeconds}
 					</Descriptions.Item>
@@ -301,13 +347,18 @@ export function SettingsDrawer(props: Props) {
 							<Typography.Text type="secondary">(unlimited)</Typography.Text>
 						)}
 					</Descriptions.Item>
-					<Descriptions.Item label="s5cmd">
+					<Descriptions.Item label="Transfer Engine">
 						<Space>
-							<Tag color={metaQuery.data.s5cmd.available ? 'success' : 'default'}>
-								{metaQuery.data.s5cmd.available ? 'available' : 'missing'}
+							<Tag color={metaQuery.data.transferEngine.available ? 'success' : 'default'}>
+								{metaQuery.data.transferEngine.available ? 'available' : 'missing'}
 							</Tag>
-							{metaQuery.data.s5cmd.version ? <Typography.Text code>{metaQuery.data.s5cmd.version}</Typography.Text> : null}
-							{metaQuery.data.s5cmd.path ? <Typography.Text code>{metaQuery.data.s5cmd.path}</Typography.Text> : null}
+							<Typography.Text code>{metaQuery.data.transferEngine.name}</Typography.Text>
+							{metaQuery.data.transferEngine.version ? (
+								<Typography.Text code>{metaQuery.data.transferEngine.version}</Typography.Text>
+							) : null}
+							{metaQuery.data.transferEngine.path ? (
+								<Typography.Text code>{metaQuery.data.transferEngine.path}</Typography.Text>
+							) : null}
 						</Space>
 					</Descriptions.Item>
 				</Descriptions>

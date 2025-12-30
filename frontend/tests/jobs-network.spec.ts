@@ -22,7 +22,7 @@ const metaResponse = {
 	capabilities: { profileTls: { enabled: false, reason: 'test' } },
 	jobConcurrency: 2,
 	uploadSessionTTLSeconds: 3600,
-	s5cmd: { available: true, path: '/usr/local/bin/s5cmd', version: 'v2.3.0' },
+	transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 }
 
 const bucketResponse = [{ name: 'test-bucket', createdAt: '2024-01-01T00:00:00Z' }]
@@ -111,7 +111,7 @@ test.describe('Jobs network resilience', () => {
 		mockOffline = true
 		await context.setOffline(true)
 		await expect(logsDrawer.getByText('Log polling paused')).toBeVisible({ timeout: 25_000 })
-		await expect(page.getByRole('button', { name: 'Retry realtime' })).toBeVisible({ timeout: 25_000 })
+		await expect(logsDrawer.getByRole('button', { name: 'Retry' })).toBeVisible({ timeout: 25_000 })
 
 		mockOffline = false
 		await context.setOffline(false)

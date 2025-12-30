@@ -1,12 +1,12 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Dropdown, Form, Grid, Modal, Space, Typography, message } from 'antd'
 import { FolderOutlined, SnippetsOutlined } from '@ant-design/icons'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError, RequestAbortedError } from '../api/client'
-import type { InputRef } from 'antd'
+import type { InputRef, MenuProps } from 'antd'
 import type { DataNode, EventDataNode } from 'antd/es/tree'
 import type { Bucket, Job, JobCreateRequest, ListObjectsResponse, ObjectFavoritesResponse, ObjectItem } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
@@ -115,8 +115,30 @@ type LocationTab = {
 
 type ObjectsUIMode = 'simple' | 'advanced'
 
+type ContextMenuSource = 'context' | 'button'
+type ContextMenuKind = 'object' | 'prefix' | 'list'
+type ContextMenuPlacement = 'bottomLeft' | 'topLeft'
+type ContextMenuState = {
+	open: boolean
+	source: ContextMenuSource | null
+	kind: ContextMenuKind | null
+	key: string | null
+	placement: ContextMenuPlacement
+}
+type ContextMenuMatch = {
+	source: ContextMenuSource
+	kind: ContextMenuKind
+	key: string
+}
 
-const DND_MIME = 'application/x-object-storage-dnd'
+const DND_MIME = 'application/x-s3desk-dnd'
+const CONTEXT_MENU_MIN_SPACE_PX = 220
+const CONTEXT_MENU_VIEWPORT_PADDING_PX = 8
+const LIST_CONTEXT_MENU_MAX_HEIGHT_PX = 320
+const CONTEXT_MENU_CLASS_NAME = 'objects-context-menu'
+const COMPACT_ROW_HEIGHT_PX = 52
+const WIDE_ROW_HEIGHT_PX = 40
+const DEFAULT_CONTEXT_MENU_PLACEMENT: ContextMenuPlacement = 'bottomLeft'
 
 type DndPayload =
 	| { kind: 'objects'; bucket: string; keys: string[] }
@@ -129,6 +151,7 @@ export function ObjectsPage(props: Props) {
 	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
 	const isOffline = useIsOffline()
+	const debugObjectsList = isObjectsListDebugEnabled()
 
 	const createJobWithRetry = useCallback(
 		(req: JobCreateRequest) => {
@@ -148,7 +171,7 @@ export function ObjectsPage(props: Props) {
 	const [activeTabId, setActiveTabId] = useLocalStorageState<string>('objectsActiveTabId', '')
 	const [recentPrefixesByBucket, setRecentPrefixesByBucket] = useLocalStorageState<Record<string, string[]>>('objectsRecentPrefixesByBucket', {})
 	const [bookmarksByBucket, setBookmarksByBucket] = useLocalStorageState<Record<string, string[]>>('objectsBookmarksByBucket', {})
-	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
+	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'advanced')
 	const isAdvanced = uiMode === 'advanced'
 
 	const [pathDraft, setPathDraft] = useState(prefix)
@@ -220,6 +243,9 @@ export function ObjectsPage(props: Props) {
 	const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
 	const layoutRef = useRef<HTMLDivElement | null>(null)
 	const [layoutWidthPx, setLayoutWidthPx] = useState(0)
+	const [listScrollerEl, setListScrollerEl] = useState<HTMLDivElement | null>(null)
+	const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+	const [scrollMargin, setScrollMargin] = useState(0)
 	const [preview, setPreview] = useState<ObjectPreview | null>(null)
 	const previewAbortRef = useRef<(() => void) | null>(null)
 	const previewURLRef = useRef<string | null>(null)
@@ -227,6 +253,14 @@ export function ObjectsPage(props: Props) {
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
 	const [favoritePendingKeys, setFavoritePendingKeys] = useState<Set<string>>(() => new Set())
 	const [lastSelectedObjectKey, setLastSelectedObjectKey] = useState<string | null>(null)
+	const [contextMenuState, setContextMenuState] = useState<ContextMenuState>({
+		open: false,
+		source: null,
+		kind: null,
+		key: null,
+		placement: DEFAULT_CONTEXT_MENU_PLACEMENT,
+	})
+	const contextMenuPlacementRef = useRef<ContextMenuPlacement>(DEFAULT_CONTEXT_MENU_PLACEMENT)
 	const pendingSelectRef = useRef<{ key: string; openDetails: boolean } | null>(null)
 	const uploadDragCounterRef = useRef(0)
 	const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
@@ -276,6 +310,7 @@ export function ObjectsPage(props: Props) {
 	const [downloadPrefixSubmitting, setDownloadPrefixSubmitting] = useState(false)
 	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
 	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
+	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
 	const [uploadFolderOpen, setUploadFolderOpen] = useState(false)
 	const [uploadFolderForm] = Form.useForm<{ localFolder: string; moveAfterUpload: boolean; cleanupEmptyDirs: boolean }>()
 	const [uploadFolderHandle, setUploadFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
@@ -412,9 +447,49 @@ export function ObjectsPage(props: Props) {
 				continuationToken: pageParam,
 			})
 		},
-		getNextPageParam: (lastPage) => {
+		getNextPageParam: (lastPage, _allPages, lastPageParam, allPageParams) => {
 			if (!lastPage.isTruncated) return undefined
-			return lastPage.nextContinuationToken ?? undefined
+			const nextToken = lastPage.nextContinuationToken ?? undefined
+			if (!nextToken) {
+				logObjectsDebug(debugObjectsList, 'warn', 'List objects missing continuation token; stopping pagination', {
+					bucket,
+					prefix,
+				})
+				return undefined
+			}
+
+			const pageEmpty = lastPage.items.length === 0 && lastPage.commonPrefixes.length === 0
+			if (pageEmpty) {
+				logObjectsDebug(debugObjectsList, 'warn', 'List objects returned empty page; stopping pagination', {
+					bucket,
+					prefix,
+					nextToken,
+				})
+				return undefined
+			}
+
+			if (typeof lastPageParam === 'string' && lastPageParam && nextToken === lastPageParam) {
+				logObjectsDebug(debugObjectsList, 'warn', 'List objects repeated continuation token; stopping pagination', {
+					bucket,
+					prefix,
+					nextToken,
+				})
+				return undefined
+			}
+
+			const seen = new Set<string>()
+			for (const param of allPageParams) {
+				if (typeof param === 'string' && param) seen.add(param)
+			}
+			if (seen.has(nextToken)) {
+				logObjectsDebug(debugObjectsList, 'warn', 'List objects hit previously seen continuation token; stopping pagination', {
+					bucket,
+					prefix,
+					nextToken,
+				})
+				return undefined
+			}
+			return nextToken
 		},
 	})
 
@@ -424,7 +499,7 @@ export function ObjectsPage(props: Props) {
 		enabled: !!props.profileId && !!bucket,
 		queryFn: () => api.listObjectFavorites({ profileId: props.profileId!, bucket }),
 	})
-	const favoriteItems = favoritesQuery.data?.items ?? []
+	const favoriteItems = useMemo(() => favoritesQuery.data?.items ?? [], [favoritesQuery.data?.items])
 	const favoriteKeys = useMemo(() => new Set(favoriteItems.map((item) => item.key)), [favoriteItems])
 
 	const globalSearchQueryText = globalSearch.trim()
@@ -490,10 +565,20 @@ export function ObjectsPage(props: Props) {
 
 		const epoch = treeEpochRef.current
 		const prefixesSet = new Set<string>()
+		const seenTokens = new Set<string>()
 		let token: string | undefined
+		let pageCount = 0
 
 		try {
 			for (;;) {
+				pageCount += 1
+				if (pageCount > 10000) {
+					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing exceeded page cap; stopping pagination', {
+						bucket,
+						prefix: nodeKey,
+					})
+					break
+				}
 				const resp = await api.listObjects({
 					profileId: props.profileId,
 					bucket,
@@ -502,10 +587,37 @@ export function ObjectsPage(props: Props) {
 					maxKeys: 1000,
 					continuationToken: token,
 				})
+				if (token) {
+					seenTokens.add(token)
+				}
 				for (const p of resp.commonPrefixes) prefixesSet.add(p)
+				const pageEmpty = resp.commonPrefixes.length === 0 && resp.items.length === 0
 				if (!resp.isTruncated) break
-				token = resp.nextContinuationToken ?? undefined
-				if (!token) break
+				const nextToken = resp.nextContinuationToken ?? undefined
+				if (pageEmpty) {
+					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing returned empty page; stopping pagination', {
+						bucket,
+						prefix: nodeKey,
+						nextToken,
+					})
+					break
+				}
+				if (!nextToken) {
+					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing missing continuation token; stopping pagination', {
+						bucket,
+						prefix: nodeKey,
+					})
+					break
+				}
+				if (seenTokens.has(nextToken)) {
+					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing repeated continuation token; stopping pagination', {
+						bucket,
+						prefix: nodeKey,
+						nextToken,
+					})
+					break
+				}
+				token = nextToken
 			}
 		} catch (err) {
 			message.error(formatErr(err))
@@ -579,7 +691,7 @@ export function ObjectsPage(props: Props) {
 	const deletePrefixJobMutation = useMutation({
 		mutationFn: (args: { prefix: string; dryRun: boolean }) =>
 			createJobWithRetry({
-				type: 's5cmd_rm_prefix',
+				type: 'transfer_delete_prefix',
 				payload: {
 					bucket,
 					prefix: args.prefix,
@@ -680,7 +792,7 @@ export function ObjectsPage(props: Props) {
 	const copyPrefixJobMutation = useMutation({
 		mutationFn: (args: { mode: 'copy' | 'move'; srcPrefix: string; dstBucket: string; dstPrefix: string; include: string[]; exclude: string[]; dryRun: boolean }) =>
 			createJobWithRetry({
-				type: args.mode === 'copy' ? 's5cmd_cp_s3_prefix_to_s3_prefix' : 's5cmd_mv_s3_prefix_to_s3_prefix',
+				type: args.mode === 'copy' ? 'transfer_copy_prefix' : 'transfer_move_prefix',
 				payload: {
 					srcBucket: bucket,
 					srcPrefix: args.srcPrefix,
@@ -798,7 +910,7 @@ export function ObjectsPage(props: Props) {
 
 	const copyMoveMutation = useMutation({
 		mutationFn: (args: { mode: 'copy' | 'move'; srcKey: string; dstBucket: string; dstKey: string; dryRun: boolean }) => {
-			const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3' : 's5cmd_mv_s3_to_s3'
+			const type = args.mode === 'copy' ? 'transfer_copy_object' : 'transfer_move_object'
 			return createJobWithRetry({
 				type,
 				payload: {
@@ -860,7 +972,7 @@ export function ObjectsPage(props: Props) {
 				if (dstPrefix === srcPrefix) throw new Error('already in destination')
 				if (dstPrefix.startsWith(srcPrefix)) throw new Error('destination must not be under source prefix')
 				return createJobWithRetry({
-					type: 's5cmd_mv_s3_prefix_to_s3_prefix',
+					type: 'transfer_move_prefix',
 					payload: {
 						srcBucket: bucket,
 						srcPrefix,
@@ -878,7 +990,7 @@ export function ObjectsPage(props: Props) {
 			const dstKey = `${parent}${raw}`
 			if (dstKey === srcKey) throw new Error('already in destination')
 			return createJobWithRetry({
-				type: 's5cmd_mv_s3_to_s3',
+				type: 'transfer_move_object',
 				payload: {
 					srcBucket: bucket,
 					srcKey,
@@ -954,7 +1066,7 @@ export function ObjectsPage(props: Props) {
 
 			if (items.length === 0) throw new Error('nothing to paste (already in destination)')
 
-			const type = args.mode === 'copy' ? 's5cmd_cp_s3_to_s3_batch' : 's5cmd_mv_s3_to_s3_batch'
+			const type = args.mode === 'copy' ? 'transfer_copy_batch' : 'transfer_move_batch'
 			return createJobWithRetry({
 				type,
 				payload: {
@@ -995,7 +1107,8 @@ export function ObjectsPage(props: Props) {
 	}
 
 	const presignMutation = useMutation({
-		mutationFn: (key: string) => api.getObjectDownloadURL({ profileId: props.profileId!, bucket, key }),
+		mutationFn: (key: string) =>
+			api.getObjectDownloadURL({ profileId: props.profileId!, bucket, key, proxy: downloadLinkProxyEnabled }),
 		onMutate: (key) => setPresignKey(key),
 		onSuccess: (resp, key) => {
 			setPresign({ key, url: resp.url, expiresAt: resp.expiresAt })
@@ -1275,19 +1388,33 @@ export function ObjectsPage(props: Props) {
 	const allLoadedSelected = visibleObjectKeys.length > 0 && loadedSelectedCount === visibleObjectKeys.length
 	const someLoadedSelected = loadedSelectedCount > 0 && loadedSelectedCount < visibleObjectKeys.length
 
-	const parentRef = useRef<HTMLDivElement | null>(null)
+	useLayoutEffect(() => {
+		const container = scrollContainerRef.current
+		const listEl = listScrollerEl
+		if (!container || !listEl) return
+		const listRect = listEl.getBoundingClientRect()
+		const containerRect = container.getBoundingClientRect()
+		const next = Math.max(0, Math.round(listRect.top - containerRect.top + container.scrollTop))
+		setScrollMargin((prev) => (prev === next ? prev : next))
+	})
+
 	const rowVirtualizer = useVirtualizer({
 		count: rows.length,
-		getScrollElement: () => parentRef.current,
-		estimateSize: () => 40,
+		getScrollElement: () => scrollContainerRef.current,
+		estimateSize: () => (isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX),
 		overscan: 10,
+		scrollMargin,
 	})
 
 	const virtualItems = rowVirtualizer.getVirtualItems()
+	const virtualItemsForRender = useMemo(
+		() => virtualItems.map((vi) => ({ index: vi.index, start: vi.start - scrollMargin })),
+		[scrollMargin, virtualItems],
+	)
 	const totalSize = rowVirtualizer.getTotalSize()
 
 	useEffect(() => {
-		parentRef.current?.scrollTo({ top: 0 })
+		scrollContainerRef.current?.scrollTo({ top: 0 })
 	}, [bucket, extFilter, favoritesFirst, favoritesOnly, maxModifiedMs, maxSize, minModifiedMs, minSize, prefix, search, sort, typeFilter])
 
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
@@ -1590,14 +1717,15 @@ useEffect(() => {
 		}
 	}, [])
 
-	useEffect(() => {
-		return () => {
-			for (const url of thumbnailCacheRef.current.values()) {
-				URL.revokeObjectURL(url)
-			}
-			thumbnailCacheRef.current.clear()
+useEffect(() => {
+	const cache = thumbnailCacheRef.current
+	return () => {
+		for (const url of cache.values()) {
+			URL.revokeObjectURL(url)
 		}
-	}, [bucket, props.profileId])
+		cache.clear()
+	}
+}, [bucket, props.profileId])
 
 	useEffect(() => {
 		treeEpochRef.current++
@@ -1875,6 +2003,7 @@ useEffect(() => {
 			const cleanedFiles = files.filter((f) => !!f)
 			if (cleanedFiles.length === 0) return
 			transfers.queueUploadFiles({ profileId: props.profileId, bucket, prefix, files: cleanedFiles })
+			transfers.openTransfers('uploads')
 		}
 
 		const openUploadFilesPicker = () => {
@@ -2117,7 +2246,7 @@ useEffect(() => {
 
 					const doCreate = async () =>
 						createJobAndNotify({
-							type: mode === 'copy' ? 's5cmd_cp_s3_prefix_to_s3_prefix' : 's5cmd_mv_s3_prefix_to_s3_prefix',
+							type: mode === 'copy' ? 'transfer_copy_prefix' : 'transfer_move_prefix',
 							payload: {
 								srcBucket: bucket,
 								srcPrefix,
@@ -2172,7 +2301,7 @@ useEffect(() => {
 				const doCreate = async () => {
 					if (pairs.length > 1) {
 						return createJobAndNotify({
-							type: mode === 'copy' ? 's5cmd_cp_s3_to_s3_batch' : 's5cmd_mv_s3_to_s3_batch',
+							type: mode === 'copy' ? 'transfer_copy_batch' : 'transfer_move_batch',
 							payload: {
 								srcBucket: bucket,
 								dstBucket: bucket,
@@ -2182,7 +2311,7 @@ useEffect(() => {
 						})
 					}
 					return createJobAndNotify({
-						type: mode === 'copy' ? 's5cmd_cp_s3_to_s3' : 's5cmd_mv_s3_to_s3',
+						type: mode === 'copy' ? 'transfer_copy_object' : 'transfer_move_object',
 						payload: {
 							srcBucket: bucket,
 							srcKey: pairs[0].srcKey,
@@ -2348,37 +2477,37 @@ useEffect(() => {
 				const isRange = e.shiftKey && !!lastSelectedObjectKey
 				const isToggle = e.metaKey || e.ctrlKey
 
-		if (isRange && lastSelectedObjectKey && orderedVisibleObjectKeys.length > 0) {
-			const a = orderedVisibleObjectKeys.indexOf(lastSelectedObjectKey)
-			const b = orderedVisibleObjectKeys.indexOf(key)
-			if (a !== -1 && b !== -1) {
-				const start = Math.min(a, b)
-				const end = Math.max(a, b)
-				const range = orderedVisibleObjectKeys.slice(start, end + 1)
-				setSelectedKeys((prev) => {
-					const next = isToggle ? new Set(prev) : new Set<string>()
-					for (const k of range) next.add(k)
-					return next
-				})
+				if (isRange && lastSelectedObjectKey && orderedVisibleObjectKeys.length > 0) {
+					const a = orderedVisibleObjectKeys.indexOf(lastSelectedObjectKey)
+					const b = orderedVisibleObjectKeys.indexOf(key)
+					if (a !== -1 && b !== -1) {
+						const start = Math.min(a, b)
+						const end = Math.max(a, b)
+						const range = orderedVisibleObjectKeys.slice(start, end + 1)
+						setSelectedKeys((prev) => {
+							const next = isToggle ? new Set(prev) : new Set<string>()
+							for (const k of range) next.add(k)
+							return next
+						})
+						setLastSelectedObjectKey(key)
+						return
+					}
+				}
+
+				if (isToggle) {
+					setSelectedKeys((prev) => {
+						const next = new Set(prev)
+						if (next.has(key)) next.delete(key)
+						else next.add(key)
+						return next
+					})
+					setLastSelectedObjectKey(key)
+					return
+				}
+
+				setSelectedKeys(new Set([key]))
 				setLastSelectedObjectKey(key)
-				return
 			}
-		}
-
-		if (isToggle) {
-			setSelectedKeys((prev) => {
-				const next = new Set(prev)
-				if (next.has(key)) next.delete(key)
-				else next.add(key)
-				return next
-			})
-			setLastSelectedObjectKey(key)
-			return
-		}
-
-		setSelectedKeys(new Set([key]))
-		setLastSelectedObjectKey(key)
-	}
 
 	const selectObjectFromCheckboxEvent = (e: React.MouseEvent, key: string) => {
 		e.stopPropagation()
@@ -2419,6 +2548,188 @@ useEffect(() => {
 		})
 		setLastSelectedObjectKey(key)
 	}
+
+	const closeContextMenu = useCallback((match?: ContextMenuMatch) => {
+		setContextMenuState((prev) => {
+			if (!prev.open) return prev
+			if (match) {
+				if (prev.source !== match.source || prev.kind !== match.kind || prev.key !== match.key) {
+					return prev
+				}
+			}
+			return { open: false, source: null, kind: null, key: null, placement: prev.placement }
+		})
+	}, [])
+
+	const openObjectContextMenu = (key: string, source: ContextMenuSource, placement?: ContextMenuPlacement) => {
+		ensureObjectSelectedForContextMenu(key)
+		setContextMenuState({ open: true, source, kind: 'object', key, placement: placement ?? DEFAULT_CONTEXT_MENU_PLACEMENT })
+	}
+
+	const openPrefixContextMenu = (key: string, source: ContextMenuSource, placement?: ContextMenuPlacement) => {
+		setContextMenuState({ open: true, source, kind: 'prefix', key, placement: placement ?? DEFAULT_CONTEXT_MENU_PLACEMENT })
+	}
+
+	const openListContextMenu = useCallback((placement?: ContextMenuPlacement) => {
+		const nextPlacement = placement ?? contextMenuPlacementRef.current ?? DEFAULT_CONTEXT_MENU_PLACEMENT
+		setContextMenuState({ open: true, source: 'context', kind: 'list', key: 'list', placement: nextPlacement })
+	}, [])
+	const getListScrollerElement = useCallback(() => {
+		if (listScrollerEl) return listScrollerEl
+		if (scrollContainerRef.current) return scrollContainerRef.current
+		return document.querySelector<HTMLDivElement>('[data-testid="objects-upload-dropzone"] [tabindex="0"]')
+	}, [listScrollerEl])
+
+	const computeContextMenuPlacement = useCallback(
+		(clientY: number): ContextMenuPlacement => {
+			const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
+			const clampedY = Math.min(Math.max(clientY, 0), viewportHeight)
+			const spaceAbove = clampedY
+			const spaceBelow = viewportHeight - clampedY
+			if (spaceBelow < CONTEXT_MENU_MIN_SPACE_PX && spaceAbove > spaceBelow) return 'topLeft'
+			if (spaceAbove < CONTEXT_MENU_MIN_SPACE_PX) return 'bottomLeft'
+			return DEFAULT_CONTEXT_MENU_PLACEMENT
+		},
+		[],
+	)
+
+	const recordContextMenuPlacement = useCallback(
+		(event: React.MouseEvent) => {
+			const placement = computeContextMenuPlacement(event.clientY)
+			contextMenuPlacementRef.current = placement
+			return placement
+		},
+		[computeContextMenuPlacement],
+	)
+
+	const clampContextMenuToViewport = useCallback(() => {
+		const menu = document.querySelector<HTMLElement>(
+			`.ant-dropdown:not(.ant-dropdown-hidden) .${CONTEXT_MENU_CLASS_NAME}`,
+		)
+		if (!menu) return
+		const dropdown = menu.closest<HTMLElement>('.ant-dropdown') ?? menu
+		const baseTransform = dropdown.dataset.baseTransform ?? dropdown.style.transform
+		if (dropdown.dataset.baseTransform == null) {
+			dropdown.dataset.baseTransform = baseTransform
+		}
+		const normalizedBase = baseTransform && baseTransform !== 'none' ? baseTransform : ''
+		dropdown.style.transform = normalizedBase
+		const rect = menu.getBoundingClientRect()
+		const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0
+		const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
+		const padding = CONTEXT_MENU_VIEWPORT_PADDING_PX
+		let offsetY = 0
+		let offsetX = 0
+		if (rect.top < padding) offsetY = padding - rect.top
+		else if (rect.bottom > viewportHeight - padding) offsetY = viewportHeight - padding - rect.bottom
+		if (rect.left < padding) offsetX = padding - rect.left
+		else if (rect.right > viewportWidth - padding) offsetX = viewportWidth - padding - rect.right
+		const translate = offsetX || offsetY ? `translate(${offsetX}px, ${offsetY}px)` : ''
+		dropdown.style.transform = [normalizedBase, translate].filter(Boolean).join(' ')
+	}, [])
+
+	useEffect(() => {
+		if (!contextMenuState.open) return
+		const el = getListScrollerElement()
+		const handleClose = () => closeContextMenu()
+		if (el) {
+			el.addEventListener('scroll', handleClose, { passive: true })
+			el.addEventListener('wheel', handleClose, { passive: true })
+		}
+		window.addEventListener('scroll', handleClose, true)
+		window.addEventListener('wheel', handleClose, { passive: true, capture: true })
+		document.addEventListener('scroll', handleClose, true)
+		document.addEventListener('wheel', handleClose, { passive: true, capture: true })
+		return () => {
+			if (el) {
+				el.removeEventListener('scroll', handleClose)
+				el.removeEventListener('wheel', handleClose)
+			}
+			window.removeEventListener('scroll', handleClose, true)
+			window.removeEventListener('wheel', handleClose, true)
+			document.removeEventListener('scroll', handleClose, true)
+			document.removeEventListener('wheel', handleClose, true)
+		}
+	}, [closeContextMenu, contextMenuState.open, getListScrollerElement])
+
+	useLayoutEffect(() => {
+		if (!contextMenuState.open) return
+		let observedMenu: HTMLElement | null = null
+		let observedDropdown: HTMLElement | null = null
+		const resizeObserver = new ResizeObserver(() => {
+			clampContextMenuToViewport()
+		})
+		const dropdownObserver = new MutationObserver(() => {
+			clampContextMenuToViewport()
+		})
+		const observeMenu = () => {
+			const menu = document.querySelector<HTMLElement>(
+				`.ant-dropdown:not(.ant-dropdown-hidden) .${CONTEXT_MENU_CLASS_NAME}`,
+			)
+			if (!menu) {
+				if (observedMenu) {
+					resizeObserver.disconnect()
+					observedMenu = null
+				}
+				if (observedDropdown) {
+					dropdownObserver.disconnect()
+					observedDropdown = null
+				}
+				return
+			}
+			if (menu !== observedMenu) {
+				resizeObserver.disconnect()
+				resizeObserver.observe(menu)
+				observedMenu = menu
+			}
+			const dropdown = menu.closest<HTMLElement>('.ant-dropdown') ?? menu
+			if (dropdown !== observedDropdown) {
+				dropdownObserver.disconnect()
+				dropdownObserver.observe(dropdown, { attributes: true, attributeFilter: ['style', 'class'] })
+				observedDropdown = dropdown
+			}
+			clampContextMenuToViewport()
+		}
+		const mutationObserver = new MutationObserver(() => {
+			observeMenu()
+		})
+		if (document.body) {
+			mutationObserver.observe(document.body, { childList: true, subtree: true })
+		}
+		observeMenu()
+		const start = window.performance.now()
+		let frame = window.requestAnimationFrame(function tick() {
+			observeMenu()
+			if (window.performance.now() - start < 500) {
+				frame = window.requestAnimationFrame(tick)
+			}
+		})
+		const timeout = window.setTimeout(() => {
+			observeMenu()
+		}, 220)
+		window.addEventListener('resize', clampContextMenuToViewport)
+		return () => {
+			resizeObserver.disconnect()
+			dropdownObserver.disconnect()
+			mutationObserver.disconnect()
+			window.cancelAnimationFrame(frame)
+			window.clearTimeout(timeout)
+			window.removeEventListener('resize', clampContextMenuToViewport)
+		}
+	}, [clampContextMenuToViewport, contextMenuState.key, contextMenuState.kind, contextMenuState.open])
+
+	const handleListScrollerContextMenu = useCallback(
+		(event: React.MouseEvent<HTMLDivElement>) => {
+			const target = event.target as HTMLElement | null
+			if (target?.closest('.ant-dropdown')) {
+				event.preventDefault()
+				event.stopPropagation()
+				return
+			}
+			recordContextMenuPlacement(event)
+		},
+		[recordContextMenuPlacement],
+	)
 
 	const openDetails = () => {
 		if (dockDetails) {
@@ -2501,6 +2812,7 @@ useEffect(() => {
 				targetLabel: downloadPrefixFolderLabel || downloadPrefixFolderHandle.name,
 				prefix: srcPrefix,
 			})
+			transfers.openTransfers('downloads')
 			setDownloadPrefixOpen(false)
 			setDownloadPrefixFolderHandle(null)
 			setDownloadPrefixFolderLabel('')
@@ -2557,6 +2869,7 @@ useEffect(() => {
 						}
 					: undefined,
 			})
+			transfers.openTransfers('uploads')
 			setUploadFolderOpen(false)
 			setUploadFolderHandle(null)
 			setUploadFolderLabel('')
@@ -2739,7 +3052,7 @@ useEffect(() => {
 		if (mode === 'move') {
 			Modal.confirm({
 				title: `Move ${src.keys.length} object(s) here?`,
-				content: 'This creates an s5cmd mv job (copy then delete source).',
+				content: 'This creates a move job (copy then delete source).',
 				okText: 'Move',
 				okType: 'danger',
 				onOk: async () => doPaste(),
@@ -3251,6 +3564,7 @@ useEffect(() => {
 			expectedBytes,
 			label: displayNameForKey(key, prefix),
 		})
+		transfers.openTransfers('downloads')
 	}
 
 	const onDownloadToDevice = async (key: string, expectedBytes?: number) => {
@@ -3278,6 +3592,7 @@ useEffect(() => {
 				targetLabel: dirHandle.name,
 				prefix: normalizePrefix(prefix),
 			})
+			transfers.openTransfers('downloads')
 		} catch (err) {
 			const error = err as Error
 			if (error?.name === 'AbortError') return
@@ -3347,25 +3662,111 @@ useEffect(() => {
 	}
 
 	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
-	const searchAutoScanCap = isAdvanced ? 20_000 : 5_000
+	const searchAutoScanCap = isAdvanced ? 3_000 : 1_000
+	const filterAutoScanCap = isAdvanced ? 3_000 : 1_000
+	const hasSearch = !!search.trim()
+	const hasNonSearchFilters =
+		!!extFilter.trim() ||
+		minSize != null ||
+		maxSize != null ||
+		minModifiedMs != null ||
+		maxModifiedMs != null ||
+		typeFilter !== 'all'
+	const autoScanReason = hasSearch && hasNonSearchFilters ? 'search+filter' : hasSearch ? 'search' : hasNonSearchFilters ? 'filter' : 'none'
+	const effectiveAutoScanCap = Math.min(
+		hasSearch ? searchAutoScanCap : Number.POSITIVE_INFINITY,
+		hasNonSearchFilters ? filterAutoScanCap : Number.POSITIVE_INFINITY,
+	)
+	const autoScanCapped = Number.isFinite(effectiveAutoScanCap) && rawTotalCount >= effectiveAutoScanCap
 	useEffect(() => {
 		if (favoritesOnly) return
 		if (!props.profileId || !bucket) return
+		if (autoScanCapped) {
+			logObjectsDebug(debugObjectsList, 'debug', 'Auto-scan cap reached; skipping next page', {
+				bucket,
+				prefix,
+				reason: autoScanReason,
+				rawTotalCount,
+				effectiveAutoScanCap,
+			})
+			return
+		}
 		const last = virtualItems[virtualItems.length - 1]
 		if (!last) return
 		if (last.index >= rows.length - 10 && hasNextPage && !isFetchingNextPage) {
+			logObjectsDebug(debugObjectsList, 'debug', 'Auto-fetching next objects page from scroll', {
+				bucket,
+				prefix,
+				rowCount: rows.length,
+			})
 			fetchNextPage().catch(() => {})
 		}
-	}, [bucket, favoritesOnly, fetchNextPage, hasNextPage, isFetchingNextPage, props.profileId, rows.length, virtualItems])
+	}, [
+		autoScanCapped,
+		autoScanReason,
+		bucket,
+		debugObjectsList,
+		favoritesOnly,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		effectiveAutoScanCap,
+		props.profileId,
+		prefix,
+		rawTotalCount,
+		rows.length,
+		virtualItems,
+	])
 
 	useEffect(() => {
 		if (favoritesOnly) return
 		if (!props.profileId || !bucket) return
 		if (!search.trim()) return
 		if (!hasNextPage || isFetchingNextPage) return
-		if (rawTotalCount >= searchAutoScanCap) return
+		if (autoScanCapped) {
+			logObjectsDebug(debugObjectsList, 'debug', 'Search auto-scan cap reached; skipping next page', {
+				bucket,
+				prefix,
+				reason: autoScanReason,
+				rawTotalCount,
+				effectiveAutoScanCap,
+			})
+			return
+		}
+		logObjectsDebug(debugObjectsList, 'debug', 'Auto-fetching next objects page for search scan', {
+			bucket,
+			prefix,
+			rawTotalCount,
+		})
 		fetchNextPage().catch(() => {})
-	}, [bucket, favoritesOnly, fetchNextPage, hasNextPage, isFetchingNextPage, props.profileId, rawTotalCount, search, searchAutoScanCap])
+	}, [
+		autoScanCapped,
+		autoScanReason,
+		bucket,
+		debugObjectsList,
+		favoritesOnly,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		effectiveAutoScanCap,
+		props.profileId,
+		prefix,
+		rawTotalCount,
+		search,
+	])
+
+	const showLoadMore = !favoritesOnly && autoScanCapped && hasNextPage
+	const loadMoreLabel = hasSearch ? 'Load more results' : hasNonSearchFilters ? 'Load more filtered items' : 'Load more'
+	const handleLoadMore = useCallback(() => {
+		if (!hasNextPage || isFetchingNextPage) return
+		logObjectsDebug(debugObjectsList, 'debug', 'Manual load more triggered', {
+			bucket,
+			prefix,
+			rawTotalCount,
+			effectiveAutoScanCap,
+		})
+		fetchNextPage().catch(() => {})
+	}, [bucket, debugObjectsList, effectiveAutoScanCap, fetchNextPage, hasNextPage, isFetchingNextPage, prefix, rawTotalCount])
 
 	const handleDownloadSelected = async () => {
 		if (selectedCount <= 0) {
@@ -3396,6 +3797,7 @@ useEffect(() => {
 				targetLabel: dirHandle.name,
 				prefix: normalizePrefix(prefix),
 			})
+			transfers.openTransfers('downloads')
 		} catch (err) {
 			const error = err as Error
 			if (error?.name === 'AbortError') return
@@ -3467,8 +3869,25 @@ useEffect(() => {
 	}
 	const selectionActions = filterActions(selectionActionsAll, isAdvanced)
 	const selectionActionMap = new Map(selectionActions.map((action) => [action.id, action]))
+	const selectionContextMenuActions = trimActionDividers(
+		[
+			selectionActionMap.get('download_selected'),
+			{ type: 'divider' as const },
+			selectionActionMap.get('copy_selected_keys'),
+			selectionActionMap.get('cut_selected_keys'),
+			selectionActionMap.get('paste_keys'),
+			{ type: 'divider' as const },
+			selectionActionMap.get('clear_selection'),
+			{ type: 'divider' as const },
+			selectionActionMap.get('delete_selected'),
+		].filter(Boolean) as UIActionOrDivider[],
+	)
 	const selectionMenuActions = trimActionDividers(
-		selectionActions.filter((action) => !['clear_selection', 'delete_selected', 'download_selected'].includes(action.id)),
+		[
+			selectionActionMap.get('copy_selected_keys'),
+			selectionActionMap.get('cut_selected_keys'),
+			selectionActionMap.get('paste_keys'),
+		].filter(Boolean) as UIActionOrDivider[],
 	)
 	const globalActions = filterActions(globalActionsAll, isAdvanced)
 	const globalActionMap = new Map(globalActionsAll.map((action) => [action.id, action]))
@@ -3583,23 +4002,69 @@ useEffect(() => {
 		},
 		onWarnRenameNoSelection: () => message.info('Select a single object to rename'),
 	})
+	const handleListScrollerScroll = () => {
+		closeContextMenu()
+	}
+	const handleListScrollerWheel = () => {
+		closeContextMenu()
+	}
+	const emptyMenu = useMemo<MenuProps>(() => ({ items: [] }), [])
+	const withContextMenuClassName = (menu: ReturnType<typeof buildActionMenu>) => ({
+		...menu,
+		className: menu.className ? `${menu.className} ${CONTEXT_MENU_CLASS_NAME}` : CONTEXT_MENU_CLASS_NAME,
+	})
+	const contextMenuPlacement = contextMenuState.placement ?? DEFAULT_CONTEXT_MENU_PLACEMENT
+	const listScrollerRef = useCallback((node: HTMLDivElement | null) => {
+		setListScrollerEl(node)
+		scrollContainerRef.current = node?.closest('[data-scroll-container="app-content"]') as HTMLDivElement | null
+	}, [])
 	const handleClearSearch = () => {
 		setSearchDraft('')
 		setSearch('')
 	}
 	const canClearSearch = !!search.trim() || !!searchDraft.trim()
 	const renderPrefixRow = (p: string, offset: number) => {
-		const prefixMenu = buildActionMenu(getPrefixActions(p), isAdvanced)
+		const prefixContextMenuOpen =
+			contextMenuState.open &&
+			contextMenuState.kind === 'prefix' &&
+			contextMenuState.key === p &&
+			contextMenuState.source === 'context'
+		const prefixButtonMenuOpen =
+			contextMenuState.open &&
+			contextMenuState.kind === 'prefix' &&
+			contextMenuState.key === p &&
+			contextMenuState.source === 'button'
+		const prefixMenu =
+			prefixContextMenuOpen || prefixButtonMenuOpen
+				? withContextMenuClassName(buildActionMenu(getPrefixActions(p), isAdvanced))
+				: emptyMenu
 		return (
 			<ObjectsPrefixRow
 				key={p}
 				offset={offset}
+				rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
 				displayName={displayNameForPrefix(p, prefix)}
 				isCompact={isCompactList}
 				listGridClassName={listGridClassName}
 				canDragDrop={canDragDrop}
 				highlightText={highlightText}
 				menu={prefixMenu}
+				contextMenuOpen={prefixContextMenuOpen}
+				buttonMenuOpen={prefixButtonMenuOpen}
+				contextMenuPlacement={contextMenuPlacement}
+				onContextMenuOpenChange={(open) => {
+					if (!open) closeContextMenu({ key: p, kind: 'prefix', source: 'context' })
+				}}
+				onButtonMenuOpenChange={(open) => {
+					if (open) openPrefixContextMenu(p, 'button')
+					else closeContextMenu({ key: p, kind: 'prefix', source: 'button' })
+				}}
+				onContextMenu={(e) => {
+					e.preventDefault()
+					e.stopPropagation()
+					const placement = recordContextMenuPlacement(e)
+					openPrefixContextMenu(p, 'context', placement)
+				}}
 				onOpen={() => onOpenPrefix(p)}
 				onDragStart={(e) => onRowDragStartPrefix(e, p)}
 				onDragEnd={() => setDndHoverPrefix(null)}
@@ -3608,10 +4073,27 @@ useEffect(() => {
 	}
 	const renderObjectRow = (object: ObjectItem, offset: number) => {
 		const key = object.key
-		const isMultiSelectionContext = selectedCount > 1 && selectedKeys.has(key)
-		const baseObjectActions = getObjectActions(key, object.size)
-		const objectMenuActions = isMultiSelectionContext ? selectionActions : baseObjectActions
-		const objectMenu = buildActionMenu(objectMenuActions, isAdvanced)
+		const objectContextMenuOpen =
+			contextMenuState.open &&
+			contextMenuState.kind === 'object' &&
+			contextMenuState.key === key &&
+			contextMenuState.source === 'context'
+		const objectButtonMenuOpen =
+			contextMenuState.open &&
+			contextMenuState.kind === 'object' &&
+			contextMenuState.key === key &&
+			contextMenuState.source === 'button'
+		const objectMenu =
+			objectContextMenuOpen || objectButtonMenuOpen
+				? withContextMenuClassName(
+						buildActionMenu(
+							selectedCount > 1 && selectedKeys.has(key)
+								? selectionContextMenuActions
+								: getObjectActions(key, object.size),
+							isAdvanced,
+						),
+					)
+				: emptyMenu
 		const sizeLabel = formatBytes(object.size)
 		const timeLabel = formatDateTime(object.lastModified)
 		const thumbnailSize = isCompactList ? 24 : 32
@@ -3633,6 +4115,7 @@ useEffect(() => {
 			<ObjectsObjectRow
 				key={key}
 				offset={offset}
+				rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
 				objectKey={key}
 				displayName={displayNameForKey(key, prefix)}
 				sizeLabel={sizeLabel}
@@ -3647,8 +4130,23 @@ useEffect(() => {
 				canDragDrop={canDragDrop}
 				highlightText={highlightText}
 				menu={objectMenu}
+				contextMenuOpen={objectContextMenuOpen}
+				buttonMenuOpen={objectButtonMenuOpen}
+				contextMenuPlacement={contextMenuPlacement}
+				onContextMenuOpenChange={(open) => {
+					if (!open) closeContextMenu({ key, kind: 'object', source: 'context' })
+				}}
+				onButtonMenuOpenChange={(open) => {
+					if (open) openObjectContextMenu(key, 'button')
+					else closeContextMenu({ key, kind: 'object', source: 'button' })
+				}}
+				onContextMenu={(e) => {
+					e.preventDefault()
+					e.stopPropagation()
+					const placement = recordContextMenuPlacement(e)
+					openObjectContextMenu(key, 'context', placement)
+				}}
 				onClick={(e) => selectObjectFromPointerEvent(e, key)}
-				onContextMenu={() => ensureObjectSelectedForContextMenu(key)}
 				onCheckboxClick={(e) => selectObjectFromCheckboxEvent(e, key)}
 				onDragStart={(e) => onRowDragStartObjects(e, key)}
 				onDragEnd={() => setDndHoverPrefix(null)}
@@ -3659,11 +4157,12 @@ useEffect(() => {
 	}
 	const listIsFetching = favoritesOnly ? favoritesQuery.isFetching : objectsQuery.isFetching
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
+	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
 	const canInteract = !!props.profileId && !!bucket && !isOffline
 	const listContent = (
 		<ObjectsListContent
 			rows={rows}
-			virtualItems={virtualItems}
+			virtualItems={virtualItemsForRender}
 			totalSize={totalSize}
 			hasProfile={!!props.profileId}
 			hasBucket={!!bucket}
@@ -3674,8 +4173,40 @@ useEffect(() => {
 			onClearSearch={handleClearSearch}
 			renderPrefixRow={renderPrefixRow}
 			renderObjectRow={renderObjectRow}
+			showLoadMore={showLoadMore}
+			loadMoreLabel={loadMoreLabel}
+			loadMoreDisabled={loadMoreDisabled}
+			onLoadMore={handleLoadMore}
 		/>
 	)
+	const listContextMenuActions = trimActionDividers(
+		[
+			globalActionMap.get('upload_files'),
+			globalActionMap.get('upload_folder'),
+			globalActionMap.get('new_folder'),
+			{ type: 'divider' as const },
+			selectionActionMap.get('paste_keys'),
+			{ type: 'divider' as const },
+			globalActionMap.get('refresh'),
+			globalActionMap.get('go_to_path'),
+			globalActionMap.get('global_search'),
+			{ type: 'divider' as const },
+			globalActionMap.get('commands'),
+			globalActionMap.get('transfers'),
+			globalActionMap.get('ui_mode'),
+		].filter(Boolean) as UIActionOrDivider[],
+	)
+	const listContextMenuBase = buildActionMenu(listContextMenuActions, isAdvanced)
+	const listContextMenu = withContextMenuClassName({
+		...listContextMenuBase,
+		style: {
+			...listContextMenuBase.style,
+			maxHeight: `min(${LIST_CONTEXT_MENU_MAX_HEIGHT_PX}px, calc(100vh - ${CONTEXT_MENU_VIEWPORT_PADDING_PX * 2}px))`,
+			overflowY: 'auto',
+			overflowX: 'hidden',
+		},
+	})
+	const listContextMenuOpen = contextMenuState.open && contextMenuState.kind === 'list'
 
 	const uploadMenuActions = trimActionDividers(
 		[
@@ -3697,12 +4228,14 @@ useEffect(() => {
 	}
 
 	const prefixMenuItems = compactMenuItems([
-		actionToMenuItem(currentPrefixActionMap.get('copyJob'), undefined, isAdvanced),
-		actionToMenuItem(currentPrefixActionMap.get('moveJob'), undefined, isAdvanced),
-		actionToMenuItem(currentPrefixActionMap.get('rename'), undefined, isAdvanced),
+		actionToMenuItem(currentPrefixActionMap.get('copy'), undefined, isAdvanced),
 		{ type: 'divider' as const },
 		actionToMenuItem(currentPrefixActionMap.get('downloadZip'), undefined, isAdvanced),
 		actionToMenuItem(currentPrefixActionMap.get('downloadToDevice'), undefined, isAdvanced),
+		{ type: 'divider' as const },
+		actionToMenuItem(currentPrefixActionMap.get('rename'), undefined, isAdvanced),
+		actionToMenuItem(currentPrefixActionMap.get('copyJob'), undefined, isAdvanced),
+		actionToMenuItem(currentPrefixActionMap.get('moveJob'), undefined, isAdvanced),
 		{ type: 'divider' as const },
 		actionToMenuItem(currentPrefixActionMap.get('delete'), undefined, isAdvanced),
 		actionToMenuItem(currentPrefixActionMap.get('deleteDry'), undefined, isAdvanced),
@@ -3849,6 +4382,8 @@ useEffect(() => {
 					showPrimaryActions: !isAdvanced,
 					primaryDownloadAction: downloadSelectionAction,
 					primaryDeleteAction: deleteSelectionAction,
+					activeTransferCount: transfers.activeTransferCount,
+					onOpenTransfers: () => transfers.openTransfers(),
 					dockTree,
 					dockDetails,
 					onOpenTree: () => setTreeDrawerOpen(true),
@@ -3987,10 +4522,23 @@ useEffect(() => {
 							onToggleSort={toggleSortColumn}
 						/>
 					}
-					listScrollerRef={parentRef}
+					listScrollerRef={listScrollerRef}
 					listScrollerTabIndex={0}
-					onListScrollerClick={() => parentRef.current?.focus()}
+					onListScrollerClick={() => getListScrollerElement()?.focus()}
 					onListScrollerKeyDown={listKeydownHandler}
+					onListScrollerScroll={handleListScrollerScroll}
+					onListScrollerWheel={handleListScrollerWheel}
+					onListScrollerContextMenu={handleListScrollerContextMenu}
+					listContextMenu={listContextMenu}
+					listContextMenuOpen={listContextMenuOpen}
+					listContextMenuPlacement={contextMenuPlacement}
+					onListContextMenuOpenChange={(open) => {
+						if (open) {
+							openListContextMenu()
+							return
+						}
+						closeContextMenu({ key: 'list', kind: 'list', source: 'context' })
+					}}
 					listContent={listContent}
 				/>
 				<ObjectsDetailsPanelSection
@@ -4669,6 +5217,34 @@ function normalizePrefix(p: string): string {
 	const trimmed = p.trim()
 	if (!trimmed) return ''
 	return trimmed.endsWith('/') ? trimmed : `${trimmed}/`
+}
+
+const DEBUG_OBJECTS_LIST_KEY = 'debugObjectsList'
+
+function isObjectsListDebugEnabled(): boolean {
+	if (typeof window === 'undefined') return false
+	try {
+		return window.localStorage.getItem(DEBUG_OBJECTS_LIST_KEY) === 'true'
+	} catch {
+		return false
+	}
+}
+
+function logObjectsDebug(
+	enabled: boolean,
+	level: 'debug' | 'warn',
+	message: string,
+	context?: Record<string, unknown>,
+): void {
+	if (!enabled) return
+	const prefix = `[objects] ${message}`
+	if (level === 'warn') {
+		if (context) console.warn(prefix, context)
+		else console.warn(prefix)
+		return
+	}
+	if (context) console.debug(prefix, context)
+	else console.debug(prefix)
 }
 
 function parentPrefixFromKey(key: string): string {

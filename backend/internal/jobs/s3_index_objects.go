@@ -8,16 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	"object-storage/internal/models"
-	"object-storage/internal/s3client"
-	"object-storage/internal/store"
-	"object-storage/internal/ws"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
-func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string, payload map[string]any) error {
+func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	fullReindex := true
@@ -28,7 +24,7 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	}
 
 	bucket = strings.TrimSpace(bucket)
-	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
+	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
 
 	if bucket == "" {
 		return errors.New("payload.bucket is required")
@@ -65,11 +61,6 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 	}
 	if !ok {
 		return errors.New("profile not found")
-	}
-
-	client, err := s3client.New(ctx, secrets)
-	if err != nil {
-		return err
 	}
 
 	indexedAt := time.Now().UTC().Format(time.RFC3339Nano)
@@ -118,8 +109,13 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		return nil
 	}
 
-	var token *string
-	for {
+	args := []string{"lsjson", "-R", "--no-mimetype", "--hash", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
+	proc, err := m.startRcloneCommand(ctx, secrets, jobID, args)
+	if err != nil {
+		return err
+	}
+
+	listErr := decodeRcloneList(proc.stdout, func(obj rcloneListEntry) error {
 		select {
 		case <-ctx.Done():
 			_ = flushBatch()
@@ -127,66 +123,52 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 			return ctx.Err()
 		default:
 		}
-
-		in := &s3.ListObjectsV2Input{
-			Bucket:  aws.String(bucket),
-			MaxKeys: aws.Int32(1000),
+		if obj.IsDir {
+			return nil
 		}
-		if prefix != "" {
-			in.Prefix = aws.String(prefix)
+		key := obj.Path
+		if strings.TrimSpace(key) == "" && strings.TrimSpace(obj.Name) != "" {
+			key = obj.Name
 		}
-		if token != nil && *token != "" {
-			in.ContinuationToken = token
+		key = rcloneObjectKey(prefix, key, preserveLeadingSlash)
+		if key == "" {
+			return nil
 		}
+		size := obj.Size
 
-		out, err := client.ListObjectsV2(ctx, in)
-		if err != nil {
-			return err
+		entry := store.ObjectIndexEntry{
+			Key:  key,
+			Size: size,
 		}
-
-		for _, obj := range out.Contents {
-			select {
-			case <-ctx.Done():
-				_ = flushBatch()
-				flushProgress(true)
-				return ctx.Err()
-			default:
-			}
-
-			key := aws.ToString(obj.Key)
-			if key == "" {
-				continue
-			}
-			size := aws.ToInt64(obj.Size)
-
-			entry := store.ObjectIndexEntry{
-				Key:  key,
-				Size: size,
-			}
-			if obj.ETag != nil {
-				entry.ETag = aws.ToString(obj.ETag)
-			}
-			if obj.LastModified != nil {
-				entry.LastModified = obj.LastModified.UTC().Format(time.RFC3339Nano)
-			}
-			batch = append(batch, entry)
-
-			objectsDone++
-			bytesDone += size
-
-			if len(batch) >= 500 {
-				if err := flushBatch(); err != nil {
-					return err
-				}
-			}
-			flushProgress(false)
+		if etag := rcloneETagFromHashes(obj.Hashes); etag != "" {
+			entry.ETag = etag
 		}
-
-		if aws.ToBool(out.IsTruncated) && out.NextContinuationToken != nil && *out.NextContinuationToken != "" {
-			token = out.NextContinuationToken
-			continue
+		if lm := rcloneParseTime(obj.ModTime); lm != "" {
+			entry.LastModified = lm
 		}
-		break
+		batch = append(batch, entry)
+
+		objectsDone++
+		bytesDone += size
+
+		if len(batch) >= 500 {
+			if err := flushBatch(); err != nil {
+				return err
+			}
+		}
+		flushProgress(false)
+		return nil
+	})
+
+	waitErr := proc.wait()
+	if errors.Is(listErr, errRcloneListStop) {
+		listErr = nil
+	}
+	if listErr != nil {
+		return listErr
+	}
+	if waitErr != nil {
+		return fmt.Errorf("rclone lsjson failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
 	}
 
 	if err := flushBatch(); err != nil {
