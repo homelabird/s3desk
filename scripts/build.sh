@@ -36,19 +36,19 @@ cp -f "${ROOT}/openapi.yml" "${ROOT}/dist/openapi.yml"
 
 echo "[build] bundle tools"
 mkdir -p "${ROOT}/dist/bin"
-S5CMD_SRC=""
-if [[ -e "${ROOT}/.tools/bin/s5cmd" ]]; then
-  S5CMD_SRC="${ROOT}/.tools/bin/s5cmd"
-elif command -v s5cmd >/dev/null 2>&1; then
-  S5CMD_SRC="$(command -v s5cmd)"
+RCLONE_SRC=""
+if [[ -e "${ROOT}/.tools/bin/rclone" ]]; then
+  RCLONE_SRC="${ROOT}/.tools/bin/rclone"
+elif command -v rclone >/dev/null 2>&1; then
+  RCLONE_SRC="$(command -v rclone)"
 fi
 
-if [[ -n "${S5CMD_SRC}" ]]; then
-  cp -fL "${S5CMD_SRC}" "${ROOT}/dist/bin/s5cmd"
-  chmod +x "${ROOT}/dist/bin/s5cmd"
-  echo "[build] bundled s5cmd: ${ROOT}/dist/bin/s5cmd (from ${S5CMD_SRC})"
+if [[ -n "${RCLONE_SRC}" ]]; then
+  cp -fL "${RCLONE_SRC}" "${ROOT}/dist/bin/rclone"
+  chmod +x "${ROOT}/dist/bin/rclone"
+  echo "[build] bundled rclone: ${ROOT}/dist/bin/rclone (from ${RCLONE_SRC})"
 else
-  echo "[build] s5cmd not found; skipping"
+  echo "[build] rclone not found; skipping"
 fi
 
 echo "[build] validate openapi"
@@ -57,7 +57,7 @@ bash "${ROOT}/scripts/validate_openapi.sh"
 echo "[build] backend"
 (
   cd "${ROOT}/backend"
-  "${GO_BIN}" build -o "${ROOT}/dist/object-storage-server" ./cmd/server
+  "${GO_BIN}" build -o "${ROOT}/dist/s3desk-server" ./cmd/server
 )
 
-echo "[build] done: ${ROOT}/dist/object-storage-server"
+echo "[build] done: ${ROOT}/dist/s3desk-server"

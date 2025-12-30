@@ -1,0 +1,517 @@
+{
+  "info": {
+    "name": "S3Desk API",
+    "_postman_id": "88f8b7d6-3f5e-4fb2-9f7b-98e3a7dd4b9c",
+    "description": "Postman collection for the S3Desk API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8080" },
+    { "key": "apiToken", "value": "change-me" },
+    { "key": "profileId", "value": "01PROFILE" },
+    { "key": "bucket", "value": "my-bucket" },
+    { "key": "prefix", "value": "path/" },
+    { "key": "objectKey", "value": "path/to/object.txt" },
+    { "key": "uploadId", "value": "01UPLOAD" },
+    { "key": "jobId", "value": "01JOB" }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Get Meta",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Token", "value": "{{apiToken}}" }],
+            "url": "{{baseUrl}}/api/v1/meta"
+          }
+        },
+        {
+          "name": "Healthz",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/healthz"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "SSE Stream",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/event-stream" }],
+            "url": "{{baseUrl}}/api/v1/events?apiToken={{apiToken}}&afterSeq=0"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profiles",
+      "item": [
+        {
+          "name": "List Profiles",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Token", "value": "{{apiToken}}" }],
+            "url": "{{baseUrl}}/api/v1/profiles"
+          }
+        },
+        {
+          "name": "Create Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"prod\",\n  \"endpoint\": \"http://minio:9000\",\n  \"region\": \"us-east-1\",\n  \"accessKeyId\": \"AKIA...\",\n  \"secretAccessKey\": \"...\",\n  \"forcePathStyle\": false,\n  \"preserveLeadingSlash\": false,\n  \"tlsInsecureSkipVerify\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/profiles"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"prod-2\",\n  \"preserveLeadingSlash\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}"
+          }
+        },
+        {
+          "name": "Delete Profile",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Api-Token", "value": "{{apiToken}}" }],
+            "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}"
+          }
+        },
+        {
+          "name": "Test Profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Api-Token", "value": "{{apiToken}}" }],
+            "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}/test"
+          }
+        },
+        {
+          "name": "Get Profile TLS",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Api-Token", "value": "{{apiToken}}" }],
+            "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}/tls"
+          }
+        },
+        {
+          "name": "Set Profile TLS",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"mtls\",\n  \"clientCertPem\": \"-----BEGIN CERTIFICATE-----...\",\n  \"clientKeyPem\": \"-----BEGIN PRIVATE KEY-----...\",\n  \"caCertPem\": \"-----BEGIN CERTIFICATE-----...\",\n  \"serverName\": \"s3.local\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}/tls"
+          }
+        },
+        {
+          "name": "Delete Profile TLS",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "X-Api-Token", "value": "{{apiToken}}" }],
+            "url": "{{baseUrl}}/api/v1/profiles/{{profileId}}/tls"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Buckets",
+      "item": [
+        {
+          "name": "List Buckets",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets"
+          }
+        },
+        {
+          "name": "Create Bucket",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{bucket}}\",\n  \"region\": \"us-east-1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/buckets"
+          }
+        },
+        {
+          "name": "Delete Bucket",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Objects",
+      "item": [
+        {
+          "name": "List Objects",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects?prefix={{prefix}}&delimiter=/&maxKeys=500"
+          }
+        },
+        {
+          "name": "Delete Objects",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keys\": [\"path/a.txt\", \"path/b.txt\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects"
+          }
+        },
+        {
+          "name": "Search Objects",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/search?q=report&prefix={{prefix}}&limit=50"
+          }
+        },
+        {
+          "name": "Index Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/index-summary?prefix={{prefix}}&sampleLimit=5"
+          }
+        },
+        {
+          "name": "Object Meta",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/meta?key={{objectKey}}"
+          }
+        },
+        {
+          "name": "Create Folder",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"path/new-folder/\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/folder"
+          }
+        },
+        {
+          "name": "Download Object",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/download?key={{objectKey}}"
+          }
+        },
+        {
+          "name": "Presigned Download URL",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/download-url?key={{objectKey}}&expiresSeconds=900"
+          }
+        },
+        {
+          "name": "List Favorites",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/favorites?prefix={{prefix}}"
+          }
+        },
+        {
+          "name": "Add Favorite",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"{{objectKey}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/favorites"
+          }
+        },
+        {
+          "name": "Remove Favorite",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/favorites?key={{objectKey}}"
+          }
+        },
+        {
+          "name": "Thumbnail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/buckets/{{bucket}}/objects/thumbnail?key={{objectKey}}&size=96"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Local",
+      "item": [
+        {
+          "name": "List Local Entries",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/local/entries?path=/data&limit=200"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Uploads",
+      "item": [
+        {
+          "name": "Create Upload Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bucket\": \"{{bucket}}\",\n  \"prefix\": \"{{prefix}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/uploads"
+          }
+        },
+        {
+          "name": "Upload Files",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "files", "type": "file", "src": "" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/uploads/{{uploadId}}/files"
+          }
+        },
+        {
+          "name": "Commit Upload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"batch-1\",\n  \"rootKind\": \"folder\",\n  \"totalFiles\": 2,\n  \"totalBytes\": 12345\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/uploads/{{uploadId}}/commit"
+          }
+        },
+        {
+          "name": "Delete Upload Session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/uploads/{{uploadId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "List Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/jobs?status=running&limit=50"
+          }
+        },
+        {
+          "name": "Create Job (Copy Prefix)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"transfer_copy_prefix\",\n  \"payload\": {\n    \"srcBucket\": \"{{bucket}}\",\n    \"srcPrefix\": \"{{prefix}}\",\n    \"dstBucket\": \"{{bucket}}\",\n    \"dstPrefix\": \"copy/\",\n    \"include\": [],\n    \"exclude\": [],\n    \"dryRun\": false\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/jobs"
+          }
+        },
+        {
+          "name": "Get Job",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/jobs/{{jobId}}"
+          }
+        },
+        {
+          "name": "Delete Job",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/jobs/{{jobId}}"
+          }
+        },
+        {
+          "name": "Job Artifact",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/jobs/{{jobId}}/artifact"
+          }
+        },
+        {
+          "name": "Job Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/jobs/{{jobId}}/logs?tailBytes=65536"
+          }
+        },
+        {
+          "name": "Cancel Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/jobs/{{jobId}}/cancel"
+          }
+        },
+        {
+          "name": "Retry Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-Api-Token", "value": "{{apiToken}}" },
+              { "key": "X-Profile-Id", "value": "{{profileId}}" }
+            ],
+            "url": "{{baseUrl}}/api/v1/jobs/{{jobId}}/retry"
+          }
+        }
+      ]
+    }
+  ]
+}

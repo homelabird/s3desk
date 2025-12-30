@@ -103,6 +103,7 @@ func migrate(db *gorm.DB) error {
 			endpoint TEXT NOT NULL,
 			region TEXT NOT NULL,
 			force_path_style INTEGER NOT NULL,
+			preserve_leading_slash INTEGER NOT NULL DEFAULT 0,
 			tls_insecure_skip_verify INTEGER NOT NULL,
 			access_key_id TEXT NOT NULL,
 			secret_access_key TEXT NOT NULL,
@@ -181,5 +182,16 @@ func migrate(db *gorm.DB) error {
 			return err
 		}
 	}
+	if err := ensureProfileColumn(db, "preserve_leading_slash", "INTEGER", "0"); err != nil {
+		return err
+	}
 	return nil
+}
+
+func ensureProfileColumn(db *gorm.DB, name, sqlType, defaultValue string) error {
+	if db.Migrator().HasColumn("profiles", name) {
+		return nil
+	}
+	stmt := fmt.Sprintf("ALTER TABLE profiles ADD COLUMN %s %s NOT NULL DEFAULT %s;", name, sqlType, defaultValue)
+	return db.Exec(stmt).Error
 }

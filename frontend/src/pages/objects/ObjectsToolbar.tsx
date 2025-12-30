@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { MenuProps, SelectProps } from 'antd'
-import { Button, Dropdown, Select, Space, Tooltip } from 'antd'
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, ReloadOutlined, RightOutlined, UpOutlined } from '@ant-design/icons'
+import { Badge, Button, Dropdown, Select, Space, Tooltip } from 'antd'
+import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, ReloadOutlined, RightOutlined, SwapOutlined, UpOutlined } from '@ant-design/icons'
 
 import type { UIAction } from './objectsActions'
 import styles from './objects.module.css'
@@ -31,6 +31,8 @@ export type ObjectsToolbarProps = {
 	showPrimaryActions: boolean
 	primaryDownloadAction?: UIAction
 	primaryDeleteAction?: UIAction
+	activeTransferCount: number
+	onOpenTransfers: () => void
 	dockTree: boolean
 	dockDetails: boolean
 	onOpenTree: () => void
@@ -132,6 +134,13 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							})}
 						</>
 					) : null}
+					<Tooltip title="Transfers">
+						<Badge count={props.activeTransferCount} size="small" showZero={false}>
+							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers}>
+								{props.showLabels ? 'Transfers' : null}
+							</Button>
+						</Badge>
+					</Tooltip>
 					{props.isAdvanced ? (
 						<Tooltip title="Refresh">
 							<Button
@@ -189,6 +198,13 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							})}
 						</>
 					) : null}
+					<Tooltip title="Transfers">
+						<Badge count={props.activeTransferCount} size="small" showZero={false}>
+							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers}>
+								{props.showLabels ? 'Transfers' : null}
+							</Button>
+						</Badge>
+					</Tooltip>
 					{props.isAdvanced && !props.dockTree ? (
 						<Button icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile || props.isOffline}>
 							{props.showLabels ? 'Folders' : null}

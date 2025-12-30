@@ -53,7 +53,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 					type="warning"
 					showIcon
 					message="Move folder is destructive"
-					description="This creates an s5cmd mv job (copy then delete source)."
+					description="This creates a move job (copy then delete source)."
 					style={{ marginBottom: 12 }}
 				/>
 			) : (
@@ -61,7 +61,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 					type="info"
 					showIcon
 					message="Copy this folder to another folder"
-					description="This creates an s5cmd cp job and may copy many objects."
+					description="This creates a copy job and may copy many objects."
 					style={{ marginBottom: 12 }}
 				/>
 			)}

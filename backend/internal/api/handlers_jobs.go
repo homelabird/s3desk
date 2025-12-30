@@ -14,11 +14,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"object-storage/internal/jobs"
-	"object-storage/internal/logging"
-	"object-storage/internal/models"
-	"object-storage/internal/store"
-	"object-storage/internal/ws"
+	"s3desk/internal/jobs"
+	"s3desk/internal/logging"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 func (s *server) handleListJobs(w http.ResponseWriter, r *http.Request) {
@@ -84,23 +84,23 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch req.Type {
-	case jobs.JobTypeS5CmdSyncLocalToS3:
-		if err := validateS5CmdSyncLocalToS3Payload(req.Payload); err != nil {
+	case jobs.JobTypeTransferSyncLocalToS3:
+		if err := validateTransferSyncLocalToS3Payload(req.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdSyncS3ToLocal:
-		if err := validateS5CmdSyncS3ToLocalPayload(req.Payload); err != nil {
+	case jobs.JobTypeTransferSyncS3ToLocal:
+		if err := validateTransferSyncS3ToLocalPayload(req.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdSyncStagingToS3:
-		if err := validateS5CmdSyncStagingToS3Payload(req.Payload); err != nil {
+	case jobs.JobTypeTransferSyncStagingToS3:
+		if err := validateTransferSyncStagingToS3Payload(req.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdRmPrefix:
-		if err := validateS5CmdRmPrefixPayload(req.Payload); err != nil {
+	case jobs.JobTypeTransferDeletePrefix:
+		if err := validateTransferDeletePrefixPayload(req.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
@@ -119,18 +119,18 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdCpS3ToS3, jobs.JobTypeS5CmdMvS3ToS3:
-		if err := validateS5CmdCpMvPayload(req.Payload); err != nil {
+	case jobs.JobTypeTransferCopyObject, jobs.JobTypeTransferMoveObject:
+		if err := validateTransferCopyMoveObjectPayload(req.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdCpS3ToS3Batch, jobs.JobTypeS5CmdMvS3ToS3Batch:
-		if err := validateS5CmdCpMvBatchPayload(req.Payload); err != nil {
+	case jobs.JobTypeTransferCopyBatch, jobs.JobTypeTransferMoveBatch:
+		if err := validateTransferCopyMoveBatchPayload(req.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdCpS3PrefixToS3Prefix, jobs.JobTypeS5CmdMvS3PrefixToS3Prefix:
-		if err := validateS5CmdCpPrefixPayload(req.Payload); err != nil {
+	case jobs.JobTypeTransferCopyPrefix, jobs.JobTypeTransferMovePrefix:
+		if err := validateTransferCopyMovePrefixPayload(req.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
@@ -141,9 +141,9 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isS5CmdJobType(req.Type) {
-		if _, ok := jobs.DetectS5Cmd(); !ok {
-			writeError(w, http.StatusBadRequest, "s5cmd_missing", "s5cmd is required for this job type (install it or set S5CMD_PATH)", nil)
+	if isTransferJobType(req.Type) {
+		if _, ok := jobs.DetectRclone(); !ok {
+			writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required for this job type (install it or set RCLONE_PATH)", nil)
 			return
 		}
 	}
@@ -158,8 +158,14 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.jobs.Enqueue(job.ID); err != nil {
+		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		if errors.Is(err, jobs.ErrJobQueueFull) {
-			_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+			msg := "job queue is full; try again later"
+			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+			job.Status = models.JobStatusFailed
+			job.Error = &msg
+			job.FinishedAt = &finishedAt
+			s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
 			stats := s.jobs.QueueStats()
 			logging.ErrorFields("job queue full", map[string]any{
 				"event":          "job.queue_full",
@@ -179,7 +185,12 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+		msg := "failed to enqueue job"
+		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+		job.Status = models.JobStatusFailed
+		job.Error = &msg
+		job.FinishedAt = &finishedAt
+		s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue job", nil)
 		return
 	}
@@ -346,23 +357,23 @@ func (s *server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch job.Type {
-	case jobs.JobTypeS5CmdSyncLocalToS3:
-		if err := validateS5CmdSyncLocalToS3Payload(job.Payload); err != nil {
+	case jobs.JobTypeTransferSyncLocalToS3:
+		if err := validateTransferSyncLocalToS3Payload(job.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdSyncS3ToLocal:
-		if err := validateS5CmdSyncS3ToLocalPayload(job.Payload); err != nil {
+	case jobs.JobTypeTransferSyncS3ToLocal:
+		if err := validateTransferSyncS3ToLocalPayload(job.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdSyncStagingToS3:
-		if err := validateS5CmdSyncStagingToS3Payload(job.Payload); err != nil {
+	case jobs.JobTypeTransferSyncStagingToS3:
+		if err := validateTransferSyncStagingToS3Payload(job.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdRmPrefix:
-		if err := validateS5CmdRmPrefixPayload(job.Payload); err != nil {
+	case jobs.JobTypeTransferDeletePrefix:
+		if err := validateTransferDeletePrefixPayload(job.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
@@ -381,18 +392,18 @@ func (s *server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdCpS3ToS3, jobs.JobTypeS5CmdMvS3ToS3:
-		if err := validateS5CmdCpMvPayload(job.Payload); err != nil {
+	case jobs.JobTypeTransferCopyObject, jobs.JobTypeTransferMoveObject:
+		if err := validateTransferCopyMoveObjectPayload(job.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdCpS3ToS3Batch, jobs.JobTypeS5CmdMvS3ToS3Batch:
-		if err := validateS5CmdCpMvBatchPayload(job.Payload); err != nil {
+	case jobs.JobTypeTransferCopyBatch, jobs.JobTypeTransferMoveBatch:
+		if err := validateTransferCopyMoveBatchPayload(job.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-	case jobs.JobTypeS5CmdCpS3PrefixToS3Prefix, jobs.JobTypeS5CmdMvS3PrefixToS3Prefix:
-		if err := validateS5CmdCpPrefixPayload(job.Payload); err != nil {
+	case jobs.JobTypeTransferCopyPrefix, jobs.JobTypeTransferMovePrefix:
+		if err := validateTransferCopyMovePrefixPayload(job.Payload); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
@@ -403,9 +414,9 @@ func (s *server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if isS5CmdJobType(job.Type) {
-		if _, ok := jobs.DetectS5Cmd(); !ok {
-			writeError(w, http.StatusBadRequest, "s5cmd_missing", "s5cmd is required for this job type (install it or set S5CMD_PATH)", nil)
+	if isTransferJobType(job.Type) {
+		if _, ok := jobs.DetectRclone(); !ok {
+			writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required for this job type (install it or set RCLONE_PATH)", nil)
 			return
 		}
 	}
@@ -608,18 +619,18 @@ func (s *server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
-func isS5CmdJobType(jobType string) bool {
+func isTransferJobType(jobType string) bool {
 	switch jobType {
-	case jobs.JobTypeS5CmdSyncLocalToS3,
-		jobs.JobTypeS5CmdSyncS3ToLocal,
-		jobs.JobTypeS5CmdSyncStagingToS3,
-		jobs.JobTypeS5CmdRmPrefix,
-		jobs.JobTypeS5CmdCpS3ToS3,
-		jobs.JobTypeS5CmdMvS3ToS3,
-		jobs.JobTypeS5CmdCpS3ToS3Batch,
-		jobs.JobTypeS5CmdMvS3ToS3Batch,
-		jobs.JobTypeS5CmdCpS3PrefixToS3Prefix,
-		jobs.JobTypeS5CmdMvS3PrefixToS3Prefix:
+	case jobs.JobTypeTransferSyncLocalToS3,
+		jobs.JobTypeTransferSyncS3ToLocal,
+		jobs.JobTypeTransferSyncStagingToS3,
+		jobs.JobTypeTransferDeletePrefix,
+		jobs.JobTypeTransferCopyObject,
+		jobs.JobTypeTransferMoveObject,
+		jobs.JobTypeTransferCopyBatch,
+		jobs.JobTypeTransferMoveBatch,
+		jobs.JobTypeTransferCopyPrefix,
+		jobs.JobTypeTransferMovePrefix:
 		return true
 	default:
 		return false
@@ -754,7 +765,7 @@ func safeFilename(value string) string {
 	return out
 }
 
-func validateS5CmdRmPrefixPayload(payload map[string]any) error {
+func validateTransferDeletePrefixPayload(payload map[string]any) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	deleteAll, _ := payload["deleteAll"].(bool)
@@ -784,7 +795,7 @@ func validateS5CmdRmPrefixPayload(payload map[string]any) error {
 	return nil
 }
 
-func validateS5CmdSyncLocalToS3Payload(payload map[string]any) error {
+func validateTransferSyncLocalToS3Payload(payload map[string]any) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	localPath, _ := payload["localPath"].(string)
@@ -809,7 +820,7 @@ func validateS5CmdSyncLocalToS3Payload(payload map[string]any) error {
 	return nil
 }
 
-func validateS5CmdSyncS3ToLocalPayload(payload map[string]any) error {
+func validateTransferSyncS3ToLocalPayload(payload map[string]any) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	localPath, _ := payload["localPath"].(string)
@@ -834,7 +845,7 @@ func validateS5CmdSyncS3ToLocalPayload(payload map[string]any) error {
 	return nil
 }
 
-func validateS5CmdSyncStagingToS3Payload(payload map[string]any) error {
+func validateTransferSyncStagingToS3Payload(payload map[string]any) error {
 	uploadID, _ := payload["uploadId"].(string)
 	uploadID = strings.TrimSpace(uploadID)
 	if uploadID == "" {
@@ -907,7 +918,7 @@ func validateS3IndexObjectsPayload(payload map[string]any) error {
 	return nil
 }
 
-func validateS5CmdCpMvPayload(payload map[string]any) error {
+func validateTransferCopyMoveObjectPayload(payload map[string]any) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	srcKey, _ := payload["srcKey"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
@@ -935,7 +946,7 @@ func validateS5CmdCpMvPayload(payload map[string]any) error {
 	return nil
 }
 
-func validateS5CmdCpMvBatchPayload(payload map[string]any) error {
+func validateTransferCopyMoveBatchPayload(payload map[string]any) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)
 
@@ -982,7 +993,7 @@ func validateS5CmdCpMvBatchPayload(payload map[string]any) error {
 	return nil
 }
 
-func validateS5CmdCpPrefixPayload(payload map[string]any) error {
+func validateTransferCopyMovePrefixPayload(payload map[string]any) error {
 	srcBucket, _ := payload["srcBucket"].(string)
 	srcPrefix, _ := payload["srcPrefix"].(string)
 	dstBucket, _ := payload["dstBucket"].(string)

@@ -1,4 +1,5 @@
-import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, RefObject } from 'react'
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, Ref, UIEvent, WheelEvent } from 'react'
+import type { MenuProps } from 'antd'
 
 import styles from './objects.module.css'
 import { ObjectsListSection } from './ObjectsListSection'
@@ -9,10 +10,18 @@ type ObjectsListSectionContainerProps = {
 	selectionBar: ReactNode
 	listHeader: ReactNode
 	listContent: ReactNode
-	listScrollerRef: RefObject<HTMLDivElement | null>
+	listScrollerRef: Ref<HTMLDivElement>
 	listScrollerTabIndex?: number
 	onListScrollerClick?: (e: MouseEvent<HTMLDivElement>) => void
 	onListScrollerKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void
+	onListScrollerScroll?: (e: UIEvent<HTMLDivElement>) => void
+	onListScrollerWheel?: (e: WheelEvent<HTMLDivElement>) => void
+	onListScrollerContextMenu?: (e: MouseEvent<HTMLDivElement>) => void
+	listContextMenu?: MenuProps
+	listContextMenuOpen?: boolean
+	listContextMenuPlacement?: 'bottomLeft' | 'topLeft'
+	onListContextMenuOpenChange?: (open: boolean) => void
+	listContextMenuPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
 	uploadDropActive: boolean
 	uploadDropLabel: string
 	onUploadDragEnter: (e: DragEvent) => void
@@ -34,6 +43,14 @@ export function ObjectsListSectionContainer(props: ObjectsListSectionContainerPr
 				listScrollerTabIndex={props.listScrollerTabIndex}
 				onListScrollerClick={props.onListScrollerClick}
 				onListScrollerKeyDown={props.onListScrollerKeyDown}
+				onListScrollerScroll={props.onListScrollerScroll}
+				onListScrollerWheel={props.onListScrollerWheel}
+				onListScrollerContextMenu={props.onListScrollerContextMenu}
+				listContextMenu={props.listContextMenu}
+				listContextMenuOpen={props.listContextMenuOpen}
+				listContextMenuPlacement={props.listContextMenuPlacement}
+				onListContextMenuOpenChange={props.onListContextMenuOpenChange}
+				listContextMenuPopupContainer={props.listContextMenuPopupContainer}
 				uploadDropActive={props.uploadDropActive}
 				uploadDropLabel={props.uploadDropLabel}
 				onUploadDragEnter={props.onUploadDragEnter}

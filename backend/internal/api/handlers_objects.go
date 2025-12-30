@@ -1,26 +1,23 @@
 package api
 
 import (
-	"bytes"
+	"bufio"
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/smithy-go"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/go-chi/chi/v5"
 
-	"object-storage/internal/models"
-	"object-storage/internal/s3client"
-	"object-storage/internal/store"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
 )
 
 func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
@@ -57,27 +54,27 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 
 	token := r.URL.Query().Get("continuationToken")
 
-	client, err := s3client.New(r.Context(), secrets)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_profile", "failed to configure s3 client", map[string]any{"error": err.Error()})
-		return
+	if strings.TrimSpace(token) != "" {
+		token = strings.TrimSpace(token)
 	}
 
-	in := &s3.ListObjectsV2Input{
-		Bucket:  aws.String(bucket),
-		Prefix:  aws.String(prefix),
-		MaxKeys: aws.Int32(int32(maxKeys)),
-	}
-	if delimiter != "" {
-		in.Delimiter = aws.String(delimiter)
-	}
-	if token != "" {
-		in.ContinuationToken = aws.String(token)
-	}
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
-	out, err := client.ListObjectsV2(r.Context(), in)
+	args := []string{"lsjson", "--no-mimetype"}
+	if delimiter == "" {
+		args = append(args, "-R")
+	}
+	args = append(args, rcloneRemoteDir(bucket, prefix, secrets.PreserveLeadingSlash))
+
+	proc, err := s.startRclone(ctx, secrets, args, "list-objects")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to list objects", map[string]any{"error": err.Error()})
+		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to list objects (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to list objects",
+		}, nil)
 		return
 	}
 
@@ -85,59 +82,140 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		Bucket:         bucket,
 		Prefix:         prefix,
 		Delimiter:      delimiter,
-		CommonPrefixes: make([]string, 0, len(out.CommonPrefixes)),
-		Items:          make([]models.ObjectItem, 0, len(out.Contents)),
-		IsTruncated:    aws.ToBool(out.IsTruncated),
+		CommonPrefixes: make([]string, 0, 16),
+		Items:          make([]models.ObjectItem, 0, maxKeys),
 	}
-	commonPrefixSet := make(map[string]struct{}, len(out.CommonPrefixes))
-	for _, cp := range out.CommonPrefixes {
-		if cp.Prefix == nil {
-			continue
-		}
-		p := *cp.Prefix
-		if p == "" {
-			continue
-		}
-		if _, ok := commonPrefixSet[p]; ok {
-			continue
-		}
-		commonPrefixSet[p] = struct{}{}
-		resp.CommonPrefixes = append(resp.CommonPrefixes, p)
-	}
-	for _, obj := range out.Contents {
-		key := aws.ToString(obj.Key)
-		size := aws.ToInt64(obj.Size)
 
-		// Treat "folder marker" objects (zero-byte keys ending with "/") as prefixes.
-		// This prevents duplicate rows in the UI and makes empty folders visible.
-		if delimiter == "/" && size == 0 && strings.HasSuffix(key, "/") {
-			if key == prefix {
-				continue
+	commonPrefixSet := make(map[string]struct{}, 64)
+	foundToken := token == ""
+	var (
+		returned  int
+		truncated bool
+		nextToken string
+		stopped   bool
+	)
+
+	listErr := decodeRcloneList(proc.stdout, func(entry rcloneListEntry) error {
+		key := entry.Path
+		if strings.TrimSpace(key) == "" && strings.TrimSpace(entry.Name) != "" {
+			key = entry.Name
+		}
+		if entry.IsDir {
+			if delimiter != "/" {
+				return nil
 			}
-			if _, ok := commonPrefixSet[key]; !ok {
-				commonPrefixSet[key] = struct{}{}
-				resp.CommonPrefixes = append(resp.CommonPrefixes, key)
+			prefixKey := rcloneObjectKey(prefix, key, secrets.PreserveLeadingSlash)
+			if !strings.HasSuffix(prefixKey, "/") {
+				prefixKey += "/"
 			}
-			continue
+			if prefixKey == prefix && prefixKey != "" {
+				return nil
+			}
+			entryToken := rcloneTokenForPrefix(prefixKey)
+			if !foundToken {
+				if rcloneMatchToken(token, entryToken, prefixKey) {
+					foundToken = true
+				}
+				return nil
+			}
+			if _, ok := commonPrefixSet[prefixKey]; ok {
+				return nil
+			}
+			commonPrefixSet[prefixKey] = struct{}{}
+			resp.CommonPrefixes = append(resp.CommonPrefixes, prefixKey)
+			returned++
+			if returned >= maxKeys {
+				truncated = true
+				nextToken = entryToken
+				stopped = true
+				cancel()
+				return errRcloneListStop
+			}
+			return nil
+		}
+
+		objKey := rcloneObjectKey(prefix, key, secrets.PreserveLeadingSlash)
+		if objKey == "" {
+			return nil
+		}
+		if delimiter == "/" && entry.Size == 0 && strings.HasSuffix(objKey, "/") {
+			if objKey == prefix {
+				return nil
+			}
+			entryToken := rcloneTokenForPrefix(objKey)
+			if !foundToken {
+				if rcloneMatchToken(token, entryToken, objKey) {
+					foundToken = true
+				}
+				return nil
+			}
+			if _, ok := commonPrefixSet[objKey]; ok {
+				return nil
+			}
+			commonPrefixSet[objKey] = struct{}{}
+			resp.CommonPrefixes = append(resp.CommonPrefixes, objKey)
+			returned++
+			if returned >= maxKeys {
+				truncated = true
+				nextToken = entryToken
+				stopped = true
+				cancel()
+				return errRcloneListStop
+			}
+			return nil
+		}
+
+		entryToken := rcloneTokenForObject(objKey)
+		if !foundToken {
+			if rcloneMatchToken(token, entryToken, objKey) {
+				foundToken = true
+			}
+			return nil
 		}
 
 		item := models.ObjectItem{
-			Key:  key,
-			Size: size,
+			Key:  objKey,
+			Size: entry.Size,
 		}
-		if obj.ETag != nil {
-			item.ETag = *obj.ETag
+		if etag := rcloneETagFromHashes(entry.Hashes); etag != "" {
+			item.ETag = etag
 		}
-		if obj.LastModified != nil {
-			item.LastModified = obj.LastModified.UTC().Format(time.RFC3339Nano)
-		}
-		if obj.StorageClass != "" {
-			item.StorageClass = string(obj.StorageClass)
+		if lm := rcloneParseTime(entry.ModTime); lm != "" {
+			item.LastModified = lm
 		}
 		resp.Items = append(resp.Items, item)
+		returned++
+		if returned >= maxKeys {
+			truncated = true
+			nextToken = entryToken
+			stopped = true
+			cancel()
+			return errRcloneListStop
+		}
+		return nil
+	})
+
+	waitErr := proc.wait()
+	if errors.Is(listErr, errRcloneListStop) {
+		listErr = nil
 	}
-	if out.NextContinuationToken != nil {
-		resp.NextContinuationToken = out.NextContinuationToken
+	if listErr != nil {
+		writeError(w, http.StatusBadRequest, "s3_error", "failed to list objects", map[string]any{"error": listErr.Error()})
+		return
+	}
+	if waitErr != nil && !stopped {
+		writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to list objects (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to list objects",
+		}, nil)
+		return
+	}
+
+	resp.IsTruncated = truncated
+	if truncated && nextToken != "" {
+		resp.NextContinuationToken = &nextToken
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -331,34 +409,33 @@ func (s *server) handleGetObjectMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := s3client.New(r.Context(), secrets)
+	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, true, "object-meta")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_profile", "failed to configure s3 client", map[string]any{"error": err.Error()})
-		return
-	}
-
-	out, err := client.HeadObject(r.Context(), &s3.HeadObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		if isNotFound(err) {
+		if rcloneIsNotFound(err, stderr) {
 			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
 			return
 		}
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to get object metadata", map[string]any{"error": err.Error()})
+		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to fetch object metadata (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to get object metadata",
+		}, map[string]any{"bucket": bucket, "key": key})
 		return
 	}
 
 	meta := models.ObjectMeta{
 		Key:         key,
-		Size:        aws.ToInt64(out.ContentLength),
-		ETag:        aws.ToString(out.ETag),
-		ContentType: aws.ToString(out.ContentType),
-		Metadata:    out.Metadata,
+		Size:        entry.Size,
+		ETag:        rcloneETagFromHashes(entry.Hashes),
+		ContentType: entry.MimeType,
+		Metadata:    entry.Metadata,
 	}
-	if out.LastModified != nil {
-		meta.LastModified = out.LastModified.UTC().Format(time.RFC3339Nano)
+	if entry.IsDir && meta.ContentType == "" {
+		meta.ContentType = "application/x-directory"
+	}
+	if lm := rcloneParseTime(entry.ModTime); lm != "" {
+		meta.LastModified = lm
 	}
 	writeJSON(w, http.StatusOK, meta)
 }
@@ -382,7 +459,7 @@ func (s *server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := strings.TrimPrefix(strings.TrimSpace(req.Key), "/")
+	key := normalizeRclonePathInput(req.Key, secrets.PreserveLeadingSlash)
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "key is required", nil)
 		return
@@ -417,27 +494,14 @@ func (s *server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	client, err := s3client.New(r.Context(), secrets)
+	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, []string{"mkdir", rcloneRemoteDir(bucket, key, secrets.PreserveLeadingSlash)}, "create-folder")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_profile", "failed to configure s3 client", map[string]any{"error": err.Error()})
-		return
-	}
-
-	if _, err := client.HeadObject(r.Context(), &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)}); err == nil {
-		writeError(w, http.StatusConflict, "already_exists", "folder already exists", map[string]any{"bucket": bucket, "key": key})
-		return
-	} else if !isNotFound(err) {
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to check folder existence", map[string]any{"error": err.Error()})
-		return
-	}
-
-	if _, err := client.PutObject(r.Context(), &s3.PutObjectInput{
-		Bucket:      aws.String(bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(nil),
-		ContentType: aws.String("application/x-directory"),
-	}); err != nil {
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to create folder", map[string]any{"error": err.Error()})
+		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to create folders (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to create folder",
+		}, map[string]any{"bucket": bucket, "key": key})
 		return
 	}
 
@@ -472,31 +536,64 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 	}
 	expires := time.Duration(expiresSeconds) * time.Second
 
-	client, err := s3client.New(r.Context(), secrets)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_profile", "failed to configure s3 client", map[string]any{"error": err.Error()})
+	proxyRaw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("proxy")))
+	useProxy := proxyRaw == "1" || proxyRaw == "true" || proxyRaw == "yes"
+	if useProxy {
+		profileID := strings.TrimSpace(secrets.ID)
+		if profileID == "" {
+			profileID = strings.TrimSpace(r.Header.Get("X-Profile-Id"))
+		}
+		if profileID == "" {
+			writeError(w, http.StatusBadRequest, "missing_profile", "X-Profile-Id header is required", nil)
+			return
+		}
+		expiresAt := time.Now().UTC().Add(expires)
+		url := s.buildDownloadProxyURL(r, downloadProxyToken{
+			ProfileID: profileID,
+			Bucket:    bucket,
+			Key:       key,
+			Expires:   expiresAt.Unix(),
+		})
+		writeJSON(w, http.StatusOK, models.PresignedURLResponse{
+			URL:       url,
+			ExpiresAt: expiresAt.Format(time.RFC3339Nano),
+		})
 		return
 	}
 
-	in := &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	}
-	if filename := path.Base(key); filename != "" && filename != "." && filename != "/" {
-		in.ResponseContentDisposition = aws.String(mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	expireArg := fmt.Sprintf("%ds", expiresSeconds)
+	args := []string{"link", "--expire", expireArg, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)}
+	out, stderr, err := s.runRcloneCapture(r.Context(), secrets, args, "download-url")
+	if err != nil {
+		if rcloneIsNotFound(err, stderr) {
+			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
+			return
+		}
+		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to generate download URLs (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "invalid_request",
+			DefaultMessage: "failed to generate download url",
+		}, map[string]any{"bucket": bucket, "key": key})
+		return
 	}
 
-	presigner := s3.NewPresignClient(client)
-	out, err := presigner.PresignGetObject(r.Context(), in, func(opts *s3.PresignOptions) {
-		opts.Expires = expires
-	})
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "failed to presign url", map[string]any{"error": err.Error()})
+	url := ""
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		url = line
+		break
+	}
+	if url == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "failed to generate download url", map[string]any{"error": "empty rclone response"})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, models.PresignedURLResponse{
-		URL:       out.URL,
+		URL:       url,
 		ExpiresAt: time.Now().UTC().Add(expires).Format(time.RFC3339Nano),
 	})
 }
@@ -515,43 +612,53 @@ func (s *server) handleDownloadObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := s3client.New(r.Context(), secrets)
+	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "download-stat")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_profile", "failed to configure s3 client", map[string]any{"error": err.Error()})
-		return
-	}
-
-	out, err := client.GetObject(r.Context(), &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		if isNotFound(err) {
+		if rcloneIsNotFound(err, stderr) {
 			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
 			return
 		}
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to download object", map[string]any{"error": err.Error()})
+		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to download object",
+		}, map[string]any{"bucket": bucket, "key": key})
 		return
 	}
-	defer out.Body.Close()
+
+	args := append(s.rcloneDownloadFlags(), "cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash))
+	proc, err := s.startRclone(r.Context(), secrets, args, "download-object")
+	if err != nil {
+		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to download object",
+		}, map[string]any{"bucket": bucket, "key": key})
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Cache-Control", "no-store")
-	if out.ContentLength != nil {
-		w.Header().Set("Content-Length", strconv.FormatInt(aws.ToInt64(out.ContentLength), 10))
+	if entry.Size > 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(entry.Size, 10))
 	}
-	if out.ETag != nil {
-		w.Header().Set("ETag", aws.ToString(out.ETag))
+	if etag := rcloneETagFromHashes(entry.Hashes); etag != "" {
+		w.Header().Set("ETag", etag)
 	}
-	if out.LastModified != nil {
-		w.Header().Set("Last-Modified", out.LastModified.UTC().Format(http.TimeFormat))
+	if lm := rcloneParseTime(entry.ModTime); lm != "" {
+		if parsed, err := time.Parse(time.RFC3339Nano, lm); err == nil {
+			w.Header().Set("Last-Modified", parsed.UTC().Format(http.TimeFormat))
+		}
 	}
 	if filename := path.Base(key); filename != "" && filename != "." && filename != "/" {
 		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	}
 
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, out.Body)
+	_, _ = io.Copy(w, proc.stdout)
+	_ = proc.wait()
 }
 
 func (s *server) handleDeleteObjects(w http.ResponseWriter, r *http.Request) {
@@ -581,68 +688,57 @@ func (s *server) handleDeleteObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := s3client.New(r.Context(), secrets)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_profile", "failed to configure s3 client", map[string]any{"error": err.Error()})
-		return
-	}
-
-	objs := make([]types.ObjectIdentifier, 0, len(req.Keys))
+	keys := make([]string, 0, len(req.Keys))
 	for _, k := range req.Keys {
 		if k == "" {
 			continue
 		}
-		objs = append(objs, types.ObjectIdentifier{Key: aws.String(k)})
+		keys = append(keys, k)
 	}
-	if len(objs) == 0 {
+	if len(keys) == 0 {
 		writeError(w, http.StatusBadRequest, "invalid_request", "keys must contain at least one non-empty key", nil)
 		return
 	}
 
-	out, err := client.DeleteObjects(r.Context(), &s3.DeleteObjectsInput{
-		Bucket: aws.String(bucket),
-		Delete: &types.Delete{Objects: objs, Quiet: aws.Bool(true)},
-	})
+	tmpFile, err := os.CreateTemp("", "rclone-delete-*.txt")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to delete objects", map[string]any{"error": err.Error()})
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
 		return
 	}
-	if len(out.Errors) > 0 {
-		details := make([]map[string]any, 0, len(out.Errors))
-		for _, e := range out.Errors {
-			details = append(details, map[string]any{
-				"key":     aws.ToString(e.Key),
-				"code":    aws.ToString(e.Code),
-				"message": aws.ToString(e.Message),
-			})
-			if len(details) >= 20 {
-				break
-			}
+	tmpPath := tmpFile.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+
+	writer := bufio.NewWriter(tmpFile)
+	for _, k := range keys {
+		if _, err := writer.WriteString(k + "\n"); err != nil {
+			_ = tmpFile.Close()
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
+			return
 		}
-		writeError(w, http.StatusBadRequest, "partial_failure", "some objects failed to delete", map[string]any{"errors": details})
+	}
+	if err := writer.Flush(); err != nil {
+		_ = tmpFile.Close()
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
+		return
+	}
+	if err := tmpFile.Close(); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, models.DeleteObjectsResponse{Deleted: len(objs)})
-}
-
-func isNotFound(err error) bool {
-	var re *smithyhttp.ResponseError
-	if errors.As(err, &re) {
-		if re.HTTPStatusCode() == http.StatusNotFound {
-			return true
-		}
+	args := []string{"delete", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
+	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, args, "delete-objects")
+	if err != nil {
+		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to delete objects (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to delete objects",
+		}, map[string]any{"bucket": bucket})
+		return
 	}
 
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
-		code := apiErr.ErrorCode()
-		if code == "NotFound" || code == "NoSuchKey" {
-			return true
-		}
-	}
-
-	return false
+	writeJSON(w, http.StatusOK, models.DeleteObjectsResponse{Deleted: len(keys)})
 }
 
 func parseSearchTimeParam(raw string) (time.Time, error) {

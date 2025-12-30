@@ -51,7 +51,7 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 					jobRetentionSeconds: null,
 					uploadSessionTTLSeconds: 86400,
 					uploadMaxBytes: null,
-					s5cmd: { available: true, path: '/usr/local/bin/s5cmd', version: 'v2.3.0' },
+					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 				}),
 			})
 		}

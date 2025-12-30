@@ -8,7 +8,7 @@ import (
 
 	"gorm.io/gorm/clause"
 
-	"object-storage/internal/models"
+	"s3desk/internal/models"
 )
 
 func (s *Store) ListObjectFavorites(ctx context.Context, profileID, bucket string) ([]models.ObjectFavorite, error) {

@@ -1,5 +1,5 @@
 import { forwardRef } from 'react'
-import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, UIEvent, WheelEvent } from 'react'
 
 import styles from './objects.module.css'
 
@@ -43,16 +43,32 @@ export function ObjectsListHeaderRow(props: { children: ReactNode }) {
 export type ObjectsListScrollerProps = {
 	children: ReactNode
 	onClick?: (e: MouseEvent<HTMLDivElement>) => void
+	onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void
+	onContextMenuCapture?: (e: MouseEvent<HTMLDivElement>) => void
 	onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void
+	onScroll?: (e: UIEvent<HTMLDivElement>) => void
+	onWheel?: (e: WheelEvent<HTMLDivElement>) => void
 	tabIndex?: number
 }
 
 export const ObjectsListScroller = forwardRef<HTMLDivElement, ObjectsListScrollerProps>(function ObjectsListScroller(
-	{ children, onClick, onKeyDown, tabIndex },
+	{ children, onClick, onContextMenu, onContextMenuCapture, onKeyDown, onScroll, onWheel, tabIndex },
 	ref,
 ) {
 	return (
-		<div ref={ref} tabIndex={tabIndex} onClick={onClick} onKeyDown={onKeyDown} className={styles.listScroller}>
+		<div
+			ref={ref}
+			tabIndex={tabIndex}
+			onClick={onClick}
+			onContextMenu={onContextMenu}
+			onContextMenuCapture={onContextMenuCapture}
+			onKeyDown={onKeyDown}
+			onScroll={onScroll}
+			onWheel={onWheel}
+			className={styles.listScroller}
+			role="list"
+			aria-label="Objects list"
+		>
 			{children}
 		</div>
 	)

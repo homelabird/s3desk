@@ -1,0 +1,589 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-01-01T00:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2024.7.0",
+  "resources": [
+    {
+      "_id": "wrk_s3desk",
+      "_type": "workspace",
+      "name": "S3Desk API",
+      "description": "Insomnia collection for the S3Desk API.",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_s3desk",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "http://127.0.0.1:8080",
+        "apiToken": "change-me",
+        "profileId": "01PROFILE",
+        "bucket": "my-bucket",
+        "prefix": "path/",
+        "objectKey": "path/to/object.txt",
+        "uploadId": "01UPLOAD",
+        "jobId": "01JOB"
+      }
+    },
+    {
+      "_id": "fld_system",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "System"
+    },
+    {
+      "_id": "req_meta",
+      "_type": "request",
+      "parentId": "fld_system",
+      "name": "Get Meta",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/meta",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" }
+      ]
+    },
+    {
+      "_id": "req_healthz",
+      "_type": "request",
+      "parentId": "fld_system",
+      "name": "Healthz",
+      "method": "GET",
+      "url": "{{ baseUrl }}/healthz"
+    },
+    {
+      "_id": "fld_events",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "Events"
+    },
+    {
+      "_id": "req_events_sse",
+      "_type": "request",
+      "parentId": "fld_events",
+      "name": "SSE Stream",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/events?apiToken={{ apiToken }}&afterSeq=0",
+      "headers": [
+        { "name": "Accept", "value": "text/event-stream" }
+      ]
+    },
+    {
+      "_id": "fld_profiles",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "Profiles"
+    },
+    {
+      "_id": "req_profiles_list",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "List Profiles",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/profiles",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" }
+      ]
+    },
+    {
+      "_id": "req_profiles_create",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "Create Profile",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/profiles",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"prod\",\n  \"endpoint\": \"http://minio:9000\",\n  \"region\": \"us-east-1\",\n  \"accessKeyId\": \"AKIA...\",\n  \"secretAccessKey\": \"...\",\n  \"forcePathStyle\": false,\n  \"preserveLeadingSlash\": false,\n  \"tlsInsecureSkipVerify\": false\n}"
+      }
+    },
+    {
+      "_id": "req_profiles_update",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "Update Profile",
+      "method": "PATCH",
+      "url": "{{ baseUrl }}/api/v1/profiles/{{ profileId }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"prod-2\",\n  \"preserveLeadingSlash\": false\n}"
+      }
+    },
+    {
+      "_id": "req_profiles_delete",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "Delete Profile",
+      "method": "DELETE",
+      "url": "{{ baseUrl }}/api/v1/profiles/{{ profileId }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" }
+      ]
+    },
+    {
+      "_id": "req_profiles_test",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "Test Profile",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/profiles/{{ profileId }}/test",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" }
+      ]
+    },
+    {
+      "_id": "req_profiles_tls_get",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "Get Profile TLS",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/profiles/{{ profileId }}/tls",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" }
+      ]
+    },
+    {
+      "_id": "req_profiles_tls_put",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "Set Profile TLS",
+      "method": "PUT",
+      "url": "{{ baseUrl }}/api/v1/profiles/{{ profileId }}/tls",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"mode\": \"mtls\",\n  \"clientCertPem\": \"-----BEGIN CERTIFICATE-----...\",\n  \"clientKeyPem\": \"-----BEGIN PRIVATE KEY-----...\",\n  \"caCertPem\": \"-----BEGIN CERTIFICATE-----...\",\n  \"serverName\": \"s3.local\"\n}"
+      }
+    },
+    {
+      "_id": "req_profiles_tls_delete",
+      "_type": "request",
+      "parentId": "fld_profiles",
+      "name": "Delete Profile TLS",
+      "method": "DELETE",
+      "url": "{{ baseUrl }}/api/v1/profiles/{{ profileId }}/tls",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" }
+      ]
+    },
+    {
+      "_id": "fld_buckets",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "Buckets"
+    },
+    {
+      "_id": "req_buckets_list",
+      "_type": "request",
+      "parentId": "fld_buckets",
+      "name": "List Buckets",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_buckets_create",
+      "_type": "request",
+      "parentId": "fld_buckets",
+      "name": "Create Bucket",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/buckets",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"{{ bucket }}\",\n  \"region\": \"us-east-1\"\n}"
+      }
+    },
+    {
+      "_id": "req_buckets_delete",
+      "_type": "request",
+      "parentId": "fld_buckets",
+      "name": "Delete Bucket",
+      "method": "DELETE",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "fld_objects",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "Objects"
+    },
+    {
+      "_id": "req_objects_list",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "List Objects",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects?prefix={{ prefix }}&delimiter=/&maxKeys=500",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_delete",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Delete Objects",
+      "method": "DELETE",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"keys\": [\"path/a.txt\", \"path/b.txt\"]\n}"
+      }
+    },
+    {
+      "_id": "req_objects_search",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Search Objects",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/search?q=report&prefix={{ prefix }}&limit=50",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_index_summary",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Index Summary",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/index-summary?prefix={{ prefix }}&sampleLimit=5",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_meta",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Object Meta",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/meta?key={{ objectKey }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_create_folder",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Create Folder",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/folder",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"key\": \"path/new-folder/\"\n}"
+      }
+    },
+    {
+      "_id": "req_objects_download",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Download Object",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/download?key={{ objectKey }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_download_url",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Presigned Download URL",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/download-url?key={{ objectKey }}&expiresSeconds=900",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_favorites_list",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "List Favorites",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/favorites?prefix={{ prefix }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_favorites_add",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Add Favorite",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/favorites",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"key\": \"{{ objectKey }}\"\n}"
+      }
+    },
+    {
+      "_id": "req_objects_favorites_delete",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Remove Favorite",
+      "method": "DELETE",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/favorites?key={{ objectKey }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_objects_thumbnail",
+      "_type": "request",
+      "parentId": "fld_objects",
+      "name": "Thumbnail",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/buckets/{{ bucket }}/objects/thumbnail?key={{ objectKey }}&size=96",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "fld_local",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "Local"
+    },
+    {
+      "_id": "req_local_entries",
+      "_type": "request",
+      "parentId": "fld_local",
+      "name": "List Local Entries",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/local/entries?path=/data&limit=200",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "fld_uploads",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "Uploads"
+    },
+    {
+      "_id": "req_uploads_create",
+      "_type": "request",
+      "parentId": "fld_uploads",
+      "name": "Create Upload Session",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/uploads",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"bucket\": \"{{ bucket }}\",\n  \"prefix\": \"{{ prefix }}\"\n}"
+      }
+    },
+    {
+      "_id": "req_uploads_files",
+      "_type": "request",
+      "parentId": "fld_uploads",
+      "name": "Upload Files",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/uploads/{{ uploadId }}/files",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ],
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          { "name": "files", "value": "", "type": "file" }
+        ]
+      }
+    },
+    {
+      "_id": "req_uploads_commit",
+      "_type": "request",
+      "parentId": "fld_uploads",
+      "name": "Commit Upload",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/uploads/{{ uploadId }}/commit",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"label\": \"batch-1\",\n  \"rootKind\": \"folder\",\n  \"totalFiles\": 2,\n  \"totalBytes\": 12345\n}"
+      }
+    },
+    {
+      "_id": "req_uploads_delete",
+      "_type": "request",
+      "parentId": "fld_uploads",
+      "name": "Delete Upload Session",
+      "method": "DELETE",
+      "url": "{{ baseUrl }}/api/v1/uploads/{{ uploadId }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "fld_jobs",
+      "_type": "request_group",
+      "parentId": "wrk_s3desk",
+      "name": "Jobs"
+    },
+    {
+      "_id": "req_jobs_list",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "List Jobs",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/jobs?status=running&limit=50",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_jobs_create",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "Create Job (Copy Prefix)",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/jobs",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"type\": \"transfer_copy_prefix\",\n  \"payload\": {\n    \"srcBucket\": \"{{ bucket }}\",\n    \"srcPrefix\": \"{{ prefix }}\",\n    \"dstBucket\": \"{{ bucket }}\",\n    \"dstPrefix\": \"copy/\",\n    \"include\": [],\n    \"exclude\": [],\n    \"dryRun\": false\n  }\n}"
+      }
+    },
+    {
+      "_id": "req_jobs_get",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "Get Job",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/jobs/{{ jobId }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_jobs_delete",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "Delete Job",
+      "method": "DELETE",
+      "url": "{{ baseUrl }}/api/v1/jobs/{{ jobId }}",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_jobs_artifact",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "Job Artifact",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/jobs/{{ jobId }}/artifact",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_jobs_logs",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "Job Logs",
+      "method": "GET",
+      "url": "{{ baseUrl }}/api/v1/jobs/{{ jobId }}/logs?tailBytes=65536",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_jobs_cancel",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "Cancel Job",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/jobs/{{ jobId }}/cancel",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    },
+    {
+      "_id": "req_jobs_retry",
+      "_type": "request",
+      "parentId": "fld_jobs",
+      "name": "Retry Job",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/jobs/{{ jobId }}/retry",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" },
+        { "name": "X-Profile-Id", "value": "{{ profileId }}" }
+      ]
+    }
+  ]
+}

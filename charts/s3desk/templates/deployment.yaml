@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "object-storage.fullname" . }}
+  name: {{ include "s3desk.fullname" . }}
   labels:
-    {{- include "object-storage.labels" . | nindent 4 }}
+    {{- include "s3desk.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "object-storage.selectorLabels" . | nindent 6 }}
+      {{- include "s3desk.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "object-storage.selectorLabels" . | nindent 8 }}
+        {{- include "s3desk.selectorLabels" . | nindent 8 }}
       {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "object-storage.serviceAccountName" . }}
+      serviceAccountName: {{ include "s3desk.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -28,7 +28,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: object-storage
+        - name: s3desk
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -68,8 +68,8 @@ spec:
               value: {{ .Values.uploads.ttl | quote }}
             - name: UPLOAD_MAX_BYTES
               value: {{ .Values.uploads.maxBytes | quote }}
-            - name: S5CMD_TUNE
-              value: {{ .Values.s5cmd.tune | quote }}
+            - name: RCLONE_TUNE
+              value: {{ .Values.rclone.tune | quote }}
             {{- if .Values.server.staticDir }}
             - name: STATIC_DIR
               value: {{ .Values.server.staticDir | quote }}
@@ -82,31 +82,31 @@ spec:
             - name: ALLOWED_LOCAL_DIRS
               value: {{ join "," .Values.server.allowedLocalDirs | quote }}
             {{- end }}
-            {{- if .Values.s5cmd.path }}
-            - name: S5CMD_PATH
-              value: {{ .Values.s5cmd.path | quote }}
+            {{- if .Values.rclone.path }}
+            - name: RCLONE_PATH
+              value: {{ .Values.rclone.path | quote }}
             {{- end }}
-            {{- if not (eq .Values.s5cmd.maxNumWorkers nil) }}
-            - name: S5CMD_MAX_NUMWORKERS
-              value: {{ .Values.s5cmd.maxNumWorkers | quote }}
+            {{- if not (eq .Values.rclone.maxTransfers nil) }}
+            - name: RCLONE_MAX_TRANSFERS
+              value: {{ .Values.rclone.maxTransfers | quote }}
             {{- end }}
-            {{- if not (eq .Values.s5cmd.maxConcurrency nil) }}
-            - name: S5CMD_MAX_CONCURRENCY
-              value: {{ .Values.s5cmd.maxConcurrency | quote }}
+            {{- if not (eq .Values.rclone.maxCheckers nil) }}
+            - name: RCLONE_MAX_CHECKERS
+              value: {{ .Values.rclone.maxCheckers | quote }}
             {{- end }}
-            {{- if not (eq .Values.s5cmd.minPartSizeMiB nil) }}
-            - name: S5CMD_MIN_PART_SIZE_MIB
-              value: {{ .Values.s5cmd.minPartSizeMiB | quote }}
+            {{- if not (eq .Values.rclone.s3ChunkSizeMiB nil) }}
+            - name: RCLONE_S3_CHUNK_SIZE_MIB
+              value: {{ .Values.rclone.s3ChunkSizeMiB | quote }}
             {{- end }}
-            {{- if not (eq .Values.s5cmd.maxPartSizeMiB nil) }}
-            - name: S5CMD_MAX_PART_SIZE_MIB
-              value: {{ .Values.s5cmd.maxPartSizeMiB | quote }}
+            {{- if not (eq .Values.rclone.s3UploadConcurrency nil) }}
+            - name: RCLONE_S3_UPLOAD_CONCURRENCY
+              value: {{ .Values.rclone.s3UploadConcurrency | quote }}
             {{- end }}
-            {{- if not (eq .Values.s5cmd.defaultPartSizeMiB nil) }}
-            - name: S5CMD_DEFAULT_PART_SIZE_MIB
-              value: {{ .Values.s5cmd.defaultPartSizeMiB | quote }}
+            {{- if .Values.rclone.statsInterval }}
+            - name: RCLONE_STATS_INTERVAL
+              value: {{ .Values.rclone.statsInterval | quote }}
             {{- end }}
-            {{- $secretName := default (include "object-storage.fullname" .) .Values.secrets.existingSecret }}
+            {{- $secretName := default (include "s3desk.fullname" .) .Values.secrets.existingSecret }}
             {{- $useSecret := or (ne (trim .Values.server.apiToken) "") (ne (trim .Values.server.encryptionKey) "") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
             {{- if $useSecret }}
             - name: API_TOKEN
@@ -171,7 +171,7 @@ spec:
         - name: data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
-            claimName: {{ default (include "object-storage.fullname" .) .Values.persistence.existingClaim }}
+            claimName: {{ default (include "s3desk.fullname" .) .Values.persistence.existingClaim }}
           {{- else }}
           emptyDir: {}
           {{- end }}

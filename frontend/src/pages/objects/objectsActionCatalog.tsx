@@ -127,7 +127,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		}
 		const deleteAction: UIAction = {
 			id: 'delete',
-			label: 'Delete',
+			label: 'Delete (Del)…',
 			icon: <DeleteOutlined />,
 			keywords: 'delete remove',
 			danger: true,
@@ -160,6 +160,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			downloadAction,
 			downloadDeviceAction,
 			presignAction,
+			{ type: 'divider' },
 			copyAction,
 			detailsAction,
 			{ type: 'divider' },
@@ -219,57 +220,58 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			run: () => deps.onConfirmDeletePrefixAsJob(false, targetPrefix),
 		}
 
-		const jobActions: UIActionOrDivider[] = [
-			{
-				id: 'copyJob',
-				label: 'Copy folder…',
-				icon: <SnippetsOutlined />,
-				keywords: 'copy cp folder job',
-				enabled: canUsePrefixActions,
-				audience: 'advanced',
-				run: () => deps.onOpenCopyPrefix('copy', targetPrefix),
-			},
-			{
-				id: 'moveJob',
-				label: 'Move folder…',
-				icon: <EditOutlined />,
-				keywords: 'move mv folder job',
-				danger: true,
-				enabled: canUsePrefixActions,
-				audience: 'advanced',
-				run: () => deps.onOpenCopyPrefix('move', targetPrefix),
-			},
-			{
-				id: 'downloadToDevice',
-				label: 'Download to folder…',
-				icon: <DownloadOutlined />,
-				keywords: 'download folder device local',
-				enabled: canUsePrefixActions,
-				audience: 'advanced',
-				run: () => deps.onOpenDownloadPrefix(targetPrefix),
-			},
-			{
-				id: 'deleteDry',
-				label: 'Dry run delete folder…',
-				icon: <DeleteOutlined />,
-				keywords: 'preview dry-run safe delete rm folder',
-				danger: true,
-				enabled: canUsePrefixActions,
-				audience: 'advanced',
-				run: () => deps.onConfirmDeletePrefixAsJob(true, targetPrefix),
-			},
-		]
+		const copyJobAction: UIAction = {
+			id: 'copyJob',
+			label: 'Copy folder…',
+			icon: <SnippetsOutlined />,
+			keywords: 'copy cp folder job',
+			enabled: canUsePrefixActions,
+			audience: 'advanced',
+			run: () => deps.onOpenCopyPrefix('copy', targetPrefix),
+		}
+		const moveJobAction: UIAction = {
+			id: 'moveJob',
+			label: 'Move folder…',
+			icon: <EditOutlined />,
+			keywords: 'move mv folder job',
+			danger: true,
+			enabled: canUsePrefixActions,
+			audience: 'advanced',
+			run: () => deps.onOpenCopyPrefix('move', targetPrefix),
+		}
+		const downloadToDeviceAction: UIAction = {
+			id: 'downloadToDevice',
+			label: 'Download to folder…',
+			icon: <DownloadOutlined />,
+			keywords: 'download folder device local',
+			enabled: canUsePrefixActions,
+			audience: 'advanced',
+			run: () => deps.onOpenDownloadPrefix(targetPrefix),
+		}
+		const deleteDryAction: UIAction = {
+			id: 'deleteDry',
+			label: 'Dry run delete folder…',
+			icon: <DeleteOutlined />,
+			keywords: 'preview dry-run safe delete rm folder',
+			danger: true,
+			enabled: canUsePrefixActions,
+			audience: 'advanced',
+			run: () => deps.onConfirmDeletePrefixAsJob(true, targetPrefix),
+		}
 
 		return [
 			openAction,
 			copyAction,
 			{ type: 'divider' },
 			downloadZipAction,
+			downloadToDeviceAction,
 			{ type: 'divider' },
 			renameAction,
-			deleteAction,
+			copyJobAction,
+			moveJobAction,
 			{ type: 'divider' },
-			...jobActions,
+			deleteAction,
+			deleteDryAction,
 		]
 	}
 
@@ -316,7 +318,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		},
 		{
 			id: 'clear_selection',
-			label: 'Clear selection',
+			label: 'Clear selection (Esc)',
 			shortLabel: 'Clear',
 			icon: <DeleteOutlined />,
 			keywords: 'unselect escape',
@@ -325,7 +327,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		},
 		{
 			id: 'delete_selected',
-			label: deps.selectedCount > 1 ? 'Delete selection…' : 'Delete',
+			label: deps.selectedCount > 1 ? 'Delete selection (Del)…' : 'Delete (Del)…',
 			shortLabel: 'Delete',
 			icon: <DeleteOutlined />,
 			keywords: 'delete remove',

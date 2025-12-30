@@ -21,14 +21,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5"
 	_ "golang.org/x/image/bmp"
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
-
-	"object-storage/internal/s3client"
 )
 
 const (
@@ -59,54 +55,57 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	client, err := s3client.New(r.Context(), secrets)
+	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), false, false, "thumbnail-meta")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_profile", "failed to configure s3 client", map[string]any{"error": err.Error()})
-		return
-	}
-
-	head, err := client.HeadObject(r.Context(), &s3.HeadObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		if isNotFound(err) {
+		if rcloneIsNotFound(err, stderr) {
 			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
 			return
 		}
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to get object metadata", map[string]any{"error": err.Error()})
+		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to get object metadata",
+		}, map[string]any{"bucket": bucket, "key": key})
 		return
 	}
 
-	if !isThumbnailCandidate(aws.ToString(head.ContentType), key) {
+	if !isThumbnailCandidate(entry.MimeType, key) {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "thumbnail not supported for this object", map[string]any{"key": key})
 		return
 	}
-	if head.ContentLength != nil && *head.ContentLength > thumbnailMaxBytes {
+	if entry.Size > thumbnailMaxBytes {
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "object is too large for thumbnail", map[string]any{
 			"maxBytes": thumbnailMaxBytes,
-			"size":     *head.ContentLength,
+			"size":     entry.Size,
 		})
 		return
 	}
 
-	out, err := client.GetObject(r.Context(), &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
+	proc, err := s.startRclone(r.Context(), secrets, []string{"cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)}, "thumbnail")
 	if err != nil {
-		if isNotFound(err) {
-			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
-			return
-		}
-		writeError(w, http.StatusBadRequest, "s3_error", "failed to download object", map[string]any{"error": err.Error()})
+		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to download object",
+		}, map[string]any{"bucket": bucket, "key": key})
 		return
 	}
-	defer out.Body.Close()
 
-	img, err := decodeThumbnailImage(out.Body)
+	img, err := decodeThumbnailImage(proc.stdout)
+	waitErr := proc.wait()
 	if err != nil {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode image", map[string]any{"error": err.Error()})
+		return
+	}
+	if waitErr != nil {
+		writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
+			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
+			DefaultStatus:  http.StatusBadRequest,
+			DefaultCode:    "s3_error",
+			DefaultMessage: "failed to download object",
+		}, map[string]any{"bucket": bucket, "key": key})
 		return
 	}
 

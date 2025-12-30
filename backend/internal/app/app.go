@@ -12,13 +12,13 @@ import (
 
 	"gorm.io/gorm"
 
-	"object-storage/internal/api"
-	"object-storage/internal/config"
-	"object-storage/internal/db"
-	"object-storage/internal/jobs"
-	"object-storage/internal/logging"
-	"object-storage/internal/store"
-	"object-storage/internal/ws"
+	"s3desk/internal/api"
+	"s3desk/internal/config"
+	"s3desk/internal/db"
+	"s3desk/internal/jobs"
+	"s3desk/internal/logging"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 func Run(ctx context.Context, cfg config.Config) error {
@@ -43,6 +43,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 	}
 	if cfg.JobRetention < 0 {
 		cfg.JobRetention = 0
+	}
+	if cfg.JobLogRetention < 0 {
+		cfg.JobLogRetention = 0
 	}
 	if cfg.UploadSessionTTL <= 0 {
 		cfg.UploadSessionTTL = 24 * time.Hour
@@ -76,7 +79,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 	var gormDB *gorm.DB
 	switch dbBackend {
 	case db.BackendSQLite:
-		dbPath = filepath.Join(cfg.DataDir, "object-storage.db")
+		dbPath = filepath.Join(cfg.DataDir, "s3desk.db")
 		gormDB, err = db.Open(db.Config{
 			Backend:    dbBackend,
 			SQLitePath: dbPath,
@@ -141,6 +144,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		JobLogMaxBytes:   cfg.JobLogMaxBytes,
 		JobLogEmitStdout: cfg.JobLogEmitStdout,
 		JobRetention:     cfg.JobRetention,
+		JobLogRetention:  cfg.JobLogRetention,
 		AllowedLocalDirs: allowedDirs,
 		UploadSessionTTL: cfg.UploadSessionTTL,
 	})

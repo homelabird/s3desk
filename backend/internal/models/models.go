@@ -16,6 +16,7 @@ type Profile struct {
 	Endpoint              string `json:"endpoint"`
 	Region                string `json:"region"`
 	ForcePathStyle        bool   `json:"forcePathStyle"`
+	PreserveLeadingSlash  bool   `json:"preserveLeadingSlash"`
 	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
 	CreatedAt             string `json:"createdAt"`
 	UpdatedAt             string `json:"updatedAt"`
@@ -27,6 +28,7 @@ type ProfileSecrets struct {
 	Endpoint              string            `json:"-"`
 	Region                string            `json:"-"`
 	ForcePathStyle        bool              `json:"-"`
+	PreserveLeadingSlash  bool              `json:"-"`
 	TLSInsecureSkipVerify bool              `json:"-"`
 	AccessKeyID           string            `json:"-"`
 	SecretAccessKey       string            `json:"-"`
@@ -43,6 +45,7 @@ type ProfileCreateRequest struct {
 	SecretAccessKey       string  `json:"secretAccessKey"`
 	SessionToken          *string `json:"sessionToken"`
 	ForcePathStyle        bool    `json:"forcePathStyle"`
+	PreserveLeadingSlash  bool    `json:"preserveLeadingSlash"`
 	TLSInsecureSkipVerify bool    `json:"tlsInsecureSkipVerify"`
 }
 
@@ -54,6 +57,7 @@ type ProfileUpdateRequest struct {
 	SecretAccessKey       *string `json:"secretAccessKey,omitempty"`
 	SessionToken          *string `json:"sessionToken,omitempty"`
 	ForcePathStyle        *bool   `json:"forcePathStyle,omitempty"`
+	PreserveLeadingSlash  *bool   `json:"preserveLeadingSlash,omitempty"`
 	TLSInsecureSkipVerify *bool   `json:"tlsInsecureSkipVerify,omitempty"`
 }
 
@@ -260,23 +264,25 @@ type MetaCapabilities struct {
 }
 
 type MetaResponse struct {
-	Version                 string           `json:"version"`
-	ServerAddr              string           `json:"serverAddr"`
-	DataDir                 string           `json:"dataDir"`
-	StaticDir               string           `json:"staticDir"`
-	APITokenEnabled         bool             `json:"apiTokenEnabled"`
-	EncryptionEnabled       bool             `json:"encryptionEnabled"`
-	Capabilities            MetaCapabilities `json:"capabilities"`
-	AllowedLocalDirs        []string         `json:"allowedLocalDirs,omitempty"`
-	JobConcurrency          int              `json:"jobConcurrency"`
-	JobLogMaxBytes          *int64           `json:"jobLogMaxBytes,omitempty"`
-	JobRetentionSeconds     *int64           `json:"jobRetentionSeconds,omitempty"`
-	UploadSessionTTLSeconds int64            `json:"uploadSessionTTLSeconds"`
-	UploadMaxBytes          *int64           `json:"uploadMaxBytes,omitempty"`
-	S5Cmd                   S5CmdInfo        `json:"s5cmd"`
+	Version                 string             `json:"version"`
+	ServerAddr              string             `json:"serverAddr"`
+	DataDir                 string             `json:"dataDir"`
+	StaticDir               string             `json:"staticDir"`
+	APITokenEnabled         bool               `json:"apiTokenEnabled"`
+	EncryptionEnabled       bool               `json:"encryptionEnabled"`
+	Capabilities            MetaCapabilities   `json:"capabilities"`
+	AllowedLocalDirs        []string           `json:"allowedLocalDirs,omitempty"`
+	JobConcurrency          int                `json:"jobConcurrency"`
+	JobLogMaxBytes          *int64             `json:"jobLogMaxBytes,omitempty"`
+	JobRetentionSeconds     *int64             `json:"jobRetentionSeconds,omitempty"`
+	JobLogRetentionSeconds  *int64             `json:"jobLogRetentionSeconds,omitempty"`
+	UploadSessionTTLSeconds int64              `json:"uploadSessionTTLSeconds"`
+	UploadMaxBytes          *int64             `json:"uploadMaxBytes,omitempty"`
+	TransferEngine          TransferEngineInfo `json:"transferEngine"`
 }
 
-type S5CmdInfo struct {
+type TransferEngineInfo struct {
+	Name      string `json:"name"`
 	Available bool   `json:"available"`
 	Path      string `json:"path,omitempty"`
 	Version   string `json:"version,omitempty"`

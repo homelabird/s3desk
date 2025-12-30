@@ -3,14 +3,14 @@ package api
 import (
 	"net/http"
 
-	"object-storage/internal/jobs"
-	"object-storage/internal/models"
-	"object-storage/internal/version"
+	"s3desk/internal/jobs"
+	"s3desk/internal/models"
+	"s3desk/internal/version"
 )
 
 func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
-	path, ok := jobs.DetectS5Cmd()
-	s5cmdVersion, vok := jobs.DetectS5CmdVersion(r.Context())
+	path, ok := jobs.DetectRclone()
+	rcloneVersion, vok := jobs.DetectRcloneVersion(r.Context())
 	var jobLogMaxBytes *int64
 	if s.cfg.JobLogMaxBytes > 0 {
 		v := s.cfg.JobLogMaxBytes
@@ -20,6 +20,11 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.JobRetention > 0 {
 		v := int64(s.cfg.JobRetention.Seconds())
 		jobRetentionSeconds = &v
+	}
+	var jobLogRetentionSeconds *int64
+	if s.cfg.JobLogRetention > 0 {
+		v := int64(s.cfg.JobLogRetention.Seconds())
+		jobLogRetentionSeconds = &v
 	}
 	var uploadMaxBytes *int64
 	if s.cfg.UploadMaxBytes > 0 {
@@ -44,16 +49,18 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		JobConcurrency:          s.cfg.JobConcurrency,
 		JobLogMaxBytes:          jobLogMaxBytes,
 		JobRetentionSeconds:     jobRetentionSeconds,
+		JobLogRetentionSeconds:  jobLogRetentionSeconds,
 		UploadSessionTTLSeconds: int64(s.cfg.UploadSessionTTL.Seconds()),
 		UploadMaxBytes:          uploadMaxBytes,
-		S5Cmd: models.S5CmdInfo{
+		TransferEngine: models.TransferEngineInfo{
+			Name:      "rclone",
 			Available: ok,
 			Path:      path,
 			Version: func() string {
 				if !vok {
 					return ""
 				}
-				return s5cmdVersion
+				return rcloneVersion
 			}(),
 		},
 	}

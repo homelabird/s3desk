@@ -10,10 +10,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"object-storage/internal/config"
-	"object-storage/internal/jobs"
-	"object-storage/internal/store"
-	"object-storage/internal/ws"
+	"s3desk/internal/config"
+	"s3desk/internal/jobs"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 type Dependencies struct {
@@ -38,6 +38,7 @@ func New(dep Dependencies) http.Handler {
 		jobs:       dep.Jobs,
 		hub:        dep.Hub,
 		serverAddr: dep.ServerAddr,
+		proxySecret: resolveProxySecret(dep.Config.APIToken),
 	}
 
 	apiRouter := chi.NewRouter()
@@ -110,6 +111,9 @@ func New(dep Dependencies) http.Handler {
 
 	r.Mount("/api/v1", apiRouter)
 
+	r.Get("/download-proxy", api.handleDownloadProxy)
+	r.Head("/download-proxy", api.handleDownloadProxy)
+
 	r.Get("/openapi.yml", func(w http.ResponseWriter, r *http.Request) {
 		specPath, ok := findOpenAPISpecPath(dep.Config.StaticDir)
 		if !ok {
@@ -119,6 +123,8 @@ func New(dep Dependencies) http.Handler {
 		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
 		http.ServeFile(w, r, specPath)
 	})
+	r.Get("/docs", serveOpenAPIDocs)
+	r.Get("/docs/", serveOpenAPIDocs)
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -141,7 +147,7 @@ func New(dep Dependencies) http.Handler {
 	if !uiEnabled {
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			_, _ = w.Write([]byte("object-storage backend is running\n\nHint: build the frontend and point --static-dir to frontend/dist\n"))
+			_, _ = w.Write([]byte("s3desk backend is running\n\nHint: build the frontend and point --static-dir to frontend/dist\n"))
 		})
 	}
 

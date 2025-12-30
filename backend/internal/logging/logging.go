@@ -280,7 +280,7 @@ func writeJSONLine(w io.Writer, fields map[string]any) {
 
 func defaultBaseFields() map[string]any {
 	fields := map[string]any{
-		"service": envOr("LOG_SERVICE", "object-storage"),
+		"service": envOr("LOG_SERVICE", "s3desk"),
 		"env":     envOr("LOG_ENV", "local"),
 	}
 	if val := strings.TrimSpace(os.Getenv("LOG_VERSION")); val != "" {

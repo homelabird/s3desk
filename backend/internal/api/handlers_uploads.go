@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,10 +15,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"object-storage/internal/jobs"
-	"object-storage/internal/models"
-	"object-storage/internal/store"
-	"object-storage/internal/ws"
+	"s3desk/internal/jobs"
+	"s3desk/internal/models"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 func (s *server) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +201,7 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, ok, err := s.store.GetUploadSession(r.Context(), profileID, uploadID)
+	us, ok, err := s.store.GetUploadSession(r.Context(), profileID, uploadID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load upload session", nil)
 		return
@@ -210,16 +211,85 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := jobs.DetectS5Cmd(); !ok {
-		writeError(w, http.StatusBadRequest, "s5cmd_missing", "s5cmd is required to commit an upload (install it or set S5CMD_PATH)", nil)
+	if _, ok := jobs.DetectRclone(); !ok {
+		writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required to commit an upload (install it or set RCLONE_PATH)", nil)
 		return
 	}
 
+	var req uploadCommitRequest
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+		return
+	}
+
+	payload := map[string]any{
+		"uploadId": uploadID,
+		"bucket":   us.Bucket,
+	}
+	if us.Prefix != "" {
+		payload["prefix"] = us.Prefix
+	}
+
+	label := strings.TrimSpace(req.Label)
+	if label != "" {
+		payload["label"] = label
+	}
+	rootName := strings.TrimSpace(req.RootName)
+	if rootName != "" {
+		payload["rootName"] = rootName
+	}
+	if req.RootKind != "" {
+		switch req.RootKind {
+		case "file", "folder", "collection":
+			payload["rootKind"] = req.RootKind
+		}
+	}
+	if req.TotalFiles != nil {
+		payload["totalFiles"] = *req.TotalFiles
+	}
+	if req.TotalBytes != nil {
+		payload["totalBytes"] = *req.TotalBytes
+	}
+
+	itemsTruncated := req.ItemsTruncated
+	items := req.Items
+	if len(items) > maxCommitItems {
+		items = items[:maxCommitItems]
+		itemsTruncated = true
+	}
+	if len(items) > 0 {
+		cleaned := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			cleanedPath := sanitizeUploadPath(item.Path)
+			if cleanedPath == "" {
+				continue
+			}
+			key := cleanedPath
+			if us.Prefix != "" {
+				key = path.Join(us.Prefix, cleanedPath)
+			}
+			entry := map[string]any{
+				"path": cleanedPath,
+				"key":  key,
+			}
+			if item.Size != nil && *item.Size >= 0 {
+				entry["size"] = *item.Size
+			}
+			cleaned = append(cleaned, entry)
+		}
+		if len(cleaned) > 0 {
+			payload["items"] = cleaned
+		}
+	}
+	if itemsTruncated {
+		payload["itemsTruncated"] = true
+	}
+
 	job, err := s.store.CreateJob(r.Context(), profileID, store.CreateJobInput{
-		Type: jobs.JobTypeS5CmdSyncStagingToS3,
-		Payload: map[string]any{
-			"uploadId": uploadID,
-		},
+		Type: jobs.JobTypeTransferSyncStagingToS3,
+		Payload: payload,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create job", nil)
@@ -227,8 +297,14 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.jobs.Enqueue(job.ID); err != nil {
+		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		if errors.Is(err, jobs.ErrJobQueueFull) {
-			_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+			msg := "job queue is full; try again later"
+			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+			job.Status = models.JobStatusFailed
+			job.Error = &msg
+			job.FinishedAt = &finishedAt
+			s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
 			stats := s.jobs.QueueStats()
 			w.Header().Set("Retry-After", "2")
 			writeError(
@@ -240,7 +316,12 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
+		msg := "failed to enqueue job"
+		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+		job.Status = models.JobStatusFailed
+		job.Error = &msg
+		job.FinishedAt = &finishedAt
+		s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue job", nil)
 		return
 	}
@@ -248,6 +329,23 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
 
 	writeJSON(w, http.StatusCreated, models.JobCreatedResponse{JobID: job.ID})
+}
+
+const maxCommitItems = 200
+
+type uploadCommitRequest struct {
+	Label          string             `json:"label,omitempty"`
+	RootName       string             `json:"rootName,omitempty"`
+	RootKind       string             `json:"rootKind,omitempty"`
+	TotalFiles     *int               `json:"totalFiles,omitempty"`
+	TotalBytes     *int64             `json:"totalBytes,omitempty"`
+	Items          []uploadCommitItem `json:"items,omitempty"`
+	ItemsTruncated bool               `json:"itemsTruncated,omitempty"`
+}
+
+type uploadCommitItem struct {
+	Path string `json:"path"`
+	Size *int64 `json:"size,omitempty"`
 }
 
 func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {

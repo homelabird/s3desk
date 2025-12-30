@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"object-storage/internal/models"
+	"s3desk/internal/models"
 )
 
 const profileTLSConfigSchemaVersion = 1

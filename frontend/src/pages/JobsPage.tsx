@@ -16,6 +16,7 @@ import {
 	Spin,
 	Table,
 	Tag,
+	Tooltip,
 	Typography,
 	message,
 	Switch,
@@ -44,6 +45,25 @@ type DeleteJobPrefill = {
 	bucket: string
 	prefix: string
 	deleteAll: boolean
+}
+
+type UploadDetailItem = {
+	path: string
+	key: string
+	size?: number
+}
+
+type UploadDetails = {
+	uploadId?: string
+	bucket?: string
+	prefix?: string
+	label?: string
+	rootName?: string
+	rootKind?: 'file' | 'folder' | 'collection'
+	totalFiles?: number
+	totalBytes?: number
+	items: UploadDetailItem[]
+	itemsTruncated?: boolean
 }
 
 export function JobsPage(props: Props) {
@@ -135,6 +155,142 @@ export function JobsPage(props: Props) {
 		queryFn: () => api.getJob(props.profileId!, detailsJobId!),
 		enabled: !!props.profileId && !!detailsJobId && detailsOpen,
 	})
+
+	const uploadDetails = useMemo<UploadDetails | null>(() => {
+		const job = jobDetailsQuery.data
+		if (!job || job.type !== 'transfer_sync_staging_to_s3') return null
+		if (!job.payload || typeof job.payload !== 'object') return null
+		const payload = job.payload as Record<string, unknown>
+		const prefix = typeof payload['prefix'] === 'string' ? payload['prefix'].trim() : ''
+		const rootKindRaw = getString(payload, 'rootKind')
+		const rootKind =
+			rootKindRaw === 'file' || rootKindRaw === 'folder' || rootKindRaw === 'collection' ? rootKindRaw : undefined
+		const itemsRaw = Array.isArray(payload['items']) ? payload['items'] : []
+		const items: UploadDetailItem[] = []
+		for (const raw of itemsRaw) {
+			if (!raw || typeof raw !== 'object') continue
+			const item = raw as Record<string, unknown>
+			const path = getString(item, 'path')
+			const key = getString(item, 'key') ?? (path ? joinKeyWithPrefix(prefix, path) : null)
+			if (!path && !key) continue
+			const size = getNumber(item, 'size')
+			const resolvedKey = key ?? (path ? joinKeyWithPrefix(prefix, path) : '')
+			const resolvedPath = path ?? resolvedKey
+			if (!resolvedKey || !resolvedPath) continue
+			items.push({ path: resolvedPath, key: resolvedKey, size: size ?? undefined })
+		}
+
+		const totalFiles = getNumber(payload, 'totalFiles')
+		const totalBytes = getNumber(payload, 'totalBytes')
+
+		return {
+			uploadId: getString(payload, 'uploadId') ?? undefined,
+			bucket: getString(payload, 'bucket') ?? undefined,
+			prefix,
+			label: getString(payload, 'label') ?? undefined,
+			rootName: getString(payload, 'rootName') ?? undefined,
+			rootKind,
+			totalFiles: totalFiles ?? (items.length ? items.length : undefined),
+			totalBytes: totalBytes ?? undefined,
+			items,
+			itemsTruncated: getBool(payload, 'itemsTruncated') || undefined,
+		}
+	}, [jobDetailsQuery.data])
+
+	const uploadItemsKey = useMemo(() => {
+		if (!uploadDetails || uploadDetails.items.length === 0) return ''
+		return uploadDetails.items.map((item) => item.key).join('|')
+	}, [uploadDetails])
+
+	const uploadEtagsQuery = useQuery({
+		queryKey: ['upload-etags', props.profileId, uploadDetails?.bucket ?? '', uploadItemsKey],
+		enabled:
+			!!props.profileId &&
+			!!uploadDetails?.bucket &&
+			uploadDetails.items.length > 0 &&
+			detailsOpen &&
+			jobDetailsQuery.data?.status === 'succeeded',
+		queryFn: async () => {
+			if (!props.profileId || !uploadDetails?.bucket) return { etags: {}, failures: 0 }
+			const entries = uploadDetails.items
+			const results = await Promise.allSettled(
+				entries.map((item) =>
+					api.getObjectMeta({
+						profileId: props.profileId!,
+						bucket: uploadDetails.bucket!,
+						key: item.key,
+					}),
+				),
+			)
+			const etags: Record<string, string | null> = {}
+			let failures = 0
+			results.forEach((res, index) => {
+				const key = entries[index]?.key
+				if (!key) return
+				if (res.status === 'fulfilled') {
+					etags[key] = res.value.etag ?? null
+					return
+				}
+				failures++
+				etags[key] = null
+			})
+			return { etags, failures }
+		},
+	})
+
+	const uploadTableData = useMemo(() => {
+		if (!uploadDetails) return []
+		const etags = uploadEtagsQuery.data?.etags ?? {}
+		const rootPrefix =
+			uploadDetails.rootKind === 'folder' && uploadDetails.rootName ? `${uploadDetails.rootName}/` : null
+		return uploadDetails.items.map((item) => ({
+			key: item.key,
+			path: rootPrefix && item.path.startsWith(rootPrefix) ? item.path.slice(rootPrefix.length) : item.path,
+			size: item.size,
+			etag: etags[item.key] ?? null,
+		}))
+	}, [uploadDetails, uploadEtagsQuery.data])
+
+	const uploadTableColumns = useMemo(() => {
+		const status = jobDetailsQuery.data?.status
+		const etags = uploadEtagsQuery.data?.etags ?? {}
+		const isLoading = uploadEtagsQuery.isFetching
+		return [
+			{
+				title: 'Path',
+				dataIndex: 'path',
+				key: 'path',
+				render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
+			},
+			{
+				title: 'Size',
+				dataIndex: 'size',
+				key: 'size',
+				align: 'right' as const,
+				render: (value?: number) =>
+					value != null ? formatBytes(value) : <Typography.Text type="secondary">-</Typography.Text>,
+			},
+			{
+				title: 'Hash',
+				dataIndex: 'etag',
+				key: 'etag',
+				render: (_: string | null, record: { key: string }) => {
+					if (status !== 'succeeded') return <Typography.Text type="secondary">Pending</Typography.Text>
+					if (isLoading) return <Typography.Text type="secondary">Loading...</Typography.Text>
+					const etag = etags[record.key]
+					return etag ? <Typography.Text code>{etag}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>
+				},
+			},
+		]
+	}, [jobDetailsQuery.data?.status, uploadEtagsQuery.data, uploadEtagsQuery.isFetching])
+
+	const uploadRootLabel = useMemo(() => {
+		if (!uploadDetails) return null
+		if (uploadDetails.rootKind && uploadDetails.rootName) return `${uploadDetails.rootKind} ${uploadDetails.rootName}`
+		if (uploadDetails.rootName) return uploadDetails.rootName
+		if (uploadDetails.rootKind === 'collection') return 'collection'
+		return null
+	}, [uploadDetails])
 
 	const jobsQuery = useInfiniteQuery({
 		queryKey: ['jobs', props.profileId, props.apiToken, statusFilter, typeFilter],
@@ -243,7 +399,7 @@ export function JobsPage(props: Props) {
 			include: string[]
 			exclude: string[]
 			dryRun: boolean
-		}) => createJobWithRetry({ type: 's5cmd_rm_prefix', payload }),
+		}) => createJobWithRetry({ type: 'transfer_delete_prefix', payload }),
 		onSuccess: async (job) => {
 			message.success(`Delete job created: ${job.id}`)
 			setCreateDeleteOpen(false)
@@ -648,6 +804,17 @@ export function JobsPage(props: Props) {
 	const jobs = jobsQuery.data?.pages.flatMap((p) => p.items) ?? []
 	const isLoading = jobsQuery.isFetching && !jobsQuery.isFetchingNextPage
 	const showJobsEmpty = !isLoading && jobs.length === 0
+	const ellipsisTextStyle = { display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const
+	const renderEllipsisText = (value: string | null | undefined, tone?: 'secondary' | 'danger') => {
+		if (!value) return <Typography.Text type="secondary">-</Typography.Text>
+		return (
+			<Tooltip title={value}>
+				<Typography.Text type={tone} style={ellipsisTextStyle}>
+					{value}
+				</Typography.Text>
+			</Tooltip>
+		)
+	}
 
 	return (
 		<Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -754,6 +921,7 @@ export function JobsPage(props: Props) {
 				loading={isLoading}
 				dataSource={jobs}
 				pagination={false}
+				tableLayout="fixed"
 				scroll={{ x: true }}
 				locale={{
 					emptyText: showJobsEmpty ? (
@@ -779,22 +947,23 @@ export function JobsPage(props: Props) {
 				}}
 				columns={[
 					{ title: 'ID', dataIndex: 'id', width: 220, render: (v: string) => <Typography.Text code>{v}</Typography.Text> },
-					{ title: 'Type', dataIndex: 'type' },
+					{ title: 'Type', dataIndex: 'type', width: 200, render: (v: string) => renderEllipsisText(v) },
 					{
 						title: 'Summary',
+						width: 420,
 						render: (_, row: Job) => (
-							<Typography.Text type="secondary" style={{ whiteSpace: screens.md ? 'nowrap' : 'normal' }}>
-								{jobSummary(row) ?? '-'}
-							</Typography.Text>
+							renderEllipsisText(jobSummary(row), 'secondary')
 						),
 					},
 					{
 						title: 'Status',
 						dataIndex: 'status',
+						width: 140,
 						render: (v: JobStatus) => <Tag color={statusColor(v)}>{v}</Tag>,
 					},
 					{
 						title: 'Progress',
+						width: 180,
 						render: (_, row: Job) => {
 							const ops = row.progress?.objectsDone ?? 0
 							const bytes = row.progress?.bytesDone ?? 0
@@ -810,12 +979,13 @@ export function JobsPage(props: Props) {
 					{
 						title: 'Error',
 						dataIndex: 'error',
-						render: (v: string | null | undefined) =>
-							v ? <Typography.Text type="danger">{v}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>,
+						width: 240,
+						render: (v: string | null | undefined) => renderEllipsisText(v, 'danger'),
 					},
 					{ title: 'Created', dataIndex: 'createdAt', width: 220 },
 					{
 						title: 'Actions',
+						width: 420,
 						render: (_, row: Job) => {
 							const isZipJob = row.type === 's3_zip_prefix' || row.type === 's3_zip_objects'
 							const canDownloadArtifact = isZipJob && row.status !== 'failed' && row.status !== 'canceled'
@@ -1081,6 +1251,84 @@ export function JobsPage(props: Props) {
 								</Descriptions.Item>
 							</Descriptions>
 
+							{uploadDetails ? (
+								<>
+									<Typography.Title level={5} style={{ marginTop: 16 }}>
+										Upload
+									</Typography.Title>
+									<Descriptions size="small" bordered column={1}>
+										<Descriptions.Item label="Destination">
+											{uploadDetails.bucket ? (
+												<Typography.Text code>
+													{formatS3Destination(uploadDetails.bucket, uploadDetails.prefix ?? '')}
+												</Typography.Text>
+											) : (
+												<Typography.Text type="secondary">-</Typography.Text>
+											)}
+										</Descriptions.Item>
+										<Descriptions.Item label="Label">
+											{uploadDetails.label ? (
+												<Typography.Text>{uploadDetails.label}</Typography.Text>
+											) : (
+												<Typography.Text type="secondary">-</Typography.Text>
+											)}
+										</Descriptions.Item>
+										<Descriptions.Item label="Root">
+											{uploadRootLabel ? (
+												<Typography.Text>{uploadRootLabel}</Typography.Text>
+											) : (
+												<Typography.Text type="secondary">-</Typography.Text>
+											)}
+										</Descriptions.Item>
+										<Descriptions.Item label="Total files">
+											{uploadDetails.totalFiles != null ? (
+												<Typography.Text>{uploadDetails.totalFiles}</Typography.Text>
+											) : (
+												<Typography.Text type="secondary">-</Typography.Text>
+											)}
+										</Descriptions.Item>
+										<Descriptions.Item label="Total bytes">
+											{uploadDetails.totalBytes != null ? (
+												<Typography.Text>{formatBytes(uploadDetails.totalBytes)}</Typography.Text>
+											) : (
+												<Typography.Text type="secondary">-</Typography.Text>
+											)}
+										</Descriptions.Item>
+									</Descriptions>
+
+									<Typography.Title level={5} style={{ marginTop: 16 }}>
+										Files
+									</Typography.Title>
+									{uploadDetails.items.length ? (
+										<>
+											{uploadDetails.itemsTruncated ? (
+												<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+													Showing first {uploadDetails.items.length} of{' '}
+													{uploadDetails.totalFiles ?? uploadDetails.items.length} files.
+												</Typography.Text>
+											) : null}
+											<Table
+												size="small"
+												columns={uploadTableColumns}
+												dataSource={uploadTableData}
+												pagination={uploadTableData.length > 20 ? { pageSize: 20, size: 'small' } : false}
+											/>
+											{jobDetailsQuery.data?.status !== 'succeeded' ? (
+												<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+													Hashes appear after the job completes.
+												</Typography.Text>
+											) : uploadEtagsQuery.data?.failures ? (
+												<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+													{uploadEtagsQuery.data.failures} file(s) missing hash data.
+												</Typography.Text>
+											) : null}
+										</>
+									) : (
+										<Typography.Text type="secondary">No file details recorded for this upload.</Typography.Text>
+									)}
+								</>
+							) : null}
+
 							<Typography.Title level={5} style={{ marginTop: 16 }}>
 								Payload
 							</Typography.Title>
@@ -1217,6 +1465,11 @@ function jobSummary(job: Job): string | null {
 	const prefix = getString(job.payload, 'prefix')
 	const localPath = getString(job.payload, 'localPath')
 	const uploadId = getString(job.payload, 'uploadId')
+	const label = getString(job.payload, 'label')
+	const rootName = getString(job.payload, 'rootName')
+	const rootKind = getString(job.payload, 'rootKind')
+	const totalFiles = getNumber(job.payload, 'totalFiles')
+	const totalBytes = getNumber(job.payload, 'totalBytes')
 	const deleteAll = getBool(job.payload, 'deleteAll')
 	const fullReindex = getBool(job.payload, 'fullReindex')
 	const srcBucket = getString(job.payload, 'srcBucket')
@@ -1247,57 +1500,74 @@ function jobSummary(job: Job): string | null {
 			const count = Array.isArray(keys) ? keys.length : 0
 			return count ? `delete ${count} object(s) in s3://${bucket}${tag}` : `delete objects in s3://${bucket}${tag}`
 		}
-		case 's5cmd_sync_local_to_s3': {
+		case 'transfer_sync_local_to_s3': {
 			const dst = bucket ? `s3://${bucket}/${prefix ?? ''}` : 's3://?'
 			const src = localPath ?? '?'
 			return `${src} → ${dst}${tag}`
 		}
-		case 's5cmd_sync_s3_to_local': {
+		case 'transfer_sync_s3_to_local': {
 			const src = bucket ? `s3://${bucket}/${prefix ?? ''}` : 's3://?'
 			const dst = localPath ?? '?'
 			return `${src} → ${dst}${tag}`
 		}
-		case 's5cmd_sync_staging_to_s3': {
-			return uploadId ? `upload ${uploadId}${tag}` : `upload ?${tag}`
+		case 'transfer_sync_staging_to_s3': {
+			const dest = formatS3Destination(bucket, prefix)
+			const fileCountLabel = totalFiles != null ? `${totalFiles} file${totalFiles === 1 ? '' : 's'}` : null
+			const totalBytesLabel = totalBytes != null ? formatBytes(totalBytes) : null
+			const metricLabel = [fileCountLabel, totalBytesLabel].filter(Boolean).join(' · ')
+			let subject: string | null = null
+			if (rootName) {
+				subject = rootKind === 'folder' ? `${rootName}/` : rootName
+			} else if (label) {
+				subject = label
+			} else if (fileCountLabel) {
+				subject = fileCountLabel
+			} else if (uploadId) {
+				subject = uploadId
+			} else {
+				subject = '?'
+			}
+			const detail = metricLabel && subject !== metricLabel ? ` (${metricLabel})` : ''
+			return dest ? `upload ${subject}${detail} → ${dest}${tag}` : `upload ${subject}${detail}${tag}`
 		}
-		case 's5cmd_rm_prefix': {
+		case 'transfer_delete_prefix': {
 			if (!bucket) return `rm ?${tag}`
 			if (deleteAll) return `rm s3://${bucket}/*${tag}`
 			if (prefix) return `rm s3://${bucket}/${prefix}*${tag}`
 			return `rm s3://${bucket}/?${tag}`
 		}
-			case 's5cmd_cp_s3_to_s3': {
-				if (!srcBucket || !srcKey || !dstBucket || !dstKey) return `cp ?${tag}`
-				return `cp s3://${srcBucket}/${srcKey} → s3://${dstBucket}/${dstKey}${tag}`
-			}
-			case 's5cmd_mv_s3_to_s3': {
-				if (!srcBucket || !srcKey || !dstBucket || !dstKey) return `mv ?${tag}`
-				return `mv s3://${srcBucket}/${srcKey} → s3://${dstBucket}/${dstKey}${tag}`
-			}
-			case 's5cmd_cp_s3_to_s3_batch': {
-				if (!srcBucket || !dstBucket) return `cp ?${tag}`
-				const items = job.payload['items']
-				const count = Array.isArray(items) ? items.length : 0
-				const first = Array.isArray(items) && items.length ? (items[0] as Record<string, unknown>) : null
-				const firstDstKey = first && typeof first['dstKey'] === 'string' ? String(first['dstKey']) : ''
-				const dstHint = firstDstKey ? parentPrefixFromKey(firstDstKey) : ''
-				return count ? `cp ${count} object(s) → s3://${dstBucket}/${dstHint}${tag}` : `cp batch s3://${srcBucket} → s3://${dstBucket}${tag}`
-			}
-			case 's5cmd_mv_s3_to_s3_batch': {
-				if (!srcBucket || !dstBucket) return `mv ?${tag}`
-				const items = job.payload['items']
-				const count = Array.isArray(items) ? items.length : 0
-				const first = Array.isArray(items) && items.length ? (items[0] as Record<string, unknown>) : null
-				const firstDstKey = first && typeof first['dstKey'] === 'string' ? String(first['dstKey']) : ''
-				const dstHint = firstDstKey ? parentPrefixFromKey(firstDstKey) : ''
-				return count ? `mv ${count} object(s) → s3://${dstBucket}/${dstHint}${tag}` : `mv batch s3://${srcBucket} → s3://${dstBucket}${tag}`
-			}
-			case 's5cmd_cp_s3_prefix_to_s3_prefix': {
-				if (!srcBucket || !srcPrefix || !dstBucket) return `cp ?${tag}`
-				const dst = dstPrefix ? `s3://${dstBucket}/${dstPrefix}` : `s3://${dstBucket}/`
-				return `cp s3://${srcBucket}/${srcPrefix}* → ${dst}${tag}`
-			}
-		case 's5cmd_mv_s3_prefix_to_s3_prefix': {
+		case 'transfer_copy_object': {
+			if (!srcBucket || !srcKey || !dstBucket || !dstKey) return `cp ?${tag}`
+			return `cp s3://${srcBucket}/${srcKey} → s3://${dstBucket}/${dstKey}${tag}`
+		}
+		case 'transfer_move_object': {
+			if (!srcBucket || !srcKey || !dstBucket || !dstKey) return `mv ?${tag}`
+			return `mv s3://${srcBucket}/${srcKey} → s3://${dstBucket}/${dstKey}${tag}`
+		}
+		case 'transfer_copy_batch': {
+			if (!srcBucket || !dstBucket) return `cp ?${tag}`
+			const items = job.payload['items']
+			const count = Array.isArray(items) ? items.length : 0
+			const first = Array.isArray(items) && items.length ? (items[0] as Record<string, unknown>) : null
+			const firstDstKey = first && typeof first['dstKey'] === 'string' ? String(first['dstKey']) : ''
+			const dstHint = firstDstKey ? parentPrefixFromKey(firstDstKey) : ''
+			return count ? `cp ${count} object(s) → s3://${dstBucket}/${dstHint}${tag}` : `cp batch s3://${srcBucket} → s3://${dstBucket}${tag}`
+		}
+		case 'transfer_move_batch': {
+			if (!srcBucket || !dstBucket) return `mv ?${tag}`
+			const items = job.payload['items']
+			const count = Array.isArray(items) ? items.length : 0
+			const first = Array.isArray(items) && items.length ? (items[0] as Record<string, unknown>) : null
+			const firstDstKey = first && typeof first['dstKey'] === 'string' ? String(first['dstKey']) : ''
+			const dstHint = firstDstKey ? parentPrefixFromKey(firstDstKey) : ''
+			return count ? `mv ${count} object(s) → s3://${dstBucket}/${dstHint}${tag}` : `mv batch s3://${srcBucket} → s3://${dstBucket}${tag}`
+		}
+		case 'transfer_copy_prefix': {
+			if (!srcBucket || !srcPrefix || !dstBucket) return `cp ?${tag}`
+			const dst = dstPrefix ? `s3://${dstBucket}/${dstPrefix}` : `s3://${dstBucket}/`
+			return `cp s3://${srcBucket}/${srcPrefix}* → ${dst}${tag}`
+		}
+		case 'transfer_move_prefix': {
 			if (!srcBucket || !srcPrefix || !dstBucket) return `mv ?${tag}`
 			const dst = dstPrefix ? `s3://${dstBucket}/${dstPrefix}` : `s3://${dstBucket}/`
 			return `mv s3://${srcBucket}/${srcPrefix}* → ${dst}${tag}`
@@ -1317,17 +1587,43 @@ function getString(payload: Record<string, unknown>, key: string): string | null
 	return typeof v === 'string' && v.trim() ? v : null
 }
 
-	function getBool(payload: Record<string, unknown>, key: string): boolean {
-		return payload[key] === true
+function getNumber(payload: Record<string, unknown>, key: string): number | null {
+	const v = payload[key]
+	if (typeof v === 'number' && Number.isFinite(v)) return v
+	if (typeof v === 'string') {
+		const trimmed = v.trim()
+		if (!trimmed) return null
+		const parsed = Number(trimmed)
+		return Number.isFinite(parsed) ? parsed : null
 	}
+	return null
+}
 
-	function parentPrefixFromKey(key: string): string {
-		const trimmed = key.replace(/\/+$/, '')
-		const parts = trimmed.split('/').filter(Boolean)
-		if (parts.length <= 1) return ''
-		parts.pop()
-		return parts.join('/') + '/'
-	}
+function getBool(payload: Record<string, unknown>, key: string): boolean {
+	return payload[key] === true
+}
+
+function parentPrefixFromKey(key: string): string {
+	const trimmed = key.replace(/\/+$/, '')
+	const parts = trimmed.split('/').filter(Boolean)
+	if (parts.length <= 1) return ''
+	parts.pop()
+	return parts.join('/') + '/'
+}
+
+function joinKeyWithPrefix(prefix: string, path: string): string {
+	const cleanPrefix = prefix.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+	const cleanPath = path.replace(/\\/g, '/').replace(/^\/+/, '')
+	if (!cleanPrefix) return cleanPath
+	if (!cleanPath) return cleanPrefix
+	return `${cleanPrefix}/${cleanPath}`
+}
+
+function formatS3Destination(bucket: string | null, prefix: string | null): string | null {
+	if (!bucket) return null
+	const cleanPrefix = (prefix ?? '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+	return cleanPrefix ? `s3://${bucket}/${cleanPrefix}` : `s3://${bucket}/`
+}
 
 function CreateJobModal(props: {
 	profileId: string | null
@@ -1629,7 +1925,7 @@ function DeletePrefixJobModal(props: {
 		<Drawer
 			open={props.open}
 			onClose={props.onCancel}
-			title="Create s5cmd delete job (S3 rm)"
+			title="Create delete job (S3)"
 			width={drawerWidth}
 			extra={
 				<Space>
@@ -1644,7 +1940,7 @@ function DeletePrefixJobModal(props: {
 				type="warning"
 				showIcon
 				message="Dangerous operation"
-				description="This job deletes remote objects via s5cmd rm. It cannot be undone."
+				description="This job deletes remote objects via the transfer engine. It cannot be undone."
 				style={{ marginBottom: 12 }}
 			/>
 
@@ -1724,7 +2020,7 @@ function DeletePrefixJobModal(props: {
 										showIcon
 										message="Prefix does not end with '/'"
 										description={
-											"Without a trailing '/', s5cmd will delete keys matching prefix* (e.g., 'abc' also matches 'abcd'). Prefer using a trailing '/'. To proceed anyway, acknowledge below."
+											"Without a trailing '/', delete will match keys with the prefix (e.g., 'abc' also matches 'abcd'). Prefer using a trailing '/'. To proceed anyway, acknowledge below."
 										}
 										style={{ marginBottom: 12 }}
 									/>

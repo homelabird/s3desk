@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"object-storage/internal/models"
+	"s3desk/internal/models"
 )
 
 func (s *server) handleListProfiles(w http.ResponseWriter, r *http.Request) {

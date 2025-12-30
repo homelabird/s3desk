@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: object-storage
+  repository: s3desk
   tag: "latest"
   pullPolicy: IfNotPresent
 
@@ -32,7 +32,7 @@ ingress:
   className: ""
   annotations: {}
   hosts:
-    - host: object-storage.local
+    - host: s3desk.local
       paths:
         - path: /
           pathType: Prefix
@@ -80,14 +80,14 @@ uploads:
   ttl: "24h"
   maxBytes: 0
 
-s5cmd:
+rclone:
   path: ""
   tune: true
-  maxNumWorkers: null
-  maxConcurrency: null
-  minPartSizeMiB: null
-  maxPartSizeMiB: null
-  defaultPartSizeMiB: null
+  maxTransfers: null
+  maxCheckers: null
+  s3ChunkSizeMiB: null
+  s3UploadConcurrency: null
+  statsInterval: ""
 
 secrets:
   existingSecret: ""
