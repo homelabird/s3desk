@@ -30,6 +30,9 @@ func (s *server) handleWSUpgrade(w http.ResponseWriter, r *http.Request) {
 			afterSeq = v
 		}
 	}
+	if afterSeq > 0 && s.metrics != nil {
+		s.metrics.IncEventsReconnects()
+	}
 
 	includeLogs := true
 	if raw := r.URL.Query().Get("includeLogs"); raw != "" {
@@ -40,6 +43,10 @@ func (s *server) handleWSUpgrade(w http.ResponseWriter, r *http.Request) {
 
 	client, backlog := s.hub.SubscribeFrom(afterSeq, includeLogs)
 	defer s.hub.Unsubscribe(client)
+	if s.metrics != nil {
+		s.metrics.IncEventsConnections()
+		defer s.metrics.DecEventsConnections()
+	}
 
 	conn.SetReadLimit(64 * 1024)
 	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))

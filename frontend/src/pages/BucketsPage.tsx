@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { APIClient, APIError } from '../api/client'
 import type { BucketCreateRequest } from '../api/types'
 import { SetupCallout } from '../components/SetupCallout'
+import { confirmDangerAction } from '../lib/confirmDangerAction'
 
 type Props = {
 	apiToken: string
@@ -128,12 +129,12 @@ export function BucketsPage(props: Props) {
 								icon={<DeleteOutlined />}
 								loading={deleteMutation.isPending && deletingBucket === row.name}
 								onClick={() => {
-									Modal.confirm({
+									confirmDangerAction({
 										title: `Delete bucket "${row.name}"?`,
-										content: 'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
-										okText: 'Delete',
-										okType: 'danger',
-										onOk: async () => {
+										description: 'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
+										confirmText: row.name,
+											confirmHint: `Type "${row.name}" to confirm`,
+										onConfirm: async () => {
 											await deleteMutation.mutateAsync(row.name)
 										},
 									})

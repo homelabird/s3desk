@@ -57,7 +57,6 @@ func TestProfileTLSLifecycle(t *testing.T) {
 		ClientCertPEM: certPEM,
 		ClientKeyPEM:  keyPEM,
 		CACertPEM:     certPEM,
-		ServerName:    "s3.example.com",
 	}
 
 	res := doJSONRequest(t, srv, http.MethodPut, "/api/v1/profiles/"+profile.ID+"/tls", putReq)
@@ -72,9 +71,6 @@ func TestProfileTLSLifecycle(t *testing.T) {
 	}
 	if !status.HasClientCert || !status.HasClientKey || !status.HasCACert {
 		t.Fatalf("expected cert/key/ca flags to be true, got cert=%v key=%v ca=%v", status.HasClientCert, status.HasClientKey, status.HasCACert)
-	}
-	if status.ServerName != "s3.example.com" {
-		t.Fatalf("expected serverName s3.example.com, got %q", status.ServerName)
 	}
 
 	getRes := doJSONRequest(t, srv, http.MethodGet, "/api/v1/profiles/"+profile.ID+"/tls", nil)

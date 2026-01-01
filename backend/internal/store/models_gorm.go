@@ -35,6 +35,7 @@ type jobRow struct {
 	PayloadJSON  string  `gorm:"column:payload_json"`
 	ProgressJSON *string `gorm:"column:progress_json"`
 	Error        *string `gorm:"column:error"`
+	ErrorCode    *string `gorm:"column:error_code"`
 	CreatedAt    string  `gorm:"column:created_at"`
 	StartedAt    *string `gorm:"column:started_at"`
 	FinishedAt   *string `gorm:"column:finished_at"`

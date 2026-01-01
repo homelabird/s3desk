@@ -15,5 +15,5 @@ export function JobQueueBanner() {
 
 	if (!banner) return null
 
-	return <Alert banner showIcon type={banner.type ?? 'warning'} message={banner.message} style={{ marginBottom: 8 }} />
+	return <Alert banner showIcon type={banner.type ?? 'warning'} title={banner.message} style={{ marginBottom: 8 }} />
 }

@@ -104,6 +104,26 @@ export type UploadFilesResult = {
 	skipped: number
 }
 
+function normalizeListObjectsResponse(
+	resp: ListObjectsResponse,
+	fallback: { bucket: string; prefix?: string; delimiter?: string },
+): ListObjectsResponse {
+	if (!resp || typeof resp !== 'object') {
+		return {
+			bucket: fallback.bucket,
+			prefix: fallback.prefix ?? '',
+			delimiter: fallback.delimiter ?? '/',
+			commonPrefixes: [],
+			items: [],
+			isTruncated: false,
+		}
+	}
+	const safe = resp as ListObjectsResponse
+	const commonPrefixes = Array.isArray(safe.commonPrefixes) ? safe.commonPrefixes : []
+	const items = Array.isArray(safe.items) ? safe.items : []
+	return { ...safe, commonPrefixes, items }
+}
+
 function resolveUploadFilename(item: UploadFileItem): string {
 	const fileWithPath = item.file as File & { webkitRelativePath?: string; relativePath?: string }
 	const relPath = (item.relPath ?? fileWithPath.webkitRelativePath ?? fileWithPath.relativePath ?? '').trim()
@@ -293,10 +313,16 @@ export class APIClient {
 		if (args.maxKeys) params.set('maxKeys', String(args.maxKeys))
 		if (args.continuationToken) params.set('continuationToken', args.continuationToken)
 		const qs = params.toString()
-		return this.request(
+		return this.request<ListObjectsResponse>(
 			`/buckets/${encodeURIComponent(args.bucket)}/objects${qs ? `?${qs}` : ''}`,
 			{ method: 'GET' },
 			{ profileId: args.profileId },
+		).then((resp) =>
+			normalizeListObjectsResponse(resp, {
+				bucket: args.bucket,
+				prefix: args.prefix,
+				delimiter: args.delimiter,
+			}),
 		)
 	}
 
@@ -683,10 +709,14 @@ export class APIClient {
 		return { promise, abort: () => xhr.abort() }
 	}
 
-	listJobs(profileId: string, args: { status?: string; type?: string; limit?: number; cursor?: string } = {}): Promise<JobsListResponse> {
+	listJobs(
+		profileId: string,
+		args: { status?: string; type?: string; errorCode?: string; limit?: number; cursor?: string } = {},
+	): Promise<JobsListResponse> {
 		const params = new URLSearchParams()
 		if (args.status) params.set('status', args.status)
 		if (args.type) params.set('type', args.type)
+		if (args.errorCode) params.set('errorCode', args.errorCode)
 		if (args.limit) params.set('limit', String(args.limit))
 		if (args.cursor) params.set('cursor', args.cursor)
 		const qs = params.toString()

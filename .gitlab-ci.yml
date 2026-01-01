@@ -1,5 +1,24 @@
 stages:
+  - test
   - audit
+
+perf_tests:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  rules:
+    - if: '$PERF_TESTS == "1"'
+      when: on_success
+    - when: never
+  script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - PERF_TESTS=1 npx playwright test tests/jobs-perf.spec.ts
+  artifacts:
+    when: always
+    paths:
+      - frontend/test-results/
+      - frontend/playwright-report/
+    expire_in: 7 days
 
 dev_license_audit:
   stage: audit

@@ -80,24 +80,31 @@ function renderRowMenu(
 	label = 'Row actions',
 ) {
 	return (
-		<Dropdown
-			trigger={['click']}
-			menu={menu}
-			open={open}
-			onOpenChange={onOpenChange}
-			getPopupContainer={getPopupContainer}
-			autoAdjustOverflow
+		<span
+			style={{ display: 'inline-flex' }}
+			onClickCapture={(e) => {
+				e.stopPropagation()
+				onOpenChange(!open)
+			}}
 		>
-			<Button
-				size="small"
-				type="text"
-				icon={<EllipsisOutlined />}
-				onClick={(e) => e.stopPropagation()}
-				aria-label={label}
-				aria-haspopup="menu"
-				aria-expanded={open}
-			/>
-		</Dropdown>
+			<Dropdown
+				trigger={['click']}
+				menu={menu}
+				open={open}
+				onOpenChange={onOpenChange}
+				getPopupContainer={getPopupContainer}
+				autoAdjustOverflow
+			>
+				<Button
+					size="small"
+					type="text"
+					icon={<EllipsisOutlined />}
+					aria-label={label}
+					aria-haspopup="menu"
+					aria-expanded={open}
+				/>
+			</Dropdown>
+		</span>
 	)
 }
 
@@ -115,7 +122,7 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 		>
 				<div
 					onClick={props.onOpen}
-					onContextMenu={props.onContextMenu}
+					onContextMenuCapture={props.onContextMenu}
 					draggable={props.canDragDrop}
 					onDragStart={props.onDragStart}
 					onDragEnd={props.onDragEnd}
@@ -132,7 +139,7 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 						</Typography.Text>
 					</div>
 					{props.isCompact ? (
-						<div style={{ justifySelf: 'end' }} onClick={(e) => e.stopPropagation()}>
+						<div style={{ justifySelf: 'end' }}>
 							{renderRowMenu(
 								props.menu,
 								props.buttonMenuOpen,
@@ -149,7 +156,7 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 							<div>
 								<Typography.Text type="secondary">-</Typography.Text>
 							</div>
-							<div style={{ justifySelf: 'end' }} onClick={(e) => e.stopPropagation()}>
+							<div style={{ justifySelf: 'end' }}>
 								{renderRowMenu(
 									props.menu,
 									props.buttonMenuOpen,
@@ -181,7 +188,7 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 		>
 				<div
 					onClick={props.onClick}
-					onContextMenu={props.onContextMenu}
+					onContextMenuCapture={props.onContextMenu}
 					draggable={props.canDragDrop}
 					onDragStart={props.onDragStart}
 					onDragEnd={props.onDragEnd}

@@ -88,7 +88,6 @@ func (s *server) handlePutProfileTLS(w http.ResponseWriter, r *http.Request) {
 	req.ClientCertPEM = strings.TrimSpace(req.ClientCertPEM)
 	req.ClientKeyPEM = strings.TrimSpace(req.ClientKeyPEM)
 	req.CACertPEM = strings.TrimSpace(req.CACertPEM)
-	req.ServerName = strings.TrimSpace(req.ServerName)
 
 	if req.Mode == models.ProfileTLSModeMTLS {
 		if req.ClientCertPEM == "" || req.ClientKeyPEM == "" {
@@ -99,7 +98,6 @@ func (s *server) handlePutProfileTLS(w http.ResponseWriter, r *http.Request) {
 		req.ClientCertPEM = ""
 		req.ClientKeyPEM = ""
 		req.CACertPEM = ""
-		req.ServerName = ""
 	}
 
 	cfg, updatedAt, err := s.store.UpsertProfileTLSConfig(r.Context(), profileID, req)
@@ -145,7 +143,6 @@ func buildProfileTLSStatus(cfg models.ProfileTLSConfig, updatedAt string) models
 		HasClientCert: strings.TrimSpace(cfg.ClientCertPEM) != "",
 		HasClientKey:  strings.TrimSpace(cfg.ClientKeyPEM) != "",
 		HasCACert:     strings.TrimSpace(cfg.CACertPEM) != "",
-		ServerName:    strings.TrimSpace(cfg.ServerName),
 		UpdatedAt:     updatedAt,
 	}
 }

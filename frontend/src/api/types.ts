@@ -13,14 +13,12 @@ export type ProfileTLSConfig = {
 	clientCertPem?: string
 	clientKeyPem?: string
 	caCertPem?: string
-	serverName?: string
 }
 export type ProfileTLSStatus = {
 	mode: ProfileTLSMode
 	hasClientCert: boolean
 	hasClientKey: boolean
 	hasCa: boolean
-	serverName?: string
 	updatedAt?: string
 }
 

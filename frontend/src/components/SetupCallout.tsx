@@ -1,5 +1,5 @@
 import { Alert, Button, Grid, Space, Typography } from 'antd'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 type Props = {
 	apiToken: string
@@ -10,7 +10,6 @@ type Props = {
 
 export function SetupCallout(props: Props) {
 	const navigate = useNavigate()
-	const location = useLocation()
 	const screens = Grid.useBreakpoint()
 
 	if (props.profileId) return null
@@ -20,10 +19,7 @@ export function SetupCallout(props: Props) {
 	}
 
 	const openSettings = () => {
-		const params = new URLSearchParams(location.search)
-		params.set('settings', '1')
-		const search = params.toString()
-		navigate({ pathname: location.pathname, search: search ? `?${search}` : '' })
+		navigate('/settings')
 	}
 
 	const showSettings = props.apiToken === ''
