@@ -5,9 +5,7 @@ import {
 	Button,
 	Descriptions,
 	Divider,
-	Drawer,
 	Form,
-	Grid,
 	Input,
 	InputNumber,
 	Space,
@@ -32,22 +30,18 @@ import {
 	RETRY_DELAY_STORAGE_KEY,
 } from '../api/client'
 import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
-import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
+import { useLocalStorageState } from '../lib/useLocalStorageState'
 
 type Props = {
-	open: boolean
-	onClose: () => void
 	apiToken: string
 	setApiToken: (v: string) => void
 	profileId: string | null
 	setProfileId: (v: string | null) => void
 }
 
-export function SettingsDrawer(props: Props) {
+export function SettingsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
-	const screens = Grid.useBreakpoint()
-	const drawerWidth = screens.md ? 480 : '100%'
 	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
 	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>(
 		'cleanupEmptyDirsDefault',
@@ -81,7 +75,6 @@ export function SettingsDrawer(props: Props) {
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
 		queryFn: () => api.getMeta(),
-		enabled: props.open,
 		retry: false,
 	})
 	const apiDocsBase = useMemo(() => {
@@ -110,17 +103,13 @@ export function SettingsDrawer(props: Props) {
 	)
 
 	return (
-		<Drawer
-			open={props.open}
-			onClose={props.onClose}
-			title="Settings"
-			width={drawerWidth}
-			extra={
-				<Space>
-					<Button onClick={props.onClose}>Close</Button>
-				</Space>
-			}
-		>
+		<Space direction="vertical" size="large" style={{ width: '100%' }}>
+			<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+				<Typography.Title level={3} style={{ margin: 0 }}>
+					Settings
+				</Typography.Title>
+			</div>
+
 			<Form layout="vertical">
 				<Form.Item label="Backend API Token (X-Api-Token)">
 					<Input.Password
@@ -144,26 +133,17 @@ export function SettingsDrawer(props: Props) {
 						</Button>
 					</Space.Compact>
 				</Form.Item>
-				<Form.Item
-					label="Default: Move after upload"
-					extra="Applies to folder uploads from this device."
-				>
+				<Form.Item label="Default: Move after upload" extra="Applies to folder uploads from this device.">
 					<Switch checked={moveAfterUploadDefault} onChange={setMoveAfterUploadDefault} />
 				</Form.Item>
-				<Form.Item
-					label="Default: Auto-clean empty folders"
-					extra="Used only when move-after-upload is enabled."
-				>
+				<Form.Item label="Default: Auto-clean empty folders" extra="Used only when move-after-upload is enabled.">
 					<Switch
 						checked={cleanupEmptyDirsDefault}
 						onChange={setCleanupEmptyDirsDefault}
 						disabled={!moveAfterUploadDefault}
 					/>
 				</Form.Item>
-				<Form.Item
-					label="Move cleanup report filename template"
-					extra="Available tokens: {bucket} {prefix} {label} {timestamp}"
-				>
+				<Form.Item label="Move cleanup report filename template" extra="Available tokens: {bucket} {prefix} {label} {timestamp}">
 					<Input
 						value={moveCleanupFilenameTemplate}
 						onChange={(e) => setMoveCleanupFilenameTemplate(e.target.value)}
@@ -175,7 +155,9 @@ export function SettingsDrawer(props: Props) {
 						min={40}
 						max={200}
 						value={moveCleanupFilenameMaxLen}
-						onChange={(value) => setMoveCleanupFilenameMaxLen(typeof value === 'number' ? value : MOVE_CLEANUP_FILENAME_MAX_LEN)}
+						onChange={(value) =>
+							setMoveCleanupFilenameMaxLen(typeof value === 'number' ? value : MOVE_CLEANUP_FILENAME_MAX_LEN)
+						}
 						style={{ width: '100%' }}
 					/>
 				</Form.Item>
@@ -198,7 +180,11 @@ export function SettingsDrawer(props: Props) {
 						precision={0}
 						value={apiRetryCount}
 						onChange={(value) =>
-							setApiRetryCount(typeof value === 'number' ? Math.min(RETRY_COUNT_MAX, Math.max(RETRY_COUNT_MIN, value)) : DEFAULT_RETRY_COUNT)
+							setApiRetryCount(
+								typeof value === 'number'
+									? Math.min(RETRY_COUNT_MAX, Math.max(RETRY_COUNT_MIN, value))
+									: DEFAULT_RETRY_COUNT,
+							)
 						}
 						style={{ width: '100%' }}
 					/>
@@ -363,7 +349,7 @@ export function SettingsDrawer(props: Props) {
 					</Descriptions.Item>
 				</Descriptions>
 			) : null}
-		</Drawer>
+		</Space>
 	)
 }
 

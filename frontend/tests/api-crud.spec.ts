@@ -140,35 +140,36 @@ test.describe('Live API CRUD', () => {
 			const deleteBucket = await request.delete(`/api/v1/buckets/${bucketName}`, { headers: profileHeaders })
 			expect(deleteBucket.status()).toBe(204)
 		} finally {
-			if (!profileId) return
-			const profileHeaders = apiHeaders(profileId)
+			if (profileId) {
+				const profileHeaders = apiHeaders(profileId)
 
-			try {
-				const listObjects = await request.get(`/api/v1/buckets/${bucketName}/objects`, { headers: profileHeaders })
-				if (listObjects.ok()) {
-					const payload = (await listObjects.json()) as { items: { key: string }[] }
-					const keys = payload.items?.map((item) => item.key) ?? []
-					if (keys.length) {
-						await request.delete(`/api/v1/buckets/${bucketName}/objects`, {
-							headers: profileHeaders,
-							data: { keys },
-						})
+				try {
+					const listObjects = await request.get(`/api/v1/buckets/${bucketName}/objects`, { headers: profileHeaders })
+					if (listObjects.ok()) {
+						const payload = (await listObjects.json()) as { items: { key: string }[] }
+						const keys = payload.items?.map((item) => item.key) ?? []
+						if (keys.length) {
+							await request.delete(`/api/v1/buckets/${bucketName}/objects`, {
+								headers: profileHeaders,
+								data: { keys },
+							})
+						}
 					}
+				} catch {
+					// best-effort cleanup
 				}
-			} catch {
-				// best-effort cleanup
-			}
 
-			try {
-				await request.delete(`/api/v1/buckets/${bucketName}`, { headers: profileHeaders })
-			} catch {
-				// best-effort cleanup
-			}
+				try {
+					await request.delete(`/api/v1/buckets/${bucketName}`, { headers: profileHeaders })
+				} catch {
+					// best-effort cleanup
+				}
 
-			try {
-				await request.delete(`/api/v1/profiles/${profileId}`, { headers: apiHeaders() })
-			} catch {
-				// best-effort cleanup
+				try {
+					await request.delete(`/api/v1/profiles/${profileId}`, { headers: apiHeaders() })
+				} catch {
+					// best-effort cleanup
+				}
 			}
 		}
 	})

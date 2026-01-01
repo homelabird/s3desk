@@ -823,6 +823,9 @@ paths:
         - name: cursor
           in: query
           schema: { type: string }
+        - name: errorCode
+          in: query
+          schema: { type: string }
       responses:
         "200":
           description: OK
@@ -1151,7 +1154,6 @@ components:
         clientCertPem: { type: string }
         clientKeyPem: { type: string }
         caCertPem: { type: string }
-        serverName: { type: string }
 
     ProfileTLSStatus:
       type: object
@@ -1162,7 +1164,6 @@ components:
         hasClientCert: { type: boolean }
         hasClientKey: { type: boolean }
         hasCa: { type: boolean }
-        serverName: { type: string }
         updatedAt: { type: string, format: date-time }
 
     Bucket:
@@ -1746,6 +1747,7 @@ components:
           additionalProperties: true
         progress: { $ref: "#/components/schemas/JobProgress" }
         error: { type: string, nullable: true }
+        errorCode: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         startedAt: { type: string, format: date-time, nullable: true }
         finishedAt: { type: string, format: date-time, nullable: true }

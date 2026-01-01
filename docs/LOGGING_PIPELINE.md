@@ -37,7 +37,7 @@ HTTP request logs:
 
 Job lifecycle logs:
 - `event=job.queued|job.started|job.completed|job.log`
-- `job_id`, `job_type`, `profile_id`, `status`, `duration_ms`, `error` (failed only)
+- `job_id`, `job_type`, `profile_id`, `status`, `duration_ms`, `error` (failed only), `error_code`
 
 ## 3) Loki (Grafana) shipping
 

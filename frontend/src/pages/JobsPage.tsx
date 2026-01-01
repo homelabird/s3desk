@@ -6,11 +6,11 @@ import {
 	Button,
 	Descriptions,
 	Drawer,
+	Dropdown,
 	Empty,
 	Form,
 	Grid,
 	Input,
-	Modal,
 	Select,
 	Space,
 	Spin,
@@ -20,9 +20,22 @@ import {
 	Typography,
 	message,
 	Switch,
+	theme,
+	type MenuProps,
 } from 'antd'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DeleteOutlined, DownloadOutlined, PlusOutlined, RedoOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+	DeleteOutlined,
+	DownloadOutlined,
+	FileTextOutlined,
+	InfoCircleOutlined,
+	MoreOutlined,
+	PlusOutlined,
+	RedoOutlined,
+	ReloadOutlined,
+	SettingOutlined,
+	StopOutlined,
+} from '@ant-design/icons'
 import { useLocation } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
@@ -32,6 +45,7 @@ import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobS
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath } from '../lib/deviceFs'
 import { listAllObjects } from '../lib/objects'
+import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
@@ -66,12 +80,32 @@ type UploadDetails = {
 	itemsTruncated?: boolean
 }
 
+type ColumnKey = 'id' | 'type' | 'summary' | 'status' | 'progress' | 'errorCode' | 'error' | 'createdAt' | 'actions'
+type ToggleableColumnKey = Exclude<ColumnKey, 'actions'>
+
+const compareText = (left?: string | null, right?: string | null) => (left ?? '').localeCompare(right ?? '')
+const compareNumber = (left?: number | null, right?: number | null) => (left ?? 0) - (right ?? 0)
+const getProgressSortValue = (job: Job) => {
+	const bytes = job.progress?.bytesDone ?? 0
+	const ops = job.progress?.objectsDone ?? 0
+	const speed = job.progress?.speedBps ?? 0
+	if (bytes) return bytes
+	if (ops) return ops
+	return speed
+}
+const toTimestamp = (value?: string | null) => {
+	if (!value) return 0
+	const ts = Date.parse(value)
+	return Number.isNaN(ts) ? 0 : ts
+}
+
 export function JobsPage(props: Props) {
 	const queryClient = useQueryClient()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const transfers = useTransfers()
 	const location = useLocation()
 	const screens = Grid.useBreakpoint()
+	const { token } = theme.useToken()
 	const isOffline = useIsOffline()
 	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
 	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
@@ -122,14 +156,89 @@ export function JobsPage(props: Props) {
 	const [eventsManualRetryToken, setEventsManualRetryToken] = useState(0)
 	const [statusFilter, setStatusFilter] = useLocalStorageState<JobStatus | 'all'>('jobsStatusFilter', 'all')
 	const [typeFilter, setTypeFilter] = useLocalStorageState('jobsTypeFilter', '')
+	const [errorCodeFilter, setErrorCodeFilter] = useLocalStorageState('jobsErrorCodeFilter', '')
 	const [cancelingJobId, setCancelingJobId] = useState<string | null>(null)
 	const [retryingJobId, setRetryingJobId] = useState<string | null>(null)
 	const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
 	const [deleteJobPrefill, setDeleteJobPrefill] = useState<DeleteJobPrefill | null>(() => deleteJobInitialPrefill)
+	const defaultColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
+		() => ({
+			id: true,
+			type: true,
+			summary: true,
+			status: true,
+			progress: true,
+			errorCode: true,
+			error: true,
+			createdAt: true,
+			actions: true,
+		}),
+		[],
+	)
+	const [columnVisibility, setColumnVisibility] = useLocalStorageState<Record<ColumnKey, boolean>>(
+		'jobsColumnVisibility',
+		defaultColumnVisibility,
+	)
+	const mergedColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
+		() => ({
+			...defaultColumnVisibility,
+			...columnVisibility,
+			actions: true,
+		}),
+		[columnVisibility, defaultColumnVisibility],
+	)
+	const columnOptions = useMemo(() => {
+		const options: Array<{ key: ToggleableColumnKey; label: string }> = [
+			{ key: 'id', label: 'ID' },
+			{ key: 'type', label: 'Type' },
+			{ key: 'summary', label: 'Summary' },
+			{ key: 'status', label: 'Status' },
+			{ key: 'progress', label: 'Progress' },
+			{ key: 'errorCode', label: 'Error code' },
+			{ key: 'error', label: 'Error' },
+			{ key: 'createdAt', label: 'Created' },
+		]
+		return options
+	}, [])
+	const columnsDirty = useMemo(
+		() => columnOptions.some((option) => mergedColumnVisibility[option.key] !== defaultColumnVisibility[option.key]),
+		[columnOptions, mergedColumnVisibility, defaultColumnVisibility],
+	)
+	const setColumnVisible = useCallback(
+		(key: ToggleableColumnKey, next: boolean) => {
+			setColumnVisibility((prev) => ({
+				...defaultColumnVisibility,
+				...prev,
+				[key]: next,
+			}))
+		},
+		[defaultColumnVisibility, setColumnVisibility],
+	)
+	const resetColumns = useCallback(() => {
+		setColumnVisibility(defaultColumnVisibility)
+	}, [defaultColumnVisibility, setColumnVisibility])
 	const logPollBaseMs = 1500
 	const logPollMaxMs = 20_000
 	const logPollPauseAfter = 3
 	const eventsRetryThreshold = 3
+	const maxLogLines = 2000
+	const tableContainerRef = useRef<HTMLDivElement | null>(null)
+	const [tableScrollY, setTableScrollY] = useState(480)
+
+	const updateTableScroll = useCallback(() => {
+		const el = tableContainerRef.current
+		if (!el) return
+		const rect = el.getBoundingClientRect()
+		const padding = 24
+		const next = Math.max(240, Math.floor(window.innerHeight - rect.top - padding))
+		setTableScrollY(next)
+	}, [])
+
+	useLayoutEffect(() => {
+		updateTableScroll()
+		window.addEventListener('resize', updateTableScroll)
+		return () => window.removeEventListener('resize', updateTableScroll)
+	}, [updateTableScroll])
 
 	const resetLogPolling = useCallback(() => {
 		logPollFailuresRef.current = 0
@@ -293,7 +402,7 @@ export function JobsPage(props: Props) {
 	}, [uploadDetails])
 
 	const jobsQuery = useInfiniteQuery({
-		queryKey: ['jobs', props.profileId, props.apiToken, statusFilter, typeFilter],
+		queryKey: ['jobs', props.profileId, props.apiToken, statusFilter, typeFilter, errorCodeFilter],
 		enabled: !!props.profileId,
 		initialPageParam: undefined as string | undefined,
 		queryFn: ({ pageParam }) =>
@@ -301,6 +410,7 @@ export function JobsPage(props: Props) {
 				limit: 50,
 				status: statusFilter === 'all' ? undefined : statusFilter,
 				type: typeFilter.trim() ? typeFilter.trim() : undefined,
+				errorCode: errorCodeFilter.trim() ? errorCodeFilter.trim() : undefined,
 				cursor: pageParam,
 			}),
 		getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -464,7 +574,7 @@ export function JobsPage(props: Props) {
 				.split('\n')
 				.map((l) => l.trimEnd())
 				.filter((l) => l.length > 0)
-				.slice(-2000)
+				.slice(-maxLogLines)
 			setLogByJobId((prev) => ({ ...prev, [jobId]: lines }))
 			logOffsetsRef.current[jobId] = nextOffset
 			logRemaindersRef.current[jobId] = ''
@@ -541,7 +651,7 @@ export function JobsPage(props: Props) {
 				setLogByJobId((prev) => {
 					const next = { ...prev }
 					const existing = next[jobId] ?? []
-					next[jobId] = [...existing, ...newLines].slice(-2000)
+					next[jobId] = [...existing, ...newLines].slice(-maxLogLines)
 					return next
 				})
 			} catch {
@@ -674,10 +784,11 @@ export function JobsPage(props: Props) {
 					typeof msg.payload === 'object' &&
 					msg.payload !== null
 				) {
-					const payload = msg.payload as { status?: JobStatus; progress?: JobProgress; error?: string }
+					const payload = msg.payload as { status?: JobStatus; progress?: JobProgress; error?: string; errorCode?: string }
 					const status = payload.status
 					const progress = payload.progress
 					const error = payload.error
+					const errorCode = payload.errorCode
 
 					queryClient.setQueriesData(
 						{ queryKey: ['jobs'], exact: false },
@@ -687,6 +798,7 @@ export function JobsPage(props: Props) {
 								status: status ?? job.status,
 								progress: progress ?? job.progress,
 								error: error ?? job.error,
+								errorCode: errorCode ?? job.errorCode,
 							})),
 					)
 				}
@@ -797,23 +909,277 @@ export function JobsPage(props: Props) {
 		}
 	}, [eventsManualRetryToken, props.apiToken, props.profileId, queryClient])
 
-	if (!props.profileId) {
-		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view jobs" />
-	}
-
-	const jobs = jobsQuery.data?.pages.flatMap((p) => p.items) ?? []
+	const jobs = useMemo(() => jobsQuery.data?.pages.flatMap((p) => p.items) ?? [], [jobsQuery.data])
 	const isLoading = jobsQuery.isFetching && !jobsQuery.isFetchingNextPage
 	const showJobsEmpty = !isLoading && jobs.length === 0
-	const ellipsisTextStyle = { display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const
-	const renderEllipsisText = (value: string | null | undefined, tone?: 'secondary' | 'danger') => {
-		if (!value) return <Typography.Text type="secondary">-</Typography.Text>
-		return (
-			<Tooltip title={value}>
-				<Typography.Text type={tone} style={ellipsisTextStyle}>
+	useEffect(() => {
+		updateTableScroll()
+	}, [updateTableScroll, bucketsQuery.isError, eventsConnected, eventsRetryCount, jobs.length, jobsQuery.isError])
+	const clampTextStyle = useMemo(
+		() =>
+			({
+				display: '-webkit-box',
+				WebkitBoxOrient: 'vertical',
+				WebkitLineClamp: 2,
+				overflow: 'hidden',
+				whiteSpace: 'normal',
+				wordBreak: 'break-word',
+			}) as const,
+		[],
+	)
+	const renderClampedText = useCallback(
+		(
+			value: string | null | undefined,
+			tone?: 'secondary' | 'danger',
+			options?: { code?: boolean },
+		) => {
+			if (!value) return <Typography.Text type="secondary">-</Typography.Text>
+			const content = (
+				<Typography.Text type={tone} style={clampTextStyle} code={options?.code}>
 					{value}
 				</Typography.Text>
-			</Tooltip>
-		)
+			)
+			const showTooltip = value.length > 32 || value.includes('\n')
+			return showTooltip ? <Tooltip title={value}>{content}</Tooltip> : content
+		},
+		[clampTextStyle],
+	)
+
+	const jobSummaryById = useMemo(() => {
+		const next = new Map<string, string | null>()
+		for (const job of jobs) {
+			next.set(job.id, jobSummary(job))
+		}
+		return next
+	}, [jobs])
+	const getJobSummary = useCallback((job: Job) => jobSummaryById.get(job.id) ?? null, [jobSummaryById])
+	const columns = useMemo(() => {
+		const columnDefs = [
+			{
+				key: 'id',
+				title: 'ID',
+				dataIndex: 'id',
+				width: 220,
+				render: (v: string) => renderClampedText(v, undefined, { code: true }),
+				sorter: (a: Job, b: Job) => compareText(a.id, b.id),
+			},
+			{
+				key: 'type',
+				title: 'Type',
+				dataIndex: 'type',
+				width: 200,
+				render: (v: string) => renderClampedText(v),
+				sorter: (a: Job, b: Job) => compareText(a.type, b.type),
+			},
+			{
+				key: 'summary',
+				title: 'Summary',
+				width: 420,
+				render: (_: unknown, row: Job) => renderClampedText(getJobSummary(row), 'secondary'),
+				sorter: (a: Job, b: Job) => compareText(getJobSummary(a), getJobSummary(b)),
+			},
+			{
+				key: 'status',
+				title: 'Status',
+				dataIndex: 'status',
+				width: 140,
+				render: (v: JobStatus) => <Tag color={statusColor(v)}>{v}</Tag>,
+				sorter: (a: Job, b: Job) => compareText(a.status, b.status),
+			},
+			{
+				key: 'progress',
+				title: 'Progress',
+				width: 180,
+				render: (_: unknown, row: Job) => {
+					const ops = row.progress?.objectsDone ?? 0
+					const bytes = row.progress?.bytesDone ?? 0
+					const speed = row.progress?.speedBps ?? 0
+					if (!ops && !bytes) return <Typography.Text type="secondary">-</Typography.Text>
+					const parts = []
+					if (ops) parts.push(`${ops} ops`)
+					if (bytes) parts.push(formatBytes(bytes))
+					if (speed) parts.push(`${formatBytes(speed)}/s`)
+					return <Typography.Text type="secondary">{parts.join(' · ')}</Typography.Text>
+				},
+				sorter: (a: Job, b: Job) => compareNumber(getProgressSortValue(a), getProgressSortValue(b)),
+			},
+			{
+				key: 'errorCode',
+				title: 'Error code',
+				dataIndex: 'errorCode',
+				width: 160,
+				render: (v: string | null | undefined) => renderClampedText(v, 'secondary'),
+				sorter: (a: Job, b: Job) => compareText(a.errorCode ?? '', b.errorCode ?? ''),
+			},
+			{
+				key: 'error',
+				title: 'Error',
+				dataIndex: 'error',
+				width: 240,
+				render: (v: string | null | undefined) => renderClampedText(v, 'danger'),
+				sorter: (a: Job, b: Job) => compareText(a.error ?? '', b.error ?? ''),
+			},
+			{
+				key: 'createdAt',
+				title: 'Created',
+				dataIndex: 'createdAt',
+				width: 220,
+				sorter: (a: Job, b: Job) => compareNumber(toTimestamp(a.createdAt), toTimestamp(b.createdAt)),
+			},
+			{
+				key: 'actions',
+				title: 'Actions',
+				width: 140,
+				fixed: 'right' as const,
+				align: 'center' as const,
+				render: (_: unknown, row: Job) => {
+					const isZipJob = row.type === 's3_zip_prefix' || row.type === 's3_zip_objects'
+					const canDownloadArtifact = isZipJob && row.status !== 'failed' && row.status !== 'canceled'
+					const isCancelDisabled =
+						isOffline ||
+						(row.status !== 'queued' && row.status !== 'running') ||
+						(cancelMutation.isPending && cancelingJobId === row.id)
+					const isRetryDisabled =
+						isOffline ||
+						(row.status !== 'failed' && row.status !== 'canceled') ||
+						(retryMutation.isPending && retryingJobId === row.id)
+					const isDeleteDisabled =
+						isOffline ||
+						row.status === 'queued' ||
+						row.status === 'running' ||
+						(deleteJobMutation.isPending && deletingJobId === row.id)
+					const summary = getJobSummary(row)
+					const label = summary ? `Artifact: ${summary}` : `Job artifact: ${row.id}`
+					const menuItems: MenuProps['items'] = []
+					const actionItems: MenuProps['items'] = []
+					const openDetails = () => {
+						setDetailsJobId(row.id)
+						setDetailsOpen(true)
+					}
+					const openLogs = () => {
+						setActiveLogJobId(row.id)
+						setLogsOpen(true)
+						logsMutation.mutate(row.id)
+					}
+
+					menuItems.push(
+						{
+							key: 'details',
+							icon: <InfoCircleOutlined />,
+							label: 'Details',
+							disabled: isOffline,
+							onClick: openDetails,
+						},
+						{
+							key: 'logs',
+							icon: <FileTextOutlined />,
+							label: 'Logs',
+							disabled: isOffline || (logsMutation.isPending && activeLogJobId === row.id),
+							onClick: openLogs,
+						},
+					)
+
+					if (isZipJob) {
+						actionItems.push({
+							key: 'download',
+							icon: <DownloadOutlined />,
+							label: 'Download ZIP',
+							disabled: isOffline || !canDownloadArtifact,
+							onClick: () =>
+								transfers.queueDownloadJobArtifact({
+									profileId: props.profileId!,
+									jobId: row.id,
+									label,
+									filenameHint: `job-${row.id}.zip`,
+									waitForJob: row.status !== 'succeeded',
+								}),
+						})
+					}
+
+					if (actionItems.length) {
+						menuItems.push({ type: 'divider' }, ...actionItems)
+					}
+
+					menuItems.push({ type: 'divider' })
+					menuItems.push({
+						key: 'cancel',
+						icon: <StopOutlined />,
+						label: 'Cancel',
+						danger: true,
+						disabled: isCancelDisabled,
+						onClick: () => cancelMutation.mutate(row.id),
+					})
+
+					return (
+						<Space size={4}>
+							<Tooltip title="Retry">
+								<Button
+									type="text"
+									size="small"
+									icon={<RedoOutlined />}
+									disabled={isRetryDisabled}
+									loading={retryMutation.isPending && retryingJobId === row.id}
+									aria-label="Retry"
+									onClick={() => retryMutation.mutate(row.id)}
+								/>
+							</Tooltip>
+							<Tooltip title="Delete">
+								<Button
+									type="text"
+									size="small"
+									danger
+									icon={<DeleteOutlined />}
+									disabled={isDeleteDisabled}
+									loading={deleteJobMutation.isPending && deletingJobId === row.id}
+									aria-label="Delete"
+									onClick={() => {
+										confirmDangerAction({
+											title: 'Delete job record?',
+											description: (
+												<Space direction="vertical" style={{ width: '100%' }}>
+													<Typography.Text>
+														Job ID: <Typography.Text code>{row.id}</Typography.Text>
+													</Typography.Text>
+													<Typography.Text type="secondary">
+														This removes the job record and deletes its log file.
+													</Typography.Text>
+												</Space>
+											),
+											onConfirm: async () => {
+												await deleteJobMutation.mutateAsync(row.id)
+											},
+										})
+									}}
+								/>
+							</Tooltip>
+							<Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
+								<Button type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
+							</Dropdown>
+						</Space>
+					)
+				},
+			},
+		]
+		return columnDefs.filter((column) => mergedColumnVisibility[column.key as ColumnKey] !== false)
+	}, [
+		activeLogJobId,
+		cancelMutation,
+		cancelingJobId,
+		deleteJobMutation,
+		deletingJobId,
+		getJobSummary,
+		isOffline,
+		logsMutation,
+		mergedColumnVisibility,
+		props.profileId,
+		renderClampedText,
+		retryMutation,
+		retryingJobId,
+		transfers,
+	])
+
+	if (!props.profileId) {
+		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view jobs" />
 	}
 
 	return (
@@ -894,9 +1260,48 @@ export function JobsPage(props: Props) {
 					value={typeFilter}
 					onChange={(e) => setTypeFilter(e.target.value)}
 					placeholder="type filter (optional)"
-					style={{ width: screens.md ? 360 : '100%', maxWidth: '100%' }}
+					style={{ width: screens.md ? 300 : '100%', maxWidth: '100%' }}
 					allowClear
 				/>
+				<Input
+					value={errorCodeFilter}
+					onChange={(e) => setErrorCodeFilter(e.target.value)}
+					placeholder="error code filter (optional)"
+					style={{ width: screens.md ? 240 : '100%', maxWidth: '100%' }}
+					allowClear
+				/>
+				<Dropdown
+					trigger={['click']}
+					dropdownRender={() => (
+						<div
+							style={{
+								padding: 8,
+								width: 220,
+								background: token.colorBgElevated,
+								border: `1px solid ${token.colorBorderSecondary}`,
+								borderRadius: token.borderRadiusLG,
+								boxShadow: token.boxShadowSecondary,
+							}}
+						>
+							<Space direction="vertical" size={4} style={{ width: '100%' }}>
+								{columnOptions.map((option) => (
+									<Checkbox
+										key={option.key}
+										checked={mergedColumnVisibility[option.key]}
+										onChange={(event) => setColumnVisible(option.key, event.target.checked)}
+									>
+										{option.label}
+									</Checkbox>
+								))}
+								<Button size="small" onClick={resetColumns} disabled={!columnsDirty}>
+									Reset columns
+								</Button>
+							</Space>
+						</div>
+					)}
+				>
+					<Button icon={<SettingOutlined />}>Columns</Button>
+				</Dropdown>
 				<Button icon={<ReloadOutlined />} onClick={() => jobsQuery.refetch()} loading={jobsQuery.isFetching} disabled={isOffline}>
 					Refresh
 				</Button>
@@ -916,174 +1321,40 @@ export function JobsPage(props: Props) {
 				<Alert type="error" showIcon message="Failed to load jobs" description={formatErr(jobsQuery.error)} />
 			) : null}
 
-			<Table
-				rowKey="id"
-				loading={isLoading}
-				dataSource={jobs}
-				pagination={false}
-				tableLayout="fixed"
-				scroll={{ x: true }}
-				locale={{
-					emptyText: showJobsEmpty ? (
-						<Empty description="No jobs yet">
-							<Space wrap>
-								<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
-									Upload folder
-								</Button>
-								<Button
-									danger
-									icon={<DeleteOutlined />}
-									onClick={() => {
-										setDeleteJobPrefill(null)
-										setCreateDeleteOpen(true)
-									}}
-									disabled={isOffline}
-								>
-									New delete job
-								</Button>
-							</Space>
-						</Empty>
-					) : null,
-				}}
-				columns={[
-					{ title: 'ID', dataIndex: 'id', width: 220, render: (v: string) => <Typography.Text code>{v}</Typography.Text> },
-					{ title: 'Type', dataIndex: 'type', width: 200, render: (v: string) => renderEllipsisText(v) },
-					{
-						title: 'Summary',
-						width: 420,
-						render: (_, row: Job) => (
-							renderEllipsisText(jobSummary(row), 'secondary')
-						),
-					},
-					{
-						title: 'Status',
-						dataIndex: 'status',
-						width: 140,
-						render: (v: JobStatus) => <Tag color={statusColor(v)}>{v}</Tag>,
-					},
-					{
-						title: 'Progress',
-						width: 180,
-						render: (_, row: Job) => {
-							const ops = row.progress?.objectsDone ?? 0
-							const bytes = row.progress?.bytesDone ?? 0
-							const speed = row.progress?.speedBps ?? 0
-							if (!ops && !bytes) return <Typography.Text type="secondary">-</Typography.Text>
-							const parts = []
-							if (ops) parts.push(`${ops} ops`)
-							if (bytes) parts.push(formatBytes(bytes))
-							if (speed) parts.push(`${formatBytes(speed)}/s`)
-							return <Typography.Text type="secondary">{parts.join(' · ')}</Typography.Text>
-						},
-					},
-					{
-						title: 'Error',
-						dataIndex: 'error',
-						width: 240,
-						render: (v: string | null | undefined) => renderEllipsisText(v, 'danger'),
-					},
-					{ title: 'Created', dataIndex: 'createdAt', width: 220 },
-					{
-						title: 'Actions',
-						width: 420,
-						render: (_, row: Job) => {
-							const isZipJob = row.type === 's3_zip_prefix' || row.type === 's3_zip_objects'
-							const canDownloadArtifact = isZipJob && row.status !== 'failed' && row.status !== 'canceled'
-							const summary = jobSummary(row)
-							const label = summary ? `Artifact: ${summary}` : `Job artifact: ${row.id}`
-
-							return (
-								<Space>
-									<Button
-										size="small"
-										icon={<DownloadOutlined />}
-										disabled={isOffline || !canDownloadArtifact}
-										onClick={() =>
-											transfers.queueDownloadJobArtifact({
-												profileId: props.profileId!,
-												jobId: row.id,
-												label,
-												filenameHint: `job-${row.id}.zip`,
-												waitForJob: row.status !== 'succeeded',
-											})
-										}
-									>
-										Zip
+			<div ref={tableContainerRef}>
+				<Table
+					rowKey="id"
+					loading={isLoading}
+					dataSource={jobs}
+					pagination={false}
+					tableLayout="fixed"
+					scroll={{ x: true, y: tableScrollY }}
+					virtual
+					locale={{
+						emptyText: showJobsEmpty ? (
+							<Empty description="No jobs yet">
+								<Space wrap>
+									<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
+										Upload folder
 									</Button>
-								<Button
-									size="small"
-									onClick={() => {
-										setDetailsJobId(row.id)
-										setDetailsOpen(true)
-									}}
-									disabled={isOffline}
-								>
-									Details
-								</Button>
-								<Button
-									size="small"
-									onClick={() => {
-										setActiveLogJobId(row.id)
-										setLogsOpen(true)
-										logsMutation.mutate(row.id)
-									}}
-									loading={logsMutation.isPending && activeLogJobId === row.id}
-									disabled={isOffline}
-								>
-									Logs
-								</Button>
-								<Button
-									size="small"
-									danger
-									icon={<StopOutlined />}
-									disabled={isOffline || (row.status !== 'queued' && row.status !== 'running')}
-									loading={cancelMutation.isPending && cancelingJobId === row.id}
-									onClick={() => cancelMutation.mutate(row.id)}
-								>
-									Cancel
-								</Button>
-								<Button
-									size="small"
-									icon={<RedoOutlined />}
-									disabled={isOffline || (row.status !== 'failed' && row.status !== 'canceled')}
-									loading={retryMutation.isPending && retryingJobId === row.id}
-									onClick={() => retryMutation.mutate(row.id)}
-								>
-									Retry
-								</Button>
-								<Button
-									size="small"
-									danger
-									icon={<DeleteOutlined />}
-									disabled={isOffline || row.status === 'queued' || row.status === 'running'}
-									loading={deleteJobMutation.isPending && deletingJobId === row.id}
-									onClick={() => {
-										Modal.confirm({
-											title: 'Delete job record?',
-											content: (
-												<Space direction="vertical" style={{ width: '100%' }}>
-													<Typography.Text>
-														Job ID: <Typography.Text code>{row.id}</Typography.Text>
-													</Typography.Text>
-													<Typography.Text type="secondary">This removes the job record and deletes its log file.</Typography.Text>
-												</Space>
-											),
-											okText: 'Delete',
-											okType: 'danger',
-											onOk: async () => {
-												await deleteJobMutation.mutateAsync(row.id)
-											},
-										})
-									}}
-								>
-									Delete
-								</Button>
-							</Space>
-							)
-						},
-					},
-				]}
-			/>
+									<Button
+										danger
+										icon={<DeleteOutlined />}
+										onClick={() => {
+											setDeleteJobPrefill(null)
+											setCreateDeleteOpen(true)
+										}}
+										disabled={isOffline}
+									>
+										New delete job
+									</Button>
+								</Space>
+							</Empty>
+						) : null,
+					}}
+					columns={columns}
+				/>
+			</div>
 
 			{jobsQuery.hasNextPage ? (
 				<Button
@@ -1125,7 +1396,7 @@ export function JobsPage(props: Props) {
 				bucketOptions={bucketOptions}
 			/>
 
-				<DeletePrefixJobModal
+			<DeletePrefixJobModal
 					open={createDeleteOpen}
 					onCancel={() => {
 						setCreateDeleteOpen(false)
@@ -1166,9 +1437,9 @@ export function JobsPage(props: Props) {
 							loading={deleteJobMutation.isPending && deletingJobId === detailsJobId}
 							onClick={() => {
 								if (!detailsJobId) return
-								Modal.confirm({
+								confirmDangerAction({
 									title: 'Delete job record?',
-									content: (
+									description: (
 										<Space direction="vertical" style={{ width: '100%' }}>
 											<Typography.Text>
 												Job ID: <Typography.Text code>{detailsJobId}</Typography.Text>
@@ -1176,9 +1447,7 @@ export function JobsPage(props: Props) {
 											<Typography.Text type="secondary">This removes the job record and deletes its log file.</Typography.Text>
 										</Space>
 									),
-									okText: 'Delete',
-									okType: 'danger',
-									onOk: async () => {
+									onConfirm: async () => {
 										await deleteJobMutation.mutateAsync(detailsJobId)
 									},
 								})
@@ -1238,6 +1507,13 @@ export function JobsPage(props: Props) {
 								<Descriptions.Item label="Finished">
 									{jobDetailsQuery.data.finishedAt ? (
 										<Typography.Text code>{jobDetailsQuery.data.finishedAt}</Typography.Text>
+									) : (
+										<Typography.Text type="secondary">-</Typography.Text>
+									)}
+								</Descriptions.Item>
+								<Descriptions.Item label="Error code">
+									{jobDetailsQuery.data.errorCode ? (
+										<Typography.Text code>{jobDetailsQuery.data.errorCode}</Typography.Text>
 									) : (
 										<Typography.Text type="secondary">-</Typography.Text>
 									)}

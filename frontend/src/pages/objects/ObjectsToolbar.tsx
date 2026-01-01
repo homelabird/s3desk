@@ -17,6 +17,7 @@ export type ObjectsToolbarProps = {
 	bucketOptions: SelectProps['options']
 	bucketsLoading: boolean
 	onBucketChange: (value: string | null) => void
+	onBucketDropdownVisibleChange?: (open: boolean) => void
 	canGoBack: boolean
 	canGoForward: boolean
 	canGoUp: boolean
@@ -104,6 +105,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						options={props.bucketOptions}
 						loading={props.bucketsLoading}
 						onChange={(value) => props.onBucketChange(value ?? null)}
+						onDropdownVisibleChange={props.onBucketDropdownVisibleChange}
 						optionFilterProp="label"
 						disabled={!canUseBucket}
 					/>
@@ -233,6 +235,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				options={props.bucketOptions}
 				loading={props.bucketsLoading}
 				onChange={(value) => props.onBucketChange(value ?? null)}
+				onDropdownVisibleChange={props.onBucketDropdownVisibleChange}
 				optionFilterProp="label"
 				disabled={!canUseBucket}
 			/>

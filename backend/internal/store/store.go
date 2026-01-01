@@ -30,6 +30,14 @@ func New(sqlDB *gorm.DB, opts Options) (*Store, error) {
 	return &Store{db: sqlDB, crypto: pc}, nil
 }
 
+func (s *Store) Ping(ctx context.Context) error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
+}
+
 func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateRequest) (models.Profile, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := ulid.Make().String()
@@ -415,10 +423,11 @@ func (s *Store) CreateJob(ctx context.Context, profileID string, in CreateJobInp
 }
 
 type JobFilter struct {
-	Status *models.JobStatus
-	Type   *string
-	Limit  int
-	Cursor *string
+	Status    *models.JobStatus
+	Type      *string
+	ErrorCode *string
+	Limit     int
+	Cursor    *string
 }
 
 func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (models.JobsListResponse, error) {
@@ -438,6 +447,12 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 	}
 	if f.Type != nil && *f.Type != "" {
 		query = query.Where("type = ?", *f.Type)
+	}
+	if f.ErrorCode != nil {
+		code := strings.TrimSpace(*f.ErrorCode)
+		if code != "" {
+			query = query.Where("error_code = ?", code)
+		}
 	}
 	if f.Cursor != nil && *f.Cursor != "" {
 		query = query.Where("id < ?", *f.Cursor)
@@ -478,6 +493,9 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 		}
 		if row.Error != nil {
 			job.Error = row.Error
+		}
+		if row.ErrorCode != nil {
+			job.ErrorCode = row.ErrorCode
 		}
 		if row.StartedAt != nil {
 			job.StartedAt = row.StartedAt
@@ -530,6 +548,9 @@ func (s *Store) GetJob(ctx context.Context, profileID, jobID string) (models.Job
 	}
 	if row.Error != nil {
 		job.Error = row.Error
+	}
+	if row.ErrorCode != nil {
+		job.ErrorCode = row.ErrorCode
 	}
 	if row.StartedAt != nil {
 		job.StartedAt = row.StartedAt
@@ -657,6 +678,9 @@ func (s *Store) GetJobByID(ctx context.Context, jobID string) (profileID string,
 	if row.Error != nil {
 		job.Error = row.Error
 	}
+	if row.ErrorCode != nil {
+		job.ErrorCode = row.ErrorCode
+	}
 	if row.StartedAt != nil {
 		job.StartedAt = row.StartedAt
 	}
@@ -667,7 +691,7 @@ func (s *Store) GetJobByID(ctx context.Context, jobID string) (profileID string,
 	return profileID, job, true, nil
 }
 
-func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string) error {
+func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string, errorCode *string) error {
 	var progressJSON *string
 	if progress != nil {
 		bytes, err := json.Marshal(progress)
@@ -679,8 +703,9 @@ func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models
 	}
 
 	updates := map[string]any{
-		"status": string(status),
-		"error":  errMsg,
+		"status":     string(status),
+		"error":      errMsg,
+		"error_code": errorCode,
 	}
 	if startedAt != nil {
 		updates["started_at"] = *startedAt

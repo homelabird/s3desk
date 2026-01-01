@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { MetaResponse, Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileTLSStatus, ProfileUpdateRequest } from '../api/types'
+import { confirmDangerAction } from '../lib/confirmDangerAction'
 
 type Props = {
 	apiToken: string
@@ -153,7 +154,7 @@ export function ProfilesPage(props: Props) {
 					message="API Token is empty"
 					description="If your backend is started with API_TOKEN, set it in Settings."
 					action={
-						<Button size="small" onClick={() => navigate({ search: '?settings=1' })}>
+						<Button size="small" onClick={() => navigate('/settings')}>
 							Open Settings
 						</Button>
 					}
@@ -222,7 +223,17 @@ export function ProfilesPage(props: Props) {
 								<Button
 									size="small"
 									danger
-									onClick={() => deleteMutation.mutate(row.id)}
+									onClick={() => {
+										confirmDangerAction({
+											title: `Delete profile "${row.name}"?`,
+											description: 'This removes the profile and any TLS settings associated with it.',
+											confirmText: row.name,
+											confirmHint: `Type "${row.name}" to confirm`,
+											onConfirm: async () => {
+												await deleteMutation.mutateAsync(row.id)
+											},
+										})
+									}}
 									loading={deleteMutation.isPending && deletingProfileId === row.id}
 								>
 									Delete
@@ -282,7 +293,6 @@ function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig |
 	const clientKeyPem = values.tlsClientKeyPem?.trim() ?? ''
 	if (!clientCertPem || !clientKeyPem) return null
 	const caCertPem = values.tlsCaCertPem?.trim() ?? ''
-	const serverName = values.tlsServerName?.trim() ?? ''
 
 	const cfg: ProfileTLSConfig = {
 		mode: 'mtls',
@@ -290,7 +300,6 @@ function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig |
 		clientKeyPem,
 	}
 	if (caCertPem) cfg.caCertPem = caCertPem
-	if (serverName) cfg.serverName = serverName
 	return cfg
 }
 
@@ -310,7 +319,6 @@ type ProfileFormValues = {
 	tlsClientCertPem?: string
 	tlsClientKeyPem?: string
 	tlsCaCertPem?: string
-	tlsServerName?: string
 }
 
 type TLSAction = 'keep' | 'enable' | 'disable'
@@ -399,7 +407,6 @@ function ProfileModal(props: {
 					tlsClientCertPem: '',
 					tlsClientKeyPem: '',
 					tlsCaCertPem: '',
-					tlsServerName: '',
 					...props.initialValues,
 				}}
 				onFinish={(values) => props.onSubmit(values)}
@@ -517,9 +524,6 @@ function ProfileModal(props: {
 									autoSize={{ minRows: 3, maxRows: 6 }}
 									placeholder="-----BEGIN CERTIFICATE-----"
 								/>
-							</Form.Item>
-							<Form.Item name="tlsServerName" label="Server Name (SNI, optional)">
-								<Input disabled={tlsUnavailable} placeholder="s3.example.com" />
 							</Form.Item>
 						</>
 					) : null}

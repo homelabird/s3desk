@@ -1337,6 +1337,7 @@ export interface paths {
                     type?: string;
                     limit?: number;
                     cursor?: string;
+                    errorCode?: string;
                 };
                 header: {
                     "X-Profile-Id": components["parameters"]["XProfileId"];
@@ -1781,14 +1782,12 @@ export interface components {
             clientCertPem?: string;
             clientKeyPem?: string;
             caCertPem?: string;
-            serverName?: string;
         };
         ProfileTLSStatus: {
             mode: components["schemas"]["ProfileTLSMode"];
             hasClientCert: boolean;
             hasClientKey: boolean;
             hasCa: boolean;
-            serverName?: string;
             /** Format: date-time */
             updatedAt?: string;
         };
@@ -2216,6 +2215,7 @@ export interface components {
             };
             progress?: components["schemas"]["JobProgress"];
             error?: string | null;
+            errorCode?: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

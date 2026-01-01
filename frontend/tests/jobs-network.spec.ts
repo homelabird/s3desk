@@ -98,11 +98,12 @@ test.describe('Jobs network resilience', () => {
 		let mockOffline = false
 		await setupApiMocks(page, () => mockOffline)
 
-		await page.goto('/jobs')
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+	await page.goto('/jobs')
+	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 
-		const logsButton = page.getByRole('button', { name: 'Logs' }).first()
-		await logsButton.click()
+	const jobRow = page.locator('[data-row-key="job-test"]')
+	await jobRow.getByRole('button', { name: 'More actions' }).click()
+	await page.getByRole('menuitem', { name: 'Logs' }).click()
 
 		const logsDrawer = page.getByRole('dialog', { name: 'Job Logs' })
 		await expect(logsDrawer).toBeVisible()

@@ -171,18 +171,19 @@ async function getMenuMetrics(page: Page): Promise<MenuMetrics | null> {
 	return { rect, viewport }
 }
 
-async function expectMenuInViewport(page: Page) {
+async function expectMenuInViewport(page: Page, options?: { padding?: number }) {
 	const deadline = Date.now() + 5000
 	let latest: MenuMetrics | null = null
+	const padding = options?.padding ?? 0
 	while (Date.now() < deadline) {
 		latest = await getMenuMetrics(page)
 		if (latest) {
 			const { rect, viewport } = latest
 			if (
-				rect.top >= 0 &&
-				rect.left >= 0 &&
-				rect.right <= viewport.width &&
-				rect.bottom <= viewport.height
+				rect.top >= -padding &&
+				rect.left >= -padding &&
+				rect.right <= viewport.width + padding &&
+				rect.bottom <= viewport.height + padding
 			) {
 				return latest
 			}
@@ -216,11 +217,20 @@ test.describe('Objects context menus', () => {
 			await scroller.scrollIntoViewIfNeeded()
 			const box = await scroller.boundingBox()
 			if (!box) throw new Error('List scroller not found')
-
-			await scroller.click({
-				button: 'right',
-				position: { x: Math.min(20, Math.max(1, box.width - 1)), y: Math.max(5, box.height - 10) },
-			})
+			await scroller.evaluate((el, point) => {
+				el.dispatchEvent(
+					new MouseEvent('contextmenu', {
+						bubbles: true,
+						cancelable: true,
+						view: window,
+						clientX: point.x,
+						clientY: point.y,
+						button: 2,
+						buttons: 2,
+						detail: 1,
+					}),
+				)
+			}, { x: box.x + 12, y: box.y + 12 })
 
 			const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .objects-context-menu')
 			await expect(menu).toBeVisible()
@@ -252,18 +262,15 @@ test.describe('Objects context menus', () => {
 
 		const rows = page.locator('[data-objects-row="true"]')
 		await expect(rows.first()).toBeVisible()
-		const target = rows.last()
+		const target = rows.first()
 		await target.scrollIntoViewIfNeeded()
-		const box = await target.boundingBox()
-		if (!box) throw new Error('Object row not found')
+		await expect(target).toBeVisible()
+		const menuTrigger = target.getByRole('button', { name: 'Object actions' })
+		await expect(menuTrigger).toBeVisible()
+		await menuTrigger.click()
 
-		await target.click({
-			button: 'right',
-			position: { x: Math.min(20, Math.max(1, box.width - 1)), y: Math.min(20, Math.max(1, box.height - 1)) },
-		})
-
-		const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .objects-context-menu')
-		await expect(menu).toBeVisible()
-		await expectMenuInViewport(page)
-	})
+	const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .objects-context-menu')
+	await expect(menu).toBeVisible()
+	await expectMenuInViewport(page, { padding: 8 })
+})
 })

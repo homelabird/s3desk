@@ -69,5 +69,5 @@ export function NetworkStatusBanner() {
 	const message =
 		display.kind === 'offline' ? offlineMessage : display.kind === 'online' ? display.message || onlineMessage : display.message || unstableMessage
 
-	return <Alert banner showIcon type={type} message={message} />
+	return <Alert banner showIcon type={type} title={message} />
 }

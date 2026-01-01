@@ -79,7 +79,6 @@ type ProfileTLSConfig struct {
 	ClientCertPEM string         `json:"clientCertPem,omitempty"`
 	ClientKeyPEM  string         `json:"clientKeyPem,omitempty"`
 	CACertPEM     string         `json:"caCertPem,omitempty"`
-	ServerName    string         `json:"serverName,omitempty"`
 }
 
 type ProfileTLSStatus struct {
@@ -87,7 +86,6 @@ type ProfileTLSStatus struct {
 	HasClientCert bool           `json:"hasClientCert"`
 	HasClientKey  bool           `json:"hasClientKey"`
 	HasCACert     bool           `json:"hasCa"`
-	ServerName    string         `json:"serverName,omitempty"`
 	UpdatedAt     string         `json:"updatedAt,omitempty"`
 }
 
@@ -235,6 +233,7 @@ type Job struct {
 	Payload    map[string]any `json:"payload"`
 	Progress   *JobProgress   `json:"progress,omitempty"`
 	Error      *string        `json:"error,omitempty"`
+	ErrorCode  *string        `json:"errorCode,omitempty"`
 	CreatedAt  string         `json:"createdAt"`
 	StartedAt  *string        `json:"startedAt,omitempty"`
 	FinishedAt *string        `json:"finishedAt,omitempty"`

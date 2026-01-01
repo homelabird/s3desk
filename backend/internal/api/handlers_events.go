@@ -35,6 +35,9 @@ func (s *server) handleEventsSSE(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if afterSeq > 0 && s.metrics != nil {
+		s.metrics.IncEventsReconnects()
+	}
 
 	includeLogs := true
 	if raw := r.URL.Query().Get("includeLogs"); raw != "" {
@@ -45,6 +48,10 @@ func (s *server) handleEventsSSE(w http.ResponseWriter, r *http.Request) {
 
 	client, backlog := s.hub.SubscribeFrom(afterSeq, includeLogs)
 	defer s.hub.Unsubscribe(client)
+	if s.metrics != nil {
+		s.metrics.IncEventsConnections()
+		defer s.metrics.DecEventsConnections()
+	}
 
 	for _, msg := range backlog {
 		_, _ = fmt.Fprintf(w, "id: %d\n", msg.Seq)

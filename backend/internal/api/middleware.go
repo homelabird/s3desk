@@ -82,13 +82,8 @@ func isSSERequest(r *http.Request) bool {
 	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream")
 }
 
-func requestLogger(next http.Handler) http.Handler {
+func (s *server) requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if shouldSkipAccessLog(r) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
@@ -97,13 +92,21 @@ func requestLogger(next http.Handler) http.Handler {
 		if status == 0 {
 			status = http.StatusOK
 		}
+		duration := time.Since(start)
+		route := routePattern(r)
+		if s.metrics != nil {
+			s.metrics.ObserveHTTPRequest(r.Method, route, status, duration)
+		}
+		if shouldSkipAccessLog(r) {
+			return
+		}
 
 		fields := map[string]any{
 			"event":       "http.request",
 			"method":      r.Method,
 			"path":        r.URL.Path,
 			"status":      status,
-			"duration_ms": time.Since(start).Milliseconds(),
+			"duration_ms": duration.Milliseconds(),
 			"bytes":       ww.BytesWritten(),
 			"remote_addr": requestRemoteAddr(r),
 			"user_agent":  r.UserAgent(),
@@ -112,7 +115,7 @@ func requestLogger(next http.Handler) http.Handler {
 		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
 			fields["request_id"] = reqID
 		}
-		if route := routePattern(r); route != "" {
+		if route != "" {
 			fields["route"] = route
 		}
 		if profileID := r.Header.Get("X-Profile-Id"); profileID != "" {
@@ -132,7 +135,7 @@ func requestLogger(next http.Handler) http.Handler {
 }
 
 func shouldSkipAccessLog(r *http.Request) bool {
-	return r.URL.Path == "/healthz"
+	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz"
 }
 
 func routePattern(r *http.Request) string {
