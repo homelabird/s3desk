@@ -2520,12 +2520,15 @@ useEffect(() => {
 				}
 
 				const linkToPrefix = (targetPrefix: string, label: string) => (
-					<Typography.Link
+					<Button
+						type="link"
+						size="small"
 						onClick={() => (canNavigate ? navigateToLocation(bucket, targetPrefix, { recordHistory: true }) : undefined)}
-						style={{ whiteSpace: 'nowrap' }}
+						disabled={!canNavigate}
+						style={{ padding: 0, height: 'auto', whiteSpace: 'nowrap' }}
 					>
 						{label}
-					</Typography.Link>
+					</Button>
 				)
 
 				items.push({
@@ -2551,7 +2554,9 @@ useEffect(() => {
 						title: wrap(
 							collapsedPrefix,
 							<Dropdown trigger={['click']} menu={{ items: menuItems }} disabled={!canNavigate}>
-								<Typography.Link style={{ whiteSpace: 'nowrap' }}>.../</Typography.Link>
+								<Button type="link" size="small" disabled={!canNavigate} style={{ padding: 0, height: 'auto', whiteSpace: 'nowrap' }}>
+									.../
+								</Button>
 							</Dropdown>,
 						),
 					})

@@ -161,7 +161,7 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		if errors.Is(err, jobs.ErrJobQueueFull) {
 			msg := "job queue is full; try again later"
-			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
 			job.Status = models.JobStatusFailed
 			job.Error = &msg
 			job.FinishedAt = &finishedAt
@@ -186,7 +186,7 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		msg := "failed to enqueue job"
-		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
 		job.Status = models.JobStatusFailed
 		job.Error = &msg
 		job.FinishedAt = &finishedAt
@@ -608,7 +608,7 @@ func (s *server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	switch job.Status {
 	case models.JobStatusQueued:
 		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
-		_ = s.store.UpdateJobStatus(r.Context(), jobID, models.JobStatusCanceled, nil, &finishedAt, nil, nil)
+		_ = s.store.UpdateJobStatus(r.Context(), jobID, models.JobStatusCanceled, nil, &finishedAt, nil, nil, nil)
 		payload := map[string]any{"status": models.JobStatusCanceled}
 		s.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
 	case models.JobStatusRunning:

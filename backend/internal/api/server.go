@@ -3,6 +3,7 @@ package api
 import (
 	"s3desk/internal/config"
 	"s3desk/internal/jobs"
+	"s3desk/internal/metrics"
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
@@ -13,6 +14,7 @@ type server struct {
 	store       *store.Store
 	jobs        *jobs.Manager
 	hub         *ws.Hub
+	metrics     *metrics.Metrics
 	serverAddr  string
 	proxySecret []byte
 }

@@ -68,6 +68,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 						placeholder="bucket"
 						loading={props.isBucketsLoading}
 						optionFilterProp="label"
+						aria-label="Destination bucket"
 					/>
 				</Form.Item>
 
@@ -94,7 +95,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 				</Form.Item>
 
 				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch />
+					<Switch aria-label="Dry run" />
 				</Form.Item>
 			</Form>
 		</Modal>

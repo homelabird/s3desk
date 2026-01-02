@@ -300,7 +300,7 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		if errors.Is(err, jobs.ErrJobQueueFull) {
 			msg := "job queue is full; try again later"
-			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
 			job.Status = models.JobStatusFailed
 			job.Error = &msg
 			job.FinishedAt = &finishedAt
@@ -317,7 +317,7 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		msg := "failed to enqueue job"
-		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg)
+		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
 		job.Status = models.JobStatusFailed
 		job.Error = &msg
 		job.FinishedAt = &finishedAt

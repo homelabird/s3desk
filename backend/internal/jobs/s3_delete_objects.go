@@ -172,7 +172,7 @@ func (m *Manager) emitJobLogStdout(jobID, level, message string) {
 
 func (m *Manager) updateAndPublishProgress(jobID string, jp *models.JobProgress) {
 	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
+	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
 	cancel()
 
 	m.hub.Publish(ws.Event{

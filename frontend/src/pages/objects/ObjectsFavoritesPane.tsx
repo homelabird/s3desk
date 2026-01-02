@@ -76,6 +76,7 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 							checked={props.favoritesOnly}
 							onChange={props.onFavoritesOnlyChange}
 							disabled={disabled}
+							aria-label="Favorites only"
 						/>
 						<Typography.Text type="secondary">Favorites only</Typography.Text>
 					</Space>
@@ -85,6 +86,7 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 							checked={props.openDetailsOnClick}
 							onChange={props.onOpenDetailsOnClickChange}
 							disabled={disabled}
+							aria-label="Open details on click"
 						/>
 						<Typography.Text type="secondary">Open details on click</Typography.Text>
 					</Space>

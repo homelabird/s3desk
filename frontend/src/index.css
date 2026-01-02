@@ -1,3 +1,10 @@
+:root {
+  --ant-color-text-secondary: rgba(0, 0, 0, 0.78);
+  --ant-color-text-tertiary: rgba(0, 0, 0, 0.68);
+  --ant-color-text-quaternary: rgba(0, 0, 0, 0.58);
+  --ant-color-text-placeholder: rgba(0, 0, 0, 0.72);
+}
+
 html,
 body,
 #root {

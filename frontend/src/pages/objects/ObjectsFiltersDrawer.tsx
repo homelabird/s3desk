@@ -59,7 +59,11 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 			<Space direction="vertical" size="middle" style={{ width: '100%' }}>
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text type="secondary">Favorites only</Typography.Text>
-					<Switch checked={props.favoritesOnly} onChange={props.onFavoritesOnlyChange} />
+					<Switch
+						checked={props.favoritesOnly}
+						onChange={props.onFavoritesOnlyChange}
+						aria-label="Favorites only"
+					/>
 				</Space>
 
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -68,6 +72,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 						checked={props.favoritesFirst}
 						onChange={props.onFavoritesFirstChange}
 						disabled={props.favoritesOnly}
+						aria-label="Favorites first"
 					/>
 				</Space>
 
@@ -76,6 +81,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 					<Select
 						value={props.typeFilter}
 						style={{ width: '100%' }}
+						aria-label="Type filter"
 						options={[
 							{ label: 'All', value: 'all' },
 							{ label: 'Folders', value: 'folders' },
@@ -94,6 +100,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 								placeholder="Ext"
 								value={props.extFilter || undefined}
 								style={{ width: '100%' }}
+								aria-label="Extension filter"
 								options={props.extOptions}
 								onChange={(value) => props.onExtFilterChange(value ?? '')}
 								disabled={fileFiltersDisabled}
@@ -149,6 +156,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 						<Select
 							value={props.sort}
 							style={{ width: '100%' }}
+							aria-label="Sort"
 							options={[
 								{ label: 'Name (A -> Z)', value: 'name_asc' },
 								{ label: 'Name (Z -> A)', value: 'name_desc' },

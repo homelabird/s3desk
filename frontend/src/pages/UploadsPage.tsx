@@ -85,6 +85,7 @@ export function UploadsPage(props: Props) {
 					showSearch
 					placeholder="Bucket"
 					style={{ width: screens.md ? 320 : '100%', maxWidth: '100%' }}
+					aria-label="Bucket"
 					value={bucket || undefined}
 					options={bucketOptions}
 					loading={bucketsQuery.isFetching}

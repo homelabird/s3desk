@@ -27,10 +27,6 @@ type Dependencies struct {
 func New(dep Dependencies) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(requestLogger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Compress(5))
-	r.Use(securityHeaders)
 
 	api := &server{
 		cfg:        dep.Config,
@@ -40,6 +36,11 @@ func New(dep Dependencies) http.Handler {
 		serverAddr: dep.ServerAddr,
 		proxySecret: resolveProxySecret(dep.Config.APIToken),
 	}
+
+	r.Use(api.requestLogger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Compress(5))
+	r.Use(securityHeaders)
 
 	apiRouter := chi.NewRouter()
 	apiRouter.Use(api.requireLocalHost)

@@ -84,7 +84,7 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		}
 
 		updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
+		_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
 		cancel()
 
 		m.hub.Publish(ws.Event{

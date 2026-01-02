@@ -106,6 +106,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Select
 							value={props.limit}
 							style={{ width: limitWidth, maxWidth: '100%' }}
+							aria-label="Result limit"
 							options={[
 								{ label: 'Limit 50', value: 50 },
 								{ label: 'Limit 100', value: 100 },
@@ -196,7 +197,11 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							</Button>
 							<Space>
 								<Typography.Text type="secondary">Full reindex</Typography.Text>
-								<Switch checked={props.indexFullReindex} onChange={(value) => props.onIndexFullReindexChange(value)} />
+								<Switch
+									checked={props.indexFullReindex}
+									onChange={(value) => props.onIndexFullReindexChange(value)}
+									aria-label="Full reindex"
+								/>
 							</Space>
 							<Button type="primary" onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
 								Create index job

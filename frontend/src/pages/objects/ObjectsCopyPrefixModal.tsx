@@ -130,6 +130,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 						placeholder="bucket"
 						loading={props.isBucketsLoading}
 						optionFilterProp="label"
+						aria-label="Destination bucket"
 					/>
 				</Form.Item>
 
@@ -175,7 +176,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				) : null}
 
 				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch />
+					<Switch aria-label="Dry run" />
 				</Form.Item>
 
 				<Form.Item name="include" label="Include patterns (one per line)">

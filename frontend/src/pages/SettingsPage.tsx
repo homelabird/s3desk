@@ -134,13 +134,18 @@ export function SettingsPage(props: Props) {
 					</Space.Compact>
 				</Form.Item>
 				<Form.Item label="Default: Move after upload" extra="Applies to folder uploads from this device.">
-					<Switch checked={moveAfterUploadDefault} onChange={setMoveAfterUploadDefault} />
+					<Switch
+						checked={moveAfterUploadDefault}
+						onChange={setMoveAfterUploadDefault}
+						aria-label="Default: Move after upload"
+					/>
 				</Form.Item>
 				<Form.Item label="Default: Auto-clean empty folders" extra="Used only when move-after-upload is enabled.">
 					<Switch
 						checked={cleanupEmptyDirsDefault}
 						onChange={setCleanupEmptyDirsDefault}
 						disabled={!moveAfterUploadDefault}
+						aria-label="Default: Auto-clean empty folders"
 					/>
 				</Form.Item>
 				<Form.Item label="Move cleanup report filename template" extra="Available tokens: {bucket} {prefix} {label} {timestamp}">
@@ -168,7 +173,11 @@ export function SettingsPage(props: Props) {
 					label="Downloads: Use server proxy"
 					extra="When enabled, downloads and 'Link...' use /download-proxy for same-origin access and Content-Disposition. When disabled, presigned URLs are used (requires S3 CORS for in-app progress)."
 				>
-					<Switch checked={downloadLinkProxyEnabled} onChange={setDownloadLinkProxyEnabled} />
+					<Switch
+						checked={downloadLinkProxyEnabled}
+						onChange={setDownloadLinkProxyEnabled}
+						aria-label="Downloads: Use server proxy"
+					/>
 				</Form.Item>
 
 				<Divider titlePlacement="left">Network</Divider>

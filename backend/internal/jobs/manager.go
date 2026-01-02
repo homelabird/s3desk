@@ -703,7 +703,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	}()
 
 	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := m.store.UpdateJobStatus(rootCtx, jobID, models.JobStatusRunning, &startedAt, nil, nil, nil); err != nil {
+	if err := m.store.UpdateJobStatus(rootCtx, jobID, models.JobStatusRunning, &startedAt, nil, nil, nil, nil); err != nil {
 		return err
 	}
 	m.hub.Publish(ws.Event{Type: "job.progress", JobID: jobID, Payload: map[string]any{"status": models.JobStatusRunning}})
@@ -823,7 +823,7 @@ func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt 
 	}
 
 	updateCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	err = m.store.UpdateJobStatus(updateCtx, jobID, status, nil, finishedAt, jp, errMsg)
+	err = m.store.UpdateJobStatus(updateCtx, jobID, status, nil, finishedAt, jp, errMsg, nil)
 	cancel()
 	return err
 }
@@ -1165,7 +1165,7 @@ func (m *Manager) trySetJobTotals(jobID string, objectsTotal, bytesTotal int64) 
 	jp := &models.JobProgress{ObjectsTotal: &ot, BytesTotal: &bt}
 
 	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
+	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
 	cancel()
 
 	m.hub.Publish(ws.Event{
@@ -1183,7 +1183,7 @@ func (m *Manager) trySetJobObjectsTotal(jobID string, objectsTotal int64) {
 	jp := &models.JobProgress{ObjectsTotal: &ot}
 
 	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
+	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
 	cancel()
 
 	m.hub.Publish(ws.Event{
@@ -1220,7 +1220,7 @@ func (m *Manager) incrementJobObjectsDone(jobID string, delta int64) {
 	jp.ObjectsDone = &done
 
 	updateCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, &jp, nil)
+	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, &jp, nil, nil)
 	cancel()
 
 	m.hub.Publish(ws.Event{
@@ -1270,7 +1270,7 @@ func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jo
 	}
 
 	updateCtx, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
+	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
 	cancel2()
 
 	m.hub.Publish(ws.Event{
@@ -1900,7 +1900,7 @@ func (m *Manager) trackRcloneProgress(ctx context.Context, jobID string, progres
 			}
 
 			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil)
+			_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
 			cancel()
 
 			m.hub.Publish(ws.Event{

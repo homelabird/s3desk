@@ -129,9 +129,9 @@ export default function App() {
 							apiToken={apiToken}
 						/>
 						<TransfersButton showLabel={!!screens.sm} />
-						<Typography.Link onClick={openSettings}>
+						<Button type="link" onClick={openSettings} aria-label="Open settings">
 							<SettingOutlined /> {screens.sm ? 'Settings' : null}
-						</Typography.Link>
+						</Button>
 					</Space>
 				</Header>
 				<Content

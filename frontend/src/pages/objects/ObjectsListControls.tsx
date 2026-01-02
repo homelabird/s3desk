@@ -76,16 +76,18 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 				value={props.sort}
 				options={props.sortOptions}
 				style={{ minWidth: 180 }}
+				aria-label="Sort objects"
 				onChange={(value) => props.onSortChange(value as ObjectSort)}
 				disabled={!props.canInteract}
 			/>
 			<Space size={6} align="center">
-					<Switch
-						size="small"
-						checked={props.favoritesFirst}
-						onChange={props.onFavoritesFirstChange}
-						disabled={!props.canInteract || props.favoritesOnly}
-					/>
+				<Switch
+					size="small"
+					checked={props.favoritesFirst}
+					onChange={props.onFavoritesFirstChange}
+					disabled={!props.canInteract || props.favoritesOnly}
+					aria-label="Favorites first"
+				/>
 				<Typography.Text type="secondary">Favorites first</Typography.Text>
 			</Space>
 		</Space>

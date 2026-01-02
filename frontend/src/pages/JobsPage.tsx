@@ -1247,6 +1247,7 @@ export function JobsPage(props: Props) {
 					value={statusFilter}
 					onChange={(v) => setStatusFilter(v)}
 					style={{ width: screens.md ? 200 : '100%', maxWidth: '100%' }}
+					aria-label="Job status filter"
 					options={[
 						{ label: 'All statuses', value: 'all' },
 						{ label: 'queued', value: 'queued' },

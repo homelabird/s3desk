@@ -38,6 +38,12 @@ ingress:
           pathType: Prefix
   tls: []
 
+istio:
+  virtualService:
+    enabled: false
+    gateways: []
+    hosts: []
+
 persistence:
   enabled: true
   existingClaim: ""

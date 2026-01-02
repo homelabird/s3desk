@@ -1,0 +1,23 @@
+{{- if .Values.istio.virtualService.enabled -}}
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ include "s3desk.fullname" . }}
+  labels:
+    {{- include "s3desk.labels" . | nindent 4 }}
+spec:
+  hosts:
+    {{- range .Values.istio.virtualService.hosts }}
+    - {{ . | quote }}
+    {{- end }}
+  gateways:
+    {{- range .Values.istio.virtualService.gateways }}
+    - {{ . | quote }}
+    {{- end }}
+  http:
+    - route:
+        - destination:
+            host: {{ include "s3desk.fullname" . }}
+            port:
+              number: {{ .Values.service.port }}
+{{- end }}

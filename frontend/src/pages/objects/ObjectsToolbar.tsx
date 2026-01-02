@@ -100,6 +100,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						allowClear
 						showSearch
 						placeholder="Bucket"
+						aria-label="Bucket"
 						style={{ width: 260, maxWidth: '100%' }}
 						value={props.bucket || undefined}
 						options={props.bucketOptions}
@@ -230,6 +231,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				allowClear
 				showSearch
 				placeholder="Bucket"
+				aria-label="Bucket"
 				style={{ width: '100%', maxWidth: '100%' }}
 				value={props.bucket || undefined}
 				options={props.bucketOptions}

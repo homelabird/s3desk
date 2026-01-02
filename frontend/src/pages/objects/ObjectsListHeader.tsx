@@ -26,6 +26,7 @@ export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 					indeterminate={props.someLoadedSelected}
 					disabled={!props.hasRows}
 					onChange={(e) => props.onToggleSelectAll(e.target.checked)}
+					aria-label="Select all objects"
 				/>
 				<Button type="text" size="small" onClick={() => props.onToggleSort('name')} style={{ padding: 0, height: 'auto' }}>
 					<Space size={4}>

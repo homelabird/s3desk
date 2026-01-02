@@ -32,6 +32,7 @@ export function TopBarProfileSelect(props: Props) {
 				allowClear
 				placeholder="Select profile"
 				style={{ width: selectWidth, maxWidth: '100%' }}
+				aria-label="Profile"
 				value={props.profileId ?? undefined}
 				options={options}
 				loading={profilesQuery.isFetching}
