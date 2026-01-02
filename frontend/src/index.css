@@ -1,8 +1,20 @@
-:root {
-  --ant-color-text-secondary: rgba(0, 0, 0, 0.78);
-  --ant-color-text-tertiary: rgba(0, 0, 0, 0.68);
-  --ant-color-text-quaternary: rgba(0, 0, 0, 0.58);
-  --ant-color-text-placeholder: rgba(0, 0, 0, 0.72);
+:root,
+.css-var-root {
+  --ant-color-text-secondary: rgba(0, 0, 0, 0.82) !important;
+  --ant-color-text-tertiary: rgba(0, 0, 0, 0.76) !important;
+  --ant-color-text-quaternary: rgba(0, 0, 0, 0.7) !important;
+  --ant-color-text-placeholder: rgba(0, 0, 0, 0.78) !important;
+}
+
+.ant-typography.ant-typography-secondary {
+  color: rgba(0, 0, 0, 0.82) !important;
+}
+
+.ant-select .ant-select-placeholder,
+.ant-select .ant-select-content-value,
+.ant-select .ant-select-selection-placeholder,
+.ant-select .ant-select-selection-item {
+  color: rgba(0, 0, 0, 0.82) !important;
 }
 
 html,
