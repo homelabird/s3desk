@@ -13,3 +13,5 @@ frontend/dist/
 frontend/.tmp/
 frontend/playwright-report/
 frontend/test-results/
+
+artifacts/
