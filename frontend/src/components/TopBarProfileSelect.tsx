@@ -18,6 +18,7 @@ export function TopBarProfileSelect(props: Props) {
 			const api = new APIClient({ apiToken: props.apiToken })
 			return api.listProfiles()
 		},
+		enabled: !!props.apiToken,
 	})
 
 	const options = (profilesQuery.data ?? []).map((p: Profile) => ({ label: p.name, value: p.id }))

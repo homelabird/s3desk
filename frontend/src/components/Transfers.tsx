@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, Button, Modal, Space, Typography, message } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
@@ -20,7 +20,6 @@ import {
 } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
-import { TransfersDrawer } from './transfers/TransfersDrawer'
 import type {
 	DownloadTask,
 	JobArtifactDownloadTask,
@@ -36,6 +35,11 @@ type UploadMovePlan = {
 	label?: string
 	cleanupEmptyDirs?: boolean
 }
+
+const TransfersDrawer = lazy(async () => {
+	const m = await import('./transfers/TransfersDrawer')
+	return { default: m.TransfersDrawer }
+})
 
 export type TransfersContextValue = {
 	isOpen: boolean
@@ -1192,31 +1196,33 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 	return (
 		<TransfersContext.Provider value={ctx}>
 			{props.children}
-			<TransfersDrawer
-				open={isOpen}
-				onClose={closeTransfers}
-				tab={tab}
-				onTabChange={(nextTab) => setTab(nextTab)}
-				activeDownloadCount={activeDownloadCount}
-				activeUploadCount={activeUploadCount}
-				activeTransferCount={activeTransferCount}
-				downloadTasks={downloadTasks}
-				uploadTasks={uploadTasks}
-				downloadSummaryText={downloadSummaryText}
-				uploadSummaryText={uploadSummaryText}
-				hasCompletedDownloads={hasCompletedDownloads}
-				hasCompletedUploads={hasCompletedUploads}
-				onClearCompletedDownloads={clearCompletedDownloads}
-				onClearCompletedUploads={clearCompletedUploads}
-				onClearAll={clearAllTransfers}
-				onCancelDownload={cancelDownloadTask}
-				onRetryDownload={retryDownloadTask}
-				onRemoveDownload={removeDownloadTask}
-				onCancelUpload={cancelUploadTask}
-				onRetryUpload={retryUploadTask}
-				onRemoveUpload={removeUploadTask}
-				onOpenJobs={() => navigate('/jobs')}
-			/>
+			<Suspense fallback={null}>
+				<TransfersDrawer
+					open={isOpen}
+					onClose={closeTransfers}
+					tab={tab}
+					onTabChange={(nextTab) => setTab(nextTab)}
+					activeDownloadCount={activeDownloadCount}
+					activeUploadCount={activeUploadCount}
+					activeTransferCount={activeTransferCount}
+					downloadTasks={downloadTasks}
+					uploadTasks={uploadTasks}
+					downloadSummaryText={downloadSummaryText}
+					uploadSummaryText={uploadSummaryText}
+					hasCompletedDownloads={hasCompletedDownloads}
+					hasCompletedUploads={hasCompletedUploads}
+					onClearCompletedDownloads={clearCompletedDownloads}
+					onClearCompletedUploads={clearCompletedUploads}
+					onClearAll={clearAllTransfers}
+					onCancelDownload={cancelDownloadTask}
+					onRetryDownload={retryDownloadTask}
+					onRemoveDownload={removeDownloadTask}
+					onCancelUpload={cancelUploadTask}
+					onRetryUpload={retryUploadTask}
+					onRemoveUpload={removeUploadTask}
+					onOpenJobs={() => navigate('/jobs')}
+				/>
+			</Suspense>
 		</TransfersContext.Provider>
 	)
 }

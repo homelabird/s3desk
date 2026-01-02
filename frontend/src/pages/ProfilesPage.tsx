@@ -26,9 +26,10 @@ export function ProfilesPage(props: Props) {
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', props.apiToken],
 		queryFn: () => api.listProfiles(),
+		enabled: !!props.apiToken,
 	})
 	const profiles = profilesQuery.data ?? []
-	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
+	const showProfilesEmpty = !!props.apiToken && !profilesQuery.isFetching && profiles.length === 0
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],

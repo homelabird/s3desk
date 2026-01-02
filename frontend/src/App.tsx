@@ -13,7 +13,6 @@ import { Suspense, lazy, useMemo, useState } from 'react'
 
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
-import { SettingsDrawer } from './components/SettingsDrawer'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/Transfers'
 import { useLocalStorageState } from './lib/useLocalStorageState'
@@ -37,6 +36,10 @@ const UploadsPage = lazy(async () => {
 const JobsPage = lazy(async () => {
 	const m = await import('./pages/JobsPage')
 	return { default: m.JobsPage }
+})
+const SettingsDrawer = lazy(async () => {
+	const m = await import('./components/SettingsDrawer')
+	return { default: m.SettingsDrawer }
 })
 
 const { Header, Content, Sider } = Layout
@@ -197,14 +200,16 @@ export default function App() {
 				/>
 			</Drawer>
 
-			<SettingsDrawer
-				open={settingsOpen}
-				onClose={closeSettings}
-				apiToken={apiToken}
-				setApiToken={setApiToken}
-				profileId={profileId}
-				setProfileId={setProfileId}
-			/>
+			<Suspense fallback={null}>
+				<SettingsDrawer
+					open={settingsOpen}
+					onClose={closeSettings}
+					apiToken={apiToken}
+					setApiToken={setApiToken}
+					profileId={profileId}
+					setProfileId={setProfileId}
+				/>
+			</Suspense>
 			</Layout>
 		</TransfersProvider>
 	)
