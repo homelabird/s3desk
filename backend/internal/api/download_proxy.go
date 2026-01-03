@@ -69,16 +69,64 @@ func (s *server) buildDownloadProxyURL(r *http.Request, token downloadProxyToken
 	values.Set("expires", strconv.FormatInt(token.Expires, 10))
 	values.Set("sig", sig)
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
+	scheme := requestScheme(r)
 	return (&url.URL{
 		Scheme:   scheme,
 		Host:     r.Host,
 		Path:     "/download-proxy",
 		RawQuery: values.Encode(),
 	}).String()
+}
+
+func requestScheme(r *http.Request) string {
+	if forwarded := strings.TrimSpace(r.Header.Get("Forwarded")); forwarded != "" {
+		if proto := parseForwardedProto(forwarded); proto != "" {
+			return proto
+		}
+	}
+	if xfProto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); xfProto != "" {
+		if comma := strings.Index(xfProto, ","); comma >= 0 {
+			xfProto = xfProto[:comma]
+		}
+		xfProto = strings.ToLower(strings.TrimSpace(xfProto))
+		if xfProto != "" {
+			return xfProto
+		}
+	}
+	if r.TLS != nil {
+		return "https"
+	}
+	if r.URL != nil && r.URL.Scheme != "" {
+		return r.URL.Scheme
+	}
+	return "http"
+}
+
+func parseForwardedProto(value string) string {
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		for _, kv := range strings.Split(part, ";") {
+			kv = strings.TrimSpace(kv)
+			if kv == "" {
+				continue
+			}
+			key, val, ok := strings.Cut(kv, "=")
+			if !ok {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(key), "proto") {
+				val = strings.Trim(strings.TrimSpace(val), "\"")
+				val = strings.ToLower(val)
+				if val != "" {
+					return val
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
