@@ -23,6 +23,15 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get("X-Api-Token")
+		if token == "" {
+			// Prometheus/ServiceMonitor and many HTTP clients support Bearer tokens
+			// out of the box, so accept Authorization: Bearer <token> as an alias.
+			if auth := strings.TrimSpace(r.Header.Get("Authorization")); auth != "" {
+				if parts := strings.SplitN(auth, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+					token = strings.TrimSpace(parts[1])
+				}
+			}
+		}
 		if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
 			token = r.URL.Query().Get("apiToken")
 		}
@@ -135,7 +144,7 @@ func (s *server) requestLogger(next http.Handler) http.Handler {
 }
 
 func shouldSkipAccessLog(r *http.Request) bool {
-	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz"
+	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics"
 }
 
 func routePattern(r *http.Request) string {

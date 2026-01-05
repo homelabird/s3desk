@@ -2254,6 +2254,8 @@ export interface components {
             transferEngine: {
                 name: string;
                 available: boolean;
+                compatible: boolean;
+                minVersion: string;
                 path?: string;
                 version?: string;
             };

@@ -3,6 +3,7 @@ import { CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, LinkOutli
 
 import type { ObjectMeta } from '../../api/types'
 import type { ObjectPreview } from './objectsTypes'
+import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
 
 export type ObjectsDetailsContentProps = {
@@ -195,16 +196,4 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 	)
 }
 
-function formatDateTime(value: string | null | undefined): string {
-	if (!value) return '-'
-	const d = new Date(value)
-	if (!Number.isFinite(d.getTime())) return value
-	return new Intl.DateTimeFormat(undefined, {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-	}).format(d)
-}
+// formatDateTime lives in ../../lib/format

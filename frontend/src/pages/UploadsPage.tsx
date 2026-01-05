@@ -5,9 +5,10 @@ import { UploadOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError } from '../api/client'
+import { APIClient } from '../api/client'
 import type { Bucket } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
+import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
@@ -143,8 +144,4 @@ function attachRelativePath(file: UploadFile): File | null {
 	return origin
 }
 
-function formatErr(err: unknown): string {
-	if (err instanceof APIError) return `${err.code}: ${err.message}`
-	if (err instanceof Error) return err.message
-	return 'unknown error'
-}
+// formatErr lives in ../lib/errors

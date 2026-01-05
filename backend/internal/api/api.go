@@ -12,6 +12,7 @@ import (
 
 	"s3desk/internal/config"
 	"s3desk/internal/jobs"
+	"s3desk/internal/metrics"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -21,6 +22,7 @@ type Dependencies struct {
 	Store      *store.Store
 	Jobs       *jobs.Manager
 	Hub        *ws.Hub
+	Metrics    *metrics.Metrics
 	ServerAddr string
 }
 
@@ -29,11 +31,12 @@ func New(dep Dependencies) http.Handler {
 	r.Use(middleware.RequestID)
 
 	api := &server{
-		cfg:        dep.Config,
-		store:      dep.Store,
-		jobs:       dep.Jobs,
-		hub:        dep.Hub,
-		serverAddr: dep.ServerAddr,
+		cfg:         dep.Config,
+		store:       dep.Store,
+		jobs:        dep.Jobs,
+		hub:         dep.Hub,
+		metrics:     dep.Metrics,
+		serverAddr:  dep.ServerAddr,
 		proxySecret: resolveProxySecret(dep.Config.APIToken),
 	}
 
@@ -127,10 +130,9 @@ func New(dep Dependencies) http.Handler {
 	r.Get("/docs", serveOpenAPIDocs)
 	r.Get("/docs/", serveOpenAPIDocs)
 
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("ok\n"))
-	})
+	r.Get("/healthz", api.handleHealthz)
+	r.Get("/readyz", api.handleReadyz)
+	r.With(api.requireLocalHost, api.requireAPIToken).Get("/metrics", api.handleMetrics)
 
 	staticIndex := filepath.Join(dep.Config.StaticDir, "index.html")
 	uiEnabled := false

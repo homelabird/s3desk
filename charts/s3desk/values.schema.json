@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "server": {
+      "type": "object",
+      "properties": {
+        "allowRemote": {
+          "type": "boolean",
+          "description": "Whether to allow non-local access. If true, a token is required for safe operation."
+        },
+        "apiToken": {
+          "type": "string",
+          "description": "API token used for authentication. Must not be the insecure placeholder value.",
+          "not": {
+            "const": "change-me"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "existingSecret": {
+          "type": "string",
+          "description": "Name of an existing Secret that contains the API token / encryption key / database URL."
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "server": {
+            "type": "object",
+            "properties": {
+              "allowRemote": {
+                "const": true
+              }
+            },
+            "required": ["allowRemote"]
+          }
+        }
+      },
+      "then": {
+        "description": "When remote access is enabled, require either a non-empty server.apiToken or secrets.existingSecret.",
+        "anyOf": [
+          {
+            "properties": {
+              "server": {
+                "type": "object",
+                "required": ["apiToken"],
+                "properties": {
+                  "apiToken": {
+                    "type": "string",
+                    "minLength": 1,
+                    "not": {
+                      "const": "change-me"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "secrets": {
+                "type": "object",
+                "required": ["existingSecret"],
+                "properties": {
+                  "existingSecret": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "additionalProperties": true
+}

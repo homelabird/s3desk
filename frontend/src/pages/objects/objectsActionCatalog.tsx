@@ -471,7 +471,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		},
 		{
 			id: 'ui_mode',
-			label: deps.isAdvanced ? 'Basic view' : 'Advanced tools',
+			label: deps.isAdvanced ? 'Simple mode' : 'Advanced mode',
 			icon: <SnippetsOutlined />,
 			keywords: 'simple advanced view mode',
 			enabled: !!deps.profileId,

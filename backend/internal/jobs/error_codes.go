@@ -7,6 +7,10 @@ import (
 )
 
 const (
+	// Transfer engine (rclone) availability / compatibility.
+	ErrorCodeTransferEngineMissing      = "transfer_engine_missing"
+	ErrorCodeTransferEngineIncompatible = "transfer_engine_incompatible"
+
 	ErrorCodeInvalidCredentials  = "invalid_credentials"
 	ErrorCodeAccessDenied        = "access_denied"
 	ErrorCodeSignatureMismatch   = "signature_mismatch"

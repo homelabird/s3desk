@@ -23,7 +23,7 @@ import {
 	theme,
 	type MenuProps,
 } from 'antd'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
 	DeleteOutlined,
 	DownloadOutlined,
@@ -38,7 +38,7 @@ import {
 } from '@ant-design/icons'
 import { useLocation } from 'react-router-dom'
 
-import { APIClient, APIError } from '../api/client'
+import { APIClient } from '../api/client'
 import { LocalDevicePathInput } from '../components/LocalDevicePathInput'
 import { useTransfers } from '../components/useTransfers'
 import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../api/types'
@@ -46,6 +46,10 @@ import { withJobQueueRetry } from '../lib/jobQueue'
 import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath } from '../lib/deviceFs'
 import { listAllObjects } from '../lib/objects'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
+import { formatErrorWithHint as formatErr } from '../lib/errors'
+import { formatDateTime, toTimestamp } from '../lib/format'
+import { getJobTypeInfo, jobTypeSelectOptions } from '../lib/jobTypes'
+import { formatBytes, formatDurationSeconds } from '../lib/transfer'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
@@ -92,11 +96,6 @@ const getProgressSortValue = (job: Job) => {
 	if (bytes) return bytes
 	if (ops) return ops
 	return speed
-}
-const toTimestamp = (value?: string | null) => {
-	if (!value) return 0
-	const ts = Date.parse(value)
-	return Number.isNaN(ts) ? 0 : ts
 }
 
 export function JobsPage(props: Props) {
@@ -157,6 +156,17 @@ export function JobsPage(props: Props) {
 	const [statusFilter, setStatusFilter] = useLocalStorageState<JobStatus | 'all'>('jobsStatusFilter', 'all')
 	const [typeFilter, setTypeFilter] = useLocalStorageState('jobsTypeFilter', '')
 	const [errorCodeFilter, setErrorCodeFilter] = useLocalStorageState('jobsErrorCodeFilter', '')
+	const typeFilterNormalized = typeFilter.trim()
+	const errorCodeFilterNormalized = errorCodeFilter.trim()
+	const filtersDirty = useMemo(
+		() => statusFilter !== 'all' || typeFilterNormalized !== '' || errorCodeFilterNormalized !== '',
+		[errorCodeFilterNormalized, statusFilter, typeFilterNormalized],
+	)
+	const resetFilters = useCallback(() => {
+		setStatusFilter('all')
+		setTypeFilter('')
+		setErrorCodeFilter('')
+	}, [setErrorCodeFilter, setStatusFilter, setTypeFilter])
 	const [cancelingJobId, setCancelingJobId] = useState<string | null>(null)
 	const [retryingJobId, setRetryingJobId] = useState<string | null>(null)
 	const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
@@ -402,7 +412,7 @@ export function JobsPage(props: Props) {
 	}, [uploadDetails])
 
 	const jobsQuery = useInfiniteQuery({
-		queryKey: ['jobs', props.profileId, props.apiToken, statusFilter, typeFilter, errorCodeFilter],
+		queryKey: ['jobs', props.profileId, props.apiToken, statusFilter, typeFilterNormalized, errorCodeFilterNormalized],
 		enabled: !!props.profileId,
 		initialPageParam: undefined as string | undefined,
 		queryFn: ({ pageParam }) =>
@@ -910,6 +920,26 @@ export function JobsPage(props: Props) {
 	}, [eventsManualRetryToken, props.apiToken, props.profileId, queryClient])
 
 	const jobs = useMemo(() => jobsQuery.data?.pages.flatMap((p) => p.items) ?? [], [jobsQuery.data])
+	const errorCodeSuggestions = useMemo(() => {
+		const uniq = new Set<string>()
+		for (const j of jobs) {
+			if (j.errorCode) uniq.add(j.errorCode)
+		}
+		return Array.from(uniq)
+			.sort()
+			.map((value) => ({ value }))
+	}, [jobs])
+	const typeFilterOptions = useMemo(() => {
+		if (!typeFilterNormalized) return jobTypeSelectOptions
+		if (getJobTypeInfo(typeFilterNormalized)) return jobTypeSelectOptions
+		return [
+			...jobTypeSelectOptions,
+			{
+				label: 'Other',
+				options: [{ label: typeFilterNormalized, value: typeFilterNormalized }],
+			},
+		]
+	}, [typeFilterNormalized])
 	const isLoading = jobsQuery.isFetching && !jobsQuery.isFetchingNextPage
 	const showJobsEmpty = !isLoading && jobs.length === 0
 	useEffect(() => {
@@ -931,7 +961,7 @@ export function JobsPage(props: Props) {
 		(
 			value: string | null | undefined,
 			tone?: 'secondary' | 'danger',
-			options?: { code?: boolean },
+			options?: { code?: boolean; tooltip?: ReactNode; forceTooltip?: boolean },
 		) => {
 			if (!value) return <Typography.Text type="secondary">-</Typography.Text>
 			const content = (
@@ -939,8 +969,9 @@ export function JobsPage(props: Props) {
 					{value}
 				</Typography.Text>
 			)
-			const showTooltip = value.length > 32 || value.includes('\n')
-			return showTooltip ? <Tooltip title={value}>{content}</Tooltip> : content
+			const showTooltip = (options?.forceTooltip ?? false) || value.length > 32 || value.includes('\n')
+			if (!showTooltip) return content
+			return <Tooltip title={options?.tooltip ?? value}>{content}</Tooltip>
 		},
 		[clampTextStyle],
 	)
@@ -967,9 +998,21 @@ export function JobsPage(props: Props) {
 				key: 'type',
 				title: 'Type',
 				dataIndex: 'type',
-				width: 200,
-				render: (v: string) => renderClampedText(v),
-				sorter: (a: Job, b: Job) => compareText(a.type, b.type),
+				width: 240,
+				render: (v: string) => {
+					const info = getJobTypeInfo(v)
+					if (!info) return renderClampedText(v)
+					const tooltip = (
+						<Space direction="vertical" size={4} style={{ maxWidth: 420 }}>
+							<Typography.Text strong>{info.label}</Typography.Text>
+							<Typography.Text type="secondary">{info.description}</Typography.Text>
+							<Typography.Text code>{v}</Typography.Text>
+						</Space>
+					)
+					return renderClampedText(info.label, undefined, { tooltip, forceTooltip: true })
+				},
+				sorter: (a: Job, b: Job) =>
+					compareText(getJobTypeInfo(a.type)?.label ?? a.type, getJobTypeInfo(b.type)?.label ?? b.type),
 			},
 			{
 				key: 'summary',
@@ -1024,6 +1067,8 @@ export function JobsPage(props: Props) {
 				title: 'Created',
 				dataIndex: 'createdAt',
 				width: 220,
+				render: (v: string) =>
+					renderClampedText(v ? formatDateTime(v) : null, 'secondary', { code: true, tooltip: v, forceTooltip: true }),
 				sorter: (a: Job, b: Job) => compareNumber(toTimestamp(a.createdAt), toTimestamp(b.createdAt)),
 			},
 			{
@@ -1257,20 +1302,38 @@ export function JobsPage(props: Props) {
 						{ label: 'canceled', value: 'canceled' },
 					]}
 				/>
-				<Input
-					value={typeFilter}
-					onChange={(e) => setTypeFilter(e.target.value)}
-					placeholder="type filter (optional)"
-					style={{ width: screens.md ? 300 : '100%', maxWidth: '100%' }}
+				<Select
+					value={typeFilterNormalized || undefined}
+					onChange={(v) => setTypeFilter(v ?? '')}
+					placeholder="Type (exact, optional)"
+					style={{ width: screens.md ? 340 : '100%', maxWidth: '100%' }}
 					allowClear
+					showSearch
+					optionFilterProp="label"
+					filterOption={(input, option) => {
+						const s = input.toLowerCase()
+						const label = String(option?.label ?? '').toLowerCase()
+						const value = String((option as any)?.value ?? '').toLowerCase()
+						return label.includes(s) || value.includes(s)
+					}}
+					options={typeFilterOptions}
 				/>
-				<Input
-					value={errorCodeFilter}
-					onChange={(e) => setErrorCodeFilter(e.target.value)}
-					placeholder="error code filter (optional)"
-					style={{ width: screens.md ? 240 : '100%', maxWidth: '100%' }}
+				<AutoComplete
+					value={errorCodeFilterNormalized}
+					onChange={(v) => setErrorCodeFilter(v)}
+					placeholder="Error code (exact, optional)"
+					style={{ width: screens.md ? 260 : '100%', maxWidth: '100%' }}
 					allowClear
+					options={errorCodeSuggestions}
+					filterOption={(input, option) =>
+						String(option?.value ?? '')
+							.toLowerCase()
+							.includes(input.toLowerCase())
+					}
 				/>
+				<Button onClick={resetFilters} disabled={!filtersDirty}>
+					Reset filters
+				</Button>
 				<Dropdown
 					trigger={['click']}
 					dropdownRender={() => (
@@ -1482,7 +1545,19 @@ export function JobsPage(props: Props) {
 								<Descriptions.Item label="ID">
 									<Typography.Text code>{jobDetailsQuery.data.id}</Typography.Text>
 								</Descriptions.Item>
-								<Descriptions.Item label="Type">{jobDetailsQuery.data.type}</Descriptions.Item>
+								<Descriptions.Item label="Type">
+									{(() => {
+										const info = getJobTypeInfo(jobDetailsQuery.data.type)
+										if (!info) return <Typography.Text code>{jobDetailsQuery.data.type}</Typography.Text>
+										return (
+											<Space direction="vertical" size={0} style={{ width: '100%' }}>
+												<Typography.Text strong>{info.label}</Typography.Text>
+												<Typography.Text type="secondary">{info.description}</Typography.Text>
+												<Typography.Text code>{jobDetailsQuery.data.type}</Typography.Text>
+											</Space>
+										)
+									})()}
+								</Descriptions.Item>
 								<Descriptions.Item label="Status">
 									<Tag color={statusColor(jobDetailsQuery.data.status)}>{jobDetailsQuery.data.status}</Tag>
 								</Descriptions.Item>
@@ -1496,18 +1571,24 @@ export function JobsPage(props: Props) {
 									)}
 								</Descriptions.Item>
 								<Descriptions.Item label="Created">
-									<Typography.Text code>{jobDetailsQuery.data.createdAt}</Typography.Text>
+									<Tooltip title={jobDetailsQuery.data.createdAt}>
+										<Typography.Text code>{formatDateTime(jobDetailsQuery.data.createdAt)}</Typography.Text>
+									</Tooltip>
 								</Descriptions.Item>
 								<Descriptions.Item label="Started">
 									{jobDetailsQuery.data.startedAt ? (
-										<Typography.Text code>{jobDetailsQuery.data.startedAt}</Typography.Text>
+										<Tooltip title={jobDetailsQuery.data.startedAt}>
+											<Typography.Text code>{formatDateTime(jobDetailsQuery.data.startedAt)}</Typography.Text>
+										</Tooltip>
 									) : (
 										<Typography.Text type="secondary">-</Typography.Text>
 									)}
 								</Descriptions.Item>
 								<Descriptions.Item label="Finished">
 									{jobDetailsQuery.data.finishedAt ? (
-										<Typography.Text code>{jobDetailsQuery.data.finishedAt}</Typography.Text>
+										<Tooltip title={jobDetailsQuery.data.finishedAt}>
+											<Typography.Text code>{formatDateTime(jobDetailsQuery.data.finishedAt)}</Typography.Text>
+										</Tooltip>
 									) : (
 										<Typography.Text type="secondary">-</Typography.Text>
 									)}
@@ -1709,12 +1790,6 @@ function buildSSEURL(apiToken: string, afterSeq?: number): string {
 	if (afterSeq && afterSeq > 0) qs.set('afterSeq', String(afterSeq))
 	const q = qs.toString()
 	return q ? `${base}?${q}` : base
-}
-
-function formatErr(err: unknown): string {
-	if (err instanceof APIError) return `${err.code}: ${err.message}`
-	if (err instanceof Error) return err.message
-	return 'unknown error'
 }
 
 function updateJob(
@@ -2392,18 +2467,6 @@ function formatProgress(p?: JobProgress | null): string {
 	else if (bytesDone) parts.push(formatBytes(bytesDone))
 	if (speed) parts.push(`${formatBytes(speed)}/s`)
 	else if (opsPerSecond) parts.push(`${opsPerSecond} ops/s`)
-	if (eta) parts.push(`${eta}s eta`)
+	if (eta) parts.push(`${formatDurationSeconds(eta)} eta`)
 	return parts.join(' · ') || '-'
-}
-
-function formatBytes(bytes: number): string {
-	const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-	let v = bytes
-	let i = 0
-	while (Math.abs(v) >= 1024 && i < units.length - 1) {
-		v /= 1024
-		i++
-	}
-	const digits = i === 0 ? 0 : Math.abs(v) >= 10 ? 1 : 2
-	return `${v.toFixed(digits)} ${units[i]}`
 }

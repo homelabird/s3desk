@@ -1,3 +1,4 @@
+{{- include "s3desk.validateValues" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +7,11 @@ metadata:
     {{- include "s3desk.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       {{- include "s3desk.selectorLabels" . | nindent 6 }}
@@ -74,9 +80,40 @@ spec:
             - name: STATIC_DIR
               value: {{ .Values.server.staticDir | quote }}
             {{- end }}
+            {{- /*
+              Build an ALLOWED_HOSTS allowlist that works out of the box for
+              common Kubernetes deployments:
+              - in-cluster access via Service DNS (incl. Prometheus scraping)
+              - Ingress or Istio VirtualService hostnames
+              - any explicit .Values.server.allowedHosts
+            */}}
+            {{- $allowedHosts := list }}
             {{- if .Values.server.allowedHosts }}
+              {{- $allowedHosts = concat $allowedHosts .Values.server.allowedHosts }}
+            {{- end }}
+            {{- if .Values.ingress.enabled }}
+              {{- range .Values.ingress.hosts }}
+                {{- if .host }}
+                  {{- $allowedHosts = append $allowedHosts .host }}
+                {{- end }}
+              {{- end }}
+            {{- end }}
+            {{- if .Values.istio.virtualService.enabled }}
+              {{- range .Values.istio.virtualService.hosts }}
+                {{- if . }}
+                  {{- $allowedHosts = append $allowedHosts . }}
+                {{- end }}
+              {{- end }}
+            {{- end }}
+            {{- $svcName := include "s3desk.fullname" . }}
+            {{- $ns := .Release.Namespace }}
+            {{- $allowedHosts = append $allowedHosts $svcName }}
+            {{- $allowedHosts = append $allowedHosts (printf "%s.%s" $svcName $ns) }}
+            {{- $allowedHosts = append $allowedHosts (printf "%s.%s.svc" $svcName $ns) }}
+            {{- $allowedHosts = append $allowedHosts (printf "%s.%s.svc.cluster.local" $svcName $ns) }}
+            {{- if gt (len $allowedHosts) 0 }}
             - name: ALLOWED_HOSTS
-              value: {{ join "," .Values.server.allowedHosts | quote }}
+              value: {{ join "," $allowedHosts | quote }}
             {{- end }}
             {{- if .Values.server.allowedLocalDirs }}
             - name: ALLOWED_LOCAL_DIRS

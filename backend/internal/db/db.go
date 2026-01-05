@@ -127,6 +127,7 @@ func migrate(db *gorm.DB) error {
 			payload_json TEXT NOT NULL,
 			progress_json TEXT,
 			error TEXT,
+			error_code TEXT,
 			created_at TEXT NOT NULL,
 			started_at TEXT,
 			finished_at TEXT,
@@ -185,6 +186,13 @@ func migrate(db *gorm.DB) error {
 	if err := ensureProfileColumn(db, "preserve_leading_slash", "INTEGER", "0"); err != nil {
 		return err
 	}
+	if err := ensureJobsColumn(db, "error_code", "TEXT"); err != nil {
+		return err
+	}
+	// Index used by ListJobs (profile_id is always filtered) when error_code filtering is enabled.
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_jobs_profile_id_error_code ON jobs(profile_id, error_code);`).Error; err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -193,5 +201,13 @@ func ensureProfileColumn(db *gorm.DB, name, sqlType, defaultValue string) error 
 		return nil
 	}
 	stmt := fmt.Sprintf("ALTER TABLE profiles ADD COLUMN %s %s NOT NULL DEFAULT %s;", name, sqlType, defaultValue)
+	return db.Exec(stmt).Error
+}
+
+func ensureJobsColumn(db *gorm.DB, name, sqlType string) error {
+	if db.Migrator().HasColumn("jobs", name) {
+		return nil
+	}
+	stmt := fmt.Sprintf("ALTER TABLE jobs ADD COLUMN %s %s;", name, sqlType)
 	return db.Exec(stmt).Error
 }

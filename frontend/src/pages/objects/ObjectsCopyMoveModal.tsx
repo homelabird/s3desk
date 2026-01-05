@@ -5,6 +5,7 @@ type CopyMoveForm = {
 	dstBucket: string
 	dstKey: string
 	dryRun: boolean
+	confirm: string
 }
 
 type ObjectsCopyMoveModalProps = {
@@ -54,7 +55,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 			<Form
 				form={props.form}
 				layout="vertical"
-				initialValues={{ dstBucket: props.bucket, dstKey: props.srcKey ?? '', dryRun: false }}
+				initialValues={{ dstBucket: props.bucket, dstKey: props.srcKey ?? '', dryRun: false, confirm: '' }}
 				onFinish={props.onFinish}
 			>
 				<Form.Item label="Source">
@@ -97,6 +98,29 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
 					<Switch aria-label="Dry run" />
 				</Form.Item>
+
+				{isMove ? (
+					<Form.Item shouldUpdate={(prev, next) => prev.dryRun !== next.dryRun} noStyle>
+						{({ getFieldValue }) =>
+							getFieldValue('dryRun') ? null : (
+								<Form.Item
+									name="confirm"
+									label='Type "MOVE" to confirm'
+									rules={[
+										{
+											validator: async (_, v: string) => {
+												if (v === 'MOVE') return
+												throw new Error('Type MOVE to proceed')
+											},
+										},
+									]}
+								>
+									<Input placeholder="MOVE" autoComplete="off" />
+								</Form.Item>
+							)
+						}
+					</Form.Item>
+				) : null}
 			</Form>
 		</Modal>
 	)

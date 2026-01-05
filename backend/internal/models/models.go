@@ -283,6 +283,8 @@ type MetaResponse struct {
 type TransferEngineInfo struct {
 	Name      string `json:"name"`
 	Available bool   `json:"available"`
+	Compatible bool  `json:"compatible"`
+	MinVersion string `json:"minVersion"`
 	Path      string `json:"path,omitempty"`
 	Version   string `json:"version,omitempty"`
 }

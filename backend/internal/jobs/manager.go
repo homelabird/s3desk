@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"s3desk/internal/logging"
+	"s3desk/internal/metrics"
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
@@ -54,6 +55,7 @@ type Config struct {
 	Store            *store.Store
 	DataDir          string
 	Hub              *ws.Hub
+	Metrics          *metrics.Metrics
 	Concurrency      int
 	JobLogMaxBytes   int64
 	JobLogEmitStdout bool
@@ -67,6 +69,7 @@ type Manager struct {
 	store           *store.Store
 	dataDir         string
 	hub             *ws.Hub
+	metrics         *metrics.Metrics
 	logMaxBytes     int64
 	logEmitStdout   bool
 	jobRetention    time.Duration
@@ -140,10 +143,11 @@ func NewManager(cfg Config) *Manager {
 		statsInterval = 500 * time.Millisecond
 	}
 
-	return &Manager{
+	m := &Manager{
 		store:           cfg.Store,
 		dataDir:         cfg.DataDir,
 		hub:             cfg.Hub,
+		metrics:         cfg.Metrics,
 		logMaxBytes:     cfg.JobLogMaxBytes,
 		logEmitStdout:   cfg.JobLogEmitStdout,
 		jobRetention:    cfg.JobRetention,
@@ -176,6 +180,13 @@ func NewManager(cfg Config) *Manager {
 		rcloneS3UploadConcurrency: envInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0),
 		rcloneStatsInterval:       statsInterval,
 	}
+
+	if m.metrics != nil {
+		m.metrics.SetJobsQueueCapacity(queueCapacity)
+		m.metrics.SetJobsQueueDepth(0)
+	}
+
+	return m
 }
 
 func envInt(key string, defaultValue int) int {
@@ -329,6 +340,7 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 	}
 	if len(runningIDs) > 0 {
 		msg := "server restarted"
+		code := ErrorCodeServerRestarted
 		for _, id := range runningIDs {
 			profileID, job, ok, err := m.store.GetJobByID(ctx, id)
 			if err != nil {
@@ -338,15 +350,21 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 				continue
 			}
 			finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
-			if err := m.finalizeJob(id, models.JobStatusFailed, &finishedAt, &msg); err != nil {
+			if err := m.finalizeJob(id, models.JobStatusFailed, &finishedAt, &msg, &code); err != nil {
 				return err
 			}
 
-			payload := map[string]any{"status": models.JobStatusFailed, "error": msg}
+			payload := map[string]any{"status": models.JobStatusFailed, "error": msg, "errorCode": code}
 			if jp := m.loadJobProgress(id); jp != nil {
 				payload["progress"] = jp
 			}
 			m.hub.Publish(ws.Event{Type: "job.completed", JobID: id, Payload: payload})
+			if m.metrics != nil {
+				m.metrics.IncJobsCompleted(job.Type, string(models.JobStatusFailed), &code)
+				if isTransferJobType(job.Type) {
+					m.metrics.IncTransferErrors(code)
+				}
+			}
 
 			logging.ErrorFields("job failed after restart", map[string]any{
 				"event":      "job.completed",
@@ -355,6 +373,7 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 				"profile_id": profileID,
 				"status":     models.JobStatusFailed,
 				"error":      msg,
+				"error_code": code,
 			})
 		}
 	}
@@ -518,13 +537,31 @@ func (m *Manager) cleanupOrphanJobLogs(ctx context.Context) {
 			continue
 		}
 		name := ent.Name()
-		if !(strings.HasSuffix(name, ".log") || strings.HasSuffix(name, ".cmd")) {
+		jobID := ""
+		isRcloneConf := false
+		switch {
+		case strings.HasSuffix(name, ".log"):
+			jobID = strings.TrimSuffix(name, ".log")
+		case strings.HasSuffix(name, ".cmd"):
+			jobID = strings.TrimSuffix(name, ".cmd")
+		case strings.HasSuffix(name, ".rclone.conf"):
+			jobID = strings.TrimSuffix(name, ".rclone.conf")
+			isRcloneConf = true
+		default:
 			continue
 		}
-		jobID := strings.TrimSuffix(name, filepath.Ext(name))
 		if jobID == "" {
 			continue
 		}
+		if isRcloneConf {
+			_, job, ok, err := m.store.GetJobByID(ctx, jobID)
+			if err == nil && ok && job.Status == models.JobStatusRunning {
+				continue
+			}
+			_ = os.Remove(filepath.Join(logDir, name))
+			continue
+		}
+
 		exists, err := m.store.JobExists(ctx, jobID)
 		if err != nil || exists {
 			continue
@@ -593,6 +630,9 @@ func (m *Manager) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case jobID := <-m.queue:
+			if m.metrics != nil {
+				m.metrics.SetJobsQueueDepth(len(m.queue))
+			}
 			m.sem <- struct{}{}
 			go func() {
 				defer func() { <-m.sem }()
@@ -612,6 +652,9 @@ func (m *Manager) QueueStats() QueueStats {
 func (m *Manager) Enqueue(jobID string) error {
 	select {
 	case m.queue <- jobID:
+		if m.metrics != nil {
+			m.metrics.SetJobsQueueDepth(len(m.queue))
+		}
 		return nil
 	default:
 		return ErrJobQueueFull
@@ -624,6 +667,9 @@ func (m *Manager) enqueueBlocking(ctx context.Context, ids []string) {
 		case <-ctx.Done():
 			return
 		case m.queue <- id:
+			if m.metrics != nil {
+				m.metrics.SetJobsQueueDepth(len(m.queue))
+			}
 		}
 	}
 }
@@ -664,6 +710,21 @@ func (m *Manager) IsSupportedJobType(jobType string) bool {
 	}
 }
 
+func isTransferJobType(jobType string) bool {
+	return strings.HasPrefix(jobType, "transfer_")
+}
+
+func transferDirectionForJobType(jobType string) string {
+	switch jobType {
+	case JobTypeTransferSyncLocalToS3, JobTypeTransferSyncStagingToS3:
+		return "upload"
+	case JobTypeTransferSyncS3ToLocal:
+		return "download"
+	default:
+		return ""
+	}
+}
+
 func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	profileID, job, ok, err := m.store.GetJobByID(rootCtx, jobID)
 	if err != nil || !ok {
@@ -689,6 +750,9 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		"job_type":   job.Type,
 		"profile_id": profileID,
 	})
+	if m.metrics != nil {
+		m.metrics.IncJobsStarted(job.Type)
+	}
 
 	ctx, cancel := context.WithCancel(rootCtx)
 	m.mu.Lock()
@@ -743,32 +807,61 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	}
 
 	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	duration := time.Since(start)
 	if errors.Is(ctx.Err(), context.Canceled) {
-		_ = m.finalizeJob(jobID, models.JobStatusCanceled, &finishedAt, nil)
+		code := ErrorCodeCanceled
+		_ = m.finalizeJob(jobID, models.JobStatusCanceled, &finishedAt, nil, &code)
 
-		payload := map[string]any{"status": models.JobStatusCanceled}
+		payload := map[string]any{"status": models.JobStatusCanceled, "errorCode": code}
 		if jp := m.loadJobProgress(jobID); jp != nil {
 			payload["progress"] = jp
+			if m.metrics != nil {
+				if dir := transferDirectionForJobType(job.Type); dir != "" && jp.BytesDone != nil && *jp.BytesDone > 0 {
+					m.metrics.AddTransferBytes(dir, *jp.BytesDone)
+				}
+			}
 		}
 		m.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
+		if m.metrics != nil {
+			m.metrics.IncJobsCanceled(job.Type)
+			m.metrics.IncJobsCompleted(job.Type, string(models.JobStatusCanceled), &code)
+			m.metrics.ObserveJobsDuration(job.Type, string(models.JobStatusCanceled), &code, duration)
+		}
 		logging.InfoFields("job canceled", map[string]any{
 			"event":       "job.completed",
 			"job_id":      jobID,
 			"job_type":    job.Type,
 			"profile_id":  profileID,
 			"status":      models.JobStatusCanceled,
-			"duration_ms": time.Since(start).Milliseconds(),
+			"error_code":  code,
+			"duration_ms": duration.Milliseconds(),
 		})
 		return nil
 	}
 	if runErr != nil {
 		msg := runErr.Error()
-		_ = m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg)
-		payload := map[string]any{"status": models.JobStatusFailed, "error": msg}
+		code := ErrorCodeUnknown
+		if c, ok := jobErrorCode(runErr); ok {
+			code = c
+		}
+		_ = m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg, &code)
+		payload := map[string]any{"status": models.JobStatusFailed, "error": msg, "errorCode": code}
 		if jp := m.loadJobProgress(jobID); jp != nil {
 			payload["progress"] = jp
+			if m.metrics != nil {
+				if dir := transferDirectionForJobType(job.Type); dir != "" && jp.BytesDone != nil && *jp.BytesDone > 0 {
+					m.metrics.AddTransferBytes(dir, *jp.BytesDone)
+				}
+			}
 		}
 		m.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
+		if m.metrics != nil {
+			m.metrics.IncJobsCompleted(job.Type, string(models.JobStatusFailed), &code)
+			m.metrics.ObserveJobsDuration(job.Type, string(models.JobStatusFailed), &code, duration)
+			if isTransferJobType(job.Type) {
+				m.metrics.IncTransferErrors(code)
+			}
+		}
 		logging.ErrorFields("job failed", map[string]any{
 			"event":       "job.completed",
 			"job_id":      jobID,
@@ -776,24 +869,34 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 			"profile_id":  profileID,
 			"status":      models.JobStatusFailed,
 			"error":       msg,
-			"duration_ms": time.Since(start).Milliseconds(),
+			"error_code":  code,
+			"duration_ms": duration.Milliseconds(),
 		})
 		return runErr
 	}
 
-	_ = m.finalizeJob(jobID, models.JobStatusSucceeded, &finishedAt, nil)
+	_ = m.finalizeJob(jobID, models.JobStatusSucceeded, &finishedAt, nil, nil)
 	payload := map[string]any{"status": models.JobStatusSucceeded}
 	if jp := m.loadJobProgress(jobID); jp != nil {
 		payload["progress"] = jp
+		if m.metrics != nil {
+			if dir := transferDirectionForJobType(job.Type); dir != "" && jp.BytesDone != nil && *jp.BytesDone > 0 {
+				m.metrics.AddTransferBytes(dir, *jp.BytesDone)
+			}
+		}
 	}
 	m.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
+	if m.metrics != nil {
+		m.metrics.IncJobsCompleted(job.Type, string(models.JobStatusSucceeded), nil)
+		m.metrics.ObserveJobsDuration(job.Type, string(models.JobStatusSucceeded), nil, duration)
+	}
 	logging.InfoFields("job completed", map[string]any{
 		"event":       "job.completed",
 		"job_id":      jobID,
 		"job_type":    job.Type,
 		"profile_id":  profileID,
 		"status":      models.JobStatusSucceeded,
-		"duration_ms": time.Since(start).Milliseconds(),
+		"duration_ms": duration.Milliseconds(),
 	})
 	return nil
 }
@@ -808,7 +911,7 @@ func (m *Manager) loadJobProgress(jobID string) *models.JobProgress {
 	return job.Progress
 }
 
-func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt *string, errMsg *string) error {
+func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt *string, errMsg *string, errorCode *string) error {
 	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	_, job, ok, err := m.store.GetJobByID(updateCtx, jobID)
 	cancel()
@@ -823,7 +926,7 @@ func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt 
 	}
 
 	updateCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	err = m.store.UpdateJobStatus(updateCtx, jobID, status, nil, finishedAt, jp, errMsg, nil)
+	err = m.store.UpdateJobStatus(updateCtx, jobID, status, nil, finishedAt, jp, errMsg, errorCode)
 	cancel()
 	return err
 }
@@ -1666,9 +1769,9 @@ const (
 )
 
 func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, commandArgs []string, opts runRcloneOptions) error {
-	rclonePath, err := ResolveRclonePath()
+	rclonePath, _, err := EnsureRcloneCompatible(ctx)
 	if err != nil {
-		return err
+		return TransferEngineJobError(err)
 	}
 
 	profileSecrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
@@ -1773,15 +1876,17 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 		}
 	}()
 
+	errCapture := newLogCapture(50)
+
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		m.pipeLogs(ctx, stdout, logWriter, jobID, "info", progressCh, opts.ProgressMode, m.logLineMaxBytes)
+		m.pipeLogs(ctx, stdout, logWriter, jobID, "info", nil, progressCh, opts.ProgressMode, m.logLineMaxBytes)
 	}()
 	go func() {
 		defer wg.Done()
-		m.pipeLogs(ctx, stderr, logWriter, jobID, "error", progressCh, opts.ProgressMode, m.logLineMaxBytes)
+		m.pipeLogs(ctx, stderr, logWriter, jobID, "error", errCapture, progressCh, opts.ProgressMode, m.logLineMaxBytes)
 	}()
 
 	waitErr := cmd.Wait()
@@ -1791,7 +1896,14 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 		close(progressCh)
 		<-progressDone
 	}
-	return waitErr
+	if waitErr != nil {
+		context := "rclone"
+		if len(commandArgs) > 0 {
+			context = context + " " + commandArgs[0]
+		}
+		return jobErrorFromRclone(waitErr, errCapture.String(), context)
+	}
+	return nil
 }
 
 func (m *Manager) writeRcloneConfig(jobID string, profile models.ProfileSecrets) (string, error) {
@@ -1968,7 +2080,7 @@ func readLogLine(r *bufio.Reader, maxBytes int) (string, bool, error) {
 	return line, false, nil
 }
 
-func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID, level string, progressCh chan<- rcloneStatsUpdate, mode rcloneProgressMode, maxLineBytes int) {
+func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID, level string, capture *logCapture, progressCh chan<- rcloneStatsUpdate, mode rcloneProgressMode, maxLineBytes int) {
 	reader := bufio.NewReaderSize(r, logReadBufferSize)
 
 	for {
@@ -1995,6 +2107,9 @@ func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID,
 		rendered, stats := formatRcloneJSONLine(line)
 		if rendered == "" {
 			rendered = line
+		}
+		if capture != nil {
+			capture.Add(rendered)
 		}
 
 		_, _ = w.Write([]byte("[" + level + "] " + rendered + "\n"))

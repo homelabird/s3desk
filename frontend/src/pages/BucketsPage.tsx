@@ -8,6 +8,8 @@ import { APIClient, APIError } from '../api/client'
 import type { BucketCreateRequest } from '../api/types'
 import { SetupCallout } from '../components/SetupCallout'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
+import { formatErrorWithHint as formatErr } from '../lib/errors'
+import { formatDateTime } from '../lib/format'
 
 type Props = {
 	apiToken: string
@@ -119,7 +121,18 @@ export function BucketsPage(props: Props) {
 				}}
 				columns={[
 					{ title: 'Name', dataIndex: 'name' },
-					{ title: 'CreatedAt', dataIndex: 'createdAt', render: (v?: string) => v ?? '-' },
+					{
+						title: 'CreatedAt',
+						dataIndex: 'createdAt',
+						render: (v?: string) =>
+							v ? (
+								<Typography.Text code title={v}>
+									{formatDateTime(v)}
+								</Typography.Text>
+							) : (
+								'-'
+							),
+					},
 					{
 						title: 'Actions',
 						render: (_, row: { name: string }) => (
@@ -156,13 +169,6 @@ export function BucketsPage(props: Props) {
 		</Space>
 	)
 }
-
-function formatErr(err: unknown): string {
-	if (err instanceof APIError) return `${err.code}: ${err.message}`
-	if (err instanceof Error) return err.message
-	return 'unknown error'
-}
-
 function BucketModal(props: {
 	open: boolean
 	onCancel: () => void

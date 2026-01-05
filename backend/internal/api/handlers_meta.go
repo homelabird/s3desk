@@ -11,6 +11,10 @@ import (
 func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 	path, ok := jobs.DetectRclone()
 	rcloneVersion, vok := jobs.DetectRcloneVersion(r.Context())
+	compatible := false
+	if ok && vok {
+		compatible = jobs.IsRcloneVersionCompatible(rcloneVersion)
+	}
 	var jobLogMaxBytes *int64
 	if s.cfg.JobLogMaxBytes > 0 {
 		v := s.cfg.JobLogMaxBytes
@@ -55,6 +59,8 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		TransferEngine: models.TransferEngineInfo{
 			Name:      "rclone",
 			Available: ok,
+			Compatible: compatible,
+			MinVersion: jobs.MinSupportedRcloneVersion,
 			Path:      path,
 			Version: func() string {
 				if !vok {

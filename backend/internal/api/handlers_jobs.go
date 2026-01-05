@@ -449,6 +449,10 @@ func (s *server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.metrics != nil {
+		s.metrics.IncJobsRetried(job.Type)
+	}
+
 	s.hub.Publish(ws.Event{Type: "job.created", JobID: newJob.ID, Payload: map[string]any{"job": newJob}})
 	writeJSON(w, http.StatusCreated, newJob)
 }
@@ -608,8 +612,9 @@ func (s *server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	switch job.Status {
 	case models.JobStatusQueued:
 		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
-		_ = s.store.UpdateJobStatus(r.Context(), jobID, models.JobStatusCanceled, nil, &finishedAt, nil, nil, nil)
-		payload := map[string]any{"status": models.JobStatusCanceled}
+		code := jobs.ErrorCodeCanceled
+		_ = s.store.UpdateJobStatus(r.Context(), jobID, models.JobStatusCanceled, nil, &finishedAt, nil, nil, &code)
+		payload := map[string]any{"status": models.JobStatusCanceled, "errorCode": code}
 		s.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
 	case models.JobStatusRunning:
 		s.jobs.Cancel(jobID)

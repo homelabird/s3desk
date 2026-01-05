@@ -1833,10 +1833,12 @@ components:
         uploadMaxBytes: { type: integer, format: int64, nullable: true }
         transferEngine:
           type: object
-          required: [name, available]
+          required: [name, available, compatible, minVersion]
           properties:
             name: { type: string }
             available: { type: boolean }
+            compatible: { type: boolean }
+            minVersion: { type: string }
             path: { type: string }
             version: { type: string }
 

@@ -3,6 +3,7 @@ import { CopyOutlined, DownloadOutlined, InfoCircleOutlined, ReloadOutlined, Sea
 import dayjs, { type Dayjs } from 'dayjs'
 
 import type { ObjectItem } from '../../api/types'
+import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
 
 type ObjectsGlobalSearchDrawerProps = {
@@ -28,6 +29,7 @@ type ObjectsGlobalSearchDrawerProps = {
 	modifiedAfterMs: number | null
 	modifiedBeforeMs: number | null
 	onModifiedRangeChange: (startMs: number | null, endMs: number | null) => void
+	onReset: () => void
 	onRefresh: () => void
 	isRefreshing: boolean
 	isError: boolean
@@ -117,6 +119,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Button icon={<ReloadOutlined />} onClick={props.onRefresh} loading={props.isRefreshing}>
 							Refresh
 						</Button>
+						<Button onClick={props.onReset}>Reset</Button>
 					</Space>
 
 					<Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -252,7 +255,13 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 										dataIndex: 'lastModified',
 										width: 220,
 										render: (value: string) =>
-											value ? <Typography.Text code>{value}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>,
+											value ? (
+												<Typography.Text code title={value}>
+													{formatDateTime(value)}
+												</Typography.Text>
+											) : (
+												<Typography.Text type="secondary">-</Typography.Text>
+											),
 									},
 									{
 										title: 'Actions',

@@ -3,6 +3,7 @@ import { Alert, Form, Input, Modal, Typography } from 'antd'
 
 type RenameForm = {
 	name: string
+	confirm: string
 }
 
 type ObjectsRenameModalProps = {
@@ -38,7 +39,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 				style={{ marginBottom: 12 }}
 			/>
 
-			<Form form={props.form} layout="vertical" initialValues={{ name: '' }} onFinish={props.onFinish}>
+			<Form form={props.form} layout="vertical" initialValues={{ name: '', confirm: '' }} onFinish={props.onFinish}>
 				<Form.Item label="Source">
 					<Typography.Text code>{sourceLabel}</Typography.Text>
 				</Form.Item>
@@ -59,6 +60,21 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 					]}
 				>
 					<Input id="objectsRenameInput" placeholder={isPrefix ? 'folder-name' : 'file-name'} autoComplete="off" />
+				</Form.Item>
+
+				<Form.Item
+					name="confirm"
+					label='Type "RENAME" to confirm'
+					rules={[
+						{
+							validator: async (_, v: string) => {
+								if (v === 'RENAME') return
+								throw new Error('Type RENAME to proceed')
+							},
+						},
+					]}
+				>
+					<Input placeholder="RENAME" autoComplete="off" />
 				</Form.Item>
 			</Form>
 		</Modal>

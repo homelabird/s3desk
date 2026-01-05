@@ -1,11 +1,14 @@
 import type { BreadcrumbProps, SelectProps } from 'antd'
-import { Alert, Button, Breadcrumb, Input, Select, Space, Spin, Switch, Tooltip, Typography } from 'antd'
-import { FilterOutlined, SearchOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { Alert, Button, Breadcrumb, Input, Select, Space, Spin, Switch, Tooltip, Typography, message } from 'antd'
+import { CopyOutlined, FilterOutlined, SearchOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import styles from './objects.module.css'
 import type { ObjectSort } from './objectsTypes'
+import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 
 type ObjectsListControlsProps = {
+	bucket: string
+	prefix: string
 	breadcrumbItems: BreadcrumbProps['items']
 	isBookmarked: boolean
 	onToggleBookmark: () => void
@@ -33,18 +36,35 @@ type ObjectsListControlsProps = {
 	onFavoritesFirstChange: (value: boolean) => void
 }
 
+function buildS3Location(bucket: string, prefix: string): string {
+	if (!bucket) return ''
+	const p = (prefix ?? '').replace(/^\/+/, '')
+	return p ? `s3://${bucket}/${p}` : `s3://${bucket}/`
+}
+
 export function ObjectsListControls(props: ObjectsListControlsProps) {
-	const globalSearchButton = (
+	const location = buildS3Location(props.bucket, props.prefix)
+
+	const copyLocation = async () => {
+		if (!location) return
+		const res = await copyToClipboard(location)
+		if (res.ok) message.success('Copied')
+		else message.warning(clipboardFailureHint())
+	}
+
+	const globalSearchButton = props.isAdvanced ? (
 		<Button size="small" icon={<SearchOutlined />} disabled={!props.canInteract} onClick={props.onOpenGlobalSearch}>
 			Global Search (Indexed)
 		</Button>
-	)
+	) : null
+
 	const searchScopeRow = (
 		<Space wrap size="small" align="center">
-			<Typography.Text type="secondary">Local search (current folder)</Typography.Text>
+			<Typography.Text type="secondary">Search in this folder</Typography.Text>
 			{globalSearchButton}
 		</Space>
 	)
+
 	const searchStatus =
 		props.search.trim() && props.hasNextPage ? (
 			props.rawTotalCount >= props.searchAutoScanCap ? (
@@ -70,7 +90,8 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 				</Typography.Text>
 			)
 		) : null
-	const sortControls = (
+
+	const sortControls = props.isAdvanced ? (
 		<Space wrap size="small" align="center">
 			<Select
 				value={props.sort}
@@ -91,13 +112,37 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 				<Typography.Text type="secondary">Favorites first</Typography.Text>
 			</Space>
 		</Space>
-	)
+	) : null
 
 	return (
 		<>
 			<div className={styles.breadcrumbRow}>
 				<div className={styles.breadcrumbLeft}>
-					<Breadcrumb items={props.breadcrumbItems} />
+					<Space direction="vertical" size={2} style={{ width: '100%' }}>
+						{location ? (
+							<Space size={6} wrap style={{ minWidth: 0 }}>
+								<Typography.Text type="secondary">Location</Typography.Text>
+								<Typography.Text
+									code
+									ellipsis={{ tooltip: location }}
+									style={{ maxWidth: 640, minWidth: 0, display: 'inline-block' }}
+								>
+									{location}
+								</Typography.Text>
+								<Tooltip title="Copy location">
+									<Button
+										type="text"
+										size="small"
+										icon={<CopyOutlined />}
+										onClick={copyLocation}
+										disabled={!props.canInteract}
+										aria-label="Copy location"
+									/>
+								</Tooltip>
+							</Space>
+						) : null}
+						<Breadcrumb items={props.breadcrumbItems} />
+					</Space>
 				</div>
 				<Space size="small">
 					<Tooltip title={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}>
@@ -109,17 +154,15 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							aria-label={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
 						/>
 					</Tooltip>
-					{props.isAdvanced ? (
-						<Tooltip title="Go to path (Ctrl+L)">
-							<Button
-								type="text"
-								icon={<SearchOutlined />}
-								onClick={props.onOpenPath}
-								disabled={!props.canInteract}
-								aria-label="Go to path"
-							/>
-						</Tooltip>
-					) : null}
+					<Tooltip title="Go to path (Ctrl+L)">
+						<Button
+							type="text"
+							icon={<SearchOutlined />}
+							onClick={props.onOpenPath}
+							disabled={!props.canInteract}
+							aria-label="Go to path"
+						/>
+					</Tooltip>
 				</Space>
 			</div>
 
@@ -171,6 +214,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							>
 								{props.isAdvanced ? 'View' : 'Filter'}
 							</Button>
+							{sortControls}
 						</Space>
 						{props.isAdvanced ? (
 							<Typography.Text type="secondary">

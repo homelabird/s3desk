@@ -17,9 +17,9 @@ type rcloneProcess struct {
 }
 
 func (m *Manager) startRcloneCommand(ctx context.Context, profile models.ProfileSecrets, jobID string, args []string) (*rcloneProcess, error) {
-	rclonePath, err := ResolveRclonePath()
+	rclonePath, _, err := EnsureRcloneCompatible(ctx)
 	if err != nil {
-		return nil, err
+		return nil, TransferEngineJobError(err)
 	}
 
 	configPath, err := m.writeRcloneConfig(jobID, profile)

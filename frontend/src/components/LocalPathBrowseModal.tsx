@@ -3,7 +3,8 @@ import { FolderOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { DataNode, EventDataNode } from 'antd/es/tree'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { APIClient, APIError } from '../api/client'
+import { APIClient } from '../api/client'
+import { formatErrorWithHint as formatErr } from '../lib/errors'
 
 type Props = {
 	api: APIClient
@@ -164,8 +165,4 @@ function upsertTreeChildren(nodes: DataNode[], targetKey: string, children: Data
 	})
 }
 
-function formatErr(err: unknown): string {
-	if (err instanceof APIError) return `${err.code}: ${err.message}`
-	if (err instanceof Error) return err.message
-	return 'unknown error'
-}
+// formatErr lives in ../lib/errors

@@ -3,9 +3,10 @@ import { Alert, Button, Checkbox, Divider, Empty, Form, Input, Modal, Select, Sp
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError } from '../api/client'
+import { APIClient } from '../api/client'
 import type { MetaResponse, Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileTLSStatus, ProfileUpdateRequest } from '../api/types'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
+import { formatErrorWithHint as formatErr } from '../lib/errors'
 
 type Props = {
 	apiToken: string
@@ -15,21 +16,20 @@ type Props = {
 
 export function ProfilesPage(props: Props) {
 	const queryClient = useQueryClient()
-	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const navigate = useNavigate()
-
+	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const [createOpen, setCreateOpen] = useState(false)
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
 	const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
 	const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null)
+	const [onboardingDismissed, setOnboardingDismissed] = useState(false)
 
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', props.apiToken],
 		queryFn: () => api.listProfiles(),
-		enabled: !!props.apiToken,
 	})
 	const profiles = profilesQuery.data ?? []
-	const showProfilesEmpty = !!props.apiToken && !profilesQuery.isFetching && profiles.length === 0
+	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
@@ -38,7 +38,6 @@ export function ProfilesPage(props: Props) {
 
 	const tlsCapability = metaQuery.data?.capabilities?.profileTls
 	const tlsCapabilityEnabled = tlsCapability?.enabled ?? true
-
 	const profileTLSQuery = useQuery({
 		queryKey: ['profileTls', editProfile?.id, props.apiToken],
 		enabled: !!editProfile && tlsCapabilityEnabled,
@@ -137,6 +136,10 @@ export function ProfilesPage(props: Props) {
 		onError: (err) => message.error(formatErr(err)),
 	})
 
+	const apiTokenEnabled = metaQuery.data?.apiTokenEnabled ?? false
+	const transferEngine = metaQuery.data?.transferEngine
+	const onboardingVisible = !onboardingDismissed && (profiles.length === 0 || !props.profileId)
+
 	return (
 		<Space direction="vertical" size="large" style={{ width: '100%' }}>
 			<div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -147,20 +150,56 @@ export function ProfilesPage(props: Props) {
 					New Profile
 				</Button>
 			</div>
-
-			{props.apiToken ? null : (
+			{onboardingVisible ? (
 				<Alert
 					type="info"
 					showIcon
-					message="API Token is empty"
-					description="If your backend is started with API_TOKEN, set it in Settings."
-					action={
-						<Button size="small" onClick={() => navigate('/settings')}>
-							Open Settings
-						</Button>
+					message="Getting started"
+					description={
+						<Space direction="vertical" size={12} style={{ width: '100%' }}>
+							<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
+							<Space direction="vertical" size={6}>
+								<Checkbox checked={metaQuery.isSuccess} disabled>
+									Backend connected
+								</Checkbox>
+								<Checkbox checked={transferEngine?.available ?? false} disabled>
+									Transfer engine detected (rclone)
+								</Checkbox>
+								<Checkbox checked={transferEngine?.compatible ?? false} disabled>
+									Transfer engine compatible
+									{transferEngine?.minVersion ? ` (>= ${transferEngine.minVersion})` : ''}
+								</Checkbox>
+								<Checkbox
+									checked={apiTokenEnabled ? !!props.apiToken.trim() : true}
+									disabled
+								>
+									API token configured{apiTokenEnabled ? '' : ' (not required)'}
+								</Checkbox>
+								<Checkbox checked={profiles.length > 0} disabled>
+									At least one profile created
+								</Checkbox>
+								<Checkbox checked={!!props.profileId} disabled>
+									Active profile selected
+								</Checkbox>
+							</Space>
+							<Space wrap>
+								<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
+									Create profile
+								</Button>
+								<Button size="small" onClick={() => navigate('/buckets')} disabled={!props.profileId}>
+									Buckets
+								</Button>
+								<Button size="small" onClick={() => navigate('/objects')} disabled={!props.profileId}>
+									Objects
+								</Button>
+								<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
+									Dismiss
+								</Button>
+							</Space>
+						</Space>
 					}
 				/>
-			)}
+			) : null}
 
 			{profilesQuery.isError ? (
 				<Alert type="error" showIcon message="Failed to load profiles" description={formatErr(profilesQuery.error)} />
@@ -281,12 +320,6 @@ export function ProfilesPage(props: Props) {
 			/>
 		</Space>
 	)
-}
-
-function formatErr(err: unknown): string {
-	if (err instanceof APIError) return `${err.code}: ${err.message}`
-	if (err instanceof Error) return err.message
-	return 'unknown error'
 }
 
 function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig | null {

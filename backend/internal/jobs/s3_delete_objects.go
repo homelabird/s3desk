@@ -105,12 +105,9 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 		waitErr := proc.wait()
 		_ = os.Remove(tmpPath)
 		if waitErr != nil {
-			msg := strings.TrimSpace(proc.stderr.String())
-			if msg == "" {
-				msg = waitErr.Error()
-			}
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("rclone delete failed: %s", msg))
-			return waitErr
+			err := jobErrorFromRclone(waitErr, proc.stderr.String(), "rclone delete")
+			m.writeJobLog(logFile, jobID, "error", err.Error())
+			return err
 		}
 
 		objectsDone += int64(len(batch))

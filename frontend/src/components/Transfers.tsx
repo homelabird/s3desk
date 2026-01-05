@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError, RequestAbortedError, RequestTimeoutError, type UploadCommitRequest, type UploadFileItem } from '../api/client'
 import type { JobProgress, JobStatus, WSEvent } from '../api/types'
+import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { TransfersContext, useTransfers } from './useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { TransferEstimator } from '../lib/transfer'
@@ -1760,8 +1761,4 @@ function maybeReportNetworkError(err: unknown) {
 	}
 }
 
-function formatErr(err: unknown): string {
-	if (err instanceof APIError) return `${err.code}: ${err.message}`
-	if (err instanceof Error) return err.message
-	return 'unknown error'
-}
+// formatErr lives in ../lib/errors

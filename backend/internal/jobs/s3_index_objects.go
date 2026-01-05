@@ -168,7 +168,7 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		return listErr
 	}
 	if waitErr != nil {
-		return fmt.Errorf("rclone lsjson failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
+		return jobErrorFromRclone(waitErr, proc.stderr.String(), "rclone lsjson")
 	}
 
 	if err := flushBatch(); err != nil {

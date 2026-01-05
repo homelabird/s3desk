@@ -288,7 +288,7 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job, err := s.store.CreateJob(r.Context(), profileID, store.CreateJobInput{
-		Type: jobs.JobTypeTransferSyncStagingToS3,
+		Type:    jobs.JobTypeTransferSyncStagingToS3,
 		Payload: payload,
 	})
 	if err != nil {

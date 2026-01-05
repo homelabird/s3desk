@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Dropdown, Form, Grid, Modal, Space, Typography, message } from 'antd'
+import { Alert, Button, Dropdown, Form, Grid, Space, Typography, message } from 'antd'
 import { FolderOutlined, SnippetsOutlined } from '@ant-design/icons'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -15,6 +15,8 @@ import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath, pickDirectory } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { listAllObjects } from '../lib/objects'
+import { formatErrorWithHint as formatErr } from '../lib/errors'
+import { formatDateTime, parseTimeMs } from '../lib/format'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { formatBytes } from '../lib/transfer'
@@ -177,7 +179,7 @@ export function ObjectsPage(props: Props) {
 	const [activeTabId, setActiveTabId] = useLocalStorageState<string>('objectsActiveTabId', '')
 	const [recentPrefixesByBucket, setRecentPrefixesByBucket] = useLocalStorageState<Record<string, string[]>>('objectsRecentPrefixesByBucket', {})
 	const [bookmarksByBucket, setBookmarksByBucket] = useLocalStorageState<Record<string, string[]>>('objectsBookmarksByBucket', {})
-	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'advanced')
+	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
 	const isAdvanced = uiMode === 'advanced'
 
 	const [pathDraft, setPathDraft] = useState(prefix)
@@ -222,6 +224,31 @@ export function ObjectsPage(props: Props) {
 	)
 	const [indexPrefix, setIndexPrefix] = useState('')
 	const [indexFullReindex, setIndexFullReindex] = useState(true)
+	const resetGlobalSearch = useCallback(() => {
+		setGlobalSearch('')
+		setGlobalSearchDraft('')
+		setGlobalSearchPrefix('')
+		setGlobalSearchLimit(100)
+		setGlobalSearchExt('')
+		setGlobalSearchMinSize(null)
+		setGlobalSearchMaxSize(null)
+		setGlobalSearchMinModifiedMs(null)
+		setGlobalSearchMaxModifiedMs(null)
+		setIndexPrefix('')
+		setIndexFullReindex(true)
+	}, [
+		setGlobalSearch,
+		setGlobalSearchDraft,
+		setGlobalSearchPrefix,
+		setGlobalSearchLimit,
+		setGlobalSearchExt,
+		setGlobalSearchMinSize,
+		setGlobalSearchMaxSize,
+		setGlobalSearchMinModifiedMs,
+		setGlobalSearchMaxModifiedMs,
+		setIndexPrefix,
+		setIndexFullReindex,
+	])
 	const [typeFilter, setTypeFilter] = useLocalStorageState<ObjectTypeFilter>('objectsTypeFilter', 'all')
 	const [favoritesOnly, setFavoritesOnly] = useLocalStorageState<boolean>('objectsFavoritesOnly', false)
 	const [favoritesFirst, setFavoritesFirst] = useLocalStorageState<boolean>('objectsFavoritesFirst', false)
@@ -290,7 +317,7 @@ export function ObjectsPage(props: Props) {
 	const [copyMoveOpen, setCopyMoveOpen] = useState(false)
 	const [copyMoveMode, setCopyMoveMode] = useState<'copy' | 'move'>('copy')
 	const [copyMoveSrcKey, setCopyMoveSrcKey] = useState<string | null>(null)
-	const [copyMoveForm] = Form.useForm<{ dstBucket: string; dstKey: string; dryRun: boolean }>()
+	const [copyMoveForm] = Form.useForm<{ dstBucket: string; dstKey: string; dryRun: boolean; confirm: string }>()
 	const [copyPrefixOpen, setCopyPrefixOpen] = useState(false)
 	const [copyPrefixMode, setCopyPrefixMode] = useState<'copy' | 'move'>('copy')
 	const [copyPrefixSrcPrefix, setCopyPrefixSrcPrefix] = useState('')
@@ -311,7 +338,7 @@ export function ObjectsPage(props: Props) {
 	const [renameOpen, setRenameOpen] = useState(false)
 	const [renameKind, setRenameKind] = useState<'object' | 'prefix'>('object')
 	const [renameSource, setRenameSource] = useState<string | null>(null)
-	const [renameForm] = Form.useForm<{ name: string }>()
+	const [renameForm] = Form.useForm<{ name: string; confirm: string }>()
 	const [downloadPrefixOpen, setDownloadPrefixOpen] = useState(false)
 	const [downloadPrefixForm] = Form.useForm<{ localFolder: string }>()
 	const [downloadPrefixFolderLabel, setDownloadPrefixFolderLabel] = useState('')
@@ -900,7 +927,7 @@ export function ObjectsPage(props: Props) {
 		if (!props.profileId || !bucket) return
 		setRenameKind('object')
 		setRenameSource(key)
-		renameForm.setFieldsValue({ name: fileNameFromKey(key) })
+		renameForm.setFieldsValue({ name: fileNameFromKey(key), confirm: '' })
 		setRenameOpen(true)
 		window.setTimeout(() => {
 			const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
@@ -912,7 +939,7 @@ export function ObjectsPage(props: Props) {
 		if (!props.profileId || !bucket) return
 		setRenameKind('prefix')
 		setRenameSource(srcPrefix)
-		renameForm.setFieldsValue({ name: folderLabelFromPrefix(srcPrefix) })
+		renameForm.setFieldsValue({ name: folderLabelFromPrefix(srcPrefix), confirm: '' })
 		setRenameOpen(true)
 		window.setTimeout(() => {
 			const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
@@ -1115,7 +1142,7 @@ export function ObjectsPage(props: Props) {
 		setCopyMoveMode(mode)
 		setCopyMoveSrcKey(key)
 		setCopyMoveOpen(true)
-		copyMoveForm.setFieldsValue({ dstBucket: bucket, dstKey: key, dryRun: false })
+		copyMoveForm.setFieldsValue({ dstBucket: bucket, dstKey: key, dryRun: false, confirm: '' })
 	}
 
 	const presignMutation = useMutation({
@@ -2362,9 +2389,9 @@ useEffect(() => {
 						})
 
 					if (mode === 'move') {
-						Modal.confirm({
+						confirmDangerAction({
 							title: `Move folder?`,
-							content: (
+							description: (
 								<Space direction="vertical" size="small">
 									<Typography.Text>
 										Move <Typography.Text code>{`s3://${bucket}/${srcPrefix}`}</Typography.Text> →{' '}
@@ -2373,10 +2400,13 @@ useEffect(() => {
 									<Typography.Text type="secondary">This will create a job and remove the source objects.</Typography.Text>
 								</Space>
 							),
-								okText: 'Move',
-								okType: 'danger',
-								onOk: () => doCreate(),
-							})
+							confirmText: 'MOVE',
+							confirmHint: 'Type "MOVE" to confirm',
+							okText: 'Move',
+							onConfirm: async () => {
+								await doCreate()
+							},
+						})
 						return
 					}
 
@@ -2426,9 +2456,9 @@ useEffect(() => {
 				}
 
 				if (mode === 'move') {
-					Modal.confirm({
+					confirmDangerAction({
 						title: `Move ${pairs.length} object(s)?`,
-						content: (
+						description: (
 							<Space direction="vertical" size="small">
 								<Typography.Text>
 									Move to <Typography.Text code>{`s3://${bucket}/${targetPrefix}`}</Typography.Text>
@@ -2436,10 +2466,13 @@ useEffect(() => {
 								<Typography.Text type="secondary">This will create a job and remove the source objects.</Typography.Text>
 							</Space>
 						),
-							okText: 'Move',
-							okType: 'danger',
-							onOk: () => doCreate(),
-						})
+						confirmText: 'MOVE',
+						confirmHint: 'Type "MOVE" to confirm',
+						okText: 'Move',
+						onConfirm: async () => {
+							await doCreate()
+						},
+					})
 					return
 				}
 
@@ -2894,12 +2927,18 @@ useEffect(() => {
 		if (keys.length === 0) return
 
 		if (keys.length === 1) {
-			Modal.confirm({
+			const key = keys[0]
+			confirmDangerAction({
 				title: 'Delete object?',
-				content: 'This cannot be undone.',
-				okText: 'Delete',
-				okType: 'danger',
-				onOk: async () => {
+				description: 'This cannot be undone.',
+				details: (
+					<Space direction="vertical" size={4} style={{ width: '100%' }}>
+						<Typography.Text>
+							Key: <Typography.Text code>{key}</Typography.Text>
+						</Typography.Text>
+					</Space>
+				),
+				onConfirm: async () => {
 					await deleteMutation.mutateAsync(keys)
 				},
 			})
@@ -3057,7 +3096,7 @@ useEffect(() => {
 		})
 	}
 
-	const handleCopyMoveSubmit = (values: { dstBucket: string; dstKey: string; dryRun: boolean }) => {
+	const handleCopyMoveSubmit = (values: { dstBucket: string; dstKey: string; dryRun: boolean; confirm: string }) => {
 		if (!props.profileId || !bucket || !copyMoveSrcKey) return
 		copyMoveMutation.mutate({
 			mode: copyMoveMode,
@@ -3068,7 +3107,7 @@ useEffect(() => {
 		})
 	}
 
-	const handleRenameSubmit = (values: { name: string }) => {
+	const handleRenameSubmit = (values: { name: string; confirm: string }) => {
 		if (!renameSource) return
 		renameMutation.mutate({ kind: renameKind, src: renameSource, name: values.name })
 	}
@@ -3206,12 +3245,13 @@ useEffect(() => {
 		}
 
 		if (mode === 'move') {
-			Modal.confirm({
+			confirmDangerAction({
 				title: `Move ${src.keys.length} object(s) here?`,
-				content: 'This creates a move job (copy then delete source).',
+				description: 'This creates a move job (copy then delete source).',
+				confirmText: 'MOVE',
+				confirmHint: 'Type "MOVE" to confirm',
 				okText: 'Move',
-				okType: 'danger',
-				onOk: async () => doPaste(),
+				onConfirm: async () => doPaste(),
 			})
 			return
 		}
@@ -4597,6 +4637,8 @@ useEffect(() => {
 				<ObjectsListSectionContainer
 					controls={
 						<ObjectsListControls
+							bucket={bucket}
+							prefix={prefix}
 							breadcrumbItems={breadcrumbItems}
 							isBookmarked={isBookmarked}
 							onToggleBookmark={toggleBookmark}
@@ -5243,6 +5285,7 @@ useEffect(() => {
 					setGlobalSearchMinModifiedMs(startMs)
 					setGlobalSearchMaxModifiedMs(endMs)
 				}}
+				onReset={resetGlobalSearch}
 				onRefresh={() => indexedSearchQuery.refetch()}
 				isRefreshing={indexedSearchQuery.isFetching}
 				isError={indexedSearchQuery.isError}
@@ -5460,30 +5503,4 @@ function suggestCopyPrefix(srcPrefix: string): string {
 		return 'unsupported'
 	}
 
-	function parseTimeMs(value: string | null | undefined): number {
-		if (!value) return 0
-		const d = new Date(value)
-		const t = d.getTime()
-	if (!Number.isFinite(t)) return 0
-	return t
-}
 
-function formatDateTime(value: string | null | undefined): string {
-	if (!value) return '-'
-	const d = new Date(value)
-	if (!Number.isFinite(d.getTime())) return value
-	return new Intl.DateTimeFormat(undefined, {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-		}).format(d)
-	}
-
-	function formatErr(err: unknown): string {
-		if (err instanceof APIError) return `${err.code}: ${err.message}`
-		if (err instanceof Error) return err.message
-	return 'unknown error'
-}

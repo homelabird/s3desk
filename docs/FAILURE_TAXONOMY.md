@@ -17,6 +17,10 @@ Job 실패 원인을 코드로 분류해 UI/로그/메트릭에서 동일한 기
 - `upstream_timeout`: 상위 시스템 타임아웃
 - `network_error`: 기타 네트워크 오류
 
+### 환경/의존성
+- `transfer_engine_missing`: rclone 미설치/경로 불가 (PATH 또는 RCLONE_PATH)
+- `transfer_engine_incompatible`: rclone 버전이 너무 낮아 필요한 플래그를 지원하지 않음
+
 ### 리소스/대상
 - `not_found`: 버킷/오브젝트 없음
 - `conflict`: 동시성/상태 충돌

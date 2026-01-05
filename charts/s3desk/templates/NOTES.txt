@@ -11,5 +11,16 @@ Port-forward:
   http://127.0.0.1:8080
 {{- end }}
 
-Remember to set a real API token (`server.apiToken` or `secrets.existingSecret`) for remote access.
-If you use Ingress with a hostname, add it to `server.allowedHosts`.
+This chart is secure-by-default.
+
+An API token is required when `server.allowRemote=true` (default). Configure one of:
+  - `server.apiToken` (recommended)
+  - `secrets.existingSecret` (must contain the configured token key)
+
+Host allowlist:
+  - The chart auto-populates ALLOWED_HOSTS with common Service DNS variants plus any Ingress/Istio hosts.
+  - Use `server.allowedHosts` for any additional hostnames.
+
+Prometheus scraping:
+  - /metrics requires the API token.
+  - You can send it as either `Authorization: Bearer <token>` or `X-Api-Token: <token>`.

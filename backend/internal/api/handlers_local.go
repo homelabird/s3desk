@@ -150,4 +150,3 @@ func localEntryName(path string) string {
 	}
 	return base
 }
-

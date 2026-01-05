@@ -15,8 +15,10 @@ import (
 	"s3desk/internal/api"
 	"s3desk/internal/config"
 	"s3desk/internal/db"
+	"s3desk/internal/dirlock"
 	"s3desk/internal/jobs"
 	"s3desk/internal/logging"
+	"s3desk/internal/metrics"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -63,6 +65,14 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return err
 	}
+
+	// Prevent accidental concurrent use of the same DATA_DIR (which would corrupt
+	// sqlite DB files and interleave job logs/artifacts).
+	dataLock, err := dirlock.Acquire(cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dataLock.Release() }()
 	if err := os.MkdirAll(filepath.Join(cfg.DataDir, "staging"), 0o700); err != nil {
 		return err
 	}
@@ -135,11 +145,13 @@ func Run(ctx context.Context, cfg config.Config) error {
 		}
 	}
 
+	m := metrics.New()
 	hub := ws.NewHub()
 	jobManager := jobs.NewManager(jobs.Config{
 		Store:            st,
 		DataDir:          cfg.DataDir,
 		Hub:              hub,
+		Metrics:          m,
 		Concurrency:      cfg.JobConcurrency,
 		JobLogMaxBytes:   cfg.JobLogMaxBytes,
 		JobLogEmitStdout: cfg.JobLogEmitStdout,
@@ -160,6 +172,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		Store:      st,
 		Jobs:       jobManager,
 		Hub:        hub,
+		Metrics:    m,
 		ServerAddr: cfg.Addr,
 	})
 

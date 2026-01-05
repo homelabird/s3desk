@@ -154,7 +154,7 @@ func (s *server) prepareRcloneConfig(profile models.ProfileSecrets, hint string)
 }
 
 func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (*rcloneProcess, error) {
-	rclonePath, err := jobs.ResolveRclonePath()
+	rclonePath, _, err := jobs.EnsureRcloneCompatible(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -406,6 +406,21 @@ type rcloneAPIErrorContext struct {
 func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rcloneAPIErrorContext, details map[string]any) {
 	if errors.Is(err, jobs.ErrRcloneNotFound) {
 		writeError(w, http.StatusBadRequest, "transfer_engine_missing", ctx.MissingMessage, nil)
+		return
+	}
+	var ie *jobs.RcloneIncompatibleError
+	if errors.As(err, &ie) {
+		out := map[string]any{}
+		for k, v := range details {
+			out[k] = v
+		}
+		if ie.CurrentVersion != "" {
+			out["currentVersion"] = ie.CurrentVersion
+		}
+		if ie.MinVersion != "" {
+			out["minVersion"] = ie.MinVersion
+		}
+		writeError(w, http.StatusBadRequest, "transfer_engine_incompatible", ie.Error(), out)
 		return
 	}
 	if status, code, ok := rcloneErrorStatus(err, stderr); ok {

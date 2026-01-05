@@ -11,6 +11,14 @@
 - `GET /metrics` exposes Prometheus text format.
 - This endpoint follows the same local-host + API token checks as other internal endpoints.
 
+Auth:
+- `X-Api-Token: <token>`
+- or `Authorization: Bearer <token>` (handy for Prometheus Operator / ServiceMonitor)
+
+Kubernetes notes:
+- `/metrics` is usually scraped via the Service DNS name, so the Host allowlist needs to include it.
+- The Helm chart templates automatically add common Service DNS names, plus Ingress/Istio hostnames, to `ALLOWED_HOSTS`.
+
 ### Job lifecycle
 - `jobs_queue_depth` (gauge)
 - `jobs_queue_capacity` (gauge)

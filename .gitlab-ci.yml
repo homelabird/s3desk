@@ -2,6 +2,24 @@ stages:
   - test
   - audit
 
+# Mandatory quality gate.
+check:
+  stage: test
+  image: golang:1.23
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends nodejs npm python3 ca-certificates curl git
+  script:
+    - bash scripts/check.sh
+    # Ensure generated artifacts (openapi types, third-party notices) are committed.
+    - git diff --exit-code
+  artifacts:
+    when: always
+    paths:
+      - THIRD_PARTY_NOTICES.md
+      - third_party/licenses/
+    expire_in: 7 days
+
 perf_tests:
   stage: test
   image: mcr.microsoft.com/playwright:v1.47.0-jammy

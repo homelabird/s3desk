@@ -26,7 +26,7 @@ type ObjectsToolbarSectionProps = {
 
 export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 	const tabItems = props.tabs.map((t) => {
-		const label = t.bucket ? `${t.bucket}${t.prefix ? `/${t.prefix}` : ''}` : '(no bucket)'
+		const label = t.bucket ? `${t.bucket}${t.prefix ? `/${t.prefix}` : ''}` : '(no bucket selected)'
 		return {
 			key: t.id,
 			label: (
@@ -42,7 +42,7 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 
 	return (
 		<>
-			<SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to browse objects" />
+			<SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to start browsing" />
 			{props.bucketsErrorMessage ? (
 				<Alert type="error" showIcon message="Failed to load buckets" description={props.bucketsErrorMessage} />
 			) : null}

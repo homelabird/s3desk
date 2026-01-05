@@ -87,12 +87,16 @@ The Helm chart lives at `charts/s3desk`.
 helm install s3desk charts/s3desk \
   --set image.repository=s3desk \
   --set image.tag=latest \
-  --set server.apiToken=change-me
+  --set server.apiToken="REPLACE_WITH_A_STRONG_RANDOM_TOKEN"
 ```
 
 Notes:
-- If you expose this via Ingress with a hostname, set `server.allowedHosts` to that hostname (so Host/Origin checks allow it).
+- If you expose this via Ingress/Istio with a hostname, that hostname must be in the Host allowlist.
+  - The chart auto-populates `ALLOWED_HOSTS` with common Service DNS variants plus any Ingress/Istio hosts.
+  - Use `server.allowedHosts` for any additional hostnames.
 - The chart defaults to `ADDR=0.0.0.0:8080` and `ALLOW_REMOTE=true`, so an API token is required.
+- The chart intentionally fails install/upgrade if `server.allowRemote=true` and no token is configured.
+- The chart rejects the insecure placeholder token value `change-me`.
 
 ## Build
 

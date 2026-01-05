@@ -142,4 +142,3 @@ func wildcardMatch(pattern, s string) bool {
 	}
 	return pi == len(p)
 }
-

@@ -13,10 +13,13 @@ This document describes baseline operational procedures for S3Desk.
 - `ENCRYPTION_KEY` (if credential encryption is enabled)
 - `DATA_DIR` location
 
+Note: S3Desk enforces a single active writer per `DATA_DIR` using an OS-level lock file (`DATA_DIR/.s3desk.lock`).
+If you start a second instance pointing at the same `DATA_DIR`, it will refuse to start (by design).
+
 ## Quick checks
 - Liveness: `GET /healthz` should return `ok`
 - Readiness: `GET /readyz` should return `ok`
-- Metrics: `GET /metrics` (requires local host + API token)
+- Metrics: `GET /metrics` (requires API token; remote must be localhost/private + allowed Host)
 - Disk usage: verify free space for `DATA_DIR`
 
 ## Start/stop (docker compose)
@@ -27,6 +30,22 @@ This document describes baseline operational procedures for S3Desk.
 ## Metrics access
 - Example:
   - `curl -H "X-Api-Token: $API_TOKEN" http://127.0.0.1:8080/metrics`
+  - `curl -H "Authorization: Bearer $API_TOKEN" http://127.0.0.1:8080/metrics`
+
+## Kubernetes / remote operation notes
+
+When running behind an Ingress (or Istio VirtualService) with a hostname, requests will be rejected unless that hostname is allowed.
+
+- Set `ALLOWED_HOSTS` (or Helm `server.allowedHosts`) to include your external hostname(s).
+- Prometheus scraping usually hits `/metrics` via the Service DNS name (for example `s3desk.default.svc`), so include the Service DNS name too if you're not using the Helm chart.
+- The Helm chart templates auto-populate `ALLOWED_HOSTS` with:
+  - the Service DNS variants
+  - Ingress hosts (if `ingress.enabled=true`)
+  - Istio VirtualService hosts (if enabled)
+
+Prometheus Operator example:
+- Configure a bearer token (same value as `API_TOKEN`) using `bearerTokenSecret` in your ServiceMonitor, and scrape path `/metrics`.
+- Keep `/metrics` off public Ingress unless you actually enjoy explaining leaks.
 
 ## Log locations
 - Job logs: `DATA_DIR/logs/jobs/{job_id}.log`

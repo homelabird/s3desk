@@ -327,7 +327,7 @@ func listRcloneZipObjectsForPrefix(ctx context.Context, m *Manager, profile mode
 		return nil, listErr
 	}
 	if waitErr != nil {
-		return nil, fmt.Errorf("rclone lsjson failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
+		return nil, jobErrorFromRclone(waitErr, proc.stderr.String(), "rclone lsjson")
 	}
 
 	return objs, nil
@@ -383,7 +383,7 @@ func fetchRcloneEntriesForKeys(ctx context.Context, m *Manager, profile models.P
 		return nil, listErr
 	}
 	if waitErr != nil {
-		return nil, fmt.Errorf("rclone lsjson failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
+		return nil, jobErrorFromRclone(waitErr, proc.stderr.String(), "rclone lsjson")
 	}
 
 	return entries, nil
@@ -474,7 +474,7 @@ func zipS3Object(
 		return copyErr
 	}
 	if waitErr != nil {
-		return fmt.Errorf("rclone cat failed: %w: %s", waitErr, strings.TrimSpace(proc.stderr.String()))
+		return jobErrorFromRclone(waitErr, proc.stderr.String(), "rclone cat")
 	}
 	_ = n
 

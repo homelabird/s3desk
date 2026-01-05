@@ -35,21 +35,24 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 	if (props.rows.length === 0) {
 		return (
 			<div style={{ padding: 24 }}>
-				{props.hasProfile && props.hasBucket ? (
-					props.isFetching ? (
-						<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
-							<Spin />
-						</div>
-					) : (
-						<Empty description={props.emptyKind === 'empty' ? 'Empty folder' : 'No results'}>
-							{props.emptyKind === 'noresults' ? (
-								<Button onClick={props.onClearSearch} disabled={!props.canClearSearch}>
-									Clear search
-								</Button>
-							) : null}
-						</Empty>
-					)
-				) : null}
+				{!props.hasProfile ? (
+					<Empty description="Select a profile to browse objects." />
+				) : !props.hasBucket ? (
+					<Empty description="Select a bucket to start browsing objects (use the dropdown above)." />
+				) : props.isFetching ? (
+					<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+						<Spin />
+					</div>
+				) : (
+					<Empty description={props.emptyKind === 'empty' ? 'Empty folder' : 'No results'}>
+						{props.emptyKind === 'noresults' ? (
+							<Button onClick={props.onClearSearch} disabled={!props.canClearSearch}>
+								Clear search
+							</Button>
+						) : null}
+					</Empty>
+				)}
+
 				{loadMoreButton ? (
 					<div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>{loadMoreButton}</div>
 				) : null}
