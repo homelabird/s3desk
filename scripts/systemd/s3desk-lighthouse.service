@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Lighthouse CI for S3Desk
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/develop/s3desk
+EnvironmentFile=%h/.config/s3desk/lighthouse.env
+ExecStart=%h/develop/s3desk/scripts/lighthouse_ci.sh

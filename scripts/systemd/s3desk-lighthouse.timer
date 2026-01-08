@@ -1,0 +1,9 @@
+[Unit]
+Description=Schedule Lighthouse CI for S3Desk
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

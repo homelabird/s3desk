@@ -1,0 +1,12 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+HOME=/home/server
+S3DESK_API_TOKEN=REPLACE_WITH_TOKEN
+S3DESK_PROFILE_ID=REPLACE_WITH_PROFILE_ID
+S3DESK_BUCKET=test123
+S3DESK_URL=https://s3desk.k8s.homelabird.com/objects
+S3DESK_LH_PRESET=desktop
+LHCI_RUNS=1
+NPM_CONFIG_CACHE=/home/server/.cache/npm
+
+30 3 * * * cd /home/server/develop/s3desk && ./scripts/lighthouse_ci.sh >> /home/server/develop/s3desk/logs/lighthouse-ci.log 2>&1

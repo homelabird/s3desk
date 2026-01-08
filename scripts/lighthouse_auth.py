@@ -31,7 +31,7 @@ def wait_for_debug_port(port, timeout_s=10):
     raise RuntimeError(f"Failed to connect to Chrome DevTools on port {port}: {last_err}")
 
 
-async def inject_local_storage(ws_url, api_token, profile_id, url):
+async def inject_local_storage(ws_url, api_token, profile_id, bucket, prefix, url):
     async with websockets.connect(ws_url) as ws:
         msg_id = 1
 
@@ -55,6 +55,19 @@ async def inject_local_storage(ws_url, api_token, profile_id, url):
             script_lines.append(
                 f"localStorage.setItem('profileId', JSON.stringify({json.dumps(profile_id)}));"
             )
+        if bucket is not None:
+            script_lines.append(
+                f"localStorage.setItem('bucket', JSON.stringify({json.dumps(bucket)}));"
+            )
+        if prefix is not None:
+            script_lines.append(
+                f"localStorage.setItem('prefix', JSON.stringify({json.dumps(prefix)}));"
+            )
+        if bucket is not None and prefix is not None:
+            script_lines.append(
+                "localStorage.setItem('objectsPrefixByBucket', JSON.stringify("
+                f"{{{json.dumps(bucket)}: {json.dumps(prefix)}}}));"
+            )
         script = "".join(script_lines) or "void 0;"
 
         await send("Page.addScriptToEvaluateOnNewDocument", {"source": script})
@@ -62,20 +75,24 @@ async def inject_local_storage(ws_url, api_token, profile_id, url):
         await asyncio.sleep(1)
 
 
-def run_lighthouse(url, port, output_path):
+def run_lighthouse(url, port, output_path, preset):
     cmd = [
         "lighthouse",
         url,
         "--port",
         str(port),
         "--disable-storage-reset",
+    ]
+    if preset:
+        cmd.extend(["--preset", preset])
+    cmd.extend([
         "--output",
         "html",
         "--output",
         "json",
         "--output-path",
         output_path,
-    ]
+    ])
     result = subprocess.run(cmd, check=False)
     return result.returncode
 
@@ -85,12 +102,15 @@ def main() -> int:
     parser.add_argument("--url", required=True)
     parser.add_argument("--api-token", required=True)
     parser.add_argument("--profile-id", default=None)
+    parser.add_argument("--bucket", default=None)
+    parser.add_argument("--prefix", default=None)
     parser.add_argument("--output", required=True, help="Base output path (without extension).")
     parser.add_argument("--port", type=int, default=9222)
     parser.add_argument("--chrome", default=os.environ.get("CHROME_BIN", "/usr/bin/google-chrome"))
     parser.add_argument("--user-data-dir", default="/tmp/lighthouse-profile-auth")
     parser.add_argument("--keep-chrome", action="store_true")
     parser.add_argument("--no-headless", action="store_true")
+    parser.add_argument("--preset", default=None, choices=["desktop", "perf", "experimental"])
     args = parser.parse_args()
 
     chrome_cmd = [
@@ -107,8 +127,8 @@ def main() -> int:
     proc = subprocess.Popen(chrome_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         ws_url = wait_for_debug_port(args.port)
-        asyncio.run(inject_local_storage(ws_url, args.api_token, args.profile_id, args.url))
-        return run_lighthouse(args.url, args.port, args.output)
+        asyncio.run(inject_local_storage(ws_url, args.api_token, args.profile_id, args.bucket, args.prefix, args.url))
+        return run_lighthouse(args.url, args.port, args.output, args.preset)
     finally:
         if not args.keep_chrome:
             proc.terminate()
