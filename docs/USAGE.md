@@ -99,6 +99,15 @@ Profile 생성 후 **상단(Profile Select)** 에서 해당 Profile을 선택하
 - Bucket 선택 → prefix(폴더) 이동 → object 목록 확인
 - 단일 오브젝트 다운로드: 목록의 다운로드 버튼
 
+#### Global Search (Indexed)
+
+- Global Search는 **색인된 데이터**를 대상으로 빠른 검색을 수행합니다.
+- 기본 동작은 **현재 prefix(폴더)** 를 기준으로 색인을 자동 생성/갱신합니다.
+  - Settings → Objects → **Auto index current prefix** 가 켜져 있을 때만 동작합니다.
+  - prefix가 비어 있으면(버킷 루트) 자동 색인을 생략합니다. 필요 시 수동으로 인덱스 작업을 실행하세요.
+  - **Auto index TTL (hours)** 보다 오래된 색인은 자동으로 갱신됩니다.
+- 수동 색인: Global Search 패널에서 `Create index job`을 사용해 원하는 prefix를 명시적으로 색인할 수 있습니다.
+
 ### Uploads (업로드)
 
 업로드는 2단계입니다.

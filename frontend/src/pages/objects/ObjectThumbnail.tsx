@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
 import { RequestAbortedError } from '../../api/client'
+import type { ThumbnailCache } from '../../lib/thumbnailCache'
 
 type Props = {
 	api: APIClient
@@ -9,13 +10,34 @@ type Props = {
 	bucket: string
 	objectKey: string
 	size: number
-	cache: Map<string, string>
+	cache: ThumbnailCache
+	cacheKeySuffix?: string
+	fit?: 'cover' | 'contain'
 }
 
 export function ObjectThumbnail(props: Props) {
-	const cacheKey = useMemo(() => `${props.bucket}:${props.objectKey}:${props.size}`, [props.bucket, props.objectKey, props.size])
+	const cacheKey = useMemo(() => {
+		const suffix = props.cacheKeySuffix ? `:${props.cacheKeySuffix}` : ''
+		return `${props.profileId}:${props.bucket}:${props.objectKey}:${props.size}${suffix}`
+	}, [props.bucket, props.cacheKeySuffix, props.objectKey, props.profileId, props.size])
 	const [url, setUrl] = useState<string | null>(() => props.cache.get(cacheKey) ?? null)
 	const [failed, setFailed] = useState(false)
+
+	useEffect(() => {
+		setUrl(props.cache.get(cacheKey) ?? null)
+		setFailed(false)
+	}, [cacheKey, props.cache])
+
+	useEffect(() => {
+		if (!url) return
+		const cached = props.cache.get(cacheKey)
+		if (!cached) {
+			setUrl(null)
+			setFailed(false)
+			return
+		}
+		if (cached !== url) setUrl(cached)
+	}, [cacheKey, props.cache, url])
 
 	useEffect(() => {
 		if (url || failed) return
@@ -60,7 +82,7 @@ export function ObjectThumbnail(props: Props) {
 		width: props.size,
 		height: props.size,
 		borderRadius: 4,
-		objectFit: 'cover' as const,
+		objectFit: props.fit ?? 'cover',
 		background: '#f5f5f5',
 		border: '1px solid #f0f0f0',
 		flex: '0 0 auto',

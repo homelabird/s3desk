@@ -36,6 +36,17 @@ import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatTime } from '../lib/format'
 import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
+import {
+	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
+	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
+	OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
+	OBJECTS_AUTO_INDEX_TTL_MIN_HOURS,
+} from '../lib/objectIndexing'
+import {
+	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
+	THUMBNAIL_CACHE_MAX_ENTRIES,
+	THUMBNAIL_CACHE_MIN_ENTRIES,
+} from '../lib/thumbnailCache'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 
 type Props = {
@@ -85,6 +96,10 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'objectsMinModifiedMs',
 	'objectsMaxModifiedMs',
 	'objectsSort',
+	'objectsShowThumbnails',
+	'objectsThumbnailCacheSize',
+	'objectsAutoIndexEnabled',
+	'objectsAutoIndexTtlHours',
 	'objectsTreeWidth',
 	'objectsTreeExpandedByBucket',
 	'objectsDetailsOpen',
@@ -109,6 +124,19 @@ export function SettingsPage(props: Props) {
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
 		'downloadLinkProxyEnabled',
 		false,
+	)
+	const [objectsShowThumbnails, setObjectsShowThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
+	const [objectsThumbnailCacheSize, setObjectsThumbnailCacheSize] = useLocalStorageState<number>(
+		'objectsThumbnailCacheSize',
+		THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
+	)
+	const [objectsAutoIndexEnabled, setObjectsAutoIndexEnabled] = useLocalStorageState<boolean>(
+		'objectsAutoIndexEnabled',
+		OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
+	)
+	const [objectsAutoIndexTtlHours, setObjectsAutoIndexTtlHours] = useLocalStorageState<number>(
+		'objectsAutoIndexTtlHours',
+		OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 	)
 	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
 	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
@@ -291,6 +319,76 @@ export function SettingsPage(props: Props) {
 										},
 									]}
 								/>
+							</Form>
+						),
+					},
+					{
+						key: 'objects',
+						label: 'Objects',
+						children: (
+							<Form layout="vertical" requiredMark={false}>
+								<Form.Item
+									label="Show image thumbnails"
+									extra="Controls thumbnails in the object list and details panel."
+								>
+									<Switch
+										checked={objectsShowThumbnails}
+										onChange={setObjectsShowThumbnails}
+										aria-label="Show image thumbnails"
+									/>
+								</Form.Item>
+								<Form.Item label="Thumbnail cache size" extra="Max cached thumbnails kept in memory (LRU).">
+									<InputNumber
+										min={THUMBNAIL_CACHE_MIN_ENTRIES}
+										max={THUMBNAIL_CACHE_MAX_ENTRIES}
+										step={50}
+										precision={0}
+										value={objectsThumbnailCacheSize}
+										onChange={(value) =>
+											setObjectsThumbnailCacheSize(
+												typeof value === 'number'
+													? Math.min(
+															THUMBNAIL_CACHE_MAX_ENTRIES,
+															Math.max(THUMBNAIL_CACHE_MIN_ENTRIES, value),
+														)
+													: THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
+											)
+										}
+										style={{ width: '100%' }}
+									/>
+								</Form.Item>
+								<Divider style={{ marginBlock: 8 }} />
+								<Form.Item
+									label="Auto index current prefix"
+									extra="When Global Search is used, build/refresh the index for the current prefix automatically."
+								>
+									<Switch
+										checked={objectsAutoIndexEnabled}
+										onChange={setObjectsAutoIndexEnabled}
+										aria-label="Auto index current prefix"
+									/>
+								</Form.Item>
+								<Form.Item label="Auto index TTL (hours)" extra="Rebuild prefix index when it is older than this value.">
+									<InputNumber
+										min={OBJECTS_AUTO_INDEX_TTL_MIN_HOURS}
+										max={OBJECTS_AUTO_INDEX_TTL_MAX_HOURS}
+										step={1}
+										precision={0}
+										value={objectsAutoIndexTtlHours}
+										onChange={(value) =>
+											setObjectsAutoIndexTtlHours(
+												typeof value === 'number'
+													? Math.min(
+															OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
+															Math.max(OBJECTS_AUTO_INDEX_TTL_MIN_HOURS, value),
+														)
+													: OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
+											)
+										}
+										disabled={!objectsAutoIndexEnabled}
+										style={{ width: '100%' }}
+									/>
+								</Form.Item>
 							</Form>
 						),
 					},

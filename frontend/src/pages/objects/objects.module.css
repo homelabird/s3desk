@@ -277,6 +277,31 @@
   overflow: hidden;
 }
 
+.toolbarSkeleton {
+  padding: 10px 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafafa;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.controlsSkeleton {
+  padding: 8px 12px;
+  border: 1px dashed #e5e5e5;
+  border-radius: 8px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.listSkeleton,
+.paneSkeleton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 120px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
 .listGridBase {
   display: grid;
   align-items: center;

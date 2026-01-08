@@ -1,4 +1,4 @@
-import type { PointerEvent } from 'react'
+import type { PointerEvent, ReactNode } from 'react'
 
 import type { ObjectMeta } from '../../api/types'
 import type { ObjectPreview } from './objectsTypes'
@@ -23,6 +23,7 @@ type ObjectsDetailsPanelSectionProps = {
 	onCopyMove: (mode: 'copy' | 'move') => void
 	onDelete: () => void
 	isDeleteLoading: boolean
+	thumbnail?: ReactNode
 	preview: ObjectPreview | null
 	onLoadPreview: () => void
 	onCancelPreview: () => void
@@ -58,6 +59,7 @@ export function ObjectsDetailsPanelSection(props: ObjectsDetailsPanelSectionProp
 			onCopyMove={props.onCopyMove}
 			onDelete={props.onDelete}
 			isDeleteLoading={props.isDeleteLoading}
+			thumbnail={props.thumbnail}
 			preview={props.preview}
 			onLoadPreview={props.onLoadPreview}
 			onCancelPreview={props.onCancelPreview}

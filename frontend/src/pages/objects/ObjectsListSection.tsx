@@ -1,6 +1,5 @@
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, Ref, UIEvent, WheelEvent } from 'react'
-import type { MenuProps } from 'antd'
-import { Dropdown, Space, Typography } from 'antd'
+import { Space, Typography } from 'antd'
 import { CloudUploadOutlined } from '@ant-design/icons'
 
 import { ObjectsDropZoneCard, ObjectsListPane, ObjectsListScroller, ObjectsListTop } from './ObjectsListPane'
@@ -18,11 +17,6 @@ type ObjectsListSectionProps = {
 	onListScrollerScroll?: (e: UIEvent<HTMLDivElement>) => void
 	onListScrollerWheel?: (e: WheelEvent<HTMLDivElement>) => void
 	onListScrollerContextMenu?: (e: MouseEvent<HTMLDivElement>) => void
-	listContextMenu?: MenuProps
-	listContextMenuOpen?: boolean
-	listContextMenuPlacement?: 'bottomLeft' | 'topLeft'
-	onListContextMenuOpenChange?: (open: boolean) => void
-	listContextMenuPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
 	uploadDropActive: boolean
 	uploadDropLabel: string
 	onUploadDragEnter: (e: DragEvent) => void
@@ -44,11 +38,6 @@ export function ObjectsListSection({
 	onListScrollerScroll,
 	onListScrollerWheel,
 	onListScrollerContextMenu,
-	listContextMenu,
-	listContextMenuOpen,
-	listContextMenuPlacement,
-	onListContextMenuOpenChange,
-	listContextMenuPopupContainer,
 	uploadDropActive,
 	uploadDropLabel,
 	onUploadDragEnter,
@@ -95,41 +84,17 @@ export function ObjectsListSection({
 					) : null}
 					{selectionBar}
 					{listHeader}
-					{listContextMenu ? (
-						<Dropdown
-							trigger={['contextMenu']}
-							menu={listContextMenu}
-							open={listContextMenuOpen}
-							onOpenChange={onListContextMenuOpenChange}
-							placement={listContextMenuPlacement ?? 'bottomLeft'}
-							getPopupContainer={listContextMenuPopupContainer}
-							autoAdjustOverflow
-						>
-							<ObjectsListScroller
-								ref={listScrollerRef}
-								tabIndex={listScrollerTabIndex}
-								onClick={onListScrollerClick}
-								onKeyDown={onListScrollerKeyDown}
-								onScroll={onListScrollerScroll}
-								onWheel={onListScrollerWheel}
-								onContextMenuCapture={onListScrollerContextMenu}
-							>
-								{listContent}
-							</ObjectsListScroller>
-						</Dropdown>
-					) : (
-						<ObjectsListScroller
-							ref={listScrollerRef}
-							tabIndex={listScrollerTabIndex}
-							onClick={onListScrollerClick}
-							onKeyDown={onListScrollerKeyDown}
-							onScroll={onListScrollerScroll}
-							onWheel={onListScrollerWheel}
-							onContextMenuCapture={onListScrollerContextMenu}
-						>
-							{listContent}
-						</ObjectsListScroller>
-					)}
+					<ObjectsListScroller
+						ref={listScrollerRef}
+						tabIndex={listScrollerTabIndex}
+						onClick={onListScrollerClick}
+						onKeyDown={onListScrollerKeyDown}
+						onScroll={onListScrollerScroll}
+						onWheel={onListScrollerWheel}
+						onContextMenu={onListScrollerContextMenu}
+					>
+						{listContent}
+					</ObjectsListScroller>
 				</ObjectsDropZoneCard>
 			</ObjectsListTop>
 		</ObjectsListPane>

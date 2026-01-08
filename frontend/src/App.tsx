@@ -209,11 +209,11 @@ export default function App() {
 						<Space wrap style={{ justifyContent: 'flex-end' }}>
 							<TopBarProfileSelect profileId={profileId} setProfileId={setProfileId} apiToken={apiToken} />
 							<TransfersButton showLabel={!!screens.sm} />
-							<Button type="link" onClick={openSettings} aria-label="Open settings">
+							<Button type="link" onClick={openSettings} aria-label={screens.sm ? undefined : 'Settings'}>
 								<SettingOutlined /> {screens.sm ? 'Settings' : null}
 							</Button>
 							{apiToken ? (
-								<Button type="link" onClick={logout} aria-label="Logout">
+								<Button type="link" onClick={logout} aria-label={screens.sm ? undefined : 'Logout'}>
 									<LogoutOutlined /> {screens.sm ? 'Logout' : null}
 								</Button>
 							) : null}

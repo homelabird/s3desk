@@ -1,5 +1,6 @@
 import { Alert, Button, Descriptions, Divider, Empty, Space, Spin, Typography } from 'antd'
 import { CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, LinkOutlined, ReloadOutlined, SnippetsOutlined } from '@ant-design/icons'
+import type { ReactNode } from 'react'
 
 import type { ObjectMeta } from '../../api/types'
 import type { ObjectPreview } from './objectsTypes'
@@ -25,6 +26,7 @@ export type ObjectsDetailsContentProps = {
 	onCopyMove: (mode: 'copy' | 'move') => void
 	onDelete: () => void
 	isDeleteLoading: boolean
+	thumbnail?: ReactNode
 	preview: ObjectPreview | null
 	onLoadPreview: () => void
 	onCancelPreview: () => void
@@ -144,6 +146,13 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 						<Typography.Text type="secondary">No user metadata</Typography.Text>
 					)}
 
+					{props.thumbnail ? (
+						<Space direction="vertical" size="small" style={{ width: '100%' }}>
+							<Typography.Text strong>Thumbnail</Typography.Text>
+							<div style={{ display: 'flex', justifyContent: 'center' }}>{props.thumbnail}</div>
+						</Space>
+					) : null}
+
 					<Divider style={{ marginBlock: 8 }} />
 
 					<Space direction="vertical" size="small" style={{ width: '100%' }}>
@@ -185,7 +194,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 								</pre>
 							</div>
 						) : (
-							<Typography.Text type="secondary">Click “Load” to fetch a small preview.</Typography.Text>
+							<Typography.Text type="secondary">Click “Load” to fetch a larger preview.</Typography.Text>
 						)}
 					</Space>
 				</>

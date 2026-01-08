@@ -4,6 +4,12 @@
   --ant-color-text-tertiary: rgba(0, 0, 0, 0.76) !important;
   --ant-color-text-quaternary: rgba(0, 0, 0, 0.7) !important;
   --ant-color-text-placeholder: rgba(0, 0, 0, 0.78) !important;
+  --ant-color-primary: #0b5ed7 !important;
+  --ant-color-primary-hover: #0a58ca !important;
+  --ant-color-primary-active: #0a58ca !important;
+  --ant-color-link: #0958d9 !important;
+  --ant-color-link-hover: #0b5ed7 !important;
+  --ant-color-link-active: #0b5ed7 !important;
 }
 
 .ant-typography.ant-typography-secondary {
@@ -15,6 +21,36 @@
 .ant-select .ant-select-selection-placeholder,
 .ant-select .ant-select-selection-item {
   color: rgba(0, 0, 0, 0.82) !important;
+}
+
+.ant-menu-dark .ant-menu-item .ant-menu-title-content,
+.ant-menu-dark .ant-menu-item .anticon,
+.ant-menu-dark .ant-menu-submenu-title,
+.ant-menu-dark .ant-menu-submenu-title .ant-menu-title-content {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ant-menu-dark .ant-menu-item-selected .ant-menu-title-content,
+.ant-menu-dark .ant-menu-item-selected .anticon {
+  color: #fff;
+}
+
+.ant-layout-sider .ant-menu-item .ant-menu-title-content,
+.ant-layout-sider .ant-menu-item .anticon {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.ant-layout-sider .ant-menu-item-selected {
+  background: #0b5ed7 !important;
+}
+
+.ant-layout-sider .ant-menu-item-selected .ant-menu-title-content,
+.ant-layout-sider .ant-menu-item-selected .anticon {
+  color: #fff !important;
+}
+
+.ant-empty-description {
+  color: rgba(0, 0, 0, 0.7);
 }
 
 html,
