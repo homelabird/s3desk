@@ -6,7 +6,6 @@ S3Desk는 **S3 호환(Object Storage/Ceph RGW 등)** 스토리지를 웹 UI로 �
 
 - `docs/API_SAMPLES.md`: 주요 엔드포인트별 요청/응답 샘플
 - `docs/JOB_RCLONE_MAP.md`: Job 타입과 rclone 명령 매핑
-- `docs/FRONTEND_CACHE.md`: 화면별 캐시 키/무효화 흐름 요약
 - `docs/S3Desk.postman_collection.json`: Postman 컬렉션
 - `docs/S3Desk.insomnia_collection.json`: Insomnia 컬렉션
 
