@@ -20,6 +20,21 @@ docker run --rm -p 8080:8080 \
 docker exec -it <container> sqlite3 /data/s3desk.db
 ```
 
+## Run with Postgres (docker compose, headless)
+
+`docker-compose.yml` is configured for a headless Postgres setup (no bundled DB). It starts Postgres + the `postgres-beta` image.
+
+```bash
+docker compose up -d
+```
+
+Defaults (overridable via environment):
+- Postgres: `POSTGRES_DB/USER/PASSWORD = s3desk`
+- App: `ADDR=0.0.0.0:8080`, `ALLOW_REMOTE=true`, `API_TOKEN=change-me`
+- DB: `DB_BACKEND=postgres`, `DATABASE_URL=postgres://s3desk:s3desk@postgres:5432/s3desk?sslmode=disable`
+
+Open `http://localhost:8080` and use the configured `API_TOKEN`.
+
 ## Docs
 
 - `docs/USAGE.md`
