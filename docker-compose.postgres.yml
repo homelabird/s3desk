@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: s3desk
+      POSTGRES_USER: s3desk
+      POSTGRES_PASSWORD: s3desk
+    volumes:
+      - s3desk-postgres:/var/lib/postgresql/data
+
+  s3desk:
+    image: homelabird/s3desk:postgres-beta
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    environment:
+      ADDR: "0.0.0.0:8080"
+      ALLOW_REMOTE: "true"
+      API_TOKEN: "change-me"
+      DB_BACKEND: "postgres"
+      DATABASE_URL: "postgres://s3desk:s3desk@postgres:5432/s3desk?sslmode=disable"
+      JOB_QUEUE_CAPACITY: "20"
+    volumes:
+      - s3desk-data:/data
+
+volumes:
+  s3desk-data:
+  s3desk-postgres:
