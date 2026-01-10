@@ -37,7 +37,7 @@ Open `http://localhost:8080` and use the configured `API_TOKEN`.
 
 ### UI preview
 
-![Profiles page](s3desk-profiles.png)
+![Profiles page](s3desk-desktop.png)
 
 ## Docs
 
