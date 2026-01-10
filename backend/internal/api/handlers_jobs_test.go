@@ -350,7 +350,12 @@ func writeFakeRclone(t *testing.T, body string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "rclone")
-	content := "#!/bin/sh\n" + body
+	content := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"version\" ]; then\n" +
+		"  echo \"rclone v1.66.0\"\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		body
 	if err := os.WriteFile(path, []byte(content), 0o700); err != nil {
 		t.Fatalf("write fake rclone: %v", err)
 	}

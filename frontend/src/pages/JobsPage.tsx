@@ -1313,7 +1313,8 @@ export function JobsPage(props: Props) {
 					filterOption={(input, option) => {
 						const s = input.toLowerCase()
 						const label = String(option?.label ?? '').toLowerCase()
-						const value = String((option as any)?.value ?? '').toLowerCase()
+						const value =
+							option && 'value' in option ? String(option.value ?? '').toLowerCase() : ''
 						return label.includes(s) || value.includes(s)
 					}}
 					options={typeFilterOptions}

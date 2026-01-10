@@ -20,24 +20,10 @@ export function ObjectThumbnail(props: Props) {
 		const suffix = props.cacheKeySuffix ? `:${props.cacheKeySuffix}` : ''
 		return `${props.profileId}:${props.bucket}:${props.objectKey}:${props.size}${suffix}`
 	}, [props.bucket, props.cacheKeySuffix, props.objectKey, props.profileId, props.size])
-	const [url, setUrl] = useState<string | null>(() => props.cache.get(cacheKey) ?? null)
-	const [failed, setFailed] = useState(false)
-
-	useEffect(() => {
-		setUrl(props.cache.get(cacheKey) ?? null)
-		setFailed(false)
-	}, [cacheKey, props.cache])
-
-	useEffect(() => {
-		if (!url) return
-		const cached = props.cache.get(cacheKey)
-		if (!cached) {
-			setUrl(null)
-			setFailed(false)
-			return
-		}
-		if (cached !== url) setUrl(cached)
-	}, [cacheKey, props.cache, url])
+	const [failedKey, setFailedKey] = useState<string | null>(null)
+	const [, bumpCacheVersion] = useState(0)
+	const url = props.cache.get(cacheKey) ?? null
+	const failed = failedKey === cacheKey
 
 	useEffect(() => {
 		if (url || failed) return
@@ -54,12 +40,12 @@ export function ObjectThumbnail(props: Props) {
 				if (!active) return
 				const objectURL = URL.createObjectURL(blob)
 				props.cache.set(cacheKey, objectURL)
-				setUrl(objectURL)
+				bumpCacheVersion((version) => version + 1)
 			})
 			.catch((err) => {
 				if (!active) return
 				if (err instanceof RequestAbortedError) return
-				setFailed(true)
+				setFailedKey(cacheKey)
 			})
 
 		return () => {

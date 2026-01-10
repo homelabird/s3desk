@@ -618,6 +618,9 @@ func (s *server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		s.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
 	case models.JobStatusRunning:
 		s.jobs.Cancel(jobID)
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_request", "job is not cancelable (only queued/running)", map[string]any{"status": job.Status})
+		return
 	}
 
 	job, _, _ = s.store.GetJob(r.Context(), profileID, jobID)
