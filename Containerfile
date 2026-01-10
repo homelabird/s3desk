@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/s3desk-server ./cm
 FROM rclone/rclone:${RCLONE_VERSION} AS rclone
 
 FROM docker.io/library/alpine:3.20 AS runtime
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates sqlite
 WORKDIR /app
 COPY --from=backend /out/s3desk-server /app/s3desk-server
 COPY --from=rclone /usr/local/bin/rclone /usr/local/bin/rclone

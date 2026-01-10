@@ -2,6 +2,24 @@
 
 S3Desk is a local-only dashboard for browsing and bulk transfer jobs (powered by `rclone`).
 
+## Quick start (single container)
+
+Single-container run uses sqlite by default, stored at `/data/s3desk.db`.
+The image also includes the `sqlite3` CLI for ad-hoc inspection.
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e ADDR=0.0.0.0:8080 \
+  -e ALLOW_REMOTE=true \
+  -e API_TOKEN=change-me \
+  -v s3desk-data:/data \
+  homelabird/s3desk:beta
+```
+
+```bash
+docker exec -it <container> sqlite3 /data/s3desk.db
+```
+
 ## Docs
 
 - `docs/USAGE.md`
@@ -97,6 +115,7 @@ Notes:
 - The chart defaults to `ADDR=0.0.0.0:8080` and `ALLOW_REMOTE=true`, so an API token is required.
 - The chart intentionally fails install/upgrade if `server.allowRemote=true` and no token is configured.
 - The chart rejects the insecure placeholder token value `change-me`.
+- Kubernetes deployment is not verified yet.
 
 ## Build
 
