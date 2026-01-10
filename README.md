@@ -35,6 +35,10 @@ Defaults (overridable via environment):
 
 Open `http://localhost:8080` and use the configured `API_TOKEN`.
 
+### UI preview
+
+![Profiles page](s3desk-profiles.png)
+
 ## Docs
 
 - `docs/USAGE.md`
