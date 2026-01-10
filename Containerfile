@@ -18,13 +18,18 @@ RUN go mod download
 COPY backend/ /src/backend/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/s3desk-server ./cmd/server
 
-FROM rclone/rclone:${RCLONE_VERSION} AS rclone
+FROM docker.io/library/golang:1.25.5-alpine AS rclone
+ARG RCLONE_VERSION
+RUN apk add --no-cache git
+WORKDIR /src/rclone
+RUN git clone --depth 1 --branch "v${RCLONE_VERSION}" https://github.com/rclone/rclone.git .
+RUN go build -trimpath -ldflags="-s -w" -o /out/rclone
 
 FROM docker.io/library/alpine:3.21 AS runtime
 RUN apk add --no-cache ca-certificates sqlite
 WORKDIR /app
 COPY --from=backend /out/s3desk-server /app/s3desk-server
-COPY --from=rclone /usr/local/bin/rclone /usr/local/bin/rclone
+COPY --from=rclone /out/rclone /usr/local/bin/rclone
 COPY --from=frontend /src/frontend/dist/ /app/ui/
 COPY openapi.yml /app/openapi.yml
 
