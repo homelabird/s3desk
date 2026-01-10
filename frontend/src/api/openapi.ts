@@ -330,6 +330,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profiles/{profileId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export profile settings as YAML */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description When true, send Content-Disposition for file download. */
+                    download?: boolean;
+                };
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    profileId: components["parameters"]["ProfileId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/yaml": string;
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profiles/{profileId}/tls": {
         parameters: {
             query?: never;

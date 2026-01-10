@@ -279,6 +279,13 @@ export class APIClient {
 		return this.request(`/profiles/${encodeURIComponent(profileId)}/tls`, { method: 'DELETE' })
 	}
 
+	exportProfileYaml(profileId: string, args: { download?: boolean } = {}): Promise<string> {
+		const params = new URLSearchParams()
+		if (args.download) params.set('download', 'true')
+		const suffix = params.toString()
+		return this.request(`/profiles/${encodeURIComponent(profileId)}/export${suffix ? `?${suffix}` : ''}`, { method: 'GET' })
+	}
+
 	listBuckets(profileId: string): Promise<Bucket[]> {
 		return this.request('/buckets', { method: 'GET' }, { profileId })
 	}

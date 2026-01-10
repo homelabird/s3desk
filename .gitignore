@@ -15,3 +15,4 @@ frontend/playwright-report/
 frontend/test-results/
 
 artifacts/
+.lighthouseci/

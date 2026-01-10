@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Divider, Empty, Form, Input, Modal, Select, Space, Switch, Table, Typography, message } from 'antd'
+import { Alert, Button, Checkbox, Divider, Empty, Form, Input, Modal, Select, Space, Spin, Switch, Table, Typography, message } from 'antd'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
 import type { MetaResponse, Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileTLSStatus, ProfileUpdateRequest } from '../api/types'
+import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 
@@ -23,6 +24,11 @@ export function ProfilesPage(props: Props) {
 	const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
 	const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null)
 	const [onboardingDismissed, setOnboardingDismissed] = useState(false)
+	const [yamlOpen, setYamlOpen] = useState(false)
+	const [yamlProfile, setYamlProfile] = useState<Profile | null>(null)
+	const [yamlContent, setYamlContent] = useState('')
+	const [yamlError, setYamlError] = useState<string | null>(null)
+	const [exportingProfileId, setExportingProfileId] = useState<string | null>(null)
 
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', props.apiToken],
@@ -136,9 +142,57 @@ export function ProfilesPage(props: Props) {
 		onError: (err) => message.error(formatErr(err)),
 	})
 
+	const exportYamlMutation = useMutation({
+		mutationFn: (id: string) => api.exportProfileYaml(id),
+		onMutate: (id) => {
+			setExportingProfileId(id)
+			setYamlContent('')
+			setYamlError(null)
+		},
+		onSuccess: (content) => {
+			setYamlContent(content)
+		},
+		onError: (err) => {
+			const msg = formatErr(err)
+			setYamlError(msg)
+			message.error(msg)
+		},
+		onSettled: (_, __, id) => setExportingProfileId((prev) => (prev === id ? null : prev)),
+	})
+
+	const openYamlModal = (profile: Profile) => {
+		setYamlProfile(profile)
+		setYamlOpen(true)
+		exportYamlMutation.mutate(profile.id)
+	}
+
+	const closeYamlModal = () => {
+		setYamlOpen(false)
+		setYamlProfile(null)
+		setYamlContent('')
+		setYamlError(null)
+	}
+
+	const handleYamlCopy = async () => {
+		if (!yamlContent) return
+		const res = await copyToClipboard(yamlContent)
+		if (res.ok) {
+			message.success('Copied YAML')
+			return
+		}
+		message.error(clipboardFailureHint())
+	}
+
+	const handleYamlDownload = () => {
+		if (!yamlContent) return
+		downloadTextFile(buildProfileExportFilename(yamlProfile), yamlContent)
+		message.success('Downloaded YAML')
+	}
+
 	const apiTokenEnabled = metaQuery.data?.apiTokenEnabled ?? false
 	const transferEngine = metaQuery.data?.transferEngine
 	const onboardingVisible = !onboardingDismissed && (profiles.length === 0 || !props.profileId)
+	const yamlFilename = buildProfileExportFilename(yamlProfile)
 
 	return (
 		<Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -262,6 +316,13 @@ export function ProfilesPage(props: Props) {
 								</Button>
 								<Button
 									size="small"
+									onClick={() => openYamlModal(row)}
+									loading={exportYamlMutation.isPending && exportingProfileId === row.id}
+								>
+									YAML
+								</Button>
+								<Button
+									size="small"
 									danger
 									onClick={() => {
 										confirmDangerAction({
@@ -318,6 +379,47 @@ export function ProfilesPage(props: Props) {
 				tlsStatusLoading={profileTLSQuery.isFetching}
 				tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
 			/>
+
+			<Modal
+				open={yamlOpen}
+				title="Profile YAML"
+				onCancel={closeYamlModal}
+				footer={[
+					<Button key="copy" disabled={!yamlContent} onClick={handleYamlCopy}>
+						Copy
+					</Button>,
+					<Button key="download" type="primary" disabled={!yamlContent} onClick={handleYamlDownload}>
+						Download
+					</Button>,
+					<Button key="close" onClick={closeYamlModal}>
+						Close
+					</Button>,
+				]}
+				destroyOnClose
+			>
+				<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+					<Alert
+						type="warning"
+						showIcon
+						message="Contains credentials"
+						description="This export includes access keys and secrets. Store it securely."
+					/>
+					{yamlProfile ? (
+						<Typography.Text>
+							Profile: <Typography.Text code>{yamlProfile.name}</Typography.Text>
+						</Typography.Text>
+					) : null}
+					{yamlError ? <Alert type="error" showIcon message="Failed to load YAML" description={yamlError} /> : null}
+					{exportYamlMutation.isPending && !yamlContent ? (
+						<Spin />
+					) : (
+						<Input.TextArea value={yamlContent} readOnly autoSize={{ minRows: 6, maxRows: 16 }} />
+					)}
+					{yamlContent ? (
+						<Typography.Text type="secondary">Filename: {yamlFilename}</Typography.Text>
+					) : null}
+				</Space>
+			</Modal>
 		</Space>
 	)
 }
@@ -565,4 +667,34 @@ function ProfileModal(props: {
 			</Form>
 		</Modal>
 	)
+}
+
+function downloadTextFile(filename: string, content: string): void {
+	const blob = new Blob([content], { type: 'text/plain' })
+	const url = URL.createObjectURL(blob)
+	const a = document.createElement('a')
+	a.href = url
+	a.download = filename
+	a.style.display = 'none'
+	document.body.appendChild(a)
+	a.click()
+	a.remove()
+	window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function buildProfileExportFilename(profile: Profile | null): string {
+	const base = sanitizeExportFilename(profile?.name ?? profile?.id ?? '')
+	return `${base || 'profile'}.yaml`
+}
+
+function sanitizeExportFilename(value: string): string {
+	const cleaned = value.trim()
+	if (!cleaned) return ''
+	return cleaned
+		.replace(/[\\/:*?"<>|]/g, '-')
+		.replace(/\s+/g, '_')
+		.replace(/-+/g, '-')
+		.replace(/_+/g, '_')
+		.replace(/[-_]+$/g, '')
+		.replace(/^[-_]+/g, '')
 }

@@ -1,14 +1,18 @@
 package api
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"gopkg.in/yaml.v3"
 
 	"s3desk/internal/models"
+	"s3desk/internal/store"
 )
 
 func (s *server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
@@ -181,4 +185,137 @@ func (s *server) handleTestProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.Details = details
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *server) handleExportProfile(w http.ResponseWriter, r *http.Request) {
+	profileID := chi.URLParam(r, "profileId")
+	if profileID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "profileId is required", nil)
+		return
+	}
+
+	secrets, ok, err := s.store.GetProfileSecrets(r.Context(), profileID)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrEncryptedCredentials):
+			writeError(w, http.StatusBadRequest, "encrypted_credentials", err.Error(), nil)
+		case errors.Is(err, store.ErrEncryptionKeyRequired):
+			writeError(w, http.StatusBadRequest, "encryption_required", err.Error(), nil)
+		default:
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load profile", nil)
+		}
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "profile not found", map[string]any{"profileId": profileID})
+		return
+	}
+
+	export := profileExport{
+		Profile: profileExportProfile{
+			ID:                    secrets.ID,
+			Name:                  secrets.Name,
+			Endpoint:              secrets.Endpoint,
+			Region:                secrets.Region,
+			AccessKeyID:           secrets.AccessKeyID,
+			SecretAccessKey:       secrets.SecretAccessKey,
+			SessionToken:          secrets.SessionToken,
+			ForcePathStyle:        secrets.ForcePathStyle,
+			PreserveLeadingSlash:  secrets.PreserveLeadingSlash,
+			TLSInsecureSkipVerify: secrets.TLSInsecureSkipVerify,
+		},
+	}
+
+	if secrets.TLSConfig != nil {
+		tls := profileExportTLS{
+			Mode:          secrets.TLSConfig.Mode,
+			ClientCertPEM: secrets.TLSConfig.ClientCertPEM,
+			ClientKeyPEM:  secrets.TLSConfig.ClientKeyPEM,
+			CACertPEM:     secrets.TLSConfig.CACertPEM,
+		}
+		if strings.TrimSpace(secrets.TLSConfigUpdatedAt) != "" {
+			tls.UpdatedAt = secrets.TLSConfigUpdatedAt
+		}
+		export.TLS = &tls
+	}
+
+	data, err := yaml.Marshal(export)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to serialize profile export", nil)
+		return
+	}
+
+	if wantsDownload(r) {
+		filename := buildProfileExportFilename(secrets.Name, secrets.ID)
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	}
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+type profileExport struct {
+	Profile profileExportProfile `yaml:"profile"`
+	TLS     *profileExportTLS    `yaml:"tls,omitempty"`
+}
+
+type profileExportProfile struct {
+	ID                    string  `yaml:"id,omitempty"`
+	Name                  string  `yaml:"name"`
+	Endpoint              string  `yaml:"endpoint"`
+	Region                string  `yaml:"region"`
+	AccessKeyID           string  `yaml:"accessKeyId"`
+	SecretAccessKey       string  `yaml:"secretAccessKey"`
+	SessionToken          *string `yaml:"sessionToken,omitempty"`
+	ForcePathStyle        bool    `yaml:"forcePathStyle"`
+	PreserveLeadingSlash  bool    `yaml:"preserveLeadingSlash"`
+	TLSInsecureSkipVerify bool    `yaml:"tlsInsecureSkipVerify"`
+}
+
+type profileExportTLS struct {
+	Mode          models.ProfileTLSMode `yaml:"mode"`
+	ClientCertPEM string                `yaml:"clientCertPem,omitempty"`
+	ClientKeyPEM  string                `yaml:"clientKeyPem,omitempty"`
+	CACertPEM     string                `yaml:"caCertPem,omitempty"`
+	UpdatedAt     string                `yaml:"updatedAt,omitempty"`
+}
+
+func wantsDownload(r *http.Request) bool {
+	value := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("download")))
+	return value == "1" || value == "true" || value == "yes"
+}
+
+func buildProfileExportFilename(name, id string) string {
+	base := sanitizeExportFilename(name)
+	if base == "" {
+		base = sanitizeExportFilename(id)
+	}
+	if base == "" {
+		base = "profile"
+	}
+	return fmt.Sprintf("%s.yaml", base)
+}
+
+func sanitizeExportFilename(value string) string {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(
+		"\\", "-",
+		"/", "-",
+		":", "-",
+		"*", "-",
+		"?", "-",
+		"\"", "-",
+		"<", "-",
+		">", "-",
+		"|", "-",
+	)
+	cleaned = replacer.Replace(cleaned)
+	cleaned = strings.Join(strings.Fields(cleaned), "_")
+	cleaned = strings.Trim(cleaned, "._-")
+	return cleaned
 }

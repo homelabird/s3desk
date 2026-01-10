@@ -199,6 +199,29 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
 
+  /profiles/{profileId}/export:
+    get:
+      tags: [Profiles]
+      summary: Export profile settings as YAML
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+        - name: download
+          in: query
+          description: When true, send Content-Disposition for file download.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/yaml:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
   /profiles/{profileId}/tls:
     get:
       tags: [Profiles]
