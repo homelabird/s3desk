@@ -1,7 +1,19 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Dropdown, Form, Grid, Menu, Space, Typography, message } from 'antd'
 import { FolderOutlined, SnippetsOutlined } from '@ant-design/icons'
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+	lazy,
+	Suspense,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+	type CSSProperties,
+	type ReactNode,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useNavigate } from 'react-router-dom'
@@ -232,9 +244,11 @@ export function ObjectsPage(props: Props) {
 	const prefixByBucketRef = useRef<Record<string, string>>(prefixByBucket)
 	const [search, setSearch] = useLocalStorageState<string>('objectsSearch', '')
 	const [searchDraft, setSearchDraft] = useState(search)
+	const deferredSearch = useDeferredValue(search)
 	const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
 	const [globalSearch, setGlobalSearch] = useLocalStorageState<string>('objectsGlobalSearch', '')
 	const [globalSearchDraft, setGlobalSearchDraft] = useState(globalSearch)
+	const deferredGlobalSearch = useDeferredValue(globalSearch)
 	const [globalSearchPrefix, setGlobalSearchPrefix] = useLocalStorageState<string>('objectsGlobalSearchPrefix', '')
 	const [globalSearchLimit, setGlobalSearchLimit] = useLocalStorageState<number>('objectsGlobalSearchLimit', 100)
 	const [globalSearchExt, setGlobalSearchExt] = useLocalStorageState<string>('objectsGlobalSearchExt', '')
@@ -600,7 +614,7 @@ export function ObjectsPage(props: Props) {
 	const favoriteItems = useMemo(() => favoritesQuery.data?.items ?? [], [favoritesQuery.data?.items])
 	const favoriteKeys = useMemo(() => new Set(favoriteItems.map((item) => item.key)), [favoriteItems])
 
-	const globalSearchQueryText = globalSearch.trim()
+	const globalSearchQueryText = deferredGlobalSearch.trim()
 	const globalSearchPrefixNormalized = normalizePrefix(globalSearchPrefix)
 	const globalSearchLimitClamped = Math.max(1, Math.min(200, globalSearchLimit))
 	const globalSearchExtNormalized = globalSearchExt.trim().replace(/^\./, '').toLowerCase()
@@ -1342,7 +1356,7 @@ export function ObjectsPage(props: Props) {
 		onError: (err) => message.error(formatErr(err)),
 	})
 
-	const searchTokens = useMemo(() => splitSearchTokens(search), [search])
+	const searchTokens = useMemo(() => splitSearchTokens(deferredSearch), [deferredSearch])
 	const searchTokensNormalized = useMemo(() => searchTokens.map((token) => normalizeForSearch(token)), [searchTokens])
 	const highlightPattern = useMemo(() => {
 		if (searchTokens.length === 0) return null

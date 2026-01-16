@@ -34,7 +34,34 @@ export default defineConfig({
             id.includes('node_modules/@rc-component') ||
             id.includes('node_modules/rc-')
           ) {
-            return 'antd'
+            const extraMatches = [
+              'antd/es/table',
+              'antd/es/date-picker',
+              'antd/es/upload',
+              'antd/es/tree',
+              'antd/es/drawer',
+              'antd/es/modal',
+              'antd/es/tooltip',
+              'antd/es/dropdown',
+              'antd/es/menu',
+              'antd/es/select',
+              'antd/es/form',
+              'rc-table',
+              'rc-picker',
+              'rc-upload',
+              'rc-tree',
+              'rc-virtual-list',
+              'rc-dialog',
+              'rc-drawer',
+              'rc-dropdown',
+              'rc-menu',
+              'rc-select',
+              'rc-trigger',
+            ]
+            if (extraMatches.some((match) => id.includes(match))) {
+              return 'antd-extra'
+            }
+            return 'antd-core'
           }
           if (id.includes('dayjs')) return 'dayjs'
           return 'vendor'

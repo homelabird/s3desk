@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { Profiler, type ReactNode } from 'react'
 import { Button, Empty, Spin } from 'antd'
 
 import type { ObjectItem } from '../../api/types'
+import { logReactRender, measurePerf } from '../../lib/perf'
 
 type Row = { kind: 'prefix'; prefix: string } | { kind: 'object'; object: ObjectItem }
 
@@ -31,9 +32,20 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 				{props.loadMoreLabel ?? 'Load more'}
 			</Button>
 		) : null
+	const renderedRows = measurePerf(
+		'ObjectsListContent.map',
+		() =>
+			props.virtualItems.map((vi) => {
+				const row = props.rows[vi.index]
+				if (!row) return null
+				if (row.kind === 'prefix') return props.renderPrefixRow(row.prefix, vi.start)
+				return props.renderObjectRow(row.object, vi.start)
+			}),
+		{ items: props.virtualItems.length, rows: props.rows.length },
+	)
 
 	if (props.rows.length === 0) {
-		return (
+		const empty = (
 			<div style={{ padding: 24 }}>
 				{!props.hasProfile ? (
 					<Empty description="Select a profile to browse objects." />
@@ -58,16 +70,16 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 				) : null}
 			</div>
 		)
+		return (
+			<Profiler id="ObjectsListContent.empty" onRender={logReactRender}>
+				{empty}
+			</Profiler>
+		)
 	}
 
-	return (
+	const content = (
 		<div style={{ height: props.totalSize, width: '100%', position: 'relative' }}>
-			{props.virtualItems.map((vi) => {
-				const row = props.rows[vi.index]
-				if (!row) return null
-				if (row.kind === 'prefix') return props.renderPrefixRow(row.prefix, vi.start)
-				return props.renderObjectRow(row.object, vi.start)
-			})}
+			{renderedRows}
 
 			{props.isFetchingNextPage ? (
 				<div style={{ position: 'absolute', left: 0, right: 0, bottom: 8, textAlign: 'center' }}>
@@ -77,5 +89,10 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 				<div style={{ position: 'absolute', left: 0, right: 0, bottom: 8, textAlign: 'center' }}>{loadMoreButton}</div>
 			) : null}
 		</div>
+	)
+	return (
+		<Profiler id="ObjectsListContent.rows" onRender={logReactRender}>
+			{content}
+		</Profiler>
 	)
 }

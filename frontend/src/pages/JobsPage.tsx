@@ -8,9 +8,7 @@ import {
 	Drawer,
 	Dropdown,
 	Empty,
-	Form,
 	Grid,
-	Input,
 	Select,
 	Space,
 	Spin,
@@ -23,7 +21,7 @@ import {
 	theme,
 	type MenuProps,
 } from 'antd'
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Profiler, type ReactNode, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
 	DeleteOutlined,
 	DownloadOutlined,
@@ -39,11 +37,10 @@ import {
 import { useLocation } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
-import { LocalDevicePathInput } from '../components/LocalDevicePathInput'
 import { useTransfers } from '../components/useTransfers'
 import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../api/types'
 import { withJobQueueRetry } from '../lib/jobQueue'
-import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath } from '../lib/deviceFs'
+import { collectFilesFromDirectoryHandle, normalizeRelativePath } from '../lib/deviceFs'
 import { listAllObjects } from '../lib/objects'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
@@ -53,6 +50,7 @@ import { formatBytes, formatDurationSeconds } from '../lib/transfer'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
+import { logReactRender, measurePerf } from '../lib/perf'
 
 type Props = {
 	apiToken: string
@@ -86,6 +84,19 @@ type UploadDetails = {
 
 type ColumnKey = 'id' | 'type' | 'summary' | 'status' | 'progress' | 'errorCode' | 'error' | 'createdAt' | 'actions'
 type ToggleableColumnKey = Exclude<ColumnKey, 'actions'>
+
+const CreateJobModal = lazy(async () => {
+	const m = await import('./jobs/CreateJobModal')
+	return { default: m.CreateJobModal }
+})
+const DownloadJobModal = lazy(async () => {
+	const m = await import('./jobs/DownloadJobModal')
+	return { default: m.DownloadJobModal }
+})
+const DeletePrefixJobModal = lazy(async () => {
+	const m = await import('./jobs/DeletePrefixJobModal')
+	return { default: m.DeletePrefixJobModal }
+})
 
 const compareText = (left?: string | null, right?: string | null) => (left ?? '').localeCompare(right ?? '')
 const compareNumber = (left?: number | null, right?: number | null) => (left ?? 0) - (right ?? 0)
@@ -919,7 +930,13 @@ export function JobsPage(props: Props) {
 		}
 	}, [eventsManualRetryToken, props.apiToken, props.profileId, queryClient])
 
-	const jobs = useMemo(() => jobsQuery.data?.pages.flatMap((p) => p.items) ?? [], [jobsQuery.data])
+	const jobs = useMemo(
+		() =>
+			measurePerf('Jobs.flatten', () => jobsQuery.data?.pages.flatMap((p) => p.items) ?? [], {
+				pages: jobsQuery.data?.pages.length ?? 0,
+			}),
+		[jobsQuery.data],
+	)
 	const errorCodeSuggestions = useMemo(() => {
 		const uniq = new Set<string>()
 		for (const j of jobs) {
@@ -1387,38 +1404,40 @@ export function JobsPage(props: Props) {
 			) : null}
 
 			<div ref={tableContainerRef}>
-				<Table
-					rowKey="id"
-					loading={isLoading}
-					dataSource={jobs}
-					pagination={false}
-					tableLayout="fixed"
-					scroll={{ x: true, y: tableScrollY }}
-					virtual
-					locale={{
-						emptyText: showJobsEmpty ? (
-							<Empty description="No jobs yet">
-								<Space wrap>
-									<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
-										Upload folder
-									</Button>
-									<Button
-										danger
-										icon={<DeleteOutlined />}
-										onClick={() => {
-											setDeleteJobPrefill(null)
-											setCreateDeleteOpen(true)
-										}}
-										disabled={isOffline}
-									>
-										New delete job
-									</Button>
-								</Space>
-							</Empty>
-						) : null,
-					}}
-					columns={columns}
-				/>
+				<Profiler id="JobsTable" onRender={logReactRender}>
+					<Table
+						rowKey="id"
+						loading={isLoading}
+						dataSource={jobs}
+						pagination={false}
+						tableLayout="fixed"
+						scroll={{ x: true, y: tableScrollY }}
+						virtual
+						locale={{
+							emptyText: showJobsEmpty ? (
+								<Empty description="No jobs yet">
+									<Space wrap>
+										<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
+											Upload folder
+										</Button>
+										<Button
+											danger
+											icon={<DeleteOutlined />}
+											onClick={() => {
+												setDeleteJobPrefill(null)
+												setCreateDeleteOpen(true)
+											}}
+											disabled={isOffline}
+										>
+											New delete job
+										</Button>
+									</Space>
+								</Empty>
+							) : null,
+						}}
+						columns={columns}
+					/>
+				</Profiler>
 			</div>
 
 			{jobsQuery.hasNextPage ? (
@@ -1431,50 +1450,60 @@ export function JobsPage(props: Props) {
 				</Button>
 			) : null}
 
-			<CreateJobModal
-				profileId={props.profileId}
-				open={createOpen}
-				onCancel={() => setCreateOpen(false)}
-				onSubmit={(values) => handleDeviceUpload(values)}
-				loading={deviceUploadLoading}
-				isOffline={isOffline}
-				bucket={bucket}
-				setBucket={setBucket}
-				bucketOptions={bucketOptions}
-				defaultMoveAfterUpload={moveAfterUploadDefault}
-				defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
-				onDefaultsChange={(values) => {
-					setMoveAfterUploadDefault(values.moveAfterUpload)
-					setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
-				}}
-			/>
+			{createOpen || createDownloadOpen || createDeleteOpen ? (
+				<Suspense fallback={null}>
+					{createOpen ? (
+						<CreateJobModal
+							profileId={props.profileId}
+							open={createOpen}
+							onCancel={() => setCreateOpen(false)}
+							onSubmit={(values) => handleDeviceUpload(values)}
+							loading={deviceUploadLoading}
+							isOffline={isOffline}
+							bucket={bucket}
+							setBucket={setBucket}
+							bucketOptions={bucketOptions}
+							defaultMoveAfterUpload={moveAfterUploadDefault}
+							defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
+							onDefaultsChange={(values) => {
+								setMoveAfterUploadDefault(values.moveAfterUpload)
+								setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
+							}}
+						/>
+					) : null}
 
-			<DownloadJobModal
-				profileId={props.profileId}
-				open={createDownloadOpen}
-				onCancel={() => setCreateDownloadOpen(false)}
-				onSubmit={(values) => handleDeviceDownload(values)}
-				loading={deviceDownloadLoading}
-				isOffline={isOffline}
-				bucket={bucket}
-				setBucket={setBucket}
-				bucketOptions={bucketOptions}
-			/>
+					{createDownloadOpen ? (
+						<DownloadJobModal
+							profileId={props.profileId}
+							open={createDownloadOpen}
+							onCancel={() => setCreateDownloadOpen(false)}
+							onSubmit={(values) => handleDeviceDownload(values)}
+							loading={deviceDownloadLoading}
+							isOffline={isOffline}
+							bucket={bucket}
+							setBucket={setBucket}
+							bucketOptions={bucketOptions}
+						/>
+					) : null}
 
-			<DeletePrefixJobModal
-					open={createDeleteOpen}
-					onCancel={() => {
-						setCreateDeleteOpen(false)
-						setDeleteJobPrefill(null)
-					}}
-					onSubmit={(values) => createDeleteMutation.mutate(values)}
-					loading={createDeleteMutation.isPending}
-					isOffline={isOffline}
-					bucket={deleteJobPrefill?.bucket ?? bucket}
-					setBucket={setBucket}
-					bucketOptions={bucketOptions}
-					prefill={deleteJobPrefill ? { prefix: deleteJobPrefill.prefix, deleteAll: deleteJobPrefill.deleteAll } : null}
-				/>
+					{createDeleteOpen ? (
+						<DeletePrefixJobModal
+							open={createDeleteOpen}
+							onCancel={() => {
+								setCreateDeleteOpen(false)
+								setDeleteJobPrefill(null)
+							}}
+							onSubmit={(values) => createDeleteMutation.mutate(values)}
+							loading={createDeleteMutation.isPending}
+							isOffline={isOffline}
+							bucket={deleteJobPrefill?.bucket ?? bucket}
+							setBucket={setBucket}
+							bucketOptions={bucketOptions}
+							prefill={deleteJobPrefill ? { prefix: deleteJobPrefill.prefix, deleteAll: deleteJobPrefill.deleteAll } : null}
+						/>
+					) : null}
+				</Suspense>
+			) : null}
 
 			<Drawer
 				open={detailsOpen}
@@ -1976,472 +2005,6 @@ function formatS3Destination(bucket: string | null, prefix: string | null): stri
 	if (!bucket) return null
 	const cleanPrefix = (prefix ?? '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
 	return cleanPrefix ? `s3://${bucket}/${cleanPrefix}` : `s3://${bucket}/`
-}
-
-function CreateJobModal(props: {
-	profileId: string | null
-	open: boolean
-	onCancel: () => void
-	onSubmit: (payload: {
-		bucket: string
-		prefix: string
-		dirHandle: FileSystemDirectoryHandle
-		label?: string
-		moveAfterUpload?: boolean
-		cleanupEmptyDirs?: boolean
-	}) => void
-	loading: boolean
-	isOffline: boolean
-	bucket: string
-	setBucket: (v: string) => void
-	bucketOptions: { label: string; value: string }[]
-	defaultMoveAfterUpload: boolean
-	defaultCleanupEmptyDirs: boolean
-	onDefaultsChange?: (values: { moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => void
-}) {
-	const screens = Grid.useBreakpoint()
-	const drawerWidth = screens.md ? 520 : '100%'
-	const [form] = Form.useForm<{
-		bucket: string
-		prefix: string
-		localFolder: string
-		moveAfterUpload: boolean
-		cleanupEmptyDirs: boolean
-	}>()
-	const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
-	const [dirLabel, setDirLabel] = useState('')
-	const support = getDevicePickerSupport()
-
-	const canSubmit = !!dirHandle && support.ok && !props.isOffline
-
-	return (
-		<Drawer
-			open={props.open}
-			onClose={props.onCancel}
-			title="Upload local folder (device → S3)"
-			width={drawerWidth}
-			destroyOnClose
-			extra={
-				<Space>
-					<Button onClick={props.onCancel}>Close</Button>
-					<Button type="primary" loading={props.loading} onClick={() => form.submit()} disabled={!canSubmit}>
-						Upload
-					</Button>
-				</Space>
-			}
-		>
-			{!support.ok ? (
-				<Alert
-					type="warning"
-					showIcon
-					message="Local folder access is not available"
-					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
-					style={{ marginBottom: 12 }}
-				/>
-			) : null}
-			<Alert
-				type="info"
-				showIcon
-				message="Uploads from this device"
-				description="Files are uploaded by the browser and appear in Transfers (not as server jobs)."
-				style={{ marginBottom: 12 }}
-			/>
-
-			<Form
-				form={form}
-				layout="vertical"
-				initialValues={{
-					bucket: props.bucket,
-					prefix: '',
-					localFolder: '',
-					moveAfterUpload: props.defaultMoveAfterUpload,
-					cleanupEmptyDirs: props.defaultCleanupEmptyDirs,
-				}}
-				onFinish={(values) => {
-					if (!dirHandle) {
-						message.info('Select a local folder first')
-						return
-					}
-					props.setBucket(values.bucket)
-					props.onSubmit({
-						bucket: values.bucket,
-						prefix: values.prefix,
-						dirHandle,
-						label: dirLabel || dirHandle.name,
-						moveAfterUpload: values.moveAfterUpload,
-						cleanupEmptyDirs: values.cleanupEmptyDirs,
-					})
-				}}
-				onValuesChange={(_, values) => {
-					props.onDefaultsChange?.({
-						moveAfterUpload: values.moveAfterUpload,
-						cleanupEmptyDirs: values.cleanupEmptyDirs,
-					})
-				}}
-			>
-				<Form.Item name="bucket" label="Bucket" rules={[{ required: true }]}>
-					<AutoComplete
-						options={props.bucketOptions}
-						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-					>
-						<Input placeholder="my-bucket" />
-					</AutoComplete>
-				</Form.Item>
-				<Form.Item name="prefix" label="Prefix (optional)">
-					<Input placeholder="path/" />
-				</Form.Item>
-				<Form.Item name="localFolder" label="Local folder" rules={[{ required: true }]}>
-					<LocalDevicePathInput
-						placeholder="Select a folder"
-						disabled={!support.ok || props.isOffline}
-						onPick={(handle) => {
-							setDirHandle(handle)
-							setDirLabel(handle.name)
-						}}
-					/>
-				</Form.Item>
-				<Form.Item name="moveAfterUpload" valuePropName="checked">
-					<Checkbox>Move after upload (delete local files after the job succeeds)</Checkbox>
-				</Form.Item>
-				<Form.Item shouldUpdate={(prev, next) => prev.moveAfterUpload !== next.moveAfterUpload} noStyle>
-					{({ getFieldValue }) => (
-						<Form.Item name="cleanupEmptyDirs" valuePropName="checked">
-							<Checkbox disabled={!getFieldValue('moveAfterUpload')}>Auto-clean empty folders</Checkbox>
-						</Form.Item>
-					)}
-				</Form.Item>
-			</Form>
-		</Drawer>
-	)
-}
-
-function DownloadJobModal(props: {
-	profileId: string | null
-	open: boolean
-	onCancel: () => void
-	onSubmit: (payload: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
-	loading: boolean
-	isOffline: boolean
-	bucket: string
-	setBucket: (v: string) => void
-	bucketOptions: { label: string; value: string }[]
-}) {
-	const screens = Grid.useBreakpoint()
-	const drawerWidth = screens.md ? 520 : '100%'
-	const [form] = Form.useForm<{
-		bucket: string
-		prefix: string
-		localFolder: string
-	}>()
-	const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
-	const [dirLabel, setDirLabel] = useState('')
-	const support = getDevicePickerSupport()
-
-	const canSubmit = !!dirHandle && support.ok && !props.isOffline
-
-	return (
-		<Drawer
-			open={props.open}
-			onClose={props.onCancel}
-			title="Download folder (S3 → device)"
-			width={drawerWidth}
-			destroyOnClose
-			extra={
-				<Space>
-					<Button onClick={props.onCancel}>Close</Button>
-					<Button type="primary" loading={props.loading} onClick={() => form.submit()} disabled={!canSubmit}>
-						Download
-					</Button>
-				</Space>
-			}
-		>
-			{!support.ok ? (
-				<Alert
-					type="warning"
-					showIcon
-					message="Local folder access is not available"
-					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
-					style={{ marginBottom: 12 }}
-				/>
-			) : null}
-			<Alert
-				type="info"
-				showIcon
-				message="Downloads to this device"
-				description="Files are saved by the browser and appear in Transfers (not as server jobs)."
-				style={{ marginBottom: 12 }}
-			/>
-
-			<Form
-				form={form}
-				layout="vertical"
-				initialValues={{
-					bucket: props.bucket,
-					prefix: '',
-					localFolder: '',
-				}}
-				onFinish={(values) => {
-					if (!dirHandle) {
-						message.info('Select a local folder first')
-						return
-					}
-					props.setBucket(values.bucket)
-					props.onSubmit({
-						bucket: values.bucket,
-						prefix: values.prefix,
-						dirHandle,
-						label: dirLabel || dirHandle.name,
-					})
-				}}
-			>
-				<Form.Item name="bucket" label="Bucket" rules={[{ required: true }]}>
-					<AutoComplete
-						options={props.bucketOptions}
-						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-					>
-						<Input placeholder="my-bucket" />
-					</AutoComplete>
-				</Form.Item>
-				<Form.Item name="prefix" label="Prefix (optional)">
-					<Input placeholder="path/" />
-				</Form.Item>
-				<Form.Item name="localFolder" label="Local destination folder" rules={[{ required: true }]}>
-					<LocalDevicePathInput
-						placeholder="Select a folder"
-						disabled={!support.ok || props.isOffline}
-						onPick={(handle) => {
-							setDirHandle(handle)
-							setDirLabel(handle.name)
-						}}
-					/>
-				</Form.Item>
-			</Form>
-		</Drawer>
-	)
-}
-
-function DeletePrefixJobModal(props: {
-	open: boolean
-	onCancel: () => void
-	onSubmit: (payload: {
-		bucket: string
-		prefix: string
-		deleteAll: boolean
-		allowUnsafePrefix: boolean
-		include: string[]
-		exclude: string[]
-		dryRun: boolean
-	}) => void
-	loading: boolean
-	isOffline: boolean
-	bucket: string
-	setBucket: (v: string) => void
-	bucketOptions: { label: string; value: string }[]
-	prefill?: { prefix: string; deleteAll: boolean } | null
-}) {
-	const screens = Grid.useBreakpoint()
-	const drawerWidth = screens.md ? 520 : '100%'
-	const [form] = Form.useForm<{
-		bucket: string
-		prefix: string
-		deleteAll: boolean
-		confirm: string
-		unsafePrefixOk: boolean
-		include: string
-		exclude: string
-		dryRun: boolean
-	}>()
-	const prevOpenRef = useRef(false)
-
-	useEffect(() => {
-		const wasOpen = prevOpenRef.current
-		prevOpenRef.current = props.open
-		if (!props.open || wasOpen) return
-		if (!props.prefill) {
-			form.resetFields()
-			form.setFieldsValue({ bucket: props.bucket })
-			return
-		}
-		form.setFieldsValue({
-			bucket: props.bucket,
-			prefix: props.prefill.prefix,
-			deleteAll: props.prefill.deleteAll,
-			confirm: '',
-			unsafePrefixOk: false,
-			include: '',
-			exclude: '',
-			dryRun: false,
-		})
-	}, [form, props.bucket, props.open, props.prefill])
-
-	return (
-		<Drawer
-			open={props.open}
-			onClose={props.onCancel}
-			title="Create delete job (S3)"
-			width={drawerWidth}
-			extra={
-				<Space>
-					<Button onClick={props.onCancel}>Close</Button>
-					<Button type="primary" danger loading={props.loading} onClick={() => form.submit()} disabled={props.isOffline}>
-						Create
-					</Button>
-				</Space>
-			}
-		>
-			<Alert
-				type="warning"
-				showIcon
-				message="Dangerous operation"
-				description="This job deletes remote objects via the transfer engine. It cannot be undone."
-				style={{ marginBottom: 12 }}
-			/>
-
-			<Form
-				form={form}
-				layout="vertical"
-				initialValues={{
-					bucket: props.bucket,
-					prefix: '',
-					deleteAll: false,
-					confirm: '',
-					unsafePrefixOk: false,
-					include: '',
-					exclude: '',
-					dryRun: false,
-				}}
-				onFinish={(values) => {
-					const normalizedPrefix = values.prefix.trim().replace(/^\/+/, '')
-					const unsafePrefix = !values.deleteAll && normalizedPrefix !== '' && !normalizedPrefix.endsWith('/')
-
-					props.setBucket(values.bucket)
-					props.onSubmit({
-						bucket: values.bucket.trim(),
-						prefix: values.deleteAll ? '' : normalizedPrefix,
-						deleteAll: values.deleteAll,
-						allowUnsafePrefix: unsafePrefix,
-						include: splitLines(values.include),
-						exclude: splitLines(values.exclude),
-						dryRun: values.dryRun,
-					})
-				}}
-			>
-				<Form.Item name="bucket" label="Bucket" rules={[{ required: true }]}>
-					<AutoComplete
-						options={props.bucketOptions}
-						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-					>
-						<Input placeholder="my-bucket" />
-					</AutoComplete>
-				</Form.Item>
-
-				<Form.Item name="deleteAll" label="Delete ALL objects in bucket" valuePropName="checked">
-					<Switch />
-				</Form.Item>
-
-				<Form.Item shouldUpdate={(prev, cur) => prev.deleteAll !== cur.deleteAll} noStyle>
-					{({ getFieldValue }) => {
-						const deleteAll = getFieldValue('deleteAll')
-						const prefix = (getFieldValue('prefix') ?? '') as string
-						const normalizedPrefix = typeof prefix === 'string' ? prefix.trim().replace(/^\/+/, '') : ''
-						const unsafePrefix = !deleteAll && normalizedPrefix !== '' && !normalizedPrefix.endsWith('/')
-
-						return (
-							<>
-							<Form.Item
-								name="prefix"
-								label="Prefix"
-								dependencies={['deleteAll']}
-								rules={[
-									({ getFieldValue }) => ({
-										validator: async (_, v: string) => {
-											if (getFieldValue('deleteAll')) return
-											const normalized = typeof v === 'string' ? v.trim().replace(/^\/+/, '') : ''
-											if (!normalized) throw new Error('prefix is required unless deleteAll is enabled')
-											if (normalized.includes('*')) throw new Error('wildcards are not allowed')
-										},
-									}),
-								]}
-							>
-								<Input placeholder="path/" disabled={deleteAll} />
-							</Form.Item>
-
-							{unsafePrefix ? (
-								<>
-									<Alert
-										type="warning"
-										showIcon
-										message="Prefix does not end with '/'"
-										description={
-											"Without a trailing '/', delete will match keys with the prefix (e.g., 'abc' also matches 'abcd'). Prefer using a trailing '/'. To proceed anyway, acknowledge below."
-										}
-										style={{ marginBottom: 12 }}
-									/>
-									<Form.Item
-										name="unsafePrefixOk"
-										valuePropName="checked"
-										dependencies={['prefix', 'deleteAll']}
-										rules={[
-											({ getFieldValue }) => ({
-												validator: async (_, v: boolean) => {
-													const deleteAll = getFieldValue('deleteAll')
-													const prefix = (getFieldValue('prefix') ?? '') as string
-													const normalizedPrefix = typeof prefix === 'string' ? prefix.trim().replace(/^\/+/, '') : ''
-													const unsafePrefix = !deleteAll && normalizedPrefix !== '' && !normalizedPrefix.endsWith('/')
-													if (!unsafePrefix) return
-													if (v === true) return
-													throw new Error('Acknowledge to proceed')
-												},
-											}),
-										]}
-									>
-										<Checkbox>I understand and want to proceed</Checkbox>
-									</Form.Item>
-								</>
-							) : null}
-
-							{deleteAll ? (
-								<Form.Item
-									name="confirm"
-									label='Type "DELETE" to confirm'
-									rules={[
-										{ required: true },
-										{
-											validator: async (_, v: string) => {
-												if (v === 'DELETE') return
-												throw new Error('Type DELETE to proceed')
-											},
-										},
-									]}
-								>
-									<Input placeholder="DELETE" />
-								</Form.Item>
-							) : null}
-						</>
-						)
-					}}
-				</Form.Item>
-
-				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch />
-				</Form.Item>
-
-				<Form.Item name="include" label="Include patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="*.log" />
-				</Form.Item>
-				<Form.Item name="exclude" label="Exclude patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="tmp_*" />
-				</Form.Item>
-			</Form>
-		</Drawer>
-	)
-}
-
-function splitLines(v: string): string[] {
-	return v
-		.split('\n')
-		.map((s) => s.trim())
-		.filter(Boolean)
 }
 
 function normalizePrefix(value: string): string {
