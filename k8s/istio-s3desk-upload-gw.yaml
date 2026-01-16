@@ -1,0 +1,307 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: istio-ingressgateway-s3desk
+  namespace: istio-system
+  labels:
+    app: istio-ingressgateway-s3desk
+    istio: ingressgateway-s3desk
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: istio-ingressgateway-s3desk
+      istio: ingressgateway-s3desk
+  template:
+    metadata:
+      labels:
+        app: istio-ingressgateway-s3desk
+        istio: ingressgateway-s3desk
+        sidecar.istio.io/inject: "false"
+      annotations:
+        prometheus.io/path: /stats/prometheus
+        prometheus.io/port: "15020"
+        prometheus.io/scrape: "true"
+        proxy.istio.io/config: '{"concurrency":8}'
+    spec:
+      serviceAccountName: istio-ingressgateway-service-account
+      securityContext:
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      containers:
+        - name: istio-proxy
+          image: docker.io/istio/proxyv2:1.19.3
+          ports:
+            - containerPort: 15090
+              protocol: TCP
+              name: http-envoy-prom
+            - containerPort: 8080
+              protocol: TCP
+              name: http2
+            - containerPort: 8443
+              protocol: TCP
+              name: https
+            - containerPort: 15021
+              protocol: TCP
+              name: status-port
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "3"
+              memory: "6Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 1337
+            runAsNonRoot: true
+            runAsUser: 1337
+          env:
+            - name: JWT_POLICY
+              value: third-party-jwt
+            - name: PILOT_CERT_PROVIDER
+              value: istiod
+            - name: CA_ADDR
+              value: istiod.istio-system.svc:15012
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: INSTANCE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: ISTIO_META_WORKLOAD_NAME
+              value: istio-ingressgateway-s3desk
+            - name: ISTIO_META_OWNER
+              value: kubernetes://apis/apps/v1/namespaces/istio-system/deployments/istio-ingressgateway-s3desk
+            - name: ISTIO_META_ROUTER_MODE
+              value: sni-dnat
+            - name: ISTIO_META_CLUSTER_ID
+              value: Kubernetes
+            - name: ISTIO_META_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: ISTIO_METAJSON_LABELS
+              value: '{"app":"istio-ingressgateway-s3desk","istio":"ingressgateway-s3desk"}'
+            - name: ISTIO_META_INTERCEPTION_MODE
+              value: REDIRECT
+            - name: ISTIO_META_WORKLOAD_CLASS
+              value: gateway
+            - name: ISTIO_META_DNS_CAPTURE
+              value: "true"
+            - name: ISTIO_META_DNS_AUTO_ALLOCATE
+              value: "true"
+          args:
+            - proxy
+            - router
+            - --domain
+            - $(POD_NAMESPACE).svc.cluster.local
+            - --proxyLogLevel=warning
+            - --proxyComponentLogLevel=misc:error
+            - --log_output_level=default:info
+            - --serviceCluster
+            - istio-ingressgateway-s3desk
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: 15021
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            failureThreshold: 30
+          volumeMounts:
+            - mountPath: /var/run/secrets/workload-spiffe-uds
+              name: workload-socket
+            - mountPath: /var/run/secrets/credential-uds
+              name: credential-socket
+            - mountPath: /var/run/secrets/workload-spiffe-credentials
+              name: workload-certs
+            - mountPath: /etc/istio/proxy
+              name: istio-envoy
+            - mountPath: /etc/istio/config
+              name: config-volume
+            - mountPath: /var/run/secrets/istio
+              name: istiod-ca-cert
+            - mountPath: /var/run/secrets/tokens
+              name: istio-token
+              readOnly: true
+            - mountPath: /var/lib/istio/data
+              name: istio-data
+            - mountPath: /etc/istio/pod
+              name: podinfo
+            - mountPath: /etc/istio/ingressgateway-certs
+              name: ingressgateway-certs
+              readOnly: true
+            - mountPath: /etc/istio/ingressgateway-ca-certs
+              name: ingressgateway-ca-certs
+              readOnly: true
+      volumes:
+        - name: workload-socket
+          emptyDir: {}
+        - name: credential-socket
+          emptyDir: {}
+        - name: workload-certs
+          emptyDir: {}
+        - name: istiod-ca-cert
+          configMap:
+            name: istio-ca-root-cert
+        - name: istio-envoy
+          emptyDir: {}
+        - name: istio-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: istio-token
+                  expirationSeconds: 43200
+                  audience: istio-ca
+        - name: istio-data
+          emptyDir: {}
+        - name: podinfo
+          downwardAPI:
+            items:
+              - path: labels
+                fieldRef:
+                  fieldPath: metadata.labels
+              - path: annotations
+                fieldRef:
+                  fieldPath: metadata.annotations
+        - name: config-volume
+          configMap:
+            name: istio
+            optional: true
+        - name: ingressgateway-certs
+          secret:
+            secretName: istio-ingressgateway-certs
+            optional: true
+        - name: ingressgateway-ca-certs
+          secret:
+            secretName: istio-ingressgateway-ca-certs
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: istio-ingressgateway-s3desk
+  namespace: istio-system
+  labels:
+    app: istio-ingressgateway-s3desk
+    istio: ingressgateway-s3desk
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: s3desk.k8s.homelabird.com
+spec:
+  type: LoadBalancer
+  selector:
+    app: istio-ingressgateway-s3desk
+    istio: ingressgateway-s3desk
+  ports:
+    - name: status-port
+      port: 15021
+      targetPort: 15021
+    - name: http2
+      port: 80
+      targetPort: 8080
+    - name: https
+      port: 443
+      targetPort: 8443
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: s3desk-upload-gw
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway-s3desk
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - s3desk.k8s.homelabird.com
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: wildcard-k8s-homelabird-tls
+      hosts:
+        - s3desk.k8s.homelabird.com
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: s3desk-upload
+  namespace: s3desk
+spec:
+  gateways:
+    - istio-system/s3desk-upload-gw
+  hosts:
+    - s3desk.k8s.homelabird.com
+  http:
+    - name: s3desk-upload
+      route:
+        - destination:
+            host: s3desk.s3desk.svc.cluster.local
+            port:
+              number: 8080
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: s3desk-upload-gw-tuning
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway-s3desk
+  configPatches:
+    - applyTo: LISTENER
+      match:
+        context: GATEWAY
+      patch:
+        operation: MERGE
+        value:
+          per_connection_buffer_limit_bytes: 1073741824
+    - applyTo: NETWORK_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+      patch:
+        operation: MERGE
+        value:
+          name: envoy.filters.network.http_connection_manager
+          typed_config:
+            '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+            stream_idle_timeout: 0s
+            common_http_protocol_options:
+              idle_timeout: 0s
+            http2_protocol_options:
+              initial_stream_window_size: 134217728
+              initial_connection_window_size: 2147483648
+              max_concurrent_streams: 1024

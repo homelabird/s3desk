@@ -150,6 +150,40 @@ func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSec
 	return string(out), strings.TrimSpace(proc.stderr.String()), nil
 }
 
+func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecrets, args []string, hint string, stdin io.Reader) (string, error) {
+	rclonePath, _, err := jobs.EnsureRcloneCompatible(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	configPath, configCleanup, err := s.prepareRcloneConfig(profile, hint)
+	if err != nil {
+		return "", err
+	}
+
+	tlsArgs, tlsCleanup, err := jobs.PrepareRcloneTLSFlags(profile)
+	if err != nil {
+		configCleanup()
+		return "", err
+	}
+
+	fullArgs := []string{"--config", configPath}
+	fullArgs = append(fullArgs, tlsArgs...)
+	fullArgs = append(fullArgs, args...)
+
+	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
+	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
+	cmd.Stdin = stdin
+	cmd.Stdout = io.Discard
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	err = cmd.Run()
+	configCleanup()
+	tlsCleanup()
+	return strings.TrimSpace(stderrBuf.String()), err
+}
+
 func decodeRcloneList(r io.Reader, onEntry func(entry rcloneListEntry) error) error {
 	dec := json.NewDecoder(r)
 	tok, err := dec.Token()

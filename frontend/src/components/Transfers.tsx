@@ -37,6 +37,99 @@ type UploadMovePlan = {
 	cleanupEmptyDirs?: boolean
 }
 
+type PersistedDownloadTask = ObjectDownloadTask | JobArtifactDownloadTask
+type PersistedTransfers = {
+	version: 1
+	savedAtMs: number
+	downloads: PersistedDownloadTask[]
+	uploads: UploadTask[]
+}
+
+const TRANSFERS_STORAGE_KEY = 'transfersHistoryV1'
+const MAX_PERSISTED_TRANSFERS = 200
+
+const isActiveDownloadStatus = (status: DownloadTask['status']) =>
+	status === 'queued' || status === 'waiting' || status === 'running'
+
+const isActiveUploadStatus = (status: UploadTask['status']) =>
+	status === 'queued' || status === 'staging' || status === 'commit' || status === 'waiting_job' || status === 'cleanup'
+
+const normalizeDownloadTask = (task: PersistedDownloadTask, now: number): DownloadTask => {
+	if (!isActiveDownloadStatus(task.status)) return task
+	return {
+		...task,
+		status: 'canceled',
+		finishedAtMs: now,
+		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
+	}
+}
+
+const normalizeUploadTask = (task: UploadTask, now: number): UploadTask => {
+	if (!isActiveUploadStatus(task.status)) return task
+	return {
+		...task,
+		status: 'canceled',
+		finishedAtMs: now,
+		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
+	}
+}
+
+const loadPersistedTransfers = (): PersistedTransfers | null => {
+	if (typeof window === 'undefined') return null
+	try {
+		const raw = window.localStorage.getItem(TRANSFERS_STORAGE_KEY)
+		if (!raw) return null
+		const parsed = JSON.parse(raw) as PersistedTransfers
+		if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.downloads) || !Array.isArray(parsed.uploads)) {
+			return null
+		}
+		return parsed
+	} catch {
+		return null
+	}
+}
+
+const normalizeRelPath = (value: string): string => {
+	const trimmed = value.trim()
+	if (!trimmed) return ''
+	return trimmed.replace(/\\/g, '/').replace(/^\.\//, '')
+}
+
+const promptForFiles = (args: { multiple: boolean; directory: boolean }): Promise<File[] | null> =>
+	new Promise((resolve) => {
+		const input = document.createElement('input')
+		input.type = 'file'
+		input.multiple = args.multiple
+		if (args.directory) {
+			;(input as HTMLInputElement & { webkitdirectory?: boolean }).webkitdirectory = true
+		}
+		input.style.display = 'none'
+		const cleanup = () => {
+			input.remove()
+		}
+		input.addEventListener('change', () => {
+			const files = input.files ? Array.from(input.files) : []
+			cleanup()
+			resolve(files.length ? files : null)
+		})
+		document.body.appendChild(input)
+		input.click()
+	})
+
+const buildUploadItems = (files: File[]): UploadFileItem[] =>
+	files.map((file) => {
+		const fileWithPath = file as File & { webkitRelativePath?: string; relativePath?: string }
+		const relPathRaw = (fileWithPath.webkitRelativePath ?? fileWithPath.relativePath ?? '').trim()
+		return { file, relPath: relPathRaw || file.name }
+	})
+
+const resolveUploadItemPath = (item: UploadFileItem): string => {
+	const rel = (item.relPath ?? '').trim()
+	return rel || item.file.name
+}
+
+const resolveUploadItemPathNormalized = (item: UploadFileItem): string => normalizeRelPath(resolveUploadItemPath(item))
+
 const TransfersDrawer = lazy(async () => {
 	const m = await import('./transfers/TransfersDrawer')
 	return { default: m.TransfersDrawer }
@@ -78,7 +171,7 @@ export type TransfersContextValue = {
 	}) => void
 }
 
-export function TransfersProvider(props: { apiToken: string; children: ReactNode }) {
+export function TransfersProvider(props: { apiToken: string; uploadDirectStream?: boolean; children: ReactNode }) {
 	const queryClient = useQueryClient()
 	const navigate = useNavigate()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
@@ -107,6 +200,36 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 	)
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
 	const [uploadEventsConnected, setUploadEventsConnected] = useState(false)
+	const hasLoadedPersistedRef = useRef(false)
+
+	useEffect(() => {
+		if (hasLoadedPersistedRef.current) return
+		hasLoadedPersistedRef.current = true
+		const persisted = loadPersistedTransfers()
+		if (!persisted) return
+		const now = Date.now()
+		setDownloadTasks(persisted.downloads.map((task) => normalizeDownloadTask(task, now)))
+		setUploadTasks(persisted.uploads.map((task) => normalizeUploadTask(task, now)))
+	}, [])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const downloads = downloadTasks
+			.filter((task): task is PersistedDownloadTask => task.kind !== 'object_device')
+			.slice(0, MAX_PERSISTED_TRANSFERS)
+		const uploads = uploadTasks.slice(0, MAX_PERSISTED_TRANSFERS)
+		const payload: PersistedTransfers = {
+			version: 1,
+			savedAtMs: Date.now(),
+			downloads,
+			uploads,
+		}
+		try {
+			window.localStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
+		} catch {
+			// ignore
+		}
+	}, [downloadTasks, uploadTasks])
 
 	useEffect(() => {
 		downloadTasksRef.current = downloadTasks
@@ -128,11 +251,95 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 
 	const downloadConcurrency = 2
 	const uploadConcurrency = 1
-	const [uploadBatchConcurrencySetting] = useLocalStorageState<number>('uploadBatchConcurrency', 8)
-	const [uploadBatchBytesMiBSetting] = useLocalStorageState<number>('uploadBatchBytesMiB', 32)
-	const uploadBatchConcurrency = Math.min(8, Math.max(1, Number.isFinite(uploadBatchConcurrencySetting) ? uploadBatchConcurrencySetting : 8))
-	const uploadBatchBytesMiB = Math.min(256, Math.max(4, Number.isFinite(uploadBatchBytesMiBSetting) ? uploadBatchBytesMiBSetting : 32))
+	const [uploadAutoTuneEnabled] = useLocalStorageState<boolean>('uploadAutoTuneEnabled', true)
+	const [uploadBatchConcurrencySetting] = useLocalStorageState<number>('uploadBatchConcurrency', 16)
+	const [uploadBatchBytesMiBSetting] = useLocalStorageState<number>('uploadBatchBytesMiB', 64)
+	const [uploadChunkSizeMiBSetting] = useLocalStorageState<number>('uploadChunkSizeMiB', 128)
+	const [uploadChunkConcurrencySetting] = useLocalStorageState<number>('uploadChunkConcurrency', 8)
+	const [uploadChunkThresholdMiBSetting] = useLocalStorageState<number>('uploadChunkThresholdMiB', 256)
+	const [uploadChunkFileConcurrencySetting] = useLocalStorageState<number>('uploadChunkFileConcurrency', 2)
+	const [uploadResumeConversionEnabled] = useLocalStorageState<boolean>('uploadResumeConversionEnabled', false)
+	const uploadBatchConcurrency = Math.min(
+		32,
+		Math.max(1, Number.isFinite(uploadBatchConcurrencySetting) ? uploadBatchConcurrencySetting : 16),
+	)
+	const uploadBatchBytesMiB = Math.min(256, Math.max(8, Number.isFinite(uploadBatchBytesMiBSetting) ? uploadBatchBytesMiBSetting : 64))
+	const uploadChunkSizeMiB = Math.min(512, Math.max(16, Number.isFinite(uploadChunkSizeMiBSetting) ? uploadChunkSizeMiBSetting : 128))
+	const uploadChunkConcurrency = Math.min(
+		16,
+		Math.max(1, Number.isFinite(uploadChunkConcurrencySetting) ? uploadChunkConcurrencySetting : 8),
+	)
+	const uploadChunkThresholdMiB = Math.min(
+		2048,
+		Math.max(64, Number.isFinite(uploadChunkThresholdMiBSetting) ? uploadChunkThresholdMiBSetting : 256),
+	)
+	const uploadChunkFileConcurrency = Math.min(
+		8,
+		Math.max(1, Number.isFinite(uploadChunkFileConcurrencySetting) ? uploadChunkFileConcurrencySetting : 2),
+	)
 	const uploadBatchBytes = uploadBatchBytesMiB * 1024 * 1024
+	const uploadChunkSizeBytes = uploadChunkSizeMiB * 1024 * 1024
+	const uploadChunkThresholdBytes = uploadChunkThresholdMiB * 1024 * 1024
+
+	const pickUploadTuning = useCallback(
+		(totalBytes: number, maxFileBytes: number | null) => {
+			if (!uploadAutoTuneEnabled) {
+				return {
+					batchConcurrency: uploadBatchConcurrency,
+					batchBytes: uploadBatchBytes,
+					chunkSizeBytes: uploadChunkSizeBytes,
+					chunkConcurrency: uploadChunkConcurrency,
+					chunkThresholdBytes: uploadChunkThresholdBytes,
+				}
+			}
+
+			const size = Math.max(totalBytes, maxFileBytes ?? 0)
+			const mib = size / (1024 * 1024)
+
+			if (mib <= 256) {
+				return {
+					batchConcurrency: 8,
+					batchBytes: 32 * 1024 * 1024,
+					chunkSizeBytes: 64 * 1024 * 1024,
+					chunkConcurrency: 4,
+					chunkThresholdBytes: 128 * 1024 * 1024,
+				}
+			}
+			if (mib <= 2048) {
+				return {
+					batchConcurrency: 16,
+					batchBytes: 64 * 1024 * 1024,
+					chunkSizeBytes: 128 * 1024 * 1024,
+					chunkConcurrency: 8,
+					chunkThresholdBytes: 256 * 1024 * 1024,
+				}
+			}
+			if (mib <= 8192) {
+				return {
+					batchConcurrency: 24,
+					batchBytes: 96 * 1024 * 1024,
+					chunkSizeBytes: 256 * 1024 * 1024,
+					chunkConcurrency: 12,
+					chunkThresholdBytes: 512 * 1024 * 1024,
+				}
+			}
+			return {
+				batchConcurrency: 32,
+				batchBytes: 128 * 1024 * 1024,
+				chunkSizeBytes: 256 * 1024 * 1024,
+				chunkConcurrency: 16,
+				chunkThresholdBytes: 512 * 1024 * 1024,
+			}
+		},
+		[
+			uploadAutoTuneEnabled,
+			uploadBatchConcurrency,
+			uploadBatchBytes,
+			uploadChunkSizeBytes,
+			uploadChunkConcurrency,
+			uploadChunkThresholdBytes,
+		],
+	)
 
 	const openTransfers = useCallback(
 		(nextTab?: TransfersTab) => {
@@ -367,31 +574,93 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 	)
 
 	const retryUploadTask = useCallback(
-		(taskId: string) => {
-			updateUploadTask(taskId, (t) => {
-				const movePlan = uploadMoveByTaskIdRef.current[taskId]
-				if (t.cleanupFailed && t.moveAfterUpload && t.jobId && movePlan) {
-					return {
-						...t,
-						status: 'waiting_job',
-						finishedAtMs: undefined,
-						error: undefined,
-						cleanupFailed: false,
-					}
-				}
-				return {
+		async (taskId: string) => {
+			const current = uploadTasksRef.current.find((t) => t.id === taskId)
+			if (!current) return
+
+			const movePlan = uploadMoveByTaskIdRef.current[taskId]
+			if (current.cleanupFailed && current.moveAfterUpload && current.jobId && movePlan) {
+				updateUploadTask(taskId, (t) => ({
 					...t,
-					status: 'queued',
-					startedAtMs: undefined,
+					status: 'waiting_job',
 					finishedAtMs: undefined,
-					loadedBytes: 0,
-					speedBps: 0,
-					etaSeconds: 0,
 					error: undefined,
-					jobId: undefined,
 					cleanupFailed: false,
+				}))
+				return
+			}
+
+			let items = uploadItemsByTaskIdRef.current[taskId]
+			if (!items || items.length === 0) {
+				const resumeFiles = current.resumeFiles ?? []
+				const expectedPaths = (resumeFiles.length > 0 ? resumeFiles.map((f) => f.path) : current.filePaths ?? [])
+					.map(normalizeRelPath)
+					.filter(Boolean)
+				const expectDirectory = expectedPaths.some((p) => p.includes('/'))
+				const selected = await promptForFiles({
+					multiple: current.fileCount > 1 || expectDirectory,
+					directory: expectDirectory,
+				})
+				if (!selected) return
+
+				const selectedItems = buildUploadItems(selected)
+				if (expectedPaths.length > 0) {
+					const selectedByPath = new Map(
+						selectedItems.map((item) => [normalizeRelPath(item.relPath ?? item.file.name), item]),
+					)
+					const matched: UploadFileItem[] = []
+					const missing: string[] = []
+					for (const path of expectedPaths) {
+						const found = selectedByPath.get(path)
+						if (!found) {
+							missing.push(path)
+							continue
+						}
+						if (resumeFiles.length > 0) {
+							const resume = resumeFiles.find((f) => normalizeRelPath(f.path) === path)
+							if (resume && found.file?.size !== resume.size) {
+								missing.push(path)
+								continue
+							}
+						}
+						matched.push(found)
+					}
+					if (missing.length > 0) {
+						message.error(`Missing ${missing.length} file(s). Select the same files or folder to resume.`)
+						return
+					}
+					items = matched
+				} else {
+					items = selectedItems
 				}
-			})
+
+				const totalBytes = items.reduce((sum, item) => sum + (item.file?.size ?? 0), 0)
+				if (current.resumeFileSize && items.length === 1 && items[0]?.file?.size !== current.resumeFileSize) {
+					message.error('Selected file size does not match the previous upload.')
+					return
+				}
+				uploadItemsByTaskIdRef.current[taskId] = items
+				updateUploadTask(taskId, (t) => ({
+					...t,
+					fileCount: items.length,
+					totalBytes,
+					filePaths: items.map((item) => normalizeRelPath(item.relPath ?? item.file.name)).filter(Boolean),
+					resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
+				}))
+			}
+
+			updateUploadTask(taskId, (t) => ({
+				...t,
+				status: 'queued',
+				startedAtMs: undefined,
+				finishedAtMs: undefined,
+				loadedBytes: 0,
+				speedBps: 0,
+				etaSeconds: 0,
+				error: undefined,
+				jobId: undefined,
+				cleanupFailed: false,
+			}))
 		},
 		[updateUploadTask],
 	)
@@ -698,12 +967,117 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 
 			let committed = false
 			let uploadId = ''
+			let existingChunksByPath: Record<string, number[]> | undefined
 			try {
-				const session = await api.createUpload(current.profileId, { bucket: current.bucket, prefix: current.prefix })
-				uploadId = session.uploadId
-				if (session.maxBytes && current.totalBytes > session.maxBytes) {
-					throw new Error(`selected files exceed maxBytes (${current.totalBytes} > ${session.maxBytes})`)
+				const maxFileBytes =
+					items.length > 0 ? Math.max(...items.map((entry) => entry.file?.size ?? 0)) : current.totalBytes
+				const tuning = pickUploadTuning(current.totalBytes, Number.isFinite(maxFileBytes) ? maxFileBytes : null)
+
+				const resumeFilesByPath = new Map<string, { size: number; chunkSizeBytes: number }>()
+				if (current.resumeFiles && current.resumeFiles.length > 0) {
+					for (const file of current.resumeFiles) {
+						const pathKey = normalizeRelPath(file.path)
+						if (!pathKey) continue
+						resumeFilesByPath.set(pathKey, { size: file.size, chunkSizeBytes: file.chunkSizeBytes })
+					}
+				} else if (current.resumeChunkSizeBytes && current.resumeFileSize && items.length === 1) {
+					const pathKey = resolveUploadItemPathNormalized(items[0])
+					if (pathKey) {
+						resumeFilesByPath.set(pathKey, {
+							size: current.resumeFileSize,
+							chunkSizeBytes: current.resumeChunkSizeBytes,
+						})
+					}
 				}
+
+				let resumeChunkSizeBytes = 0
+				let allowPerFileChunkSize = uploadResumeConversionEnabled && resumeFilesByPath.size > 0
+				if (resumeFilesByPath.size > 0) {
+					const distinctSizes = new Set(Array.from(resumeFilesByPath.values()).map((v) => v.chunkSizeBytes))
+					if (distinctSizes.size > 1) {
+						if (!uploadResumeConversionEnabled) {
+							message.error('Resume requires consistent chunk size across files. Enable conversion mode or re-add files.')
+							return
+						}
+						allowPerFileChunkSize = true
+					}
+					resumeChunkSizeBytes = Array.from(distinctSizes)[0] ?? 0
+				}
+
+				if (current.uploadId && resumeFilesByPath.size > 0) {
+					const existing: Record<string, number[]> = {}
+					let resumeAvailable = true
+					for (const item of items) {
+						const pathRaw = resolveUploadItemPath(item)
+						const pathKey = normalizeRelPath(pathRaw)
+						const resumeInfo = resumeFilesByPath.get(pathKey)
+						if (!resumeInfo) continue
+						if ((item.file?.size ?? 0) !== resumeInfo.size) {
+							message.error('Selected file size does not match the previous upload.')
+							return
+						}
+						try {
+							const chunkState = await api.getUploadChunks(current.profileId, current.uploadId, {
+								path: pathRaw,
+								total: Math.max(1, Math.ceil(resumeInfo.size / resumeInfo.chunkSizeBytes)),
+								chunkSize: resumeInfo.chunkSizeBytes,
+								fileSize: resumeInfo.size,
+							})
+							existing[pathRaw] = chunkState.present
+						} catch (err) {
+							if (err instanceof APIError && err.status === 404) {
+								resumeAvailable = false
+								break
+							}
+							throw err
+						}
+					}
+					if (resumeAvailable) {
+						uploadId = current.uploadId
+						existingChunksByPath = existing
+					}
+				}
+
+				if (!uploadId) {
+					const session = await api.createUpload(current.profileId, { bucket: current.bucket, prefix: current.prefix })
+					uploadId = session.uploadId
+					if (session.maxBytes && current.totalBytes > session.maxBytes) {
+						throw new Error(`selected files exceed maxBytes (${current.totalBytes} > ${session.maxBytes})`)
+					}
+				}
+
+				const chunkSizeBytes = resumeChunkSizeBytes > 0 && !allowPerFileChunkSize ? resumeChunkSizeBytes : tuning.chunkSizeBytes
+				const chunkThresholdBytes = tuning.chunkThresholdBytes
+				const chunkSizeByPath: Record<string, number> = {}
+
+				const resumeFilesNext = items
+					.filter((item) => {
+						const pathKey = resolveUploadItemPathNormalized(item)
+						if (resumeFilesByPath.has(pathKey)) return true
+						return (item.file?.size ?? 0) >= chunkThresholdBytes
+					})
+					.map((item) => {
+						const pathKey = resolveUploadItemPathNormalized(item)
+						const pathRaw = resolveUploadItemPath(item)
+						const resumeInfo = resumeFilesByPath.get(pathKey)
+						const fileChunkSize = resumeInfo?.chunkSizeBytes ?? chunkSizeBytes
+						if (pathRaw) {
+							chunkSizeByPath[pathRaw] = fileChunkSize
+						}
+						return {
+							path: pathKey,
+							size: item.file?.size ?? 0,
+							chunkSizeBytes: fileChunkSize,
+						}
+					})
+
+				updateUploadTask(taskId, (t) => ({
+					...t,
+					uploadId,
+					resumeChunkSizeBytes: items.length === 1 ? chunkSizeBytes : undefined,
+					resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
+					resumeFiles: resumeFilesNext,
+				}))
 
 				const handle = api.uploadFilesWithProgress(current.profileId, uploadId, items, {
 					onProgress: (p) => {
@@ -718,9 +1092,15 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 							etaSeconds: stats.etaSeconds,
 						}))
 					},
-					concurrency: uploadBatchConcurrency,
-					maxBatchBytes: uploadBatchBytes,
+					concurrency: tuning.batchConcurrency,
+					maxBatchBytes: tuning.batchBytes,
 					maxBatchItems: 50,
+					chunkSizeBytes,
+					chunkConcurrency: tuning.chunkConcurrency,
+					chunkThresholdBytes,
+					existingChunksByPath,
+					chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
+					chunkFileConcurrency: uploadChunkFileConcurrency,
 				})
 				uploadAbortByTaskIdRef.current[taskId] = handle.abort
 				const result = await handle.promise
@@ -783,7 +1163,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				}
 			}
 		},
-		[api, navigate, queryClient, updateUploadTask, uploadBatchBytes, uploadBatchConcurrency],
+		[api, navigate, pickUploadTuning, queryClient, updateUploadTask, uploadChunkFileConcurrency, uploadResumeConversionEnabled],
 	)
 
 	useEffect(() => {
@@ -1125,12 +1505,9 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 			const files = args.files.filter((f) => !!f)
 			if (files.length === 0) return
 
-			const items: UploadFileItem[] = files.map((file) => {
-				const fileWithPath = file as File & { webkitRelativePath?: string; relativePath?: string }
-				const relPath = (fileWithPath.webkitRelativePath ?? fileWithPath.relativePath ?? '').trim()
-				return { file, relPath: relPath || file.name }
-			})
+			const items: UploadFileItem[] = buildUploadItems(files)
 			const totalBytes = items.reduce((sum, i) => sum + (i.file.size ?? 0), 0)
+			const filePaths = items.map((item) => normalizeRelPath(item.relPath ?? item.file.name)).filter(Boolean)
 
 			const taskId = randomId()
 			uploadItemsByTaskIdRef.current[taskId] = items
@@ -1161,6 +1538,8 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				error: undefined,
 				jobId: undefined,
 				label: args.label?.trim() || (items.length === 1 ? `Upload: ${items[0]?.file?.name ?? '1 file'}` : `Upload: ${items.length} file(s)`),
+				filePaths,
+				resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
 			}
 
 			setUploadTasks((prev) => [task, ...prev])

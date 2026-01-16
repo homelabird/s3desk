@@ -29,6 +29,7 @@ import (
 const (
 	JobTypeTransferSyncLocalToS3   = "transfer_sync_local_to_s3"
 	JobTypeTransferSyncStagingToS3 = "transfer_sync_staging_to_s3"
+	JobTypeTransferDirectUpload    = "transfer_direct_upload"
 	JobTypeTransferSyncS3ToLocal   = "transfer_sync_s3_to_local"
 	JobTypeTransferDeletePrefix    = "transfer_delete_prefix"
 	JobTypeTransferCopyObject      = "transfer_copy_object"

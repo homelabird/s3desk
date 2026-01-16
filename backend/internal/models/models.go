@@ -361,6 +361,10 @@ type UploadCreateResponse struct {
 	ExpiresAt string `json:"expiresAt"`
 }
 
+type UploadChunkState struct {
+	Present []int `json:"present"`
+}
+
 type JobStatus string
 
 const (
@@ -432,6 +436,7 @@ type MetaResponse struct {
 	JobLogRetentionSeconds  *int64             `json:"jobLogRetentionSeconds,omitempty"`
 	UploadSessionTTLSeconds int64              `json:"uploadSessionTTLSeconds"`
 	UploadMaxBytes          *int64             `json:"uploadMaxBytes,omitempty"`
+	UploadDirectStream      bool               `json:"uploadDirectStream"`
 	TransferEngine          TransferEngineInfo `json:"transferEngine"`
 }
 

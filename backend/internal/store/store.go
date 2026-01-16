@@ -9,6 +9,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"s3desk/internal/models"
 )
@@ -1328,6 +1329,19 @@ type UploadSession struct {
 	CreatedAt  string
 }
 
+type MultipartUpload struct {
+	UploadID   string
+	ProfileID  string
+	Path       string
+	Bucket     string
+	ObjectKey  string
+	S3UploadID string
+	ChunkSize  int64
+	FileSize   int64
+	CreatedAt  string
+	UpdatedAt  string
+}
+
 func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, prefix, stagingDir, expiresAt string) (UploadSession, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := ulid.Make().String()
@@ -1373,6 +1387,54 @@ func (s *Store) GetUploadSession(ctx context.Context, profileID, uploadID string
 		return UploadSession{}, false, err
 	}
 	return UploadSession(row), true, nil
+}
+
+func (s *Store) GetMultipartUpload(ctx context.Context, profileID, uploadID, path string) (MultipartUpload, bool, error) {
+	var row uploadMultipartRow
+	if err := s.db.WithContext(ctx).
+		Where("profile_id = ? AND upload_id = ? AND path = ?", profileID, uploadID, path).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return MultipartUpload{}, false, nil
+		}
+		return MultipartUpload{}, false, err
+	}
+	return MultipartUpload(row), true, nil
+}
+
+func (s *Store) UpsertMultipartUpload(ctx context.Context, mu MultipartUpload) error {
+	row := uploadMultipartRow(mu)
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "upload_id"}, {Name: "path"}},
+		DoUpdates: clause.AssignmentColumns([]string{"bucket", "object_key", "s3_upload_id", "chunk_size", "file_size", "updated_at"}),
+	}).Create(&row).Error
+}
+
+func (s *Store) ListMultipartUploads(ctx context.Context, profileID, uploadID string) ([]MultipartUpload, error) {
+	var rows []uploadMultipartRow
+	if err := s.db.WithContext(ctx).
+		Where("profile_id = ? AND upload_id = ?", profileID, uploadID).
+		Order("path ASC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]MultipartUpload, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, MultipartUpload(row))
+	}
+	return out, nil
+}
+
+func (s *Store) DeleteMultipartUpload(ctx context.Context, profileID, uploadID, path string) error {
+	return s.db.WithContext(ctx).
+		Where("profile_id = ? AND upload_id = ? AND path = ?", profileID, uploadID, path).
+		Delete(&uploadMultipartRow{}).Error
+}
+
+func (s *Store) DeleteMultipartUploadsBySession(ctx context.Context, profileID, uploadID string) error {
+	return s.db.WithContext(ctx).
+		Where("profile_id = ? AND upload_id = ?", profileID, uploadID).
+		Delete(&uploadMultipartRow{}).Error
 }
 
 func (s *Store) UploadSessionExists(ctx context.Context, uploadID string) (bool, error) {

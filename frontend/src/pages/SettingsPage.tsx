@@ -61,6 +61,14 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'bucket',
 	'prefix',
 	'uploadPrefix',
+	'uploadBatchConcurrency',
+	'uploadBatchBytesMiB',
+	'uploadChunkSizeMiB',
+	'uploadChunkConcurrency',
+	'uploadChunkThresholdMiB',
+	'uploadChunkFileConcurrency',
+	'uploadAutoTuneEnabled',
+	'uploadResumeConversionEnabled',
 
 	// Jobs
 	'jobsFollowLogs',
@@ -148,6 +156,35 @@ export function SettingsPage(props: Props) {
 	)
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
 		'downloadLinkProxyEnabled',
+		false,
+	)
+	const [uploadAutoTuneEnabled, setUploadAutoTuneEnabled] = useLocalStorageState<boolean>('uploadAutoTuneEnabled', true)
+	const [uploadBatchConcurrencySetting, setUploadBatchConcurrencySetting] = useLocalStorageState<number>(
+		'uploadBatchConcurrency',
+		16,
+	)
+	const [uploadBatchBytesMiBSetting, setUploadBatchBytesMiBSetting] = useLocalStorageState<number>(
+		'uploadBatchBytesMiB',
+		64,
+	)
+	const [uploadChunkSizeMiBSetting, setUploadChunkSizeMiBSetting] = useLocalStorageState<number>(
+		'uploadChunkSizeMiB',
+		128,
+	)
+	const [uploadChunkConcurrencySetting, setUploadChunkConcurrencySetting] = useLocalStorageState<number>(
+		'uploadChunkConcurrency',
+		8,
+	)
+	const [uploadChunkThresholdMiBSetting, setUploadChunkThresholdMiBSetting] = useLocalStorageState<number>(
+		'uploadChunkThresholdMiB',
+		256,
+	)
+	const [uploadChunkFileConcurrencySetting, setUploadChunkFileConcurrencySetting] = useLocalStorageState<number>(
+		'uploadChunkFileConcurrency',
+		2,
+	)
+	const [uploadResumeConversionEnabled, setUploadResumeConversionEnabled] = useLocalStorageState<boolean>(
+		'uploadResumeConversionEnabled',
 		false,
 	)
 	const [objectsShowThumbnails, setObjectsShowThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
@@ -313,6 +350,160 @@ export function SettingsPage(props: Props) {
 											label: 'Advanced',
 											children: (
 												<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+													<Form.Item
+														label="Upload auto-tuning"
+														extra="Automatically adjusts batch/chunk settings based on file size."
+													>
+														<Switch
+															checked={uploadAutoTuneEnabled}
+															onChange={setUploadAutoTuneEnabled}
+															aria-label="Upload auto-tuning"
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Upload batch concurrency"
+														extra="Number of parallel upload batches per client. Higher values can improve throughput on fast networks."
+													>
+														<InputNumber
+															min={1}
+															max={32}
+															precision={0}
+															value={uploadBatchConcurrencySetting}
+															onChange={(value) =>
+																setUploadBatchConcurrencySetting(typeof value === 'number' ? value : 16)
+															}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Upload batch size (MiB)"
+														extra="Target size per upload batch. Larger batches reduce request overhead but increase memory use."
+													>
+														<InputNumber
+															min={8}
+															max={256}
+															step={8}
+															precision={0}
+															value={uploadBatchBytesMiBSetting}
+															onChange={(value) =>
+																setUploadBatchBytesMiBSetting(typeof value === 'number' ? value : 64)
+															}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Upload tuning presets"
+														extra="Quick presets for batch + chunk settings. You can still fine-tune below."
+													>
+														<Space wrap>
+															<Button
+																onClick={() => {
+																	setUploadBatchConcurrencySetting(8)
+																	setUploadBatchBytesMiBSetting(32)
+																	setUploadChunkSizeMiBSetting(64)
+																	setUploadChunkConcurrencySetting(4)
+																	setUploadChunkThresholdMiBSetting(128)
+																}}
+															>
+																Stable
+															</Button>
+															<Button
+																onClick={() => {
+																	setUploadBatchConcurrencySetting(16)
+																	setUploadBatchBytesMiBSetting(64)
+																	setUploadChunkSizeMiBSetting(128)
+																	setUploadChunkConcurrencySetting(8)
+																	setUploadChunkThresholdMiBSetting(256)
+																}}
+															>
+																Fast
+															</Button>
+															<Button
+																type="primary"
+																onClick={() => {
+																	setUploadBatchConcurrencySetting(32)
+																	setUploadBatchBytesMiBSetting(128)
+																	setUploadChunkSizeMiBSetting(256)
+																	setUploadChunkConcurrencySetting(16)
+																	setUploadChunkThresholdMiBSetting(512)
+																}}
+															>
+																Max Throughput
+															</Button>
+														</Space>
+													</Form.Item>
+													<Form.Item
+														label="Upload chunk size (MiB)"
+														extra="Single-file uploads above the threshold are split into chunks of this size."
+													>
+														<InputNumber
+															min={16}
+															max={512}
+															step={16}
+															precision={0}
+															value={uploadChunkSizeMiBSetting}
+															onChange={(value) =>
+																setUploadChunkSizeMiBSetting(typeof value === 'number' ? value : 128)
+															}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Upload chunk concurrency"
+														extra="Parallel chunk uploads for a single large file."
+													>
+														<InputNumber
+															min={1}
+															max={16}
+															precision={0}
+															value={uploadChunkConcurrencySetting}
+															onChange={(value) =>
+																setUploadChunkConcurrencySetting(typeof value === 'number' ? value : 8)
+															}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Upload file concurrency (chunked)"
+														extra="Number of large files uploaded in parallel when chunking."
+													>
+														<InputNumber
+															min={1}
+															max={8}
+															precision={0}
+															value={uploadChunkFileConcurrencySetting}
+															onChange={(value) =>
+																setUploadChunkFileConcurrencySetting(typeof value === 'number' ? value : 2)
+															}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Chunking threshold (MiB)"
+														extra="Files larger than this threshold use chunked uploads."
+													>
+														<InputNumber
+															min={64}
+															max={2048}
+															step={64}
+															precision={0}
+															value={uploadChunkThresholdMiBSetting}
+															onChange={(value) =>
+																setUploadChunkThresholdMiBSetting(typeof value === 'number' ? value : 256)
+															}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Resume conversion mode"
+														extra="Allows resuming uploads even if chunk sizes changed between sessions."
+													>
+														<Switch
+															checked={uploadResumeConversionEnabled}
+															onChange={setUploadResumeConversionEnabled}
+															aria-label="Resume conversion mode"
+														/>
+													</Form.Item>
 													<Form.Item
 														label="Move cleanup report filename template"
 														extra="Available tokens: {bucket} {prefix} {label} {timestamp}"

@@ -61,4 +61,9 @@ export type UploadTask = {
 	jobId?: string
 	error?: string
 	label: string
+	filePaths?: string[]
+	uploadId?: string
+	resumeChunkSizeBytes?: number
+	resumeFileSize?: number
+	resumeFiles?: Array<{ path: string; size: number; chunkSizeBytes: number }>
 }

@@ -53,6 +53,7 @@ func main() {
 	flag.DurationVar(&cfg.JobLogRetention, "job-log-retention", getEnvDuration("JOB_LOG_RETENTION", 0), "delete job log files older than this duration (0=keep forever)")
 	flag.DurationVar(&cfg.UploadSessionTTL, "upload-ttl", getEnvDuration("UPLOAD_TTL", 24*time.Hour), "upload session TTL")
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", getEnvInt64("UPLOAD_MAX_BYTES", 0), "max total bytes per upload session (0=unlimited)")
+	flag.BoolVar(&cfg.UploadDirectStream, "upload-direct-stream", getEnvBool("UPLOAD_DIRECT_STREAM", false), "stream uploads directly to the provider (disables staging)")
 	flag.IntVar(&cfg.RcloneDownloadMultiThreadStreams, "rclone-download-multi-thread-streams", getEnvInt("RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS", 16), "rclone --multi-thread-streams for API downloads (0=use rclone default)")
 	flag.IntVar(&cfg.RcloneDownloadMultiThreadCutoffMiB, "rclone-download-multi-thread-cutoff-mib", getEnvInt("RCLONE_DOWNLOAD_MULTI_THREAD_CUTOFF_MIB", 4), "rclone --multi-thread-cutoff for API downloads, in MiB (0=use rclone default)")
 	flag.IntVar(&cfg.RcloneDownloadBufferSizeMiB, "rclone-download-buffer-size-mib", getEnvInt("RCLONE_DOWNLOAD_BUFFER_SIZE_MIB", 128), "rclone --buffer-size for API downloads, in MiB (0=use rclone default)")

@@ -2778,6 +2778,7 @@ export interface components {
             uploadSessionTTLSeconds: number;
             /** Format: int64 */
             uploadMaxBytes?: number | null;
+            uploadDirectStream?: boolean;
             transferEngine: {
                 name: string;
                 available: boolean;

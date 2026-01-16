@@ -114,6 +114,10 @@ export type UploadFilesResult = {
 	skipped: number
 }
 
+export type UploadChunkState = {
+	present: number[]
+}
+
 function normalizeListObjectsResponse(
 	resp: ListObjectsResponse,
 	fallback: { bucket: string; prefix?: string; delimiter?: string },
@@ -568,22 +572,52 @@ export class APIClient {
 			concurrency?: number
 			maxBatchBytes?: number
 			maxBatchItems?: number
+			chunkSizeBytes?: number
+			chunkConcurrency?: number
+			chunkThresholdBytes?: number
+			chunkFileConcurrency?: number
+			existingChunkIndices?: number[]
+			existingChunksByPath?: Record<string, number[]>
+			chunkSizeBytesByPath?: Record<string, number>
 		} = {},
 	): { promise: Promise<UploadFilesResult>; abort: () => void } {
 		const concurrency = Math.max(1, args.concurrency ?? 1)
 		const maxBatchBytes = Math.max(1, args.maxBatchBytes ?? 64 * 1024 * 1024)
 		const maxBatchItems = Math.max(1, args.maxBatchItems ?? 50)
+		const chunkSizeBytes = Math.max(1, args.chunkSizeBytes ?? 128 * 1024 * 1024)
+		const chunkConcurrency = Math.max(1, args.chunkConcurrency ?? 8)
+		const chunkThresholdBytes = Math.max(1, args.chunkThresholdBytes ?? 256 * 1024 * 1024)
 		const totalBytes = files.reduce((acc, item) => acc + (item.file?.size ?? 0), 0)
 
 		if (files.length === 0) {
 			return { promise: Promise.resolve({ skipped: 0 }), abort: () => {} }
 		}
 
+		const isChunkedItem = (item: UploadFileItem) => {
+			const key = resolveUploadFilename(item)
+			if (args.chunkSizeBytesByPath?.[key]) return true
+			return (item.file?.size ?? 0) >= chunkThresholdBytes
+		}
+		const chunkedItems = files.filter(isChunkedItem)
+		const batchItems = files.filter((item) => !isChunkedItem(item))
+
+		if (files.length === 1 && chunkedItems.length === 1) {
+			const only = chunkedItems[0]
+			const key = resolveUploadFilename(only)
+			const existing = args.existingChunksByPath?.[key] ?? args.existingChunkIndices
+			return this.uploadFileChunksWithProgress(profileId, uploadId, only, {
+				onProgress: args.onProgress,
+				chunkSizeBytes: args.chunkSizeBytesByPath?.[key] ?? chunkSizeBytes,
+				chunkConcurrency,
+				existingChunkIndices: existing,
+			})
+		}
+
 		const batches: UploadFileItem[][] = []
 		const batchBytes: number[] = []
 		let current: UploadFileItem[] = []
 		let currentBytes = 0
-		for (const item of files) {
+		for (const item of batchItems) {
 			const size = item.file?.size ?? 0
 			const exceedsSize = currentBytes + size > maxBatchBytes
 			const exceedsCount = current.length >= maxBatchItems
@@ -602,12 +636,16 @@ export class APIClient {
 		}
 
 		const perBatchLoaded = new Array(batches.length).fill(0)
+		const chunkLoadedByPath = new Map<string, number>()
 		const aborters: Array<() => void> = []
 		let aborted = false
 
 		const emitProgress = () => {
 			if (!args.onProgress) return
-			const loadedBytes = perBatchLoaded.reduce((acc, v) => acc + v, 0)
+			let loadedBytes = perBatchLoaded.reduce((acc, v) => acc + v, 0)
+			for (const val of chunkLoadedByPath.values()) {
+				loadedBytes += val
+			}
 			args.onProgress({ loadedBytes, totalBytes: totalBytes || undefined })
 		}
 
@@ -654,7 +692,8 @@ export class APIClient {
 			return { promise, abort: () => xhr.abort() }
 		}
 
-		const promise = (async () => {
+		const runBatches = async () => {
+			if (batches.length === 0) return { skipped: 0 }
 			let nextIndex = 0
 			let skippedTotal = 0
 
@@ -683,6 +722,52 @@ export class APIClient {
 			const workers = Array.from({ length: Math.min(concurrency, batches.length) }, () => worker())
 			await Promise.all(workers)
 			return { skipped: skippedTotal }
+		}
+
+		const runChunked = async () => {
+			if (chunkedItems.length === 0) return { skipped: 0 }
+			let nextIndex = 0
+			const fileConcurrency = Math.min(Math.max(1, args.chunkFileConcurrency ?? 2), chunkedItems.length)
+
+			const worker = async () => {
+				while (true) {
+					if (aborted) return
+					const currentIndex = nextIndex
+					if (currentIndex >= chunkedItems.length) return
+					nextIndex += 1
+
+					const item = chunkedItems[currentIndex]
+					const key = resolveUploadFilename(item)
+					const handle = this.uploadFileChunksWithProgress(profileId, uploadId, item, {
+						onProgress: (p) => {
+							chunkLoadedByPath.set(key, p.loadedBytes)
+							emitProgress()
+						},
+						chunkSizeBytes: args.chunkSizeBytesByPath?.[key] ?? chunkSizeBytes,
+						chunkConcurrency,
+						existingChunkIndices: args.existingChunksByPath?.[key],
+					})
+					aborters.push(handle.abort)
+					try {
+						await handle.promise
+					} catch (err) {
+						if (!aborted) {
+							aborted = true
+							for (const abort of aborters) abort()
+						}
+						throw err
+					}
+				}
+			}
+
+			const workers = Array.from({ length: Math.min(fileConcurrency, chunkedItems.length) }, () => worker())
+			await Promise.all(workers)
+			return { skipped: 0 }
+		}
+
+		const promise = (async () => {
+			const [batchRes, chunkRes] = await Promise.all([runBatches(), runChunked()])
+			return { skipped: batchRes.skipped + chunkRes.skipped }
 		})()
 
 		return {
@@ -692,6 +777,147 @@ export class APIClient {
 				for (const abort of aborters) abort()
 			},
 		}
+	}
+
+	private uploadFileChunksWithProgress(
+		profileId: string,
+		uploadId: string,
+		item: UploadFileItem,
+		args: {
+			onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void
+			chunkSizeBytes: number
+			chunkConcurrency: number
+			existingChunkIndices?: number[]
+		},
+	): { promise: Promise<UploadFilesResult>; abort: () => void } {
+		const file = item.file
+		if (!file) {
+			return { promise: Promise.resolve({ skipped: 0 }), abort: () => {} }
+		}
+
+		const chunkSizeBytes = Math.max(1, args.chunkSizeBytes)
+		const totalChunks = Math.max(1, Math.ceil(file.size / chunkSizeBytes))
+		const perChunkLoaded = new Array(totalChunks).fill(0)
+		const existing = new Set<number>((args.existingChunkIndices ?? []).filter((idx) => idx >= 0 && idx < totalChunks))
+		const aborters: Array<() => void> = []
+		let aborted = false
+
+		const emitProgress = () => {
+			if (!args.onProgress) return
+			const loadedBytes = perChunkLoaded.reduce((acc, v) => acc + v, 0)
+			args.onProgress({ loadedBytes, totalBytes: file.size })
+		}
+
+		if (existing.size > 0) {
+			for (const index of existing) {
+				const start = index * chunkSizeBytes
+				const end = Math.min(file.size, start + chunkSizeBytes)
+				perChunkLoaded[index] = end - start
+			}
+			emitProgress()
+		}
+
+		const uploadChunk = (chunkIndex: number) =>
+			new Promise<void>((resolve, reject) => {
+				const start = chunkIndex * chunkSizeBytes
+				const end = Math.min(file.size, start + chunkSizeBytes)
+				const blob = file.slice(start, end)
+
+				const xhr = new XMLHttpRequest()
+				xhr.open('POST', this.baseUrl + `/uploads/${encodeURIComponent(uploadId)}/files`)
+				xhr.setRequestHeader('X-Profile-Id', profileId)
+				if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+				xhr.setRequestHeader('X-Upload-Chunk-Index', String(chunkIndex))
+				xhr.setRequestHeader('X-Upload-Chunk-Total', String(totalChunks))
+				xhr.setRequestHeader('X-Upload-Chunk-Size', String(chunkSizeBytes))
+				xhr.setRequestHeader('X-Upload-File-Size', String(file.size))
+				xhr.setRequestHeader('X-Upload-Relative-Path', resolveUploadFilename(item))
+
+				xhr.upload.onprogress = (e) => {
+					if (aborted) return
+					perChunkLoaded[chunkIndex] = e.loaded
+					emitProgress()
+				}
+
+				xhr.onerror = () => {
+					if (aborted) return
+					reject(new Error('network error'))
+				}
+				xhr.onabort = () => {
+					reject(new RequestAbortedError())
+				}
+				xhr.onload = () => {
+					if (xhr.status >= 200 && xhr.status < 300) {
+						perChunkLoaded[chunkIndex] = end - start
+						emitProgress()
+						resolve()
+						return
+					}
+					reject(parseAPIError(xhr.status, xhr.responseText))
+				}
+
+				xhr.send(blob)
+				aborters.push(() => xhr.abort())
+			})
+
+		const promise = new Promise<UploadFilesResult>((resolve, reject) => {
+			let inFlight = 0
+			let nextIndex = 0
+			const startNext = () => {
+				if (aborted) return
+				while (nextIndex < totalChunks && existing.has(nextIndex)) {
+					nextIndex += 1
+				}
+				if (nextIndex >= totalChunks && inFlight === 0) {
+					resolve({ skipped: 0 })
+					return
+				}
+				while (inFlight < args.chunkConcurrency && nextIndex < totalChunks) {
+					const current = nextIndex
+					nextIndex += 1
+					while (nextIndex < totalChunks && existing.has(nextIndex)) {
+						nextIndex += 1
+					}
+					inFlight += 1
+					uploadChunk(current)
+						.then(() => {
+							inFlight -= 1
+							if (nextIndex >= totalChunks && inFlight === 0) {
+								resolve({ skipped: 0 })
+								return
+							}
+							startNext()
+						})
+						.catch((err) => {
+							aborted = true
+							for (const abort of aborters) abort()
+							reject(err)
+						})
+				}
+			}
+			startNext()
+		})
+
+		return {
+			promise,
+			abort: () => {
+				aborted = true
+				for (const abort of aborters) abort()
+			},
+		}
+	}
+
+	getUploadChunks(
+		profileId: string,
+		uploadId: string,
+		args: { path: string; total: number; chunkSize: number; fileSize: number },
+	): Promise<UploadChunkState> {
+		const params = new URLSearchParams()
+		params.set('path', args.path)
+		params.set('total', String(args.total))
+		params.set('chunkSize', String(args.chunkSize))
+		params.set('fileSize', String(args.fileSize))
+		return this.request(`/uploads/${encodeURIComponent(uploadId)}/chunks?${params.toString()}`, { method: 'GET' }, { profileId })
 	}
 
 	downloadObject(

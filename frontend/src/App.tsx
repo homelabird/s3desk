@@ -88,6 +88,8 @@ export default function App() {
 		[],
 	)
 
+	const uploadDirectStream = metaQuery.data?.uploadDirectStream ?? false
+
 	const openSettings = () => setSettingsOpenState(true)
 	const closeSettings = () => {
 		setSettingsOpenState(false)
@@ -157,7 +159,7 @@ export default function App() {
 	}
 
 	return (
-		<TransfersProvider apiToken={apiToken}>
+		<TransfersProvider apiToken={apiToken} uploadDirectStream={uploadDirectStream}>
 			<Layout style={{ minHeight: '100dvh' }}>
 				{isDesktop ? (
 					<Sider width={220}>

@@ -87,6 +87,7 @@ jobs:
 uploads:
   ttl: "24h"
   maxBytes: 0
+  directStream: false
 
 rclone:
   path: ""

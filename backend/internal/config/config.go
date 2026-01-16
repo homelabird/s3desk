@@ -26,6 +26,7 @@ type Config struct {
 	JobLogRetention                    time.Duration
 	UploadSessionTTL                   time.Duration
 	UploadMaxBytes                     int64
+	UploadDirectStream                 bool
 	RcloneDownloadMultiThreadStreams   int
 	RcloneDownloadMultiThreadCutoffMiB int
 	RcloneDownloadBufferSizeMiB        int

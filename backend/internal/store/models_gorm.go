@@ -58,6 +58,21 @@ type uploadSessionRow struct {
 
 func (uploadSessionRow) TableName() string { return "upload_sessions" }
 
+type uploadMultipartRow struct {
+	UploadID   string `gorm:"column:upload_id;primaryKey"`
+	ProfileID  string `gorm:"column:profile_id"`
+	Path       string `gorm:"column:path;primaryKey"`
+	Bucket     string `gorm:"column:bucket"`
+	ObjectKey  string `gorm:"column:object_key"`
+	S3UploadID string `gorm:"column:s3_upload_id"`
+	ChunkSize  int64  `gorm:"column:chunk_size"`
+	FileSize   int64  `gorm:"column:file_size"`
+	CreatedAt  string `gorm:"column:created_at"`
+	UpdatedAt  string `gorm:"column:updated_at"`
+}
+
+func (uploadMultipartRow) TableName() string { return "upload_multipart_uploads" }
+
 type objectIndexRow struct {
 	ProfileID    string  `gorm:"column:profile_id;primaryKey"`
 	Bucket       string  `gorm:"column:bucket;primaryKey"`

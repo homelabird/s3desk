@@ -156,6 +156,23 @@ func migrate(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_upload_sessions_profile_id ON upload_sessions(profile_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_upload_sessions_expires_at ON upload_sessions(expires_at);`,
 
+		`CREATE TABLE IF NOT EXISTS upload_multipart_uploads (
+			upload_id TEXT NOT NULL,
+			profile_id TEXT NOT NULL,
+			path TEXT NOT NULL,
+			bucket TEXT NOT NULL,
+			object_key TEXT NOT NULL,
+			s3_upload_id TEXT NOT NULL,
+			chunk_size BIGINT NOT NULL,
+			file_size BIGINT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(upload_id, path),
+			FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_upload_multipart_uploads_profile_id ON upload_multipart_uploads(profile_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_upload_multipart_uploads_upload_id ON upload_multipart_uploads(upload_id);`,
+
 		`CREATE TABLE IF NOT EXISTS object_index (
 			profile_id TEXT NOT NULL,
 			bucket TEXT NOT NULL,

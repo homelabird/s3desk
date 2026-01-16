@@ -103,6 +103,7 @@ func New(dep Dependencies) http.Handler {
 		r.Route("/uploads", func(r chi.Router) {
 			r.Post("/", api.handleCreateUpload)
 			r.Post("/{uploadId}/files", api.handleUploadFiles)
+			r.Get("/{uploadId}/chunks", api.handleGetUploadChunks)
 			r.Post("/{uploadId}/commit", api.handleCommitUpload)
 			r.Delete("/{uploadId}", api.handleDeleteUpload)
 		})

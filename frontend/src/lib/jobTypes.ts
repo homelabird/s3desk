@@ -19,6 +19,12 @@ const JOB_TYPES: JobTypeInfo[] = [
 		description: 'Internal stage used by the upload pipeline (staging → S3).',
 	},
 	{
+		type: 'transfer_direct_upload',
+		category: 'transfer',
+		label: 'Upload (direct stream → S3)',
+		description: 'Streams uploads directly from the client to S3 without staging.',
+	},
+	{
 		type: 'transfer_sync_s3_to_local',
 		category: 'transfer',
 		label: 'Download folder (S3 → device)',

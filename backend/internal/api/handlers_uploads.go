@@ -1,22 +1,28 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/jobs"
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -41,7 +47,6 @@ func (s *server) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresAt := time.Now().UTC().Add(s.cfg.UploadSessionTTL).Format(time.RFC3339Nano)
-	stagingBase := filepath.Join(s.cfg.DataDir, "staging")
 
 	us, err := s.store.CreateUploadSession(r.Context(), profileID, req.Bucket, req.Prefix, "", expiresAt)
 	if err != nil {
@@ -49,16 +54,19 @@ func (s *server) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stagingDir := filepath.Join(stagingBase, us.ID)
-	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
-		_, _ = s.store.DeleteUploadSession(r.Context(), profileID, us.ID)
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create staging directory", nil)
-		return
-	}
+	if !s.cfg.UploadDirectStream {
+		stagingBase := filepath.Join(s.cfg.DataDir, "staging")
+		stagingDir := filepath.Join(stagingBase, us.ID)
+		if err := os.MkdirAll(stagingDir, 0o700); err != nil {
+			_, _ = s.store.DeleteUploadSession(r.Context(), profileID, us.ID)
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create staging directory", nil)
+			return
+		}
 
-	if err := s.store.SetUploadSessionStagingDir(r.Context(), profileID, us.ID, stagingDir); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to finalize upload session", nil)
-		return
+		if err := s.store.SetUploadSessionStagingDir(r.Context(), profileID, us.ID, stagingDir); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to finalize upload session", nil)
+			return
+		}
 	}
 
 	var maxBytes *int64
@@ -91,7 +99,7 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "upload session not found", map[string]any{"uploadId": uploadID})
 		return
 	}
-	if us.StagingDir == "" {
+	if us.StagingDir == "" && !s.cfg.UploadDirectStream {
 		writeError(w, http.StatusInternalServerError, "internal_error", "upload session is missing staging directory", nil)
 		return
 	}
@@ -101,6 +109,314 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "expired", "upload session expired", nil)
 			return
 		}
+	}
+
+	chunkIndexRaw := strings.TrimSpace(r.Header.Get("X-Upload-Chunk-Index"))
+	if s.cfg.UploadDirectStream && chunkIndexRaw != "" {
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal_error", "upload session not found", nil)
+			return
+		}
+		secrets, ok := profileFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal_error", "missing profile secrets", nil)
+			return
+		}
+		if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+			writeError(w, http.StatusBadRequest, "not_supported", "direct streaming multipart uploads require an S3-compatible provider", nil)
+			return
+		}
+
+		chunkTotalRaw := strings.TrimSpace(r.Header.Get("X-Upload-Chunk-Total"))
+		relPath := sanitizeUploadPath(r.Header.Get("X-Upload-Relative-Path"))
+		if chunkTotalRaw == "" || relPath == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "chunk uploads require X-Upload-Chunk-Total and X-Upload-Relative-Path", nil)
+			return
+		}
+		chunkIndex, err := strconv.Atoi(chunkIndexRaw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-Chunk-Index", map[string]any{"error": err.Error()})
+			return
+		}
+		chunkTotal, err := strconv.Atoi(chunkTotalRaw)
+		if err != nil || chunkTotal <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-Chunk-Total", map[string]any{"error": err.Error()})
+			return
+		}
+		if chunkIndex < 0 || chunkIndex >= chunkTotal {
+			writeError(w, http.StatusBadRequest, "invalid_request", "chunk index out of range", map[string]any{"index": chunkIndex})
+			return
+		}
+
+		chunkSizeRaw := strings.TrimSpace(r.Header.Get("X-Upload-Chunk-Size"))
+		chunkSize, err := strconv.ParseInt(chunkSizeRaw, 10, 64)
+		if err != nil || chunkSize <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-Chunk-Size", map[string]any{"chunkSize": chunkSizeRaw})
+			return
+		}
+		fileSizeRaw := strings.TrimSpace(r.Header.Get("X-Upload-File-Size"))
+		fileSize, err := strconv.ParseInt(fileSizeRaw, 10, 64)
+		if err != nil || fileSize <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-File-Size", map[string]any{"fileSize": fileSizeRaw})
+			return
+		}
+		if s.cfg.UploadMaxBytes > 0 && fileSize > s.cfg.UploadMaxBytes {
+			writeError(w, http.StatusRequestEntityTooLarge, "too_large", "upload exceeds maxBytes", map[string]any{"maxBytes": s.cfg.UploadMaxBytes})
+			return
+		}
+
+		key := relPath
+		if us.Prefix != "" {
+			key = path.Join(us.Prefix, relPath)
+		}
+
+		client, err := s3ClientFromProfile(secrets)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare multipart client", nil)
+			return
+		}
+
+		meta, found, err := s.store.GetMultipartUpload(r.Context(), profileID, uploadID, relPath)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load multipart upload", nil)
+			return
+		}
+
+		expectedChunkSize := chunkSize
+		if chunkIndex == chunkTotal-1 {
+			expectedChunkSize = chunkSize
+		}
+
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		if found {
+			if meta.FileSize != fileSize || meta.ChunkSize <= 0 {
+				if err := s.abortMultipartUpload(r.Context(), client, meta); err != nil {
+					writeError(w, http.StatusBadGateway, "upload_failed", "failed to reset multipart upload", nil)
+					return
+				}
+				_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, relPath)
+				found = false
+			} else if meta.ChunkSize != chunkSize && chunkIndex < chunkTotal-1 {
+				writeError(w, http.StatusBadRequest, "invalid_request", "chunk size mismatch", map[string]any{"chunkSize": chunkSize})
+				return
+			}
+		}
+
+		if !found {
+			resp, err := client.CreateMultipartUpload(r.Context(), &s3.CreateMultipartUploadInput{
+				Bucket: &us.Bucket,
+				Key:    &key,
+			})
+			if err != nil || resp.UploadId == nil || *resp.UploadId == "" {
+				writeError(w, http.StatusBadGateway, "upload_failed", "failed to create multipart upload", map[string]any{"error": err.Error()})
+				return
+			}
+			meta = store.MultipartUpload{
+				UploadID:   uploadID,
+				ProfileID:  profileID,
+				Path:       relPath,
+				Bucket:     us.Bucket,
+				ObjectKey:  key,
+				S3UploadID: *resp.UploadId,
+				ChunkSize:  expectedChunkSize,
+				FileSize:   fileSize,
+				CreatedAt:  now,
+				UpdatedAt:  now,
+			}
+		} else {
+			meta.UpdatedAt = now
+		}
+
+		if err := s.store.UpsertMultipartUpload(r.Context(), meta); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist multipart upload", nil)
+			return
+		}
+
+		partNumber := int32(chunkIndex + 1)
+		contentLength := chunkSize
+		if chunkIndex == chunkTotal-1 {
+			remaining := fileSize - (int64(chunkTotal-1) * meta.ChunkSize)
+			if remaining > 0 && remaining < contentLength {
+				contentLength = remaining
+			}
+		}
+
+		_, err = client.UploadPart(r.Context(), &s3.UploadPartInput{
+			Bucket:        &us.Bucket,
+			Key:           &key,
+			PartNumber:    &partNumber,
+			UploadId:      &meta.S3UploadID,
+			Body:          r.Body,
+			ContentLength: &contentLength,
+		})
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "upload_failed", "failed to upload multipart part", map[string]any{"error": err.Error()})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if s.cfg.UploadDirectStream {
+		secrets, ok := profileFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal_error", "missing profile secrets", nil)
+			return
+		}
+
+		reader, err := r.MultipartReader()
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "expected multipart/form-data", map[string]any{"error": err.Error()})
+			return
+		}
+
+		maxBytes := s.cfg.UploadMaxBytes
+		remainingBytes := int64(-1)
+		if maxBytes > 0 {
+			remainingBytes = maxBytes
+		}
+
+		written := 0
+		skipped := 0
+		for {
+			part, err := reader.NextPart()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_request", "failed to read multipart upload", map[string]any{"error": err.Error()})
+				return
+			}
+			if part.FormName() != "files" {
+				_ = part.Close()
+				continue
+			}
+
+			relPath := safeUploadPath(part)
+			if relPath == "" {
+				_ = part.Close()
+				skipped++
+				continue
+			}
+			key := relPath
+			if us.Prefix != "" {
+				key = path.Join(us.Prefix, relPath)
+			}
+
+			source := io.Reader(part)
+			if remainingBytes >= 0 {
+				source = io.LimitReader(source, remainingBytes+1)
+			}
+			counter := &countingReader{r: source}
+			target := rcloneRemoteObject(us.Bucket, key, secrets.PreserveLeadingSlash)
+			stderr, err := s.runRcloneStdin(r.Context(), secrets, []string{"rcat", target}, "upload-stream", counter)
+			_ = part.Close()
+			if err != nil {
+				writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+					MissingMessage: "rclone is required to stream uploads (install it or set RCLONE_PATH)",
+					DefaultStatus:  http.StatusBadGateway,
+					DefaultCode:    "upload_failed",
+					DefaultMessage: "failed to stream upload",
+				}, map[string]any{"path": relPath})
+				return
+			}
+
+			if remainingBytes >= 0 {
+				if counter.n > remainingBytes {
+					_, _, _ = s.runRcloneCapture(r.Context(), secrets, []string{"deletefile", target}, "upload-stream-cleanup")
+					writeError(w, http.StatusRequestEntityTooLarge, "too_large", "upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
+					return
+				}
+				remainingBytes -= counter.n
+			}
+			written++
+		}
+
+		if written == 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "no files uploaded", nil)
+			return
+		}
+		if skipped > 0 {
+			w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if chunkIndexRaw != "" {
+		chunkTotalRaw := strings.TrimSpace(r.Header.Get("X-Upload-Chunk-Total"))
+		relPath := sanitizeUploadPath(r.Header.Get("X-Upload-Relative-Path"))
+		if chunkTotalRaw == "" || relPath == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "chunk uploads require X-Upload-Chunk-Total and X-Upload-Relative-Path", nil)
+			return
+		}
+		chunkIndex, err := strconv.Atoi(chunkIndexRaw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-Chunk-Index", map[string]any{"error": err.Error()})
+			return
+		}
+		chunkTotal, err := strconv.Atoi(chunkTotalRaw)
+		if err != nil || chunkTotal <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-Chunk-Total", map[string]any{"error": err.Error()})
+			return
+		}
+		if chunkIndex < 0 || chunkIndex >= chunkTotal {
+			writeError(w, http.StatusBadRequest, "invalid_request", "chunk index out of range", map[string]any{"index": chunkIndex})
+			return
+		}
+
+		relOS := filepath.FromSlash(relPath)
+		chunkDir := filepath.Join(us.StagingDir, ".chunks", relOS)
+		if !isUnderDir(us.StagingDir, chunkDir) {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload path", map[string]any{"path": relPath})
+			return
+		}
+		if err := os.MkdirAll(chunkDir, 0o700); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create chunk directory", map[string]any{"error": err.Error()})
+			return
+		}
+
+		maxBytes := s.cfg.UploadMaxBytes
+		remainingBytes := int64(-1)
+		if maxBytes > 0 {
+			current, err := dirSize(us.StagingDir)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "internal_error", "failed to check upload size", map[string]any{"error": err.Error()})
+				return
+			}
+			remainingBytes = maxBytes - current
+			if remainingBytes <= 0 {
+				writeError(w, http.StatusRequestEntityTooLarge, "too_large", "upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
+				return
+			}
+		}
+
+		chunkPath := filepath.Join(chunkDir, chunkPartName(chunkIndex))
+		if maxBytes > 0 && remainingBytes <= 0 {
+			writeError(w, http.StatusRequestEntityTooLarge, "too_large", "upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
+			return
+		}
+		defer func() { _ = r.Body.Close() }()
+		n, err := writeReaderToFile(r.Body, chunkPath, remainingBytes)
+		if err != nil {
+			if errors.Is(err, errUploadTooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, "too_large", "upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to store chunk", map[string]any{"error": err.Error()})
+			return
+		}
+		if maxBytes > 0 {
+			remainingBytes -= n
+		}
+
+		if err := tryAssembleChunkFile(us.StagingDir, relOS, chunkDir, chunkTotal); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to assemble upload", map[string]any{"error": err.Error()})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 
 	reader, err := r.MultipartReader()
@@ -193,6 +509,196 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *server) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.UploadDirectStream {
+		profileID := r.Header.Get("X-Profile-Id")
+		uploadID := chi.URLParam(r, "uploadId")
+		if profileID == "" || uploadID == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "profile and uploadId are required", nil)
+			return
+		}
+
+		pathRaw := sanitizeUploadPath(r.URL.Query().Get("path"))
+		if pathRaw == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "path is required", nil)
+			return
+		}
+		chunkSizeRaw := r.URL.Query().Get("chunkSize")
+		chunkSize, err := strconv.ParseInt(chunkSizeRaw, 10, 64)
+		if err != nil || chunkSize <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid chunkSize", map[string]any{"chunkSize": chunkSizeRaw})
+			return
+		}
+		fileSizeRaw := r.URL.Query().Get("fileSize")
+		fileSize, err := strconv.ParseInt(fileSizeRaw, 10, 64)
+		if err != nil || fileSize <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid fileSize", map[string]any{"fileSize": fileSizeRaw})
+			return
+		}
+
+		meta, ok, err := s.store.GetMultipartUpload(r.Context(), profileID, uploadID, pathRaw)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load multipart upload", nil)
+			return
+		}
+		if !ok || meta.FileSize != fileSize || meta.ChunkSize != chunkSize {
+			writeError(w, http.StatusNotFound, "not_found", "multipart upload not found", nil)
+			return
+		}
+
+		secrets, ok := profileFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal_error", "missing profile secrets", nil)
+			return
+		}
+		client, err := s3ClientFromProfile(secrets)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare multipart client", nil)
+			return
+		}
+
+		parts, err := s.listMultipartParts(r.Context(), client, meta)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "upload_failed", "failed to list multipart parts", map[string]any{"error": err.Error()})
+			return
+		}
+
+		expectedTotal := int(math.Ceil(float64(meta.FileSize) / float64(meta.ChunkSize)))
+		present := make([]int, 0, len(parts))
+		for _, part := range parts {
+			if part.PartNumber == nil {
+				continue
+			}
+			index := int(*part.PartNumber) - 1
+			if index < 0 || index >= expectedTotal {
+				continue
+			}
+			expected := meta.ChunkSize
+			if index == expectedTotal-1 {
+				remaining := meta.FileSize - (int64(expectedTotal-1) * meta.ChunkSize)
+				if remaining > 0 {
+					expected = remaining
+				}
+			}
+			if part.Size == nil || *part.Size != expected {
+				continue
+			}
+			present = append(present, index)
+		}
+
+		writeJSON(w, http.StatusOK, models.UploadChunkState{Present: present})
+		return
+	}
+
+	profileID := r.Header.Get("X-Profile-Id")
+	uploadID := chi.URLParam(r, "uploadId")
+	if profileID == "" || uploadID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "profile and uploadId are required", nil)
+		return
+	}
+
+	pathRaw := sanitizeUploadPath(r.URL.Query().Get("path"))
+	if pathRaw == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "path is required", nil)
+		return
+	}
+	totalRaw := r.URL.Query().Get("total")
+	total, err := strconv.Atoi(totalRaw)
+	if err != nil || total <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid total", map[string]any{"total": totalRaw})
+		return
+	}
+	chunkSizeRaw := r.URL.Query().Get("chunkSize")
+	chunkSize, err := strconv.ParseInt(chunkSizeRaw, 10, 64)
+	if err != nil || chunkSize <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid chunkSize", map[string]any{"chunkSize": chunkSizeRaw})
+		return
+	}
+	fileSizeRaw := r.URL.Query().Get("fileSize")
+	fileSize, err := strconv.ParseInt(fileSizeRaw, 10, 64)
+	if err != nil || fileSize <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid fileSize", map[string]any{"fileSize": fileSizeRaw})
+		return
+	}
+
+	us, ok, err := s.store.GetUploadSession(r.Context(), profileID, uploadID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load upload session", nil)
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "upload session not found", map[string]any{"uploadId": uploadID})
+		return
+	}
+	if us.StagingDir == "" {
+		writeError(w, http.StatusInternalServerError, "internal_error", "upload session is missing staging directory", nil)
+		return
+	}
+	if expiresAt, err := time.Parse(time.RFC3339Nano, us.ExpiresAt); err == nil {
+		if time.Now().UTC().After(expiresAt) {
+			writeError(w, http.StatusBadRequest, "expired", "upload session expired", nil)
+			return
+		}
+	}
+
+	relOS := filepath.FromSlash(pathRaw)
+	chunkDir := filepath.Join(us.StagingDir, ".chunks", relOS)
+	if !isUnderDir(us.StagingDir, chunkDir) {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload path", map[string]any{"path": pathRaw})
+		return
+	}
+
+	present := make([]int, 0, total)
+	for i := 0; i < total; i++ {
+		partPath := filepath.Join(chunkDir, chunkPartName(i))
+		info, err := os.Stat(partPath)
+		if err != nil {
+			continue
+		}
+		expected := chunkSize
+		if i == total-1 {
+			remaining := fileSize - (int64(total-1) * chunkSize)
+			if remaining > 0 {
+				expected = remaining
+			}
+		}
+		if expected > 0 && info.Size() != expected {
+			_ = os.Remove(partPath)
+			continue
+		}
+		present = append(present, i)
+	}
+
+	writeJSON(w, http.StatusOK, models.UploadChunkState{Present: present})
+}
+
+func (s *server) listMultipartParts(ctx context.Context, client *s3.Client, meta store.MultipartUpload) ([]types.Part, error) {
+	input := &s3.ListPartsInput{
+		Bucket:   &meta.Bucket,
+		Key:      &meta.ObjectKey,
+		UploadId: &meta.S3UploadID,
+	}
+	paginator := s3.NewListPartsPaginator(client, input)
+	parts := make([]types.Part, 0, 16)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, page.Parts...)
+	}
+	return parts, nil
+}
+
+func (s *server) abortMultipartUpload(ctx context.Context, client *s3.Client, meta store.MultipartUpload) error {
+	_, err := client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+		Bucket:   &meta.Bucket,
+		Key:      &meta.ObjectKey,
+		UploadId: &meta.S3UploadID,
+	})
+	return err
+}
+
 func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	profileID := r.Header.Get("X-Profile-Id")
 	uploadID := chi.URLParam(r, "uploadId")
@@ -208,11 +714,6 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if !ok {
 		writeError(w, http.StatusNotFound, "not_found", "upload session not found", map[string]any{"uploadId": uploadID})
-		return
-	}
-
-	if _, ok := jobs.DetectRclone(); !ok {
-		writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required to commit an upload (install it or set RCLONE_PATH)", nil)
 		return
 	}
 
@@ -285,6 +786,127 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	if itemsTruncated {
 		payload["itemsTruncated"] = true
+	}
+
+	if s.cfg.UploadDirectStream {
+		secrets, ok := profileFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "internal_error", "missing profile secrets", nil)
+			return
+		}
+		if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+			writeError(w, http.StatusBadRequest, "not_supported", "direct streaming multipart uploads require an S3-compatible provider", nil)
+			return
+		}
+
+		multipartUploads, err := s.store.ListMultipartUploads(r.Context(), profileID, uploadID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load multipart uploads", nil)
+			return
+		}
+
+		if len(multipartUploads) > 0 {
+			client, err := s3ClientFromProfile(secrets)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare multipart client", nil)
+				return
+			}
+
+			for _, meta := range multipartUploads {
+				if meta.ChunkSize <= 0 || meta.FileSize <= 0 {
+					writeError(w, http.StatusBadRequest, "invalid_request", "multipart metadata missing size", map[string]any{"path": meta.Path})
+					return
+				}
+				parts, err := s.listMultipartParts(r.Context(), client, meta)
+				if err != nil {
+					writeError(w, http.StatusBadGateway, "upload_failed", "failed to list multipart parts", map[string]any{"path": meta.Path})
+					return
+				}
+				expectedTotal := int(math.Ceil(float64(meta.FileSize) / float64(meta.ChunkSize)))
+				partByNumber := make(map[int32]types.Part, len(parts))
+				for _, part := range parts {
+					if part.PartNumber == nil {
+						continue
+					}
+					partByNumber[*part.PartNumber] = part
+				}
+				if len(partByNumber) < expectedTotal {
+					writeError(w, http.StatusBadRequest, "upload_incomplete", "multipart upload is missing parts", map[string]any{"path": meta.Path})
+					return
+				}
+				completed := make([]types.CompletedPart, 0, expectedTotal)
+				for i := 1; i <= expectedTotal; i++ {
+					part, ok := partByNumber[int32(i)]
+					if !ok || part.ETag == nil {
+						writeError(w, http.StatusBadRequest, "upload_incomplete", "multipart upload is missing parts", map[string]any{"path": meta.Path})
+						return
+					}
+					completed = append(completed, types.CompletedPart{
+						ETag:       part.ETag,
+						PartNumber: part.PartNumber,
+					})
+				}
+
+				_, err = client.CompleteMultipartUpload(r.Context(), &s3.CompleteMultipartUploadInput{
+					Bucket:   &meta.Bucket,
+					Key:      &meta.ObjectKey,
+					UploadId: &meta.S3UploadID,
+					MultipartUpload: &types.CompletedMultipartUpload{
+						Parts: completed,
+					},
+				})
+				if err != nil {
+					writeError(w, http.StatusBadGateway, "upload_failed", "failed to complete multipart upload", map[string]any{"path": meta.Path})
+					return
+				}
+				_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, meta.Path)
+			}
+		}
+
+		job, err := s.store.CreateJob(r.Context(), profileID, store.CreateJobInput{
+			Type:    jobs.JobTypeTransferDirectUpload,
+			Payload: payload,
+		})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create job", nil)
+			return
+		}
+
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		var progress *models.JobProgress
+		if req.TotalBytes != nil || req.TotalFiles != nil {
+			p := models.JobProgress{}
+			if req.TotalBytes != nil && *req.TotalBytes >= 0 {
+				total := *req.TotalBytes
+				p.BytesTotal = &total
+				p.BytesDone = &total
+			}
+			if req.TotalFiles != nil && *req.TotalFiles >= 0 {
+				total := int64(*req.TotalFiles)
+				p.ObjectsTotal = &total
+				p.ObjectsDone = &total
+			}
+			progress = &p
+		}
+		if err := s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusSucceeded, &now, &now, progress, nil, nil); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to finalize job", nil)
+			return
+		}
+
+		_ = s.store.DeleteMultipartUploadsBySession(r.Context(), profileID, uploadID)
+		_, _ = s.store.DeleteUploadSession(r.Context(), profileID, uploadID)
+		payload := map[string]any{"status": models.JobStatusSucceeded}
+		if progress != nil {
+			payload["progress"] = progress
+		}
+		s.hub.Publish(ws.Event{Type: "job.completed", JobID: job.ID, Payload: payload})
+		writeJSON(w, http.StatusCreated, models.JobCreatedResponse{JobID: job.ID})
+		return
+	}
+
+	if _, ok := jobs.DetectRclone(); !ok {
+		writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required to commit an upload (install it or set RCLONE_PATH)", nil)
+		return
 	}
 
 	job, err := s.store.CreateJob(r.Context(), profileID, store.CreateJobInput{
@@ -366,6 +988,20 @@ func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.cfg.UploadDirectStream {
+		secrets, ok := profileFromContext(r.Context())
+		if ok && rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+			if client, err := s3ClientFromProfile(secrets); err == nil {
+				if uploads, err := s.store.ListMultipartUploads(r.Context(), profileID, uploadID); err == nil {
+					for _, meta := range uploads {
+						_ = s.abortMultipartUpload(r.Context(), client, meta)
+					}
+				}
+			}
+		}
+		_ = s.store.DeleteMultipartUploadsBySession(r.Context(), profileID, uploadID)
+	}
+
 	_, _ = s.store.DeleteUploadSession(r.Context(), profileID, uploadID)
 	if us.StagingDir != "" {
 		_ = os.RemoveAll(us.StagingDir)
@@ -418,6 +1054,17 @@ func uniqueFilePath(dir, filename string) string {
 
 var errUploadTooLarge = errors.New("upload too large")
 
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
 func writePartToFile(part *multipart.Part, dstPath string, maxBytes int64) (int64, error) {
 	defer func() { _ = part.Close() }()
 
@@ -450,6 +1097,105 @@ func writePartToFile(part *multipart.Part, dstPath string, maxBytes int64) (int6
 		return n, err
 	}
 	return n, nil
+}
+
+func writeReaderToFile(r io.Reader, dstPath string, maxBytes int64) (int64, error) {
+	tmpPath := dstPath + ".tmp"
+	// #nosec G304 -- tmpPath is derived from the upload staging directory.
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return 0, err
+	}
+	var reader io.Reader = r
+	if maxBytes >= 0 {
+		reader = io.LimitReader(r, maxBytes+1)
+	}
+	buf := make([]byte, 4*1024*1024)
+	n, copyErr := io.CopyBuffer(f, reader, buf)
+	closeErr := f.Close()
+	if copyErr != nil {
+		_ = os.Remove(tmpPath)
+		return n, copyErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(tmpPath)
+		return n, closeErr
+	}
+	if maxBytes >= 0 && n > maxBytes {
+		_ = os.Remove(tmpPath)
+		return n, errUploadTooLarge
+	}
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return n, err
+	}
+	return n, nil
+}
+
+func chunkPartName(index int) string {
+	return fmt.Sprintf("part-%06d", index)
+}
+
+func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int) error {
+	if totalChunks <= 0 {
+		return nil
+	}
+	for i := 0; i < totalChunks; i++ {
+		if _, err := os.Stat(filepath.Join(chunkDir, chunkPartName(i))); err != nil {
+			return nil
+		}
+	}
+
+	lockPath := filepath.Join(chunkDir, ".assemble.lock")
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil
+	}
+	_ = lock.Close()
+	defer func() { _ = os.Remove(lockPath) }()
+
+	finalPath := filepath.Join(stagingDir, relOS)
+	dstDir := filepath.Dir(finalPath)
+	if !isUnderDir(stagingDir, dstDir) {
+		return fmt.Errorf("invalid upload path")
+	}
+	if err := os.MkdirAll(dstDir, 0o700); err != nil {
+		return err
+	}
+
+	tmpPath := finalPath + ".tmp"
+	// #nosec G304 -- tmpPath is derived from the upload staging directory.
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < totalChunks; i++ {
+		partPath := filepath.Join(chunkDir, chunkPartName(i))
+		part, err := os.Open(partPath)
+		if err != nil {
+			_ = f.Close()
+			_ = os.Remove(tmpPath)
+			return err
+		}
+		if _, err := io.Copy(f, part); err != nil {
+			_ = part.Close()
+			_ = f.Close()
+			_ = os.Remove(tmpPath)
+			return err
+		}
+		_ = part.Close()
+		_ = os.Remove(partPath)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	_ = os.RemoveAll(chunkDir)
+	return nil
 }
 
 func dirSize(root string) (int64, error) {

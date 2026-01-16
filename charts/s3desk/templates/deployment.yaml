@@ -74,6 +74,8 @@ spec:
               value: {{ .Values.uploads.ttl | quote }}
             - name: UPLOAD_MAX_BYTES
               value: {{ .Values.uploads.maxBytes | quote }}
+            - name: UPLOAD_DIRECT_STREAM
+              value: {{ .Values.uploads.directStream | quote }}
             - name: RCLONE_TUNE
               value: {{ .Values.rclone.tune | quote }}
             {{- if .Values.server.staticDir }}

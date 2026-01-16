@@ -56,6 +56,7 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		JobLogRetentionSeconds:  jobLogRetentionSeconds,
 		UploadSessionTTLSeconds: int64(s.cfg.UploadSessionTTL.Seconds()),
 		UploadMaxBytes:          uploadMaxBytes,
+		UploadDirectStream:      s.cfg.UploadDirectStream,
 		TransferEngine: models.TransferEngineInfo{
 			Name:       "rclone",
 			Available:  ok,
