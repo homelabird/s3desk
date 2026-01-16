@@ -30,6 +30,46 @@ export function getRecoveryHint(err: unknown): string | undefined {
 			// This is often the remote-access guard or an origin/host restriction.
 			return 'Forbidden. If this is your own server, try localhost or verify ALLOW_REMOTE / ALLOWED_HOSTS / ALLOWED_ORIGINS.'
 		}
+
+		// Provider-agnostic normalized errors (derived from rclone stderr)
+		const norm = err.normalizedError
+		if (norm?.code === 'invalid_credentials') {
+			return 'Invalid credentials. Double-check access keys / account key / service account JSON.'
+		}
+		if (norm?.code === 'access_denied') {
+			return 'Access denied. Check IAM permissions, bucket policies, and whether the credentials match the target.'
+		}
+		if (norm?.code === 'not_found') {
+			return 'Not found. The bucket/object may not exist, or the credentials cannot see it.'
+		}
+		if (norm?.code === 'rate_limited') {
+			const wait = typeof err.retryAfterSeconds === 'number' ? ` Retry-After: ${err.retryAfterSeconds}s` : ''
+			return `Rate limited by provider.${wait} Try again after a short delay.`
+		}
+		if (norm?.code === 'signature_mismatch') {
+			return 'Signature mismatch. Common causes: wrong secret key, wrong region, clock skew, or path-style setting.'
+		}
+		if (norm?.code === 'request_time_skewed') {
+			return 'Request time skewed. Check server/system time (NTP) and try again.'
+		}
+		if (norm?.code === 'invalid_config') {
+			return 'Invalid configuration. Re-check endpoint/region and provider-specific fields.'
+		}
+		if (norm?.code === 'endpoint_unreachable') {
+			return 'Endpoint unreachable. Verify the endpoint URL, DNS, and network access from the server.'
+		}
+		if (norm?.code === 'upstream_timeout') {
+			return 'Upstream timeout. Provider or network is slow; retry later.'
+		}
+		if (norm?.code === 'network_error') {
+			return 'Network error. Check connectivity, proxy/firewall rules, and TLS settings.'
+		}
+		if (norm?.code === 'conflict') {
+			return 'Conflict. The resource may already exist, or a precondition failed.'
+		}
+		if (norm?.code === 'canceled') {
+			return 'Request was canceled.'
+		}
 	}
 
 	// Network / infra

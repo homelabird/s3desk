@@ -1,6 +1,9 @@
 import type {
 	Bucket,
 	BucketCreateRequest,
+	BucketPolicyPutRequest,
+	BucketPolicyResponse,
+	BucketPolicyValidateResponse,
 	DeleteObjectsResponse,
 	ErrorResponse,
 	Job,
@@ -36,6 +39,11 @@ export const DEFAULT_TIMEOUT_MS = 30_000
 export const DEFAULT_RETRY_COUNT = 2
 export const DEFAULT_RETRY_DELAY_MS = 600
 export const MAX_RETRY_DELAY_MS = 5000
+
+export type NormalizedError = {
+	code: string
+	retryable: boolean
+}
 export const RETRY_COUNT_MIN = 0
 export const RETRY_COUNT_MAX = 5
 export const RETRY_DELAY_MIN_MS = 200
@@ -44,14 +52,16 @@ export const RETRY_DELAY_MAX_MS = 5000
 export class APIError extends Error {
 	status: number
 	code: string
+	normalizedError?: NormalizedError
 	details?: Record<string, unknown>
 	retryAfterSeconds?: number
 
-	constructor(args: { status: number; code: string; message: string; details?: Record<string, unknown>; retryAfterSeconds?: number }) {
+	constructor(args: { status: number; code: string; message: string; normalizedError?: NormalizedError; details?: Record<string, unknown>; retryAfterSeconds?: number }) {
 		super(args.message)
 		this.name = 'APIError'
 		this.status = args.status
 		this.code = args.code
+		this.normalizedError = args.normalizedError
 		this.details = args.details
 		this.retryAfterSeconds = args.retryAfterSeconds
 	}
@@ -180,6 +190,7 @@ export class APIClient {
 					status: res.status,
 					code: er.error?.code ?? 'error',
 					message: er.error?.message ?? res.statusText,
+						normalizedError: er.error?.normalizedError ?? undefined,
 					details: er.error?.details,
 					retryAfterSeconds,
 				})
@@ -305,6 +316,40 @@ export class APIClient {
 	deleteBucket(profileId: string, bucket: string): Promise<void> {
 		return this.request(`/buckets/${encodeURIComponent(bucket)}`, { method: 'DELETE' }, { profileId })
 	}
+
+
+	getBucketPolicy(profileId: string, bucket: string): Promise<BucketPolicyResponse> {
+		return this.request(`/buckets/${encodeURIComponent(bucket)}/policy`, { method: 'GET' }, { profileId })
+	}
+
+	putBucketPolicy(profileId: string, bucket: string, req: BucketPolicyPutRequest): Promise<void> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/policy`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	deleteBucketPolicy(profileId: string, bucket: string): Promise<void> {
+		return this.request(`/buckets/${encodeURIComponent(bucket)}/policy`, { method: 'DELETE' }, { profileId })
+	}
+
+	validateBucketPolicy(profileId: string, bucket: string, req: BucketPolicyPutRequest): Promise<BucketPolicyValidateResponse> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/policy/validate`,
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
 
 	listObjects(args: {
 		profileId: string
@@ -803,7 +848,7 @@ function isIdempotentMethod(method?: string): boolean {
 }
 
 function shouldRetryStatus(status: number): boolean {
-	return status === 500 || status === 502 || status === 503 || status === 504
+	return status === 429 || status === 500 || status === 502 || status === 503 || status === 504
 }
 
 function isRetryableFetchError(err: unknown): boolean {
@@ -867,9 +912,13 @@ async function fetchWithRetry(url: string, init: RequestInit, options: RequestOp
 		try {
 			const res = await fetchWithTimeout(url, init, timeoutMs)
 			if (!res.ok && idempotent && attempt < retries && shouldRetryStatus(res.status)) {
-				logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} after HTTP ${res.status}` })
-				publishNetworkStatus({ kind: 'unstable', message: `Server unavailable (HTTP ${res.status}). Retrying...` })
-				await sleep(retryDelayMs(baseDelayMs, attempt))
+				const retryAfterSeconds = parseRetryAfterSeconds(res.headers.get('Retry-After'))
+				const delayMs = retryAfterSeconds != null ? Math.min(retryAfterSeconds * 1000, maxRetryDelayMs) : retryDelayMs(baseDelayMs, attempt)
+				const retryHint = retryAfterSeconds != null ? ` (Retry-After ${retryAfterSeconds}s)` : ''
+				logNetworkEvent({ kind: 'retry', message: `Retry ${attempt + 1}/${retries} after HTTP ${res.status}${retryHint}` })
+				const msg = res.status === 429 ? 'Rate limited (HTTP 429). Retrying...' : `Server unavailable (HTTP ${res.status}). Retrying...`
+				publishNetworkStatus({ kind: 'unstable', message: msg })
+				await sleep(delayMs)
 				attempt += 1
 				continue
 			}
@@ -936,6 +985,7 @@ function parseAPIError(status: number, bodyText: string | null): APIError {
 				status,
 				code: er.error?.code ?? 'error',
 				message: er.error?.message ?? 'request failed',
+				normalizedError: er.error?.normalizedError ?? undefined,
 				details: er.error?.details,
 			})
 		}

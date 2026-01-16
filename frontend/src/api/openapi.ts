@@ -322,6 +322,7 @@ export interface paths {
                     };
                 };
                 400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
             };
         };
         delete?: never;
@@ -590,6 +591,175 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/buckets/{bucket}/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get bucket policy
+         * @description Returns the current S3 bucket policy document if present.
+         *
+         *     For buckets with no policy, returns `exists=false`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketPolicyResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                429: components["responses"]["ErrorResponse"];
+                502: components["responses"]["ErrorResponse"];
+            };
+        };
+        /**
+         * Put bucket policy
+         * @description Sets (replaces) the S3 bucket policy document.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketPolicyPutRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                429: components["responses"]["ErrorResponse"];
+                502: components["responses"]["ErrorResponse"];
+            };
+        };
+        /**
+         * Delete bucket policy
+         * @description Deletes the S3 bucket policy document.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                429: components["responses"]["ErrorResponse"];
+                502: components["responses"]["ErrorResponse"];
+            };
+        };
+        options?: never;
+        head?: never;
+        post?: never;
+        patch?: never;
+        trace?: never;
+    };
+
+    "/buckets/{bucket}/policy/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Validate bucket policy
+         * @description Performs static (non-mutating) validation of a provider-specific bucket access policy document.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketPolicyPutRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketPolicyValidateResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        get?: never;
+        put?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+
     "/buckets/{bucket}/objects": {
         parameters: {
             query?: never;
@@ -1762,17 +1932,37 @@ export interface components {
             error: {
                 code: string;
                 message: string;
+                normalizedError?: components["schemas"]["NormalizedError"];
                 details?: {
                     [key: string]: unknown;
                 };
             };
         };
-        Profile: {
+        /** @description Provider-agnostic error classifier (primarily derived from rclone stderr). */
+        NormalizedError: {
+            code: components["schemas"]["NormalizedErrorCode"];
+            retryable: boolean;
+        };
+        NormalizedErrorCode:
+            | "invalid_credentials"
+            | "access_denied"
+            | "not_found"
+            | "rate_limited"
+            | "network_error"
+            | "invalid_config"
+            | "signature_mismatch"
+            | "request_time_skewed"
+            | "conflict"
+            | "upstream_timeout"
+            | "endpoint_unreachable"
+            | "canceled"
+            | "unknown";
+        /** @description Storage provider backend for a profile. */
+        ProfileProvider: "aws_s3" | "s3_compatible" | "oci_s3_compat" | "azure_blob" | "gcp_gcs" | "oci_object_storage";
+        ProfileBase: {
             id: string;
             name: string;
-            endpoint: string;
-            region: string;
-            forcePathStyle: boolean;
+            provider: components["schemas"]["ProfileProvider"];
             preserveLeadingSlash: boolean;
             tlsInsecureSkipVerify: boolean;
             /** Format: date-time */
@@ -1780,7 +1970,78 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        ProfileCreateRequest: {
+        ProfileAwsS3: components["schemas"]["ProfileBase"] & {
+            provider: "aws_s3";
+            /** @description Optional. If omitted, uses AWS default endpoint resolution. */
+            endpoint?: string;
+            region: string;
+            forcePathStyle: boolean;
+        };
+        ProfileS3Compatible: components["schemas"]["ProfileBase"] & {
+            provider: "s3_compatible";
+            endpoint: string;
+            region: string;
+            forcePathStyle: boolean;
+        };
+        ProfileOciS3Compat: components["schemas"]["ProfileBase"] & {
+            provider: "oci_s3_compat";
+            endpoint: string;
+            region: string;
+            forcePathStyle: boolean;
+        };
+        ProfileAzureBlob: components["schemas"]["ProfileBase"] & {
+            provider: "azure_blob";
+            accountName: string;
+            /** @description Optional. Used for local emulators (Azurite) or custom Azure endpoints. */
+            endpoint?: string;
+            /** @description Optional. If true and endpoint is omitted, server may choose a default emulator endpoint. */
+            useEmulator?: boolean;
+        };
+        ProfileGcpGcs: components["schemas"]["ProfileBase"] & {
+            provider: "gcp_gcs";
+            projectId?: string;
+            clientEmail?: string;
+            /** @description Optional. Used for local emulators (fake-gcs-server) or custom endpoints. */
+            endpoint?: string;
+            /** @description Optional. If true, requests are unauthenticated and serviceAccountJson can be omitted. */
+            anonymous?: boolean;
+            projectNumber?: string;
+        };
+        ProfileOciObjectStorage: components["schemas"]["ProfileBase"] & {
+            provider: "oci_object_storage";
+            region: string;
+            namespace: string;
+            compartment: string;
+            endpoint?: string;
+            authProvider?: string;
+            configFile?: string;
+            configProfile?: string;
+        };
+        Profile:
+            | components["schemas"]["ProfileAwsS3"]
+            | components["schemas"]["ProfileS3Compatible"]
+            | components["schemas"]["ProfileOciS3Compat"]
+            | components["schemas"]["ProfileAzureBlob"]
+            | components["schemas"]["ProfileGcpGcs"]
+            | components["schemas"]["ProfileOciObjectStorage"];
+        ProfileCreateRequestAwsS3: {
+            provider: "aws_s3";
+            name: string;
+            /** @description Optional. If omitted, uses AWS default endpoint resolution. */
+            endpoint?: string;
+            region: string;
+            accessKeyId: string;
+            secretAccessKey: string;
+            sessionToken?: string | null;
+            /** @default false */
+            forcePathStyle: boolean;
+            /** @default false */
+            preserveLeadingSlash: boolean;
+            /** @default false */
+            tlsInsecureSkipVerify: boolean;
+        };
+        ProfileCreateRequestS3Compatible: {
+            provider: "s3_compatible";
             name: string;
             endpoint: string;
             region: string;
@@ -1794,7 +2055,74 @@ export interface components {
             /** @default false */
             tlsInsecureSkipVerify: boolean;
         };
-        ProfileUpdateRequest: {
+        ProfileCreateRequestOciS3Compat: {
+            provider: "oci_s3_compat";
+            name: string;
+            endpoint: string;
+            region: string;
+            accessKeyId: string;
+            secretAccessKey: string;
+            sessionToken?: string | null;
+            /** @default false */
+            forcePathStyle: boolean;
+            /** @default false */
+            preserveLeadingSlash: boolean;
+            /** @default false */
+            tlsInsecureSkipVerify: boolean;
+        };
+        ProfileCreateRequestAzureBlob: {
+            provider: "azure_blob";
+            name: string;
+            accountName: string;
+            accountKey: string;
+            /** @description Optional. Used for local emulators (Azurite) or custom Azure endpoints. */
+            endpoint?: string;
+            /** @description Optional. If true and endpoint is omitted, server may choose a default emulator endpoint. */
+            useEmulator?: boolean;
+            /** @default false */
+            preserveLeadingSlash: boolean;
+            /** @default false */
+            tlsInsecureSkipVerify: boolean;
+        };
+        ProfileCreateRequestGcpGcs: {
+            provider: "gcp_gcs";
+            name: string;
+            /** @description GCP service account JSON. Required unless anonymous=true. */
+            serviceAccountJson?: string;
+            /** @description If true, requests are unauthenticated and serviceAccountJson can be omitted. */
+            anonymous?: boolean;
+            /** @description Optional. Used for local emulators (fake-gcs-server) or custom endpoints. */
+            endpoint?: string;
+            projectNumber?: string;
+            /** @default false */
+            preserveLeadingSlash: boolean;
+            /** @default false */
+            tlsInsecureSkipVerify: boolean;
+        };
+        ProfileCreateRequestOciObjectStorage: {
+            provider: "oci_object_storage";
+            name: string;
+            region: string;
+            namespace: string;
+            compartment: string;
+            endpoint?: string;
+            authProvider?: string;
+            configFile?: string;
+            configProfile?: string;
+            /** @default false */
+            preserveLeadingSlash: boolean;
+            /** @default false */
+            tlsInsecureSkipVerify: boolean;
+        };
+        ProfileCreateRequest:
+            | components["schemas"]["ProfileCreateRequestAwsS3"]
+            | components["schemas"]["ProfileCreateRequestS3Compatible"]
+            | components["schemas"]["ProfileCreateRequestOciS3Compat"]
+            | components["schemas"]["ProfileCreateRequestAzureBlob"]
+            | components["schemas"]["ProfileCreateRequestGcpGcs"]
+            | components["schemas"]["ProfileCreateRequestOciObjectStorage"];
+        ProfileUpdateRequestAwsS3: {
+            provider: "aws_s3";
             name?: string;
             endpoint?: string;
             region?: string;
@@ -1806,6 +2134,76 @@ export interface components {
             preserveLeadingSlash?: boolean;
             tlsInsecureSkipVerify?: boolean;
         };
+        ProfileUpdateRequestS3Compatible: {
+            provider: "s3_compatible";
+            name?: string;
+            endpoint?: string;
+            region?: string;
+            accessKeyId?: string;
+            secretAccessKey?: string;
+            /** @description Set to empty string to clear; omit to keep unchanged. */
+            sessionToken?: string | null;
+            forcePathStyle?: boolean;
+            preserveLeadingSlash?: boolean;
+            tlsInsecureSkipVerify?: boolean;
+        };
+        ProfileUpdateRequestOciS3Compat: {
+            provider: "oci_s3_compat";
+            name?: string;
+            endpoint?: string;
+            region?: string;
+            accessKeyId?: string;
+            secretAccessKey?: string;
+            /** @description Set to empty string to clear; omit to keep unchanged. */
+            sessionToken?: string | null;
+            forcePathStyle?: boolean;
+            preserveLeadingSlash?: boolean;
+            tlsInsecureSkipVerify?: boolean;
+        };
+        ProfileUpdateRequestAzureBlob: {
+            provider: "azure_blob";
+            name?: string;
+            accountName?: string;
+            accountKey?: string;
+            /** @description Optional. Used for local emulators (Azurite) or custom Azure endpoints. */
+            endpoint?: string;
+            /** @description Optional. If true and endpoint is omitted, server may choose a default emulator endpoint. */
+            useEmulator?: boolean;
+            preserveLeadingSlash?: boolean;
+            tlsInsecureSkipVerify?: boolean;
+        };
+        ProfileUpdateRequestGcpGcs: {
+            provider: "gcp_gcs";
+            name?: string;
+            serviceAccountJson?: string;
+            /** @description If true, requests are unauthenticated and serviceAccountJson can be omitted. */
+            anonymous?: boolean;
+            /** @description Optional. Used for local emulators (fake-gcs-server) or custom endpoints. */
+            endpoint?: string;
+            projectNumber?: string;
+            preserveLeadingSlash?: boolean;
+            tlsInsecureSkipVerify?: boolean;
+        };
+        ProfileUpdateRequestOciObjectStorage: {
+            provider: "oci_object_storage";
+            name?: string;
+            region?: string;
+            namespace?: string;
+            compartment?: string;
+            endpoint?: string;
+            authProvider?: string;
+            configFile?: string;
+            configProfile?: string;
+            preserveLeadingSlash?: boolean;
+            tlsInsecureSkipVerify?: boolean;
+        };
+        ProfileUpdateRequest:
+            | components["schemas"]["ProfileUpdateRequestAwsS3"]
+            | components["schemas"]["ProfileUpdateRequestS3Compatible"]
+            | components["schemas"]["ProfileUpdateRequestOciS3Compat"]
+            | components["schemas"]["ProfileUpdateRequestAzureBlob"]
+            | components["schemas"]["ProfileUpdateRequestGcpGcs"]
+            | components["schemas"]["ProfileUpdateRequestOciObjectStorage"];
         ProfileTestResponse: {
             ok: boolean;
             message?: string;
@@ -1845,6 +2243,24 @@ export interface components {
         BucketCreateRequest: {
             name: string;
             region?: string;
+        };
+        BucketPolicyResponse: {
+            bucket: string;
+            exists: boolean;
+            policy?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        BucketPolicyPutRequest: {
+            policy: {
+                [key: string]: unknown;
+            };
+        };
+        BucketPolicyValidateResponse: {
+            ok: boolean;
+            provider: components["schemas"]["ProfileProvider"];
+            errors?: string[];
+            warnings?: string[];
         };
         ObjectItem: {
             key: string;

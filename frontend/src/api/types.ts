@@ -25,6 +25,10 @@ export type ProfileTLSStatus = {
 export type Bucket = components['schemas']['Bucket']
 export type BucketCreateRequest = components['schemas']['BucketCreateRequest']
 
+export type BucketPolicyResponse = components['schemas']['BucketPolicyResponse']
+export type BucketPolicyPutRequest = components['schemas']['BucketPolicyPutRequest']
+export type BucketPolicyValidateResponse = components['schemas']['BucketPolicyValidateResponse']
+
 export type ObjectItem = components['schemas']['ObjectItem']
 export type ListObjectsResponse = components['schemas']['ListObjectsResponse']
 export type SearchObjectsResponse = components['schemas']['SearchObjectsResponse']
