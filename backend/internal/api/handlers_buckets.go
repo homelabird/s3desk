@@ -8,12 +8,20 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneerrors"
 )
 
 func (s *server) handleListBuckets(w http.ResponseWriter, r *http.Request) {
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
+		return
+	}
+
+	// GCS bucket operations require a project number for list/create/delete buckets.
+	// See rclone docs: google cloud storage backend -> project_number.
+	if secrets.Provider == models.ProfileProviderGcpGcs && strings.TrimSpace(secrets.GcpProjectNumber) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_config", "gcp projectNumber is required to list buckets", map[string]any{"field": "projectNumber"})
 		return
 	}
 
@@ -67,6 +75,13 @@ func (s *server) handleCreateBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// GCS bucket operations require a project number for list/create/delete buckets.
+	// See rclone docs: google cloud storage backend -> project_number.
+	if secrets.Provider == models.ProfileProviderGcpGcs && strings.TrimSpace(secrets.GcpProjectNumber) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_config", "gcp projectNumber is required to create buckets", map[string]any{"field": "projectNumber"})
+		return
+	}
+
 	var req models.BucketCreateRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
@@ -79,11 +94,20 @@ func (s *server) handleCreateBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Region != "" {
+	args := []string{"mkdir"}
+	if secrets.Provider == models.ProfileProviderGcpGcs {
+		// For GCS, bucket creation location is controlled by --gcs-location.
+		// (We reuse req.Region field from the API for this value.)
+		if req.Region != "" {
+			args = append(args, "--gcs-location", req.Region)
+		}
+	} else if req.Region != "" {
+		// For S3/S3-compatible providers, region affects bucket creation.
 		secrets.Region = req.Region
 	}
+	args = append(args, rcloneRemoteBucket(req.Name))
 
-	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, []string{"mkdir", rcloneRemoteBucket(req.Name)}, "create-bucket")
+	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, args, "create-bucket")
 	if err != nil {
 		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to create buckets (install it or set RCLONE_PATH)",
@@ -108,6 +132,13 @@ func (s *server) handleDeleteBucket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// GCS bucket operations require a project number for list/create/delete buckets.
+	// See rclone docs: google cloud storage backend -> project_number.
+	if secrets.Provider == models.ProfileProviderGcpGcs && strings.TrimSpace(secrets.GcpProjectNumber) == "" {
+		writeError(w, http.StatusBadRequest, "invalid_config", "gcp projectNumber is required to delete buckets", map[string]any{"field": "projectNumber"})
+		return
+	}
+
 	bucket := chi.URLParam(r, "bucket")
 	bucket = strings.TrimSpace(bucket)
 	if bucket == "" {
@@ -117,7 +148,7 @@ func (s *server) handleDeleteBucket(w http.ResponseWriter, r *http.Request) {
 
 	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, []string{"rmdir", rcloneRemoteBucket(bucket)}, "delete-bucket")
 	if err != nil {
-		if rcloneIsBucketNotEmpty(err, stderr) {
+		if rcloneerrors.IsBucketNotEmpty(strings.ToLower(rcloneErrorMessage(err, stderr))) {
 			writeError(w, http.StatusConflict, "bucket_not_empty", "bucket is not empty; delete objects first", map[string]any{"bucket": bucket})
 			return
 		}

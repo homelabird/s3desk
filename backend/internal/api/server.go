@@ -4,7 +4,6 @@ import (
 	"s3desk/internal/config"
 	"s3desk/internal/jobs"
 	"s3desk/internal/metrics"
-	"s3desk/internal/models"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -25,8 +24,3 @@ const (
 	profileIDKey      contextKey = "profile_id"
 	profileSecretsKey contextKey = "profile_secrets"
 )
-
-type profileContext struct {
-	ID      string
-	Secrets models.ProfileSecrets
-}

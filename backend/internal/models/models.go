@@ -1,21 +1,85 @@
 package models
 
+import "encoding/json"
+
 type ErrorResponse struct {
 	Error APIError `json:"error"`
 }
 
-type APIError struct {
-	Code    string         `json:"code"`
-	Message string         `json:"message"`
-	Details map[string]any `json:"details,omitempty"`
+// NormalizedErrorCode is a provider-agnostic error code intended for stable UX/logic.
+//
+// It is primarily derived from rclone stderr (see internal/rcloneerrors).
+type NormalizedErrorCode string
+
+const (
+	NormalizedErrorInvalidCredentials NormalizedErrorCode = "invalid_credentials" // #nosec G101 -- error code, not credentials
+	NormalizedErrorAccessDenied       NormalizedErrorCode = "access_denied"
+	NormalizedErrorNotFound           NormalizedErrorCode = "not_found"
+	NormalizedErrorRateLimited        NormalizedErrorCode = "rate_limited"
+	NormalizedErrorNetworkError       NormalizedErrorCode = "network_error"
+	NormalizedErrorInvalidConfig      NormalizedErrorCode = "invalid_config"
+
+	// Extended (still provider-agnostic) codes.
+	NormalizedErrorSignatureMismatch   NormalizedErrorCode = "signature_mismatch"
+	NormalizedErrorRequestTimeSkewed   NormalizedErrorCode = "request_time_skewed"
+	NormalizedErrorConflict            NormalizedErrorCode = "conflict"
+	NormalizedErrorUpstreamTimeout     NormalizedErrorCode = "upstream_timeout"
+	NormalizedErrorEndpointUnreachable NormalizedErrorCode = "endpoint_unreachable"
+	NormalizedErrorCanceled            NormalizedErrorCode = "canceled"
+	NormalizedErrorUnknown             NormalizedErrorCode = "unknown"
+)
+
+type NormalizedError struct {
+	Code      NormalizedErrorCode `json:"code"`
+	Retryable bool                `json:"retryable"`
 }
 
+type APIError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	// NormalizedError is an optional, stable classification meant for UI and retry logic.
+	NormalizedError *NormalizedError `json:"normalizedError,omitempty"`
+	Details         map[string]any   `json:"details,omitempty"`
+}
+
+type ProfileProvider string
+
+const (
+	ProfileProviderAwsS3            ProfileProvider = "aws_s3"
+	ProfileProviderS3Compatible     ProfileProvider = "s3_compatible"
+	ProfileProviderOciS3Compat      ProfileProvider = "oci_s3_compat"
+	ProfileProviderAzureBlob        ProfileProvider = "azure_blob"
+	ProfileProviderGcpGcs           ProfileProvider = "gcp_gcs"
+	ProfileProviderOciObjectStorage ProfileProvider = "oci_object_storage"
+)
+
 type Profile struct {
-	ID                    string `json:"id"`
-	Name                  string `json:"name"`
-	Endpoint              string `json:"endpoint"`
-	Region                string `json:"region"`
-	ForcePathStyle        bool   `json:"forcePathStyle"`
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	Provider ProfileProvider `json:"provider"`
+
+	// S3-style providers
+	Endpoint       string `json:"endpoint,omitempty"`
+	Region         string `json:"region,omitempty"`
+	ForcePathStyle *bool  `json:"forcePathStyle,omitempty"`
+
+	// Azure Blob
+	AccountName string `json:"accountName,omitempty"`
+	UseEmulator *bool  `json:"useEmulator,omitempty"`
+
+	// GCP GCS
+	ProjectID     string `json:"projectId,omitempty"`
+	ClientEmail   string `json:"clientEmail,omitempty"`
+	Anonymous     *bool  `json:"anonymous,omitempty"`
+	ProjectNumber string `json:"projectNumber,omitempty"`
+
+	// OCI Object Storage
+	Namespace     string `json:"namespace,omitempty"`
+	Compartment   string `json:"compartment,omitempty"`
+	AuthProvider  string `json:"authProvider,omitempty"`
+	ConfigFile    string `json:"configFile,omitempty"`
+	ConfigProfile string `json:"configProfile,omitempty"`
+
 	PreserveLeadingSlash  bool   `json:"preserveLeadingSlash"`
 	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
 	CreatedAt             string `json:"createdAt"`
@@ -23,42 +87,114 @@ type Profile struct {
 }
 
 type ProfileSecrets struct {
-	ID                    string            `json:"-"`
-	Name                  string            `json:"-"`
-	Endpoint              string            `json:"-"`
-	Region                string            `json:"-"`
-	ForcePathStyle        bool              `json:"-"`
+	ID       string          `json:"-"`
+	Name     string          `json:"-"`
+	Provider ProfileProvider `json:"-"`
+
+	// S3-style secrets
+	Endpoint        string  `json:"-"`
+	Region          string  `json:"-"`
+	ForcePathStyle  bool    `json:"-"`
+	AccessKeyID     string  `json:"-"`
+	SecretAccessKey string  `json:"-"`
+	SessionToken    *string `json:"-"`
+
+	// Azure Blob secrets
+	AzureAccountName string `json:"-"`
+	AzureAccountKey  string `json:"-"`
+	AzureEndpoint    string `json:"-"`
+	AzureUseEmulator bool   `json:"-"`
+
+	// GCP GCS secrets
+	GcpServiceAccountJSON string `json:"-"`
+	GcpEndpoint           string `json:"-"`
+	GcpAnonymous          bool   `json:"-"`
+	GcpProjectNumber      string `json:"-"`
+
+	// OCI Object Storage
+	OciNamespace     string `json:"-"`
+	OciCompartment   string `json:"-"`
+	OciAuthProvider  string `json:"-"`
+	OciConfigFile    string `json:"-"`
+	OciConfigProfile string `json:"-"`
+	OciEndpoint      string `json:"-"`
+
+	// Common
 	PreserveLeadingSlash  bool              `json:"-"`
 	TLSInsecureSkipVerify bool              `json:"-"`
-	AccessKeyID           string            `json:"-"`
-	SecretAccessKey       string            `json:"-"`
-	SessionToken          *string           `json:"-"`
 	TLSConfig             *ProfileTLSConfig `json:"-"`
 	TLSConfigUpdatedAt    string            `json:"-"`
 }
 
 type ProfileCreateRequest struct {
-	Name                  string  `json:"name"`
-	Endpoint              string  `json:"endpoint"`
-	Region                string  `json:"region"`
-	AccessKeyID           string  `json:"accessKeyId"`
-	SecretAccessKey       string  `json:"secretAccessKey"`
-	SessionToken          *string `json:"sessionToken"`
-	ForcePathStyle        bool    `json:"forcePathStyle"`
-	PreserveLeadingSlash  bool    `json:"preserveLeadingSlash"`
-	TLSInsecureSkipVerify bool    `json:"tlsInsecureSkipVerify"`
+	// Provider is required by the OpenAPI schema, but we accept empty (defaults to s3_compatible)
+	// to preserve compatibility with older clients.
+	Provider ProfileProvider `json:"provider,omitempty"`
+	Name     string          `json:"name"`
+
+	// S3-style
+	Endpoint        *string `json:"endpoint,omitempty"`
+	Region          *string `json:"region,omitempty"`
+	AccessKeyID     *string `json:"accessKeyId,omitempty"`
+	SecretAccessKey *string `json:"secretAccessKey,omitempty"`
+	SessionToken    *string `json:"sessionToken,omitempty"`
+	ForcePathStyle  *bool   `json:"forcePathStyle,omitempty"`
+
+	// Azure Blob
+	AccountName *string `json:"accountName,omitempty"`
+	AccountKey  *string `json:"accountKey,omitempty"`
+	UseEmulator *bool   `json:"useEmulator,omitempty"`
+
+	// GCP GCS
+	ServiceAccountJSON *string `json:"serviceAccountJson,omitempty"`
+	Anonymous          *bool   `json:"anonymous,omitempty"`
+	ProjectNumber      *string `json:"projectNumber,omitempty"`
+
+	// OCI Object Storage
+	Namespace     *string `json:"namespace,omitempty"`
+	Compartment   *string `json:"compartment,omitempty"`
+	AuthProvider  *string `json:"authProvider,omitempty"`
+	ConfigFile    *string `json:"configFile,omitempty"`
+	ConfigProfile *string `json:"configProfile,omitempty"`
+
+	// Common
+	PreserveLeadingSlash  bool `json:"preserveLeadingSlash"`
+	TLSInsecureSkipVerify bool `json:"tlsInsecureSkipVerify"`
 }
 
 type ProfileUpdateRequest struct {
-	Name                  *string `json:"name,omitempty"`
-	Endpoint              *string `json:"endpoint,omitempty"`
-	Region                *string `json:"region,omitempty"`
-	AccessKeyID           *string `json:"accessKeyId,omitempty"`
-	SecretAccessKey       *string `json:"secretAccessKey,omitempty"`
-	SessionToken          *string `json:"sessionToken,omitempty"`
-	ForcePathStyle        *bool   `json:"forcePathStyle,omitempty"`
-	PreserveLeadingSlash  *bool   `json:"preserveLeadingSlash,omitempty"`
-	TLSInsecureSkipVerify *bool   `json:"tlsInsecureSkipVerify,omitempty"`
+	// Provider is required by the OpenAPI schema. We use it as a discriminator to validate
+	// and to prevent accidental provider changes.
+	Provider ProfileProvider `json:"provider,omitempty"`
+
+	Name     *string `json:"name,omitempty"`
+	Endpoint *string `json:"endpoint,omitempty"`
+	Region   *string `json:"region,omitempty"`
+
+	AccessKeyID     *string `json:"accessKeyId,omitempty"`
+	SecretAccessKey *string `json:"secretAccessKey,omitempty"`
+	SessionToken    *string `json:"sessionToken,omitempty"`
+
+	ForcePathStyle        *bool `json:"forcePathStyle,omitempty"`
+	PreserveLeadingSlash  *bool `json:"preserveLeadingSlash,omitempty"`
+	TLSInsecureSkipVerify *bool `json:"tlsInsecureSkipVerify,omitempty"`
+
+	// Azure Blob
+	AccountName *string `json:"accountName,omitempty"`
+	AccountKey  *string `json:"accountKey,omitempty"`
+	UseEmulator *bool   `json:"useEmulator,omitempty"`
+
+	// GCP GCS
+	ServiceAccountJSON *string `json:"serviceAccountJson,omitempty"`
+	Anonymous          *bool   `json:"anonymous,omitempty"`
+	ProjectNumber      *string `json:"projectNumber,omitempty"`
+
+	// OCI Object Storage
+	Namespace     *string `json:"namespace,omitempty"`
+	Compartment   *string `json:"compartment,omitempty"`
+	AuthProvider  *string `json:"authProvider,omitempty"`
+	ConfigFile    *string `json:"configFile,omitempty"`
+	ConfigProfile *string `json:"configProfile,omitempty"`
 }
 
 type ProfileTestResponse struct {
@@ -97,6 +233,25 @@ type Bucket struct {
 type BucketCreateRequest struct {
 	Name   string `json:"name"`
 	Region string `json:"region,omitempty"`
+}
+
+type BucketPolicyResponse struct {
+	Bucket string          `json:"bucket"`
+	Exists bool            `json:"exists"`
+	Policy json.RawMessage `json:"policy,omitempty"`
+}
+
+type BucketPolicyPutRequest struct {
+	Policy json.RawMessage `json:"policy"`
+}
+
+// BucketPolicyValidateResponse is a provider-agnostic, non-mutating validation result for bucket access policies.
+// It performs static checks only; provider-side validation happens when applying policies (PUT).
+type BucketPolicyValidateResponse struct {
+	Ok       bool            `json:"ok"`
+	Provider ProfileProvider `json:"provider"`
+	Errors   []string        `json:"errors,omitempty"`
+	Warnings []string        `json:"warnings,omitempty"`
 }
 
 type ObjectItem struct {
@@ -281,10 +436,10 @@ type MetaResponse struct {
 }
 
 type TransferEngineInfo struct {
-	Name      string `json:"name"`
-	Available bool   `json:"available"`
-	Compatible bool  `json:"compatible"`
+	Name       string `json:"name"`
+	Available  bool   `json:"available"`
+	Compatible bool   `json:"compatible"`
 	MinVersion string `json:"minVersion"`
-	Path      string `json:"path,omitempty"`
-	Version   string `json:"version,omitempty"`
+	Path       string `json:"path,omitempty"`
+	Version    string `json:"version,omitempty"`
 }

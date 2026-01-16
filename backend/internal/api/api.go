@@ -76,6 +76,13 @@ func New(dep Dependencies) http.Handler {
 			r.Delete("/{bucket}", api.handleDeleteBucket)
 		})
 
+		r.Route("/buckets/{bucket}/policy", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketPolicy)
+			r.Put("/", api.handlePutBucketPolicy)
+			r.Delete("/", api.handleDeleteBucketPolicy)
+			r.Post("/validate", api.handleValidateBucketPolicy)
+		})
+
 		r.Route("/buckets/{bucket}/objects", func(r chi.Router) {
 			r.Get("/", api.handleListObjects)
 			r.Delete("/", api.handleDeleteObjects)

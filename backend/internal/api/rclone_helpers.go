@@ -8,14 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"s3desk/internal/jobs"
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/rcloneerrors"
 )
 
 type rcloneListEntry struct {
@@ -38,34 +38,16 @@ type rcloneProcess struct {
 
 var errRcloneListStop = errors.New("rclone list stop")
 
-const rcloneRemoteName = "remote"
-
 func rcloneRemoteBucket(bucket string) string {
-	return fmt.Sprintf("%s:%s", rcloneRemoteName, strings.TrimSpace(bucket))
+	return rcloneconfig.RemoteBucket(bucket)
 }
 
 func rcloneRemoteDir(bucket, prefix string, preserveLeadingSlash bool) string {
-	prefix = normalizeRclonePathInput(prefix, preserveLeadingSlash)
-	if prefix == "" {
-		return rcloneRemoteBucket(bucket)
-	}
-	return fmt.Sprintf("%s:%s/%s", rcloneRemoteName, strings.TrimSpace(bucket), prefix)
+	return rcloneconfig.RemoteDir(bucket, prefix, preserveLeadingSlash)
 }
 
 func rcloneRemoteObject(bucket, key string, preserveLeadingSlash bool) string {
-	key = normalizeRclonePathInput(key, preserveLeadingSlash)
-	if key == "" {
-		return rcloneRemoteBucket(bucket)
-	}
-	return fmt.Sprintf("%s:%s/%s", rcloneRemoteName, strings.TrimSpace(bucket), key)
-}
-
-func normalizeRclonePathInput(value string, preserveLeadingSlash bool) string {
-	value = strings.TrimSpace(value)
-	if preserveLeadingSlash {
-		return value
-	}
-	return strings.TrimPrefix(value, "/")
+	return rcloneconfig.RemoteObject(bucket, key, preserveLeadingSlash)
 }
 
 func (s *server) rcloneDownloadFlags() []string {
@@ -83,74 +65,7 @@ func (s *server) rcloneDownloadFlags() []string {
 }
 
 func (s *server) prepareRcloneConfig(profile models.ProfileSecrets, hint string) (path string, cleanup func(), err error) {
-	baseDir := s.cfg.DataDir
-	if strings.TrimSpace(baseDir) == "" {
-		baseDir = os.TempDir()
-	}
-	cfgDir := filepath.Join(baseDir, "tmp", "rclone")
-	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
-		return "", func() {}, err
-	}
-
-	prefix := "api"
-	if hint != "" {
-		prefix += "-" + hint
-	}
-	f, err := os.CreateTemp(cfgDir, prefix+"-*.rclone.conf")
-	if err != nil {
-		return "", func() {}, err
-	}
-	path = f.Name()
-	cleanup = func() { _ = os.Remove(path) }
-	defer func() { _ = f.Close() }()
-
-	if _, err := fmt.Fprintf(f, "[%s]\n", "remote"); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	if _, err := fmt.Fprintln(f, "type = s3"); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	if _, err := fmt.Fprintln(f, "provider = Other"); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	if profile.Endpoint != "" {
-		if _, err := fmt.Fprintf(f, "endpoint = %s\n", profile.Endpoint); err != nil {
-			cleanup()
-			return "", func() {}, err
-		}
-	}
-	if profile.Region != "" {
-		if _, err := fmt.Fprintf(f, "region = %s\n", profile.Region); err != nil {
-			cleanup()
-			return "", func() {}, err
-		}
-	}
-	if _, err := fmt.Fprintf(f, "access_key_id = %s\n", profile.AccessKeyID); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	if _, err := fmt.Fprintf(f, "secret_access_key = %s\n", profile.SecretAccessKey); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	if profile.SessionToken != nil && *profile.SessionToken != "" {
-		if _, err := fmt.Fprintf(f, "session_token = %s\n", *profile.SessionToken); err != nil {
-			cleanup()
-			return "", func() {}, err
-		}
-	}
-	if _, err := fmt.Fprintf(f, "force_path_style = %t\n", profile.ForcePathStyle); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	if err := f.Close(); err != nil {
-		cleanup()
-		return "", func() {}, err
-	}
-	return path, cleanup, nil
+	return rcloneconfig.WriteTempConfig(s.cfg.DataDir, "api", hint, profile)
 }
 
 func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (*rcloneProcess, error) {
@@ -174,6 +89,7 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 	fullArgs = append(fullArgs, tlsArgs...)
 	fullArgs = append(fullArgs, args...)
 
+	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
 	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -372,11 +288,6 @@ func rcloneIsNotFound(err error, stderr string) bool {
 	}
 }
 
-func rcloneIsBucketNotEmpty(err error, stderr string) bool {
-	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
-	return strings.Contains(msg, "not empty") || strings.Contains(msg, "directory not empty")
-}
-
 func rcloneIsBucketNotFound(err error, stderr string) bool {
 	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
 	return strings.Contains(msg, "bucket") && strings.Contains(msg, "not found") || strings.Contains(msg, "nosuchbucket")
@@ -423,11 +334,35 @@ func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rc
 		writeError(w, http.StatusBadRequest, "transfer_engine_incompatible", ie.Error(), out)
 		return
 	}
+	cls := rcloneerrors.Classify(err, stderr)
+	norm := &models.NormalizedError{Code: models.NormalizedErrorCode(cls.Code), Retryable: cls.Retryable}
+
+	// Rate-limited responses are actionable for clients; expose a conservative backoff hint.
+	if cls.Code == rcloneerrors.CodeRateLimited {
+		if w.Header().Get("Retry-After") == "" {
+			w.Header().Set("Retry-After", "3")
+		}
+	}
+
 	if status, code, ok := rcloneErrorStatus(err, stderr); ok {
-		writeError(w, status, code, ctx.DefaultMessage, rcloneErrorDetails(err, stderr, details))
+		writeJSON(w, status, models.ErrorResponse{
+			Error: models.APIError{
+				Code:            code,
+				Message:         ctx.DefaultMessage,
+				NormalizedError: norm,
+				Details:         rcloneErrorDetails(err, stderr, details),
+			},
+		})
 		return
 	}
-	writeError(w, ctx.DefaultStatus, ctx.DefaultCode, ctx.DefaultMessage, rcloneErrorDetails(err, stderr, details))
+	writeJSON(w, ctx.DefaultStatus, models.ErrorResponse{
+		Error: models.APIError{
+			Code:            ctx.DefaultCode,
+			Message:         ctx.DefaultMessage,
+			NormalizedError: norm,
+			Details:         rcloneErrorDetails(err, stderr, details),
+		},
+	})
 }
 
 func rcloneErrorDetails(err error, stderr string, details map[string]any) map[string]any {
@@ -451,122 +386,25 @@ func rcloneErrorDetails(err error, stderr string, details map[string]any) map[st
 }
 
 func rcloneErrorStatus(err error, stderr string) (int, string, bool) {
-	switch {
-	case rcloneIsNotFound(err, stderr):
-		return http.StatusNotFound, "not_found", true
-	case rcloneIsSignatureMismatch(err, stderr):
-		return http.StatusForbidden, "signature_mismatch", true
-	case rcloneIsInvalidCredentials(err, stderr):
-		return http.StatusUnauthorized, "invalid_credentials", true
-	case rcloneIsAccessDenied(err, stderr):
-		return http.StatusForbidden, "access_denied", true
-	case rcloneIsRequestTimeSkewed(err, stderr):
-		return http.StatusForbidden, "request_time_skewed", true
-	case rcloneIsTimeout(err, stderr):
-		return http.StatusGatewayTimeout, "upstream_timeout", true
-	case rcloneIsEndpointError(err, stderr):
-		return http.StatusBadGateway, "endpoint_unreachable", true
+	cls := rcloneerrors.Classify(err, stderr)
+	switch cls.Code {
+	case rcloneerrors.CodeNotFound:
+		return http.StatusNotFound, string(cls.Code), true
+	case rcloneerrors.CodeInvalidCredentials:
+		return http.StatusUnauthorized, string(cls.Code), true
+	case rcloneerrors.CodeAccessDenied, rcloneerrors.CodeSignatureMismatch, rcloneerrors.CodeRequestTimeSkewed:
+		return http.StatusForbidden, string(cls.Code), true
+	case rcloneerrors.CodeRateLimited:
+		return http.StatusTooManyRequests, string(cls.Code), true
+	case rcloneerrors.CodeConflict:
+		return http.StatusConflict, string(cls.Code), true
+	case rcloneerrors.CodeUpstreamTimeout:
+		return http.StatusGatewayTimeout, string(cls.Code), true
+	case rcloneerrors.CodeEndpointUnreachable, rcloneerrors.CodeNetworkError:
+		return http.StatusBadGateway, string(cls.Code), true
+	case rcloneerrors.CodeInvalidConfig:
+		return http.StatusBadRequest, string(cls.Code), true
 	default:
 		return 0, "", false
-	}
-}
-
-func rcloneIsAccessDenied(err error, stderr string) bool {
-	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
-	if msg == "" {
-		return false
-	}
-	switch {
-	case strings.Contains(msg, "accessdenied") || strings.Contains(msg, "access denied"):
-		return true
-	case strings.Contains(msg, "permission denied"):
-		return true
-	case strings.Contains(msg, "forbidden"):
-		return true
-	case strings.Contains(msg, "status 403") || strings.Contains(msg, "error 403"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsInvalidCredentials(err error, stderr string) bool {
-	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
-	if msg == "" {
-		return false
-	}
-	switch {
-	case strings.Contains(msg, "invalidaccesskeyid"):
-		return true
-	case strings.Contains(msg, "access key id you provided does not exist"):
-		return true
-	case strings.Contains(msg, "invalid access key"):
-		return true
-	case strings.Contains(msg, "invalidtoken") || strings.Contains(msg, "expiredtoken"):
-		return true
-	case strings.Contains(msg, "security token") && strings.Contains(msg, "invalid"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsSignatureMismatch(err error, stderr string) bool {
-	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
-	if msg == "" {
-		return false
-	}
-	switch {
-	case strings.Contains(msg, "signaturedoesnotmatch"):
-		return true
-	case strings.Contains(msg, "signature does not match"):
-		return true
-	case strings.Contains(msg, "request signature we calculated does not match"):
-		return true
-	case strings.Contains(msg, "invalid signature"):
-		return true
-	case strings.Contains(msg, "authorizationheader malformed"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsRequestTimeSkewed(err error, stderr string) bool {
-	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
-	if msg == "" {
-		return false
-	}
-	return strings.Contains(msg, "request time too skewed") || strings.Contains(msg, "requesttime")
-}
-
-func rcloneIsTimeout(err error, stderr string) bool {
-	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
-	if msg == "" {
-		return false
-	}
-	return strings.Contains(msg, "timeout") || strings.Contains(msg, "context deadline exceeded")
-}
-
-func rcloneIsEndpointError(err error, stderr string) bool {
-	msg := strings.ToLower(rcloneErrorMessage(err, stderr))
-	if msg == "" {
-		return false
-	}
-	switch {
-	case strings.Contains(msg, "no such host"):
-		return true
-	case strings.Contains(msg, "temporary failure in name resolution"):
-		return true
-	case strings.Contains(msg, "connection refused"):
-		return true
-	case strings.Contains(msg, "connection reset"):
-		return true
-	case strings.Contains(msg, "dial tcp"):
-		return true
-	case strings.Contains(msg, "tls:") || strings.Contains(msg, "x509:"):
-		return true
-	default:
-		return false
 	}
 }

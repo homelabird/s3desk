@@ -16,6 +16,7 @@ type jobLogWriter struct {
 }
 
 func openJobLogWriter(path string, maxBytes int64) (*jobLogWriter, error) {
+	// #nosec G304 -- path is built from the configured data directory.
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, err

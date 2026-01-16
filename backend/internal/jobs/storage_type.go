@@ -1,32 +1,10 @@
 package jobs
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
-
-type responseHeadersCapture struct {
-	Headers http.Header
-}
-
-func captureResponseHeaders(c *responseHeadersCapture) func(*middleware.Stack) error {
-	return func(stack *middleware.Stack) error {
-		return stack.Deserialize.Add(middleware.DeserializeMiddlewareFunc("CaptureResponseHeaders", func(
-			ctx context.Context, in middleware.DeserializeInput, next middleware.DeserializeHandler,
-		) (out middleware.DeserializeOutput, md middleware.Metadata, err error) {
-			out, md, err = next.HandleDeserialize(ctx, in)
-			if resp, ok := out.RawResponse.(*smithyhttp.Response); ok && resp != nil {
-				c.Headers = resp.Header.Clone()
-			}
-			return out, md, err
-		}), middleware.After)
-	}
-}
 
 func detectStorageType(endpoint string, headers http.Header) (storageType string, source string) {
 	if storageType = storageTypeFromServerHeader(headers); storageType != "" {

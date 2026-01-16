@@ -1,0 +1,1 @@
+BucketNotEmpty: The bucket you tried to delete is not empty

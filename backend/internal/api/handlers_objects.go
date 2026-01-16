@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/store"
 )
 
@@ -459,7 +460,7 @@ func (s *server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := normalizeRclonePathInput(req.Key, secrets.PreserveLeadingSlash)
+	key := rcloneconfig.NormalizePathInput(req.Key, secrets.PreserveLeadingSlash)
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "key is required", nil)
 		return

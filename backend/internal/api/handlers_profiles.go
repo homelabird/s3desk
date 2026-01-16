@@ -11,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"gopkg.in/yaml.v3"
 
+	"s3desk/internal/jobs"
+
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
@@ -30,27 +32,128 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
 		return
 	}
+
 	req.Name = strings.TrimSpace(req.Name)
-	req.Endpoint = strings.TrimSpace(req.Endpoint)
-	req.Region = strings.TrimSpace(req.Region)
-	req.AccessKeyID = strings.TrimSpace(req.AccessKeyID)
-	req.SecretAccessKey = strings.TrimSpace(req.SecretAccessKey)
-	if req.SessionToken != nil {
-		v := strings.TrimSpace(*req.SessionToken)
-		if v == "" {
-			req.SessionToken = nil
-		} else {
-			req.SessionToken = &v
-		}
+	provider := models.ProfileProvider(strings.TrimSpace(string(req.Provider)))
+	if provider == "" {
+		// Backwards compatibility for older clients.
+		provider = models.ProfileProviderS3Compatible
 	}
-	if req.Name == "" || req.Endpoint == "" || req.Region == "" || req.AccessKeyID == "" || req.SecretAccessKey == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "missing required fields", nil)
+	req.Provider = provider
+
+	trimPtrNilIfEmpty := func(p **string) {
+		if *p == nil {
+			return
+		}
+		v := strings.TrimSpace(**p)
+		if v == "" {
+			*p = nil
+			return
+		}
+		*p = &v
+	}
+
+	// Trim optional string fields (and normalize empty to nil where it makes sense).
+	trimPtrNilIfEmpty(&req.Endpoint)
+	trimPtrNilIfEmpty(&req.Region)
+	trimPtrNilIfEmpty(&req.AccessKeyID)
+	trimPtrNilIfEmpty(&req.SecretAccessKey)
+	trimPtrNilIfEmpty(&req.SessionToken)
+	trimPtrNilIfEmpty(&req.AccountName)
+	trimPtrNilIfEmpty(&req.AccountKey)
+	trimPtrNilIfEmpty(&req.ServiceAccountJSON)
+	trimPtrNilIfEmpty(&req.ProjectNumber)
+	trimPtrNilIfEmpty(&req.Namespace)
+	trimPtrNilIfEmpty(&req.Compartment)
+	trimPtrNilIfEmpty(&req.AuthProvider)
+	trimPtrNilIfEmpty(&req.ConfigFile)
+	trimPtrNilIfEmpty(&req.ConfigProfile)
+
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "name is required", nil)
+		return
+	}
+
+	switch provider {
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+		// Validate S3-style providers.
+		if provider != models.ProfileProviderAwsS3 {
+			if req.Endpoint == nil || strings.TrimSpace(*req.Endpoint) == "" {
+				writeError(w, http.StatusBadRequest, "invalid_request", "endpoint is required", nil)
+				return
+			}
+		}
+		if req.Region == nil || strings.TrimSpace(*req.Region) == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "region is required", nil)
+			return
+		}
+		if req.AccessKeyID == nil || strings.TrimSpace(*req.AccessKeyID) == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "accessKeyId is required", nil)
+			return
+		}
+		if req.SecretAccessKey == nil || strings.TrimSpace(*req.SecretAccessKey) == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "secretAccessKey is required", nil)
+			return
+		}
+		// forcePathStyle is required by OpenAPI; default to false for leniency.
+		if req.ForcePathStyle == nil {
+			f := false
+			req.ForcePathStyle = &f
+		}
+		// Reject fields from other providers.
+		if req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for s3 provider", nil)
+			return
+		}
+
+	case models.ProfileProviderAzureBlob:
+		if req.AccountName == nil || *req.AccountName == "" || req.AccountKey == nil || *req.AccountKey == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "accountName and accountKey are required", nil)
+			return
+		}
+		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for azure_blob", nil)
+			return
+		}
+
+	case models.ProfileProviderGcpGcs:
+		anonymous := req.Anonymous != nil && *req.Anonymous
+		if !anonymous {
+			if req.ServiceAccountJSON == nil || *req.ServiceAccountJSON == "" {
+				writeError(w, http.StatusBadRequest, "invalid_request", "serviceAccountJson is required unless anonymous=true", nil)
+				return
+			}
+		}
+		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for gcp_gcs", nil)
+			return
+		}
+
+	case models.ProfileProviderOciObjectStorage:
+		if req.Region == nil || strings.TrimSpace(*req.Region) == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "region is required", nil)
+			return
+		}
+		if req.Namespace == nil || strings.TrimSpace(*req.Namespace) == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "namespace is required", nil)
+			return
+		}
+		if req.Compartment == nil || strings.TrimSpace(*req.Compartment) == "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "compartment is required", nil)
+			return
+		}
+		if req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for oci_object_storage", nil)
+			return
+		}
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_request", "unknown provider", map[string]any{"provider": provider})
 		return
 	}
 
 	profile, err := s.store.CreateProfile(r.Context(), req)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create profile", nil)
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create profile", map[string]any{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusCreated, profile)
@@ -68,54 +171,67 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
 		return
 	}
-	if req.Name != nil {
-		v := strings.TrimSpace(*req.Name)
-		if v == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "name must not be empty", nil)
+
+	// Trim all string pointer fields in-place. For update requests, an explicit empty string
+	// can be meaningful (e.g. clearing sessionToken), so we don't nil them out.
+	trimPtr := func(p **string) {
+		if *p == nil {
 			return
 		}
-		req.Name = &v
+		v := strings.TrimSpace(**p)
+		*p = &v
 	}
-	if req.Endpoint != nil {
-		v := strings.TrimSpace(*req.Endpoint)
-		if v == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "endpoint must not be empty", nil)
-			return
-		}
-		req.Endpoint = &v
+
+	if strings.TrimSpace(string(req.Provider)) != "" {
+		p := strings.TrimSpace(string(req.Provider))
+		req.Provider = models.ProfileProvider(p)
 	}
-	if req.Region != nil {
-		v := strings.TrimSpace(*req.Region)
-		if v == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "region must not be empty", nil)
-			return
-		}
-		req.Region = &v
+	trimPtr(&req.Name)
+	trimPtr(&req.Endpoint)
+	trimPtr(&req.Region)
+	trimPtr(&req.AccessKeyID)
+	trimPtr(&req.SecretAccessKey)
+	trimPtr(&req.SessionToken)
+	trimPtr(&req.AccountName)
+	trimPtr(&req.AccountKey)
+	trimPtr(&req.ServiceAccountJSON)
+	trimPtr(&req.ProjectNumber)
+	trimPtr(&req.Namespace)
+	trimPtr(&req.Compartment)
+	trimPtr(&req.AuthProvider)
+	trimPtr(&req.ConfigFile)
+	trimPtr(&req.ConfigProfile)
+	trimPtr(&req.ProjectNumber)
+	trimPtr(&req.Namespace)
+	trimPtr(&req.Compartment)
+	trimPtr(&req.AuthProvider)
+	trimPtr(&req.ConfigFile)
+	trimPtr(&req.ConfigProfile)
+
+	if req.Name != nil && *req.Name == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "name must not be empty", nil)
+		return
 	}
-	if req.AccessKeyID != nil {
-		v := strings.TrimSpace(*req.AccessKeyID)
-		if v == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "accessKeyId must not be empty", nil)
-			return
-		}
-		req.AccessKeyID = &v
+	if req.AccessKeyID != nil && *req.AccessKeyID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "accessKeyId must not be empty", nil)
+		return
 	}
-	if req.SecretAccessKey != nil {
-		v := strings.TrimSpace(*req.SecretAccessKey)
-		if v == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "secretAccessKey must not be empty", nil)
-			return
-		}
-		req.SecretAccessKey = &v
-	}
-	if req.SessionToken != nil {
-		v := strings.TrimSpace(*req.SessionToken)
-		req.SessionToken = &v
+	if req.SecretAccessKey != nil && *req.SecretAccessKey == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "secretAccessKey must not be empty", nil)
+		return
 	}
 
 	profile, ok, err := s.store.UpdateProfile(r.Context(), profileID, req)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to update profile", nil)
+		switch {
+		case errors.Is(err, store.ErrEncryptedCredentials):
+			writeError(w, http.StatusBadRequest, "encrypted_credentials", err.Error(), nil)
+		case errors.Is(err, store.ErrEncryptionKeyRequired):
+			writeError(w, http.StatusBadRequest, "encryption_required", err.Error(), nil)
+		default:
+			// Most UpdateProfile errors are user-input validation errors.
+			writeError(w, http.StatusBadRequest, "invalid_request", "failed to update profile", map[string]any{"error": err.Error()})
+		}
 		return
 	}
 	if !ok {
@@ -171,8 +287,23 @@ func (s *server) handleTestProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok, details, err := s.jobs.TestS3Connectivity(r.Context(), profileID)
+	ok, details, err := s.jobs.TestConnectivity(r.Context(), profileID)
 	if err != nil {
+		switch {
+		case errors.Is(err, jobs.ErrProfileNotFound):
+			writeError(w, http.StatusNotFound, "not_found", "profile not found", map[string]any{"profileId": profileID})
+			return
+		case errors.Is(err, jobs.ErrRcloneNotFound):
+			writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required to test connectivity (install it or set RCLONE_PATH)", nil)
+			return
+		default:
+			var inc *jobs.RcloneIncompatibleError
+			if errors.As(err, &inc) {
+				writeError(w, http.StatusBadRequest, "transfer_engine_incompatible", "rclone version is incompatible", map[string]any{"currentVersion": inc.CurrentVersion, "minVersion": inc.MinVersion})
+				return
+			}
+		}
+
 		writeError(w, http.StatusBadRequest, "test_failed", "profile test failed", map[string]any{"error": err.Error()})
 		return
 	}
@@ -211,20 +342,52 @@ func (s *server) handleExportProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	export := profileExport{
-		Profile: profileExportProfile{
-			ID:                    secrets.ID,
-			Name:                  secrets.Name,
-			Endpoint:              secrets.Endpoint,
-			Region:                secrets.Region,
-			AccessKeyID:           secrets.AccessKeyID,
-			SecretAccessKey:       secrets.SecretAccessKey,
-			SessionToken:          secrets.SessionToken,
-			ForcePathStyle:        secrets.ForcePathStyle,
-			PreserveLeadingSlash:  secrets.PreserveLeadingSlash,
-			TLSInsecureSkipVerify: secrets.TLSInsecureSkipVerify,
-		},
+	exportProfile := profileExportProfile{
+		ID:                    secrets.ID,
+		Name:                  secrets.Name,
+		Provider:              secrets.Provider,
+		PreserveLeadingSlash:  secrets.PreserveLeadingSlash,
+		TLSInsecureSkipVerify: secrets.TLSInsecureSkipVerify,
 	}
+	switch secrets.Provider {
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+		force := secrets.ForcePathStyle
+		exportProfile.Endpoint = secrets.Endpoint
+		exportProfile.Region = secrets.Region
+		exportProfile.AccessKeyID = secrets.AccessKeyID
+		exportProfile.SecretAccessKey = secrets.SecretAccessKey
+		exportProfile.SessionToken = secrets.SessionToken
+		exportProfile.ForcePathStyle = &force
+
+	case models.ProfileProviderAzureBlob:
+		exportProfile.AccountName = secrets.AzureAccountName
+		exportProfile.AccountKey = secrets.AzureAccountKey
+		exportProfile.Endpoint = secrets.AzureEndpoint
+		if secrets.AzureUseEmulator {
+			v := true
+			exportProfile.UseEmulator = &v
+		}
+
+	case models.ProfileProviderGcpGcs:
+		exportProfile.ServiceAccountJSON = secrets.GcpServiceAccountJSON
+		exportProfile.Endpoint = secrets.GcpEndpoint
+		if secrets.GcpAnonymous {
+			v := true
+			exportProfile.Anonymous = &v
+		}
+		exportProfile.ProjectNumber = secrets.GcpProjectNumber
+
+	case models.ProfileProviderOciObjectStorage:
+		exportProfile.Region = secrets.Region
+		exportProfile.Endpoint = secrets.OciEndpoint
+		exportProfile.Namespace = secrets.OciNamespace
+		exportProfile.Compartment = secrets.OciCompartment
+		exportProfile.AuthProvider = secrets.OciAuthProvider
+		exportProfile.ConfigFile = secrets.OciConfigFile
+		exportProfile.ConfigProfile = secrets.OciConfigProfile
+	}
+
+	export := profileExport{Profile: exportProfile}
 
 	if secrets.TLSConfig != nil {
 		tls := profileExportTLS{
@@ -262,16 +425,39 @@ type profileExport struct {
 }
 
 type profileExportProfile struct {
-	ID                    string  `yaml:"id,omitempty"`
-	Name                  string  `yaml:"name"`
-	Endpoint              string  `yaml:"endpoint"`
-	Region                string  `yaml:"region"`
-	AccessKeyID           string  `yaml:"accessKeyId"`
-	SecretAccessKey       string  `yaml:"secretAccessKey"`
-	SessionToken          *string `yaml:"sessionToken,omitempty"`
-	ForcePathStyle        bool    `yaml:"forcePathStyle"`
-	PreserveLeadingSlash  bool    `yaml:"preserveLeadingSlash"`
-	TLSInsecureSkipVerify bool    `yaml:"tlsInsecureSkipVerify"`
+	ID       string                 `yaml:"id,omitempty"`
+	Name     string                 `yaml:"name"`
+	Provider models.ProfileProvider `yaml:"provider,omitempty"`
+
+	// Common-ish (used by multiple providers)
+	Endpoint string `yaml:"endpoint,omitempty"`
+	Region   string `yaml:"region,omitempty"`
+
+	// S3-style
+	AccessKeyID     string  `yaml:"accessKeyId,omitempty"`
+	SecretAccessKey string  `yaml:"secretAccessKey,omitempty"`
+	SessionToken    *string `yaml:"sessionToken,omitempty"`
+	ForcePathStyle  *bool   `yaml:"forcePathStyle,omitempty"`
+
+	// Azure Blob
+	AccountName string `yaml:"accountName,omitempty"`
+	AccountKey  string `yaml:"accountKey,omitempty"`
+	UseEmulator *bool  `yaml:"useEmulator,omitempty"`
+
+	// GCP GCS
+	ServiceAccountJSON string `yaml:"serviceAccountJson,omitempty"`
+	Anonymous          *bool  `yaml:"anonymous,omitempty"`
+	ProjectNumber      string `yaml:"projectNumber,omitempty"`
+
+	// OCI Object Storage
+	Namespace     string `yaml:"namespace,omitempty"`
+	Compartment   string `yaml:"compartment,omitempty"`
+	AuthProvider  string `yaml:"authProvider,omitempty"`
+	ConfigFile    string `yaml:"configFile,omitempty"`
+	ConfigProfile string `yaml:"configProfile,omitempty"`
+
+	PreserveLeadingSlash  bool `yaml:"preserveLeadingSlash"`
+	TLSInsecureSkipVerify bool `yaml:"tlsInsecureSkipVerify"`
 }
 
 type profileExportTLS struct {

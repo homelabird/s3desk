@@ -100,6 +100,9 @@ func migrate(db *gorm.DB) error {
 		`CREATE TABLE IF NOT EXISTS profiles (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
+			provider TEXT NOT NULL DEFAULT 's3_compatible',
+			config_json TEXT NOT NULL DEFAULT '{}',
+			secrets_json TEXT NOT NULL DEFAULT '{}',
 			endpoint TEXT NOT NULL,
 			region TEXT NOT NULL,
 			force_path_style INTEGER NOT NULL,
@@ -184,6 +187,15 @@ func migrate(db *gorm.DB) error {
 		}
 	}
 	if err := ensureProfileColumn(db, "preserve_leading_slash", "INTEGER", "0"); err != nil {
+		return err
+	}
+	if err := ensureProfileColumn(db, "provider", "TEXT", "'s3_compatible'"); err != nil {
+		return err
+	}
+	if err := ensureProfileColumn(db, "config_json", "TEXT", "'{}'"); err != nil {
+		return err
+	}
+	if err := ensureProfileColumn(db, "secrets_json", "TEXT", "'{}'"); err != nil {
 		return err
 	}
 	if err := ensureJobsColumn(db, "error_code", "TEXT"); err != nil {

@@ -37,6 +37,7 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 	fullArgs = append(fullArgs, tlsArgs...)
 	fullArgs = append(fullArgs, args...)
 
+	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
 	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

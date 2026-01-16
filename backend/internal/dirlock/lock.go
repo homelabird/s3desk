@@ -32,6 +32,7 @@ func Acquire(dataDir string) (*Lock, error) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, err
 	}
+	// #nosec G304 -- lockPath is derived from the configured data directory.
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err

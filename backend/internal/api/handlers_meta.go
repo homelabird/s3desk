@@ -57,11 +57,11 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		UploadSessionTTLSeconds: int64(s.cfg.UploadSessionTTL.Seconds()),
 		UploadMaxBytes:          uploadMaxBytes,
 		TransferEngine: models.TransferEngineInfo{
-			Name:      "rclone",
-			Available: ok,
+			Name:       "rclone",
+			Available:  ok,
 			Compatible: compatible,
 			MinVersion: jobs.MinSupportedRcloneVersion,
-			Path:      path,
+			Path:       path,
 			Version: func() string {
 				if !vok {
 					return ""

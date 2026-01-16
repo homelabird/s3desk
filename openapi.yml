@@ -199,6 +199,9 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
 
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
   /profiles/{profileId}/export:
     get:
       tags: [Profiles]
@@ -334,6 +337,106 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
         "400":
           $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/policy:
+    get:
+      tags: [Buckets]
+      summary: Get bucket policy
+      description: |
+        Returns the current S3 bucket policy document if present.
+        For buckets with no policy, returns `exists=false`.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketPolicyResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/ErrorResponse"
+        "502":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Put bucket policy
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketPolicyPutRequest"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/ErrorResponse"
+        "502":
+          $ref: "#/components/responses/ErrorResponse"
+    delete:
+      tags: [Buckets]
+      summary: Delete bucket policy
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/ErrorResponse"
+        "502":
+          $ref: "#/components/responses/ErrorResponse"
+
+
+  /buckets/{bucket}/policy/validate:
+    post:
+      tags: [Buckets]
+      summary: Validate bucket policy
+      description: |
+        Performs static (non-mutating) validation of a provider-specific bucket access policy document.
+
+        - For S3 providers, this is syntactic lint only. Real provider validation happens on PUT.
+        - For GCS/Azure providers, this validates the expected JSON shape for IAM/ACL documents.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketPolicyPutRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketPolicyValidateResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
 
   /buckets/{bucket}/objects:
     get:
@@ -1098,27 +1201,179 @@ components:
           properties:
             code: { type: string }
             message: { type: string }
+            normalizedError:
+              $ref: "#/components/schemas/NormalizedError"
             details: { type: object, additionalProperties: true }
 
-    Profile:
+    NormalizedError:
       type: object
-      required: [id, name, endpoint, region, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify, createdAt, updatedAt]
+      description: Provider-agnostic error classifier (primarily derived from rclone stderr).
+      required: [code, retryable]
+      properties:
+        code:
+          $ref: "#/components/schemas/NormalizedErrorCode"
+        retryable:
+          type: boolean
+
+    NormalizedErrorCode:
+      type: string
+      enum:
+        - invalid_credentials
+        - access_denied
+        - not_found
+        - rate_limited
+        - network_error
+        - invalid_config
+        - signature_mismatch
+        - request_time_skewed
+        - conflict
+        - upstream_timeout
+        - endpoint_unreachable
+        - canceled
+        - unknown
+
+    ProfileProvider:
+      type: string
+      description: Storage provider backend for a profile.
+      enum: [aws_s3, s3_compatible, oci_s3_compat, azure_blob, gcp_gcs, oci_object_storage]
+
+    ProfileBase:
+      type: object
+      required: [id, name, provider, preserveLeadingSlash, tlsInsecureSkipVerify, createdAt, updatedAt]
       properties:
         id: { type: string }
         name: { type: string }
-        endpoint: { type: string }
-        region: { type: string }
-        forcePathStyle: { type: boolean }
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
         preserveLeadingSlash: { type: boolean }
         tlsInsecureSkipVerify: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
-    ProfileCreateRequest:
+    ProfileAwsS3:
+      allOf:
+        - $ref: "#/components/schemas/ProfileBase"
+        - type: object
+          required: [provider, region, forcePathStyle]
+          properties:
+            provider: { type: string, enum: [aws_s3] }
+            endpoint:
+              type: string
+              description: Optional. If omitted, uses AWS default endpoint resolution.
+            region: { type: string }
+            forcePathStyle: { type: boolean }
+
+    ProfileS3Compatible:
+      allOf:
+        - $ref: "#/components/schemas/ProfileBase"
+        - type: object
+          required: [provider, endpoint, region, forcePathStyle]
+          properties:
+            provider: { type: string, enum: [s3_compatible] }
+            endpoint: { type: string }
+            region: { type: string }
+            forcePathStyle: { type: boolean }
+
+    ProfileOciS3Compat:
+      allOf:
+        - $ref: "#/components/schemas/ProfileBase"
+        - type: object
+          required: [provider, endpoint, region, forcePathStyle]
+          properties:
+            provider: { type: string, enum: [oci_s3_compat] }
+            endpoint: { type: string }
+            region: { type: string }
+            forcePathStyle: { type: boolean }
+
+    ProfileAzureBlob:
+      allOf:
+        - $ref: "#/components/schemas/ProfileBase"
+        - type: object
+          required: [provider, accountName]
+          properties:
+            provider: { type: string, enum: [azure_blob] }
+            accountName: { type: string }
+            endpoint:
+              type: string
+              description: Optional. Used for local emulators (Azurite) or custom Azure endpoints.
+            useEmulator:
+              type: boolean
+              description: Optional. If true and endpoint is omitted, server may choose a default emulator endpoint.
+
+    ProfileGcpGcs:
+      allOf:
+        - $ref: "#/components/schemas/ProfileBase"
+        - type: object
+          required: [provider]
+          properties:
+            provider: { type: string, enum: [gcp_gcs] }
+            projectId: { type: string }
+            clientEmail: { type: string }
+            endpoint:
+              type: string
+              description: Optional. Used for local emulators (fake-gcs-server) or custom endpoints.
+            anonymous:
+              type: boolean
+              description: Optional. If true, requests are unauthenticated and serviceAccountJson can be omitted.
+            projectNumber: { type: string }
+
+    ProfileOciObjectStorage:
+      allOf:
+        - $ref: "#/components/schemas/ProfileBase"
+        - type: object
+          required: [provider, region, namespace, compartment]
+          properties:
+            provider: { type: string, enum: [oci_object_storage] }
+            region: { type: string }
+            namespace: { type: string }
+            compartment: { type: string }
+            endpoint: { type: string }
+            authProvider: { type: string }
+            configFile: { type: string }
+            configProfile: { type: string }
+
+    Profile:
+      oneOf:
+        - $ref: "#/components/schemas/ProfileAwsS3"
+        - $ref: "#/components/schemas/ProfileS3Compatible"
+        - $ref: "#/components/schemas/ProfileOciS3Compat"
+        - $ref: "#/components/schemas/ProfileAzureBlob"
+        - $ref: "#/components/schemas/ProfileGcpGcs"
+        - $ref: "#/components/schemas/ProfileOciObjectStorage"
+      discriminator:
+        propertyName: provider
+        mapping:
+          aws_s3: "#/components/schemas/ProfileAwsS3"
+          s3_compatible: "#/components/schemas/ProfileS3Compatible"
+          oci_s3_compat: "#/components/schemas/ProfileOciS3Compat"
+          azure_blob: "#/components/schemas/ProfileAzureBlob"
+          gcp_gcs: "#/components/schemas/ProfileGcpGcs"
+          oci_object_storage: "#/components/schemas/ProfileOciObjectStorage"
+
+    ProfileCreateRequestAwsS3:
       type: object
       additionalProperties: false
-      required: [name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify]
+      required: [provider, name, region, accessKeyId, secretAccessKey, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify]
       properties:
+        provider: { type: string, enum: [aws_s3] }
+        name: { type: string }
+        endpoint:
+          type: string
+          description: Optional. If omitted, uses AWS default endpoint resolution.
+        region: { type: string }
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        sessionToken: { type: string, nullable: true }
+        forcePathStyle: { type: boolean, default: false }
+        preserveLeadingSlash: { type: boolean, default: false }
+        tlsInsecureSkipVerify: { type: boolean, default: false }
+
+    ProfileCreateRequestS3Compatible:
+      type: object
+      additionalProperties: false
+      required: [provider, name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify]
+      properties:
+        provider: { type: string, enum: [s3_compatible] }
         name: { type: string }
         endpoint: { type: string }
         region: { type: string }
@@ -1129,10 +1384,101 @@ components:
         preserveLeadingSlash: { type: boolean, default: false }
         tlsInsecureSkipVerify: { type: boolean, default: false }
 
-    ProfileUpdateRequest:
+    ProfileCreateRequestOciS3Compat:
       type: object
       additionalProperties: false
+      required: [provider, name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify]
       properties:
+        provider: { type: string, enum: [oci_s3_compat] }
+        name: { type: string }
+        endpoint: { type: string }
+        region: { type: string }
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        sessionToken: { type: string, nullable: true }
+        forcePathStyle: { type: boolean, default: false }
+        preserveLeadingSlash: { type: boolean, default: false }
+        tlsInsecureSkipVerify: { type: boolean, default: false }
+
+    ProfileCreateRequestAzureBlob:
+      type: object
+      additionalProperties: false
+      required: [provider, name, accountName, accountKey, preserveLeadingSlash, tlsInsecureSkipVerify]
+      properties:
+        provider: { type: string, enum: [azure_blob] }
+        name: { type: string }
+        accountName: { type: string }
+        accountKey: { type: string }
+        endpoint:
+          type: string
+          description: Optional. Used for local emulators (Azurite) or custom Azure endpoints.
+        useEmulator:
+          type: boolean
+          description: Optional. If true and endpoint is omitted, server may choose a default emulator endpoint.
+        preserveLeadingSlash: { type: boolean, default: false }
+        tlsInsecureSkipVerify: { type: boolean, default: false }
+
+    ProfileCreateRequestGcpGcs:
+      type: object
+      additionalProperties: false
+      required: [provider, name, preserveLeadingSlash, tlsInsecureSkipVerify]
+      properties:
+        provider: { type: string, enum: [gcp_gcs] }
+        name: { type: string }
+        serviceAccountJson:
+          type: string
+          description: GCP service account JSON. Required unless anonymous=true.
+        anonymous:
+          type: boolean
+          description: If true, requests are unauthenticated and serviceAccountJson can be omitted.
+        endpoint:
+          type: string
+          description: Optional. Used for local emulators (fake-gcs-server) or custom endpoints.
+        projectNumber: { type: string }
+        preserveLeadingSlash: { type: boolean, default: false }
+        tlsInsecureSkipVerify: { type: boolean, default: false }
+
+    ProfileCreateRequestOciObjectStorage:
+      type: object
+      additionalProperties: false
+      required: [provider, name, region, namespace, compartment, preserveLeadingSlash, tlsInsecureSkipVerify]
+      properties:
+        provider: { type: string, enum: [oci_object_storage] }
+        name: { type: string }
+        region: { type: string }
+        namespace: { type: string }
+        compartment: { type: string }
+        endpoint: { type: string }
+        authProvider: { type: string }
+        configFile: { type: string }
+        configProfile: { type: string }
+        preserveLeadingSlash: { type: boolean, default: false }
+        tlsInsecureSkipVerify: { type: boolean, default: false }
+
+    ProfileCreateRequest:
+      oneOf:
+        - $ref: "#/components/schemas/ProfileCreateRequestAwsS3"
+        - $ref: "#/components/schemas/ProfileCreateRequestS3Compatible"
+        - $ref: "#/components/schemas/ProfileCreateRequestOciS3Compat"
+        - $ref: "#/components/schemas/ProfileCreateRequestAzureBlob"
+        - $ref: "#/components/schemas/ProfileCreateRequestGcpGcs"
+        - $ref: "#/components/schemas/ProfileCreateRequestOciObjectStorage"
+      discriminator:
+        propertyName: provider
+        mapping:
+          aws_s3: "#/components/schemas/ProfileCreateRequestAwsS3"
+          s3_compatible: "#/components/schemas/ProfileCreateRequestS3Compatible"
+          oci_s3_compat: "#/components/schemas/ProfileCreateRequestOciS3Compat"
+          azure_blob: "#/components/schemas/ProfileCreateRequestAzureBlob"
+          gcp_gcs: "#/components/schemas/ProfileCreateRequestGcpGcs"
+          oci_object_storage: "#/components/schemas/ProfileCreateRequestOciObjectStorage"
+
+    ProfileUpdateRequestAwsS3:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [aws_s3] }
         name: { type: string }
         endpoint: { type: string }
         region: { type: string }
@@ -1145,6 +1491,115 @@ components:
         forcePathStyle: { type: boolean }
         preserveLeadingSlash: { type: boolean }
         tlsInsecureSkipVerify: { type: boolean }
+
+    ProfileUpdateRequestS3Compatible:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [s3_compatible] }
+        name: { type: string }
+        endpoint: { type: string }
+        region: { type: string }
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        sessionToken:
+          type: string
+          nullable: true
+          description: Set to empty string to clear; omit to keep unchanged.
+        forcePathStyle: { type: boolean }
+        preserveLeadingSlash: { type: boolean }
+        tlsInsecureSkipVerify: { type: boolean }
+
+    ProfileUpdateRequestOciS3Compat:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [oci_s3_compat] }
+        name: { type: string }
+        endpoint: { type: string }
+        region: { type: string }
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        sessionToken:
+          type: string
+          nullable: true
+          description: Set to empty string to clear; omit to keep unchanged.
+        forcePathStyle: { type: boolean }
+        preserveLeadingSlash: { type: boolean }
+        tlsInsecureSkipVerify: { type: boolean }
+
+    ProfileUpdateRequestAzureBlob:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [azure_blob] }
+        name: { type: string }
+        accountName: { type: string }
+        accountKey: { type: string }
+        endpoint:
+          type: string
+          description: Optional. Used for local emulators (Azurite) or custom Azure endpoints.
+        useEmulator:
+          type: boolean
+          description: Optional. If true and endpoint is omitted, server may choose a default emulator endpoint.
+        preserveLeadingSlash: { type: boolean }
+        tlsInsecureSkipVerify: { type: boolean }
+
+    ProfileUpdateRequestGcpGcs:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [gcp_gcs] }
+        name: { type: string }
+        serviceAccountJson: { type: string }
+        anonymous:
+          type: boolean
+          description: If true, requests are unauthenticated and serviceAccountJson can be omitted.
+        endpoint:
+          type: string
+          description: Optional. Used for local emulators (fake-gcs-server) or custom endpoints.
+        projectNumber: { type: string }
+        preserveLeadingSlash: { type: boolean }
+        tlsInsecureSkipVerify: { type: boolean }
+
+    ProfileUpdateRequestOciObjectStorage:
+      type: object
+      additionalProperties: false
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [oci_object_storage] }
+        name: { type: string }
+        region: { type: string }
+        namespace: { type: string }
+        compartment: { type: string }
+        endpoint: { type: string }
+        authProvider: { type: string }
+        configFile: { type: string }
+        configProfile: { type: string }
+        preserveLeadingSlash: { type: boolean }
+        tlsInsecureSkipVerify: { type: boolean }
+
+    ProfileUpdateRequest:
+      oneOf:
+        - $ref: "#/components/schemas/ProfileUpdateRequestAwsS3"
+        - $ref: "#/components/schemas/ProfileUpdateRequestS3Compatible"
+        - $ref: "#/components/schemas/ProfileUpdateRequestOciS3Compat"
+        - $ref: "#/components/schemas/ProfileUpdateRequestAzureBlob"
+        - $ref: "#/components/schemas/ProfileUpdateRequestGcpGcs"
+        - $ref: "#/components/schemas/ProfileUpdateRequestOciObjectStorage"
+      discriminator:
+        propertyName: provider
+        mapping:
+          aws_s3: "#/components/schemas/ProfileUpdateRequestAwsS3"
+          s3_compatible: "#/components/schemas/ProfileUpdateRequestS3Compatible"
+          oci_s3_compat: "#/components/schemas/ProfileUpdateRequestOciS3Compat"
+          azure_blob: "#/components/schemas/ProfileUpdateRequestAzureBlob"
+          gcp_gcs: "#/components/schemas/ProfileUpdateRequestGcpGcs"
+          oci_object_storage: "#/components/schemas/ProfileUpdateRequestOciObjectStorage"
 
     ProfileTestResponse:
       type: object
@@ -1203,6 +1658,48 @@ components:
       properties:
         name: { type: string }
         region: { type: string }
+
+    BucketPolicyResponse:
+      type: object
+      required: [bucket, exists]
+      properties:
+        bucket: { type: string }
+        exists: { type: boolean }
+        policy:
+          description: |
+            Bucket access policy document.
+
+            - S3 providers: S3 bucket policy JSON.
+            - GCS: bucket IAM policy JSON (bindings).
+            - Azure: container public access + stored access policy JSON.
+          type: object
+          nullable: true
+          additionalProperties: true
+
+    BucketPolicyPutRequest:
+      type: object
+      additionalProperties: false
+      required: [policy]
+      properties:
+        policy:
+          description: Bucket access policy document (provider-specific).
+          type: object
+          additionalProperties: true
+
+    BucketPolicyValidateResponse:
+      type: object
+      required: [ok, provider]
+      properties:
+        ok: { type: boolean }
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        errors:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
 
     ObjectItem:
       type: object

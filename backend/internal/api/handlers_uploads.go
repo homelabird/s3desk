@@ -422,6 +422,7 @@ func writePartToFile(part *multipart.Part, dstPath string, maxBytes int64) (int6
 	defer func() { _ = part.Close() }()
 
 	tmpPath := dstPath + ".tmp"
+	// #nosec G304 -- tmpPath is derived from the upload staging directory.
 	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return 0, err

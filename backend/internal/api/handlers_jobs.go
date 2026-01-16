@@ -257,6 +257,7 @@ func (s *server) handleGetJobArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	artifactPath := filepath.Join(s.cfg.DataDir, "artifacts", "jobs", jobID+".zip")
+	// #nosec G304 -- artifactPath is derived from the configured data directory.
 	f, err := os.Open(artifactPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -510,7 +511,8 @@ func (s *server) handleGetJobLogs(w http.ResponseWriter, r *http.Request) {
 			maxBytes = 1024 * 1024
 		}
 
-		f, err := os.Open(logPath)
+			// #nosec G304 -- logPath is derived from the configured data directory.
+			f, err := os.Open(logPath)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -556,6 +558,7 @@ func (s *server) handleGetJobLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #nosec G304 -- logPath is derived from the configured data directory.
 	f, err := os.Open(logPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

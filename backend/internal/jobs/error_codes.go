@@ -3,6 +3,7 @@ package jobs
 import (
 	"errors"
 	"fmt"
+	"s3desk/internal/rcloneerrors"
 	"strings"
 )
 
@@ -11,7 +12,7 @@ const (
 	ErrorCodeTransferEngineMissing      = "transfer_engine_missing"
 	ErrorCodeTransferEngineIncompatible = "transfer_engine_incompatible"
 
-	ErrorCodeInvalidCredentials  = "invalid_credentials"
+	ErrorCodeInvalidCredentials  = "invalid_credentials" // #nosec G101 -- error code, not credentials
 	ErrorCodeAccessDenied        = "access_denied"
 	ErrorCodeSignatureMismatch   = "signature_mismatch"
 	ErrorCodeRequestTimeSkewed   = "request_time_skewed"
@@ -21,6 +22,7 @@ const (
 	ErrorCodeNotFound            = "not_found"
 	ErrorCodeConflict            = "conflict"
 	ErrorCodeRateLimited         = "rate_limited"
+	ErrorCodeInvalidConfig       = "invalid_config"
 	ErrorCodeCanceled            = "canceled"
 	ErrorCodeServerRestarted     = "server_restarted"
 	ErrorCodeValidation          = "validation_error"
@@ -43,14 +45,6 @@ func (e *jobError) Unwrap() error {
 
 func newJobError(code, message string, cause error) error {
 	return &jobError{code: code, message: message, cause: cause}
-}
-
-func validationError(message string) error {
-	return newJobError(ErrorCodeValidation, message, nil)
-}
-
-func notFoundError(message string) error {
-	return newJobError(ErrorCodeNotFound, message, nil)
 }
 
 func jobErrorCode(err error) (string, bool) {
@@ -88,176 +82,11 @@ func jobErrorFromRclone(err error, stderr string, context string) error {
 }
 
 func classifyRcloneError(err error, stderr string) string {
-	msg := strings.ToLower(jobErrorMessage(err, stderr))
-	if msg == "" {
+	cls := rcloneerrors.Classify(err, stderr)
+	if cls.Code == rcloneerrors.CodeUnknown {
 		return ""
 	}
-	switch {
-	case rcloneIsNotFound(msg):
-		return ErrorCodeNotFound
-	case rcloneIsSignatureMismatch(msg):
-		return ErrorCodeSignatureMismatch
-	case rcloneIsInvalidCredentials(msg):
-		return ErrorCodeInvalidCredentials
-	case rcloneIsAccessDenied(msg):
-		return ErrorCodeAccessDenied
-	case rcloneIsRequestTimeSkewed(msg):
-		return ErrorCodeRequestTimeSkewed
-	case rcloneIsRateLimited(msg):
-		return ErrorCodeRateLimited
-	case rcloneIsConflict(msg):
-		return ErrorCodeConflict
-	case rcloneIsTimeout(msg):
-		return ErrorCodeUpstreamTimeout
-	case rcloneIsEndpointError(msg):
-		return ErrorCodeEndpointUnreachable
-	case rcloneIsNetworkError(msg):
-		return ErrorCodeNetworkError
-	default:
-		return ""
-	}
-}
-
-func rcloneIsNotFound(msg string) bool {
-	switch {
-	case strings.Contains(msg, "not found"):
-		return true
-	case strings.Contains(msg, "no such file") || strings.Contains(msg, "no such key"):
-		return true
-	case strings.Contains(msg, "nosuchkey") || strings.Contains(msg, "nosuchbucket"):
-		return true
-	case strings.Contains(msg, "404"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsAccessDenied(msg string) bool {
-	switch {
-	case strings.Contains(msg, "accessdenied") || strings.Contains(msg, "access denied"):
-		return true
-	case strings.Contains(msg, "permission denied"):
-		return true
-	case strings.Contains(msg, "forbidden"):
-		return true
-	case strings.Contains(msg, "status 403") || strings.Contains(msg, "error 403"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsInvalidCredentials(msg string) bool {
-	switch {
-	case strings.Contains(msg, "invalidaccesskeyid"):
-		return true
-	case strings.Contains(msg, "access key id you provided does not exist"):
-		return true
-	case strings.Contains(msg, "invalid access key"):
-		return true
-	case strings.Contains(msg, "invalidtoken") || strings.Contains(msg, "expiredtoken"):
-		return true
-	case strings.Contains(msg, "security token") && strings.Contains(msg, "invalid"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsSignatureMismatch(msg string) bool {
-	switch {
-	case strings.Contains(msg, "signaturedoesnotmatch"):
-		return true
-	case strings.Contains(msg, "signature does not match"):
-		return true
-	case strings.Contains(msg, "request signature we calculated does not match"):
-		return true
-	case strings.Contains(msg, "invalid signature"):
-		return true
-	case strings.Contains(msg, "authorizationheader malformed"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsRequestTimeSkewed(msg string) bool {
-	return strings.Contains(msg, "request time too skewed") || strings.Contains(msg, "requesttime")
-}
-
-func rcloneIsRateLimited(msg string) bool {
-	switch {
-	case strings.Contains(msg, "rate limit"):
-		return true
-	case strings.Contains(msg, "too many requests"):
-		return true
-	case strings.Contains(msg, "slow down"):
-		return true
-	case strings.Contains(msg, "throttle") || strings.Contains(msg, "throttl"):
-		return true
-	case strings.Contains(msg, "status 429") || strings.Contains(msg, "error 429"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsConflict(msg string) bool {
-	switch {
-	case strings.Contains(msg, "conflict"):
-		return true
-	case strings.Contains(msg, "already exists"):
-		return true
-	case strings.Contains(msg, "precondition failed"):
-		return true
-	case strings.Contains(msg, "status 409") || strings.Contains(msg, "error 409"):
-		return true
-	case strings.Contains(msg, "status 412") || strings.Contains(msg, "error 412"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsTimeout(msg string) bool {
-	return strings.Contains(msg, "timeout") || strings.Contains(msg, "context deadline exceeded")
-}
-
-func rcloneIsEndpointError(msg string) bool {
-	switch {
-	case strings.Contains(msg, "no such host"):
-		return true
-	case strings.Contains(msg, "temporary failure in name resolution"):
-		return true
-	case strings.Contains(msg, "connection refused"):
-		return true
-	case strings.Contains(msg, "connection reset"):
-		return true
-	case strings.Contains(msg, "dial tcp"):
-		return true
-	case strings.Contains(msg, "tls:") || strings.Contains(msg, "x509:"):
-		return true
-	default:
-		return false
-	}
-}
-
-func rcloneIsNetworkError(msg string) bool {
-	switch {
-	case strings.Contains(msg, "broken pipe"):
-		return true
-	case strings.Contains(msg, "connection closed"):
-		return true
-	case strings.Contains(msg, "connection aborted"):
-		return true
-	case strings.Contains(msg, "unexpected eof"):
-		return true
-	case strings.Contains(msg, "network error"):
-		return true
-	default:
-		return false
-	}
+	return string(cls.Code)
 }
 
 func FormatJobErrorMessage(message, code string) string {

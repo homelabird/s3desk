@@ -3,6 +3,9 @@ package store
 type profileRow struct {
 	ID                    string  `gorm:"column:id;primaryKey"`
 	Name                  string  `gorm:"column:name"`
+	Provider              string  `gorm:"column:provider"`
+	ConfigJSON            string  `gorm:"column:config_json"`
+	SecretsJSON           string  `gorm:"column:secrets_json"`
 	Endpoint              string  `gorm:"column:endpoint"`
 	Region                string  `gorm:"column:region"`
 	ForcePathStyle        int     `gorm:"column:force_path_style"`

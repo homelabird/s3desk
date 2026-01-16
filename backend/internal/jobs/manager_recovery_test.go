@@ -34,12 +34,22 @@ func TestRecoverAndRequeue(t *testing.T) {
 		t.Fatalf("new store: %v", err)
 	}
 
+	endpoint := "http://localhost:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	forcePathStyle := false
+
 	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
-		Name:            "test",
-		Endpoint:        "http://localhost:9000",
-		Region:          "us-east-1",
-		AccessKeyID:     "access",
-		SecretAccessKey: "secret",
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "test",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		ForcePathStyle:        &forcePathStyle,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
 	})
 	if err != nil {
 		t.Fatalf("create profile: %v", err)

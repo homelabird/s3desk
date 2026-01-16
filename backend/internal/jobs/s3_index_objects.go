@@ -60,7 +60,7 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		return err
 	}
 	if !ok {
-		return errors.New("profile not found")
+		return ErrProfileNotFound
 	}
 
 	indexedAt := time.Now().UTC().Format(time.RFC3339Nano)

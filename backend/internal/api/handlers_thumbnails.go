@@ -209,7 +209,7 @@ func writeThumbnailFile(cachePath string, img image.Image) error {
 		return errors.New("empty image")
 	}
 	dir := filepath.Dir(cachePath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(dir, "thumb-*.jpg")

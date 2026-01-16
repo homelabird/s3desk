@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -21,6 +20,8 @@ import (
 	"s3desk/internal/logging"
 	"s3desk/internal/metrics"
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/rcloneerrors"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -93,6 +94,14 @@ type Manager struct {
 	rcloneS3ChunkSizeMiB      int
 	rcloneS3UploadConcurrency int
 	rcloneStatsInterval       time.Duration
+
+	// Retry/backoff for transient rclone failures (rate limit, network, timeouts).
+	rcloneRetryAttempts  int
+	rcloneRetryBaseDelay time.Duration
+	rcloneRetryMaxDelay  time.Duration
+
+	// When enabled, persist unknown rclone stderr samples for later pattern expansion.
+	captureUnknownRcloneErrors bool
 }
 
 type QueueStats struct {
@@ -143,6 +152,20 @@ func NewManager(cfg Config) *Manager {
 		statsInterval = 500 * time.Millisecond
 	}
 
+	retryAttempts := envInt("RCLONE_RETRY_ATTEMPTS", 3)
+	if retryAttempts < 1 {
+		retryAttempts = 1
+	}
+	retryBaseDelay := envDuration("RCLONE_RETRY_BASE_DELAY", 800*time.Millisecond)
+	if retryBaseDelay < 0 {
+		retryBaseDelay = 0
+	}
+	retryMaxDelay := envDuration("RCLONE_RETRY_MAX_DELAY", 8*time.Second)
+	if retryMaxDelay < retryBaseDelay {
+		retryMaxDelay = retryBaseDelay
+	}
+	captureUnknown := envBool("RCLONE_CAPTURE_UNKNOWN_ERRORS", false)
+
 	m := &Manager{
 		store:           cfg.Store,
 		dataDir:         cfg.DataDir,
@@ -172,13 +195,17 @@ func NewManager(cfg Config) *Manager {
 			return out
 		}(),
 
-		logLineMaxBytes:           logLineMaxBytes,
-		rcloneTuneEnabled:         envBool("RCLONE_TUNE", true),
-		rcloneMaxTransfers:        envInt("RCLONE_MAX_TRANSFERS", defaultMaxTransfers),
-		rcloneMaxCheckers:         envInt("RCLONE_MAX_CHECKERS", defaultMaxCheckers),
-		rcloneS3ChunkSizeMiB:      envInt("RCLONE_S3_CHUNK_SIZE_MIB", 0),
-		rcloneS3UploadConcurrency: envInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0),
-		rcloneStatsInterval:       statsInterval,
+		logLineMaxBytes:            logLineMaxBytes,
+		rcloneTuneEnabled:          envBool("RCLONE_TUNE", true),
+		rcloneMaxTransfers:         envInt("RCLONE_MAX_TRANSFERS", defaultMaxTransfers),
+		rcloneMaxCheckers:          envInt("RCLONE_MAX_CHECKERS", defaultMaxCheckers),
+		rcloneS3ChunkSizeMiB:       envInt("RCLONE_S3_CHUNK_SIZE_MIB", 0),
+		rcloneS3UploadConcurrency:  envInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0),
+		rcloneStatsInterval:        statsInterval,
+		rcloneRetryAttempts:        retryAttempts,
+		rcloneRetryBaseDelay:       retryBaseDelay,
+		rcloneRetryMaxDelay:        retryMaxDelay,
+		captureUnknownRcloneErrors: captureUnknown,
 	}
 
 	if m.metrics != nil {
@@ -246,17 +273,7 @@ func hasAnyFlag(args []string, flags ...string) bool {
 	return false
 }
 
-func clampInt(v, minV, maxV int) int {
-	if v < minV {
-		return minV
-	}
-	if v > maxV {
-		return maxV
-	}
-	return v
-}
-
-func (m *Manager) computeRcloneTune(commandArgs []string) (tune rcloneTune, ok bool) {
+func (m *Manager) computeRcloneTune(commandArgs []string, isS3 bool) (tune rcloneTune, ok bool) {
 	if !m.rcloneTuneEnabled {
 		return rcloneTune{}, false
 	}
@@ -301,9 +318,9 @@ func (m *Manager) computeRcloneTune(commandArgs []string) (tune rcloneTune, ok b
 		checkers = maxCheckers
 	}
 
-	uploadConcurrency := m.rcloneS3UploadConcurrency
-	if uploadConcurrency > 0 {
-		uploadConcurrency = uploadConcurrency / activeJobs
+	uploadConcurrency := 0
+	if isS3 && m.rcloneS3UploadConcurrency > 0 {
+		uploadConcurrency = m.rcloneS3UploadConcurrency / activeJobs
 		if uploadConcurrency < 1 {
 			uploadConcurrency = 1
 		}
@@ -320,14 +337,14 @@ func (m *Manager) computeRcloneTune(commandArgs []string) (tune rcloneTune, ok b
 	}, true
 }
 
-func applyRcloneTune(args []string, tune rcloneTune) []string {
+func applyRcloneTune(args []string, tune rcloneTune, isS3 bool) []string {
 	if tune.Transfers > 0 && !hasAnyFlag(args, "--transfers") {
 		args = append(args, "--transfers", strconv.Itoa(tune.Transfers))
 	}
 	if tune.Checkers > 0 && !hasAnyFlag(args, "--checkers") {
 		args = append(args, "--checkers", strconv.Itoa(tune.Checkers))
 	}
-	if tune.UploadConcurrency > 0 && !hasAnyFlag(args, "--s3-upload-concurrency") {
+	if isS3 && tune.UploadConcurrency > 0 && !hasAnyFlag(args, "--s3-upload-concurrency") {
 		args = append(args, "--s3-upload-concurrency", strconv.Itoa(tune.UploadConcurrency))
 	}
 	return args
@@ -739,7 +756,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return err
 	}
 	if !ok {
-		return errors.New("profile not found")
+		return ErrProfileNotFound
 	}
 	preserveLeadingSlash := profile.PreserveLeadingSlash
 
@@ -755,6 +772,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	}
 
 	ctx, cancel := context.WithCancel(rootCtx)
+	ctx = withJobType(ctx, job.Type)
 	m.mu.Lock()
 	m.cancels[jobID] = cancel
 	m.mu.Unlock()
@@ -843,6 +861,21 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		code := ErrorCodeUnknown
 		if c, ok := jobErrorCode(runErr); ok {
 			code = c
+		} else {
+			// Best-effort mapping for non-rclone failures (e.g., missing transfer engine, deleted profile).
+			switch {
+			case errors.Is(runErr, ErrProfileNotFound):
+				code = ErrorCodeNotFound
+			case errors.Is(runErr, ErrRcloneNotFound):
+				code = ErrorCodeTransferEngineMissing
+			default:
+				var inc *RcloneIncompatibleError
+				if errors.As(runErr, &inc) {
+					code = ErrorCodeTransferEngineIncompatible
+				} else if errors.Is(runErr, context.Canceled) {
+					code = ErrorCodeCanceled
+				}
+			}
 		}
 		_ = m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg, &code)
 		payload := map[string]any{"status": models.JobStatusFailed, "error": msg, "errorCode": code}
@@ -1686,41 +1719,19 @@ func evalSymlinksBestEffort(path string) (string, error) {
 }
 
 func normalizeKeyInput(value string, preserveLeadingSlash bool) string {
-	value = strings.TrimSpace(value)
-	if preserveLeadingSlash {
-		return value
-	}
-	return strings.TrimPrefix(value, "/")
+	return rcloneconfig.NormalizePathInput(value, preserveLeadingSlash)
 }
-
-func normalizePrefix(prefix string, preserveLeadingSlash bool) string {
-	p := normalizeKeyInput(prefix, preserveLeadingSlash)
-	if p != "" && !strings.HasSuffix(p, "/") {
-		p += "/"
-	}
-	return p
-}
-
-const rcloneRemoteName = "remote"
 
 func rcloneRemoteBucket(bucket string) string {
-	return fmt.Sprintf("%s:%s", rcloneRemoteName, bucket)
+	return rcloneconfig.RemoteBucket(bucket)
 }
 
 func rcloneRemoteDir(bucket, prefix string, preserveLeadingSlash bool) string {
-	p := normalizePrefix(prefix, preserveLeadingSlash)
-	if p == "" {
-		return rcloneRemoteBucket(bucket)
-	}
-	return fmt.Sprintf("%s:%s/%s", rcloneRemoteName, bucket, p)
+	return rcloneconfig.RemoteDir(bucket, prefix, preserveLeadingSlash)
 }
 
 func rcloneRemoteObject(bucket, key string, preserveLeadingSlash bool) string {
-	k := normalizeKeyInput(key, preserveLeadingSlash)
-	if k == "" {
-		return rcloneRemoteBucket(bucket)
-	}
-	return fmt.Sprintf("%s:%s/%s", rcloneRemoteName, bucket, k)
+	return rcloneconfig.RemoteObject(bucket, key, preserveLeadingSlash)
 }
 
 func (m *Manager) runRcloneSync(ctx context.Context, profileID, jobID, src, dst string, deleteExtraneous bool, include, exclude []string, dryRun bool, mode rcloneProgressMode) error {
@@ -1779,7 +1790,7 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 		return err
 	}
 	if !ok {
-		return errors.New("profile not found")
+		return ErrProfileNotFound
 	}
 
 	configPath, err := m.writeRcloneConfig(jobID, profileSecrets)
@@ -1811,13 +1822,14 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 	if opts.DryRun {
 		args = append(args, "--dry-run")
 	}
-	if m.rcloneS3ChunkSizeMiB > 0 && !hasAnyFlag(args, "--s3-chunk-size") {
+	isS3 := rcloneconfig.IsS3LikeProvider(profileSecrets.Provider)
+	if isS3 && m.rcloneS3ChunkSizeMiB > 0 && !hasAnyFlag(args, "--s3-chunk-size") {
 		args = append(args, "--s3-chunk-size", fmt.Sprintf("%dM", m.rcloneS3ChunkSizeMiB))
 	}
 
-	tune, tuneOK := m.computeRcloneTune(commandArgs)
+	tune, tuneOK := m.computeRcloneTune(commandArgs, isS3)
 	if tuneOK {
-		args = applyRcloneTune(args, tune)
+		args = applyRcloneTune(args, tune, isS3)
 	}
 	args = append(args, commandArgs...)
 
@@ -1834,74 +1846,46 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 		m.emitJobLogStdout(jobID, "info", tuneMsg)
 	}
 
-	cmd := exec.CommandContext(ctx, rclonePath, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
+	maxAttempts := m.rcloneRetryAttempts
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
 
-	if err := cmd.Start(); err != nil {
-		return err
+	errContext := "rclone"
+	if len(commandArgs) > 0 {
+		errContext = errContext + " " + commandArgs[0]
 	}
 
-	m.mu.Lock()
-	if cmd.Process != nil {
-		m.pids[jobID] = cmd.Process.Pid
-	}
-	m.mu.Unlock()
-
-	var (
-		progressCh   chan rcloneStatsUpdate
-		progressDone chan struct{}
-	)
-	if opts.TrackProgress {
-		progressCh = make(chan rcloneStatsUpdate, 128)
-		progressDone = make(chan struct{})
-		go func() {
-			defer close(progressDone)
-			m.trackRcloneProgress(ctx, jobID, progressCh)
-		}()
-	}
-
-	go func() {
-		<-ctx.Done()
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			m.writeJobLog(logWriter, jobID, "warn", fmt.Sprintf("retrying %s (attempt %d/%d)", errContext, attempt, maxAttempts))
 		}
-	}()
 
-	errCapture := newLogCapture(50)
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		m.pipeLogs(ctx, stdout, logWriter, jobID, "info", nil, progressCh, opts.ProgressMode, m.logLineMaxBytes)
-	}()
-	go func() {
-		defer wg.Done()
-		m.pipeLogs(ctx, stderr, logWriter, jobID, "error", errCapture, progressCh, opts.ProgressMode, m.logLineMaxBytes)
-	}()
-
-	waitErr := cmd.Wait()
-	wg.Wait()
-
-	if progressCh != nil {
-		close(progressCh)
-		<-progressDone
-	}
-	if waitErr != nil {
-		context := "rclone"
-		if len(commandArgs) > 0 {
-			context = context + " " + commandArgs[0]
+		stderrCapture, waitErr := m.runRcloneAttempt(ctx, rclonePath, args, jobID, logWriter, opts)
+		if waitErr == nil {
+			return nil
 		}
-		return jobErrorFromRclone(waitErr, errCapture.String(), context)
+
+		cls := rcloneerrors.Classify(waitErr, stderrCapture)
+		if cls.Code == rcloneerrors.CodeUnknown {
+			m.maybeCaptureUnknownRcloneError(profileSecrets, jobID, errContext, stderrCapture)
+		}
+
+		if attempt >= maxAttempts || !cls.Retryable {
+			return jobErrorFromRclone(waitErr, stderrCapture, errContext)
+		}
+
+		if m.metrics != nil {
+			if jt, ok := jobTypeFromContext(ctx); ok {
+				m.metrics.IncJobsRetried(jt)
+			}
+		}
+
+		delay := m.rcloneRetryDelay(attempt, cls.Code)
+		m.writeJobLog(logWriter, jobID, "warn", fmt.Sprintf("%s failed with %s; retrying in %s (attempt %d/%d)", errContext, cls.Code, delay, attempt+1, maxAttempts))
+		if err := sleepWithContext(ctx, delay); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1912,46 +1896,11 @@ func (m *Manager) writeRcloneConfig(jobID string, profile models.ProfileSecrets)
 		return "", err
 	}
 	path := filepath.Join(dir, jobID+".rclone.conf")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-	if err != nil {
+	if err := rcloneconfig.WriteConfigFile(path, profile, rcloneconfig.RemoteName); err != nil {
+		_ = os.Remove(path)
 		return "", err
 	}
-	defer func() { _ = f.Close() }()
-
-	if _, err := fmt.Fprintf(f, "[%s]\n", rcloneRemoteName); err != nil {
-		return "", err
-	}
-	if _, err := fmt.Fprintln(f, "type = s3"); err != nil {
-		return "", err
-	}
-	if _, err := fmt.Fprintln(f, "provider = Other"); err != nil {
-		return "", err
-	}
-	if profile.Endpoint != "" {
-		if _, err := fmt.Fprintf(f, "endpoint = %s\n", profile.Endpoint); err != nil {
-			return "", err
-		}
-	}
-	if profile.Region != "" {
-		if _, err := fmt.Fprintf(f, "region = %s\n", profile.Region); err != nil {
-			return "", err
-		}
-	}
-	if _, err := fmt.Fprintf(f, "access_key_id = %s\n", profile.AccessKeyID); err != nil {
-		return "", err
-	}
-	if _, err := fmt.Fprintf(f, "secret_access_key = %s\n", profile.SecretAccessKey); err != nil {
-		return "", err
-	}
-	if profile.SessionToken != nil && *profile.SessionToken != "" {
-		if _, err := fmt.Fprintf(f, "session_token = %s\n", *profile.SessionToken); err != nil {
-			return "", err
-		}
-	}
-	if _, err := fmt.Fprintf(f, "force_path_style = %t\n", profile.ForcePathStyle); err != nil {
-		return "", err
-	}
-	return path, f.Close()
+	return path, nil
 }
 
 func (m *Manager) trackRcloneProgress(ctx context.Context, jobID string, progress <-chan rcloneStatsUpdate) {
@@ -2221,13 +2170,13 @@ func stringSlice(v any) []string {
 	return out
 }
 
-func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
+func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
 	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)
 	if err != nil {
 		return false, nil, err
 	}
 	if !found {
-		return false, nil, errors.New("profile not found")
+		return false, nil, ErrProfileNotFound
 	}
 
 	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -2248,16 +2197,24 @@ func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok 
 	})
 	waitErr := proc.wait()
 
-	storageType, storageSource := detectStorageType(profileSecrets.Endpoint, nil)
-	details = map[string]any{}
-	if storageType != "" {
-		details["storageType"] = storageType
+	details = map[string]any{"provider": profileSecrets.Provider}
+	if rcloneconfig.IsS3LikeProvider(profileSecrets.Provider) {
+		storageType, storageSource := detectStorageType(profileSecrets.Endpoint, nil)
+		if storageType != "" {
+			details["storageType"] = storageType
+		}
+		if storageSource != "" {
+			details["storageTypeSource"] = storageSource
+		}
 	}
-	if storageSource != "" {
-		details["storageTypeSource"] = storageSource
-	}
+
 	if listErr != nil {
 		details["error"] = listErr.Error()
+		cls := rcloneerrors.Classify(listErr, proc.stderr.String())
+		details["normalizedError"] = map[string]any{
+			"code":      string(cls.Code),
+			"retryable": cls.Retryable,
+		}
 		return false, details, nil
 	}
 	if waitErr != nil {
@@ -2266,8 +2223,18 @@ func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok 
 			msg = waitErr.Error()
 		}
 		details["error"] = msg
+		cls := rcloneerrors.Classify(waitErr, proc.stderr.String())
+		details["normalizedError"] = map[string]any{
+			"code":      string(cls.Code),
+			"retryable": cls.Retryable,
+		}
 		return false, details, nil
 	}
 	details["buckets"] = bucketCount
 	return true, details, nil
+}
+
+// TestS3Connectivity is kept for backwards compatibility.
+func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
+	return m.TestConnectivity(ctx, profileID)
 }

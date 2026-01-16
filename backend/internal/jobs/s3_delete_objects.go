@@ -43,7 +43,7 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 		return err
 	}
 	if !ok {
-		return errors.New("profile not found")
+		return ErrProfileNotFound
 	}
 
 	ot := int64(len(keys))

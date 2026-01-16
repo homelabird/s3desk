@@ -50,7 +50,7 @@ func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, p
 		return err
 	}
 	if !ok {
-		return errors.New("profile not found")
+		return ErrProfileNotFound
 	}
 
 	objs, err := listRcloneZipObjectsForPrefix(ctx, m, profileSecrets, jobID, bucket, prefix, preserveLeadingSlash)
@@ -98,7 +98,7 @@ func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, 
 		return err
 	}
 	if !ok {
-		return errors.New("profile not found")
+		return ErrProfileNotFound
 	}
 
 	// Normalize + de-dupe keys.
@@ -177,6 +177,7 @@ func (m *Manager) writeZipArtifact(
 	_ = os.Remove(tmpPath)
 	_ = os.Remove(finalPath)
 
+	// #nosec G304 -- tmpPath is built from the configured data directory.
 	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
@@ -450,9 +451,9 @@ func zipS3Object(
 		Method: zip.Store,
 	}
 	if obj.LastModified != nil {
-		h.SetModTime(*obj.LastModified)
+		h.Modified = *obj.LastModified
 	} else {
-		h.SetModTime(time.Now())
+		h.Modified = time.Now()
 	}
 
 	w, err := zw.CreateHeader(h)

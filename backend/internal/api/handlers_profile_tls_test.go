@@ -159,13 +159,21 @@ func newTestServer(t *testing.T, encryptionKey string) (*store.Store, *httptest.
 
 func createTestProfile(t *testing.T, st *store.Store) models.Profile {
 	t.Helper()
+	endpoint := "http://127.0.0.1:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	forcePathStyle := false
+
 	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
 		Name:                  "test-profile",
-		Endpoint:              "http://127.0.0.1:9000",
-		Region:                "us-east-1",
-		AccessKeyID:           "access",
-		SecretAccessKey:       "secret",
-		ForcePathStyle:        false,
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		ForcePathStyle:        &forcePathStyle,
+		PreserveLeadingSlash:  false,
 		TLSInsecureSkipVerify: false,
 	})
 	if err != nil {
