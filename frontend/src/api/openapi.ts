@@ -601,7 +601,6 @@ export interface paths {
         /**
          * Get bucket policy
          * @description Returns the current S3 bucket policy document if present.
-         *
          *     For buckets with no policy, returns `exists=false`.
          */
         get: {
@@ -634,10 +633,7 @@ export interface paths {
                 502: components["responses"]["ErrorResponse"];
             };
         };
-        /**
-         * Put bucket policy
-         * @description Sets (replaces) the S3 bucket policy document.
-         */
+        /** Put bucket policy */
         put: {
             parameters: {
                 query?: never;
@@ -670,10 +666,8 @@ export interface paths {
                 502: components["responses"]["ErrorResponse"];
             };
         };
-        /**
-         * Delete bucket policy
-         * @description Deletes the S3 bucket policy document.
-         */
+        post?: never;
+        /** Delete bucket policy */
         delete: {
             parameters: {
                 query?: never;
@@ -704,11 +698,9 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        post?: never;
         patch?: never;
         trace?: never;
     };
-
     "/buckets/{bucket}/policy/validate": {
         parameters: {
             query?: never;
@@ -716,9 +708,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Validate bucket policy
          * @description Performs static (non-mutating) validation of a provider-specific bucket access policy document.
+         *
+         *     - For S3 providers, this is syntactic lint only. Real provider validation happens on PUT.
+         *     - For GCS/Azure providers, this validates the expected JSON shape for IAM/ACL documents.
          */
         post: {
             parameters: {
@@ -751,15 +748,12 @@ export interface paths {
                 400: components["responses"]["ErrorResponse"];
             };
         };
-        get?: never;
-        put?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-
     "/buckets/{bucket}/objects": {
         parameters: {
             query?: never;
@@ -1943,21 +1937,12 @@ export interface components {
             code: components["schemas"]["NormalizedErrorCode"];
             retryable: boolean;
         };
-        NormalizedErrorCode:
-            | "invalid_credentials"
-            | "access_denied"
-            | "not_found"
-            | "rate_limited"
-            | "network_error"
-            | "invalid_config"
-            | "signature_mismatch"
-            | "request_time_skewed"
-            | "conflict"
-            | "upstream_timeout"
-            | "endpoint_unreachable"
-            | "canceled"
-            | "unknown";
-        /** @description Storage provider backend for a profile. */
+        /** @enum {string} */
+        NormalizedErrorCode: "invalid_credentials" | "access_denied" | "not_found" | "rate_limited" | "network_error" | "invalid_config" | "signature_mismatch" | "request_time_skewed" | "conflict" | "upstream_timeout" | "endpoint_unreachable" | "canceled" | "unknown";
+        /**
+         * @description Storage provider backend for a profile.
+         * @enum {string}
+         */
         ProfileProvider: "aws_s3" | "s3_compatible" | "oci_s3_compat" | "azure_blob" | "gcp_gcs" | "oci_object_storage";
         ProfileBase: {
             id: string;
@@ -1971,33 +1956,62 @@ export interface components {
             updatedAt: string;
         };
         ProfileAwsS3: components["schemas"]["ProfileBase"] & {
+            /** @enum {string} */
             provider: "aws_s3";
             /** @description Optional. If omitted, uses AWS default endpoint resolution. */
             endpoint?: string;
             region: string;
             forcePathStyle: boolean;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            provider: "aws_s3";
         };
         ProfileS3Compatible: components["schemas"]["ProfileBase"] & {
+            /** @enum {string} */
             provider: "s3_compatible";
             endpoint: string;
             region: string;
             forcePathStyle: boolean;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            provider: "s3_compatible";
         };
         ProfileOciS3Compat: components["schemas"]["ProfileBase"] & {
+            /** @enum {string} */
             provider: "oci_s3_compat";
             endpoint: string;
             region: string;
             forcePathStyle: boolean;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            provider: "oci_s3_compat";
         };
         ProfileAzureBlob: components["schemas"]["ProfileBase"] & {
+            /** @enum {string} */
             provider: "azure_blob";
             accountName: string;
             /** @description Optional. Used for local emulators (Azurite) or custom Azure endpoints. */
             endpoint?: string;
             /** @description Optional. If true and endpoint is omitted, server may choose a default emulator endpoint. */
             useEmulator?: boolean;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            provider: "azure_blob";
         };
         ProfileGcpGcs: components["schemas"]["ProfileBase"] & {
+            /** @enum {string} */
             provider: "gcp_gcs";
             projectId?: string;
             clientEmail?: string;
@@ -2006,8 +2020,15 @@ export interface components {
             /** @description Optional. If true, requests are unauthenticated and serviceAccountJson can be omitted. */
             anonymous?: boolean;
             projectNumber?: string;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            provider: "gcp_gcs";
         };
         ProfileOciObjectStorage: components["schemas"]["ProfileBase"] & {
+            /** @enum {string} */
             provider: "oci_object_storage";
             region: string;
             namespace: string;
@@ -2016,15 +2037,19 @@ export interface components {
             authProvider?: string;
             configFile?: string;
             configProfile?: string;
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            provider: "oci_object_storage";
         };
-        Profile:
-            | components["schemas"]["ProfileAwsS3"]
-            | components["schemas"]["ProfileS3Compatible"]
-            | components["schemas"]["ProfileOciS3Compat"]
-            | components["schemas"]["ProfileAzureBlob"]
-            | components["schemas"]["ProfileGcpGcs"]
-            | components["schemas"]["ProfileOciObjectStorage"];
+        Profile: components["schemas"]["ProfileAwsS3"] | components["schemas"]["ProfileS3Compatible"] | components["schemas"]["ProfileOciS3Compat"] | components["schemas"]["ProfileAzureBlob"] | components["schemas"]["ProfileGcpGcs"] | components["schemas"]["ProfileOciObjectStorage"];
         ProfileCreateRequestAwsS3: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "aws_s3";
             name: string;
             /** @description Optional. If omitted, uses AWS default endpoint resolution. */
@@ -2041,6 +2066,10 @@ export interface components {
             tlsInsecureSkipVerify: boolean;
         };
         ProfileCreateRequestS3Compatible: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "s3_compatible";
             name: string;
             endpoint: string;
@@ -2056,6 +2085,10 @@ export interface components {
             tlsInsecureSkipVerify: boolean;
         };
         ProfileCreateRequestOciS3Compat: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "oci_s3_compat";
             name: string;
             endpoint: string;
@@ -2071,6 +2104,10 @@ export interface components {
             tlsInsecureSkipVerify: boolean;
         };
         ProfileCreateRequestAzureBlob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "azure_blob";
             name: string;
             accountName: string;
@@ -2085,6 +2122,10 @@ export interface components {
             tlsInsecureSkipVerify: boolean;
         };
         ProfileCreateRequestGcpGcs: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "gcp_gcs";
             name: string;
             /** @description GCP service account JSON. Required unless anonymous=true. */
@@ -2100,6 +2141,10 @@ export interface components {
             tlsInsecureSkipVerify: boolean;
         };
         ProfileCreateRequestOciObjectStorage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "oci_object_storage";
             name: string;
             region: string;
@@ -2114,14 +2159,12 @@ export interface components {
             /** @default false */
             tlsInsecureSkipVerify: boolean;
         };
-        ProfileCreateRequest:
-            | components["schemas"]["ProfileCreateRequestAwsS3"]
-            | components["schemas"]["ProfileCreateRequestS3Compatible"]
-            | components["schemas"]["ProfileCreateRequestOciS3Compat"]
-            | components["schemas"]["ProfileCreateRequestAzureBlob"]
-            | components["schemas"]["ProfileCreateRequestGcpGcs"]
-            | components["schemas"]["ProfileCreateRequestOciObjectStorage"];
+        ProfileCreateRequest: components["schemas"]["ProfileCreateRequestAwsS3"] | components["schemas"]["ProfileCreateRequestS3Compatible"] | components["schemas"]["ProfileCreateRequestOciS3Compat"] | components["schemas"]["ProfileCreateRequestAzureBlob"] | components["schemas"]["ProfileCreateRequestGcpGcs"] | components["schemas"]["ProfileCreateRequestOciObjectStorage"];
         ProfileUpdateRequestAwsS3: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "aws_s3";
             name?: string;
             endpoint?: string;
@@ -2135,6 +2178,10 @@ export interface components {
             tlsInsecureSkipVerify?: boolean;
         };
         ProfileUpdateRequestS3Compatible: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "s3_compatible";
             name?: string;
             endpoint?: string;
@@ -2148,6 +2195,10 @@ export interface components {
             tlsInsecureSkipVerify?: boolean;
         };
         ProfileUpdateRequestOciS3Compat: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "oci_s3_compat";
             name?: string;
             endpoint?: string;
@@ -2161,6 +2212,10 @@ export interface components {
             tlsInsecureSkipVerify?: boolean;
         };
         ProfileUpdateRequestAzureBlob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "azure_blob";
             name?: string;
             accountName?: string;
@@ -2173,6 +2228,10 @@ export interface components {
             tlsInsecureSkipVerify?: boolean;
         };
         ProfileUpdateRequestGcpGcs: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "gcp_gcs";
             name?: string;
             serviceAccountJson?: string;
@@ -2185,6 +2244,10 @@ export interface components {
             tlsInsecureSkipVerify?: boolean;
         };
         ProfileUpdateRequestOciObjectStorage: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             provider: "oci_object_storage";
             name?: string;
             region?: string;
@@ -2197,13 +2260,7 @@ export interface components {
             preserveLeadingSlash?: boolean;
             tlsInsecureSkipVerify?: boolean;
         };
-        ProfileUpdateRequest:
-            | components["schemas"]["ProfileUpdateRequestAwsS3"]
-            | components["schemas"]["ProfileUpdateRequestS3Compatible"]
-            | components["schemas"]["ProfileUpdateRequestOciS3Compat"]
-            | components["schemas"]["ProfileUpdateRequestAzureBlob"]
-            | components["schemas"]["ProfileUpdateRequestGcpGcs"]
-            | components["schemas"]["ProfileUpdateRequestOciObjectStorage"];
+        ProfileUpdateRequest: components["schemas"]["ProfileUpdateRequestAwsS3"] | components["schemas"]["ProfileUpdateRequestS3Compatible"] | components["schemas"]["ProfileUpdateRequestOciS3Compat"] | components["schemas"]["ProfileUpdateRequestAzureBlob"] | components["schemas"]["ProfileUpdateRequestGcpGcs"] | components["schemas"]["ProfileUpdateRequestOciObjectStorage"];
         ProfileTestResponse: {
             ok: boolean;
             message?: string;
@@ -2247,11 +2304,19 @@ export interface components {
         BucketPolicyResponse: {
             bucket: string;
             exists: boolean;
+            /**
+             * @description Bucket access policy document.
+             *
+             *     - S3 providers: S3 bucket policy JSON.
+             *     - GCS: bucket IAM policy JSON (bindings).
+             *     - Azure: container public access + stored access policy JSON.
+             */
             policy?: {
                 [key: string]: unknown;
             } | null;
         };
         BucketPolicyPutRequest: {
+            /** @description Bucket access policy document (provider-specific). */
             policy: {
                 [key: string]: unknown;
             };
