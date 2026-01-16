@@ -28,6 +28,7 @@ JOB_ID="01JOB"
   "error": {
     "code": "not_found",
     "message": "job not found",
+    "normalizedError": { "code": "not_found", "retryable": false },
     "details": {
       "jobId": "01JOB"
     }

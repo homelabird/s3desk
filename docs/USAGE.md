@@ -1,6 +1,17 @@
 # 사용법 (S3Desk)
 
-S3Desk는 **S3 호환(Object Storage/Ceph RGW 등)** 스토리지를 웹 UI로 조회하고, `rclone` 기반의 대량 작업(업로드/삭제/복사/동기화 Job)을 실행할 수 있는 대시보드입니다.
+S3Desk는 **오브젝트 스토리지**를 웹 UI로 조회하고, `rclone` 기반의 대량 작업(업로드/삭제/복사/동기화 Job)을 실행할 수 있는 대시보드입니다.
+
+현재 코드 기준으로 “1급(Profile) 지원”하는 provider 타입은 아래와 같습니다.
+
+- AWS S3 / S3 호환(Ceph RGW, MinIO 등)
+- Microsoft Azure Blob Storage
+- Google Cloud Storage(GCS)
+- Oracle Cloud Infrastructure(OCI)
+  - OCI S3-compatible endpoint
+  - OCI native Object Storage (rclone `oracleobjectstorage` backend)
+
+자세한 Profile 필드/제약은 `docs/PROVIDERS.md`를 참고하세요.
 
 ## 추가 문서
 
@@ -40,9 +51,13 @@ podman run --rm -p 8080:8080 \
 
 - 로컬 도메인(예: `s3desk.local`)으로 접속하는 경우 `ALLOWED_HOSTS`에 호스트를 추가해야 Host/Origin 검사에서 차단되지 않습니다.
 
-## 3) Profile 만들기 (S3/CEPH 접속 정보)
+## 3) Profile 만들기 (Provider별 접속 정보)
 
-Profile은 “S3 접속 정보” 입니다. `rclone` 사용 예시가 아래라면:
+Profile은 “스토리지 접속 정보” 입니다.
+
+### S3 / S3-compatible
+
+`rclone` 사용 예시가 아래라면:
 
 ```bash
 rclone lsd :s3,provider=Other,endpoint=http://object.anonymdog.com,access_key_id=AKIA...,secret_access_key=...:
@@ -61,6 +76,15 @@ UI에서의 대응은 다음과 같습니다.
   - 자체서명 인증서/사설 TLS에서 필요할 수 있습니다(가능하면 끄는 것을 권장).
 
 Profile 생성 후 **상단(Profile Select)** 에서 해당 Profile을 선택하면 이후 API 호출에 사용됩니다.
+
+### Azure Blob / GCS / OCI
+
+provider별로 필요한 필드가 다르며, UI에서 provider를 선택하면 입력 폼이 바뀝니다.
+
+- Azure Blob: `accountName`, `accountKey` (+ Azurite면 `useEmulator`, `endpoint`)
+- GCS: `serviceAccountJson` 또는 `anonymous=true` (에뮬레이터면 `endpoint`)
+  - **버킷 목록/생성/삭제는 `projectNumber`가 필요할 수 있어**, S3Desk에서도 `projectNumber` 없으면 버킷 레벨 API가 `invalid_config`로 실패합니다.
+- OCI Object Storage: `region`, `ociNamespace`, `ociCompartment`, `ociConfigFile`, `ociConfigProfile` (선택: `ociEndpoint`)
 
 > 보안 주의: Profile 자격증명은 `DB_BACKEND=sqlite`일 때 `DATA_DIR/s3desk.db`에 저장됩니다(ENCRYPTION_KEY 설정 시 암호화).
 > 이 DB는 로컬 전용으로만 보관하고 커밋/공유하지 마세요. 유출 가능성이 있으면 즉시 키를 회전하세요.
@@ -112,7 +136,7 @@ Profile 생성 후 **상단(Profile Select)** 에서 해당 Profile을 선택하
 업로드는 2단계입니다.
 
 1) **브라우저 → 서버 staging** (진행률/속도/ETA가 UI에 표시됨)
-2) **Commit → Job 생성 → 서버에서 rclone으로 S3 업로드** (Jobs 페이지에서 진행률/ETA 확인)
+2) **Commit → Job 생성 → 서버에서 rclone으로 업로드** (Jobs 페이지에서 진행률/ETA 확인)
 
 ### Jobs
 
@@ -150,9 +174,11 @@ Settings → Server 섹션의 Transfer Engine 항목에서 감지 상태/경로�
   - `/download-url`은 rclone의 `link` 결과를 그대로 반환합니다(스토리지 구현에 따라 path-style/host-style 및 서명 규칙이 다를 수 있음).
   - 엄격한 경로/서명 호환이나 `Content-Disposition` 보장이 필요하면 `proxy=true`로 `/download-proxy`를 사용하세요.
   - `/download-proxy`는 **S3 서명이 아니라 서버 HMAC 서명**(API 토큰 기반)을 사용합니다.
-- 에러 의미 통합
-  - rclone 오류 메시지를 다음 코드로 매핑합니다: `access_denied`, `invalid_credentials`, `signature_mismatch`, `request_time_skewed`, `endpoint_unreachable`, `upstream_timeout`.
-  - 분류되지 않은 오류는 `s3_error`로 반환하며 `details.error`에 원문을 포함합니다.
+- 에러 의미 통합 (NormalizedError)
+  - rclone 오류 메시지는 provider별로 제각각이라, S3Desk는 오류 응답에 `normalizedError`를 같이 실어 보냅니다.
+  - `normalizedError.code`는 provider-agnostic 공통 코드이며, UI/자동화 로직은 이 값을 기준으로 처리하는 것을 권장합니다.
+  - 대표 코드: `invalid_credentials`, `access_denied`, `not_found`, `rate_limited`, `network_error`, `invalid_config`, `signature_mismatch`, `request_time_skewed`, `conflict`, `upstream_timeout`, `endpoint_unreachable`, `canceled`, `unknown`.
+  - `error.code`는 레거시(`s3_error` 등)일 수 있으며, 분류가 가능한 경우에는 `invalid_credentials` 같은 공통 코드가 직접 내려갑니다.
 
 ## 6) 자주 나오는 문제
 

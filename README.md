@@ -1,6 +1,23 @@
-# S3Desk (S3-compatible)
+# S3Desk (multi-provider object storage)
 
 S3Desk is a local-only dashboard for browsing and bulk transfer jobs (powered by `rclone`).
+
+## Providers
+
+S3Desk uses `rclone` under the hood, so the long-term goal is a single UI/API for multiple object-storage providers.
+
+First-class profile types currently included:
+
+- AWS S3 / S3-compatible (Ceph RGW, MinIO, etc.)
+- Microsoft Azure Blob Storage
+- Google Cloud Storage (GCS)
+- Oracle Cloud Infrastructure (OCI)
+  - OCI S3-compatible endpoint
+  - OCI native Object Storage (rclone `oracleobjectstorage` backend)
+
+See:
+- `docs/USAGE.md`
+- `docs/PROVIDERS.md`
 
 ## Quick start (single container)
 
@@ -44,6 +61,8 @@ Open `http://localhost:8080` and use the configured `API_TOKEN`.
 - `docs/USAGE.md`
 
 ## Run (dev)
+
+> Frontend build/dev requires **Node.js 22+** (or Node 20.19+). If you run an older Node, `npm ci` and Vite will fail with engine errors.
 
 1) Start backend
 
@@ -163,13 +182,23 @@ Run the packaged UI:
 
 ## E2E tests
 
-Playwright specs live in `frontend/tests`. Live server + MinIO coverage is gated by `E2E_LIVE=1`.
+There are two flavors of E2E coverage:
 
-Docker + MinIO example:
+- **Backend provider smoke** (CI): `docker-compose.e2e.yml` + `e2e/runner/runner.py`
+  - Scenario: “profile create → connection test → bucket list → upload/download”
+  - Covers MinIO (S3), Azurite (Azure Blob), fake-gcs-server (GCS)
+- **UI E2E** (local): Playwright specs live in `frontend/tests` (gated by `E2E_LIVE=1`)
+
+Docker (provider smoke) example:
 
 ```bash
 docker compose -f docker-compose.e2e.yml up -d --build
+
+# Run the provider-agnostic API flow runner
+docker compose -f docker-compose.e2e.yml run --rm runner
 ```
+
+Playwright (UI) example:
 
 ```bash
 cd frontend

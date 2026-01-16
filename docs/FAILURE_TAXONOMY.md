@@ -34,8 +34,21 @@ Job 실패 원인을 코드로 분류해 UI/로그/메트릭에서 동일한 기
 
 ## 적용 지점
 
-- rclone 에러 메시지 → 코드 매핑 (`rclone_helpers.go`의 패턴 사용)
-- 내부 Job 실패 시 에러 메시지에 `error_code` 포함
+- API 오류 응답에서 `normalizedError.code=rate_limited`인 경우, HTTP 헤더 `Retry-After`를 함께 반환해
+  클라이언트/자동화가 백오프(backoff) 기준을 잡을 수 있게 한다.
+
+- Jobs(비동기)에서 rclone 실행이 `normalizedError.retryable=true`로 분류되면 자동으로 exponential backoff 재시도한다.
+  - 기본 retry 대상: `rate_limited` / `endpoint_unreachable` / `upstream_timeout` / `network_error`
+  - 환경 변수: `RCLONE_RETRY_ATTEMPTS`, `RCLONE_RETRY_BASE_DELAY`, `RCLONE_RETRY_MAX_DELAY`
+  - duration 포맷: Go duration string (예: `800ms`, `2s`, `30s`)
+
+- (옵션) unknown rclone stderr 샘플을 저장해 패턴을 확장한다.
+  - 환경 변수: `RCLONE_CAPTURE_UNKNOWN_ERRORS=true`
+  - 저장 경로: `${DATA_DIR}/logs/rcloneerrors/unknown/*.txt`
+
+- rclone 에러 메시지 → 코드 매핑 (`backend/internal/rcloneerrors` 공통 모듈 사용)
+- API 오류 응답: `ErrorResponse.error.normalizedError` (provider-agnostic 공통 코드)
+- 내부 Job 실패 시 에러 메시지/DB에 `error_code` 포함 (동일한 분류 로직 사용)
 - Job 완료 이벤트 및 로그에 `error_code` 필드 포함
 
 ## 대시보드 계획
