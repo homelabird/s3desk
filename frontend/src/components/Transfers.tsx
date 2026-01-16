@@ -128,6 +128,8 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 
 	const downloadConcurrency = 2
 	const uploadConcurrency = 1
+	const uploadBatchConcurrency = 4
+	const uploadBatchBytes = 64 * 1024 * 1024
 
 	const openTransfers = useCallback(
 		(nextTab?: TransfersTab) => {
@@ -713,6 +715,9 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 							etaSeconds: stats.etaSeconds,
 						}))
 					},
+					concurrency: uploadBatchConcurrency,
+					maxBatchBytes: uploadBatchBytes,
+					maxBatchItems: 50,
 				})
 				uploadAbortByTaskIdRef.current[taskId] = handle.abort
 				const result = await handle.promise
@@ -775,7 +780,7 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 				}
 			}
 		},
-		[api, navigate, queryClient, updateUploadTask],
+		[api, navigate, queryClient, updateUploadTask, uploadBatchBytes, uploadBatchConcurrency],
 	)
 
 	useEffect(() => {

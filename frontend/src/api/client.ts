@@ -563,51 +563,135 @@ export class APIClient {
 		profileId: string,
 		uploadId: string,
 		files: UploadFileItem[],
-		args: { onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void } = {},
+		args: {
+			onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void
+			concurrency?: number
+			maxBatchBytes?: number
+			maxBatchItems?: number
+		} = {},
 	): { promise: Promise<UploadFilesResult>; abort: () => void } {
-		const form = new FormData()
+		const concurrency = Math.max(1, args.concurrency ?? 1)
+		const maxBatchBytes = Math.max(1, args.maxBatchBytes ?? 64 * 1024 * 1024)
+		const maxBatchItems = Math.max(1, args.maxBatchItems ?? 50)
+		const totalBytes = files.reduce((acc, item) => acc + (item.file?.size ?? 0), 0)
+
+		if (files.length === 0) {
+			return { promise: Promise.resolve({ skipped: 0 }), abort: () => {} }
+		}
+
+		const batches: UploadFileItem[][] = []
+		const batchBytes: number[] = []
+		let current: UploadFileItem[] = []
+		let currentBytes = 0
 		for (const item of files) {
-			form.append('files', item.file, resolveUploadFilename(item))
+			const size = item.file?.size ?? 0
+			const exceedsSize = currentBytes + size > maxBatchBytes
+			const exceedsCount = current.length >= maxBatchItems
+			if (current.length > 0 && (exceedsSize || exceedsCount)) {
+				batches.push(current)
+				batchBytes.push(currentBytes)
+				current = []
+				currentBytes = 0
+			}
+			current.push(item)
+			currentBytes += size
+		}
+		if (current.length > 0) {
+			batches.push(current)
+			batchBytes.push(currentBytes)
 		}
 
-		const xhr = new XMLHttpRequest()
-		xhr.open('POST', this.baseUrl + `/uploads/${encodeURIComponent(uploadId)}/files`)
+		const perBatchLoaded = new Array(batches.length).fill(0)
+		const aborters: Array<() => void> = []
+		let aborted = false
 
-		xhr.setRequestHeader('X-Profile-Id', profileId)
-		if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
-
-		xhr.upload.onprogress = (e) => {
+		const emitProgress = () => {
 			if (!args.onProgress) return
-			args.onProgress({
-				loadedBytes: e.loaded,
-				totalBytes: e.lengthComputable ? e.total : undefined,
-			})
+			const loadedBytes = perBatchLoaded.reduce((acc, v) => acc + v, 0)
+			args.onProgress({ loadedBytes, totalBytes: totalBytes || undefined })
 		}
 
-		const promise = new Promise<UploadFilesResult>((resolve, reject) => {
-			xhr.onload = () => {
-				if (xhr.status >= 200 && xhr.status < 300) {
-					clearNetworkStatus()
-					const skippedRaw = xhr.getResponseHeader('X-Upload-Skipped')
-					const skipped = skippedRaw ? Number.parseInt(skippedRaw, 10) : 0
-					resolve({ skipped: Number.isFinite(skipped) && skipped > 0 ? skipped : 0 })
-					return
-				}
-				if (xhr.status >= 500 || xhr.status === 0) {
-					publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
-				}
-				reject(parseAPIError(xhr.status, xhr.responseText))
+		const runBatch = (batch: UploadFileItem[], batchIndex: number) => {
+			const form = new FormData()
+			for (const item of batch) {
+				form.append('files', item.file, resolveUploadFilename(item))
 			}
-			xhr.onerror = () => {
-				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
-				reject(new Error('network error'))
+
+			const xhr = new XMLHttpRequest()
+			xhr.open('POST', this.baseUrl + `/uploads/${encodeURIComponent(uploadId)}/files`)
+			xhr.setRequestHeader('X-Profile-Id', profileId)
+			if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+
+			xhr.upload.onprogress = (e) => {
+				perBatchLoaded[batchIndex] = e.loaded
+				emitProgress()
 			}
-			xhr.onabort = () => reject(new RequestAbortedError())
-		})
 
-		xhr.send(form)
+			const promise = new Promise<UploadFilesResult>((resolve, reject) => {
+				xhr.onload = () => {
+					if (xhr.status >= 200 && xhr.status < 300) {
+						clearNetworkStatus()
+						const skippedRaw = xhr.getResponseHeader('X-Upload-Skipped')
+						const skipped = skippedRaw ? Number.parseInt(skippedRaw, 10) : 0
+						perBatchLoaded[batchIndex] = batchBytes[batchIndex]
+						emitProgress()
+						resolve({ skipped: Number.isFinite(skipped) && skipped > 0 ? skipped : 0 })
+						return
+					}
+					if (xhr.status >= 500 || xhr.status === 0) {
+						publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
+					}
+					reject(parseAPIError(xhr.status, xhr.responseText))
+				}
+				xhr.onerror = () => {
+					publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+					reject(new Error('network error'))
+				}
+				xhr.onabort = () => reject(new RequestAbortedError())
+			})
 
-		return { promise, abort: () => xhr.abort() }
+			xhr.send(form)
+			return { promise, abort: () => xhr.abort() }
+		}
+
+		const promise = (async () => {
+			let nextIndex = 0
+			let skippedTotal = 0
+
+			const worker = async () => {
+				while (true) {
+					if (aborted) return
+					const batchIndex = nextIndex
+					if (batchIndex >= batches.length) return
+					nextIndex += 1
+
+					const handle = runBatch(batches[batchIndex], batchIndex)
+					aborters.push(handle.abort)
+					try {
+						const res = await handle.promise
+						skippedTotal += res.skipped
+					} catch (err) {
+						if (!aborted) {
+							aborted = true
+							for (const abort of aborters) abort()
+						}
+						throw err
+					}
+				}
+			}
+
+			const workers = Array.from({ length: Math.min(concurrency, batches.length) }, () => worker())
+			await Promise.all(workers)
+			return { skipped: skippedTotal }
+		})()
+
+		return {
+			promise,
+			abort: () => {
+				aborted = true
+				for (const abort of aborters) abort()
+			},
+		}
 	}
 
 	downloadObject(
