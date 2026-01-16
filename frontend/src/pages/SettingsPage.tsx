@@ -106,6 +106,31 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'objectsDetailsWidth',
 ] as const
 
+function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => void }) {
+	const [draft, setDraft] = useState(props.apiToken)
+	const apply = () => {
+		props.setApiToken(draft.trim())
+	}
+	return (
+		<Space.Compact style={{ width: '100%' }}>
+			<Input.Password
+				placeholder="Must match API_TOKEN"
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				onBlur={apply}
+				onPressEnter={(e) => {
+					e.preventDefault()
+					apply()
+				}}
+				autoComplete="current-password"
+			/>
+			<Button type="primary" onClick={apply}>
+				Apply
+			</Button>
+		</Space.Compact>
+	)
+}
+
 export function SettingsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
@@ -215,12 +240,7 @@ export function SettingsPage(props: Props) {
 							<Space direction="vertical" size="middle" style={{ width: '100%' }}>
 								<Form layout="vertical" requiredMark={false}>
 									<Form.Item label="Backend API Token (X-Api-Token)">
-										<Input.Password
-											placeholder="Must match API_TOKEN"
-											value={props.apiToken}
-											onChange={(e) => props.setApiToken(e.target.value)}
-											autoComplete="current-password"
-										/>
+										<ApiTokenField key={props.apiToken} apiToken={props.apiToken} setApiToken={props.setApiToken} />
 										<Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
 											This must match the server's <Typography.Text code>API_TOKEN</Typography.Text> (or{' '}
 											<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials.
