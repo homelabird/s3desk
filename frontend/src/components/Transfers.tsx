@@ -128,8 +128,11 @@ export function TransfersProvider(props: { apiToken: string; children: ReactNode
 
 	const downloadConcurrency = 2
 	const uploadConcurrency = 1
-	const uploadBatchConcurrency = 4
-	const uploadBatchBytes = 64 * 1024 * 1024
+	const [uploadBatchConcurrencySetting] = useLocalStorageState<number>('uploadBatchConcurrency', 8)
+	const [uploadBatchBytesMiBSetting] = useLocalStorageState<number>('uploadBatchBytesMiB', 32)
+	const uploadBatchConcurrency = Math.min(8, Math.max(1, Number.isFinite(uploadBatchConcurrencySetting) ? uploadBatchConcurrencySetting : 8))
+	const uploadBatchBytesMiB = Math.min(256, Math.max(4, Number.isFinite(uploadBatchBytesMiBSetting) ? uploadBatchBytesMiBSetting : 32))
+	const uploadBatchBytes = uploadBatchBytesMiB * 1024 * 1024
 
 	const openTransfers = useCallback(
 		(nextTab?: TransfersTab) => {
