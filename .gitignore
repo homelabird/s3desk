@@ -16,3 +16,7 @@ frontend/test-results/
 
 artifacts/
 .lighthouseci/
+
+# Python
+__pycache__/
+*.pyc

@@ -11,6 +11,20 @@ services:
     volumes:
       - minio-data:/data
 
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --loose --skipApiVersionCheck
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite-data:/data
+
+  fake-gcs-server:
+    image: fsouza/fake-gcs-server:latest
+    command: ["-scheme", "http", "-port", "4443", "-backend", "memory"]
+    ports:
+      - "4443:4443"
+
   s3desk:
     build:
       context: .
@@ -25,7 +39,21 @@ services:
       - s3desk-data:/data
     depends_on:
       - minio
+      - azurite
+      - fake-gcs-server
+
+  runner:
+    build:
+      context: ./e2e/runner
+      dockerfile: Dockerfile
+    environment:
+      BASE_URL: "http://s3desk:8080"
+      API_TOKEN: "change-me"
+    depends_on:
+      - s3desk
+    command: ["python", "/app/runner.py"]
 
 volumes:
   minio-data:
+  azurite-data:
   s3desk-data:

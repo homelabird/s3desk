@@ -15,8 +15,28 @@ if [[ -z "${GO_BIN}" ]]; then
   fi
 fi
 
+GOFMT_BIN="${GOFMT_BIN:-}"
+if [[ -z "${GOFMT_BIN}" ]]; then
+  if command -v gofmt >/dev/null 2>&1; then
+    GOFMT_BIN="gofmt"
+  elif [[ -x "$(dirname "${GO_BIN}")/gofmt" ]]; then
+    GOFMT_BIN="$(dirname "${GO_BIN}")/gofmt"
+  else
+    echo "[check] gofmt not found (install Go or add .tools/go)" >&2
+    exit 1
+  fi
+fi
+
 echo "[check] openapi"
 bash "${ROOT}/scripts/validate_openapi.sh"
+
+echo "[check] gofmt"
+UNFORMATTED=$(find "${ROOT}/backend" -name '*.go' -type f -print0 | xargs -0 "${GOFMT_BIN}" -l)
+if [[ -n "${UNFORMATTED}" ]]; then
+  echo "[check] gofmt needed:" >&2
+  echo "${UNFORMATTED}" >&2
+  exit 1
+fi
 
 echo "[check] backend"
 (cd "${ROOT}/backend" && "${GO_BIN}" test ./...)

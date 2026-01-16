@@ -8,7 +8,11 @@ check:
   image: golang:1.23
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends nodejs npm python3 ca-certificates curl git
+    - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y --no-install-recommends nodejs
+    - node --version
+    - npm --version
   script:
     - bash scripts/check.sh
     # Ensure generated artifacts (openapi types, third-party notices) are committed.
@@ -20,6 +24,22 @@ check:
       - third_party/licenses/
     expire_in: 7 days
 
+e2e:
+  stage: test
+  image: docker:27.3.1
+  services:
+    - name: docker:27.3.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - docker version
+    - docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from runner
+  after_script:
+    - if [ "$CI_JOB_STATUS" != "success" ]; then docker compose -f docker-compose.e2e.yml logs --no-color; fi
+    - docker compose -f docker-compose.e2e.yml down -v
+
 perf_tests:
   stage: test
   image: mcr.microsoft.com/playwright:v1.47.0-jammy
@@ -28,6 +48,12 @@ perf_tests:
       when: on_success
     - when: never
   script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends ca-certificates curl gnupg
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y --no-install-recommends nodejs
+    - node --version
+    - npm --version
     - cd frontend
     - npm ci --no-audit --no-fund
     - PERF_TESTS=1 npx playwright test tests/jobs-perf.spec.ts
@@ -43,7 +69,11 @@ dev_license_audit:
   image: golang:1.23
   before_script:
     - apt-get update
-    - apt-get install -y --no-install-recommends nodejs npm python3 ca-certificates curl
+    - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y --no-install-recommends nodejs
+    - node --version
+    - npm --version
   script:
     - cd frontend
     - npm ci --no-audit --no-fund
