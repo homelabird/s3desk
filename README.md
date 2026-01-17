@@ -28,9 +28,9 @@ Single-container run uses sqlite by default at `/data/s3desk.db`.
 The image includes the `sqlite3` CLI for ad-hoc inspection.
 
 > **Getting started**
-> - `docker run`으로 단일 컨테이너 실행 (아래 예시)
-> - 브라우저에서 `http://localhost:8080` 접속
-> - 원격 접속 시 `ALLOW_REMOTE=true` + `API_TOKEN` 설정
+> - Run a single container with `docker run` (see below)
+> - Open `http://localhost:8080` in your browser
+> - For remote access, set `ALLOW_REMOTE=true` and `API_TOKEN`
 
 ```bash
 docker run --rm -p 8080:8080 \
