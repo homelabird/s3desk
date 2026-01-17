@@ -39,7 +39,11 @@ if [[ -n "${UNFORMATTED}" ]]; then
 fi
 
 echo "[check] backend"
-(cd "${ROOT}/backend" && "${GO_BIN}" test ./...)
+(
+  cd "${ROOT}/backend"
+  "${GO_BIN}" vet ./...
+  "${GO_BIN}" test ./...
+)
 
 echo "[check] frontend"
 (

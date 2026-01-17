@@ -5,7 +5,7 @@ stages:
 # Mandatory quality gate.
 check:
   stage: test
-  image: golang:1.23
+  image: golang:1.24
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -15,6 +15,14 @@ check:
     - npm --version
   script:
     - bash scripts/check.sh
+    - |
+      GOBIN="$(go env GOBIN)"
+      if [ -z "$GOBIN" ]; then
+        GOBIN="$(go env GOPATH)/bin"
+      fi
+      go install golang.org/x/vuln/cmd/govulncheck@latest
+      cd backend
+      "$GOBIN/govulncheck" ./...
     # Ensure generated artifacts (openapi types, third-party notices) are committed.
     - git diff --exit-code
   artifacts:
@@ -66,7 +74,7 @@ perf_tests:
 
 dev_license_audit:
   stage: audit
-  image: golang:1.23
+  image: golang:1.24
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
