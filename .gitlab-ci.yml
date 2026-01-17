@@ -146,7 +146,7 @@ api_integration:
       fi
       if command -v podman-compose >/dev/null 2>&1; then
         COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod --pod-args=--network=slirp4netns"
+        COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
       else
         if command -v dnf >/dev/null 2>&1; then
           dnf -y install python3-pip
@@ -158,7 +158,7 @@ api_integration:
         fi
         python3 -m pip install --no-cache-dir podman-compose
         COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod --pod-args=--network=slirp4netns"
+        COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
       fi
       echo "$COMPOSE_CMD" > /tmp/compose_cmd
       echo "$COMPOSE_ARGS" > /tmp/compose_args
