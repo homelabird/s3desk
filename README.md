@@ -4,10 +4,9 @@ S3Desk is a local-only dashboard for browsing and bulk transfer jobs (powered by
 
 ## Providers
 
-S3Desk uses `rclone` under the hood, so the long-term goal is a single UI/API for multiple object-storage providers.
+S3Desk uses `rclone`, with a long-term goal of a single UI/API across multiple object-storage providers.
 
-First-class profile types currently included:
-
+Supported providers:
 - AWS S3 / S3-compatible (Ceph RGW, MinIO, etc.)
 - Microsoft Azure Blob Storage
 - Google Cloud Storage (GCS)
@@ -19,14 +18,14 @@ Support tiers:
 - **Tier 1**: AWS S3, S3-compatible (MinIO/Ceph), Azure Blob, GCS
 - **Tier 2**: OCI S3-compatible, OCI Object Storage (native)
 
-See:
+Details:
 - `docs/USAGE.md`
 - `docs/PROVIDERS.md`
 
 ## Quick start (single container)
 
-Single-container run uses sqlite by default, stored at `/data/s3desk.db`.
-The image also includes the `sqlite3` CLI for ad-hoc inspection.
+Single-container run uses sqlite by default at `/data/s3desk.db`.
+The image includes the `sqlite3` CLI for ad-hoc inspection.
 
 ```bash
 docker run --rm -p 8080:8080 \
@@ -68,14 +67,14 @@ Open `http://localhost:8080` and use the configured `API_TOKEN`.
 
 > Frontend build/dev requires **Node.js 22+** (or Node 20.19+). If you run an older Node, `npm ci` and Vite will fail with engine errors.
 
-1) Start backend
+1) Start the backend
 
 ```bash
 cd backend
 go run ./cmd/server
 ```
 
-2) Start frontend (Vite dev server)
+2) Start the frontend (Vite dev server)
 
 ```bash
 cd frontend
@@ -165,7 +164,7 @@ Notes:
 ./scripts/build.sh
 ```
 
-Verify everything:
+Verify everything locally:
 
 ```bash
 ./scripts/check.sh
