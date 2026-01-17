@@ -20,6 +20,12 @@
   - Add a small “contract” check that asserts API error payloads always include `normalizedError` for a fixed set of codes.
   - Make E2E job upload artifacts (runner stdout + compose logs) for longer retention.
 
+### 4) Transfer flow test coverage (definition)
+- **Next**
+  - **Job creation**: API + UI (sync local<->s3, copy/move object, copy/move prefix, delete prefix).
+  - **Progress tracking**: events/SSE → UI counters, speed/eta updates, completion state transitions.
+  - **Error recovery**: retryable failure shows normalized code + retry action; cancel + retry clears state; rerun job succeeds.
+
 ## P1 — Multi-cloud feature integration (core platform)
 
 ### 4) Provider capability matrix
@@ -48,4 +54,3 @@
 - Provider-specific form guidance (field-level validation + docs links)
 - Policy editor validation and “diff preview”
 - Better error UX: show normalized code + recommended actions
-

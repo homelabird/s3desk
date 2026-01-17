@@ -6,6 +6,22 @@ UI/DB/API 스키마로 **어떤 옵션을 1급(Profile)으로 노출하느냐**�
 
 이 문서는 현재 코드 기준으로 **지원 provider 타입**, **Profile 필드**, **API 기능 범위**를 정리합니다.
 
+## 0) 지원 등급(Tier) 정의
+
+- **Tier 1**: CI에서 provider smoke가 돌아가며, 핵심 플로우(연결 테스트, 버킷/오브젝트 기본 CRUD, 전송 Job)가 검증됩니다.
+- **Tier 2**: UI/스키마에서 제공되지만 자동화 테스트 커버리지가 낮아, 환경별 수동 검증이 필요합니다.
+
+## 0-1) Provider별 등급/범위
+
+| Provider | Tier | 핵심 지원 범위 | 제약/비고 |
+|---|---|---|---|
+| AWS S3 | Tier 1 | Profile CRUD, 연결 테스트, 버킷 list/create/delete, 오브젝트 list/upload/download/delete, 전송 Job | 기본 AWS 엔드포인트 사용 가능 |
+| S3 호환 스토리지(Ceph, MinIO 등) | Tier 1 | Profile CRUD, 연결 테스트, 버킷/오브젝트 기본 CRUD, 전송 Job | CI 검증은 MinIO 기준, 환경별 `endpoint`/`forcePathStyle` 차이 존재 |
+| Azure Blob Storage | Tier 1 | Profile CRUD, 연결 테스트, 컨테이너 list/create/delete, 오브젝트 list/upload/download/delete, 전송 Job | CI 검증은 Azurite 기준 |
+| Google Cloud Storage(GCS) | Tier 1 | Profile CRUD, 연결 테스트, 버킷/오브젝트 기본 CRUD, 전송 Job | 버킷 레벨 API는 `projectNumber` 필요할 수 있음 |
+| OCI S3-compatible | Tier 2 | Profile CRUD, 연결 테스트, 버킷/오브젝트 기본 CRUD, 전송 Job | S3 호환으로 동작하나 자동화 커버리지 낮음 |
+| OCI Object Storage (native) | Tier 2 | Profile CRUD, 연결 테스트, 버킷/오브젝트 기본 CRUD, 전송 Job | OCI config 파일/compartment 설정 필요, 자동화 커버리지 낮음 |
+
 ## 1) Provider 타입
 
 | Provider | 의미 | rclone backend |

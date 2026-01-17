@@ -2,16 +2,17 @@
 
 S3Desk는 **오브젝트 스토리지**를 웹 UI로 조회하고, `rclone` 기반의 대량 작업(업로드/삭제/복사/동기화 Job)을 실행할 수 있는 대시보드입니다.
 
-현재 코드 기준으로 “1급(Profile) 지원”하는 provider 타입은 아래와 같습니다.
+현재 코드 기준으로 provider 지원 등급은 아래와 같습니다(자세한 범위/제약은 `docs/PROVIDERS.md` 참고).
 
-- AWS S3 / S3 호환(Ceph RGW, MinIO 등)
+**Tier 1**
+- AWS S3
+- S3 호환 스토리지(Ceph RGW, MinIO 등)
 - Microsoft Azure Blob Storage
 - Google Cloud Storage(GCS)
-- Oracle Cloud Infrastructure(OCI)
-  - OCI S3-compatible endpoint
-  - OCI native Object Storage (rclone `oracleobjectstorage` backend)
 
-자세한 Profile 필드/제약은 `docs/PROVIDERS.md`를 참고하세요.
+**Tier 2**
+- OCI S3-compatible endpoint
+- OCI native Object Storage (rclone `oracleobjectstorage` backend)
 
 ## 추가 문서
 

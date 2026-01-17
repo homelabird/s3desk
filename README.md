@@ -15,6 +15,10 @@ First-class profile types currently included:
   - OCI S3-compatible endpoint
   - OCI native Object Storage (rclone `oracleobjectstorage` backend)
 
+Support tiers:
+- **Tier 1**: AWS S3, S3-compatible (MinIO/Ceph), Azure Blob, GCS
+- **Tier 2**: OCI S3-compatible, OCI Object Storage (native)
+
 See:
 - `docs/USAGE.md`
 - `docs/PROVIDERS.md`
