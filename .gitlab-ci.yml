@@ -1,5 +1,7 @@
 workflow:
   rules:
+    - if: '$CI_COMMIT_TAG'
+      when: always
     - changes:
         - .gitlab-ci.yml
         - Containerfile
@@ -25,6 +27,7 @@ workflow:
 stages:
   - test
   - audit
+  - publish
 
 # Mandatory quality gate.
 check:
@@ -117,3 +120,26 @@ dev_license_audit:
       - THIRD_PARTY_NOTICES.md
       - third_party/licenses/
     expire_in: 7 days
+
+publish_dockerhub:
+  stage: publish
+  image: docker:27.3.1
+  services:
+    - name: docker:27.3.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  script:
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker build -f Containerfile -t "$DOCKERHUB_REPO:$CI_COMMIT_TAG" -t "$DOCKERHUB_REPO:beta" .
+    - docker push "$DOCKERHUB_REPO:$CI_COMMIT_TAG"
+    - docker push "$DOCKERHUB_REPO:beta"
+    - docker run --rm -v "$CI_PROJECT_DIR":/workspace \
+        -e DOCKERHUB_USERNAME \
+        -e DOCKERHUB_PASSWORD="$DOCKERHUB_TOKEN" \
+        -e DOCKERHUB_REPOSITORY="$DOCKERHUB_REPO" \
+        -e README_FILEPATH=/workspace/README.md \
+        peterevans/dockerhub-description:latest
