@@ -109,6 +109,9 @@ func resolveEndpoint(profile models.ProfileSecrets) (*url.URL, error) {
 		return nil, err
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
+	if strings.HasSuffix(u.Path, "/storage/v1/v1") {
+		u.Path = strings.TrimSuffix(u.Path, "/v1")
+	}
 	// fake-gcs-server exposes JSON API under /storage/v1.
 	if !strings.HasSuffix(u.Path, "/storage/v1") {
 		u.Path = u.Path + "/storage/v1"

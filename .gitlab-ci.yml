@@ -13,6 +13,13 @@ workflow:
         - scripts/**/*
         - third_party/licenses-manual/**/*
         - third_party/licenses/**/*
+      when: always
+    - changes:
+        - README.md
+        - LICENSE*
+        - docs/**/*
+        - docs/wiki/**/*
+      when: never
     - when: never
 
 stages:

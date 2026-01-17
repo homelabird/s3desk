@@ -2,6 +2,11 @@
 
 S3Desk is a local-only dashboard for browsing and bulk transfer jobs (powered by `rclone`).
 
+> **Getting started (summary)**
+> - Run a single container with `docker run` (see Quick start)
+> - Open `http://localhost:8080` in your browser
+> - For remote access, set `ALLOW_REMOTE=true` and `API_TOKEN`
+
 ## Providers
 
 S3Desk uses `rclone`, with a long-term goal of a single UI/API across multiple object-storage providers.
@@ -26,11 +31,6 @@ Details:
 
 Single-container run uses sqlite by default at `/data/s3desk.db`.
 The image includes the `sqlite3` CLI for ad-hoc inspection.
-
-> **Getting started**
-> - Run a single container with `docker run` (see below)
-> - Open `http://localhost:8080` in your browser
-> - For remote access, set `ALLOW_REMOTE=true` and `API_TOKEN`
 
 ```bash
 docker run --rm -p 8080:8080 \
@@ -67,6 +67,9 @@ Open `http://localhost:8080` and use the configured `API_TOKEN`.
 ## Docs
 
 - `docs/USAGE.md`
+- `docs/PROVIDERS.md`
+- `docs/ROADMAP.md`
+- `docs/wiki/` (GitLab wiki source)
 
 ## Run (dev)
 

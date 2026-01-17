@@ -1,6 +1,6 @@
 services:
   minio:
-    image: minio/minio:latest
+    image: docker.io/minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: "minioadmin"
@@ -20,7 +20,7 @@ services:
       - azurite-data:/data
 
   fake-gcs-server:
-    image: fsouza/fake-gcs-server:latest
+    image: docker.io/fsouza/fake-gcs-server:latest
     command: ["-scheme", "http", "-port", "4443", "-backend", "memory"]
     ports:
       - "4443:4443"
