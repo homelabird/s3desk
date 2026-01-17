@@ -8,6 +8,9 @@ import urllib.parse
 
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8080").rstrip("/")
+API_BASE_URL = os.environ.get("API_BASE_URL", "").rstrip("/")
+if not API_BASE_URL:
+    API_BASE_URL = BASE_URL if BASE_URL.endswith("/api/v1") else f"{BASE_URL}/api/v1"
 API_TOKEN = os.environ.get("API_TOKEN", "change-me")
 
 
@@ -78,7 +81,7 @@ def _request(
     accept: str | None = None,
     timeout_s: int = 30,
 ) -> tuple[int, dict[str, str], bytes]:
-    url = f"{BASE_URL}{path}"
+    url = f"{API_BASE_URL}{path}"
     headers = {"X-Api-Token": API_TOKEN}
     if profile_id:
         headers["X-Profile-Id"] = profile_id

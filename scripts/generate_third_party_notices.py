@@ -206,13 +206,39 @@ def normalize_npm_license(info: dict) -> str:
     return ""
 
 
+def resolve_generated_at() -> str:
+    ts = os.environ.get("SOURCE_DATE_EPOCH")
+    if ts:
+        try:
+            return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+        except ValueError:
+            pass
+
+    ci_ts = os.environ.get("CI_COMMIT_TIMESTAMP")
+    if ci_ts:
+        try:
+            parsed = datetime.fromisoformat(ci_ts.replace("Z", "+00:00"))
+            return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+        except ValueError:
+            pass
+
+    try:
+        git_ts = run(["git", "log", "-1", "--format=%ct"], cwd=REPO_ROOT).strip()
+        if git_ts.isdigit():
+            return datetime.fromtimestamp(int(git_ts), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+
+
 def write_notices(
     go_modules: list[dict[str, str]],
     npm_runtime: list[dict[str, str]],
     npm_dev: list[dict[str, str]],
     include_dev: bool,
 ) -> None:
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+    timestamp = resolve_generated_at()
     lines: list[str] = []
     lines.append("# Third-Party Notices")
     lines.append("")
