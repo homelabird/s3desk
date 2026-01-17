@@ -35,6 +35,7 @@ services:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"
       API_TOKEN: "change-me"
+      ALLOWED_HOSTS: "s3desk"
     volumes:
       - s3desk-data:/data
     depends_on:
