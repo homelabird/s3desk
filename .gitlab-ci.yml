@@ -127,7 +127,10 @@ api_integration:
     BUILDAH_ISOLATION: "chroot"
     PODMAN_NETWORK_BACKEND: "slirp4netns"
     CONTAINERS_NETWORK_BACKEND: "slirp4netns"
-    PODMAN_RUN_ARGS: "--network slirp4netns"
+    E2E_BASE_URL: "http://127.0.0.1:8080"
+    E2E_MINIO_ENDPOINT: "http://127.0.0.1:9000"
+    E2E_AZURITE_ENDPOINT: "http://127.0.0.1:10000/devstoreaccount1"
+    E2E_GCS_ENDPOINT: "http://127.0.0.1:4443/storage/v1/v1"
   before_script:
     - |
       set -e
@@ -141,12 +144,9 @@ api_integration:
           apt-get install -y --no-install-recommends slirp4netns
         fi
       fi
-      if podman compose version >/dev/null 2>&1; then
-        COMPOSE_CMD="podman compose"
-        COMPOSE_ARGS=""
-      elif command -v podman-compose >/dev/null 2>&1; then
+      if command -v podman-compose >/dev/null 2>&1; then
         COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--podman-run-args=--network=slirp4netns"
+        COMPOSE_ARGS="--in-pod --pod-args=--network=slirp4netns"
       else
         if command -v dnf >/dev/null 2>&1; then
           dnf -y install python3-pip
@@ -158,7 +158,7 @@ api_integration:
         fi
         python3 -m pip install --no-cache-dir podman-compose
         COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--podman-run-args=--network=slirp4netns"
+        COMPOSE_ARGS="--in-pod --pod-args=--network=slirp4netns"
       fi
       echo "$COMPOSE_CMD" > /tmp/compose_cmd
       echo "$COMPOSE_ARGS" > /tmp/compose_args

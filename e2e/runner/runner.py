@@ -13,6 +13,10 @@ API_BASE_URL = os.environ.get("API_BASE_URL", "").rstrip("/")
 if not API_BASE_URL:
     API_BASE_URL = BASE_URL if BASE_URL.endswith("/api/v1") else f"{BASE_URL}/api/v1"
 API_TOKEN = os.environ.get("API_TOKEN", "change-me")
+MINIO_ENDPOINT = os.environ.get("E2E_MINIO_ENDPOINT", "http://minio:9000")
+AZURITE_ENDPOINT = os.environ.get("E2E_AZURITE_ENDPOINT", "http://azurite:10000/devstoreaccount1")
+# rclone's GCS endpoint handling drops /storage/v1; add a second v1 to keep /storage/v1/b.
+GCS_ENDPOINT = os.environ.get("E2E_GCS_ENDPOINT", "http://fake-gcs-server:4443/storage/v1/v1")
 
 
 class HTTPFailure(RuntimeError):
@@ -570,7 +574,7 @@ def main() -> int:
         {
             "provider": "s3_compatible",
             "name": "e2e-minio",
-            "endpoint": "http://minio:9000",
+            "endpoint": MINIO_ENDPOINT,
             "region": "us-east-1",
             "accessKeyId": "minioadmin",
             "secretAccessKey": "minioadmin",
@@ -579,7 +583,7 @@ def main() -> int:
             "tlsInsecureSkipVerify": False,
         },
         bucket="e2e-minio",
-        endpoint_note="minio:9000",
+        endpoint_note=MINIO_ENDPOINT,
     )
 
     # Azurite (Azure Blob)
@@ -593,13 +597,13 @@ def main() -> int:
             "name": "e2e-azurite",
             "accountName": "devstoreaccount1",
             "accountKey": azurite_key,
-            "endpoint": "http://azurite:10000/devstoreaccount1",
+            "endpoint": AZURITE_ENDPOINT,
             "useEmulator": True,
             "preserveLeadingSlash": False,
             "tlsInsecureSkipVerify": False,
         },
         bucket="e2e-azurite",
-        endpoint_note="azurite:10000",
+        endpoint_note=AZURITE_ENDPOINT,
     )
 
     # fake-gcs-server (GCP GCS)
@@ -612,13 +616,12 @@ def main() -> int:
             # (Value is arbitrary for the fake-gcs-server emulator.)
             "projectNumber": "1234567890",
             "anonymous": True,
-            # rclone's GCS endpoint handling drops /storage/v1; add a second v1 to keep /storage/v1/b.
-            "endpoint": "http://fake-gcs-server:4443/storage/v1/v1",
+            "endpoint": GCS_ENDPOINT,
             "preserveLeadingSlash": False,
             "tlsInsecureSkipVerify": False,
         },
         bucket="e2e-fake-gcs",
-        endpoint_note="fake-gcs-server:4443",
+        endpoint_note=GCS_ENDPOINT,
     )
 
     log("\nAll E2E scenarios passed")

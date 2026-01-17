@@ -48,8 +48,11 @@ services:
       context: ./e2e/runner
       dockerfile: Dockerfile
     environment:
-      BASE_URL: "http://s3desk:8080"
+      BASE_URL: "${E2E_BASE_URL:-http://s3desk:8080}"
       API_TOKEN: "change-me"
+      E2E_MINIO_ENDPOINT: "${E2E_MINIO_ENDPOINT:-http://minio:9000}"
+      E2E_AZURITE_ENDPOINT: "${E2E_AZURITE_ENDPOINT:-http://azurite:10000/devstoreaccount1}"
+      E2E_GCS_ENDPOINT: "${E2E_GCS_ENDPOINT:-http://fake-gcs-server:4443/storage/v1/v1}"
     depends_on:
       - s3desk
     command: ["python", "/app/runner.py"]
