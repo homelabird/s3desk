@@ -1,3 +1,20 @@
+workflow:
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - Containerfile
+        - docker-compose*.yml
+        - openapi.yml
+        - backend/**/*
+        - charts/**/*
+        - e2e/**/*
+        - frontend/**/*
+        - k8s/**/*
+        - scripts/**/*
+        - third_party/licenses-manual/**/*
+        - third_party/licenses/**/*
+    - when: never
+
 stages:
   - test
   - audit
