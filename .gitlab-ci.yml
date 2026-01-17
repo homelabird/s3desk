@@ -24,6 +24,11 @@ workflow:
       when: never
     - when: never
 
+default:
+  tags:
+    - onpremise
+    - k8s
+
 stages:
   - test
   - audit
