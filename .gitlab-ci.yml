@@ -72,13 +72,14 @@ e2e:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
     BUILDAH_ISOLATION: "chroot"
+    PODMAN_NETWORK_BACKEND: "slirp4netns"
   before_script:
     - |
       set -e
       if podman compose version >/dev/null 2>&1; then
-        export COMPOSE_CMD="podman compose"
+        COMPOSE_CMD="podman compose"
       elif command -v podman-compose >/dev/null 2>&1; then
-        export COMPOSE_CMD="podman-compose"
+        COMPOSE_CMD="podman-compose"
       else
         if command -v dnf >/dev/null 2>&1; then
           dnf -y install python3-pip
@@ -89,14 +90,17 @@ e2e:
           apt-get install -y --no-install-recommends python3 python3-pip
         fi
         python3 -m pip install --no-cache-dir podman-compose
-        export COMPOSE_CMD="podman-compose"
+        COMPOSE_CMD="podman-compose"
       fi
+      echo "$COMPOSE_CMD" > /tmp/compose_cmd
   script:
     - podman --version
-    - $COMPOSE_CMD -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from runner
+    - COMPOSE_CMD="$(cat /tmp/compose_cmd)" && $COMPOSE_CMD -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from runner
   after_script:
-    - if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD -f docker-compose.e2e.yml logs --no-color; fi
-    - $COMPOSE_CMD -f docker-compose.e2e.yml down -v
+    - |
+      COMPOSE_CMD="$(cat /tmp/compose_cmd)"
+      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD -f docker-compose.e2e.yml logs --no-color; fi
+      $COMPOSE_CMD -f docker-compose.e2e.yml down -v
 
 perf_tests:
   stage: test
