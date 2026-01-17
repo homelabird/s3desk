@@ -193,9 +193,9 @@ Run the packaged UI:
 
 ## E2E tests
 
-There are two flavors of E2E coverage:
+There are two flavors of E2E coverage (see `docs/TESTING.md` for the full test map and CI split):
 
-- **Backend provider smoke** (CI): `docker-compose.e2e.yml` + `e2e/runner/runner.py`
+- **Backend provider smoke / API integration** (CI): `docker-compose.e2e.yml` + `e2e/runner/runner.py`
   - Scenario: “profile create → connection test → bucket list → upload/download”
   - Covers MinIO (S3), Azurite (Azure Blob), fake-gcs-server (GCS)
 - **UI E2E** (local): Playwright specs live in `frontend/tests` (gated by `E2E_LIVE=1`)
