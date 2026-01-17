@@ -1,4 +1,4 @@
-FROM docker.io/library/python:3.12-slim
+FROM harbor.k8s.homelabird.com/library/python:3.12-slim
 
 WORKDIR /app
 

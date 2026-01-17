@@ -36,13 +36,13 @@ stages:
 
 openapi_validate:
   stage: test
-  image: golang:1.24
+  image: harbor.k8s.homelabird.com/library/golang:1.24
   script:
     - bash scripts/validate_openapi.sh
 
 gofmt:
   stage: test
-  image: golang:1.24
+  image: harbor.k8s.homelabird.com/library/golang:1.24
   script:
     - |
       UNFORMATTED=$(find backend -name '*.go' -type f -print0 | xargs -0 gofmt -l)
@@ -54,7 +54,7 @@ gofmt:
 
 go_test:
   stage: test
-  image: golang:1.24
+  image: harbor.k8s.homelabird.com/library/golang:1.24
   script:
     - cd backend
     - go vet ./...
@@ -62,7 +62,7 @@ go_test:
 
 govulncheck:
   stage: test
-  image: golang:1.24
+  image: harbor.k8s.homelabird.com/library/golang:1.24
   script:
     - |
       GOBIN="$(go env GOBIN)"
@@ -75,7 +75,7 @@ govulncheck:
 
 frontend_openapi_types:
   stage: test
-  image: node:22-bookworm
+  image: harbor.k8s.homelabird.com/library/node:22-bookworm
   script:
     - cd frontend
     - npm ci --no-audit --no-fund
@@ -85,7 +85,7 @@ frontend_openapi_types:
 
 frontend_lint:
   stage: test
-  image: node:22-bookworm
+  image: harbor.k8s.homelabird.com/library/node:22-bookworm
   script:
     - cd frontend
     - npm ci --no-audit --no-fund
@@ -94,7 +94,7 @@ frontend_lint:
 
 frontend_build:
   stage: test
-  image: node:22-bookworm
+  image: harbor.k8s.homelabird.com/library/node:22-bookworm
   script:
     - cd frontend
     - npm ci --no-audit --no-fund
@@ -103,7 +103,7 @@ frontend_build:
 
 third_party_notices:
   stage: audit
-  image: golang:1.24
+  image: harbor.k8s.homelabird.com/library/golang:1.24
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -186,7 +186,7 @@ api_integration:
 
 frontend_unit_tests:
   stage: test
-  image: node:22-bookworm
+  image: harbor.k8s.homelabird.com/library/node:22-bookworm
   script:
     - cd frontend
     - npm ci --no-audit --no-fund
@@ -266,7 +266,7 @@ perf_tests:
 
 dev_license_audit:
   stage: audit
-  image: golang:1.24
+  image: harbor.k8s.homelabird.com/library/golang:1.24
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -288,9 +288,9 @@ dev_license_audit:
 
 publish_dockerhub:
   stage: publish
-  image: docker:27.3.1
+  image: harbor.k8s.homelabird.com/library/docker:27.3.1
   services:
-    - name: docker:27.3.1-dind
+    - name: harbor.k8s.homelabird.com/library/docker:27.3.1-dind
       command: ["--tls=false"]
   variables:
     DOCKER_HOST: "tcp://docker:2375"
