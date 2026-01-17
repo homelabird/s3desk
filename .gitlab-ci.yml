@@ -56,7 +56,8 @@ check:
       cd backend
       "$GOBIN/govulncheck" ./...
     # Ensure generated artifacts (openapi types, third-party notices) are committed.
-    - git diff --exit-code
+    # Ignore the Generated at timestamp since it is time-dependent.
+    - git diff --exit-code -I '^Generated at '
   artifacts:
     when: always
     paths:
