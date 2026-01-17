@@ -34,8 +34,16 @@ test.describe('@transfer', () => {
 
 ## CI job mapping
 
-- `check`: lint/build/gofmt/govuln + generated artifacts check
+- `openapi_validate`: OpenAPI spec validation
+- `gofmt`: gofmt enforcement
+- `go_test`: `go vet` + `go test`
+- `govulncheck`: dependency vulnerability scan
+- `frontend_openapi_types`: OpenAPI types generation + diff check
+- `frontend_lint`: ESLint
+- `frontend_build`: `vite build`
 - `frontend_unit_tests`: `npm run test:unit`
+- `third_party_notices`: runtime-only notices + diff check
+- `dev_license_audit`: dev-only notices (audit stage)
 - `api_integration`: `docker-compose.e2e.yml` + `e2e/runner/runner.py`
 - `ui_smoke` (optional, `E2E_UI=1`, `E2E_BASE_URL` required): `tests/objects-smoke.spec.ts`, `tests/docs-smoke.spec.ts`
 - `transfer_scenarios` (optional, `E2E_TRANSFERS=1`, `E2E_BASE_URL` required): `tests/transfers-*.spec.ts`

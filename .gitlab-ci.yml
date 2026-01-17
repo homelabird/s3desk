@@ -34,19 +34,36 @@ stages:
   - audit
   - publish
 
-# Mandatory quality gate.
-check:
+openapi_validate:
   stage: test
   image: golang:1.24
-  before_script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
-    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    - apt-get install -y --no-install-recommends nodejs
-    - node --version
-    - npm --version
   script:
-    - bash scripts/check.sh
+    - bash scripts/validate_openapi.sh
+
+gofmt:
+  stage: test
+  image: golang:1.24
+  script:
+    - |
+      UNFORMATTED=$(find backend -name '*.go' -type f -print0 | xargs -0 gofmt -l)
+      if [ -n "$UNFORMATTED" ]; then
+        echo "[gofmt] needed:" >&2
+        echo "$UNFORMATTED" >&2
+        exit 1
+      fi
+
+go_test:
+  stage: test
+  image: golang:1.24
+  script:
+    - cd backend
+    - go vet ./...
+    - go test ./...
+
+govulncheck:
+  stage: test
+  image: golang:1.24
+  script:
     - |
       GOBIN="$(go env GOBIN)"
       if [ -z "$GOBIN" ]; then
@@ -55,7 +72,43 @@ check:
       go install golang.org/x/vuln/cmd/govulncheck@latest
       cd backend
       "$GOBIN/govulncheck" ./...
-    # Ensure generated artifacts (openapi types, third-party notices) are committed.
+
+frontend_openapi_types:
+  stage: test
+  image: node:22-bookworm
+  script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - cd ..
+    - git diff --exit-code frontend/src/api/openapi.ts
+
+frontend_lint:
+  stage: test
+  image: node:22-bookworm
+  script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - npm run lint
+
+frontend_build:
+  stage: test
+  image: node:22-bookworm
+  script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - npm run build
+
+third_party_notices:
+  stage: audit
+  image: golang:1.24
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
+  script:
+    - python3 scripts/generate_third_party_notices.py
     # Ignore the Generated at timestamp since it is time-dependent.
     - git diff --exit-code -I '^Generated at '
   artifacts:
