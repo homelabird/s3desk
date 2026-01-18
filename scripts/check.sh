@@ -46,7 +46,10 @@ echo "[check] backend"
 )
 
 REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR:-22}"
-REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR%%.x}"
+REQUIRED_NODE_MAJOR="$(echo "${REQUIRED_NODE_MAJOR}" | sed -E 's/^([0-9]+).*/\1/')"
+if [[ -z "${REQUIRED_NODE_MAJOR}" ]]; then
+  REQUIRED_NODE_MAJOR="22"
+fi
 REQUIRED_NPM_VERSION="${REQUIRED_NPM_VERSION:-10.9.4}"
 
 if ! command -v node >/dev/null 2>&1; then
