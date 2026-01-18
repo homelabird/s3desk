@@ -21,7 +21,10 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/s3desk-server ./cm
 FROM harbor.k8s.homelabird.com/library/rclone/rclone:${RCLONE_VERSION} AS rclone
 
 FROM harbor.k8s.homelabird.com/library/alpine:3.21 AS runtime
-RUN apk add --no-cache ca-certificates sqlite
+ARG DB_BACKEND=sqlite
+RUN set -e; \
+    apk add --no-cache ca-certificates; \
+    if [ "$DB_BACKEND" = "sqlite" ]; then apk add --no-cache sqlite; fi
 WORKDIR /app
 COPY --from=backend /out/s3desk-server /app/s3desk-server
 COPY --from=rclone /usr/local/bin/rclone /usr/local/bin/rclone
@@ -31,7 +34,8 @@ COPY openapi.yml /app/openapi.yml
 ENV ADDR=127.0.0.1:8080 \
     DATA_DIR=/data \
     STATIC_DIR=/app/ui \
-    RCLONE_PATH=/usr/local/bin/rclone
+    RCLONE_PATH=/usr/local/bin/rclone \
+    DB_BACKEND=$DB_BACKEND
 
 VOLUME ["/data"]
 EXPOSE 8080

@@ -38,7 +38,7 @@ docker run --rm -p 8080:8080 \
   -e ALLOW_REMOTE=true \
   -e API_TOKEN=change-me \
   -v s3desk-data:/data \
-  homelabird/s3desk:beta
+  homelabird/s3desk:beta-sqlite
 ```
 
 ```bash
@@ -47,7 +47,7 @@ docker exec -it <container> sqlite3 /data/s3desk.db
 
 ## Run with Postgres (docker compose, headless)
 
-`docker-compose.yml` is configured for a headless Postgres setup (no bundled DB). It starts Postgres + the `postgres-beta` image.
+`docker-compose.yml` is configured for a headless Postgres setup (no bundled DB). It starts Postgres + the `beta-postgres` image.
 
 ```bash
 docker compose up -d
