@@ -172,7 +172,15 @@ third_party_notices:
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y --no-install-recommends nodejs
+    - node --version
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
   script:
+    - cd frontend
+    - npm ci --no-audit --no-fund
+    - cd ..
     - python3 scripts/generate_third_party_notices.py
     # Ignore the Generated at timestamp since it is time-dependent.
     - git diff --exit-code -I '^Generated at '
