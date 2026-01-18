@@ -424,6 +424,20 @@ publish_dockerhub:
   script:
     - echo "$DOCKERHUB_TOKEN" | podman login -u "$DOCKERHUB_USERNAME" --password-stdin docker.io
     - |
+      DOCKERHUB_REPO="$(printf '%s' "$DOCKERHUB_REPO" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#https://}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#http://}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#docker.io/}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#index.docker.io/}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#registry-1.docker.io/}"
+      if [ -z "$DOCKERHUB_REPO" ]; then
+        echo "DOCKERHUB_REPO is empty after normalization." >&2
+        exit 1
+      fi
+      if ! printf '%s' "$DOCKERHUB_REPO" | grep -Eq '^[a-z0-9]+([._-][a-z0-9]+)*/[a-z0-9]+([._-][a-z0-9]+)*$'; then
+        echo "DOCKERHUB_REPO must be in the form 'namespace/repo' (lowercase, no scheme)." >&2
+        exit 1
+      fi
       TAG="$CI_COMMIT_TAG"
       BASE_TAG="$TAG"
       case "$TAG" in
