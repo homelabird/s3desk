@@ -44,6 +44,20 @@ openapi_validate:
   script:
     - bash scripts/validate_openapi.sh
 
+check:
+  stage: test
+  image: harbor.k8s.homelabird.com/library/golang:1.24
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
+    - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    - apt-get install -y --no-install-recommends nodejs
+    - node --version
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+  script:
+    - bash scripts/check.sh
+
 build_s3desk_image:
   stage: build
   image: quay.io/podman/stable:latest
@@ -300,17 +314,17 @@ frontend_unit_tests:
     - npm ci --no-audit --no-fund
     - npm run test:unit
 
-ui_smoke:
+e2e:
   stage: test
   image: mcr.microsoft.com/playwright:v1.47.0-jammy
   rules:
-    - if: '$E2E_UI == "1"'
+    - if: '$E2E_BASE_URL'
       when: on_success
     - when: never
   script:
     - |
       if [ -z "$E2E_BASE_URL" ]; then
-        echo "E2E_BASE_URL is required to run UI smoke in CI."
+        echo "E2E_BASE_URL is required to run E2E tests in CI."
         exit 1
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
@@ -318,33 +332,7 @@ ui_smoke:
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
-    - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts
-  artifacts:
-    when: always
-    paths:
-      - frontend/test-results/
-      - frontend/playwright-report/
-    expire_in: 7 days
-
-transfer_scenarios:
-  stage: test
-  image: mcr.microsoft.com/playwright:v1.47.0-jammy
-  rules:
-    - if: '$E2E_TRANSFERS == "1"'
-      when: on_success
-    - when: never
-  script:
-    - |
-      if [ -z "$E2E_BASE_URL" ]; then
-        echo "E2E_BASE_URL is required to run transfer scenarios in CI."
-        exit 1
-      fi
-    - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
-    - cd frontend
-    - npm install -g "npm@${NPM_VERSION}"
-    - npm --version
-    - npm ci --no-audit --no-fund
-    - npx playwright test tests/transfers-*.spec.ts
+    - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/transfers-*.spec.ts
   artifacts:
     when: always
     paths:
