@@ -493,16 +493,7 @@ publish_dockerhub:
       token="$(curl -fsS -H 'Content-Type: application/json' \
         -d "{\"username\":\"${DOCKERHUB_USERNAME}\",\"password\":\"${DOCKERHUB_TOKEN}\"}" \
         https://hub.docker.com/v2/users/login/ | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"token\"])')"
-      payload="$(python3 - <<'PY'
-import json
-import os
-
-path = os.environ.get("README_FILEPATH")
-with open(path, "r", encoding="utf-8") as f:
-    body = f.read()
-print(json.dumps({"full_description": body}))
-PY
-      )"
+      payload="$(python3 -c 'import json,os; path=os.environ.get("README_FILEPATH"); print(json.dumps({"full_description": open(path, "r", encoding="utf-8").read()}))')"
       curl -fsS -X PATCH \
         -H "Content-Type: application/json" \
         -H "Authorization: JWT ${token}" \
