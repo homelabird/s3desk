@@ -490,6 +490,7 @@ publish_dockerhub:
         fi
       fi
       README_FILEPATH="${README_FILEPATH:-$CI_PROJECT_DIR/README.md}"
+      export README_FILEPATH
       token="$(curl -fsS -H 'Content-Type: application/json' \
         -d "{\"username\":\"${DOCKERHUB_USERNAME}\",\"password\":\"${DOCKERHUB_TOKEN}\"}" \
         https://hub.docker.com/v2/users/login/ | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
