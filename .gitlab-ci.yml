@@ -386,6 +386,30 @@ dev_license_audit:
       - third_party/licenses/
     expire_in: 7 days
 
+trivy_scan:
+  stage: audit
+  image: aquasec/trivy:0.56.2
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
+    - when: never
+  variables:
+    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
+    S3DESK_IMAGE: "${HARBOR_REGISTRY}/library/s3desk:${CI_COMMIT_SHA}"
+  script:
+    - |
+      if [ -z "$HARBOR_USERNAME" ] || [ -z "$HARBOR_PASSWORD" ]; then
+        echo "HARBOR_USERNAME/HARBOR_PASSWORD are required for trivy scan." >&2
+        exit 1
+      fi
+      trivy image \
+        --severity HIGH,CRITICAL \
+        --exit-code 0 \
+        --ignore-unfixed \
+        --username "$HARBOR_USERNAME" \
+        --password "$HARBOR_PASSWORD" \
+        "$S3DESK_IMAGE"
+
 publish_dockerhub:
   stage: publish
   image: harbor.k8s.homelabird.com/library/docker:27.3.1
@@ -395,6 +419,8 @@ publish_dockerhub:
   variables:
     DOCKER_HOST: "tcp://docker:2375"
     DOCKER_TLS_CERTDIR: ""
+  needs:
+    - trivy_scan
   rules:
     - if: '$CI_COMMIT_TAG'
   script:
