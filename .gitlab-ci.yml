@@ -80,11 +80,7 @@ build_s3desk_image:
     - |
       tag="${CI_COMMIT_SHA}"
       repo="library/s3desk"
-      encoded_pass=$(python3 - <<'PY'
-import os, base64
-print(base64.b64encode(f"{os.environ['HARBOR_USERNAME']}:{os.environ['HARBOR_PASSWORD']}".encode()).decode())
-PY
-)
+      encoded_pass=$(printf '%s' "$HARBOR_USERNAME:$HARBOR_PASSWORD" | base64 | tr -d '\n')
       if curl -fsS -H "Authorization: Basic ${encoded_pass}" \
         "https://${HARBOR_REGISTRY}/v2/${repo}/manifests/${tag}" >/dev/null; then
         echo "Harbor already has ${repo}:${tag}; skipping build/push."
