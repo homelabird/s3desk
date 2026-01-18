@@ -12,7 +12,7 @@ services:
       - minio-data:/data
 
   azurite:
-    image: mcr.microsoft.com/azure-storage/azurite:latest
+    image: harbor.k8s.homelabird.com/library/azurite:latest
     command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --loose --skipApiVersionCheck
     ports:
       - "10000:10000"
@@ -26,9 +26,7 @@ services:
       - "4443:4443"
 
   s3desk:
-    build:
-      context: .
-      dockerfile: Containerfile
+    image: "${S3DESK_IMAGE:-harbor.k8s.homelabird.com/library/s3desk:dev}"
     ports:
       - "8080:8080"
     environment:

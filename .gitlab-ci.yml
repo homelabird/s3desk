@@ -30,6 +30,7 @@ default:
     - k8s
 
 stages:
+  - build
   - test
   - audit
   - publish
@@ -39,6 +40,35 @@ openapi_validate:
   image: harbor.k8s.homelabird.com/library/golang:1.24
   script:
     - bash scripts/validate_openapi.sh
+
+build_s3desk_image:
+  stage: build
+  image: quay.io/podman/stable:latest
+  rules:
+    - changes:
+        - Containerfile
+        - docker-compose.e2e.yml
+        - backend/**/*
+        - e2e/**/*
+        - frontend/**/*
+        - openapi.yml
+    - when: never
+  variables:
+    STORAGE_DRIVER: "vfs"
+    CONTAINERS_STORAGE_DRIVER: "vfs"
+    BUILDAH_ISOLATION: "chroot"
+    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
+    S3DESK_IMAGE: "${HARBOR_REGISTRY}/library/s3desk:${CI_COMMIT_SHA}"
+  before_script:
+    - |
+      if [ -z "$HARBOR_USERNAME" ] || [ -z "$HARBOR_PASSWORD" ]; then
+        echo "HARBOR_USERNAME/HARBOR_PASSWORD are required to push images." >&2
+        exit 1
+      fi
+      podman login "$HARBOR_REGISTRY" -u "$HARBOR_USERNAME" -p "$HARBOR_PASSWORD"
+  script:
+    - podman build -t "$S3DESK_IMAGE" -f Containerfile .
+    - podman push "$S3DESK_IMAGE"
 
 gofmt:
   stage: test
@@ -128,16 +158,27 @@ third_party_notices:
 api_integration:
   stage: test
   image: quay.io/podman/stable:latest
+  rules:
+    - changes:
+        - Containerfile
+        - docker-compose.e2e.yml
+        - e2e/**/*
+        - backend/**/*
+        - frontend/**/*
+        - openapi.yml
+    - when: never
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
     BUILDAH_ISOLATION: "chroot"
     PODMAN_NETWORK_BACKEND: "slirp4netns"
     CONTAINERS_NETWORK_BACKEND: "slirp4netns"
-    E2E_BASE_URL: "http://127.0.0.1:8080"
-    E2E_MINIO_ENDPOINT: "http://127.0.0.1:9000"
-    E2E_AZURITE_ENDPOINT: "http://127.0.0.1:10000/devstoreaccount1"
-    E2E_GCS_ENDPOINT: "http://127.0.0.1:4443/storage/v1/v1"
+    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
+    S3DESK_IMAGE: "${HARBOR_REGISTRY}/library/s3desk:${CI_COMMIT_SHA}"
+    E2E_BASE_URL: "http://s3desk:8080"
+    E2E_MINIO_ENDPOINT: "http://minio:9000"
+    E2E_AZURITE_ENDPOINT: "http://azurite:10000/devstoreaccount1"
+    E2E_GCS_ENDPOINT: "http://fake-gcs-server:4443/storage/v1/v1"
   before_script:
     - |
       set -e
@@ -160,6 +201,7 @@ api_integration:
       if command -v podman-compose >/dev/null 2>&1; then
         COMPOSE_CMD="podman-compose"
         COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
+        COMPOSE_PULL_ARGS=""
       else
         if command -v dnf >/dev/null 2>&1; then
           dnf -y install python3-pip
@@ -172,9 +214,11 @@ api_integration:
         python3 -m pip install --no-cache-dir podman-compose
         COMPOSE_CMD="podman-compose"
         COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
+        COMPOSE_PULL_ARGS=""
       fi
       echo "$COMPOSE_CMD" > /tmp/compose_cmd
       echo "$COMPOSE_ARGS" > /tmp/compose_args
+      echo "$COMPOSE_PULL_ARGS" > /tmp/compose_pull_args
       if [ "$COMPOSE_CMD" = "podman-compose" ]; then
         echo "logs" > /tmp/compose_logs_cmd
       else
@@ -182,14 +226,29 @@ api_integration:
       fi
   script:
     - podman --version
-    - COMPOSE_CMD="$(cat /tmp/compose_cmd)" COMPOSE_ARGS="$(cat /tmp/compose_args)" && $COMPOSE_CMD $COMPOSE_ARGS -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from runner
+    - |
+      if [ -n "$HARBOR_USERNAME" ] && [ -n "$HARBOR_PASSWORD" ]; then
+        podman login "$HARBOR_REGISTRY" -u "$HARBOR_USERNAME" -p "$HARBOR_PASSWORD"
+      fi
+    - |
+      for image in \
+        "$S3DESK_IMAGE" \
+        "harbor.k8s.homelabird.com/library/minio/minio:latest" \
+        "harbor.k8s.homelabird.com/library/azurite:latest" \
+        "harbor.k8s.homelabird.com/library/fsouza/fake-gcs-server:latest"; do \
+        if ! podman image exists "$image"; then \
+          podman pull "$image"; \
+        fi; \
+      done
+    - COMPOSE_CMD="$(cat /tmp/compose_cmd)" COMPOSE_ARGS="$(cat /tmp/compose_args)" COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)" && $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml up --abort-on-container-exit --exit-code-from runner
   after_script:
     - |
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
+      COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
       LOGS_CMD="$(cat /tmp/compose_logs_cmd)"
-      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS -f docker-compose.e2e.yml $LOGS_CMD; fi
-      $COMPOSE_CMD $COMPOSE_ARGS -f docker-compose.e2e.yml down -v
+      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml $LOGS_CMD; fi
+      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml down -v
 
 frontend_unit_tests:
   stage: test
