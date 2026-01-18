@@ -62,7 +62,7 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 node_version="$(node --version)"
-node_major="$(echo "${node_version}" | sed -E 's/^v([0-9]+).*/\\1/')"
+node_major="$(echo "${node_version}" | sed -E 's/^v([0-9]+).*/\1/')"
 if [[ "${node_major}" != "${REQUIRED_NODE_MAJOR}" ]]; then
   echo "[check] node ${node_version} found; expected Node ${REQUIRED_NODE_MAJOR}.x" >&2
   exit 1
