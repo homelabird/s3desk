@@ -33,10 +33,10 @@ stages:
   - build
   - test
   - audit
+  - publish
 
 variables:
   NPM_VERSION: "10.9.4"
-  - publish
 
 openapi_validate:
   stage: test
