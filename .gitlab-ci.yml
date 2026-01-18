@@ -412,19 +412,17 @@ trivy_scan:
 
 publish_dockerhub:
   stage: publish
-  image: harbor.k8s.homelabird.com/library/docker:27.3.1
-  services:
-    - name: harbor.k8s.homelabird.com/library/docker:27.3.1-dind
-      command: ["--tls=false"]
+  image: quay.io/podman/stable:latest
   variables:
-    DOCKER_HOST: "tcp://docker:2375"
-    DOCKER_TLS_CERTDIR: ""
+    STORAGE_DRIVER: "vfs"
+    CONTAINERS_STORAGE_DRIVER: "vfs"
+    BUILDAH_ISOLATION: "chroot"
   needs:
     - trivy_scan
   rules:
     - if: '$CI_COMMIT_TAG'
   script:
-    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "$DOCKERHUB_TOKEN" | podman login -u "$DOCKERHUB_USERNAME" --password-stdin docker.io
     - |
       TAG="$CI_COMMIT_TAG"
       BASE_TAG="$TAG"
@@ -442,17 +440,17 @@ publish_dockerhub:
           BETA_TAG="beta-sqlite"
           LEGACY_TAG=""
         fi
-        docker build --build-arg DB_BACKEND="$DB_BACKEND" -f Containerfile \
+        podman build --build-arg DB_BACKEND="$DB_BACKEND" -f Containerfile \
           -t "$DOCKERHUB_REPO:$SUFFIX_TAG" \
           -t "$DOCKERHUB_REPO:$BETA_TAG" \
           ${LEGACY_TAG:+-t "$DOCKERHUB_REPO:$LEGACY_TAG"} .
-        docker push "$DOCKERHUB_REPO:$SUFFIX_TAG"
-        docker push "$DOCKERHUB_REPO:$BETA_TAG"
+        podman push "$DOCKERHUB_REPO:$SUFFIX_TAG"
+        podman push "$DOCKERHUB_REPO:$BETA_TAG"
         if [ -n "$LEGACY_TAG" ]; then
-          docker push "$DOCKERHUB_REPO:$LEGACY_TAG"
+          podman push "$DOCKERHUB_REPO:$LEGACY_TAG"
         fi
       done
-    - docker run --rm -v "$CI_PROJECT_DIR":/workspace \
+    - podman run --rm -v "$CI_PROJECT_DIR":/workspace \
         -e DOCKERHUB_USERNAME \
         -e DOCKERHUB_PASSWORD="$DOCKERHUB_TOKEN" \
         -e DOCKERHUB_REPOSITORY="$DOCKERHUB_REPO" \
