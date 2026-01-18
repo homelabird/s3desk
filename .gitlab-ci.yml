@@ -417,6 +417,7 @@ publish_dockerhub:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
     BUILDAH_ISOLATION: "chroot"
+    SKIP_DOCKERHUB_DESCRIPTION: "1"
   needs:
     - trivy_scan
   rules:
