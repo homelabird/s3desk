@@ -210,12 +210,10 @@ api_integration:
   image: quay.io/podman/stable:latest
   rules:
     - changes:
-        - Containerfile
-        - docker-compose.e2e.yml
-        - e2e/**/*
         - backend/**/*
-        - frontend/**/*
+        - e2e/api/**/*
         - openapi.yml
+        - docker-compose.e2e.yml
     - when: never
   variables:
     STORAGE_DRIVER: "vfs"
