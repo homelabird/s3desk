@@ -464,7 +464,8 @@ publish_dockerhub:
           podman push "$DOCKERHUB_REPO:$LEGACY_TAG"
         fi
       done
-    - podman run --rm -v "$CI_PROJECT_DIR":/workspace \
+    - |
+      podman run --rm -v "$CI_PROJECT_DIR":/workspace \
         -e DOCKERHUB_USERNAME \
         -e DOCKERHUB_PASSWORD="$DOCKERHUB_TOKEN" \
         -e DOCKERHUB_REPOSITORY="$DOCKERHUB_REPO" \
