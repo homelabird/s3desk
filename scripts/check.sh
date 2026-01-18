@@ -46,6 +46,7 @@ echo "[check] backend"
 )
 
 REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR:-22}"
+REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR%%.x}"
 REQUIRED_NPM_VERSION="${REQUIRED_NPM_VERSION:-10.9.4}"
 
 if ! command -v node >/dev/null 2>&1; then
