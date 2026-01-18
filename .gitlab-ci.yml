@@ -401,21 +401,31 @@ publish_dockerhub:
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - |
       TAG="$CI_COMMIT_TAG"
-      LEGACY_TAG=""
+      BASE_TAG="$TAG"
       case "$TAG" in
-        *-postgres) DB_BACKEND="postgres"; BETA_TAG="beta-postgres"; LEGACY_TAG="postgres-beta" ;;
-        *-sqlite) DB_BACKEND="sqlite"; BETA_TAG="beta-sqlite" ;;
-        *) echo "Tag must end with -postgres or -sqlite (got: $TAG)" >&2; exit 1 ;;
+        *-postgres) BASE_TAG="${TAG%-postgres}" ;;
+        *-sqlite) BASE_TAG="${TAG%-sqlite}" ;;
       esac
-      docker build --build-arg DB_BACKEND="$DB_BACKEND" -f Containerfile \
-        -t "$DOCKERHUB_REPO:$TAG" \
-        -t "$DOCKERHUB_REPO:$BETA_TAG" \
-        ${LEGACY_TAG:+-t "$DOCKERHUB_REPO:$LEGACY_TAG"} .
-      docker push "$DOCKERHUB_REPO:$TAG"
-      docker push "$DOCKERHUB_REPO:$BETA_TAG"
-      if [ -n "$LEGACY_TAG" ]; then
-        docker push "$DOCKERHUB_REPO:$LEGACY_TAG"
-      fi
+      for DB_BACKEND in postgres sqlite; do
+        if [ "$DB_BACKEND" = "postgres" ]; then
+          SUFFIX_TAG="${BASE_TAG}-postgres"
+          BETA_TAG="beta-postgres"
+          LEGACY_TAG="postgres-beta"
+        else
+          SUFFIX_TAG="${BASE_TAG}-sqlite"
+          BETA_TAG="beta-sqlite"
+          LEGACY_TAG=""
+        fi
+        docker build --build-arg DB_BACKEND="$DB_BACKEND" -f Containerfile \
+          -t "$DOCKERHUB_REPO:$SUFFIX_TAG" \
+          -t "$DOCKERHUB_REPO:$BETA_TAG" \
+          ${LEGACY_TAG:+-t "$DOCKERHUB_REPO:$LEGACY_TAG"} .
+        docker push "$DOCKERHUB_REPO:$SUFFIX_TAG"
+        docker push "$DOCKERHUB_REPO:$BETA_TAG"
+        if [ -n "$LEGACY_TAG" ]; then
+          docker push "$DOCKERHUB_REPO:$LEGACY_TAG"
+        fi
+      done
     - docker run --rm -v "$CI_PROJECT_DIR":/workspace \
         -e DOCKERHUB_USERNAME \
         -e DOCKERHUB_PASSWORD="$DOCKERHUB_TOKEN" \
