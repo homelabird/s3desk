@@ -33,6 +33,9 @@ stages:
   - build
   - test
   - audit
+
+variables:
+  NPM_VERSION: "10.9.4"
   - publish
 
 openapi_validate:
@@ -130,6 +133,8 @@ frontend_openapi_types:
   image: harbor.k8s.homelabird.com/library/node:22-bookworm
   script:
     - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
     - npm ci --no-audit --no-fund
     - npm run gen:openapi
     - cd ..
@@ -140,6 +145,8 @@ frontend_lint:
   image: harbor.k8s.homelabird.com/library/node:22-bookworm
   script:
     - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
     - npm ci --no-audit --no-fund
     - npm run gen:openapi
     - npm run lint
@@ -153,6 +160,8 @@ frontend_build:
     KUBERNETES_MEMORY_LIMIT: "2Gi"
   script:
     - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
     - npm ci --no-audit --no-fund
     - npm run gen:openapi
     - npm run build
@@ -278,6 +287,8 @@ frontend_unit_tests:
     KUBERNETES_MEMORY_LIMIT: "2Gi"
   script:
     - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
     - npm ci --no-audit --no-fund
     - npm run test:unit
 
@@ -296,6 +307,8 @@ ui_smoke:
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
     - npm ci --no-audit --no-fund
     - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts
   artifacts:
@@ -320,6 +333,8 @@ transfer_scenarios:
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
     - npm ci --no-audit --no-fund
     - npx playwright test tests/transfers-*.spec.ts
   artifacts:
@@ -342,6 +357,7 @@ perf_tests:
     - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     - apt-get install -y --no-install-recommends nodejs
     - node --version
+    - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - cd frontend
     - npm ci --no-audit --no-fund
@@ -362,6 +378,7 @@ dev_license_audit:
     - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     - apt-get install -y --no-install-recommends nodejs
     - node --version
+    - npm install -g "npm@${NPM_VERSION}"
     - npm --version
   script:
     - cd frontend

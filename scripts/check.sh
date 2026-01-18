@@ -45,6 +45,31 @@ echo "[check] backend"
   "${GO_BIN}" test ./...
 )
 
+REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR:-22}"
+REQUIRED_NPM_VERSION="${REQUIRED_NPM_VERSION:-10.9.4}"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "[check] node not found (expected Node ${REQUIRED_NODE_MAJOR}.x)" >&2
+  exit 1
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "[check] npm not found (expected npm ${REQUIRED_NPM_VERSION})" >&2
+  exit 1
+fi
+
+node_version="$(node --version)"
+node_major="$(echo "${node_version}" | sed -E 's/^v([0-9]+).*/\\1/')"
+if [[ "${node_major}" != "${REQUIRED_NODE_MAJOR}" ]]; then
+  echo "[check] node ${node_version} found; expected Node ${REQUIRED_NODE_MAJOR}.x" >&2
+  exit 1
+fi
+
+npm_version="$(npm --version)"
+if [[ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]]; then
+  echo "[check] npm ${npm_version} found; expected npm ${REQUIRED_NPM_VERSION}" >&2
+  exit 1
+fi
+
 echo "[check] frontend"
 (
   cd "${ROOT}/frontend"
@@ -56,5 +81,10 @@ echo "[check] frontend"
 
 echo "[check] third-party notices"
 python3 "${ROOT}/scripts/generate_third_party_notices.py"
+if command -v git >/dev/null 2>&1; then
+  git -C "${ROOT}" diff --exit-code -I '^Generated at ' -- THIRD_PARTY_NOTICES.md third_party/licenses
+else
+  echo "[check] git not found; skipping third-party notices diff check" >&2
+fi
 
 echo "[check] ok"
