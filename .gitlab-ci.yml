@@ -492,7 +492,7 @@ publish_dockerhub:
       README_FILEPATH="${README_FILEPATH:-$CI_PROJECT_DIR/README.md}"
       token="$(curl -fsS -H 'Content-Type: application/json' \
         -d "{\"username\":\"${DOCKERHUB_USERNAME}\",\"password\":\"${DOCKERHUB_TOKEN}\"}" \
-        https://hub.docker.com/v2/users/login/ | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"token\"])')"
+        https://hub.docker.com/v2/users/login/ | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
       payload="$(python3 -c 'import json,os; path=os.environ.get("README_FILEPATH"); print(json.dumps({"full_description": open(path, "r", encoding="utf-8").read()}))')"
       curl -fsS -X PATCH \
         -H "Content-Type: application/json" \
