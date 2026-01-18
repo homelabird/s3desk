@@ -470,4 +470,5 @@ publish_dockerhub:
         -e DOCKERHUB_PASSWORD="$DOCKERHUB_TOKEN" \
         -e DOCKERHUB_REPOSITORY="$DOCKERHUB_REPO" \
         -e README_FILEPATH=/workspace/README.md \
-        docker.io/peterevans/dockerhub-description:latest
+        docker.io/node:22-bullseye bash -lc \
+        "npm install -g dockerhub-description@latest && dockerhub-description"
