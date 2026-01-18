@@ -55,6 +55,9 @@ gofmt:
 go_test:
   stage: test
   image: harbor.k8s.homelabird.com/library/golang:1.24
+  variables:
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
   script:
     - cd backend
     - go vet ./...
@@ -95,6 +98,10 @@ frontend_lint:
 frontend_build:
   stage: test
   image: harbor.k8s.homelabird.com/library/node:22-bookworm
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
   script:
     - cd frontend
     - npm ci --no-audit --no-fund
@@ -187,6 +194,10 @@ api_integration:
 frontend_unit_tests:
   stage: test
   image: harbor.k8s.homelabird.com/library/node:22-bookworm
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
   script:
     - cd frontend
     - npm ci --no-audit --no-fund
