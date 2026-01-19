@@ -34,6 +34,7 @@ stages:
   - test
   - audit
   - publish
+  - post-publish
 
 variables:
   NPM_VERSION: "10.9.4"
@@ -105,6 +106,37 @@ build_s3desk_image:
       fi
     - podman build -t "$S3DESK_IMAGE" -f Containerfile .
     - podman push "$S3DESK_IMAGE"
+
+build_release_images:
+  stage: build
+  image: quay.io/podman/stable:latest
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  variables:
+    STORAGE_DRIVER: "vfs"
+    CONTAINERS_STORAGE_DRIVER: "vfs"
+    BUILDAH_ISOLATION: "chroot"
+  script:
+    - podman --version
+    - |
+      BASE_TAG="$CI_COMMIT_TAG"
+      case "$BASE_TAG" in
+        *-postgres) BASE_TAG="${BASE_TAG%-postgres}" ;;
+        *-sqlite) BASE_TAG="${BASE_TAG%-sqlite}" ;;
+      esac
+      if [ -z "$BASE_TAG" ]; then
+        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
+        exit 1
+      fi
+      podman build --build-arg DB_BACKEND=postgres -f Containerfile -t "s3desk-release:${BASE_TAG}" .
+      podman build --build-arg DB_BACKEND=sqlite -f Containerfile -t "s3desk-release:${BASE_TAG}-sqlite" .
+      podman save -o release-postgres.tar "s3desk-release:${BASE_TAG}"
+      podman save -o release-sqlite.tar "s3desk-release:${BASE_TAG}-sqlite"
+  artifacts:
+    paths:
+      - release-postgres.tar
+      - release-sqlite.tar
+    expire_in: 7 days
 
 gofmt:
   stage: test
@@ -298,6 +330,104 @@ api_integration:
       if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml $LOGS_CMD; fi
       $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml down -v
 
+release_postgres_smoke:
+  stage: test
+  image: quay.io/podman/stable:latest
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  needs:
+    - job: build_release_images
+      artifacts: true
+  variables:
+    STORAGE_DRIVER: "vfs"
+    CONTAINERS_STORAGE_DRIVER: "vfs"
+    BUILDAH_ISOLATION: "chroot"
+    PODMAN_NETWORK_BACKEND: "slirp4netns"
+    CONTAINERS_NETWORK_BACKEND: "slirp4netns"
+  before_script:
+    - |
+      set -e
+      export XDG_CONFIG_HOME="/tmp"
+      mkdir -p "${XDG_CONFIG_HOME}/containers"
+      cat > "${XDG_CONFIG_HOME}/containers/containers.conf" <<'EOF'
+      [network]
+      default_rootless_network_cmd = "slirp4netns"
+      EOF
+      if ! command -v curl >/dev/null 2>&1; then
+        if command -v dnf >/dev/null 2>&1; then
+          dnf -y install curl
+        elif command -v apk >/dev/null 2>&1; then
+          apk add --no-cache curl
+        elif command -v apt-get >/dev/null 2>&1; then
+          apt-get update
+          apt-get install -y --no-install-recommends curl
+        fi
+      fi
+      if command -v podman-compose >/dev/null 2>&1; then
+        COMPOSE_CMD="podman-compose"
+        COMPOSE_ARGS="--in-pod s3desk-release-smoke --pod-args=--network=slirp4netns"
+        COMPOSE_PULL_ARGS=""
+      else
+        if command -v dnf >/dev/null 2>&1; then
+          dnf -y install python3-pip
+        elif command -v apk >/dev/null 2>&1; then
+          apk add --no-cache python3 py3-pip
+        elif command -v apt-get >/dev/null 2>&1; then
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-pip
+        fi
+        python3 -m pip install --no-cache-dir podman-compose
+        COMPOSE_CMD="podman-compose"
+        COMPOSE_ARGS="--in-pod s3desk-release-smoke --pod-args=--network=slirp4netns"
+        COMPOSE_PULL_ARGS=""
+      fi
+      echo "$COMPOSE_CMD" > /tmp/compose_cmd
+      echo "$COMPOSE_ARGS" > /tmp/compose_args
+      echo "$COMPOSE_PULL_ARGS" > /tmp/compose_pull_args
+      if [ "$COMPOSE_CMD" = "podman-compose" ]; then
+        echo "logs" > /tmp/compose_logs_cmd
+      else
+        echo "logs --no-color" > /tmp/compose_logs_cmd
+      fi
+  script:
+    - podman --version
+    - podman load -i release-postgres.tar
+    - |
+      BASE_TAG="$CI_COMMIT_TAG"
+      case "$BASE_TAG" in
+        *-postgres) BASE_TAG="${BASE_TAG%-postgres}" ;;
+        *-sqlite) BASE_TAG="${BASE_TAG%-sqlite}" ;;
+      esac
+      if [ -z "$BASE_TAG" ]; then
+        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
+        exit 1
+      fi
+      if ! podman image inspect "s3desk-release:${BASE_TAG}" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx 'DB_BACKEND=postgres'; then
+        echo "release image s3desk-release:${BASE_TAG} missing DB_BACKEND=postgres" >&2
+        exit 1
+      fi
+      COMPOSE_CMD="$(cat /tmp/compose_cmd)"
+      COMPOSE_ARGS="$(cat /tmp/compose_args)"
+      COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
+      S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$BASE_TAG" \
+        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml up -d
+      for i in $(seq 1 30); do
+        if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+          break
+        fi
+        sleep 2
+      done
+      curl -fsS http://127.0.0.1:8080/readyz >/dev/null
+      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:8080/api/v1/meta >/dev/null
+  after_script:
+    - |
+      COMPOSE_CMD="$(cat /tmp/compose_cmd)"
+      COMPOSE_ARGS="$(cat /tmp/compose_args)"
+      COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
+      LOGS_CMD="$(cat /tmp/compose_logs_cmd)"
+      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml $LOGS_CMD; fi
+      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+
 frontend_unit_tests:
   stage: test
   image: harbor.k8s.homelabird.com/library/node:22-bookworm
@@ -393,22 +523,23 @@ trivy_scan:
     - if: '$CI_COMMIT_TAG'
       when: on_success
     - when: never
-  variables:
-    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
-    S3DESK_IMAGE: "${HARBOR_REGISTRY}/library/s3desk:${CI_COMMIT_SHA}"
+  needs:
+    - job: build_release_images
+      artifacts: true
   script:
     - |
-      if [ -z "$HARBOR_USERNAME" ] || [ -z "$HARBOR_PASSWORD" ]; then
-        echo "HARBOR_USERNAME/HARBOR_PASSWORD are required for trivy scan." >&2
-        exit 1
-      fi
+      TRIVY_SEVERITY="${TRIVY_SEVERITY:-HIGH,CRITICAL}"
+      TRIVY_EXIT_CODE="${TRIVY_EXIT_CODE:-1}"
       trivy image \
-        --severity HIGH,CRITICAL \
-        --exit-code 0 \
+        --severity "${TRIVY_SEVERITY}" \
+        --exit-code "${TRIVY_EXIT_CODE}" \
         --ignore-unfixed \
-        --username "$HARBOR_USERNAME" \
-        --password "$HARBOR_PASSWORD" \
-        "$S3DESK_IMAGE"
+        --input release-postgres.tar
+      trivy image \
+        --severity "${TRIVY_SEVERITY}" \
+        --exit-code "${TRIVY_EXIT_CODE}" \
+        --ignore-unfixed \
+        --input release-sqlite.tar
 
 publish_dockerhub:
   stage: publish
@@ -419,11 +550,15 @@ publish_dockerhub:
     BUILDAH_ISOLATION: "chroot"
     SKIP_DOCKERHUB_DESCRIPTION: "1"
   needs:
+    - job: build_release_images
+      artifacts: true
     - trivy_scan
   rules:
     - if: '$CI_COMMIT_TAG'
   script:
     - echo "$DOCKERHUB_TOKEN" | podman login -u "$DOCKERHUB_USERNAME" --password-stdin docker.io
+    - podman load -i release-postgres.tar
+    - podman load -i release-sqlite.tar
     - |
       DOCKERHUB_REPO="$(printf '%s' "$DOCKERHUB_REPO" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
       DOCKERHUB_REPO="${DOCKERHUB_REPO#https://}"
@@ -451,11 +586,9 @@ publish_dockerhub:
       fi
       POSTGRES_TAG="$BASE_TAG"
       SQLITE_TAG="${BASE_TAG}-sqlite"
-      podman build --build-arg DB_BACKEND=postgres -f Containerfile \
-        -t "$DOCKERHUB_REPO:$POSTGRES_TAG" .
+      podman tag "s3desk-release:${POSTGRES_TAG}" "$DOCKERHUB_REPO:$POSTGRES_TAG"
       podman push "$DOCKERHUB_REPO:$POSTGRES_TAG"
-      podman build --build-arg DB_BACKEND=sqlite -f Containerfile \
-        -t "$DOCKERHUB_REPO:$SQLITE_TAG" .
+      podman tag "s3desk-release:${SQLITE_TAG}" "$DOCKERHUB_REPO:$SQLITE_TAG"
       podman push "$DOCKERHUB_REPO:$SQLITE_TAG"
     - |
       if [ "${SKIP_DOCKERHUB_DESCRIPTION:-0}" = "1" ]; then
@@ -493,3 +626,138 @@ publish_dockerhub:
         -H "Authorization: JWT ${token}" \
         --data-binary "${payload}" \
         "https://hub.docker.com/v2/repositories/${DOCKERHUB_REPO}/"
+
+release_image_smoke:
+  stage: post-publish
+  image: quay.io/podman/stable:latest
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  needs:
+    - publish_dockerhub
+  variables:
+    STORAGE_DRIVER: "vfs"
+    CONTAINERS_STORAGE_DRIVER: "vfs"
+    BUILDAH_ISOLATION: "chroot"
+    PODMAN_NETWORK_BACKEND: "slirp4netns"
+    CONTAINERS_NETWORK_BACKEND: "slirp4netns"
+  before_script:
+    - |
+      set -e
+      export XDG_CONFIG_HOME="/tmp"
+      mkdir -p "${XDG_CONFIG_HOME}/containers"
+      cat > "${XDG_CONFIG_HOME}/containers/containers.conf" <<'EOF'
+      [network]
+      default_rootless_network_cmd = "slirp4netns"
+      EOF
+      if ! command -v curl >/dev/null 2>&1; then
+        if command -v dnf >/dev/null 2>&1; then
+          dnf -y install curl
+        elif command -v apk >/dev/null 2>&1; then
+          apk add --no-cache curl
+        elif command -v apt-get >/dev/null 2>&1; then
+          apt-get update
+          apt-get install -y --no-install-recommends curl
+        fi
+      fi
+      if command -v podman-compose >/dev/null 2>&1; then
+        COMPOSE_CMD="podman-compose"
+        COMPOSE_ARGS="--in-pod s3desk-release-published --pod-args=--network=slirp4netns"
+        COMPOSE_PULL_ARGS=""
+      else
+        if command -v dnf >/dev/null 2>&1; then
+          dnf -y install python3-pip
+        elif command -v apk >/dev/null 2>&1; then
+          apk add --no-cache python3 py3-pip
+        elif command -v apt-get >/dev/null 2>&1; then
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-pip
+        fi
+        python3 -m pip install --no-cache-dir podman-compose
+        COMPOSE_CMD="podman-compose"
+        COMPOSE_ARGS="--in-pod s3desk-release-published --pod-args=--network=slirp4netns"
+        COMPOSE_PULL_ARGS=""
+      fi
+      echo "$COMPOSE_CMD" > /tmp/compose_cmd
+      echo "$COMPOSE_ARGS" > /tmp/compose_args
+      echo "$COMPOSE_PULL_ARGS" > /tmp/compose_pull_args
+      if [ "$COMPOSE_CMD" = "podman-compose" ]; then
+        echo "logs" > /tmp/compose_logs_cmd
+      else
+        echo "logs --no-color" > /tmp/compose_logs_cmd
+      fi
+  script:
+    - podman --version
+    - echo "$DOCKERHUB_TOKEN" | podman login -u "$DOCKERHUB_USERNAME" --password-stdin docker.io
+    - |
+      DOCKERHUB_REPO="$(printf '%s' "$DOCKERHUB_REPO" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#https://}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#http://}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#docker.io/}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#index.docker.io/}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#registry-1.docker.io/}"
+      if [ -z "$DOCKERHUB_REPO" ]; then
+        echo "DOCKERHUB_REPO is empty after normalization." >&2
+        exit 1
+      fi
+      if ! printf '%s' "$DOCKERHUB_REPO" | grep -Eq '^[a-z0-9]+([._-][a-z0-9]+)*/[a-z0-9]+([._-][a-z0-9]+)*$'; then
+        echo "DOCKERHUB_REPO must be in the form 'namespace/repo' (lowercase, no scheme)." >&2
+        exit 1
+      fi
+      BASE_TAG="$CI_COMMIT_TAG"
+      case "$BASE_TAG" in
+        *-postgres) BASE_TAG="${BASE_TAG%-postgres}" ;;
+        *-sqlite) BASE_TAG="${BASE_TAG%-sqlite}" ;;
+      esac
+      if [ -z "$BASE_TAG" ]; then
+        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
+        exit 1
+      fi
+      POSTGRES_IMAGE="${DOCKERHUB_REPO}:${BASE_TAG}"
+      SQLITE_IMAGE="${DOCKERHUB_REPO}:${BASE_TAG}-sqlite"
+      podman pull "$POSTGRES_IMAGE"
+      podman pull "$SQLITE_IMAGE"
+      if ! podman image inspect "$POSTGRES_IMAGE" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx 'DB_BACKEND=postgres'; then
+        echo "Docker Hub image $POSTGRES_IMAGE missing DB_BACKEND=postgres" >&2
+        exit 1
+      fi
+      if ! podman image inspect "$SQLITE_IMAGE" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx 'DB_BACKEND=sqlite'; then
+        echo "Docker Hub image $SQLITE_IMAGE missing DB_BACKEND=sqlite" >&2
+        exit 1
+      fi
+      COMPOSE_CMD="$(cat /tmp/compose_cmd)"
+      COMPOSE_ARGS="$(cat /tmp/compose_args)"
+      COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
+      S3DESK_IMAGE="$DOCKERHUB_REPO" S3DESK_TAG="$BASE_TAG" \
+        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml up -d
+      for i in $(seq 1 30); do
+        if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+          break
+        fi
+        sleep 2
+      done
+      curl -fsS http://127.0.0.1:8080/readyz >/dev/null
+      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:8080/api/v1/meta >/dev/null
+      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+      podman run --rm -d --name s3desk-sqlite-smoke -p 18080:8080 \
+        -e ADDR=0.0.0.0:8080 \
+        -e ALLOW_REMOTE=true \
+        -e API_TOKEN=change-me \
+        "$SQLITE_IMAGE"
+      for i in $(seq 1 30); do
+        if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
+          break
+        fi
+        sleep 2
+      done
+      curl -fsS http://127.0.0.1:18080/readyz >/dev/null
+      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:18080/api/v1/meta >/dev/null
+      podman rm -f s3desk-sqlite-smoke
+  after_script:
+    - |
+      COMPOSE_CMD="$(cat /tmp/compose_cmd)"
+      COMPOSE_ARGS="$(cat /tmp/compose_args)"
+      COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
+      LOGS_CMD="$(cat /tmp/compose_logs_cmd)"
+      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml $LOGS_CMD; fi
+      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+      if podman container exists s3desk-sqlite-smoke; then podman rm -f s3desk-sqlite-smoke; fi
