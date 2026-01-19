@@ -5,3 +5,6 @@ server:
 image:
   repository: s3desk
   tag: "latest"
+
+persistence:
+  enabled: false

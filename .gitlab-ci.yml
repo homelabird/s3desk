@@ -43,6 +43,7 @@ variables:
   GITLEAKS_VERSION: "8.21.2"
   HELM_VERSION: "3.16.4"
   KUBECONFORM_VERSION: "0.6.7"
+  KUBECTL_VERSION: "1.30.4"
   NPM_CONFIG_FETCH_RETRIES: "5"
   NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
@@ -67,6 +68,28 @@ variables:
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
+
+.helm_k8s_tools: &helm_k8s_tools
+  image: harbor.k8s.homelabird.com/library/alpine:3.21
+  before_script:
+    - apk add --no-cache curl tar ca-certificates bash coreutils
+    - |
+      arch="$(uname -m)"
+      case "$arch" in
+        x86_64|amd64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *) echo "unsupported arch: $arch" >&2; exit 1 ;;
+      esac
+      helm_version="v${HELM_VERSION}"
+      curl -fsSL -o /tmp/helm.tar.gz \
+        "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      tar -C /tmp -xzf /tmp/helm.tar.gz
+      mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
+      rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
+      kubectl_version="v${KUBECTL_VERSION}"
+      curl -fsSL -o /usr/local/bin/kubectl \
+        "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${arch}/kubectl"
+      chmod +x /usr/local/bin/kubectl
 
 helm_lint:
   <<: *helm_tools
@@ -100,6 +123,64 @@ helm_template:
   script:
     - helm template s3desk charts/s3desk -f charts/s3desk/ci-values.yaml > /tmp/helm-rendered.yaml
     - kubeconform -strict -summary -ignore-missing-schemas /tmp/helm-rendered.yaml
+
+helm_template_negative:
+  <<: *helm_tools
+  stage: test
+  script:
+    - |
+      if helm template s3desk charts/s3desk \
+        --set server.allowRemote=true \
+        --set-string server.apiToken= \
+        > /tmp/helm-negative.yaml 2>/tmp/helm-negative.err; then
+        echo "Expected helm template to fail when server.allowRemote=true with empty apiToken." >&2
+        exit 1
+      fi
+      grep -E "Missing configuration|apiToken" /tmp/helm-negative.err >/dev/null
+
+helm_k8s_smoke_sqlite:
+  <<: *helm_k8s_tools
+  stage: test
+  variables:
+    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
+    S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
+    S3DESK_FALLBACK_TAG: "dev"
+  script:
+    - bash scripts/helm_k8s_smoke.sh sqlite
+
+helm_k8s_smoke_postgres:
+  <<: *helm_k8s_tools
+  stage: test
+  variables:
+    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
+    S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
+    S3DESK_FALLBACK_TAG: "dev"
+  script:
+    - bash scripts/helm_k8s_smoke.sh postgres
+
+helm_k8s_upgrade:
+  <<: *helm_k8s_tools
+  stage: test
+  variables:
+    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
+    S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
+    S3DESK_FALLBACK_TAG: "dev"
+  script:
+    - bash scripts/helm_k8s_smoke.sh upgrade
+
+helm_k8s_pvc:
+  <<: *helm_k8s_tools
+  stage: test
+  variables:
+    HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
+    S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
+    S3DESK_FALLBACK_TAG: "dev"
+  rules:
+    - if: '$HELM_PVC_TESTS == "1"'
+      when: on_success
+    - when: never
+  script:
+    - bash scripts/helm_k8s_smoke.sh pvc
 
 security_fs_scan:
   stage: audit
