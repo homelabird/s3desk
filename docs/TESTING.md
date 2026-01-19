@@ -14,6 +14,8 @@ Use file prefixes as the primary category signal:
 - `frontend/tests/api-*.spec.ts` -> API integration (frontend-side)
 - `frontend/tests/transfers-*.spec.ts` -> transfer scenarios
 - `frontend/tests/objects-*.spec.ts` -> objects UI flows
+- `frontend/tests/profiles-*.spec.ts` -> profile/provider UI flows
+- `frontend/tests/settings-*.spec.ts` -> settings/auth flows
 - `frontend/tests/jobs-*.spec.ts` -> job flows
 - `frontend/tests/docs-*.spec.ts` -> docs/UI smoke
 - `frontend/tests/*-perf.spec.ts` -> performance

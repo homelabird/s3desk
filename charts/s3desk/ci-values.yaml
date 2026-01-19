@@ -14,5 +14,25 @@ resources:
     cpu: "500m"
     memory: "512Mi"
 
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
+
 persistence:
   enabled: false

@@ -1,0 +1,3 @@
+# CI-only RBAC exceptions for helm smoke tests.
+KSV053
+KSV056
