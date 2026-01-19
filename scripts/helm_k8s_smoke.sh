@@ -29,12 +29,18 @@ sanitize_name() {
 
 default_ns="s3desk-ci-${CI_PIPELINE_ID:-local}-${CI_JOB_ID:-$(date +%s)}"
 default_release="s3desk-${CI_JOB_ID:-$(date +%s)}"
-NAMESPACE="$(sanitize_name "${K8S_NAMESPACE:-$default_ns}")"
+if [[ -n "${K8S_NAMESPACE:-}" ]]; then
+  NAMESPACE="${K8S_NAMESPACE}"
+else
+  NAMESPACE="$(sanitize_name "${default_ns}")"
+fi
 RELEASE="$(sanitize_name "${HELM_RELEASE:-$default_release}")"
+POSTGRES_NAME="$(sanitize_name "${RELEASE}-postgres")"
 
 KUBECONFIG_PATH=""
 IMAGE_PULL_SECRET=""
 IMAGE_TAG=""
+CREATED_NAMESPACE=0
 
 setup_kubeconfig() {
   if [[ -n "${KUBECONFIG:-}" && -f "${KUBECONFIG}" ]]; then
@@ -75,7 +81,9 @@ cleanup() {
     return
   fi
   helm -n "${NAMESPACE}" uninstall "${RELEASE}" >/dev/null 2>&1 || true
-  kubectl delete namespace "${NAMESPACE}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  if [[ "${CREATED_NAMESPACE}" == "1" ]]; then
+    kubectl delete namespace "${NAMESPACE}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  fi
 }
 
 on_error() {
@@ -85,8 +93,8 @@ on_error() {
   kubectl -n "${NAMESPACE}" get svc -o wide || true
   kubectl -n "${NAMESPACE}" describe deployment "${RELEASE}" || true
   kubectl -n "${NAMESPACE}" logs deployment/"${RELEASE}" --tail=200 || true
-  kubectl -n "${NAMESPACE}" describe deployment s3desk-postgres || true
-  kubectl -n "${NAMESPACE}" logs deployment/s3desk-postgres --tail=200 || true
+  kubectl -n "${NAMESPACE}" describe deployment "${POSTGRES_NAME}" || true
+  kubectl -n "${NAMESPACE}" logs deployment/"${POSTGRES_NAME}" --tail=200 || true
   exit "${exit_code}"
 }
 
@@ -118,7 +126,17 @@ resolve_image_tag() {
 }
 
 setup_namespace() {
-  kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace "${NAMESPACE}" >/dev/null
+  if [[ -n "${K8S_NAMESPACE:-}" ]]; then
+    if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
+      echo "K8S_NAMESPACE '${NAMESPACE}' does not exist." >&2
+      exit 1
+    fi
+  else
+    if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
+      kubectl create namespace "${NAMESPACE}" >/dev/null
+      CREATED_NAMESPACE=1
+    fi
+  fi
   kubectl config set-context ci --namespace="${NAMESPACE}" >/dev/null
 }
 
@@ -192,31 +210,31 @@ smoke_http() {
 }
 
 deploy_postgres() {
-  kubectl -n "${NAMESPACE}" apply -f - >/dev/null <<'EOF'
+  kubectl -n "${NAMESPACE}" apply -f - >/dev/null <<EOF
 apiVersion: v1
 kind: Service
 metadata:
-  name: s3desk-postgres
+  name: ${POSTGRES_NAME}
 spec:
   ports:
     - port: 5432
       targetPort: 5432
   selector:
-    app: s3desk-postgres
+    app: ${POSTGRES_NAME}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: s3desk-postgres
+  name: ${POSTGRES_NAME}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: s3desk-postgres
+      app: ${POSTGRES_NAME}
   template:
     metadata:
       labels:
-        app: s3desk-postgres
+        app: ${POSTGRES_NAME}
     spec:
       containers:
         - name: postgres
@@ -237,7 +255,7 @@ spec:
         - name: pgdata
           emptyDir: {}
 EOF
-  kubectl -n "${NAMESPACE}" rollout status deployment/s3desk-postgres --timeout="${HELM_TIMEOUT}"
+  kubectl -n "${NAMESPACE}" rollout status deployment/"${POSTGRES_NAME}" --timeout="${HELM_TIMEOUT}"
 }
 
 deploy_s3desk() {
@@ -293,7 +311,7 @@ case "${MODE}" in
     deploy_postgres
     deploy_s3desk \
       --set "db.backend=postgres" \
-      --set-string "db.databaseUrl=postgres://s3desk:s3desk@s3desk-postgres:5432/s3desk?sslmode=disable"
+      --set-string "db.databaseUrl=postgres://s3desk:s3desk@${POSTGRES_NAME}:5432/s3desk?sslmode=disable"
     smoke_http 18080
     ;;
   upgrade)
