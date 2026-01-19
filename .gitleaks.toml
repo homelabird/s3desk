@@ -1,0 +1,12 @@
+title = "S3Desk gitleaks config"
+
+[allowlist]
+  description = "Ignore build artifacts and known test/placeholder strings."
+  paths = [
+    '''^frontend/dist/''',
+  ]
+  regexes = [
+    '''Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==''',
+    '''Authorization:\s*Basic\s*\$\{encoded_pass\}''',
+    '''Authorization:\s*JWT\s*\$\{token\}''',
+  ]

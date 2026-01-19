@@ -38,6 +38,20 @@ stages:
 
 variables:
   NPM_VERSION: "10.9.4"
+  TRIVY_SEVERITY: "HIGH,CRITICAL"
+  TRIVY_EXIT_CODE: "1"
+
+security_fs_scan:
+  stage: audit
+  image: aquasec/trivy:0.56.2
+  script:
+    - trivy fs --scanners vuln,secret,misconfig --severity "${TRIVY_SEVERITY}" --ignore-unfixed --skip-dirs frontend/dist .
+
+gitleaks_scan:
+  stage: audit
+  image: zricethezav/gitleaks:8.21.2
+  script:
+    - gitleaks detect --source . --config .gitleaks.toml
 
 openapi_validate:
   stage: test

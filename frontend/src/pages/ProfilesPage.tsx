@@ -1244,7 +1244,14 @@ function ProfileModal(props: {
 								<Input.TextArea
 									autoSize={{ minRows: 6, maxRows: 12 }}
 									placeholder={`{
-  "type": "service_account", ...
+  "type": "service_account_json",
+  "project_id": "example-project",
+  "private_key_id": "...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n",
+  "client_email": "example@project.iam.gserviceaccount.com",
+  "client_id": "...",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token"
 }`}
 								/>
 							</Form.Item>
