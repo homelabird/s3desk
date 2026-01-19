@@ -1,0 +1,7 @@
+server:
+  allowRemote: true
+  apiToken: "ci-token"
+
+image:
+  repository: s3desk
+  tag: "latest"
