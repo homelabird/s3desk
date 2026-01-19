@@ -22,6 +22,8 @@ subjects:
     namespace: gitlab-runner
 ---
 # Required for helm_k8s_* jobs: allow managing resources in the gitlab-runner namespace.
+# trivy:ignore:KSV053 CI smoke tests need exec/port-forward for validation.
+# trivy:ignore:KSV056 CI smoke tests need to create services for helm release.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

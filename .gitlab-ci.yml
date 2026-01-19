@@ -187,7 +187,8 @@ security_fs_scan:
   stage: audit
   image: aquasec/trivy:0.56.2
   script:
-    - trivy fs --scanners vuln,secret,misconfig --severity "${TRIVY_SEVERITY}" --ignore-unfixed --skip-dirs frontend/dist .
+    - trivy fs --scanners vuln,secret --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --ignore-unfixed --skip-dirs frontend/dist .
+    - trivy config --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --skip-dirs frontend/dist --helm-values charts/s3desk/ci-values.yaml .
 
 gitleaks_scan:
   stage: audit
