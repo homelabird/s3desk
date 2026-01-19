@@ -46,8 +46,21 @@ async function setupApiMocks(page: Page) {
 }
 
 async function selectProvider(page: Page, optionLabel: string) {
-	await page.getByRole('combobox', { name: 'Provider' }).click()
-	await page.getByRole('option', { name: optionLabel }).click()
+	const combobox = page.getByRole('combobox', { name: 'Provider' })
+	await combobox.click({ force: true })
+	if ((await combobox.getAttribute('aria-expanded')) !== 'true') {
+		await combobox.press('ArrowDown')
+	}
+	if ((await combobox.getAttribute('aria-expanded')) !== 'true') {
+		const selector = combobox.locator('xpath=ancestor::*[contains(@class,"ant-select-selector")]')
+		if (await selector.count()) {
+			await selector.first().click({ force: true })
+		}
+	}
+	await expect(combobox).toHaveAttribute('aria-expanded', 'true')
+	const dropdown = page.locator('.ant-select-dropdown').filter({ hasText: optionLabel })
+	await expect(dropdown).toBeVisible()
+	await dropdown.getByText(optionLabel, { exact: true }).click()
 }
 
 test('profile provider forms toggle provider-specific fields', async ({ page }) => {

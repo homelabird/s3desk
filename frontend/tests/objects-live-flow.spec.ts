@@ -126,39 +126,39 @@ test.describe('Live UI flow', () => {
 			await profileConfirm.getByRole('button', { name: 'Delete' }).click()
 			await expect(page.getByText(profileName, { exact: true })).toHaveCount(0, { timeout: 60_000 })
 		} finally {
-			if (!profileId) return
-
-			const profileHeaders = {
-				'X-Api-Token': apiToken,
-				'X-Profile-Id': profileId,
-			}
-
-			try {
-				const listObjects = await request.get(`/api/v1/buckets/${bucketName}/objects`, { headers: profileHeaders })
-				if (listObjects.ok()) {
-					const payload = (await listObjects.json()) as { items?: { key: string }[] }
-					const keys = payload.items?.map((item) => item.key) ?? []
-					if (keys.length) {
-						await request.delete(`/api/v1/buckets/${bucketName}/objects`, {
-							headers: profileHeaders,
-							data: { keys },
-						})
-					}
+			if (profileId) {
+				const profileHeaders = {
+					'X-Api-Token': apiToken,
+					'X-Profile-Id': profileId,
 				}
-			} catch {
-				// best-effort cleanup
-			}
 
-			try {
-				await request.delete(`/api/v1/buckets/${bucketName}`, { headers: profileHeaders })
-			} catch {
-				// best-effort cleanup
-			}
+				try {
+					const listObjects = await request.get(`/api/v1/buckets/${bucketName}/objects`, { headers: profileHeaders })
+					if (listObjects.ok()) {
+						const payload = (await listObjects.json()) as { items?: { key: string }[] }
+						const keys = payload.items?.map((item) => item.key) ?? []
+						if (keys.length) {
+							await request.delete(`/api/v1/buckets/${bucketName}/objects`, {
+								headers: profileHeaders,
+								data: { keys },
+							})
+						}
+					}
+				} catch {
+					// best-effort cleanup
+				}
 
-			try {
-				await request.delete(`/api/v1/profiles/${profileId}`, { headers: { 'X-Api-Token': apiToken } })
-			} catch {
-				// best-effort cleanup
+				try {
+					await request.delete(`/api/v1/buckets/${bucketName}`, { headers: profileHeaders })
+				} catch {
+					// best-effort cleanup
+				}
+
+				try {
+					await request.delete(`/api/v1/profiles/${profileId}`, { headers: { 'X-Api-Token': apiToken } })
+				} catch {
+					// best-effort cleanup
+				}
 			}
 		}
 	})

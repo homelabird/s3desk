@@ -214,9 +214,9 @@ test('transfer scenarios cover job types, progress, cancel, and retry', async ({
 	await page.goto('/jobs')
 	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 
-	await expect(page.getByText(/Upload folder \(device/)).toBeVisible()
-	await expect(page.getByText(/Finalize upload \(staging/)).toBeVisible()
-	await expect(page.getByText(/Download folder \(S3/)).toBeVisible()
+	await expect(page.getByText(/Upload folder \(device \u2192 S3\)/)).toBeVisible()
+	await expect(page.getByText(/Finalize upload \(staging \u2192 S3\)/)).toBeVisible()
+	await expect(page.getByText(/Download folder \(S3 \u2192 device\)/)).toBeVisible()
 	await expect(page.getByText('Copy object')).toBeVisible()
 	await expect(page.getByText('Delete folder/prefix')).toBeVisible()
 

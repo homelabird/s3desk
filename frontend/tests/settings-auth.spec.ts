@@ -72,7 +72,7 @@ test('login gate and settings persist local state', async ({ page }) => {
 	await page.goto('/profiles')
 	await expect(page.getByRole('heading', { name: 'S3Desk' })).toBeVisible()
 
-	await page.getByLabel('API Token').fill(validToken)
+	await page.getByPlaceholder('API_TOKEN').fill(validToken)
 	await page.getByRole('button', { name: 'Login' }).click()
 	await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible({ timeout: 10_000 })
 
@@ -80,7 +80,9 @@ test('login gate and settings persist local state', async ({ page }) => {
 	const drawer = page.locator('.ant-drawer').filter({ hasText: 'Settings' })
 	await expect(drawer).toBeVisible()
 
-	await drawer.getByLabel('Backend API Token (X-Api-Token)').fill(updatedToken)
+	const tokenInput = drawer.getByPlaceholder('Must match API_TOKEN')
+	await expect(tokenInput).toBeVisible()
+	await tokenInput.fill(updatedToken)
 	await drawer.getByRole('button', { name: 'Apply' }).click()
 	const storedToken = await page.evaluate(() => JSON.parse(window.localStorage.getItem('apiToken') ?? '""'))
 	expect(storedToken).toBe(updatedToken)
