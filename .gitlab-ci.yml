@@ -175,10 +175,6 @@ helm_k8s_pvc:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
     S3DESK_FALLBACK_TAG: "dev"
-  rules:
-    - if: '$HELM_PVC_TESTS == "1"'
-      when: on_success
-    - when: never
   script:
     - bash scripts/helm_k8s_smoke.sh pvc
 
