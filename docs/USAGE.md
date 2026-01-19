@@ -21,6 +21,13 @@ S3Desk는 **오브젝트 스토리지**를 웹 UI로 조회하고, `rclone` 기�
 - `docs/S3Desk.postman_collection.json`: Postman 컬렉션
 - `docs/S3Desk.insomnia_collection.json`: Insomnia 컬렉션
 
+## 컨테이너 이미지 태그
+
+- Docker Compose는 루트 `.env`의 `S3DESK_IMAGE`, `S3DESK_TAG`를 사용합니다.
+- 기본(Postgres) 태그: `${S3DESK_TAG}`
+- SQLite 태그: `${S3DESK_TAG}-sqlite`
+- 릴리스 버전을 바꾸려면 `.env`의 `S3DESK_TAG`만 변경하세요.
+
 ## 1) 실행 후 접속
 
 - 기본 접속: `http://127.0.0.1:8080` 또는 `http://localhost:8080`

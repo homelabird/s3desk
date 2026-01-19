@@ -9,7 +9,7 @@ services:
       - s3desk-postgres:/var/lib/postgresql/data
 
   s3desk:
-    image: homelabird/s3desk:beta-postgres
+    image: "${S3DESK_IMAGE}:${S3DESK_TAG}"
     depends_on:
       - postgres
     ports:

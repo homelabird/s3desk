@@ -445,26 +445,18 @@ publish_dockerhub:
         *-postgres) BASE_TAG="${TAG%-postgres}" ;;
         *-sqlite) BASE_TAG="${TAG%-sqlite}" ;;
       esac
-      for DB_BACKEND in postgres sqlite; do
-        if [ "$DB_BACKEND" = "postgres" ]; then
-          SUFFIX_TAG="${BASE_TAG}-postgres"
-          BETA_TAG="beta-postgres"
-          LEGACY_TAG="postgres-beta"
-        else
-          SUFFIX_TAG="${BASE_TAG}-sqlite"
-          BETA_TAG="beta-sqlite"
-          LEGACY_TAG=""
-        fi
-        podman build --build-arg DB_BACKEND="$DB_BACKEND" -f Containerfile \
-          -t "$DOCKERHUB_REPO:$SUFFIX_TAG" \
-          -t "$DOCKERHUB_REPO:$BETA_TAG" \
-          ${LEGACY_TAG:+-t "$DOCKERHUB_REPO:$LEGACY_TAG"} .
-        podman push "$DOCKERHUB_REPO:$SUFFIX_TAG"
-        podman push "$DOCKERHUB_REPO:$BETA_TAG"
-        if [ -n "$LEGACY_TAG" ]; then
-          podman push "$DOCKERHUB_REPO:$LEGACY_TAG"
-        fi
-      done
+      if [ -z "$BASE_TAG" ]; then
+        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
+        exit 1
+      fi
+      POSTGRES_TAG="$BASE_TAG"
+      SQLITE_TAG="${BASE_TAG}-sqlite"
+      podman build --build-arg DB_BACKEND=postgres -f Containerfile \
+        -t "$DOCKERHUB_REPO:$POSTGRES_TAG" .
+      podman push "$DOCKERHUB_REPO:$POSTGRES_TAG"
+      podman build --build-arg DB_BACKEND=sqlite -f Containerfile \
+        -t "$DOCKERHUB_REPO:$SQLITE_TAG" .
+      podman push "$DOCKERHUB_REPO:$SQLITE_TAG"
     - |
       if [ "${SKIP_DOCKERHUB_DESCRIPTION:-0}" = "1" ]; then
         echo "Skipping Docker Hub description upload (SKIP_DOCKERHUB_DESCRIPTION=1)."

@@ -31,14 +31,19 @@ Details:
 
 Single-container run uses sqlite by default at `/data/s3desk.db`.
 The image includes the `sqlite3` CLI for ad-hoc inspection.
+Release tags are tracked in `.env`: `S3DESK_TAG` is the base (Postgres) tag, and sqlite uses `${S3DESK_TAG}-sqlite`.
+Docker Hub releases publish exactly two tags per version: `${S3DESK_TAG}` (Postgres) and `${S3DESK_TAG}-sqlite`.
 
 ```bash
+export S3DESK_IMAGE=homelabird/s3desk
+export S3DESK_TAG=v0.1.2
+
 docker run --rm -p 8080:8080 \
   -e ADDR=0.0.0.0:8080 \
   -e ALLOW_REMOTE=true \
   -e API_TOKEN=change-me \
   -v s3desk-data:/data \
-  homelabird/s3desk:beta-sqlite
+  "${S3DESK_IMAGE}:${S3DESK_TAG}-sqlite"
 ```
 
 ```bash
@@ -47,7 +52,7 @@ docker exec -it <container> sqlite3 /data/s3desk.db
 
 ## Run with Postgres (docker compose, headless)
 
-`docker-compose.yml` is configured for a headless Postgres setup (no bundled DB). It starts Postgres + the `beta-postgres` image.
+`docker-compose.yml` is configured for a headless Postgres setup (no bundled DB). It starts Postgres + the `${S3DESK_TAG}` image defined in `.env`.
 
 ```bash
 docker compose up -d
