@@ -239,6 +239,13 @@ spec:
       containers:
         - name: postgres
           image: postgres:15-alpine
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           env:
             - name: POSTGRES_DB
               value: s3desk

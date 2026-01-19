@@ -146,6 +146,7 @@ helm_k8s_smoke_sqlite:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
     S3DESK_FALLBACK_TAG: "dev"
+    S3DESK_IMAGE_TAG: "${CI_COMMIT_SHA}"
   script:
     - bash scripts/helm_k8s_smoke.sh sqlite
 
@@ -156,6 +157,7 @@ helm_k8s_smoke_postgres:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
     S3DESK_FALLBACK_TAG: "dev"
+    S3DESK_IMAGE_TAG: "${CI_COMMIT_SHA}"
   script:
     - bash scripts/helm_k8s_smoke.sh postgres
 
@@ -166,6 +168,7 @@ helm_k8s_upgrade:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
     S3DESK_FALLBACK_TAG: "dev"
+    S3DESK_IMAGE_TAG: "${CI_COMMIT_SHA}"
   script:
     - bash scripts/helm_k8s_smoke.sh upgrade
 
@@ -176,6 +179,7 @@ helm_k8s_pvc:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
     S3DESK_FALLBACK_TAG: "dev"
+    S3DESK_IMAGE_TAG: "${CI_COMMIT_SHA}"
   script:
     - bash scripts/helm_k8s_smoke.sh pvc
 
@@ -230,14 +234,7 @@ build_s3desk_image:
   stage: build
   image: quay.io/podman/stable:latest
   rules:
-    - changes:
-        - Containerfile
-        - docker-compose.e2e.yml
-        - backend/**/*
-        - e2e/**/*
-        - frontend/**/*
-        - openapi.yml
-    - when: never
+    - when: on_success
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
