@@ -12,6 +12,7 @@ CHART_PATH="${HELM_CHART_PATH:-charts/s3desk}"
 VALUES_FILE="${HELM_VALUES_FILE:-charts/s3desk/ci-values.yaml}"
 API_TOKEN="${S3DESK_API_TOKEN:-ci-token}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-180s}"
+POD_FS_GROUP="${POD_FS_GROUP:-1000}"
 
 HARBOR_REGISTRY="${HARBOR_REGISTRY:-harbor.k8s.homelabird.com}"
 IMAGE_REPO="${S3DESK_IMAGE_REPOSITORY:-${HARBOR_REGISTRY}/library/s3desk}"
@@ -334,7 +335,9 @@ case "${MODE}" in
     deploy_s3desk \
       --set "persistence.enabled=true" \
       --set "persistence.size=${PERSISTENCE_SIZE:-1Gi}" \
-      --set "persistence.storageClass=${PERSISTENCE_STORAGE_CLASS:-}"
+      --set "persistence.storageClass=${PERSISTENCE_STORAGE_CLASS:-}" \
+      --set "podSecurityContext.fsGroup=${POD_FS_GROUP}" \
+      --set "podSecurityContext.fsGroupChangePolicy=OnRootMismatch"
     persist_data_check
     ;;
   *)
