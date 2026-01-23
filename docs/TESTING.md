@@ -116,6 +116,21 @@ npm install
 E2E_LIVE=1 E2E_API_TOKEN=change-me npm run test:e2e
 ```
 
+Live UI flow (CI-like):
+
+```bash
+cd frontend
+npm install
+E2E_LIVE=1 \
+E2E_BASE_URL=http://127.0.0.1:8080 \
+E2E_API_TOKEN=change-me \
+E2E_S3_ENDPOINT=http://127.0.0.1:9000 \
+E2E_S3_ACCESS_KEY=minioadmin \
+E2E_S3_SECRET_KEY=minioadmin \
+E2E_S3_REGION=us-east-1 \
+npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
+```
+
 When the UI and API base URLs differ (e.g. Vite dev server), set:
 
 ```bash
