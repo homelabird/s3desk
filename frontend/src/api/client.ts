@@ -30,6 +30,10 @@ import type {
 	ObjectFavoritesResponse,
 	UploadCreateRequest,
 	UploadCreateResponse,
+	UploadMultipartAbortRequest,
+	UploadMultipartCompleteRequest,
+	UploadPresignRequest,
+	UploadPresignResponse,
 } from './types'
 import { clearNetworkStatus, logNetworkEvent, publishNetworkStatus } from '../lib/networkStatus'
 
@@ -527,6 +531,42 @@ export class APIClient {
 	createUpload(profileId: string, req: UploadCreateRequest): Promise<UploadCreateResponse> {
 		return this.request(
 			'/uploads',
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	presignUpload(profileId: string, uploadId: string, req: UploadPresignRequest): Promise<UploadPresignResponse> {
+		return this.request(
+			`/uploads/${encodeURIComponent(uploadId)}/presign`,
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	completeMultipartUpload(profileId: string, uploadId: string, req: UploadMultipartCompleteRequest): Promise<void> {
+		return this.request(
+			`/uploads/${encodeURIComponent(uploadId)}/multipart/complete`,
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	abortMultipartUpload(profileId: string, uploadId: string, req: UploadMultipartAbortRequest): Promise<void> {
+		return this.request(
+			`/uploads/${encodeURIComponent(uploadId)}/multipart/abort`,
 			{
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },

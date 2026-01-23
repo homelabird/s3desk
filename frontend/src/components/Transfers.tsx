@@ -4,7 +4,15 @@ import { DownloadOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError, RequestAbortedError, RequestTimeoutError, type UploadCommitRequest, type UploadFileItem } from '../api/client'
+import {
+	APIClient,
+	APIError,
+	RequestAbortedError,
+	RequestTimeoutError,
+	type UploadCommitRequest,
+	type UploadFileItem,
+	type UploadFilesResult,
+} from '../api/client'
 import type { JobProgress, JobStatus, WSEvent } from '../api/types'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { TransfersContext, useTransfers } from './useTransfers'
@@ -129,6 +137,331 @@ const resolveUploadItemPath = (item: UploadFileItem): string => {
 }
 
 const resolveUploadItemPathNormalized = (item: UploadFileItem): string => normalizeRelPath(resolveUploadItemPath(item))
+
+const PRESIGNED_MIN_PART_BYTES = 5 * 1024 * 1024
+const PRESIGNED_MAX_PARTS = 10_000
+const PRESIGNED_UNSAFE_HEADERS = new Set(['accept-encoding', 'connection', 'content-length', 'host', 'user-agent'])
+
+type PresignedUploadItem = {
+	item: UploadFileItem
+	path: string
+	size: number
+	contentType?: string
+	index: number
+}
+
+type PresignedMultipartPlan = {
+	partSizeBytes: number
+	partCount: number
+}
+
+const planPresignedMultipart = (args: {
+	fileSize: number
+	partSizeBytes: number
+	thresholdBytes: number
+}): PresignedMultipartPlan | null => {
+	if (!Number.isFinite(args.fileSize) || args.fileSize <= 0) return null
+	if (args.fileSize < args.thresholdBytes) return null
+
+	let partSizeBytes = Math.max(PRESIGNED_MIN_PART_BYTES, Math.ceil(args.partSizeBytes))
+	let partCount = Math.ceil(args.fileSize / partSizeBytes)
+	if (partCount > PRESIGNED_MAX_PARTS) {
+		partSizeBytes = Math.ceil(args.fileSize / PRESIGNED_MAX_PARTS)
+		if (partSizeBytes < PRESIGNED_MIN_PART_BYTES) {
+			partSizeBytes = PRESIGNED_MIN_PART_BYTES
+		}
+		partCount = Math.ceil(args.fileSize / partSizeBytes)
+	}
+
+	if (partCount < 2) return null
+	return { partSizeBytes, partCount }
+}
+
+const applyPresignedHeaders = (xhr: XMLHttpRequest, headers?: Record<string, string>) => {
+	if (!headers) return
+	for (const [key, value] of Object.entries(headers)) {
+		if (!value) continue
+		if (PRESIGNED_UNSAFE_HEADERS.has(key.toLowerCase())) continue
+		xhr.setRequestHeader(key, value)
+	}
+}
+
+const uploadPresignedBlob = (args: {
+	url: string
+	method?: string
+	headers?: Record<string, string>
+	body: Blob
+	onProgress?: (loadedBytes: number) => void
+}): { promise: Promise<{ etag?: string }>; abort: () => void } => {
+	const xhr = new XMLHttpRequest()
+	xhr.open(args.method ?? 'PUT', args.url)
+	applyPresignedHeaders(xhr, args.headers)
+
+	if (args.onProgress) {
+		xhr.upload.onprogress = (e) => {
+			args.onProgress?.(e.loaded)
+		}
+	}
+
+	const promise = new Promise<{ etag?: string }>((resolve, reject) => {
+		xhr.onload = () => {
+			if (xhr.status >= 200 && xhr.status < 300) {
+				clearNetworkStatus()
+				resolve({ etag: xhr.getResponseHeader('etag') ?? xhr.getResponseHeader('ETag') ?? undefined })
+				return
+			}
+			if (xhr.status >= 500 || xhr.status === 0) {
+				publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
+			}
+			reject(new Error(xhr.responseText ? `upload failed: ${xhr.responseText}` : `upload failed (HTTP ${xhr.status || '0'})`))
+		}
+		xhr.onerror = () => {
+			publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+			reject(new Error('network error'))
+		}
+		xhr.onabort = () => reject(new RequestAbortedError())
+	})
+
+	xhr.send(args.body)
+	return { promise, abort: () => xhr.abort() }
+}
+
+const uploadPresignedFilesWithProgress = (args: {
+	api: APIClient
+	profileId: string
+	uploadId: string
+	items: UploadFileItem[]
+	onProgress?: (progress: { loadedBytes: number; totalBytes?: number }) => void
+	singleConcurrency: number
+	multipartFileConcurrency: number
+	partConcurrency: number
+	chunkThresholdBytes: number
+	chunkSizeBytes: number
+}): { promise: Promise<UploadFilesResult>; abort: () => void } => {
+	const totalBytes = args.items.reduce((acc, item) => acc + (item.file?.size ?? 0), 0)
+	if (args.items.length === 0) {
+		return { promise: Promise.resolve({ skipped: 0 }), abort: () => {} }
+	}
+
+	const validItems: PresignedUploadItem[] = []
+	let skipped = 0
+	let skippedBytes = 0
+	for (const [index, item] of args.items.entries()) {
+		const path = normalizeUploadPath(resolveUploadItemPath(item))
+		if (!path) {
+			skipped += 1
+			skippedBytes += item.file?.size ?? 0
+			continue
+		}
+		validItems.push({
+			item,
+			path,
+			size: item.file?.size ?? 0,
+			contentType: item.file?.type?.trim() || undefined,
+			index,
+		})
+	}
+
+	if (validItems.length === 0) {
+		return { promise: Promise.resolve({ skipped }), abort: () => {} }
+	}
+
+	const emitProgress = (loadedBytes: number) => {
+		if (!args.onProgress) return
+		args.onProgress({ loadedBytes, totalBytes: totalBytes || undefined })
+	}
+
+	const loadedByKey = new Map<string, number>()
+	let loadedBytes = skippedBytes
+	if (skippedBytes > 0) emitProgress(loadedBytes)
+
+	const updateLoaded = (key: string, nextLoaded: number) => {
+		const prev = loadedByKey.get(key) ?? 0
+		const delta = nextLoaded - prev
+		if (delta <= 0) return
+		loadedByKey.set(key, nextLoaded)
+		loadedBytes += delta
+		emitProgress(loadedBytes)
+	}
+
+	const singleItems: PresignedUploadItem[] = []
+	const multipartItems: Array<{ info: PresignedUploadItem; plan: PresignedMultipartPlan }> = []
+	for (const info of validItems) {
+		const plan = planPresignedMultipart({
+			fileSize: info.size,
+			partSizeBytes: args.chunkSizeBytes,
+			thresholdBytes: args.chunkThresholdBytes,
+		})
+		if (plan) multipartItems.push({ info, plan })
+		else singleItems.push(info)
+	}
+
+	const singleConcurrency = Math.max(1, args.singleConcurrency)
+	const multipartConcurrency = Math.max(1, args.multipartFileConcurrency)
+	const partConcurrency = Math.max(1, args.partConcurrency)
+	const aborters: Array<() => void> = []
+	let aborted = false
+
+	const uploadSingleItem = async (info: PresignedUploadItem) => {
+		const presigned = await args.api.presignUpload(args.profileId, args.uploadId, {
+			path: info.path,
+			contentType: info.contentType,
+			size: info.size,
+		})
+		if (presigned.mode !== 'single' || !presigned.url) {
+			throw new Error('unexpected presigned response for single upload')
+		}
+		const key = `single:${info.index}`
+		const handle = uploadPresignedBlob({
+			url: presigned.url,
+			method: presigned.method,
+			headers: presigned.headers,
+			body: info.item.file,
+			onProgress: (loaded) => updateLoaded(key, loaded),
+		})
+		aborters.push(handle.abort)
+		await handle.promise
+		updateLoaded(key, info.size)
+	}
+
+	const uploadMultipartItem = async (info: PresignedUploadItem, plan: PresignedMultipartPlan) => {
+		const presigned = await args.api.presignUpload(args.profileId, args.uploadId, {
+			path: info.path,
+			contentType: info.contentType,
+			size: info.size,
+			multipart: {
+				fileSize: info.size,
+				partSizeBytes: plan.partSizeBytes,
+			},
+		})
+		if (presigned.mode !== 'multipart' || !presigned.multipart) {
+			throw new Error('unexpected presigned response for multipart upload')
+		}
+		try {
+			const partSizeBytes = presigned.multipart.partSizeBytes
+			const partCount = presigned.multipart.partCount
+			const parts = presigned.multipart.parts ?? []
+			if (parts.length === 0) {
+				throw new Error('multipart presign returned no parts')
+			}
+			const partsByNumber = new Map(parts.map((part) => [part.number, part]))
+			for (let i = 1; i <= partCount; i += 1) {
+				if (!partsByNumber.has(i)) {
+					throw new Error(`missing presigned part ${i}`)
+				}
+			}
+
+			let nextPart = 1
+			const completed: Array<{ number: number; etag: string }> = []
+			const uploadPart = async (partNumber: number) => {
+				const part = partsByNumber.get(partNumber)
+				if (!part) throw new Error(`missing presigned part ${partNumber}`)
+				const start = (partNumber - 1) * partSizeBytes
+				const end = Math.min(info.size, start + partSizeBytes)
+				const blob = info.item.file.slice(start, end)
+				const key = `multi:${info.index}:${partNumber}`
+				const handle = uploadPresignedBlob({
+					url: part.url,
+					method: part.method,
+					headers: part.headers,
+					body: blob,
+					onProgress: (loaded) => updateLoaded(key, loaded),
+				})
+				aborters.push(handle.abort)
+				const res = await handle.promise
+				const etag = res.etag?.trim()
+				if (!etag) {
+					throw new Error(`missing etag for part ${partNumber}`)
+				}
+				updateLoaded(key, end - start)
+				return { number: partNumber, etag }
+			}
+
+			const partWorker = async () => {
+				while (true) {
+					if (aborted) return
+					const current = nextPart
+					if (current > partCount) return
+					nextPart += 1
+					const partResult = await uploadPart(current)
+					completed.push(partResult)
+				}
+			}
+
+			const workers = Array.from({ length: Math.min(partConcurrency, partCount) }, () => partWorker())
+			await Promise.all(workers)
+			await args.api.completeMultipartUpload(args.profileId, args.uploadId, {
+				path: info.path,
+				parts: completed,
+			})
+		} catch (err) {
+			await args.api.abortMultipartUpload(args.profileId, args.uploadId, { path: info.path }).catch(() => {})
+			throw err
+		}
+	}
+
+	const runSingles = async () => {
+		if (singleItems.length === 0) return
+		let nextIndex = 0
+		const worker = async () => {
+			while (true) {
+				if (aborted) return
+				const currentIndex = nextIndex
+				if (currentIndex >= singleItems.length) return
+				nextIndex += 1
+				try {
+					await uploadSingleItem(singleItems[currentIndex])
+				} catch (err) {
+					if (!aborted) {
+						aborted = true
+						for (const abort of aborters) abort()
+					}
+					throw err
+				}
+			}
+		}
+		const workers = Array.from({ length: Math.min(singleConcurrency, singleItems.length) }, () => worker())
+		await Promise.all(workers)
+	}
+
+	const runMultiparts = async () => {
+		if (multipartItems.length === 0) return
+		let nextIndex = 0
+		const worker = async () => {
+			while (true) {
+				if (aborted) return
+				const currentIndex = nextIndex
+				if (currentIndex >= multipartItems.length) return
+				nextIndex += 1
+				const entry = multipartItems[currentIndex]
+				try {
+					await uploadMultipartItem(entry.info, entry.plan)
+				} catch (err) {
+					if (!aborted) {
+						aborted = true
+						for (const abort of aborters) abort()
+					}
+					throw err
+				}
+			}
+		}
+		const workers = Array.from({ length: Math.min(multipartConcurrency, multipartItems.length) }, () => worker())
+		await Promise.all(workers)
+	}
+
+	const promise = (async () => {
+		await Promise.all([runSingles(), runMultiparts()])
+		return { skipped }
+	})()
+
+	return {
+		promise,
+		abort: () => {
+			aborted = true
+			for (const abort of aborters) abort()
+		},
+	}
+}
 
 const TransfersDrawer = lazy(async () => {
 	const m = await import('./transfers/TransfersDrawer')
@@ -725,12 +1058,39 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 
 				try {
 					await ensureReadWritePermission(current.targetDirHandle)
-					const res = await api.downloadObjectStream({
-						profileId: current.profileId,
-						bucket: current.bucket,
-						key: current.key,
-						signal: controller.signal,
-					})
+					let res: Response
+					if (downloadLinkProxyEnabled) {
+						const proxy = await api.getObjectDownloadURL({
+							profileId: current.profileId,
+							bucket: current.bucket,
+							key: current.key,
+							proxy: true,
+						})
+						res = await fetch(proxy.url, { signal: controller.signal })
+					} else {
+						try {
+							const direct = await api.getObjectDownloadURL({
+								profileId: current.profileId,
+								bucket: current.bucket,
+								key: current.key,
+							})
+							res = await fetch(direct.url, { signal: controller.signal })
+						} catch (err) {
+							if (!shouldFallbackToProxy(err) || controller.signal.aborted) {
+								throw err
+							}
+							const proxy = await api.getObjectDownloadURL({
+								profileId: current.profileId,
+								bucket: current.bucket,
+								key: current.key,
+								proxy: true,
+							})
+							res = await fetch(proxy.url, { signal: controller.signal })
+						}
+					}
+					if (!res.ok) {
+						throw new Error(`Download failed (HTTP ${res.status})`)
+					}
 					const fileHandle = await getFileHandleForPath(current.targetDirHandle, current.targetPath)
 
 					await writeResponseToFile({
@@ -777,33 +1137,48 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 
 			if (current.kind === 'object') {
 				try {
-					const presigned = await api.getObjectDownloadURL({
-						profileId: current.profileId,
-						bucket: current.bucket,
-						key: current.key,
-						proxy: downloadLinkProxyEnabled,
-					})
-					const latest = downloadTasksRef.current.find((t) => t.id === taskId)
-					if (!latest || latest.status !== 'running') {
-						return
+					const runDownload = async (proxy: boolean) => {
+						const presigned = await api.getObjectDownloadURL({
+							profileId: current.profileId,
+							bucket: current.bucket,
+							key: current.key,
+							proxy,
+						})
+						const latest = downloadTasksRef.current.find((t) => t.id === taskId)
+						if (!latest || latest.status !== 'running') {
+							throw new RequestAbortedError()
+						}
+						const handle = downloadURLWithProgress(presigned.url, {
+							onProgress: (p) => {
+								const e = downloadEstimatorByTaskIdRef.current[taskId]
+								if (!e) return
+								const stats = e.update(p.loadedBytes, p.totalBytes)
+								updateDownloadTask(taskId, (t) => ({
+									...t,
+									loadedBytes: stats.loadedBytes,
+									totalBytes: stats.totalBytes ?? t.totalBytes,
+									speedBps: stats.speedBps,
+									etaSeconds: stats.etaSeconds,
+								}))
+							},
+						})
+						downloadAbortByTaskIdRef.current[taskId] = handle.abort
+						return await handle.promise
 					}
-					const handle = downloadURLWithProgress(presigned.url, {
-						onProgress: (p) => {
-							const e = downloadEstimatorByTaskIdRef.current[taskId]
-							if (!e) return
-							const stats = e.update(p.loadedBytes, p.totalBytes)
-							updateDownloadTask(taskId, (t) => ({
-								...t,
-								loadedBytes: stats.loadedBytes,
-								totalBytes: stats.totalBytes ?? t.totalBytes,
-								speedBps: stats.speedBps,
-								etaSeconds: stats.etaSeconds,
-							}))
-						},
-					})
-					downloadAbortByTaskIdRef.current[taskId] = handle.abort
 
-					const resp = await handle.promise
+					let resp: { blob: Blob; contentDisposition: string | null; contentType: string | null }
+					if (downloadLinkProxyEnabled) {
+						resp = await runDownload(true)
+					} else {
+						try {
+							resp = await runDownload(false)
+						} catch (err) {
+							if (!shouldFallbackToProxy(err)) {
+								throw err
+							}
+							resp = await runDownload(true)
+						}
+					}
 					const fallbackName = defaultFilenameFromKey(current.key)
 					const filename = filenameFromContentDisposition(resp.contentDisposition) ?? (current.filenameHint?.trim() || fallbackName)
 					saveBlob(resp.blob, filename)
@@ -973,26 +1348,30 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 					items.length > 0 ? Math.max(...items.map((entry) => entry.file?.size ?? 0)) : current.totalBytes
 				const tuning = pickUploadTuning(current.totalBytes, Number.isFinite(maxFileBytes) ? maxFileBytes : null)
 
+				const allowResume = current.uploadMode !== 'presigned'
 				const resumeFilesByPath = new Map<string, { size: number; chunkSizeBytes: number }>()
-				if (current.resumeFiles && current.resumeFiles.length > 0) {
-					for (const file of current.resumeFiles) {
-						const pathKey = normalizeRelPath(file.path)
-						if (!pathKey) continue
-						resumeFilesByPath.set(pathKey, { size: file.size, chunkSizeBytes: file.chunkSizeBytes })
-					}
-				} else if (current.resumeChunkSizeBytes && current.resumeFileSize && items.length === 1) {
-					const pathKey = resolveUploadItemPathNormalized(items[0])
-					if (pathKey) {
-						resumeFilesByPath.set(pathKey, {
-							size: current.resumeFileSize,
-							chunkSizeBytes: current.resumeChunkSizeBytes,
-						})
+				if (allowResume) {
+					if (current.resumeFiles && current.resumeFiles.length > 0) {
+						for (const file of current.resumeFiles) {
+							const pathKey = normalizeRelPath(file.path)
+							if (!pathKey) continue
+							resumeFilesByPath.set(pathKey, { size: file.size, chunkSizeBytes: file.chunkSizeBytes })
+						}
+					} else if (current.resumeChunkSizeBytes && current.resumeFileSize && items.length === 1) {
+						const pathKey = resolveUploadItemPathNormalized(items[0])
+						if (pathKey) {
+							resumeFilesByPath.set(pathKey, {
+								size: current.resumeFileSize,
+								chunkSizeBytes: current.resumeChunkSizeBytes,
+							})
+						}
 					}
 				}
 
 				let resumeChunkSizeBytes = 0
-				let allowPerFileChunkSize = uploadResumeConversionEnabled && resumeFilesByPath.size > 0
-				if (resumeFilesByPath.size > 0) {
+				let allowPerFileChunkSize = false
+				if (allowResume && resumeFilesByPath.size > 0) {
+					allowPerFileChunkSize = uploadResumeConversionEnabled
 					const distinctSizes = new Set(Array.from(resumeFilesByPath.values()).map((v) => v.chunkSizeBytes))
 					if (distinctSizes.size > 1) {
 						if (!uploadResumeConversionEnabled) {
@@ -1004,7 +1383,7 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 					resumeChunkSizeBytes = Array.from(distinctSizes)[0] ?? 0
 				}
 
-				if (current.uploadId && resumeFilesByPath.size > 0) {
+				if (allowResume && current.uploadId && resumeFilesByPath.size > 0) {
 					const existing: Record<string, number[]> = {}
 					let resumeAvailable = true
 					for (const item of items) {
@@ -1038,9 +1417,29 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 					}
 				}
 
+				let sessionMode = current.uploadMode
 				if (!uploadId) {
-					const session = await api.createUpload(current.profileId, { bucket: current.bucket, prefix: current.prefix })
+					let session: { uploadId: string; mode: 'staging' | 'direct' | 'presigned'; maxBytes?: number | null }
+					try {
+						session = await api.createUpload(current.profileId, {
+							bucket: current.bucket,
+							prefix: current.prefix ?? '',
+							mode: 'presigned',
+						})
+					} catch (err) {
+						if (err instanceof APIError && (err.code === 'not_supported' || err.code === 'invalid_request')) {
+							session = await api.createUpload(current.profileId, {
+								bucket: current.bucket,
+								prefix: current.prefix ?? '',
+								mode: props.uploadDirectStream ? 'direct' : 'staging',
+							})
+							message.info('Presigned uploads are not supported here. Falling back to staging uploads.')
+						} else {
+							throw err
+						}
+					}
 					uploadId = session.uploadId
+					sessionMode = session.mode
 					if (session.maxBytes && current.totalBytes > session.maxBytes) {
 						throw new Error(`selected files exceed maxBytes (${current.totalBytes} > ${session.maxBytes})`)
 					}
@@ -1048,60 +1447,89 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 
 				const chunkSizeBytes = resumeChunkSizeBytes > 0 && !allowPerFileChunkSize ? resumeChunkSizeBytes : tuning.chunkSizeBytes
 				const chunkThresholdBytes = tuning.chunkThresholdBytes
+				const shouldTrackResume = sessionMode !== 'presigned'
 				const chunkSizeByPath: Record<string, number> = {}
 
-				const resumeFilesNext = items
-					.filter((item) => {
-						const pathKey = resolveUploadItemPathNormalized(item)
-						if (resumeFilesByPath.has(pathKey)) return true
-						return (item.file?.size ?? 0) >= chunkThresholdBytes
-					})
-					.map((item) => {
-						const pathKey = resolveUploadItemPathNormalized(item)
-						const pathRaw = resolveUploadItemPath(item)
-						const resumeInfo = resumeFilesByPath.get(pathKey)
-						const fileChunkSize = resumeInfo?.chunkSizeBytes ?? chunkSizeBytes
-						if (pathRaw) {
-							chunkSizeByPath[pathRaw] = fileChunkSize
-						}
-						return {
-							path: pathKey,
-							size: item.file?.size ?? 0,
-							chunkSizeBytes: fileChunkSize,
-						}
-					})
+				const resumeFilesNext = shouldTrackResume
+					? items
+							.filter((item) => {
+								const pathKey = resolveUploadItemPathNormalized(item)
+								if (resumeFilesByPath.has(pathKey)) return true
+								return (item.file?.size ?? 0) >= chunkThresholdBytes
+							})
+							.map((item) => {
+								const pathKey = resolveUploadItemPathNormalized(item)
+								const pathRaw = resolveUploadItemPath(item)
+								const resumeInfo = resumeFilesByPath.get(pathKey)
+								const fileChunkSize = resumeInfo?.chunkSizeBytes ?? chunkSizeBytes
+								if (pathRaw) {
+									chunkSizeByPath[pathRaw] = fileChunkSize
+								}
+								return {
+									path: pathKey,
+									size: item.file?.size ?? 0,
+									chunkSizeBytes: fileChunkSize,
+								}
+							})
+					: undefined
 
 				updateUploadTask(taskId, (t) => ({
 					...t,
 					uploadId,
-					resumeChunkSizeBytes: items.length === 1 ? chunkSizeBytes : undefined,
+					uploadMode: sessionMode,
+					resumeChunkSizeBytes: shouldTrackResume && items.length === 1 ? chunkSizeBytes : undefined,
 					resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
 					resumeFiles: resumeFilesNext,
 				}))
 
-				const handle = api.uploadFilesWithProgress(current.profileId, uploadId, items, {
-					onProgress: (p) => {
-						const e = uploadEstimatorByTaskIdRef.current[taskId]
-						if (!e) return
-						const stats = e.update(p.loadedBytes, p.totalBytes)
-						updateUploadTask(taskId, (t) => ({
-							...t,
-							loadedBytes: stats.loadedBytes,
-							totalBytes: stats.totalBytes ?? t.totalBytes,
-							speedBps: stats.speedBps,
-							etaSeconds: stats.etaSeconds,
-						}))
-					},
-					concurrency: tuning.batchConcurrency,
-					maxBatchBytes: tuning.batchBytes,
-					maxBatchItems: 50,
-					chunkSizeBytes,
-					chunkConcurrency: tuning.chunkConcurrency,
-					chunkThresholdBytes,
-					existingChunksByPath,
-					chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
-					chunkFileConcurrency: uploadChunkFileConcurrency,
-				})
+				const handle =
+					sessionMode === 'presigned'
+						? uploadPresignedFilesWithProgress({
+								api,
+								profileId: current.profileId,
+								uploadId,
+								items,
+								onProgress: (p) => {
+									const e = uploadEstimatorByTaskIdRef.current[taskId]
+									if (!e) return
+									const stats = e.update(p.loadedBytes, p.totalBytes)
+									updateUploadTask(taskId, (t) => ({
+										...t,
+										loadedBytes: stats.loadedBytes,
+										totalBytes: stats.totalBytes ?? t.totalBytes,
+										speedBps: stats.speedBps,
+										etaSeconds: stats.etaSeconds,
+									}))
+								},
+								singleConcurrency: tuning.batchConcurrency,
+								multipartFileConcurrency: uploadChunkFileConcurrency,
+								partConcurrency: tuning.chunkConcurrency,
+								chunkThresholdBytes,
+								chunkSizeBytes,
+							})
+						: api.uploadFilesWithProgress(current.profileId, uploadId, items, {
+								onProgress: (p) => {
+									const e = uploadEstimatorByTaskIdRef.current[taskId]
+									if (!e) return
+									const stats = e.update(p.loadedBytes, p.totalBytes)
+									updateUploadTask(taskId, (t) => ({
+										...t,
+										loadedBytes: stats.loadedBytes,
+										totalBytes: stats.totalBytes ?? t.totalBytes,
+										speedBps: stats.speedBps,
+										etaSeconds: stats.etaSeconds,
+									}))
+								},
+								concurrency: tuning.batchConcurrency,
+								maxBatchBytes: tuning.batchBytes,
+								maxBatchItems: 50,
+								chunkSizeBytes,
+								chunkConcurrency: tuning.chunkConcurrency,
+								chunkThresholdBytes,
+								existingChunksByPath,
+								chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
+								chunkFileConcurrency: uploadChunkFileConcurrency,
+							})
 				uploadAbortByTaskIdRef.current[taskId] = handle.abort
 				const result = await handle.promise
 				delete uploadAbortByTaskIdRef.current[taskId]
@@ -1131,6 +1559,16 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 					speedBps: 0,
 					etaSeconds: 0,
 				}))
+
+				if (resp.jobId) {
+					void api
+						.getJob(current.profileId, resp.jobId)
+						.then((job) => handleUploadJobUpdate(taskId, job))
+						.catch((err) => {
+							maybeReportNetworkError(err)
+							updateUploadTask(taskId, (prev) => ({ ...prev, error: formatErr(err) }))
+						})
+				}
 
 				message.open({
 					type: 'success',
@@ -1163,7 +1601,16 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 				}
 			}
 		},
-		[api, navigate, pickUploadTuning, queryClient, updateUploadTask, uploadChunkFileConcurrency, uploadResumeConversionEnabled],
+		[
+			api,
+			handleUploadJobUpdate,
+			navigate,
+			pickUploadTuning,
+			queryClient,
+			updateUploadTask,
+			uploadChunkFileConcurrency,
+			uploadResumeConversionEnabled,
+		],
 	)
 
 	useEffect(() => {
@@ -2089,13 +2536,11 @@ function downloadURLWithProgress(
 
 				const bodyText = await blobToTextSafe(xhr.response)
 				const fallback =
-					xhr.status === 0
-						? 'Download failed (network/CORS). Enable server proxy in Settings if needed.'
-						: `Download failed (HTTP ${xhr.status})`
+					xhr.status === 0 ? 'Download failed (network/CORS).' : `Download failed (HTTP ${xhr.status})`
 				reject(new Error(bodyText ? `${fallback}: ${bodyText}` : fallback))
 			}
 			xhr.onerror = () => {
-				reject(new Error('Network error (possible CORS). Enable server proxy in Settings if needed.'))
+				reject(new Error('Network error (possible CORS).'))
 			}
 			xhr.onabort = () => reject(new RequestAbortedError())
 		},
@@ -2146,6 +2591,21 @@ function maybeReportNetworkError(err: unknown) {
 	if (err instanceof Error && /network|failed to fetch|load failed/i.test(err.message)) {
 		publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
 	}
+}
+
+function shouldFallbackToProxy(err: unknown): boolean {
+	if (err instanceof RequestAbortedError) return false
+	if (err instanceof APIError) return false
+	if (err instanceof Error) {
+		const msg = err.message.toLowerCase()
+		if (msg.includes('cors')) return true
+		if (msg.includes('download failed') && msg.includes('network')) return true
+		if (msg.includes('failed to fetch')) return true
+	}
+	if (err instanceof TypeError) {
+		return true
+	}
+	return false
 }
 
 // formatErr lives in ../lib/errors
