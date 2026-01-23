@@ -53,6 +53,50 @@ async function seedStorage(page: Page, args: { profileId: string; bucket: string
 	}, { apiToken, profileId: args.profileId, bucket: args.bucket })
 }
 
+async function uploadObject(request: APIRequestContext, profileId: string, bucket: string, key: string, body: string) {
+	const profileHeaders = apiHeaders(profileId)
+	const createUpload = await request.post('/api/v1/uploads', {
+		headers: profileHeaders,
+		data: { bucket },
+	})
+	if (createUpload.status() !== 201) {
+		throw new Error(`failed to create upload (${createUpload.status()})`)
+	}
+	const upload = (await createUpload.json()) as { uploadId: string }
+
+	const uploadFiles = await request.post(`/api/v1/uploads/${upload.uploadId}/files`, {
+		headers: profileHeaders,
+		multipart: {
+			files: {
+				name: key,
+				mimeType: 'text/plain',
+				buffer: Buffer.from(body),
+			},
+		},
+	})
+	if (!uploadFiles.ok()) {
+		throw new Error(`upload files failed (${uploadFiles.status()})`)
+	}
+
+	const commitUpload = await request.post(`/api/v1/uploads/${upload.uploadId}/commit`, { headers: profileHeaders })
+	if (commitUpload.status() !== 201) {
+		throw new Error(`commit upload failed (${commitUpload.status()})`)
+	}
+	const commit = (await commitUpload.json()) as { jobId: string }
+	await waitForJob(request, profileId, commit.jobId)
+}
+
+async function listKeys(request: APIRequestContext, profileId: string, bucket: string, prefix: string) {
+	const res = await request.get(`/api/v1/buckets/${bucket}/objects?prefix=${encodeURIComponent(prefix)}`, {
+		headers: apiHeaders(profileId),
+	})
+	if (!res.ok()) {
+		throw new Error(`list objects failed (${res.status()})`)
+	}
+	const payload = (await res.json()) as { items?: { key: string }[] }
+	return payload.items?.map((item) => item.key) ?? []
+}
+
 test.describe('Live Jobs flow', () => {
 	test.skip(!isLive, 'E2E_LIVE=1 required')
 
@@ -63,7 +107,16 @@ test.describe('Live Jobs flow', () => {
 		const profileName = `e2e-jobs-${runId}`
 		const bucketName = `e2e-jobs-${runId}`
 		const prefix = `jobs/${runId}/`
-		const objectKey = `${prefix}delete-me.txt`
+		const deletePrefix = `${prefix}delete/`
+		const copyPrefix = `${prefix}copy/`
+		const copyDestPrefix = `${prefix}copy-dest/`
+		const movePrefix = `${prefix}move/`
+		const moveDestPrefix = `${prefix}move-dest/`
+		const deleteObjectKey = `${deletePrefix}delete-me.txt`
+		const copySourceKey = `${copyPrefix}copy-source.txt`
+		const copyDestKey = `${copyDestPrefix}copy-dest.txt`
+		const moveSourceKey = `${movePrefix}move-source.txt`
+		const moveDestKey = `${moveDestPrefix}move-dest.txt`
 		let profileId: string | null = null
 
 		try {
@@ -91,29 +144,51 @@ test.describe('Live Jobs flow', () => {
 			})
 			expect(createBucket.status()).toBe(201)
 
-			const createUpload = await request.post('/api/v1/uploads', {
-				headers: profileHeaders,
-				data: { bucket: bucketName },
-			})
-			expect(createUpload.status()).toBe(201)
-			const upload = (await createUpload.json()) as { uploadId: string }
+			await uploadObject(request, profileId, bucketName, deleteObjectKey, `delete-${runId}`)
+			await uploadObject(request, profileId, bucketName, copySourceKey, `copy-${runId}`)
+			await uploadObject(request, profileId, bucketName, moveSourceKey, `move-${runId}`)
 
-			const uploadFiles = await request.post(`/api/v1/uploads/${upload.uploadId}/files`, {
+			const copyJob = await request.post('/api/v1/jobs', {
 				headers: profileHeaders,
-				multipart: {
-					files: {
-						name: objectKey,
-						mimeType: 'text/plain',
-						buffer: Buffer.from(`delete-${runId}`),
+				data: {
+					type: 'transfer_copy_object',
+					payload: {
+						srcBucket: bucketName,
+						srcKey: copySourceKey,
+						dstBucket: bucketName,
+						dstKey: copyDestKey,
 					},
 				},
 			})
-			expect(uploadFiles.ok()).toBeTruthy()
+			expect(copyJob.status()).toBe(201)
+			const copyJobResp = (await copyJob.json()) as { id: string }
+			await waitForJob(request, profileId, copyJobResp.id)
 
-			const commitUpload = await request.post(`/api/v1/uploads/${upload.uploadId}/commit`, { headers: profileHeaders })
-			expect(commitUpload.status()).toBe(201)
-			const commit = (await commitUpload.json()) as { jobId: string }
-			await waitForJob(request, profileId, commit.jobId)
+			const copySrcKeys = await listKeys(request, profileId, bucketName, copyPrefix)
+			expect(copySrcKeys).toContain(copySourceKey)
+			const copyDestKeys = await listKeys(request, profileId, bucketName, copyDestPrefix)
+			expect(copyDestKeys).toContain(copyDestKey)
+
+			const moveJob = await request.post('/api/v1/jobs', {
+				headers: profileHeaders,
+				data: {
+					type: 'transfer_move_object',
+					payload: {
+						srcBucket: bucketName,
+						srcKey: moveSourceKey,
+						dstBucket: bucketName,
+						dstKey: moveDestKey,
+					},
+				},
+			})
+			expect(moveJob.status()).toBe(201)
+			const moveJobResp = (await moveJob.json()) as { id: string }
+			await waitForJob(request, profileId, moveJobResp.id)
+
+			const moveSrcKeys = await listKeys(request, profileId, bucketName, movePrefix)
+			expect(moveSrcKeys).not.toContain(moveSourceKey)
+			const moveDestKeys = await listKeys(request, profileId, bucketName, moveDestPrefix)
+			expect(moveDestKeys).toContain(moveDestKey)
 
 			await seedStorage(page, { profileId, bucket: bucketName })
 			await page.goto('/jobs')
@@ -128,21 +203,17 @@ test.describe('Live Jobs flow', () => {
 			const bucketSelect = deleteDrawer.getByRole('combobox', { name: 'Bucket' })
 			await bucketSelect.fill(bucketName)
 			await page.keyboard.press('Enter')
-			await deleteDrawer.getByLabel('Prefix', { exact: true }).fill(prefix)
+			await deleteDrawer.getByLabel('Prefix', { exact: true }).fill(deletePrefix)
 			await deleteDrawer.getByRole('button', { name: 'Create' }).click()
 
 			const jobResponse = await createResponse
 			expect(jobResponse.ok()).toBeTruthy()
 			const job = (await jobResponse.json()) as { id: string }
-			await expect(page.getByText(`rm s3://${bucketName}/${prefix}*`)).toBeVisible({ timeout: 30_000 })
+			await expect(page.getByText(`rm s3://${bucketName}/${deletePrefix}*`)).toBeVisible({ timeout: 30_000 })
 			await waitForJob(request, profileId, job.id)
 
-			const listObjects = await request.get(`/api/v1/buckets/${bucketName}/objects?prefix=${encodeURIComponent(prefix)}`, {
-				headers: profileHeaders,
-			})
-			expect(listObjects.ok()).toBeTruthy()
-			const payload = (await listObjects.json()) as { items?: { key: string }[] }
-			expect(payload.items?.length ?? 0).toBe(0)
+			const deleteKeys = await listKeys(request, profileId, bucketName, deletePrefix)
+			expect(deleteKeys.length).toBe(0)
 		} finally {
 			if (profileId) {
 				const profileHeaders = apiHeaders(profileId)
