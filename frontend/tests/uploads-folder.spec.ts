@@ -15,8 +15,45 @@ function seedStorage(page: Page) {
 }
 
 test('folder upload preserves relative paths', async ({ page }) => {
+	await page.route('**/api/v1/meta', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				version: 'test',
+				serverAddr: '127.0.0.1:8080',
+				dataDir: '/tmp',
+				staticDir: '/tmp',
+				apiTokenEnabled: true,
+				encryptionEnabled: false,
+				capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
+				allowedLocalDirs: [],
+				jobConcurrency: 2,
+				jobLogMaxBytes: null,
+				jobRetentionSeconds: null,
+				uploadSessionTTLSeconds: 86400,
+				uploadMaxBytes: null,
+				transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
+			}),
+		})
+	})
 	await page.route('**/api/v1/profiles', async (route) => {
-		await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify([
+				{
+					id: 'playwright-profile',
+					name: 'Playwright',
+					endpoint: 'http://localhost:9000',
+					region: 'us-east-1',
+					forcePathStyle: true,
+					tlsInsecureSkipVerify: true,
+					createdAt: '2024-01-01T00:00:00Z',
+					updatedAt: '2024-01-01T00:00:00Z',
+				},
+			]),
+		})
 	})
 	await page.route('**/api/v1/buckets', async (route) => {
 		await route.fulfill({

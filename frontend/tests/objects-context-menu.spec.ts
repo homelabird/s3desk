@@ -149,11 +149,15 @@ type MenuMetrics = {
 		width: number
 		height: number
 	}
-	viewport: { width: number; height: number }
+	viewport: { width: number; height: number; top: number; left: number; right: number; bottom: number }
 }
 
-async function getMenuMetrics(page: Page): Promise<MenuMetrics | null> {
-	const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .objects-context-menu')
+async function getMenuMetrics(
+	page: Page,
+	selector = '.objects-context-menu.ant-dropdown',
+	viewportSelector?: string,
+): Promise<MenuMetrics | null> {
+	const menu = page.locator(selector)
 	if (!(await menu.count())) return null
 	const rect = await menu.evaluate((el) => {
 		const box = el.getBoundingClientRect()
@@ -166,24 +170,53 @@ async function getMenuMetrics(page: Page): Promise<MenuMetrics | null> {
 			height: box.height,
 		}
 	})
-	const viewport = page.viewportSize()
-	if (!viewport) return null
+	let viewport: MenuMetrics['viewport'] | null = null
+	if (viewportSelector) {
+		const viewportEl = page.locator(viewportSelector)
+		if (await viewportEl.count()) {
+			viewport = await viewportEl.evaluate((el) => {
+				const box = el.getBoundingClientRect()
+				return {
+					top: box.top,
+					left: box.left,
+					right: box.right,
+					bottom: box.bottom,
+					width: box.width,
+					height: box.height,
+				}
+			})
+		}
+	}
+	if (!viewport) {
+		const size = page.viewportSize()
+		if (!size) return null
+		viewport = {
+			top: 0,
+			left: 0,
+			right: size.width,
+			bottom: size.height,
+			width: size.width,
+			height: size.height,
+		}
+	}
 	return { rect, viewport }
 }
 
-async function expectMenuInViewport(page: Page, options?: { padding?: number }) {
+async function expectMenuInViewport(page: Page, options?: { padding?: number; selector?: string; viewportSelector?: string }) {
 	const deadline = Date.now() + 5000
 	let latest: MenuMetrics | null = null
 	const padding = options?.padding ?? 0
+	const selector = options?.selector
+	const viewportSelector = options?.viewportSelector
 	while (Date.now() < deadline) {
-		latest = await getMenuMetrics(page)
+		latest = await getMenuMetrics(page, selector, viewportSelector)
 		if (latest) {
 			const { rect, viewport } = latest
 			if (
-				rect.top >= -padding &&
-				rect.left >= -padding &&
-				rect.right <= viewport.width + padding &&
-				rect.bottom <= viewport.height + padding
+				rect.top >= viewport.top - padding &&
+				rect.left >= viewport.left - padding &&
+				rect.right <= viewport.right + padding &&
+				rect.bottom <= viewport.bottom + padding
 			) {
 				return latest
 			}
@@ -232,11 +265,11 @@ test.describe('Objects context menus', () => {
 				)
 			}, { x: box.x + 12, y: box.y + 12 })
 
-			const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .objects-context-menu')
+			const menu = page.locator('.objects-context-menu.ant-dropdown')
 			await expect(menu).toBeVisible()
 			await expectMenuInViewport(page)
 
-			const styles = await menu.evaluate((el) => {
+			const styles = await menu.locator('.ant-dropdown-menu').evaluate((el) => {
 				const computed = window.getComputedStyle(el)
 				return { maxHeight: computed.maxHeight, overflowY: computed.overflowY }
 			})
@@ -269,8 +302,12 @@ test.describe('Objects context menus', () => {
 		await expect(menuTrigger).toBeVisible()
 		await menuTrigger.click()
 
-	const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .objects-context-menu')
-	await expect(menu).toBeVisible()
-	await expectMenuInViewport(page, { padding: 8 })
-})
+		const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .ant-dropdown-menu')
+		await expect(menu).toBeVisible()
+		await expectMenuInViewport(page, {
+			padding: 8,
+			selector: '.ant-dropdown:not(.ant-dropdown-hidden) .ant-dropdown-menu',
+			viewportSelector: '[data-scroll-container="app-content"]',
+		})
+	})
 })
