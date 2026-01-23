@@ -59,6 +59,10 @@ export type DeleteObjectsResponse = components['schemas']['DeleteObjectsResponse
 
 export type UploadCreateRequest = components['schemas']['UploadCreateRequest']
 export type UploadCreateResponse = components['schemas']['UploadCreateResponse']
+export type UploadPresignRequest = components['schemas']['UploadPresignRequest']
+export type UploadPresignResponse = components['schemas']['UploadPresignResponse']
+export type UploadMultipartCompleteRequest = components['schemas']['UploadMultipartCompleteRequest']
+export type UploadMultipartAbortRequest = components['schemas']['UploadMultipartAbortRequest']
 
 export type JobStatus = components['schemas']['JobStatus']
 export type JobProgress = components['schemas']['JobProgress']

@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
 
+const perfBaseURL = process.env.PERF_BASE_URL?.trim()
+if (perfBaseURL) {
+	test.use({ baseURL: perfBaseURL })
+}
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -230,9 +235,15 @@ test.describe('jobs performance', () => {
 		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 		await expect(page.getByText('200 jobs', { exact: true })).toBeVisible()
 
+		const typeFilter = page.getByRole('combobox', { name: 'Job type filter' })
+		await typeFilter.click()
+		await typeFilter.fill('Finalize')
 		const started = Date.now()
-		await page.getByPlaceholder('type filter (optional)').fill('transfer_sync')
-		await page.waitForResponse((response) => response.url().includes('/api/v1/jobs') && response.status() === 200)
+		const responsePromise = page.waitForResponse(
+			(response) => response.url().includes('/api/v1/jobs') && response.status() === 200,
+		)
+		await page.keyboard.press('Enter')
+		await responsePromise
 		await expect(page.getByText('100 jobs', { exact: true })).toBeVisible()
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `jobs_filter_ms=${elapsed}` })

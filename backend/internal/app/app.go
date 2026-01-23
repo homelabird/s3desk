@@ -55,6 +55,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if cfg.UploadMaxBytes < 0 {
 		cfg.UploadMaxBytes = 0
 	}
+	if cfg.UploadMaxConcurrentRequests < 0 {
+		cfg.UploadMaxConcurrentRequests = 0
+	}
 
 	allowedDirs, err := normalizeAllowedDirs(cfg.AllowedLocalDirs)
 	if err != nil {

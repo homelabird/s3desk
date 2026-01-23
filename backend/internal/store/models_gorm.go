@@ -51,7 +51,9 @@ type uploadSessionRow struct {
 	ProfileID  string `gorm:"column:profile_id"`
 	Bucket     string `gorm:"column:bucket"`
 	Prefix     string `gorm:"column:prefix"`
+	Mode       string `gorm:"column:mode"`
 	StagingDir string `gorm:"column:staging_dir"`
+	Bytes      int64  `gorm:"column:bytes_tracked"`
 	ExpiresAt  string `gorm:"column:expires_at"`
 	CreatedAt  string `gorm:"column:created_at"`
 }

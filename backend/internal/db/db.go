@@ -148,7 +148,9 @@ func migrate(db *gorm.DB) error {
 			profile_id TEXT NOT NULL,
 			bucket TEXT NOT NULL,
 			prefix TEXT NOT NULL,
+			mode TEXT NOT NULL DEFAULT 'staging',
 			staging_dir TEXT NOT NULL,
+			bytes_tracked BIGINT NOT NULL DEFAULT 0,
 			expires_at TEXT NOT NULL,
 			created_at TEXT NOT NULL,
 			FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
@@ -218,6 +220,12 @@ func migrate(db *gorm.DB) error {
 	if err := ensureJobsColumn(db, "error_code", "TEXT"); err != nil {
 		return err
 	}
+	if err := ensureUploadSessionsColumn(db, "mode", "TEXT", "'staging'"); err != nil {
+		return err
+	}
+	if err := ensureUploadSessionsColumn(db, "bytes_tracked", "BIGINT", "0"); err != nil {
+		return err
+	}
 	// Index used by ListJobs (profile_id is always filtered) when error_code filtering is enabled.
 	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_jobs_profile_id_error_code ON jobs(profile_id, error_code);`).Error; err != nil {
 		return err
@@ -238,5 +246,13 @@ func ensureJobsColumn(db *gorm.DB, name, sqlType string) error {
 		return nil
 	}
 	stmt := fmt.Sprintf("ALTER TABLE jobs ADD COLUMN %s %s;", name, sqlType)
+	return db.Exec(stmt).Error
+}
+
+func ensureUploadSessionsColumn(db *gorm.DB, name, sqlType, defaultValue string) error {
+	if db.Migrator().HasColumn("upload_sessions", name) {
+		return nil
+	}
+	stmt := fmt.Sprintf("ALTER TABLE upload_sessions ADD COLUMN %s %s NOT NULL DEFAULT %s;", name, sqlType, defaultValue)
 	return db.Exec(stmt).Error
 }

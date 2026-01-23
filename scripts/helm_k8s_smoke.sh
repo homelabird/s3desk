@@ -13,6 +13,7 @@ VALUES_FILE="${HELM_VALUES_FILE:-charts/s3desk/ci-values.yaml}"
 API_TOKEN="${S3DESK_API_TOKEN:-ci-token}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-180s}"
 POD_FS_GROUP="${POD_FS_GROUP:-1000}"
+USE_POSTGRES=0
 
 HARBOR_REGISTRY="${HARBOR_REGISTRY:-harbor.k8s.homelabird.com}"
 IMAGE_REPO="${S3DESK_IMAGE_REPOSITORY:-${HARBOR_REGISTRY}/library/s3desk}"
@@ -94,8 +95,10 @@ on_error() {
   kubectl -n "${NAMESPACE}" get svc -o wide || true
   kubectl -n "${NAMESPACE}" describe deployment "${RELEASE}" || true
   kubectl -n "${NAMESPACE}" logs deployment/"${RELEASE}" --tail=200 || true
-  kubectl -n "${NAMESPACE}" describe deployment "${POSTGRES_NAME}" || true
-  kubectl -n "${NAMESPACE}" logs deployment/"${POSTGRES_NAME}" --tail=200 || true
+  if [[ "${USE_POSTGRES}" == "1" ]]; then
+    kubectl -n "${NAMESPACE}" describe deployment "${POSTGRES_NAME}" || true
+    kubectl -n "${NAMESPACE}" logs deployment/"${POSTGRES_NAME}" --tail=200 || true
+  fi
   exit "${exit_code}"
 }
 
@@ -271,7 +274,8 @@ deploy_s3desk() {
   local helm_args=(
     --namespace "${NAMESPACE}"
     --values "${VALUES_FILE}"
-    --set "server.apiToken=${API_TOKEN}"
+    --set "server.allowRemote=true"
+    --set-string "server.apiToken=${API_TOKEN}"
     --set "image.repository=${IMAGE_REPO}"
     --set "image.tag=${IMAGE_TAG}"
     --set "image.pullPolicy=Always"
@@ -312,10 +316,12 @@ log "namespace=${NAMESPACE} release=${RELEASE} image=${IMAGE_REPO}:${IMAGE_TAG}"
 
 case "${MODE}" in
   sqlite)
+    USE_POSTGRES=0
     deploy_s3desk
     smoke_http 18080
     ;;
   postgres)
+    USE_POSTGRES=1
     deploy_postgres
     deploy_s3desk \
       --set "db.backend=postgres" \
@@ -323,6 +329,7 @@ case "${MODE}" in
     smoke_http 18080
     ;;
   upgrade)
+    USE_POSTGRES=0
     deploy_s3desk --set "jobs.queueCapacity=128"
     smoke_http 18080
     deploy_s3desk --set "jobs.queueCapacity=64"
@@ -332,6 +339,7 @@ case "${MODE}" in
     smoke_http 18080
     ;;
   pvc)
+    USE_POSTGRES=0
     deploy_s3desk \
       --set "persistence.enabled=true" \
       --set "persistence.size=${PERSISTENCE_SIZE:-1Gi}" \

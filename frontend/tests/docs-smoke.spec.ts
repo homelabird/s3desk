@@ -8,10 +8,14 @@ test.describe('Docs smoke', () => {
 	test('loads Swagger UI', async ({ page }) => {
 		test.setTimeout(60_000)
 
-		const specRes = await page.request.get('/openapi.yml')
+		const docsBaseURL = process.env.DOCS_BASE_URL?.trim()
+		const specURL = docsBaseURL ? new URL('/openapi.yml', docsBaseURL).toString() : '/openapi.yml'
+		const docsURL = docsBaseURL ? new URL('/docs', docsBaseURL).toString() : '/docs'
+
+		const specRes = await page.request.get(specURL)
 		expect(specRes.ok()).toBeTruthy()
 
-		await page.goto('/docs')
+		await page.goto(docsURL)
 		await expect(page.locator('#swagger-ui .swagger-ui').first()).toBeVisible({ timeout: 30_000 })
 		await expect(page.getByText('S3Desk API')).toBeVisible()
 	})

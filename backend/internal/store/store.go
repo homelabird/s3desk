@@ -1324,7 +1324,9 @@ type UploadSession struct {
 	ProfileID  string
 	Bucket     string
 	Prefix     string
+	Mode       string
 	StagingDir string
+	Bytes      int64
 	ExpiresAt  string
 	CreatedAt  string
 }
@@ -1342,7 +1344,7 @@ type MultipartUpload struct {
 	UpdatedAt  string
 }
 
-func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, prefix, stagingDir, expiresAt string) (UploadSession, error) {
+func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, prefix, mode, stagingDir, expiresAt string) (UploadSession, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	id := ulid.Make().String()
 
@@ -1351,7 +1353,9 @@ func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, pref
 		ProfileID:  profileID,
 		Bucket:     bucket,
 		Prefix:     prefix,
+		Mode:       mode,
 		StagingDir: stagingDir,
+		Bytes:      0,
 		ExpiresAt:  expiresAt,
 		CreatedAt:  now,
 	}
@@ -1363,7 +1367,9 @@ func (s *Store) CreateUploadSession(ctx context.Context, profileID, bucket, pref
 		ProfileID:  profileID,
 		Bucket:     bucket,
 		Prefix:     prefix,
+		Mode:       mode,
 		StagingDir: stagingDir,
+		Bytes:      0,
 		ExpiresAt:  expiresAt,
 		CreatedAt:  now,
 	}, nil
@@ -1387,6 +1393,16 @@ func (s *Store) GetUploadSession(ctx context.Context, profileID, uploadID string
 		return UploadSession{}, false, err
 	}
 	return UploadSession(row), true, nil
+}
+
+func (s *Store) AddUploadSessionBytes(ctx context.Context, profileID, uploadID string, delta int64) error {
+	if delta == 0 {
+		return nil
+	}
+	return s.db.WithContext(ctx).
+		Model(&uploadSessionRow{}).
+		Where("profile_id = ? AND id = ?", profileID, uploadID).
+		UpdateColumn("bytes_tracked", gorm.Expr("bytes_tracked + ?", delta)).Error
 }
 
 func (s *Store) GetMultipartUpload(ctx context.Context, profileID, uploadID, path string) (MultipartUpload, bool, error) {

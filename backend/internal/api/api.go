@@ -38,6 +38,7 @@ func New(dep Dependencies) http.Handler {
 		metrics:     dep.Metrics,
 		serverAddr:  dep.ServerAddr,
 		proxySecret: resolveProxySecret(dep.Config.APIToken),
+		uploadLimit: newRequestLimiter(dep.Config.UploadMaxConcurrentRequests),
 	}
 
 	r.Use(api.requestLogger)
@@ -103,6 +104,9 @@ func New(dep Dependencies) http.Handler {
 		r.Route("/uploads", func(r chi.Router) {
 			r.Post("/", api.handleCreateUpload)
 			r.Post("/{uploadId}/files", api.handleUploadFiles)
+			r.Post("/{uploadId}/presign", api.handlePresignUpload)
+			r.Post("/{uploadId}/multipart/complete", api.handleCompleteMultipartUpload)
+			r.Post("/{uploadId}/multipart/abort", api.handleAbortMultipartUpload)
 			r.Get("/{uploadId}/chunks", api.handleGetUploadChunks)
 			r.Post("/{uploadId}/commit", api.handleCommitUpload)
 			r.Delete("/{uploadId}", api.handleDeleteUpload)

@@ -1443,6 +1443,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/{uploadId}/presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Get presigned upload URLs */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    uploadId: components["parameters"]["UploadId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UploadPresignRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadPresignResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/uploads/{uploadId}/multipart/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a multipart upload */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    uploadId: components["parameters"]["UploadId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UploadMultipartCompleteRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/uploads/{uploadId}/multipart/abort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Abort a multipart upload */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    uploadId: components["parameters"]["UploadId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UploadMultipartAbortRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/uploads/{uploadId}/commit": {
         parameters: {
             query?: never;
@@ -2424,9 +2564,16 @@ export interface components {
             bucket: string;
             /** @default  */
             prefix: string;
+            /**
+             * @default staging
+             * @enum {string}
+             */
+            mode: "staging" | "direct" | "presigned";
         };
         UploadCreateResponse: {
             uploadId: string;
+            /** @enum {string} */
+            mode: "staging" | "direct" | "presigned";
             /** Format: int64 */
             maxBytes?: number | null;
             /** Format: date-time */
@@ -2447,6 +2594,61 @@ export interface components {
             totalBytes?: number;
             items?: components["schemas"]["UploadCommitItem"][];
             itemsTruncated?: boolean;
+        };
+        UploadPresignRequest: {
+            path: string;
+            contentType?: string;
+            /** Format: int64 */
+            size?: number;
+            expiresSeconds?: number;
+            multipart?: components["schemas"]["UploadMultipartPresignReq"];
+        };
+        UploadMultipartPresignReq: {
+            /** Format: int64 */
+            fileSize?: number;
+            /** Format: int64 */
+            partSizeBytes?: number;
+            partNumbers?: number[];
+        };
+        UploadPresignResponse: {
+            /** @enum {string} */
+            mode: "single" | "multipart";
+            bucket: string;
+            key: string;
+            method?: string;
+            url?: string;
+            headers?: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            expiresAt: string;
+            multipart?: components["schemas"]["UploadPresignMultipart"];
+        };
+        UploadPresignMultipart: {
+            uploadId: string;
+            /** Format: int64 */
+            partSizeBytes: number;
+            partCount: number;
+            parts?: components["schemas"]["UploadPresignPart"][];
+        };
+        UploadPresignPart: {
+            number: number;
+            method?: string;
+            url: string;
+            headers?: {
+                [key: string]: string;
+            };
+        };
+        UploadMultipartCompleteRequest: {
+            path: string;
+            parts: components["schemas"]["UploadMultipartCompletePart"][];
+        };
+        UploadMultipartCompletePart: {
+            number: number;
+            etag: string;
+        };
+        UploadMultipartAbortRequest: {
+            path: string;
         };
         /** @enum {string} */
         JobStatus: "queued" | "running" | "succeeded" | "failed" | "canceled";

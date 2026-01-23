@@ -27,6 +27,7 @@ type Config struct {
 	UploadSessionTTL                   time.Duration
 	UploadMaxBytes                     int64
 	UploadDirectStream                 bool
+	UploadMaxConcurrentRequests        int
 	RcloneDownloadMultiThreadStreams   int
 	RcloneDownloadMultiThreadCutoffMiB int
 	RcloneDownloadBufferSizeMiB        int

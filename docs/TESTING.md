@@ -49,7 +49,31 @@ test.describe('@transfer', () => {
 - `api_integration`: `docker-compose.e2e.yml` + `e2e/runner/runner.py`
 - `ui_smoke` (optional, `E2E_UI=1`, `E2E_BASE_URL` required): `tests/objects-smoke.spec.ts`, `tests/docs-smoke.spec.ts`
 - `transfer_scenarios` (optional, `E2E_TRANSFERS=1`, `E2E_BASE_URL` required): `tests/transfers-*.spec.ts`
+- `e2e_live` (optional, `E2E_LIVE=1`, `E2E_BASE_URL` required): `tests/api-crud.spec.ts`, `tests/jobs-live-flow.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/docs-smoke.spec.ts`
 - `perf_tests` (optional, `PERF_TESTS=1`): `tests/jobs-perf.spec.ts`
+
+## CI environment variables (Live UI tests)
+
+Set these in CI when running `e2e_live` (or local live runs):
+
+- `E2E_LIVE=1` (enables live specs)
+- `E2E_BASE_URL` (UI base URL, e.g. `http://s3desk:8080`)
+- `E2E_API_TOKEN` (default `change-me`)
+- `E2E_S3_ENDPOINT` (MinIO/S3 endpoint reachable **from the API service**; in containers use the service DNS like `http://minio:9000`, not `127.0.0.1`)
+- `E2E_S3_ACCESS_KEY` / `E2E_S3_SECRET_KEY` (defaults `minioadmin`)
+- `E2E_S3_REGION` (default `us-east-1`)
+- `E2E_S3_FORCE_PATH_STYLE` (default `true`)
+- `E2E_S3_TLS_SKIP_VERIFY` (default `true`)
+
+Optional overrides when UI/Docs/Perf are split:
+
+- `PLAYWRIGHT_BASE_URL` (UI base URL)
+- `DOCS_BASE_URL` (docs backend base URL)
+- `PERF_BASE_URL` (perf test base URL)
+
+Sample CI env file:
+
+- `docs/ci/e2e_live.env.example`
 
 ## Transfer scenario test list
 
@@ -90,4 +114,29 @@ Playwright:
 cd frontend
 npm install
 E2E_LIVE=1 E2E_API_TOKEN=change-me npm run test:e2e
+```
+
+Live UI flow (CI-like):
+
+```bash
+cd frontend
+npm install
+E2E_LIVE=1 \
+E2E_BASE_URL=http://127.0.0.1:8080 \
+E2E_API_TOKEN=change-me \
+E2E_S3_ENDPOINT=http://minio:9000 \
+E2E_S3_ACCESS_KEY=minioadmin \
+E2E_S3_SECRET_KEY=minioadmin \
+E2E_S3_REGION=us-east-1 \
+npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
+```
+
+When the UI and API base URLs differ (e.g. Vite dev server), set:
+
+```bash
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 \
+DOCS_BASE_URL=http://127.0.0.1:8080 \
+PERF_BASE_URL=http://127.0.0.1:8080 \
+E2E_LIVE=1 E2E_API_TOKEN=change-me \
+npm run test:e2e
 ```

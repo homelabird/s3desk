@@ -17,16 +17,31 @@ const testDir = path.dirname(fileURLToPath(import.meta.url))
 const uploadFixture = path.join(testDir, 'fixtures', 'upload-folder', 'dir-a', 'alpha.txt')
 const uploadFilename = 'alpha.txt'
 
-test.use({ acceptDownloads: true })
+const browserArgs = isLive
+	? [
+			'--host-resolver-rules=MAP minio 127.0.0.1',
+			'--disable-web-security',
+			'--disable-features=IsolateOrigins,site-per-process',
+		]
+	: []
+
+test.use({
+	acceptDownloads: true,
+	launchOptions: { args: browserArgs },
+})
 
 async function seedStorage(page: Page) {
 	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(null))
-		window.localStorage.setItem('bucket', JSON.stringify(''))
-		window.localStorage.setItem('prefix', JSON.stringify(''))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify('simple'))
-		window.localStorage.setItem('downloadLinkProxyEnabled', JSON.stringify(true))
+		const setIfMissing = (key: string, value: unknown) => {
+			if (window.localStorage.getItem(key) !== null) return
+			window.localStorage.setItem(key, JSON.stringify(value))
+		}
+		setIfMissing('apiToken', seed.apiToken)
+		setIfMissing('profileId', null)
+		setIfMissing('bucket', '')
+		setIfMissing('prefix', '')
+		setIfMissing('objectsUIMode', 'simple')
+		setIfMissing('downloadLinkProxyEnabled', true)
 	}, { apiToken })
 }
 
@@ -67,20 +82,31 @@ test.describe('Live UI flow', () => {
 			await page.getByLabel('Secret').fill(s3SecretKey)
 			await setSwitch(page, 'Force Path Style', forcePathStyle)
 			await setSwitch(page, 'TLS Insecure Skip Verify', tlsSkipVerify)
-			await page.getByRole('button', { name: 'Create' }).click()
+			const profileModal = page.locator('.ant-modal').filter({ hasText: 'Create Profile' })
+			await profileModal.getByRole('button', { name: 'Create' }).click()
 
-			await expect(page.getByText(profileName, { exact: true })).toBeVisible({ timeout: 30_000 })
+			const createdProfileRow = page.getByRole('row', { name: new RegExp(profileName) })
+			await expect(createdProfileRow).toBeVisible({ timeout: 30_000 })
+			await createdProfileRow.getByRole('button', { name: 'Use' }).click()
+			await expect(page.locator('.ant-select-content-value', { hasText: profileName })).toBeVisible({ timeout: 15_000 })
+			await page.waitForFunction(() => {
+				const value = window.localStorage.getItem('profileId')
+				return value && JSON.parse(value)
+			})
 			profileId = await page.evaluate(() => JSON.parse(window.localStorage.getItem('profileId') ?? 'null'))
 
 			await page.goto('/buckets')
 			await page.getByRole('button', { name: 'New Bucket' }).click()
 			await page.getByLabel('Bucket name').fill(bucketName)
-			await page.getByRole('button', { name: 'Create' }).click()
-			await expect(page.getByText(bucketName, { exact: true })).toBeVisible({ timeout: 30_000 })
+			const bucketModal = page.locator('.ant-modal').filter({ hasText: 'Create Bucket' })
+			await bucketModal.getByRole('button', { name: 'Create' }).click()
+			await expect(page.getByRole('row', { name: new RegExp(bucketName) })).toBeVisible({ timeout: 30_000 })
 
 			await page.goto('/uploads')
-			await page.getByRole('combobox', { name: 'Bucket' }).click()
-			await page.getByRole('option', { name: bucketName }).click()
+			const uploadsBucketSelect = page.getByRole('combobox', { name: 'Bucket' })
+			await uploadsBucketSelect.click()
+			await uploadsBucketSelect.fill(bucketName)
+			await page.keyboard.press('Enter')
 
 			const fileInput = page.locator('input[type="file"]').first()
 			await fileInput.setInputFiles(uploadFixture)
@@ -91,20 +117,32 @@ test.describe('Live UI flow', () => {
 			await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 180_000 })
 
 			await page.goto('/objects')
-			await page.getByRole('combobox', { name: 'Bucket' }).click()
-			await page.getByRole('option', { name: bucketName }).click()
+			const objectsBucketValue = page.locator('.ant-select-content-value', { hasText: bucketName })
+			if (!(await objectsBucketValue.isVisible())) {
+				const objectsBucketSelect = page.getByRole('combobox', { name: 'Bucket' })
+				await objectsBucketSelect.click({ force: true })
+				await objectsBucketSelect.fill(bucketName)
+				await page.keyboard.press('Enter')
+			}
 
 			const objectRow = page.locator('[data-objects-row="true"]', { hasText: uploadFilename }).first()
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
 
-			const downloadPromise = page.waitForEvent('download')
 			await objectRow.getByRole('button', { name: 'Object actions' }).click()
 			await page.getByRole('menuitem', { name: 'Download (client)' }).click()
-			const download = await downloadPromise
-			expect(download.suggestedFilename()).toContain(uploadFilename)
+			await page.getByRole('button', { name: /Transfers/ }).first().click()
+			const transfersDialog = page.getByRole('dialog', { name: /Transfers/i })
+			await expect(transfersDialog).toBeVisible({ timeout: 30_000 })
+			const downloadRow = transfersDialog
+				.getByText(uploadFilename)
+				.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]')
+			await expect(downloadRow).toBeVisible({ timeout: 30_000 })
+			await expect(downloadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 120_000 })
+			await transfersDialog.getByRole('button', { name: 'Close' }).click()
+			await expect(transfersDialog).toBeHidden({ timeout: 10_000 })
 
-			await objectRow.getByRole('button', { name: 'Object actions' }).click()
-			await page.getByRole('menuitem', { name: /Delete \(Del\)/ }).click()
+			await expect(page.getByText('1 selected')).toBeVisible({ timeout: 10_000 })
+			await page.getByRole('button', { name: /Delete/ }).last().click()
 			const objectConfirm = page.locator('.ant-modal').filter({ hasText: 'Delete object?' })
 			await objectConfirm.getByPlaceholder('DELETE').fill('DELETE')
 			await objectConfirm.getByRole('button', { name: 'Delete' }).click()
@@ -116,7 +154,7 @@ test.describe('Live UI flow', () => {
 			const bucketConfirm = page.locator('.ant-modal').filter({ hasText: bucketName })
 			await bucketConfirm.getByPlaceholder(bucketName).fill(bucketName)
 			await bucketConfirm.getByRole('button', { name: 'Delete' }).click()
-			await expect(page.getByText(bucketName, { exact: true })).toHaveCount(0, { timeout: 60_000 })
+			await expect(bucketRow).toHaveCount(0, { timeout: 60_000 })
 
 			await page.goto('/profiles')
 			const profileRow = page.getByRole('row', { name: new RegExp(profileName) })
@@ -124,7 +162,7 @@ test.describe('Live UI flow', () => {
 			const profileConfirm = page.locator('.ant-modal').filter({ hasText: profileName })
 			await profileConfirm.getByPlaceholder(profileName).fill(profileName)
 			await profileConfirm.getByRole('button', { name: 'Delete' }).click()
-			await expect(page.getByText(profileName, { exact: true })).toHaveCount(0, { timeout: 60_000 })
+			await expect(profileRow).toHaveCount(0, { timeout: 60_000 })
 		} finally {
 			if (profileId) {
 				const profileHeaders = {

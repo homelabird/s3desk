@@ -353,16 +353,71 @@ type DeleteObjectsResponse struct {
 type UploadCreateRequest struct {
 	Bucket string `json:"bucket"`
 	Prefix string `json:"prefix,omitempty"`
+	Mode   string `json:"mode,omitempty"`
 }
 
 type UploadCreateResponse struct {
 	UploadID  string `json:"uploadId"`
+	Mode      string `json:"mode"`
 	MaxBytes  *int64 `json:"maxBytes,omitempty"`
 	ExpiresAt string `json:"expiresAt"`
 }
 
 type UploadChunkState struct {
 	Present []int `json:"present"`
+}
+
+type UploadPresignRequest struct {
+	Path           string                     `json:"path"`
+	ContentType    string                     `json:"contentType,omitempty"`
+	Size           *int64                     `json:"size,omitempty"`
+	ExpiresSeconds *int                       `json:"expiresSeconds,omitempty"`
+	Multipart      *UploadMultipartPresignReq `json:"multipart,omitempty"`
+}
+
+type UploadMultipartPresignReq struct {
+	FileSize      *int64 `json:"fileSize,omitempty"`
+	PartSizeBytes int64  `json:"partSizeBytes,omitempty"`
+	PartNumbers   []int  `json:"partNumbers,omitempty"`
+}
+
+type UploadPresignResponse struct {
+	Mode      string                  `json:"mode"`
+	Bucket    string                  `json:"bucket"`
+	Key       string                  `json:"key"`
+	Method    string                  `json:"method,omitempty"`
+	URL       string                  `json:"url,omitempty"`
+	Headers   map[string]string       `json:"headers,omitempty"`
+	ExpiresAt string                  `json:"expiresAt"`
+	Multipart *UploadPresignMultipart `json:"multipart,omitempty"`
+}
+
+type UploadPresignMultipart struct {
+	UploadID      string              `json:"uploadId"`
+	PartSizeBytes int64               `json:"partSizeBytes"`
+	PartCount     int                 `json:"partCount"`
+	Parts         []UploadPresignPart `json:"parts,omitempty"`
+}
+
+type UploadPresignPart struct {
+	Number  int               `json:"number"`
+	Method  string            `json:"method,omitempty"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+type UploadMultipartCompleteRequest struct {
+	Path  string                        `json:"path"`
+	Parts []UploadMultipartCompletePart `json:"parts"`
+}
+
+type UploadMultipartCompletePart struct {
+	Number int    `json:"number"`
+	ETag   string `json:"etag"`
+}
+
+type UploadMultipartAbortRequest struct {
+	Path string `json:"path"`
 }
 
 type JobStatus string
