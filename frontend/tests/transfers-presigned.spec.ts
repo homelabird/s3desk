@@ -371,6 +371,16 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 
 	await expect.poll(() => presignRequested, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => presignedUploadAttempted, { timeout: 5000 }).toBe(true)
-	await expect(page.getByText('network error', { exact: true })).toBeVisible()
+	const drawerMask = page.locator('.ant-drawer-mask').first()
+	const drawerOpen = await drawerMask.isVisible().catch(() => false)
+	if (!drawerOpen) {
+		await page.getByRole('button', { name: /Transfers/i }).first().click()
+	}
+	await page.getByRole('tab', { name: /Uploads/i }).click()
+
+	const labelNode = page.getByText('Upload: hello.txt', { exact: true })
+	await labelNode.waitFor({ timeout: 5000 })
+	const row = labelNode.locator('xpath=ancestor::div[contains(@style, \"border: 1px solid\")]').first()
+	await expect(row.getByText(/network error/i)).toBeVisible()
 	expect(commitCalled).toBe(false)
 })
