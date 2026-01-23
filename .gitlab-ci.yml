@@ -626,7 +626,7 @@ e2e:
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
-    - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/transfers-*.spec.ts
+    - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/jobs-network.spec.ts tests/transfers-*.spec.ts
   artifacts:
     when: always
     paths:

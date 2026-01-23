@@ -235,6 +235,8 @@ Environment overrides:
 
 If you run MinIO on the host with a locally running server, set `E2E_S3_ENDPOINT=http://127.0.0.1:9000`.
 
+CI note: `E2E_S3_ENDPOINT` must be reachable from the Playwright runner container (for example, `http://minio:9000` inside the Compose network).
+
 Vite dev server + backend example:
 
 ```bash

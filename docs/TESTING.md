@@ -52,6 +52,25 @@ test.describe('@transfer', () => {
 - `e2e_live` (optional, `E2E_LIVE=1`, `E2E_BASE_URL` required): `tests/api-crud.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/docs-smoke.spec.ts`
 - `perf_tests` (optional, `PERF_TESTS=1`): `tests/jobs-perf.spec.ts`
 
+## CI environment variables (Live UI tests)
+
+Set these in CI when running `e2e_live` (or local live runs):
+
+- `E2E_LIVE=1` (enables live specs)
+- `E2E_BASE_URL` (UI base URL, e.g. `http://s3desk:8080`)
+- `E2E_API_TOKEN` (default `change-me`)
+- `E2E_S3_ENDPOINT` (MinIO/S3 endpoint reachable **from the Playwright runner**)
+- `E2E_S3_ACCESS_KEY` / `E2E_S3_SECRET_KEY` (defaults `minioadmin`)
+- `E2E_S3_REGION` (default `us-east-1`)
+- `E2E_S3_FORCE_PATH_STYLE` (default `true`)
+- `E2E_S3_TLS_SKIP_VERIFY` (default `true`)
+
+Optional overrides when UI/Docs/Perf are split:
+
+- `PLAYWRIGHT_BASE_URL` (UI base URL)
+- `DOCS_BASE_URL` (docs backend base URL)
+- `PERF_BASE_URL` (perf test base URL)
+
 ## Transfer scenario test list
 
 Define scenarios to cover end-to-end transfer behavior:
