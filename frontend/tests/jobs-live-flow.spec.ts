@@ -54,10 +54,21 @@ async function seedStorage(page: Page, args: { profileId: string; bucket: string
 }
 
 async function uploadObject(request: APIRequestContext, profileId: string, bucket: string, key: string, body: string) {
+	const normalized = key.replace(/^\/+/, '').replace(/\/+$/, '')
+	if (!normalized) {
+		throw new Error('upload key is required')
+	}
+	const parts = normalized.split('/')
+	const filename = parts.pop() ?? ''
+	if (!filename) {
+		throw new Error(`invalid upload key: ${key}`)
+	}
+	const prefix = parts.length ? `${parts.join('/')}/` : ''
+
 	const profileHeaders = apiHeaders(profileId)
 	const createUpload = await request.post('/api/v1/uploads', {
 		headers: profileHeaders,
-		data: { bucket },
+		data: { bucket, ...(prefix ? { prefix } : {}) },
 	})
 	if (createUpload.status() !== 201) {
 		throw new Error(`failed to create upload (${createUpload.status()})`)
@@ -68,7 +79,7 @@ async function uploadObject(request: APIRequestContext, profileId: string, bucke
 		headers: profileHeaders,
 		multipart: {
 			files: {
-				name: key,
+				name: filename,
 				mimeType: 'text/plain',
 				buffer: Buffer.from(body),
 			},
