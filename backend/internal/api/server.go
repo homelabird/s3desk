@@ -16,6 +16,7 @@ type server struct {
 	metrics     *metrics.Metrics
 	serverAddr  string
 	proxySecret []byte
+	uploadLimit *requestLimiter
 }
 
 type contextKey string

@@ -891,6 +891,76 @@ paths:
         "404":
           $ref: "#/components/responses/ErrorResponse"
 
+  /uploads/{uploadId}/presign:
+    post:
+      tags: [Uploads]
+      summary: Get presigned upload URLs
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadPresignRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadPresignResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads/{uploadId}/multipart/complete:
+    post:
+      tags: [Uploads]
+      summary: Complete a multipart upload
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadMultipartCompleteRequest"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads/{uploadId}/multipart/abort:
+    post:
+      tags: [Uploads]
+      summary: Abort a multipart upload
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadMultipartAbortRequest"
+      responses:
+        "204":
+          description: No Content
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
   /uploads/{uploadId}/commit:
     post:
       tags: [Uploads]
@@ -1861,12 +1931,17 @@ components:
       properties:
         bucket: { type: string }
         prefix: { type: string, default: "" }
+        mode:
+          type: string
+          enum: [staging, direct, presigned]
+          default: staging
 
     UploadCreateResponse:
       type: object
-      required: [uploadId, expiresAt]
+      required: [uploadId, mode, expiresAt]
       properties:
         uploadId: { type: string }
+        mode: { type: string, enum: [staging, direct, presigned] }
         maxBytes: { type: integer, format: int64, nullable: true }
         expiresAt: { type: string, format: date-time }
 
@@ -1891,6 +1966,90 @@ components:
           type: array
           items: { $ref: "#/components/schemas/UploadCommitItem" }
         itemsTruncated: { type: boolean }
+
+    UploadPresignRequest:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: { type: string }
+        contentType: { type: string }
+        size: { type: integer, format: int64 }
+        expiresSeconds: { type: integer, minimum: 60, maximum: 3600 }
+        multipart: { $ref: "#/components/schemas/UploadMultipartPresignReq" }
+
+    UploadMultipartPresignReq:
+      type: object
+      additionalProperties: false
+      properties:
+        fileSize: { type: integer, format: int64 }
+        partSizeBytes: { type: integer, format: int64 }
+        partNumbers:
+          type: array
+          items: { type: integer, minimum: 1 }
+
+    UploadPresignResponse:
+      type: object
+      required: [mode, bucket, key, expiresAt]
+      properties:
+        mode: { type: string, enum: [single, multipart] }
+        bucket: { type: string }
+        key: { type: string }
+        method: { type: string }
+        url: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        expiresAt: { type: string, format: date-time }
+        multipart: { $ref: "#/components/schemas/UploadPresignMultipart" }
+
+    UploadPresignMultipart:
+      type: object
+      required: [uploadId, partSizeBytes, partCount]
+      properties:
+        uploadId: { type: string }
+        partSizeBytes: { type: integer, format: int64 }
+        partCount: { type: integer }
+        parts:
+          type: array
+          items: { $ref: "#/components/schemas/UploadPresignPart" }
+
+    UploadPresignPart:
+      type: object
+      required: [number, url]
+      properties:
+        number: { type: integer }
+        method: { type: string }
+        url: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+
+    UploadMultipartCompleteRequest:
+      type: object
+      additionalProperties: false
+      required: [path, parts]
+      properties:
+        path: { type: string }
+        parts:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/UploadMultipartCompletePart" }
+
+    UploadMultipartCompletePart:
+      type: object
+      additionalProperties: false
+      required: [number, etag]
+      properties:
+        number: { type: integer, minimum: 1 }
+        etag: { type: string }
+
+    UploadMultipartAbortRequest:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: { type: string }
 
     JobStatus:
       type: string

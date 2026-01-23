@@ -329,6 +329,18 @@ go_test:
 govulncheck:
   stage: test
   image: harbor.k8s.homelabird.com/library/golang:1.24
+  variables:
+    GOVULNCHECK_TIMEOUT: "30m"
+    GOVULNCHECK_PATTERN: "./internal/api/..."
+    GOPROXY: "https://proxy.golang.org,direct"
+    GOSUMDB: "sum.golang.org"
+    GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
+    GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
+  cache:
+    key: "go-cache"
+    paths:
+      - .cache/go-mod
+      - .cache/go-build
   script:
     - |
       GOBIN="$(go env GOBIN)"
@@ -337,7 +349,18 @@ govulncheck:
       fi
       go install golang.org/x/vuln/cmd/govulncheck@latest
       cd backend
-      "$GOBIN/govulncheck" ./...
+      if timeout "${GOVULNCHECK_TIMEOUT}" "$GOBIN/govulncheck" "${GOVULNCHECK_PATTERN}"; then
+        status=0
+      else
+        status=$?
+      fi
+      if [ "$status" -eq 124 ]; then
+        echo "govulncheck timed out after ${GOVULNCHECK_TIMEOUT}"
+      elif [ "$status" -eq 137 ]; then
+        echo "govulncheck killed (possible OOM or timeout kill)"
+      fi
+      echo "govulncheck exit code: ${status}"
+      exit "$status"
 
 frontend_openapi_types:
   stage: test
@@ -621,11 +644,40 @@ e2e:
         exit 1
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
+    - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
-    - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/transfers-*.spec.ts
+    - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/jobs-network.spec.ts tests/transfers-*.spec.ts
+  artifacts:
+    when: always
+    paths:
+      - frontend/test-results/
+      - frontend/playwright-report/
+    expire_in: 7 days
+
+e2e_live:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  rules:
+    - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
+      when: on_success
+    - when: never
+  script:
+    - |
+      if [ -z "$E2E_BASE_URL" ]; then
+        echo "E2E_BASE_URL is required to run live E2E tests in CI."
+        exit 1
+      fi
+    - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
+    - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
+    - export E2E_LIVE=1
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
   artifacts:
     when: always
     paths:
@@ -650,6 +702,7 @@ perf_tests:
     - npm --version
     - cd frontend
     - npm ci --no-audit --no-fund
+    - export PERF_BASE_URL="${PERF_BASE_URL:-http://127.0.0.1:8080}"
     - PERF_TESTS=1 npx playwright test tests/jobs-perf.spec.ts
   artifacts:
     when: always

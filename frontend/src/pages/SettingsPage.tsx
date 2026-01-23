@@ -333,7 +333,7 @@ export function SettingsPage(props: Props) {
 
 								<Form.Item
 									label="Downloads: Use server proxy"
-									extra="When enabled, downloads and 'Link…' use /download-proxy for same-origin access and Content-Disposition. When disabled, presigned URLs are used (requires S3 CORS for in-app progress)."
+									extra="When enabled, downloads and 'Link…' always use /download-proxy. When disabled, downloads try presigned URLs first and fall back to the proxy only if CORS blocks the request."
 								>
 									<Switch
 										checked={downloadLinkProxyEnabled}

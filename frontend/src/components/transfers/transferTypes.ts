@@ -63,6 +63,7 @@ export type UploadTask = {
 	label: string
 	filePaths?: string[]
 	uploadId?: string
+	uploadMode?: 'staging' | 'direct' | 'presigned'
 	resumeChunkSizeBytes?: number
 	resumeFileSize?: number
 	resumeFiles?: Array<{ path: string; size: number; chunkSizeBytes: number }>
