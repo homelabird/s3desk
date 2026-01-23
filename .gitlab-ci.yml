@@ -634,6 +634,34 @@ e2e:
       - frontend/playwright-report/
     expire_in: 7 days
 
+e2e_live:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  rules:
+    - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
+      when: on_success
+    - when: never
+  script:
+    - |
+      if [ -z "$E2E_BASE_URL" ]; then
+        echo "E2E_BASE_URL is required to run live E2E tests in CI."
+        exit 1
+      fi
+    - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
+    - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
+    - export E2E_LIVE=1
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npx playwright test tests/api-crud.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
+  artifacts:
+    when: always
+    paths:
+      - frontend/test-results/
+      - frontend/playwright-report/
+    expire_in: 7 days
+
 perf_tests:
   stage: test
   image: mcr.microsoft.com/playwright:v1.47.0-jammy
