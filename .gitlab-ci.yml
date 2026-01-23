@@ -339,7 +339,7 @@ govulncheck:
       fi
       go install golang.org/x/vuln/cmd/govulncheck@latest
       cd backend
-      "$GOBIN/govulncheck" -timeout="${GOVULNCHECK_TIMEOUT}" ./...
+      timeout "${GOVULNCHECK_TIMEOUT}" "$GOBIN/govulncheck" ./...
 
 frontend_openapi_types:
   stage: test
