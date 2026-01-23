@@ -59,7 +59,7 @@ Set these in CI when running `e2e_live` (or local live runs):
 - `E2E_LIVE=1` (enables live specs)
 - `E2E_BASE_URL` (UI base URL, e.g. `http://s3desk:8080`)
 - `E2E_API_TOKEN` (default `change-me`)
-- `E2E_S3_ENDPOINT` (MinIO/S3 endpoint reachable **from the Playwright runner**)
+- `E2E_S3_ENDPOINT` (MinIO/S3 endpoint reachable **from the API service**; in containers use the service DNS like `http://minio:9000`, not `127.0.0.1`)
 - `E2E_S3_ACCESS_KEY` / `E2E_S3_SECRET_KEY` (defaults `minioadmin`)
 - `E2E_S3_REGION` (default `us-east-1`)
 - `E2E_S3_FORCE_PATH_STYLE` (default `true`)
@@ -124,7 +124,7 @@ npm install
 E2E_LIVE=1 \
 E2E_BASE_URL=http://127.0.0.1:8080 \
 E2E_API_TOKEN=change-me \
-E2E_S3_ENDPOINT=http://127.0.0.1:9000 \
+E2E_S3_ENDPOINT=http://minio:9000 \
 E2E_S3_ACCESS_KEY=minioadmin \
 E2E_S3_SECRET_KEY=minioadmin \
 E2E_S3_REGION=us-east-1 \
