@@ -329,6 +329,8 @@ go_test:
 govulncheck:
   stage: test
   image: harbor.k8s.homelabird.com/library/golang:1.24
+  variables:
+    GOVULNCHECK_TIMEOUT: "15m"
   script:
     - |
       GOBIN="$(go env GOBIN)"
@@ -337,7 +339,7 @@ govulncheck:
       fi
       go install golang.org/x/vuln/cmd/govulncheck@latest
       cd backend
-      "$GOBIN/govulncheck" ./...
+      "$GOBIN/govulncheck" -timeout="${GOVULNCHECK_TIMEOUT}" ./...
 
 frontend_openapi_types:
   stage: test
