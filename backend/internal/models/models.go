@@ -382,20 +382,20 @@ type UploadMultipartPresignReq struct {
 }
 
 type UploadPresignResponse struct {
-	Mode      string                 `json:"mode"`
-	Bucket    string                 `json:"bucket"`
-	Key       string                 `json:"key"`
-	Method    string                 `json:"method,omitempty"`
-	URL       string                 `json:"url,omitempty"`
-	Headers   map[string]string      `json:"headers,omitempty"`
-	ExpiresAt string                 `json:"expiresAt"`
+	Mode      string                  `json:"mode"`
+	Bucket    string                  `json:"bucket"`
+	Key       string                  `json:"key"`
+	Method    string                  `json:"method,omitempty"`
+	URL       string                  `json:"url,omitempty"`
+	Headers   map[string]string       `json:"headers,omitempty"`
+	ExpiresAt string                  `json:"expiresAt"`
 	Multipart *UploadPresignMultipart `json:"multipart,omitempty"`
 }
 
 type UploadPresignMultipart struct {
-	UploadID      string               `json:"uploadId"`
-	PartSizeBytes int64                `json:"partSizeBytes"`
-	PartCount     int                  `json:"partCount"`
+	UploadID      string              `json:"uploadId"`
+	PartSizeBytes int64               `json:"partSizeBytes"`
+	PartCount     int                 `json:"partCount"`
 	Parts         []UploadPresignPart `json:"parts,omitempty"`
 }
 
@@ -407,7 +407,7 @@ type UploadPresignPart struct {
 }
 
 type UploadMultipartCompleteRequest struct {
-	Path  string                       `json:"path"`
+	Path  string                        `json:"path"`
 	Parts []UploadMultipartCompletePart `json:"parts"`
 }
 

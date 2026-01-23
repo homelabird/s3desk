@@ -1606,6 +1606,7 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 			handleUploadJobUpdate,
 			navigate,
 			pickUploadTuning,
+			props.uploadDirectStream,
 			queryClient,
 			updateUploadTask,
 			uploadChunkFileConcurrency,

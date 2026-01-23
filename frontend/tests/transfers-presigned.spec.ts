@@ -380,7 +380,7 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 
 	const labelNode = page.getByText('Upload: hello.txt', { exact: true })
 	await labelNode.waitFor({ timeout: 5000 })
-	const row = labelNode.locator('xpath=ancestor::div[contains(@style, \"border: 1px solid\")]').first()
+	const row = labelNode.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]').first()
 	await expect(row.getByText(/network error/i)).toBeVisible()
 	expect(commitCalled).toBe(false)
 })

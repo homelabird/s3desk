@@ -135,7 +135,7 @@ test.describe('Live UI flow', () => {
 			await expect(transfersDialog).toBeVisible({ timeout: 30_000 })
 			const downloadRow = transfersDialog
 				.getByText(uploadFilename)
-				.locator('xpath=ancestor::div[contains(@style, \"border: 1px solid\")]')
+				.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]')
 			await expect(downloadRow).toBeVisible({ timeout: 30_000 })
 			await expect(downloadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 120_000 })
 			await transfersDialog.getByRole('button', { name: 'Close' }).click()
