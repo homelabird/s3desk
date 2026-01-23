@@ -46,6 +46,7 @@ variables:
   NPM_VERSION: "10.9.4"
   TRIVY_SEVERITY: "HIGH,CRITICAL"
   TRIVY_EXIT_CODE: "1"
+  TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.cache/trivy"
   GITLEAKS_VERSION: "8.21.2"
   HELM_VERSION: "3.16.4"
   KUBECONFORM_VERSION: "0.6.7"
@@ -79,6 +80,12 @@ variables:
     paths:
       - .cache/go-mod
       - .cache/go-build
+
+.trivy_cache: &trivy_cache
+  cache:
+    key: "trivy-cache"
+    paths:
+      - .cache/trivy
 
 .helm_tools: &helm_tools
   image: "$ALPINE_IMAGE"
@@ -132,6 +139,7 @@ variables:
 helm_lint:
   <<: *helm_tools
   stage: test
+  interruptible: true
   rules:
     - changes:
         - charts/**/*
@@ -144,6 +152,7 @@ helm_lint:
 helm_template:
   <<: *helm_tools
   stage: test
+  interruptible: true
   rules:
     - changes:
         - charts/**/*
@@ -183,6 +192,7 @@ helm_template:
 helm_template_negative:
   <<: *helm_tools
   stage: test
+  interruptible: true
   rules:
     - changes:
         - charts/**/*
@@ -203,6 +213,7 @@ helm_template_negative:
 helm_k8s_smoke_sqlite:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
   rules:
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
@@ -222,6 +233,7 @@ helm_k8s_smoke_sqlite:
 helm_k8s_smoke_postgres:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
   rules:
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
@@ -241,6 +253,7 @@ helm_k8s_smoke_postgres:
 helm_k8s_upgrade:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
   rules:
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
@@ -260,6 +273,7 @@ helm_k8s_upgrade:
 helm_k8s_pvc:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
   rules:
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
@@ -279,6 +293,9 @@ helm_k8s_pvc:
 security_fs_scan:
   stage: audit
   image: "$TRIVY_IMAGE"
+  <<: *trivy_cache
+  interruptible: true
+  needs: []
   script:
     - trivy fs --scanners vuln,secret --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --ignore-unfixed --skip-dirs frontend/dist .
     - trivy config --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --skip-dirs frontend/dist --helm-values charts/s3desk/ci-values.yaml .
@@ -286,6 +303,8 @@ security_fs_scan:
 gitleaks_scan:
   stage: audit
   image: "$ALPINE_IMAGE"
+  interruptible: true
+  needs: []
   variables:
     GIT_DEPTH: "0"
   before_script:
@@ -310,6 +329,7 @@ gitleaks_scan:
 openapi_validate:
   stage: test
   image: "$GO_IMAGE"
+  interruptible: true
   rules:
     - changes:
         - openapi.yml
@@ -321,6 +341,7 @@ openapi_validate:
 check:
   stage: test
   image: "$GO_IMAGE"
+  interruptible: true
   rules:
     - changes:
         - backend/**/*
@@ -355,6 +376,7 @@ check:
 build_s3desk_image:
   stage: build
   image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - if: '$RUN_IMAGE_BUILD == "1"'
       when: on_success
@@ -403,6 +425,7 @@ build_s3desk_image:
 build_release_images:
   stage: build
   image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
   variables:
@@ -434,6 +457,7 @@ build_release_images:
 gofmt:
   stage: test
   image: "$GO_IMAGE"
+  interruptible: true
   <<: *go_cache
   rules:
     - changes:
@@ -451,6 +475,7 @@ gofmt:
 go_test:
   stage: test
   image: "$GO_IMAGE"
+  interruptible: true
   <<: *go_cache
   rules:
     - changes:
@@ -467,6 +492,7 @@ go_test:
 govulncheck:
   stage: test
   image: "$GO_IMAGE"
+  interruptible: true
   <<: *go_cache
   rules:
     - changes:
@@ -501,6 +527,7 @@ govulncheck:
 frontend_openapi_types:
   stage: test
   image: "$NODE_IMAGE"
+  interruptible: true
   <<: *node_cache
   rules:
     - changes:
@@ -519,6 +546,7 @@ frontend_openapi_types:
 frontend_lint:
   stage: test
   image: "$NODE_IMAGE"
+  interruptible: true
   <<: *node_cache
   rules:
     - changes:
@@ -536,6 +564,7 @@ frontend_lint:
 frontend_build:
   stage: test
   image: "$NODE_IMAGE"
+  interruptible: true
   <<: *node_cache
   rules:
     - changes:
@@ -557,6 +586,8 @@ frontend_build:
 third_party_notices:
   stage: audit
   image: "$GO_IMAGE"
+  interruptible: true
+  needs: []
   <<: *node_cache
   rules:
     - changes:
@@ -589,6 +620,7 @@ third_party_notices:
 api_integration:
   stage: test
   image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - changes:
         - backend/**/*
@@ -682,6 +714,7 @@ api_integration:
 release_postgres_smoke:
   stage: test
   image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
   needs:
@@ -780,6 +813,7 @@ release_postgres_smoke:
 frontend_unit_tests:
   stage: test
   image: "$NODE_IMAGE"
+  interruptible: true
   <<: *node_cache
   rules:
     - changes:
@@ -799,6 +833,7 @@ frontend_unit_tests:
 e2e:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
+  interruptible: true
   <<: *node_cache
   rules:
     - if: '$E2E_BASE_URL'
@@ -827,6 +862,7 @@ e2e:
 e2e_live:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
+  interruptible: true
   <<: *node_cache
   rules:
     - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
@@ -856,6 +892,7 @@ e2e_live:
 perf_tests:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
+  interruptible: true
   <<: *node_cache
   rules:
     - if: '$PERF_TESTS == "1"'
@@ -883,6 +920,8 @@ perf_tests:
 dev_license_audit:
   stage: audit
   image: "$GO_IMAGE"
+  interruptible: true
+  needs: []
   <<: *node_cache
   rules:
     - changes:
@@ -913,6 +952,8 @@ dev_license_audit:
 trivy_scan:
   stage: audit
   image: "$TRIVY_IMAGE"
+  <<: *trivy_cache
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -938,6 +979,7 @@ trivy_scan:
 publish_dockerhub:
   stage: publish
   image: "$PODMAN_IMAGE"
+  interruptible: true
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
@@ -1060,6 +1102,7 @@ publish_helm_chart:
 release_image_smoke:
   stage: post-publish
   image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
   needs:
