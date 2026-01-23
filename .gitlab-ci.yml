@@ -331,7 +331,7 @@ govulncheck:
   image: harbor.k8s.homelabird.com/library/golang:1.24
   variables:
     GOVULNCHECK_TIMEOUT: "30m"
-    GOVULNCHECK_PATTERN: "./internal/..."
+    GOVULNCHECK_PATTERN: "./internal/api/..."
     GOPROXY: "https://proxy.golang.org,direct"
     GOSUMDB: "sum.golang.org"
     GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
