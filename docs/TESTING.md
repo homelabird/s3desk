@@ -71,6 +71,10 @@ Optional overrides when UI/Docs/Perf are split:
 - `DOCS_BASE_URL` (docs backend base URL)
 - `PERF_BASE_URL` (perf test base URL)
 
+Sample CI env file:
+
+- `docs/ci/e2e_live.env.example`
+
 ## Transfer scenario test list
 
 Define scenarios to cover end-to-end transfer behavior:
