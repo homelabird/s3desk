@@ -654,7 +654,7 @@ e2e_live:
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
-    - npx playwright test tests/api-crud.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
+    - npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
   artifacts:
     when: always
     paths:

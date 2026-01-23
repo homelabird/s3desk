@@ -49,7 +49,7 @@ test.describe('@transfer', () => {
 - `api_integration`: `docker-compose.e2e.yml` + `e2e/runner/runner.py`
 - `ui_smoke` (optional, `E2E_UI=1`, `E2E_BASE_URL` required): `tests/objects-smoke.spec.ts`, `tests/docs-smoke.spec.ts`
 - `transfer_scenarios` (optional, `E2E_TRANSFERS=1`, `E2E_BASE_URL` required): `tests/transfers-*.spec.ts`
-- `e2e_live` (optional, `E2E_LIVE=1`, `E2E_BASE_URL` required): `tests/api-crud.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/docs-smoke.spec.ts`
+- `e2e_live` (optional, `E2E_LIVE=1`, `E2E_BASE_URL` required): `tests/api-crud.spec.ts`, `tests/jobs-live-flow.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/docs-smoke.spec.ts`
 - `perf_tests` (optional, `PERF_TESTS=1`): `tests/jobs-perf.spec.ts`
 
 ## CI environment variables (Live UI tests)
