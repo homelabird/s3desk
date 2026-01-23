@@ -37,6 +37,12 @@ stages:
   - post-publish
 
 variables:
+  ALPINE_IMAGE: "harbor.k8s.homelabird.com/library/alpine:3.21"
+  GO_IMAGE: "harbor.k8s.homelabird.com/library/golang:1.24"
+  NODE_IMAGE: "harbor.k8s.homelabird.com/library/node:22-bookworm"
+  PODMAN_IMAGE: "quay.io/podman/stable:latest"
+  PLAYWRIGHT_IMAGE: "mcr.microsoft.com/playwright:v1.47.0-jammy"
+  TRIVY_IMAGE: "aquasec/trivy:0.56.2"
   NPM_VERSION: "10.9.4"
   TRIVY_SEVERITY: "HIGH,CRITICAL"
   TRIVY_EXIT_CODE: "1"
@@ -44,16 +50,38 @@ variables:
   HELM_VERSION: "3.16.4"
   KUBECONFORM_VERSION: "0.6.7"
   KUBECTL_VERSION: "1.30.4"
-  K8S_NAMESPACE: "gitlab-runner"
   NPM_CONFIG_FETCH_RETRIES: "5"
   NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
   NPM_CONFIG_PREFER_OFFLINE: "true"
   NPM_CONFIG_AUDIT: "false"
   NPM_CONFIG_FUND: "false"
+  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
+  GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
+  GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
+  GOVULNCHECK_VERSION: "latest"
+
+.node_cache: &node_cache
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+      prefix: "npm-cache"
+    paths:
+      - .cache/npm/
+
+.go_cache: &go_cache
+  cache:
+    key:
+      files:
+        - backend/go.sum
+      prefix: "go-cache"
+    paths:
+      - .cache/go-mod
+      - .cache/go-build
 
 .helm_tools: &helm_tools
-  image: harbor.k8s.homelabird.com/library/alpine:3.21
+  image: "$ALPINE_IMAGE"
   before_script:
     - apk add --no-cache curl tar ca-certificates bash
     - |
@@ -66,12 +94,15 @@ variables:
       helm_version="v${HELM_VERSION}"
       curl -fsSL -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      if [ -n "${HELM_TGZ_SHA256:-}" ]; then
+        echo "${HELM_TGZ_SHA256}  /tmp/helm.tar.gz" | sha256sum -c -
+      fi
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
 
 .helm_k8s_tools: &helm_k8s_tools
-  image: harbor.k8s.homelabird.com/library/alpine:3.21
+  image: "$ALPINE_IMAGE"
   before_script:
     - apk add --no-cache curl tar ca-certificates bash coreutils
     - |
@@ -84,23 +115,41 @@ variables:
       helm_version="v${HELM_VERSION}"
       curl -fsSL -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      if [ -n "${HELM_TGZ_SHA256:-}" ]; then
+        echo "${HELM_TGZ_SHA256}  /tmp/helm.tar.gz" | sha256sum -c -
+      fi
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
       kubectl_version="v${KUBECTL_VERSION}"
       curl -fsSL -o /usr/local/bin/kubectl \
         "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${arch}/kubectl"
+      if [ -n "${KUBECTL_SHA256:-}" ]; then
+        echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum -c -
+      fi
       chmod +x /usr/local/bin/kubectl
 
 helm_lint:
   <<: *helm_tools
   stage: test
+  rules:
+    - changes:
+        - charts/**/*
+        - charts/s3desk/ci-values.yaml
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   script:
     - helm lint charts/s3desk -f charts/s3desk/ci-values.yaml
 
 helm_template:
   <<: *helm_tools
   stage: test
+  rules:
+    - changes:
+        - charts/**/*
+        - charts/s3desk/ci-values.yaml
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   before_script:
     - apk add --no-cache curl tar ca-certificates bash
     - |
@@ -113,12 +162,18 @@ helm_template:
       helm_version="v${HELM_VERSION}"
       curl -fsSL -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      if [ -n "${HELM_TGZ_SHA256:-}" ]; then
+        echo "${HELM_TGZ_SHA256}  /tmp/helm.tar.gz" | sha256sum -c -
+      fi
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
       kubeconform_version="v${KUBECONFORM_VERSION}"
       curl -fsSL -o /tmp/kubeconform.tar.gz \
         "https://github.com/yannh/kubeconform/releases/download/${kubeconform_version}/kubeconform-linux-${arch}.tar.gz"
+      if [ -n "${KUBECONFORM_TGZ_SHA256:-}" ]; then
+        echo "${KUBECONFORM_TGZ_SHA256}  /tmp/kubeconform.tar.gz" | sha256sum -c -
+      fi
       tar -C /usr/local/bin -xzf /tmp/kubeconform.tar.gz kubeconform
       rm -f /tmp/kubeconform.tar.gz
   script:
@@ -128,6 +183,12 @@ helm_template:
 helm_template_negative:
   <<: *helm_tools
   stage: test
+  rules:
+    - changes:
+        - charts/**/*
+        - charts/s3desk/ci-values.yaml
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   script:
     - |
       if helm template s3desk charts/s3desk \
@@ -142,6 +203,14 @@ helm_template_negative:
 helm_k8s_smoke_sqlite:
   <<: *helm_k8s_tools
   stage: test
+  rules:
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -153,6 +222,14 @@ helm_k8s_smoke_sqlite:
 helm_k8s_smoke_postgres:
   <<: *helm_k8s_tools
   stage: test
+  rules:
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -164,6 +241,14 @@ helm_k8s_smoke_postgres:
 helm_k8s_upgrade:
   <<: *helm_k8s_tools
   stage: test
+  rules:
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -175,6 +260,14 @@ helm_k8s_upgrade:
 helm_k8s_pvc:
   <<: *helm_k8s_tools
   stage: test
+  rules:
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -185,14 +278,14 @@ helm_k8s_pvc:
 
 security_fs_scan:
   stage: audit
-  image: aquasec/trivy:0.56.2
+  image: "$TRIVY_IMAGE"
   script:
     - trivy fs --scanners vuln,secret --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --ignore-unfixed --skip-dirs frontend/dist .
     - trivy config --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --skip-dirs frontend/dist --helm-values charts/s3desk/ci-values.yaml .
 
 gitleaks_scan:
   stage: audit
-  image: harbor.k8s.homelabird.com/library/alpine:3.21
+  image: "$ALPINE_IMAGE"
   variables:
     GIT_DEPTH: "0"
   before_script:
@@ -207,19 +300,47 @@ gitleaks_scan:
       version="v${GITLEAKS_VERSION}"
       curl -fsSL -o /tmp/gitleaks.tar.gz \
         "https://github.com/gitleaks/gitleaks/releases/download/${version}/gitleaks_${version#v}_linux_${arch}.tar.gz"
+      if [ -n "${GITLEAKS_TGZ_SHA256:-}" ]; then
+        echo "${GITLEAKS_TGZ_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+      fi
       tar -C /usr/local/bin -xzf /tmp/gitleaks.tar.gz gitleaks
   script:
     - gitleaks detect --source . --config .gitleaks.toml
 
 openapi_validate:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  rules:
+    - changes:
+        - openapi.yml
+        - scripts/validate_openapi.sh
+    - when: never
   script:
     - bash scripts/validate_openapi.sh
 
 check:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  rules:
+    - changes:
+        - backend/**/*
+        - frontend/**/*
+        - openapi.yml
+        - scripts/check.sh
+        - scripts/validate_openapi.sh
+        - scripts/generate_third_party_notices.py
+        - third_party/**/*
+    - when: never
+  cache:
+    key:
+      files:
+        - backend/go.sum
+        - frontend/package-lock.json
+      prefix: "check-cache"
+    paths:
+      - .cache/go-mod
+      - .cache/go-build
+      - .cache/npm/
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -233,9 +354,16 @@ check:
 
 build_s3desk_image:
   stage: build
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
   rules:
-    - when: on_success
+    - if: '$RUN_IMAGE_BUILD == "1"'
+      when: on_success
+    - changes:
+        - Containerfile
+        - backend/**/*
+        - frontend/**/*
+        - openapi.yml
+    - when: never
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
@@ -274,7 +402,7 @@ build_s3desk_image:
 
 build_release_images:
   stage: build
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
   rules:
     - if: '$CI_COMMIT_TAG'
   variables:
@@ -305,7 +433,12 @@ build_release_images:
 
 gofmt:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  <<: *go_cache
+  rules:
+    - changes:
+        - backend/**/*
+    - when: never
   script:
     - |
       UNFORMATTED=$(find backend -name '*.go' -type f -print0 | xargs -0 gofmt -l)
@@ -317,7 +450,12 @@ gofmt:
 
 go_test:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  <<: *go_cache
+  rules:
+    - changes:
+        - backend/**/*
+    - when: never
   variables:
     KUBERNETES_MEMORY_REQUEST: "1Gi"
     KUBERNETES_MEMORY_LIMIT: "2Gi"
@@ -328,26 +466,24 @@ go_test:
 
 govulncheck:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  <<: *go_cache
+  rules:
+    - changes:
+        - backend/**/*
+    - when: never
   variables:
     GOVULNCHECK_TIMEOUT: "30m"
     GOVULNCHECK_PATTERN: "./internal/api/..."
     GOPROXY: "https://proxy.golang.org,direct"
     GOSUMDB: "sum.golang.org"
-    GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
-    GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
-  cache:
-    key: "go-cache"
-    paths:
-      - .cache/go-mod
-      - .cache/go-build
   script:
     - |
       GOBIN="$(go env GOBIN)"
       if [ -z "$GOBIN" ]; then
         GOBIN="$(go env GOPATH)/bin"
       fi
-      go install golang.org/x/vuln/cmd/govulncheck@latest
+      go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
       cd backend
       if timeout "${GOVULNCHECK_TIMEOUT}" "$GOBIN/govulncheck" "${GOVULNCHECK_PATTERN}"; then
         status=0
@@ -364,7 +500,13 @@ govulncheck:
 
 frontend_openapi_types:
   stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
+  image: "$NODE_IMAGE"
+  <<: *node_cache
+  rules:
+    - changes:
+        - frontend/**/*
+        - openapi.yml
+    - when: never
   script:
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
@@ -376,7 +518,13 @@ frontend_openapi_types:
 
 frontend_lint:
   stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
+  image: "$NODE_IMAGE"
+  <<: *node_cache
+  rules:
+    - changes:
+        - frontend/**/*
+        - openapi.yml
+    - when: never
   script:
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
@@ -387,7 +535,13 @@ frontend_lint:
 
 frontend_build:
   stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
+  image: "$NODE_IMAGE"
+  <<: *node_cache
+  rules:
+    - changes:
+        - frontend/**/*
+        - openapi.yml
+    - when: never
   variables:
     NODE_OPTIONS: "--max-old-space-size=2048"
     KUBERNETES_MEMORY_REQUEST: "1Gi"
@@ -402,7 +556,14 @@ frontend_build:
 
 third_party_notices:
   stage: audit
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  <<: *node_cache
+  rules:
+    - changes:
+        - frontend/**/*
+        - scripts/generate_third_party_notices.py
+        - third_party/**/*
+    - when: never
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -427,7 +588,7 @@ third_party_notices:
 
 api_integration:
   stage: test
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
   rules:
     - changes:
         - backend/**/*
@@ -520,7 +681,7 @@ api_integration:
 
 release_postgres_smoke:
   stage: test
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
   rules:
     - if: '$CI_COMMIT_TAG'
   needs:
@@ -618,7 +779,12 @@ release_postgres_smoke:
 
 frontend_unit_tests:
   stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
+  image: "$NODE_IMAGE"
+  <<: *node_cache
+  rules:
+    - changes:
+        - frontend/**/*
+    - when: never
   variables:
     NODE_OPTIONS: "--max-old-space-size=2048"
     KUBERNETES_MEMORY_REQUEST: "1Gi"
@@ -632,7 +798,8 @@ frontend_unit_tests:
 
 e2e:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  image: "$PLAYWRIGHT_IMAGE"
+  <<: *node_cache
   rules:
     - if: '$E2E_BASE_URL'
       when: on_success
@@ -659,7 +826,8 @@ e2e:
 
 e2e_live:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  image: "$PLAYWRIGHT_IMAGE"
+  <<: *node_cache
   rules:
     - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
       when: on_success
@@ -687,7 +855,8 @@ e2e_live:
 
 perf_tests:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  image: "$PLAYWRIGHT_IMAGE"
+  <<: *node_cache
   rules:
     - if: '$PERF_TESTS == "1"'
       when: on_success
@@ -713,7 +882,14 @@ perf_tests:
 
 dev_license_audit:
   stage: audit
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  <<: *node_cache
+  rules:
+    - changes:
+        - frontend/**/*
+        - scripts/generate_third_party_notices.py
+        - third_party/**/*
+    - when: never
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -736,7 +912,7 @@ dev_license_audit:
 
 trivy_scan:
   stage: audit
-  image: aquasec/trivy:0.56.2
+  image: "$TRIVY_IMAGE"
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -761,7 +937,7 @@ trivy_scan:
 
 publish_dockerhub:
   stage: publish
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
@@ -883,7 +1059,7 @@ publish_helm_chart:
 
 release_image_smoke:
   stage: post-publish
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
   rules:
     - if: '$CI_COMMIT_TAG'
   needs:
