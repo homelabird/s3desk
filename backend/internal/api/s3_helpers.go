@@ -44,6 +44,14 @@ func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
 	}), nil
 }
 
+func s3PresignClientFromProfile(secrets models.ProfileSecrets) (*s3.PresignClient, error) {
+	client, err := s3ClientFromProfile(secrets)
+	if err != nil {
+		return nil, err
+	}
+	return s3.NewPresignClient(client), nil
+}
+
 func derefString(value *string) string {
 	if value == nil {
 		return ""
