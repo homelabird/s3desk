@@ -223,6 +223,9 @@ E2E_LIVE=1 E2E_API_TOKEN=change-me npm run test:e2e
 ```
 
 Environment overrides:
+- `PLAYWRIGHT_BASE_URL` (UI base URL; e.g. Vite dev server at `http://127.0.0.1:5173`)
+- `DOCS_BASE_URL` (docs backend base URL for `docs-smoke` when UI base differs)
+- `PERF_BASE_URL` (perf test base URL for `jobs-perf` when UI base differs)
 - `E2E_API_TOKEN` (default `change-me`)
 - `E2E_S3_ENDPOINT` (default `http://minio:9000`)
 - `E2E_S3_ACCESS_KEY` / `E2E_S3_SECRET_KEY` (defaults `minioadmin`)
@@ -231,6 +234,18 @@ Environment overrides:
 - `E2E_S3_TLS_SKIP_VERIFY` (default `true`)
 
 If you run MinIO on the host with a locally running server, set `E2E_S3_ENDPOINT=http://127.0.0.1:9000`.
+
+Vite dev server + backend example:
+
+```bash
+cd frontend
+npm install
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 \
+DOCS_BASE_URL=http://127.0.0.1:8080 \
+PERF_BASE_URL=http://127.0.0.1:8080 \
+E2E_LIVE=1 E2E_API_TOKEN=change-me \
+npm run test:e2e
+```
 
 ## rclone
 

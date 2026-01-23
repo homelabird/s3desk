@@ -621,6 +621,7 @@ e2e:
         exit 1
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
+    - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
@@ -650,6 +651,7 @@ perf_tests:
     - npm --version
     - cd frontend
     - npm ci --no-audit --no-fund
+    - export PERF_BASE_URL="${PERF_BASE_URL:-http://127.0.0.1:8080}"
     - PERF_TESTS=1 npx playwright test tests/jobs-perf.spec.ts
   artifacts:
     when: always
