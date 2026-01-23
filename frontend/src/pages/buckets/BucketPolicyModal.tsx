@@ -602,6 +602,16 @@ function BucketPolicyEditor(props: {
 
 	const title = `Policy: ${bucket}${titleSuffix}`
 	const details = lastProviderError?.details
+	const providerCause = typeof details?.cause === 'string' ? details.cause : null
+	const providerError = typeof details?.providerError === 'string' ? details.providerError : null
+
+	const serverValidationMessages =
+		serverValidation && (serverValidation.errors?.length || serverValidation.warnings?.length)
+			? [
+					...(serverValidation.errors ?? []).map((row) => `Error: ${row}`),
+					...(serverValidation.warnings ?? []).map((row) => `Warning: ${row}`),
+				]
+			: []
 
 	return (
 		<Modal
@@ -742,42 +752,42 @@ function BucketPolicyEditor(props: {
 									Validate with provider
 								</Button>
 
-								{serverValidation ? (
-									<Alert
-										type={serverValidation.ok ? 'success' : 'warning'}
-										showIcon
-										message={serverValidation.ok ? 'Server validation OK' : 'Server validation found issues'}
-										description={
-											<Space direction="vertical" size={4} style={{ width: '100%' }}>
-												{serverValidation.messages?.map((row, idx) => (
-													<Typography.Text key={`${idx}-${row}`} type="secondary">
-														{row}
-													</Typography.Text>
-												))}
-											</Space>
-										}
-									/>
-								) : null}
+									{serverValidation ? (
+										<Alert
+											type={serverValidation.ok ? 'success' : 'warning'}
+											showIcon
+											message={serverValidation.ok ? 'Server validation OK' : 'Server validation found issues'}
+											description={
+												<Space direction="vertical" size={4} style={{ width: '100%' }}>
+													{serverValidationMessages.map((row, idx) => (
+														<Typography.Text key={`${idx}-${row}`} type="secondary">
+															{row}
+														</Typography.Text>
+													))}
+												</Space>
+											}
+										/>
+									) : null}
 
 								{serverValidationError ? (
 									<Alert type="error" showIcon message="Server validation failed" description={serverValidationError} />
 								) : null}
 
-								{lastProviderError ? (
-									<Alert
-										type="error"
-										showIcon
-										message="Provider rejected the policy"
-										description={
-											<Space direction="vertical" size={4} style={{ width: '100%' }}>
-												<Typography.Text type="secondary">{lastProviderError.message}</Typography.Text>
-												{details?.cause ? <Typography.Text type="secondary">Cause: {details.cause}</Typography.Text> : null}
-												{details?.providerError ? (
-													<Typography.Text type="secondary">Provider: {details.providerError}</Typography.Text>
-												) : null}
-											</Space>
-										}
-									/>
+									{lastProviderError ? (
+										<Alert
+											type="error"
+											showIcon
+											message="Provider rejected the policy"
+											description={
+												<Space direction="vertical" size={4} style={{ width: '100%' }}>
+													<Typography.Text type="secondary">{lastProviderError.message}</Typography.Text>
+													{providerCause ? <Typography.Text type="secondary">Cause: {providerCause}</Typography.Text> : null}
+													{providerError ? (
+														<Typography.Text type="secondary">Provider: {providerError}</Typography.Text>
+													) : null}
+												</Space>
+											}
+										/>
 								) : null}
 							</Space>
 						),
