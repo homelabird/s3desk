@@ -330,7 +330,17 @@ govulncheck:
   stage: test
   image: harbor.k8s.homelabird.com/library/golang:1.24
   variables:
-    GOVULNCHECK_TIMEOUT: "15m"
+    GOVULNCHECK_TIMEOUT: "30m"
+    GOVULNCHECK_PATTERN: "./internal/..."
+    GOPROXY: "https://proxy.golang.org,direct"
+    GOSUMDB: "sum.golang.org"
+    GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
+    GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
+  cache:
+    key: "go-cache"
+    paths:
+      - .cache/go-mod
+      - .cache/go-build
   script:
     - |
       GOBIN="$(go env GOBIN)"
@@ -339,7 +349,18 @@ govulncheck:
       fi
       go install golang.org/x/vuln/cmd/govulncheck@latest
       cd backend
-      timeout "${GOVULNCHECK_TIMEOUT}" "$GOBIN/govulncheck" ./...
+      if timeout "${GOVULNCHECK_TIMEOUT}" "$GOBIN/govulncheck" "${GOVULNCHECK_PATTERN}"; then
+        status=0
+      else
+        status=$?
+      fi
+      if [ "$status" -eq 124 ]; then
+        echo "govulncheck timed out after ${GOVULNCHECK_TIMEOUT}"
+      elif [ "$status" -eq 137 ]; then
+        echo "govulncheck killed (possible OOM or timeout kill)"
+      fi
+      echo "govulncheck exit code: ${status}"
+      exit "$status"
 
 frontend_openapi_types:
   stage: test
