@@ -71,11 +71,19 @@ export function UploadsPage(props: Props) {
 
 			{isOffline ? <Alert type="warning" showIcon message="Offline: uploads are disabled." /> : null}
 
-			{showBucketsEmpty ? (
-				<Empty description="No buckets available">
-					<Button onClick={() => navigate('/buckets')}>Go to Buckets</Button>
-				</Empty>
-			) : null}
+				{showBucketsEmpty ? (
+					<Empty description="No buckets available">
+						<Button
+							href="/buckets"
+							onClick={(event) => {
+								event.preventDefault()
+								navigate('/buckets')
+							}}
+						>
+							Go to Buckets
+						</Button>
+					</Empty>
+				) : null}
 
 			{bucketsQuery.isError ? (
 				<Alert type="error" showIcon message="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
@@ -84,7 +92,7 @@ export function UploadsPage(props: Props) {
 			<Space wrap style={{ width: '100%' }}>
 				<Select
 					showSearch
-					placeholder="Bucket"
+					placeholder="Bucket…"
 					style={{ width: screens.md ? 320 : '100%', maxWidth: '100%' }}
 					aria-label="Bucket"
 					value={bucket || undefined}
@@ -95,7 +103,7 @@ export function UploadsPage(props: Props) {
 					disabled={isOffline}
 				/>
 				<Input
-					placeholder="prefix (optional)"
+					placeholder="prefix (optional)…"
 					style={{ width: screens.md ? 420 : '100%', maxWidth: '100%' }}
 					value={prefix}
 					onChange={(e) => setPrefix(e.target.value)}

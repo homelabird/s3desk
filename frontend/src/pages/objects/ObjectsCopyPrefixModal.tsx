@@ -127,7 +127,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 					<Select
 						showSearch
 						options={props.bucketOptions}
-						placeholder="bucket"
+						placeholder="bucket…"
 						loading={props.isBucketsLoading}
 						optionFilterProp="label"
 						aria-label="Destination bucket"
@@ -154,7 +154,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 						},
 					]}
 				>
-					<Input placeholder="target-folder/" />
+					<Input placeholder="target-folder/…" />
 				</Form.Item>
 
 				{isMove ? (
@@ -171,7 +171,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 							},
 						]}
 					>
-						<Input placeholder="MOVE" />
+						<Input placeholder="MOVE…" />
 					</Form.Item>
 				) : null}
 
@@ -180,10 +180,10 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				</Form.Item>
 
 				<Form.Item name="include" label="Include patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="*.log" />
+					<Input.TextArea rows={4} placeholder="*.log…" />
 				</Form.Item>
 				<Form.Item name="exclude" label="Exclude patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="tmp_*" />
+					<Input.TextArea rows={4} placeholder="tmp_*…" />
 				</Form.Item>
 			</Form>
 		</Modal>

@@ -110,15 +110,15 @@ export function CreateJobModal(props: {
 						options={props.bucketOptions}
 						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
 					>
-						<Input placeholder="my-bucket" />
+						<Input placeholder="my-bucket…" />
 					</AutoComplete>
 				</Form.Item>
 				<Form.Item name="prefix" label="Prefix (optional)">
-					<Input placeholder="path/" />
+					<Input placeholder="path/…" />
 				</Form.Item>
 				<Form.Item name="localFolder" label="Local folder" rules={[{ required: true }]}>
 					<LocalDevicePathInput
-						placeholder="Select a folder"
+						placeholder="Select a folder…"
 						disabled={!support.ok || props.isOffline}
 						onPick={(handle) => {
 							setDirHandle(handle)

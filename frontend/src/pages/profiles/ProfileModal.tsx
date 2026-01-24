@@ -110,7 +110,7 @@ export function ProfileModal(props: {
 							<Input placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'} />
 						</Form.Item>
 						<Form.Item name="region" label="Region" rules={[{ required: true }]}>
-							<Input placeholder="us-east-1" />
+							<Input placeholder="us-east-1…" />
 						</Form.Item>
 					</>
 				) : null}
@@ -118,25 +118,25 @@ export function ProfileModal(props: {
 				{isOciObjectStorage ? (
 					<>
 						<Form.Item name="region" label="Region" rules={[{ required: true }]}>
-							<Input placeholder="us-ashburn-1" />
+							<Input placeholder="us-ashburn-1…" />
 						</Form.Item>
 						<Form.Item name="ociNamespace" label="Namespace" rules={[{ required: true }]}>
-							<Input placeholder="my-namespace" />
+							<Input placeholder="my-namespace…" />
 						</Form.Item>
 						<Form.Item name="ociCompartment" label="Compartment OCID" rules={[{ required: true }]}>
-							<Input placeholder="ocid1.compartment.oc1.." />
+							<Input placeholder="ocid1.compartment.oc1..…" />
 						</Form.Item>
 						<Form.Item name="ociEndpoint" label="Endpoint URL (optional)">
-							<Input placeholder="https://objectstorage.{region}.oraclecloud.com" />
+							<Input placeholder="https://objectstorage.{region}.oraclecloud.com…" />
 						</Form.Item>
 						<Form.Item name="ociAuthProvider" label="Auth Provider (optional)">
-							<Input placeholder="instance_principal / api_key / resource_principal" />
+							<Input placeholder="instance_principal / api_key / resource_principal…" />
 						</Form.Item>
 						<Form.Item name="ociConfigFile" label="OCI Config File (optional)">
-							<Input placeholder="/home/user/.oci/config" />
+							<Input placeholder="/home/user/.oci/config…" />
 						</Form.Item>
 						<Form.Item name="ociConfigProfile" label="OCI Config Profile (optional)">
-							<Input placeholder="DEFAULT" />
+							<Input placeholder="DEFAULT…" />
 						</Form.Item>
 						<Typography.Text type="secondary">
 							This uses rclone's oracleobjectstorage backend (native).
@@ -147,7 +147,7 @@ export function ProfileModal(props: {
 				{isAzure ? (
 					<>
 						<Form.Item name="azureAccountName" label="Storage Account Name" rules={[{ required: true }]}> 
-							<Input placeholder="mystorageaccount" />
+							<Input placeholder="mystorageaccount…" />
 						</Form.Item>
 						<Form.Item
 							name="azureAccountKey"
@@ -163,7 +163,7 @@ export function ProfileModal(props: {
 							</Form.Item>
 						</Space>
 						<Form.Item name="azureEndpoint" label="Endpoint URL (optional)">
-							<Input placeholder="http://127.0.0.1:10000/devstoreaccount1" />
+							<Input placeholder="http://127.0.0.1:10000/devstoreaccount1…" />
 						</Form.Item>
 						<Typography.Text type="secondary">
 							If "Use Emulator" is enabled and endpoint is blank, the server may use a default Azurite endpoint.
@@ -178,10 +178,10 @@ export function ProfileModal(props: {
 							</Form.Item>
 						</Space>
 						<Form.Item name="gcpEndpoint" label="Endpoint URL (optional)">
-							<Input placeholder="https://storage.googleapis.com" />
+							<Input placeholder="https://storage.googleapis.com…" />
 						</Form.Item>
 						<Form.Item name="gcpProjectNumber" label="Project Number (optional)">
-							<Input placeholder="123456789012" />
+							<Input placeholder="123456789012…" />
 						</Form.Item>
 
 						{gcpAnonymous ? (
@@ -300,7 +300,7 @@ export function ProfileModal(props: {
 								<Input.TextArea
 									disabled={tlsUnavailable}
 									autoSize={{ minRows: 4, maxRows: 8 }}
-									placeholder="-----BEGIN CERTIFICATE-----"
+									placeholder="-----BEGIN CERTIFICATE-----…"
 								/>
 							</Form.Item>
 							<Form.Item
@@ -311,14 +311,14 @@ export function ProfileModal(props: {
 								<Input.TextArea
 									disabled={tlsUnavailable}
 									autoSize={{ minRows: 4, maxRows: 8 }}
-									placeholder="-----BEGIN PRIVATE KEY-----"
+									placeholder="-----BEGIN PRIVATE KEY-----…"
 								/>
 							</Form.Item>
 							<Form.Item name="tlsCaCertPem" label="CA Certificate (optional)">
 								<Input.TextArea
 									disabled={tlsUnavailable}
 									autoSize={{ minRows: 3, maxRows: 6 }}
-									placeholder="-----BEGIN CERTIFICATE-----"
+									placeholder="-----BEGIN CERTIFICATE-----…"
 								/>
 							</Form.Item>
 						</>

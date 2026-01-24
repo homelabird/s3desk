@@ -15,6 +15,7 @@ export function confirmDangerAction(options: ConfirmDangerActionOptions) {
 	const confirmToken = options.confirmText ?? 'DELETE'
 	const confirmHint = options.confirmHint ?? `Type "${confirmToken}" to confirm`
 	let currentValue = ''
+	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 
 	Modal.confirm({
 		title: options.title,
@@ -29,7 +30,7 @@ export function confirmDangerAction(options: ConfirmDangerActionOptions) {
 					<Input
 						placeholder={confirmToken}
 						autoComplete="off"
-						autoFocus
+						autoFocus={shouldAutoFocus}
 						onChange={(event) => {
 							currentValue = event.target.value
 						}}

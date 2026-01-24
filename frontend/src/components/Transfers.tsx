@@ -1570,16 +1570,24 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 						})
 				}
 
-				message.open({
-					type: 'success',
-					content: (
-						<Space>
-							<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-								Open Jobs
-							</Button>
-						</Space>
-					),
+					message.open({
+						type: 'success',
+						content: (
+							<Space>
+								<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
+								<Button
+									size="small"
+									type="link"
+									href="/jobs"
+									onClick={(event) => {
+										event.preventDefault()
+										navigate('/jobs')
+									}}
+								>
+									Open Jobs
+								</Button>
+							</Space>
+						),
 					duration: 6,
 				})
 				await queryClient.invalidateQueries({ queryKey: ['jobs'] })

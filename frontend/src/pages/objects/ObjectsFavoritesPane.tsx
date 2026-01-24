@@ -63,7 +63,7 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 				<Input
 					allowClear
 					size="small"
-					placeholder="Find favorite"
+					placeholder="Find favorite…"
 					prefix={<SearchOutlined />}
 					value={props.query}
 					onChange={(e) => props.onQueryChange(e.target.value)}

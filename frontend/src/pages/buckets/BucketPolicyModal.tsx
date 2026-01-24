@@ -440,7 +440,7 @@ function BucketPolicyEditor(props: {
 											const v = e.target.value
 											setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, role: v } : b)))
 										}}
-										placeholder="roles/storage.objectViewer"
+										placeholder="roles/storage.objectViewer…"
 									/>
 								),
 							},
@@ -454,7 +454,7 @@ function BucketPolicyEditor(props: {
 											setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, members: vals } : b)))
 										}}
 										style={{ width: '100%' }}
-										placeholder="allUsers, user:alice@example.com"
+										placeholder="allUsers, user:alice@example.com…"
 									/>
 								),
 							},
@@ -521,7 +521,7 @@ function BucketPolicyEditor(props: {
 											const v = e.target.value
 											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, id: v } : p)))
 										}}
-										placeholder="policy-id"
+										placeholder="policy-id…"
 									/>
 								),
 							},
@@ -534,7 +534,7 @@ function BucketPolicyEditor(props: {
 											const v = e.target.value
 											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, start: v } : p)))
 										}}
-										placeholder="2024-01-01T00:00:00Z"
+										placeholder="2024-01-01T00:00:00Z…"
 									/>
 								),
 							},
@@ -547,7 +547,7 @@ function BucketPolicyEditor(props: {
 											const v = e.target.value
 											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, expiry: v } : p)))
 										}}
-										placeholder="2024-02-01T00:00:00Z"
+										placeholder="2024-02-01T00:00:00Z…"
 									/>
 								),
 							},
@@ -560,7 +560,7 @@ function BucketPolicyEditor(props: {
 											const v = e.target.value
 											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, permission: v } : p)))
 										}}
-										placeholder="rl"
+										placeholder="rl…"
 									/>
 								),
 							},

@@ -111,7 +111,7 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 						<Divider style={{ marginBlock: 8 }} />
 						<Typography.Text type="secondary">Type DELETE to confirm</Typography.Text>
 						<Input
-							placeholder="DELETE"
+							placeholder="DELETE…"
 							value={props.confirmText}
 							onChange={(e) => props.onConfirmTextChange(e.target.value)}
 							autoComplete="off"

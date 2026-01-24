@@ -1322,7 +1322,7 @@ export function JobsPage(props: Props) {
 				<Select
 					value={typeFilterNormalized || undefined}
 					onChange={(v) => setTypeFilter(v ?? '')}
-					placeholder="Type (exact, optional)"
+					placeholder="Type (exact, optional)…"
 					aria-label="Job type filter"
 					style={{ width: screens.md ? 340 : '100%', maxWidth: '100%' }}
 					allowClear
@@ -1340,7 +1340,7 @@ export function JobsPage(props: Props) {
 				<AutoComplete
 					value={errorCodeFilterNormalized}
 					onChange={(v) => setErrorCodeFilter(v)}
-					placeholder="Error code (exact, optional)"
+					placeholder="Error code (exact, optional)…"
 					style={{ width: screens.md ? 260 : '100%', maxWidth: '100%' }}
 					allowClear
 					options={errorCodeSuggestions}

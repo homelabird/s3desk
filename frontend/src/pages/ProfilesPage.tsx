@@ -310,19 +310,35 @@ export function ProfilesPage(props: Props) {
 									Active profile selected
 								</Checkbox>
 							</Space>
-							<Space wrap>
-								<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
-									Create profile
-								</Button>
-								<Button size="small" onClick={() => navigate('/buckets')} disabled={!props.profileId}>
-									Buckets
-								</Button>
-								<Button size="small" onClick={() => navigate('/objects')} disabled={!props.profileId}>
-									Objects
-								</Button>
-								<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
-									Dismiss
-								</Button>
+								<Space wrap>
+									<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
+										Create profile
+									</Button>
+									<Button
+										size="small"
+										href="/buckets"
+										onClick={(event) => {
+											event.preventDefault()
+											navigate('/buckets')
+										}}
+										disabled={!props.profileId}
+									>
+										Buckets
+									</Button>
+									<Button
+										size="small"
+										href="/objects"
+										onClick={(event) => {
+											event.preventDefault()
+											navigate('/objects')
+										}}
+										disabled={!props.profileId}
+									>
+										Objects
+									</Button>
+									<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
+										Dismiss
+									</Button>
 							</Space>
 						</Space>
 					}
@@ -593,6 +609,7 @@ export function ProfilesPage(props: Props) {
 						<input
 							type="file"
 							accept=".yaml,.yml"
+							aria-label="Import profile YAML file"
 							onChange={(e) => {
 								const file = e.target.files?.[0]
 								if (!file) return
@@ -612,7 +629,7 @@ export function ProfilesPage(props: Props) {
 								setImportError(null)
 							}}
 							autoSize={{ minRows: 8, maxRows: 16 }}
-							placeholder="Paste YAML here"
+							placeholder="Paste YAML here…"
 						/>
 						{importError ? <Alert type="error" showIcon message={importError} /> : null}
 					</Space>

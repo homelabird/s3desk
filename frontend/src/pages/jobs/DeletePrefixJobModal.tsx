@@ -112,7 +112,7 @@ export function DeletePrefixJobModal(props: {
 						options={props.bucketOptions}
 						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
 					>
-						<Input placeholder="my-bucket" />
+						<Input placeholder="my-bucket…" />
 					</AutoComplete>
 				</Form.Item>
 
@@ -144,7 +144,7 @@ export function DeletePrefixJobModal(props: {
 										}),
 									]}
 								>
-									<Input placeholder="path/" disabled={deleteAll} />
+									<Input placeholder="path/…" disabled={deleteAll} />
 								</Form.Item>
 
 								{unsafePrefix ? (
@@ -195,7 +195,7 @@ export function DeletePrefixJobModal(props: {
 											},
 										]}
 									>
-										<Input placeholder="DELETE" />
+										<Input placeholder="DELETE…" />
 									</Form.Item>
 								) : null}
 							</>
@@ -208,10 +208,10 @@ export function DeletePrefixJobModal(props: {
 				</Form.Item>
 
 				<Form.Item name="include" label="Include patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="*.log" />
+					<Input.TextArea rows={4} placeholder="*.log…" />
 				</Form.Item>
 				<Form.Item name="exclude" label="Exclude patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="tmp_*" />
+					<Input.TextArea rows={4} placeholder="tmp_*…" />
 				</Form.Item>
 			</Form>
 		</Drawer>

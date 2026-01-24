@@ -12,6 +12,7 @@ import {
 	useRef,
 	useState,
 	type CSSProperties,
+	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -208,6 +209,13 @@ export function ObjectsPage(props: Props) {
 	)
 
 	const isDesktop = !!screens.lg
+	const handleJobsLinkClick = useCallback(
+		(event: ReactMouseEvent<HTMLElement>) => {
+			event.preventDefault()
+			navigate('/jobs')
+		},
+		[navigate],
+	)
 	const isWideDesktop = !!screens.xl
 	const canDragDrop = !!screens.lg && !isOffline
 
@@ -846,7 +854,7 @@ export function ObjectsPage(props: Props) {
 							<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 								Open Transfers
 							</Button>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 							Open Jobs
 						</Button>
 					</Space>
@@ -890,7 +898,7 @@ export function ObjectsPage(props: Props) {
 							<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 								Open Transfers
 							</Button>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 							Open Jobs
 						</Button>
 					</Space>
@@ -947,7 +955,7 @@ export function ObjectsPage(props: Props) {
 					content: (
 						<Space>
 							<Typography.Text>Index task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 								Open Jobs
 							</Button>
 						</Space>
@@ -1176,7 +1184,7 @@ export function ObjectsPage(props: Props) {
 				content: (
 					<Space>
 						<Typography.Text>Rename task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 							Open Jobs
 						</Button>
 					</Space>
@@ -1253,7 +1261,7 @@ export function ObjectsPage(props: Props) {
 				content: (
 					<Space>
 						<Typography.Text>{args.mode === 'copy' ? 'Paste copy task' : 'Paste move task'} started: {job.id}</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 							Open Jobs
 						</Button>
 					</Space>
@@ -2473,7 +2481,7 @@ useEffect(() => {
 						content: (
 							<Space>
 								<Typography.Text>Task started: {job.id}</Typography.Text>
-								<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+								<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 									Open Jobs
 								</Button>
 							</Space>
@@ -3729,7 +3737,7 @@ useEffect(() => {
 				content: (
 					<Space>
 						<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 							Open Jobs
 						</Button>
 						<Button size="small" type="link" onClick={() => setDownloadsOpen(true)}>
@@ -4703,6 +4711,7 @@ useEffect(() => {
 				ref={uploadFilesInputRef}
 				type="file"
 				multiple
+				aria-label="Select files to upload"
 				style={{ display: 'none' }}
 				onChange={(e) => {
 					const files = Array.from(e.target.files ?? [])
@@ -4714,6 +4723,7 @@ useEffect(() => {
 				ref={uploadFolderInputRef}
 				type="file"
 				multiple
+				aria-label="Select folder to upload"
 				style={{ display: 'none' }}
 				onChange={(e) => {
 					const files = Array.from(e.target.files ?? [])
@@ -5243,7 +5253,7 @@ useEffect(() => {
 
 															<Space size="small" wrap>
 																{t.jobId ? (
-																	<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+																	<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 																		Jobs
 																	</Button>
 																) : null}

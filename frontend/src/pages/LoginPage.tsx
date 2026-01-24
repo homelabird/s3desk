@@ -14,6 +14,7 @@ export function LoginPage(props: Props) {
 	const [token, setToken] = useState(props.initialToken ?? '')
 	const [submitting, setSubmitting] = useState(false)
 	const [localError, setLocalError] = useState<string | null>(null)
+	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 
 	const showSavedTokenWarning = !!props.initialToken
 	const initialHint = useMemo(() => {
@@ -67,8 +68,8 @@ export function LoginPage(props: Props) {
 							<Input.Password
 								value={token}
 								onChange={(e) => setToken(e.target.value)}
-								placeholder="API_TOKEN"
-								autoFocus
+								placeholder="API_TOKEN…"
+								autoFocus={shouldAutoFocus}
 							/>
 						</Form.Item>
 						<Space wrap>

@@ -93,7 +93,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<Input
 								allowClear
 								prefix={<SearchOutlined />}
-								placeholder="Search query (substring)"
+								placeholder="Search query (substring)…"
 								aria-label="Search query"
 								style={{ width: inputWidth, maxWidth: '100%' }}
 								value={props.queryDraft}
@@ -101,7 +101,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							/>
 							<Input
 								allowClear
-								placeholder="Prefix filter (optional)"
+								placeholder="Prefix filter (optional)…"
 								aria-label="Prefix filter"
 								style={{ width: prefixWidth, maxWidth: '100%' }}
 								value={props.prefixFilter}
@@ -129,7 +129,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Space wrap>
 							<Input
 								allowClear
-								placeholder="Ext (e.g. log)"
+								placeholder="Ext (e.g. log)…"
 								aria-label="Extension filter"
 								style={{ width: extWidth, maxWidth: '100%' }}
 								value={props.extFilter}
@@ -138,7 +138,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<InputNumber
 								min={0}
 								step={0.1}
-								placeholder="Min MB"
+								placeholder="Min MB…"
 								aria-label="Minimum size (MB)"
 								style={{ width: sizeWidth, maxWidth: '100%' }}
 								value={mbFromBytes(props.minSizeBytes)}
@@ -147,7 +147,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<InputNumber
 								min={0}
 								step={0.1}
-								placeholder="Max MB"
+								placeholder="Max MB…"
 								aria-label="Maximum size (MB)"
 								style={{ width: sizeWidth, maxWidth: '100%' }}
 								value={mbFromBytes(props.maxSizeBytes)}
@@ -196,7 +196,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Space wrap>
 							<Input
 								allowClear
-								placeholder="Index prefix (optional)"
+								placeholder="Index prefix (optional)…"
 								aria-label="Index prefix"
 								style={{ width: inputWidth, maxWidth: '100%' }}
 								value={props.indexPrefix}
@@ -278,9 +278,24 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 												<Button size="small" onClick={() => props.onOpenPrefixForKey(row.key)}>
 													Open
 												</Button>
-												<Button size="small" icon={<CopyOutlined />} onClick={() => props.onCopyKey(row.key)} />
-												<Button size="small" icon={<DownloadOutlined />} onClick={() => props.onDownloadKey(row.key, row.size)} />
-												<Button size="small" icon={<InfoCircleOutlined />} onClick={() => props.onOpenDetails(row.key)} />
+												<Button
+													size="small"
+													icon={<CopyOutlined />}
+													aria-label="Copy key"
+													onClick={() => props.onCopyKey(row.key)}
+												/>
+												<Button
+													size="small"
+													icon={<DownloadOutlined />}
+													aria-label="Download"
+													onClick={() => props.onDownloadKey(row.key, row.size)}
+												/>
+												<Button
+													size="small"
+													icon={<InfoCircleOutlined />}
+													aria-label="Open details"
+													onClick={() => props.onOpenDetails(row.key)}
+												/>
 											</Space>
 										),
 									},

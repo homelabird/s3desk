@@ -171,7 +171,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					{searchScopeRow}
 						<Input
 							allowClear
-							placeholder="Search current folder"
+							placeholder="Search current folder…"
 							aria-label="Search current folder"
 							style={{ width: '100%', maxWidth: '100%' }}
 							value={props.searchDraft}
@@ -202,7 +202,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						<Space wrap>
 								<Input
 									allowClear
-									placeholder="Search current folder"
+									placeholder="Search current folder…"
 									aria-label="Search current folder"
 									style={{ width: 320, maxWidth: '100%' }}
 									value={props.searchDraft}

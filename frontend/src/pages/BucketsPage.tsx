@@ -82,7 +82,9 @@ export function BucketsPage(props: Props) {
 							<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
 							<Button
 								type="link"
-								onClick={() => {
+								href="/objects"
+								onClick={(event) => {
+									event.preventDefault()
 									Modal.destroyAll()
 									window.localStorage.setItem('bucket', JSON.stringify(bucketName))
 									window.localStorage.setItem('prefix', JSON.stringify(''))
