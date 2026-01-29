@@ -44,3 +44,21 @@ These numbers reflect local networking and MinIO behavior. Real-world latency wi
 
 See `scripts/perf_objects_list.sh` for a reproducible local benchmark that creates a temporary bucket,
 loads N objects per prefix, and measures list latency via the API.
+
+Output:
+- JSON to stdout (suitable for CI/cron ingestion).
+- Markdown table appended to this file by default (`APPEND_PERF_NOTES=1`).
+  - Includes environment metadata (server version/addr, transfer engine, container, host, networks when available).
+
+## Measurement (2026-01-29 18:27 UTC)
+
+Environment:
+- API base: http://127.0.0.1:8080
+- Profile ID: 01KG5D3YCB9YQA8BNMA83JGZ59
+- Endpoint: http://minio:9000
+- Requests per prefix: 5
+- Bucket: perf-objects-1769711128
+
+| Objects | Avg (s) | Min (s) | Max (s) |
+| ---: | ---: | ---: | ---: |
+| 100000 | 3.728 | 2.718 | 7.571 |
