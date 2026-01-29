@@ -22,6 +22,17 @@ If you start a second instance pointing at the same `DATA_DIR`, it will refuse t
 - Metrics: `GET /metrics` (requires API token; remote must be localhost/private + allowed Host)
 - Disk usage: verify free space for `DATA_DIR`
 
+## Recommended runtime settings (long-running)
+
+Set these envs for better observability and fewer surprises in containerized setups:
+
+- `LOG_FORMAT=json` (structured logs)
+- `JOB_LOG_EMIT_STDOUT=true` (emit job logs to stdout)
+- `LOG_LEVEL=info` (use `debug` only while investigating)
+- `ALLOWED_HOSTS` should include any non-local hostnames used by clients or service DNS.
+  - Example (local containers): `ALLOWED_HOSTS=s3desk_local,localhost,127.0.0.1`
+  - Example (K8s Service DNS): `ALLOWED_HOSTS=s3desk,s3desk.default.svc,s3desk.default.svc.cluster.local`
+
 ## Start/stop (docker compose)
 - Start: `docker compose up -d`
 - Stop: `docker compose down`

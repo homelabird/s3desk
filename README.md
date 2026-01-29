@@ -171,6 +171,17 @@ Notes:
 - The chart rejects the insecure placeholder token value `change-me`.
 - Kubernetes deployment is not verified yet.
 
+## Recommended runtime settings (long-running)
+
+Set these envs for better observability and fewer surprises in containerized setups:
+
+- `LOG_FORMAT=json` (structured logs)
+- `JOB_LOG_EMIT_STDOUT=true` (emit job logs to stdout)
+- `LOG_LEVEL=info` (use `debug` only while investigating)
+- `ALLOWED_HOSTS` should include any non-local hostnames used by clients or service DNS.
+  - Example (local containers): `ALLOWED_HOSTS=s3desk_local,localhost,127.0.0.1`
+  - Example (K8s Service DNS): `ALLOWED_HOSTS=s3desk,s3desk.default.svc,s3desk.default.svc.cluster.local`
+
 ## Build
 
 ```bash
