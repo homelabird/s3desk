@@ -52,3 +52,7 @@ Kubernetes notes:
 ## Dashboards
 
 - Failure taxonomy and dashboard queries are defined in `docs/FAILURE_TAXONOMY.md`.
+
+## Performance notes
+
+- Local performance measurements and large-prefix tuning guidance: `docs/PERF_NOTES.md`.
