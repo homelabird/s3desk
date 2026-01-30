@@ -101,3 +101,9 @@ Prometheus Operator example:
 - Inspect recent logs (container logs + job logs)
 - Confirm API token matches runtime configuration
 - Verify DB connectivity and credentials
+
+## CI pipeline notes (summary)
+- `check` is a full verification job that runs only when `RUN_FULL_CHECK=1` or on scheduled pipelines.
+- Frontend validation is consolidated into `frontend_ci` (OpenAPI gen + diff, lint, unit tests, build).
+- `security_fs_scan` and `gitleaks_scan` run on tags, schedules, default-branch pipelines, or when code/infrastructure paths change.
+- `api_integration` triggers on backend, `e2e/runner`, OpenAPI, or `docker-compose.e2e.yml` changes.

@@ -248,6 +248,13 @@ If you run MinIO on the host with a locally running server, set `E2E_S3_ENDPOINT
 
 CI note: `E2E_S3_ENDPOINT` must be reachable from the Playwright runner container (for example, `http://minio:9000` inside the Compose network).
 
+## CI pipeline notes (summary)
+
+- `check` is a full verification job that runs only when `RUN_FULL_CHECK=1` or on scheduled pipelines.
+- Frontend validation is consolidated into `frontend_ci` (OpenAPI gen + diff, lint, unit tests, build).
+- `security_fs_scan` and `gitleaks_scan` run on tags, schedules, default-branch pipelines, or when code/infrastructure paths change.
+- `api_integration` triggers on backend, `e2e/runner`, OpenAPI, or `docker-compose.e2e.yml` changes.
+
 Vite dev server + backend example:
 
 ```bash
