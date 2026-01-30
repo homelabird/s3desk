@@ -73,19 +73,22 @@ SERVER_ADDR=""
 TRANSFER_VERSION=""
 TRANSFER_PATH=""
 if [ -n "$PYTHON_BIN" ]; then
-  meta_raw=$("$PYTHON_BIN" - <<PY
+  meta_raw=$(API_BASE="$API_BASE" API_TOKEN="$API_TOKEN" "$PYTHON_BIN" - <<'PY'
 import json, os, urllib.request, sys
-base=os.environ.get('API_BASE')
-token=os.environ.get('API_TOKEN')
+base=os.environ.get('API_BASE') or ''
+token=os.environ.get('API_TOKEN') or ''
+if not base:
+  print("\t\t\t")
+  sys.exit(0)
 req=urllib.request.Request(base + '/api/v1/meta', headers={'X-Api-Token': token})
 try:
   with urllib.request.urlopen(req, timeout=10) as resp:
     data=json.loads(resp.read().decode('utf-8'))
 except Exception:
-  print(\"\\t\\t\\t\")
+  print("\t\t\t")
   sys.exit(0)
 te=data.get('transferEngine') or {}
-print(data.get('version',''), data.get('serverAddr',''), te.get('version',''), te.get('path',''), sep='\\t')
+print(data.get('version',''), data.get('serverAddr',''), te.get('version',''), te.get('path',''), sep='\t')
 PY
 )
   IFS=$'\t' read -r SERVER_VERSION SERVER_ADDR TRANSFER_VERSION TRANSFER_PATH <<<"$meta_raw"
