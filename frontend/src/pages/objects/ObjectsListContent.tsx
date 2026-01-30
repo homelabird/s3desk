@@ -3,11 +3,10 @@ import { Button, Empty, Spin } from 'antd'
 
 import type { ObjectItem } from '../../api/types'
 import { logReactRender, measurePerf } from '../../lib/perf'
-
-type Row = { kind: 'prefix'; prefix: string } | { kind: 'object'; object: ObjectItem }
+import type { ObjectRow } from './objectsListUtils'
 
 type ObjectsListContentProps = {
-	rows: Row[]
+	rows: ObjectRow[]
 	virtualItems: { index: number; start: number }[]
 	totalSize: number
 	hasProfile: boolean

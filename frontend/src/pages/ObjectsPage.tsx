@@ -30,7 +30,7 @@ import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelat
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { listAllObjects } from '../lib/objects'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
-import { formatDateTime, parseTimeMs } from '../lib/format'
+import { formatDateTime } from '../lib/format'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { formatBytes } from '../lib/transfer'
@@ -54,6 +54,26 @@ import { ObjectsObjectRow, ObjectsPrefixRow } from './objects/ObjectsListRow'
 import { ObjectsListSectionContainer } from './objects/ObjectsListSectionContainer'
 import { ObjectThumbnail } from './objects/ObjectThumbnail'
 import { ObjectsSelectionBarSection } from './objects/ObjectsSelectionBarSection'
+import type { ObjectRow } from './objects/objectsListUtils'
+import {
+	buildObjectRows,
+	clampNumber,
+	displayNameForKey,
+	displayNameForPrefix,
+	fileNameFromKey,
+	folderLabelFromPrefix,
+	guessPreviewKind,
+	isImageKey,
+	normalizeForSearch,
+	normalizePrefix,
+	parentPrefixFromKey,
+	splitLines,
+	splitSearchTokens,
+	suggestCopyPrefix,
+	treeAncestorKeys,
+	treeKeyFromPrefix,
+	upsertTreeChildren,
+} from './objects/objectsListUtils'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
@@ -142,10 +162,6 @@ type Props = {
 	apiToken: string
 	profileId: string | null
 }
-
-type Row =
-	| { kind: 'prefix'; prefix: string }
-	| { kind: 'object'; object: ObjectItem }
 
 type Location = { bucket: string; prefix: string }
 
@@ -1402,106 +1418,43 @@ export function ObjectsPage(props: Props) {
 		[highlightPattern],
 	)
 
-	const rows = useMemo(() => {
-		const pages = objectsQuery.data?.pages ?? []
-		const activePrefix = normalizePrefix(prefix)
-		const prefixes = favoritesOnly ? [] : uniquePrefixes(pages)
-		const items = favoritesOnly
-			? favoriteItems.filter((item) => (activePrefix ? item.key.startsWith(activePrefix) : true))
-			: pages.flatMap((p) => p.items)
-
-		const match = (value: string) => matchesSearchTokens(value, searchTokens, searchTokensNormalized)
-
-		const filteredPrefixes = prefixes.filter((p) => match(displayNameForPrefix(p, prefix)) || match(p))
-		const ext = extFilter.trim().replace(/^\./, '').toLowerCase()
-		let min = typeof minSize === 'number' && Number.isFinite(minSize) ? minSize : null
-		let max = typeof maxSize === 'number' && Number.isFinite(maxSize) ? maxSize : null
-		if (min != null && max != null && min > max) {
-			;[min, max] = [max, min]
-		}
-		let minTime = typeof minModifiedMs === 'number' && Number.isFinite(minModifiedMs) ? minModifiedMs : null
-		let maxTime = typeof maxModifiedMs === 'number' && Number.isFinite(maxModifiedMs) ? maxModifiedMs : null
-		if (minTime != null && maxTime != null && minTime > maxTime) {
-			;[minTime, maxTime] = [maxTime, minTime]
-		}
-
-		const filteredItems = items
-			.filter((o) => match(displayNameForKey(o.key, prefix)) || match(o.key))
-			.filter((o) => {
-				if (ext) {
-					if (fileExtensionFromKey(o.key) !== ext) return false
-				}
-				const size = o.size ?? 0
-				if (min != null && size < min) return false
-				if (max != null && size > max) return false
-				if (minTime != null || maxTime != null) {
-					const modified = parseTimeMs(o.lastModified)
-					if (!modified) return false
-					if (minTime != null && modified < minTime) return false
-					if (maxTime != null && modified > maxTime) return false
-				}
-				return true
-			})
-
-		const visiblePrefixes = typeFilter === 'files' ? [] : filteredPrefixes
-		const visibleItems = typeFilter === 'folders' ? [] : filteredItems
-
-		const sortedPrefixes = [...visiblePrefixes].sort((a, b) => (sort === 'name_desc' ? b.localeCompare(a) : a.localeCompare(b)))
-		const sortedItems = [...visibleItems].sort((a, b) => {
-			switch (sort) {
-				case 'name_asc':
-					return a.key.localeCompare(b.key)
-				case 'name_desc':
-					return b.key.localeCompare(a.key)
-				case 'size_asc':
-					return (a.size ?? 0) - (b.size ?? 0) || a.key.localeCompare(b.key)
-				case 'size_desc':
-					return (b.size ?? 0) - (a.size ?? 0) || a.key.localeCompare(b.key)
-				case 'time_asc':
-					return parseTimeMs(a.lastModified) - parseTimeMs(b.lastModified) || a.key.localeCompare(b.key)
-				case 'time_desc':
-					return parseTimeMs(b.lastModified) - parseTimeMs(a.lastModified) || a.key.localeCompare(b.key)
-				default:
-					return a.key.localeCompare(b.key)
-			}
-		})
-		const orderedItems = favoritesFirst
-			? sortedItems.reduce<{ favorites: ObjectItem[]; rest: ObjectItem[] }>(
-					(acc, item) => {
-						if (favoriteKeys.has(item.key)) acc.favorites.push(item)
-						else acc.rest.push(item)
-						return acc
-					},
-					{ favorites: [], rest: [] },
-				)
-			: null
-
-		const out: Row[] = []
-		for (const p of sortedPrefixes) out.push({ kind: 'prefix', prefix: p })
-		if (orderedItems) {
-			for (const obj of orderedItems.favorites) out.push({ kind: 'object', object: obj })
-			for (const obj of orderedItems.rest) out.push({ kind: 'object', object: obj })
-		} else {
-			for (const obj of sortedItems) out.push({ kind: 'object', object: obj })
-		}
-		return out
-	}, [
-		extFilter,
-		favoriteKeys,
-		favoriteItems,
-		favoritesFirst,
-		favoritesOnly,
-		maxModifiedMs,
-		maxSize,
-		minModifiedMs,
-		minSize,
-		objectsQuery.data,
-		prefix,
-		searchTokens,
-		searchTokensNormalized,
-		sort,
-		typeFilter,
-	])
+	const rows: ObjectRow[] = useMemo(
+		() =>
+			buildObjectRows({
+				pages: objectsQuery.data?.pages ?? [],
+				favoriteItems,
+				favoritesOnly,
+				favoriteKeys,
+				prefix,
+				searchTokens,
+				searchTokensNormalized,
+				extFilter,
+				minSize,
+				maxSize,
+				minModifiedMs,
+				maxModifiedMs,
+				typeFilter,
+				sort,
+				favoritesFirst,
+			}),
+		[
+			extFilter,
+			favoriteKeys,
+			favoriteItems,
+			favoritesFirst,
+			favoritesOnly,
+			maxModifiedMs,
+			maxSize,
+			minModifiedMs,
+			minSize,
+			objectsQuery.data,
+			prefix,
+			searchTokens,
+			searchTokensNormalized,
+			sort,
+			typeFilter,
+		],
+	)
 
 	const rowIndexByObjectKey = useMemo(() => {
 		const out = new Map<string, number>()
@@ -5512,116 +5465,6 @@ useEffect(() => {
 	)
 }
 
-function splitLines(v: string): string[] {
-	return v
-		.split('\n')
-		.map((s) => s.trim())
-		.filter(Boolean)
-}
-
-function splitSearchTokens(value: string): string[] {
-	return value
-		.trim()
-		.split(/\s+/)
-		.map((s) => s.trim())
-		.filter(Boolean)
-}
-
-function normalizeForSearch(value: string): string {
-	return value
-		.toLowerCase()
-		.normalize('NFKD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.replace(/[^\p{L}\p{N}]+/gu, '')
-}
-
-function matchesSearchTokens(value: string, tokens: string[], normalizedTokens?: string[]): boolean {
-	if (tokens.length === 0) return true
-	const raw = value.toLowerCase()
-	let normalizedRaw: string | null = null
-
-	for (let i = 0; i < tokens.length; i++) {
-		const rawToken = tokens[i]?.toLowerCase() ?? ''
-		if (!rawToken) continue
-		if (raw.includes(rawToken)) continue
-
-		const normalizedToken = normalizedTokens?.[i] ?? normalizeForSearch(rawToken)
-		if (!normalizedToken) return false
-
-		if (normalizedRaw === null) normalizedRaw = normalizeForSearch(raw)
-		if (!normalizedRaw.includes(normalizedToken)) return false
-	}
-	return true
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-	if (!Number.isFinite(value)) return min
-	if (max < min) return min
-	return Math.max(min, Math.min(max, value))
-}
-
-function treeKeyFromPrefix(prefix: string): string {
-	const p = normalizePrefix(prefix)
-	return p ? p : '/'
-}
-
-function treeAncestorKeys(prefixKey: string): string[] {
-	if (!prefixKey || prefixKey === '/') return ['/']
-	const normalized = normalizePrefix(prefixKey)
-	const parts = normalized.split('/').filter(Boolean)
-	const out: string[] = ['/']
-	let current = ''
-	for (const part of parts) {
-		current += part + '/'
-		out.push(current)
-	}
-	return out
-}
-
-function folderLabelFromPrefix(prefix: string): string {
-	const trimmed = prefix.replace(/\/+$/, '')
-	const parts = trimmed.split('/').filter(Boolean)
-	return parts.length ? parts[parts.length - 1] : prefix
-}
-
-function fileNameFromKey(key: string): string {
-	const trimmed = key.replace(/\/+$/, '')
-	const parts = trimmed.split('/').filter(Boolean)
-	return parts.length ? parts[parts.length - 1] : trimmed || key
-}
-
-function upsertTreeChildren(nodes: DataNode[], targetKey: string, children: DataNode[]): DataNode[] {
-	return nodes.map((node) => {
-		if (String(node.key) === targetKey) {
-			return { ...node, children, isLeaf: children.length === 0 }
-		}
-		if (node.children && Array.isArray(node.children)) {
-			return { ...node, children: upsertTreeChildren(node.children as DataNode[], targetKey, children) }
-		}
-		return node
-	})
-}
-
-function displayNameForKey(key: string, currentPrefix: string): string {
-	const p = normalizePrefix(currentPrefix)
-	if (!p) return key
-	if (!key.startsWith(p)) return key
-	return key.slice(p.length) || key
-}
-
-function displayNameForPrefix(prefix: string, currentPrefix: string): string {
-	const p = normalizePrefix(currentPrefix)
-	if (!p) return prefix
-	if (!prefix.startsWith(p)) return prefix
-	return prefix.slice(p.length) || prefix
-}
-
-function normalizePrefix(p: string): string {
-	const trimmed = p.trim()
-	if (!trimmed) return ''
-	return trimmed.endsWith('/') ? trimmed : `${trimmed}/`
-}
-
 const DEBUG_OBJECTS_LIST_KEY = 'debugObjectsList'
 const DEBUG_CONTEXT_MENU_KEY = 'debugObjectsContextMenu'
 
@@ -5670,54 +5513,3 @@ function logContextMenuDebug(
 	if (context) console.debug(prefix, context)
 	else console.debug(prefix)
 }
-
-function parentPrefixFromKey(key: string): string {
-	const trimmed = key.replace(/\/+$/, '')
-	const parts = trimmed.split('/').filter(Boolean)
-	if (parts.length <= 1) return ''
-	parts.pop()
-	return parts.join('/') + '/'
-}
-
-function suggestCopyPrefix(srcPrefix: string): string {
-	const base = srcPrefix.replace(/\/+$/, '')
-	if (!base) return 'copy/'
-	return `${base}-copy/`
-}
-
-	function uniquePrefixes(pages: ListObjectsResponse[]): string[] {
-		const set = new Set<string>()
-		for (const p of pages) {
-			const commonPrefixes = Array.isArray(p.commonPrefixes) ? p.commonPrefixes : []
-			for (const cp of commonPrefixes) {
-				set.add(cp)
-			}
-		}
-		return Array.from(set).sort((a, b) => a.localeCompare(b))
-	}
-
-	function fileExtensionFromKey(key: string): string {
-		const base = key.split('/').filter(Boolean).pop() ?? ''
-		const idx = base.lastIndexOf('.')
-		if (idx <= 0 || idx === base.length - 1) return ''
-		return base.slice(idx + 1).toLowerCase()
-	}
-
-	function isImageKey(key: string): boolean {
-		const ext = fileExtensionFromKey(key)
-		return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)
-	}
-
-	function guessPreviewKind(contentType: string | null | undefined, key: string): 'image' | 'text' | 'json' | 'unsupported' {
-		const ct = (contentType ?? '').toLowerCase()
-		if (ct.startsWith('image/')) return 'image'
-		if (ct.includes('json')) return 'json'
-		if (ct.startsWith('text/') || ct.includes('xml') || ct.includes('yaml') || ct.includes('csv') || ct.includes('log')) return 'text'
-
-		const ext = fileExtensionFromKey(key)
-		if (ext === 'json') return 'json'
-		if (ext === 'svg') return 'text'
-		if (['txt', 'log', 'md', 'csv', 'tsv', 'yml', 'yaml', 'xml'].includes(ext)) return 'text'
-		if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)) return 'image'
-		return 'unsupported'
-	}
