@@ -28,6 +28,10 @@ default:
   tags:
     - onpremise
     - k8s
+  before_script:
+    - export NPM_CONFIG_PREFIX="${CI_PROJECT_DIR}/.cache/npm-global"
+    - export PATH="${NPM_CONFIG_PREFIX}/bin:${PATH}"
+    - mkdir -p "${NPM_CONFIG_PREFIX}"
 
 stages:
   - build
@@ -70,6 +74,16 @@ variables:
       prefix: "npm-cache"
     paths:
       - .cache/npm/
+      - .cache/npm-global/
+
+.playwright_cache: &playwright_cache
+  cache:
+    key:
+      prefix: "playwright-cache"
+    paths:
+      - .cache/ms-playwright/
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
 
 .go_cache: &go_cache
   cache:
@@ -390,6 +404,8 @@ check:
       when: on_success
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: on_success
+    - when: manual
+      allow_failure: true
     - when: never
   cache:
     key:
@@ -401,6 +417,7 @@ check:
       - .cache/go-mod
       - .cache/go-build
       - .cache/npm/
+      - .cache/npm-global/
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -569,6 +586,8 @@ frontend_ci:
   interruptible: true
   <<: *node_cache
   rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      when: never
     - changes:
         - frontend/**/*
         - openapi.yml
@@ -588,6 +607,94 @@ frontend_ci:
     - cd frontend
     - npm run lint
     - npm run test:unit
+    - npm run build
+
+frontend_openapi_types:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - cd ..
+    - git diff --exit-code frontend/src/api/openapi.ts
+
+frontend_lint:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - npm run lint
+
+frontend_unit_tests:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm run test:unit
+
+frontend_build:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
     - npm run build
 
 third_party_notices:
@@ -630,10 +737,12 @@ api_integration:
   interruptible: true
   rules:
     - changes:
+        - Containerfile
         - backend/**/*
         - e2e/runner/**/*
         - openapi.yml
         - docker-compose.e2e.yml
+        - scripts/ci_podman_compose.sh
     - when: never
   variables:
     STORAGE_DRIVER: "vfs"
@@ -647,51 +756,9 @@ api_integration:
     E2E_MINIO_ENDPOINT: "http://minio:9000"
     E2E_AZURITE_ENDPOINT: "http://azurite:10000/devstoreaccount1"
     E2E_GCS_ENDPOINT: "http://fake-gcs-server:4443/storage/v1/v1"
+    COMPOSE_POD_NAME: "s3desk-e2e"
   before_script:
-    - |
-      set -e
-      export XDG_CONFIG_HOME="/tmp"
-      mkdir -p "${XDG_CONFIG_HOME}/containers"
-      cat > "${XDG_CONFIG_HOME}/containers/containers.conf" <<'EOF'
-      [network]
-      default_rootless_network_cmd = "slirp4netns"
-      EOF
-      if ! command -v slirp4netns >/dev/null 2>&1; then
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install slirp4netns
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache slirp4netns
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends slirp4netns
-        fi
-      fi
-      if command -v podman-compose >/dev/null 2>&1; then
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      else
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install python3-pip
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache python3 py3-pip
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends python3 python3-pip
-        fi
-        python3 -m pip install --no-cache-dir podman-compose
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      fi
-      echo "$COMPOSE_CMD" > /tmp/compose_cmd
-      echo "$COMPOSE_ARGS" > /tmp/compose_args
-      echo "$COMPOSE_PULL_ARGS" > /tmp/compose_pull_args
-      if [ "$COMPOSE_CMD" = "podman-compose" ]; then
-        echo "logs" > /tmp/compose_logs_cmd
-      else
-        echo "logs --no-color" > /tmp/compose_logs_cmd
-      fi
+    - bash scripts/ci_podman_compose.sh
   script:
     - podman --version
     - |
@@ -733,51 +800,9 @@ release_postgres_smoke:
     BUILDAH_ISOLATION: "chroot"
     PODMAN_NETWORK_BACKEND: "slirp4netns"
     CONTAINERS_NETWORK_BACKEND: "slirp4netns"
+    COMPOSE_POD_NAME: "s3desk-release-smoke"
   before_script:
-    - |
-      set -e
-      export XDG_CONFIG_HOME="/tmp"
-      mkdir -p "${XDG_CONFIG_HOME}/containers"
-      cat > "${XDG_CONFIG_HOME}/containers/containers.conf" <<'EOF'
-      [network]
-      default_rootless_network_cmd = "slirp4netns"
-      EOF
-      if ! command -v curl >/dev/null 2>&1; then
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install curl
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache curl
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends curl
-        fi
-      fi
-      if command -v podman-compose >/dev/null 2>&1; then
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-release-smoke --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      else
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install python3-pip
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache python3 py3-pip
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends python3 python3-pip
-        fi
-        python3 -m pip install --no-cache-dir podman-compose
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-release-smoke --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      fi
-      echo "$COMPOSE_CMD" > /tmp/compose_cmd
-      echo "$COMPOSE_ARGS" > /tmp/compose_args
-      echo "$COMPOSE_PULL_ARGS" > /tmp/compose_pull_args
-      if [ "$COMPOSE_CMD" = "podman-compose" ]; then
-        echo "logs" > /tmp/compose_logs_cmd
-      else
-        echo "logs --no-color" > /tmp/compose_logs_cmd
-      fi
+    - bash scripts/ci_podman_compose.sh
   script:
     - podman --version
     - podman load -i release-postgres.tar
@@ -821,7 +846,7 @@ e2e:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
   interruptible: true
-  <<: *node_cache
+  <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$E2E_BASE_URL'
       when: on_success
@@ -834,10 +859,13 @@ e2e:
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
+    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
+    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/jobs-network.spec.ts tests/transfers-*.spec.ts
   artifacts:
     when: always
@@ -850,7 +878,7 @@ e2e_live:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
   interruptible: true
-  <<: *node_cache
+  <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
       when: on_success
@@ -864,10 +892,13 @@ e2e_live:
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
     - export E2E_LIVE=1
+    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
+    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
   artifacts:
     when: always
@@ -880,7 +911,7 @@ perf_tests:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
   interruptible: true
-  <<: *node_cache
+  <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$PERF_TESTS == "1"'
       when: on_success
@@ -896,6 +927,9 @@ perf_tests:
     - cd frontend
     - npm ci --no-audit --no-fund
     - export PERF_BASE_URL="${PERF_BASE_URL:-http://127.0.0.1:8080}"
+    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
+    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - PERF_TESTS=1 npx playwright test tests/jobs-perf.spec.ts
   artifacts:
     when: always
@@ -911,10 +945,10 @@ dev_license_audit:
   needs: []
   <<: *node_cache
   rules:
-    - changes:
-        - frontend/**/*
-        - scripts/generate_third_party_notices.py
-        - third_party/**/*
+    - if: '$RUN_DEV_AUDIT == "1"'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
     - when: never
   before_script:
     - apt-get update

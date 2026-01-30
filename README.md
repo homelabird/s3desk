@@ -254,6 +254,9 @@ CI note: `E2E_S3_ENDPOINT` must be reachable from the Playwright runner containe
 - Frontend validation is consolidated into `frontend_ci` (OpenAPI gen + diff, lint, unit tests, build).
 - `security_fs_scan` and `gitleaks_scan` run on tags, schedules, default-branch pipelines, or when code/infrastructure paths change.
 - `api_integration` triggers on backend, `e2e/runner`, OpenAPI, or `docker-compose.e2e.yml` changes.
+- Optional toggles:
+  - `FRONTEND_PARALLEL=1` runs frontend checks as separate jobs (openapi types, lint, unit tests, build).
+  - `RUN_DEV_AUDIT=1` runs the dev license audit job outside schedules.
 
 Vite dev server + backend example:
 
