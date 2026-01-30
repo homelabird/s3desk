@@ -98,3 +98,23 @@ Environment:
 | Objects | Avg (s) | Min (s) | Max (s) |
 | ---: | ---: | ---: | ---: |
 | 100000 | 2.867 | 2.801 | 3.074 |
+
+## Measurement (2026-01-30 14:40 UTC)
+
+Environment:
+- API base: http://127.0.0.1:8080
+- Profile ID: 01KG5D3YCB9YQA8BNMA83JGZ59
+- Server version: 0.1.0
+- Server addr: 0.0.0.0:8080
+- Transfer engine version: rclone v1.72.0
+- Transfer engine path: /usr/local/bin/rclone
+- Container: s3desk_local
+- Container networks: s3desk_default
+- Host: fedora
+- Endpoint: http://minio:9000
+- Requests per prefix: 5
+- Bucket: perf-objects-1769783856
+
+| Objects | Avg (s) | Min (s) | Max (s) |
+| ---: | ---: | ---: | ---: |
+| 200000 | 8.939 | 5.142 | 14.584 |
