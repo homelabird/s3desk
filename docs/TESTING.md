@@ -72,7 +72,7 @@ test.describe('@transfer', () => {
 | Date | Pipeline type | Duration | Jobs | Cache notes | Notes |
 | --- | --- | --- | --- | --- | --- |
 | TBD | Baseline (before changes) | TBD | TBD | TBD | TBD |
-| TBD | Default (after changes) | TBD | TBD | TBD | TBD |
+| 2026-01-30 | `FRONTEND_PARALLEL=1` + `RUN_FULL_CHECK=1` + `RUN_DEV_AUDIT=1` (project vars) | 15m25s (failed) | 22 (18 ok, 4 failed) | N/A | Failed `helm_k8s_*` jobs (RUN_HELM_SMOKE likely enabled). |
 | TBD | `FRONTEND_PARALLEL=1` | TBD | TBD | TBD | TBD |
 | TBD | `RUN_FULL_CHECK=1` | TBD | TBD | TBD | TBD |
 | TBD | `RUN_DEV_AUDIT=1` | TBD | TBD | TBD | TBD |

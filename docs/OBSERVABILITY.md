@@ -56,3 +56,5 @@ Kubernetes notes:
 ## Performance notes
 
 - Local performance measurements and large-prefix tuning guidance: `docs/PERF_NOTES.md`.
+- Profiling plan + script: `docs/PERF_PROFILING.md` and `scripts/perf_profile.sh`.
+- Dashboard panel template: `docs/OBSERVABILITY_DASHBOARD.md`.
