@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Space, Typography } from 'antd'
 
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
@@ -33,11 +33,11 @@ export function useObjectsDeleteConfirm({
 	const [deletePrefixConfirmPrefix, setDeletePrefixConfirmPrefix] = useState('')
 	const [deletePrefixConfirmText, setDeletePrefixConfirmText] = useState('')
 
-	useEffect(() => {
-		if (deletePrefixConfirmOpen) return
+	const resetDeletePrefixConfirm = useCallback(() => {
 		setDeletePrefixConfirmText('')
 		setDeletePrefixConfirmPrefix('')
-	}, [deletePrefixConfirmOpen])
+		setDeletePrefixConfirmDryRun(false)
+	}, [])
 
 	const confirmDeleteObjects = useCallback(
 		(keys: string[]) => {
@@ -96,11 +96,13 @@ export function useObjectsDeleteConfirm({
 		if (!deletePrefixConfirmPrefix) return
 		await deletePrefixJobMutation.mutateAsync({ prefix: deletePrefixConfirmPrefix, dryRun: deletePrefixConfirmDryRun })
 		setDeletePrefixConfirmOpen(false)
-	}, [deletePrefixConfirmDryRun, deletePrefixConfirmPrefix, deletePrefixJobMutation])
+		resetDeletePrefixConfirm()
+	}, [deletePrefixConfirmDryRun, deletePrefixConfirmPrefix, deletePrefixJobMutation, resetDeletePrefixConfirm])
 
 	const handleDeletePrefixCancel = useCallback(() => {
 		setDeletePrefixConfirmOpen(false)
-	}, [])
+		resetDeletePrefixConfirm()
+	}, [resetDeletePrefixConfirm])
 
 	return {
 		deletePrefixConfirmOpen,

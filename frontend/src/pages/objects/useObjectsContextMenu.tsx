@@ -83,6 +83,7 @@ export function useObjectsContextMenu({
 
 	const closeContextMenu = useCallback(
 		(match?: ContextMenuMatch, reason?: string) => {
+			let cleared = false
 			setContextMenuState((prev) => {
 				if (!prev.open) return prev
 				if (match) {
@@ -96,8 +97,13 @@ export function useObjectsContextMenu({
 					key: prev.key,
 					source: prev.source,
 				})
+				cleared = true
 				return { open: false, source: null, kind: null, key: null }
 			})
+			if (cleared) {
+				setContextMenuPoint(null)
+				setContextMenuPosition(null)
+			}
 		},
 		[debugEnabled, log],
 	)
@@ -259,12 +265,6 @@ export function useObjectsContextMenu({
 		if (!target || !(target instanceof HTMLElement)) return false
 		return !!target.closest(`.${CONTEXT_MENU_CLASS_NAME}`)
 	}, [])
-
-	useEffect(() => {
-		if (contextMenuState.open) return
-		setContextMenuPoint(null)
-		setContextMenuPosition(null)
-	}, [contextMenuState.open])
 
 	const positionContextMenu = useCallback(() => {
 		if (!contextMenuState.open || contextMenuState.source !== 'context' || !contextMenuPoint) return

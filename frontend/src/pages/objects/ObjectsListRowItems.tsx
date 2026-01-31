@@ -37,53 +37,74 @@ type ObjectsPrefixRowItemProps = {
 }
 
 export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: ObjectsPrefixRowItemProps) {
+	const {
+		prefixKey,
+		currentPrefix,
+		offset,
+		rowMinHeight,
+		listGridClassName,
+		isCompact,
+		canDragDrop,
+		highlightText,
+		isAdvanced,
+		getPrefixActions,
+		withContextMenuClassName,
+		buttonMenuOpen,
+		getPopupContainer,
+		recordContextMenuPoint,
+		openPrefixContextMenu,
+		closeContextMenu,
+		onOpenPrefix,
+		onRowDragStartPrefix,
+		onRowDragEnd,
+	} = props
 	const displayName = useMemo(
-		() => displayNameForPrefix(props.prefixKey, props.currentPrefix),
-		[props.currentPrefix, props.prefixKey],
+		() => displayNameForPrefix(prefixKey, currentPrefix),
+		[currentPrefix, prefixKey],
 	)
 	const menu = useMemo(
-		() => props.withContextMenuClassName(buildActionMenu(props.getPrefixActions(props.prefixKey), props.isAdvanced)),
-		[props.getPrefixActions, props.isAdvanced, props.prefixKey, props.withContextMenuClassName],
+		() => withContextMenuClassName(buildActionMenu(getPrefixActions(prefixKey), isAdvanced)),
+		[getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName],
 	)
 	const handleButtonMenuOpenChange = useCallback(
 		(open: boolean) => {
-			if (open) props.openPrefixContextMenu(props.prefixKey, 'button')
-			else props.closeContextMenu({ key: props.prefixKey, kind: 'prefix', source: 'button' }, 'button_menu')
+			if (open) openPrefixContextMenu(prefixKey, 'button')
+			else closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, 'button_menu')
 		},
-		[props.closeContextMenu, props.openPrefixContextMenu, props.prefixKey],
+		[closeContextMenu, openPrefixContextMenu, prefixKey],
 	)
 	const handleContextMenu = useCallback(
 		(event: MouseEvent<HTMLDivElement>) => {
 			event.preventDefault()
 			event.stopPropagation()
-			const point = props.recordContextMenuPoint(event)
-			props.openPrefixContextMenu(props.prefixKey, 'context', point)
+			const point = recordContextMenuPoint(event)
+			openPrefixContextMenu(prefixKey, 'context', point)
 		},
-		[props.openPrefixContextMenu, props.prefixKey, props.recordContextMenuPoint],
+		[openPrefixContextMenu, prefixKey, recordContextMenuPoint],
 	)
-	const handleOpen = useCallback(() => props.onOpenPrefix(props.prefixKey), [props.onOpenPrefix, props.prefixKey])
+	const handleOpen = useCallback(() => onOpenPrefix(prefixKey), [onOpenPrefix, prefixKey])
 	const handleDragStart = useCallback(
-		(event: DragEvent) => props.onRowDragStartPrefix(event, props.prefixKey),
-		[props.onRowDragStartPrefix, props.prefixKey],
+		(event: DragEvent) => onRowDragStartPrefix(event, prefixKey),
+		[onRowDragStartPrefix, prefixKey],
 	)
 
 	return (
 		<ObjectsPrefixRow
-			offset={props.offset}
-			rowMinHeight={props.rowMinHeight}
-			listGridClassName={props.listGridClassName}
-			isCompact={props.isCompact}
-			canDragDrop={props.canDragDrop}
+			offset={offset}
+			rowMinHeight={rowMinHeight}
+			listGridClassName={listGridClassName}
+			isCompact={isCompact}
+			canDragDrop={canDragDrop}
 			displayName={displayName}
-			highlightText={props.highlightText}
+			highlightText={highlightText}
 			menu={menu}
-			buttonMenuOpen={props.buttonMenuOpen}
-			getPopupContainer={props.getPopupContainer}
+			buttonMenuOpen={buttonMenuOpen}
+			getPopupContainer={getPopupContainer}
 			onButtonMenuOpenChange={handleButtonMenuOpenChange}
 			onContextMenu={handleContextMenu}
 			onOpen={handleOpen}
 			onDragStart={handleDragStart}
-			onDragEnd={props.onRowDragEnd}
+			onDragEnd={onRowDragEnd}
 		/>
 	)
 })
@@ -125,98 +146,127 @@ type ObjectsObjectRowItemProps = {
 }
 
 export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: ObjectsObjectRowItemProps) {
-	const { object } = props
+	const {
+		object,
+		currentPrefix,
+		offset,
+		rowMinHeight,
+		listGridClassName,
+		isCompact,
+		canDragDrop,
+		highlightText,
+		isAdvanced,
+		getObjectActions,
+		selectionContextMenuActions,
+		useSelectionMenu,
+		isSelected,
+		isFavorite,
+		favoriteDisabled,
+		buttonMenuOpen,
+		getPopupContainer,
+		recordContextMenuPoint,
+		openObjectContextMenu,
+		closeContextMenu,
+		onSelectObject,
+		onSelectCheckbox,
+		onRowDragStartObjects,
+		onRowDragEnd,
+		onToggleFavorite,
+		api,
+		profileId,
+		bucket,
+		showThumbnails,
+		thumbnailCache,
+		withContextMenuClassName,
+	} = props
 	const displayName = useMemo(
-		() => displayNameForKey(object.key, props.currentPrefix),
-		[object.key, props.currentPrefix],
+		() => displayNameForKey(object.key, currentPrefix),
+		[currentPrefix, object.key],
 	)
 	const sizeLabel = useMemo(() => formatBytes(object.size), [object.size])
 	const timeLabel = useMemo(() => formatDateTime(object.lastModified), [object.lastModified])
-	const thumbnailSize = props.isCompact ? 24 : 32
-	const canShowThumbnail = props.showThumbnails && isImageKey(object.key)
+	const thumbnailSize = isCompact ? 24 : 32
+	const canShowThumbnail = showThumbnails && isImageKey(object.key)
 	const thumbnail =
-		canShowThumbnail && props.profileId && props.bucket ? (
+		canShowThumbnail && profileId && bucket ? (
 			<ObjectThumbnail
-				key={`${props.bucket}:${object.key}:${thumbnailSize}`}
-				api={props.api}
-				profileId={props.profileId}
-				bucket={props.bucket}
+				key={`${bucket}:${object.key}:${thumbnailSize}`}
+				api={api}
+				profileId={profileId}
+				bucket={bucket}
 				objectKey={object.key}
 				size={thumbnailSize}
-				cache={props.thumbnailCache}
+				cache={thumbnailCache}
 				cacheKeySuffix={object.etag || object.lastModified || undefined}
 			/>
 		) : null
 
 	const menu = useMemo(() => {
-		const actions = props.useSelectionMenu ? props.selectionContextMenuActions : props.getObjectActions(object.key, object.size)
-		return props.withContextMenuClassName(buildActionMenu(actions, props.isAdvanced))
+		const actions = useSelectionMenu ? selectionContextMenuActions : getObjectActions(object.key, object.size)
+		return withContextMenuClassName(buildActionMenu(actions, isAdvanced))
 	}, [
 		object.key,
 		object.size,
-		props.getObjectActions,
-		props.isAdvanced,
-		props.selectionContextMenuActions,
-		props.useSelectionMenu,
-		props.withContextMenuClassName,
+		getObjectActions,
+		isAdvanced,
+		selectionContextMenuActions,
+		useSelectionMenu,
+		withContextMenuClassName,
 	])
 	const handleButtonMenuOpenChange = useCallback(
 		(open: boolean) => {
-			if (open) props.openObjectContextMenu(object.key, 'button')
-			else props.closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, 'button_menu')
+			if (open) openObjectContextMenu(object.key, 'button')
+			else closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, 'button_menu')
 		},
-		[object.key, props.closeContextMenu, props.openObjectContextMenu],
+		[closeContextMenu, object.key, openObjectContextMenu],
 	)
 	const handleContextMenu = useCallback(
 		(event: MouseEvent<HTMLDivElement>) => {
 			event.preventDefault()
 			event.stopPropagation()
-			const point = props.recordContextMenuPoint(event)
-			props.openObjectContextMenu(object.key, 'context', point)
+			const point = recordContextMenuPoint(event)
+			openObjectContextMenu(object.key, 'context', point)
 		},
-		[object.key, props.openObjectContextMenu, props.recordContextMenuPoint],
+		[object.key, openObjectContextMenu, recordContextMenuPoint],
 	)
-	const handleClick = useCallback(
-		(event: MouseEvent) => props.onSelectObject(event, object.key),
-		[object.key, props.onSelectObject],
-	)
+	const handleClick = useCallback((event: MouseEvent) => onSelectObject(event, object.key), [object.key, onSelectObject])
 	const handleCheckboxClick = useCallback(
-		(event: MouseEvent) => props.onSelectCheckbox(event, object.key),
-		[object.key, props.onSelectCheckbox],
+		(event: MouseEvent) => onSelectCheckbox(event, object.key),
+		[object.key, onSelectCheckbox],
 	)
 	const handleDragStart = useCallback(
-		(event: DragEvent) => props.onRowDragStartObjects(event, object.key),
-		[object.key, props.onRowDragStartObjects],
+		(event: DragEvent) => onRowDragStartObjects(event, object.key),
+		[object.key, onRowDragStartObjects],
 	)
 	const handleToggleFavorite = useCallback(
-		() => props.onToggleFavorite(object.key),
-		[object.key, props.onToggleFavorite],
+		() => onToggleFavorite(object.key),
+		[object.key, onToggleFavorite],
 	)
 
 	return (
 		<ObjectsObjectRow
-			offset={props.offset}
-			rowMinHeight={props.rowMinHeight}
-			listGridClassName={props.listGridClassName}
-			isCompact={props.isCompact}
-			canDragDrop={props.canDragDrop}
+			offset={offset}
+			rowMinHeight={rowMinHeight}
+			listGridClassName={listGridClassName}
+			isCompact={isCompact}
+			canDragDrop={canDragDrop}
 			objectKey={object.key}
 			displayName={displayName}
 			sizeLabel={sizeLabel}
 			timeLabel={timeLabel}
-			isSelected={props.isSelected}
-			isFavorite={props.isFavorite}
-			favoriteDisabled={props.favoriteDisabled}
-			highlightText={props.highlightText}
+			isSelected={isSelected}
+			isFavorite={isFavorite}
+			favoriteDisabled={favoriteDisabled}
+			highlightText={highlightText}
 			menu={menu}
-			buttonMenuOpen={props.buttonMenuOpen}
-			getPopupContainer={props.getPopupContainer}
+			buttonMenuOpen={buttonMenuOpen}
+			getPopupContainer={getPopupContainer}
 			onButtonMenuOpenChange={handleButtonMenuOpenChange}
 			onClick={handleClick}
 			onContextMenu={handleContextMenu}
 			onCheckboxClick={handleCheckboxClick}
 			onDragStart={handleDragStart}
-			onDragEnd={props.onRowDragEnd}
+			onDragEnd={onRowDragEnd}
 			onToggleFavorite={handleToggleFavorite}
 			thumbnail={thumbnail}
 		/>

@@ -1,6 +1,6 @@
 import { Button, Space, Typography, message } from 'antd'
 import type { QueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { useCallback, useState, type MouseEvent } from 'react'
 
 import type { Job, JobCreateRequest } from '../../api/types'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
@@ -81,10 +81,6 @@ export function useObjectsDnd({
 	onJobsLinkClick,
 }: UseObjectsDndArgs) {
 	const [dndHoverPrefix, setDndHoverPrefix] = useState<string | null>(null)
-
-	useEffect(() => {
-		setDndHoverPrefix(null)
-	}, [isDesktop])
 
 	const normalizeDropTargetPrefix = useCallback((raw: string): string => {
 		const trimmed = raw.trim()
@@ -306,8 +302,10 @@ export function useObjectsDnd({
 
 	const clearDndHover = useCallback(() => setDndHoverPrefix(null), [])
 
+	const effectiveDndHoverPrefix = isDesktop ? dndHoverPrefix : null
+
 	return {
-		dndHoverPrefix,
+		dndHoverPrefix: effectiveDndHoverPrefix,
 		normalizeDropTargetPrefix,
 		onDndTargetDragOver,
 		onDndTargetDragLeave,

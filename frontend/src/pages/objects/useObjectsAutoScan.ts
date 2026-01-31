@@ -36,127 +36,150 @@ export type ObjectsAutoScanResult = {
 }
 
 export function useObjectsAutoScan(args: UseObjectsAutoScanArgs): ObjectsAutoScanResult {
-	const searchAutoScanCap = args.isAdvanced ? 3_000 : 1_000
-	const filterAutoScanCap = args.isAdvanced ? 3_000 : 1_000
-	const hasSearch = !!args.search.trim()
+	const {
+		favoritesOnly,
+		profileId,
+		bucket,
+		prefix,
+		search,
+		isAdvanced,
+		extFilter,
+		minSize,
+		maxSize,
+		minModifiedMs,
+		maxModifiedMs,
+		typeFilter,
+		rawTotalCount,
+		rowsLength,
+		virtualItems,
+		autoScanReady,
+		hasNextPage,
+		isFetchingNextPage,
+		fetchNextPage,
+		debugEnabled,
+		log,
+	} = args
+	const searchAutoScanCap = isAdvanced ? 3_000 : 1_000
+	const filterAutoScanCap = isAdvanced ? 3_000 : 1_000
+	const hasSearch = !!search.trim()
 	const hasNonSearchFilters =
-		!!args.extFilter.trim() ||
-		args.minSize != null ||
-		args.maxSize != null ||
-		args.minModifiedMs != null ||
-		args.maxModifiedMs != null ||
-		args.typeFilter !== 'all'
+		!!extFilter.trim() ||
+		minSize != null ||
+		maxSize != null ||
+		minModifiedMs != null ||
+		maxModifiedMs != null ||
+		typeFilter !== 'all'
 	const autoScanReason = hasSearch && hasNonSearchFilters ? 'search+filter' : hasSearch ? 'search' : hasNonSearchFilters ? 'filter' : 'none'
 	const effectiveAutoScanCap = Math.min(
 		hasSearch ? searchAutoScanCap : Number.POSITIVE_INFINITY,
 		hasNonSearchFilters ? filterAutoScanCap : Number.POSITIVE_INFINITY,
 	)
-	const autoScanCapped = Number.isFinite(effectiveAutoScanCap) && args.rawTotalCount >= effectiveAutoScanCap
+	const autoScanCapped = Number.isFinite(effectiveAutoScanCap) && rawTotalCount >= effectiveAutoScanCap
 
 	useEffect(() => {
-		if (args.favoritesOnly) return
-		if (!args.profileId || !args.bucket) return
-		if (!args.autoScanReady) return
+		if (favoritesOnly) return
+		if (!profileId || !bucket) return
+		if (!autoScanReady) return
 		if (autoScanCapped) {
-			args.log(args.debugEnabled, 'debug', 'Auto-scan cap reached; skipping next page', {
-				bucket: args.bucket,
-				prefix: args.prefix,
+			log(debugEnabled, 'debug', 'Auto-scan cap reached; skipping next page', {
+				bucket,
+				prefix,
 				reason: autoScanReason,
-				rawTotalCount: args.rawTotalCount,
+				rawTotalCount,
 				effectiveAutoScanCap,
 			})
 			return
 		}
-		const last = args.virtualItems[args.virtualItems.length - 1]
+		const last = virtualItems[virtualItems.length - 1]
 		if (!last) return
-		if (last.index >= args.rowsLength - 10 && args.hasNextPage && !args.isFetchingNextPage) {
-			args.log(args.debugEnabled, 'debug', 'Auto-fetching next objects page from scroll', {
-				bucket: args.bucket,
-				prefix: args.prefix,
-				rowCount: args.rowsLength,
+		if (last.index >= rowsLength - 10 && hasNextPage && !isFetchingNextPage) {
+			log(debugEnabled, 'debug', 'Auto-fetching next objects page from scroll', {
+				bucket,
+				prefix,
+				rowCount: rowsLength,
 			})
-			args.fetchNextPage().catch(() => {})
+			fetchNextPage().catch(() => {})
 		}
 	}, [
 		autoScanCapped,
+		autoScanReady,
 		autoScanReason,
+		bucket,
+		debugEnabled,
 		effectiveAutoScanCap,
-		args.autoScanReady,
-		args.bucket,
-		args.debugEnabled,
-		args.favoritesOnly,
-		args.fetchNextPage,
-		args.hasNextPage,
-		args.isFetchingNextPage,
-		args.log,
-		args.profileId,
-		args.prefix,
-		args.rawTotalCount,
-		args.rowsLength,
-		args.virtualItems,
+		favoritesOnly,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		log,
+		prefix,
+		profileId,
+		rawTotalCount,
+		rowsLength,
+		virtualItems,
 	])
 
 	useEffect(() => {
-		if (args.favoritesOnly) return
-		if (!args.profileId || !args.bucket) return
-		if (!args.autoScanReady) return
-		if (!args.search.trim()) return
-		if (!args.hasNextPage || args.isFetchingNextPage) return
+		if (favoritesOnly) return
+		if (!profileId || !bucket) return
+		if (!autoScanReady) return
+		if (!search.trim()) return
+		if (!hasNextPage || isFetchingNextPage) return
 		if (autoScanCapped) {
-			args.log(args.debugEnabled, 'debug', 'Search auto-scan cap reached; skipping next page', {
-				bucket: args.bucket,
-				prefix: args.prefix,
+			log(debugEnabled, 'debug', 'Search auto-scan cap reached; skipping next page', {
+				bucket,
+				prefix,
 				reason: autoScanReason,
-				rawTotalCount: args.rawTotalCount,
+				rawTotalCount,
 				effectiveAutoScanCap,
 			})
 			return
 		}
-		args.log(args.debugEnabled, 'debug', 'Auto-fetching next objects page for search scan', {
-			bucket: args.bucket,
-			prefix: args.prefix,
-			rawTotalCount: args.rawTotalCount,
+		log(debugEnabled, 'debug', 'Auto-fetching next objects page for search scan', {
+			bucket,
+			prefix,
+			rawTotalCount,
 		})
-		args.fetchNextPage().catch(() => {})
+		fetchNextPage().catch(() => {})
 	}, [
 		autoScanCapped,
+		autoScanReady,
 		autoScanReason,
+		bucket,
+		debugEnabled,
 		effectiveAutoScanCap,
-		args.autoScanReady,
-		args.bucket,
-		args.debugEnabled,
-		args.favoritesOnly,
-		args.fetchNextPage,
-		args.hasNextPage,
-		args.isFetchingNextPage,
-		args.log,
-		args.profileId,
-		args.prefix,
-		args.rawTotalCount,
-		args.search,
+		favoritesOnly,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		log,
+		prefix,
+		profileId,
+		rawTotalCount,
+		search,
 	])
 
-	const showLoadMore = useMemo(() => !args.favoritesOnly && autoScanCapped && args.hasNextPage, [args.favoritesOnly, autoScanCapped, args.hasNextPage])
+	const showLoadMore = useMemo(() => !favoritesOnly && autoScanCapped && hasNextPage, [autoScanCapped, favoritesOnly, hasNextPage])
 	const loadMoreLabel = hasSearch ? 'Load more results' : hasNonSearchFilters ? 'Load more filtered items' : 'Load more'
 	const handleLoadMore = useCallback(() => {
-		if (!args.hasNextPage || args.isFetchingNextPage) return
-		args.log(args.debugEnabled, 'debug', 'Manual load more triggered', {
-			bucket: args.bucket,
-			prefix: args.prefix,
-			rawTotalCount: args.rawTotalCount,
+		if (!hasNextPage || isFetchingNextPage) return
+		log(debugEnabled, 'debug', 'Manual load more triggered', {
+			bucket,
+			prefix,
+			rawTotalCount,
 			effectiveAutoScanCap,
 		})
-		args.fetchNextPage().catch(() => {})
+		fetchNextPage().catch(() => {})
 	}, [
-		args.bucket,
-		args.debugEnabled,
-		args.fetchNextPage,
-		args.hasNextPage,
-		args.isFetchingNextPage,
-		args.log,
-		args.prefix,
-		args.rawTotalCount,
+		bucket,
+		debugEnabled,
 		effectiveAutoScanCap,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
+		log,
+		prefix,
+		rawTotalCount,
 	])
 
 	return {

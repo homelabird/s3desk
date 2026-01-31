@@ -166,44 +166,33 @@ export function useObjectsActionCatalog({
 
 	const currentPrefixActionsAll: UIActionOrDivider[] = commandPrefix ? getPrefixActions(commandPrefix) : []
 	const currentPrefixActions = filterActionItems(currentPrefixActionsAll, isAdvanced)
-	const currentPrefixActionMap = useMemo(() => {
-		const map = new Map<string, UIAction>()
-		for (const item of currentPrefixActionsAll) {
-			if ('type' in item) continue
-			map.set(item.id, item)
-		}
-		return map
-	}, [currentPrefixActionsAll])
+	const currentPrefixActionMap = new Map<string, UIAction>()
+	for (const item of currentPrefixActionsAll) {
+		if ('type' in item) continue
+		currentPrefixActionMap.set(item.id, item)
+	}
 
 	const selectionActions = filterActions(selectionActionsAll, isAdvanced)
-	const selectionActionMap = useMemo(() => new Map(selectionActions.map((action) => [action.id, action])), [selectionActions])
-	const selectionContextMenuActions = useMemo(
-		() =>
-			trimActionDividers(
-				[
-					selectionActionMap.get('download_selected'),
-					{ type: 'divider' as const },
-					selectionActionMap.get('copy_selected_keys'),
-					selectionActionMap.get('cut_selected_keys'),
-					selectionActionMap.get('paste_keys'),
-					{ type: 'divider' as const },
-					selectionActionMap.get('clear_selection'),
-					{ type: 'divider' as const },
-					selectionActionMap.get('delete_selected'),
-				].filter(Boolean) as UIActionOrDivider[],
-				),
-		[selectionActionMap],
+	const selectionActionMap = new Map(selectionActions.map((action) => [action.id, action]))
+	const selectionContextMenuActions = trimActionDividers(
+		[
+			selectionActionMap.get('download_selected'),
+			{ type: 'divider' as const },
+			selectionActionMap.get('copy_selected_keys'),
+			selectionActionMap.get('cut_selected_keys'),
+			selectionActionMap.get('paste_keys'),
+			{ type: 'divider' as const },
+			selectionActionMap.get('clear_selection'),
+			{ type: 'divider' as const },
+			selectionActionMap.get('delete_selected'),
+		].filter(Boolean) as UIActionOrDivider[],
 	)
-	const selectionMenuActions = useMemo(
-		() =>
-			trimActionDividers(
-				[
-					selectionActionMap.get('copy_selected_keys'),
-					selectionActionMap.get('cut_selected_keys'),
-					selectionActionMap.get('paste_keys'),
-				].filter(Boolean) as UIActionOrDivider[],
-				),
-		[selectionActionMap],
+	const selectionMenuActions = trimActionDividers(
+		[
+			selectionActionMap.get('copy_selected_keys'),
+			selectionActionMap.get('cut_selected_keys'),
+			selectionActionMap.get('paste_keys'),
+		].filter(Boolean) as UIActionOrDivider[],
 	)
 
 	const globalActions = filterActions(globalActionsAll, isAdvanced)
