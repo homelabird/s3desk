@@ -1330,11 +1330,11 @@ export function JobsPage(props: Props) {
 						{ label: 'canceled', value: 'canceled' },
 					]}
 				/>
-				<Select
-					value={typeFilterNormalized || undefined}
-					onChange={(v) => setTypeFilter(v ?? '')}
-					placeholder="Type (exact, optional)…"
-					aria-label="Job type filter"
+					<Select
+						value={typeFilterNormalized || undefined}
+						onChange={(v) => setTypeFilter(v ?? '')}
+						placeholder="Type (exact, optional)…"
+						aria-label="Job type filter"
 					style={{ width: screens.md ? 340 : '100%', maxWidth: '100%' }}
 					allowClear
 					showSearch

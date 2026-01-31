@@ -257,7 +257,6 @@ CI note: `E2E_S3_ENDPOINT` must be reachable from the Playwright runner containe
 - Optional toggles:
   - `FRONTEND_PARALLEL=1` runs frontend checks as separate jobs (openapi types, lint, unit tests, build).
   - `RUN_DEV_AUDIT=1` runs the dev license audit job outside schedules.
-
 Vite dev server + backend example:
 
 ```bash

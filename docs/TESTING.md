@@ -76,7 +76,6 @@ test.describe('@transfer', () => {
 | TBD | `FRONTEND_PARALLEL=1` | TBD | TBD | TBD | TBD |
 | TBD | `RUN_FULL_CHECK=1` | TBD | TBD | TBD | TBD |
 | TBD | `RUN_DEV_AUDIT=1` | TBD | TBD | TBD | TBD |
-
 ## CI environment variables (Live UI tests)
 
 Set these in CI when running `e2e_live` (or local live runs):
