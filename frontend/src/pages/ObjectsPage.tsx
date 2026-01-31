@@ -96,7 +96,7 @@ import { useObjectsIndexing } from './objects/useObjectsIndexing'
 import { useObjectsDownloadPrefix } from './objects/useObjectsDownloadPrefix'
 import { useObjectsUploadDrop } from './objects/useObjectsUploadDrop'
 import { useObjectsDeleteConfirm } from './objects/useObjectsDeleteConfirm'
-import { useObjectsDeletePrefixSummary } from './objects/useObjectsDeletePrefixSummary'
+import { useObjectsPrefixSummary } from './objects/useObjectsPrefixSummary'
 
 const ObjectsCommandPaletteModal = lazy(async () => {
 	const m = await import('./objects/ObjectsCommandPaletteModal')
@@ -1229,17 +1229,30 @@ const objectsQuery = useInfiniteQuery({
 		deletePrefixJobMutation,
 	})
 	const {
-		deletePrefixSummaryQuery,
-		deletePrefixSummary,
-		deletePrefixSummaryNotIndexed,
-		deletePrefixSummaryError,
-	} = useObjectsDeletePrefixSummary({
+		summaryQuery: deletePrefixSummaryQuery,
+		summary: deletePrefixSummary,
+		summaryNotIndexed: deletePrefixSummaryNotIndexed,
+		summaryError: deletePrefixSummaryError,
+	} = useObjectsPrefixSummary({
 		api,
 		profileId: props.profileId,
 		bucket,
 		prefix: deletePrefixConfirmPrefix,
 		apiToken: props.apiToken,
 		enabled: deletePrefixConfirmOpen,
+	})
+	const {
+		summaryQuery: copyPrefixSummaryQuery,
+		summary: copyPrefixSummary,
+		summaryNotIndexed: copyPrefixSummaryNotIndexed,
+		summaryError: copyPrefixSummaryError,
+	} = useObjectsPrefixSummary({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix: copyPrefixSrcPrefix,
+		apiToken: props.apiToken,
+		enabled: copyPrefixOpen,
 	})
 	const {
 		uploadFolderOpen,
@@ -1304,16 +1317,6 @@ const objectsQuery = useInfiniteQuery({
 		detailsMeta,
 		downloadLinkProxyEnabled,
 	})
-
-	const copyPrefixSummaryQuery = useQuery({
-		queryKey: ['objectIndexSummary', props.profileId, bucket, copyPrefixSrcPrefix, props.apiToken],
-		enabled: copyPrefixOpen && !!props.profileId && !!bucket && !!copyPrefixSrcPrefix,
-		queryFn: () => api.getObjectIndexSummary({ profileId: props.profileId!, bucket, prefix: copyPrefixSrcPrefix, sampleLimit: 5 }),
-		retry: false,
-	})
-	const copyPrefixSummary = copyPrefixSummaryQuery.data ?? null
-	const copyPrefixSummaryNotIndexed = copyPrefixSummaryQuery.error instanceof APIError && copyPrefixSummaryQuery.error.code === 'not_indexed'
-	const copyPrefixSummaryError = copyPrefixSummaryQuery.isError ? formatErr(copyPrefixSummaryQuery.error) : ''
 
 	const rowVirtualizer = useVirtualizer({
 		count: rows.length,
