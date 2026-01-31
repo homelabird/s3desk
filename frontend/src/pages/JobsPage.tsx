@@ -52,15 +52,15 @@ import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
 import { logReactRender, measurePerf } from '../lib/perf'
 import {
-\tformatS3Destination,
-\tgetBool,
-\tgetNumber,
-\tgetString,
-\tjoinKeyWithPrefix,
-\tnormalizePrefix as normalizeJobPrefix,
-\tparentPrefixFromKey,
-\tstatusColor,
-\tupdateJob,
+	formatS3Destination,
+	getBool,
+	getNumber,
+	getString,
+	joinKeyWithPrefix,
+	normalizePrefix as normalizeJobPrefix,
+	parentPrefixFromKey,
+	statusColor,
+	updateJob,
 } from './jobs/jobUtils'
 
 type Props = {
