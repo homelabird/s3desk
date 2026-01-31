@@ -609,7 +609,7 @@ frontend_ci:
     - npm run test:unit
     - npm run build
 
-frontend_openapi_types:
+frontend_deps:
   stage: test
   image: "$NODE_IMAGE"
   interruptible: true
@@ -621,11 +621,43 @@ frontend_openapi_types:
         - openapi.yml
       when: on_success
     - when: never
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
   script:
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - cd ..
+    - git diff --exit-code frontend/src/api/openapi.ts
+  artifacts:
+    when: always
+    paths:
+      - frontend/node_modules/
+    expire_in: 7 days
+
+frontend_openapi_types:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
     - npm run gen:openapi
     - cd ..
     - git diff --exit-code frontend/src/api/openapi.ts
@@ -635,6 +667,9 @@ frontend_lint:
   image: "$NODE_IMAGE"
   interruptible: true
   <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
   rules:
     - if: '$FRONTEND_PARALLEL == "1"'
       changes:
@@ -646,7 +681,6 @@ frontend_lint:
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
-    - npm ci --no-audit --no-fund
     - npm run gen:openapi
     - npm run lint
 
@@ -655,6 +689,9 @@ frontend_unit_tests:
   image: "$NODE_IMAGE"
   interruptible: true
   <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
   rules:
     - if: '$FRONTEND_PARALLEL == "1"'
       changes:
@@ -670,7 +707,6 @@ frontend_unit_tests:
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
-    - npm ci --no-audit --no-fund
     - npm run test:unit
 
 frontend_build:
@@ -678,6 +714,9 @@ frontend_build:
   image: "$NODE_IMAGE"
   interruptible: true
   <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
   rules:
     - if: '$FRONTEND_PARALLEL == "1"'
       changes:
@@ -693,7 +732,6 @@ frontend_build:
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
-    - npm ci --no-audit --no-fund
     - npm run gen:openapi
     - npm run build
 
@@ -744,6 +782,9 @@ api_integration:
         - docker-compose.e2e.yml
         - scripts/ci_podman_compose.sh
     - when: never
+  needs:
+    - job: build_s3desk_image
+      optional: true
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
