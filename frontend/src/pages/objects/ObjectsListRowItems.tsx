@@ -103,6 +103,7 @@ type ObjectsObjectRowItemProps = {
 	getObjectActions: (key: string, size?: number) => UIActionOrDivider[]
 	selectionContextMenuActions: UIActionOrDivider[]
 	useSelectionMenu: boolean
+	withContextMenuClassName: (menu: MenuProps) => MenuProps
 	isSelected: boolean
 	isFavorite: boolean
 	favoriteDisabled: boolean

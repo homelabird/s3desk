@@ -32,6 +32,7 @@ export type ObjectsAutoScanResult = {
 	showLoadMore: boolean
 	loadMoreLabel: string
 	handleLoadMore: () => void
+	searchAutoScanCap: number
 }
 
 export function useObjectsAutoScan(args: UseObjectsAutoScanArgs): ObjectsAutoScanResult {
@@ -80,7 +81,6 @@ export function useObjectsAutoScan(args: UseObjectsAutoScanArgs): ObjectsAutoSca
 		autoScanCapped,
 		autoScanReason,
 		effectiveAutoScanCap,
-		hasNextPage,
 		args.autoScanReady,
 		args.bucket,
 		args.debugEnabled,
@@ -163,5 +163,6 @@ export function useObjectsAutoScan(args: UseObjectsAutoScanArgs): ObjectsAutoSca
 		showLoadMore,
 		loadMoreLabel,
 		handleLoadMore,
+		searchAutoScanCap,
 	}
 }

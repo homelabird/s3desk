@@ -55,7 +55,7 @@ type UseObjectsActionCatalogArgs = {
 	onOpenCommandPalette: () => void
 	onOpenTransfers: () => void
 	onAddTab: () => void
-	onCloseTab: () => void
+	onCloseTab: (tabId: string) => void
 	onOpenGlobalSearch: () => void
 	onToggleUiMode: () => void
 }
@@ -125,7 +125,7 @@ export function useObjectsActionCatalog({
 		canGoForward,
 		canGoUp,
 		detailsVisible,
-		activeTabId,
+		activeTabId: activeTabId ?? '',
 		tabsCount,
 		onGoBack,
 		onGoForward,

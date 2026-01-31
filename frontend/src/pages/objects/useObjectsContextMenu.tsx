@@ -364,6 +364,7 @@ export function useObjectsContextMenu({
 		contextMenuProps,
 		contextMenuStyle,
 		withContextMenuClassName,
+		getListScrollerElement,
 		recordContextMenuPoint,
 		openObjectContextMenu,
 		openPrefixContextMenu,

@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Dropdown, Grid, Menu, Space, Typography, message } from 'antd'
+import { Alert, Button, Dropdown, Grid, Menu, Typography, message } from 'antd'
 import { SnippetsOutlined } from '@ant-design/icons'
 import {
 	lazy,
@@ -18,16 +18,15 @@ import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError, RequestAbortedError } from '../api/client'
+import { APIClient, APIError } from '../api/client'
 import type { InputRef } from 'antd'
 import type { Bucket, JobCreateRequest, ListObjectsResponse, ObjectItem } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
-import { getDevicePickerSupport, pickDirectory } from '../lib/deviceFs'
+import { getDevicePickerSupport } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
-import { formatBytes } from '../lib/transfer'
 import styles from './objects/objects.module.css'
 import type { UIActionOrDivider } from './objects/objectsActions'
 import {
@@ -46,13 +45,14 @@ import { ObjectsSelectionBarSection } from './objects/ObjectsSelectionBarSection
 import type { ObjectRow } from './objects/objectsListUtils'
 import {
 	buildObjectRows,
-	displayNameForKey,
+	fileExtensionFromKey,
 	guessPreviewKind,
 	normalizeForSearch,
 	normalizePrefix,
 	parentPrefixFromKey,
 	splitLines,
 	splitSearchTokens,
+	uniquePrefixes,
 } from './objects/objectsListUtils'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
@@ -1960,7 +1960,7 @@ const objectsQuery = useInfiniteQuery({
 
 	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
 
-	const { showLoadMore, loadMoreLabel, handleLoadMore } = useObjectsAutoScan({
+	const { showLoadMore, loadMoreLabel, handleLoadMore, searchAutoScanCap } = useObjectsAutoScan({
 		favoritesOnly,
 		profileId: props.profileId,
 		bucket,
@@ -2094,6 +2094,7 @@ const objectsQuery = useInfiniteQuery({
 		contextMenuProps,
 		contextMenuStyle,
 		withContextMenuClassName,
+		getListScrollerElement,
 		recordContextMenuPoint,
 		openObjectContextMenu,
 		openPrefixContextMenu,
@@ -2262,9 +2263,9 @@ const objectsQuery = useInfiniteQuery({
 				contextMenuState.source === 'button'
 			const useSelectionMenu = selectedCount > 1 && selectedKeys.has(key)
 			return (
-				<ObjectsObjectRowItem
-					key={key}
-					object={object}
+					<ObjectsObjectRowItem
+						key={key}
+						object={object}
 					currentPrefix={prefix}
 					offset={offset}
 					rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
@@ -2273,10 +2274,11 @@ const objectsQuery = useInfiniteQuery({
 					canDragDrop={canDragDrop}
 					highlightText={highlightText}
 					isAdvanced={isAdvanced}
-					getObjectActions={getObjectActions}
-					selectionContextMenuActions={selectionContextMenuActions}
-					useSelectionMenu={useSelectionMenu}
-					isSelected={selectedKeys.has(key)}
+						getObjectActions={getObjectActions}
+						selectionContextMenuActions={selectionContextMenuActions}
+						useSelectionMenu={useSelectionMenu}
+						withContextMenuClassName={withContextMenuClassName}
+						isSelected={selectedKeys.has(key)}
 					isFavorite={favoriteKeys.has(key)}
 					favoriteDisabled={favoritePendingKeys.has(key) || isOffline || !props.profileId || !bucket}
 					buttonMenuOpen={objectButtonMenuOpen}
