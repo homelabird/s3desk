@@ -948,7 +948,7 @@ const objectsQuery = useInfiniteQuery({
 			navigateToLocation(bucket, key === '/' ? '' : key, { recordHistory: true })
 			if (closeDrawer) setTreeDrawerOpen(false)
 		},
-		[bucket, navigateToLocation],
+		[bucket, navigateToLocation, setTreeDrawerOpen, setTreeSelectedKeys],
 	)
 
 	const canGoBack = !!activeTab && activeTab.historyIndex > 0
@@ -1037,10 +1037,13 @@ const objectsQuery = useInfiniteQuery({
 		navigateToLocation(bucket, next, { recordHistory: true })
 	}
 
-	const onOpenPrefix = (p: string) => {
-		if (!bucket) return
-		navigateToLocation(bucket, p, { recordHistory: true })
-	}
+	const onOpenPrefix = useCallback(
+		(p: string) => {
+			if (!bucket) return
+			navigateToLocation(bucket, p, { recordHistory: true })
+		},
+		[bucket, navigateToLocation],
+	)
 
 	const commitPathDraft = () => {
 		if (!bucket) {
