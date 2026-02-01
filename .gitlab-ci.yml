@@ -35,6 +35,11 @@ default:
   artifacts:
     expire_in: 7 days
 
+.heavy_tags: &heavy_tags
+  - onpremise
+  - k8s
+  - k8s-heavy
+
 stages:
   - build
   - test
@@ -230,6 +235,7 @@ helm_k8s_smoke_sqlite:
   <<: *helm_k8s_tools
   stage: test
   interruptible: true
+  tags: *heavy_tags
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
@@ -252,6 +258,7 @@ helm_k8s_smoke_postgres:
   <<: *helm_k8s_tools
   stage: test
   interruptible: true
+  tags: *heavy_tags
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
@@ -274,6 +281,7 @@ helm_k8s_upgrade:
   <<: *helm_k8s_tools
   stage: test
   interruptible: true
+  tags: *heavy_tags
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
@@ -296,6 +304,7 @@ helm_k8s_pvc:
   <<: *helm_k8s_tools
   stage: test
   interruptible: true
+  tags: *heavy_tags
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
@@ -443,6 +452,7 @@ build_s3desk_image:
   stage: build
   image: "$PODMAN_IMAGE"
   interruptible: true
+  tags: *heavy_tags
   rules:
     - if: '$RUN_IMAGE_BUILD == "1"'
       when: on_success
@@ -492,6 +502,7 @@ build_release_images:
   stage: build
   image: "$PODMAN_IMAGE"
   interruptible: true
+  tags: *heavy_tags
   rules:
     - if: '$CI_COMMIT_TAG'
   variables:
@@ -783,6 +794,7 @@ api_integration:
   stage: test
   image: "$PODMAN_IMAGE"
   interruptible: true
+  tags: *heavy_tags
   rules:
     - changes:
         - Containerfile
@@ -840,6 +852,7 @@ release_postgres_smoke:
   stage: test
   image: "$PODMAN_IMAGE"
   interruptible: true
+  tags: *heavy_tags
   rules:
     - if: '$CI_COMMIT_TAG'
   needs:
@@ -897,6 +910,7 @@ e2e:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
   interruptible: true
+  tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$E2E_BASE_URL'
@@ -929,6 +943,7 @@ e2e_live:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
   interruptible: true
+  tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
@@ -962,6 +977,7 @@ perf_tests:
   stage: test
   image: "$PLAYWRIGHT_IMAGE"
   interruptible: true
+  tags: *heavy_tags
   <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$PERF_TESTS == "1"'
