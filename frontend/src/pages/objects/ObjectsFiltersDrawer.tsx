@@ -97,7 +97,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 							<Typography.Text type="secondary">Extension</Typography.Text>
 							<Select
 								allowClear
-								placeholder="Ext"
+								placeholder="Ext…"
 								value={props.extFilter || undefined}
 								style={{ width: '100%' }}
 								aria-label="Extension filter"
@@ -113,7 +113,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 								<InputNumber
 									min={0}
 									step={0.1}
-									placeholder="Min MB"
+									placeholder="Min MB…"
 									style={{ flex: 1, maxWidth: '100%' }}
 									value={mbFromBytes(props.minSizeBytes)}
 									onChange={(value) => props.onMinSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
@@ -122,7 +122,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 								<InputNumber
 									min={0}
 									step={0.1}
-									placeholder="Max MB"
+									placeholder="Max MB…"
 									style={{ flex: 1, maxWidth: '100%' }}
 									value={mbFromBytes(props.maxSizeBytes)}
 									onChange={(value) => props.onMaxSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}

@@ -54,7 +54,7 @@ export function ObjectsGoToPathModal({
 				>
 					<Input
 						ref={inputRef}
-						placeholder="Prefix (e.g. logs/2025/)"
+						placeholder="Prefix (e.g. logs/2025/)…"
 						onPressEnter={onCommit}
 						allowClear
 						disabled={disabled}

@@ -1,7 +1,7 @@
 import type { MenuProps } from 'antd'
 import { Button, Checkbox, Dropdown, Tooltip, Typography } from 'antd'
 import { EllipsisOutlined, FolderOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
-import type { DragEvent, MouseEvent, ReactNode } from 'react'
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 
 import styles from './objects.module.css'
 
@@ -66,6 +66,12 @@ function rowStyle(offset: number, background?: string, minHeight?: number) {
 	}
 }
 
+function handleRowKeyDown(event: KeyboardEvent<HTMLDivElement>, onActivate: (event: KeyboardEvent<HTMLDivElement>) => void) {
+	if (event.key !== 'Enter' && event.key !== ' ') return
+	event.preventDefault()
+	onActivate(event)
+}
+
 function renderRowMenu(
 	menu: MenuProps,
 	open: boolean,
@@ -97,16 +103,18 @@ function renderRowMenu(
 
 export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 	return (
-		<div style={rowStyle(props.offset, undefined, props.rowMinHeight)}>
+		<div style={rowStyle(props.offset, undefined, props.rowMinHeight)} role="listitem">
 			<div
 				onClick={props.onOpen}
 				onContextMenu={props.onContextMenu}
+				onKeyDown={(event) => handleRowKeyDown(event, () => props.onOpen())}
 				draggable={props.canDragDrop}
 				onDragStart={props.onDragStart}
 				onDragEnd={props.onDragEnd}
 				className={`${styles.listGridBase} ${props.listGridClassName}`}
 				data-objects-row="true"
-				role="listitem"
+				role="button"
+				tabIndex={0}
 				style={{ cursor: props.canDragDrop ? 'grab' : 'pointer' }}
 			>
 				<div />
@@ -153,16 +161,18 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 	const metaLabel = `${props.sizeLabel} · ${props.timeLabel}`
 	return (
-		<div style={rowStyle(props.offset, props.isSelected ? '#e6f4ff' : undefined, props.rowMinHeight)}>
+		<div style={rowStyle(props.offset, props.isSelected ? '#e6f4ff' : undefined, props.rowMinHeight)} role="listitem">
 			<div
 				onClick={props.onClick}
 				onContextMenu={props.onContextMenu}
+				onKeyDown={(event) => handleRowKeyDown(event, (ev) => props.onClick(ev as unknown as MouseEvent))}
 				draggable={props.canDragDrop}
 				onDragStart={props.onDragStart}
 				onDragEnd={props.onDragEnd}
 				className={`${styles.listGridBase} ${props.listGridClassName}`}
 				data-objects-row="true"
-				role="listitem"
+				role="button"
+				tabIndex={0}
 				style={{ cursor: props.canDragDrop ? 'grab' : 'pointer' }}
 			>
 				<div>

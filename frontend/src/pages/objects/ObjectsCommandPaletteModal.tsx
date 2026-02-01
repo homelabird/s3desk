@@ -22,7 +22,7 @@ export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProp
 				<Input
 					id="objectsCommandPaletteInput"
 					autoComplete="off"
-					placeholder="Type a command..."
+					placeholder="Type a command...…"
 					value={props.query}
 					onChange={(e) => props.onQueryChange(e.target.value)}
 					onKeyDown={props.onKeyDown}

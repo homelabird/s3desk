@@ -40,18 +40,42 @@ test.describe('@transfer', () => {
 - `gofmt`: gofmt enforcement
 - `go_test`: `go vet` + `go test`
 - `govulncheck`: dependency vulnerability scan
-- `frontend_openapi_types`: OpenAPI types generation + diff check
-- `frontend_lint`: ESLint
-- `frontend_build`: `vite build`
-- `frontend_unit_tests`: `npm run test:unit`
+- `frontend_ci`: OpenAPI gen + diff check, lint, unit tests, build (default)
+- `frontend_openapi_types`: OpenAPI types generation + diff check (`FRONTEND_PARALLEL=1`)
+- `frontend_lint`: ESLint (`FRONTEND_PARALLEL=1`)
+- `frontend_build`: `vite build` (`FRONTEND_PARALLEL=1`)
+- `frontend_unit_tests`: `npm run test:unit` (`FRONTEND_PARALLEL=1`)
 - `third_party_notices`: runtime-only notices + diff check
-- `dev_license_audit`: dev-only notices (audit stage)
+- `dev_license_audit`: dev-only notices (audit stage; schedule or `RUN_DEV_AUDIT=1`)
 - `api_integration`: `docker-compose.e2e.yml` + `e2e/runner/runner.py`
-- `ui_smoke` (optional, `E2E_UI=1`, `E2E_BASE_URL` required): `tests/objects-smoke.spec.ts`, `tests/docs-smoke.spec.ts`
-- `transfer_scenarios` (optional, `E2E_TRANSFERS=1`, `E2E_BASE_URL` required): `tests/transfers-*.spec.ts`
+- `e2e` (optional, `E2E_BASE_URL` required): `tests/objects-smoke.spec.ts`, `tests/docs-smoke.spec.ts`, `tests/jobs-network.spec.ts`, `tests/transfers-*.spec.ts`
 - `e2e_live` (optional, `E2E_LIVE=1`, `E2E_BASE_URL` required): `tests/api-crud.spec.ts`, `tests/jobs-live-flow.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/docs-smoke.spec.ts`
 - `perf_tests` (optional, `PERF_TESTS=1`): `tests/jobs-perf.spec.ts`
 
+## CI toggles (pipeline variables)
+
+- `RUN_FULL_CHECK=1`: runs the full `check` job (backend + frontend + notices).
+- `FRONTEND_PARALLEL=1`: splits frontend checks into separate jobs (`frontend_openapi_types`, `frontend_lint`, `frontend_unit_tests`, `frontend_build`).
+- `RUN_DEV_AUDIT=1`: runs `dev_license_audit` outside schedules.
+- `E2E_LIVE=1`: enables live UI specs in `e2e_live` (requires `E2E_BASE_URL`).
+- `PERF_TESTS=1`: enables Playwright perf tests in `perf_tests`.
+
+## Pipeline validation checklist
+
+- Default pipeline (no extra variables): verify `frontend_ci` runs; `check` stays manual-only.
+- `FRONTEND_PARALLEL=1`: verify `frontend_ci` is skipped and split jobs run.
+- `RUN_FULL_CHECK=1`: verify `check` runs alongside the split jobs.
+- `RUN_DEV_AUDIT=1`: verify `dev_license_audit` runs.
+
+## Pipeline performance tracking (fill after CI runs)
+
+| Date | Pipeline type | Duration | Jobs | Cache notes | Notes |
+| --- | --- | --- | --- | --- | --- |
+| TBD | Baseline (before changes) | TBD | TBD | TBD | TBD |
+| 2026-01-30 | `FRONTEND_PARALLEL=1` + `RUN_FULL_CHECK=1` + `RUN_DEV_AUDIT=1` (project vars) | 15m25s (failed) | 22 (18 ok, 4 failed) | N/A | Failed `helm_k8s_*` jobs (RUN_HELM_SMOKE likely enabled). |
+| TBD | `FRONTEND_PARALLEL=1` | TBD | TBD | TBD | TBD |
+| TBD | `RUN_FULL_CHECK=1` | TBD | TBD | TBD | TBD |
+| TBD | `RUN_DEV_AUDIT=1` | TBD | TBD | TBD | TBD |
 ## CI environment variables (Live UI tests)
 
 Set these in CI when running `e2e_live` (or local live runs):

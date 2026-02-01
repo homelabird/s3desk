@@ -74,7 +74,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 						},
 					]}
 				>
-					<Input placeholder="RENAME" autoComplete="off" />
+					<Input placeholder="RENAME…" autoComplete="off" />
 				</Form.Item>
 			</Form>
 		</Modal>

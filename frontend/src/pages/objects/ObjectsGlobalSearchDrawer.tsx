@@ -89,22 +89,24 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 				<Alert type="warning" showIcon message="Select a bucket first" />
 			) : (
 				<Space direction="vertical" size="middle" style={{ width: '100%' }}>
-					<Space wrap>
-						<Input
-							allowClear
-							prefix={<SearchOutlined />}
-							placeholder="Search query (substring)"
-							style={{ width: inputWidth, maxWidth: '100%' }}
-							value={props.queryDraft}
-							onChange={(e) => props.onQueryDraftChange(e.target.value)}
-						/>
-						<Input
-							allowClear
-							placeholder="Prefix filter (optional)"
-							style={{ width: prefixWidth, maxWidth: '100%' }}
-							value={props.prefixFilter}
-							onChange={(e) => props.onPrefixFilterChange(e.target.value)}
-						/>
+						<Space wrap>
+							<Input
+								allowClear
+								prefix={<SearchOutlined />}
+								placeholder="Search query (substring)…"
+								aria-label="Search query"
+								style={{ width: inputWidth, maxWidth: '100%' }}
+								value={props.queryDraft}
+								onChange={(e) => props.onQueryDraftChange(e.target.value)}
+							/>
+							<Input
+								allowClear
+								placeholder="Prefix filter (optional)…"
+								aria-label="Prefix filter"
+								style={{ width: prefixWidth, maxWidth: '100%' }}
+								value={props.prefixFilter}
+								onChange={(e) => props.onPrefixFilterChange(e.target.value)}
+							/>
 						<Select
 							value={props.limit}
 							style={{ width: limitWidth, maxWidth: '100%' }}
@@ -127,7 +129,8 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Space wrap>
 							<Input
 								allowClear
-								placeholder="Ext (e.g. log)"
+								placeholder="Ext (e.g. log)…"
+								aria-label="Extension filter"
 								style={{ width: extWidth, maxWidth: '100%' }}
 								value={props.extFilter}
 								onChange={(e) => props.onExtFilterChange(e.target.value)}
@@ -135,7 +138,8 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<InputNumber
 								min={0}
 								step={0.1}
-								placeholder="Min MB"
+								placeholder="Min MB…"
+								aria-label="Minimum size (MB)"
 								style={{ width: sizeWidth, maxWidth: '100%' }}
 								value={mbFromBytes(props.minSizeBytes)}
 								onChange={(value) => props.onMinSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
@@ -143,13 +147,15 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<InputNumber
 								min={0}
 								step={0.1}
-								placeholder="Max MB"
+								placeholder="Max MB…"
+								aria-label="Maximum size (MB)"
 								style={{ width: sizeWidth, maxWidth: '100%' }}
 								value={mbFromBytes(props.maxSizeBytes)}
 								onChange={(value) => props.onMaxSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
 							/>
 							<DatePicker.RangePicker
 								allowClear
+								aria-label="Modified date range"
 								style={{ width: dateWidth, maxWidth: '100%' }}
 								value={dateRange}
 								onChange={(values) => {
@@ -190,7 +196,8 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Space wrap>
 							<Input
 								allowClear
-								placeholder="Index prefix (optional)"
+								placeholder="Index prefix (optional)…"
+								aria-label="Index prefix"
 								style={{ width: inputWidth, maxWidth: '100%' }}
 								value={props.indexPrefix}
 								onChange={(e) => props.onIndexPrefixChange(e.target.value)}
@@ -271,9 +278,24 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 												<Button size="small" onClick={() => props.onOpenPrefixForKey(row.key)}>
 													Open
 												</Button>
-												<Button size="small" icon={<CopyOutlined />} onClick={() => props.onCopyKey(row.key)} />
-												<Button size="small" icon={<DownloadOutlined />} onClick={() => props.onDownloadKey(row.key, row.size)} />
-												<Button size="small" icon={<InfoCircleOutlined />} onClick={() => props.onOpenDetails(row.key)} />
+												<Button
+													size="small"
+													icon={<CopyOutlined />}
+													aria-label="Copy key"
+													onClick={() => props.onCopyKey(row.key)}
+												/>
+												<Button
+													size="small"
+													icon={<DownloadOutlined />}
+													aria-label="Download"
+													onClick={() => props.onDownloadKey(row.key, row.size)}
+												/>
+												<Button
+													size="small"
+													icon={<InfoCircleOutlined />}
+													aria-label="Open details"
+													onClick={() => props.onOpenDetails(row.key)}
+												/>
 											</Space>
 										),
 									},

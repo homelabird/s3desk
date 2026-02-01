@@ -118,6 +118,49 @@ provider별로 필요한 필드가 다르며, UI에서 provider를 선택하면 
 - `DB_BACKEND=sqlite` (기본값)
   - 로컬 파일(`DATA_DIR/s3desk.db`)에 저장됩니다.
   - **SQLite는 1 replica 사용을 권장**합니다.
+
+## 4) Direct/Presigned vs Proxy (CORS/Endpoint 운영 가이드)
+
+S3Desk는 **브라우저가 스토리지에 직접 접근하는 경로**(presigned URL)와 **서버 프록시 경로**를 모두 제공합니다.
+운영 환경에 따라 **CORS/네트워크 제약**이 달라질 수 있으니 아래 기준을 참고하세요.
+
+### 다운로드 경로 선택
+
+- 기본: **presigned URL 직접 다운로드**를 먼저 시도합니다.
+- Settings → **Downloads: Use server proxy**를 켜면 **항상 `/download-proxy`** 를 사용합니다.
+- CORS 차단/네트워크 오류가 발생하면 UI는 **proxy로 자동 fallback** 합니다.
+
+> `/download-proxy`는 **서버 HMAC 서명** 기반이므로 S3 CORS와 무관하게 **same-origin**으로 동작합니다.
+
+### 업로드 경로 선택
+
+- **Presigned 업로드**: 브라우저가 스토리지로 직접 `PUT/Multipart` 전송합니다.
+  - 스토리지 CORS 허용이 반드시 필요합니다.
+  - presign 미지원 provider(또는 제한된 계정)에서는 **staging(서버 업로드)** 로 fallback 됩니다.
+- **Staging 업로드**: 서버가 업로드를 대신 처리합니다(브라우저 → 서버 → 스토리지).
+  - CORS 영향을 받지 않습니다.
+
+### CORS 대응 가이드 (S3 호환/CEPH/MinIO)
+
+- presigned **직접 업/다운로드**가 실패하면 브라우저 콘솔에 `CORS` 오류가 뜹니다.
+- 해결 방법:
+  1) **스토리지 버킷 CORS 허용** (UI origin 허용)
+  2) **다운로드는 proxy 사용** (`Downloads: Use server proxy`)
+  3) **업로드는 staging fallback**으로 처리
+
+허용해야 할 Origin은 **UI 접속 주소(프로토콜+호스트+포트)** 입니다.
+예: `http://192.168.0.200:8080`
+
+### API Token / Endpoint 주의사항
+
+- **API Token**: UI Settings의 `X-Api-Token`은 **서버 `API_TOKEN`과 동일해야** 합니다.
+  - 토큰이 다르면 `/api/v1/meta`와 Job/API 호출이 `401`로 실패합니다.
+- **Endpoint 접근성**:
+  - `endpoint`는 **서버 컨테이너에서 접근 가능**해야 합니다.
+  - **presigned URL**은 브라우저가 직접 접근하므로 **브라우저에서도 접근 가능**해야 합니다.
+  - 컨테이너 내부에서 `localhost/127.0.0.1`은 **컨테이너 자신**을 의미합니다.
+    - 예: MinIO가 같은 Compose 네트워크라면 `http://minio:9000`
+    - 호스트에서만 열려있다면 적절한 브리지/포트 매핑을 사용하세요.
 - `DB_BACKEND=postgres`
   - 외부 DB(`DATABASE_URL`)에 저장됩니다.
   - **Postgres는 multi-replica 구성이 가능**합니다.

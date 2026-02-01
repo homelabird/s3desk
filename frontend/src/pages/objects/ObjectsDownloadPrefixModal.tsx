@@ -61,7 +61,7 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 				</Form.Item>
 				<Form.Item name="localFolder" label="Local destination folder" rules={[{ required: true }]}>
 					<LocalDevicePathInput
-						placeholder="Select a folder"
+						placeholder="Select a folder…"
 						disabled={!support.ok}
 						onPick={props.onPickFolder}
 					/>

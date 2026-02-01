@@ -10,8 +10,8 @@ import {
 	SettingOutlined,
 	ToolOutlined,
 } from '@ant-design/icons'
-import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
+import { Suspense, lazy, useMemo, useState, type CSSProperties } from 'react'
 
 import { APIClient, APIError } from './api/client'
 import { JobQueueBanner } from './components/JobQueueBanner'
@@ -20,6 +20,15 @@ import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/Transfers'
 import { LoginPage } from './pages/LoginPage'
 import { useLocalStorageState } from './lib/useLocalStorageState'
+
+const menuLinkStyle: CSSProperties = {
+	display: 'flex',
+	alignItems: 'center',
+	gap: 8,
+	width: '100%',
+	color: 'inherit',
+	textDecoration: 'none',
+}
 
 const ProfilesPage = lazy(async () => {
 	const m = await import('./pages/ProfilesPage')
@@ -49,7 +58,6 @@ const SettingsDrawer = lazy(async () => {
 const { Header, Content, Sider } = Layout
 
 export default function App() {
-	const navigate = useNavigate()
 	const location = useLocation()
 	const screens = Grid.useBreakpoint()
 	const isDesktop = !!screens.lg
@@ -79,11 +87,51 @@ export default function App() {
 
 	const menuItems = useMemo(
 		() => [
-			{ key: '/profiles', icon: <ProfileOutlined />, label: 'Profiles' },
-			{ key: '/buckets', icon: <AppstoreOutlined />, label: 'Buckets' },
-			{ key: '/objects', icon: <FolderOpenOutlined />, label: 'Objects' },
-			{ key: '/uploads', icon: <CloudUploadOutlined />, label: 'Uploads' },
-			{ key: '/jobs', icon: <ToolOutlined />, label: 'Jobs' },
+			{
+				key: '/profiles',
+				label: (
+					<Link to="/profiles" style={menuLinkStyle}>
+						<ProfileOutlined />
+						<span>Profiles</span>
+					</Link>
+				),
+			},
+			{
+				key: '/buckets',
+				label: (
+					<Link to="/buckets" style={menuLinkStyle}>
+						<AppstoreOutlined />
+						<span>Buckets</span>
+					</Link>
+				),
+			},
+			{
+				key: '/objects',
+				label: (
+					<Link to="/objects" style={menuLinkStyle}>
+						<FolderOpenOutlined />
+						<span>Objects</span>
+					</Link>
+				),
+			},
+			{
+				key: '/uploads',
+				label: (
+					<Link to="/uploads" style={menuLinkStyle}>
+						<CloudUploadOutlined />
+						<span>Uploads</span>
+					</Link>
+				),
+			},
+			{
+				key: '/jobs',
+				label: (
+					<Link to="/jobs" style={menuLinkStyle}>
+						<ToolOutlined />
+						<span>Jobs</span>
+					</Link>
+				),
+			},
 		],
 		[],
 	)
@@ -169,13 +217,12 @@ export default function App() {
 							</Typography.Title>
 							<Typography.Text style={{ color: 'rgba(255,255,255,0.65)' }}>Local Dashboard</Typography.Text>
 						</div>
-						<Menu
-							theme="dark"
-							mode="inline"
-							selectedKeys={[selectedKey]}
-							items={menuItems}
-							onClick={(e) => navigate(e.key)}
-						/>
+							<Menu
+								theme="dark"
+								mode="inline"
+								selectedKeys={[selectedKey]}
+								items={menuItems}
+							/>
 					</Sider>
 				) : null}
 
@@ -274,15 +321,14 @@ export default function App() {
 						</Typography.Title>
 						<Typography.Text type="secondary">Local Dashboard</Typography.Text>
 					</div>
-					<Menu
-						mode="inline"
-						selectedKeys={[selectedKey]}
-						items={menuItems}
-						onClick={(e) => {
-							navigate(e.key)
-							setNavOpen(false)
-						}}
-					/>
+						<Menu
+							mode="inline"
+							selectedKeys={[selectedKey]}
+							items={menuItems}
+							onClick={() => {
+								setNavOpen(false)
+							}}
+						/>
 				</Drawer>
 
 				<Suspense fallback={null}>

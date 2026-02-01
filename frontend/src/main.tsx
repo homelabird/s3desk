@@ -8,6 +8,7 @@ import 'antd/dist/reset.css'
 import './index.css'
 import App from './App.tsx'
 
+// Keep a single QueryClient instance for the app lifetime.
 const queryClient = new QueryClient()
 
 createRoot(document.getElementById('root')!).render(

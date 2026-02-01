@@ -122,7 +122,7 @@ function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => vo
 	return (
 		<Space.Compact style={{ width: '100%' }}>
 			<Input.Password
-				placeholder="Must match API_TOKEN"
+				placeholder="Must match API_TOKEN…"
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
 				onBlur={apply}
@@ -286,7 +286,7 @@ export function SettingsPage(props: Props) {
 
 									<Form.Item label="Selected Profile" extra="Used by most pages to scope S3 operations.">
 										<Space.Compact style={{ width: '100%' }}>
-											<Input value={props.profileId ?? ''} placeholder="(none)" readOnly />
+											<Input value={props.profileId ?? ''} placeholder="(none)…" readOnly />
 											<Button danger onClick={() => props.setProfileId(null)}>
 												Clear
 											</Button>

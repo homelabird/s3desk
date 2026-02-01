@@ -66,8 +66,9 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 		if (!action) return null
 		const label = props.showLabels ? action.shortLabel ?? action.label ?? opts.fallbackLabel : null
 		const disabled = !action.enabled
+		const ariaLabel = action.label ?? opts.fallbackLabel
 		const button = (
-			<Button size="middle" icon={opts.icon} danger={opts.danger} disabled={disabled} onClick={action.run}>
+			<Button size="middle" icon={opts.icon} danger={opts.danger} disabled={disabled} onClick={action.run} aria-label={ariaLabel}>
 				{label}
 			</Button>
 		)
@@ -85,13 +86,28 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					{props.isAdvanced ? (
 						<>
 							<Tooltip title="Back">
-								<Button icon={<LeftOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoBack} onClick={props.onGoBack} />
+								<Button
+									icon={<LeftOutlined />}
+									disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
+									onClick={props.onGoBack}
+									aria-label="Go back"
+								/>
 							</Tooltip>
 							<Tooltip title="Forward">
-								<Button icon={<RightOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoForward} onClick={props.onGoForward} />
+								<Button
+									icon={<RightOutlined />}
+									disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
+									onClick={props.onGoForward}
+									aria-label="Go forward"
+								/>
 							</Tooltip>
 							<Tooltip title="Up">
-								<Button icon={<UpOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoUp} onClick={props.onGoUp} />
+								<Button
+									icon={<UpOutlined />}
+									disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
+									onClick={props.onGoUp}
+									aria-label="Go up"
+								/>
 							</Tooltip>
 						</>
 					) : null}
@@ -99,7 +115,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					<Select
 						allowClear
 						showSearch
-						placeholder="Bucket"
+						placeholder="Bucket…"
 						aria-label="Bucket"
 						style={{ width: 260, maxWidth: '100%' }}
 						value={props.bucket || undefined}
@@ -139,7 +155,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					) : null}
 					<Tooltip title="Transfers">
 						<Badge count={props.activeTransferCount} size="small" showZero={false}>
-							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers}>
+							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers} aria-label="Transfers">
 								{props.showLabels ? 'Transfers' : null}
 							</Button>
 						</Badge>
@@ -151,11 +167,17 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 								onClick={props.onRefresh}
 								loading={props.isRefreshing}
 								disabled={!props.hasProfile || props.isOffline || !props.bucket}
+								aria-label="Refresh"
 							/>
 						</Tooltip>
 					) : null}
 					<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-						<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile || props.isOffline} data-testid="objects-toolbar-more">
+						<Button
+							icon={<EllipsisOutlined />}
+							disabled={!props.hasProfile || props.isOffline}
+							data-testid="objects-toolbar-more"
+							aria-label="More actions"
+						>
 							More
 						</Button>
 					</Dropdown>
@@ -171,18 +193,33 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					{props.isAdvanced ? (
 						<>
 							<Tooltip title="Back">
-								<Button icon={<LeftOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoBack} onClick={props.onGoBack} />
+								<Button
+									icon={<LeftOutlined />}
+									disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
+									onClick={props.onGoBack}
+									aria-label="Go back"
+								/>
 							</Tooltip>
 							<Tooltip title="Forward">
-								<Button icon={<RightOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoForward} onClick={props.onGoForward} />
+								<Button
+									icon={<RightOutlined />}
+									disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
+									onClick={props.onGoForward}
+									aria-label="Go forward"
+								/>
 							</Tooltip>
-							<Button icon={<UpOutlined />} disabled={!props.hasProfile || props.isOffline || !props.canGoUp} onClick={props.onGoUp}>
+							<Button
+								icon={<UpOutlined />}
+								disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
+								onClick={props.onGoUp}
+								aria-label="Go up"
+							>
 								Up
 							</Button>
 						</>
 					) : null}
 					<Dropdown menu={props.uploadMenu} trigger={['click']}>
-						<Button icon={<CloudUploadOutlined />} disabled={!canUpload}>
+						<Button icon={<CloudUploadOutlined />} disabled={!canUpload} aria-label="Upload">
 							{props.showLabels ? 'Upload' : null}
 						</Button>
 					</Dropdown>
@@ -203,25 +240,40 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					) : null}
 					<Tooltip title="Transfers">
 						<Badge count={props.activeTransferCount} size="small" showZero={false}>
-							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers}>
+							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers} aria-label="Transfers">
 								{props.showLabels ? 'Transfers' : null}
 							</Button>
 						</Badge>
 					</Tooltip>
 					{props.isAdvanced && !props.dockTree ? (
-						<Button icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile || props.isOffline}>
+						<Button
+							icon={<FolderOutlined />}
+							onClick={props.onOpenTree}
+							disabled={!props.hasProfile || props.isOffline}
+							aria-label="Folders"
+						>
 							{props.showLabels ? 'Folders' : null}
 						</Button>
 					) : null}
 					{props.isAdvanced && !props.dockDetails ? (
-						<Button icon={<InfoCircleOutlined />} onClick={props.onOpenDetails} disabled={!props.hasProfile || props.isOffline}>
+						<Button
+							icon={<InfoCircleOutlined />}
+							onClick={props.onOpenDetails}
+							disabled={!props.hasProfile || props.isOffline}
+							aria-label="Details"
+						>
 							{props.showLabels ? 'Details' : null}
 						</Button>
 					) : null}
 				</Space>
 
 				<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-					<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile || props.isOffline} data-testid="objects-toolbar-more">
+					<Button
+						icon={<EllipsisOutlined />}
+						disabled={!props.hasProfile || props.isOffline}
+						data-testid="objects-toolbar-more"
+						aria-label="More actions"
+					>
 						{props.showLabels ? 'Actions' : null}
 					</Button>
 				</Dropdown>
@@ -230,7 +282,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 			<Select
 				allowClear
 				showSearch
-				placeholder="Bucket"
+				placeholder="Bucket…"
 				aria-label="Bucket"
 				style={{ width: '100%', maxWidth: '100%' }}
 				value={props.bucket || undefined}

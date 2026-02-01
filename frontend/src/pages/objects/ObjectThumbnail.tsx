@@ -78,5 +78,5 @@ export function ObjectThumbnail(props: Props) {
 		return <span style={style} aria-hidden />
 	}
 
-	return <img src={url} style={style} loading="lazy" alt="" />
+	return <img src={url} style={style} loading="lazy" alt="" width={props.size} height={props.size} />
 }

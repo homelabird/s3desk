@@ -169,13 +169,14 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			{props.isCompact ? (
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>
 					{searchScopeRow}
-					<Input
-						allowClear
-						placeholder="Search current folder"
-						style={{ width: '100%', maxWidth: '100%' }}
-						value={props.searchDraft}
-						onChange={(e) => props.onSearchDraftChange(e.target.value)}
-					/>
+						<Input
+							allowClear
+							placeholder="Search current folder…"
+							aria-label="Search current folder"
+							style={{ width: '100%', maxWidth: '100%' }}
+							value={props.searchDraft}
+							onChange={(e) => props.onSearchDraftChange(e.target.value)}
+						/>
 					<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
 						<Button
 							icon={<FilterOutlined />}
@@ -199,13 +200,14 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					{searchScopeRow}
 					<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
 						<Space wrap>
-							<Input
-								allowClear
-								placeholder="Search current folder"
-								style={{ width: 320, maxWidth: '100%' }}
-								value={props.searchDraft}
-								onChange={(e) => props.onSearchDraftChange(e.target.value)}
-							/>
+								<Input
+									allowClear
+									placeholder="Search current folder…"
+									aria-label="Search current folder"
+									style={{ width: 320, maxWidth: '100%' }}
+									value={props.searchDraft}
+									onChange={(e) => props.onSearchDraftChange(e.target.value)}
+								/>
 							<Button
 								icon={<FilterOutlined />}
 								type={props.hasActiveView ? 'primary' : 'default'}

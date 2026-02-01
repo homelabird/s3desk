@@ -1,6 +1,6 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Dropdown, Form, Grid, Menu, Space, Typography, message } from 'antd'
-import { FolderOutlined, SnippetsOutlined } from '@ant-design/icons'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, Button, Dropdown, Grid, Menu, Typography, message } from 'antd'
+import { SnippetsOutlined } from '@ant-design/icons'
 import {
 	lazy,
 	Suspense,
@@ -11,48 +11,49 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type CSSProperties,
+	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError, RequestAbortedError } from '../api/client'
-import type { InputRef, MenuProps } from 'antd'
-import type { DataNode, EventDataNode } from 'antd/es/tree'
-import type { Bucket, Job, JobCreateRequest, ListObjectsResponse, ObjectFavoritesResponse, ObjectItem } from '../api/types'
+import { APIClient, APIError } from '../api/client'
+import type { InputRef } from 'antd'
+import type { Bucket, JobCreateRequest, ListObjectsResponse, ObjectItem } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
-import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
-import { confirmDangerAction } from '../lib/confirmDangerAction'
-import { collectFilesFromDirectoryHandle, getDevicePickerSupport, normalizeRelativePath, pickDirectory } from '../lib/deviceFs'
+import { getDevicePickerSupport } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
-import { listAllObjects } from '../lib/objects'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
-import { formatDateTime, parseTimeMs } from '../lib/format'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
-import { formatBytes } from '../lib/transfer'
 import styles from './objects/objects.module.css'
-import type { CommandItem, UIAction, UIActionOrDivider } from './objects/objectsActions'
+import type { UIActionOrDivider } from './objects/objectsActions'
 import {
 	actionToMenuItem,
 	buildActionMenu,
-	commandItemsFromActions,
 	compactMenuItems,
-	filterActionItems,
-	filterActions,
 	trimActionDividers,
 } from './objects/objectsActions'
-import type { ClipboardObjects } from './objects/objectsActionCatalog'
-import { buildObjectsActionCatalog } from './objects/objectsActionCatalog'
-import type { ObjectPreview, ObjectSort, ObjectTypeFilter } from './objects/objectsTypes'
+import type { ObjectSort, ObjectTypeFilter } from './objects/objectsTypes'
 import { ObjectsLayout } from './objects/ObjectsLayout'
 import { ObjectsListHeader } from './objects/ObjectsListHeader'
-import { ObjectsObjectRow, ObjectsPrefixRow } from './objects/ObjectsListRow'
+import { ObjectsObjectRowItem, ObjectsPrefixRowItem } from './objects/ObjectsListRowItems'
 import { ObjectsListSectionContainer } from './objects/ObjectsListSectionContainer'
 import { ObjectThumbnail } from './objects/ObjectThumbnail'
 import { ObjectsSelectionBarSection } from './objects/ObjectsSelectionBarSection'
+import type { ObjectRow } from './objects/objectsListUtils'
+import {
+	buildObjectRows,
+	fileExtensionFromKey,
+	guessPreviewKind,
+	normalizeForSearch,
+	normalizePrefix,
+	parentPrefixFromKey,
+	splitLines,
+	splitSearchTokens,
+	uniquePrefixes,
+} from './objects/objectsListUtils'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
@@ -65,8 +66,37 @@ import {
 	THUMBNAIL_CACHE_MAX_ENTRIES,
 	THUMBNAIL_CACHE_MIN_ENTRIES,
 } from '../lib/thumbnailCache'
-import { useObjectsListKeydown } from './objects/useObjectsListKeydown'
+import { useObjectsListKeydownHandler } from './objects/useObjectsListKeydownHandler'
 import { useObjectsCommandPalette } from './objects/useObjectsCommandPalette'
+import { useObjectPreview } from './objects/useObjectPreview'
+import { useObjectDownloads } from './objects/useObjectDownloads'
+import { useObjectsAutoScan } from './objects/useObjectsAutoScan'
+import { useSearchHighlight } from './objects/useSearchHighlight'
+import { useObjectsTree } from './objects/useObjectsTree'
+import { useObjectsLayout } from './objects/useObjectsLayout'
+import { useObjectsActionCatalog } from './objects/useObjectsActionCatalog'
+import { useObjectsClipboard } from './objects/useObjectsClipboard'
+import { useObjectsDnd } from './objects/useObjectsDnd'
+import { useObjectsSelection } from './objects/useObjectsSelection'
+import { useObjectsContextMenu } from './objects/useObjectsContextMenu'
+import { useObjectsSelectionHandlers } from './objects/useObjectsSelectionHandlers'
+import { useObjectsSelectionBulk } from './objects/useObjectsSelectionBulk'
+import { useObjectsSelectionEffects } from './objects/useObjectsSelectionEffects'
+import { useObjectsFavorites } from './objects/useObjectsFavorites'
+import { useObjectsDetailsActions } from './objects/useObjectsDetailsActions'
+import { useObjectsSelectionBarActions } from './objects/useObjectsSelectionBarActions'
+import { useObjectsPresign } from './objects/useObjectsPresign'
+import { useObjectsRename } from './objects/useObjectsRename'
+import { useObjectsUploadFolder } from './objects/useObjectsUploadFolder'
+import { useObjectsCopyMove } from './objects/useObjectsCopyMove'
+import { useObjectsDelete } from './objects/useObjectsDelete'
+import { useObjectsNewFolder } from './objects/useObjectsNewFolder'
+import { useObjectsZipJobs } from './objects/useObjectsZipJobs'
+import { useObjectsIndexing } from './objects/useObjectsIndexing'
+import { useObjectsDownloadPrefix } from './objects/useObjectsDownloadPrefix'
+import { useObjectsUploadDrop } from './objects/useObjectsUploadDrop'
+import { useObjectsDeleteConfirm } from './objects/useObjectsDeleteConfirm'
+import { useObjectsPrefixSummary } from './objects/useObjectsPrefixSummary'
 
 const ObjectsCommandPaletteModal = lazy(async () => {
 	const m = await import('./objects/ObjectsCommandPaletteModal')
@@ -142,10 +172,6 @@ type Props = {
 	profileId: string | null
 }
 
-type Row =
-	| { kind: 'prefix'; prefix: string }
-	| { kind: 'object'; object: ObjectItem }
-
 type Location = { bucket: string; prefix: string }
 
 type LocationTab = {
@@ -158,36 +184,10 @@ type LocationTab = {
 
 type ObjectsUIMode = 'simple' | 'advanced'
 
-type ContextMenuSource = 'context' | 'button'
-type ContextMenuKind = 'object' | 'prefix' | 'list'
-type ContextMenuState = {
-	open: boolean
-	source: ContextMenuSource | null
-	kind: ContextMenuKind | null
-	key: string | null
-}
-type ContextMenuPoint = {
-	x: number
-	y: number
-}
-type ContextMenuMatch = {
-	source: ContextMenuSource
-	kind: ContextMenuKind
-	key: string
-}
-
-const DND_MIME = 'application/x-s3desk-dnd'
-const CONTEXT_MENU_VIEWPORT_PADDING_PX = 8
-const LIST_CONTEXT_MENU_MAX_HEIGHT_PX = 320
-const CONTEXT_MENU_CLASS_NAME = 'objects-context-menu'
 const OBJECTS_LIST_PAGE_SIZE = 200
 const AUTO_INDEX_COOLDOWN_MS = 5 * 60 * 1000
 const COMPACT_ROW_HEIGHT_PX = 52
 const WIDE_ROW_HEIGHT_PX = 40
-
-type DndPayload =
-	| { kind: 'objects'; bucket: string; keys: string[] }
-	| { kind: 'prefix'; bucket: string; prefix: string }
 
 export function ObjectsPage(props: Props) {
 	const queryClient = useQueryClient()
@@ -208,6 +208,13 @@ export function ObjectsPage(props: Props) {
 	)
 
 	const isDesktop = !!screens.lg
+	const handleJobsLinkClick = useCallback(
+		(event: ReactMouseEvent<HTMLElement>) => {
+			event.preventDefault()
+			navigate('/jobs')
+		},
+		[navigate],
+	)
 	const isWideDesktop = !!screens.xl
 	const canDragDrop = !!screens.lg && !isOffline
 
@@ -314,18 +321,7 @@ export function ObjectsPage(props: Props) {
 		OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 	)
 	const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false)
-	const [treeWidth, setTreeWidth] = useLocalStorageState<number>('objectsTreeWidth', 300)
-	const [treeExpandedByBucket, setTreeExpandedByBucket] = useLocalStorageState<Record<string, string[]>>('objectsTreeExpandedByBucket', {})
-	const treeExpandedByBucketRef = useRef<Record<string, string[]>>(treeExpandedByBucket)
-	const [treeData, setTreeData] = useState<DataNode[]>(() => [{ key: '/', title: '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: '#1677ff' }} /> }])
-	const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([])
-	const [treeSelectedKeys, setTreeSelectedKeys] = useState<string[]>(['/'])
-	const treeLoadedKeysRef = useRef<Set<string>>(new Set())
-	const treeLoadingKeysRef = useRef<Set<string>>(new Set())
-	const treeEpochRef = useRef(0)
-	const [treeDrawerOpen, setTreeDrawerOpen] = useState(false)
 	const [detailsOpen, setDetailsOpen] = useLocalStorageState<boolean>('objectsDetailsOpen', true)
-	const [detailsWidth, setDetailsWidth] = useLocalStorageState<number>('objectsDetailsWidth', 480)
 	const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
 	const layoutRef = useRef<HTMLDivElement | null>(null)
 	const [layoutWidthPx, setLayoutWidthPx] = useState(0)
@@ -333,9 +329,6 @@ export function ObjectsPage(props: Props) {
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 	const [scrollMargin, setScrollMargin] = useState(0)
 	const [autoScanReady, setAutoScanReady] = useState(false)
-	const [preview, setPreview] = useState<ObjectPreview | null>(null)
-	const previewAbortRef = useRef<(() => void) | null>(null)
-	const previewURLRef = useRef<string | null>(null)
 	const normalizedThumbnailCacheSize = useMemo(() => {
 		if (typeof thumbnailCacheSize !== 'number' || !Number.isFinite(thumbnailCacheSize)) {
 			return THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES
@@ -356,23 +349,50 @@ export function ObjectsPage(props: Props) {
 		)
 		return clamped * 60 * 60 * 1000
 	}, [autoIndexTtlHours])
-	const autoIndexPendingRef = useRef(false)
-	const autoIndexLastKeyRef = useRef<string | null>(null)
-	const autoIndexLastTriggeredRef = useRef<number>(0)
-	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
-	const [favoritePendingKeys, setFavoritePendingKeys] = useState<Set<string>>(() => new Set())
-	const [lastSelectedObjectKey, setLastSelectedObjectKey] = useState<string | null>(null)
-	const [contextMenuState, setContextMenuState] = useState<ContextMenuState>({
-		open: false,
-		source: null,
-		kind: null,
-		key: null,
+	const { selectedKeys, setSelectedKeys, selectedCount, lastSelectedObjectKey, setLastSelectedObjectKey, clearSelection } = useObjectsSelection()
+	const {
+		treeData,
+		treeExpandedKeys,
+		setTreeExpandedKeys,
+		treeSelectedKeys,
+		setTreeSelectedKeys,
+		onTreeLoadData,
+		refreshTreeNode,
+		treeDrawerOpen,
+		setTreeDrawerOpen,
+	} = useObjectsTree({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		debugEnabled: debugObjectsList,
+		log: logObjectsDebug,
 	})
-	const [contextMenuPoint, setContextMenuPoint] = useState<ContextMenuPoint | null>(null)
-	const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPoint | null>(null)
-	const contextMenuRef = useRef<HTMLDivElement | null>(null)
-	const pendingSelectRef = useRef<{ key: string; openDetails: boolean } | null>(null)
-	const uploadDragCounterRef = useRef(0)
+	const {
+		dockTree,
+		dockDetails,
+		detailsVisible,
+		treeWidthUsed,
+		detailsWidthUsed,
+		isCompactList,
+		treeResizeHandleWidth,
+		detailsResizeHandleWidth,
+		onTreeResizePointerDown,
+		onTreeResizePointerMove,
+		onTreeResizePointerUp,
+		onDetailsResizePointerDown,
+		onDetailsResizePointerMove,
+		onDetailsResizePointerUp,
+	} = useObjectsLayout({
+		layoutWidthPx,
+		isDesktop,
+		isWideDesktop,
+		isAdvanced,
+		detailsOpen,
+		detailsDrawerOpen,
+		setDetailsDrawerOpen,
+		setTreeDrawerOpen,
+	})
 	const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
 	const uploadFolderInputRef = useRef<HTMLInputElement | null>(null)
 	useEffect(() => {
@@ -381,51 +401,11 @@ export function ObjectsPage(props: Props) {
 		el.setAttribute('webkitdirectory', '')
 		el.setAttribute('directory', '')
 	}, [uploadFolderInputRef])
-	const [uploadDropActive, setUploadDropActive] = useState(false)
-	const [dndHoverPrefix, setDndHoverPrefix] = useState<string | null>(null)
-	const [presignOpen, setPresignOpen] = useState(false)
-	const [presign, setPresign] = useState<{ key: string; url: string; expiresAt: string } | null>(null)
-	const [presignKey, setPresignKey] = useState<string | null>(null)
-	const [deletingKey, setDeletingKey] = useState<string | null>(null)
-	const [clipboardObjects, setClipboardObjects] = useState<ClipboardObjects | null>(null)
-	const [copyMoveOpen, setCopyMoveOpen] = useState(false)
-	const [copyMoveMode, setCopyMoveMode] = useState<'copy' | 'move'>('copy')
-	const [copyMoveSrcKey, setCopyMoveSrcKey] = useState<string | null>(null)
-	const [copyMoveForm] = Form.useForm<{ dstBucket: string; dstKey: string; dryRun: boolean; confirm: string }>()
-	const [copyPrefixOpen, setCopyPrefixOpen] = useState(false)
-	const [copyPrefixMode, setCopyPrefixMode] = useState<'copy' | 'move'>('copy')
-	const [copyPrefixSrcPrefix, setCopyPrefixSrcPrefix] = useState('')
-	const [copyPrefixForm] = Form.useForm<{
-		dstBucket: string
-		dstPrefix: string
-		include: string
-		exclude: string
-		dryRun: boolean
-		confirm: string
-	}>()
-	const [deletePrefixConfirmOpen, setDeletePrefixConfirmOpen] = useState(false)
-	const [deletePrefixConfirmDryRun, setDeletePrefixConfirmDryRun] = useState(false)
-	const [deletePrefixConfirmPrefix, setDeletePrefixConfirmPrefix] = useState('')
-	const [deletePrefixConfirmText, setDeletePrefixConfirmText] = useState('')
-	const [newFolderOpen, setNewFolderOpen] = useState(false)
-	const [newFolderForm] = Form.useForm<{ name: string }>()
-	const [renameOpen, setRenameOpen] = useState(false)
-	const [renameKind, setRenameKind] = useState<'object' | 'prefix'>('object')
-	const [renameSource, setRenameSource] = useState<string | null>(null)
-	const [renameForm] = Form.useForm<{ name: string; confirm: string }>()
-	const [downloadPrefixOpen, setDownloadPrefixOpen] = useState(false)
-	const [downloadPrefixForm] = Form.useForm<{ localFolder: string }>()
-	const [downloadPrefixFolderLabel, setDownloadPrefixFolderLabel] = useState('')
-	const [downloadPrefixFolderHandle, setDownloadPrefixFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
-	const [downloadPrefixSubmitting, setDownloadPrefixSubmitting] = useState(false)
+
+
 	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
 	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
-	const [uploadFolderOpen, setUploadFolderOpen] = useState(false)
-	const [uploadFolderForm] = Form.useForm<{ localFolder: string; moveAfterUpload: boolean; cleanupEmptyDirs: boolean }>()
-	const [uploadFolderHandle, setUploadFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
-	const [uploadFolderLabel, setUploadFolderLabel] = useState('')
-	const [uploadFolderSubmitting, setUploadFolderSubmitting] = useState(false)
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
@@ -438,14 +418,6 @@ export function ObjectsPage(props: Props) {
 	useEffect(() => {
 		prefixByBucketRef.current = prefixByBucket
 	}, [prefixByBucket])
-
-	useEffect(() => {
-		treeExpandedByBucketRef.current = treeExpandedByBucket
-	}, [treeExpandedByBucket])
-
-	useEffect(() => {
-		setDndHoverPrefix(null)
-	}, [isDesktop])
 
 	useEffect(() => {
 		const el = layoutRef.current
@@ -537,13 +509,7 @@ export function ObjectsPage(props: Props) {
 	}, [openPathModal])
 
 
-	useEffect(() => {
-		if (deletePrefixConfirmOpen) return
-		setDeletePrefixConfirmText('')
-		setDeletePrefixConfirmPrefix('')
-	}, [deletePrefixConfirmOpen])
-
-	const objectsQuery = useInfiniteQuery({
+const objectsQuery = useInfiniteQuery({
 		queryKey: ['objects', props.profileId, bucket, prefix, props.apiToken],
 		enabled: !!props.profileId && !!bucket,
 		initialPageParam: undefined as string | undefined,
@@ -605,14 +571,13 @@ export function ObjectsPage(props: Props) {
 		},
 	})
 
-	const favoritesQueryKey = ['objectFavorites', props.profileId, bucket, props.apiToken]
-	const favoritesQuery = useQuery({
-		queryKey: favoritesQueryKey,
-		enabled: !!props.profileId && !!bucket,
-		queryFn: () => api.listObjectFavorites({ profileId: props.profileId!, bucket }),
+	const { favoritesQuery, favoriteItems, favoriteKeys, favoritePendingKeys, toggleFavorite } = useObjectsFavorites({
+		api,
+		profileId: props.profileId,
+		bucket,
+		apiToken: props.apiToken,
+		objectsPages: objectsQuery.data?.pages ?? [],
 	})
-	const favoriteItems = useMemo(() => favoritesQuery.data?.items ?? [], [favoritesQuery.data?.items])
-	const favoriteKeys = useMemo(() => new Set(favoriteItems.map((item) => item.key)), [favoriteItems])
 
 	const globalSearchQueryText = deferredGlobalSearch.trim()
 	const globalSearchPrefixNormalized = normalizePrefix(globalSearchPrefix)
@@ -665,835 +630,75 @@ export function ObjectsPage(props: Props) {
 				maxSize: globalSearchMaxSizeBytes ?? undefined,
 				modifiedAfter: globalSearchModifiedAfter,
 				modifiedBefore: globalSearchModifiedBefore,
-			}),
+		}),
 		getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
 	})
 
-	const loadTreeChildren = useCallback(async (nodeKey: string): Promise<void> => {
-		if (!props.profileId || !bucket) return
-		if (treeLoadedKeysRef.current.has(nodeKey)) return
-		if (treeLoadingKeysRef.current.has(nodeKey)) return
-		treeLoadingKeysRef.current.add(nodeKey)
-
-		const epoch = treeEpochRef.current
-		const prefixesSet = new Set<string>()
-		const seenTokens = new Set<string>()
-		let token: string | undefined
-		let pageCount = 0
-
-		try {
-			for (;;) {
-				pageCount += 1
-				if (pageCount > 10000) {
-					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing exceeded page cap; stopping pagination', {
-						bucket,
-						prefix: nodeKey,
-					})
-					break
-				}
-				const resp = await api.listObjects({
-					profileId: props.profileId,
-					bucket,
-					prefix: nodeKey === '/' ? undefined : nodeKey,
-					delimiter: '/',
-					maxKeys: 1000,
-					continuationToken: token,
-				})
-				if (token) {
-					seenTokens.add(token)
-				}
-				const commonPrefixes = Array.isArray(resp.commonPrefixes) ? resp.commonPrefixes : []
-				for (const p of commonPrefixes) prefixesSet.add(p)
-				const pageEmpty = commonPrefixes.length === 0 && resp.items.length === 0
-				if (!resp.isTruncated) break
-				const nextToken = resp.nextContinuationToken ?? undefined
-				if (pageEmpty) {
-					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing returned empty page; stopping pagination', {
-						bucket,
-						prefix: nodeKey,
-						nextToken,
-					})
-					break
-				}
-				if (!nextToken) {
-					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing missing continuation token; stopping pagination', {
-						bucket,
-						prefix: nodeKey,
-					})
-					break
-				}
-				if (seenTokens.has(nextToken)) {
-					logObjectsDebug(debugObjectsList, 'warn', 'Tree listing repeated continuation token; stopping pagination', {
-						bucket,
-						prefix: nodeKey,
-						nextToken,
-					})
-					break
-				}
-				token = nextToken
-			}
-		} catch (err) {
-			message.error(formatErr(err))
-			treeLoadingKeysRef.current.delete(nodeKey)
-			return
-		}
-
-		if (treeEpochRef.current !== epoch) {
-			treeLoadingKeysRef.current.delete(nodeKey)
-			return
-		}
-
-		const children: DataNode[] = Array.from(prefixesSet)
-			.sort((a, b) => a.localeCompare(b))
-			.map((p) => ({
-				key: p,
-				title: folderLabelFromPrefix(p),
-				isLeaf: false,
-				icon: <FolderOutlined style={{ color: '#1677ff' }} />,
-			}))
-
-		setTreeData((prev) => upsertTreeChildren(prev, nodeKey, children))
-		treeLoadedKeysRef.current.add(nodeKey)
-		treeLoadingKeysRef.current.delete(nodeKey)
-		}, [api, bucket, debugObjectsList, props.profileId])
-
-	const onTreeLoadData = useCallback(async (node: EventDataNode<DataNode>) => {
-		const key = String(node.key)
-		await loadTreeChildren(key)
-	}, [loadTreeChildren])
-
-	const deleteMutation = useMutation({
-		mutationFn: async (keys: string[]) => {
-			if (keys.length < 1) throw new Error('select objects first')
-			if (keys.length > 50_000) throw new Error('too many keys; use a prefix delete job instead')
-			if (keys.length > 1000) {
-				const job = await createJobWithRetry({
-					type: 's3_delete_objects',
-					payload: { bucket, keys },
-				})
-				return { kind: 'job' as const, job }
-			}
-			let deleted = 0
-			for (let i = 0; i < keys.length; i += 1000) {
-				const batch = keys.slice(i, i + 1000)
-				const resp = await api.deleteObjects({ profileId: props.profileId!, bucket, keys: batch })
-				deleted += resp.deleted
-			}
-			return { kind: 'direct' as const, deleted }
-		},
-		onMutate: (keys) => setDeletingKey(keys.length === 1 ? keys[0] : null),
-		onSuccess: async (result, keys) => {
-			if (result.kind === 'direct') {
-				message.success(`Deleted ${result.deleted}`)
-			} else {
-				message.success(`Delete task started: ${result.job.id}`)
-				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-			}
-			setSelectedKeys((prev) => {
-				if (prev.size === 0) return prev
-				const next = new Set(prev)
-				for (const k of keys) next.delete(k)
-				return next
-			})
-			await queryClient.invalidateQueries({ queryKey: ['objects'] })
-		},
-		onSettled: (_, __, keys) => setDeletingKey((prev) => (keys.length === 1 && prev === keys[0] ? null : prev)),
-		onError: (err) => message.error(formatErr(err)),
+	const { zipPrefixJobMutation, zipObjectsJobMutation } = useObjectsZipJobs({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		transfers,
+		createJobWithRetry,
+		onJobsLinkClick: handleJobsLinkClick,
 	})
-
-	const deletePrefixJobMutation = useMutation({
-		mutationFn: (args: { prefix: string; dryRun: boolean }) =>
-			createJobWithRetry({
-				type: 'transfer_delete_prefix',
-				payload: {
-					bucket,
-					prefix: args.prefix,
-					deleteAll: false,
-					allowUnsafePrefix: false,
-					include: [],
-					exclude: [],
-					dryRun: args.dryRun,
-				},
-			}),
-		onSuccess: (job: Job) => message.success(`Delete task started: ${job.id}`),
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const zipPrefixJobMutation = useMutation({
-		mutationFn: async (args: { prefix: string }) => {
-			if (!props.profileId) throw new Error('profile is required')
-			if (!bucket) throw new Error('bucket is required')
-			return createJobWithRetry({
-				type: 's3_zip_prefix',
-				payload: { bucket, prefix: normalizePrefix(args.prefix) },
-			})
-		},
-			onSuccess: async (job: Job, args) => {
-				const normPrefix = normalizePrefix(args.prefix)
-				const label = normPrefix ? `Folder zip: ${normPrefix}` : 'Folder zip: (root)'
-				transfers.queueDownloadJobArtifact({
-					profileId: props.profileId!,
-					jobId: job.id,
-					label,
-				filenameHint: `job-${job.id}.zip`,
-				waitForJob: job.status !== 'succeeded',
-			})
-			message.open({
-				type: 'success',
-					content: (
-						<Space>
-							<Typography.Text>Zip task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
-								Open Transfers
-							</Button>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-							Open Jobs
-						</Button>
-					</Space>
-				),
-				duration: 6,
-			})
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const zipObjectsJobMutation = useMutation({
-		mutationFn: async (args: { keys: string[] }) => {
-			if (!props.profileId) throw new Error('profile is required')
-			if (!bucket) throw new Error('bucket is required')
-			if (args.keys.length < 1) throw new Error('select objects first')
-			if (args.keys.length > 10_000) throw new Error('too many keys (max 10000)')
-			return createJobWithRetry({
-				type: 's3_zip_objects',
-				payload: {
-					bucket,
-					keys: args.keys,
-					stripPrefix: normalizePrefix(prefix),
-				},
-			})
-		},
-		onSuccess: async (job: Job, args) => {
-			const label = `Zip selection: ${args.keys.length} object(s)`
-			transfers.queueDownloadJobArtifact({
-				profileId: props.profileId!,
-				jobId: job.id,
-				label,
-				filenameHint: `job-${job.id}.zip`,
-				waitForJob: job.status !== 'succeeded',
-			})
-			message.open({
-				type: 'success',
-					content: (
-						<Space>
-							<Typography.Text>Zip task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
-								Open Transfers
-							</Button>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-							Open Jobs
-						</Button>
-					</Space>
-				),
-				duration: 6,
-			})
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const copyPrefixJobMutation = useMutation({
-		mutationFn: (args: { mode: 'copy' | 'move'; srcPrefix: string; dstBucket: string; dstPrefix: string; include: string[]; exclude: string[]; dryRun: boolean }) =>
-			createJobWithRetry({
-				type: args.mode === 'copy' ? 'transfer_copy_prefix' : 'transfer_move_prefix',
-				payload: {
-					srcBucket: bucket,
-					srcPrefix: args.srcPrefix,
-					dstBucket: args.dstBucket,
-					dstPrefix: args.dstPrefix,
-					include: args.include,
-					exclude: args.exclude,
-					dryRun: args.dryRun,
-				},
-			}),
-		onSuccess: (job: Job, args) => {
-			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
-			setCopyPrefixOpen(false)
-			setCopyPrefixSrcPrefix('')
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const indexObjectsJobMutation = useMutation({
-		mutationFn: async (args: { prefix: string; fullReindex: boolean; silent?: boolean }) => {
-			if (!props.profileId) throw new Error('profile is required')
-			if (!bucket) throw new Error('bucket is required')
-			const p = normalizePrefix(args.prefix)
-			if (p.includes('*')) throw new Error('wildcards are not allowed')
-
-			return createJobWithRetry({
-				type: 's3_index_objects',
-				payload: {
-					bucket,
-					prefix: p,
-					fullReindex: args.fullReindex,
-				},
-			})
-		},
-		onSuccess: async (job: Job, variables) => {
-			if (!variables?.silent) {
-				message.open({
-					type: 'success',
-					content: (
-						<Space>
-							<Typography.Text>Index task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-								Open Jobs
-							</Button>
-						</Space>
-					),
-					duration: 6,
-				})
-			}
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	useEffect(() => {
-		if (!globalSearchOpen || !autoIndexEnabled) return
-		if (!props.profileId || !bucket) return
-		if (!globalSearchQueryText) return
-		const targetPrefix = globalSearchPrefixNormalized || normalizePrefix(prefix)
-		if (!targetPrefix.trim()) return
-		if (indexObjectsJobMutation.isPending || autoIndexPendingRef.current) return
-
-		const key = `${props.profileId}:${bucket}:${targetPrefix}`
-		if (autoIndexLastKeyRef.current === key && Date.now() - autoIndexLastTriggeredRef.current < AUTO_INDEX_COOLDOWN_MS) {
-			return
-		}
-
-		autoIndexPendingRef.current = true
-		;(async () => {
-			let indexedAtMs = 0
-			try {
-				const summary = await api.getObjectIndexSummary({
-					profileId: props.profileId!,
-					bucket,
-					prefix: targetPrefix,
-					sampleLimit: 1,
-				})
-				if (summary.indexedAt) {
-					indexedAtMs = Date.parse(summary.indexedAt)
-				}
-			} catch (err) {
-				if (!(err instanceof APIError) || err.code !== 'not_indexed') {
-					return
-				}
-			}
-
-			const stale = !indexedAtMs || Date.now() - indexedAtMs > autoIndexTtlMs
-			if (!stale) return
-
-			autoIndexLastKeyRef.current = key
-			autoIndexLastTriggeredRef.current = Date.now()
-			setIndexPrefix(targetPrefix)
-			indexObjectsJobMutation.mutate({ prefix: targetPrefix, fullReindex: true, silent: true })
-		})().finally(() => {
-			autoIndexPendingRef.current = false
-		})
-	}, [
+	const { indexObjectsJobMutation } = useObjectsIndexing({
 		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		globalSearchOpen,
+		globalSearchQueryText,
+		globalSearchPrefixNormalized,
 		autoIndexEnabled,
 		autoIndexTtlMs,
-		bucket,
-		globalSearchOpen,
-		globalSearchPrefixNormalized,
-		globalSearchQueryText,
-		indexObjectsJobMutation,
-		prefix,
-		props.profileId,
-	])
-
-	const openCopyPrefix = (mode: 'copy' | 'move', srcPrefixOverride?: string) => {
-		if (!props.profileId || !bucket) return
-		const srcPrefix = normalizePrefix(srcPrefixOverride ?? prefix)
-		if (!srcPrefix) return
-
-		setCopyPrefixMode(mode)
-		setCopyPrefixSrcPrefix(srcPrefix)
-		setCopyPrefixOpen(true)
-		copyPrefixForm.setFieldsValue({
-			dstBucket: bucket,
-			dstPrefix: suggestCopyPrefix(srcPrefix),
-			include: '',
-			exclude: '',
-			dryRun: false,
-			confirm: '',
-		})
-	}
-
-	const openDownloadPrefix = (srcPrefixOverride?: string) => {
-		if (!props.profileId || !bucket) return
-		const srcPrefix = normalizePrefix(srcPrefixOverride ?? prefix)
-		if (!srcPrefix) return
-
-		setDownloadPrefixFolderHandle(null)
-		setDownloadPrefixFolderLabel('')
-		setDownloadPrefixOpen(true)
-		downloadPrefixForm.setFieldsValue({ localFolder: '' })
-	}
-
-	const openNewFolder = () => {
-		if (!props.profileId || !bucket) return
-		setNewFolderOpen(true)
-		newFolderForm.setFieldsValue({ name: '' })
-		window.setTimeout(() => {
-			const el = document.getElementById('objectsNewFolderInput') as HTMLInputElement | null
-			el?.focus()
-		}, 0)
-	}
-
-	const openRenameObject = (key: string) => {
-		if (!props.profileId || !bucket) return
-		setRenameKind('object')
-		setRenameSource(key)
-		renameForm.setFieldsValue({ name: fileNameFromKey(key), confirm: '' })
-		setRenameOpen(true)
-		window.setTimeout(() => {
-			const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
-			el?.focus()
-		}, 0)
-	}
-
-	const openRenamePrefix = (srcPrefix: string) => {
-		if (!props.profileId || !bucket) return
-		setRenameKind('prefix')
-		setRenameSource(srcPrefix)
-		renameForm.setFieldsValue({ name: folderLabelFromPrefix(srcPrefix), confirm: '' })
-		setRenameOpen(true)
-		window.setTimeout(() => {
-			const el = document.getElementById('objectsRenameInput') as HTMLInputElement | null
-			el?.focus()
-		}, 0)
-	}
-
-	const copyMoveMutation = useMutation({
-		mutationFn: (args: { mode: 'copy' | 'move'; srcKey: string; dstBucket: string; dstKey: string; dryRun: boolean }) => {
-			const type = args.mode === 'copy' ? 'transfer_copy_object' : 'transfer_move_object'
-			return createJobWithRetry({
-				type,
-				payload: {
-					srcBucket: bucket,
-					srcKey: args.srcKey,
-					dstBucket: args.dstBucket,
-					dstKey: args.dstKey,
-					dryRun: args.dryRun,
-				},
-			})
-		},
-		onSuccess: (job, args) => {
-			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
-			setCopyMoveOpen(false)
-			setCopyMoveSrcKey(null)
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const createFolderMutation = useMutation({
-		mutationFn: async (args: { name: string }) => {
-			if (!props.profileId) throw new Error('profile is required')
-			if (!bucket) throw new Error('bucket is required')
-			const raw = args.name.trim().replace(/\/+$/, '')
-			if (!raw) throw new Error('folder name is required')
-			if (raw === '.' || raw === '..') throw new Error('invalid folder name')
-			if (raw.includes('/')) throw new Error("folder name must not contain '/'")
-			if (raw.includes('\u0000')) throw new Error('invalid folder name')
-
-			const key = `${normalizePrefix(prefix)}${raw}/`
-			return api.createFolder({ profileId: props.profileId, bucket, key })
-		},
-		onSuccess: async (resp) => {
-			message.success(`Folder created: ${resp.key}`)
-			setNewFolderOpen(false)
-			newFolderForm.resetFields()
-			await queryClient.invalidateQueries({ queryKey: ['objects'] })
-			const parentKey = normalizePrefix(prefix) || '/'
-			treeLoadedKeysRef.current.delete(parentKey)
-			void loadTreeChildren(parentKey)
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const renameMutation = useMutation({
-		mutationFn: async (args: { kind: 'object' | 'prefix'; src: string; name: string }) => {
-			if (!props.profileId) throw new Error('profile is required')
-			if (!bucket) throw new Error('bucket is required')
-			const raw = args.name.trim().replace(/\/+$/, '')
-			if (!raw) throw new Error('name is required')
-			if (raw === '.' || raw === '..') throw new Error('invalid name')
-			if (raw.includes('/')) throw new Error("name must not contain '/'")
-			if (raw.includes('\u0000')) throw new Error('invalid name')
-
-			if (args.kind === 'prefix') {
-				const srcPrefix = normalizePrefix(args.src)
-				const parent = parentPrefixFromKey(srcPrefix.replace(/\/+$/, ''))
-				const dstPrefix = `${parent}${raw}/`
-				if (dstPrefix === srcPrefix) throw new Error('already in destination')
-				if (dstPrefix.startsWith(srcPrefix)) throw new Error('destination must not be under source prefix')
-				return createJobWithRetry({
-					type: 'transfer_move_prefix',
-					payload: {
-						srcBucket: bucket,
-						srcPrefix,
-						dstBucket: bucket,
-						dstPrefix,
-						include: [],
-						exclude: [],
-						dryRun: false,
-					},
-				})
-			}
-
-			const srcKey = args.src.trim().replace(/^\/+/, '')
-			const parent = parentPrefixFromKey(srcKey)
-			const dstKey = `${parent}${raw}`
-			if (dstKey === srcKey) throw new Error('already in destination')
-			return createJobWithRetry({
-				type: 'transfer_move_object',
-				payload: {
-					srcBucket: bucket,
-					srcKey,
-					dstBucket: bucket,
-					dstKey,
-					dryRun: false,
-				},
-			})
-		},
-		onSuccess: async (job) => {
-			message.open({
-				type: 'success',
-				content: (
-					<Space>
-						<Typography.Text>Rename task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-							Open Jobs
-						</Button>
-					</Space>
-				),
-				duration: 6,
-			})
-			setRenameOpen(false)
-			setRenameSource(null)
-			renameForm.resetFields()
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const pasteObjectsMutation = useMutation({
-		mutationFn: async (args: { mode: 'copy' | 'move'; srcBucket: string; srcPrefix: string; keys: string[]; dstBucket: string; dstPrefix: string }) => {
-			if (!props.profileId) throw new Error('profile is required')
-			if (!bucket) throw new Error('bucket is required')
-
-			const srcBucket = args.srcBucket.trim()
-			const dstBucket = args.dstBucket.trim()
-			if (!srcBucket) throw new Error('source bucket is required')
-			if (!dstBucket) throw new Error('destination bucket is required')
-
-			const srcPrefix = normalizePrefix(args.srcPrefix)
-			const dstPrefix = normalizePrefix(args.dstPrefix)
-
-			const uniqueKeys = Array.from(new Set(args.keys.map((k) => k.trim()).filter(Boolean)))
-			if (uniqueKeys.length === 0) throw new Error('no keys to paste')
-			if (uniqueKeys.length > 50_000) throw new Error('too many keys to paste; use a prefix job instead')
-
-			const items: { srcKey: string; dstKey: string }[] = []
-			const dstSet = new Set<string>()
-
-			for (const srcKeyRaw of uniqueKeys) {
-				const srcKey = srcKeyRaw.replace(/^\/+/, '')
-				if (!srcKey) continue
-
-				let rel: string
-				if (srcPrefix && srcKey.startsWith(srcPrefix)) {
-					rel = srcKey.slice(srcPrefix.length)
-				} else {
-					rel = fileNameFromKey(srcKey)
-				}
-				rel = rel.replace(/^\/+/, '')
-				if (!rel) rel = fileNameFromKey(srcKey)
-
-				const dstKey = `${dstPrefix}${rel}`
-				if (srcBucket === dstBucket && dstKey === srcKey) continue
-
-				if (dstSet.has(dstKey)) {
-					throw new Error(`multiple keys map to the same destination: ${dstKey}`)
-				}
-				dstSet.add(dstKey)
-				items.push({ srcKey, dstKey })
-			}
-
-			if (items.length === 0) throw new Error('nothing to paste (already in destination)')
-
-			const type = args.mode === 'copy' ? 'transfer_copy_batch' : 'transfer_move_batch'
-			return createJobWithRetry({
-				type,
-				payload: {
-					srcBucket,
-					dstBucket,
-					items,
-					dryRun: false,
-				},
-			})
-		},
-		onSuccess: async (job, args) => {
-			message.open({
-				type: 'success',
-				content: (
-					<Space>
-						<Typography.Text>{args.mode === 'copy' ? 'Paste copy task' : 'Paste move task'} started: {job.id}</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-							Open Jobs
-						</Button>
-					</Space>
-				),
-				duration: 6,
-			})
-			if (args.mode === 'move') {
-				setClipboardObjects(null)
-			}
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const openCopyMove = (mode: 'copy' | 'move', key: string) => {
-		if (!props.profileId || !bucket) return
-		setCopyMoveMode(mode)
-		setCopyMoveSrcKey(key)
-		setCopyMoveOpen(true)
-		copyMoveForm.setFieldsValue({ dstBucket: bucket, dstKey: key, dryRun: false, confirm: '' })
-	}
-
-	const presignMutation = useMutation({
-		mutationFn: (key: string) =>
-			api.getObjectDownloadURL({ profileId: props.profileId!, bucket, key, proxy: downloadLinkProxyEnabled }),
-		onMutate: (key) => setPresignKey(key),
-		onSuccess: (resp, key) => {
-			setPresign({ key, url: resp.url, expiresAt: resp.expiresAt })
-			setPresignOpen(true)
-		},
-		onSettled: (_, __, key) => setPresignKey((prev) => (prev === key ? null : prev)),
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const buildFavoriteItem = useCallback(
-		(key: string, createdAt: string) => {
-			let found: ObjectItem | undefined
-			for (const page of objectsQuery.data?.pages ?? []) {
-				found = page.items.find((item) => item.key === key)
-				if (found) break
-			}
-			if (!found) {
-				found = favoriteItems.find((item) => item.key === key)
-			}
-			return {
-				key,
-				size: found?.size ?? 0,
-				etag: found?.etag ?? '',
-				lastModified: found?.lastModified ?? '',
-				storageClass: found?.storageClass ?? '',
-				createdAt,
-			}
-		},
-		[favoriteItems, objectsQuery.data],
-	)
-
-	const addFavoriteMutation = useMutation({
-		mutationFn: (key: string) => api.createObjectFavorite({ profileId: props.profileId!, bucket, key }),
-		onMutate: (key) => {
-			setFavoritePendingKeys((prev) => new Set(prev).add(key))
-		},
-		onSuccess: (fav) => {
-			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoritesQueryKey, (prev) => {
-				const item = buildFavoriteItem(fav.key, fav.createdAt)
-				if (!prev) {
-					return { bucket, items: [item] }
-				}
-				const items = Array.isArray(prev.items) ? prev.items.filter((entry) => entry.key !== fav.key) : []
-				return { ...prev, items: [item, ...items] }
-			})
-		},
-		onSettled: (_, __, key) => {
-			setFavoritePendingKeys((prev) => {
-				const next = new Set(prev)
-				next.delete(key)
-				return next
-			})
-		},
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const removeFavoriteMutation = useMutation({
-		mutationFn: (key: string) => api.deleteObjectFavorite({ profileId: props.profileId!, bucket, key }),
-		onMutate: (key) => {
-			setFavoritePendingKeys((prev) => new Set(prev).add(key))
-		},
-		onSuccess: (_, key) => {
-			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoritesQueryKey, (prev) => {
-				if (!prev || !Array.isArray(prev.items)) return prev
-				return { ...prev, items: prev.items.filter((entry) => entry.key !== key) }
-			})
-		},
-		onSettled: (_, __, key) => {
-			setFavoritePendingKeys((prev) => {
-				const next = new Set(prev)
-				next.delete(key)
-				return next
-			})
-		},
-		onError: (err) => message.error(formatErr(err)),
+		autoIndexCooldownMs: AUTO_INDEX_COOLDOWN_MS,
+		setIndexPrefix,
+		createJobWithRetry,
+		onJobsLinkClick: handleJobsLinkClick,
 	})
 
 	const searchTokens = useMemo(() => splitSearchTokens(deferredSearch), [deferredSearch])
 	const searchTokensNormalized = useMemo(() => searchTokens.map((token) => normalizeForSearch(token)), [searchTokens])
-	const highlightPattern = useMemo(() => {
-		if (searchTokens.length === 0) return null
-		const uniqueTokens = Array.from(new Set(searchTokens.filter(Boolean))).slice(0, 8)
-		if (uniqueTokens.length === 0) return null
+	const { highlightText } = useSearchHighlight(searchTokens)
 
-		const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-		const normalizedTokens = uniqueTokens.map((token) => normalizeForSearch(token)).filter(Boolean)
-		const rawPatterns = uniqueTokens.map(escape)
-		const loosePatterns = normalizedTokens.map((token) => token.split('').map(escape).join('[^\\p{L}\\p{N}]*'))
-		const patterns = Array.from(new Set([...rawPatterns, ...loosePatterns])).filter(Boolean)
-		if (patterns.length === 0) return null
-
-		return new RegExp(`(${patterns.join('|')})`, 'giu')
-	}, [searchTokens])
-	const highlightText = useCallback(
-		(value: string): ReactNode => {
-			if (!value) return value
-			if (!highlightPattern) return value
-
-			const parts = value.split(highlightPattern)
-			return (
-				<span>
-					{parts.map((part, idx) => {
-						if (idx % 2 === 0) return <span key={idx}>{part}</span>
-						return (
-							<span key={idx} style={{ background: '#fff1b8', paddingInline: 2, borderRadius: 2 }}>
-								{part}
-							</span>
-						)
-					})}
-				</span>
-			)
-		},
-		[highlightPattern],
+	const rows: ObjectRow[] = useMemo(
+		() =>
+			buildObjectRows({
+				pages: objectsQuery.data?.pages ?? [],
+				favoriteItems,
+				favoritesOnly,
+				favoriteKeys,
+				prefix,
+				searchTokens,
+				searchTokensNormalized,
+				extFilter,
+				minSize,
+				maxSize,
+				minModifiedMs,
+				maxModifiedMs,
+				typeFilter,
+				sort,
+				favoritesFirst,
+			}),
+		[
+			extFilter,
+			favoriteKeys,
+			favoriteItems,
+			favoritesFirst,
+			favoritesOnly,
+			maxModifiedMs,
+			maxSize,
+			minModifiedMs,
+			minSize,
+			objectsQuery.data,
+			prefix,
+			searchTokens,
+			searchTokensNormalized,
+			sort,
+			typeFilter,
+		],
 	)
-
-	const rows = useMemo(() => {
-		const pages = objectsQuery.data?.pages ?? []
-		const activePrefix = normalizePrefix(prefix)
-		const prefixes = favoritesOnly ? [] : uniquePrefixes(pages)
-		const items = favoritesOnly
-			? favoriteItems.filter((item) => (activePrefix ? item.key.startsWith(activePrefix) : true))
-			: pages.flatMap((p) => p.items)
-
-		const match = (value: string) => matchesSearchTokens(value, searchTokens, searchTokensNormalized)
-
-		const filteredPrefixes = prefixes.filter((p) => match(displayNameForPrefix(p, prefix)) || match(p))
-		const ext = extFilter.trim().replace(/^\./, '').toLowerCase()
-		let min = typeof minSize === 'number' && Number.isFinite(minSize) ? minSize : null
-		let max = typeof maxSize === 'number' && Number.isFinite(maxSize) ? maxSize : null
-		if (min != null && max != null && min > max) {
-			;[min, max] = [max, min]
-		}
-		let minTime = typeof minModifiedMs === 'number' && Number.isFinite(minModifiedMs) ? minModifiedMs : null
-		let maxTime = typeof maxModifiedMs === 'number' && Number.isFinite(maxModifiedMs) ? maxModifiedMs : null
-		if (minTime != null && maxTime != null && minTime > maxTime) {
-			;[minTime, maxTime] = [maxTime, minTime]
-		}
-
-		const filteredItems = items
-			.filter((o) => match(displayNameForKey(o.key, prefix)) || match(o.key))
-			.filter((o) => {
-				if (ext) {
-					if (fileExtensionFromKey(o.key) !== ext) return false
-				}
-				const size = o.size ?? 0
-				if (min != null && size < min) return false
-				if (max != null && size > max) return false
-				if (minTime != null || maxTime != null) {
-					const modified = parseTimeMs(o.lastModified)
-					if (!modified) return false
-					if (minTime != null && modified < minTime) return false
-					if (maxTime != null && modified > maxTime) return false
-				}
-				return true
-			})
-
-		const visiblePrefixes = typeFilter === 'files' ? [] : filteredPrefixes
-		const visibleItems = typeFilter === 'folders' ? [] : filteredItems
-
-		const sortedPrefixes = [...visiblePrefixes].sort((a, b) => (sort === 'name_desc' ? b.localeCompare(a) : a.localeCompare(b)))
-		const sortedItems = [...visibleItems].sort((a, b) => {
-			switch (sort) {
-				case 'name_asc':
-					return a.key.localeCompare(b.key)
-				case 'name_desc':
-					return b.key.localeCompare(a.key)
-				case 'size_asc':
-					return (a.size ?? 0) - (b.size ?? 0) || a.key.localeCompare(b.key)
-				case 'size_desc':
-					return (b.size ?? 0) - (a.size ?? 0) || a.key.localeCompare(b.key)
-				case 'time_asc':
-					return parseTimeMs(a.lastModified) - parseTimeMs(b.lastModified) || a.key.localeCompare(b.key)
-				case 'time_desc':
-					return parseTimeMs(b.lastModified) - parseTimeMs(a.lastModified) || a.key.localeCompare(b.key)
-				default:
-					return a.key.localeCompare(b.key)
-			}
-		})
-		const orderedItems = favoritesFirst
-			? sortedItems.reduce<{ favorites: ObjectItem[]; rest: ObjectItem[] }>(
-					(acc, item) => {
-						if (favoriteKeys.has(item.key)) acc.favorites.push(item)
-						else acc.rest.push(item)
-						return acc
-					},
-					{ favorites: [], rest: [] },
-				)
-			: null
-
-		const out: Row[] = []
-		for (const p of sortedPrefixes) out.push({ kind: 'prefix', prefix: p })
-		if (orderedItems) {
-			for (const obj of orderedItems.favorites) out.push({ kind: 'object', object: obj })
-			for (const obj of orderedItems.rest) out.push({ kind: 'object', object: obj })
-		} else {
-			for (const obj of sortedItems) out.push({ kind: 'object', object: obj })
-		}
-		return out
-	}, [
-		extFilter,
-		favoriteKeys,
-		favoriteItems,
-		favoritesFirst,
-		favoritesOnly,
-		maxModifiedMs,
-		maxSize,
-		minModifiedMs,
-		minSize,
-		objectsQuery.data,
-		prefix,
-		searchTokens,
-		searchTokensNormalized,
-		sort,
-		typeFilter,
-	])
 
 	const rowIndexByObjectKey = useMemo(() => {
 		const out = new Map<string, number>()
@@ -1536,6 +741,23 @@ export function ObjectsPage(props: Props) {
 		}
 		return out
 	}, [rows])
+
+	const {
+		selectObjectFromPointerEvent,
+		selectObjectFromCheckboxEvent,
+		ensureObjectSelectedForContextMenu,
+	} = useObjectsSelectionHandlers({
+		orderedVisibleObjectKeys,
+		lastSelectedObjectKey,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+	})
+	const { handleToggleSelectAll, selectRange, selectAllLoaded } = useObjectsSelectionBulk({
+		visibleObjectKeys,
+		orderedVisibleObjectKeys,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+	})
 
 	const { visiblePrefixCount, visibleFileCount } = useMemo(() => {
 		let prefixCount = 0
@@ -1726,41 +948,7 @@ export function ObjectsPage(props: Props) {
 			navigateToLocation(bucket, key === '/' ? '' : key, { recordHistory: true })
 			if (closeDrawer) setTreeDrawerOpen(false)
 		},
-		[bucket, navigateToLocation],
-	)
-
-	const handleFavoriteSelect = useCallback(
-		(key: string, closeDrawer: boolean) => {
-			if (!bucket) return
-			const targetPrefix = parentPrefixFromKey(key)
-			const normalizedCurrent = normalizePrefix(prefix)
-			const normalizedTarget = normalizePrefix(targetPrefix)
-
-			if (normalizedCurrent === normalizedTarget) {
-				setSelectedKeys(new Set([key]))
-				setLastSelectedObjectKey(key)
-				if (favoritesOpenDetails) {
-					setDetailsOpen(true)
-					setDetailsDrawerOpen(true)
-				}
-				if (closeDrawer) setTreeDrawerOpen(false)
-				return
-			}
-
-			pendingSelectRef.current = { key, openDetails: favoritesOpenDetails }
-			navigateToLocation(bucket, targetPrefix, { recordHistory: true })
-			if (closeDrawer) setTreeDrawerOpen(false)
-		},
-		[
-			bucket,
-			favoritesOpenDetails,
-			navigateToLocation,
-			prefix,
-			setDetailsDrawerOpen,
-			setDetailsOpen,
-			setLastSelectedObjectKey,
-			setSelectedKeys,
-		],
+		[bucket, navigateToLocation, setTreeDrawerOpen, setTreeSelectedKeys],
 	)
 
 	const canGoBack = !!activeTab && activeTab.historyIndex > 0
@@ -1840,22 +1028,6 @@ export function ObjectsPage(props: Props) {
 		})
 	}
 
-	const toggleFavorite = (key: string) => {
-		if (!props.profileId) {
-			message.info('Select a profile first')
-			return
-		}
-		if (!bucket) {
-			message.info('Select a bucket first')
-			return
-		}
-		if (favoriteKeys.has(key)) {
-			removeFavoriteMutation.mutate(key)
-			return
-		}
-		addFavoriteMutation.mutate(key)
-	}
-
 	const canGoUp = !!bucket && !!prefix && prefix.includes('/')
 	const onUp = () => {
 		if (!bucket) return
@@ -1865,10 +1037,13 @@ export function ObjectsPage(props: Props) {
 		navigateToLocation(bucket, next, { recordHistory: true })
 	}
 
-	const onOpenPrefix = (p: string) => {
-		if (!bucket) return
-		navigateToLocation(bucket, p, { recordHistory: true })
-	}
+	const onOpenPrefix = useCallback(
+		(p: string) => {
+			if (!bucket) return
+			navigateToLocation(bucket, p, { recordHistory: true })
+		},
+		[bucket, navigateToLocation],
+	)
 
 	const commitPathDraft = () => {
 		if (!bucket) {
@@ -1921,37 +1096,182 @@ export function ObjectsPage(props: Props) {
 		return null
 	}
 
-useEffect(() => {
-	setSelectedKeys(new Set())
-	setLastSelectedObjectKey(null)
-}, [bucket, prefix, props.profileId])
-
-useEffect(() => {
-	pendingSelectRef.current = null
-}, [bucket])
-
-useEffect(() => {
-	const pending = pendingSelectRef.current
-	if (!pending) return
-	const expectedPrefix = normalizePrefix(parentPrefixFromKey(pending.key))
-	if (normalizePrefix(prefix) !== expectedPrefix) return
-	pendingSelectRef.current = null
-	setSelectedKeys(new Set([pending.key]))
-	setLastSelectedObjectKey(pending.key)
-	if (pending.openDetails) {
-		setDetailsOpen(true)
-		setDetailsDrawerOpen(true)
-	}
-}, [prefix, setDetailsDrawerOpen, setDetailsOpen])
-
-	const cleanupPreview = useCallback(() => {
-		previewAbortRef.current?.()
-		previewAbortRef.current = null
-		if (previewURLRef.current) {
-			URL.revokeObjectURL(previewURLRef.current)
-			previewURLRef.current = null
-		}
-	}, [])
+	const { handleFavoriteSelect } = useObjectsSelectionEffects({
+		bucket,
+		prefix,
+		profileId: props.profileId,
+		favoritesOpenDetails,
+		navigateToLocation,
+		setDetailsOpen,
+		setDetailsDrawerOpen,
+		setTreeDrawerOpen,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+	})
+	const { openDetails, openDetailsForKey, toggleDetails } = useObjectsDetailsActions({
+		dockDetails,
+		setDetailsOpen,
+		setDetailsDrawerOpen,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+	})
+	const {
+		renameOpen,
+		renameKind,
+		renameSource,
+		renameForm,
+		renameSubmitting,
+		openRenameObject,
+		openRenamePrefix,
+		handleRenameSubmit,
+		handleRenameCancel,
+	} = useObjectsRename({
+		profileId: props.profileId,
+		bucket,
+		createJobWithRetry,
+		onJobsLinkClick: handleJobsLinkClick,
+	})
+	const { presignOpen, presign, presignKey, presignMutation, closePresign } = useObjectsPresign({
+		api,
+		profileId: props.profileId,
+		bucket,
+		downloadLinkProxyEnabled,
+	})
+	const {
+		copyMoveOpen,
+		copyMoveMode,
+		copyMoveSrcKey,
+		copyMoveForm,
+		copyMoveSubmitting,
+		openCopyMove,
+		handleCopyMoveSubmit,
+		handleCopyMoveCancel,
+		copyPrefixOpen,
+		copyPrefixMode,
+		copyPrefixSrcPrefix,
+		copyPrefixForm,
+		copyPrefixSubmitting,
+		openCopyPrefix,
+		handleCopyPrefixSubmit,
+		handleCopyPrefixCancel,
+	} = useObjectsCopyMove({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		createJobWithRetry,
+		splitLines,
+	})
+	const { deletingKey, deleteMutation, deletePrefixJobMutation } = useObjectsDelete({
+		api,
+		profileId: props.profileId,
+		bucket,
+		createJobWithRetry,
+		setSelectedKeys,
+	})
+	const {
+		newFolderOpen,
+		newFolderForm,
+		newFolderSubmitting,
+		openNewFolder,
+		handleNewFolderSubmit,
+		handleNewFolderCancel,
+	} = useObjectsNewFolder({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		refreshTreeNode,
+	})
+	const {
+		downloadPrefixOpen,
+		downloadPrefixForm,
+		downloadPrefixSubmitting,
+		downloadPrefixCanSubmit,
+		openDownloadPrefix,
+		handleDownloadPrefixSubmit,
+		handleDownloadPrefixCancel,
+		handleDownloadPrefixPick,
+	} = useObjectsDownloadPrefix({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		transfers,
+	})
+	const {
+		uploadDropActive,
+		startUploadFromFiles,
+		onUploadDragEnter,
+		onUploadDragLeave,
+		onUploadDragOver,
+		onUploadDrop,
+	} = useObjectsUploadDrop({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		isOffline,
+		transfers,
+	})
+	const {
+		deletePrefixConfirmOpen,
+		deletePrefixConfirmDryRun,
+		deletePrefixConfirmPrefix,
+		deletePrefixConfirmText,
+		setDeletePrefixConfirmText,
+		confirmDeleteObjects,
+		confirmDeleteSelected,
+		confirmDeletePrefixAsJob,
+		handleDeletePrefixConfirm,
+		handleDeletePrefixCancel,
+	} = useObjectsDeleteConfirm({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		selectedKeys,
+		deleteMutation,
+		deletePrefixJobMutation,
+	})
+	const {
+		summaryQuery: deletePrefixSummaryQuery,
+		summary: deletePrefixSummary,
+		summaryNotIndexed: deletePrefixSummaryNotIndexed,
+		summaryError: deletePrefixSummaryError,
+	} = useObjectsPrefixSummary({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix: deletePrefixConfirmPrefix,
+		apiToken: props.apiToken,
+		enabled: deletePrefixConfirmOpen,
+	})
+	const {
+		summaryQuery: copyPrefixSummaryQuery,
+		summary: copyPrefixSummary,
+		summaryNotIndexed: copyPrefixSummaryNotIndexed,
+		summaryError: copyPrefixSummaryError,
+	} = useObjectsPrefixSummary({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix: copyPrefixSrcPrefix,
+		apiToken: props.apiToken,
+		enabled: copyPrefixOpen,
+	})
+	const {
+		uploadFolderOpen,
+		uploadFolderForm,
+		uploadFolderSubmitting,
+		uploadFolderCanSubmit,
+		openUploadFolderModal,
+		handleUploadFolderSubmit,
+		handleUploadFolderCancel,
+		handleUploadFolderPick,
+	} = useObjectsUploadFolder({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		transfers,
+	})
 
 	useEffect(() => {
 		return () => {
@@ -1965,37 +1285,10 @@ useEffect(() => {
 		}
 	}, [showThumbnails, thumbnailCache])
 
-	useEffect(() => {
-		treeEpochRef.current++
-		treeLoadedKeysRef.current.clear()
-		treeLoadingKeysRef.current.clear()
-		setTreeExpandedKeys([])
-		setTreeData([{ key: '/', title: bucket || '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: '#1677ff' }} /> }])
-	}, [bucket])
-
-	useEffect(() => {
-		if (!bucket) return
-		if (treeExpandedKeys.length === 0) return
-		setTreeExpandedByBucket((prev) => ({ ...prev, [bucket]: treeExpandedKeys }))
-	}, [bucket, setTreeExpandedByBucket, treeExpandedKeys])
-
-	useEffect(() => {
-		const key = treeKeyFromPrefix(prefix)
-		setTreeSelectedKeys([key])
-		if (treeLoadedKeysRef.current.size === 0) return
-		const ancestors = treeAncestorKeys(key)
-		setTreeExpandedKeys((prev) => {
-			const next = new Set(prev)
-			for (const k of ancestors) next.add(k)
-			return Array.from(next)
-		})
-	}, [prefix])
-
 	const indexedSearchItems = indexedSearchQuery.data?.pages.flatMap((p) => p.items) ?? []
 	const indexedSearchNotIndexed = indexedSearchQuery.error instanceof APIError && indexedSearchQuery.error.code === 'not_indexed'
 	const indexedSearchErrorMessage = indexedSearchQuery.isError ? formatErr(indexedSearchQuery.error) : ''
 
-	const selectedCount = selectedKeys.size
 	const objectByKey = useMemo(() => {
 		const out = new Map<string, ObjectItem>()
 		if (favoritesOnly) {
@@ -2009,23 +1302,6 @@ useEffect(() => {
 	}, [favoriteItems, favoritesOnly, objectsQuery.data])
 	const singleSelectedKey = selectedCount === 1 ? Array.from(selectedKeys)[0] : null
 	const singleSelectedItem = singleSelectedKey ? objectByKey.get(singleSelectedKey) : undefined
-
-	const minTreeWidth = 220
-	const maxTreeWidth = 720
-	const minDetailsWidth = 320
-	const maxDetailsWidth = 920
-	const minCenterWidth = 360
-	const treeResizeHandleWidth = 12
-	const detailsResizeHandleWidth = 12
-	const collapsedDetailsWidth = 36
-	const minDockedTreeWidth = minCenterWidth + minTreeWidth + treeResizeHandleWidth
-	const minDockedDetailsWidth = minDockedTreeWidth + minDetailsWidth + detailsResizeHandleWidth
-	const compactListMinWidth = 980
-
-	const dockTree = isDesktop && (layoutWidthPx <= 0 || layoutWidthPx >= minDockedTreeWidth)
-	const dockDetails = isWideDesktop && (layoutWidthPx <= 0 || layoutWidthPx >= minDockedDetailsWidth)
-	const detailsDocked = dockDetails
-	const detailsVisible = detailsDocked ? detailsOpen : detailsDrawerOpen
 	const detailsKey = detailsVisible ? singleSelectedKey : null
 	const detailsMetaQuery = useQuery({
 		queryKey: ['objectMeta', props.profileId, bucket, detailsKey, props.apiToken],
@@ -2035,110 +1311,15 @@ useEffect(() => {
 	})
 	const detailsMeta = detailsMetaQuery.data ?? null
 
-	const deletePrefixSummaryQuery = useQuery({
-		queryKey: ['objectIndexSummary', props.profileId, bucket, deletePrefixConfirmPrefix, props.apiToken],
-		enabled: deletePrefixConfirmOpen && !!props.profileId && !!bucket && !!deletePrefixConfirmPrefix,
-		queryFn: () => api.getObjectIndexSummary({ profileId: props.profileId!, bucket, prefix: deletePrefixConfirmPrefix, sampleLimit: 5 }),
-		retry: false,
+	const { preview, loadPreview, cancelPreview, canCancelPreview } = useObjectPreview({
+		api,
+		profileId: props.profileId,
+		bucket,
+		detailsKey,
+		detailsVisible,
+		detailsMeta,
+		downloadLinkProxyEnabled,
 	})
-	const deletePrefixSummary = deletePrefixSummaryQuery.data ?? null
-	const deletePrefixSummaryNotIndexed = deletePrefixSummaryQuery.error instanceof APIError && deletePrefixSummaryQuery.error.code === 'not_indexed'
-	const deletePrefixSummaryError = deletePrefixSummaryQuery.isError ? formatErr(deletePrefixSummaryQuery.error) : ''
-
-	const copyPrefixSummaryQuery = useQuery({
-		queryKey: ['objectIndexSummary', props.profileId, bucket, copyPrefixSrcPrefix, props.apiToken],
-		enabled: copyPrefixOpen && !!props.profileId && !!bucket && !!copyPrefixSrcPrefix,
-		queryFn: () => api.getObjectIndexSummary({ profileId: props.profileId!, bucket, prefix: copyPrefixSrcPrefix, sampleLimit: 5 }),
-		retry: false,
-	})
-	const copyPrefixSummary = copyPrefixSummaryQuery.data ?? null
-	const copyPrefixSummaryNotIndexed = copyPrefixSummaryQuery.error instanceof APIError && copyPrefixSummaryQuery.error.code === 'not_indexed'
-	const copyPrefixSummaryError = copyPrefixSummaryQuery.isError ? formatErr(copyPrefixSummaryQuery.error) : ''
-
-	useEffect(() => {
-		cleanupPreview()
-		setPreview(null)
-	}, [cleanupPreview, detailsKey, detailsVisible])
-
-	const clearSelection = () => {
-		setSelectedKeys(new Set())
-		setLastSelectedObjectKey(null)
-	}
-
-	useEffect(() => {
-		if (dockTree) setTreeDrawerOpen(false)
-		if (dockDetails) setDetailsDrawerOpen(false)
-	}, [dockDetails, dockTree])
-
-	const { treeWidthUsed, detailsWidthUsed } = useMemo(() => {
-		let tree = dockTree ? clampNumber(treeWidth, minTreeWidth, maxTreeWidth) : 0
-		let details = 0
-		if (dockDetails) {
-			details = detailsOpen ? clampNumber(detailsWidth, minDetailsWidth, maxDetailsWidth) : collapsedDetailsWidth
-		}
-
-		if (!isDesktop || layoutWidthPx <= 0) {
-			return { treeWidthUsed: tree, detailsWidthUsed: details }
-		}
-
-		if (!dockTree) {
-			return { treeWidthUsed: 0, detailsWidthUsed: 0 }
-		}
-
-		if (!dockDetails) {
-			const handles = treeResizeHandleWidth
-			const available = Math.max(0, layoutWidthPx - handles)
-			const maxTree = clampNumber(available - minCenterWidth, minTreeWidth, maxTreeWidth)
-			tree = clampNumber(tree, minTreeWidth, maxTree)
-			return { treeWidthUsed: tree, detailsWidthUsed: 0 }
-		}
-
-		const handles = treeResizeHandleWidth + (detailsOpen ? detailsResizeHandleWidth : 0)
-		const available = Math.max(0, layoutWidthPx - handles)
-
-		let overflow = tree + details + minCenterWidth - available
-		if (overflow > 0 && detailsOpen) {
-			const reducible = details - minDetailsWidth
-			const reduce = Math.min(reducible, overflow)
-			details -= reduce
-			overflow -= reduce
-		}
-		if (overflow > 0) {
-			const reducible = tree - minTreeWidth
-			const reduce = Math.min(reducible, overflow)
-			tree -= reduce
-			overflow -= reduce
-		}
-
-		return { treeWidthUsed: tree, detailsWidthUsed: details }
-	}, [collapsedDetailsWidth, detailsOpen, detailsWidth, dockDetails, dockTree, isDesktop, layoutWidthPx, treeWidth])
-
-	const dynamicMaxTreeWidth = useMemo(() => {
-		if (!dockTree || !isDesktop || layoutWidthPx <= 0) return maxTreeWidth
-		const handles = treeResizeHandleWidth + (dockDetails && detailsOpen ? detailsResizeHandleWidth : 0)
-		const available = Math.max(0, layoutWidthPx - handles)
-		const details = dockDetails ? detailsWidthUsed : 0
-		return clampNumber(available - minCenterWidth - details, minTreeWidth, maxTreeWidth)
-	}, [detailsOpen, detailsWidthUsed, dockDetails, dockTree, isDesktop, layoutWidthPx])
-
-	const dynamicMaxDetailsWidth = useMemo(() => {
-		if (!dockDetails || !isDesktop || !detailsOpen || layoutWidthPx <= 0) return maxDetailsWidth
-		const handles = treeResizeHandleWidth + detailsResizeHandleWidth
-		const available = Math.max(0, layoutWidthPx - handles)
-		return clampNumber(available - minCenterWidth - treeWidthUsed, minDetailsWidth, maxDetailsWidth)
-	}, [detailsOpen, dockDetails, isDesktop, layoutWidthPx, treeWidthUsed])
-
-	const listViewportWidthPx = useMemo(() => {
-		if (layoutWidthPx <= 0) return 0
-		if (!isDesktop) return layoutWidthPx
-		const handles = (dockTree ? treeResizeHandleWidth : 0) + (dockDetails && detailsOpen ? detailsResizeHandleWidth : 0)
-		const tree = dockTree ? treeWidthUsed : 0
-		const details = dockDetails ? detailsWidthUsed : 0
-		return Math.max(0, layoutWidthPx - handles - tree - details)
-	}, [detailsOpen, detailsWidthUsed, dockDetails, dockTree, isDesktop, layoutWidthPx, treeWidthUsed])
-
-	const isCompactList =
-		!screens.lg || !isAdvanced || (isDesktop && (listViewportWidthPx <= 0 || listViewportWidthPx < compactListMinWidth))
 
 	const rowVirtualizer = useVirtualizer({
 		count: rows.length,
@@ -2198,468 +1379,27 @@ useEffect(() => {
 		setSort('name_asc')
 	}
 
-	const treeResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
-	const onTreeResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-		if (e.button !== 0) return
-		treeResizeRef.current = { startX: e.clientX, startWidth: treeWidthUsed }
-		e.currentTarget.setPointerCapture(e.pointerId)
-		e.preventDefault()
-	}
-	const onTreeResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-		const state = treeResizeRef.current
-		if (!state) return
-		const dx = e.clientX - state.startX
-		const raw = state.startWidth + dx
-		const next = clampNumber(Math.round(raw), minTreeWidth, dynamicMaxTreeWidth)
-		setTreeWidth(next)
-		e.preventDefault()
-	}
-	const onTreeResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-		if (!treeResizeRef.current) return
-		treeResizeRef.current = null
-		try {
-			e.currentTarget.releasePointerCapture(e.pointerId)
-		} catch {
-			// ignore
+	const openUploadFilesPicker = () => {
+		if (isOffline) {
+			message.warning('Offline: uploads are disabled.')
+			return
 		}
+		uploadFilesInputRef.current?.click()
+	}
+	const openUploadFolderPicker = () => {
+		if (isOffline) {
+			message.warning('Offline: uploads are disabled.')
+			return
+		}
+		const support = getDevicePickerSupport()
+		if (support.ok) {
+			openUploadFolderModal()
+			return
+		}
+		uploadFolderInputRef.current?.click()
 	}
 
-	const detailsResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
-	const onDetailsResizePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-		if (e.button !== 0) return
-		detailsResizeRef.current = { startX: e.clientX, startWidth: detailsWidthUsed }
-		e.currentTarget.setPointerCapture(e.pointerId)
-		e.preventDefault()
-	}
-	const onDetailsResizePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-		const state = detailsResizeRef.current
-		if (!state) return
-		const dx = state.startX - e.clientX
-		const raw = state.startWidth + dx
-		const next = clampNumber(Math.round(raw), minDetailsWidth, dynamicMaxDetailsWidth)
-		setDetailsWidth(next)
-		e.preventDefault()
-	}
-	const onDetailsResizePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-		if (!detailsResizeRef.current) return
-		detailsResizeRef.current = null
-		try {
-			e.currentTarget.releasePointerCapture(e.pointerId)
-		} catch {
-			// ignore
-		}
-	}
-
-		const startUploadFromFiles = (files: File[]) => {
-			if (isOffline) {
-				message.warning('Offline: uploads are disabled.')
-				return
-			}
-			if (!props.profileId) {
-				message.info('Select a profile first')
-				return
-			}
-			if (!bucket) {
-				message.info('Select a bucket first')
-				return
-			}
-			const cleanedFiles = files.filter((f) => !!f)
-			if (cleanedFiles.length === 0) return
-			transfers.queueUploadFiles({ profileId: props.profileId, bucket, prefix, files: cleanedFiles })
-			transfers.openTransfers('uploads')
-		}
-
-		const openUploadFilesPicker = () => {
-			if (isOffline) {
-				message.warning('Offline: uploads are disabled.')
-				return
-			}
-			uploadFilesInputRef.current?.click()
-		}
-		const openUploadFolderPicker = () => {
-			if (isOffline) {
-				message.warning('Offline: uploads are disabled.')
-				return
-			}
-			const support = getDevicePickerSupport()
-			if (support.ok) {
-				setUploadFolderOpen(true)
-				return
-			}
-			uploadFolderInputRef.current?.click()
-		}
-
-		const onUploadDragEnter = (e: React.DragEvent) => {
-			if (!props.profileId || !bucket || isOffline) return
-			if (!e.dataTransfer.types.includes('Files')) return
-			e.preventDefault()
-			uploadDragCounterRef.current += 1
-			setUploadDropActive(true)
-		}
-
-		const onUploadDragLeave = (e: React.DragEvent) => {
-			if (!props.profileId || !bucket || isOffline) return
-			if (!e.dataTransfer.types.includes('Files')) return
-			e.preventDefault()
-			uploadDragCounterRef.current -= 1
-			if (uploadDragCounterRef.current <= 0) {
-				uploadDragCounterRef.current = 0
-				setUploadDropActive(false)
-			}
-		}
-
-			const onUploadDragOver = (e: React.DragEvent) => {
-				if (!props.profileId || !bucket || isOffline) return
-				if (!e.dataTransfer.types.includes('Files')) return
-				e.preventDefault()
-				e.dataTransfer.dropEffect = 'copy'
-			}
-
-			type WebKitEntry = {
-				isFile: boolean
-				isDirectory: boolean
-				fullPath?: string
-				name: string
-				file?: (success: (file: File) => void, error?: (err: unknown) => void) => void
-				createReader?: () => { readEntries: (success: (entries: WebKitEntry[]) => void, error?: (err: unknown) => void) => void }
-			}
-
-			const collectDroppedUploadFiles = async (dt: DataTransfer): Promise<File[]> => {
-				const items = Array.from(dt.items ?? [])
-				const entries: WebKitEntry[] = []
-				for (const item of items) {
-					const withEntry = item as DataTransferItem & { webkitGetAsEntry?: () => WebKitEntry | null }
-					if (typeof withEntry.webkitGetAsEntry !== 'function') continue
-					const entry = withEntry.webkitGetAsEntry()
-					if (entry) entries.push(entry)
-				}
-
-				if (entries.length === 0) return Array.from(dt.files ?? [])
-
-				const out: (File & { relativePath?: string })[] = []
-
-				const readAllDirEntries = async (dir: WebKitEntry): Promise<WebKitEntry[]> => {
-					const reader = dir.createReader?.()
-					if (!reader) return []
-
-					const acc: WebKitEntry[] = []
-					for (;;) {
-						const batch = await new Promise<WebKitEntry[]>((resolve, reject) => {
-							reader.readEntries(resolve, reject)
-						})
-						if (batch.length === 0) break
-						acc.push(...batch)
-					}
-					return acc
-				}
-
-				const walk = async (entry: WebKitEntry): Promise<void> => {
-					if (entry.isFile) {
-						if (!entry.file) return
-						const file = await new Promise<File>((resolve, reject) => {
-							try {
-								entry.file?.call(entry, resolve, reject)
-							} catch (err) {
-								reject(err)
-							}
-						})
-						const fullPath = typeof entry.fullPath === 'string' && entry.fullPath ? entry.fullPath : file.name
-						const relPath = fullPath.replace(/^\/+/, '')
-						const fileWithPath = file as File & { relativePath?: string }
-						fileWithPath.relativePath = relPath
-						out.push(fileWithPath)
-						return
-					}
-
-					if (entry.isDirectory) {
-						const children = await readAllDirEntries(entry)
-						for (const child of children) await walk(child)
-					}
-				}
-
-				for (const entry of entries) {
-					await walk(entry)
-				}
-				return out
-			}
-
-			const onUploadDrop = (e: React.DragEvent) => {
-				if (!props.profileId || !bucket) return
-				if (isOffline) {
-					message.warning('Offline: uploads are disabled.')
-					return
-				}
-				if (!e.dataTransfer.types.includes('Files')) return
-				e.preventDefault()
-				setUploadDropActive(false)
-				uploadDragCounterRef.current = 0
-
-				const dt = e.dataTransfer
-				const hasEntryAPI = Array.from(dt.items ?? []).some((item) => typeof (item as { webkitGetAsEntry?: unknown }).webkitGetAsEntry === 'function')
-				if (!hasEntryAPI) {
-					const files = Array.from(dt.files ?? [])
-					startUploadFromFiles(files)
-					return
-				}
-
-				const key = 'upload_prepare'
-				message.open({ type: 'loading', content: 'Preparing folder upload…', duration: 0, key })
-				void (async () => {
-					try {
-						const files = await collectDroppedUploadFiles(dt)
-						if (files.length === 0) {
-							message.open({ type: 'warning', content: 'No files found', key, duration: 2 })
-							return
-						}
-						message.open({ type: 'success', content: `Queued ${files.length} file(s)`, key, duration: 2 })
-						startUploadFromFiles(files)
-					} catch (err) {
-						message.open({ type: 'error', content: formatErr(err), key, duration: 4 })
-					}
-				})()
-			}
-
-				const normalizeDropTargetPrefix = (raw: string): string => {
-					const trimmed = raw.trim()
-					if (!trimmed || trimmed === '/') return ''
-					return normalizePrefix(trimmed)
-			}
-
-			const hasDndPayload = (dt: DataTransfer | null): boolean => {
-				if (!dt) return false
-				const types = Array.from(dt.types ?? [])
-				return types.includes(DND_MIME)
-			}
-
-			const parseDndPayload = (dt: DataTransfer): DndPayload | null => {
-				const raw = dt.getData(DND_MIME)
-				if (!raw) return null
-				try {
-					const parsed: unknown = JSON.parse(raw)
-					if (!parsed || typeof parsed !== 'object') return null
-					const rec = parsed as Record<string, unknown>
-
-					const kind = typeof rec['kind'] === 'string' ? rec['kind'] : ''
-					const bucket = typeof rec['bucket'] === 'string' ? rec['bucket'] : ''
-					if (!bucket) return null
-
-					if (kind === 'objects') {
-						const keysRaw = rec['keys']
-						const keys = Array.isArray(keysRaw) ? keysRaw.map(String).filter(Boolean) : []
-						if (keys.length < 1) return null
-						return { kind: 'objects', bucket, keys }
-					}
-					if (kind === 'prefix') {
-						const prefix = typeof rec['prefix'] === 'string' ? rec['prefix'] : ''
-						if (!prefix) return null
-						return { kind: 'prefix', bucket, prefix }
-					}
-					return null
-				} catch {
-					return null
-				}
-			}
-
-			const dropModeFromEvent = (e: React.DragEvent): 'copy' | 'move' => {
-				const isCopy = e.ctrlKey || e.metaKey || e.altKey
-				return isCopy ? 'copy' : 'move'
-			}
-
-			const createJobAndNotify = async (req: JobCreateRequest) => {
-				if (!props.profileId) throw new Error('profile is required')
-				const job = await createJobWithRetry(req)
-					message.open({
-						type: 'success',
-						content: (
-							<Space>
-								<Typography.Text>Task started: {job.id}</Typography.Text>
-								<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-									Open Jobs
-								</Button>
-							</Space>
-					),
-					duration: 6,
-				})
-				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-				return job
-			}
-
-			const performDrop = async (payload: DndPayload, targetPrefixRaw: string, mode: 'copy' | 'move') => {
-				if (!props.profileId || !bucket) return
-				if (payload.bucket !== bucket) {
-					message.warning('Drag & drop across buckets is not supported yet')
-					return
-				}
-
-				const targetPrefix = normalizeDropTargetPrefix(targetPrefixRaw)
-
-				if (payload.kind === 'prefix') {
-					const srcPrefix = normalizePrefix(payload.prefix)
-					const folderName = folderLabelFromPrefix(srcPrefix)
-					const dstPrefix = `${targetPrefix}${folderName}/`
-
-					if (dstPrefix === srcPrefix) {
-						message.info('Already in destination')
-						return
-					}
-					if (dstPrefix.startsWith(srcPrefix)) {
-						message.error('Cannot move/copy a folder into itself')
-						return
-					}
-
-					const doCreate = async () =>
-						createJobAndNotify({
-							type: mode === 'copy' ? 'transfer_copy_prefix' : 'transfer_move_prefix',
-							payload: {
-								srcBucket: bucket,
-								srcPrefix,
-								dstBucket: bucket,
-								dstPrefix,
-								include: [],
-								exclude: [],
-								dryRun: false,
-							},
-						})
-
-					if (mode === 'move') {
-						confirmDangerAction({
-							title: `Move folder?`,
-							description: (
-								<Space direction="vertical" size="small">
-									<Typography.Text>
-										Move <Typography.Text code>{`s3://${bucket}/${srcPrefix}`}</Typography.Text> →{' '}
-										<Typography.Text code>{`s3://${bucket}/${dstPrefix}`}</Typography.Text>
-									</Typography.Text>
-									<Typography.Text type="secondary">This will create a job and remove the source objects.</Typography.Text>
-								</Space>
-							),
-							confirmText: 'MOVE',
-							confirmHint: 'Type "MOVE" to confirm',
-							okText: 'Move',
-							onConfirm: async () => {
-								await doCreate()
-							},
-						})
-						return
-					}
-
-					await doCreate()
-					return
-				}
-
-				const keys = payload.keys.filter(Boolean)
-				if (keys.length < 1) return
-
-				const pairs = keys
-					.map((srcKey) => {
-						const name = displayNameForKey(srcKey, prefix)
-						const dstKey = `${targetPrefix}${name}`
-						return { srcKey, dstKey }
-					})
-					.filter((p) => p.srcKey && p.dstKey)
-					.filter((p) => !(p.srcKey === p.dstKey))
-
-				if (pairs.length === 0) {
-					message.info('Already in destination')
-					return
-				}
-
-				const doCreate = async () => {
-					if (pairs.length > 1) {
-						return createJobAndNotify({
-							type: mode === 'copy' ? 'transfer_copy_batch' : 'transfer_move_batch',
-							payload: {
-								srcBucket: bucket,
-								dstBucket: bucket,
-								items: pairs,
-								dryRun: false,
-							},
-						})
-					}
-					return createJobAndNotify({
-						type: mode === 'copy' ? 'transfer_copy_object' : 'transfer_move_object',
-						payload: {
-							srcBucket: bucket,
-							srcKey: pairs[0].srcKey,
-							dstBucket: bucket,
-							dstKey: pairs[0].dstKey,
-							dryRun: false,
-						},
-					})
-				}
-
-				if (mode === 'move') {
-					confirmDangerAction({
-						title: `Move ${pairs.length} object(s)?`,
-						description: (
-							<Space direction="vertical" size="small">
-								<Typography.Text>
-									Move to <Typography.Text code>{`s3://${bucket}/${targetPrefix}`}</Typography.Text>
-								</Typography.Text>
-								<Typography.Text type="secondary">This will create a job and remove the source objects.</Typography.Text>
-							</Space>
-						),
-						confirmText: 'MOVE',
-						confirmHint: 'Type "MOVE" to confirm',
-						okText: 'Move',
-						onConfirm: async () => {
-							await doCreate()
-						},
-					})
-					return
-				}
-
-				await doCreate()
-			}
-
-			const onDndTargetDragOver = (e: React.DragEvent, targetPrefixRaw: string) => {
-				if (!canDragDrop) return
-				if (!hasDndPayload(e.dataTransfer)) return
-				e.preventDefault()
-				setDndHoverPrefix(normalizeDropTargetPrefix(targetPrefixRaw))
-				e.dataTransfer.dropEffect = dropModeFromEvent(e) === 'copy' ? 'copy' : 'move'
-			}
-
-			const onDndTargetDragLeave = (_e: React.DragEvent, targetPrefixRaw: string) => {
-				const target = normalizeDropTargetPrefix(targetPrefixRaw)
-				setDndHoverPrefix((prev) => (prev === target ? null : prev))
-			}
-
-			const onDndTargetDrop = (e: React.DragEvent, targetPrefixRaw: string) => {
-				if (!canDragDrop) return
-				if (!hasDndPayload(e.dataTransfer)) return
-				e.preventDefault()
-				setDndHoverPrefix(null)
-
-				const payload = parseDndPayload(e.dataTransfer)
-				if (!payload) return
-				const mode = dropModeFromEvent(e)
-				void performDrop(payload, targetPrefixRaw, mode).catch((err) => message.error(formatErr(err)))
-			}
-
-			const onRowDragStartObjects = (e: React.DragEvent, key: string) => {
-				if (!canDragDrop) return
-				if (!props.profileId || !bucket) return
-				const keysToDrag = selectedKeys.has(key) ? Array.from(selectedKeys) : [key]
-				if (!selectedKeys.has(key)) {
-					setSelectedKeys(new Set([key]))
-					setLastSelectedObjectKey(key)
-				}
-				e.dataTransfer.setData(DND_MIME, JSON.stringify({ kind: 'objects', bucket, keys: keysToDrag }))
-				e.dataTransfer.setData('text/plain', keysToDrag.join('\n'))
-				e.dataTransfer.effectAllowed = 'copyMove'
-			}
-
-			const onRowDragStartPrefix = (e: React.DragEvent, p: string) => {
-				if (!canDragDrop) return
-				if (!props.profileId || !bucket) return
-				const srcPrefix = normalizePrefix(p)
-				e.dataTransfer.setData(DND_MIME, JSON.stringify({ kind: 'prefix', bucket, prefix: srcPrefix }))
-				e.dataTransfer.setData('text/plain', srcPrefix)
-				e.dataTransfer.effectAllowed = 'copyMove'
-			}
-
-			const breadcrumbItems: { title: ReactNode }[] = (() => {
+	const breadcrumbItems: { title: ReactNode }[] = (() => {
 				const parts = prefix.split('/').filter(Boolean)
 				const items: { title: ReactNode }[] = []
 				const canNavigate = !!bucket
@@ -2746,594 +1486,6 @@ useEffect(() => {
 
 				return items
 			})()
-
-			const selectObjectFromPointerEvent = (e: React.MouseEvent, key: string) => {
-				const isRange = e.shiftKey && !!lastSelectedObjectKey
-				const isToggle = e.metaKey || e.ctrlKey
-
-				if (isRange && lastSelectedObjectKey && orderedVisibleObjectKeys.length > 0) {
-					const a = orderedVisibleObjectKeys.indexOf(lastSelectedObjectKey)
-					const b = orderedVisibleObjectKeys.indexOf(key)
-					if (a !== -1 && b !== -1) {
-						const start = Math.min(a, b)
-						const end = Math.max(a, b)
-						const range = orderedVisibleObjectKeys.slice(start, end + 1)
-						setSelectedKeys((prev) => {
-							const next = isToggle ? new Set(prev) : new Set<string>()
-							for (const k of range) next.add(k)
-							return next
-						})
-						setLastSelectedObjectKey(key)
-						return
-					}
-				}
-
-				if (isToggle) {
-					setSelectedKeys((prev) => {
-						const next = new Set(prev)
-						if (next.has(key)) next.delete(key)
-						else next.add(key)
-						return next
-					})
-					setLastSelectedObjectKey(key)
-					return
-				}
-
-				setSelectedKeys(new Set([key]))
-				setLastSelectedObjectKey(key)
-			}
-
-	const selectObjectFromCheckboxEvent = (e: React.MouseEvent, key: string) => {
-		e.stopPropagation()
-
-		const isRange = e.shiftKey && !!lastSelectedObjectKey
-		const isAdd = e.metaKey || e.ctrlKey
-
-		if (isRange && lastSelectedObjectKey && orderedVisibleObjectKeys.length > 0) {
-			const a = orderedVisibleObjectKeys.indexOf(lastSelectedObjectKey)
-			const b = orderedVisibleObjectKeys.indexOf(key)
-			if (a !== -1 && b !== -1) {
-				const start = Math.min(a, b)
-				const end = Math.max(a, b)
-				const range = orderedVisibleObjectKeys.slice(start, end + 1)
-				setSelectedKeys((prev) => {
-					const next = isAdd ? new Set(prev) : new Set<string>()
-					for (const k of range) next.add(k)
-					return next
-				})
-				setLastSelectedObjectKey(key)
-				return
-			}
-		}
-
-		setSelectedKeys((prev) => {
-			const next = new Set(prev)
-			if (next.has(key)) next.delete(key)
-			else next.add(key)
-			return next
-		})
-		setLastSelectedObjectKey(key)
-	}
-
-	const ensureObjectSelectedForContextMenu = (key: string) => {
-		setSelectedKeys((prev) => {
-			if (prev.has(key)) return prev
-			return new Set([key])
-		})
-		setLastSelectedObjectKey(key)
-	}
-
-	const closeContextMenu = useCallback((match?: ContextMenuMatch, reason?: string) => {
-		setContextMenuState((prev) => {
-			if (!prev.open) return prev
-			if (match) {
-				if (prev.source !== match.source || prev.kind !== match.kind || prev.key !== match.key) {
-					return prev
-				}
-			}
-			logContextMenuDebug(debugContextMenu, 'close', {
-				reason: reason ?? 'unknown',
-				kind: prev.kind,
-				key: prev.key,
-				source: prev.source,
-			})
-			return { open: false, source: null, kind: null, key: null }
-		})
-	}, [debugContextMenu])
-
-	const openObjectContextMenu = (key: string, source: ContextMenuSource, point?: ContextMenuPoint) => {
-		ensureObjectSelectedForContextMenu(key)
-		logContextMenuDebug(debugContextMenu, 'open', {
-			kind: 'object',
-			key,
-			source,
-			point: point ?? contextMenuPoint ?? undefined,
-		})
-		setContextMenuState({ open: true, source, kind: 'object', key })
-	}
-
-	const openPrefixContextMenu = (key: string, source: ContextMenuSource, point?: ContextMenuPoint) => {
-		logContextMenuDebug(debugContextMenu, 'open', {
-			kind: 'prefix',
-			key,
-			source,
-			point: point ?? contextMenuPoint ?? undefined,
-		})
-		setContextMenuState({ open: true, source, kind: 'prefix', key })
-	}
-
-	const openListContextMenu = useCallback((point?: ContextMenuPoint) => {
-		logContextMenuDebug(debugContextMenu, 'open', {
-			kind: 'list',
-			key: 'list',
-			source: 'context',
-			point: point ?? contextMenuPoint ?? undefined,
-		})
-		setContextMenuState({ open: true, source: 'context', kind: 'list', key: 'list' })
-	}, [contextMenuPoint, debugContextMenu])
-	const getListScrollerElement = useCallback(() => {
-		if (listScrollerEl) return listScrollerEl
-		if (scrollContainerRef.current) return scrollContainerRef.current
-		return document.querySelector<HTMLDivElement>('[data-testid="objects-upload-dropzone"] [tabindex="0"]')
-	}, [listScrollerEl])
-
-	const recordContextMenuPoint = useCallback((event: React.MouseEvent) => {
-		const nextPoint = { x: event.clientX, y: event.clientY }
-		setContextMenuPoint(nextPoint)
-		setContextMenuPosition(null)
-		return nextPoint
-	}, [])
-	const shouldIgnoreContextMenuClose = useCallback((event?: Event) => {
-		const target = event?.target
-		if (!target || !(target instanceof HTMLElement)) return false
-		return !!target.closest(`.${CONTEXT_MENU_CLASS_NAME}`)
-	}, [])
-
-	useEffect(() => {
-		if (contextMenuState.open) return
-		setContextMenuPoint(null)
-		setContextMenuPosition(null)
-	}, [contextMenuState.open])
-
-	const positionContextMenu = useCallback(() => {
-		if (!contextMenuState.open || contextMenuState.source !== 'context' || !contextMenuPoint) return
-		const menu = contextMenuRef.current
-		if (!menu) return
-		const padding = CONTEXT_MENU_VIEWPORT_PADDING_PX
-		const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0
-		const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
-		const rect = menu.getBoundingClientRect()
-		const maxX = Math.max(padding, viewportWidth - rect.width - padding)
-		const maxY = Math.max(padding, viewportHeight - rect.height - padding)
-		const nextX = clampNumber(contextMenuPoint.x, padding, maxX)
-		const nextY = clampNumber(contextMenuPoint.y, padding, maxY)
-		setContextMenuPosition((prev) => {
-			if (prev && prev.x === nextX && prev.y === nextY) return prev
-			return { x: nextX, y: nextY }
-		})
-	}, [contextMenuPoint, contextMenuState.open, contextMenuState.source])
-
-	useLayoutEffect(() => {
-		positionContextMenu()
-	}, [positionContextMenu, contextMenuState.kind, contextMenuState.key, selectedCount])
-
-	useEffect(() => {
-		if (!contextMenuState.open || contextMenuState.source !== 'context') return
-		const handleResize = () => {
-			positionContextMenu()
-		}
-		window.addEventListener('resize', handleResize)
-		return () => {
-			window.removeEventListener('resize', handleResize)
-		}
-	}, [contextMenuState.open, contextMenuState.source, positionContextMenu])
-
-	useEffect(() => {
-		if (!contextMenuState.open) return
-		const el = getListScrollerElement()
-		const handleClose = (event: Event) => {
-			if (shouldIgnoreContextMenuClose(event)) return
-			closeContextMenu(undefined, event.type)
-		}
-		const handlePointerDown = (event: Event) => {
-			if (shouldIgnoreContextMenuClose(event)) return
-			closeContextMenu(undefined, 'pointerdown')
-		}
-		const handleKeyDown = (event: Event) => {
-			if (!(event instanceof KeyboardEvent)) return
-			if (event.key !== 'Escape') return
-			closeContextMenu(undefined, 'escape')
-		}
-		if (el) {
-			el.addEventListener('scroll', handleClose, { passive: true })
-			el.addEventListener('wheel', handleClose, { passive: true })
-		}
-		window.addEventListener('scroll', handleClose, true)
-		window.addEventListener('wheel', handleClose, { passive: true, capture: true })
-		document.addEventListener('scroll', handleClose, true)
-		document.addEventListener('wheel', handleClose, { passive: true, capture: true })
-		document.addEventListener('pointerdown', handlePointerDown, true)
-		document.addEventListener('keydown', handleKeyDown, true)
-		return () => {
-			if (el) {
-				el.removeEventListener('scroll', handleClose)
-				el.removeEventListener('wheel', handleClose)
-			}
-			window.removeEventListener('scroll', handleClose, true)
-			window.removeEventListener('wheel', handleClose, true)
-			document.removeEventListener('scroll', handleClose, true)
-			document.removeEventListener('wheel', handleClose, true)
-			document.removeEventListener('pointerdown', handlePointerDown, true)
-			document.removeEventListener('keydown', handleKeyDown, true)
-		}
-	}, [closeContextMenu, contextMenuState.open, getListScrollerElement, shouldIgnoreContextMenuClose])
-
-	const handleListScrollerContextMenu = useCallback(
-		(event: React.MouseEvent<HTMLDivElement>) => {
-			const target = event.target as HTMLElement | null
-			if (target?.closest('[data-objects-row="true"]')) return
-			if (target?.closest('.ant-dropdown')) {
-				event.preventDefault()
-				event.stopPropagation()
-				return
-			}
-			event.preventDefault()
-			event.stopPropagation()
-			const point = recordContextMenuPoint(event)
-			openListContextMenu(point)
-		},
-		[openListContextMenu, recordContextMenuPoint],
-	)
-
-	const openDetails = () => {
-		if (dockDetails) {
-			setDetailsOpen(true)
-			return
-		}
-		setDetailsDrawerOpen(true)
-	}
-
-	const openDetailsForKey = (key: string) => {
-		setSelectedKeys(new Set([key]))
-		setLastSelectedObjectKey(key)
-		openDetails()
-	}
-
-	const confirmDeleteObjects = (keys: string[]) => {
-		if (keys.length === 0) return
-
-		if (keys.length === 1) {
-			const key = keys[0]
-			confirmDangerAction({
-				title: 'Delete object?',
-				description: 'This cannot be undone.',
-				details: (
-					<Space direction="vertical" size={4} style={{ width: '100%' }}>
-						<Typography.Text>
-							Key: <Typography.Text code>{key}</Typography.Text>
-						</Typography.Text>
-					</Space>
-				),
-				onConfirm: async () => {
-					await deleteMutation.mutateAsync(keys)
-				},
-			})
-			return
-		}
-
-		confirmDangerAction({
-			title: `Delete ${keys.length} objects?`,
-			description: 'This cannot be undone.',
-			onConfirm: async () => {
-				await deleteMutation.mutateAsync(keys)
-			},
-		})
-	}
-
-	const confirmDeleteSelected = () => {
-		confirmDeleteObjects(Array.from(selectedKeys))
-	}
-
-	const confirmDeletePrefixAsJob = (dryRun: boolean, prefixOverride?: string) => {
-		if (!props.profileId || !bucket) return
-
-		const rawPrefix = (prefixOverride ?? prefix).trim()
-		if (!rawPrefix) return
-		const effectivePrefix = rawPrefix && !rawPrefix.endsWith('/') ? `${rawPrefix}/` : rawPrefix
-		setDeletePrefixConfirmDryRun(dryRun)
-		setDeletePrefixConfirmPrefix(effectivePrefix)
-		setDeletePrefixConfirmText('')
-		setDeletePrefixConfirmOpen(true)
-	}
-
-	const handleDeletePrefixConfirm = async () => {
-		if (!deletePrefixConfirmPrefix) return
-		await deletePrefixJobMutation.mutateAsync({ prefix: deletePrefixConfirmPrefix, dryRun: deletePrefixConfirmDryRun })
-		setDeletePrefixConfirmOpen(false)
-	}
-
-	const handleDownloadPrefixSubmit = async (values: { localFolder: string }) => {
-		void values
-		if (!props.profileId || !bucket) return
-		const srcPrefix = normalizePrefix(prefix)
-		if (!srcPrefix) return
-		if (!downloadPrefixFolderHandle) {
-			message.info('Select a local folder first')
-			return
-		}
-
-		setDownloadPrefixSubmitting(true)
-		try {
-			const items = await listAllObjects({
-				api,
-				profileId: props.profileId,
-				bucket,
-				prefix: srcPrefix,
-			})
-			if (items.length === 0) {
-				message.info('No objects found under this prefix')
-				return
-			}
-
-			transfers.queueDownloadObjectsToDevice({
-				profileId: props.profileId,
-				bucket,
-				items: items.map((item) => ({ key: item.key, size: item.size })),
-				targetDirHandle: downloadPrefixFolderHandle,
-				targetLabel: downloadPrefixFolderLabel || downloadPrefixFolderHandle.name,
-				prefix: srcPrefix,
-			})
-			transfers.openTransfers('downloads')
-			setDownloadPrefixOpen(false)
-			setDownloadPrefixFolderHandle(null)
-			setDownloadPrefixFolderLabel('')
-		} catch (err) {
-			message.error(formatErr(err))
-		} finally {
-			setDownloadPrefixSubmitting(false)
-		}
-	}
-
-	const handleUploadFolderSubmit = async (values: { localFolder: string; moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => {
-		void values
-		if (!props.profileId) {
-			message.info('Select a profile first')
-			return
-		}
-		if (!bucket) {
-			message.info('Select a bucket first')
-			return
-		}
-		if (!uploadFolderHandle) {
-			message.info('Select a local folder first')
-			return
-		}
-
-		setUploadFolderSubmitting(true)
-		try {
-			const files = await collectFilesFromDirectoryHandle(uploadFolderHandle)
-			if (files.length === 0) {
-				message.info('No files found in the selected folder')
-				return
-			}
-			const relPaths = files
-				.map((file) => {
-					const fileWithPath = file as File & { relativePath?: string; webkitRelativePath?: string }
-					const relPath = (fileWithPath.relativePath ?? fileWithPath.webkitRelativePath ?? file.name).trim()
-					return normalizeRelativePath(relPath || file.name)
-				})
-				.filter(Boolean)
-
-			const label = uploadFolderLabel || uploadFolderHandle.name
-			transfers.queueUploadFiles({
-				profileId: props.profileId,
-				bucket,
-				prefix,
-				files,
-				label,
-				moveSource: values.moveAfterUpload
-					? {
-							rootHandle: uploadFolderHandle,
-							relPaths,
-							label,
-							cleanupEmptyDirs: values.cleanupEmptyDirs,
-						}
-					: undefined,
-			})
-			transfers.openTransfers('uploads')
-			setUploadFolderOpen(false)
-			setUploadFolderHandle(null)
-			setUploadFolderLabel('')
-			uploadFolderForm.resetFields()
-		} catch (err) {
-			message.error(formatErr(err))
-		} finally {
-			setUploadFolderSubmitting(false)
-		}
-	}
-
-	const handleCopyPrefixSubmit = (values: {
-		dstBucket: string
-		dstPrefix: string
-		include: string
-		exclude: string
-		dryRun: boolean
-		confirm: string
-	}) => {
-		if (!props.profileId || !bucket || !copyPrefixSrcPrefix) return
-		copyPrefixJobMutation.mutate({
-			mode: copyPrefixMode,
-			srcPrefix: copyPrefixSrcPrefix,
-			dstBucket: values.dstBucket.trim(),
-			dstPrefix: normalizePrefix(values.dstPrefix),
-			include: splitLines(values.include),
-			exclude: splitLines(values.exclude),
-			dryRun: values.dryRun,
-		})
-	}
-
-	const handleCopyMoveSubmit = (values: { dstBucket: string; dstKey: string; dryRun: boolean; confirm: string }) => {
-		if (!props.profileId || !bucket || !copyMoveSrcKey) return
-		copyMoveMutation.mutate({
-			mode: copyMoveMode,
-			srcKey: copyMoveSrcKey,
-			dstBucket: values.dstBucket.trim(),
-			dstKey: values.dstKey.trim(),
-			dryRun: values.dryRun,
-		})
-	}
-
-	const handleRenameSubmit = (values: { name: string; confirm: string }) => {
-		if (!renameSource) return
-		renameMutation.mutate({ kind: renameKind, src: renameSource, name: values.name })
-	}
-
-	const handleRenameCancel = () => {
-		setRenameOpen(false)
-		setRenameSource(null)
-		renameForm.resetFields()
-	}
-
-	const onCopy = async (value: string) => {
-		const res = await copyToClipboard(value)
-		if (res.ok) {
-			message.success('Copied')
-			return
-		}
-		message.error(clipboardFailureHint())
-	}
-
-	const copySelectionToClipboard = async (mode: 'copy' | 'move') => {
-		if (!bucket) return
-		const keys = Array.from(selectedKeys)
-		if (keys.length === 0) return
-
-		setClipboardObjects({ mode, srcBucket: bucket, srcPrefix: normalizePrefix(prefix), keys })
-
-		const res = await copyToClipboard(keys.join('\n'))
-		if (res.ok) {
-			message.success(mode === 'copy' ? `Copied ${keys.length} key(s)` : `Cut ${keys.length} key(s)`)
-			return
-		}
-		message.warning(`Saved internally, but clipboard failed: ${clipboardFailureHint()}`)
-	}
-
-	const commonPrefixFromKeys = (keys: string[]): string => {
-		const parts = keys
-			.map((k) => k.replace(/^\/+/, '').split('/').filter(Boolean))
-			.filter((p) => p.length > 0)
-		if (parts.length === 0) return ''
-		let prefixParts = parts[0]
-		for (let i = 1; i < parts.length; i++) {
-			const next = parts[i]
-			let j = 0
-			while (j < prefixParts.length && j < next.length && prefixParts[j] === next[j]) j++
-			prefixParts = prefixParts.slice(0, j)
-			if (prefixParts.length === 0) return ''
-		}
-		return prefixParts.length ? `${prefixParts.join('/')}/` : ''
-	}
-
-	const readClipboardObjectsFromSystemClipboard = async (): Promise<ClipboardObjects | null> => {
-		if (!bucket) {
-			message.info('Select a bucket first')
-			return null
-		}
-		if (!navigator.clipboard?.readText) {
-			message.error(clipboardFailureHint())
-			return null
-		}
-
-		let text = ''
-		try {
-			text = await navigator.clipboard.readText()
-		} catch {
-			message.error(clipboardFailureHint())
-			return null
-		}
-		const lines = text
-			.split('\n')
-			.map((l) => l.trim())
-			.filter(Boolean)
-		if (lines.length === 0) {
-			message.info('Clipboard is empty')
-			return null
-		}
-
-		const parsed: { bucket: string; key: string }[] = []
-		for (const line of lines) {
-			if (line.startsWith('s3://')) {
-				const rest = line.slice('s3://'.length)
-				const idx = rest.indexOf('/')
-				if (idx <= 0) continue
-				const b = rest.slice(0, idx)
-				const k = rest.slice(idx + 1).replace(/^\/+/, '')
-				if (!b || !k) continue
-				parsed.push({ bucket: b, key: k })
-				continue
-			}
-			const k = line.replace(/^\/+/, '')
-			if (!k) continue
-			parsed.push({ bucket, key: k })
-		}
-
-		if (parsed.length === 0) {
-			message.info('Clipboard does not contain any object keys')
-			return null
-		}
-
-		const buckets = Array.from(new Set(parsed.map((p) => p.bucket)))
-		if (buckets.length !== 1) {
-			message.error('Clipboard contains multiple buckets; copy from one bucket at a time')
-			return null
-		}
-
-		const srcBucket = buckets[0]
-		const keys = parsed.map((p) => p.key)
-		return { mode: 'copy', srcBucket, srcPrefix: commonPrefixFromKeys(keys), keys }
-	}
-
-	const pasteClipboardObjects = async () => {
-		if (!props.profileId) {
-			message.info('Select a profile first')
-			return
-		}
-		if (!bucket) {
-			message.info('Select a bucket first')
-			return
-		}
-
-		const src = clipboardObjects ?? (await readClipboardObjectsFromSystemClipboard())
-		if (!src) return
-
-		setClipboardObjects(src)
-
-		const mode = src.mode
-		const doPaste = async () => {
-			await pasteObjectsMutation.mutateAsync({
-				mode,
-				srcBucket: src.srcBucket,
-				srcPrefix: src.srcPrefix,
-				keys: src.keys,
-				dstBucket: bucket,
-				dstPrefix: prefix,
-			})
-		}
-
-		if (mode === 'move') {
-			confirmDangerAction({
-				title: `Move ${src.keys.length} object(s) here?`,
-				description: 'This creates a move job (copy then delete source).',
-				confirmText: 'MOVE',
-				confirmHint: 'Type "MOVE" to confirm',
-				okText: 'Move',
-				onConfirm: async () => doPaste(),
-			})
-			return
-		}
-
-		await doPaste()
-	}
 
 	/*
 	 * Transfers were refactored into a global provider (`frontend/src/components/Transfers.tsx`).
@@ -3539,17 +1691,7 @@ useEffect(() => {
 	}
 	}, [api, hasWaitingJobArtifactDownloads, props.profileId, updateDownloadTask])
 	
-	const onDownload = (key: string, expectedBytes?: number) => {
-	if (!props.profileId) {
-		message.info('Select a profile first')
-		return
-	}
-	if (!bucket) {
-		message.info('Select a bucket first')
-		return
-	}
-	
-	const bucketName = bucket
+		const bucketName = bucket
 	const existing = downloadTasksRef.current.find(
 		(t) => t.kind === 'object' && t.bucket === bucketName && t.key === key && (t.status === 'queued' || t.status === 'running'),
 	)
@@ -3729,7 +1871,7 @@ useEffect(() => {
 				content: (
 					<Space>
 						<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+						<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 							Open Jobs
 						</Button>
 						<Button size="small" type="link" onClick={() => setDownloadsOpen(true)}>
@@ -3819,309 +1961,83 @@ useEffect(() => {
 	
 	*/
 
-	const onDownload = (key: string, expectedBytes?: number) => {
-		if (!props.profileId) {
-			message.info('Select a profile first')
-			return
-		}
-		if (!bucket) {
-			message.info('Select a bucket first')
-			return
-		}
-
-		transfers.queueDownloadObject({
-			profileId: props.profileId,
-			bucket,
-			key,
-			expectedBytes,
-			label: displayNameForKey(key, prefix),
-		})
-		transfers.openTransfers('downloads')
-	}
-
-	const onDownloadToDevice = async (key: string, expectedBytes?: number) => {
-		if (!props.profileId) {
-			message.info('Select a profile first')
-			return
-		}
-		if (!bucket) {
-			message.info('Select a bucket first')
-			return
-		}
-
-		const support = getDevicePickerSupport()
-		if (!support.ok) {
-			message.warning(support.reason ?? 'Directory picker is not available.')
-			return
-		}
-		try {
-			const dirHandle = await pickDirectory()
-			transfers.queueDownloadObjectsToDevice({
-				profileId: props.profileId,
-				bucket,
-				items: [{ key, size: expectedBytes }],
-				targetDirHandle: dirHandle,
-				targetLabel: dirHandle.name,
-				prefix: normalizePrefix(prefix),
-			})
-			transfers.openTransfers('downloads')
-		} catch (err) {
-			const error = err as Error
-			if (error?.name === 'AbortError') return
-			message.error(error?.message ?? 'Failed to select a local folder.')
-		}
-	}
-
-	const loadPreview = async () => {
-		if (!props.profileId || !bucket || !detailsMeta) return
-		if (preview?.status === 'loading') return
-
-		const key = detailsMeta.key
-		const kind = guessPreviewKind(detailsMeta.contentType, key)
-		const contentType = detailsMeta.contentType ?? null
-		const size = typeof detailsMeta.size === 'number' && Number.isFinite(detailsMeta.size) ? detailsMeta.size : 0
-
-		if (kind === 'unsupported') {
-			setPreview({ key, status: 'unsupported', kind: 'unsupported', contentType, error: 'Preview not supported' })
-			return
-		}
-
-		const maxBytes = kind === 'image' ? 10 * 1024 * 1024 : 2 * 1024 * 1024
-		if (size > maxBytes) {
-			message.info(`Preview is limited to ${formatBytes(maxBytes)} (object is ${formatBytes(size)})`)
-			return
-		}
-
-		cleanupPreview()
-		setPreview({ key, status: 'loading', kind, contentType })
-
-		const controller = new AbortController()
-		previewAbortRef.current = () => controller.abort()
-		try {
-			const fetchPreview = async (useProxy: boolean) => {
-				const presigned = await api.getObjectDownloadURL({
-					profileId: props.profileId!,
-					bucket,
-					key,
-					proxy: useProxy,
-				})
-				const res = await fetch(presigned.url, { signal: controller.signal })
-				if (!res.ok) {
-					throw new Error(`Download failed (HTTP ${res.status})`)
-				}
-				return {
-					blob: await res.blob(),
-					contentType: res.headers.get('content-type'),
-				}
-			}
-
-			const shouldFallback = (err: unknown) => {
-				if (controller.signal.aborted) return false
-				if (err instanceof RequestAbortedError) return false
-				if (err instanceof Error && err.name === 'AbortError') return false
-				if (err instanceof TypeError) return true
-				if (err instanceof Error && /cors|failed to fetch|network/i.test(err.message)) return true
-				return false
-			}
-
-			let resp: { blob: Blob; contentType: string | null }
-			if (downloadLinkProxyEnabled) {
-				resp = await fetchPreview(true)
-			} else {
-				try {
-					resp = await fetchPreview(false)
-				} catch (err) {
-					if (!shouldFallback(err)) {
-						throw err
-					}
-					resp = await fetchPreview(true)
-				}
-			}
-			previewAbortRef.current = null
-			const effectiveContentType = resp.contentType ?? contentType
-
-			if (kind === 'image') {
-				const url = URL.createObjectURL(resp.blob)
-				previewURLRef.current = url
-				setPreview({ key, status: 'ready', kind: 'image', contentType: effectiveContentType, url })
-				return
-			}
-
-			const rawText = await resp.blob.text()
-			const maxChars = 200_000
-			const truncated = rawText.length > maxChars
-			let text = truncated ? rawText.slice(0, maxChars) : rawText
-
-			if (kind === 'json') {
-				try {
-					text = JSON.stringify(JSON.parse(text), null, 2)
-				} catch {
-					// keep raw text
-				}
-			}
-
-			setPreview({ key, status: 'ready', kind, contentType: effectiveContentType, text, truncated })
-		} catch (err) {
-			previewAbortRef.current = null
-			if (err instanceof RequestAbortedError || (err instanceof Error && err.name === 'AbortError')) {
-				message.info('Preview canceled')
-				setPreview(null)
-				return
-			}
-			setPreview({ key, status: 'error', kind, contentType, error: formatErr(err) })
-		}
-	}
-
 	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
-	const searchAutoScanCap = isAdvanced ? 3_000 : 1_000
-	const filterAutoScanCap = isAdvanced ? 3_000 : 1_000
-	const hasSearch = !!search.trim()
-	const hasNonSearchFilters =
-		!!extFilter.trim() ||
-		minSize != null ||
-		maxSize != null ||
-		minModifiedMs != null ||
-		maxModifiedMs != null ||
-		typeFilter !== 'all'
-	const autoScanReason = hasSearch && hasNonSearchFilters ? 'search+filter' : hasSearch ? 'search' : hasNonSearchFilters ? 'filter' : 'none'
-	const effectiveAutoScanCap = Math.min(
-		hasSearch ? searchAutoScanCap : Number.POSITIVE_INFINITY,
-		hasNonSearchFilters ? filterAutoScanCap : Number.POSITIVE_INFINITY,
-	)
-	const autoScanCapped = Number.isFinite(effectiveAutoScanCap) && rawTotalCount >= effectiveAutoScanCap
-	useEffect(() => {
-		if (favoritesOnly) return
-		if (!props.profileId || !bucket) return
-		if (!autoScanReady) return
-		if (autoScanCapped) {
-			logObjectsDebug(debugObjectsList, 'debug', 'Auto-scan cap reached; skipping next page', {
-				bucket,
-				prefix,
-				reason: autoScanReason,
-				rawTotalCount,
-				effectiveAutoScanCap,
-			})
-			return
-		}
-		const last = virtualItems[virtualItems.length - 1]
-		if (!last) return
-		if (last.index >= rows.length - 10 && hasNextPage && !isFetchingNextPage) {
-			logObjectsDebug(debugObjectsList, 'debug', 'Auto-fetching next objects page from scroll', {
-				bucket,
-				prefix,
-				rowCount: rows.length,
-			})
-			fetchNextPage().catch(() => {})
-		}
-	}, [
-		autoScanReady,
-		autoScanCapped,
-		autoScanReason,
-		bucket,
-		debugObjectsList,
-		favoritesOnly,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		effectiveAutoScanCap,
-		props.profileId,
-		prefix,
-		rawTotalCount,
-		rows.length,
-		virtualItems,
-	])
 
-	useEffect(() => {
-		if (favoritesOnly) return
-		if (!props.profileId || !bucket) return
-		if (!autoScanReady) return
-		if (!search.trim()) return
-		if (!hasNextPage || isFetchingNextPage) return
-		if (autoScanCapped) {
-			logObjectsDebug(debugObjectsList, 'debug', 'Search auto-scan cap reached; skipping next page', {
-				bucket,
-				prefix,
-				reason: autoScanReason,
-				rawTotalCount,
-				effectiveAutoScanCap,
-			})
-			return
-		}
-		logObjectsDebug(debugObjectsList, 'debug', 'Auto-fetching next objects page for search scan', {
-			bucket,
-			prefix,
-			rawTotalCount,
-		})
-		fetchNextPage().catch(() => {})
-	}, [
-		autoScanReady,
-		autoScanCapped,
-		autoScanReason,
-		bucket,
-		debugObjectsList,
+	const { showLoadMore, loadMoreLabel, handleLoadMore, searchAutoScanCap } = useObjectsAutoScan({
 		favoritesOnly,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		effectiveAutoScanCap,
-		props.profileId,
+		profileId: props.profileId,
+		bucket,
 		prefix,
-		rawTotalCount,
 		search,
-	])
+		isAdvanced,
+		extFilter,
+		minSize,
+		maxSize,
+		minModifiedMs,
+		maxModifiedMs,
+		typeFilter,
+		rawTotalCount,
+		rowsLength: rows.length,
+		virtualItems,
+		autoScanReady,
+		hasNextPage,
+		isFetchingNextPage,
+		fetchNextPage,
+		debugEnabled: debugObjectsList,
+		log: logObjectsDebug,
+	})
+	const { onDownload, onDownloadToDevice, handleDownloadSelected } = useObjectDownloads({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		selectedKeys,
+		selectedCount,
+		objectByKey,
+		transfers,
+		onZipObjects: (keys) => zipObjectsJobMutation.mutate({ keys }),
+	})
+	const { clipboardObjects, onCopy, copySelectionToClipboard, pasteClipboardObjects } = useObjectsClipboard({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		selectedKeys,
+		createJobWithRetry,
+		queryClient,
+		onJobsLinkClick: handleJobsLinkClick,
+	})
+	const {
+		dndHoverPrefix,
+		normalizeDropTargetPrefix,
+		onDndTargetDragOver,
+		onDndTargetDragLeave,
+		onDndTargetDrop,
+		onRowDragStartObjects,
+		onRowDragStartPrefix,
+		clearDndHover,
+	} = useObjectsDnd({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		canDragDrop,
+		isDesktop,
+		selectedKeys,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+		createJobWithRetry,
+		queryClient,
+		onJobsLinkClick: handleJobsLinkClick,
+	})
 
-	const showLoadMore = !favoritesOnly && autoScanCapped && hasNextPage
-	const loadMoreLabel = hasSearch ? 'Load more results' : hasNonSearchFilters ? 'Load more filtered items' : 'Load more'
-	const handleLoadMore = useCallback(() => {
-		if (!hasNextPage || isFetchingNextPage) return
-		logObjectsDebug(debugObjectsList, 'debug', 'Manual load more triggered', {
-			bucket,
-			prefix,
-			rawTotalCount,
-			effectiveAutoScanCap,
-		})
-		fetchNextPage().catch(() => {})
-	}, [bucket, debugObjectsList, effectiveAutoScanCap, fetchNextPage, hasNextPage, isFetchingNextPage, prefix, rawTotalCount])
-
-	const handleDownloadSelected = async () => {
-		if (selectedCount <= 0) {
-			message.info('Select objects first')
-			return
-		}
-		const keys = Array.from(selectedKeys)
-		if (keys.length === 1) {
-			const key = keys[0]
-			const item = objectByKey.get(key)
-			onDownload(key, item?.size)
-			return
-		}
-
-		const support = getDevicePickerSupport()
-		if (!support.ok) {
-			message.warning(support.reason ?? 'Directory picker is not available.')
-			zipObjectsJobMutation.mutate({ keys })
-			return
-		}
-		try {
-			const dirHandle = await pickDirectory()
-			transfers.queueDownloadObjectsToDevice({
-				profileId: props.profileId!,
-				bucket,
-				items: keys.map((key) => ({ key, size: objectByKey.get(key)?.size })),
-				targetDirHandle: dirHandle,
-				targetLabel: dirHandle.name,
-				prefix: normalizePrefix(prefix),
-			})
-			transfers.openTransfers('downloads')
-		} catch (err) {
-			const error = err as Error
-			if (error?.name === 'AbortError') return
-			message.error(error?.message ?? 'Failed to select a local folder.')
-		}
-	}
-
-	const commandPrefix = normalizePrefix(prefix)
-	const { getObjectActions, getPrefixActions, selectionActionsAll, globalActionsAll } = buildObjectsActionCatalog({
+	const {
+		getObjectActions,
+		getPrefixActions,
+		currentPrefixActionMap,
+		selectionActionMap,
+		selectionContextMenuActions,
+		selectionMenuActions,
+		globalActionMap,
+		commandItems,
+	} = useObjectsActionCatalog({
 		isAdvanced,
 		isOffline,
 		profileId: props.profileId,
@@ -4129,6 +2045,8 @@ useEffect(() => {
 		prefix,
 		selectedCount,
 		clipboardObjects,
+		singleSelectedKey,
+		singleSelectedItemSize: singleSelectedItem?.size,
 		canGoBack,
 		canGoForward,
 		canGoUp,
@@ -4157,10 +2075,7 @@ useEffect(() => {
 		onPasteClipboardObjects: () => void pasteClipboardObjects(),
 		onClearSelection: clearSelection,
 		onConfirmDeleteSelected: confirmDeleteSelected,
-		onToggleDetails: () => {
-			if (dockDetails) setDetailsOpen((prev) => !prev)
-			else setDetailsDrawerOpen((prev) => !prev)
-		},
+		onToggleDetails: toggleDetails,
 		onOpenTreeDrawer: () => setTreeDrawerOpen(true),
 		onRefresh: () => void refresh(),
 		onOpenPathModal: openPathModal,
@@ -4174,52 +2089,36 @@ useEffect(() => {
 		onOpenGlobalSearch: () => setGlobalSearchOpen(true),
 		onToggleUiMode: () => setUiMode(isAdvanced ? 'simple' : 'advanced'),
 	})
-
-	const currentPrefixActionsAll: UIActionOrDivider[] = commandPrefix ? getPrefixActions(commandPrefix) : []
-	const currentPrefixActions = filterActionItems(currentPrefixActionsAll, isAdvanced)
-	const currentPrefixActionMap = new Map<string, UIAction>()
-	for (const item of currentPrefixActionsAll) {
-		if ('type' in item) continue
-		currentPrefixActionMap.set(item.id, item)
-	}
-	const selectionActions = filterActions(selectionActionsAll, isAdvanced)
-	const selectionActionMap = new Map(selectionActions.map((action) => [action.id, action]))
-	const selectionContextMenuActions = trimActionDividers(
-		[
-			selectionActionMap.get('download_selected'),
-			{ type: 'divider' as const },
-			selectionActionMap.get('copy_selected_keys'),
-			selectionActionMap.get('cut_selected_keys'),
-			selectionActionMap.get('paste_keys'),
-			{ type: 'divider' as const },
-			selectionActionMap.get('clear_selection'),
-			{ type: 'divider' as const },
-			selectionActionMap.get('delete_selected'),
-		].filter(Boolean) as UIActionOrDivider[],
-	)
-	const selectionMenuActions = trimActionDividers(
-		[
-			selectionActionMap.get('copy_selected_keys'),
-			selectionActionMap.get('cut_selected_keys'),
-			selectionActionMap.get('paste_keys'),
-		].filter(Boolean) as UIActionOrDivider[],
-	)
-	const globalActions = filterActions(globalActionsAll, isAdvanced)
-	const globalActionMap = new Map(globalActionsAll.map((action) => [action.id, action]))
-
-	const selectedObjectCommandItems: CommandItem[] = singleSelectedKey
-		? commandItemsFromActions(filterActionItems(getObjectActions(singleSelectedKey, singleSelectedItem?.size), isAdvanced), 'obj_')
-		: []
-
-	const currentFolderCommandItems: CommandItem[] = commandPrefix
-		? commandItemsFromActions(currentPrefixActions, 'prefix_').filter((c) => c.id !== 'prefix_open')
-		: []
-	const commandItems: CommandItem[] = [
-		...commandItemsFromActions(globalActions, 'global_'),
-		...commandItemsFromActions(selectionActions, 'selection_'),
-		...selectedObjectCommandItems,
-		...currentFolderCommandItems,
-	]
+	const {
+		contextMenuClassName,
+		contextMenuRef,
+		contextMenuState,
+		contextMenuVisible,
+		contextMenuProps,
+		contextMenuStyle,
+		withContextMenuClassName,
+		getListScrollerElement,
+		recordContextMenuPoint,
+		openObjectContextMenu,
+		openPrefixContextMenu,
+		closeContextMenu,
+		handleListScrollerContextMenu,
+	} = useObjectsContextMenu({
+		debugEnabled: debugContextMenu,
+		log: logContextMenuDebug,
+		listScrollerEl,
+		scrollContainerRef,
+		selectedCount,
+		objectByKey,
+		selectedKeys,
+		getObjectActions,
+		getPrefixActions,
+		selectionContextMenuActions,
+		globalActionMap,
+		selectionActionMap,
+		isAdvanced,
+		ensureObjectSelected: ensureObjectSelectedForContextMenu,
+	})
 	const {
 		open: commandPaletteOpen,
 		setOpen: setCommandPaletteOpen,
@@ -4255,26 +2154,13 @@ useEffect(() => {
 		return () => window.clearTimeout(id)
 	}, [commandPaletteOpen, setCommandPaletteActiveIndex, setCommandPaletteQuery])
 
-
 	const listGridClassName = isCompactList ? styles.listGridCompact : styles.listGridWide
-	const handleToggleSelectAll = (checked: boolean) => {
-		setSelectedKeys((prev) => {
-			const next = new Set(prev)
-			if (checked) {
-				for (const k of visibleObjectKeys) next.add(k)
-			} else {
-				for (const k of visibleObjectKeys) next.delete(k)
-			}
-			return next
-		})
-		setLastSelectedObjectKey(checked ? (orderedVisibleObjectKeys[orderedVisibleObjectKeys.length - 1] ?? null) : null)
-	}
-	const clearSelectionAction = selectionActionMap.get('clear_selection')
-	const deleteSelectionAction = selectionActionMap.get('delete_selected')
-	const downloadSelectionAction = selectionActionMap.get('download_selected')
+	const { clearSelectionAction, deleteSelectionAction, downloadSelectionAction } = useObjectsSelectionBarActions({
+		selectionActionMap,
+	})
 	const showUploadDropOverlay = uploadDropActive && !!props.profileId && !!bucket && !isOffline
 	const uploadDropLabel = bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'
-	const listKeydownHandler = useObjectsListKeydown({
+	const listKeydownHandler = useObjectsListKeydownHandler({
 		selectedCount,
 		singleSelectedKey,
 		lastSelectedObjectKey,
@@ -4282,40 +2168,19 @@ useEffect(() => {
 		visibleObjectKeys,
 		rowIndexByObjectKey,
 		canGoUp,
-		onClearSelection: clearSelection,
-		onOpenRename: openRenameObject,
-		onNewFolder: openNewFolder,
-		onCopySelection: (mode) => void copySelectionToClipboard(mode),
-		onPasteSelection: () => void pasteClipboardObjects(),
-		onOpenDetails: openDetailsForKey,
-		onGoUp: onUp,
-		onDeleteSelected: confirmDeleteSelected,
-		onSelectKeys: (keys) => setSelectedKeys(new Set(keys)),
-		onSetLastSelected: setLastSelectedObjectKey,
-		onSelectRange: (startKey, endKey) => {
-			const a = orderedVisibleObjectKeys.indexOf(startKey)
-			const b = orderedVisibleObjectKeys.indexOf(endKey)
-			if (a !== -1) {
-				const start = Math.min(a, b)
-				const end = Math.max(a, b)
-				const range = orderedVisibleObjectKeys.slice(start, end + 1)
-				setSelectedKeys(new Set(range))
-				setLastSelectedObjectKey(endKey)
-			} else {
-				setSelectedKeys(new Set([endKey]))
-				setLastSelectedObjectKey(endKey)
-			}
-		},
-		onScrollToIndex: (index) => rowVirtualizer.scrollToIndex(index),
-		onSelectAllLoaded: () => {
-			setSelectedKeys((prev) => {
-				const next = new Set(prev)
-				for (const k of visibleObjectKeys) next.add(k)
-				return next
-			})
-			setLastSelectedObjectKey(orderedVisibleObjectKeys[orderedVisibleObjectKeys.length - 1] ?? null)
-		},
-		onWarnRenameNoSelection: () => message.info('Select a single object to rename'),
+		clearSelection,
+		openRenameObject,
+		openNewFolder,
+		copySelectionToClipboard,
+		pasteClipboardObjects,
+		openDetailsForKey,
+		onUp,
+		confirmDeleteSelected,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+		selectRange,
+		selectAllLoaded,
+		scrollToIndex: (index) => rowVirtualizer.scrollToIndex(index),
 	})
 	const handleListScrollerScroll = () => {
 		closeContextMenu(undefined, 'list_scroll')
@@ -4323,16 +2188,6 @@ useEffect(() => {
 	const handleListScrollerWheel = () => {
 		closeContextMenu(undefined, 'list_wheel')
 	}
-	const withContextMenuClassName = (menu: ReturnType<typeof buildActionMenu>) => ({
-		...menu,
-		className: menu.className,
-		style: {
-			...menu.style,
-			maxHeight: menu.style?.maxHeight ?? `calc(100vh - ${CONTEXT_MENU_VIEWPORT_PADDING_PX * 2}px)`,
-			overflowY: menu.style?.overflowY ?? 'auto',
-		},
-	})
-	const contextMenuOpen = contextMenuState.open && contextMenuState.source === 'context'
 	const listScrollerRef = useCallback((node: HTMLDivElement | null) => {
 		setListScrollerEl(node)
 		scrollContainerRef.current = node?.closest('[data-scroll-container="app-content"]') as HTMLDivElement | null
@@ -4347,110 +2202,141 @@ useEffect(() => {
 		setSearch('')
 	}
 	const canClearSearch = !!search.trim() || !!searchDraft.trim()
-	const renderPrefixRow = (p: string, offset: number) => {
-		const prefixButtonMenuOpen =
-			contextMenuState.open &&
-			contextMenuState.kind === 'prefix' &&
-			contextMenuState.key === p &&
-			contextMenuState.source === 'button'
-		const prefixMenu = withContextMenuClassName(buildActionMenu(getPrefixActions(p), isAdvanced))
-		return (
-			<ObjectsPrefixRow
-				key={p}
-				offset={offset}
-				rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
-				displayName={displayNameForPrefix(p, prefix)}
-				isCompact={isCompactList}
-				listGridClassName={listGridClassName}
-				canDragDrop={canDragDrop}
-				highlightText={highlightText}
-				menu={prefixMenu}
-				buttonMenuOpen={prefixButtonMenuOpen}
-				getPopupContainer={getContextMenuPopupContainer}
-				onButtonMenuOpenChange={(open) => {
-					if (open) openPrefixContextMenu(p, 'button')
-					else closeContextMenu({ key: p, kind: 'prefix', source: 'button' }, 'button_menu')
-				}}
-				onContextMenu={(e) => {
-					e.preventDefault()
-					e.stopPropagation()
-					const point = recordContextMenuPoint(e)
-					openPrefixContextMenu(p, 'context', point)
-				}}
-				onOpen={() => onOpenPrefix(p)}
-				onDragStart={(e) => onRowDragStartPrefix(e, p)}
-				onDragEnd={() => setDndHoverPrefix(null)}
-			/>
-		)
-	}
-	const renderObjectRow = (object: ObjectItem, offset: number) => {
-		const key = object.key
-		const objectButtonMenuOpen =
-			contextMenuState.open &&
-			contextMenuState.kind === 'object' &&
-			contextMenuState.key === key &&
-			contextMenuState.source === 'button'
-		const objectMenu = withContextMenuClassName(
-			buildActionMenu(
-				selectedCount > 1 && selectedKeys.has(key) ? selectionContextMenuActions : getObjectActions(key, object.size),
-				isAdvanced,
-			),
-		)
-		const sizeLabel = formatBytes(object.size)
-		const timeLabel = formatDateTime(object.lastModified)
-		const thumbnailSize = isCompactList ? 24 : 32
-		const canShowThumbnail = showThumbnails && isImageKey(key)
-		const thumbnail =
-			canShowThumbnail && props.profileId && bucket ? (
-				<ObjectThumbnail
-					key={`${bucket}:${key}:${thumbnailSize}`}
+	const renderPrefixRow = useCallback(
+		(p: string, offset: number) => {
+			const prefixButtonMenuOpen =
+				contextMenuState.open &&
+				contextMenuState.kind === 'prefix' &&
+				contextMenuState.key === p &&
+				contextMenuState.source === 'button'
+			return (
+				<ObjectsPrefixRowItem
+					key={p}
+					prefixKey={p}
+					currentPrefix={prefix}
+					offset={offset}
+					rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
+					listGridClassName={listGridClassName}
+					isCompact={isCompactList}
+					canDragDrop={canDragDrop}
+					highlightText={highlightText}
+					isAdvanced={isAdvanced}
+					getPrefixActions={getPrefixActions}
+					withContextMenuClassName={withContextMenuClassName}
+					buttonMenuOpen={prefixButtonMenuOpen}
+					getPopupContainer={getContextMenuPopupContainer}
+					recordContextMenuPoint={recordContextMenuPoint}
+					openPrefixContextMenu={openPrefixContextMenu}
+					closeContextMenu={closeContextMenu}
+					onOpenPrefix={onOpenPrefix}
+					onRowDragStartPrefix={onRowDragStartPrefix}
+					onRowDragEnd={clearDndHover}
+				/>
+			)
+		},
+		[
+			canDragDrop,
+			clearDndHover,
+			closeContextMenu,
+			contextMenuState.key,
+			contextMenuState.kind,
+			contextMenuState.open,
+			contextMenuState.source,
+			getContextMenuPopupContainer,
+			getPrefixActions,
+			highlightText,
+			isAdvanced,
+			isCompactList,
+			listGridClassName,
+			onOpenPrefix,
+			onRowDragStartPrefix,
+			openPrefixContextMenu,
+			prefix,
+			recordContextMenuPoint,
+			withContextMenuClassName,
+		],
+	)
+	const renderObjectRow = useCallback(
+		(object: ObjectItem, offset: number) => {
+			const key = object.key
+			const objectButtonMenuOpen =
+				contextMenuState.open &&
+				contextMenuState.kind === 'object' &&
+				contextMenuState.key === key &&
+				contextMenuState.source === 'button'
+			const useSelectionMenu = selectedCount > 1 && selectedKeys.has(key)
+			return (
+					<ObjectsObjectRowItem
+						key={key}
+						object={object}
+					currentPrefix={prefix}
+					offset={offset}
+					rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
+					listGridClassName={listGridClassName}
+					isCompact={isCompactList}
+					canDragDrop={canDragDrop}
+					highlightText={highlightText}
+					isAdvanced={isAdvanced}
+						getObjectActions={getObjectActions}
+						selectionContextMenuActions={selectionContextMenuActions}
+						useSelectionMenu={useSelectionMenu}
+						withContextMenuClassName={withContextMenuClassName}
+						isSelected={selectedKeys.has(key)}
+					isFavorite={favoriteKeys.has(key)}
+					favoriteDisabled={favoritePendingKeys.has(key) || isOffline || !props.profileId || !bucket}
+					buttonMenuOpen={objectButtonMenuOpen}
+					getPopupContainer={getContextMenuPopupContainer}
+					recordContextMenuPoint={recordContextMenuPoint}
+					openObjectContextMenu={openObjectContextMenu}
+					closeContextMenu={closeContextMenu}
+					onSelectObject={selectObjectFromPointerEvent}
+					onSelectCheckbox={selectObjectFromCheckboxEvent}
+					onRowDragStartObjects={onRowDragStartObjects}
+					onRowDragEnd={clearDndHover}
+					onToggleFavorite={toggleFavorite}
 					api={api}
 					profileId={props.profileId}
 					bucket={bucket}
-					objectKey={key}
-					size={thumbnailSize}
-					cache={thumbnailCache}
-					cacheKeySuffix={object.etag || object.lastModified || undefined}
+					showThumbnails={showThumbnails}
+					thumbnailCache={thumbnailCache}
 				/>
-			) : null
-		return (
-			<ObjectsObjectRow
-				key={key}
-				offset={offset}
-				rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
-				objectKey={key}
-				displayName={displayNameForKey(key, prefix)}
-				sizeLabel={sizeLabel}
-				timeLabel={timeLabel}
-				isSelected={selectedKeys.has(key)}
-				isFavorite={favoriteKeys.has(key)}
-				favoriteDisabled={favoritePendingKeys.has(key) || isOffline || !props.profileId || !bucket}
-				isCompact={isCompactList}
-				listGridClassName={listGridClassName}
-				canDragDrop={canDragDrop}
-				highlightText={highlightText}
-				menu={objectMenu}
-				buttonMenuOpen={objectButtonMenuOpen}
-				getPopupContainer={getContextMenuPopupContainer}
-				onButtonMenuOpenChange={(open) => {
-					if (open) openObjectContextMenu(key, 'button')
-					else closeContextMenu({ key, kind: 'object', source: 'button' }, 'button_menu')
-				}}
-				onContextMenu={(e) => {
-					e.preventDefault()
-					e.stopPropagation()
-					const point = recordContextMenuPoint(e)
-					openObjectContextMenu(key, 'context', point)
-				}}
-				onClick={(e) => selectObjectFromPointerEvent(e, key)}
-				onCheckboxClick={(e) => selectObjectFromCheckboxEvent(e, key)}
-				onDragStart={(e) => onRowDragStartObjects(e, key)}
-				onDragEnd={() => setDndHoverPrefix(null)}
-				onToggleFavorite={() => toggleFavorite(key)}
-				thumbnail={thumbnail}
-			/>
-		)
-	}
+			)
+		},
+		[
+			api,
+			bucket,
+			canDragDrop,
+			clearDndHover,
+			closeContextMenu,
+			contextMenuState.key,
+			contextMenuState.kind,
+			contextMenuState.open,
+			contextMenuState.source,
+			favoriteKeys,
+			favoritePendingKeys,
+			getContextMenuPopupContainer,
+			getObjectActions,
+			highlightText,
+			isAdvanced,
+			isCompactList,
+			isOffline,
+			listGridClassName,
+			onRowDragStartObjects,
+			openObjectContextMenu,
+			prefix,
+			props.profileId,
+			recordContextMenuPoint,
+			selectedCount,
+			selectedKeys,
+			selectionContextMenuActions,
+			selectObjectFromCheckboxEvent,
+			selectObjectFromPointerEvent,
+			showThumbnails,
+			thumbnailCache,
+			toggleFavorite,
+			withContextMenuClassName,
+		],
+	)
 	const listIsFetching = favoritesOnly ? favoritesQuery.isFetching : objectsQuery.isFetching
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
 	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
@@ -4497,72 +2383,6 @@ useEffect(() => {
 			/>
 		</Suspense>
 	)
-	const listContextMenuActions = trimActionDividers(
-		[
-			globalActionMap.get('upload_files'),
-			globalActionMap.get('upload_folder'),
-			globalActionMap.get('new_folder'),
-			{ type: 'divider' as const },
-			selectionActionMap.get('paste_keys'),
-			{ type: 'divider' as const },
-			globalActionMap.get('refresh'),
-			globalActionMap.get('go_to_path'),
-			globalActionMap.get('global_search'),
-			{ type: 'divider' as const },
-			globalActionMap.get('commands'),
-			globalActionMap.get('transfers'),
-			globalActionMap.get('ui_mode'),
-		].filter(Boolean) as UIActionOrDivider[],
-	)
-	const listContextMenuBase = buildActionMenu(listContextMenuActions, isAdvanced)
-	const listContextMenu = withContextMenuClassName({
-		...listContextMenuBase,
-		style: {
-			...listContextMenuBase.style,
-			maxHeight: `min(${LIST_CONTEXT_MENU_MAX_HEIGHT_PX}px, calc(100vh - ${CONTEXT_MENU_VIEWPORT_PADDING_PX * 2}px))`,
-			overflowY: 'auto',
-			overflowX: 'hidden',
-		},
-	})
-	const contextMenuMenu = (() => {
-		if (!contextMenuOpen) return null
-		if (contextMenuState.kind === 'list') return listContextMenu
-		if (contextMenuState.kind === 'prefix' && contextMenuState.key) {
-			return withContextMenuClassName(buildActionMenu(getPrefixActions(contextMenuState.key), isAdvanced))
-		}
-		if (contextMenuState.kind === 'object' && contextMenuState.key) {
-			const item = objectByKey.get(contextMenuState.key)
-			const actions =
-				selectedCount > 1 && selectedKeys.has(contextMenuState.key)
-					? selectionContextMenuActions
-					: getObjectActions(contextMenuState.key, item?.size)
-			return withContextMenuClassName(buildActionMenu(actions, isAdvanced))
-		}
-		return null
-	})()
-	const contextMenuVisible = contextMenuOpen && !!contextMenuMenu && !!contextMenuPoint
-	const contextMenuProps = contextMenuMenu
-		? {
-				...contextMenuMenu,
-				className: [contextMenuMenu.className, 'ant-dropdown-menu'].filter(Boolean).join(' '),
-				onClick: (info: Parameters<NonNullable<MenuProps['onClick']>>[0]) => {
-					contextMenuMenu.onClick?.(info)
-					closeContextMenu(undefined, 'menu')
-				},
-		  }
-		: null
-	const contextMenuAnchor = contextMenuPosition ?? contextMenuPoint
-	const contextMenuStyle: CSSProperties | null =
-		contextMenuVisible && contextMenuAnchor
-			? {
-					position: 'fixed',
-					left: contextMenuAnchor.x,
-					top: contextMenuAnchor.y,
-					zIndex: 2000,
-					opacity: contextMenuPosition ? 1 : 0,
-					pointerEvents: contextMenuPosition ? 'auto' : 'none',
-			  }
-			: null
 
 	const uploadMenuActions = trimActionDividers(
 		[
@@ -4703,6 +2523,7 @@ useEffect(() => {
 				ref={uploadFilesInputRef}
 				type="file"
 				multiple
+				aria-label="Select files to upload"
 				style={{ display: 'none' }}
 				onChange={(e) => {
 					const files = Array.from(e.target.files ?? [])
@@ -4714,6 +2535,7 @@ useEffect(() => {
 				ref={uploadFolderInputRef}
 				type="file"
 				multiple
+				aria-label="Select folder to upload"
 				style={{ display: 'none' }}
 				onChange={(e) => {
 					const files = Array.from(e.target.files ?? [])
@@ -4821,7 +2643,7 @@ useEffect(() => {
 					? createPortal(
 							<div
 								ref={contextMenuRef}
-								className={`${CONTEXT_MENU_CLASS_NAME} ant-dropdown`}
+								className={`${contextMenuClassName} ant-dropdown`}
 								style={contextMenuStyle}
 								onContextMenu={(event) => event.preventDefault()}
 							>
@@ -4967,8 +2789,8 @@ useEffect(() => {
 						thumbnail={detailsThumbnail}
 						preview={preview}
 						onLoadPreview={loadPreview}
-						onCancelPreview={() => previewAbortRef.current?.()}
-						canCancelPreview={!!previewAbortRef.current}
+						onCancelPreview={cancelPreview}
+						canCancelPreview={canCancelPreview}
 						dockDetails={dockDetails}
 						detailsOpen={detailsOpen}
 						detailsDrawerOpen={detailsDrawerOpen}
@@ -5243,7 +3065,7 @@ useEffect(() => {
 
 															<Space size="small" wrap>
 																{t.jobId ? (
-																	<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+																	<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
 																		Jobs
 																	</Button>
 																) : null}
@@ -5282,10 +3104,7 @@ useEffect(() => {
 				<ObjectsPresignModal
 					open={presignOpen}
 					presign={presign}
-					onClose={() => {
-						setPresignOpen(false)
-						setPresign(null)
-					}}
+					onClose={closePresign}
 				/>
 
 				<ObjectsGoToPathModal
@@ -5329,7 +3148,7 @@ useEffect(() => {
 					hasBucket={!!bucket}
 					isConfirming={deletePrefixJobMutation.isPending}
 					onConfirm={handleDeletePrefixConfirm}
-					onCancel={() => setDeletePrefixConfirmOpen(false)}
+					onCancel={handleDeletePrefixCancel}
 					isSummaryFetching={deletePrefixSummaryQuery.isFetching}
 					summary={deletePrefixSummary}
 					summaryNotIndexed={deletePrefixSummaryNotIndexed}
@@ -5346,17 +3165,10 @@ useEffect(() => {
 					sourceLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}*` : '-'}
 					form={downloadPrefixForm}
 					isSubmitting={downloadPrefixSubmitting}
-					onCancel={() => {
-						setDownloadPrefixOpen(false)
-						setDownloadPrefixFolderHandle(null)
-						setDownloadPrefixFolderLabel('')
-					}}
+					onCancel={handleDownloadPrefixCancel}
 					onFinish={handleDownloadPrefixSubmit}
-					onPickFolder={(handle) => {
-						setDownloadPrefixFolderHandle(handle)
-						setDownloadPrefixFolderLabel(handle.name)
-					}}
-					canSubmit={!!downloadPrefixFolderHandle}
+					onPickFolder={handleDownloadPrefixPick}
+					canSubmit={downloadPrefixCanSubmit}
 				/>
 
 				<ObjectsUploadFolderModal
@@ -5366,22 +3178,14 @@ useEffect(() => {
 					defaultMoveAfterUpload={moveAfterUploadDefault}
 					defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
 					isSubmitting={uploadFolderSubmitting}
-					onCancel={() => {
-						setUploadFolderOpen(false)
-						setUploadFolderHandle(null)
-						setUploadFolderLabel('')
-						uploadFolderForm.resetFields()
-					}}
+					onCancel={handleUploadFolderCancel}
 					onDefaultsChange={(values) => {
 						setMoveAfterUploadDefault(values.moveAfterUpload)
 						setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
 					}}
 					onFinish={handleUploadFolderSubmit}
-					onPickFolder={(handle) => {
-						setUploadFolderHandle(handle)
-						setUploadFolderLabel(handle.name)
-					}}
-					canSubmit={!!uploadFolderHandle}
+					onPickFolder={handleUploadFolderPick}
+					canSubmit={uploadFolderCanSubmit}
 				/>
 
 				<ObjectsCopyPrefixModal
@@ -5393,11 +3197,8 @@ useEffect(() => {
 					form={copyPrefixForm}
 					bucketOptions={bucketOptions}
 					isBucketsLoading={bucketsQuery.isFetching}
-					isSubmitting={copyPrefixJobMutation.isPending}
-					onCancel={() => {
-						setCopyPrefixOpen(false)
-						setCopyPrefixSrcPrefix('')
-					}}
+					isSubmitting={copyPrefixSubmitting}
+					onCancel={handleCopyPrefixCancel}
 					onFinish={handleCopyPrefixSubmit}
 					isSummaryFetching={copyPrefixSummaryQuery.isFetching}
 					summary={copyPrefixSummary}
@@ -5419,8 +3220,8 @@ useEffect(() => {
 					form={copyMoveForm}
 					bucketOptions={bucketOptions}
 					isBucketsLoading={bucketsQuery.isFetching}
-					isSubmitting={copyMoveMutation.isPending}
-					onCancel={() => setCopyMoveOpen(false)}
+					isSubmitting={copyMoveSubmitting}
+					onCancel={handleCopyMoveCancel}
 					onFinish={handleCopyMoveSubmit}
 				/>
 
@@ -5428,12 +3229,9 @@ useEffect(() => {
 				open={newFolderOpen}
 				parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
 				form={newFolderForm}
-				isSubmitting={createFolderMutation.isPending}
-				onCancel={() => {
-					setNewFolderOpen(false)
-					newFolderForm.resetFields()
-				}}
-				onFinish={(values) => createFolderMutation.mutate({ name: values.name })}
+				isSubmitting={newFolderSubmitting}
+				onCancel={handleNewFolderCancel}
+				onFinish={handleNewFolderSubmit}
 			/>
 
 				<ObjectsRenameModal
@@ -5442,7 +3240,7 @@ useEffect(() => {
 					source={renameSource}
 					bucket={bucket}
 					form={renameForm}
-					isSubmitting={renameMutation.isPending}
+					isSubmitting={renameSubmitting}
 					onCancel={handleRenameCancel}
 					onFinish={handleRenameSubmit}
 				/>
@@ -5502,116 +3300,6 @@ useEffect(() => {
 	)
 }
 
-function splitLines(v: string): string[] {
-	return v
-		.split('\n')
-		.map((s) => s.trim())
-		.filter(Boolean)
-}
-
-function splitSearchTokens(value: string): string[] {
-	return value
-		.trim()
-		.split(/\s+/)
-		.map((s) => s.trim())
-		.filter(Boolean)
-}
-
-function normalizeForSearch(value: string): string {
-	return value
-		.toLowerCase()
-		.normalize('NFKD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.replace(/[^\p{L}\p{N}]+/gu, '')
-}
-
-function matchesSearchTokens(value: string, tokens: string[], normalizedTokens?: string[]): boolean {
-	if (tokens.length === 0) return true
-	const raw = value.toLowerCase()
-	let normalizedRaw: string | null = null
-
-	for (let i = 0; i < tokens.length; i++) {
-		const rawToken = tokens[i]?.toLowerCase() ?? ''
-		if (!rawToken) continue
-		if (raw.includes(rawToken)) continue
-
-		const normalizedToken = normalizedTokens?.[i] ?? normalizeForSearch(rawToken)
-		if (!normalizedToken) return false
-
-		if (normalizedRaw === null) normalizedRaw = normalizeForSearch(raw)
-		if (!normalizedRaw.includes(normalizedToken)) return false
-	}
-	return true
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-	if (!Number.isFinite(value)) return min
-	if (max < min) return min
-	return Math.max(min, Math.min(max, value))
-}
-
-function treeKeyFromPrefix(prefix: string): string {
-	const p = normalizePrefix(prefix)
-	return p ? p : '/'
-}
-
-function treeAncestorKeys(prefixKey: string): string[] {
-	if (!prefixKey || prefixKey === '/') return ['/']
-	const normalized = normalizePrefix(prefixKey)
-	const parts = normalized.split('/').filter(Boolean)
-	const out: string[] = ['/']
-	let current = ''
-	for (const part of parts) {
-		current += part + '/'
-		out.push(current)
-	}
-	return out
-}
-
-function folderLabelFromPrefix(prefix: string): string {
-	const trimmed = prefix.replace(/\/+$/, '')
-	const parts = trimmed.split('/').filter(Boolean)
-	return parts.length ? parts[parts.length - 1] : prefix
-}
-
-function fileNameFromKey(key: string): string {
-	const trimmed = key.replace(/\/+$/, '')
-	const parts = trimmed.split('/').filter(Boolean)
-	return parts.length ? parts[parts.length - 1] : trimmed || key
-}
-
-function upsertTreeChildren(nodes: DataNode[], targetKey: string, children: DataNode[]): DataNode[] {
-	return nodes.map((node) => {
-		if (String(node.key) === targetKey) {
-			return { ...node, children, isLeaf: children.length === 0 }
-		}
-		if (node.children && Array.isArray(node.children)) {
-			return { ...node, children: upsertTreeChildren(node.children as DataNode[], targetKey, children) }
-		}
-		return node
-	})
-}
-
-function displayNameForKey(key: string, currentPrefix: string): string {
-	const p = normalizePrefix(currentPrefix)
-	if (!p) return key
-	if (!key.startsWith(p)) return key
-	return key.slice(p.length) || key
-}
-
-function displayNameForPrefix(prefix: string, currentPrefix: string): string {
-	const p = normalizePrefix(currentPrefix)
-	if (!p) return prefix
-	if (!prefix.startsWith(p)) return prefix
-	return prefix.slice(p.length) || prefix
-}
-
-function normalizePrefix(p: string): string {
-	const trimmed = p.trim()
-	if (!trimmed) return ''
-	return trimmed.endsWith('/') ? trimmed : `${trimmed}/`
-}
-
 const DEBUG_OBJECTS_LIST_KEY = 'debugObjectsList'
 const DEBUG_CONTEXT_MENU_KEY = 'debugObjectsContextMenu'
 
@@ -5660,54 +3348,3 @@ function logContextMenuDebug(
 	if (context) console.debug(prefix, context)
 	else console.debug(prefix)
 }
-
-function parentPrefixFromKey(key: string): string {
-	const trimmed = key.replace(/\/+$/, '')
-	const parts = trimmed.split('/').filter(Boolean)
-	if (parts.length <= 1) return ''
-	parts.pop()
-	return parts.join('/') + '/'
-}
-
-function suggestCopyPrefix(srcPrefix: string): string {
-	const base = srcPrefix.replace(/\/+$/, '')
-	if (!base) return 'copy/'
-	return `${base}-copy/`
-}
-
-	function uniquePrefixes(pages: ListObjectsResponse[]): string[] {
-		const set = new Set<string>()
-		for (const p of pages) {
-			const commonPrefixes = Array.isArray(p.commonPrefixes) ? p.commonPrefixes : []
-			for (const cp of commonPrefixes) {
-				set.add(cp)
-			}
-		}
-		return Array.from(set).sort((a, b) => a.localeCompare(b))
-	}
-
-	function fileExtensionFromKey(key: string): string {
-		const base = key.split('/').filter(Boolean).pop() ?? ''
-		const idx = base.lastIndexOf('.')
-		if (idx <= 0 || idx === base.length - 1) return ''
-		return base.slice(idx + 1).toLowerCase()
-	}
-
-	function isImageKey(key: string): boolean {
-		const ext = fileExtensionFromKey(key)
-		return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)
-	}
-
-	function guessPreviewKind(contentType: string | null | undefined, key: string): 'image' | 'text' | 'json' | 'unsupported' {
-		const ct = (contentType ?? '').toLowerCase()
-		if (ct.startsWith('image/')) return 'image'
-		if (ct.includes('json')) return 'json'
-		if (ct.startsWith('text/') || ct.includes('xml') || ct.includes('yaml') || ct.includes('csv') || ct.includes('log')) return 'text'
-
-		const ext = fileExtensionFromKey(key)
-		if (ext === 'json') return 'json'
-		if (ext === 'svg') return 'text'
-		if (['txt', 'log', 'md', 'csv', 'tsv', 'yml', 'yaml', 'xml'].includes(ext)) return 'text'
-		if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)) return 'image'
-		return 'unsupported'
-	}

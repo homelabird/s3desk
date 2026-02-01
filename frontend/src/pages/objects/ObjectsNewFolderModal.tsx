@@ -49,7 +49,7 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 						},
 					]}
 				>
-					<Input id="objectsNewFolderInput" placeholder="new-folder" autoComplete="off" />
+					<Input id="objectsNewFolderInput" placeholder="new-folder…" autoComplete="off" />
 				</Form.Item>
 			</Form>
 		</Modal>

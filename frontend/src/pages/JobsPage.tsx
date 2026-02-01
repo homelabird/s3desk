@@ -1,4 +1,4 @@
-import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import {
 	Alert,
 	AutoComplete,
@@ -51,6 +51,17 @@ import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
 import { logReactRender, measurePerf } from '../lib/perf'
+import {
+	formatS3Destination,
+	getBool,
+	getNumber,
+	getString,
+	joinKeyWithPrefix,
+	normalizePrefix as normalizeJobPrefix,
+	parentPrefixFromKey,
+	statusColor,
+	updateJob,
+} from './jobs/jobUtils'
 
 type Props = {
 	apiToken: string
@@ -492,7 +503,7 @@ export function JobsPage(props: Props) {
 			if (!props.profileId) return
 			setDeviceDownloadLoading(true)
 			try {
-				const normPrefix = normalizePrefix(args.prefix)
+				const normPrefix = normalizeJobPrefix(args.prefix)
 				const items = await listAllObjects({
 					api,
 					profileId: props.profileId,
@@ -1319,11 +1330,11 @@ export function JobsPage(props: Props) {
 						{ label: 'canceled', value: 'canceled' },
 					]}
 				/>
-				<Select
-					value={typeFilterNormalized || undefined}
-					onChange={(v) => setTypeFilter(v ?? '')}
-					placeholder="Type (exact, optional)"
-					aria-label="Job type filter"
+					<Select
+						value={typeFilterNormalized || undefined}
+						onChange={(v) => setTypeFilter(v ?? '')}
+						placeholder="Type (exact, optional)…"
+						aria-label="Job type filter"
 					style={{ width: screens.md ? 340 : '100%', maxWidth: '100%' }}
 					allowClear
 					showSearch
@@ -1340,7 +1351,7 @@ export function JobsPage(props: Props) {
 				<AutoComplete
 					value={errorCodeFilterNormalized}
 					onChange={(v) => setErrorCodeFilter(v)}
-					placeholder="Error code (exact, optional)"
+					placeholder="Error code (exact, optional)…"
 					style={{ width: screens.md ? 260 : '100%', maxWidth: '100%' }}
 					allowClear
 					options={errorCodeSuggestions}
@@ -1787,21 +1798,6 @@ export function JobsPage(props: Props) {
 	)
 }
 
-function statusColor(s: JobStatus): string {
-	switch (s) {
-		case 'queued':
-			return 'default'
-		case 'running':
-			return 'processing'
-		case 'succeeded':
-			return 'success'
-		case 'failed':
-			return 'error'
-		case 'canceled':
-			return 'warning'
-	}
-}
-
 function buildWSURL(apiToken: string, afterSeq?: number): string {
 	const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 	const base = `${proto}//${window.location.host}/api/v1/ws`
@@ -1821,26 +1817,6 @@ function buildSSEURL(apiToken: string, afterSeq?: number): string {
 	if (afterSeq && afterSeq > 0) qs.set('afterSeq', String(afterSeq))
 	const q = qs.toString()
 	return q ? `${base}?${q}` : base
-}
-
-function updateJob(
-	old: InfiniteData<JobsListResponse, string | undefined> | undefined,
-	jobId: string,
-	patch: (job: Job) => Job,
-): InfiniteData<JobsListResponse, string | undefined> | undefined {
-	if (!old) return old
-
-	let changed = false
-	const nextPages = old.pages.map((page) => {
-		const idx = page.items.findIndex((j) => j.id === jobId)
-		if (idx < 0) return page
-		const nextItems = page.items.slice()
-		nextItems[idx] = patch(nextItems[idx])
-		changed = true
-		return { ...page, items: nextItems }
-	})
-	if (!changed) return old
-	return { ...old, pages: nextPages }
 }
 
 function jobSummary(job: Job): string | null {
@@ -1963,56 +1939,6 @@ function jobSummary(job: Job): string | null {
 		default:
 			return null
 	}
-}
-
-function getString(payload: Record<string, unknown>, key: string): string | null {
-	const v = payload[key]
-	return typeof v === 'string' && v.trim() ? v : null
-}
-
-function getNumber(payload: Record<string, unknown>, key: string): number | null {
-	const v = payload[key]
-	if (typeof v === 'number' && Number.isFinite(v)) return v
-	if (typeof v === 'string') {
-		const trimmed = v.trim()
-		if (!trimmed) return null
-		const parsed = Number(trimmed)
-		return Number.isFinite(parsed) ? parsed : null
-	}
-	return null
-}
-
-function getBool(payload: Record<string, unknown>, key: string): boolean {
-	return payload[key] === true
-}
-
-function parentPrefixFromKey(key: string): string {
-	const trimmed = key.replace(/\/+$/, '')
-	const parts = trimmed.split('/').filter(Boolean)
-	if (parts.length <= 1) return ''
-	parts.pop()
-	return parts.join('/') + '/'
-}
-
-function joinKeyWithPrefix(prefix: string, path: string): string {
-	const cleanPrefix = prefix.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
-	const cleanPath = path.replace(/\\/g, '/').replace(/^\/+/, '')
-	if (!cleanPrefix) return cleanPath
-	if (!cleanPath) return cleanPrefix
-	return `${cleanPrefix}/${cleanPath}`
-}
-
-function formatS3Destination(bucket: string | null, prefix: string | null): string | null {
-	if (!bucket) return null
-	const cleanPrefix = (prefix ?? '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
-	return cleanPrefix ? `s3://${bucket}/${cleanPrefix}` : `s3://${bucket}/`
-}
-
-function normalizePrefix(value: string): string {
-	const trimmed = value.trim()
-	if (!trimmed) return ''
-	const normalized = trimmed.replace(/\\/g, '/')
-	return normalized.endsWith('/') ? normalized : `${normalized}/`
 }
 
 function formatProgress(p?: JobProgress | null): string {

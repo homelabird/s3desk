@@ -183,6 +183,8 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 								<img
 									src={props.preview.url}
 									alt={props.detailsKey}
+									width={360}
+									height={360}
 									style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain', display: 'block', marginInline: 'auto' }}
 								/>
 							</div>

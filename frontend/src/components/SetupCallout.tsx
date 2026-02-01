@@ -15,15 +15,10 @@ export function SetupCallout(props: Props) {
 
 	if (props.profileId) return null
 
-	const openProfiles = () => {
-		navigate('/profiles')
-	}
-
-	const openSettings = () => {
-		const next = new URLSearchParams(location.search)
-		next.set('settings', '1')
-		navigate({ pathname: location.pathname, search: `?${next.toString()}` })
-	}
+	const settingsParams = new URLSearchParams(location.search)
+	settingsParams.set('settings', '1')
+	const settingsSearch = settingsParams.toString()
+	const settingsHref = `${location.pathname}?${settingsSearch}`
 
 	const showSettings = props.apiToken === ''
 	const actionDirection = screens.sm ? 'horizontal' : 'vertical'
@@ -43,18 +38,32 @@ export function SetupCallout(props: Props) {
 			showIcon
 			message={props.message ?? 'Select a profile to continue'}
 			description={description}
-			action={
-				<Space direction={actionDirection} size="small">
-					<Button size="small" onClick={openProfiles}>
-						Profiles
-					</Button>
-					{showSettings ? (
-						<Button size="small" onClick={openSettings}>
-							Settings
+				action={
+					<Space direction={actionDirection} size="small">
+						<Button
+							size="small"
+							href="/profiles"
+							onClick={(event) => {
+								event.preventDefault()
+								navigate('/profiles')
+							}}
+						>
+							Profiles
 						</Button>
-					) : null}
-				</Space>
-			}
+						{showSettings ? (
+							<Button
+								size="small"
+								href={settingsHref}
+								onClick={(event) => {
+									event.preventDefault()
+									navigate({ pathname: location.pathname, search: `?${settingsSearch}` })
+								}}
+							>
+								Settings
+							</Button>
+						) : null}
+					</Space>
+				}
 		/>
 	)
 }

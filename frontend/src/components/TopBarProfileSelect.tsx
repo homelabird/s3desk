@@ -31,7 +31,7 @@ export function TopBarProfileSelect(props: Props) {
 			<Select
 				showSearch
 				allowClear
-				placeholder="Select profile"
+				placeholder="Select profile…"
 				style={{ width: selectWidth, maxWidth: '100%' }}
 				aria-label="Profile"
 				value={props.profileId ?? undefined}

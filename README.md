@@ -171,6 +171,17 @@ Notes:
 - The chart rejects the insecure placeholder token value `change-me`.
 - Kubernetes deployment is not verified yet.
 
+## Recommended runtime settings (long-running)
+
+Set these envs for better observability and fewer surprises in containerized setups:
+
+- `LOG_FORMAT=json` (structured logs)
+- `JOB_LOG_EMIT_STDOUT=true` (emit job logs to stdout)
+- `LOG_LEVEL=info` (use `debug` only while investigating)
+- `ALLOWED_HOSTS` should include any non-local hostnames used by clients or service DNS.
+  - Example (local containers): `ALLOWED_HOSTS=s3desk_local,localhost,127.0.0.1`
+  - Example (K8s Service DNS): `ALLOWED_HOSTS=s3desk,s3desk.default.svc,s3desk.default.svc.cluster.local`
+
 ## Build
 
 ```bash
@@ -237,6 +248,15 @@ If you run MinIO on the host with a locally running server, set `E2E_S3_ENDPOINT
 
 CI note: `E2E_S3_ENDPOINT` must be reachable from the Playwright runner container (for example, `http://minio:9000` inside the Compose network).
 
+## CI pipeline notes (summary)
+
+- `check` is a full verification job that runs only when `RUN_FULL_CHECK=1` or on scheduled pipelines.
+- Frontend validation is consolidated into `frontend_ci` (OpenAPI gen + diff, lint, unit tests, build).
+- `security_fs_scan` and `gitleaks_scan` run on tags, schedules, default-branch pipelines, or when code/infrastructure paths change.
+- `api_integration` triggers on backend, `e2e/runner`, OpenAPI, or `docker-compose.e2e.yml` changes.
+- Optional toggles:
+  - `FRONTEND_PARALLEL=1` runs frontend checks as separate jobs (openapi types, lint, unit tests, build).
+  - `RUN_DEV_AUDIT=1` runs the dev license audit job outside schedules.
 Vite dev server + backend example:
 
 ```bash

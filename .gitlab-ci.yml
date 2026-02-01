@@ -28,6 +28,10 @@ default:
   tags:
     - onpremise
     - k8s
+  before_script:
+    - export NPM_CONFIG_PREFIX="${CI_PROJECT_DIR}/.cache/npm-global"
+    - export PATH="${NPM_CONFIG_PREFIX}/bin:${PATH}"
+    - mkdir -p "${NPM_CONFIG_PREFIX}"
 
 stages:
   - build
@@ -37,23 +41,68 @@ stages:
   - post-publish
 
 variables:
+  ALPINE_IMAGE: "harbor.k8s.homelabird.com/library/alpine:3.21"
+  GO_IMAGE: "harbor.k8s.homelabird.com/library/golang:1.24"
+  NODE_IMAGE: "harbor.k8s.homelabird.com/library/node:22-bookworm"
+  PODMAN_IMAGE: "quay.io/podman/stable:latest"
+  PLAYWRIGHT_IMAGE: "mcr.microsoft.com/playwright:v1.47.0-jammy"
+  TRIVY_IMAGE: "aquasec/trivy:0.56.2"
   NPM_VERSION: "10.9.4"
   TRIVY_SEVERITY: "HIGH,CRITICAL"
   TRIVY_EXIT_CODE: "1"
+  TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.cache/trivy"
   GITLEAKS_VERSION: "8.21.2"
   HELM_VERSION: "3.16.4"
   KUBECONFORM_VERSION: "0.6.7"
   KUBECTL_VERSION: "1.30.4"
-  K8S_NAMESPACE: "gitlab-runner"
   NPM_CONFIG_FETCH_RETRIES: "5"
   NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
   NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
   NPM_CONFIG_PREFER_OFFLINE: "true"
   NPM_CONFIG_AUDIT: "false"
   NPM_CONFIG_FUND: "false"
+  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.cache/npm"
+  GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
+  GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
+  GOVULNCHECK_VERSION: "latest"
+
+.node_cache: &node_cache
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+      prefix: "npm-cache"
+    paths:
+      - .cache/npm/
+      - .cache/npm-global/
+
+.playwright_cache: &playwright_cache
+  cache:
+    key:
+      prefix: "playwright-cache"
+    paths:
+      - .cache/ms-playwright/
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+
+.go_cache: &go_cache
+  cache:
+    key:
+      files:
+        - backend/go.sum
+      prefix: "go-cache"
+    paths:
+      - .cache/go-mod
+      - .cache/go-build
+
+.trivy_cache: &trivy_cache
+  cache:
+    key: "trivy-cache"
+    paths:
+      - .cache/trivy
 
 .helm_tools: &helm_tools
-  image: harbor.k8s.homelabird.com/library/alpine:3.21
+  image: "$ALPINE_IMAGE"
   before_script:
     - apk add --no-cache curl tar ca-certificates bash
     - |
@@ -66,12 +115,15 @@ variables:
       helm_version="v${HELM_VERSION}"
       curl -fsSL -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      if [ -n "${HELM_TGZ_SHA256:-}" ]; then
+        echo "${HELM_TGZ_SHA256}  /tmp/helm.tar.gz" | sha256sum -c -
+      fi
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
 
 .helm_k8s_tools: &helm_k8s_tools
-  image: harbor.k8s.homelabird.com/library/alpine:3.21
+  image: "$ALPINE_IMAGE"
   before_script:
     - apk add --no-cache curl tar ca-certificates bash coreutils
     - |
@@ -84,23 +136,43 @@ variables:
       helm_version="v${HELM_VERSION}"
       curl -fsSL -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      if [ -n "${HELM_TGZ_SHA256:-}" ]; then
+        echo "${HELM_TGZ_SHA256}  /tmp/helm.tar.gz" | sha256sum -c -
+      fi
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
       kubectl_version="v${KUBECTL_VERSION}"
       curl -fsSL -o /usr/local/bin/kubectl \
         "https://dl.k8s.io/release/${kubectl_version}/bin/linux/${arch}/kubectl"
+      if [ -n "${KUBECTL_SHA256:-}" ]; then
+        echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum -c -
+      fi
       chmod +x /usr/local/bin/kubectl
 
 helm_lint:
   <<: *helm_tools
   stage: test
+  interruptible: true
+  rules:
+    - changes:
+        - charts/**/*
+        - charts/s3desk/ci-values.yaml
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   script:
     - helm lint charts/s3desk -f charts/s3desk/ci-values.yaml
 
 helm_template:
   <<: *helm_tools
   stage: test
+  interruptible: true
+  rules:
+    - changes:
+        - charts/**/*
+        - charts/s3desk/ci-values.yaml
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   before_script:
     - apk add --no-cache curl tar ca-certificates bash
     - |
@@ -113,12 +185,18 @@ helm_template:
       helm_version="v${HELM_VERSION}"
       curl -fsSL -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      if [ -n "${HELM_TGZ_SHA256:-}" ]; then
+        echo "${HELM_TGZ_SHA256}  /tmp/helm.tar.gz" | sha256sum -c -
+      fi
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
       kubeconform_version="v${KUBECONFORM_VERSION}"
       curl -fsSL -o /tmp/kubeconform.tar.gz \
         "https://github.com/yannh/kubeconform/releases/download/${kubeconform_version}/kubeconform-linux-${arch}.tar.gz"
+      if [ -n "${KUBECONFORM_TGZ_SHA256:-}" ]; then
+        echo "${KUBECONFORM_TGZ_SHA256}  /tmp/kubeconform.tar.gz" | sha256sum -c -
+      fi
       tar -C /usr/local/bin -xzf /tmp/kubeconform.tar.gz kubeconform
       rm -f /tmp/kubeconform.tar.gz
   script:
@@ -128,6 +206,13 @@ helm_template:
 helm_template_negative:
   <<: *helm_tools
   stage: test
+  interruptible: true
+  rules:
+    - changes:
+        - charts/**/*
+        - charts/s3desk/ci-values.yaml
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   script:
     - |
       if helm template s3desk charts/s3desk \
@@ -142,6 +227,17 @@ helm_template_negative:
 helm_k8s_smoke_sqlite:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -153,6 +249,17 @@ helm_k8s_smoke_sqlite:
 helm_k8s_smoke_postgres:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -164,6 +271,17 @@ helm_k8s_smoke_postgres:
 helm_k8s_upgrade:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -175,6 +293,17 @@ helm_k8s_upgrade:
 helm_k8s_pvc:
   <<: *helm_k8s_tools
   stage: test
+  interruptible: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$RUN_HELM_SMOKE == "1"'
+      when: on_success
+    - changes:
+        - charts/**/*
+        - k8s/**/*
+        - scripts/helm_k8s_smoke.sh
+    - when: never
   variables:
     HARBOR_REGISTRY: "harbor.k8s.homelabird.com"
     S3DESK_IMAGE_REPOSITORY: "${HARBOR_REGISTRY}/library/s3desk"
@@ -185,16 +314,64 @@ helm_k8s_pvc:
 
 security_fs_scan:
   stage: audit
-  image: aquasec/trivy:0.56.2
+  image: "$TRIVY_IMAGE"
+  <<: *trivy_cache
+  interruptible: true
+  needs: []
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_success
+    - changes:
+        - .gitlab-ci.yml
+        - Containerfile
+        - docker-compose*.yml
+        - openapi.yml
+        - backend/**/*
+        - charts/**/*
+        - e2e/**/*
+        - frontend/**/*
+        - k8s/**/*
+        - scripts/**/*
+        - third_party/**/*
+      when: on_success
+    - when: never
   script:
     - trivy fs --scanners vuln,secret --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --ignore-unfixed --skip-dirs frontend/dist .
     - trivy config --severity "${TRIVY_SEVERITY}" --exit-code "${TRIVY_EXIT_CODE}" --skip-dirs frontend/dist --helm-values charts/s3desk/ci-values.yaml .
 
 gitleaks_scan:
   stage: audit
-  image: harbor.k8s.homelabird.com/library/alpine:3.21
+  image: "$ALPINE_IMAGE"
+  interruptible: true
+  needs: []
   variables:
     GIT_DEPTH: "0"
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_success
+    - changes:
+        - .gitlab-ci.yml
+        - .gitleaks.toml
+        - Containerfile
+        - docker-compose*.yml
+        - openapi.yml
+        - backend/**/*
+        - charts/**/*
+        - e2e/**/*
+        - frontend/**/*
+        - k8s/**/*
+        - scripts/**/*
+        - third_party/**/*
+      when: on_success
+    - when: never
   before_script:
     - apk add --no-cache curl tar ca-certificates git
     - |
@@ -207,19 +384,48 @@ gitleaks_scan:
       version="v${GITLEAKS_VERSION}"
       curl -fsSL -o /tmp/gitleaks.tar.gz \
         "https://github.com/gitleaks/gitleaks/releases/download/${version}/gitleaks_${version#v}_linux_${arch}.tar.gz"
+      if [ -n "${GITLEAKS_TGZ_SHA256:-}" ]; then
+        echo "${GITLEAKS_TGZ_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+      fi
       tar -C /usr/local/bin -xzf /tmp/gitleaks.tar.gz gitleaks
   script:
     - gitleaks detect --source . --config .gitleaks.toml
 
 openapi_validate:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  interruptible: true
+  rules:
+    - changes:
+        - openapi.yml
+        - scripts/validate_openapi.sh
+    - when: never
   script:
     - bash scripts/validate_openapi.sh
 
 check:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  interruptible: true
+  rules:
+    - if: '$RUN_FULL_CHECK == "1"'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
+    - when: manual
+      allow_failure: true
+    - when: never
+  cache:
+    key:
+      files:
+        - backend/go.sum
+        - frontend/package-lock.json
+      prefix: "check-cache"
+    paths:
+      - .cache/go-mod
+      - .cache/go-build
+      - .cache/npm/
+      - .cache/npm-global/
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -233,9 +439,17 @@ check:
 
 build_s3desk_image:
   stage: build
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
-    - when: on_success
+    - if: '$RUN_IMAGE_BUILD == "1"'
+      when: on_success
+    - changes:
+        - Containerfile
+        - backend/**/*
+        - frontend/**/*
+        - openapi.yml
+    - when: never
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
@@ -274,7 +488,8 @@ build_s3desk_image:
 
 build_release_images:
   stage: build
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
   variables:
@@ -305,7 +520,13 @@ build_release_images:
 
 gofmt:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  interruptible: true
+  <<: *go_cache
+  rules:
+    - changes:
+        - backend/**/*
+    - when: never
   script:
     - |
       UNFORMATTED=$(find backend -name '*.go' -type f -print0 | xargs -0 gofmt -l)
@@ -317,7 +538,13 @@ gofmt:
 
 go_test:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  interruptible: true
+  <<: *go_cache
+  rules:
+    - changes:
+        - backend/**/*
+    - when: never
   variables:
     KUBERNETES_MEMORY_REQUEST: "1Gi"
     KUBERNETES_MEMORY_LIMIT: "2Gi"
@@ -328,26 +555,25 @@ go_test:
 
 govulncheck:
   stage: test
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  interruptible: true
+  <<: *go_cache
+  rules:
+    - changes:
+        - backend/**/*
+    - when: never
   variables:
     GOVULNCHECK_TIMEOUT: "30m"
     GOVULNCHECK_PATTERN: "./internal/api/..."
     GOPROXY: "https://proxy.golang.org,direct"
     GOSUMDB: "sum.golang.org"
-    GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
-    GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
-  cache:
-    key: "go-cache"
-    paths:
-      - .cache/go-mod
-      - .cache/go-build
   script:
     - |
       GOBIN="$(go env GOBIN)"
       if [ -z "$GOBIN" ]; then
         GOBIN="$(go env GOPATH)/bin"
       fi
-      go install golang.org/x/vuln/cmd/govulncheck@latest
+      go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
       cd backend
       if timeout "${GOVULNCHECK_TIMEOUT}" "$GOBIN/govulncheck" "${GOVULNCHECK_PATTERN}"; then
         status=0
@@ -362,32 +588,18 @@ govulncheck:
       echo "govulncheck exit code: ${status}"
       exit "$status"
 
-frontend_openapi_types:
+frontend_ci:
   stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
-  script:
-    - cd frontend
-    - npm install -g "npm@${NPM_VERSION}"
-    - npm --version
-    - npm ci --no-audit --no-fund
-    - npm run gen:openapi
-    - cd ..
-    - git diff --exit-code frontend/src/api/openapi.ts
-
-frontend_lint:
-  stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
-  script:
-    - cd frontend
-    - npm install -g "npm@${NPM_VERSION}"
-    - npm --version
-    - npm ci --no-audit --no-fund
-    - npm run gen:openapi
-    - npm run lint
-
-frontend_build:
-  stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      when: never
+    - changes:
+        - frontend/**/*
+        - openapi.yml
+    - when: never
   variables:
     NODE_OPTIONS: "--max-old-space-size=2048"
     KUBERNETES_MEMORY_REQUEST: "1Gi"
@@ -398,11 +610,151 @@ frontend_build:
     - npm --version
     - npm ci --no-audit --no-fund
     - npm run gen:openapi
+    - cd ..
+    - git diff --exit-code frontend/src/api/openapi.ts
+    - cd frontend
+    - npm run lint
+    - npm run test:unit
+    - npm run build
+
+frontend_deps:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - cd ..
+    - git diff --exit-code frontend/src/api/openapi.ts
+  artifacts:
+    when: always
+    paths:
+      - frontend/node_modules/
+    expire_in: 7 days
+
+frontend_openapi_types:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm run gen:openapi
+    - cd ..
+    - git diff --exit-code frontend/src/api/openapi.ts
+
+frontend_lint:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm run gen:openapi
+    - npm run lint
+
+frontend_unit_tests:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm run test:unit
+
+frontend_build:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
+  rules:
+    - if: '$FRONTEND_PARALLEL == "1"'
+      changes:
+        - frontend/**/*
+        - openapi.yml
+      when: on_success
+    - when: never
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm run gen:openapi
     - npm run build
 
 third_party_notices:
   stage: audit
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  interruptible: true
+  needs: []
+  <<: *node_cache
+  rules:
+    - changes:
+        - frontend/**/*
+        - scripts/generate_third_party_notices.py
+        - third_party/**/*
+    - when: never
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -427,14 +779,20 @@ third_party_notices:
 
 api_integration:
   stage: test
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - changes:
+        - Containerfile
         - backend/**/*
-        - e2e/api/**/*
+        - e2e/runner/**/*
         - openapi.yml
         - docker-compose.e2e.yml
+        - scripts/ci_podman_compose.sh
     - when: never
+  needs:
+    - job: build_s3desk_image
+      optional: true
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
@@ -447,51 +805,9 @@ api_integration:
     E2E_MINIO_ENDPOINT: "http://minio:9000"
     E2E_AZURITE_ENDPOINT: "http://azurite:10000/devstoreaccount1"
     E2E_GCS_ENDPOINT: "http://fake-gcs-server:4443/storage/v1/v1"
+    COMPOSE_POD_NAME: "s3desk-e2e"
   before_script:
-    - |
-      set -e
-      export XDG_CONFIG_HOME="/tmp"
-      mkdir -p "${XDG_CONFIG_HOME}/containers"
-      cat > "${XDG_CONFIG_HOME}/containers/containers.conf" <<'EOF'
-      [network]
-      default_rootless_network_cmd = "slirp4netns"
-      EOF
-      if ! command -v slirp4netns >/dev/null 2>&1; then
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install slirp4netns
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache slirp4netns
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends slirp4netns
-        fi
-      fi
-      if command -v podman-compose >/dev/null 2>&1; then
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      else
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install python3-pip
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache python3 py3-pip
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends python3 python3-pip
-        fi
-        python3 -m pip install --no-cache-dir podman-compose
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-e2e --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      fi
-      echo "$COMPOSE_CMD" > /tmp/compose_cmd
-      echo "$COMPOSE_ARGS" > /tmp/compose_args
-      echo "$COMPOSE_PULL_ARGS" > /tmp/compose_pull_args
-      if [ "$COMPOSE_CMD" = "podman-compose" ]; then
-        echo "logs" > /tmp/compose_logs_cmd
-      else
-        echo "logs --no-color" > /tmp/compose_logs_cmd
-      fi
+    - bash scripts/ci_podman_compose.sh
   script:
     - podman --version
     - |
@@ -520,7 +836,8 @@ api_integration:
 
 release_postgres_smoke:
   stage: test
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
   needs:
@@ -532,51 +849,9 @@ release_postgres_smoke:
     BUILDAH_ISOLATION: "chroot"
     PODMAN_NETWORK_BACKEND: "slirp4netns"
     CONTAINERS_NETWORK_BACKEND: "slirp4netns"
+    COMPOSE_POD_NAME: "s3desk-release-smoke"
   before_script:
-    - |
-      set -e
-      export XDG_CONFIG_HOME="/tmp"
-      mkdir -p "${XDG_CONFIG_HOME}/containers"
-      cat > "${XDG_CONFIG_HOME}/containers/containers.conf" <<'EOF'
-      [network]
-      default_rootless_network_cmd = "slirp4netns"
-      EOF
-      if ! command -v curl >/dev/null 2>&1; then
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install curl
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache curl
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends curl
-        fi
-      fi
-      if command -v podman-compose >/dev/null 2>&1; then
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-release-smoke --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      else
-        if command -v dnf >/dev/null 2>&1; then
-          dnf -y install python3-pip
-        elif command -v apk >/dev/null 2>&1; then
-          apk add --no-cache python3 py3-pip
-        elif command -v apt-get >/dev/null 2>&1; then
-          apt-get update
-          apt-get install -y --no-install-recommends python3 python3-pip
-        fi
-        python3 -m pip install --no-cache-dir podman-compose
-        COMPOSE_CMD="podman-compose"
-        COMPOSE_ARGS="--in-pod s3desk-release-smoke --pod-args=--network=slirp4netns"
-        COMPOSE_PULL_ARGS=""
-      fi
-      echo "$COMPOSE_CMD" > /tmp/compose_cmd
-      echo "$COMPOSE_ARGS" > /tmp/compose_args
-      echo "$COMPOSE_PULL_ARGS" > /tmp/compose_pull_args
-      if [ "$COMPOSE_CMD" = "podman-compose" ]; then
-        echo "logs" > /tmp/compose_logs_cmd
-      else
-        echo "logs --no-color" > /tmp/compose_logs_cmd
-      fi
+    - bash scripts/ci_podman_compose.sh
   script:
     - podman --version
     - podman load -i release-postgres.tar
@@ -616,23 +891,11 @@ release_postgres_smoke:
       if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml $LOGS_CMD; fi
       $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
 
-frontend_unit_tests:
-  stage: test
-  image: harbor.k8s.homelabird.com/library/node:22-bookworm
-  variables:
-    NODE_OPTIONS: "--max-old-space-size=2048"
-    KUBERNETES_MEMORY_REQUEST: "1Gi"
-    KUBERNETES_MEMORY_LIMIT: "2Gi"
-  script:
-    - cd frontend
-    - npm install -g "npm@${NPM_VERSION}"
-    - npm --version
-    - npm ci --no-audit --no-fund
-    - npm run test:unit
-
 e2e:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  image: "$PLAYWRIGHT_IMAGE"
+  interruptible: true
+  <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$E2E_BASE_URL'
       when: on_success
@@ -645,10 +908,13 @@ e2e:
       fi
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
+    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
+    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test tests/objects-smoke.spec.ts tests/docs-smoke.spec.ts tests/jobs-network.spec.ts tests/transfers-*.spec.ts
   artifacts:
     when: always
@@ -659,7 +925,9 @@ e2e:
 
 e2e_live:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  image: "$PLAYWRIGHT_IMAGE"
+  interruptible: true
+  <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$E2E_LIVE == "1" && $E2E_BASE_URL'
       when: on_success
@@ -673,10 +941,13 @@ e2e_live:
     - export PLAYWRIGHT_BASE_URL="$E2E_BASE_URL"
     - export DOCS_BASE_URL="${DOCS_BASE_URL:-$E2E_BASE_URL}"
     - export E2E_LIVE=1
+    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
     - cd frontend
     - npm install -g "npm@${NPM_VERSION}"
     - npm --version
     - npm ci --no-audit --no-fund
+    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
   artifacts:
     when: always
@@ -687,7 +958,9 @@ e2e_live:
 
 perf_tests:
   stage: test
-  image: mcr.microsoft.com/playwright:v1.47.0-jammy
+  image: "$PLAYWRIGHT_IMAGE"
+  interruptible: true
+  <<: [*node_cache, *playwright_cache]
   rules:
     - if: '$PERF_TESTS == "1"'
       when: on_success
@@ -703,6 +976,9 @@ perf_tests:
     - cd frontend
     - npm ci --no-audit --no-fund
     - export PERF_BASE_URL="${PERF_BASE_URL:-http://127.0.0.1:8080}"
+    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
+    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - PERF_TESTS=1 npx playwright test tests/jobs-perf.spec.ts
   artifacts:
     when: always
@@ -713,7 +989,16 @@ perf_tests:
 
 dev_license_audit:
   stage: audit
-  image: harbor.k8s.homelabird.com/library/golang:1.24
+  image: "$GO_IMAGE"
+  interruptible: true
+  needs: []
+  <<: *node_cache
+  rules:
+    - if: '$RUN_DEV_AUDIT == "1"'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: on_success
+    - when: never
   before_script:
     - apt-get update
     - apt-get install -y --no-install-recommends python3 ca-certificates curl git gnupg
@@ -736,7 +1021,9 @@ dev_license_audit:
 
 trivy_scan:
   stage: audit
-  image: aquasec/trivy:0.56.2
+  image: "$TRIVY_IMAGE"
+  <<: *trivy_cache
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -761,7 +1048,8 @@ trivy_scan:
 
 publish_dockerhub:
   stage: publish
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
+  interruptible: true
   variables:
     STORAGE_DRIVER: "vfs"
     CONTAINERS_STORAGE_DRIVER: "vfs"
@@ -883,7 +1171,8 @@ publish_helm_chart:
 
 release_image_smoke:
   stage: post-publish
-  image: quay.io/podman/stable:latest
+  image: "$PODMAN_IMAGE"
+  interruptible: true
   rules:
     - if: '$CI_COMMIT_TAG'
   needs:
