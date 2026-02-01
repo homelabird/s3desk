@@ -32,6 +32,8 @@ default:
     - export NPM_CONFIG_PREFIX="${CI_PROJECT_DIR}/.cache/npm-global"
     - export PATH="${NPM_CONFIG_PREFIX}/bin:${PATH}"
     - mkdir -p "${NPM_CONFIG_PREFIX}"
+  artifacts:
+    expire_in: 7 days
 
 stages:
   - build
