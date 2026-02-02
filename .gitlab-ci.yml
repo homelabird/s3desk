@@ -239,6 +239,8 @@ helm_k8s_smoke_sqlite:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
+    - if: '$CI_COMMIT_TAG && $RUN_HELM_SMOKE != "1"'
+      when: never
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
     - changes:
@@ -261,6 +263,8 @@ helm_k8s_smoke_postgres:
   tags: *heavy_tags
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_TAG && $RUN_HELM_SMOKE != "1"'
       when: never
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
@@ -285,6 +289,8 @@ helm_k8s_upgrade:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: never
+    - if: '$CI_COMMIT_TAG && $RUN_HELM_SMOKE != "1"'
+      when: never
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
     - changes:
@@ -307,6 +313,8 @@ helm_k8s_pvc:
   tags: *heavy_tags
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - if: '$CI_COMMIT_TAG && $RUN_HELM_SMOKE != "1"'
       when: never
     - if: '$RUN_HELM_SMOKE == "1"'
       when: on_success
@@ -1043,6 +1051,9 @@ trivy_scan:
   <<: *trivy_cache
   interruptible: true
   rules:
+    - if: '$CI_COMMIT_TAG && $RUN_TRIVY != "1"'
+      when: manual
+      allow_failure: true
     - if: '$CI_COMMIT_TAG'
       when: on_success
     - when: never
