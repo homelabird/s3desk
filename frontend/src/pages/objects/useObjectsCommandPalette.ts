@@ -1,13 +1,18 @@
 import { useCallback, useMemo, useState } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 
 import type { CommandItem } from './objectsActions'
 
 type UseObjectsCommandPaletteArgs = {
 	items: CommandItem[]
+	open?: boolean
+	setOpen?: Dispatch<SetStateAction<boolean>>
 }
 
 export function useObjectsCommandPalette(args: UseObjectsCommandPaletteArgs) {
-	const [open, setOpen] = useState(false)
+	const [openState, setOpenState] = useState(false)
+	const open = args.open ?? openState
+	const setOpen = args.setOpen ?? setOpenState
 	const [query, setQuery] = useState('')
 	const [activeIndex, setActiveIndex] = useState(0)
 
@@ -24,7 +29,7 @@ export function useObjectsCommandPalette(args: UseObjectsCommandPaletteArgs) {
 		if (!cmd.enabled) return
 		setOpen(false)
 		window.setTimeout(() => cmd.run(), 0)
-	}, [])
+	}, [setOpen])
 
 	const onQueryChange = useCallback((value: string) => {
 		setQuery(value)
@@ -56,7 +61,7 @@ export function useObjectsCommandPalette(args: UseObjectsCommandPaletteArgs) {
 				run(cmd)
 			}
 		},
-		[activeIndex, filtered, maxIndex, run],
+		[activeIndex, filtered, maxIndex, run, setOpen],
 	)
 
 	return {

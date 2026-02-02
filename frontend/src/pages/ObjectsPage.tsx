@@ -253,6 +253,7 @@ export function ObjectsPage(props: Props) {
 	const [searchDraft, setSearchDraft] = useState(search)
 	const deferredSearch = useDeferredValue(search)
 	const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
+	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [globalSearch, setGlobalSearch] = useLocalStorageState<string>('objectsGlobalSearch', '')
 	const [globalSearchDraft, setGlobalSearchDraft] = useState(globalSearch)
 	const deferredGlobalSearch = useDeferredValue(globalSearch)
@@ -2120,8 +2121,6 @@ const objectsQuery = useInfiniteQuery({
 		ensureObjectSelected: ensureObjectSelectedForContextMenu,
 	})
 	const {
-		open: commandPaletteOpen,
-		setOpen: setCommandPaletteOpen,
 		query: commandPaletteQuery,
 		setQuery: setCommandPaletteQuery,
 		activeIndex: commandPaletteActiveIndex,
@@ -2130,7 +2129,11 @@ const objectsQuery = useInfiniteQuery({
 		run: runCommandPaletteItem,
 		onQueryChange: onCommandPaletteQueryChange,
 		onKeyDown: onCommandPaletteKeyDown,
-	} = useObjectsCommandPalette({ items: commandItems })
+	} = useObjectsCommandPalette({
+		items: commandItems,
+		open: commandPaletteOpen,
+		setOpen: setCommandPaletteOpen,
+	})
 
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
