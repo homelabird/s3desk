@@ -639,6 +639,33 @@ frontend_smoke:
     - npm ci --no-audit --no-fund
     - npm run test:unit -- src/pages/objects/__tests__/ObjectsPage.smoke.test.tsx
 
+e2e_smoke:
+  stage: smoke
+  image: "$PLAYWRIGHT_IMAGE"
+  interruptible: true
+  tags: *heavy_tags
+  <<: [*node_cache, *playwright_cache]
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: on_success
+    - when: never
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm run gen:openapi
+    - npm run build
+    - mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+    - if [ -d /ms-playwright ] && [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then cp -R /ms-playwright/* "$PLAYWRIGHT_BROWSERS_PATH"/; fi
+    - npm run preview -- --host 0.0.0.0 --port 4173 &
+    - for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:4173 >/dev/null; then break; fi; sleep 1; done
+    - export PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173"
+    - if [ -z "$(ls -A \"$PLAYWRIGHT_BROWSERS_PATH\")" ]; then npx playwright install chromium; fi
+    - npx playwright test --project=chromium tests/objects-smoke.spec.ts tests/jobs-flow.spec.ts tests/uploads-folder.spec.ts
+
 frontend_ci:
   stage: test
   image: "$NODE_IMAGE"
