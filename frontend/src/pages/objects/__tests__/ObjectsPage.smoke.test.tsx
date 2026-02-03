@@ -4,16 +4,17 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, beforeAll } from 'vitest'
 
 import { ObjectsPage } from '../../ObjectsPage'
+import type { DownloadTask, TransfersContextValue, UploadTask } from '../../../components/Transfers'
 import { TransfersContext } from '../../../components/useTransfers'
 
-const transfersStub = {
+const transfersStub: TransfersContextValue = {
 	isOpen: false,
 	tab: 'downloads',
 	activeDownloadCount: 0,
 	activeUploadCount: 0,
 	activeTransferCount: 0,
-	downloadTasks: [],
-	uploadTasks: [],
+	downloadTasks: [] as DownloadTask[],
+	uploadTasks: [] as UploadTask[],
 	openTransfers: () => {},
 	closeTransfers: () => {},
 	queueDownloadObject: () => {},
@@ -29,12 +30,13 @@ beforeAll(() => {
 			unobserve() {}
 			disconnect() {}
 		}
-		// @ts-expect-error - shim for jsdom
 		globalThis.ResizeObserver = ResizeObserver
 	}
 	if (!('scrollTo' in Element.prototype)) {
-		// @ts-expect-error - shim for jsdom
-		Element.prototype.scrollTo = () => {}
+		Object.defineProperty(Element.prototype, 'scrollTo', {
+			value: () => {},
+			writable: true,
+		})
 	}
 })
 
