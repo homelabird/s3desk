@@ -32,7 +32,14 @@ describe('ProfilesPage', () => {
 			jobRetentionSeconds: null,
 			uploadSessionTTLSeconds: 3600,
 			uploadMaxBytes: null,
-			transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
+			transferEngine: {
+				name: 'rclone',
+				available: true,
+				compatible: true,
+				minVersion: '1.52.0',
+				path: '/usr/local/bin/rclone',
+				version: 'v1.66.0',
+			},
 		})
 
 		const client = new QueryClient({
@@ -44,7 +51,7 @@ describe('ProfilesPage', () => {
 		render(
 			<QueryClientProvider client={client}>
 				<MemoryRouter>
-					<ProfilesPage apiToken="" profileId={null} />
+					<ProfilesPage apiToken="" profileId={null} setProfileId={vi.fn()} />
 				</MemoryRouter>
 			</QueryClientProvider>,
 		)
