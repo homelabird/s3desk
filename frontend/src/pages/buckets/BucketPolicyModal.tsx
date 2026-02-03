@@ -71,7 +71,7 @@ export function BucketPolicyModal(props: {
 
 	if (policyQuery.isError) {
 		return (
-			<Modal open={open} title={`Policy: ${bucket}`} onCancel={props.onClose} footer={null} width={920} destroyOnClose>
+			<Modal open={open} title={`Policy: ${bucket}`} onCancel={props.onClose} footer={null} width={920} destroyOnHidden>
 				<Alert type="error" showIcon title="Failed to load policy" description={formatErr(policyQuery.error)} />
 			</Modal>
 		)
@@ -79,7 +79,7 @@ export function BucketPolicyModal(props: {
 
 	if (!policyQuery.data) {
 		return (
-			<Modal open={open} title={`Policy: ${bucket}`} onCancel={props.onClose} footer={null} width={920} destroyOnClose>
+			<Modal open={open} title={`Policy: ${bucket}`} onCancel={props.onClose} footer={null} width={920} destroyOnHidden>
 				<Typography.Text type="secondary">Loading...</Typography.Text>
 			</Modal>
 		)
@@ -371,7 +371,7 @@ function BucketPolicyEditor(props: {
 	const renderStructuredEditor = () => {
 		if (policyKind === 'gcs') {
 			return (
-				<Space direction="vertical" style={{ width: '100%' }} size="middle">
+				<Space orientation="vertical" style={{ width: '100%' }} size="middle">
 					<Space align="center" wrap>
 						<Switch
 							checked={gcsPublicRead}
@@ -415,7 +415,7 @@ function BucketPolicyEditor(props: {
 							showIcon
 							title="etag preserved"
 							description={
-								<Space direction="vertical" size={4} style={{ width: '100%' }}>
+								<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 									<Typography.Text type="secondary">This value will be sent back on save.</Typography.Text>
 									<Typography.Text code>{gcsEtag}</Typography.Text>
 								</Space>
@@ -486,7 +486,7 @@ function BucketPolicyEditor(props: {
 
 		if (policyKind === 'azure') {
 			return (
-				<Space direction="vertical" style={{ width: '100%' }} size="middle">
+				<Space orientation="vertical" style={{ width: '100%' }} size="middle">
 					<Space align="center" wrap>
 						<Typography.Text strong>Public access:</Typography.Text>
 						<Select
@@ -655,7 +655,7 @@ function BucketPolicyEditor(props: {
 				</Space>
 			)}
 			width={920}
-			destroyOnClose
+			destroyOnHidden
 		>
 			<Tabs
 				activeKey={activeTab}
@@ -665,7 +665,7 @@ function BucketPolicyEditor(props: {
 						key: 'validate',
 						label: 'Validate',
 						children: (
-							<Space direction="vertical" style={{ width: '100%' }} size="middle">
+							<Space orientation="vertical" style={{ width: '100%' }} size="middle">
 								{parsed.ok ? (
 									<Alert
 										type="success"
@@ -710,7 +710,7 @@ function BucketPolicyEditor(props: {
 								{editorMode === 'form' && policyKind !== 's3' ? renderStructuredEditor() : null}
 
 								{editorMode === 'json' || policyKind === 's3' ? (
-									<Space direction="vertical" size="small" style={{ width: '100%' }}>
+									<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 										<Input.TextArea
 											value={policyText}
 											onChange={(e) => {
@@ -758,7 +758,7 @@ function BucketPolicyEditor(props: {
 											showIcon
 											title={serverValidation.ok ? 'Server validation OK' : 'Server validation found issues'}
 											description={
-												<Space direction="vertical" size={4} style={{ width: '100%' }}>
+												<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 													{serverValidationMessages.map((row, idx) => (
 														<Typography.Text key={`${idx}-${row}`} type="secondary">
 															{row}
@@ -779,7 +779,7 @@ function BucketPolicyEditor(props: {
 											showIcon
 											title="Provider rejected the policy"
 											description={
-												<Space direction="vertical" size={4} style={{ width: '100%' }}>
+												<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 													<Typography.Text type="secondary">{lastProviderError.message}</Typography.Text>
 													{providerCause ? <Typography.Text type="secondary">Cause: {providerCause}</Typography.Text> : null}
 													{providerError ? (
@@ -796,7 +796,7 @@ function BucketPolicyEditor(props: {
 						key: 'preview',
 						label: 'Preview',
 						children: (
-							<Space direction="vertical" size="small" style={{ width: '100%' }}>
+							<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 								{!parsed.ok ? (
 									<Alert type="warning" showIcon title="Fix JSON errors first" description={parsed.error ?? 'Invalid JSON'} />
 								) : null}
@@ -808,7 +808,7 @@ function BucketPolicyEditor(props: {
 						key: 'diff',
 						label: 'Diff',
 						children: (
-							<Space direction="vertical" size="small" style={{ width: '100%' }}>
+							<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 								<Input.TextArea value={diffText} readOnly autoSize={{ minRows: 10, maxRows: 24 }} />
 							</Space>
 						),

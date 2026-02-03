@@ -22,10 +22,10 @@ export function confirmDangerAction(options: ConfirmDangerActionOptions) {
 		okText: options.okText ?? 'Delete',
 		okType: 'danger',
 		content: (
-			<Space direction="vertical" style={{ width: '100%' }}>
+			<Space orientation="vertical" style={{ width: '100%' }}>
 				{options.description ? <div>{options.description}</div> : null}
 				{options.details ? <Typography.Text type="secondary">{options.details}</Typography.Text> : null}
-				<Space direction="vertical" size={4} style={{ width: '100%' }}>
+				<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 					<Typography.Text type="secondary">{confirmHint}</Typography.Text>
 					<Input
 						placeholder={confirmToken}

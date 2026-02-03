@@ -151,7 +151,7 @@ export function useObjectsDnd({
 				confirmDangerAction({
 					title: `Move folder?`,
 					description: (
-						<Space direction="vertical" size="small">
+						<Space orientation="vertical" size="small">
 							<Typography.Text>
 								Move <Typography.Text code>{`s3://${bucket}/${srcPrefix}`}</Typography.Text> →{' '}
 								<Typography.Text code>{`s3://${bucket}/${dstPrefix}`}</Typography.Text>
@@ -218,7 +218,7 @@ export function useObjectsDnd({
 			confirmDangerAction({
 				title: `Move ${pairs.length} object(s)?`,
 				description: (
-					<Space direction="vertical" size="small">
+					<Space orientation="vertical" size="small">
 						<Typography.Text>
 							Move to <Typography.Text code>{`s3://${bucket}/${targetPrefix}`}</Typography.Text>
 						</Typography.Text>

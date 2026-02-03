@@ -34,7 +34,7 @@ export function DownloadJobModal(props: {
 			onClose={props.onCancel}
 			title="Download folder (S3 → device)"
 			width={drawerWidth}
-			destroyOnClose
+			destroyOnHidden
 			extra={
 				<Space>
 					<Button onClick={props.onCancel}>Close</Button>

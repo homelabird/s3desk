@@ -1031,7 +1031,7 @@ export function JobsPage(props: Props) {
 					const info = getJobTypeInfo(v)
 					if (!info) return renderClampedText(v)
 					const tooltip = (
-						<Space direction="vertical" size={4} style={{ maxWidth: 420 }}>
+						<Space orientation="vertical" size={4} style={{ maxWidth: 420 }}>
 							<Typography.Text strong>{info.label}</Typography.Text>
 							<Typography.Text type="secondary">{info.description}</Typography.Text>
 							<Typography.Text code>{v}</Typography.Text>
@@ -1209,7 +1209,7 @@ export function JobsPage(props: Props) {
 										confirmDangerAction({
 											title: 'Delete job record?',
 											description: (
-												<Space direction="vertical" style={{ width: '100%' }}>
+												<Space orientation="vertical" style={{ width: '100%' }}>
 													<Typography.Text>
 														Job ID: <Typography.Text code>{row.id}</Typography.Text>
 													</Typography.Text>
@@ -1256,7 +1256,7 @@ export function JobsPage(props: Props) {
 	}
 
 	return (
-		<Space direction="vertical" size="large" style={{ width: '100%' }}>
+		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
 			<div
 				style={{
 					display: 'flex',
@@ -1377,7 +1377,7 @@ export function JobsPage(props: Props) {
 								boxShadow: token.boxShadowSecondary,
 							}}
 						>
-							<Space direction="vertical" size={4} style={{ width: '100%' }}>
+							<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 								{columnOptions.map((option) => (
 									<Checkbox
 										key={option.key}
@@ -1546,7 +1546,7 @@ export function JobsPage(props: Props) {
 								confirmDangerAction({
 									title: 'Delete job record?',
 									description: (
-										<Space direction="vertical" style={{ width: '100%' }}>
+										<Space orientation="vertical" style={{ width: '100%' }}>
 											<Typography.Text>
 												Job ID: <Typography.Text code>{detailsJobId}</Typography.Text>
 											</Typography.Text>
@@ -1592,7 +1592,7 @@ export function JobsPage(props: Props) {
 										const info = getJobTypeInfo(jobDetailsQuery.data.type)
 										if (!info) return <Typography.Text code>{jobDetailsQuery.data.type}</Typography.Text>
 										return (
-											<Space direction="vertical" size={0} style={{ width: '100%' }}>
+											<Space orientation="vertical" size={0} style={{ width: '100%' }}>
 												<Typography.Text strong>{info.label}</Typography.Text>
 												<Typography.Text type="secondary">{info.description}</Typography.Text>
 												<Typography.Text code>{jobDetailsQuery.data.type}</Typography.Text>

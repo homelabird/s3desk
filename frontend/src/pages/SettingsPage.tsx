@@ -266,7 +266,7 @@ export function SettingsPage(props: Props) {
 	}, [])
 
 	return (
-		<Space direction="vertical" size="large" style={{ width: '100%' }}>
+		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
 			<Tabs
 				defaultActiveKey="access"
 				items={[
@@ -274,7 +274,7 @@ export function SettingsPage(props: Props) {
 						key: 'access',
 						label: 'Access',
 						children: (
-							<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+							<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 								<Form layout="vertical" requiredMark={false}>
 									<Form.Item label="Backend API Token (X-Api-Token)">
 										<ApiTokenField key={props.apiToken} apiToken={props.apiToken} setApiToken={props.setApiToken} />
@@ -296,7 +296,7 @@ export function SettingsPage(props: Props) {
 
 								<Divider style={{ marginBlock: 8 }} />
 
-								<Space direction="vertical" size={4} style={{ width: '100%' }}>
+								<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 									<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
 									<Space wrap>
 										<Button type="link" href={apiDocsUrl} target="_blank" rel="noreferrer">
@@ -349,7 +349,7 @@ export function SettingsPage(props: Props) {
 											key: 'advanced',
 											label: 'Advanced',
 											children: (
-												<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+												<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 													<Form.Item
 														label="Upload auto-tuning"
 														extra="Automatically adjusts batch/chunk settings based on file size."
@@ -641,7 +641,7 @@ export function SettingsPage(props: Props) {
 									/>
 								</Form.Item>
 								<Form.Item label="Network diagnostics" extra="Recent network events and retries (this session).">
-									<Space direction="vertical" size={8} style={{ width: '100%' }}>
+									<Space orientation="vertical" size={8} style={{ width: '100%' }}>
 										<Button size="small" onClick={() => clearNetworkLog()} disabled={networkLog.length === 0}>
 											Clear log
 										</Button>
@@ -654,7 +654,7 @@ export function SettingsPage(props: Props) {
 												overflow: 'auto',
 											}}
 										>
-											<Space direction="vertical" size={4} style={{ width: '100%' }}>
+											<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 												{networkLog.length === 0 ? (
 													<Typography.Text type="secondary">No network events yet.</Typography.Text>
 												) : (
@@ -675,7 +675,7 @@ export function SettingsPage(props: Props) {
 						key: 'server',
 						label: 'Server',
 						children: (
-							<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+							<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 								{metaQuery.isFetching && !metaQuery.data ? (
 									<div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
 										<Spin />
@@ -725,7 +725,7 @@ export function SettingsPage(props: Props) {
 												</Tag>
 											</Descriptions.Item>
 											<Descriptions.Item label={mtlsLabel}>
-												<Space direction="vertical" size={0}>
+												<Space orientation="vertical" size={0}>
 													<Tag color={tlsEnabled ? 'success' : 'default'}>{tlsEnabled ? 'enabled' : 'disabled'}</Tag>
 													{!tlsEnabled && tlsReason ? <Typography.Text type="secondary">{tlsReason}</Typography.Text> : null}
 												</Space>
@@ -794,7 +794,7 @@ export function SettingsPage(props: Props) {
 						key: 'troubleshooting',
 						label: 'Troubleshooting',
 						children: (
-							<Space direction="vertical" size={8} style={{ width: '100%' }}>
+							<Space orientation="vertical" size={8} style={{ width: '100%' }}>
 								<Typography.Text type="secondary">
 									Clears saved view / filter / layout state from your browser (localStorage). Useful when a screen looks
 									"stuck" because an old filter or panel state was persisted.

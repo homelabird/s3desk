@@ -45,7 +45,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 	}
 	if (props.selectedCount > 1) {
 		return (
-			<Space direction="vertical" size="small" style={{ width: '100%' }}>
+			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Typography.Text strong>{props.selectedCount} selected</Typography.Text>
 				<Typography.Text type="secondary">Use the selection bar for bulk actions.</Typography.Text>
 			</Space>
@@ -56,7 +56,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 	}
 
 	return (
-		<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+		<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 			<Space wrap>
 				<Button size="small" icon={<CopyOutlined />} onClick={props.onCopyKey}>
 					Copy key
@@ -147,7 +147,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 					)}
 
 					{props.thumbnail ? (
-						<Space direction="vertical" size="small" style={{ width: '100%' }}>
+						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 							<Typography.Text strong>Thumbnail</Typography.Text>
 							<div style={{ display: 'flex', justifyContent: 'center' }}>{props.thumbnail}</div>
 						</Space>
@@ -155,7 +155,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 
 					<Divider style={{ marginBlock: 8 }} />
 
-					<Space direction="vertical" size="small" style={{ width: '100%' }}>
+					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 						<Space style={{ width: '100%', justifyContent: 'space-between' }}>
 							<Typography.Text strong>Preview</Typography.Text>
 							<Space>

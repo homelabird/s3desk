@@ -2430,7 +2430,7 @@ function showMoveCleanupReport(args: {
 		if (items.length === 0) return
 		const sample = items.slice(0, maxItems)
 		sections.push(
-			<Space key={sectionTitle} direction="vertical" size={4}>
+			<Space key={sectionTitle} orientation="vertical" size={4}>
 				<Typography.Text strong>
 					{sectionTitle} ({items.length})
 				</Typography.Text>
@@ -2456,7 +2456,7 @@ function showMoveCleanupReport(args: {
 	modal({
 		title,
 		content: (
-			<Space direction="vertical" size="middle">
+			<Space orientation="vertical" size="middle">
 				<Typography.Text type="secondary">{formatMoveCleanupSummary(result, label ?? '')}</Typography.Text>
 				<Button size="small" onClick={() => downloadTextFile(reportFilename, reportText)}>
 					Download report

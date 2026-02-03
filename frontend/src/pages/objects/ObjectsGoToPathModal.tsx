@@ -37,9 +37,9 @@ export function ObjectsGoToPathModal({
 			onOk={onCommit}
 			okText="Go"
 			okButtonProps={{ disabled }}
-			destroyOnClose
+			destroyOnHidden
 		>
-			<Space direction="vertical" size="small" style={{ width: '100%' }}>
+			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Typography.Text type="secondary">
 					Bucket: <Typography.Text code>{bucket || '(none)'}</Typography.Text>
 				</Typography.Text>

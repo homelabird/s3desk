@@ -194,7 +194,7 @@ export default function App() {
 						showIcon
 						title="Backend connection failed"
 						description={
-							<Space direction="vertical" size={8} style={{ width: '100%' }}>
+							<Space orientation="vertical" size={8} style={{ width: '100%' }}>
 								<Typography.Text>{title}</Typography.Text>
 								<Typography.Text type="secondary">{hint}</Typography.Text>
 								<Button onClick={() => metaQuery.refetch()}>Retry</Button>

@@ -44,9 +44,9 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 			}}
 			onOk={props.onConfirm}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
-			<Space direction="vertical" size="small" style={{ width: '100%' }}>
+			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Typography.Text>
 					Bucket: <Typography.Text code>{props.bucket || '-'}</Typography.Text>
 				</Typography.Text>

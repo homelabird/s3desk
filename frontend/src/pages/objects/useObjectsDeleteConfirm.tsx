@@ -49,7 +49,7 @@ export function useObjectsDeleteConfirm({
 					title: 'Delete object?',
 					description: 'This cannot be undone.',
 					details: (
-						<Space direction="vertical" size={4} style={{ width: '100%' }}>
+						<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 							<Typography.Text>
 								Key: <Typography.Text code>{key}</Typography.Text>
 							</Typography.Text>

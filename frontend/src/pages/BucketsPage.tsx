@@ -77,7 +77,7 @@ export function BucketsPage(props: Props) {
 				Modal.confirm({
 					title: `Bucket "${bucketName}" isn’t empty`,
 					content: (
-						<Space direction="vertical" style={{ width: '100%' }}>
+						<Space orientation="vertical" style={{ width: '100%' }}>
 							<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
 							<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
 							<Button
@@ -114,7 +114,7 @@ export function BucketsPage(props: Props) {
 	}
 
 	return (
-		<Space direction="vertical" size="large" style={{ width: '100%' }}>
+		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
 			<div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
 				<Typography.Title level={3} style={{ margin: 0 }}>
 					Buckets

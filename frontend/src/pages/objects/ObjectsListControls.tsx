@@ -118,7 +118,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 		<>
 			<div className={styles.breadcrumbRow}>
 				<div className={styles.breadcrumbLeft}>
-					<Space direction="vertical" size={2} style={{ width: '100%' }}>
+					<Space orientation="vertical" size={2} style={{ width: '100%' }}>
 						{location ? (
 							<Space size={6} wrap style={{ minWidth: 0 }}>
 								<Typography.Text type="secondary">Location</Typography.Text>
@@ -167,7 +167,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			</div>
 
 			{props.isCompact ? (
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					{searchScopeRow}
 						<Input
 							allowClear
@@ -196,7 +196,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					{searchStatus}
 				</Space>
 			) : (
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					{searchScopeRow}
 					<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
 						<Space wrap>

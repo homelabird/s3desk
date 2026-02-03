@@ -46,7 +46,7 @@ export function CreateJobModal(props: {
 			onClose={props.onCancel}
 			title="Upload local folder (device → S3)"
 			width={drawerWidth}
-			destroyOnClose
+			destroyOnHidden
 			extra={
 				<Space>
 					<Button onClick={props.onCancel}>Close</Button>

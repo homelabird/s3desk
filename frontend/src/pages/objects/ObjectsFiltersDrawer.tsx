@@ -56,8 +56,8 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 			placement="right"
 			width="90%"
 		>
-			<Space direction="vertical" size="middle" style={{ width: '100%' }}>
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+			<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text type="secondary">Favorites only</Typography.Text>
 					<Switch
 						checked={props.favoritesOnly}
@@ -66,7 +66,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 					/>
 				</Space>
 
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text type="secondary">Favorites first</Typography.Text>
 					<Switch
 						checked={props.favoritesFirst}
@@ -76,7 +76,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 					/>
 				</Space>
 
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text type="secondary">Type</Typography.Text>
 					<Select
 						value={props.typeFilter}
@@ -93,7 +93,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 
 				{props.isAdvanced ? (
 					<>
-						<Space direction="vertical" size="small" style={{ width: '100%' }}>
+						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 							<Typography.Text type="secondary">Extension</Typography.Text>
 							<Select
 								allowClear
@@ -107,7 +107,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 							/>
 						</Space>
 
-						<Space direction="vertical" size="small" style={{ width: '100%' }}>
+						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 							<Typography.Text type="secondary">Size (MB)</Typography.Text>
 							<Space style={{ width: '100%' }}>
 								<InputNumber
@@ -131,7 +131,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 							</Space>
 						</Space>
 
-						<Space direction="vertical" size="small" style={{ width: '100%' }}>
+						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 							<Typography.Text type="secondary">Last modified</Typography.Text>
 							<DatePicker.RangePicker
 								allowClear
@@ -151,7 +151,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 				) : null}
 
 				{props.isAdvanced ? (
-					<Space direction="vertical" size="small" style={{ width: '100%' }}>
+					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 						<Typography.Text type="secondary">Sort</Typography.Text>
 						<Select
 							value={props.sort}

@@ -17,8 +17,8 @@ type ObjectsCommandPaletteModalProps = {
 
 export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProps) {
 	return (
-		<Modal open={props.open} title="Commands" footer={null} onCancel={props.onCancel} destroyOnClose>
-			<Space direction="vertical" size="small" style={{ width: '100%' }}>
+		<Modal open={props.open} title="Commands" footer={null} onCancel={props.onCancel} destroyOnHidden>
+			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Input
 					id="objectsCommandPaletteInput"
 					autoComplete="off"

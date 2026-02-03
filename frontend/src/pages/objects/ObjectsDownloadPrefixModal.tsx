@@ -30,7 +30,7 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 			okButtonProps={{ loading: props.isSubmitting, disabled: !props.canSubmit }}
 			onOk={() => props.form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			<Alert
 				type="info"

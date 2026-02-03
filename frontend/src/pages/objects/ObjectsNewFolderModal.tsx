@@ -19,7 +19,7 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 			okButtonProps={{ loading: props.isSubmitting }}
 			onOk={() => props.form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			<Alert
 				type="info"

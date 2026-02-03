@@ -32,7 +32,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 			okButtonProps={{ loading: props.isSubmitting, danger: isMove }}
 			onOk={() => props.form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			{isMove ? (
 				<Alert

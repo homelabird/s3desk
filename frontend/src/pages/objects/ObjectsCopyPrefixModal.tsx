@@ -46,7 +46,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 			okButtonProps={{ loading: props.isSubmitting, danger: isMove }}
 			onOk={() => props.form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			{isMove ? (
 				<Alert

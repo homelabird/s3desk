@@ -59,7 +59,7 @@ export function LoginPage(props: Props) {
 
 				<div style={{ height: 16 }} />
 
-				<Space direction="vertical" size={12} style={{ width: '100%' }}>
+				<Space orientation="vertical" size={12} style={{ width: '100%' }}>
 					<Alert type={showSavedTokenWarning ? 'warning' : 'info'} showIcon title={initialHint} />
 					{localError ? <Alert type="error" showIcon title={localError} /> : null}
 

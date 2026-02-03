@@ -35,7 +35,7 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 			okButtonProps={{ loading: props.isSubmitting, disabled: !props.canSubmit }}
 			onOk={() => props.form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			<Alert
 				type="info"

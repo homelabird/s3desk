@@ -24,7 +24,7 @@ export function SetupCallout(props: Props) {
 	const actionDirection = screens.sm ? 'horizontal' : 'vertical'
 	const description =
 		props.description ?? (
-			<Space direction="vertical" size={4}>
+			<Space orientation="vertical" size={4}>
 				<Typography.Text type="secondary">Profiles store your S3 endpoint and credentials.</Typography.Text>
 				{showSettings ? (
 					<Typography.Text type="secondary">If your server uses API_TOKEN, set it in Settings.</Typography.Text>
@@ -39,7 +39,7 @@ export function SetupCallout(props: Props) {
 			title={props.message ?? 'Select a profile to continue'}
 			description={description}
 				action={
-					<Space direction={actionDirection} size="small">
+					<Space orientation={actionDirection} size="small">
 						<Button
 							size="small"
 							href="/profiles"

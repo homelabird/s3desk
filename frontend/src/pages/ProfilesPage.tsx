@@ -266,7 +266,7 @@ export function ProfilesPage(props: Props) {
 		: undefined
 
 	return (
-		<Space direction="vertical" size="large" style={{ width: '100%' }}>
+		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
 				<div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
 					<Typography.Title level={3} style={{ margin: 0 }}>
 						Profiles
@@ -284,9 +284,9 @@ export function ProfilesPage(props: Props) {
 					showIcon
 					title="Getting started"
 					description={
-						<Space direction="vertical" size={12} style={{ width: '100%' }}>
+						<Space orientation="vertical" size={12} style={{ width: '100%' }}>
 							<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
-							<Space direction="vertical" size={6}>
+							<Space orientation="vertical" size={6}>
 								<Checkbox checked={metaQuery.isSuccess} disabled>
 									Backend connected
 								</Checkbox>
@@ -405,7 +405,7 @@ export function ProfilesPage(props: Props) {
 									if (endpoint) parts.push(endpoint)
 									const secondary = parts.join(' · ')
 									return (
-									<Space direction="vertical" size={0} style={{ width: '100%' }}>
+									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
 										<Typography.Text>{accountName}</Typography.Text>
 										<Typography.Text type="secondary">{secondary}</Typography.Text>
 									</Space>
@@ -419,7 +419,7 @@ export function ProfilesPage(props: Props) {
 									const primary = projectId || clientEmail || ''
 									const secondary = endpoint || (projectId && clientEmail ? clientEmail : '')
 									return (
-									<Space direction="vertical" size={0} style={{ width: '100%' }}>
+									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
 										<Typography.Text>{primary}</Typography.Text>
 										{secondary ? <Typography.Text type="secondary">{secondary}</Typography.Text> : null}
 									</Space>
@@ -439,7 +439,7 @@ export function ProfilesPage(props: Props) {
 								const bottom = bottomParts.join(' · ')
 
 								return (
-									<Space direction="vertical" size={0} style={{ width: '100%' }}>
+									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
 										<Typography.Text>{top}</Typography.Text>
 										{bottom ? <Typography.Text type="secondary">{bottom}</Typography.Text> : null}
 									</Space>
@@ -450,7 +450,7 @@ export function ProfilesPage(props: Props) {
 								const region = 'region' in row ? row.region ?? '' : ''
 								const endpointLabel = endpoint || (provider === 'aws_s3' ? 'AWS default endpoint' : '')
 								return (
-									<Space direction="vertical" size={0} style={{ width: '100%' }}>
+									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
 									<Typography.Text>{endpointLabel}</Typography.Text>
 									{region ? <Typography.Text type="secondary">{region}</Typography.Text> : null}
 								</Space>
@@ -566,9 +566,9 @@ export function ProfilesPage(props: Props) {
 						Close
 					</Button>,
 				]}
-				destroyOnClose
+				destroyOnHidden
 			>
-				<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 					<Alert
 						type="warning"
 						showIcon
@@ -600,9 +600,9 @@ export function ProfilesPage(props: Props) {
 					onOk={() => importMutation.mutate(importText)}
 					okButtonProps={{ disabled: importMutation.isPending || importText.trim() === '' }}
 					confirmLoading={importMutation.isPending}
-					destroyOnClose
+					destroyOnHidden
 				>
-					<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+					<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 						<Typography.Text type="secondary">
 							Import a profile exported from S3Desk. This will create a new profile (the YAML id is ignored).
 						</Typography.Text>

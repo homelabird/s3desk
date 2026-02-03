@@ -71,7 +71,7 @@ export function ObjectsListSection({
 								pointerEvents: 'none',
 							}}
 						>
-							<Space direction="vertical" align="center" size="small">
+							<Space orientation="vertical" align="center" size="small">
 								<CloudUploadOutlined style={{ fontSize: 32, color: '#1677ff' }} />
 								<Typography.Text>
 									Drop to upload to <Typography.Text code>{uploadDropLabel}</Typography.Text>

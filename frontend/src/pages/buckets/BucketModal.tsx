@@ -30,7 +30,7 @@ export function BucketModal(props: {
 			okButtonProps={{ loading: props.loading }}
 			onOk={() => form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			<Form
 				form={form}

@@ -45,10 +45,10 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 					Close
 				</Button>,
 			]}
-			destroyOnClose
+			destroyOnHidden
 		>
 			{props.presign ? (
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text>
 						Key: <Typography.Text code>{props.presign.key}</Typography.Text>
 					</Typography.Text>

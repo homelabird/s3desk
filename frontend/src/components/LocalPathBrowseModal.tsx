@@ -105,12 +105,12 @@ export function LocalPathBrowseModal(props: Props) {
 				if (!selectedPath) return
 				props.onSelect(selectedPath)
 			}}
-			destroyOnClose
+			destroyOnHidden
 		>
 			{!props.profileId ? (
 				<Alert type="warning" showIcon title="Select a profile first" />
 			) : (
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Alert
 						type="info"
 						showIcon

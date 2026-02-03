@@ -29,7 +29,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 			okButtonProps={{ loading: props.isSubmitting, danger: true, disabled: !props.source }}
 			onOk={() => props.form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			<Alert
 				type="warning"

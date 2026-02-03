@@ -82,13 +82,13 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 	const dateRange: [Dayjs | null, Dayjs | null] = [toDayjs(props.modifiedAfterMs), toDayjs(props.modifiedBeforeMs)]
 
 	return (
-		<Drawer open={props.open} onClose={props.onClose} width={drawerWidth} title="Global Search (Indexed)" destroyOnClose>
+		<Drawer open={props.open} onClose={props.onClose} width={drawerWidth} title="Global Search (Indexed)" destroyOnHidden>
 			{!props.hasProfile ? (
 				<Alert type="warning" showIcon title="Select a profile first" />
 			) : !props.hasBucket ? (
 				<Alert type="warning" showIcon title="Select a bucket first" />
 			) : (
-				<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 						<Space wrap>
 							<Input
 								allowClear
@@ -124,7 +124,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Button onClick={props.onReset}>Reset</Button>
 					</Space>
 
-					<Space direction="vertical" size="small" style={{ width: '100%' }}>
+					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 						<Typography.Text type="secondary">Filters</Typography.Text>
 						<Space wrap>
 							<Input
@@ -189,7 +189,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 
 					<Divider style={{ marginBlock: 4 }} />
 
-					<Space direction="vertical" size="small" style={{ width: '100%' }}>
+					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 						<Typography.Text type="secondary">
 							Build/rebuild the index for <Typography.Text code>{props.bucket}</Typography.Text>:
 						</Typography.Text>

@@ -42,7 +42,7 @@ export function ProfileModal(props: {
 			okButtonProps={{ loading: props.loading }}
 			onOk={() => form.submit()}
 			onCancel={props.onCancel}
-			destroyOnClose
+			destroyOnHidden
 		>
 			<Form
 				form={form}
@@ -259,7 +259,7 @@ export function ProfileModal(props: {
 
 				<Divider />
 
-				<Space direction="vertical" size="small" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text strong>Advanced TLS (mTLS)</Typography.Text>
 					{tlsUnavailable ? <Alert type="warning" showIcon title="mTLS is disabled" description={tlsDisabledReason} /> : null}
 					{props.editMode ? (

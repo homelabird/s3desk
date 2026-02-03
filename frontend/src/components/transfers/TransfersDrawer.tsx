@@ -118,7 +118,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 								{props.uploadTasks.length === 0 ? (
 									<Empty
 										description={
-											<Space direction="vertical" size={4} align="center">
+											<Space orientation="vertical" size={4} align="center">
 												<span>No uploads yet</span>
 												<Typography.Text type="secondary">
 													Tip: drag & drop files into the object list to queue uploads.
