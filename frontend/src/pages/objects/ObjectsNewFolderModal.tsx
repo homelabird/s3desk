@@ -24,7 +24,7 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 			<Alert
 				type="info"
 				showIcon
-				message="Creates a folder marker object"
+				title="Creates a folder marker object"
 				description="S3 folders are prefixes; this creates a zero-byte object whose key ends with '/'."
 				style={{ marginBottom: 12 }}
 			/>

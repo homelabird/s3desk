@@ -108,17 +108,17 @@ export function LocalPathBrowseModal(props: Props) {
 			destroyOnClose
 		>
 			{!props.profileId ? (
-				<Alert type="warning" showIcon message="Select a profile first" />
+				<Alert type="warning" showIcon title="Select a profile first" />
 			) : (
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>
 					<Alert
 						type="info"
 						showIcon
-						message="Only directories under ALLOWED_LOCAL_DIRS are shown"
+						title="Only directories under ALLOWED_LOCAL_DIRS are shown"
 						description="This selects a server-side destination path for jobs."
 					/>
 
-					{error ? <Alert type="error" showIcon message="Failed to list directories" description={error} /> : null}
+					{error ? <Alert type="error" showIcon title="Failed to list directories" description={error} /> : null}
 
 					<Space style={{ width: '100%', justifyContent: 'space-between' }}>
 						<Typography.Text type="secondary" ellipsis={{ tooltip: selectedPath ?? '' }} style={{ maxWidth: 520 }}>

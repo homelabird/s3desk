@@ -72,7 +72,7 @@ export function BucketPolicyModal(props: {
 	if (policyQuery.isError) {
 		return (
 			<Modal open={open} title={`Policy: ${bucket}`} onCancel={props.onClose} footer={null} width={920} destroyOnClose>
-				<Alert type="error" showIcon message="Failed to load policy" description={formatErr(policyQuery.error)} />
+				<Alert type="error" showIcon title="Failed to load policy" description={formatErr(policyQuery.error)} />
 			</Modal>
 		)
 	}
@@ -406,14 +406,14 @@ function BucketPolicyEditor(props: {
 						<Alert
 							type="warning"
 							showIcon
-							message="etag missing"
+							title="etag missing"
 							description="GCS IAM policy updates are safest when preserving etag. Reload policy before saving if you hit conflicts."
 						/>
 					) : (
 						<Alert
 							type="info"
 							showIcon
-							message="etag preserved"
+							title="etag preserved"
 							description={
 								<Space direction="vertical" size={4} style={{ width: '100%' }}>
 									<Typography.Text type="secondary">This value will be sent back on save.</Typography.Text>
@@ -502,7 +502,7 @@ function BucketPolicyEditor(props: {
 					</Space>
 
 					{azureStoredPolicies.length > 5 ? (
-						<Alert type="warning" showIcon message="Azure supports at most 5 stored access policies" />
+						<Alert type="warning" showIcon title="Azure supports at most 5 stored access policies" />
 					) : null}
 
 					<Table
@@ -670,10 +670,10 @@ function BucketPolicyEditor(props: {
 									<Alert
 										type="success"
 										showIcon
-										message={editorMode === 'form' ? 'Valid policy (structured editor)' : 'Valid JSON policy'}
+										title={editorMode === 'form' ? 'Valid policy (structured editor)' : 'Valid JSON policy'}
 									/>
 								) : (
-									<Alert type="error" showIcon message="Invalid JSON policy" description={parsed.error ?? 'Invalid JSON'} />
+									<Alert type="error" showIcon title="Invalid JSON policy" description={parsed.error ?? 'Invalid JSON'} />
 								)}
 
 								{policyKind !== 's3' ? (
@@ -722,19 +722,19 @@ function BucketPolicyEditor(props: {
 											placeholder={editorPlaceholder}
 										/>
 										{!parsed.ok ? (
-											<Alert type="warning" showIcon message="Fix JSON errors first" description={parsed.error ?? 'Invalid JSON'} />
+											<Alert type="warning" showIcon title="Fix JSON errors first" description={parsed.error ?? 'Invalid JSON'} />
 										) : null}
 									</Space>
 								) : null}
 
 								{providerWarnings.length > 0 ? (
-									<Alert type="warning" showIcon message="Provider-specific notes" description={providerWarnings.join('\n')} />
+									<Alert type="warning" showIcon title="Provider-specific notes" description={providerWarnings.join('\n')} />
 								) : null}
 
 								<Alert
 									type={parsed.ok ? 'info' : 'warning'}
 									showIcon
-									message={parsed.ok ? 'Local validation OK' : 'Local validation failed'}
+									title={parsed.ok ? 'Local validation OK' : 'Local validation failed'}
 									description={providerValidationHint}
 								/>
 
@@ -756,7 +756,7 @@ function BucketPolicyEditor(props: {
 										<Alert
 											type={serverValidation.ok ? 'success' : 'warning'}
 											showIcon
-											message={serverValidation.ok ? 'Server validation OK' : 'Server validation found issues'}
+											title={serverValidation.ok ? 'Server validation OK' : 'Server validation found issues'}
 											description={
 												<Space direction="vertical" size={4} style={{ width: '100%' }}>
 													{serverValidationMessages.map((row, idx) => (
@@ -770,14 +770,14 @@ function BucketPolicyEditor(props: {
 									) : null}
 
 								{serverValidationError ? (
-									<Alert type="error" showIcon message="Server validation failed" description={serverValidationError} />
+									<Alert type="error" showIcon title="Server validation failed" description={serverValidationError} />
 								) : null}
 
 									{lastProviderError ? (
 										<Alert
 											type="error"
 											showIcon
-											message="Provider rejected the policy"
+											title="Provider rejected the policy"
 											description={
 												<Space direction="vertical" size={4} style={{ width: '100%' }}>
 													<Typography.Text type="secondary">{lastProviderError.message}</Typography.Text>
@@ -798,7 +798,7 @@ function BucketPolicyEditor(props: {
 						children: (
 							<Space direction="vertical" size="small" style={{ width: '100%' }}>
 								{!parsed.ok ? (
-									<Alert type="warning" showIcon message="Fix JSON errors first" description={parsed.error ?? 'Invalid JSON'} />
+									<Alert type="warning" showIcon title="Fix JSON errors first" description={parsed.error ?? 'Invalid JSON'} />
 								) : null}
 								<Input.TextArea value={previewText || effectivePolicyText} readOnly autoSize={{ minRows: 10, maxRows: 24 }} />
 							</Space>

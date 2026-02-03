@@ -36,7 +36,7 @@ export function SetupCallout(props: Props) {
 		<Alert
 			type="warning"
 			showIcon
-			message={props.message ?? 'Select a profile to continue'}
+			title={props.message ?? 'Select a profile to continue'}
 			description={description}
 				action={
 					<Space direction={actionDirection} size="small">

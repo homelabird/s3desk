@@ -84,9 +84,9 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 	return (
 		<Drawer open={props.open} onClose={props.onClose} width={drawerWidth} title="Global Search (Indexed)" destroyOnClose>
 			{!props.hasProfile ? (
-				<Alert type="warning" showIcon message="Select a profile first" />
+				<Alert type="warning" showIcon title="Select a profile first" />
 			) : !props.hasBucket ? (
-				<Alert type="warning" showIcon message="Select a bucket first" />
+				<Alert type="warning" showIcon title="Select a bucket first" />
 			) : (
 				<Space direction="vertical" size="middle" style={{ width: '100%' }}>
 						<Space wrap>
@@ -174,7 +174,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<Alert
 								type="info"
 								showIcon
-								message="Index not found"
+								title="Index not found"
 								description="Create an s3_index_objects job first, then search again."
 								action={
 									<Button type="primary" size="small" onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
@@ -183,7 +183,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								}
 							/>
 						) : (
-							<Alert type="error" showIcon message="Search failed" description={props.errorMessage} />
+							<Alert type="error" showIcon title="Search failed" description={props.errorMessage} />
 						)
 					) : null}
 

@@ -69,7 +69,7 @@ export function UploadsPage(props: Props) {
 				Uploads
 			</Typography.Title>
 
-			{isOffline ? <Alert type="warning" showIcon message="Offline: uploads are disabled." /> : null}
+			{isOffline ? <Alert type="warning" showIcon title="Offline: uploads are disabled." /> : null}
 
 				{showBucketsEmpty ? (
 					<Empty description="No buckets available">
@@ -86,7 +86,7 @@ export function UploadsPage(props: Props) {
 				) : null}
 
 			{bucketsQuery.isError ? (
-				<Alert type="error" showIcon message="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
+				<Alert type="error" showIcon title="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
 			) : null}
 
 			<Space wrap style={{ width: '100%' }}>

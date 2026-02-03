@@ -1299,12 +1299,12 @@ export function JobsPage(props: Props) {
 				</Space>
 			</div>
 
-			{isOffline ? <Alert type="warning" showIcon message="Offline: job actions are disabled." /> : null}
+			{isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
 			{!eventsConnected && !isOffline ? (
 				<Alert
 					type="warning"
 					showIcon
-					message="Realtime updates disconnected"
+					title="Realtime updates disconnected"
 					description={
 						eventsRetryCount >= eventsRetryThreshold
 							? 'Auto-retry paused. Use Retry realtime to reconnect.'
@@ -1406,13 +1406,13 @@ export function JobsPage(props: Props) {
 				<Alert
 					type="error"
 					showIcon
-					message="Failed to load buckets (autocomplete)"
+					title="Failed to load buckets (autocomplete)"
 					description={formatErr(bucketsQuery.error)}
 				/>
 			) : null}
 
 			{jobsQuery.isError ? (
-				<Alert type="error" showIcon message="Failed to load jobs" description={formatErr(jobsQuery.error)} />
+				<Alert type="error" showIcon title="Failed to load jobs" description={formatErr(jobsQuery.error)} />
 			) : null}
 
 			<div ref={tableContainerRef}>
@@ -1577,7 +1577,7 @@ export function JobsPage(props: Props) {
 				}
 			>
 				{jobDetailsQuery.isError ? (
-					<Alert type="error" showIcon message="Failed to load job" description={formatErr(jobDetailsQuery.error)} />
+					<Alert type="error" showIcon title="Failed to load job" description={formatErr(jobDetailsQuery.error)} />
 				) : null}
 
 				{detailsJobId ? (
@@ -1774,7 +1774,7 @@ export function JobsPage(props: Props) {
 							<Alert
 								type="warning"
 								showIcon
-								message="Log polling paused"
+								title="Log polling paused"
 								description={`Paused after ${logPollFailures} failed attempts. Click retry to resume polling.`}
 								action={
 									<Button size="small" onClick={resumeLogPolling}>

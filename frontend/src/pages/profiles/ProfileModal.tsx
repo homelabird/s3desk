@@ -261,14 +261,14 @@ export function ProfileModal(props: {
 
 				<Space direction="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text strong>Advanced TLS (mTLS)</Typography.Text>
-					{tlsUnavailable ? <Alert type="warning" showIcon message="mTLS is disabled" description={tlsDisabledReason} /> : null}
+					{tlsUnavailable ? <Alert type="warning" showIcon title="mTLS is disabled" description={tlsDisabledReason} /> : null}
 					{props.editMode ? (
 						<>
 							<Typography.Text type="secondary">
 								Current: {tlsStatusLabel}
 							</Typography.Text>
 							{showTLSStatusError ? (
-								<Alert type="warning" showIcon message="Failed to load TLS status" description={showTLSStatusError} />
+								<Alert type="warning" showIcon title="Failed to load TLS status" description={showTLSStatusError} />
 							) : null}
 							<Form.Item name="tlsAction" label="mTLS action">
 								<Select

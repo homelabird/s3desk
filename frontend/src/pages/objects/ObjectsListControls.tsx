@@ -72,7 +72,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					banner
 					type="info"
 					showIcon
-					message={`Search paused at ${props.searchAutoScanCap.toLocaleString()} items`}
+					title={`Search paused at ${props.searchAutoScanCap.toLocaleString()} items`}
 					description="Use Global Search (Indexed) to scan the full bucket."
 					action={
 						<Button size="small" type="primary" disabled={!props.canInteract} onClick={props.onOpenGlobalSearch}>

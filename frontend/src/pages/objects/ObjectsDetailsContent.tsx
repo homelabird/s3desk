@@ -90,7 +90,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 				<Alert
 					type="error"
 					showIcon
-					message="Failed to load metadata"
+					title="Failed to load metadata"
 					description={props.metaErrorMessage}
 					action={
 						<Button size="small" onClick={props.onRetryMeta} disabled={!props.detailsKey}>
@@ -175,7 +175,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 								<Spin />
 							</div>
 						) : props.preview?.status === 'error' ? (
-							<Alert type="error" showIcon message="Preview failed" description={props.preview.error ?? 'unknown error'} />
+							<Alert type="error" showIcon title="Preview failed" description={props.preview.error ?? 'unknown error'} />
 						) : props.preview?.status === 'unsupported' ? (
 							<Empty description="Preview not available for this type" />
 						) : props.preview?.status === 'ready' && props.preview.kind === 'image' && props.preview.url ? (

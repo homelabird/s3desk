@@ -52,7 +52,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				<Alert
 					type="warning"
 					showIcon
-					message="Move folder is destructive"
+					title="Move folder is destructive"
 					description="This creates a move job (copy then delete source)."
 					style={{ marginBottom: 12 }}
 				/>
@@ -60,7 +60,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				<Alert
 					type="info"
 					showIcon
-					message="Copy this folder to another folder"
+					title="Copy this folder to another folder"
 					description="This creates a copy job and may copy many objects."
 					style={{ marginBottom: 12 }}
 				/>
@@ -74,7 +74,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				<Alert
 					type="warning"
 					showIcon
-					message="Impact preview unavailable (index not found)"
+					title="Impact preview unavailable (index not found)"
 					description="Run an index job to preview object count and size before copying/moving."
 					action={
 						<Button size="small" onClick={props.onIndexPrefix} disabled={indexDisabled}>
@@ -87,7 +87,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				<Alert
 					type="error"
 					showIcon
-					message="Failed to load impact preview"
+					title="Failed to load impact preview"
 					description={props.summaryErrorMessage}
 					style={{ marginBottom: 12 }}
 				/>

@@ -192,7 +192,7 @@ export default function App() {
 					<Alert
 						type="error"
 						showIcon
-						message="Backend connection failed"
+						title="Backend connection failed"
 						description={
 							<Space direction="vertical" size={8} style={{ width: '100%' }}>
 								<Typography.Text>{title}</Typography.Text>

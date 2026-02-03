@@ -34,7 +34,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 			<Alert
 				type="warning"
 				showIcon
-				message={isPrefix ? 'Folder rename moves all objects under it' : 'Rename is destructive'}
+				title={isPrefix ? 'Folder rename moves all objects under it' : 'Rename is destructive'}
 				description="This creates a move job (copy then delete source)."
 				style={{ marginBottom: 12 }}
 			/>

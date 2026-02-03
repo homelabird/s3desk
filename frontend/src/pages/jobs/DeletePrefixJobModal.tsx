@@ -73,7 +73,7 @@ export function DeletePrefixJobModal(props: {
 			<Alert
 				type="warning"
 				showIcon
-				message="Dangerous operation"
+				title="Dangerous operation"
 				description="This job deletes remote objects via the transfer engine. It cannot be undone."
 				style={{ marginBottom: 12 }}
 			/>
@@ -152,7 +152,7 @@ export function DeletePrefixJobModal(props: {
 										<Alert
 											type="warning"
 											showIcon
-											message="Prefix does not end with '/'"
+											title="Prefix does not end with '/'"
 											description={
 												"Without a trailing '/', delete will match keys with the prefix (e.g., 'abc' also matches 'abcd'). Prefer using a trailing '/'. To proceed anyway, acknowledge below."
 											}

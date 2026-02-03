@@ -125,7 +125,7 @@ export function BucketsPage(props: Props) {
 			</div>
 
 			{bucketsQuery.isError ? (
-				<Alert type="error" showIcon message="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
+				<Alert type="error" showIcon title="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
 			) : null}
 
 			<Table

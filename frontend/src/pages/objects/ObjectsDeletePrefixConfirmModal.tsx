@@ -57,7 +57,7 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 				<Alert
 					type={props.dryRun ? 'info' : 'warning'}
 					showIcon
-					message={props.dryRun ? 'Dry run' : 'Danger zone'}
+					title={props.dryRun ? 'Dry run' : 'Danger zone'}
 					description={
 						props.dryRun
 							? 'This runs a preview (no changes) and shows what would be deleted.'
@@ -73,7 +73,7 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 					<Alert
 						type="warning"
 						showIcon
-						message="Impact preview unavailable (index not found)"
+						title="Impact preview unavailable (index not found)"
 						description="Run an index job to preview object count and size before deleting."
 						action={
 							<Button size="small" onClick={props.onIndexPrefix} disabled={indexDisabled}>
@@ -82,7 +82,7 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 						}
 					/>
 				) : props.isSummaryError ? (
-					<Alert type="error" showIcon message="Failed to load impact preview" description={props.summaryErrorMessage} />
+					<Alert type="error" showIcon title="Failed to load impact preview" description={props.summaryErrorMessage} />
 				) : props.summary ? (
 					<>
 						<Descriptions size="small" bordered column={1}>

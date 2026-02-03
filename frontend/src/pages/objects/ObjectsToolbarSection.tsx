@@ -44,7 +44,7 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 		<>
 			<SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to start browsing" />
 			{props.bucketsErrorMessage ? (
-				<Alert type="error" showIcon message="Failed to load buckets" description={props.bucketsErrorMessage} />
+				<Alert type="error" showIcon title="Failed to load buckets" description={props.bucketsErrorMessage} />
 			) : null}
 
 			{props.isAdvanced && props.tabs.length > 1 ? (

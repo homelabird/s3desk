@@ -2702,15 +2702,15 @@ const objectsQuery = useInfiniteQuery({
 					}
 					alerts={
 						<>
-							{isOffline ? <Alert type="warning" showIcon message="Offline: object actions are disabled." /> : null}
+							{isOffline ? <Alert type="warning" showIcon title="Offline: object actions are disabled." /> : null}
 							{favoritesOnly ? (
 								favoritesQuery.isError ? (
-									<Alert type="error" showIcon message="Failed to load favorites" description={formatErr(favoritesQuery.error)} />
+									<Alert type="error" showIcon title="Failed to load favorites" description={formatErr(favoritesQuery.error)} />
 								) : null
 							) : objectsQuery.isError ? (
-								<Alert type="error" showIcon message="Failed to list objects" description={formatErr(objectsQuery.error)} />
+								<Alert type="error" showIcon title="Failed to list objects" description={formatErr(objectsQuery.error)} />
 							) : null}
-							{bucket ? null : <Alert type="info" showIcon message="Select a bucket to browse objects." />}
+							{bucket ? null : <Alert type="info" showIcon title="Select a bucket to browse objects." />}
 						</>
 					}
 					uploadDropActive={showUploadDropOverlay}

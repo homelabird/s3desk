@@ -60,8 +60,8 @@ export function LoginPage(props: Props) {
 				<div style={{ height: 16 }} />
 
 				<Space direction="vertical" size={12} style={{ width: '100%' }}>
-					<Alert type={showSavedTokenWarning ? 'warning' : 'info'} showIcon message={initialHint} />
-					{localError ? <Alert type="error" showIcon message={localError} /> : null}
+					<Alert type={showSavedTokenWarning ? 'warning' : 'info'} showIcon title={initialHint} />
+					{localError ? <Alert type="error" showIcon title={localError} /> : null}
 
 					<Form layout="vertical" onFinish={submit} requiredMark={false}>
 						<Form.Item label="API Token" required>

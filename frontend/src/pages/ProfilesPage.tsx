@@ -282,7 +282,7 @@ export function ProfilesPage(props: Props) {
 				<Alert
 					type="info"
 					showIcon
-					message="Getting started"
+					title="Getting started"
 					description={
 						<Space direction="vertical" size={12} style={{ width: '100%' }}>
 							<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
@@ -346,7 +346,7 @@ export function ProfilesPage(props: Props) {
 			) : null}
 
 			{profilesQuery.isError ? (
-				<Alert type="error" showIcon message="Failed to load profiles" description={formatErr(profilesQuery.error)} />
+				<Alert type="error" showIcon title="Failed to load profiles" description={formatErr(profilesQuery.error)} />
 			) : null}
 
 			<Table
@@ -572,7 +572,7 @@ export function ProfilesPage(props: Props) {
 					<Alert
 						type="warning"
 						showIcon
-						message="Contains credentials"
+						title="Contains credentials"
 						description="This export includes access keys and secrets. Store it securely."
 					/>
 					{yamlProfile ? (
@@ -580,7 +580,7 @@ export function ProfilesPage(props: Props) {
 							Profile: <Typography.Text code>{yamlProfile.name}</Typography.Text>
 						</Typography.Text>
 					) : null}
-					{yamlError ? <Alert type="error" showIcon message="Failed to load YAML" description={yamlError} /> : null}
+					{yamlError ? <Alert type="error" showIcon title="Failed to load YAML" description={yamlError} /> : null}
 					{exportYamlMutation.isPending && !yamlContent ? (
 						<Spin />
 					) : (
@@ -631,7 +631,7 @@ export function ProfilesPage(props: Props) {
 							autoSize={{ minRows: 8, maxRows: 16 }}
 							placeholder="Paste YAML here…"
 						/>
-						{importError ? <Alert type="error" showIcon message={importError} /> : null}
+						{importError ? <Alert type="error" showIcon title={importError} /> : null}
 					</Space>
 				</Modal>
 		</Space>

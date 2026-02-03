@@ -38,7 +38,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 				<Alert
 					type="warning"
 					showIcon
-					message="Move/Rename is destructive"
+					title="Move/Rename is destructive"
 					description="This uses transfer move (copy then delete source)."
 					style={{ marginBottom: 12 }}
 				/>
@@ -46,7 +46,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 				<Alert
 					type="info"
 					showIcon
-					message="Copy within S3"
+					title="Copy within S3"
 					description="This uses transfer copy (server-side copy)."
 					style={{ marginBottom: 12 }}
 				/>

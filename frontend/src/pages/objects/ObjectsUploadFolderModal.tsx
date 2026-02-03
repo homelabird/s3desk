@@ -40,7 +40,7 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 			<Alert
 				type="info"
 				showIcon
-				message="Uploads from this device"
+				title="Uploads from this device"
 				description="Files are uploaded by the browser and appear in Transfers (not as server jobs)."
 				style={{ marginBottom: 12 }}
 			/>
@@ -49,7 +49,7 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 				<Alert
 					type="warning"
 					showIcon
-					message="Local folder access is not available"
+					title="Local folder access is not available"
 					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
 					style={{ marginBottom: 12 }}
 				/>

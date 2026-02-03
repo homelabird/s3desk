@@ -686,7 +686,7 @@ export function SettingsPage(props: Props) {
 									<Alert
 										type="error"
 										showIcon
-										message="Failed to load /meta"
+										title="Failed to load /meta"
 										description={formatErr(metaQuery.error)}
 										style={{ marginBottom: 12 }}
 									/>
@@ -698,7 +698,7 @@ export function SettingsPage(props: Props) {
 											<Alert
 												type="warning"
 												showIcon
-												message="Transfer engine is incompatible"
+												title="Transfer engine is incompatible"
 												description={`Requires rclone >= ${metaQuery.data.transferEngine.minVersion}. Current: ${metaQuery.data.transferEngine.version || 'unknown'}.`}
 											/>
 										) : null}
