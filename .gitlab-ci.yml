@@ -42,6 +42,7 @@ default:
 
 stages:
   - build
+  - smoke
   - test
   - audit
   - publish
@@ -608,6 +609,25 @@ govulncheck:
       fi
       echo "govulncheck exit code: ${status}"
       exit "$status"
+
+frontend_smoke:
+  stage: smoke
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
+    - changes:
+        - frontend/**/*
+        - openapi.yml
+    - when: never
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - npm ci --no-audit --no-fund
+    - npm run test:unit -- src/pages/objects/__tests__/ObjectsPage.smoke.test.tsx
 
 frontend_ci:
   stage: test
