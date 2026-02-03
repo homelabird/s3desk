@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, beforeAll } from 'vitest'
 
 import { ObjectsPage } from '../../ObjectsPage'
-import type { DownloadTask, TransfersContextValue, UploadTask } from '../../../components/Transfers'
+import type { TransfersContextValue } from '../../../components/Transfers'
 import { TransfersContext } from '../../../components/useTransfers'
 
 const transfersStub: TransfersContextValue = {
@@ -13,8 +13,8 @@ const transfersStub: TransfersContextValue = {
 	activeDownloadCount: 0,
 	activeUploadCount: 0,
 	activeTransferCount: 0,
-	downloadTasks: [] as DownloadTask[],
-	uploadTasks: [] as UploadTask[],
+	downloadTasks: [] as TransfersContextValue['downloadTasks'],
+	uploadTasks: [] as TransfersContextValue['uploadTasks'],
 	openTransfers: () => {},
 	closeTransfers: () => {},
 	queueDownloadObject: () => {},
