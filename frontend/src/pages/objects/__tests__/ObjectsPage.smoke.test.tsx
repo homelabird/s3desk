@@ -1,43 +1,15 @@
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, beforeAll } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
-import { ObjectsPage } from '../../ObjectsPage'
-import type { TransfersContextValue } from '../../../components/Transfers'
 import { TransfersContext } from '../../../components/useTransfers'
-
-const transfersStub: TransfersContextValue = {
-	isOpen: false,
-	tab: 'downloads',
-	activeDownloadCount: 0,
-	activeUploadCount: 0,
-	activeTransferCount: 0,
-	downloadTasks: [] as TransfersContextValue['downloadTasks'],
-	uploadTasks: [] as TransfersContextValue['uploadTasks'],
-	openTransfers: () => {},
-	closeTransfers: () => {},
-	queueDownloadObject: () => {},
-	queueDownloadObjectsToDevice: () => {},
-	queueDownloadJobArtifact: () => {},
-	queueUploadFiles: () => {},
-} as const
+import { ensureDomShims } from '../../../test/domShims'
+import { transfersStub } from '../../../test/transfersStub'
+import { ObjectsPage } from '../../ObjectsPage'
 
 beforeAll(() => {
-	if (!('ResizeObserver' in globalThis)) {
-		class ResizeObserver {
-			observe() {}
-			unobserve() {}
-			disconnect() {}
-		}
-		globalThis.ResizeObserver = ResizeObserver
-	}
-	if (!('scrollTo' in Element.prototype)) {
-		Object.defineProperty(Element.prototype, 'scrollTo', {
-			value: () => {},
-			writable: true,
-		})
-	}
+	ensureDomShims()
 })
 
 describe('ObjectsPage', () => {
