@@ -11,6 +11,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -1181,11 +1182,12 @@ const objectsQuery = useInfiniteQuery({
 		createJobWithRetry,
 		setSelectedKeys,
 	})
-		const {
+	const {
 			newFolderOpen,
 			newFolderForm,
 			newFolderSubmitting,
 			newFolderError,
+			newFolderPartialKey,
 			newFolderParentPrefix,
 			openNewFolder,
 			handleNewFolderSubmit,
@@ -1197,7 +1199,7 @@ const objectsQuery = useInfiniteQuery({
 				prefix,
 				typeFilter,
 				favoritesOnly,
-				searchText: searchDraft.trim() ? searchDraft : search,
+				searchText: deferredSearch,
 				onClearSearch: clearSearch,
 				onDisableFavoritesOnly: () => setFavoritesOnly(false),
 				onShowFolders: () => setTypeFilter('all'),
@@ -2159,6 +2161,13 @@ const objectsQuery = useInfiniteQuery({
 		isAdvanced,
 		ensureObjectSelected: ensureObjectSelectedForContextMenu,
 	})
+	const handleTreePrefixContextMenu = useCallback(
+		(event: ReactMouseEvent, nodeKey: string) => {
+			const point = recordContextMenuPoint(event)
+			openPrefixContextMenu(nodeKey, 'context', point)
+		},
+		[openPrefixContextMenu, recordContextMenuPoint],
+	)
 	const {
 		query: commandPaletteQuery,
 		setQuery: setCommandPaletteQuery,
@@ -2691,10 +2700,11 @@ const objectsQuery = useInfiniteQuery({
 							onResizePointerDown={onTreeResizePointerDown}
 							onResizePointerMove={onTreeResizePointerMove}
 							onResizePointerUp={onTreeResizePointerUp}
-							canCreateFolder={canCreateFolder}
-							createFolderTooltipText={createFolderTooltipText}
-							onNewFolderAtPrefix={openNewFolder}
-							onCloseDrawer={() => setTreeDrawerOpen(false)}
+						canCreateFolder={canCreateFolder}
+						createFolderTooltipText={createFolderTooltipText}
+						onNewFolderAtPrefix={openNewFolder}
+						onPrefixContextMenu={handleTreePrefixContextMenu}
+						onCloseDrawer={() => setTreeDrawerOpen(false)}
 						/>
 					</Suspense>
 
@@ -3306,7 +3316,10 @@ const objectsQuery = useInfiniteQuery({
 						<ObjectsNewFolderModal
 							open={newFolderOpen}
 							parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(newFolderParentPrefix)}` : '-'}
+							parentPrefix={newFolderParentPrefix}
 							errorMessage={newFolderError}
+							partialKey={newFolderPartialKey}
+							onOpenPrefix={onOpenPrefix}
 							form={newFolderForm}
 							isSubmitting={newFolderSubmitting}
 							onCancel={handleNewFolderCancel}

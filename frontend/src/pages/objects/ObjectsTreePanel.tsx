@@ -1,7 +1,7 @@
 import { Button, Drawer, Tooltip } from 'antd'
 import type { DataNode, EventDataNode } from 'antd/es/tree'
 import { FolderAddOutlined } from '@ant-design/icons'
-import type { DragEvent, PointerEvent } from 'react'
+import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 
 import styles from './objects.module.css'
 import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
@@ -44,6 +44,7 @@ type ObjectsTreePanelProps = {
 	canCreateFolder: boolean
 	createFolderTooltipText: string
 	onNewFolderAtPrefix: (prefixKey: string) => void
+	onPrefixContextMenu: (event: ReactMouseEvent, prefixKey: string) => void
 	onCloseDrawer: () => void
 }
 
@@ -64,6 +65,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 			onDndTargetDragOver={props.onDndTargetDragOver}
 			onDndTargetDragLeave={props.onDndTargetDragLeave}
 			onDndTargetDrop={props.onDndTargetDrop}
+			onPrefixContextMenu={props.onPrefixContextMenu}
 		/>
 	)
 

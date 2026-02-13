@@ -42,11 +42,13 @@ export function useObjectsNewFolder({
 	const [newFolderOpen, setNewFolderOpen] = useState(false)
 	const [newFolderForm] = Form.useForm<NewFolderFormValues>()
 	const [newFolderError, setNewFolderError] = useState<string | null>(null)
+	const [newFolderPartialKey, setNewFolderPartialKey] = useState<string | null>(null)
 	const [newFolderParentPrefix, setNewFolderParentPrefix] = useState('')
 
 	const openNewFolder = useCallback((parentPrefixOverride?: string) => {
 		if (!profileId || !bucket) return
 		setNewFolderError(null)
+		setNewFolderPartialKey(null)
 		setNewFolderOpen(true)
 		const p = typeof parentPrefixOverride === 'string' ? parentPrefixOverride : prefix
 		setNewFolderParentPrefix(p === '/' ? '' : p)
@@ -72,16 +74,25 @@ export function useObjectsNewFolder({
 			const parent = normalizePrefix(newFolderParentPrefix)
 			let current = parent
 			let last = ''
-			for (const part of parts) {
-				current = `${current}${part}/`
-				last = current
-				await api.createFolder({ profileId, bucket, key: current })
+			try {
+				for (const part of parts) {
+					current = `${current}${part}/`
+					await api.createFolder({ profileId, bucket, key: current })
+					last = current
+				}
+			} catch (err) {
+				const e = err instanceof Error ? err : new Error(String(err))
+				;(e as { partialKey?: string }).partialKey = last || undefined
+				throw e
 			}
 			return { key: last }
 			},
 			onSuccess: async (resp: { key: string }) => {
 				const createdKey = resp.key
-				const parentIsCurrent = normalizePrefix(newFolderParentPrefix) === normalizePrefix(prefix)
+				const parentPrefixNormalized = normalizePrefix(newFolderParentPrefix)
+				const currentPrefixNormalized = normalizePrefix(prefix)
+				const parentIsCurrent = parentPrefixNormalized === currentPrefixNormalized
+				const createdOutsideView = !parentIsCurrent
 				const searchRaw = (searchText ?? '').trim()
 				const tokens = splitSearchTokens(searchRaw)
 				const normalizedTokens = tokens.map(normalizeForSearch)
@@ -100,7 +111,7 @@ export function useObjectsNewFolder({
 						}
 					}
 				}
-				const autoOpened = !!viewHideReason
+				const autoOpened = parentIsCurrent && !!viewHideReason
 				if (autoOpened) {
 					onOpenPrefix(createdKey)
 				}
@@ -113,11 +124,12 @@ export function useObjectsNewFolder({
 							: viewHideReason === 'search'
 								? 'search filter'
 								: null
+				const createdOutsideLabel = createdOutsideView ? (parentPrefixNormalized || '/') : null
 				message.success({
 					duration: 6,
 					content: (
 						<span>
-							Folder created{autoOpened ? ' and opened' : ''}{viewHideLabel ? ` (${viewHideLabel})` : ''}:{' '}
+							Folder created{autoOpened ? ' and opened' : ''}{viewHideLabel ? ` (${viewHideLabel})` : createdOutsideLabel ? ` (under ${createdOutsideLabel})` : ''}:{' '}
 							<Typography.Text code>{createdKey}</Typography.Text>{' '}
 							<Button
 								type="link"
@@ -129,7 +141,7 @@ export function useObjectsNewFolder({
 							>
 								{autoOpened ? 'Reopen' : 'Open'}
 							</Button>
-							{autoOpened ? (
+							{autoOpened || createdOutsideView ? (
 								<>
 									<Button
 										type="link"
@@ -139,18 +151,22 @@ export function useObjectsNewFolder({
 									>
 										Parent
 									</Button>
-									{viewHideReason === 'favoritesOnly' ? (
-										<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onDisableFavoritesOnly}>
-											Disable favorites-only
-										</Button>
-									) : viewHideReason === 'filesOnly' ? (
-										<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onShowFolders}>
-											Show folders
-										</Button>
-									) : viewHideReason === 'search' ? (
-										<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onClearSearch}>
-											Clear search
-										</Button>
+									{autoOpened ? (
+										<>
+											{viewHideReason === 'favoritesOnly' ? (
+												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onDisableFavoritesOnly}>
+													Disable favorites-only
+												</Button>
+											) : viewHideReason === 'filesOnly' ? (
+												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onShowFolders}>
+													Show folders
+												</Button>
+											) : viewHideReason === 'search' ? (
+												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onClearSearch}>
+													Clear search
+												</Button>
+											) : null}
+										</>
 									) : null}
 								</>
 							) : null}
@@ -159,11 +175,17 @@ export function useObjectsNewFolder({
 				})
 				setNewFolderOpen(false)
 				newFolderForm.resetFields()
+				setNewFolderPartialKey(null)
 			await queryClient.invalidateQueries({ queryKey: ['objects'] })
 			const parentKey = normalizePrefix(newFolderParentPrefix) || '/'
 			void refreshTreeNode(parentKey)
 		},
 		onError: (err) => {
+			const partialKey =
+				typeof (err as { partialKey?: unknown })?.partialKey === 'string' && (err as { partialKey?: string }).partialKey
+					? (err as { partialKey?: string }).partialKey!
+					: null
+			setNewFolderPartialKey(partialKey)
 			setNewFolderError(formatErr(err))
 		},
 	})
@@ -171,6 +193,7 @@ export function useObjectsNewFolder({
 	const handleNewFolderSubmit = useCallback(
 		(values: NewFolderFormValues) => {
 			setNewFolderError(null)
+			setNewFolderPartialKey(null)
 			createFolderMutation.mutate(values)
 		},
 		[createFolderMutation],
@@ -179,6 +202,7 @@ export function useObjectsNewFolder({
 	const handleNewFolderCancel = useCallback(() => {
 		setNewFolderOpen(false)
 		setNewFolderError(null)
+		setNewFolderPartialKey(null)
 		newFolderForm.resetFields()
 	}, [newFolderForm])
 
@@ -187,6 +211,7 @@ export function useObjectsNewFolder({
 		newFolderForm,
 		newFolderSubmitting: createFolderMutation.isPending,
 		newFolderError,
+		newFolderPartialKey,
 		newFolderParentPrefix,
 		openNewFolder,
 		handleNewFolderSubmit,

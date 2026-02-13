@@ -1,4 +1,4 @@
-import type { DragEvent, PointerEvent } from 'react'
+import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 import type { DataNode, EventDataNode } from 'antd/es/tree'
 import type { FavoriteObjectItem } from '../../api/types'
 
@@ -39,6 +39,7 @@ type ObjectsTreeSectionProps = {
 	canCreateFolder: boolean
 	createFolderTooltipText: string
 	onNewFolderAtPrefix: (prefixKey: string) => void
+	onPrefixContextMenu: (event: ReactMouseEvent, prefixKey: string) => void
 	onCloseDrawer: () => void
 }
 

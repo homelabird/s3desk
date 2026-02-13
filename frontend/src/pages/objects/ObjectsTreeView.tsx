@@ -1,6 +1,6 @@
 import { Tree, Typography } from 'antd'
 import type { DataNode, EventDataNode } from 'antd/es/tree'
-import type { DragEvent } from 'react'
+import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react'
 
 type ObjectsTreeViewProps = {
 	hasProfile: boolean
@@ -17,6 +17,7 @@ type ObjectsTreeViewProps = {
 	onDndTargetDragOver: (event: DragEvent, nodeKey: string) => void
 	onDndTargetDragLeave: (event: DragEvent, nodeKey: string) => void
 	onDndTargetDrop: (event: DragEvent, nodeKey: string) => void
+	onPrefixContextMenu?: (event: ReactMouseEvent, nodeKey: string) => void
 }
 
 export function ObjectsTreeView(props: ObjectsTreeViewProps) {
@@ -40,6 +41,15 @@ export function ObjectsTreeView(props: ObjectsTreeViewProps) {
 				const renderedTitle = typeof node.title === 'function' ? node.title(node) : node.title
 				return (
 					<span
+						onContextMenu={
+							props.onPrefixContextMenu
+								? (e) => {
+										e.preventDefault()
+										e.stopPropagation()
+										props.onPrefixContextMenu?.(e, nodeKey)
+								  }
+								: undefined
+						}
 						onDragOver={(e) => props.onDndTargetDragOver(e, nodeKey)}
 						onDragLeave={(e) => props.onDndTargetDragLeave(e, nodeKey)}
 						onDrop={(e) => props.onDndTargetDrop(e, nodeKey)}

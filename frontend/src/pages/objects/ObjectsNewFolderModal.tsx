@@ -1,10 +1,13 @@
 import type { FormInstance } from 'antd'
-import { Alert, Checkbox, Form, Input, Modal, Typography } from 'antd'
+import { Alert, Button, Checkbox, Form, Input, Modal, Typography } from 'antd'
 
 type ObjectsNewFolderModalProps = {
 	open: boolean
 	parentLabel: string
+	parentPrefix: string
 	errorMessage?: string | null
+	partialKey?: string | null
+	onOpenPrefix: (prefix: string) => void
 	form: FormInstance<{ name: string; allowPath?: boolean }>
 	isSubmitting: boolean
 	onCancel: () => void
@@ -12,6 +15,18 @@ type ObjectsNewFolderModalProps = {
 }
 
 export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
+	const rawName = props.form.getFieldValue('name')
+	const rawInput = typeof rawName === 'string' ? rawName.trim().replace(/\/+$/, '').replace(/^\/+/, '') : ''
+	const parent = props.parentPrefix.trim()
+	const parentNormalized = !parent ? '' : parent.endsWith('/') ? parent : `${parent}/`
+	const typedKey = rawInput ? `${parentNormalized}${rawInput}/` : ''
+	const partialKey = (props.partialKey ?? '').trim()
+
+	const openPrefix = (target: string) => {
+		props.onCancel()
+		props.onOpenPrefix(target)
+	}
+
 	return (
 		<Modal
 			open={props.open}
@@ -23,7 +38,37 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 			destroyOnHidden
 		>
 			{props.errorMessage ? (
-				<Alert type="error" showIcon title="Failed to create folder" description={props.errorMessage} style={{ marginBottom: 12 }} />
+				<Alert
+					type="error"
+					showIcon
+					title="Failed to create folder"
+					description={
+						<div>
+							<div>{props.errorMessage}</div>
+							{partialKey ? (
+								<div style={{ marginTop: 6 }}>
+									<Typography.Text type="secondary">
+										Some intermediate folders may already exist: <Typography.Text code>{partialKey}</Typography.Text>
+									</Typography.Text>
+								</div>
+							) : null}
+							<div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+								<Button size="small" onClick={() => openPrefix(props.parentPrefix)}>
+									Open parent
+								</Button>
+								<Button size="small" disabled={!typedKey} onClick={() => typedKey && openPrefix(typedKey)}>
+									Open typed path
+								</Button>
+								{partialKey ? (
+									<Button size="small" onClick={() => openPrefix(partialKey)}>
+										Open last created
+									</Button>
+								) : null}
+							</div>
+						</div>
+					}
+					style={{ marginBottom: 12 }}
+				/>
 			) : null}
 
 			<details style={{ marginBottom: 12 }}>
@@ -51,6 +96,7 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 				<Form.Item
 					name="name"
 					label="Folder name"
+					dependencies={['allowPath']}
 					rules={[
 						{ required: true, message: 'folder name is required' },
 						{
