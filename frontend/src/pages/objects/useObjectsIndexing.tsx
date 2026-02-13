@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Button, Space, Typography, message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 
 import { APIError, type APIClient } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
@@ -39,6 +40,7 @@ export function useObjectsIndexing({
 	createJobWithRetry,
 }: UseObjectsIndexingArgs) {
 	const queryClient = useQueryClient()
+	const navigate = useNavigate()
 	const autoIndexPendingRef = useRef(false)
 	const autoIndexLastKeyRef = useRef<string | null>(null)
 	const autoIndexLastTriggeredRef = useRef<number>(0)
@@ -66,7 +68,7 @@ export function useObjectsIndexing({
 					content: (
 						<Space>
 							<Typography.Text>Index task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" href="/jobs">
+							<Button size="small" type="link" onClick={() => navigate('/jobs')}>
 								Open Jobs
 							</Button>
 						</Space>

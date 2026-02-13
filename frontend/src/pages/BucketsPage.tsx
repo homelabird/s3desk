@@ -90,21 +90,21 @@ export function BucketsPage(props: Props) {
 					title: `Bucket "${bucketName}" isn’t empty`,
 					content: (
 						<Space orientation="vertical" style={{ width: '100%' }}>
-							<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
-							<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
+								<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
+								<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
 								<Button
 									type="link"
-									href="/objects"
 									onClick={() => {
 										Modal.destroyAll()
 										window.localStorage.setItem('bucket', JSON.stringify(bucketName))
 										window.localStorage.setItem('prefix', JSON.stringify(''))
+										navigate('/objects')
 									}}
 								>
 									Open Objects
 								</Button>
-						</Space>
-					),
+							</Space>
+						),
 					okText: 'Delete all objects (job)',
 					okType: 'danger',
 					cancelText: 'Close',

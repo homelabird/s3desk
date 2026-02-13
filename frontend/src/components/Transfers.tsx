@@ -1597,18 +1597,18 @@ export function TransfersProvider(props: {
 						})
 				}
 
-					message.open({
-						type: 'success',
-						content: (
-							<Space>
-								<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-								<Button size="small" type="link" href="/jobs">
-									Open Jobs
-								</Button>
-							</Space>
-						),
-						duration: 6,
-					})
+							message.open({
+								type: 'success',
+								content: (
+									<Space>
+										<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
+										<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+											Open Jobs
+										</Button>
+									</Space>
+								),
+								duration: 6,
+							})
 				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 			} catch (err) {
 				if (err instanceof RequestAbortedError) {
@@ -1628,14 +1628,15 @@ export function TransfersProvider(props: {
 				}
 			}
 		},
-			[
-				api,
-				handleUploadJobUpdate,
-				pickUploadTuning,
-				props.uploadCapabilityByProfileId,
-				props.uploadDirectStream,
-				queryClient,
-				updateUploadTask,
+				[
+					api,
+					handleUploadJobUpdate,
+					navigate,
+					pickUploadTuning,
+					props.uploadCapabilityByProfileId,
+					props.uploadDirectStream,
+					queryClient,
+					updateUploadTask,
 				uploadChunkFileConcurrency,
 				uploadResumeConversionEnabled,
 			],

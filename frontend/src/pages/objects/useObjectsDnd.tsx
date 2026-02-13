@@ -1,6 +1,7 @@
 import { Button, Space, Typography, message } from 'antd'
 import type { QueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
@@ -79,6 +80,7 @@ export function useObjectsDnd({
 	queryClient,
 }: UseObjectsDndArgs) {
 	const [dndHoverPrefix, setDndHoverPrefix] = useState<string | null>(null)
+	const navigate = useNavigate()
 
 	const normalizeDropTargetPrefix = useCallback((raw: string): string => {
 		const trimmed = raw.trim()
@@ -95,7 +97,7 @@ export function useObjectsDnd({
 				content: (
 					<Space>
 						<Typography.Text>Task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" href="/jobs">
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
 							Open Jobs
 						</Button>
 					</Space>
@@ -105,7 +107,7 @@ export function useObjectsDnd({
 			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 			return job
 		},
-		[createJobWithRetry, profileId, queryClient],
+		[createJobWithRetry, navigate, profileId, queryClient],
 	)
 
 	const performDrop = useCallback(async (payload: DndPayload, targetPrefixRaw: string, mode: 'copy' | 'move') => {

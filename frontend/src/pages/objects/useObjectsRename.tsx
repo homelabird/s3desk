@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Button, Form, Space, Typography, message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
@@ -18,6 +19,7 @@ type RenameFormValues = { name: string; confirm: string }
 
 export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseObjectsRenameArgs) {
 	const queryClient = useQueryClient()
+	const navigate = useNavigate()
 	const [renameOpen, setRenameOpen] = useState(false)
 	const [renameKind, setRenameKind] = useState<'object' | 'prefix'>('object')
 	const [renameSource, setRenameSource] = useState<string | null>(null)
@@ -105,7 +107,7 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseO
 				content: (
 					<Space>
 						<Typography.Text>Rename task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" href="/jobs">
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
 							Open Jobs
 						</Button>
 					</Space>

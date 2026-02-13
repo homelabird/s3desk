@@ -1,6 +1,7 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
 import { Button, Space, Typography, message } from 'antd'
 import { useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
@@ -27,6 +28,7 @@ export function useObjectsClipboard({
 	queryClient,
 }: UseObjectsClipboardArgs) {
 	const [clipboardObjects, setClipboardObjects] = useState<ClipboardObjects | null>(null)
+	const navigate = useNavigate()
 
 	const pasteObjectsMutation = useMutation({
 		mutationFn: async (args: {
@@ -97,7 +99,7 @@ export function useObjectsClipboard({
 				content: (
 					<Space>
 						<Typography.Text>{args.mode === 'copy' ? 'Paste copy task' : 'Paste move task'} started: {job.id}</Typography.Text>
-						<Button size="small" type="link" href="/jobs">
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
 							Open Jobs
 						</Button>
 					</Space>

@@ -13,6 +13,7 @@ import { formatBytes } from '../lib/transfer'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
+import { LinkButton } from '../components/LinkButton'
 
 type Props = {
 	apiToken: string
@@ -158,9 +159,7 @@ export function UploadsPage(props: Props) {
 
 				{showBucketsEmpty ? (
 					<Empty description="No buckets available">
-						<Button href="/buckets">
-							Go to Buckets
-						</Button>
+						<LinkButton to="/buckets">Go to Buckets</LinkButton>
 					</Empty>
 				) : null}
 

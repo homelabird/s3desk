@@ -1,5 +1,7 @@
-import { Alert, Button, Grid, Space, Typography } from 'antd'
+import { Alert, Grid, Space, Typography } from 'antd'
 import { useLocation } from 'react-router-dom'
+
+import { LinkButton } from './LinkButton'
 
 type Props = {
 	apiToken: string
@@ -39,13 +41,13 @@ export function SetupCallout(props: Props) {
 			description={description}
 			action={
 				<Space orientation={actionDirection} size="small">
-					<Button size="small" href="/profiles">
+					<LinkButton to="/profiles" size="small">
 						Profiles
-					</Button>
+					</LinkButton>
 					{showSettings ? (
-						<Button size="small" href={settingsHref}>
+						<LinkButton to={settingsHref} size="small">
 							Settings
-						</Button>
+						</LinkButton>
 					) : null}
 				</Space>
 			}

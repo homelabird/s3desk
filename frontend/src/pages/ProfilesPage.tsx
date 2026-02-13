@@ -9,6 +9,7 @@ import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequ
 import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
+import { LinkButton } from '../components/LinkButton'
 import type { ProfileFormValues, ProfileProvider } from './profiles/profileTypes'
 
 type Props = {
@@ -309,20 +310,20 @@ export function ProfilesPage(props: Props) {
 									Active profile selected
 								</Checkbox>
 							</Space>
-									<Space wrap>
-										<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
-											Create profile
+										<Space wrap>
+											<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
+												Create profile
+											</Button>
+											<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
+												Buckets
+											</LinkButton>
+											<LinkButton to="/objects" size="small" disabled={!props.profileId}>
+												Objects
+											</LinkButton>
+										<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
+											Dismiss
 										</Button>
-										<Button size="small" href="/buckets" disabled={!props.profileId}>
-											Buckets
-										</Button>
-										<Button size="small" href="/objects" disabled={!props.profileId}>
-											Objects
-										</Button>
-									<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
-										Dismiss
-									</Button>
-							</Space>
+								</Space>
 						</Space>
 					}
 				/>

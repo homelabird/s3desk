@@ -1,5 +1,6 @@
 import { Button, Space, Typography, message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
 import type { TransfersContextValue } from '../../components/Transfers'
@@ -24,6 +25,7 @@ export function useObjectsZipJobs({
 	createJobWithRetry,
 }: UseObjectsZipJobsArgs) {
 	const queryClient = useQueryClient()
+	const navigate = useNavigate()
 
 	const zipPrefixJobMutation = useMutation({
 		mutationFn: async (args: { prefix: string }) => {
@@ -52,9 +54,9 @@ export function useObjectsZipJobs({
 						<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 							Open Transfers
 						</Button>
-							<Button size="small" type="link" href="/jobs">
-								Open Jobs
-							</Button>
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							Open Jobs
+						</Button>
 					</Space>
 				),
 				duration: 6,
@@ -96,9 +98,9 @@ export function useObjectsZipJobs({
 						<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 							Open Transfers
 						</Button>
-							<Button size="small" type="link" href="/jobs">
-								Open Jobs
-							</Button>
+						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+							Open Jobs
+						</Button>
 					</Space>
 				),
 				duration: 6,
