@@ -28,6 +28,33 @@
         }
       },
       "additionalProperties": true
+    },
+    "rclone": {
+      "type": "object",
+      "properties": {
+        "retryAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Max retry attempts for retryable rclone errors."
+        },
+        "retryBaseDelay": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Base delay for exponential retry backoff (Go duration format)."
+        },
+        "retryMaxDelay": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Maximum delay for retry backoff (Go duration format)."
+        },
+        "retryJitterRatio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Random jitter ratio for rclone retry delay. Range: 0..1."
+        }
+      },
+      "additionalProperties": true
     }
   },
   "allOf": [

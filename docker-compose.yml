@@ -21,6 +21,10 @@ services:
       DB_BACKEND: "postgres"
       DATABASE_URL: "postgres://s3desk:s3desk@postgres:5432/s3desk?sslmode=disable"
       JOB_QUEUE_CAPACITY: "20"
+      RCLONE_RETRY_ATTEMPTS: "3"
+      RCLONE_RETRY_BASE_DELAY: "800ms"
+      RCLONE_RETRY_MAX_DELAY: "8s"
+      RCLONE_RETRY_JITTER_RATIO: "0.2"
     volumes:
       - s3desk-data:/data
 

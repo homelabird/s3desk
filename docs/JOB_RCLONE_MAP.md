@@ -53,3 +53,7 @@ Job 타입 매핑
 - RCLONE_S3_CHUNK_SIZE_MIB: multipart chunk size
 - RCLONE_S3_UPLOAD_CONCURRENCY: multipart upload 동시성
 - RCLONE_STATS_INTERVAL: stats 갱신 주기 (기본 2s, 최소 500ms)
+- RCLONE_RETRY_ATTEMPTS: retryable 오류 재시도 최대 횟수 (기본 3)
+- RCLONE_RETRY_BASE_DELAY: retry backoff 기본 지연 (기본 800ms)
+- RCLONE_RETRY_MAX_DELAY: retry backoff 최대 지연 (기본 8s)
+- RCLONE_RETRY_JITTER_RATIO: retry 지연 지터 비율 (기본 0.2, 0..1)

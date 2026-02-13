@@ -145,6 +145,22 @@ spec:
             - name: RCLONE_STATS_INTERVAL
               value: {{ .Values.rclone.statsInterval | quote }}
             {{- end }}
+            {{- if not (eq .Values.rclone.retryAttempts nil) }}
+            - name: RCLONE_RETRY_ATTEMPTS
+              value: {{ .Values.rclone.retryAttempts | quote }}
+            {{- end }}
+            {{- if .Values.rclone.retryBaseDelay }}
+            - name: RCLONE_RETRY_BASE_DELAY
+              value: {{ .Values.rclone.retryBaseDelay | quote }}
+            {{- end }}
+            {{- if .Values.rclone.retryMaxDelay }}
+            - name: RCLONE_RETRY_MAX_DELAY
+              value: {{ .Values.rclone.retryMaxDelay | quote }}
+            {{- end }}
+            {{- if not (eq .Values.rclone.retryJitterRatio nil) }}
+            - name: RCLONE_RETRY_JITTER_RATIO
+              value: {{ .Values.rclone.retryJitterRatio | quote }}
+            {{- end }}
             {{- $secretName := default (include "s3desk.fullname" .) .Values.secrets.existingSecret }}
             {{- $useSecret := or (ne (trim .Values.server.apiToken) "") (ne (trim .Values.server.encryptionKey) "") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
             {{- if $useSecret }}

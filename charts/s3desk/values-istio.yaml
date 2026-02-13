@@ -13,6 +13,9 @@ server:
   allowedHosts:
     - s3desk.k8s.homelabird.com
 
+rclone:
+  retryJitterRatio: 0.2
+
 extraEnv:
   - name: RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS
     value: "8"

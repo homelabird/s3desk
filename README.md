@@ -42,6 +42,10 @@ docker run --rm -p 8080:8080 \
   -e ADDR=0.0.0.0:8080 \
   -e ALLOW_REMOTE=true \
   -e API_TOKEN=change-me \
+  -e RCLONE_RETRY_ATTEMPTS=3 \
+  -e RCLONE_RETRY_BASE_DELAY=800ms \
+  -e RCLONE_RETRY_MAX_DELAY=8s \
+  -e RCLONE_RETRY_JITTER_RATIO=0.2 \
   -v s3desk-data:/data \
   "${S3DESK_IMAGE}:${S3DESK_TAG}-sqlite"
 ```
@@ -61,6 +65,7 @@ docker compose up -d
 Defaults (overridable via environment):
 - Postgres: `POSTGRES_DB/USER/PASSWORD = s3desk`
 - App: `ADDR=0.0.0.0:8080`, `ALLOW_REMOTE=true`, `API_TOKEN=change-me`
+- Retry defaults: `RCLONE_RETRY_ATTEMPTS=3`, `RCLONE_RETRY_BASE_DELAY=800ms`, `RCLONE_RETRY_MAX_DELAY=8s`, `RCLONE_RETRY_JITTER_RATIO=0.2`
 - DB: `DB_BACKEND=postgres`, `DATABASE_URL=postgres://s3desk:s3desk@postgres:5432/s3desk?sslmode=disable`
 
 Open `http://localhost:8080` and use the configured `API_TOKEN`.
@@ -133,6 +138,10 @@ podman run --rm -p 8080:8080 \
   -e ADDR=0.0.0.0:8080 \
   -e ALLOW_REMOTE=true \
   -e API_TOKEN=change-me \
+  -e RCLONE_RETRY_ATTEMPTS=3 \
+  -e RCLONE_RETRY_BASE_DELAY=800ms \
+  -e RCLONE_RETRY_MAX_DELAY=8s \
+  -e RCLONE_RETRY_JITTER_RATIO=0.2 \
   -v s3desk-data:/data \
   s3desk:local
 ```
@@ -336,6 +345,10 @@ Backend flags/env:
 - `RCLONE_S3_CHUNK_SIZE_MIB` (default `0` = rclone default)
 - `RCLONE_S3_UPLOAD_CONCURRENCY` (default `0` = rclone default)
 - `RCLONE_STATS_INTERVAL` (default `2s`, min `500ms`)
+- `RCLONE_RETRY_ATTEMPTS` (default `3`, min `1`; max retry attempts for retryable rclone errors)
+- `RCLONE_RETRY_BASE_DELAY` (default `800ms`; exponential backoff base delay)
+- `RCLONE_RETRY_MAX_DELAY` (default `8s`; upper bound for retry backoff delay)
+- `RCLONE_RETRY_JITTER_RATIO` (default `0.2`, range `0..1`; random jitter ratio applied to retry delay)
 
 Generate an encryption key:
 

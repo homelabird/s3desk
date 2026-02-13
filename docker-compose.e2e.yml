@@ -34,6 +34,10 @@ services:
       ALLOW_REMOTE: "true"
       API_TOKEN: "change-me"
       ALLOWED_HOSTS: "s3desk"
+      RCLONE_RETRY_ATTEMPTS: "3"
+      RCLONE_RETRY_BASE_DELAY: "800ms"
+      RCLONE_RETRY_MAX_DELAY: "8s"
+      RCLONE_RETRY_JITTER_RATIO: "0.2"
     volumes:
       - s3desk-data:/data
     depends_on:

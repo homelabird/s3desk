@@ -52,6 +52,10 @@ podman run --rm -p 8080:8080 \
   -e API_TOKEN=change-me \
   -e ALLOWED_HOSTS=s3desk.local \
   -e JOB_QUEUE_CAPACITY=256 \
+  -e RCLONE_RETRY_ATTEMPTS=3 \
+  -e RCLONE_RETRY_BASE_DELAY=800ms \
+  -e RCLONE_RETRY_MAX_DELAY=8s \
+  -e RCLONE_RETRY_JITTER_RATIO=0.2 \
   -e JOB_LOG_MAX_LINE_BYTES=262144 \
   -v s3desk-data:/data \
   s3desk:local
@@ -209,6 +213,10 @@ podman run --rm --network host \
   -v "$(command -v rclone)":/usr/local/bin/rclone:ro \
   -e RCLONE_PATH=/usr/local/bin/rclone \
   -e JOB_QUEUE_CAPACITY=256 \
+  -e RCLONE_RETRY_ATTEMPTS=3 \
+  -e RCLONE_RETRY_BASE_DELAY=800ms \
+  -e RCLONE_RETRY_MAX_DELAY=8s \
+  -e RCLONE_RETRY_JITTER_RATIO=0.2 \
   -e JOB_LOG_MAX_LINE_BYTES=262144 \
   s3desk:local
 ```
@@ -257,6 +265,10 @@ Settings → Server 섹션의 Transfer Engine 항목에서 감지 상태/경로�
 - `RCLONE_S3_CHUNK_SIZE_MIB`: S3 multipart chunk size(MiB).
 - `RCLONE_S3_UPLOAD_CONCURRENCY`: S3 multipart upload 동시성.
 - `RCLONE_STATS_INTERVAL`: rclone stats 출력 간격(예: `2s`, 최소 `500ms`).
+- `RCLONE_RETRY_ATTEMPTS`: retryable rclone 오류에 대한 최대 재시도 횟수(기본 `3`).
+- `RCLONE_RETRY_BASE_DELAY`: retry backoff 기본 지연(예: `800ms`).
+- `RCLONE_RETRY_MAX_DELAY`: retry backoff 최대 지연(예: `8s`).
+- `RCLONE_RETRY_JITTER_RATIO`: retry 지연에 적용할 랜덤 지터 비율(`0..1`, 기본 `0.2`).
 - `RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS`: API 다운로드용 멀티스레드 스트림 수(0이면 rclone 기본값).
 - `RCLONE_DOWNLOAD_MULTI_THREAD_CUTOFF_MIB`: API 다운로드 멀티스레드 적용 기준 크기(MiB, 0이면 기본값).
 - `RCLONE_DOWNLOAD_BUFFER_SIZE_MIB`: API 다운로드 버퍼 크기(MiB, 0이면 기본값).
@@ -266,6 +278,10 @@ Settings → Server 섹션의 Transfer Engine 항목에서 감지 상태/경로�
 ```bash
 JOB_QUEUE_CAPACITY=256
 JOB_LOG_MAX_LINE_BYTES=262144
+RCLONE_RETRY_ATTEMPTS=3
+RCLONE_RETRY_BASE_DELAY=800ms
+RCLONE_RETRY_MAX_DELAY=8s
+RCLONE_RETRY_JITTER_RATIO=0.2
 ```
 
 ### 로그 필드 예시(JSON Lines)

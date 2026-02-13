@@ -97,6 +97,10 @@ rclone:
   s3ChunkSizeMiB: null
   s3UploadConcurrency: null
   statsInterval: ""
+  retryAttempts: 3
+  retryBaseDelay: "800ms"
+  retryMaxDelay: "8s"
+  retryJitterRatio: 0.2
 
 secrets:
   existingSecret: ""
