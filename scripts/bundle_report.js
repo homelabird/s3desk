@@ -154,7 +154,7 @@ function main() {
 
 	const budgets = {
 		vendorUiGzip: Number(process.env.BUNDLE_BUDGET_VENDOR_UI_GZIP_KB || 300) * 1024,
-		initialJsGzip: Number(process.env.BUNDLE_BUDGET_INITIAL_JS_GZIP_KB || 450) * 1024,
+		initialJsGzip: Number(process.env.BUNDLE_BUDGET_INITIAL_JS_GZIP_KB || 160) * 1024,
 	}
 
 	const warnings = []
