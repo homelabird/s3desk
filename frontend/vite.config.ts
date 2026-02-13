@@ -2,6 +2,14 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
 
+const OPTIONAL_INITIAL_UI_CHUNK_MARKERS = [
+	'vendor-ui-picker-',
+	'vendor-ui-tree-',
+	'vendor-ui-form-',
+	'vendor-ui-upload-',
+	'vendor-ui-tabs-',
+] as const
+
 function chunkGroupForModule(id: string): string | undefined {
 	if (!id.includes('node_modules/')) return undefined
 	// Split out a few heavy-but-not-always-needed UI deps so they can be loaded later.
@@ -12,6 +20,23 @@ function chunkGroupForModule(id: string): string | undefined {
 		id.includes('/node_modules/antd/es/calendar/')
 	) {
 		return 'vendor-ui-picker'
+	}
+	if (
+		id.includes('/node_modules/@rc-component/form/') ||
+		id.includes('/node_modules/@rc-component/async-validator/') ||
+		id.includes('/node_modules/antd/es/form/')
+	) {
+		return 'vendor-ui-form'
+	}
+	if (
+		id.includes('/node_modules/@rc-component/upload/') ||
+		id.includes('/node_modules/rc-upload/') ||
+		id.includes('/node_modules/antd/es/upload/')
+	) {
+		return 'vendor-ui-upload'
+	}
+	if (id.includes('/node_modules/@rc-component/tabs/') || id.includes('/node_modules/antd/es/tabs/')) {
+		return 'vendor-ui-tabs'
 	}
 	if (
 		id.includes('/node_modules/@rc-component/tree/') ||
@@ -84,6 +109,13 @@ export default defineConfig(({ mode }) => {
 		},
 		build: {
 			chunkSizeWarningLimit: 1200,
+			modulePreload: {
+				resolveDependencies: (_filename, deps, context) => {
+					// Keep route-level UI bundles out of initial /profiles HTML preload.
+					if (context.hostType !== 'html') return deps
+					return deps.filter((dep) => !OPTIONAL_INITIAL_UI_CHUNK_MARKERS.some((marker) => dep.includes(marker)))
+				},
+			},
 			rollupOptions: {
 				output: {
 					manualChunks(id) {

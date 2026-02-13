@@ -1,9 +1,13 @@
-import { Alert, Button, Collapse, DatePicker, Divider, Drawer, Empty, Input, InputNumber, Select, Space, Spin, Switch, Table, Typography } from 'antd'
+import { Alert, Button, Collapse, Divider, Drawer, Empty, Input, InputNumber, Select, Space, Spin, Switch, Table, Typography } from 'antd'
 import { CopyOutlined, DownloadOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import dayjs, { type Dayjs } from 'dayjs'
 
 import type { ObjectItem } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
+import {
+	formatLocalDateInputValue,
+	localDayEndMsFromDateInput,
+	localDayStartMsFromDateInput,
+} from '../../lib/localDate'
 import { formatBytes } from '../../lib/transfer'
 
 type ObjectsGlobalSearchDrawerProps = {
@@ -64,11 +68,6 @@ const bytesFromMb = (value: number | null) => {
 	return Math.max(0, Math.round(value * 1024 * 1024))
 }
 
-const toDayjs = (value: number | null): Dayjs | null => {
-	if (value == null || !Number.isFinite(value)) return null
-	return dayjs(value)
-}
-
 export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps) {
 	const drawerWidth = props.isMd ? 920 : '100%'
 	const inputWidth = props.isMd ? 360 : '100%'
@@ -76,10 +75,11 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 	const limitWidth = props.isMd ? 140 : '100%'
 	const extWidth = props.isMd ? 160 : '100%'
 	const sizeWidth = props.isMd ? 160 : '100%'
-	const dateWidth = props.isMd ? 320 : '100%'
+	const dateWidth = props.isMd ? 152 : '100%'
 	const tableKeyWidth = props.isMd ? 520 : 260
 	const tableScrollY = props.isMd ? 520 : undefined
-	const dateRange: [Dayjs | null, Dayjs | null] = [toDayjs(props.modifiedAfterMs), toDayjs(props.modifiedBeforeMs)]
+	const modifiedAfterValue = formatLocalDateInputValue(props.modifiedAfterMs)
+	const modifiedBeforeValue = formatLocalDateInputValue(props.modifiedBeforeMs)
 
 	return (
 		<Drawer open={props.open} onClose={props.onClose} width={drawerWidth} title="Global Search (Indexed)" destroyOnHidden>
@@ -89,25 +89,25 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 				<Alert type="warning" showIcon title="Select a bucket first" />
 			) : (
 				<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-						<Typography.Text strong>Search</Typography.Text>
-						<Space wrap>
-							<Input
-								allowClear
-								prefix={<SearchOutlined />}
-								placeholder="Search query (substring)…"
-								aria-label="Search query"
-								style={{ width: inputWidth, maxWidth: '100%' }}
-								value={props.queryDraft}
-								onChange={(e) => props.onQueryDraftChange(e.target.value)}
-							/>
-							<Input
-								allowClear
-								placeholder="Prefix filter (optional)…"
-								aria-label="Prefix filter"
-								style={{ width: prefixWidth, maxWidth: '100%' }}
-								value={props.prefixFilter}
-								onChange={(e) => props.onPrefixFilterChange(e.target.value)}
-							/>
+					<Typography.Text strong>Search</Typography.Text>
+					<Space wrap>
+						<Input
+							allowClear
+							prefix={<SearchOutlined />}
+							placeholder="Search query (substring)…"
+							aria-label="Search query"
+							style={{ width: inputWidth, maxWidth: '100%' }}
+							value={props.queryDraft}
+							onChange={(e) => props.onQueryDraftChange(e.target.value)}
+						/>
+						<Input
+							allowClear
+							placeholder="Prefix filter (optional)…"
+							aria-label="Prefix filter"
+							style={{ width: prefixWidth, maxWidth: '100%' }}
+							value={props.prefixFilter}
+							onChange={(e) => props.onPrefixFilterChange(e.target.value)}
+						/>
 						<Select
 							value={props.limit}
 							style={{ width: limitWidth, maxWidth: '100%' }}
@@ -154,17 +154,22 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								value={mbFromBytes(props.maxSizeBytes)}
 								onChange={(value) => props.onMaxSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
 							/>
-							<DatePicker.RangePicker
-								allowClear
-								aria-label="Modified date range"
+							<input
+								type="date"
+								aria-label="Modified after date"
 								style={{ width: dateWidth, maxWidth: '100%' }}
-								value={dateRange}
-								onChange={(values) => {
-									const start = values?.[0] ?? null
-									const end = values?.[1] ?? null
-									const startMs = start ? start.startOf('day').valueOf() : null
-									const endMs = end ? end.endOf('day').valueOf() : null
-									props.onModifiedRangeChange(startMs, endMs)
+								value={modifiedAfterValue}
+								onChange={(event) => {
+									props.onModifiedRangeChange(localDayStartMsFromDateInput(event.currentTarget.value), props.modifiedBeforeMs)
+								}}
+							/>
+							<input
+								type="date"
+								aria-label="Modified before date"
+								style={{ width: dateWidth, maxWidth: '100%' }}
+								value={modifiedBeforeValue}
+								onChange={(event) => {
+									props.onModifiedRangeChange(props.modifiedAfterMs, localDayEndMsFromDateInput(event.currentTarget.value))
 								}}
 							/>
 						</Space>

@@ -1,8 +1,12 @@
 import type { SelectProps } from 'antd'
-import { Button, DatePicker, Drawer, InputNumber, Select, Space, Switch, Typography } from 'antd'
-import dayjs, { type Dayjs } from 'dayjs'
+import { Button, Drawer, InputNumber, Select, Space, Switch, Typography } from 'antd'
 
 import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
+import {
+	formatLocalDateInputValue,
+	localDayEndMsFromDateInput,
+	localDayStartMsFromDateInput,
+} from '../../lib/localDate'
 
 type ObjectsFiltersDrawerProps = {
 	open: boolean
@@ -40,14 +44,10 @@ const bytesFromMb = (value: number | null) => {
 	return Math.max(0, Math.round(value * 1024 * 1024))
 }
 
-const toDayjs = (value: number | null): Dayjs | null => {
-	if (value == null || !Number.isFinite(value)) return null
-	return dayjs(value)
-}
-
 export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 	const fileFiltersDisabled = props.typeFilter === 'folders'
-	const rangeValue: [Dayjs | null, Dayjs | null] = [toDayjs(props.modifiedAfterMs), toDayjs(props.modifiedBeforeMs)]
+	const modifiedAfterValue = formatLocalDateInputValue(props.modifiedAfterMs)
+	const modifiedBeforeValue = formatLocalDateInputValue(props.modifiedBeforeMs)
 	return (
 		<Drawer
 			open={props.open}
@@ -114,6 +114,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 									min={0}
 									step={0.1}
 									placeholder="Min MB…"
+									aria-label="Minimum size (MB)"
 									style={{ flex: 1, maxWidth: '100%' }}
 									value={mbFromBytes(props.minSizeBytes)}
 									onChange={(value) => props.onMinSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
@@ -123,6 +124,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 									min={0}
 									step={0.1}
 									placeholder="Max MB…"
+									aria-label="Maximum size (MB)"
 									style={{ flex: 1, maxWidth: '100%' }}
 									value={mbFromBytes(props.maxSizeBytes)}
 									onChange={(value) => props.onMaxSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
@@ -133,19 +135,28 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 
 						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 							<Typography.Text type="secondary">Last modified</Typography.Text>
-							<DatePicker.RangePicker
-								allowClear
-								style={{ width: '100%' }}
-								value={rangeValue}
-								onChange={(values) => {
-									const start = values?.[0] ?? null
-									const end = values?.[1] ?? null
-									const startMs = start ? start.startOf('day').valueOf() : null
-									const endMs = end ? end.endOf('day').valueOf() : null
-									props.onModifiedRangeChange(startMs, endMs)
-								}}
-								disabled={fileFiltersDisabled}
-							/>
+							<Space style={{ width: '100%' }}>
+								<input
+									type="date"
+									aria-label="Modified after date"
+									style={{ flex: 1, maxWidth: '100%' }}
+									value={modifiedAfterValue}
+									onChange={(event) => {
+										props.onModifiedRangeChange(localDayStartMsFromDateInput(event.currentTarget.value), props.modifiedBeforeMs)
+									}}
+									disabled={fileFiltersDisabled}
+								/>
+								<input
+									type="date"
+									aria-label="Modified before date"
+									style={{ flex: 1, maxWidth: '100%' }}
+									value={modifiedBeforeValue}
+									onChange={(event) => {
+										props.onModifiedRangeChange(props.modifiedAfterMs, localDayEndMsFromDateInput(event.currentTarget.value))
+									}}
+									disabled={fileFiltersDisabled}
+								/>
+							</Space>
 						</Space>
 					</>
 				) : null}
