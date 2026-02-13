@@ -69,9 +69,17 @@ if [[ "${node_major}" != "${REQUIRED_NODE_MAJOR}" ]]; then
 fi
 
 npm_version="$(npm --version)"
-if [[ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]]; then
-  echo "[check] npm ${npm_version} found; expected npm ${REQUIRED_NPM_VERSION}" >&2
+npm_major="$(echo "${npm_version}" | sed -E 's/^([0-9]+).*/\1/')"
+required_npm_major="$(echo "${REQUIRED_NPM_VERSION}" | sed -E 's/^([0-9]+).*/\1/')"
+if [[ -z "${required_npm_major}" ]]; then
+  required_npm_major="10"
+fi
+if [[ "${npm_major}" != "${required_npm_major}" ]]; then
+  echo "[check] npm ${npm_version} found; expected npm ${REQUIRED_NPM_VERSION} (major ${required_npm_major}.x)" >&2
   exit 1
+fi
+if [[ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]]; then
+  echo "[check] npm ${npm_version} found; recommended npm ${REQUIRED_NPM_VERSION}" >&2
 fi
 
 echo "[check] frontend"
