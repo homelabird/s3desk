@@ -100,7 +100,7 @@ func TestSecurityHeaders_DoesNotOverrideExistingValues(t *testing.T) {
 	}
 }
 
-func TestRequireLocalHost_BlocksCrossSiteFetchMetadata(t *testing.T) {
+func TestRequireLocalHost_BlocksCrossSiteFetchMetadataWithoutOrigin(t *testing.T) {
 	t.Parallel()
 
 	s := &server{}
@@ -125,6 +125,25 @@ func TestRequireLocalHost_BlocksCrossSiteFetchMetadata(t *testing.T) {
 	}
 }
 
+func TestRequireLocalHost_AllowsCrossSiteFetchMetadataWhenOriginAllowed(t *testing.T) {
+	t.Parallel()
+
+	s := &server{}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "http://localhost:5173")
+
+	s.requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
 func TestRequireLocalHost_AllowsSameSiteFetchMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -140,6 +159,60 @@ func TestRequireLocalHost_AllowsSameSiteFetchMetadata(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+func TestCORS_PreflightReturnsNoContentAndSetsHeadersForAllowedOrigin(t *testing.T) {
+	t.Parallel()
+
+	s := &server{}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "http://127.0.0.1:8080/api/v1/meta", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "X-Api-Token, X-Profile-Id")
+
+	nextCalled := false
+	h := s.requireLocalHost(s.cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	})))
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if nextCalled {
+		t.Fatalf("expected handler to short-circuit preflight")
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Fatalf("Access-Control-Allow-Origin=%q, want %q", got, "http://localhost:5173")
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Headers"); got == "" {
+		t.Fatalf("Access-Control-Allow-Headers is empty")
+	}
+	if got := rr.Header().Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
+		t.Fatalf("Cross-Origin-Resource-Policy=%q, want %q", got, "cross-origin")
+	}
+}
+
+func TestCORS_OverridesCORPForAllowedOrigin(t *testing.T) {
+	t.Parallel()
+
+	s := &server{}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	req.Header.Set("Origin", "http://localhost:5173")
+
+	securityHeaders(s.cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))).ServeHTTP(rr, req)
+
+	if got := rr.Header().Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
+		t.Fatalf("Cross-Origin-Resource-Policy=%q, want %q", got, "cross-origin")
 	}
 }
 

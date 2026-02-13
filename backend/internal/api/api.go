@@ -48,6 +48,7 @@ func New(dep Dependencies) http.Handler {
 
 	apiRouter := chi.NewRouter()
 	apiRouter.Use(api.requireLocalHost)
+	apiRouter.Use(api.cors)
 	apiRouter.Use(api.requireAPIToken)
 
 	apiRouter.Get("/ws", api.handleWS)

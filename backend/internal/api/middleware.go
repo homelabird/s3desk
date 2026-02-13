@@ -220,8 +220,45 @@ func (s *server) requireLocalHost(next http.Handler) http.Handler {
 		}
 
 		if fetchSite := strings.ToLower(r.Header.Get("Sec-Fetch-Site")); fetchSite == "cross-site" {
-			writeError(w, http.StatusForbidden, "forbidden", "cross-site requests are not allowed", map[string]any{"secFetchSite": fetchSite})
-			return
+			// Allow cross-site requests only when a valid Origin is present and allowed.
+			// Browsers include Origin for cross-site fetches; requests without Origin are rejected.
+			if strings.TrimSpace(r.Header.Get("Origin")) == "" {
+				writeError(w, http.StatusForbidden, "forbidden", "cross-site requests are not allowed", map[string]any{"secFetchSite": fetchSite})
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *server) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin != "" {
+			u, err := url.Parse(origin)
+			if err == nil {
+				oh := strings.ToLower(u.Hostname())
+				if isAllowedHost(oh, s.cfg.AllowRemote, s.cfg.AllowedHosts) {
+					h := w.Header()
+					h.Set("Access-Control-Allow-Origin", origin)
+					h.Add("Vary", "Origin")
+					h.Set("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS,HEAD")
+					h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Api-Token, X-Profile-Id")
+					h.Set("Access-Control-Expose-Headers", "Retry-After")
+					h.Set("Access-Control-Max-Age", "600")
+					// securityHeaders() defaults CORP to same-origin, which breaks cross-origin API calls
+					// even when CORS is enabled. For allowed origins, explicitly allow cross-origin reads.
+					h.Set("Cross-Origin-Resource-Policy", "cross-origin")
+				}
+			}
+		}
+
+		if r.Method == http.MethodOptions {
+			if w.Header().Get("Access-Control-Allow-Origin") != "" {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
 		}
 
 		next.ServeHTTP(w, r)

@@ -124,6 +124,7 @@
   - Added `VITE_API_BASE_URL` support (default `/api/v1`).
   - WebSocket/SSE endpoints now follow the configured API base.
   - Settings “API docs/OpenAPI” links and header display now follow the configured API base/origin.
+  - Backend: added explicit CORS + preflight handling for allowed origins (and relaxed `Sec-Fetch-Site: cross-site` block when Origin is allowed).
   - Added `frontend/vercel.json` SPA fallback routing.
   - Updated `frontend/README.md` with Vercel deploy steps + CORS/WS notes.
 - **Definition of done**
