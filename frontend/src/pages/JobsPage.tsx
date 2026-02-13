@@ -68,6 +68,8 @@ import {
 	statusColor,
 	updateJob,
 } from './jobs/jobUtils'
+import { useJobsColumnsVisibility, type ColumnKey } from './jobs/useJobsColumnsVisibility'
+import { useJobsFilters } from './jobs/useJobsFilters'
 
 type Props = {
 	apiToken: string
@@ -98,9 +100,6 @@ type UploadDetails = {
 	items: UploadDetailItem[]
 	itemsTruncated?: boolean
 }
-
-type ColumnKey = 'id' | 'type' | 'summary' | 'status' | 'progress' | 'errorCode' | 'error' | 'createdAt' | 'actions'
-type ToggleableColumnKey = Exclude<ColumnKey, 'actions'>
 
 const CreateJobModal = lazy(async () => {
 	const m = await import('./jobs/CreateJobModal')
@@ -182,80 +181,23 @@ export function JobsPage(props: Props) {
 	const [eventsTransport, setEventsTransport] = useState<'ws' | 'sse' | null>(null)
 	const [eventsRetryCount, setEventsRetryCount] = useState(0)
 	const [eventsManualRetryToken, setEventsManualRetryToken] = useState(0)
-	const [statusFilter, setStatusFilter] = useLocalStorageState<JobStatus | 'all'>('jobsStatusFilter', 'all')
-	const [typeFilter, setTypeFilter] = useLocalStorageState('jobsTypeFilter', '')
-	const [errorCodeFilter, setErrorCodeFilter] = useLocalStorageState('jobsErrorCodeFilter', '')
-	const typeFilterNormalized = typeFilter.trim()
-	const errorCodeFilterNormalized = errorCodeFilter.trim()
-	const filtersDirty = useMemo(
-		() => statusFilter !== 'all' || typeFilterNormalized !== '' || errorCodeFilterNormalized !== '',
-		[errorCodeFilterNormalized, statusFilter, typeFilterNormalized],
-	)
-	const resetFilters = useCallback(() => {
-		setStatusFilter('all')
-		setTypeFilter('')
-		setErrorCodeFilter('')
-	}, [setErrorCodeFilter, setStatusFilter, setTypeFilter])
+	const {
+		statusFilter,
+		setStatusFilter,
+		typeFilter,
+		setTypeFilter,
+		errorCodeFilter,
+		setErrorCodeFilter,
+		typeFilterNormalized,
+		errorCodeFilterNormalized,
+		filtersDirty,
+		resetFilters,
+	} = useJobsFilters()
 	const [cancelingJobId, setCancelingJobId] = useState<string | null>(null)
 	const [retryingJobId, setRetryingJobId] = useState<string | null>(null)
 	const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
 	const [deleteJobPrefill, setDeleteJobPrefill] = useState<DeleteJobPrefill | null>(() => deleteJobInitialPrefill)
-	const defaultColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
-		() => ({
-			id: true,
-			type: true,
-			summary: true,
-			status: true,
-			progress: true,
-			errorCode: true,
-			error: true,
-			createdAt: true,
-			actions: true,
-		}),
-		[],
-	)
-	const [columnVisibility, setColumnVisibility] = useLocalStorageState<Record<ColumnKey, boolean>>(
-		'jobsColumnVisibility',
-		defaultColumnVisibility,
-	)
-	const mergedColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
-		() => ({
-			...defaultColumnVisibility,
-			...columnVisibility,
-			actions: true,
-		}),
-		[columnVisibility, defaultColumnVisibility],
-	)
-	const columnOptions = useMemo(() => {
-		const options: Array<{ key: ToggleableColumnKey; label: string }> = [
-			{ key: 'id', label: 'ID' },
-			{ key: 'type', label: 'Type' },
-			{ key: 'summary', label: 'Summary' },
-			{ key: 'status', label: 'Status' },
-			{ key: 'progress', label: 'Progress' },
-			{ key: 'errorCode', label: 'Error code' },
-			{ key: 'error', label: 'Error' },
-			{ key: 'createdAt', label: 'Created' },
-		]
-		return options
-	}, [])
-	const columnsDirty = useMemo(
-		() => columnOptions.some((option) => mergedColumnVisibility[option.key] !== defaultColumnVisibility[option.key]),
-		[columnOptions, mergedColumnVisibility, defaultColumnVisibility],
-	)
-	const setColumnVisible = useCallback(
-		(key: ToggleableColumnKey, next: boolean) => {
-			setColumnVisibility((prev) => ({
-				...defaultColumnVisibility,
-				...prev,
-				[key]: next,
-			}))
-		},
-		[defaultColumnVisibility, setColumnVisibility],
-	)
-	const resetColumns = useCallback(() => {
-		setColumnVisibility(defaultColumnVisibility)
-	}, [defaultColumnVisibility, setColumnVisibility])
+	const { mergedColumnVisibility, columnOptions, columnsDirty, setColumnVisible, resetColumns } = useJobsColumnsVisibility()
 	const openDeleteJobModal = useCallback(() => {
 		setDeleteJobPrefill(null)
 		setCreateDeleteOpen(true)

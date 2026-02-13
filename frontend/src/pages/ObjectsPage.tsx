@@ -35,7 +35,6 @@ import {
 	compactMenuItems,
 	trimActionDividers,
 } from './objects/objectsActions'
-import type { ObjectSort, ObjectTypeFilter } from './objects/objectsTypes'
 import { ObjectsLayout } from './objects/ObjectsLayout'
 import { ObjectsListHeader } from './objects/ObjectsListHeader'
 import { ObjectsObjectRowItem, ObjectsPrefixRowItem } from './objects/ObjectsListRowItems'
@@ -55,7 +54,6 @@ import {
 	uniquePrefixes,
 } from './objects/objectsListUtils'
 import {
-	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MIN_HOURS,
@@ -86,6 +84,8 @@ import { useObjectsFavorites } from './objects/useObjectsFavorites'
 import { useObjectsDetailsActions } from './objects/useObjectsDetailsActions'
 import { useObjectsSelectionBarActions } from './objects/useObjectsSelectionBarActions'
 import { useObjectsPresign } from './objects/useObjectsPresign'
+import { useObjectsGlobalSearchState } from './objects/useObjectsGlobalSearchState'
+import { useObjectsFiltersState } from './objects/useObjectsFiltersState'
 import { useObjectsRename } from './objects/useObjectsRename'
 import { useObjectsUploadFolder } from './objects/useObjectsUploadFolder'
 import { useObjectsCopyMove } from './objects/useObjectsCopyMove'
@@ -250,73 +250,62 @@ export function ObjectsPage(props: Props) {
 		const deferredSearch = useDeferredValue(search)
 		const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
 		const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
-	const [globalSearch, setGlobalSearch] = useLocalStorageState<string>('objectsGlobalSearch', '')
-	const [globalSearchDraft, setGlobalSearchDraft] = useState(globalSearch)
-	const deferredGlobalSearch = useDeferredValue(globalSearch)
-	const [globalSearchPrefix, setGlobalSearchPrefix] = useLocalStorageState<string>('objectsGlobalSearchPrefix', '')
-	const [globalSearchLimit, setGlobalSearchLimit] = useLocalStorageState<number>('objectsGlobalSearchLimit', 100)
-	const [globalSearchExt, setGlobalSearchExt] = useLocalStorageState<string>('objectsGlobalSearchExt', '')
-	const [globalSearchMinSize, setGlobalSearchMinSize] = useLocalStorageState<number | null>('objectsGlobalSearchMinSize', null)
-	const [globalSearchMaxSize, setGlobalSearchMaxSize] = useLocalStorageState<number | null>('objectsGlobalSearchMaxSize', null)
-	const [globalSearchMinModifiedMs, setGlobalSearchMinModifiedMs] = useLocalStorageState<number | null>(
-		'objectsGlobalSearchMinModifiedMs',
-		null,
-	)
-	const [globalSearchMaxModifiedMs, setGlobalSearchMaxModifiedMs] = useLocalStorageState<number | null>(
-		'objectsGlobalSearchMaxModifiedMs',
-		null,
-	)
-	const [indexPrefix, setIndexPrefix] = useState('')
-	const [indexFullReindex, setIndexFullReindex] = useState(true)
-	const resetGlobalSearch = useCallback(() => {
-		setGlobalSearch('')
-		setGlobalSearchDraft('')
-		setGlobalSearchPrefix('')
-		setGlobalSearchLimit(100)
-		setGlobalSearchExt('')
-		setGlobalSearchMinSize(null)
-		setGlobalSearchMaxSize(null)
-		setGlobalSearchMinModifiedMs(null)
-		setGlobalSearchMaxModifiedMs(null)
-		setIndexPrefix('')
-		setIndexFullReindex(true)
-	}, [
+
+	const {
+		globalSearch,
 		setGlobalSearch,
+		globalSearchDraft,
 		setGlobalSearchDraft,
+		deferredGlobalSearch,
+		globalSearchPrefix,
 		setGlobalSearchPrefix,
+		globalSearchLimit,
 		setGlobalSearchLimit,
+		globalSearchExt,
 		setGlobalSearchExt,
+		globalSearchMinSize,
 		setGlobalSearchMinSize,
+		globalSearchMaxSize,
 		setGlobalSearchMaxSize,
+		globalSearchMinModifiedMs,
 		setGlobalSearchMinModifiedMs,
+		globalSearchMaxModifiedMs,
 		setGlobalSearchMaxModifiedMs,
+		indexPrefix,
 		setIndexPrefix,
+		indexFullReindex,
 		setIndexFullReindex,
-	])
-	const [typeFilter, setTypeFilter] = useLocalStorageState<ObjectTypeFilter>('objectsTypeFilter', 'all')
-	const [favoritesOnly, setFavoritesOnly] = useLocalStorageState<boolean>('objectsFavoritesOnly', false)
-	const [favoritesFirst, setFavoritesFirst] = useLocalStorageState<boolean>('objectsFavoritesFirst', false)
-	const [favoritesSearch, setFavoritesSearch] = useLocalStorageState<string>('objectsFavoritesSearch', '')
-	const [favoritesOpenDetails, setFavoritesOpenDetails] = useLocalStorageState<boolean>('objectsFavoritesOpenDetails', false)
-	const [extFilter, setExtFilter] = useLocalStorageState<string>('objectsExtFilter', '')
-	const [minSize, setMinSize] = useLocalStorageState<number | null>('objectsMinSize', null)
-	const [maxSize, setMaxSize] = useLocalStorageState<number | null>('objectsMaxSize', null)
-	const [minModifiedMs, setMinModifiedMs] = useLocalStorageState<number | null>('objectsMinModifiedMs', null)
-	const [maxModifiedMs, setMaxModifiedMs] = useLocalStorageState<number | null>('objectsMaxModifiedMs', null)
-	const [sort, setSort] = useLocalStorageState<ObjectSort>('objectsSort', 'name_asc')
-	const [showThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
-	const [thumbnailCacheSize] = useLocalStorageState<number>(
-		'objectsThumbnailCacheSize',
-		THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
-	)
-	const [autoIndexEnabled] = useLocalStorageState<boolean>(
-		'objectsAutoIndexEnabled',
-		OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
-	)
-	const [autoIndexTtlHours] = useLocalStorageState<number>(
-		'objectsAutoIndexTtlHours',
-		OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
-	)
+		resetGlobalSearch,
+	} = useObjectsGlobalSearchState()
+
+	const {
+		typeFilter,
+		setTypeFilter,
+		favoritesOnly,
+		setFavoritesOnly,
+		favoritesFirst,
+		setFavoritesFirst,
+		favoritesSearch,
+		setFavoritesSearch,
+		favoritesOpenDetails,
+		setFavoritesOpenDetails,
+		extFilter,
+		setExtFilter,
+		minSize,
+		setMinSize,
+		maxSize,
+		setMaxSize,
+		minModifiedMs,
+		setMinModifiedMs,
+		maxModifiedMs,
+		setMaxModifiedMs,
+		sort,
+		setSort,
+		showThumbnails,
+		thumbnailCacheSize,
+		autoIndexEnabled,
+		autoIndexTtlHours,
+	} = useObjectsFiltersState()
 	const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false)
 	const [detailsOpen, setDetailsOpen] = useLocalStorageState<boolean>('objectsDetailsOpen', true)
 	const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
@@ -491,7 +480,7 @@ export function ObjectsPage(props: Props) {
 
 	useEffect(() => {
 		setGlobalSearchDraft(globalSearch)
-	}, [globalSearch])
+	}, [globalSearch, setGlobalSearchDraft])
 
 	useEffect(() => {
 		if (globalSearchDraft === globalSearch) return
