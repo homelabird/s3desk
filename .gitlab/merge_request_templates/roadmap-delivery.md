@@ -18,6 +18,8 @@
 
 ## 검증 체크리스트
 - [ ] 단위/통합 테스트 통과
+- [ ] `frontend`: `npm run lint && npm run test:unit && npm run build`
+- [ ] `frontend` E2E 스모크(모킹): `npx playwright test tests/objects-smoke.spec.ts tests/jobs-flow.spec.ts tests/uploads-folder.spec.ts`
 - [ ] `go test ./internal/jobs -run RcloneRetryDelay -count=1`
 - [ ] `helm lint charts/s3desk -f charts/s3desk/values.yaml -f charts/s3desk/ci-values.yaml`
 - [ ] `helm template s3desk charts/s3desk -f charts/s3desk/values.yaml -f charts/s3desk/ci-values.yaml >/tmp/s3desk-render.yaml`

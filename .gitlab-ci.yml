@@ -66,7 +66,7 @@ variables:
   GO_IMAGE: "harbor.k8s.homelabird.com/library/golang:1.24"
   NODE_IMAGE: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   PODMAN_IMAGE: "quay.io/podman/stable:latest"
-  PLAYWRIGHT_IMAGE: "mcr.microsoft.com/playwright:v1.47.0-jammy"
+  PLAYWRIGHT_IMAGE: "mcr.microsoft.com/playwright:v1.57.0-noble"
   TRIVY_IMAGE: "aquasec/trivy:0.56.2"
   NPM_VERSION: "10.9.4"
   TRIVY_SEVERITY: "HIGH,CRITICAL"
@@ -100,7 +100,9 @@ variables:
 .playwright_cache: &playwright_cache
   cache:
     key:
-      prefix: "playwright-cache"
+      files:
+        - frontend/package-lock.json
+      prefix: "playwright-cache-v1.57.0"
     paths:
       - .cache/ms-playwright/
   variables:
