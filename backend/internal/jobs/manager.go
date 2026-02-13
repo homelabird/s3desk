@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -97,9 +98,11 @@ type Manager struct {
 	rcloneStatsInterval       time.Duration
 
 	// Retry/backoff for transient rclone failures (rate limit, network, timeouts).
-	rcloneRetryAttempts  int
-	rcloneRetryBaseDelay time.Duration
-	rcloneRetryMaxDelay  time.Duration
+	rcloneRetryAttempts    int
+	rcloneRetryBaseDelay   time.Duration
+	rcloneRetryMaxDelay    time.Duration
+	rcloneRetryJitterRatio float64
+	rcloneRetryRandFloat   func() float64
 
 	// When enabled, persist unknown rclone stderr samples for later pattern expansion.
 	captureUnknownRcloneErrors bool
@@ -165,6 +168,13 @@ func NewManager(cfg Config) *Manager {
 	if retryMaxDelay < retryBaseDelay {
 		retryMaxDelay = retryBaseDelay
 	}
+	retryJitterRatio := envFloat("RCLONE_RETRY_JITTER_RATIO", 0.2)
+	if retryJitterRatio < 0 {
+		retryJitterRatio = 0
+	}
+	if retryJitterRatio > 1 {
+		retryJitterRatio = 1
+	}
 	captureUnknown := envBool("RCLONE_CAPTURE_UNKNOWN_ERRORS", false)
 
 	m := &Manager{
@@ -206,6 +216,8 @@ func NewManager(cfg Config) *Manager {
 		rcloneRetryAttempts:        retryAttempts,
 		rcloneRetryBaseDelay:       retryBaseDelay,
 		rcloneRetryMaxDelay:        retryMaxDelay,
+		rcloneRetryJitterRatio:     retryJitterRatio,
+		rcloneRetryRandFloat:       rand.Float64,
 		captureUnknownRcloneErrors: captureUnknown,
 	}
 
@@ -223,6 +235,18 @@ func envInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	parsed, err := strconv.Atoi(val)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
+func envFloat(key string, defaultValue float64) float64 {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.ParseFloat(val, 64)
 	if err != nil {
 		return defaultValue
 	}

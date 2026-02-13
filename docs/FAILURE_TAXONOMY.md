@@ -39,7 +39,8 @@ Job 실패 원인을 코드로 분류해 UI/로그/메트릭에서 동일한 기
 
 - Jobs(비동기)에서 rclone 실행이 `normalizedError.retryable=true`로 분류되면 자동으로 exponential backoff 재시도한다.
   - 기본 retry 대상: `rate_limited` / `endpoint_unreachable` / `upstream_timeout` / `network_error`
-  - 환경 변수: `RCLONE_RETRY_ATTEMPTS`, `RCLONE_RETRY_BASE_DELAY`, `RCLONE_RETRY_MAX_DELAY`
+  - 환경 변수: `RCLONE_RETRY_ATTEMPTS`, `RCLONE_RETRY_BASE_DELAY`, `RCLONE_RETRY_MAX_DELAY`, `RCLONE_RETRY_JITTER_RATIO`
+  - 기본값: `3`, `800ms`, `8s`, `0.2`
   - duration 포맷: Go duration string (예: `800ms`, `2s`, `30s`)
 
 - (옵션) unknown rclone stderr 샘플을 저장해 패턴을 확장한다.

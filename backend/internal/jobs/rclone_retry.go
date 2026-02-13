@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,6 +44,35 @@ func (m *Manager) rcloneRetryDelay(attempt int, code rcloneerrors.Code) time.Dur
 		exp = 0
 	}
 	delay := time.Duration(float64(base) * math.Pow(2, float64(exp)))
+
+	jitterRatio := m.rcloneRetryJitterRatio
+	if jitterRatio < 0 {
+		jitterRatio = 0
+	}
+	if jitterRatio > 1 {
+		jitterRatio = 1
+	}
+	if jitterRatio > 0 && delay > 0 {
+		randFn := m.rcloneRetryRandFloat
+		if randFn == nil {
+			randFn = rand.Float64
+		}
+		r := randFn()
+		if !math.IsNaN(r) {
+			if r < 0 {
+				r = 0
+			}
+			if r > 1 {
+				r = 1
+			}
+			factor := 1 + ((r*2)-1)*jitterRatio
+			if factor < 0 {
+				factor = 0
+			}
+			delay = time.Duration(float64(delay) * factor)
+		}
+	}
+
 	maxDelay := m.rcloneRetryMaxDelay
 	if maxDelay > 0 && delay > maxDelay {
 		delay = maxDelay
