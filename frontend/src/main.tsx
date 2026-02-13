@@ -6,6 +6,8 @@ import { ConfigProvider } from 'antd'
 import 'antd/dist/reset.css'
 import './index.css'
 import App from './App.tsx'
+import { A11yLiveRegions } from './components/A11yLiveRegions.tsx'
+import { AntdToastAnnouncer } from './components/AntdToastAnnouncer.tsx'
 
 const Devtools =
 	import.meta.env.DEV
@@ -29,6 +31,8 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ConfigProvider getPopupContainer={() => document.body}>
+        <A11yLiveRegions />
+        <AntdToastAnnouncer />
         <BrowserRouter>
           <App />
         </BrowserRouter>

@@ -212,7 +212,7 @@ export function ProfileModal(props: {
 								...(isAws ? [] : [{ required: true }]),
 								{ validator: (_, value) => validateOptionalHttpUrl(value) },
 							]}
-							extra={isAws ? 'Leave blank to use the AWS default endpoint.' : 'Use full URL including protocol (https://...).'}
+							extra={isAws ? 'Leave blank to use the AWS default endpoint.' : 'Use full URL including protocol (https://…).'}
 						>
 							<Input placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'} />
 						</Form.Item>

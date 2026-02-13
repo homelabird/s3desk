@@ -1902,13 +1902,14 @@ export function JobsPage(props: Props) {
 							/>
 						) : null}
 						<Space wrap size={8} style={{ width: '100%', marginBottom: 8 }}>
-							<Input
-								allowClear
-								placeholder="Search logs (contains)"
-								value={logSearchQuery}
-								onChange={(e) => setLogSearchQuery(e.target.value)}
-								style={{ width: screens.sm ? 320 : '100%' }}
-							/>
+								<Input
+									allowClear
+									placeholder="Search logs (contains)"
+									aria-label="Search logs"
+									value={logSearchQuery}
+									onChange={(e) => setLogSearchQuery(e.target.value)}
+									style={{ width: screens.sm ? 320 : '100%' }}
+								/>
 							<Button icon={<CopyOutlined />} onClick={() => void copyVisibleLogs()} disabled={visibleLogEntries.length === 0}>
 								Copy {normalizedLogSearchQuery ? 'visible' : 'all'}
 							</Button>

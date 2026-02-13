@@ -6,7 +6,7 @@ import { JobQueueBanner } from '../JobQueueBanner'
 
 describe('JobQueueBanner', () => {
 	it('shows and clears the banner via events', () => {
-		const message = 'Queue full (1/2). Retrying...'
+		const message = 'Queue full (1/2). Retrying…'
 
 		render(<JobQueueBanner />)
 		expect(screen.queryByText(message)).not.toBeInTheDocument()

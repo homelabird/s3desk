@@ -76,10 +76,10 @@ export async function withJobQueueRetry<T>(action: () => Promise<T>, options: Jo
 			const jitterMs = Math.floor(Math.random() * 250)
 			const queueHint = readQueueStats(err.details)
 			const label = options.actionLabel ? ` (${options.actionLabel})` : ''
-			publishJobQueueBanner({
-				type: 'warning',
-				message: `Queue full${queueHint}. Retrying${label} in ${Math.ceil((delayMs + jitterMs) / 1000)}s...`,
-			})
+				publishJobQueueBanner({
+					type: 'warning',
+					message: `Queue full${queueHint}. Retrying${label} in ${Math.ceil((delayMs + jitterMs) / 1000)}s…`,
+				})
 			await sleep(delayMs + jitterMs)
 			attempts += 1
 		}

@@ -41,7 +41,7 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 	if (!props.hasProfile) emptyMessage = 'Select a profile to view favorites.'
 	else if (!props.hasBucket) emptyMessage = 'Select a bucket to view favorites.'
 	else if (props.errorMessage) emptyMessage = `Failed to load favorites: ${props.errorMessage}`
-	else if (props.isLoading && availableFavorites.length === 0) emptyMessage = 'Loading favorites...'
+	else if (props.isLoading && availableFavorites.length === 0) emptyMessage = 'Loading favorites…'
 	else if (availableFavorites.length === 0) emptyMessage = 'No favorites yet.'
 	else if (sorted.length === 0) emptyMessage = 'No favorites match your search.'
 
@@ -64,6 +64,7 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 					allowClear
 					size="small"
 					placeholder="Find favorite…"
+					aria-label="Find favorite"
 					prefix={<SearchOutlined />}
 					value={props.query}
 					onChange={(e) => props.onQueryChange(e.target.value)}

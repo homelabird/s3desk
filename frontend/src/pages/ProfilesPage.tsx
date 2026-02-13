@@ -465,23 +465,23 @@ export function ProfilesPage(props: Props) {
 									menu={{
 										items: [
 											{ key: 'edit', label: 'Edit' },
-											{
-												key: 'test',
-												label: testMutation.isPending && testingProfileId === row.id ? 'Testing...' : 'Test',
-												disabled: testMutation.isPending && testingProfileId === row.id,
-											},
-											{
-												key: 'yaml',
-												label: exportYamlMutation.isPending && exportingProfileId === row.id ? 'Exporting YAML...' : 'YAML',
-												disabled: exportYamlMutation.isPending && exportingProfileId === row.id,
-											},
+												{
+													key: 'test',
+													label: testMutation.isPending && testingProfileId === row.id ? 'Testing…' : 'Test',
+													disabled: testMutation.isPending && testingProfileId === row.id,
+												},
+												{
+													key: 'yaml',
+													label: exportYamlMutation.isPending && exportingProfileId === row.id ? 'Exporting YAML…' : 'YAML',
+													disabled: exportYamlMutation.isPending && exportingProfileId === row.id,
+												},
 											{ type: 'divider' },
-											{
-												key: 'delete',
-												label: deleteMutation.isPending && deletingProfileId === row.id ? 'Deleting...' : 'Delete',
-												danger: true,
-												disabled: deleteMutation.isPending && deletingProfileId === row.id,
-											},
+												{
+													key: 'delete',
+													label: deleteMutation.isPending && deletingProfileId === row.id ? 'Deleting…' : 'Delete',
+													danger: true,
+													disabled: deleteMutation.isPending && deletingProfileId === row.id,
+												},
 										],
 										onClick: ({ key }) => {
 											if (key === 'edit') {
