@@ -133,18 +133,14 @@
 
 ### 12) Bundle size optimization (especially `vendor-ui`)
 - **Goal**
-  - Reduce the initial JS payload and avoid a single mega `vendor-ui` chunk when possible.
-- **Done (step 1)**
+  - Reduce the initial JS payload while keeping runtime stability (avoid fragile chunk splits across `antd`/`rc-*`).
+- **Done**
   - Added `npm run build:analyze` to generate a bundle treemap (`frontend/dist/stats.html`) and raw data (`frontend/dist/stats.json`).
-  - Split the previous `vendor-ui` mega chunk into feature chunks:
-    - `vendor-ui` (core antd/rc)
-    - `vendor-ui-picker` (date picker stack)
-    - `vendor-ui-tree` (tree stack)
-    - `vendor-ui-icons` (ant icons)
-  - Size improvement (Vite build output, raw / gzip):
-    - Before: `vendor-ui` ~1039 kB / 314 kB
-    - After: `vendor-ui` ~767 kB / 247 kB (+ new optional chunks loaded on demand)
-- **Next (step 2)**
-  - Re-run analyze after each UI feature change and keep `vendor-ui` < 800 kB raw as a soft budget.
-  - Consider replacing `DatePicker` usage with native inputs for further reduction if UX is acceptable.
-  - Evaluate whether table-heavy flows can defer loading (route/modals) to reduce first-page cost.
+- **Notes**
+  - We attempted to split `antd`/`rc-*` into multiple vendor chunks, but this caused production runtime init-order crashes (TDZ / circular import ordering) and was reverted.
+  - Current strategy: keep `antd` + `rc-*` in a single `vendor-ui` chunk for correctness; optimize by removing optional heavy UI dependencies and deferring feature routes/modals.
+  - Current size (local build, 2026-02-14): `vendor-ui` ~869 kB / 276 kB (raw / gzip).
+- **Next**
+  - Keep tracking `frontend/dist/stats.json` per change; establish a soft budget and investigate growth.
+  - Reduce initial usage of table/tree-heavy components on `/profiles` (prefer route-level loading and lighter primitives).
+  - Prefer native inputs over optional UI widgets where UX is acceptable (for example date filters).

@@ -216,9 +216,20 @@ export default function App() {
 
 		const title = err instanceof APIError ? `${err.code}: ${err.message}` : err instanceof Error ? err.message : 'Unknown error'
 		const hint =
-			err instanceof APIError && err.status === 403
-				? 'Access blocked. Try localhost. If you\'re running behind WSL2/containers/private networking, check ALLOW_REMOTE and ALLOWED_HOSTS on the server.'
-				: 'Failed to reach the backend. Check that the server is running and that the address/port are correct.'
+			err instanceof APIError && err.status === 403 ? (
+				<Space orientation="vertical" size={2} style={{ width: '100%' }}>
+					<Typography.Text type="secondary">Access blocked by server policy.</Typography.Text>
+					<Typography.Text type="secondary">On the server host: open the UI from the same machine (loopback).</Typography.Text>
+					<Typography.Text type="secondary">
+						From another device: open the server&apos;s LAN IP (for example, 192.168.0.200) and verify ALLOW_REMOTE=true, API_TOKEN,
+						and (if using a hostname) ALLOWED_HOSTS.
+					</Typography.Text>
+				</Space>
+			) : (
+				<Typography.Text type="secondary">
+					Failed to reach the backend. Check that the server is running and that the address/port are correct.
+				</Typography.Text>
+			)
 
 		return (
 			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -231,13 +242,13 @@ export default function App() {
 						showIcon
 						title="Backend connection failed"
 						description={
-							<Space orientation="vertical" size={8} style={{ width: '100%' }}>
-								<Typography.Text>{title}</Typography.Text>
-								<Typography.Text type="secondary">{hint}</Typography.Text>
-								<Button onClick={() => metaQuery.refetch()}>Retry</Button>
-							</Space>
-						}
-					/>
+								<Space orientation="vertical" size={8} style={{ width: '100%' }}>
+									<Typography.Text>{title}</Typography.Text>
+									{hint}
+									<Button onClick={() => metaQuery.refetch()}>Retry</Button>
+								</Space>
+							}
+						/>
 				</div>
 			</div>
 		)

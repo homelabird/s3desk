@@ -3136,9 +3136,9 @@ const objectsQuery = useInfiniteQuery({
 
 															<Space size="small" wrap>
 																	{t.jobId ? (
-																		<Button size="small" type="link" href="/jobs">
+																		<LinkButton size="small" type="link" to="/jobs">
 																			Jobs
-																		</Button>
+																		</LinkButton>
 																	) : null}
 																{t.status === 'queued' || t.status === 'staging' ? (
 																	<Button size="small" onClick={() => cancelUploadTask(t.id)}>
