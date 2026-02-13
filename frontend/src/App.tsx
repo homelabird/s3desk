@@ -15,6 +15,7 @@ import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'rea
 import { Suspense, lazy, useMemo, useState, type CSSProperties } from 'react'
 
 import { APIClient, APIError } from './api/client'
+import { getApiBaseUrl } from './api/baseUrl'
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
@@ -72,6 +73,17 @@ export default function App() {
 	const settingsOpen = settingsOpenState || searchParams.has('settings')
 
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
+	const apiBaseLabel = useMemo(() => {
+		const raw = getApiBaseUrl()
+		try {
+			const url = new URL(raw, window.location.origin)
+			const path = url.pathname.replace(/\/+$/, '') || '/'
+			if (url.origin === window.location.origin) return path
+			return `${url.host}${path}`
+		} catch {
+			return raw
+		}
+	}, [])
 	const metaQuery = useQuery({
 		queryKey: ['meta', apiToken],
 		queryFn: () => api.getMeta(),
@@ -275,16 +287,16 @@ export default function App() {
 									aria-label="Open navigation"
 								/>
 							)}
-							{screens.sm ? (
-								<>
-									<Typography.Text strong>API</Typography.Text>
-									<Typography.Text type="secondary">
-										<Link to="/profiles">/api/v1</Link>
-									</Typography.Text>
-								</>
-							) : (
-								<Typography.Text strong>S3Desk</Typography.Text>
-							)}
+								{screens.sm ? (
+									<>
+										<Typography.Text strong>API</Typography.Text>
+										<Typography.Text type="secondary" code ellipsis={{ tooltip: apiBaseLabel }} style={{ maxWidth: 260 }}>
+											{apiBaseLabel}
+										</Typography.Text>
+									</>
+								) : (
+									<Typography.Text strong>S3Desk</Typography.Text>
+								)}
 						</Space>
 						<Space wrap style={{ justifyContent: 'flex-end' }}>
 							<TopBarProfileSelect profileId={profileId} setProfileId={setProfileId} apiToken={apiToken} />

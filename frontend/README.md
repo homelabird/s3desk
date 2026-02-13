@@ -32,7 +32,8 @@ Note: Vite env vars are baked at build time.
    - Install Command: `npm ci`
    - Build Command: `npm run build`
    - Output Directory: `dist`
-3. Set env vars:
+3. Ensure the Node.js version is compatible (this project expects Node 22.x).
+4. Set env vars:
    - `VITE_API_BASE_URL=https://<your-backend-host>/api/v1`
 
 This repo includes `frontend/vercel.json` to ensure React Router deep links (for example `/jobs`) are routed to `index.html`.

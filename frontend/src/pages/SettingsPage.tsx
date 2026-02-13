@@ -30,6 +30,7 @@ import {
 	RETRY_DELAY_MIN_MS,
 	RETRY_DELAY_STORAGE_KEY,
 } from '../api/client'
+import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatTime } from '../lib/format'
@@ -222,16 +223,11 @@ export function SettingsPage(props: Props) {
 		retry: false,
 	})
 	const apiDocsBase = useMemo(() => {
-		const rawAddr = metaQuery.data?.serverAddr?.trim() ?? ''
-		if (!rawAddr) return window.location.origin
-		if (rawAddr.startsWith('http://') || rawAddr.startsWith('https://')) {
-			return rawAddr.replace(/\/+$/, '')
-		}
-		if (rawAddr.startsWith('0.0.0.0') || rawAddr.startsWith('::') || rawAddr.startsWith('[::')) {
-			return window.location.origin
-		}
-		return `${window.location.protocol}//${rawAddr}`.replace(/\/+$/, '')
-	}, [metaQuery.data?.serverAddr])
+		const apiBaseUrl = getApiBaseUrl()
+		const api = new URL(apiBaseUrl, window.location.origin)
+		api.pathname = stripApiBaseSuffix(api.pathname)
+		return `${api.origin}${api.pathname}`.replace(/\/+$/, '')
+	}, [])
 	const openapiUrl = `${apiDocsBase}/openapi.yml`
 	const apiDocsUrl = `${apiDocsBase}/docs`
 	const tlsCapability = metaQuery.data?.capabilities?.profileTls
