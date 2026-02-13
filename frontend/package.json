@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "npm run gen:openapi && vite",
     "build": "tsc -b && vite build",
+    "build:analyze": "ANALYZE=1 npm run build",
     "gen:openapi": "openapi-typescript ../openapi.yml -o src/api/openapi.ts",
     "lint": "eslint .",
     "test:unit": "vitest run",
@@ -43,6 +44,7 @@
     "globals": "^16.5.0",
     "jsdom": "^27.4.0",
     "openapi-typescript": "^7.10.1",
+    "rollup-plugin-visualizer": "^6.0.5",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",

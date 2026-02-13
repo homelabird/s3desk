@@ -130,3 +130,21 @@
 - **Definition of done**
   - Vercel preview deployment works with direct navigation/refresh on non-root routes.
   - API calls succeed against a configured backend origin in production.
+
+### 12) Bundle size optimization (especially `vendor-ui`)
+- **Goal**
+  - Reduce the initial JS payload and avoid a single mega `vendor-ui` chunk when possible.
+- **Done (step 1)**
+  - Added `npm run build:analyze` to generate a bundle treemap (`frontend/dist/stats.html`) and raw data (`frontend/dist/stats.json`).
+  - Split the previous `vendor-ui` mega chunk into feature chunks:
+    - `vendor-ui` (core antd/rc)
+    - `vendor-ui-picker` (date picker stack)
+    - `vendor-ui-tree` (tree stack)
+    - `vendor-ui-icons` (ant icons)
+  - Size improvement (Vite build output, raw / gzip):
+    - Before: `vendor-ui` ~1039 kB / 314 kB
+    - After: `vendor-ui` ~767 kB / 247 kB (+ new optional chunks loaded on demand)
+- **Next (step 2)**
+  - Re-run analyze after each UI feature change and keep `vendor-ui` < 800 kB raw as a soft budget.
+  - Consider replacing `DatePicker` usage with native inputs for further reduction if UX is acceptable.
+  - Evaluate whether table-heavy flows can defer loading (route/modals) to reduce first-page cost.
