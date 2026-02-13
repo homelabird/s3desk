@@ -45,7 +45,7 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 		t.status === 'queued'
 			? null
 			: t.status === 'waiting'
-				? 'Waiting for job to finish...'
+				? 'Waiting for job to finish…'
 				: `${formatBytes(t.loadedBytes)}${t.totalBytes != null ? `/${formatBytes(t.totalBytes)}` : ''} · ${
 						t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'
 					} · ${t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'}`

@@ -73,10 +73,10 @@ export function BucketPolicyModal(props: {
 	if (!policyQuery.data) {
 		return (
 			<Modal open={open} title={`Policy: ${bucket}`} onCancel={props.onClose} footer={null} width={920} destroyOnHidden>
-				<Typography.Text type="secondary">Loading...</Typography.Text>
-			</Modal>
-		)
-	}
+					<Typography.Text type="secondary">Loading…</Typography.Text>
+				</Modal>
+			)
+		}
 
 	return (
 		<BucketPolicyEditor

@@ -321,19 +321,19 @@ export default function App() {
 							)}
 						</Space>
 					</Header>
-					<Content
-						style={{
-							padding: screens.md ? 16 : 8,
-							minHeight: 0,
-							display: 'flex',
-							flexDirection: 'column',
-						}}
-					>
-						<div style={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-scroll-container="app-content">
-							<div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'white' }}>
-								<NetworkStatusBanner />
-								<JobQueueBanner />
-							</div>
+						<Content
+							style={{
+								padding: screens.md ? 16 : 8,
+								minHeight: 0,
+								display: 'flex',
+								flexDirection: 'column',
+							}}
+						>
+							<main id="main" tabIndex={-1} style={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-scroll-container="app-content">
+								<div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'white' }}>
+									<NetworkStatusBanner />
+									<JobQueueBanner />
+								</div>
 							<Suspense
 								fallback={
 									<div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
@@ -354,14 +354,14 @@ export default function App() {
 									<Route path="/objects" element={<ObjectsPage apiToken={apiToken} profileId={profileId} />} />
 									<Route path="/uploads" element={<UploadsPage apiToken={apiToken} profileId={profileId} />} />
 									<Route path="/jobs" element={<JobsPage apiToken={apiToken} profileId={profileId} />} />
-									<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
-								</Routes>
-							</Suspense>
-						</div>
-					</Content>
-				</Layout>
+										<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
+									</Routes>
+								</Suspense>
+							</main>
+						</Content>
+					</Layout>
 
-				<Drawer
+					<Drawer
 					open={!isDesktop && navOpen}
 					onClose={() => setNavOpen(false)}
 					placement="left"

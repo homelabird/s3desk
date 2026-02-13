@@ -2364,26 +2364,26 @@ const objectsQuery = useInfiniteQuery({
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
 	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
 	const canInteract = !!props.profileId && !!bucket && !isOffline
-	const paneFallback = (
-		<div className={styles.paneSkeleton}>
-			<Typography.Text type="secondary">Loading...</Typography.Text>
-		</div>
-	)
-	const listFallback = (
-		<div className={styles.listSkeleton}>
-			<Typography.Text type="secondary">Loading list...</Typography.Text>
-		</div>
-	)
-	const controlsFallback = (
-		<div className={styles.controlsSkeleton}>
-			<Typography.Text type="secondary">Loading controls...</Typography.Text>
-		</div>
-	)
-	const toolbarFallback = (
-		<div className={styles.toolbarSkeleton}>
-			<Typography.Text type="secondary">Loading toolbar...</Typography.Text>
-		</div>
-	)
+		const paneFallback = (
+			<div className={styles.paneSkeleton}>
+				<Typography.Text type="secondary">Loading…</Typography.Text>
+			</div>
+		)
+		const listFallback = (
+			<div className={styles.listSkeleton}>
+				<Typography.Text type="secondary">Loading list…</Typography.Text>
+			</div>
+		)
+		const controlsFallback = (
+			<div className={styles.controlsSkeleton}>
+				<Typography.Text type="secondary">Loading controls…</Typography.Text>
+			</div>
+		)
+		const toolbarFallback = (
+			<div className={styles.toolbarSkeleton}>
+				<Typography.Text type="secondary">Loading toolbar…</Typography.Text>
+			</div>
+		)
 	const listContent = (
 		<Suspense fallback={listFallback}>
 			<ObjectsListContent

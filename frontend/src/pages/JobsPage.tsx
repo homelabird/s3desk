@@ -475,11 +475,11 @@ export function JobsPage(props: Props) {
 				key: 'etag',
 				render: (_: string | null, record: { key: string }) => {
 					if (status !== 'succeeded') return <Typography.Text type="secondary">Pending</Typography.Text>
-					if (isLoading) return <Typography.Text type="secondary">Loading...</Typography.Text>
-					const etag = etags[record.key]
-					return etag ? <Typography.Text code>{etag}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>
+						if (isLoading) return <Typography.Text type="secondary">Loading…</Typography.Text>
+						const etag = etags[record.key]
+						return etag ? <Typography.Text code>{etag}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>
+					},
 				},
-			},
 		]
 	}, [jobDetailsQuery.data?.status, uploadEtagsQuery.data, uploadEtagsQuery.isFetching])
 

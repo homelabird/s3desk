@@ -58,13 +58,13 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 		t.status === 'staging'
 			? transferMetricsText
 			: t.status === 'commit'
-				? 'Committing...'
+				? 'Committing…'
 				: t.status === 'waiting_job'
 					? hasTransferMetrics
 						? transferMetricsText
-						: 'Starting upload job...'
+						: 'Starting upload job…'
 					: t.status === 'cleanup'
-						? 'Removing local files...'
+						? 'Removing local files…'
 				: null
 	const subtitle = `s3://${t.bucket}/${normalizePrefix(t.prefix)}`
 

@@ -82,7 +82,7 @@ export function ProfileModal(props: {
 	const tlsUnavailable = props.tlsCapability?.enabled === false
 	const tlsDisabledReason = props.tlsCapability?.reason ?? 'mTLS is disabled on the server.'
 	const showTLSFields = !tlsUnavailable && (props.editMode ? tlsAction === 'enable' : !!tlsEnabled)
-	const tlsStatusLabel = tlsUnavailable ? 'unavailable' : props.tlsStatusLoading ? 'loading...' : props.tlsStatus?.mode === 'mtls' ? 'enabled' : 'disabled'
+		const tlsStatusLabel = tlsUnavailable ? 'unavailable' : props.tlsStatusLoading ? 'loading…' : props.tlsStatus?.mode === 'mtls' ? 'enabled' : 'disabled'
 	const showTLSStatusError = !tlsUnavailable && props.tlsStatusError
 	const providerGuide = (() => {
 		switch (provider) {
