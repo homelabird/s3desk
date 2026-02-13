@@ -238,13 +238,17 @@ export function ObjectsPage(props: Props) {
 		}, 0)
 	}, [bucket, prefix, props.profileId])
 
-	const [prefixByBucket, setPrefixByBucket] = useLocalStorageState<Record<string, string>>('objectsPrefixByBucket', {})
-	const prefixByBucketRef = useRef<Record<string, string>>(prefixByBucket)
-	const [search, setSearch] = useLocalStorageState<string>('objectsSearch', '')
-	const [searchDraft, setSearchDraft] = useState(search)
-	const deferredSearch = useDeferredValue(search)
-	const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
-	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+		const [prefixByBucket, setPrefixByBucket] = useLocalStorageState<Record<string, string>>('objectsPrefixByBucket', {})
+		const prefixByBucketRef = useRef<Record<string, string>>(prefixByBucket)
+		const [search, setSearch] = useLocalStorageState<string>('objectsSearch', '')
+		const [searchDraft, setSearchDraft] = useState(search)
+		const clearSearch = useCallback(() => {
+			setSearchDraft('')
+			setSearch('')
+		}, [setSearch, setSearchDraft])
+		const deferredSearch = useDeferredValue(search)
+		const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
+		const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 	const [globalSearch, setGlobalSearch] = useLocalStorageState<string>('objectsGlobalSearch', '')
 	const [globalSearchDraft, setGlobalSearchDraft] = useState(globalSearch)
 	const deferredGlobalSearch = useDeferredValue(globalSearch)
@@ -1186,14 +1190,20 @@ const objectsQuery = useInfiniteQuery({
 			openNewFolder,
 			handleNewFolderSubmit,
 			handleNewFolderCancel,
-		} = useObjectsNewFolder({
-			api,
-			profileId: props.profileId,
-			bucket,
-			prefix,
-			refreshTreeNode,
-			onOpenPrefix,
-		})
+			} = useObjectsNewFolder({
+				api,
+				profileId: props.profileId,
+				bucket,
+				prefix,
+				typeFilter,
+				favoritesOnly,
+				searchText: searchDraft.trim() ? searchDraft : search,
+				onClearSearch: clearSearch,
+				onDisableFavoritesOnly: () => setFavoritesOnly(false),
+				onShowFolders: () => setTypeFilter('all'),
+				refreshTreeNode,
+				onOpenPrefix,
+			})
 	const {
 		downloadPrefixOpen,
 		downloadPrefixForm,
@@ -2229,10 +2239,7 @@ const objectsQuery = useInfiniteQuery({
 		if (typeof document !== 'undefined') return document.body
 		return triggerNode
 	}, [])
-	const handleClearSearch = () => {
-		setSearchDraft('')
-		setSearch('')
-	}
+		const handleClearSearch = clearSearch
 	const canClearSearch = !!search.trim() || !!searchDraft.trim()
 	const renderPrefixRow = useCallback(
 		(p: string, offset: number) => {

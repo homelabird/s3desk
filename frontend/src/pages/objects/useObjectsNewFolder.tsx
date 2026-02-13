@@ -4,20 +4,40 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import type { APIClient } from '../../api/client'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import { normalizePrefix } from './objectsListUtils'
+import type { ObjectTypeFilter } from './objectsTypes'
+import { displayNameForPrefix, matchesSearchTokens, normalizeForSearch, normalizePrefix, splitSearchTokens } from './objectsListUtils'
 
 type UseObjectsNewFolderArgs = {
 	api: APIClient
 	profileId: string | null
 	bucket: string
 	prefix: string
+	typeFilter: ObjectTypeFilter
+	favoritesOnly: boolean
+	searchText: string
+	onClearSearch: () => void
+	onDisableFavoritesOnly: () => void
+	onShowFolders: () => void
 	refreshTreeNode: (key: string) => Promise<void> | void
 	onOpenPrefix: (prefix: string) => void
 }
 
 type NewFolderFormValues = { name: string; allowPath?: boolean }
 
-export function useObjectsNewFolder({ api, profileId, bucket, prefix, refreshTreeNode, onOpenPrefix }: UseObjectsNewFolderArgs) {
+export function useObjectsNewFolder({
+	api,
+	profileId,
+	bucket,
+	prefix,
+	typeFilter,
+	favoritesOnly,
+	searchText,
+	onClearSearch,
+	onDisableFavoritesOnly,
+	onShowFolders,
+	refreshTreeNode,
+	onOpenPrefix,
+}: UseObjectsNewFolderArgs) {
 	const queryClient = useQueryClient()
 	const [newFolderOpen, setNewFolderOpen] = useState(false)
 	const [newFolderForm] = Form.useForm<NewFolderFormValues>()
@@ -58,28 +78,87 @@ export function useObjectsNewFolder({ api, profileId, bucket, prefix, refreshTre
 				await api.createFolder({ profileId, bucket, key: current })
 			}
 			return { key: last }
-		},
-		onSuccess: async (resp: { key: string }) => {
-			const createdKey = resp.key
-			message.success({
-				content: (
-					<span>
-						Folder created: <Typography.Text code>{createdKey}</Typography.Text>{' '}
-						<Button
-							type="link"
-							size="small"
-							style={{ paddingInline: 4 }}
-							onClick={() => {
-								onOpenPrefix(createdKey)
-							}}
-						>
-							Open
-						</Button>
-					</span>
-				),
-			})
-			setNewFolderOpen(false)
-			newFolderForm.resetFields()
+			},
+			onSuccess: async (resp: { key: string }) => {
+				const createdKey = resp.key
+				const parentIsCurrent = normalizePrefix(newFolderParentPrefix) === normalizePrefix(prefix)
+				const searchRaw = (searchText ?? '').trim()
+				const tokens = splitSearchTokens(searchRaw)
+				const normalizedTokens = tokens.map(normalizeForSearch)
+				const matchesSearch = (value: string) => matchesSearchTokens(value, tokens, normalizedTokens)
+
+				let viewHideReason: 'favoritesOnly' | 'filesOnly' | 'search' | null = null
+				if (parentIsCurrent) {
+					if (favoritesOnly) {
+						viewHideReason = 'favoritesOnly'
+					} else if (typeFilter === 'files') {
+						viewHideReason = 'filesOnly'
+					} else if (tokens.length > 0) {
+						const displayName = displayNameForPrefix(createdKey, prefix)
+						if (!(matchesSearch(displayName) || matchesSearch(createdKey))) {
+							viewHideReason = 'search'
+						}
+					}
+				}
+				const autoOpened = !!viewHideReason
+				if (autoOpened) {
+					onOpenPrefix(createdKey)
+				}
+
+				const viewHideLabel =
+					viewHideReason === 'favoritesOnly'
+						? 'favorites-only view'
+						: viewHideReason === 'filesOnly'
+							? 'files-only view'
+							: viewHideReason === 'search'
+								? 'search filter'
+								: null
+				message.success({
+					duration: 6,
+					content: (
+						<span>
+							Folder created{autoOpened ? ' and opened' : ''}{viewHideLabel ? ` (${viewHideLabel})` : ''}:{' '}
+							<Typography.Text code>{createdKey}</Typography.Text>{' '}
+							<Button
+								type="link"
+								size="small"
+								style={{ paddingInline: 4 }}
+								onClick={() => {
+									onOpenPrefix(createdKey)
+								}}
+							>
+								{autoOpened ? 'Reopen' : 'Open'}
+							</Button>
+							{autoOpened ? (
+								<>
+									<Button
+										type="link"
+										size="small"
+										style={{ paddingInline: 4 }}
+										onClick={() => onOpenPrefix(newFolderParentPrefix)}
+									>
+										Parent
+									</Button>
+									{viewHideReason === 'favoritesOnly' ? (
+										<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onDisableFavoritesOnly}>
+											Disable favorites-only
+										</Button>
+									) : viewHideReason === 'filesOnly' ? (
+										<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onShowFolders}>
+											Show folders
+										</Button>
+									) : viewHideReason === 'search' ? (
+										<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onClearSearch}>
+											Clear search
+										</Button>
+									) : null}
+								</>
+							) : null}
+						</span>
+					),
+				})
+				setNewFolderOpen(false)
+				newFolderForm.resetFields()
 			await queryClient.invalidateQueries({ queryKey: ['objects'] })
 			const parentKey = normalizePrefix(newFolderParentPrefix) || '/'
 			void refreshTreeNode(parentKey)
