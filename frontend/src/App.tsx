@@ -80,7 +80,6 @@ export default function App() {
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', apiToken],
 		queryFn: () => api.listProfiles(),
-		enabled: metaQuery.isSuccess,
 	})
 	const uploadCapabilityByProfileId = useMemo(() => {
 		const out: Record<string, { presignedUpload: boolean; directUpload: boolean }> = {}

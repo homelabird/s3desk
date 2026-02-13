@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Checkbox, Dropdown, Empty, Input, Modal, Space, Spin, Table, Typography, message } from 'antd'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { MoreOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
 import { parse as parseYaml } from 'yaml'
 
 import { APIClient } from '../api/client'
@@ -28,7 +27,6 @@ const ProfileModal = lazy(async () => {
 
 export function ProfilesPage(props: Props) {
 	const queryClient = useQueryClient()
-	const navigate = useNavigate()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const [createOpen, setCreateOpen] = useState(false)
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
@@ -311,32 +309,16 @@ export function ProfilesPage(props: Props) {
 									Active profile selected
 								</Checkbox>
 							</Space>
-								<Space wrap>
-									<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
-										Create profile
-									</Button>
-									<Button
-										size="small"
-										href="/buckets"
-										onClick={(event) => {
-											event.preventDefault()
-											navigate('/buckets')
-										}}
-										disabled={!props.profileId}
-									>
-										Buckets
-									</Button>
-									<Button
-										size="small"
-										href="/objects"
-										onClick={(event) => {
-											event.preventDefault()
-											navigate('/objects')
-										}}
-										disabled={!props.profileId}
-									>
-										Objects
-									</Button>
+									<Space wrap>
+										<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
+											Create profile
+										</Button>
+										<Button size="small" href="/buckets" disabled={!props.profileId}>
+											Buckets
+										</Button>
+										<Button size="small" href="/objects" disabled={!props.profileId}>
+											Objects
+										</Button>
 									<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
 										Dismiss
 									</Button>

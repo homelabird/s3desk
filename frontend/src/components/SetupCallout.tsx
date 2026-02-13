@@ -1,5 +1,5 @@
 import { Alert, Button, Grid, Space, Typography } from 'antd'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 
 type Props = {
 	apiToken: string
@@ -9,7 +9,6 @@ type Props = {
 }
 
 export function SetupCallout(props: Props) {
-	const navigate = useNavigate()
 	const location = useLocation()
 	const screens = Grid.useBreakpoint()
 
@@ -38,32 +37,18 @@ export function SetupCallout(props: Props) {
 			showIcon
 			title={props.message ?? 'Select a profile to continue'}
 			description={description}
-				action={
-					<Space orientation={actionDirection} size="small">
-						<Button
-							size="small"
-							href="/profiles"
-							onClick={(event) => {
-								event.preventDefault()
-								navigate('/profiles')
-							}}
-						>
-							Profiles
+			action={
+				<Space orientation={actionDirection} size="small">
+					<Button size="small" href="/profiles">
+						Profiles
+					</Button>
+					{showSettings ? (
+						<Button size="small" href={settingsHref}>
+							Settings
 						</Button>
-						{showSettings ? (
-							<Button
-								size="small"
-								href={settingsHref}
-								onClick={(event) => {
-									event.preventDefault()
-									navigate({ pathname: location.pathname, search: `?${settingsSearch}` })
-								}}
-							>
-								Settings
-							</Button>
-						) : null}
-					</Space>
-				}
+					) : null}
+				</Space>
+			}
 		/>
 	)
 }

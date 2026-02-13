@@ -21,6 +21,7 @@ export function formatError(err: unknown): string {
 export function getRecoveryHint(err: unknown): string | undefined {
 	// API auth / access control
 	if (err instanceof APIError) {
+		const norm = err.normalizedError
 		if (err.code === 'transfer_engine_missing') {
 			return 'Transfer engine (rclone) not found. Install rclone or set RCLONE_PATH on the server.'
 		}
@@ -34,6 +35,9 @@ export function getRecoveryHint(err: unknown): string | undefined {
 			return 'Unauthorized. Check the API Token in Settings (must match API_TOKEN on the server).'
 		}
 		if (err.status === 403) {
+			if (norm?.code === 'access_denied') {
+				return 'Access denied. Check IAM permissions, bucket policies, and whether the credentials match the target.'
+			}
 			// This is often the remote-access guard or an origin/host restriction.
 			return 'Forbidden. If this is your own server, try localhost or verify ALLOW_REMOTE / ALLOWED_HOSTS / ALLOWED_ORIGINS.'
 		}
@@ -48,7 +52,6 @@ export function getRecoveryHint(err: unknown): string | undefined {
 		}
 
 		// Provider-agnostic normalized errors (derived from rclone stderr)
-		const norm = err.normalizedError
 		if (norm?.code === 'invalid_credentials') {
 			return 'Invalid credentials. Double-check access keys / account key / service account JSON.'
 		}

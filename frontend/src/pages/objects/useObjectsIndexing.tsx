@@ -22,7 +22,6 @@ type UseObjectsIndexingArgs = {
 	autoIndexCooldownMs: number
 	setIndexPrefix: (value: string) => void
 	createJobWithRetry: CreateJobWithRetry
-	onJobsLinkClick: (event: React.MouseEvent<HTMLElement>) => void
 }
 
 export function useObjectsIndexing({
@@ -38,7 +37,6 @@ export function useObjectsIndexing({
 	autoIndexCooldownMs,
 	setIndexPrefix,
 	createJobWithRetry,
-	onJobsLinkClick,
 }: UseObjectsIndexingArgs) {
 	const queryClient = useQueryClient()
 	const autoIndexPendingRef = useRef(false)
@@ -68,7 +66,7 @@ export function useObjectsIndexing({
 					content: (
 						<Space>
 							<Typography.Text>Index task started: {job.id}</Typography.Text>
-							<Button size="small" type="link" href="/jobs" onClick={onJobsLinkClick}>
+							<Button size="small" type="link" href="/jobs">
 								Open Jobs
 							</Button>
 						</Space>

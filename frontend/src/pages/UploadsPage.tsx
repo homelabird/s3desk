@@ -3,7 +3,6 @@ import { Alert, Button, Dropdown, Empty, Grid, Input, Select, Space, Switch, Too
 import type { UploadFile } from 'antd'
 import { EllipsisOutlined, UploadOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
 import type { Bucket, Profile } from '../api/types'
@@ -23,7 +22,6 @@ type Props = {
 export function UploadsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const transfers = useTransfers()
-	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
 	const isOffline = useIsOffline()
 
@@ -158,19 +156,13 @@ export function UploadsPage(props: Props) {
 				<Alert type="info" showIcon title="Uploads are not available for this provider" description={uploadsUnsupportedReason} />
 			) : null}
 
-			{showBucketsEmpty ? (
-				<Empty description="No buckets available">
-					<Button
-						href="/buckets"
-						onClick={(event) => {
-							event.preventDefault()
-							navigate('/buckets')
-						}}
-					>
-						Go to Buckets
-					</Button>
-				</Empty>
-			) : null}
+				{showBucketsEmpty ? (
+					<Empty description="No buckets available">
+						<Button href="/buckets">
+							Go to Buckets
+						</Button>
+					</Empty>
+				) : null}
 
 			{bucketsQuery.isError ? (
 				<Alert type="error" showIcon title="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
@@ -189,18 +181,24 @@ export function UploadsPage(props: Props) {
 					optionFilterProp="label"
 					disabled={isOffline || !uploadsSupported}
 				/>
-				<Input
-					placeholder="prefix (optional)…"
-					style={{ width: screens.md ? 420 : '100%', maxWidth: '100%' }}
-					value={prefix}
-					onChange={(e) => setPrefix(e.target.value)}
-					disabled={isOffline || !uploadsSupported}
-				/>
-				<Space>
-					<Typography.Text type="secondary">Folder mode</Typography.Text>
-					<Switch checked={folderMode} onChange={setFolderMode} disabled={isOffline || !uploadsSupported} />
+					<Input
+						placeholder="prefix (optional)…"
+						style={{ width: screens.md ? 420 : '100%', maxWidth: '100%' }}
+						aria-label="Upload prefix (optional)"
+						value={prefix}
+						onChange={(e) => setPrefix(e.target.value)}
+						disabled={isOffline || !uploadsSupported}
+					/>
+					<Space>
+						<Typography.Text type="secondary">Folder mode</Typography.Text>
+						<Switch
+							checked={folderMode}
+							onChange={setFolderMode}
+							disabled={isOffline || !uploadsSupported}
+							aria-label="Folder mode"
+						/>
+					</Space>
 				</Space>
-			</Space>
 
 			<Upload
 				multiple

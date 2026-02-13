@@ -1,6 +1,6 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
 import { Button, Space, Typography, message } from 'antd'
-import { useCallback, useState, type MouseEvent } from 'react'
+import { useCallback, useState } from 'react'
 
 import type { Job, JobCreateRequest } from '../../api/types'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
@@ -16,7 +16,6 @@ type UseObjectsClipboardArgs = {
 	selectedKeys: Set<string>
 	createJobWithRetry: (req: JobCreateRequest) => Promise<Job>
 	queryClient: QueryClient
-	onJobsLinkClick: (event: MouseEvent<HTMLElement>) => void
 }
 
 export function useObjectsClipboard({
@@ -26,7 +25,6 @@ export function useObjectsClipboard({
 	selectedKeys,
 	createJobWithRetry,
 	queryClient,
-	onJobsLinkClick,
 }: UseObjectsClipboardArgs) {
 	const [clipboardObjects, setClipboardObjects] = useState<ClipboardObjects | null>(null)
 
@@ -99,7 +97,7 @@ export function useObjectsClipboard({
 				content: (
 					<Space>
 						<Typography.Text>{args.mode === 'copy' ? 'Paste copy task' : 'Paste move task'} started: {job.id}</Typography.Text>
-						<Button size="small" type="link" href="/jobs" onClick={onJobsLinkClick}>
+						<Button size="small" type="link" href="/jobs">
 							Open Jobs
 						</Button>
 					</Space>

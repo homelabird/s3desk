@@ -92,19 +92,17 @@ export function BucketsPage(props: Props) {
 						<Space orientation="vertical" style={{ width: '100%' }}>
 							<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
 							<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
-							<Button
-								type="link"
-								href="/objects"
-								onClick={(event) => {
-									event.preventDefault()
-									Modal.destroyAll()
-									window.localStorage.setItem('bucket', JSON.stringify(bucketName))
-									window.localStorage.setItem('prefix', JSON.stringify(''))
-									navigate('/objects')
-								}}
-							>
-								Open Objects
-							</Button>
+								<Button
+									type="link"
+									href="/objects"
+									onClick={() => {
+										Modal.destroyAll()
+										window.localStorage.setItem('bucket', JSON.stringify(bucketName))
+										window.localStorage.setItem('prefix', JSON.stringify(''))
+									}}
+								>
+									Open Objects
+								</Button>
 						</Space>
 					),
 					okText: 'Delete all objects (job)',

@@ -191,7 +191,9 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 	await expect(page.getByText('job-running')).toBeVisible()
 	await expect(page.getByText('job-failed')).toBeVisible()
 
-	await page.getByRole('button', { name: 'New Delete Job' }).click()
+	const header = page.getByRole('heading', { name: 'Jobs' }).locator('..')
+	await header.getByRole('button', { name: /More/i }).click()
+	await page.getByRole('menuitem', { name: 'New Delete Job' }).click()
 	const deleteDrawer = page.getByRole('dialog', { name: 'Create delete job (S3)' })
 	await expect(deleteDrawer).toBeVisible()
 	await deleteDrawer.getByRole('combobox', { name: 'Bucket' }).fill(defaultStorage.bucket)

@@ -11,12 +11,10 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { InputRef } from 'antd'
@@ -194,7 +192,6 @@ export function ObjectsPage(props: Props) {
 	const queryClient = useQueryClient()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const transfers = useTransfers()
-	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
 	const isOffline = useIsOffline()
 	const debugObjectsList = isObjectsListDebugEnabled()
@@ -209,13 +206,6 @@ export function ObjectsPage(props: Props) {
 	)
 
 	const isDesktop = !!screens.lg
-	const handleJobsLinkClick = useCallback(
-		(event: ReactMouseEvent<HTMLElement>) => {
-			event.preventDefault()
-			navigate('/jobs')
-		},
-		[navigate],
-	)
 	const isWideDesktop = !!screens.xl
 	const canDragDrop = !!screens.lg && !isOffline
 
@@ -656,14 +646,13 @@ const objectsQuery = useInfiniteQuery({
 		getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
 	})
 
-	const { zipPrefixJobMutation, zipObjectsJobMutation } = useObjectsZipJobs({
-		profileId: props.profileId,
-		bucket,
-		prefix,
-		transfers,
-		createJobWithRetry,
-		onJobsLinkClick: handleJobsLinkClick,
-	})
+		const { zipPrefixJobMutation, zipObjectsJobMutation } = useObjectsZipJobs({
+			profileId: props.profileId,
+			bucket,
+			prefix,
+			transfers,
+			createJobWithRetry,
+		})
 	const { indexObjectsJobMutation } = useObjectsIndexing({
 		api,
 		profileId: props.profileId,
@@ -672,13 +661,12 @@ const objectsQuery = useInfiniteQuery({
 		globalSearchOpen,
 		globalSearchQueryText,
 		globalSearchPrefixNormalized,
-		autoIndexEnabled,
-		autoIndexTtlMs,
-		autoIndexCooldownMs: AUTO_INDEX_COOLDOWN_MS,
-		setIndexPrefix,
-		createJobWithRetry,
-		onJobsLinkClick: handleJobsLinkClick,
-	})
+			autoIndexEnabled,
+			autoIndexTtlMs,
+			autoIndexCooldownMs: AUTO_INDEX_COOLDOWN_MS,
+			setIndexPrefix,
+			createJobWithRetry,
+		})
 
 	const searchTokens = useMemo(() => splitSearchTokens(deferredSearch), [deferredSearch])
 	const searchTokensNormalized = useMemo(() => searchTokens.map((token) => normalizeForSearch(token)), [searchTokens])
@@ -1147,12 +1135,11 @@ const objectsQuery = useInfiniteQuery({
 		openRenamePrefix,
 		handleRenameSubmit,
 		handleRenameCancel,
-	} = useObjectsRename({
-		profileId: props.profileId,
-		bucket,
-		createJobWithRetry,
-		onJobsLinkClick: handleJobsLinkClick,
-	})
+		} = useObjectsRename({
+			profileId: props.profileId,
+			bucket,
+			createJobWithRetry,
+		})
 	const { presignOpen, presign, presignKey, presignMutation, closePresign } = useObjectsPresign({
 		api,
 		profileId: props.profileId,
@@ -1817,9 +1804,9 @@ const objectsQuery = useInfiniteQuery({
 				content: (
 					<Space>
 						<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-						<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
-							Open Jobs
-						</Button>
+							<Button size="small" type="link" href="/jobs">
+								Open Jobs
+							</Button>
 						<Button size="small" type="link" onClick={() => setDownloadsOpen(true)}>
 							Open Transfers
 						</Button>
@@ -1942,15 +1929,14 @@ const objectsQuery = useInfiniteQuery({
 		transfers,
 		onZipObjects: (keys) => zipObjectsJobMutation.mutate({ keys }),
 	})
-	const { clipboardObjects, onCopy, copySelectionToClipboard, pasteClipboardObjects } = useObjectsClipboard({
-		profileId: props.profileId,
-		bucket,
-		prefix,
-		selectedKeys,
-		createJobWithRetry,
-		queryClient,
-		onJobsLinkClick: handleJobsLinkClick,
-	})
+		const { clipboardObjects, onCopy, copySelectionToClipboard, pasteClipboardObjects } = useObjectsClipboard({
+			profileId: props.profileId,
+			bucket,
+			prefix,
+			selectedKeys,
+			createJobWithRetry,
+			queryClient,
+		})
 	const {
 		dndHoverPrefix,
 		normalizeDropTargetPrefix,
@@ -1967,12 +1953,11 @@ const objectsQuery = useInfiniteQuery({
 		canDragDrop,
 		isDesktop,
 		selectedKeys,
-		setSelectedKeys,
-		setLastSelectedObjectKey,
-		createJobWithRetry,
-		queryClient,
-		onJobsLinkClick: handleJobsLinkClick,
-	})
+			setSelectedKeys,
+			setLastSelectedObjectKey,
+			createJobWithRetry,
+			queryClient,
+		})
 
 	const breadcrumbItems: { title: ReactNode }[] = (() => {
 		const parts = prefix.split('/').filter(Boolean)
@@ -3114,11 +3099,11 @@ const objectsQuery = useInfiniteQuery({
 															</div>
 
 															<Space size="small" wrap>
-																{t.jobId ? (
-																	<Button size="small" type="link" href="/jobs" onClick={handleJobsLinkClick}>
-																		Jobs
-																	</Button>
-																) : null}
+																	{t.jobId ? (
+																		<Button size="small" type="link" href="/jobs">
+																			Jobs
+																		</Button>
+																	) : null}
 																{t.status === 'queued' || t.status === 'staging' ? (
 																	<Button size="small" onClick={() => cancelUploadTask(t.id)}>
 																		Cancel

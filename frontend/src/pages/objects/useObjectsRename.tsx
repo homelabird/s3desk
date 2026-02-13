@@ -12,12 +12,11 @@ type UseObjectsRenameArgs = {
 	profileId: string | null
 	bucket: string
 	createJobWithRetry: CreateJobWithRetry
-	onJobsLinkClick: (event: React.MouseEvent<HTMLElement>) => void
 }
 
 type RenameFormValues = { name: string; confirm: string }
 
-export function useObjectsRename({ profileId, bucket, createJobWithRetry, onJobsLinkClick }: UseObjectsRenameArgs) {
+export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseObjectsRenameArgs) {
 	const queryClient = useQueryClient()
 	const [renameOpen, setRenameOpen] = useState(false)
 	const [renameKind, setRenameKind] = useState<'object' | 'prefix'>('object')
@@ -106,7 +105,7 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry, onJobs
 				content: (
 					<Space>
 						<Typography.Text>Rename task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" href="/jobs" onClick={onJobsLinkClick}>
+						<Button size="small" type="link" href="/jobs">
 							Open Jobs
 						</Button>
 					</Space>

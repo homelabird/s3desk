@@ -1602,21 +1602,13 @@ export function TransfersProvider(props: {
 						content: (
 							<Space>
 								<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-								<Button
-									size="small"
-									type="link"
-									href="/jobs"
-									onClick={(event) => {
-										event.preventDefault()
-										navigate('/jobs')
-									}}
-								>
+								<Button size="small" type="link" href="/jobs">
 									Open Jobs
 								</Button>
 							</Space>
 						),
-					duration: 6,
-				})
+						duration: 6,
+					})
 				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 			} catch (err) {
 				if (err instanceof RequestAbortedError) {
@@ -1636,18 +1628,17 @@ export function TransfersProvider(props: {
 				}
 			}
 		},
-		[
-			api,
-			handleUploadJobUpdate,
-				navigate,
+			[
+				api,
+				handleUploadJobUpdate,
 				pickUploadTuning,
 				props.uploadCapabilityByProfileId,
 				props.uploadDirectStream,
 				queryClient,
-			updateUploadTask,
-			uploadChunkFileConcurrency,
-			uploadResumeConversionEnabled,
-		],
+				updateUploadTask,
+				uploadChunkFileConcurrency,
+				uploadResumeConversionEnabled,
+			],
 	)
 
 	useEffect(() => {

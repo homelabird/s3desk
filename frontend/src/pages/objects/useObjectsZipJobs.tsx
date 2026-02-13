@@ -14,7 +14,6 @@ type UseObjectsZipJobsArgs = {
 	prefix: string
 	transfers: TransfersContextValue
 	createJobWithRetry: CreateJobWithRetry
-	onJobsLinkClick: (event: React.MouseEvent<HTMLElement>) => void
 }
 
 export function useObjectsZipJobs({
@@ -23,7 +22,6 @@ export function useObjectsZipJobs({
 	prefix,
 	transfers,
 	createJobWithRetry,
-	onJobsLinkClick,
 }: UseObjectsZipJobsArgs) {
 	const queryClient = useQueryClient()
 
@@ -54,9 +52,9 @@ export function useObjectsZipJobs({
 						<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 							Open Transfers
 						</Button>
-						<Button size="small" type="link" href="/jobs" onClick={onJobsLinkClick}>
-							Open Jobs
-						</Button>
+							<Button size="small" type="link" href="/jobs">
+								Open Jobs
+							</Button>
 					</Space>
 				),
 				duration: 6,
@@ -98,9 +96,9 @@ export function useObjectsZipJobs({
 						<Button size="small" type="link" onClick={() => transfers.openTransfers('downloads')}>
 							Open Transfers
 						</Button>
-						<Button size="small" type="link" href="/jobs" onClick={onJobsLinkClick}>
-							Open Jobs
-						</Button>
+							<Button size="small" type="link" href="/jobs">
+								Open Jobs
+							</Button>
 					</Space>
 				),
 				duration: 6,

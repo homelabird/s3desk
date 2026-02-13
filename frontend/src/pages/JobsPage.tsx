@@ -1444,13 +1444,14 @@ export function JobsPage(props: Props) {
 					}}
 					options={typeFilterOptions}
 				/>
-				<AutoComplete
-					value={errorCodeFilterNormalized}
-					onChange={(v) => setErrorCodeFilter(v)}
-					placeholder="Error code (exact, optional)…"
-					style={{ width: screens.md ? 260 : '100%', maxWidth: '100%' }}
-					allowClear
-					options={errorCodeSuggestions}
+					<AutoComplete
+						value={errorCodeFilterNormalized}
+						onChange={(v) => setErrorCodeFilter(v)}
+						placeholder="Error code (exact, optional)…"
+						aria-label="Job error code filter"
+						style={{ width: screens.md ? 260 : '100%', maxWidth: '100%' }}
+						allowClear
+						options={errorCodeSuggestions}
 					filterOption={(input, option) =>
 						String(option?.value ?? '')
 							.toLowerCase()
@@ -1873,10 +1874,14 @@ export function JobsPage(props: Props) {
 						>
 							Refresh
 						</Button>
-						<Space>
-							<Typography.Text type="secondary">Follow</Typography.Text>
-							<Switch checked={followLogs} onChange={(v) => setFollowLogs(v)} />
-						</Space>
+							<Space>
+								<Typography.Text type="secondary">Follow</Typography.Text>
+								<Switch
+									checked={followLogs}
+									onChange={(v) => setFollowLogs(v)}
+									aria-label="Follow job logs"
+								/>
+							</Space>
 					</Space>
 				}
 			>

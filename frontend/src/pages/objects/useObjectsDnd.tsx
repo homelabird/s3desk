@@ -1,6 +1,6 @@
 import { Button, Space, Typography, message } from 'antd'
 import type { QueryClient } from '@tanstack/react-query'
-import { useCallback, useState, type MouseEvent } from 'react'
+import { useCallback, useState } from 'react'
 
 import type { Job, JobCreateRequest } from '../../api/types'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
@@ -64,7 +64,6 @@ type UseObjectsDndArgs = {
 	setLastSelectedObjectKey: React.Dispatch<React.SetStateAction<string | null>>
 	createJobWithRetry: (req: JobCreateRequest) => Promise<Job>
 	queryClient: QueryClient
-	onJobsLinkClick: (event: MouseEvent<HTMLElement>) => void
 }
 
 export function useObjectsDnd({
@@ -78,7 +77,6 @@ export function useObjectsDnd({
 	setLastSelectedObjectKey,
 	createJobWithRetry,
 	queryClient,
-	onJobsLinkClick,
 }: UseObjectsDndArgs) {
 	const [dndHoverPrefix, setDndHoverPrefix] = useState<string | null>(null)
 
@@ -97,7 +95,7 @@ export function useObjectsDnd({
 				content: (
 					<Space>
 						<Typography.Text>Task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" href="/jobs" onClick={onJobsLinkClick}>
+						<Button size="small" type="link" href="/jobs">
 							Open Jobs
 						</Button>
 					</Space>
@@ -107,7 +105,7 @@ export function useObjectsDnd({
 			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 			return job
 		},
-		[createJobWithRetry, onJobsLinkClick, profileId, queryClient],
+		[createJobWithRetry, profileId, queryClient],
 	)
 
 	const performDrop = useCallback(async (payload: DndPayload, targetPrefixRaw: string, mode: 'copy' | 'move') => {
