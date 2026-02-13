@@ -13,6 +13,7 @@ import {
 	type UploadFileItem,
 	type UploadFilesResult,
 } from '../api/client'
+import { buildApiHttpUrl, buildApiWsUrl } from '../api/baseUrl'
 import type { JobProgress, JobStatus, WSEvent } from '../api/types'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { TransfersContext, useTransfers } from './useTransfers'
@@ -2280,24 +2281,19 @@ function formatMoveCleanupSummary(result: RemoveEntriesResult, label: string): s
 	return parts.join(' · ')
 }
 
-function buildWSURL(apiToken: string): string {
-	const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-	const base = `${proto}//${window.location.host}/api/v1/ws`
-	const qs = new URLSearchParams()
-	if (apiToken) qs.set('apiToken', apiToken)
-	qs.set('includeLogs', 'false')
-	const q = qs.toString()
-	return q ? `${base}?${q}` : base
-}
+	function buildWSURL(apiToken: string): string {
+		const url = buildApiWsUrl('/ws')
+		if (apiToken) url.searchParams.set('apiToken', apiToken)
+		url.searchParams.set('includeLogs', 'false')
+		return url.toString()
+	}
 
-function buildSSEURL(apiToken: string): string {
-	const base = `${window.location.protocol}//${window.location.host}/api/v1/events`
-	const qs = new URLSearchParams()
-	if (apiToken) qs.set('apiToken', apiToken)
-	qs.set('includeLogs', 'false')
-	const q = qs.toString()
-	return q ? `${base}?${q}` : base
-}
+	function buildSSEURL(apiToken: string): string {
+		const url = buildApiHttpUrl('/events')
+		if (apiToken) url.searchParams.set('apiToken', apiToken)
+		url.searchParams.set('includeLogs', 'false')
+		return url.toString()
+	}
 
 function buildMoveCleanupReportText(result: RemoveEntriesResult, label: string, bucket?: string, prefix?: string): string {
 	const lines: string[] = []

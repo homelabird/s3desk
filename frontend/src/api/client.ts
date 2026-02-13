@@ -36,6 +36,7 @@ import type {
 	UploadPresignResponse,
 } from './types'
 import { clearNetworkStatus, logNetworkEvent, publishNetworkStatus } from '../lib/networkStatus'
+import { getApiBaseUrl, normalizeApiBaseUrl } from './baseUrl'
 
 export const RETRY_COUNT_STORAGE_KEY = 'apiRetryCount'
 export const RETRY_DELAY_STORAGE_KEY = 'apiRetryDelayMs'
@@ -153,7 +154,7 @@ export class APIClient {
 	private apiToken: string
 
 	constructor(args: { baseUrl?: string; apiToken?: string } = {}) {
-		this.baseUrl = args.baseUrl ?? '/api/v1'
+		this.baseUrl = normalizeApiBaseUrl(args.baseUrl ?? getApiBaseUrl())
 		this.apiToken = args.apiToken ?? ''
 	}
 

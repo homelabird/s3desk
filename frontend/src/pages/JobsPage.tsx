@@ -40,6 +40,7 @@ import {
 import { useLocation } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
+import { buildApiHttpUrl, buildApiWsUrl } from '../api/baseUrl'
 import { useTransfers } from '../components/useTransfers'
 import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobStatus, Profile, WSEvent } from '../api/types'
 import { withJobQueueRetry } from '../lib/jobQueue'
@@ -1934,26 +1935,21 @@ export function JobsPage(props: Props) {
 	)
 }
 
-function buildWSURL(apiToken: string, afterSeq?: number): string {
-	const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-	const base = `${proto}//${window.location.host}/api/v1/ws`
-	const qs = new URLSearchParams()
-	if (apiToken) qs.set('apiToken', apiToken)
-	qs.set('includeLogs', 'false')
-	if (afterSeq && afterSeq > 0) qs.set('afterSeq', String(afterSeq))
-	const q = qs.toString()
-	return q ? `${base}?${q}` : base
-}
+	function buildWSURL(apiToken: string, afterSeq?: number): string {
+		const url = buildApiWsUrl('/ws')
+		if (apiToken) url.searchParams.set('apiToken', apiToken)
+		url.searchParams.set('includeLogs', 'false')
+		if (afterSeq && afterSeq > 0) url.searchParams.set('afterSeq', String(afterSeq))
+		return url.toString()
+	}
 
-function buildSSEURL(apiToken: string, afterSeq?: number): string {
-	const base = `${window.location.protocol}//${window.location.host}/api/v1/events`
-	const qs = new URLSearchParams()
-	if (apiToken) qs.set('apiToken', apiToken)
-	qs.set('includeLogs', 'false')
-	if (afterSeq && afterSeq > 0) qs.set('afterSeq', String(afterSeq))
-	const q = qs.toString()
-	return q ? `${base}?${q}` : base
-}
+	function buildSSEURL(apiToken: string, afterSeq?: number): string {
+		const url = buildApiHttpUrl('/events')
+		if (apiToken) url.searchParams.set('apiToken', apiToken)
+		url.searchParams.set('includeLogs', 'false')
+		if (afterSeq && afterSeq > 0) url.searchParams.set('afterSeq', String(afterSeq))
+		return url.toString()
+	}
 
 function jobSummary(job: Job): string | null {
 	const bucket = getString(job.payload, 'bucket')
