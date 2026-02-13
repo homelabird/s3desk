@@ -2,12 +2,9 @@ import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ConfigProvider } from 'antd'
-import 'antd/dist/reset.css'
 import './index.css'
 import App from './App.tsx'
 import { A11yLiveRegions } from './components/A11yLiveRegions.tsx'
-import { AntdToastAnnouncer } from './components/AntdToastAnnouncer.tsx'
 
 const Devtools =
 	import.meta.env.DEV
@@ -30,13 +27,10 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ConfigProvider getPopupContainer={() => document.body}>
-        <A11yLiveRegions />
-        <AntdToastAnnouncer />
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </ConfigProvider>
+      <A11yLiveRegions />
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
       {Devtools ? (
         <Suspense fallback={null}>
           <Devtools initialIsOpen={false} />

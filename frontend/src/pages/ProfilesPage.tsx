@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Checkbox, Dropdown, Empty, Input, Modal, Space, Spin, Table, Typography, message } from 'antd'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { MoreOutlined } from '@ant-design/icons'
+import { useSearchParams } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
 import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../api/types'
@@ -28,7 +29,9 @@ const ProfileModal = lazy(async () => {
 export function ProfilesPage(props: Props) {
 	const queryClient = useQueryClient()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
-	const [createOpen, setCreateOpen] = useState(false)
+	const [searchParams, setSearchParams] = useSearchParams()
+	const createRequested = searchParams.has('create')
+	const [createOpen, setCreateOpen] = useState(() => createRequested)
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
 	const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
 	const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null)
@@ -48,6 +51,13 @@ export function ProfilesPage(props: Props) {
 	})
 	const profiles = profilesQuery.data ?? []
 	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
+	const closeCreateModal = () => {
+		setCreateOpen(false)
+		if (!searchParams.has('create')) return
+		const next = new URLSearchParams(searchParams)
+		next.delete('create')
+		setSearchParams(next, { replace: true })
+	}
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
@@ -521,17 +531,17 @@ export function ProfilesPage(props: Props) {
 			/>
 
 			<Suspense fallback={null}>
-				{createOpen ? (
-					<ProfileModal
-						open
-						title="Create Profile"
-						okText="Create"
-						onCancel={() => setCreateOpen(false)}
-						onSubmit={(values) => createMutation.mutate(values)}
-						loading={createMutation.isPending}
-						tlsCapability={tlsCapability ?? null}
-					/>
-				) : null}
+					{createOpen ? (
+						<ProfileModal
+							open
+							title="Create Profile"
+							okText="Create"
+							onCancel={closeCreateModal}
+							onSubmit={(values) => createMutation.mutate(values)}
+							loading={createMutation.isPending}
+							tlsCapability={tlsCapability ?? null}
+						/>
+					) : null}
 
 				{editProfile ? (
 					<ProfileModal
