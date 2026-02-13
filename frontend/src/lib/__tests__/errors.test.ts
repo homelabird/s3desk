@@ -58,4 +58,17 @@ describe('getRecoveryHint', () => {
 		expect(formatErrorWithHint(err)).toContain('Recommended action:')
 		expect(formatErrorWithHint(err)).toContain('Check IAM permissions')
 	})
+
+	it('returns remote-access guard guidance for non-access_denied 403 without mentioning ALLOWED_ORIGINS', () => {
+		const err = new APIError({
+			status: 403,
+			code: 'forbidden',
+			message: 'host must be localhost',
+		})
+
+		const hint = getRecoveryHint(err)
+		expect(hint).toContain('ALLOW_REMOTE=true')
+		expect(hint).toContain('API_TOKEN')
+		expect(hint).not.toContain('ALLOWED_ORIGINS')
+	})
 })
