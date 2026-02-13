@@ -36,6 +36,9 @@ type ObjectsTreeSectionProps = {
 	onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerMove: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerUp: (event: PointerEvent<HTMLDivElement>) => void
+	canCreateFolder: boolean
+	createFolderTooltipText: string
+	onNewFolderAtPrefix: (prefixKey: string) => void
 	onCloseDrawer: () => void
 }
 

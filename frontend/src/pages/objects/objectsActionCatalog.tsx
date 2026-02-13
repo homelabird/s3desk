@@ -53,7 +53,7 @@ type ObjectsActionDeps = {
 	onOpenPathModal: () => void
 	onOpenUploadFiles: () => void
 	onOpenUploadFolder: () => void
-	onOpenNewFolder: () => void
+	onOpenNewFolder: (parentPrefixOverride?: string) => void
 	onOpenCommandPalette: () => void
 	onOpenTransfers: () => void
 	onAddTab: () => void
@@ -173,21 +173,29 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		]
 	}
 
-	const getPrefixActions = (targetPrefix: string): UIActionOrDivider[] => {
-		const canUsePrefixActions = !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported
-		const openAction: UIAction = {
-			id: 'open',
-			label: 'Open',
-			icon: <FolderOutlined />,
-			keywords: 'open folder enter',
-			enabled: canUsePrefixActions,
-			run: () => deps.onOpenPrefix(targetPrefix),
-		}
-		const copyAction: UIAction = {
-			id: 'copy',
-			label: 'Copy folder path',
-			icon: <CopyOutlined />,
-			keywords: 'copy clipboard path',
+		const getPrefixActions = (targetPrefix: string): UIActionOrDivider[] => {
+			const canUsePrefixActions = !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported
+			const openAction: UIAction = {
+				id: 'open',
+				label: 'Open',
+				icon: <FolderOutlined />,
+				keywords: 'open folder enter',
+				enabled: canUsePrefixActions,
+				run: () => deps.onOpenPrefix(targetPrefix),
+			}
+			const newSubfolderAction: UIAction = {
+				id: 'new_subfolder',
+				label: 'New subfolder…',
+				icon: <FolderAddOutlined />,
+				keywords: 'mkdir new folder create',
+				enabled: canUsePrefixActions,
+				run: () => deps.onOpenNewFolder(targetPrefix),
+			}
+			const copyAction: UIAction = {
+				id: 'copy',
+				label: 'Copy folder path',
+				icon: <CopyOutlined />,
+				keywords: 'copy clipboard path',
 			enabled: true,
 			audience: 'advanced',
 			run: () => deps.onCopy(targetPrefix),
@@ -250,10 +258,10 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			audience: 'advanced',
 			run: () => deps.onOpenDownloadPrefix(targetPrefix),
 		}
-		const deleteDryAction: UIAction = {
-			id: 'deleteDry',
-			label: 'Dry run delete folder…',
-			icon: <DeleteOutlined />,
+			const deleteDryAction: UIAction = {
+				id: 'deleteDry',
+				label: 'Dry run delete folder…',
+				icon: <DeleteOutlined />,
 			keywords: 'preview dry-run safe delete rm folder',
 			danger: true,
 			enabled: canUsePrefixActions,
@@ -261,12 +269,13 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			run: () => deps.onConfirmDeletePrefixAsJob(true, targetPrefix),
 		}
 
-		return [
-			openAction,
-			copyAction,
-			{ type: 'divider' },
-			downloadZipAction,
-			downloadToDeviceAction,
+			return [
+				openAction,
+				newSubfolderAction,
+				copyAction,
+				{ type: 'divider' },
+				downloadZipAction,
+				downloadToDeviceAction,
 			{ type: 'divider' },
 			renameAction,
 			copyJobAction,
@@ -418,14 +427,15 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.uploadSupported,
 			run: () => deps.onOpenUploadFolder(),
 		},
-		{
-			id: 'new_folder',
-			label: 'New folder',
-			icon: <FolderAddOutlined />,
-			keywords: 'mkdir folder',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
-			run: () => deps.onOpenNewFolder(),
-		},
+			{
+				id: 'new_folder',
+				label: 'New folder…',
+				shortcut: 'Ctrl+Shift+N',
+				icon: <FolderAddOutlined />,
+				keywords: 'mkdir folder',
+				enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
+				run: () => deps.onOpenNewFolder(),
+			},
 		{
 			id: 'commands',
 			label: 'Commands (Ctrl+K)',

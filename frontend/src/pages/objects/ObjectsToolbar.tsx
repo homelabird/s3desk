@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { MenuProps, SelectProps } from 'antd'
 import { Badge, Button, Dropdown, Select, Space, Tooltip } from 'antd'
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined, UpOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined, UpOutlined } from '@ant-design/icons'
 
 import type { UIAction } from './objectsActions'
 import styles from './objects.module.css'
@@ -28,6 +28,9 @@ export type ObjectsToolbarProps = {
 	uploadEnabled: boolean
 	uploadDisabledReason?: string | null
 	onUploadFiles: () => void
+	canCreateFolder: boolean
+	createFolderTooltipText: string
+	onNewFolder: () => void
 	onRefresh: () => void
 	isRefreshing: boolean
 	topMoreMenu: MenuProps
@@ -48,12 +51,13 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	const uploadTooltipText = !props.hasProfile
 		? 'Select a profile first'
 		: props.isOffline
-			? 'Offline: check your network connection'
-			: !props.bucket
-				? 'Select a bucket first'
-				: !props.uploadEnabled
-					? props.uploadDisabledReason ?? 'Uploads are not supported by this provider'
-					: 'Upload files or folders'
+				? 'Offline: check your network connection'
+				: !props.bucket
+					? 'Select a bucket first'
+					: !props.uploadEnabled
+						? props.uploadDisabledReason ?? 'Uploads are not supported by this provider'
+						: 'Upload files or folders'
+	const createFolderTooltipText = props.createFolderTooltipText
 	const showSelectionPrimaryActions = props.showPrimaryActions && props.selectedCount > 0
 	const downloadDisabledReason = !props.hasProfile
 		? 'Select a profile first'
@@ -109,6 +113,11 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 			</Button>
 		</Dropdown>
 	)
+	const newFolderButton = (
+		<Button icon={<FolderAddOutlined />} disabled={!props.canCreateFolder} onClick={props.onNewFolder} aria-label="New folder">
+			{props.showLabels ? 'New folder' : null}
+		</Button>
+	)
 
 	if (props.isDesktop) {
 		return (
@@ -159,14 +168,17 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					/>
 				</Space>
 
-				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
-					<Tooltip title={uploadTooltipText}>
-						<span>{uploadButtonDesktop}</span>
-					</Tooltip>
-					{showSelectionPrimaryActions ? (
-						<>
-							{renderPrimaryActionButton(props.primaryDownloadAction, {
-								icon: <DownloadOutlined />,
+					<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
+						<Tooltip title={uploadTooltipText}>
+							<span>{uploadButtonDesktop}</span>
+						</Tooltip>
+						<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
+							<span>{newFolderButton}</span>
+						</Tooltip>
+						{showSelectionPrimaryActions ? (
+							<>
+								{renderPrimaryActionButton(props.primaryDownloadAction, {
+									icon: <DownloadOutlined />,
 								fallbackLabel: 'Download',
 								tooltip: downloadDisabledReason,
 							})}
@@ -196,9 +208,9 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	}
 
 	return (
-		<div className={styles.toolbarColumn}>
-			<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-				<Space wrap className={styles.toolbarGroup}>
+			<div className={styles.toolbarColumn}>
+				<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+					<Space wrap className={styles.toolbarGroup}>
 					{props.isAdvanced ? (
 						<>
 							<Tooltip title="Back">
@@ -227,13 +239,16 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							</Button>
 						</>
 					) : null}
-					<Tooltip title={uploadTooltipText}>
-						<span>{uploadButtonMobile}</span>
-					</Tooltip>
-					{showSelectionPrimaryActions ? (
-						<>
-							{renderPrimaryActionButton(props.primaryDownloadAction, {
-								icon: <DownloadOutlined />,
+						<Tooltip title={uploadTooltipText}>
+							<span>{uploadButtonMobile}</span>
+						</Tooltip>
+						<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
+							<span>{newFolderButton}</span>
+						</Tooltip>
+						{showSelectionPrimaryActions ? (
+							<>
+								{renderPrimaryActionButton(props.primaryDownloadAction, {
+									icon: <DownloadOutlined />,
 								fallbackLabel: 'Download',
 								tooltip: downloadDisabledReason,
 							})}

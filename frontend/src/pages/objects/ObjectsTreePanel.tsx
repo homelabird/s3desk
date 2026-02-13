@@ -1,5 +1,6 @@
-import { Drawer } from 'antd'
+import { Button, Drawer, Tooltip } from 'antd'
 import type { DataNode, EventDataNode } from 'antd/es/tree'
+import { FolderAddOutlined } from '@ant-design/icons'
 import type { DragEvent, PointerEvent } from 'react'
 
 import styles from './objects.module.css'
@@ -40,6 +41,9 @@ type ObjectsTreePanelProps = {
 	onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerMove: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerUp: (event: PointerEvent<HTMLDivElement>) => void
+	canCreateFolder: boolean
+	createFolderTooltipText: string
+	onNewFolderAtPrefix: (prefixKey: string) => void
 	onCloseDrawer: () => void
 }
 
@@ -63,8 +67,11 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 		/>
 	)
 
-	const renderPanel = (onSelectKey: (key: string) => void, onSelectFavorite: (key: string) => void) => (
-		<div className={styles.treeStack}>
+	const renderPanel = (onSelectKey: (key: string) => void, onSelectFavorite: (key: string) => void) => {
+		const selectedKey = String(props.selectedKeys[0] ?? '/')
+		const newFolderLabel = selectedKey === '/' ? 'New folder' : 'New subfolder'
+		return (
+			<div className={styles.treeStack}>
 			<ObjectsFavoritesPane
 				hasProfile={props.hasProfile}
 				hasBucket={props.hasBucket}
@@ -79,9 +86,36 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 				isLoading={props.favoritesLoading}
 				errorMessage={props.favoritesError}
 			/>
-			<ObjectsTreePane title="Folders">{renderTreeView(onSelectKey)}</ObjectsTreePane>
-		</div>
-	)
+			<ObjectsTreePane
+				title="Folders"
+				extra={
+					<Tooltip
+						title={
+							props.canCreateFolder
+								? selectedKey === '/'
+									? 'New folder (Ctrl+Shift+N)'
+									: 'New subfolder'
+								: props.createFolderTooltipText
+						}
+					>
+						<span>
+							<Button
+								size="small"
+								type="text"
+								icon={<FolderAddOutlined />}
+								disabled={!props.canCreateFolder}
+								aria-label={newFolderLabel}
+								onClick={() => props.onNewFolderAtPrefix(selectedKey)}
+							/>
+						</span>
+					</Tooltip>
+				}
+			>
+				{renderTreeView(onSelectKey)}
+			</ObjectsTreePane>
+			</div>
+		)
+	}
 
 	return (
 		<>

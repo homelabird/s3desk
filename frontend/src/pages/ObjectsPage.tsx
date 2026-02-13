@@ -23,7 +23,7 @@ import { useTransfers } from '../components/useTransfers'
 import { getDevicePickerSupport } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
-import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
+import { getProviderCapabilities, getProviderCapabilityReason, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import styles from './objects/objects.module.css'
@@ -1177,20 +1177,23 @@ const objectsQuery = useInfiniteQuery({
 		createJobWithRetry,
 		setSelectedKeys,
 	})
-	const {
-		newFolderOpen,
-		newFolderForm,
-		newFolderSubmitting,
-		openNewFolder,
-		handleNewFolderSubmit,
-		handleNewFolderCancel,
-	} = useObjectsNewFolder({
-		api,
-		profileId: props.profileId,
-		bucket,
-		prefix,
-		refreshTreeNode,
-	})
+		const {
+			newFolderOpen,
+			newFolderForm,
+			newFolderSubmitting,
+			newFolderError,
+			newFolderParentPrefix,
+			openNewFolder,
+			handleNewFolderSubmit,
+			handleNewFolderCancel,
+		} = useObjectsNewFolder({
+			api,
+			profileId: props.profileId,
+			bucket,
+			prefix,
+			refreshTreeNode,
+			onOpenPrefix,
+		})
 	const {
 		downloadPrefixOpen,
 		downloadPrefixForm,
@@ -2413,15 +2416,19 @@ const objectsQuery = useInfiniteQuery({
 		</Suspense>
 	)
 
-	const uploadMenuActions = trimActionDividers(
-		[
-			globalActionMap.get('upload_files'),
-			globalActionMap.get('upload_folder'),
-			{ type: 'divider' as const },
-			globalActionMap.get('new_folder'),
-		].filter(Boolean) as UIActionOrDivider[],
-	)
-	const uploadButtonMenu = buildActionMenu(uploadMenuActions, isAdvanced)
+		const uploadMenuActions = trimActionDividers([globalActionMap.get('upload_files'), globalActionMap.get('upload_folder')].filter(Boolean) as UIActionOrDivider[])
+		const uploadButtonMenu = buildActionMenu(uploadMenuActions, isAdvanced)
+		const canCreateFolder = !!props.profileId && !!bucket && !isOffline && objectCrudSupported
+		const createFolderTooltipText = !props.profileId
+			? 'Select a profile first'
+			: isOffline
+				? 'Offline: check your network connection'
+				: !bucket
+					? 'Select a bucket first'
+					: !objectCrudSupported
+						? getProviderCapabilityReason(profileCapabilities, 'objectCrud', 'Selected provider does not support object APIs.') ??
+							'Selected provider does not support object APIs.'
+						: 'Create a new folder marker object'
 	const handleBucketChange = (value: string | null) => {
 		const nextBucket = value ?? ''
 		if (!nextBucket) {
@@ -2582,7 +2589,7 @@ const objectsQuery = useInfiniteQuery({
 			/>
 
 			<Suspense fallback={toolbarFallback}>
-				<ObjectsToolbarSection
+					<ObjectsToolbarSection
 					apiToken={props.apiToken}
 					profileId={props.profileId}
 					bucketsErrorMessage={bucketsQuery.isError ? formatErr(bucketsQuery.error) : null}
@@ -2593,33 +2600,36 @@ const objectsQuery = useInfiniteQuery({
 					onTabAdd={addTab}
 					onTabClose={closeTab}
 					tabLabelMaxWidth={screens.md ? 320 : 220}
-					toolbarProps={{
-						isDesktop: !!screens.lg,
-						showLabels: !!screens.sm,
-						isAdvanced,
-						isOffline,
-						hasProfile: !!props.profileId,
-						bucket,
-						selectedCount,
-						bucketOptions,
-						bucketsLoading: bucketsQuery.isFetching,
-						onBucketChange: handleBucketChange,
-						onBucketDropdownVisibleChange: handleBucketDropdownVisibleChange,
-						canGoBack,
-						canGoForward,
-						canGoUp,
-						onGoBack: goBack,
-						onGoForward: goForward,
-						onGoUp: onUp,
-						uploadMenu: uploadButtonMenu,
-						uploadEnabled: uploadSupported,
-						uploadDisabledReason: uploadDisabledReason,
-						onUploadFiles: openUploadFilesPicker,
-						onRefresh: refresh,
-						isRefreshing: listIsFetching,
-						topMoreMenu,
-						showPrimaryActions: !isAdvanced,
-						primaryDownloadAction: downloadSelectionAction,
+						toolbarProps={{
+							isDesktop: !!screens.lg,
+							showLabels: !!screens.sm,
+							isAdvanced,
+							isOffline,
+							hasProfile: !!props.profileId,
+							bucket,
+							selectedCount,
+							bucketOptions,
+							bucketsLoading: bucketsQuery.isFetching,
+							onBucketChange: handleBucketChange,
+							onBucketDropdownVisibleChange: handleBucketDropdownVisibleChange,
+							canGoBack,
+							canGoForward,
+							canGoUp,
+							onGoBack: goBack,
+							onGoForward: goForward,
+							onGoUp: onUp,
+							uploadMenu: uploadButtonMenu,
+							uploadEnabled: uploadSupported,
+							uploadDisabledReason: uploadDisabledReason,
+							onUploadFiles: openUploadFilesPicker,
+							canCreateFolder: canCreateFolder,
+							createFolderTooltipText: createFolderTooltipText,
+							onNewFolder: () => openNewFolder(),
+							onRefresh: refresh,
+							isRefreshing: listIsFetching,
+							topMoreMenu,
+							showPrimaryActions: !isAdvanced,
+							primaryDownloadAction: downloadSelectionAction,
 						primaryDeleteAction: deleteSelectionAction,
 						activeTransferCount: transfers.activeTransferCount,
 						onOpenTransfers: () => transfers.openTransfers(),
@@ -2670,13 +2680,16 @@ const objectsQuery = useInfiniteQuery({
 						dndHoverPrefix={dndHoverPrefix}
 						onDndTargetDragOver={onDndTargetDragOver}
 						onDndTargetDragLeave={onDndTargetDragLeave}
-						onDndTargetDrop={onDndTargetDrop}
-						onResizePointerDown={onTreeResizePointerDown}
-						onResizePointerMove={onTreeResizePointerMove}
-						onResizePointerUp={onTreeResizePointerUp}
-						onCloseDrawer={() => setTreeDrawerOpen(false)}
-					/>
-				</Suspense>
+							onDndTargetDrop={onDndTargetDrop}
+							onResizePointerDown={onTreeResizePointerDown}
+							onResizePointerMove={onTreeResizePointerMove}
+							onResizePointerUp={onTreeResizePointerUp}
+							canCreateFolder={canCreateFolder}
+							createFolderTooltipText={createFolderTooltipText}
+							onNewFolderAtPrefix={openNewFolder}
+							onCloseDrawer={() => setTreeDrawerOpen(false)}
+						/>
+					</Suspense>
 
 				{contextMenuVisible && contextMenuProps && contextMenuStyle && typeof document !== 'undefined'
 					? createPortal(
@@ -3282,15 +3295,16 @@ const objectsQuery = useInfiniteQuery({
 					/>
 				) : null}
 
-				{newFolderOpen ? (
-					<ObjectsNewFolderModal
-						open={newFolderOpen}
-						parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
-						form={newFolderForm}
-						isSubmitting={newFolderSubmitting}
-						onCancel={handleNewFolderCancel}
-						onFinish={handleNewFolderSubmit}
-					/>
+					{newFolderOpen ? (
+						<ObjectsNewFolderModal
+							open={newFolderOpen}
+							parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(newFolderParentPrefix)}` : '-'}
+							errorMessage={newFolderError}
+							form={newFolderForm}
+							isSubmitting={newFolderSubmitting}
+							onCancel={handleNewFolderCancel}
+							onFinish={handleNewFolderSubmit}
+						/>
 				) : null}
 
 				{renameOpen ? (

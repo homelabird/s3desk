@@ -14,6 +14,7 @@ export type UIAction = {
 	id: string
 	label: string
 	shortLabel?: string
+	shortcut?: string
 	icon?: ReactNode
 	keywords?: string
 	danger?: boolean
@@ -69,9 +70,17 @@ export function filterActionItems(items: UIActionOrDivider[], isAdvanced: boolea
 export function actionToMenuItem(action: UIAction | undefined, overrides?: MenuItemOverrides, isAdvanced?: boolean): MenuItem | null {
 	if (!action) return null
 	if (typeof isAdvanced === 'boolean' && !isActionVisible(action, isAdvanced)) return null
+	const label = action.shortcut ? (
+		<span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
+			<span>{action.label}</span>
+			<span style={{ opacity: 0.6, fontSize: 12, whiteSpace: 'nowrap' }}>{action.shortcut}</span>
+		</span>
+	) : (
+		action.label
+	)
 	return {
 		key: action.id,
-		label: action.label,
+		label,
 		icon: action.icon,
 		danger: action.danger,
 		disabled: !action.enabled,
