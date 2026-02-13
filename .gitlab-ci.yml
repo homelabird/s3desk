@@ -669,7 +669,7 @@ e2e_smoke:
     - npm run preview -- --host 0.0.0.0 --port 4173 &
     - for i in $(seq 1 30); do if curl -fsS http://127.0.0.1:4173 >/dev/null; then break; fi; sleep 1; done
     - export PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173"
-    - if [ -z "$(ls -A \"$PLAYWRIGHT_BROWSERS_PATH\")" ]; then npx playwright install chromium; fi
+    - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
     - npx playwright test --project=chromium tests/objects-smoke.spec.ts tests/jobs-flow.spec.ts tests/uploads-folder.spec.ts
 
 frontend_ci:
