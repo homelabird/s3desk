@@ -16,42 +16,6 @@ function chunkGroupForModule(id: string): string | undefined {
 	// into the initial bundle via helper re-exports.
 	if (id.includes('commonjsHelpers')) return 'vendor-misc'
 	if (!id.includes('node_modules/')) return undefined
-	// Split out a few heavy-but-not-always-needed UI deps so they can be loaded later.
-	if (
-		id.includes('/node_modules/@rc-component/picker/') ||
-		id.includes('/node_modules/rc-picker/') ||
-		id.includes('/node_modules/antd/es/date-picker/') ||
-		id.includes('/node_modules/antd/es/calendar/')
-	) {
-		return 'vendor-ui-picker'
-	}
-	if (
-		id.includes('/node_modules/@rc-component/form/') ||
-		id.includes('/node_modules/@rc-component/async-validator/') ||
-		id.includes('/node_modules/antd/es/form/')
-	) {
-		return 'vendor-ui-form'
-	}
-	if (
-		id.includes('/node_modules/@rc-component/upload/') ||
-		id.includes('/node_modules/rc-upload/') ||
-		id.includes('/node_modules/antd/es/upload/')
-	) {
-		return 'vendor-ui-upload'
-	}
-	if (id.includes('/node_modules/@rc-component/tabs/') || id.includes('/node_modules/antd/es/tabs/')) {
-		return 'vendor-ui-tabs'
-	}
-	if (
-		id.includes('/node_modules/@rc-component/tree/') ||
-		id.includes('/node_modules/rc-tree/') ||
-		id.includes('/node_modules/antd/es/tree/')
-	) {
-		return 'vendor-ui-tree'
-	}
-	if (id.includes('/node_modules/@ant-design/icons/') || id.includes('/node_modules/@ant-design/icons-svg/')) {
-		return 'vendor-ui-icons'
-	}
 	// Keep antd + rc-* in the same chunk to avoid cross-chunk circular init ordering issues.
 	if (
 		id.includes('/node_modules/antd/') ||
