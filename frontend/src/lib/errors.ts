@@ -5,8 +5,15 @@ export type ErrorDetails = {
 	hint?: string
 }
 
+function formatAPIErrorTags(err: APIError): string {
+	const tags: string[] = []
+	if (err.normalizedError?.code) tags.push(`normalized=${err.normalizedError.code}`)
+	if (typeof err.retryAfterSeconds === 'number') tags.push(`retry-after=${err.retryAfterSeconds}s`)
+	return tags.length > 0 ? ` [${tags.join(', ')}]` : ''
+}
+
 export function formatError(err: unknown): string {
-	if (err instanceof APIError) return `${err.code}: ${err.message}`
+	if (err instanceof APIError) return `${err.code}: ${err.message}${formatAPIErrorTags(err)}`
 	if (err instanceof Error) return err.message
 	return 'unknown error'
 }
@@ -30,6 +37,15 @@ export function getRecoveryHint(err: unknown): string | undefined {
 			// This is often the remote-access guard or an origin/host restriction.
 			return 'Forbidden. If this is your own server, try localhost or verify ALLOW_REMOTE / ALLOWED_HOSTS / ALLOWED_ORIGINS.'
 		}
+		if (err.status === 400 && err.code === 'invalid_request') {
+			const msg = err.message.toLowerCase()
+			if (msg.includes('allowed local directory')) {
+				return 'Local path is outside the server allowlist. Choose a path under ALLOWED_LOCAL_DIRS (see Settings > Server).'
+			}
+			if (msg.includes('payload.localpath not found')) {
+				return 'Local path was not found on the server filesystem. Verify the path exists on the server host.'
+			}
+		}
 
 		// Provider-agnostic normalized errors (derived from rclone stderr)
 		const norm = err.normalizedError
@@ -43,8 +59,10 @@ export function getRecoveryHint(err: unknown): string | undefined {
 			return 'Not found. The bucket/object may not exist, or the credentials cannot see it.'
 		}
 		if (norm?.code === 'rate_limited') {
-			const wait = typeof err.retryAfterSeconds === 'number' ? ` Retry-After: ${err.retryAfterSeconds}s` : ''
-			return `Rate limited by provider.${wait} Try again after a short delay.`
+			if (typeof err.retryAfterSeconds === 'number') {
+				return 'Wait for the Retry-After interval, then retry.'
+			}
+			return 'Rate limited by provider. Retry after a short delay.'
 		}
 		if (norm?.code === 'signature_mismatch') {
 			return 'Signature mismatch. Common causes: wrong secret key, wrong region, clock skew, or path-style setting.'
@@ -70,6 +88,12 @@ export function getRecoveryHint(err: unknown): string | undefined {
 		if (norm?.code === 'canceled') {
 			return 'Request was canceled.'
 		}
+		if (norm?.retryable) {
+			return 'Temporary provider error. Retry after a short delay.'
+		}
+		if (err.status >= 500) {
+			return 'Server-side error. Retry shortly; if it persists, inspect server logs.'
+		}
 	}
 
 	// Network / infra
@@ -92,5 +116,5 @@ export function describeError(err: unknown): ErrorDetails {
 
 export function formatErrorWithHint(err: unknown): string {
 	const details = describeError(err)
-	return details.hint ? `${details.title} · ${details.hint}` : details.title
+	return details.hint ? `${details.title} · Recommended action: ${details.hint}` : details.title
 }

@@ -49,7 +49,7 @@ test.describe('@transfer', () => {
 - `dev_license_audit`: dev-only notices (audit stage; schedule or `RUN_DEV_AUDIT=1`)
 - `api_integration`: `docker-compose.e2e.yml` + `e2e/runner/runner.py`
 - `e2e` (optional, `E2E_BASE_URL` required): `tests/objects-smoke.spec.ts`, `tests/docs-smoke.spec.ts`, `tests/jobs-network.spec.ts`, `tests/transfers-*.spec.ts`
-- `e2e_live` (optional, `E2E_LIVE=1`, `E2E_BASE_URL` required): `tests/api-crud.spec.ts`, `tests/jobs-live-flow.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/docs-smoke.spec.ts`
+- `e2e_live` (optional, `E2E_LIVE=1`, `E2E_BASE_URL` required): `tests/api-crud.spec.ts`, `tests/jobs-live-flow.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/transfers-live-fallback.spec.ts`, `tests/bucket-policy-live.spec.ts`, `tests/docs-smoke.spec.ts`
 - `perf_tests` (optional, `PERF_TESTS=1`): `tests/jobs-perf.spec.ts`
 
 ## CI toggles (pipeline variables)
@@ -88,6 +88,25 @@ Set these in CI when running `e2e_live` (or local live runs):
 - `E2E_S3_REGION` (default `us-east-1`)
 - `E2E_S3_FORCE_PATH_STYLE` (default `true`)
 - `E2E_S3_TLS_SKIP_VERIFY` (default `true`)
+
+Optional provider policy live smoke toggles (`tests/bucket-policy-live.spec.ts`):
+
+- `E2E_GCS_POLICY_LIVE=1`: enable GCS policy `GET/PUT/GET` smoke
+- `E2E_GCS_BUCKET`: existing GCS bucket name used for smoke
+- `E2E_GCS_SERVICE_ACCOUNT_JSON`: service account JSON string
+- `E2E_GCS_ENDPOINT` (optional): emulator/custom endpoint
+- `E2E_GCS_PROJECT_NUMBER` (optional)
+- `E2E_GCS_TLS_SKIP_VERIFY=1` (optional)
+- `E2E_AZURE_POLICY_LIVE=1`: enable Azure policy `GET/PUT/GET` smoke (+ restore)
+- `E2E_AZURE_CONTAINER`: existing container name
+- `E2E_AZURE_ACCOUNT_NAME` / `E2E_AZURE_ACCOUNT_KEY`: Azure credentials
+- `E2E_AZURE_ENDPOINT` (optional): Azurite/custom endpoint
+- `E2E_AZURE_USE_EMULATOR=1` (optional)
+- `E2E_AZURE_TLS_SKIP_VERIFY=1` (optional)
+- `E2E_POLICY_SUMMARY_FILE` (optional): provider policy API 요약 NDJSON 출력 경로  
+  - 기본값: `test-results/policy-live-summary.ndjson` (CI artifact에 포함됨)
+  - `e2e_live` 잡 `after_script`에서 `scripts/render_policy_live_summary.js`로 `frontend/test-results/policy-live-summary.md`를 생성하고 로그 preview를 출력
+  - CI 환경에서 `CI_JOB_SUMMARY`가 제공되면 동일 markdown을 Job Summary에도 append
 
 Optional overrides when UI/Docs/Perf are split:
 
@@ -152,7 +171,22 @@ E2E_S3_ENDPOINT=http://minio:9000 \
 E2E_S3_ACCESS_KEY=minioadmin \
 E2E_S3_SECRET_KEY=minioadmin \
 E2E_S3_REGION=us-east-1 \
-npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
+npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/transfers-live-fallback.spec.ts tests/bucket-policy-live.spec.ts tests/docs-smoke.spec.ts
+
+# (선택) Bucket policy S3 flow
+npx playwright test tests/bucket-policy-live.spec.ts
+```
+
+Local one-shot helper (starts MinIO + backend, runs live suite including fallback coverage, then cleans up):
+
+```bash
+bash scripts/run_live_e2e_local.sh
+```
+
+Run only specific specs with the helper:
+
+```bash
+bash scripts/run_live_e2e_local.sh tests/docs-smoke.spec.ts tests/jobs-live-flow.spec.ts
 ```
 
 When the UI and API base URLs differ (e.g. Vite dev server), set:

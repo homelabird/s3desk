@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Empty, Modal, Space, Table, Typography, message } from 'antd'
+import { Alert, Button, Empty, Modal, Space, Table, Tooltip, Typography, message } from 'antd'
 import { DeleteOutlined, FileTextOutlined } from '@ant-design/icons'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -10,7 +10,7 @@ import { SetupCallout } from '../components/SetupCallout'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatDateTime } from '../lib/format'
-import { getProviderCapabilities } from '../lib/providerCapabilities'
+import { getProviderCapabilities, getProviderCapabilityReason } from '../lib/providerCapabilities'
 
 type Props = {
 	apiToken: string
@@ -35,6 +35,12 @@ export function BucketsPage(props: Props) {
 	const [deletingBucket, setDeletingBucket] = useState<string | null>(null)
 	const [policyBucket, setPolicyBucket] = useState<string | null>(null)
 
+	const metaQuery = useQuery({
+		queryKey: ['meta', props.apiToken],
+		queryFn: () => api.getMeta(),
+		enabled: !!props.apiToken,
+	})
+
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', props.apiToken],
 		queryFn: () => api.listProfiles(),
@@ -44,7 +50,13 @@ export function BucketsPage(props: Props) {
 		if (!props.profileId) return null
 		return profilesQuery.data?.find((p) => p.id === props.profileId) ?? null
 	}, [profilesQuery.data, props.profileId])
-	const capabilities = getProviderCapabilities(selectedProfile?.provider)
+	const capabilities = getProviderCapabilities(selectedProfile?.provider, metaQuery.data?.capabilities?.providers)
+	const policySupported = capabilities.bucketPolicy || capabilities.gcsIamPolicy || capabilities.azureContainerAccessPolicy
+	const policyUnsupportedReason =
+		getProviderCapabilityReason(capabilities, 'bucketPolicy') ??
+		getProviderCapabilityReason(capabilities, 'gcsIamPolicy') ??
+		getProviderCapabilityReason(capabilities, 'azureContainerAccessPolicy') ??
+		'Policy management is not supported by this provider.'
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
@@ -161,17 +173,20 @@ export function BucketsPage(props: Props) {
 						title: 'Actions',
 						render: (_, row: { name: string }) => (
 							<Space wrap>
-								{capabilities.bucketPolicy || capabilities.gcsIamPolicy || capabilities.azureContainerAccessPolicy ? (
-									<Button
-										size="small"
-										icon={<FileTextOutlined />}
-										onClick={() => {
-											setPolicyBucket(row.name)
-										}}
-									>
-										Policy
-									</Button>
-								) : null}
+								<Tooltip title={policySupported ? 'Manage bucket policy' : policyUnsupportedReason}>
+									<span>
+										<Button
+											size="small"
+											icon={<FileTextOutlined />}
+											disabled={!policySupported}
+											onClick={() => {
+												setPolicyBucket(row.name)
+											}}
+										>
+											Policy
+										</Button>
+									</span>
+								</Tooltip>
 
 								<Button
 									size="small"

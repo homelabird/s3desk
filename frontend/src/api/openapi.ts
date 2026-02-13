@@ -599,9 +599,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get bucket policy
-         * @description Returns the current S3 bucket policy document if present.
-         *     For buckets with no policy, returns `exists=false`.
+         * Get bucket access policy
+         * @description Returns the current provider-specific bucket access policy document if present.
+         *
+         *     - S3 providers: bucket policy JSON.
+         *     - GCS: bucket IAM policy JSON.
+         *     - Azure: container access policy JSON.
+         *
+         *     For buckets/containers with no policy, returns `exists=false`.
          */
         get: {
             parameters: {
@@ -633,7 +638,14 @@ export interface paths {
                 502: components["responses"]["ErrorResponse"];
             };
         };
-        /** Put bucket policy */
+        /**
+         * Put bucket access policy
+         * @description Applies provider-specific bucket access policy JSON.
+         *
+         *     - S3 providers: PutBucketPolicy.
+         *     - GCS: Set bucket IAM policy.
+         *     - Azure: Set container ACL/public access.
+         */
         put: {
             parameters: {
                 query?: never;
@@ -667,7 +679,14 @@ export interface paths {
             };
         };
         post?: never;
-        /** Delete bucket policy */
+        /**
+         * Delete or reset bucket access policy
+         * @description Removes or resets provider-specific access policy state.
+         *
+         *     - S3 providers: deletes bucket policy.
+         *     - Azure: resets container ACL/public access to private + clears stored access policies.
+         *     - GCS: delete is not supported; returns `400 bucket_policy_delete_unsupported`.
+         */
         delete: {
             parameters: {
                 query?: never;
@@ -2992,10 +3011,36 @@ export interface components {
         };
         MetaCapabilities: {
             profileTls: components["schemas"]["FeatureCapability"];
+            providers?: {
+                [key: string]: components["schemas"]["ProviderCapability"];
+            };
         };
         FeatureCapability: {
             enabled: boolean;
             reason?: string;
+        };
+        ProviderCapability: {
+            bucketCrud: boolean;
+            objectCrud: boolean;
+            jobTransfer: boolean;
+            bucketPolicy: boolean;
+            gcsIamPolicy: boolean;
+            azureContainerAccessPolicy: boolean;
+            presignedUpload: boolean;
+            presignedMultipartUpload: boolean;
+            directUpload: boolean;
+            reasons?: components["schemas"]["ProviderCapabilityReasons"];
+        };
+        ProviderCapabilityReasons: {
+            bucketCrud?: string;
+            objectCrud?: string;
+            jobTransfer?: string;
+            bucketPolicy?: string;
+            gcsIamPolicy?: string;
+            azureContainerAccessPolicy?: string;
+            presignedUpload?: string;
+            presignedMultipartUpload?: string;
+            directUpload?: string;
         };
     };
     responses: {

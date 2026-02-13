@@ -23,6 +23,9 @@ export default defineConfig({
 			name: 'mobile-iphone-13',
 			use: {
 				...devices['iPhone 13'],
+				// Keep iPhone viewport/UA emulation, but run on Chromium for Linux host portability.
+				// WebKit binaries frequently require distro-specific deps on non-Ubuntu runners.
+				browserName: 'chromium',
 			},
 			testMatch: /mobile-smoke\.spec\.ts/,
 		},

@@ -504,7 +504,14 @@ export type TransfersContextValue = {
 	}) => void
 }
 
-export function TransfersProvider(props: { apiToken: string; uploadDirectStream?: boolean; children: ReactNode }) {
+type UploadCapabilityByProfileId = Record<string, { presignedUpload: boolean; directUpload: boolean }>
+
+export function TransfersProvider(props: {
+	apiToken: string
+	uploadDirectStream?: boolean
+	uploadCapabilityByProfileId?: UploadCapabilityByProfileId
+	children: ReactNode
+}) {
 	const queryClient = useQueryClient()
 	const navigate = useNavigate()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
@@ -1419,21 +1426,41 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 
 				let sessionMode = current.uploadMode
 				if (!uploadId) {
+					const uploadCapability = props.uploadCapabilityByProfileId?.[current.profileId]
+					const canUsePresigned = uploadCapability ? uploadCapability.presignedUpload : true
+					const canUseDirect = uploadCapability ? uploadCapability.directUpload : !!props.uploadDirectStream
+					const directModePreferred = !!props.uploadDirectStream && canUseDirect
+					const fallbackMode: 'direct' | 'staging' = directModePreferred ? 'direct' : 'staging'
+					const preferredMode: 'presigned' | 'direct' | 'staging' = canUsePresigned ? 'presigned' : fallbackMode
 					let session: { uploadId: string; mode: 'staging' | 'direct' | 'presigned'; maxBytes?: number | null }
 					try {
 						session = await api.createUpload(current.profileId, {
 							bucket: current.bucket,
 							prefix: current.prefix ?? '',
-							mode: 'presigned',
+							mode: preferredMode,
 						})
 					} catch (err) {
-						if (err instanceof APIError && (err.code === 'not_supported' || err.code === 'invalid_request')) {
+						if (
+							canUsePresigned &&
+							err instanceof APIError &&
+							(err.code === 'not_supported' || err.code === 'invalid_request')
+						) {
 							session = await api.createUpload(current.profileId, {
 								bucket: current.bucket,
 								prefix: current.prefix ?? '',
-								mode: props.uploadDirectStream ? 'direct' : 'staging',
+								mode: fallbackMode,
 							})
-							message.info('Presigned uploads are not supported here. Falling back to staging uploads.')
+							message.info(`Presigned uploads are not supported here. Falling back to ${fallbackMode} uploads.`)
+						} else if (
+							preferredMode === 'direct' &&
+							err instanceof APIError &&
+							(err.code === 'not_supported' || err.code === 'invalid_request')
+						) {
+							session = await api.createUpload(current.profileId, {
+								bucket: current.bucket,
+								prefix: current.prefix ?? '',
+								mode: 'staging',
+							})
 						} else {
 							throw err
 						}
@@ -1612,10 +1639,11 @@ export function TransfersProvider(props: { apiToken: string; uploadDirectStream?
 		[
 			api,
 			handleUploadJobUpdate,
-			navigate,
-			pickUploadTuning,
-			props.uploadDirectStream,
-			queryClient,
+				navigate,
+				pickUploadTuning,
+				props.uploadCapabilityByProfileId,
+				props.uploadDirectStream,
+				queryClient,
 			updateUploadTask,
 			uploadChunkFileConcurrency,
 			uploadResumeConversionEnabled,

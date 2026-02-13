@@ -20,11 +20,12 @@ import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { InputRef } from 'antd'
-import type { Bucket, JobCreateRequest, ListObjectsResponse, ObjectItem } from '../api/types'
+import type { Bucket, JobCreateRequest, ListObjectsResponse, ObjectItem, Profile } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
 import { getDevicePickerSupport } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
+import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import styles from './objects/objects.module.css'
@@ -407,6 +408,26 @@ export function ObjectsPage(props: Props) {
 	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
 	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
+	const metaQuery = useQuery({
+		queryKey: ['meta', props.apiToken],
+		queryFn: () => api.getMeta(),
+		enabled: !!props.apiToken,
+	})
+	const profilesQuery = useQuery({
+		queryKey: ['profiles', props.apiToken],
+		queryFn: () => api.listProfiles(),
+		enabled: !!props.apiToken,
+	})
+	const selectedProfile: Profile | null = useMemo(() => {
+		if (!props.profileId) return null
+		return profilesQuery.data?.find((profile) => profile.id === props.profileId) ?? null
+	}, [profilesQuery.data, props.profileId])
+	const profileCapabilities = selectedProfile?.provider
+		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers)
+		: null
+	const objectCrudSupported = profileCapabilities ? profileCapabilities.objectCrud : true
+	const uploadSupported = profileCapabilities ? profileCapabilities.objectCrud && profileCapabilities.jobTransfer : true
+	const uploadDisabledReason = getUploadCapabilityDisabledReason(profileCapabilities)
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
@@ -1211,6 +1232,8 @@ const objectsQuery = useInfiniteQuery({
 		bucket,
 		prefix,
 		isOffline,
+		uploadsEnabled: uploadSupported,
+		uploadsDisabledReason: uploadDisabledReason,
 		transfers,
 	})
 	const {
@@ -1271,6 +1294,8 @@ const objectsQuery = useInfiniteQuery({
 		profileId: props.profileId,
 		bucket,
 		prefix,
+		uploadsEnabled: uploadSupported,
+		uploadsDisabledReason: uploadDisabledReason,
 		transfers,
 	})
 
@@ -1385,11 +1410,19 @@ const objectsQuery = useInfiniteQuery({
 			message.warning('Offline: uploads are disabled.')
 			return
 		}
+		if (!uploadSupported) {
+			message.warning(uploadDisabledReason ?? 'Uploads are not supported by this provider.')
+			return
+		}
 		uploadFilesInputRef.current?.click()
 	}
 	const openUploadFolderPicker = () => {
 		if (isOffline) {
 			message.warning('Offline: uploads are disabled.')
+			return
+		}
+		if (!uploadSupported) {
+			message.warning(uploadDisabledReason ?? 'Uploads are not supported by this provider.')
 			return
 		}
 		const support = getDevicePickerSupport()
@@ -2044,6 +2077,8 @@ const objectsQuery = useInfiniteQuery({
 		profileId: props.profileId,
 		bucket,
 		prefix,
+		objectCrudSupported,
+		uploadSupported,
 		selectedCount,
 		clipboardObjects,
 		singleSelectedKey,
@@ -2161,7 +2196,7 @@ const objectsQuery = useInfiniteQuery({
 	const { clearSelectionAction, deleteSelectionAction, downloadSelectionAction } = useObjectsSelectionBarActions({
 		selectionActionMap,
 	})
-	const showUploadDropOverlay = uploadDropActive && !!props.profileId && !!bucket && !isOffline
+	const showUploadDropOverlay = uploadDropActive && !!props.profileId && !!bucket && !isOffline && uploadSupported
 	const uploadDropLabel = bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'
 	const listKeydownHandler = useObjectsListKeydownHandler({
 		selectedCount,
@@ -2516,13 +2551,21 @@ const objectsQuery = useInfiniteQuery({
 		indexObjectsJobMutation.mutate({ prefix: indexPrefix, fullReindex: indexFullReindex })
 	}
 
-	return (
-		<div className={styles.page}>
-			<Typography.Title level={3} style={{ margin: 0 }}>
-				Objects
-			</Typography.Title>
+		return (
+			<div className={styles.page}>
+				<Typography.Title level={3} style={{ margin: 0 }}>
+					Objects
+				</Typography.Title>
+				{!uploadSupported ? (
+					<Alert
+						type="info"
+						showIcon
+						title="Uploads are disabled for this provider"
+						description={uploadDisabledReason ?? 'Object uploads are not supported by the selected provider.'}
+					/>
+				) : null}
 
-			<input
+				<input
 				ref={uploadFilesInputRef}
 				type="file"
 				multiple
@@ -2578,6 +2621,8 @@ const objectsQuery = useInfiniteQuery({
 						onGoForward: goForward,
 						onGoUp: onUp,
 						uploadMenu: uploadButtonMenu,
+						uploadEnabled: uploadSupported,
+						uploadDisabledReason: uploadDisabledReason,
 						onUploadFiles: openUploadFilesPicker,
 						onRefresh: refresh,
 						isRefreshing: listIsFetching,
@@ -2808,34 +2853,36 @@ const objectsQuery = useInfiniteQuery({
 			</ObjectsLayout>
 
 			<Suspense fallback={null}>
-				<ObjectsFiltersDrawer
-					open={filtersDrawerOpen}
-					onClose={() => setFiltersDrawerOpen(false)}
-					isAdvanced={isAdvanced}
-					typeFilter={typeFilter}
-					onTypeFilterChange={(value) => setTypeFilter(value)}
-					favoritesOnly={favoritesOnly}
-					onFavoritesOnlyChange={setFavoritesOnly}
-					favoritesFirst={favoritesFirst}
-					onFavoritesFirstChange={setFavoritesFirst}
-					extFilter={extFilter}
-					extOptions={extOptions}
-					onExtFilterChange={(value) => setExtFilter(value)}
-					minSizeBytes={minSize}
-					maxSizeBytes={maxSize}
-					onMinSizeBytesChange={(value) => setMinSize(value)}
-					onMaxSizeBytesChange={(value) => setMaxSize(value)}
-					modifiedAfterMs={minModifiedMs}
-					modifiedBeforeMs={maxModifiedMs}
-					onModifiedRangeChange={(startMs, endMs) => {
-						setMinModifiedMs(startMs)
-						setMaxModifiedMs(endMs)
-					}}
-					sort={sort}
-					onSortChange={(value) => setSort(value)}
-					onResetView={resetFilters}
-					hasActiveView={hasActiveView}
-				/>
+				{filtersDrawerOpen ? (
+					<ObjectsFiltersDrawer
+						open={filtersDrawerOpen}
+						onClose={() => setFiltersDrawerOpen(false)}
+						isAdvanced={isAdvanced}
+						typeFilter={typeFilter}
+						onTypeFilterChange={(value) => setTypeFilter(value)}
+						favoritesOnly={favoritesOnly}
+						onFavoritesOnlyChange={setFavoritesOnly}
+						favoritesFirst={favoritesFirst}
+						onFavoritesFirstChange={setFavoritesFirst}
+						extFilter={extFilter}
+						extOptions={extOptions}
+						onExtFilterChange={(value) => setExtFilter(value)}
+						minSizeBytes={minSize}
+						maxSizeBytes={maxSize}
+						onMinSizeBytesChange={(value) => setMinSize(value)}
+						onMaxSizeBytesChange={(value) => setMaxSize(value)}
+						modifiedAfterMs={minModifiedMs}
+						modifiedBeforeMs={maxModifiedMs}
+						onModifiedRangeChange={(startMs, endMs) => {
+							setMinModifiedMs(startMs)
+							setMaxModifiedMs(endMs)
+						}}
+						sort={sort}
+						onSortChange={(value) => setSort(value)}
+						onResetView={resetFilters}
+						hasActiveView={hasActiveView}
+					/>
+				) : null}
 
 				{/* <Drawer
 					open={downloadsOpen}
@@ -3104,200 +3151,222 @@ const objectsQuery = useInfiniteQuery({
 				/>
 			</Drawer> */}
 
-				<ObjectsPresignModal
-					open={presignOpen}
-					presign={presign}
-					onClose={closePresign}
-				/>
+				{presignOpen ? (
+					<ObjectsPresignModal
+						open={presignOpen}
+						presign={presign}
+						onClose={closePresign}
+					/>
+				) : null}
 
-				<ObjectsGoToPathModal
-					open={pathModalOpen}
-					bucket={bucket}
-					hasProfile={!!props.profileId}
-					pathDraft={pathDraft}
-					options={pathOptions}
-					inputRef={pathInputRef}
-					onChangeDraft={setPathDraft}
-					onSelectPath={(v) => {
-						if (!bucket) return
-						setPathDraft(v)
-						navigateToLocation(bucket, v, { recordHistory: true })
-						setPathModalOpen(false)
-					}}
-					onCommit={commitPathDraft}
-					onClose={() => setPathModalOpen(false)}
-				/>
+				{pathModalOpen ? (
+					<ObjectsGoToPathModal
+						open={pathModalOpen}
+						bucket={bucket}
+						hasProfile={!!props.profileId}
+						pathDraft={pathDraft}
+						options={pathOptions}
+						inputRef={pathInputRef}
+						onChangeDraft={setPathDraft}
+						onSelectPath={(v) => {
+							if (!bucket) return
+							setPathDraft(v)
+							navigateToLocation(bucket, v, { recordHistory: true })
+							setPathModalOpen(false)
+						}}
+						onCommit={commitPathDraft}
+						onClose={() => setPathModalOpen(false)}
+					/>
+				) : null}
 
-				<ObjectsCommandPaletteModal
-					open={commandPaletteOpen}
-					query={commandPaletteQuery}
-					commands={commandPaletteItems}
-					activeIndex={commandPaletteActiveIndex}
-					onQueryChange={onCommandPaletteQueryChange}
-					onActiveIndexChange={setCommandPaletteActiveIndex}
-					onRunCommand={runCommandPaletteItem}
-					onCancel={() => setCommandPaletteOpen(false)}
-					onKeyDown={onCommandPaletteKeyDown}
-				/>
+				{commandPaletteOpen ? (
+					<ObjectsCommandPaletteModal
+						open={commandPaletteOpen}
+						query={commandPaletteQuery}
+						commands={commandPaletteItems}
+						activeIndex={commandPaletteActiveIndex}
+						onQueryChange={onCommandPaletteQueryChange}
+						onActiveIndexChange={setCommandPaletteActiveIndex}
+						onRunCommand={runCommandPaletteItem}
+						onCancel={() => setCommandPaletteOpen(false)}
+						onKeyDown={onCommandPaletteKeyDown}
+					/>
+				) : null}
 
-				<ObjectsDeletePrefixConfirmModal
-					open={deletePrefixConfirmOpen}
-					dryRun={deletePrefixConfirmDryRun}
-					bucket={bucket}
-					prefix={deletePrefixConfirmPrefix}
-					confirmText={deletePrefixConfirmText}
-					onConfirmTextChange={setDeletePrefixConfirmText}
-					hasProfile={!!props.profileId}
-					hasBucket={!!bucket}
-					isConfirming={deletePrefixJobMutation.isPending}
-					onConfirm={handleDeletePrefixConfirm}
-					onCancel={handleDeletePrefixCancel}
-					isSummaryFetching={deletePrefixSummaryQuery.isFetching}
-					summary={deletePrefixSummary}
-					summaryNotIndexed={deletePrefixSummaryNotIndexed}
-					isSummaryError={deletePrefixSummaryQuery.isError}
-					summaryErrorMessage={deletePrefixSummaryError}
-					onIndexPrefix={() => {
-						if (!deletePrefixConfirmPrefix) return
-						indexObjectsJobMutation.mutate({ prefix: deletePrefixConfirmPrefix, fullReindex: false })
-					}}
-				/>
+				{deletePrefixConfirmOpen ? (
+					<ObjectsDeletePrefixConfirmModal
+						open={deletePrefixConfirmOpen}
+						dryRun={deletePrefixConfirmDryRun}
+						bucket={bucket}
+						prefix={deletePrefixConfirmPrefix}
+						confirmText={deletePrefixConfirmText}
+						onConfirmTextChange={setDeletePrefixConfirmText}
+						hasProfile={!!props.profileId}
+						hasBucket={!!bucket}
+						isConfirming={deletePrefixJobMutation.isPending}
+						onConfirm={handleDeletePrefixConfirm}
+						onCancel={handleDeletePrefixCancel}
+						isSummaryFetching={deletePrefixSummaryQuery.isFetching}
+						summary={deletePrefixSummary}
+						summaryNotIndexed={deletePrefixSummaryNotIndexed}
+						isSummaryError={deletePrefixSummaryQuery.isError}
+						summaryErrorMessage={deletePrefixSummaryError}
+						onIndexPrefix={() => {
+							if (!deletePrefixConfirmPrefix) return
+							indexObjectsJobMutation.mutate({ prefix: deletePrefixConfirmPrefix, fullReindex: false })
+						}}
+					/>
+				) : null}
 
-				<ObjectsDownloadPrefixModal
-					open={downloadPrefixOpen}
-					sourceLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}*` : '-'}
-					form={downloadPrefixForm}
-					isSubmitting={downloadPrefixSubmitting}
-					onCancel={handleDownloadPrefixCancel}
-					onFinish={handleDownloadPrefixSubmit}
-					onPickFolder={handleDownloadPrefixPick}
-					canSubmit={downloadPrefixCanSubmit}
-				/>
+				{downloadPrefixOpen ? (
+					<ObjectsDownloadPrefixModal
+						open={downloadPrefixOpen}
+						sourceLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}*` : '-'}
+						form={downloadPrefixForm}
+						isSubmitting={downloadPrefixSubmitting}
+						onCancel={handleDownloadPrefixCancel}
+						onFinish={handleDownloadPrefixSubmit}
+						onPickFolder={handleDownloadPrefixPick}
+						canSubmit={downloadPrefixCanSubmit}
+					/>
+				) : null}
 
-				<ObjectsUploadFolderModal
-					open={uploadFolderOpen}
-					destinationLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
-					form={uploadFolderForm}
-					defaultMoveAfterUpload={moveAfterUploadDefault}
-					defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
-					isSubmitting={uploadFolderSubmitting}
-					onCancel={handleUploadFolderCancel}
-					onDefaultsChange={(values) => {
-						setMoveAfterUploadDefault(values.moveAfterUpload)
-						setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
-					}}
-					onFinish={handleUploadFolderSubmit}
-					onPickFolder={handleUploadFolderPick}
-					canSubmit={uploadFolderCanSubmit}
-				/>
+				{uploadFolderOpen ? (
+					<ObjectsUploadFolderModal
+						open={uploadFolderOpen}
+						destinationLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
+						form={uploadFolderForm}
+						defaultMoveAfterUpload={moveAfterUploadDefault}
+						defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
+						isSubmitting={uploadFolderSubmitting}
+						onCancel={handleUploadFolderCancel}
+						onDefaultsChange={(values) => {
+							setMoveAfterUploadDefault(values.moveAfterUpload)
+							setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
+						}}
+						onFinish={handleUploadFolderSubmit}
+						onPickFolder={handleUploadFolderPick}
+						canSubmit={uploadFolderCanSubmit}
+					/>
+				) : null}
 
-				<ObjectsCopyPrefixModal
-					open={copyPrefixOpen}
-					mode={copyPrefixMode}
-					bucket={bucket}
-					srcPrefix={copyPrefixSrcPrefix}
-					sourceLabel={copyPrefixSrcPrefix ? `s3://${bucket}/${copyPrefixSrcPrefix}*` : '-'}
-					form={copyPrefixForm}
-					bucketOptions={bucketOptions}
-					isBucketsLoading={bucketsQuery.isFetching}
-					isSubmitting={copyPrefixSubmitting}
-					onCancel={handleCopyPrefixCancel}
-					onFinish={handleCopyPrefixSubmit}
-					isSummaryFetching={copyPrefixSummaryQuery.isFetching}
-					summary={copyPrefixSummary}
-					summaryNotIndexed={copyPrefixSummaryNotIndexed}
-					isSummaryError={copyPrefixSummaryQuery.isError}
-					summaryErrorMessage={copyPrefixSummaryError}
-					onIndexPrefix={() => {
-						if (!copyPrefixSrcPrefix) return
-						indexObjectsJobMutation.mutate({ prefix: copyPrefixSrcPrefix, fullReindex: false })
-					}}
-					normalizePrefix={normalizePrefix}
-				/>
+				{copyPrefixOpen ? (
+					<ObjectsCopyPrefixModal
+						open={copyPrefixOpen}
+						mode={copyPrefixMode}
+						bucket={bucket}
+						srcPrefix={copyPrefixSrcPrefix}
+						sourceLabel={copyPrefixSrcPrefix ? `s3://${bucket}/${copyPrefixSrcPrefix}*` : '-'}
+						form={copyPrefixForm}
+						bucketOptions={bucketOptions}
+						isBucketsLoading={bucketsQuery.isFetching}
+						isSubmitting={copyPrefixSubmitting}
+						onCancel={handleCopyPrefixCancel}
+						onFinish={handleCopyPrefixSubmit}
+						isSummaryFetching={copyPrefixSummaryQuery.isFetching}
+						summary={copyPrefixSummary}
+						summaryNotIndexed={copyPrefixSummaryNotIndexed}
+						isSummaryError={copyPrefixSummaryQuery.isError}
+						summaryErrorMessage={copyPrefixSummaryError}
+						onIndexPrefix={() => {
+							if (!copyPrefixSrcPrefix) return
+							indexObjectsJobMutation.mutate({ prefix: copyPrefixSrcPrefix, fullReindex: false })
+						}}
+						normalizePrefix={normalizePrefix}
+					/>
+				) : null}
 
-				<ObjectsCopyMoveModal
-					open={copyMoveOpen}
-					mode={copyMoveMode}
-					bucket={bucket}
-					srcKey={copyMoveSrcKey}
-					form={copyMoveForm}
-					bucketOptions={bucketOptions}
-					isBucketsLoading={bucketsQuery.isFetching}
-					isSubmitting={copyMoveSubmitting}
-					onCancel={handleCopyMoveCancel}
-					onFinish={handleCopyMoveSubmit}
-				/>
+				{copyMoveOpen ? (
+					<ObjectsCopyMoveModal
+						open={copyMoveOpen}
+						mode={copyMoveMode}
+						bucket={bucket}
+						srcKey={copyMoveSrcKey}
+						form={copyMoveForm}
+						bucketOptions={bucketOptions}
+						isBucketsLoading={bucketsQuery.isFetching}
+						isSubmitting={copyMoveSubmitting}
+						onCancel={handleCopyMoveCancel}
+						onFinish={handleCopyMoveSubmit}
+					/>
+				) : null}
 
-			<ObjectsNewFolderModal
-				open={newFolderOpen}
-				parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
-				form={newFolderForm}
-				isSubmitting={newFolderSubmitting}
-				onCancel={handleNewFolderCancel}
-				onFinish={handleNewFolderSubmit}
-			/>
+				{newFolderOpen ? (
+					<ObjectsNewFolderModal
+						open={newFolderOpen}
+						parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
+						form={newFolderForm}
+						isSubmitting={newFolderSubmitting}
+						onCancel={handleNewFolderCancel}
+						onFinish={handleNewFolderSubmit}
+					/>
+				) : null}
 
-				<ObjectsRenameModal
-					open={renameOpen}
-					kind={renameKind}
-					source={renameSource}
-					bucket={bucket}
-					form={renameForm}
-					isSubmitting={renameSubmitting}
-					onCancel={handleRenameCancel}
-					onFinish={handleRenameSubmit}
-				/>
+				{renameOpen ? (
+					<ObjectsRenameModal
+						open={renameOpen}
+						kind={renameKind}
+						source={renameSource}
+						bucket={bucket}
+						form={renameForm}
+						isSubmitting={renameSubmitting}
+						onCancel={handleRenameCancel}
+						onFinish={handleRenameSubmit}
+					/>
+				) : null}
 
-			<ObjectsGlobalSearchDrawer
-				open={globalSearchOpen}
-				onClose={() => setGlobalSearchOpen(false)}
-				hasProfile={!!props.profileId}
-				hasBucket={!!bucket}
-				bucket={bucket}
-				currentPrefix={prefix}
-				isMd={!!screens.md}
-				queryDraft={globalSearchDraft}
-				onQueryDraftChange={setGlobalSearchDraft}
-				prefixFilter={globalSearchPrefix}
-				onPrefixFilterChange={setGlobalSearchPrefix}
-				limit={globalSearchLimitClamped}
-				onLimitChange={setGlobalSearchLimit}
-				extFilter={globalSearchExt}
-				onExtFilterChange={setGlobalSearchExt}
-				minSizeBytes={globalSearchMinSize}
-				maxSizeBytes={globalSearchMaxSize}
-				onMinSizeBytesChange={setGlobalSearchMinSize}
-				onMaxSizeBytesChange={setGlobalSearchMaxSize}
-				modifiedAfterMs={globalSearchMinModifiedMs}
-				modifiedBeforeMs={globalSearchMaxModifiedMs}
-				onModifiedRangeChange={(startMs, endMs) => {
-					setGlobalSearchMinModifiedMs(startMs)
-					setGlobalSearchMaxModifiedMs(endMs)
-				}}
-				onReset={resetGlobalSearch}
-				onRefresh={() => indexedSearchQuery.refetch()}
-				isRefreshing={indexedSearchQuery.isFetching}
-				isError={indexedSearchQuery.isError}
-				isNotIndexed={indexedSearchNotIndexed}
-				errorMessage={indexedSearchErrorMessage}
-				onCreateIndexJob={createIndexJob}
-				isCreatingIndexJob={indexObjectsJobMutation.isPending}
-				indexPrefix={indexPrefix}
-				onIndexPrefixChange={setIndexPrefix}
-				indexFullReindex={indexFullReindex}
-				onIndexFullReindexChange={setIndexFullReindex}
-				searchQueryText={globalSearchQueryText}
-				isFetching={indexedSearchQuery.isFetching}
-				hasNextPage={indexedSearchQuery.hasNextPage}
-				isFetchingNextPage={indexedSearchQuery.isFetchingNextPage}
-				items={indexedSearchItems}
-				onLoadMore={() => indexedSearchQuery.fetchNextPage()}
-				onUseCurrentPrefix={() => setIndexPrefix(prefix)}
-				onOpenPrefixForKey={openGlobalSearchPrefix}
-				onCopyKey={onCopy}
-				onDownloadKey={onDownload}
-				onOpenDetails={openGlobalSearchDetails}
-			/>
+				{globalSearchOpen ? (
+					<ObjectsGlobalSearchDrawer
+						open={globalSearchOpen}
+						onClose={() => setGlobalSearchOpen(false)}
+						hasProfile={!!props.profileId}
+						hasBucket={!!bucket}
+						bucket={bucket}
+						currentPrefix={prefix}
+						isMd={!!screens.md}
+						queryDraft={globalSearchDraft}
+						onQueryDraftChange={setGlobalSearchDraft}
+						prefixFilter={globalSearchPrefix}
+						onPrefixFilterChange={setGlobalSearchPrefix}
+						limit={globalSearchLimitClamped}
+						onLimitChange={setGlobalSearchLimit}
+						extFilter={globalSearchExt}
+						onExtFilterChange={setGlobalSearchExt}
+						minSizeBytes={globalSearchMinSize}
+						maxSizeBytes={globalSearchMaxSize}
+						onMinSizeBytesChange={setGlobalSearchMinSize}
+						onMaxSizeBytesChange={setGlobalSearchMaxSize}
+						modifiedAfterMs={globalSearchMinModifiedMs}
+						modifiedBeforeMs={globalSearchMaxModifiedMs}
+						onModifiedRangeChange={(startMs, endMs) => {
+							setGlobalSearchMinModifiedMs(startMs)
+							setGlobalSearchMaxModifiedMs(endMs)
+						}}
+						onReset={resetGlobalSearch}
+						onRefresh={() => indexedSearchQuery.refetch()}
+						isRefreshing={indexedSearchQuery.isFetching}
+						isError={indexedSearchQuery.isError}
+						isNotIndexed={indexedSearchNotIndexed}
+						errorMessage={indexedSearchErrorMessage}
+						onCreateIndexJob={createIndexJob}
+						isCreatingIndexJob={indexObjectsJobMutation.isPending}
+						indexPrefix={indexPrefix}
+						onIndexPrefixChange={setIndexPrefix}
+						indexFullReindex={indexFullReindex}
+						onIndexFullReindexChange={setIndexFullReindex}
+						searchQueryText={globalSearchQueryText}
+						isFetching={indexedSearchQuery.isFetching}
+						hasNextPage={indexedSearchQuery.hasNextPage}
+						isFetchingNextPage={indexedSearchQuery.isFetchingNextPage}
+						items={indexedSearchItems}
+						onLoadMore={() => indexedSearchQuery.fetchNextPage()}
+						onUseCurrentPrefix={() => setIndexPrefix(prefix)}
+						onOpenPrefixForKey={openGlobalSearchPrefix}
+						onCopyKey={onCopy}
+						onDownloadKey={onDownload}
+						onOpenDetails={openGlobalSearchDetails}
+					/>
+				) : null}
 			</Suspense>
 		</div>
 	)

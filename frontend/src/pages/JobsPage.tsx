@@ -4,11 +4,13 @@ import {
 	AutoComplete,
 	Checkbox,
 	Button,
+	Collapse,
 	Descriptions,
 	Drawer,
 	Dropdown,
 	Empty,
 	Grid,
+	Input,
 	Select,
 	Space,
 	Spin,
@@ -23,6 +25,7 @@ import {
 } from 'antd'
 import { Profiler, type ReactNode, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+	CopyOutlined,
 	DeleteOutlined,
 	DownloadOutlined,
 	FileTextOutlined,
@@ -38,14 +41,16 @@ import { useLocation } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
 import { useTransfers } from '../components/useTransfers'
-import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../api/types'
+import type { Bucket, Job, JobCreateRequest, JobProgress, JobsListResponse, JobStatus, Profile, WSEvent } from '../api/types'
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { collectFilesFromDirectoryHandle, normalizeRelativePath } from '../lib/deviceFs'
 import { listAllObjects } from '../lib/objects'
+import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatDateTime, toTimestamp } from '../lib/format'
 import { getJobTypeInfo, jobTypeSelectOptions } from '../lib/jobTypes'
+import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
 import { formatBytes, formatDurationSeconds } from '../lib/transfer'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
@@ -158,6 +163,7 @@ export function JobsPage(props: Props) {
 	const [logsOpen, setLogsOpen] = useState(false)
 	const [activeLogJobId, setActiveLogJobId] = useState<string | null>(null)
 	const [logByJobId, setLogByJobId] = useState<Record<string, string[]>>({})
+	const [logSearchQuery, setLogSearchQuery] = useState('')
 	const [detailsOpen, setDetailsOpen] = useState(false)
 	const [detailsJobId, setDetailsJobId] = useState<string | null>(null)
 	const [followLogs, setFollowLogs] = useLocalStorageState('jobsFollowLogs', true)
@@ -249,6 +255,39 @@ export function JobsPage(props: Props) {
 	const resetColumns = useCallback(() => {
 		setColumnVisibility(defaultColumnVisibility)
 	}, [defaultColumnVisibility, setColumnVisibility])
+	const openDeleteJobModal = useCallback(() => {
+		setDeleteJobPrefill(null)
+		setCreateDeleteOpen(true)
+	}, [])
+	const topActionsMenu = useMemo<MenuProps>(
+		() => ({
+			items: [
+				{
+					key: 'download_folder',
+					icon: <DownloadOutlined />,
+					label: 'Download folder (device)',
+					disabled: isOffline,
+				},
+				{
+					key: 'new_delete_job',
+					icon: <DeleteOutlined />,
+					label: 'New Delete Job',
+					danger: true,
+					disabled: isOffline,
+				},
+			],
+			onClick: ({ key }) => {
+				if (key === 'download_folder') {
+					setCreateDownloadOpen(true)
+					return
+				}
+				if (key === 'new_delete_job') {
+					openDeleteJobModal()
+				}
+			},
+		}),
+		[isOffline, openDeleteJobModal],
+	)
 	const logPollBaseMs = 1500
 	const logPollMaxMs = 20_000
 	const logPollPauseAfter = 3
@@ -283,6 +322,25 @@ export function JobsPage(props: Props) {
 		resetLogPolling()
 		setLogPollRetryToken((prev) => prev + 1)
 	}, [resetLogPolling])
+	const metaQuery = useQuery({
+		queryKey: ['meta', props.apiToken],
+		queryFn: () => api.getMeta(),
+		enabled: !!props.apiToken,
+	})
+	const profilesQuery = useQuery({
+		queryKey: ['profiles', props.apiToken],
+		queryFn: () => api.listProfiles(),
+		enabled: !!props.apiToken,
+	})
+	const selectedProfile: Profile | null = useMemo(() => {
+		if (!props.profileId) return null
+		return profilesQuery.data?.find((profile) => profile.id === props.profileId) ?? null
+	}, [profilesQuery.data, props.profileId])
+	const profileCapabilities = selectedProfile?.provider
+		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers)
+		: null
+	const uploadSupported = profileCapabilities ? profileCapabilities.objectCrud && profileCapabilities.jobTransfer : true
+	const uploadDisabledReason = getUploadCapabilityDisabledReason(profileCapabilities)
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
@@ -459,6 +517,10 @@ export function JobsPage(props: Props) {
 			cleanupEmptyDirs?: boolean
 		}) => {
 			if (!props.profileId) return
+			if (!uploadSupported) {
+				message.warning(uploadDisabledReason ?? 'Uploads are not supported by this provider.')
+				return
+			}
 			setDeviceUploadLoading(true)
 			try {
 				const files = await collectFilesFromDirectoryHandle(args.dirHandle)
@@ -495,7 +557,7 @@ export function JobsPage(props: Props) {
 				setDeviceUploadLoading(false)
 			}
 		},
-		[props.profileId, transfers],
+		[props.profileId, transfers, uploadDisabledReason, uploadSupported],
 	)
 
 	const handleDeviceDownload = useCallback(
@@ -719,6 +781,10 @@ export function JobsPage(props: Props) {
 		if (!el) return
 		el.scrollTop = el.scrollHeight
 	}, [activeLogJobId, followLogs, logByJobId, logsOpen])
+
+	useEffect(() => {
+		setLogSearchQuery('')
+	}, [activeLogJobId])
 
 	useEffect(() => {
 		if (!props.profileId) return
@@ -1250,6 +1316,29 @@ export function JobsPage(props: Props) {
 		retryingJobId,
 		transfers,
 	])
+	const activeLogEntries = useMemo(
+		() => (activeLogJobId ? (logByJobId[activeLogJobId] ?? []) : []),
+		[activeLogJobId, logByJobId],
+	)
+	const activeLogLines = activeLogEntries.length
+	const normalizedLogSearchQuery = logSearchQuery.trim().toLowerCase()
+	const visibleLogEntries = useMemo(() => {
+		if (!normalizedLogSearchQuery) return activeLogEntries
+		return activeLogEntries.filter((line) => line.toLowerCase().includes(normalizedLogSearchQuery))
+	}, [activeLogEntries, normalizedLogSearchQuery])
+	const visibleLogText = useMemo(() => visibleLogEntries.join('\n'), [visibleLogEntries])
+	const copyVisibleLogs = useCallback(async () => {
+		if (visibleLogEntries.length === 0) {
+			message.info(normalizedLogSearchQuery ? 'No matching log lines to copy.' : 'No log lines to copy.')
+			return
+		}
+		const result = await copyToClipboard(visibleLogText)
+		if (result.ok) {
+			message.success(`Copied ${visibleLogEntries.length.toLocaleString()} line(s)`)
+			return
+		}
+		message.error(clipboardFailureHint())
+	}, [normalizedLogSearchQuery, visibleLogEntries, visibleLogText])
 
 	if (!props.profileId) {
 		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view jobs" />
@@ -1274,32 +1363,39 @@ export function JobsPage(props: Props) {
 					<Tag color={eventsConnected ? 'success' : 'default'}>
 						{eventsConnected ? `Realtime: ${(eventsTransport ?? 'unknown').toUpperCase()}` : 'Realtime disconnected'}
 					</Tag>
-					{!eventsConnected && eventsRetryCount >= eventsRetryThreshold ? (
+						{!eventsConnected && eventsRetryCount >= eventsRetryThreshold ? (
 						<Button size="small" onClick={() => setEventsManualRetryToken((prev) => prev + 1)} disabled={isOffline}>
 							Retry realtime
 						</Button>
 					) : null}
-					<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
-						Upload folder (device)
-					</Button>
-					<Button icon={<DownloadOutlined />} onClick={() => setCreateDownloadOpen(true)} disabled={isOffline}>
-						Download folder (device)
-					</Button>
-					<Button
-						danger
-						icon={<DeleteOutlined />}
-						onClick={() => {
-							setDeleteJobPrefill(null)
-							setCreateDeleteOpen(true)
-						}}
-						disabled={isOffline}
-					>
-						New Delete Job
-					</Button>
-				</Space>
-			</div>
+						<Tooltip
+							title={
+								!uploadSupported
+									? uploadDisabledReason ?? 'Uploads are not supported by this provider.'
+									: 'Upload a local folder from this device'
+							}
+						>
+							<span>
+								<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline || !uploadSupported}>
+									Upload folder (device)
+								</Button>
+							</span>
+						</Tooltip>
+						<Dropdown menu={topActionsMenu} trigger={['click']} placement="bottomRight">
+							<Button icon={<MoreOutlined />}>More</Button>
+						</Dropdown>
+					</Space>
+				</div>
 
 			{isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
+			{!uploadSupported ? (
+				<Alert
+					type="info"
+					showIcon
+					title="Upload actions are disabled for this provider"
+					description={uploadDisabledReason ?? 'This provider does not support upload transfers.'}
+				/>
+			) : null}
 			{!eventsConnected && !isOffline ? (
 				<Alert
 					type="warning"
@@ -1426,19 +1522,16 @@ export function JobsPage(props: Props) {
 						scroll={{ x: true, y: tableScrollY }}
 						virtual
 						locale={{
-							emptyText: showJobsEmpty ? (
-								<Empty description="No jobs yet">
-									<Space wrap>
-										<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline}>
-											Upload folder
-										</Button>
+								emptyText: showJobsEmpty ? (
+									<Empty description="No jobs yet">
+										<Space wrap>
+											<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline || !uploadSupported}>
+												Upload folder
+											</Button>
 										<Button
 											danger
 											icon={<DeleteOutlined />}
-											onClick={() => {
-												setDeleteJobPrefill(null)
-												setCreateDeleteOpen(true)
-											}}
+											onClick={openDeleteJobModal}
 											disabled={isOffline}
 										>
 											New delete job
@@ -1469,12 +1562,14 @@ export function JobsPage(props: Props) {
 							profileId={props.profileId}
 							open={createOpen}
 							onCancel={() => setCreateOpen(false)}
-							onSubmit={(values) => handleDeviceUpload(values)}
-							loading={deviceUploadLoading}
-							isOffline={isOffline}
-							bucket={bucket}
-							setBucket={setBucket}
-							bucketOptions={bucketOptions}
+								onSubmit={(values) => handleDeviceUpload(values)}
+								loading={deviceUploadLoading}
+								isOffline={isOffline}
+								uploadSupported={uploadSupported}
+								uploadUnsupportedReason={uploadDisabledReason}
+								bucket={bucket}
+								setBucket={setBucket}
+								bucketOptions={bucketOptions}
 							defaultMoveAfterUpload={moveAfterUploadDefault}
 							defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
 							onDefaultsChange={(values) => {
@@ -1522,6 +1617,7 @@ export function JobsPage(props: Props) {
 				onClose={() => setDetailsOpen(false)}
 				title="Job Details"
 				width={screens.md ? 720 : '100%'}
+				destroyOnHidden
 				extra={
 					<Space>
 						<Button
@@ -1651,90 +1747,102 @@ export function JobsPage(props: Props) {
 								</Descriptions.Item>
 							</Descriptions>
 
-							{uploadDetails ? (
-								<>
-									<Typography.Title level={5} style={{ marginTop: 16 }}>
-										Upload
-									</Typography.Title>
-									<Descriptions size="small" bordered column={1}>
-										<Descriptions.Item label="Destination">
-											{uploadDetails.bucket ? (
-												<Typography.Text code>
-													{formatS3Destination(uploadDetails.bucket, uploadDetails.prefix ?? '')}
-												</Typography.Text>
-											) : (
-												<Typography.Text type="secondary">-</Typography.Text>
-											)}
-										</Descriptions.Item>
-										<Descriptions.Item label="Label">
-											{uploadDetails.label ? (
-												<Typography.Text>{uploadDetails.label}</Typography.Text>
-											) : (
-												<Typography.Text type="secondary">-</Typography.Text>
-											)}
-										</Descriptions.Item>
-										<Descriptions.Item label="Root">
-											{uploadRootLabel ? (
-												<Typography.Text>{uploadRootLabel}</Typography.Text>
-											) : (
-												<Typography.Text type="secondary">-</Typography.Text>
-											)}
-										</Descriptions.Item>
-										<Descriptions.Item label="Total files">
-											{uploadDetails.totalFiles != null ? (
-												<Typography.Text>{uploadDetails.totalFiles}</Typography.Text>
-											) : (
-												<Typography.Text type="secondary">-</Typography.Text>
-											)}
-										</Descriptions.Item>
-										<Descriptions.Item label="Total bytes">
-											{uploadDetails.totalBytes != null ? (
-												<Typography.Text>{formatBytes(uploadDetails.totalBytes)}</Typography.Text>
-											) : (
-												<Typography.Text type="secondary">-</Typography.Text>
-											)}
-										</Descriptions.Item>
-									</Descriptions>
+							<Collapse
+								size="small"
+								style={{ marginTop: 16 }}
+								items={[
+									...(uploadDetails
+										? [
+												{
+													key: 'upload',
+													label: 'Upload details',
+													children: (
+														<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+															<Descriptions size="small" bordered column={1}>
+																<Descriptions.Item label="Destination">
+																	{uploadDetails.bucket ? (
+																		<Typography.Text code>
+																			{formatS3Destination(uploadDetails.bucket, uploadDetails.prefix ?? '')}
+																		</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">-</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Label">
+																	{uploadDetails.label ? (
+																		<Typography.Text>{uploadDetails.label}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">-</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Root">
+																	{uploadRootLabel ? (
+																		<Typography.Text>{uploadRootLabel}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">-</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Total files">
+																	{uploadDetails.totalFiles != null ? (
+																		<Typography.Text>{uploadDetails.totalFiles}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">-</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Total bytes">
+																	{uploadDetails.totalBytes != null ? (
+																		<Typography.Text>{formatBytes(uploadDetails.totalBytes)}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">-</Typography.Text>
+																	)}
+																</Descriptions.Item>
+															</Descriptions>
 
-									<Typography.Title level={5} style={{ marginTop: 16 }}>
-										Files
-									</Typography.Title>
-									{uploadDetails.items.length ? (
-										<>
-											{uploadDetails.itemsTruncated ? (
-												<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-													Showing first {uploadDetails.items.length} of{' '}
-													{uploadDetails.totalFiles ?? uploadDetails.items.length} files.
-												</Typography.Text>
-											) : null}
-											<Table
-												size="small"
-												columns={uploadTableColumns}
-												dataSource={uploadTableData}
-												pagination={uploadTableData.length > 20 ? { pageSize: 20, size: 'small' } : false}
-											/>
-											{jobDetailsQuery.data?.status !== 'succeeded' ? (
-												<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-													Hashes appear after the job completes.
-												</Typography.Text>
-											) : uploadEtagsQuery.data?.failures ? (
-												<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-													{uploadEtagsQuery.data.failures} file(s) missing hash data.
-												</Typography.Text>
-											) : null}
-										</>
-									) : (
-										<Typography.Text type="secondary">No file details recorded for this upload.</Typography.Text>
-									)}
-								</>
-							) : null}
-
-							<Typography.Title level={5} style={{ marginTop: 16 }}>
-								Payload
-							</Typography.Title>
-							<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-								{JSON.stringify(jobDetailsQuery.data.payload, null, 2)}
-							</pre>
+															{uploadDetails.items.length ? (
+																<>
+																	{uploadDetails.itemsTruncated ? (
+																		<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+																			Showing first {uploadDetails.items.length} of{' '}
+																			{uploadDetails.totalFiles ?? uploadDetails.items.length} files.
+																		</Typography.Text>
+																	) : null}
+																	<Table
+																		size="small"
+																		columns={uploadTableColumns}
+																		dataSource={uploadTableData}
+																		pagination={uploadTableData.length > 20 ? { pageSize: 20, size: 'small' } : false}
+																	/>
+																	{jobDetailsQuery.data?.status !== 'succeeded' ? (
+																		<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+																			Hashes appear after the job completes.
+																		</Typography.Text>
+																	) : uploadEtagsQuery.data?.failures ? (
+																		<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+																			{uploadEtagsQuery.data.failures} file(s) missing hash data.
+																		</Typography.Text>
+																	) : null}
+																</>
+															) : (
+																<Typography.Text type="secondary">
+																	No file details recorded for this upload.
+																</Typography.Text>
+															)}
+														</Space>
+													),
+												},
+											]
+										: []),
+									{
+										key: 'payload',
+										label: 'Payload (JSON)',
+										children: (
+											<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
+												{JSON.stringify(jobDetailsQuery.data.payload, null, 2)}
+											</pre>
+										),
+									},
+								]}
+							/>
 						</>
 					) : (
 						<div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
@@ -1746,11 +1854,15 @@ export function JobsPage(props: Props) {
 				)}
 				</Drawer>
 
-				<Drawer
-					open={logsOpen}
-					onClose={() => setLogsOpen(false)}
+			<Drawer
+				open={logsOpen}
+				onClose={() => {
+					setLogsOpen(false)
+					setLogSearchQuery('')
+				}}
 				title="Job Logs"
 				width={screens.md ? 720 : '100%'}
+				destroyOnHidden
 				extra={
 					<Space>
 						<Button
@@ -1784,10 +1896,28 @@ export function JobsPage(props: Props) {
 								style={{ marginBottom: 12 }}
 							/>
 						) : null}
+						<Space wrap size={8} style={{ width: '100%', marginBottom: 8 }}>
+							<Input
+								allowClear
+								placeholder="Search logs (contains)"
+								value={logSearchQuery}
+								onChange={(e) => setLogSearchQuery(e.target.value)}
+								style={{ width: screens.sm ? 320 : '100%' }}
+							/>
+							<Button icon={<CopyOutlined />} onClick={() => void copyVisibleLogs()} disabled={visibleLogEntries.length === 0}>
+								Copy {normalizedLogSearchQuery ? 'visible' : 'all'}
+							</Button>
+						</Space>
+						<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+							Lines: {activeLogLines.toLocaleString()}
+							{normalizedLogSearchQuery ? ` · Matches: ${visibleLogEntries.length.toLocaleString()}` : ''}
+						</Typography.Text>
 						<div ref={logsContainerRef} style={{ maxHeight: '75vh', overflow: 'auto' }}>
-							<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
-								{(logByJobId[activeLogJobId] ?? []).join('\n')}
-							</pre>
+							{normalizedLogSearchQuery && visibleLogEntries.length === 0 ? (
+								<Typography.Text type="secondary">No matching log lines.</Typography.Text>
+							) : (
+								<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>{visibleLogText}</pre>
+							)}
 						</div>
 					</>
 				) : (

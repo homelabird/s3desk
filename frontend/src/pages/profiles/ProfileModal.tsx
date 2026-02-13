@@ -3,6 +3,57 @@ import { Alert, Checkbox, Divider, Form, Input, Modal, Select, Space, Switch, Ty
 import type { ProfileTLSStatus } from '../../api/types'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
 
+function validateOptionalHttpUrl(value: string | undefined): Promise<void> {
+	if (!value || !value.trim()) return Promise.resolve()
+	try {
+		const parsed = new URL(value.trim())
+		if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+			return Promise.reject(new Error('Endpoint URL must start with http:// or https://'))
+		}
+		return Promise.resolve()
+	} catch {
+		return Promise.reject(new Error('Enter a valid endpoint URL (including protocol)'))
+	}
+}
+
+function validateRegionLike(value: string | undefined): Promise<void> {
+	if (!value || !value.trim()) return Promise.resolve()
+	return /^[a-z0-9-]+$/.test(value.trim())
+		? Promise.resolve()
+		: Promise.reject(new Error('Use lowercase letters, numbers, and hyphens only'))
+}
+
+function validateDigitsOnly(value: string | undefined): Promise<void> {
+	if (!value || !value.trim()) return Promise.resolve()
+	return /^\d+$/.test(value.trim())
+		? Promise.resolve()
+		: Promise.reject(new Error('Use digits only'))
+}
+
+function validateJsonDocument(value: string | undefined): Promise<void> {
+	if (!value || !value.trim()) return Promise.resolve()
+	try {
+		JSON.parse(value)
+		return Promise.resolve()
+	} catch {
+		return Promise.reject(new Error('Enter valid JSON'))
+	}
+}
+
+function validateAzureAccountName(value: string | undefined): Promise<void> {
+	if (!value || !value.trim()) return Promise.resolve()
+	return /^[a-z0-9]{3,24}$/.test(value.trim())
+		? Promise.resolve()
+		: Promise.reject(new Error('Use 3-24 lowercase letters or numbers'))
+}
+
+function validateOciCompartment(value: string | undefined): Promise<void> {
+	if (!value || !value.trim()) return Promise.resolve()
+	return value.trim().startsWith('ocid1.compartment.')
+		? Promise.resolve()
+		: Promise.reject(new Error('Expected OCID that starts with ocid1.compartment.'))
+}
+
 export function ProfileModal(props: {
 	open: boolean
 	title: string
@@ -33,6 +84,42 @@ export function ProfileModal(props: {
 	const showTLSFields = !tlsUnavailable && (props.editMode ? tlsAction === 'enable' : !!tlsEnabled)
 	const tlsStatusLabel = tlsUnavailable ? 'unavailable' : props.tlsStatusLoading ? 'loading...' : props.tlsStatus?.mode === 'mtls' ? 'enabled' : 'disabled'
 	const showTLSStatusError = !tlsUnavailable && props.tlsStatusError
+	const providerGuide = (() => {
+		switch (provider) {
+			case 'aws_s3':
+				return {
+					hint: 'Use AWS region code (for example us-east-1). Endpoint is usually left empty.',
+					docsUrl: 'https://rclone.org/s3/#amazon-s3',
+				}
+			case 's3_compatible':
+				return {
+					hint: 'Set the full endpoint URL and keep region consistent with your server.',
+					docsUrl: 'https://rclone.org/s3/',
+				}
+			case 'oci_s3_compat':
+				return {
+					hint: 'Use OCI S3-compatible endpoint + region + access keys.',
+					docsUrl: 'https://rclone.org/s3/#oracle-oci-object-storage',
+				}
+			case 'oci_object_storage':
+				return {
+					hint: 'Use namespace, compartment OCID, and region for native OCI backend.',
+					docsUrl: 'https://rclone.org/oracleobjectstorage/',
+				}
+			case 'azure_blob':
+				return {
+					hint: 'Account name is lowercase only. Use emulator mode for Azurite.',
+					docsUrl: 'https://rclone.org/azureblob/',
+				}
+			case 'gcp_gcs':
+				return {
+					hint: 'Use Service Account JSON unless anonymous mode is intended.',
+					docsUrl: 'https://rclone.org/googlecloudstorage/',
+				}
+			default:
+				return null
+		}
+	})()
 
 	return (
 		<Modal
@@ -95,6 +182,22 @@ export function ProfileModal(props: {
 						]}
 					/>
 				</Form.Item>
+				{providerGuide ? (
+					<Alert
+						type="info"
+						showIcon
+						title="Provider setup hint"
+						style={{ marginBottom: 12 }}
+						description={
+							<Space direction="vertical" size={2}>
+								<Typography.Text type="secondary">{providerGuide.hint}</Typography.Text>
+								<Typography.Link href={providerGuide.docsUrl} target="_blank" rel="noreferrer">
+									Open provider setup docs
+								</Typography.Link>
+							</Space>
+						}
+					/>
+				) : null}
 
 				<Form.Item name="name" label="Name" rules={[{ required: true }]}>
 					<Input />
@@ -105,11 +208,20 @@ export function ProfileModal(props: {
 						<Form.Item
 							name="endpoint"
 							label={isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
-							rules={isAws ? [] : [{ required: true }]}
+							rules={[
+								...(isAws ? [] : [{ required: true }]),
+								{ validator: (_, value) => validateOptionalHttpUrl(value) },
+							]}
+							extra={isAws ? 'Leave blank to use the AWS default endpoint.' : 'Use full URL including protocol (https://...).'}
 						>
 							<Input placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'} />
 						</Form.Item>
-						<Form.Item name="region" label="Region" rules={[{ required: true }]}>
+						<Form.Item
+							name="region"
+							label="Region"
+							rules={[{ required: true }, { validator: (_, value) => validateRegionLike(value) }]}
+							extra="Example: us-east-1"
+						>
 							<Input placeholder="us-east-1…" />
 						</Form.Item>
 					</>
@@ -117,16 +229,29 @@ export function ProfileModal(props: {
 
 				{isOciObjectStorage ? (
 					<>
-						<Form.Item name="region" label="Region" rules={[{ required: true }]}>
+						<Form.Item
+							name="region"
+							label="Region"
+							rules={[{ required: true }, { validator: (_, value) => validateRegionLike(value) }]}
+							extra="Example: us-ashburn-1"
+						>
 							<Input placeholder="us-ashburn-1…" />
 						</Form.Item>
 						<Form.Item name="ociNamespace" label="Namespace" rules={[{ required: true }]}>
 							<Input placeholder="my-namespace…" />
 						</Form.Item>
-						<Form.Item name="ociCompartment" label="Compartment OCID" rules={[{ required: true }]}>
+						<Form.Item
+							name="ociCompartment"
+							label="Compartment OCID"
+							rules={[{ required: true }, { validator: (_, value) => validateOciCompartment(value) }]}
+						>
 							<Input placeholder="ocid1.compartment.oc1..…" />
 						</Form.Item>
-						<Form.Item name="ociEndpoint" label="Endpoint URL (optional)">
+						<Form.Item
+							name="ociEndpoint"
+							label="Endpoint URL (optional)"
+							rules={[{ validator: (_, value) => validateOptionalHttpUrl(value) }]}
+						>
 							<Input placeholder="https://objectstorage.{region}.oraclecloud.com…" />
 						</Form.Item>
 						<Form.Item name="ociAuthProvider" label="Auth Provider (optional)">
@@ -146,7 +271,12 @@ export function ProfileModal(props: {
 
 				{isAzure ? (
 					<>
-						<Form.Item name="azureAccountName" label="Storage Account Name" rules={[{ required: true }]}> 
+						<Form.Item
+							name="azureAccountName"
+							label="Storage Account Name"
+							rules={[{ required: true }, { validator: (_, value) => validateAzureAccountName(value) }]}
+							extra="3-24 lowercase letters or numbers."
+						>
 							<Input placeholder="mystorageaccount…" />
 						</Form.Item>
 						<Form.Item
@@ -162,7 +292,11 @@ export function ProfileModal(props: {
 								<Switch />
 							</Form.Item>
 						</Space>
-						<Form.Item name="azureEndpoint" label="Endpoint URL (optional)">
+						<Form.Item
+							name="azureEndpoint"
+							label="Endpoint URL (optional)"
+							rules={[{ validator: (_, value) => validateOptionalHttpUrl(value) }]}
+						>
 							<Input placeholder="http://127.0.0.1:10000/devstoreaccount1…" />
 						</Form.Item>
 						<Typography.Text type="secondary">
@@ -177,10 +311,18 @@ export function ProfileModal(props: {
 								<Switch />
 							</Form.Item>
 						</Space>
-						<Form.Item name="gcpEndpoint" label="Endpoint URL (optional)">
+						<Form.Item
+							name="gcpEndpoint"
+							label="Endpoint URL (optional)"
+							rules={[{ validator: (_, value) => validateOptionalHttpUrl(value) }]}
+						>
 							<Input placeholder="https://storage.googleapis.com…" />
 						</Form.Item>
-						<Form.Item name="gcpProjectNumber" label="Project Number (optional)">
+						<Form.Item
+							name="gcpProjectNumber"
+							label="Project Number (optional)"
+							rules={[{ validator: (_, value) => validateDigitsOnly(value) }]}
+						>
 							<Input placeholder="123456789012…" />
 						</Form.Item>
 
@@ -192,7 +334,10 @@ export function ProfileModal(props: {
 							<Form.Item
 								name="gcpServiceAccountJson"
 								label={props.editMode ? 'Service Account JSON (optional)' : 'Service Account JSON'}
-								rules={props.editMode ? [] : [{ required: true }]}
+								rules={[
+									...(props.editMode ? [] : [{ required: true }]),
+									{ validator: (_, value) => validateJsonDocument(value) },
+								]}
 							>
 								<Input.TextArea
 									autoSize={{ minRows: 6, maxRows: 12 }}

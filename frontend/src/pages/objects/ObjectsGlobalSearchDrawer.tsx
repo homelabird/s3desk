@@ -1,4 +1,4 @@
-import { Alert, Button, DatePicker, Divider, Drawer, Empty, Input, InputNumber, Select, Space, Spin, Switch, Table, Typography } from 'antd'
+import { Alert, Button, Collapse, DatePicker, Divider, Drawer, Empty, Input, InputNumber, Select, Space, Spin, Switch, Table, Typography } from 'antd'
 import { CopyOutlined, DownloadOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 
@@ -89,6 +89,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 				<Alert type="warning" showIcon title="Select a bucket first" />
 			) : (
 				<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+						<Typography.Text strong>Search</Typography.Text>
 						<Space wrap>
 							<Input
 								allowClear
@@ -187,37 +188,47 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						)
 					) : null}
 
-					<Divider style={{ marginBlock: 4 }} />
-
-					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
-						<Typography.Text type="secondary">
-							Build/rebuild the index for <Typography.Text code>{props.bucket}</Typography.Text>:
-						</Typography.Text>
-						<Space wrap>
-							<Input
-								allowClear
-								placeholder="Index prefix (optional)…"
-								aria-label="Index prefix"
-								style={{ width: inputWidth, maxWidth: '100%' }}
-								value={props.indexPrefix}
-								onChange={(e) => props.onIndexPrefixChange(e.target.value)}
-							/>
-							<Button size="small" onClick={props.onUseCurrentPrefix} disabled={!props.currentPrefix.trim()}>
-								Use current prefix
-							</Button>
-							<Space>
-								<Typography.Text type="secondary">Full reindex</Typography.Text>
-								<Switch
-									checked={props.indexFullReindex}
-									onChange={(value) => props.onIndexFullReindexChange(value)}
-									aria-label="Full reindex"
-								/>
-							</Space>
-							<Button type="primary" onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
-								Create index job
-							</Button>
-						</Space>
-					</Space>
+					<Collapse
+						size="small"
+						defaultActiveKey={props.isNotIndexed ? ['index'] : []}
+						items={[
+							{
+								key: 'index',
+								label: 'Index management',
+								children: (
+									<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+										<Typography.Text type="secondary">
+											Build/rebuild the index for <Typography.Text code>{props.bucket}</Typography.Text>:
+										</Typography.Text>
+										<Space wrap>
+											<Input
+												allowClear
+												placeholder="Index prefix (optional)…"
+												aria-label="Index prefix"
+												style={{ width: inputWidth, maxWidth: '100%' }}
+												value={props.indexPrefix}
+												onChange={(e) => props.onIndexPrefixChange(e.target.value)}
+											/>
+											<Button size="small" onClick={props.onUseCurrentPrefix} disabled={!props.currentPrefix.trim()}>
+												Use current prefix
+											</Button>
+											<Space>
+												<Typography.Text type="secondary">Full reindex</Typography.Text>
+												<Switch
+													checked={props.indexFullReindex}
+													onChange={(value) => props.onIndexFullReindexChange(value)}
+													aria-label="Full reindex"
+												/>
+											</Space>
+											<Button type="primary" onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
+												Create index job
+											</Button>
+										</Space>
+									</Space>
+								),
+							},
+						]}
+					/>
 
 					<Divider style={{ marginBlock: 8 }} />
 

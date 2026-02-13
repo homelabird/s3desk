@@ -9,6 +9,8 @@ type UseObjectsUploadDropArgs = {
 	bucket: string
 	prefix: string
 	isOffline: boolean
+	uploadsEnabled: boolean
+	uploadsDisabledReason?: string | null
 	transfers: TransfersContextValue
 }
 
@@ -80,7 +82,15 @@ const collectDroppedUploadFiles = async (dt: DataTransfer): Promise<File[]> => {
 	return out
 }
 
-export function useObjectsUploadDrop({ profileId, bucket, prefix, isOffline, transfers }: UseObjectsUploadDropArgs) {
+export function useObjectsUploadDrop({
+	profileId,
+	bucket,
+	prefix,
+	isOffline,
+	uploadsEnabled,
+	uploadsDisabledReason,
+	transfers,
+}: UseObjectsUploadDropArgs) {
 	const uploadDragCounterRef = useRef(0)
 	const [uploadDropActive, setUploadDropActive] = useState(false)
 
@@ -88,6 +98,10 @@ export function useObjectsUploadDrop({ profileId, bucket, prefix, isOffline, tra
 		(files: File[]) => {
 			if (isOffline) {
 				message.warning('Offline: uploads are disabled.')
+				return
+			}
+			if (!uploadsEnabled) {
+				message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
 				return
 			}
 			if (!profileId) {
@@ -103,23 +117,23 @@ export function useObjectsUploadDrop({ profileId, bucket, prefix, isOffline, tra
 			transfers.queueUploadFiles({ profileId, bucket, prefix, files: cleanedFiles })
 			transfers.openTransfers('uploads')
 		},
-		[bucket, isOffline, prefix, profileId, transfers],
+		[bucket, isOffline, prefix, profileId, transfers, uploadsDisabledReason, uploadsEnabled],
 	)
 
 	const onUploadDragEnter = useCallback(
 		(e: React.DragEvent) => {
-			if (!profileId || !bucket || isOffline) return
+			if (!profileId || !bucket || isOffline || !uploadsEnabled) return
 			if (!e.dataTransfer.types.includes('Files')) return
 			e.preventDefault()
 			uploadDragCounterRef.current += 1
 			setUploadDropActive(true)
 		},
-		[bucket, isOffline, profileId],
+		[bucket, isOffline, profileId, uploadsEnabled],
 	)
 
 	const onUploadDragLeave = useCallback(
 		(e: React.DragEvent) => {
-			if (!profileId || !bucket || isOffline) return
+			if (!profileId || !bucket || isOffline || !uploadsEnabled) return
 			if (!e.dataTransfer.types.includes('Files')) return
 			e.preventDefault()
 			uploadDragCounterRef.current -= 1
@@ -128,26 +142,30 @@ export function useObjectsUploadDrop({ profileId, bucket, prefix, isOffline, tra
 				setUploadDropActive(false)
 			}
 		},
-		[bucket, isOffline, profileId],
+		[bucket, isOffline, profileId, uploadsEnabled],
 	)
 
 	const onUploadDragOver = useCallback(
 		(e: React.DragEvent) => {
-			if (!profileId || !bucket || isOffline) return
+			if (!profileId || !bucket || isOffline || !uploadsEnabled) return
 			if (!e.dataTransfer.types.includes('Files')) return
 			e.preventDefault()
 			e.dataTransfer.dropEffect = 'copy'
 		},
-		[bucket, isOffline, profileId],
+		[bucket, isOffline, profileId, uploadsEnabled],
 	)
 
 	const onUploadDrop = useCallback(
-		(e: React.DragEvent) => {
-			if (!profileId || !bucket) return
-			if (isOffline) {
-				message.warning('Offline: uploads are disabled.')
-				return
-			}
+			(e: React.DragEvent) => {
+				if (!profileId || !bucket) return
+				if (!uploadsEnabled) {
+					message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+					return
+				}
+				if (isOffline) {
+					message.warning('Offline: uploads are disabled.')
+					return
+				}
 			if (!e.dataTransfer.types.includes('Files')) return
 			e.preventDefault()
 			setUploadDropActive(false)
@@ -177,7 +195,7 @@ export function useObjectsUploadDrop({ profileId, bucket, prefix, isOffline, tra
 				}
 			})()
 		},
-		[bucket, isOffline, profileId, startUploadFromFiles],
+		[bucket, isOffline, profileId, startUploadFromFiles, uploadsDisabledReason, uploadsEnabled],
 	)
 
 	return {

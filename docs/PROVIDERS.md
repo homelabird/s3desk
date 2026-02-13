@@ -36,6 +36,18 @@ UI/DB/API 스키마로 **어떤 옵션을 1급(Profile)으로 노출하느냐**�
 > 참고: `aws_s3`는 endpoint를 비워도 AWS 기본 엔드포인트로 동작합니다.
 > 반면 `s3_compatible`/`oci_s3_compat`는 **endpoint가 사실상 필수**입니다.
 
+## 1-1) 런타임 Capability Matrix (`/meta`)
+
+서버는 `GET /api/v1/meta`의 `capabilities.providers`에 provider별 기능 플래그를 제공합니다.
+
+- 공통: `bucketCrud`, `objectCrud`, `jobTransfer`, `directUpload`
+- 정책: `bucketPolicy`, `gcsIamPolicy`, `azureContainerAccessPolicy`
+- 업로드: `presignedUpload`, `presignedMultipartUpload`
+- 사유: `reasons.*` (해당 capability가 `false`일 때 provider별/서버설정별 비활성 사유)
+
+UI는 하드코딩 대신 이 매트릭스를 우선 사용해 provider별 미지원 기능을 숨기거나 비활성화해야 합니다.
+구버전 서버 호환을 위해 fallback 매트릭스를 함께 유지할 수 있습니다.
+
 
 ## 2) Profile 필드 요약
 
@@ -118,19 +130,21 @@ UI/DB/API 스키마로 **어떤 옵션을 1급(Profile)으로 노출하느냐**�
 
 ### 현재 미지원(로드맵에 포함)
 
-- “버킷 정책 / IAM / ACL 정책 편집” 같은 관리 기능
 - 수명주기(Lifecycle), CORS, 버전닝, 리텐션 정책, KMS 키 설정
 
-다만 사용자 요구(멀티-클라우드 통합 + 정책 조작)가 명확해져서, 다음과 같이 **단계적으로** 범위를 확장할 계획입니다.
+### 버킷 정책 / IAM / ACL (현재 지원 범위)
 
-- 1차: S3 계열(`aws_s3`, `s3_compatible`, `oci_s3_compat`, MinIO, Ceph RGW 등)
-  - S3 Bucket Policy(JSON) 조회/적용/삭제를 제공
-- 2차: GCS
-  - Bucket IAM Policy(바인딩) 조작을 S3Desk 공통 모델로 매핑
-- 3차: Azure Blob
-  - Container public access/ACL(stored access policy) 조작 범위를 정의
+아래 provider는 버킷 정책 관리 API/UI를 지원합니다.
 
-Provider마다 정책 모델이 다르기 때문에, "완전히 동일한 UI"가 아니라 **공통 UX(권한 부여/차단, public access, 최소 권한 안내)**를 중심으로 통합하는 방향이 현실적입니다.
+- S3 계열(`aws_s3`, `s3_compatible`, `oci_s3_compat`, MinIO, Ceph RGW 등)
+  - S3 Bucket Policy(JSON) `GET/PUT/DELETE`
+- GCS
+  - Bucket IAM Policy(JSON) `GET/PUT`
+  - `DELETE`는 미지원 (`bucket_policy_delete_unsupported` 반환, 정책은 `PUT`으로 갱신)
+- Azure Blob
+  - Container access policy(JSON) `GET/PUT/DELETE` (public access + stored access policies)
+
+Provider마다 정책 모델이 달라 "완전히 동일한 JSON"은 아니며, S3Desk는 공통 UX(정책 조회/수정/검증/적용)를 제공합니다.
 
 ## 4) 에러 처리 (NormalizedError)
 

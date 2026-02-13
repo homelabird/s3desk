@@ -13,6 +13,8 @@ type UseObjectsActionCatalogArgs = {
 	profileId: string | null
 	bucket: string
 	prefix: string
+	objectCrudSupported: boolean
+	uploadSupported: boolean
 	selectedCount: number
 	clipboardObjects: ClipboardObjects | null
 	singleSelectedKey: string | null
@@ -66,6 +68,8 @@ export function useObjectsActionCatalog({
 	profileId,
 	bucket,
 	prefix,
+	objectCrudSupported,
+	uploadSupported,
 	selectedCount,
 	clipboardObjects,
 	singleSelectedKey,
@@ -119,6 +123,8 @@ export function useObjectsActionCatalog({
 		profileId,
 		bucket,
 		prefix,
+		objectCrudSupported,
+		uploadSupported,
 		selectedCount,
 		clipboardObjects,
 		canGoBack,

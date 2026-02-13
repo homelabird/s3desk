@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Drawer, Grid, Layout, Menu, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Drawer, Dropdown, Grid, Layout, Menu, Space, Spin, Typography } from 'antd'
 import {
 	AppstoreOutlined,
 	CloudUploadOutlined,
+	EllipsisOutlined,
 	FolderOpenOutlined,
 	LogoutOutlined,
 	MenuOutlined,
@@ -19,6 +20,7 @@ import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/Transfers'
 import { LoginPage } from './pages/LoginPage'
+import { getProviderCapabilities } from './lib/providerCapabilities'
 import { useLocalStorageState } from './lib/useLocalStorageState'
 
 const menuLinkStyle: CSSProperties = {
@@ -75,6 +77,24 @@ export default function App() {
 		queryFn: () => api.getMeta(),
 		retry: false,
 	})
+	const profilesQuery = useQuery({
+		queryKey: ['profiles', apiToken],
+		queryFn: () => api.listProfiles(),
+		enabled: metaQuery.isSuccess,
+	})
+	const uploadCapabilityByProfileId = useMemo(() => {
+		const out: Record<string, { presignedUpload: boolean; directUpload: boolean }> = {}
+		const providerMatrix = metaQuery.data?.capabilities?.providers
+		for (const profile of profilesQuery.data ?? []) {
+			if (!profile.provider) continue
+			const capability = getProviderCapabilities(profile.provider, providerMatrix)
+			out[profile.id] = {
+				presignedUpload: capability.presignedUpload,
+				directUpload: capability.directUpload,
+			}
+		}
+		return out
+	}, [metaQuery.data?.capabilities?.providers, profilesQuery.data])
 
 	const selectedKey = useMemo(() => {
 		if (location.pathname.startsWith('/profiles')) return '/profiles'
@@ -151,6 +171,10 @@ export default function App() {
 		setApiToken('')
 		setProfileId(null)
 	}
+	const mobileHeaderMenuItems = [
+		{ key: 'settings', icon: <SettingOutlined />, label: 'Settings' },
+		...(apiToken ? [{ key: 'logout', icon: <LogoutOutlined />, label: 'Logout', danger: true }] : []),
+	]
 
 	// Auth gate (token-based):
 	// - If server requires API_TOKEN and we don't have it (or it's wrong), /api/v1/meta returns 401.
@@ -207,7 +231,11 @@ export default function App() {
 	}
 
 	return (
-		<TransfersProvider apiToken={apiToken} uploadDirectStream={uploadDirectStream}>
+		<TransfersProvider
+			apiToken={apiToken}
+			uploadDirectStream={uploadDirectStream}
+			uploadCapabilityByProfileId={uploadCapabilityByProfileId}
+		>
 			<Layout style={{ minHeight: '100dvh' }}>
 				{isDesktop ? (
 					<Sider width={220}>
@@ -248,24 +276,50 @@ export default function App() {
 									aria-label="Open navigation"
 								/>
 							)}
-							<Typography.Text strong>API</Typography.Text>
 							{screens.sm ? (
-								<Typography.Text type="secondary">
-									<Link to="/profiles">/api/v1</Link>
-								</Typography.Text>
-							) : null}
+								<>
+									<Typography.Text strong>API</Typography.Text>
+									<Typography.Text type="secondary">
+										<Link to="/profiles">/api/v1</Link>
+									</Typography.Text>
+								</>
+							) : (
+								<Typography.Text strong>S3Desk</Typography.Text>
+							)}
 						</Space>
 						<Space wrap style={{ justifyContent: 'flex-end' }}>
 							<TopBarProfileSelect profileId={profileId} setProfileId={setProfileId} apiToken={apiToken} />
 							<TransfersButton showLabel={!!screens.sm} />
-							<Button type="link" onClick={openSettings} aria-label={screens.sm ? undefined : 'Settings'}>
-								<SettingOutlined /> {screens.sm ? 'Settings' : null}
-							</Button>
-							{apiToken ? (
-								<Button type="link" onClick={logout} aria-label={screens.sm ? undefined : 'Logout'}>
-									<LogoutOutlined /> {screens.sm ? 'Logout' : null}
-								</Button>
-							) : null}
+							{screens.sm ? (
+								<>
+									<Button type="link" onClick={openSettings}>
+										<SettingOutlined /> Settings
+									</Button>
+									{apiToken ? (
+										<Button type="link" onClick={logout}>
+											<LogoutOutlined /> Logout
+										</Button>
+									) : null}
+								</>
+							) : (
+								<Dropdown
+									trigger={['click']}
+									menu={{
+										items: mobileHeaderMenuItems,
+										onClick: ({ key }) => {
+											if (key === 'settings') {
+												openSettings()
+												return
+											}
+											if (key === 'logout') {
+												logout()
+											}
+										},
+									}}
+								>
+									<Button type="text" icon={<EllipsisOutlined />} aria-label="More actions" />
+								</Dropdown>
+							)}
 						</Space>
 					</Header>
 					<Content

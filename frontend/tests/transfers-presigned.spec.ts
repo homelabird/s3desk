@@ -384,3 +384,177 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 	await expect(row.getByText(/network error/i)).toBeVisible()
 	expect(commitCalled).toBe(false)
 })
+
+test('uses capability matrix to skip presigned mode for unsupported providers', async ({ page }) => {
+	const now = '2024-01-01T00:00:00Z'
+	const uploadId = 'upload-capability'
+	let profilesLoaded = false
+	let presignedAttempted = false
+	let stagingAttempted = false
+	let commitCalled = false
+
+	await page.route('**/api/v1/**', async (route) => {
+		const request = route.request()
+		const url = new URL(request.url())
+		const path = url.pathname
+		const method = request.method()
+
+		if (method === 'GET' && path === '/api/v1/events') {
+			return route.fulfill({
+				status: 200,
+				headers: { 'content-type': 'text/event-stream' },
+				body: '',
+			})
+		}
+
+		if (method === 'GET' && path === '/api/v1/meta') {
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					version: 'test',
+					serverAddr: '127.0.0.1:8080',
+					dataDir: '/tmp',
+					staticDir: '/tmp',
+					apiTokenEnabled: true,
+					encryptionEnabled: false,
+					capabilities: {
+						profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' },
+						providers: {
+							azure_blob: {
+								bucketCrud: true,
+								objectCrud: true,
+								jobTransfer: true,
+								bucketPolicy: false,
+								gcsIamPolicy: false,
+								azureContainerAccessPolicy: true,
+								presignedUpload: false,
+								presignedMultipartUpload: false,
+								directUpload: false,
+							},
+						},
+					},
+					allowedLocalDirs: [],
+					jobConcurrency: 2,
+					jobLogMaxBytes: null,
+					jobRetentionSeconds: null,
+					uploadSessionTTLSeconds: 86400,
+					uploadMaxBytes: null,
+					uploadDirectStream: false,
+					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
+				}),
+			})
+		}
+
+		if (method === 'GET' && path === '/api/v1/profiles') {
+			profilesLoaded = true
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify([
+					{
+						id: defaultStorage.profileId,
+						provider: 'azure_blob',
+						name: 'Playwright',
+						accountName: 'playwright',
+						accountKey: 'secret',
+						createdAt: now,
+						updatedAt: now,
+					},
+				]),
+			})
+		}
+
+		if (method === 'GET' && path === '/api/v1/buckets') {
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
+			})
+		}
+
+		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					bucket: defaultStorage.bucket,
+					prefix: '',
+					delimiter: '/',
+					commonPrefixes: [],
+					items: [],
+					nextContinuationToken: null,
+					isTruncated: false,
+				}),
+			})
+		}
+
+		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					bucket: defaultStorage.bucket,
+					prefix: '',
+					items: [],
+				}),
+			})
+		}
+
+		if (method === 'POST' && path === '/api/v1/uploads') {
+			const body = request.postDataJSON() as { mode?: string }
+			if (body?.mode === 'presigned') {
+				presignedAttempted = true
+				return route.fulfill({
+					status: 400,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						error: {
+							code: 'not_supported',
+							message: 'presigned uploads require an S3-compatible provider',
+						},
+					}),
+				})
+			}
+			if (body?.mode === 'staging') {
+				stagingAttempted = true
+			}
+			return route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({ uploadId, mode: body?.mode ?? 'staging', maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }),
+			})
+		}
+
+		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/files`) {
+			return route.fulfill({ status: 204 })
+		}
+
+		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/commit`) {
+			commitCalled = true
+			return route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({ jobId: 'job-capability' }),
+			})
+		}
+		if (method === 'GET' && path === '/api/v1/jobs/job-capability') {
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ status: 'running' }),
+			})
+		}
+
+		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+	})
+
+	await seedStorage(page)
+	await page.goto('/objects')
+	await expect.poll(() => profilesLoaded, { timeout: 5000 }).toBe(true)
+	await dropSingleFile(page, 'hello.txt', 'hello', 'text/plain')
+
+	await expect.poll(() => stagingAttempted, { timeout: 5000 }).toBe(true)
+	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
+	expect(presignedAttempted).toBe(false)
+})

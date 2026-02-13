@@ -2,6 +2,12 @@
 
 These panels are designed for the built-in metrics in `internal/metrics`.
 
+## Import-ready dashboard JSON
+
+- Grafana import file: `docs/grafana/s3desk-jobs-retry-failure.dashboard.json`
+- Import path: Grafana `Dashboards` -> `New` -> `Import` -> upload the JSON file.
+- Datasource: map `DS_PROMETHEUS` to your Prometheus datasource during import.
+
 ## HTTP
 
 - **RPS by route**
@@ -43,6 +49,35 @@ These panels are designed for the built-in metrics in `internal/metrics`.
   sum(rate(jobs_completed_total{status="failed"}[15m])) by (type, error_code)
   ```
 
+- **Retry attempts rate by type**
+  ```
+  sum(rate(jobs_retried_total[15m])) by (type)
+  ```
+
+- **Retry pressure (% of started jobs)**
+  ```
+  100 * sum(rate(jobs_retried_total[15m]))
+    / clamp_min(sum(rate(jobs_started_total[15m])), 0.001)
+  ```
+
+- **Final failure ratio (overall %)**
+  ```
+  100 * sum(rate(jobs_completed_total{status="failed"}[15m]))
+    / clamp_min(sum(rate(jobs_completed_total[15m])), 0.001)
+  ```
+
+- **Final failure ratio by type (%)**
+  ```
+  100 * sum(rate(jobs_completed_total{status="failed"}[15m])) by (type)
+    / clamp_min(sum(rate(jobs_completed_total[15m])) by (type), 0.001)
+  ```
+
+- **Retry effectiveness (retries per failed completion)**
+  ```
+  sum(rate(jobs_retried_total[15m]))
+    / clamp_min(sum(rate(jobs_completed_total{status="failed"}[15m])), 0.001)
+  ```
+
 ## Transfers
 
 - **Transfer throughput**
@@ -66,4 +101,3 @@ These panels are designed for the built-in metrics in `internal/metrics`.
   ```
   rate(events_reconnects_total[15m])
   ```
-

@@ -4,7 +4,6 @@ import {
 	Alert,
 	Button,
 	Descriptions,
-	Divider,
 	Form,
 	Input,
 	InputNumber,
@@ -137,6 +136,10 @@ function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => vo
 			</Button>
 		</Space.Compact>
 	)
+}
+
+function networkLogTagColor(kind: NetworkLogEvent['kind']): string {
+	return kind === 'retry' ? 'orange' : 'blue'
 }
 
 export function SettingsPage(props: Props) {
@@ -294,19 +297,28 @@ export function SettingsPage(props: Props) {
 									</Form.Item>
 								</Form>
 
-								<Divider style={{ marginBlock: 8 }} />
-
-								<Space orientation="vertical" size={4} style={{ width: '100%' }}>
-									<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
-									<Space wrap>
-										<Button type="link" href={apiDocsUrl} target="_blank" rel="noreferrer">
-											Open API Docs
-										</Button>
-										<Button type="link" href={openapiUrl} target="_blank" rel="noreferrer">
-											OpenAPI YAML
-										</Button>
-									</Space>
-								</Space>
+								<Collapse
+									size="small"
+									items={[
+										{
+											key: 'advanced',
+											label: 'Advanced',
+											children: (
+												<Space orientation="vertical" size={4} style={{ width: '100%' }}>
+													<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
+													<Space wrap>
+														<Button type="link" href={apiDocsUrl} target="_blank" rel="noreferrer">
+															Open API Docs
+														</Button>
+														<Button type="link" href={openapiUrl} target="_blank" rel="noreferrer">
+															OpenAPI YAML
+														</Button>
+													</Space>
+												</Space>
+											),
+										},
+									]}
+								/>
 							</Space>
 						),
 					},
@@ -548,58 +560,73 @@ export function SettingsPage(props: Props) {
 										aria-label="Show image thumbnails"
 									/>
 								</Form.Item>
-								<Form.Item label="Thumbnail cache size" extra="Max cached thumbnails kept in memory (LRU).">
-									<InputNumber
-										min={THUMBNAIL_CACHE_MIN_ENTRIES}
-										max={THUMBNAIL_CACHE_MAX_ENTRIES}
-										step={50}
-										precision={0}
-										value={objectsThumbnailCacheSize}
-										onChange={(value) =>
-											setObjectsThumbnailCacheSize(
-												typeof value === 'number'
-													? Math.min(
-															THUMBNAIL_CACHE_MAX_ENTRIES,
-															Math.max(THUMBNAIL_CACHE_MIN_ENTRIES, value),
-														)
-													: THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
-											)
-										}
-										style={{ width: '100%' }}
-									/>
-								</Form.Item>
-								<Divider style={{ marginBlock: 8 }} />
-								<Form.Item
-									label="Auto index current prefix"
-									extra="When Global Search is used, build/refresh the index for the current prefix automatically."
-								>
-									<Switch
-										checked={objectsAutoIndexEnabled}
-										onChange={setObjectsAutoIndexEnabled}
-										aria-label="Auto index current prefix"
-									/>
-								</Form.Item>
-								<Form.Item label="Auto index TTL (hours)" extra="Rebuild prefix index when it is older than this value.">
-									<InputNumber
-										min={OBJECTS_AUTO_INDEX_TTL_MIN_HOURS}
-										max={OBJECTS_AUTO_INDEX_TTL_MAX_HOURS}
-										step={1}
-										precision={0}
-										value={objectsAutoIndexTtlHours}
-										onChange={(value) =>
-											setObjectsAutoIndexTtlHours(
-												typeof value === 'number'
-													? Math.min(
-															OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
-															Math.max(OBJECTS_AUTO_INDEX_TTL_MIN_HOURS, value),
-														)
-													: OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
-											)
-										}
-										disabled={!objectsAutoIndexEnabled}
-										style={{ width: '100%' }}
-									/>
-								</Form.Item>
+								<Collapse
+									size="small"
+									items={[
+										{
+											key: 'advanced',
+											label: 'Advanced',
+											children: (
+												<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+													<Form.Item label="Thumbnail cache size" extra="Max cached thumbnails kept in memory (LRU).">
+														<InputNumber
+															min={THUMBNAIL_CACHE_MIN_ENTRIES}
+															max={THUMBNAIL_CACHE_MAX_ENTRIES}
+															step={50}
+															precision={0}
+															value={objectsThumbnailCacheSize}
+															onChange={(value) =>
+																setObjectsThumbnailCacheSize(
+																	typeof value === 'number'
+																		? Math.min(
+																				THUMBNAIL_CACHE_MAX_ENTRIES,
+																				Math.max(THUMBNAIL_CACHE_MIN_ENTRIES, value),
+																			)
+																		: THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
+																)
+															}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Auto index current prefix"
+														extra="When Global Search is used, build/refresh the index for the current prefix automatically."
+													>
+														<Switch
+															checked={objectsAutoIndexEnabled}
+															onChange={setObjectsAutoIndexEnabled}
+															aria-label="Auto index current prefix"
+														/>
+													</Form.Item>
+													<Form.Item
+														label="Auto index TTL (hours)"
+														extra="Rebuild prefix index when it is older than this value."
+													>
+														<InputNumber
+															min={OBJECTS_AUTO_INDEX_TTL_MIN_HOURS}
+															max={OBJECTS_AUTO_INDEX_TTL_MAX_HOURS}
+															step={1}
+															precision={0}
+															value={objectsAutoIndexTtlHours}
+															onChange={(value) =>
+																setObjectsAutoIndexTtlHours(
+																	typeof value === 'number'
+																		? Math.min(
+																				OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
+																				Math.max(OBJECTS_AUTO_INDEX_TTL_MIN_HOURS, value),
+																			)
+																		: OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
+																)
+															}
+															disabled={!objectsAutoIndexEnabled}
+															style={{ width: '100%' }}
+														/>
+													</Form.Item>
+												</Space>
+											),
+										},
+									]}
+								/>
 							</Form>
 						),
 					},
@@ -640,34 +667,56 @@ export function SettingsPage(props: Props) {
 										style={{ width: '100%' }}
 									/>
 								</Form.Item>
-								<Form.Item label="Network diagnostics" extra="Recent network events and retries (this session).">
-									<Space orientation="vertical" size={8} style={{ width: '100%' }}>
-										<Button size="small" onClick={() => clearNetworkLog()} disabled={networkLog.length === 0}>
-											Clear log
-										</Button>
-										<div
-											style={{
-												border: '1px solid rgba(0, 0, 0, 0.08)',
-												borderRadius: 8,
-												padding: 8,
-												maxHeight: 160,
-												overflow: 'auto',
-											}}
-										>
-											<Space orientation="vertical" size={4} style={{ width: '100%' }}>
-												{networkLog.length === 0 ? (
-													<Typography.Text type="secondary">No network events yet.</Typography.Text>
-												) : (
-													networkLog.map((entry, index) => (
-														<Typography.Text key={`${entry.ts}-${index}`} type="secondary">
-															{formatTime(entry.ts)} · {entry.kind} · {entry.message}
-														</Typography.Text>
-													))
-												)}
-											</Space>
-										</div>
-									</Space>
-								</Form.Item>
+								<Collapse
+									size="small"
+									items={[
+										{
+											key: 'advanced',
+											label: 'Advanced',
+											children: (
+												<Form.Item
+													label="Network diagnostics"
+													extra="Recent network events and retries (this session)."
+													style={{ marginBottom: 0 }}
+												>
+														<Space orientation="vertical" size={8} style={{ width: '100%' }}>
+															<Typography.Text type="secondary">Session log ({networkLog.length})</Typography.Text>
+															<Typography.Text type="secondary">
+																Retry entries include wait time and reason. If <Typography.Text code>Retry-After</Typography.Text> appears, wait that
+																interval before manual retry.
+															</Typography.Text>
+															<Button size="small" onClick={() => clearNetworkLog()} disabled={networkLog.length === 0}>
+																Clear log
+															</Button>
+														<div
+															style={{
+																border: '1px solid rgba(0, 0, 0, 0.08)',
+																borderRadius: 8,
+																padding: 8,
+																maxHeight: 160,
+																overflow: 'auto',
+															}}
+														>
+															<Space orientation="vertical" size={4} style={{ width: '100%' }}>
+																{networkLog.length === 0 ? (
+																	<Typography.Text type="secondary">No network events yet.</Typography.Text>
+																) : (
+																		networkLog.map((entry, index) => (
+																			<Space key={`${entry.ts}-${index}`} size={8} wrap>
+																				<Typography.Text type="secondary">{formatTime(entry.ts)}</Typography.Text>
+																				<Tag color={networkLogTagColor(entry.kind)}>{entry.kind.toUpperCase()}</Tag>
+																				<Typography.Text type="secondary">{entry.message}</Typography.Text>
+																			</Space>
+																		))
+																	)}
+																</Space>
+															</div>
+													</Space>
+												</Form.Item>
+											),
+										},
+									]}
+								/>
 							</Form>
 						),
 					},
@@ -703,88 +752,113 @@ export function SettingsPage(props: Props) {
 											/>
 										) : null}
 
-										<Descriptions size="small" bordered column={1}>
-											<Descriptions.Item label="Version">{metaQuery.data.version}</Descriptions.Item>
-											<Descriptions.Item label="Server Addr">
-												<Typography.Text code>{metaQuery.data.serverAddr}</Typography.Text>
-											</Descriptions.Item>
-											<Descriptions.Item label="Data Dir">
-												<Typography.Text code>{metaQuery.data.dataDir}</Typography.Text>
-											</Descriptions.Item>
-											<Descriptions.Item label="Static Dir">
-												<Typography.Text code>{metaQuery.data.staticDir}</Typography.Text>
-											</Descriptions.Item>
-											<Descriptions.Item label="API Token Required">
-												<Tag color={metaQuery.data.apiTokenEnabled ? 'warning' : 'default'}>
-													{metaQuery.data.apiTokenEnabled ? 'enabled' : 'disabled'}
-												</Tag>
-											</Descriptions.Item>
-											<Descriptions.Item label="Encryption">
-												<Tag color={metaQuery.data.encryptionEnabled ? 'success' : 'default'}>
-													{metaQuery.data.encryptionEnabled ? 'enabled' : 'disabled'}
-												</Tag>
-											</Descriptions.Item>
-											<Descriptions.Item label={mtlsLabel}>
-												<Space orientation="vertical" size={0}>
-													<Tag color={tlsEnabled ? 'success' : 'default'}>{tlsEnabled ? 'enabled' : 'disabled'}</Tag>
-													{!tlsEnabled && tlsReason ? <Typography.Text type="secondary">{tlsReason}</Typography.Text> : null}
-												</Space>
-											</Descriptions.Item>
-											<Descriptions.Item label="Allowed Local Dirs">
-												{metaQuery.data.allowedLocalDirs?.length ? (
-													<Typography.Text code>{metaQuery.data.allowedLocalDirs.join(', ')}</Typography.Text>
-												) : (
-													<Typography.Text type="secondary">(not configured)</Typography.Text>
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="Job Concurrency">{metaQuery.data.jobConcurrency}</Descriptions.Item>
-											<Descriptions.Item label="Job Log Max Bytes">
-												{metaQuery.data.jobLogMaxBytes ? (
-													<Typography.Text code>{metaQuery.data.jobLogMaxBytes}</Typography.Text>
-												) : (
-													<Typography.Text type="secondary">(unlimited)</Typography.Text>
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="Job Retention (seconds)">
-												{metaQuery.data.jobRetentionSeconds ? (
-													<Typography.Text code>{metaQuery.data.jobRetentionSeconds}</Typography.Text>
-												) : (
-													<Typography.Text type="secondary">(keep forever)</Typography.Text>
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="Job Log Retention (seconds)">
-												{metaQuery.data.jobLogRetentionSeconds ? (
-													<Typography.Text code>{metaQuery.data.jobLogRetentionSeconds}</Typography.Text>
-												) : (
-													<Typography.Text type="secondary">(keep forever)</Typography.Text>
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="Upload Session TTL (seconds)">{metaQuery.data.uploadSessionTTLSeconds}</Descriptions.Item>
-											<Descriptions.Item label="Upload Max Bytes">
-												{metaQuery.data.uploadMaxBytes ? (
-													<Typography.Text code>{metaQuery.data.uploadMaxBytes}</Typography.Text>
-												) : (
-													<Typography.Text type="secondary">(unlimited)</Typography.Text>
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="Transfer Engine">
-												<Space>
-													<Tag color={metaQuery.data.transferEngine.available ? 'success' : 'default'}>
-														{metaQuery.data.transferEngine.available ? 'available' : 'missing'}
-													</Tag>
-													{metaQuery.data.transferEngine.available ? (
-														<Tag color={metaQuery.data.transferEngine.compatible ? 'success' : 'error'}>
-															{metaQuery.data.transferEngine.compatible
-																? 'compatible'
-																: `incompatible (>= ${metaQuery.data.transferEngine.minVersion})`}
-														</Tag>
-													) : null}
-													<Typography.Text code>{metaQuery.data.transferEngine.name}</Typography.Text>
-													{metaQuery.data.transferEngine.version ? <Typography.Text code>{metaQuery.data.transferEngine.version}</Typography.Text> : null}
-													{metaQuery.data.transferEngine.path ? <Typography.Text code>{metaQuery.data.transferEngine.path}</Typography.Text> : null}
-												</Space>
-											</Descriptions.Item>
-										</Descriptions>
+										<Collapse
+											size="small"
+											items={[
+												{
+													key: 'advanced',
+													label: 'Advanced',
+													children: (
+														<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+															<Typography.Text type="secondary">Detailed server metadata and capability status.</Typography.Text>
+															<Descriptions size="small" bordered column={1}>
+																<Descriptions.Item label="Version">{metaQuery.data.version}</Descriptions.Item>
+																<Descriptions.Item label="Server Addr">
+																	<Typography.Text code>{metaQuery.data.serverAddr}</Typography.Text>
+																</Descriptions.Item>
+																<Descriptions.Item label="Data Dir">
+																	<Typography.Text code>{metaQuery.data.dataDir}</Typography.Text>
+																</Descriptions.Item>
+																<Descriptions.Item label="Static Dir">
+																	<Typography.Text code>{metaQuery.data.staticDir}</Typography.Text>
+																</Descriptions.Item>
+																<Descriptions.Item label="API Token Required">
+																	<Tag color={metaQuery.data.apiTokenEnabled ? 'warning' : 'default'}>
+																		{metaQuery.data.apiTokenEnabled ? 'enabled' : 'disabled'}
+																	</Tag>
+																</Descriptions.Item>
+																<Descriptions.Item label="Encryption">
+																	<Tag color={metaQuery.data.encryptionEnabled ? 'success' : 'default'}>
+																		{metaQuery.data.encryptionEnabled ? 'enabled' : 'disabled'}
+																	</Tag>
+																</Descriptions.Item>
+																<Descriptions.Item label={mtlsLabel}>
+																	<Space orientation="vertical" size={0}>
+																		<Tag color={tlsEnabled ? 'success' : 'default'}>{tlsEnabled ? 'enabled' : 'disabled'}</Tag>
+																		{!tlsEnabled && tlsReason ? <Typography.Text type="secondary">{tlsReason}</Typography.Text> : null}
+																	</Space>
+																</Descriptions.Item>
+																<Descriptions.Item label="Allowed Local Dirs">
+																	<Space orientation="vertical" size={0}>
+																		{metaQuery.data.allowedLocalDirs?.length ? (
+																			<Typography.Text code>{metaQuery.data.allowedLocalDirs.join(', ')}</Typography.Text>
+																		) : (
+																			<Typography.Text type="secondary">(not configured)</Typography.Text>
+																		)}
+																		<Typography.Text type="secondary">
+																			Server-side local sync jobs are restricted to these roots.
+																		</Typography.Text>
+																	</Space>
+																</Descriptions.Item>
+																<Descriptions.Item label="Job Concurrency">{metaQuery.data.jobConcurrency}</Descriptions.Item>
+																<Descriptions.Item label="Job Log Max Bytes">
+																	{metaQuery.data.jobLogMaxBytes ? (
+																		<Typography.Text code>{metaQuery.data.jobLogMaxBytes}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">(unlimited)</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Job Retention (seconds)">
+																	{metaQuery.data.jobRetentionSeconds ? (
+																		<Typography.Text code>{metaQuery.data.jobRetentionSeconds}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">(keep forever)</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Job Log Retention (seconds)">
+																	{metaQuery.data.jobLogRetentionSeconds ? (
+																		<Typography.Text code>{metaQuery.data.jobLogRetentionSeconds}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">(keep forever)</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Upload Session TTL (seconds)">
+																	{metaQuery.data.uploadSessionTTLSeconds}
+																</Descriptions.Item>
+																<Descriptions.Item label="Upload Max Bytes">
+																	{metaQuery.data.uploadMaxBytes ? (
+																		<Typography.Text code>{metaQuery.data.uploadMaxBytes}</Typography.Text>
+																	) : (
+																		<Typography.Text type="secondary">(unlimited)</Typography.Text>
+																	)}
+																</Descriptions.Item>
+																<Descriptions.Item label="Transfer Engine">
+																	<Space>
+																		<Tag color={metaQuery.data.transferEngine.available ? 'success' : 'default'}>
+																			{metaQuery.data.transferEngine.available ? 'available' : 'missing'}
+																		</Tag>
+																		{metaQuery.data.transferEngine.available ? (
+																			<Tag color={metaQuery.data.transferEngine.compatible ? 'success' : 'error'}>
+																				{metaQuery.data.transferEngine.compatible
+																					? 'compatible'
+																					: `incompatible (>= ${metaQuery.data.transferEngine.minVersion})`}
+																			</Tag>
+																		) : null}
+																		<Typography.Text code>{metaQuery.data.transferEngine.name}</Typography.Text>
+																		{metaQuery.data.transferEngine.version ? (
+																			<Typography.Text code>{metaQuery.data.transferEngine.version}</Typography.Text>
+																		) : null}
+																		{metaQuery.data.transferEngine.path ? (
+																			<Typography.Text code>{metaQuery.data.transferEngine.path}</Typography.Text>
+																		) : null}
+																	</Space>
+																</Descriptions.Item>
+															</Descriptions>
+														</Space>
+													),
+												},
+											]}
+										/>
 									</>
 								) : null}
 							</Space>

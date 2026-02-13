@@ -38,6 +38,9 @@ func (s *server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 	if t := r.URL.Query().Get("type"); t != "" {
 		filter.Type = &t
 	}
+	if ec := r.URL.Query().Get("errorCode"); ec != "" {
+		filter.ErrorCode = &ec
+	}
 
 	limit := 50
 	if raw := r.URL.Query().Get("limit"); raw != "" {
@@ -85,12 +88,12 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Type {
 	case jobs.JobTypeTransferSyncLocalToS3:
-		if err := validateTransferSyncLocalToS3Payload(req.Payload); err != nil {
+		if err := validateTransferSyncLocalToS3Payload(req.Payload, s.cfg.AllowedLocalDirs); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
 	case jobs.JobTypeTransferSyncS3ToLocal:
-		if err := validateTransferSyncS3ToLocalPayload(req.Payload); err != nil {
+		if err := validateTransferSyncS3ToLocalPayload(req.Payload, s.cfg.AllowedLocalDirs); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
@@ -158,14 +161,8 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.jobs.Enqueue(job.ID); err != nil {
-		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		if errors.Is(err, jobs.ErrJobQueueFull) {
-			msg := "job queue is full; try again later"
-			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
-			job.Status = models.JobStatusFailed
-			job.Error = &msg
-			job.FinishedAt = &finishedAt
-			s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
+			_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
 			stats := s.jobs.QueueStats()
 			logging.ErrorFields("job queue full", map[string]any{
 				"event":          "job.queue_full",
@@ -185,12 +182,7 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		msg := "failed to enqueue job"
-		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
-		job.Status = models.JobStatusFailed
-		job.Error = &msg
-		job.FinishedAt = &finishedAt
-		s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
+		_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue job", nil)
 		return
 	}
@@ -359,12 +351,12 @@ func (s *server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 
 	switch job.Type {
 	case jobs.JobTypeTransferSyncLocalToS3:
-		if err := validateTransferSyncLocalToS3Payload(job.Payload); err != nil {
+		if err := validateTransferSyncLocalToS3Payload(job.Payload, s.cfg.AllowedLocalDirs); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
 	case jobs.JobTypeTransferSyncS3ToLocal:
-		if err := validateTransferSyncS3ToLocalPayload(job.Payload); err != nil {
+		if err := validateTransferSyncS3ToLocalPayload(job.Payload, s.cfg.AllowedLocalDirs); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
@@ -806,7 +798,7 @@ func validateTransferDeletePrefixPayload(payload map[string]any) error {
 	return nil
 }
 
-func validateTransferSyncLocalToS3Payload(payload map[string]any) error {
+func validateTransferSyncLocalToS3Payload(payload map[string]any, allowedRoots []string) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	localPath, _ := payload["localPath"].(string)
@@ -823,6 +815,9 @@ func validateTransferSyncLocalToS3Payload(payload map[string]any) error {
 	}
 	if strings.Contains(prefix, "*") {
 		return errors.New("wildcards are not allowed in prefix")
+	}
+	if err := validateLocalPathForRead(localPath, allowedRoots); err != nil {
+		return err
 	}
 
 	payload["bucket"] = bucket
@@ -831,7 +826,7 @@ func validateTransferSyncLocalToS3Payload(payload map[string]any) error {
 	return nil
 }
 
-func validateTransferSyncS3ToLocalPayload(payload map[string]any) error {
+func validateTransferSyncS3ToLocalPayload(payload map[string]any, allowedRoots []string) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
 	localPath, _ := payload["localPath"].(string)
@@ -849,11 +844,107 @@ func validateTransferSyncS3ToLocalPayload(payload map[string]any) error {
 	if strings.Contains(prefix, "*") {
 		return errors.New("wildcards are not allowed in prefix")
 	}
+	if err := validateLocalPathForCreate(localPath, allowedRoots); err != nil {
+		return err
+	}
 
 	payload["bucket"] = bucket
 	payload["prefix"] = prefix
 	payload["localPath"] = localPath
 	return nil
+}
+
+func validateLocalPathForRead(localPath string, allowedRoots []string) error {
+	if len(allowedRoots) == 0 {
+		return nil
+	}
+
+	abs, err := filepath.Abs(filepath.Clean(localPath))
+	if err != nil {
+		return errors.New("payload.localPath is invalid")
+	}
+	real, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("payload.localPath not found")
+		}
+		return fmt.Errorf("payload.localPath is invalid: %w", err)
+	}
+	if _, err := os.Stat(real); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("payload.localPath not found")
+		}
+		return fmt.Errorf("payload.localPath is invalid: %w", err)
+	}
+	for _, root := range allowedRoots {
+		if isUnderDir(root, real) {
+			return nil
+		}
+	}
+	return fmt.Errorf("payload.localPath %q is not under an allowed local directory", real)
+}
+
+func validateLocalPathForCreate(localPath string, allowedRoots []string) error {
+	if len(allowedRoots) == 0 {
+		return nil
+	}
+
+	real, err := resolveLocalPathForCreate(localPath)
+	if err != nil {
+		return err
+	}
+	for _, root := range allowedRoots {
+		if isUnderDir(root, real) {
+			return nil
+		}
+	}
+	return fmt.Errorf("payload.localPath %q is not under an allowed local directory", real)
+}
+
+func resolveLocalPathForCreate(localPath string) (string, error) {
+	clean := filepath.Clean(localPath)
+	if clean == "" || clean == "." {
+		return "", errors.New("payload.localPath is invalid")
+	}
+	abs, err := filepath.Abs(clean)
+	if err != nil {
+		return "", errors.New("payload.localPath is invalid")
+	}
+	if real, err := filepath.EvalSymlinks(abs); err == nil {
+		return real, nil
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("payload.localPath is invalid: %w", err)
+	}
+
+	current := abs
+	for {
+		parent := filepath.Dir(current)
+		if parent == current {
+			return abs, nil
+		}
+
+		info, err := os.Stat(parent)
+		if err != nil {
+			if os.IsNotExist(err) {
+				current = parent
+				continue
+			}
+			return "", fmt.Errorf("payload.localPath is invalid: %w", err)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("payload.localPath is invalid: %q is not a directory", parent)
+		}
+
+		realParent, err := filepath.EvalSymlinks(parent)
+		if err != nil {
+			return "", fmt.Errorf("payload.localPath is invalid: %w", err)
+		}
+		rel, err := filepath.Rel(parent, abs)
+		if err != nil {
+			return "", fmt.Errorf("payload.localPath is invalid: %w", err)
+		}
+		return filepath.Join(realParent, rel), nil
+	}
 }
 
 func validateTransferSyncStagingToS3Payload(payload map[string]any) error {

@@ -49,6 +49,27 @@ curl -sS "$BASE_URL/api/v1/meta" \
   "version": "0.1.0",
   "serverAddr": "0.0.0.0:8080",
   "apiTokenEnabled": true,
+  "capabilities": {
+    "profileTls": { "enabled": false, "reason": "ENCRYPTION_KEY is required to store mTLS material" },
+    "providers": {
+      "s3_compatible": {
+        "bucketCrud": true,
+        "objectCrud": true,
+        "jobTransfer": true,
+        "bucketPolicy": true,
+        "gcsIamPolicy": false,
+        "azureContainerAccessPolicy": false,
+        "presignedUpload": true,
+        "presignedMultipartUpload": true,
+        "directUpload": false,
+        "reasons": {
+          "gcsIamPolicy": "Supported only by gcp_gcs.",
+          "azureContainerAccessPolicy": "Supported only by azure_blob.",
+          "directUpload": "Direct upload mode is disabled on this server (UPLOAD_DIRECT_STREAM=false)."
+        }
+      }
+    }
+  },
   "jobConcurrency": 2,
   "uploadSessionTTLSeconds": 86400,
   "transferEngine": { "name": "rclone", "available": true, "version": "rclone v1.66.0" }

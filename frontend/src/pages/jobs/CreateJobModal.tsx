@@ -18,6 +18,8 @@ export function CreateJobModal(props: {
 	}) => void
 	loading: boolean
 	isOffline: boolean
+	uploadSupported?: boolean
+	uploadUnsupportedReason?: string | null
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
@@ -37,8 +39,9 @@ export function CreateJobModal(props: {
 	const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
 	const [dirLabel, setDirLabel] = useState('')
 	const support = getDevicePickerSupport()
+	const uploadSupported = props.uploadSupported ?? true
 
-	const canSubmit = !!dirHandle && support.ok && !props.isOffline
+	const canSubmit = !!dirHandle && support.ok && !props.isOffline && uploadSupported
 
 	return (
 		<Drawer
@@ -65,6 +68,15 @@ export function CreateJobModal(props: {
 					style={{ marginBottom: 12 }}
 				/>
 			) : null}
+			{!uploadSupported ? (
+				<Alert
+					type="info"
+					showIcon
+					title="Uploads are not available for this provider"
+					description={props.uploadUnsupportedReason ?? 'This provider does not support upload transfers.'}
+					style={{ marginBottom: 12 }}
+				/>
+			) : null}
 			<Alert
 				type="info"
 				showIcon
@@ -84,6 +96,10 @@ export function CreateJobModal(props: {
 					cleanupEmptyDirs: props.defaultCleanupEmptyDirs,
 				}}
 				onFinish={(values) => {
+					if (!uploadSupported) {
+						message.warning(props.uploadUnsupportedReason ?? 'This provider does not support upload transfers.')
+						return
+					}
 					if (!dirHandle) {
 						message.info('Select a local folder first')
 						return
@@ -119,7 +135,7 @@ export function CreateJobModal(props: {
 				<Form.Item name="localFolder" label="Local folder" rules={[{ required: true }]}>
 					<LocalDevicePathInput
 						placeholder="Select a folder…"
-						disabled={!support.ok || props.isOffline}
+						disabled={!support.ok || props.isOffline || !uploadSupported}
 						onPick={(handle) => {
 							setDirHandle(handle)
 							setDirLabel(handle.name)

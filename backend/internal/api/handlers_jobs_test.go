@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -284,7 +285,145 @@ func TestJobRetryInvalidStatus(t *testing.T) {
 	}
 }
 
+func TestJobCreateQueueFullRollsBackCreatedJob(t *testing.T) {
+	t.Setenv("JOB_QUEUE_CAPACITY", "1")
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	first := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+		"bucket": "test-bucket",
+		"keys":   []any{"a.txt"},
+	})
+
+	req := models.JobCreateRequest{
+		Type: jobs.JobTypeS3DeleteObjects,
+		Payload: map[string]any{
+			"bucket": "test-bucket",
+			"keys":   []any{"b.txt"},
+		},
+	}
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs", profile.ID, req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusTooManyRequests {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 429, got %d: %s", res.StatusCode, string(body))
+	}
+	if retry := res.Header.Get("Retry-After"); retry != "2" {
+		t.Fatalf("expected Retry-After 2, got %q", retry)
+	}
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "job_queue_full" {
+		t.Fatalf("expected job_queue_full, got %q", errResp.Error.Code)
+	}
+
+	listed, err := st.ListJobs(context.Background(), profile.ID, store.JobFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(listed.Items) != 1 {
+		t.Fatalf("expected exactly 1 persisted job, got %d", len(listed.Items))
+	}
+	if listed.Items[0].ID != first.ID {
+		t.Fatalf("expected persisted job %s, got %s", first.ID, listed.Items[0].ID)
+	}
+}
+
+func TestListJobsFiltersByErrorCode(t *testing.T) {
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	ctx := context.Background()
+	rateLimited, err := st.CreateJob(ctx, profile.ID, store.CreateJobInput{
+		Type: jobs.JobTypeS3DeleteObjects,
+		Payload: map[string]any{
+			"bucket": "test-bucket",
+			"keys":   []any{"a.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create rate-limited job: %v", err)
+	}
+	accessDenied, err := st.CreateJob(ctx, profile.ID, store.CreateJobInput{
+		Type: jobs.JobTypeS3DeleteObjects,
+		Payload: map[string]any{
+			"bucket": "test-bucket",
+			"keys":   []any{"b.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create access-denied job: %v", err)
+	}
+
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	rateMsg := "rate limited"
+	rateCode := jobs.ErrorCodeRateLimited
+	if err := st.UpdateJobStatus(ctx, rateLimited.ID, models.JobStatusFailed, nil, &finishedAt, nil, &rateMsg, &rateCode); err != nil {
+		t.Fatalf("update rate-limited job: %v", err)
+	}
+	accessMsg := "access denied"
+	accessCode := jobs.ErrorCodeAccessDenied
+	if err := st.UpdateJobStatus(ctx, accessDenied.ID, models.JobStatusFailed, nil, &finishedAt, nil, &accessMsg, &accessCode); err != nil {
+		t.Fatalf("update access-denied job: %v", err)
+	}
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodGet, "/api/v1/jobs?errorCode="+jobs.ErrorCodeRateLimited, profile.ID, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var listed models.JobsListResponse
+	decodeJSONResponse(t, res, &listed)
+	if len(listed.Items) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(listed.Items))
+	}
+	if listed.Items[0].ID != rateLimited.ID {
+		t.Fatalf("expected job %s, got %s", rateLimited.ID, listed.Items[0].ID)
+	}
+	if listed.Items[0].ErrorCode == nil || *listed.Items[0].ErrorCode != jobs.ErrorCodeRateLimited {
+		t.Fatalf("expected error code %q, got %v", jobs.ErrorCodeRateLimited, listed.Items[0].ErrorCode)
+	}
+}
+
+func TestJobCreateRejectsLocalPathOutsideAllowedRoots(t *testing.T) {
+	allowedRoot := t.TempDir()
+	st, _, srv, _ := newTestJobsServerWithAllowedDirs(t, testEncryptionKey(), false, []string{allowedRoot})
+	profile := createTestProfile(t, st)
+	outside := t.TempDir()
+
+	req := models.JobCreateRequest{
+		Type: jobs.JobTypeTransferSyncLocalToS3,
+		Payload: map[string]any{
+			"bucket":    "test-bucket",
+			"prefix":    "path/",
+			"localPath": outside,
+		},
+	}
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs", profile.ID, req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "invalid_request" {
+		t.Fatalf("expected invalid_request, got %q", errResp.Error.Code)
+	}
+	if !strings.Contains(errResp.Error.Message, "not under an allowed local directory") {
+		t.Fatalf("expected local directory guard message, got %q", errResp.Error.Message)
+	}
+}
+
 func newTestJobsServer(t *testing.T, encryptionKey string, startManager bool) (*store.Store, *jobs.Manager, *httptest.Server, string) {
+	return newTestJobsServerWithAllowedDirs(t, encryptionKey, startManager, nil)
+}
+
+func newTestJobsServerWithAllowedDirs(t *testing.T, encryptionKey string, startManager bool, allowedLocalDirs []string) (*store.Store, *jobs.Manager, *httptest.Server, string) {
 	t.Helper()
 	dataDir := t.TempDir()
 	gormDB, err := db.Open(db.Config{
@@ -315,7 +454,7 @@ func newTestJobsServer(t *testing.T, encryptionKey string, startManager bool) (*
 		Concurrency:      1,
 		JobLogMaxBytes:   0,
 		JobRetention:     0,
-		AllowedLocalDirs: nil,
+		AllowedLocalDirs: allowedLocalDirs,
 		UploadSessionTTL: time.Minute,
 	})
 
@@ -327,6 +466,7 @@ func newTestJobsServer(t *testing.T, encryptionKey string, startManager bool) (*
 			StaticDir:        dataDir,
 			EncryptionKey:    encryptionKey,
 			JobConcurrency:   1,
+			AllowedLocalDirs: allowedLocalDirs,
 			UploadSessionTTL: time.Minute,
 		},
 		Store:      st,

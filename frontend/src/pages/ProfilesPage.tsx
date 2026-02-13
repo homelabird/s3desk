@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Empty, Input, Modal, Space, Spin, Table, Typography, message } from 'antd'
+import { Alert, Button, Checkbox, Dropdown, Empty, Input, Modal, Space, Spin, Table, Typography, message } from 'antd'
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { MoreOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { parse as parseYaml } from 'yaml'
 
@@ -477,41 +478,60 @@ export function ProfilesPage(props: Props) {
 								<Button size="small" onClick={() => props.setProfileId(row.id)}>
 									Use
 								</Button>
-								<Button size="small" onClick={() => setEditProfile(row)}>
-									Edit
-								</Button>
-								<Button
-									size="small"
-									onClick={() => testMutation.mutate(row.id)}
-									loading={testMutation.isPending && testingProfileId === row.id}
-								>
-									Test
-								</Button>
-								<Button
-									size="small"
-									onClick={() => openYamlModal(row)}
-									loading={exportYamlMutation.isPending && exportingProfileId === row.id}
-								>
-									YAML
-								</Button>
-								<Button
-									size="small"
-									danger
-									onClick={() => {
-										confirmDangerAction({
-											title: `Delete profile "${row.name}"?`,
-											description: 'This removes the profile and any TLS settings associated with it.',
-											confirmText: row.name,
-											confirmHint: `Type "${row.name}" to confirm`,
-											onConfirm: async () => {
-												await deleteMutation.mutateAsync(row.id)
+								<Dropdown
+									trigger={['click']}
+									menu={{
+										items: [
+											{ key: 'edit', label: 'Edit' },
+											{
+												key: 'test',
+												label: testMutation.isPending && testingProfileId === row.id ? 'Testing...' : 'Test',
+												disabled: testMutation.isPending && testingProfileId === row.id,
 											},
-										})
+											{
+												key: 'yaml',
+												label: exportYamlMutation.isPending && exportingProfileId === row.id ? 'Exporting YAML...' : 'YAML',
+												disabled: exportYamlMutation.isPending && exportingProfileId === row.id,
+											},
+											{ type: 'divider' },
+											{
+												key: 'delete',
+												label: deleteMutation.isPending && deletingProfileId === row.id ? 'Deleting...' : 'Delete',
+												danger: true,
+												disabled: deleteMutation.isPending && deletingProfileId === row.id,
+											},
+										],
+										onClick: ({ key }) => {
+											if (key === 'edit') {
+												setEditProfile(row)
+												return
+											}
+											if (key === 'test') {
+												testMutation.mutate(row.id)
+												return
+											}
+											if (key === 'yaml') {
+												openYamlModal(row)
+												return
+											}
+											if (key === 'delete') {
+												confirmDangerAction({
+													title: `Delete profile "${row.name}"?`,
+													description: 'This removes the profile and any TLS settings associated with it.',
+													confirmText: row.name,
+													confirmHint: `Type "${row.name}" to confirm`,
+													onConfirm: async () => {
+														await deleteMutation.mutateAsync(row.id)
+													},
+												})
+											}
+										},
 									}}
-									loading={deleteMutation.isPending && deletingProfileId === row.id}
 								>
-									Delete
-								</Button>
+									<Button size="small" icon={<MoreOutlined />} aria-label={`More actions for ${row.name}`}>
+										More
+									</Button>
+								</Dropdown>
 							</Space>
 						),
 					},

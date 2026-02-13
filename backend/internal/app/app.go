@@ -23,6 +23,11 @@ import (
 	"s3desk/internal/ws"
 )
 
+const (
+	defaultUploadSessionTTL            = 24 * time.Hour
+	defaultUploadMaxConcurrentRequests = 16
+)
+
 func Run(ctx context.Context, cfg config.Config) error {
 	if err := validateListenAddr(cfg.Addr, cfg.AllowRemote); err != nil {
 		return err
@@ -37,27 +42,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		}
 	}
 
-	if cfg.JobConcurrency <= 0 {
-		cfg.JobConcurrency = 1
-	}
-	if cfg.JobLogMaxBytes < 0 {
-		cfg.JobLogMaxBytes = 0
-	}
-	if cfg.JobRetention < 0 {
-		cfg.JobRetention = 0
-	}
-	if cfg.JobLogRetention < 0 {
-		cfg.JobLogRetention = 0
-	}
-	if cfg.UploadSessionTTL <= 0 {
-		cfg.UploadSessionTTL = 24 * time.Hour
-	}
-	if cfg.UploadMaxBytes < 0 {
-		cfg.UploadMaxBytes = 0
-	}
-	if cfg.UploadMaxConcurrentRequests < 0 {
-		cfg.UploadMaxConcurrentRequests = 0
-	}
+	applySafeDefaults(&cfg)
 
 	allowedDirs, err := normalizeAllowedDirs(cfg.AllowedLocalDirs)
 	if err != nil {
@@ -204,6 +189,30 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return nil
 	case err := <-errCh:
 		return err
+	}
+}
+
+func applySafeDefaults(cfg *config.Config) {
+	if cfg.JobConcurrency <= 0 {
+		cfg.JobConcurrency = 1
+	}
+	if cfg.JobLogMaxBytes < 0 {
+		cfg.JobLogMaxBytes = 0
+	}
+	if cfg.JobRetention < 0 {
+		cfg.JobRetention = 0
+	}
+	if cfg.JobLogRetention < 0 {
+		cfg.JobLogRetention = 0
+	}
+	if cfg.UploadSessionTTL <= 0 {
+		cfg.UploadSessionTTL = defaultUploadSessionTTL
+	}
+	if cfg.UploadMaxBytes < 0 {
+		cfg.UploadMaxBytes = 0
+	}
+	if cfg.UploadMaxConcurrentRequests < 0 {
+		cfg.UploadMaxConcurrentRequests = defaultUploadMaxConcurrentRequests
 	}
 }
 

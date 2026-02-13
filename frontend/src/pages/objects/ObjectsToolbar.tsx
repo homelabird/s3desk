@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { MenuProps, SelectProps } from 'antd'
 import { Badge, Button, Dropdown, Select, Space, Tooltip } from 'antd'
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, ReloadOutlined, RightOutlined, SwapOutlined, UpOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined, UpOutlined } from '@ant-design/icons'
 
 import type { UIAction } from './objectsActions'
 import styles from './objects.module.css'
@@ -25,6 +25,8 @@ export type ObjectsToolbarProps = {
 	onGoForward: () => void
 	onGoUp: () => void
 	uploadMenu: MenuProps
+	uploadEnabled: boolean
+	uploadDisabledReason?: string | null
 	onUploadFiles: () => void
 	onRefresh: () => void
 	isRefreshing: boolean
@@ -42,7 +44,17 @@ export type ObjectsToolbarProps = {
 
 export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	const canUseBucket = props.hasProfile && !props.isOffline
-	const canUpload = props.hasProfile && !!props.bucket && !props.isOffline
+	const canUpload = props.hasProfile && !!props.bucket && !props.isOffline && props.uploadEnabled
+	const uploadTooltipText = !props.hasProfile
+		? 'Select a profile first'
+		: props.isOffline
+			? 'Offline: check your network connection'
+			: !props.bucket
+				? 'Select a bucket first'
+				: !props.uploadEnabled
+					? props.uploadDisabledReason ?? 'Uploads are not supported by this provider'
+					: 'Upload files or folders'
+	const showSelectionPrimaryActions = props.showPrimaryActions && props.selectedCount > 0
 	const downloadDisabledReason = !props.hasProfile
 		? 'Select a profile first'
 		: props.isOffline
@@ -78,6 +90,25 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 			</Tooltip>
 		)
 	}
+
+	const uploadButtonDesktop = (
+		<Dropdown.Button
+			type="primary"
+			icon={<CloudUploadOutlined />}
+			disabled={!canUpload}
+			menu={props.uploadMenu}
+			onClick={props.onUploadFiles}
+		>
+			Upload
+		</Dropdown.Button>
+	)
+	const uploadButtonMobile = (
+		<Dropdown menu={props.uploadMenu} trigger={['click']}>
+			<Button icon={<CloudUploadOutlined />} disabled={!canUpload} aria-label="Upload">
+				{props.showLabels ? 'Upload' : null}
+			</Button>
+		</Dropdown>
+	)
 
 	if (props.isDesktop) {
 		return (
@@ -129,16 +160,10 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				</Space>
 
 				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
-					<Dropdown.Button
-						type="primary"
-						icon={<CloudUploadOutlined />}
-						disabled={!canUpload}
-						menu={props.uploadMenu}
-						onClick={props.onUploadFiles}
-					>
-						Upload
-					</Dropdown.Button>
-					{props.showPrimaryActions ? (
+					<Tooltip title={uploadTooltipText}>
+						<span>{uploadButtonDesktop}</span>
+					</Tooltip>
+					{showSelectionPrimaryActions ? (
 						<>
 							{renderPrimaryActionButton(props.primaryDownloadAction, {
 								icon: <DownloadOutlined />,
@@ -153,33 +178,17 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							})}
 						</>
 					) : null}
-					<Tooltip title="Transfers">
+					<Dropdown trigger={['click']} menu={props.topMoreMenu}>
 						<Badge count={props.activeTransferCount} size="small" showZero={false}>
-							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers} aria-label="Transfers">
-								{props.showLabels ? 'Transfers' : null}
+							<Button
+								icon={<EllipsisOutlined />}
+								disabled={!props.hasProfile}
+								data-testid="objects-toolbar-more"
+								aria-label="More actions"
+							>
+								More
 							</Button>
 						</Badge>
-					</Tooltip>
-					{props.isAdvanced ? (
-						<Tooltip title="Refresh">
-							<Button
-								icon={<ReloadOutlined />}
-								onClick={props.onRefresh}
-								loading={props.isRefreshing}
-								disabled={!props.hasProfile || props.isOffline || !props.bucket}
-								aria-label="Refresh"
-							/>
-						</Tooltip>
-					) : null}
-					<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-						<Button
-							icon={<EllipsisOutlined />}
-							disabled={!props.hasProfile || props.isOffline}
-							data-testid="objects-toolbar-more"
-							aria-label="More actions"
-						>
-							More
-						</Button>
 					</Dropdown>
 				</Space>
 			</div>
@@ -218,12 +227,10 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							</Button>
 						</>
 					) : null}
-					<Dropdown menu={props.uploadMenu} trigger={['click']}>
-						<Button icon={<CloudUploadOutlined />} disabled={!canUpload} aria-label="Upload">
-							{props.showLabels ? 'Upload' : null}
-						</Button>
-					</Dropdown>
-					{props.showPrimaryActions ? (
+					<Tooltip title={uploadTooltipText}>
+						<span>{uploadButtonMobile}</span>
+					</Tooltip>
+					{showSelectionPrimaryActions ? (
 						<>
 							{renderPrimaryActionButton(props.primaryDownloadAction, {
 								icon: <DownloadOutlined />,
@@ -238,13 +245,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							})}
 						</>
 					) : null}
-					<Tooltip title="Transfers">
-						<Badge count={props.activeTransferCount} size="small" showZero={false}>
-							<Button icon={<SwapOutlined />} onClick={props.onOpenTransfers} aria-label="Transfers">
-								{props.showLabels ? 'Transfers' : null}
-							</Button>
-						</Badge>
-					</Tooltip>
 					{props.isAdvanced && !props.dockTree ? (
 						<Button
 							icon={<FolderOutlined />}
@@ -268,14 +268,16 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				</Space>
 
 				<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-					<Button
-						icon={<EllipsisOutlined />}
-						disabled={!props.hasProfile || props.isOffline}
-						data-testid="objects-toolbar-more"
-						aria-label="More actions"
-					>
-						{props.showLabels ? 'Actions' : null}
-					</Button>
+					<Badge count={props.activeTransferCount} size="small" showZero={false}>
+						<Button
+							icon={<EllipsisOutlined />}
+							disabled={!props.hasProfile}
+							data-testid="objects-toolbar-more"
+							aria-label="More actions"
+						>
+							{props.showLabels ? 'Actions' : null}
+						</Button>
+					</Badge>
 				</Dropdown>
 			</Space>
 

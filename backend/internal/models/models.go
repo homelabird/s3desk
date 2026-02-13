@@ -473,7 +473,37 @@ type FeatureCapability struct {
 }
 
 type MetaCapabilities struct {
-	ProfileTLS FeatureCapability `json:"profileTls"`
+	ProfileTLS FeatureCapability                      `json:"profileTls"`
+	Providers  map[ProfileProvider]ProviderCapability `json:"providers,omitempty"`
+}
+
+// ProviderCapabilityReasons carries per-capability reason messages when a capability is false.
+// Keys mirror ProviderCapability JSON field names.
+type ProviderCapabilityReasons struct {
+	BucketCRUD                 string `json:"bucketCrud,omitempty"`
+	ObjectCRUD                 string `json:"objectCrud,omitempty"`
+	JobTransfer                string `json:"jobTransfer,omitempty"`
+	BucketPolicy               string `json:"bucketPolicy,omitempty"`
+	GCSIAMPolicy               string `json:"gcsIamPolicy,omitempty"`
+	AzureContainerAccessPolicy string `json:"azureContainerAccessPolicy,omitempty"`
+	PresignedUpload            string `json:"presignedUpload,omitempty"`
+	PresignedMultipartUpload   string `json:"presignedMultipartUpload,omitempty"`
+	DirectUpload               string `json:"directUpload,omitempty"`
+}
+
+// ProviderCapability describes provider-level feature availability so the UI can
+// hide unsupported controls before making API calls.
+type ProviderCapability struct {
+	BucketCRUD                 bool                       `json:"bucketCrud"`
+	ObjectCRUD                 bool                       `json:"objectCrud"`
+	JobTransfer                bool                       `json:"jobTransfer"`
+	BucketPolicy               bool                       `json:"bucketPolicy"`
+	GCSIAMPolicy               bool                       `json:"gcsIamPolicy"`
+	AzureContainerAccessPolicy bool                       `json:"azureContainerAccessPolicy"`
+	PresignedUpload            bool                       `json:"presignedUpload"`
+	PresignedMultipartUpload   bool                       `json:"presignedMultipartUpload"`
+	DirectUpload               bool                       `json:"directUpload"`
+	Reasons                    *ProviderCapabilityReasons `json:"reasons,omitempty"`
 }
 
 type MetaResponse struct {

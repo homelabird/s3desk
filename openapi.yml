@@ -341,10 +341,15 @@ paths:
   /buckets/{bucket}/policy:
     get:
       tags: [Buckets]
-      summary: Get bucket policy
+      summary: Get bucket access policy
       description: |
-        Returns the current S3 bucket policy document if present.
-        For buckets with no policy, returns `exists=false`.
+        Returns the current provider-specific bucket access policy document if present.
+
+        - S3 providers: bucket policy JSON.
+        - GCS: bucket IAM policy JSON.
+        - Azure: container access policy JSON.
+
+        For buckets/containers with no policy, returns `exists=false`.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
@@ -366,7 +371,13 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
     put:
       tags: [Buckets]
-      summary: Put bucket policy
+      summary: Put bucket access policy
+      description: |
+        Applies provider-specific bucket access policy JSON.
+
+        - S3 providers: PutBucketPolicy.
+        - GCS: Set bucket IAM policy.
+        - Azure: Set container ACL/public access.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
@@ -390,7 +401,13 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
     delete:
       tags: [Buckets]
-      summary: Delete bucket policy
+      summary: Delete or reset bucket access policy
+      description: |
+        Removes or resets provider-specific access policy state.
+
+        - S3 providers: deletes bucket policy.
+        - Azure: resets container ACL/public access to private + clears stored access policies.
+        - GCS: delete is not supported; returns `400 bucket_policy_delete_unsupported`.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
@@ -2527,6 +2544,10 @@ components:
       required: [profileTls]
       properties:
         profileTls: { $ref: "#/components/schemas/FeatureCapability" }
+        providers:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ProviderCapability"
 
     FeatureCapability:
       type: object
@@ -2534,3 +2555,40 @@ components:
       properties:
         enabled: { type: boolean }
         reason: { type: string }
+
+    ProviderCapability:
+      type: object
+      required:
+        - bucketCrud
+        - objectCrud
+        - jobTransfer
+        - bucketPolicy
+        - gcsIamPolicy
+        - azureContainerAccessPolicy
+        - presignedUpload
+        - presignedMultipartUpload
+        - directUpload
+      properties:
+        bucketCrud: { type: boolean }
+        objectCrud: { type: boolean }
+        jobTransfer: { type: boolean }
+        bucketPolicy: { type: boolean }
+        gcsIamPolicy: { type: boolean }
+        azureContainerAccessPolicy: { type: boolean }
+        presignedUpload: { type: boolean }
+        presignedMultipartUpload: { type: boolean }
+        directUpload: { type: boolean }
+        reasons: { $ref: "#/components/schemas/ProviderCapabilityReasons" }
+
+    ProviderCapabilityReasons:
+      type: object
+      properties:
+        bucketCrud: { type: string }
+        objectCrud: { type: string }
+        jobTransfer: { type: string }
+        bucketPolicy: { type: string }
+        gcsIamPolicy: { type: string }
+        azureContainerAccessPolicy: { type: string }
+        presignedUpload: { type: string }
+        presignedMultipartUpload: { type: string }
+        directUpload: { type: string }

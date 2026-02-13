@@ -110,7 +110,7 @@ test.describe('Live UI flow', () => {
 
 			const fileInput = page.locator('input[type="file"]').first()
 			await fileInput.setInputFiles(uploadFixture)
-			await page.getByRole('button', { name: 'Queue upload' }).click()
+			await page.getByRole('button', { name: /Queue upload/i }).click()
 
 			const uploadRow = page.getByText(`Upload: ${uploadFilename}`, { exact: true }).locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]')
 			await expect(uploadRow).toBeVisible({ timeout: 30_000 })

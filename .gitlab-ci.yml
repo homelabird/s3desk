@@ -914,8 +914,17 @@ api_integration:
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
       COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
       LOGS_CMD="$(cat /tmp/compose_logs_cmd)"
-      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml $LOGS_CMD; fi
+      mkdir -p artifacts/api_integration
+      echo "job_status=${CI_JOB_STATUS}" > artifacts/api_integration/status.txt
+      if [ "$CI_JOB_STATUS" != "success" ]; then
+        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml $LOGS_CMD | tee artifacts/api_integration/compose-logs.txt
+      fi
       $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml down -v
+  artifacts:
+    when: always
+    paths:
+      - artifacts/api_integration/
+    expire_in: 14 days
 
 release_postgres_smoke:
   stage: test
@@ -1034,7 +1043,35 @@ e2e_live:
     - npm --version
     - npm ci --no-audit --no-fund
     - if [ -z "$(ls -A "$PLAYWRIGHT_BROWSERS_PATH")" ]; then npx playwright install chromium; fi
-    - npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/docs-smoke.spec.ts
+    - npx playwright test tests/api-crud.spec.ts tests/jobs-live-flow.spec.ts tests/objects-live-flow.spec.ts tests/transfers-live-fallback.spec.ts tests/bucket-policy-live.spec.ts tests/docs-smoke.spec.ts
+  after_script:
+    - |
+      SUMMARY_REL="${E2E_POLICY_SUMMARY_FILE:-test-results/policy-live-summary.ndjson}"
+      SUMMARY_SOURCE="${SUMMARY_REL}"
+      if [ "${SUMMARY_REL#/}" = "$SUMMARY_REL" ]; then
+        SUMMARY_SOURCE="frontend/${SUMMARY_REL}"
+      fi
+      SUMMARY_REPORT="frontend/test-results/policy-live-summary.md"
+      if [ -f "$SUMMARY_SOURCE" ]; then
+        if node scripts/render_policy_live_summary.js "$SUMMARY_SOURCE" "$SUMMARY_REPORT"; then
+          echo "[policy-summary] markdown report: ${SUMMARY_REPORT}"
+          echo "[policy-summary] begin markdown preview"
+          sed -n '1,160p' "$SUMMARY_REPORT"
+          SUMMARY_LINES="$(wc -l < "$SUMMARY_REPORT" | tr -d ' ')"
+          if [ "${SUMMARY_LINES:-0}" -gt 160 ]; then
+            echo "[policy-summary] ... truncated preview (${SUMMARY_LINES} lines total). See artifact: ${SUMMARY_REPORT}"
+          fi
+          echo "[policy-summary] end markdown preview"
+          if [ -n "${CI_JOB_SUMMARY:-}" ]; then
+            cat "$SUMMARY_REPORT" >> "$CI_JOB_SUMMARY" || true
+            echo "[policy-summary] appended to CI_JOB_SUMMARY"
+          fi
+        else
+          echo "[policy-summary] failed to render markdown report from ${SUMMARY_SOURCE}" >&2
+        fi
+      else
+        echo "[policy-summary] summary file not found: ${SUMMARY_SOURCE}"
+      fi
   artifacts:
     when: always
     paths:

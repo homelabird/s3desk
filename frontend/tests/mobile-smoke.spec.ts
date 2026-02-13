@@ -153,7 +153,7 @@ test.describe('mobile smoke', () => {
 	test('jobs page renders', async ({ page }) => {
 		await page.goto('/jobs')
 		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-		await expect(page.getByRole('button', { name: /Upload folder/i })).toBeVisible()
+		await expect(page.getByRole('button', { name: /Upload folder(\s*\(device\))?/i }).first()).toBeVisible()
 	})
 
 	test('uploads page renders', async ({ page }) => {

@@ -3,7 +3,8 @@
 ## Health checks
 
 - `GET /healthz` returns `ok` when the server process is running (liveness).
-- `GET /readyz` checks database reachability; returns `503` with `db_error` on failure.
+- `GET /readyz` checks core dependencies (store/job manager) plus database reachability.
+- `GET /readyz` returns `503` with one of `store_unavailable`, `jobs_unavailable`, or `db_error` when not ready.
 - Use `healthz` for liveness, `readyz` for readiness in local or container orchestration.
 
 ## Metrics (Prometheus)
@@ -52,6 +53,8 @@ Kubernetes notes:
 ## Dashboards
 
 - Failure taxonomy and dashboard queries are defined in `docs/FAILURE_TAXONOMY.md`.
+- Retry/failure 운영 패널 템플릿은 `docs/OBSERVABILITY_DASHBOARD.md`의 Jobs 섹션(예: retry pressure %, final failure ratio %)을 사용.
+- 바로 import 가능한 Grafana JSON 템플릿: `docs/grafana/s3desk-jobs-retry-failure.dashboard.json`
 
 ## Performance notes
 

@@ -1480,14 +1480,8 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.jobs.Enqueue(job.ID); err != nil {
-		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		if errors.Is(err, jobs.ErrJobQueueFull) {
-			msg := "job queue is full; try again later"
-			_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
-			job.Status = models.JobStatusFailed
-			job.Error = &msg
-			job.FinishedAt = &finishedAt
-			s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
+			_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
 			stats := s.jobs.QueueStats()
 			w.Header().Set("Retry-After", "2")
 			writeError(
@@ -1499,12 +1493,7 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
-		msg := "failed to enqueue job"
-		_ = s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusFailed, nil, &finishedAt, nil, &msg, nil)
-		job.Status = models.JobStatusFailed
-		job.Error = &msg
-		job.FinishedAt = &finishedAt
-		s.hub.Publish(ws.Event{Type: "job.created", JobID: job.ID, Payload: map[string]any{"job": job}})
+		_, _ = s.store.DeleteJob(r.Context(), profileID, job.ID)
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue job", nil)
 		return
 	}

@@ -163,7 +163,7 @@ func New(dep Dependencies) http.Handler {
 	if !uiEnabled {
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			_, _ = w.Write([]byte("s3desk backend is running\n\nHint: build the frontend and point --static-dir to frontend/dist\n"))
+			_, _ = w.Write([]byte("s3desk backend is running\n\nHint: build the frontend and point --static-dir to ../frontend/dist\n"))
 		})
 	}
 

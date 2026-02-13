@@ -15,6 +15,8 @@ type ObjectsActionDeps = {
 	profileId: string | null
 	bucket: string
 	prefix: string
+	objectCrudSupported: boolean
+	uploadSupported: boolean
 	selectedCount: number
 	clipboardObjects: ClipboardObjects | null
 	canGoBack: boolean
@@ -69,7 +71,7 @@ export type ObjectsActionCatalog = {
 
 export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActionCatalog {
 	const getObjectActions = (objectKey: string, objectSize?: number): UIActionOrDivider[] => {
-		const canUseObjectActions = !!deps.profileId && !!deps.bucket && !deps.isOffline
+		const canUseObjectActions = !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported
 		const downloadAction: UIAction = {
 			id: 'download',
 			label: 'Download (client)',
@@ -172,7 +174,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 	}
 
 	const getPrefixActions = (targetPrefix: string): UIActionOrDivider[] => {
-		const canUsePrefixActions = !!deps.profileId && !!deps.bucket && !deps.isOffline
+		const canUsePrefixActions = !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported
 		const openAction: UIAction = {
 			id: 'open',
 			label: 'Open',
@@ -275,7 +277,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		]
 	}
 
-	const canUseSelectionActions = !!deps.profileId && !!deps.bucket && !deps.isOffline
+	const canUseSelectionActions = !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported
 	const selectionIsBulk = deps.selectedCount > 1
 	const selectionActionsAll: UIAction[] = [
 		{
@@ -388,7 +390,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Refresh',
 			icon: <ReloadOutlined />,
 			keywords: 'reload refetch',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
 			run: () => deps.onRefresh(),
 		},
 		{
@@ -396,7 +398,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Go to path… (Ctrl+L)',
 			icon: <SearchOutlined />,
 			keywords: 'ctrl+l address prefix jump',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
 			audience: 'advanced',
 			run: () => deps.onOpenPathModal(),
 		},
@@ -405,7 +407,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Upload files',
 			icon: <CloudUploadOutlined />,
 			keywords: 'upload files',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.uploadSupported,
 			run: () => deps.onOpenUploadFiles(),
 		},
 		{
@@ -413,7 +415,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Upload folder',
 			icon: <FolderOutlined />,
 			keywords: 'upload folder',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.uploadSupported,
 			run: () => deps.onOpenUploadFolder(),
 		},
 		{
@@ -421,7 +423,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'New folder',
 			icon: <FolderAddOutlined />,
 			keywords: 'mkdir folder',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
 			run: () => deps.onOpenNewFolder(),
 		},
 		{
@@ -465,7 +467,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			label: 'Global search',
 			icon: <SearchOutlined />,
 			keywords: 'index search',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
 			audience: 'advanced',
 			run: () => deps.onOpenGlobalSearch(),
 		},

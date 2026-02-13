@@ -54,11 +54,14 @@ Job 실패 원인을 코드로 분류해 UI/로그/메트릭에서 동일한 기
 
 ## 대시보드 계획
 
-- 실패 비율(전체): `sum(rate(jobs_completed_total{status="failed"}[5m])) / sum(rate(jobs_completed_total[5m]))`
+- 실패 비율(전체): `100 * sum(rate(jobs_completed_total{status="failed"}[15m])) / clamp_min(sum(rate(jobs_completed_total[15m])), 0.001)`
+- 실패 비율(type별): `100 * sum(rate(jobs_completed_total{status="failed"}[15m])) by (type) / clamp_min(sum(rate(jobs_completed_total[15m])) by (type), 0.001)`
 - 상위 실패 코드 Top-N: `topk(5, sum(rate(jobs_completed_total{status="failed"}[15m])) by (error_code))`
 - 코드별 평균 Job duration: `sum(rate(jobs_duration_ms_sum{status="failed"}[15m])) by (error_code) / sum(rate(jobs_duration_ms_count{status="failed"}[15m])) by (error_code)`
-- unknown 비율: `sum(rate(jobs_completed_total{status="failed",error_code="unknown"}[15m])) / sum(rate(jobs_completed_total{status="failed"}[15m]))`
-- 재시도 비율: `jobs_retried_total` 대비 실패 코드
+- unknown 비율: `100 * sum(rate(jobs_completed_total{status="failed",error_code="unknown"}[15m])) / clamp_min(sum(rate(jobs_completed_total{status="failed"}[15m])), 0.001)`
+- 재시도 시도량(type별): `sum(rate(jobs_retried_total[15m])) by (type)`
+- 재시도 압력(%): `100 * sum(rate(jobs_retried_total[15m])) / clamp_min(sum(rate(jobs_started_total[15m])), 0.001)`
+- 재시도 효과지표(재시도/최종실패): `sum(rate(jobs_retried_total[15m])) / clamp_min(sum(rate(jobs_completed_total{status="failed"}[15m])), 0.001)`
 
 > 참고: `jobs_completed_total`/`jobs_duration_ms`의 `error_code` 라벨은 실패가 아닌 상태에서는 `none`으로 기록된다.
 

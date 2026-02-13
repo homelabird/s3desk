@@ -15,10 +15,19 @@ type UseObjectsUploadFolderArgs = {
 	profileId: string | null
 	bucket: string
 	prefix: string
+	uploadsEnabled: boolean
+	uploadsDisabledReason?: string | null
 	transfers: TransfersContextValue
 }
 
-export function useObjectsUploadFolder({ profileId, bucket, prefix, transfers }: UseObjectsUploadFolderArgs) {
+export function useObjectsUploadFolder({
+	profileId,
+	bucket,
+	prefix,
+	uploadsEnabled,
+	uploadsDisabledReason,
+	transfers,
+}: UseObjectsUploadFolderArgs) {
 	const [uploadFolderOpen, setUploadFolderOpen] = useState(false)
 	const [uploadFolderForm] = Form.useForm<UploadFolderFormValues>()
 	const [uploadFolderHandle, setUploadFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
@@ -26,8 +35,12 @@ export function useObjectsUploadFolder({ profileId, bucket, prefix, transfers }:
 	const [uploadFolderSubmitting, setUploadFolderSubmitting] = useState(false)
 
 	const openUploadFolderModal = useCallback(() => {
+		if (!uploadsEnabled) {
+			message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+			return
+		}
 		setUploadFolderOpen(true)
-	}, [])
+	}, [uploadsDisabledReason, uploadsEnabled])
 
 	const handleUploadFolderPick = useCallback((handle: FileSystemDirectoryHandle) => {
 		setUploadFolderHandle(handle)
@@ -48,14 +61,18 @@ export function useObjectsUploadFolder({ profileId, bucket, prefix, transfers }:
 				message.info('Select a profile first')
 				return
 			}
-			if (!bucket) {
-				message.info('Select a bucket first')
-				return
-			}
-			if (!uploadFolderHandle) {
-				message.info('Select a local folder first')
-				return
-			}
+				if (!bucket) {
+					message.info('Select a bucket first')
+					return
+				}
+				if (!uploadsEnabled) {
+					message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+					return
+				}
+				if (!uploadFolderHandle) {
+					message.info('Select a local folder first')
+					return
+				}
 
 			setUploadFolderSubmitting(true)
 			try {
@@ -99,17 +116,27 @@ export function useObjectsUploadFolder({ profileId, bucket, prefix, transfers }:
 				setUploadFolderSubmitting(false)
 			}
 		},
-		[bucket, prefix, profileId, transfers, uploadFolderForm, uploadFolderHandle, uploadFolderLabel],
-	)
+			[
+				bucket,
+				prefix,
+				profileId,
+				transfers,
+				uploadFolderForm,
+				uploadFolderHandle,
+				uploadFolderLabel,
+				uploadsDisabledReason,
+				uploadsEnabled,
+			],
+		)
 
-	return {
-		uploadFolderOpen,
-		uploadFolderForm,
-		uploadFolderSubmitting,
-		uploadFolderCanSubmit: !!uploadFolderHandle,
-		openUploadFolderModal,
-		handleUploadFolderSubmit,
-		handleUploadFolderCancel,
-		handleUploadFolderPick,
-	}
+		return {
+			uploadFolderOpen,
+			uploadFolderForm,
+			uploadFolderSubmitting,
+			uploadFolderCanSubmit: !!uploadFolderHandle && uploadsEnabled,
+			openUploadFolderModal,
+			handleUploadFolderSubmit,
+			handleUploadFolderCancel,
+			handleUploadFolderPick,
+		}
 }
