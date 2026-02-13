@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Button, Progress, Space, Tag, Typography } from 'antd'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 
@@ -6,13 +7,13 @@ import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
 
 type TransferDownloadRowProps = {
 	task: DownloadTask
-	onCancel: () => void
-	onRetry: () => void
-	onRemove: () => void
+	onCancel: (taskId: string) => void
+	onRetry: (taskId: string) => void
+	onRemove: (taskId: string) => void
 	onOpenJobs?: () => void
 }
 
-export function TransferDownloadRow(props: TransferDownloadRowProps) {
+export const TransferDownloadRow = memo(function TransferDownloadRow(props: TransferDownloadRowProps) {
 	const t = props.task
 	const percent = t.totalBytes && t.totalBytes > 0 ? Math.floor((t.loadedBytes / t.totalBytes) * 100) : 0
 	const status = t.status === 'failed' ? 'exception' : t.status === 'succeeded' ? 'success' : t.status === 'running' ? 'active' : 'normal'
@@ -84,16 +85,16 @@ export function TransferDownloadRow(props: TransferDownloadRowProps) {
 						</Button>
 					) : null}
 					{t.status === 'running' || t.status === 'queued' || t.status === 'waiting' ? (
-						<Button size="small" onClick={props.onCancel}>
+						<Button size="small" onClick={() => props.onCancel(t.id)}>
 							Cancel
 						</Button>
 					) : null}
 					{t.status === 'failed' || t.status === 'canceled' ? (
-						<Button size="small" icon={<ReloadOutlined />} onClick={props.onRetry}>
+						<Button size="small" icon={<ReloadOutlined />} onClick={() => props.onRetry(t.id)}>
 							Retry
 						</Button>
 					) : null}
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={props.onRemove}>
+					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => props.onRemove(t.id)}>
 						Remove
 					</Button>
 				</Space>
@@ -105,4 +106,6 @@ export function TransferDownloadRow(props: TransferDownloadRowProps) {
 			</div>
 		</div>
 	)
-}
+})
+
+TransferDownloadRow.displayName = 'TransferDownloadRow'

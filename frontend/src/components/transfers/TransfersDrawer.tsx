@@ -92,9 +92,9 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 											<TransferDownloadRow
 												key={t.id}
 												task={t}
-												onCancel={() => props.onCancelDownload(t.id)}
-												onRetry={() => props.onRetryDownload(t.id)}
-												onRemove={() => props.onRemoveDownload(t.id)}
+												onCancel={props.onCancelDownload}
+												onRetry={props.onRetryDownload}
+												onRemove={props.onRemoveDownload}
 												onOpenJobs={props.onOpenJobs}
 											/>
 										))}
@@ -136,9 +136,9 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 												key={t.id}
 												task={t}
 												onOpenJobs={props.onOpenJobs}
-												onCancel={() => props.onCancelUpload(t.id)}
-												onRetry={() => props.onRetryUpload(t.id)}
-												onRemove={() => props.onRemoveUpload(t.id)}
+												onCancel={props.onCancelUpload}
+												onRetry={props.onRetryUpload}
+												onRemove={props.onRemoveUpload}
 											/>
 										))}
 									</div>

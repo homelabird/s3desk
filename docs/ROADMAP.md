@@ -78,3 +78,10 @@
 - [Done] Policy editor validation + diff preview 강화(변경 라인 수 표시, no-op 저장 차단)
 - [Done] Better error UX: shared formatter now surfaces `normalized` code + explicit recommended action text across Alerts/Toasts
 - [Done] Network diagnostics에서 retry 로그를 대기시간/원인(`Retry-After`, normalized code) 중심으로 가시화.
+- [Done] Transfers drawer에서 row 컴포넌트 메모이제이션 + 안정적인 콜백 전달로 단일 진행 업데이트 시 리스트 전체 재렌더를 줄여 체감 응답성을 개선.
+
+### 8) Observability operations
+- **Done**
+  - [Done] 대시보드 템플릿에 retry pressure(%), final failure ratio(%), retry effectiveness 패널 PromQL 추가.
+  - [Done] Failure taxonomy 문서에 운영용 retry/failure 비율 쿼리를 정규화(0분모 보호 포함).
+  - [Done] Grafana import용 dashboard JSON(`docs/grafana/s3desk-jobs-retry-failure.dashboard.json`) 추가.

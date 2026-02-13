@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Button, Progress, Space, Tag, Typography } from 'antd'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 
@@ -7,12 +8,12 @@ import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
 type TransferUploadRowProps = {
 	task: UploadTask
 	onOpenJobs?: () => void
-	onCancel: () => void
-	onRetry: () => void
-	onRemove: () => void
+	onCancel: (taskId: string) => void
+	onRetry: (taskId: string) => void
+	onRemove: (taskId: string) => void
 }
 
-export function TransferUploadRow(props: TransferUploadRowProps) {
+export const TransferUploadRow = memo(function TransferUploadRow(props: TransferUploadRowProps) {
 	const t = props.task
 	const percent = t.totalBytes > 0 ? Math.floor((t.loadedBytes / t.totalBytes) * 100) : 0
 	const status =
@@ -76,6 +77,7 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 							{t.label}
 						</Typography.Text>
 						<Tag color={tagColor}>{tagText}</Tag>
+						{t.uploadMode ? <Tag>{uploadModeLabel(t.uploadMode)}</Tag> : null}
 						{t.moveAfterUpload ? <Tag color="gold">Move</Tag> : null}
 						{t.jobId ? <Tag>{t.jobId}</Tag> : null}
 					</Space>
@@ -98,16 +100,16 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 						</Button>
 					) : null}
 					{t.status === 'queued' || t.status === 'staging' ? (
-						<Button size="small" onClick={props.onCancel}>
+						<Button size="small" onClick={() => props.onCancel(t.id)}>
 							Cancel
 						</Button>
 					) : null}
 					{t.status === 'failed' || t.status === 'canceled' ? (
-						<Button size="small" icon={<ReloadOutlined />} onClick={props.onRetry}>
+						<Button size="small" icon={<ReloadOutlined />} onClick={() => props.onRetry(t.id)}>
 							Retry
 						</Button>
 					) : null}
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={props.onRemove}>
+					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => props.onRemove(t.id)}>
 						Remove
 					</Button>
 				</Space>
@@ -119,10 +121,18 @@ export function TransferUploadRow(props: TransferUploadRowProps) {
 			</div>
 		</div>
 	)
-}
+})
+
+TransferUploadRow.displayName = 'TransferUploadRow'
 
 function normalizePrefix(p: string): string {
 	const trimmed = p.trim()
 	if (!trimmed) return ''
 	return trimmed.endsWith('/') ? trimmed : `${trimmed}/`
+}
+
+function uploadModeLabel(mode: UploadTask['uploadMode']): string {
+	if (mode === 'presigned') return 'Presigned'
+	if (mode === 'direct') return 'Direct'
+	return 'Staging'
 }
