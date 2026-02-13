@@ -827,6 +827,59 @@ frontend_build:
     - npm run gen:openapi
     - npm run build
 
+frontend_bundle_analyze:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  <<: *node_cache
+  needs:
+    - job: frontend_deps
+      artifacts: true
+      optional: true
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
+    - changes:
+        - frontend/**/*
+        - openapi.yml
+        - scripts/bundle_report.js
+    - when: never
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=2048"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "2Gi"
+  script:
+    - cd frontend
+    - npm install -g "npm@${NPM_VERSION}"
+    - npm --version
+    - |
+      if [ ! -d node_modules ]; then
+        npm ci --no-audit --no-fund
+      fi
+    - npm run gen:openapi
+    - cd ..
+    - git diff --exit-code frontend/src/api/openapi.ts
+    - cd frontend
+    - npm run build:analyze
+    - cd ..
+    - node scripts/bundle_report.js frontend/dist/stats.json frontend/dist/bundle-report.md
+    - echo "[bundle-report] begin markdown preview"
+    - sed -n '1,200p' frontend/dist/bundle-report.md
+    - echo "[bundle-report] end markdown preview"
+  after_script:
+    - |
+      if [ -n "${CI_JOB_SUMMARY:-}" ] && [ -f frontend/dist/bundle-report.md ]; then
+        cat frontend/dist/bundle-report.md >> "$CI_JOB_SUMMARY" || true
+        echo "[bundle-report] appended to CI_JOB_SUMMARY"
+      fi
+  artifacts:
+    when: always
+    paths:
+      - frontend/dist/stats.html
+      - frontend/dist/stats.json
+      - frontend/dist/bundle-report.md
+    expire_in: 7 days
+
 third_party_notices:
   stage: audit
   image: "$GO_IMAGE"

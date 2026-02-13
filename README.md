@@ -62,6 +62,12 @@ docker exec -it <container> sqlite3 /data/s3desk.db
 docker compose up -d
 ```
 
+If `8080` is already in use on the host, override the published port:
+
+```bash
+S3DESK_PORT=8081 docker compose up -d
+```
+
 Defaults (overridable via environment):
 - Postgres: `POSTGRES_DB/USER/PASSWORD = s3desk`
 - App: `ADDR=0.0.0.0:8080`, `ALLOW_REMOTE=true`, `API_TOKEN=change-me`
@@ -100,13 +106,21 @@ npm install
 npm run dev
 ```
 
-Frontend proxies `/api/*` to `http://127.0.0.1:8080`.
+Frontend proxies `/api/*` to the backend (default: `http://127.0.0.1:8080`).
+Override the dev proxy target with `S3DESK_DEV_PROXY_TARGET`.
 
-Or run both:
+Or run both (auto-picks free ports if `8080` / `5173` are already in use):
 
 ```bash
 ./scripts/dev.sh
 ```
+
+Overrides:
+- Backend listen: `S3DESK_BACKEND_ADDR=127.0.0.1:8081`
+- Frontend host/port: `S3DESK_FRONTEND_HOST=0.0.0.0 S3DESK_FRONTEND_PORT=5174`
+
+If you bind the dev server to `0.0.0.0` and open it via a LAN IP (for example `http://192.168.0.200:5174`),
+start the backend with `ALLOW_REMOTE=true` (and set `API_TOKEN`).
 
 ## Run (single origin: backend serves UI)
 

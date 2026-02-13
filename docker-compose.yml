@@ -13,7 +13,7 @@ services:
     depends_on:
       - postgres
     ports:
-      - "8080:8080"
+      - "${S3DESK_PORT:-8080}:8080"
     environment:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"

@@ -16,5 +16,6 @@
 - Related remote-access requirements (must be mentioned when relevant):
   - `ADDR=0.0.0.0:8080`
   - `ALLOW_REMOTE=true`
-  - `ALLOWED_HOSTS` must include `192.168.0.200`
   - `API_TOKEN` should be set
+  - `ALLOWED_HOSTS` is only required for non-private hostnames (Ingress domains, etc.).
+    - Private IPs like `192.168.0.200` are allowed when `ALLOW_REMOTE=true`.

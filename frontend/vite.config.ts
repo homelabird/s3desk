@@ -33,9 +33,60 @@ function chunkGroupForModule(id: string): string | undefined {
 	return 'vendor-misc'
 }
 
+const DEFAULT_DEV_PROXY_TARGET = 'http://127.0.0.1:8080'
+
+function normalizeProxyHost(host: string): string {
+	const h = host.trim()
+	if (h === '' || h === '0.0.0.0' || h === '::') return '127.0.0.1'
+	return h
+}
+
+function parseBackendAddr(addr: string): { host: string; port: string } | null {
+	const a = addr.trim()
+	if (!a) return null
+
+	// Best-effort support if someone provides a full URL.
+	if (a.startsWith('http://') || a.startsWith('https://')) {
+		try {
+			const u = new URL(a)
+			if (!u.hostname) return null
+			return { host: u.hostname, port: u.port || '8080' }
+		} catch {
+			return null
+		}
+	}
+
+	const ipv6 = a.match(/^\[([^\]]+)\]:(\d+)$/)
+	if (ipv6) return { host: ipv6[1], port: ipv6[2] }
+
+	const hostPort = a.match(/^([^:]*):(\d+)$/)
+	if (hostPort) return { host: hostPort[1], port: hostPort[2] }
+
+	return null
+}
+
+function formatProxyTarget(host: string, port: string): string {
+	const h = normalizeProxyHost(host)
+	if (h.includes(':')) return `http://[${h}]:${port}`
+	return `http://${h}:${port}`
+}
+
+function resolveDevProxyTarget(): string {
+	const explicit = process.env.S3DESK_DEV_PROXY_TARGET
+	if (explicit) return explicit
+
+	const backendAddr = process.env.S3DESK_BACKEND_ADDR || process.env.ADDR
+	if (backendAddr) {
+		const parsed = parseBackendAddr(backendAddr)
+		if (parsed) return formatProxyTarget(parsed.host, parsed.port)
+	}
+	return DEFAULT_DEV_PROXY_TARGET
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
 	const analyze = mode === 'analyze' || process.env.ANALYZE === '1'
+	const devProxyTarget = resolveDevProxyTarget()
 	const plugins = [...react()]
 	if (analyze) {
 		plugins.push(
@@ -69,7 +120,7 @@ export default defineConfig(({ mode }) => {
 		server: {
 			proxy: {
 				'/api': {
-					target: 'http://127.0.0.1:8080',
+					target: devProxyTarget,
 					changeOrigin: false,
 					ws: true,
 				},
