@@ -88,6 +88,7 @@ echo "[check] frontend"
   npm ci --no-audit --no-fund
   npm run gen:openapi
   npm run lint
+  npm run test:unit
   npm run build
 )
 
