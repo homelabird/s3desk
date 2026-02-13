@@ -11,6 +11,10 @@ const OPTIONAL_INITIAL_UI_CHUNK_MARKERS = [
 ] as const
 
 function chunkGroupForModule(id: string): string | undefined {
+	// Rollup CommonJS interop helpers can get deduped into arbitrary chunks.
+	// Keep them in a core chunk so optional libraries (like YAML) don't get pulled
+	// into the initial bundle via helper re-exports.
+	if (id.includes('commonjsHelpers')) return 'vendor-misc'
 	if (!id.includes('node_modules/')) return undefined
 	// Split out a few heavy-but-not-always-needed UI deps so they can be loaded later.
 	if (

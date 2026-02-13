@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Checkbox, Dropdown, Empty, Input, Modal, Space, Spin, Table, Typography, message } from 'antd'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { MoreOutlined } from '@ant-design/icons'
-import { parse as parseYaml } from 'yaml'
 
 import { APIClient } from '../api/client'
 import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../api/types'
@@ -200,7 +199,7 @@ export function ProfilesPage(props: Props) {
 
 	const importMutation = useMutation({
 		mutationFn: async (yamlText: string) => {
-			const { request, tlsConfig } = parseProfileYaml(yamlText)
+			const { request, tlsConfig } = await parseProfileYaml(yamlText)
 			const created = await api.createProfile(request)
 			if (tlsConfig) {
 				await api.updateProfileTLS(created.id, tlsConfig)
@@ -727,7 +726,9 @@ function inferProvider(profile: ProfileYamlProfile): ProfileProvider {
 	return 'aws_s3'
 }
 
-function parseProfileYaml(yamlText: string): { request: ProfileCreateRequest; tlsConfig?: ProfileTLSConfig } {
+async function parseProfileYaml(yamlText: string): Promise<{ request: ProfileCreateRequest; tlsConfig?: ProfileTLSConfig }> {
+	// YAML parsing is an optional Profiles-only feature. Keep it out of the initial bundle.
+	const { parse: parseYaml } = await import('yaml')
 	const parsed = parseYaml(yamlText) as unknown
 	const { profile, tls } = extractProfileYaml(parsed)
 	const name = toOptionalString(profile.name)
