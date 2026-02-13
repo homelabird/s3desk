@@ -1799,18 +1799,24 @@ const objectsQuery = useInfiniteQuery({
 				jobId: resp.jobId,
 			}))
 	
-			message.open({
-				type: 'success',
-				content: (
-					<Space>
-						<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-							<Button size="small" type="link" href="/jobs">
-								Open Jobs
+				message.open({
+					type: 'success',
+					content: (
+						<Space>
+							<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
+							<Button
+								size="small"
+								type="link"
+								onClick={() => {
+									navigate('/jobs')
+								}}
+							>
+									Open Jobs
+								</Button>
+							<Button size="small" type="link" onClick={() => setDownloadsOpen(true)}>
+								Open Transfers
 							</Button>
-						<Button size="small" type="link" onClick={() => setDownloadsOpen(true)}>
-							Open Transfers
-						</Button>
-					</Space>
+						</Space>
 				),
 				duration: 6,
 			})

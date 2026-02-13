@@ -453,14 +453,15 @@ function BucketPolicyEditor(props: {
 	const renderStructuredEditor = () => {
 		if (policyKind === 'gcs') {
 			return (
-				<Space orientation="vertical" style={{ width: '100%' }} size="middle">
-					<Space align="center" wrap>
-						<Switch
-							checked={gcsPublicRead}
-							onChange={(checked) => {
-								setGcsBindings((prev) => {
-									const next = prev.map((b) => ({ ...b, members: [...b.members] }))
-									const role = 'roles/storage.objectViewer'
+						<Space orientation="vertical" style={{ width: '100%' }} size="middle">
+							<Space align="center" wrap>
+								<Switch
+									checked={gcsPublicRead}
+									aria-label="Public read access"
+									onChange={(checked) => {
+										setGcsBindings((prev) => {
+											const next = prev.map((b) => ({ ...b, members: [...b.members] }))
+											const role = 'roles/storage.objectViewer'
 									if (checked) {
 										const idx = next.findIndex((b) => b.role === role)
 										if (idx === -1) {
@@ -515,27 +516,29 @@ function BucketPolicyEditor(props: {
 							{
 								title: 'Role',
 								dataIndex: 'role',
-								render: (_: unknown, row: GcsBindingRow) => (
-									<Input
-										value={row.role}
-										onChange={(e) => {
-											const v = e.target.value
-											setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, role: v } : b)))
-										}}
-										placeholder="roles/storage.objectViewer…"
-									/>
-								),
-							},
-							{
-								title: 'Members',
-								render: (_: unknown, row: GcsBindingRow) => (
-									<Select
-										mode="tags"
-										value={row.members}
-										onChange={(vals: string[]) => {
-											setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, members: vals } : b)))
-										}}
-										style={{ width: '100%' }}
+									render: (_: unknown, row: GcsBindingRow) => (
+										<Input
+											value={row.role}
+											aria-label="Role"
+											onChange={(e) => {
+												const v = e.target.value
+												setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, role: v } : b)))
+											}}
+											placeholder="roles/storage.objectViewer…"
+										/>
+									),
+								},
+								{
+									title: 'Members',
+									render: (_: unknown, row: GcsBindingRow) => (
+										<Select
+											mode="tags"
+											value={row.members}
+											aria-label="Members"
+											onChange={(vals: string[]) => {
+												setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, members: vals } : b)))
+											}}
+											style={{ width: '100%' }}
 										placeholder="allUsers, user:alice@example.com…"
 									/>
 								),
@@ -569,14 +572,15 @@ function BucketPolicyEditor(props: {
 		if (policyKind === 'azure') {
 			return (
 				<Space orientation="vertical" style={{ width: '100%' }} size="middle">
-					<Space align="center" wrap>
-						<Typography.Text strong>Public access:</Typography.Text>
-						<Select
-							value={azurePublicAccess}
-							onChange={(v) => setAzurePublicAccess(v as 'private' | 'blob' | 'container')}
-							options={[
-								{ value: 'private', label: 'private' },
-								{ value: 'blob', label: 'blob (public read for blobs)' },
+						<Space align="center" wrap>
+							<Typography.Text strong>Public access:</Typography.Text>
+							<Select
+								value={azurePublicAccess}
+								aria-label="Public access"
+								onChange={(v) => setAzurePublicAccess(v as 'private' | 'blob' | 'container')}
+								options={[
+									{ value: 'private', label: 'private' },
+									{ value: 'blob', label: 'blob (public read for blobs)' },
 								{ value: 'container', label: 'container (public read for container + blobs)' },
 							]}
 							style={{ width: 360 }}
@@ -596,52 +600,56 @@ function BucketPolicyEditor(props: {
 						columns={[
 							{
 								title: 'ID',
-								render: (_: unknown, row: AzureStoredPolicyRow) => (
-									<Input
-										value={row.id}
-										onChange={(e) => {
-											const v = e.target.value
-											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, id: v } : p)))
-										}}
+									render: (_: unknown, row: AzureStoredPolicyRow) => (
+										<Input
+											value={row.id}
+											aria-label="ID"
+											onChange={(e) => {
+												const v = e.target.value
+												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, id: v } : p)))
+											}}
 										placeholder="policy-id…"
 									/>
 								),
 							},
 							{
 								title: 'Start (optional)',
-								render: (_: unknown, row: AzureStoredPolicyRow) => (
-									<Input
-										value={row.start}
-										onChange={(e) => {
-											const v = e.target.value
-											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, start: v } : p)))
-										}}
+									render: (_: unknown, row: AzureStoredPolicyRow) => (
+										<Input
+											value={row.start}
+											aria-label="Start"
+											onChange={(e) => {
+												const v = e.target.value
+												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, start: v } : p)))
+											}}
 										placeholder="2024-01-01T00:00:00Z…"
 									/>
 								),
 							},
 							{
 								title: 'Expiry (optional)',
-								render: (_: unknown, row: AzureStoredPolicyRow) => (
-									<Input
-										value={row.expiry}
-										onChange={(e) => {
-											const v = e.target.value
-											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, expiry: v } : p)))
-										}}
+									render: (_: unknown, row: AzureStoredPolicyRow) => (
+										<Input
+											value={row.expiry}
+											aria-label="Expiry"
+											onChange={(e) => {
+												const v = e.target.value
+												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, expiry: v } : p)))
+											}}
 										placeholder="2024-02-01T00:00:00Z…"
 									/>
 								),
 							},
 							{
 								title: 'Permission',
-								render: (_: unknown, row: AzureStoredPolicyRow) => (
-									<Input
-										value={row.permission}
-										onChange={(e) => {
-											const v = e.target.value
-											setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, permission: v } : p)))
-										}}
+									render: (_: unknown, row: AzureStoredPolicyRow) => (
+										<Input
+											value={row.permission}
+											aria-label="Permission"
+											onChange={(e) => {
+												const v = e.target.value
+												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, permission: v } : p)))
+											}}
 										placeholder="rl…"
 									/>
 								),
@@ -954,13 +962,18 @@ function BucketPolicyEditor(props: {
 										title={hasPolicyChanges ? 'Changes ready to save' : 'No policy changes'}
 										description={hasPolicyChanges ? `+${diffStats.added} / -${diffStats.removed}` : undefined}
 									/>
-									<Space align="center" wrap>
-										<Switch checked={showDiffContext} onChange={setShowDiffContext} disabled={!hasPolicyChanges} />
-										<Typography.Text type="secondary">Show unchanged lines</Typography.Text>
+										<Space align="center" wrap>
+											<Switch
+												checked={showDiffContext}
+												onChange={setShowDiffContext}
+												disabled={!hasPolicyChanges}
+												aria-label="Show unchanged lines"
+											/>
+											<Typography.Text type="secondary">Show unchanged lines</Typography.Text>
+										</Space>
+										<Input.TextArea value={visibleDiffText} readOnly autoSize={{ minRows: 10, maxRows: 24 }} />
 									</Space>
-									<Input.TextArea value={visibleDiffText} readOnly autoSize={{ minRows: 10, maxRows: 24 }} />
-								</Space>
-							),
+								),
 						},
 				]}
 			/>

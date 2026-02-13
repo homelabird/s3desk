@@ -301,18 +301,18 @@ export function SettingsPage(props: Props) {
 											label: 'Advanced',
 											children: (
 												<Space orientation="vertical" size={4} style={{ width: '100%' }}>
-													<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
-													<Space wrap>
-														<Button type="link" href={apiDocsUrl} target="_blank" rel="noreferrer">
-															Open API Docs
-														</Button>
-														<Button type="link" href={openapiUrl} target="_blank" rel="noreferrer">
-															OpenAPI YAML
-														</Button>
+														<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
+														<Space wrap>
+															<Button type="link" href={apiDocsUrl} target="_blank" rel="noopener noreferrer">
+																Open API Docs (new tab)
+															</Button>
+															<Button type="link" href={openapiUrl} target="_blank" rel="noopener noreferrer">
+																OpenAPI YAML (new tab)
+															</Button>
+														</Space>
 													</Space>
-												</Space>
-											),
-										},
+												),
+											},
 									]}
 								/>
 							</Space>

@@ -67,10 +67,9 @@ export default function App() {
 
 	const [apiToken, setApiToken] = useLocalStorageState('apiToken', '')
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
-	const [settingsOpenState, setSettingsOpenState] = useState(false)
 	const [navOpen, setNavOpen] = useState(false)
 	const [searchParams, setSearchParams] = useSearchParams()
-	const settingsOpen = settingsOpenState || searchParams.has('settings')
+	const settingsOpen = searchParams.has('settings')
 
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
 	const apiBaseLabel = useMemo(() => {
@@ -169,9 +168,12 @@ export default function App() {
 
 	const uploadDirectStream = metaQuery.data?.uploadDirectStream ?? false
 
-	const openSettings = () => setSettingsOpenState(true)
+	const openSettings = () => {
+		const next = new URLSearchParams(searchParams)
+		next.set('settings', '1')
+		setSearchParams(next, { replace: false })
+	}
 	const closeSettings = () => {
-		setSettingsOpenState(false)
 		if (!searchParams.has('settings')) return
 		const next = new URLSearchParams(searchParams)
 		next.delete('settings')

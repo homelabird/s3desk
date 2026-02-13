@@ -191,12 +191,12 @@ export function ProfileModal(props: {
 						description={
 							<Space direction="vertical" size={2}>
 								<Typography.Text type="secondary">{providerGuide.hint}</Typography.Text>
-								<Typography.Link href={providerGuide.docsUrl} target="_blank" rel="noreferrer">
-									Open provider setup docs
-								</Typography.Link>
-							</Space>
-						}
-					/>
+									<Typography.Link href={providerGuide.docsUrl} target="_blank" rel="noopener noreferrer">
+										Open provider setup docs (new tab)
+									</Typography.Link>
+								</Space>
+							}
+						/>
 				) : null}
 
 				<Form.Item name="name" label="Name" rules={[{ required: true }]}>
