@@ -85,3 +85,39 @@
   - [Done] 대시보드 템플릿에 retry pressure(%), final failure ratio(%), retry effectiveness 패널 PromQL 추가.
   - [Done] Failure taxonomy 문서에 운영용 retry/failure 비율 쿼리를 정규화(0분모 보호 포함).
   - [Done] Grafana import용 dashboard JSON(`docs/grafana/s3desk-jobs-retry-failure.dashboard.json`) 추가.
+
+## P3 — Frontend deploy readiness & UX polish (next)
+
+### 9) Web UI Guidelines compliance sweep (a11y + copy)
+- **Done (baseline)**
+  - Skip link + `main` landmark to support keyboard navigation.
+  - CI E2E smoke + unit tests green after navigation refactors.
+- **Next**
+  - Replace remaining user-facing `...` with `…` (for example: profile actions dropdown, favorites empty/loading messages, command palette placeholder).
+  - Ensure every input/control has an accessible name (`label` or `aria-label`), starting with:
+    - Favorites pane search input
+    - Command palette input
+    - Job logs search input
+  - Verify toast/notification accessibility (`aria-live=polite`) for Ant Design `message`/`notification` usage, and wrap if needed.
+- **Definition of done**
+  - `npm run lint && npm run test:unit && npm run build` pass in `frontend/`.
+  - Playwright smoke (`objects-smoke`, `jobs-flow`, `uploads-folder`) passes.
+  - Manual keyboard check: skip link works, focus order is predictable, and key flows are usable without a mouse.
+
+### 10) SPA navigation semantics (React Router)
+- Convert remaining full page navigations (`href="/..."`) that are intended as in-app navigation into router-native links.
+  - Avoid invalid nested interactive markup (`<a><button/></a>` or `<button><a/></button>`); prefer a dedicated “link-as-button” component or a styled `<Link>`.
+- **Definition of done**
+  - Internal navigation does not cause a full reload for primary flows (Profiles/Buckets/Objects/Uploads/Jobs).
+  - Cmd/Ctrl-click and open-in-new-tab work where navigation is presented as a link.
+
+### 11) Vercel deployment profile (frontend-only)
+- **Goal**
+  - Make the Vite SPA deployable on Vercel without route-refresh 404s, and with a configurable backend API origin.
+- **Work**
+  - Add `VITE_API_BASE_URL` support in the frontend client (default remains `/api/v1`).
+  - Add Vercel routing config so deep links like `/jobs` render `index.html` (SPA fallback).
+  - Document deployment steps + required backend CORS/WS considerations.
+- **Definition of done**
+  - Vercel preview deployment works with direct navigation/refresh on non-root routes.
+  - API calls succeed against a configured backend origin in production.
