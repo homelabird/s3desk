@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from './api/client'
@@ -210,12 +209,31 @@ function ProfilesList(props: {
 	const navigate = useNavigate()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 
-	const profilesQuery = useQuery({
-		queryKey: ['profiles', props.apiToken],
-		queryFn: async () => (await api.listProfiles()) as LightProfile[],
-	})
+	const [reloadNonce, setReloadNonce] = useState(0)
+	const [profilesState, setProfilesState] = useState<
+		| { status: 'loading' }
+		| { status: 'success'; data: LightProfile[] }
+		| { status: 'error'; error: unknown }
+	>({ status: 'loading' })
 
-	const profiles = profilesQuery.data ?? []
+	useEffect(() => {
+		let cancelled = false
+		api
+			.listProfiles()
+			.then((data) => {
+				if (cancelled) return
+				setProfilesState({ status: 'success', data: data as LightProfile[] })
+			})
+			.catch((err) => {
+				if (cancelled) return
+				setProfilesState({ status: 'error', error: err })
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [api, reloadNonce])
+
+	const profiles = profilesState.status === 'success' ? profilesState.data : []
 	const hasProfiles = profiles.length > 0
 
 	const openDashboard = (path: '/buckets' | '/objects' | '/uploads' | '/jobs') => {
@@ -295,11 +313,32 @@ function ProfilesList(props: {
 						)}
 					</div>
 
-					{profilesQuery.isPending ? (
+					{profilesState.status === 'loading' ? (
 						<div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>Loading profiles…</div>
-					) : profilesQuery.isError ? (
+					) : profilesState.status === 'error' ? (
 						<div style={{ padding: 14, fontSize: 13 }}>
-							Failed to load profiles: <span style={{ opacity: 0.85 }}>{formatApiErrorTitle(profilesQuery.error)}</span>
+							<div>
+								Failed to load profiles: <span style={{ opacity: 0.85 }}>{formatApiErrorTitle(profilesState.error)}</span>
+							</div>
+							<div style={{ marginTop: 10 }}>
+								<button
+									type="button"
+									onClick={() => {
+										setProfilesState({ status: 'loading' })
+										setReloadNonce((v) => v + 1)
+									}}
+									style={{
+										border: '1px solid #cbd5e1',
+										background: '#fff',
+										borderRadius: 10,
+										padding: '8px 12px',
+										fontWeight: 700,
+										cursor: 'pointer',
+									}}
+								>
+									Retry
+								</button>
+							</div>
 						</div>
 					) : !hasProfiles ? (
 						<div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>No profiles yet. Create one to get started.</div>
@@ -377,13 +416,41 @@ export default function LightApp() {
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
 
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
-	const metaQuery = useQuery({
-		queryKey: ['meta', apiToken],
-		queryFn: () => api.getMeta(),
-		retry: false,
-	})
+	const [metaReloadNonce, setMetaReloadNonce] = useState(0)
+	const [metaState, setMetaState] = useState<
+		| { status: 'loading' }
+		| { status: 'success' }
+		| { status: 'error'; error: unknown }
+	>({ status: 'loading' })
 
-	if (metaQuery.isPending) {
+	useEffect(() => {
+		let cancelled = false
+		api
+			.getMeta()
+			.then(() => {
+				if (cancelled) return
+				setMetaState({ status: 'success' })
+			})
+			.catch((err) => {
+				if (cancelled) return
+				setMetaState({ status: 'error', error: err })
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [api, metaReloadNonce])
+
+	const retryMeta = () => {
+		setMetaState({ status: 'loading' })
+		setMetaReloadNonce((v) => v + 1)
+	}
+
+	const applyApiToken = (nextToken: string) => {
+		setMetaState({ status: 'loading' })
+		setApiToken(nextToken)
+	}
+
+	if (metaState.status === 'loading') {
 		return (
 			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
 				<div style={{ width: 520, maxWidth: '100%', textAlign: 'center' }}>
@@ -394,16 +461,16 @@ export default function LightApp() {
 		)
 	}
 
-	if (metaQuery.isError) {
-		const err = metaQuery.error
+	if (metaState.status === 'error') {
+		const err = metaState.error
 		const isUnauthorized = err instanceof APIError && err.status === 401
 		if (isUnauthorized) {
 			return (
 				<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
 					<LightLogin
 						initialToken={apiToken}
-						onLogin={(token) => setApiToken(token)}
-						onClearSavedToken={() => setApiToken('')}
+						onLogin={(token) => applyApiToken(token)}
+						onClearSavedToken={() => applyApiToken('')}
 					/>
 				</div>
 			)
@@ -413,7 +480,7 @@ export default function LightApp() {
 		const hint = err instanceof APIError && err.status === 403 ? <LightHint403 /> : undefined
 		return (
 			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-				<LightErrorCard title={title} hint={hint} onRetry={() => metaQuery.refetch()} />
+				<LightErrorCard title={title} hint={hint} onRetry={retryMeta} />
 			</div>
 		)
 	}
@@ -425,7 +492,7 @@ export default function LightApp() {
 					<button
 						type="button"
 						onClick={() => {
-							setApiToken('')
+							applyApiToken('')
 							setProfileId(null)
 						}}
 						style={{

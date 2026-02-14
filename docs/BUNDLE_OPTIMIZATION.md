@@ -17,7 +17,7 @@ Artifacts:
 Key numbers to watch (local build, 2026-02-14):
 - `vendor-ui` (antd + rc-*): about `~228 kB gzip`
 - `vendor-tanstack-virtual` (`@tanstack/react-virtual`): about `~4.8 kB gzip` (excluded from `/profiles` HTML preload)
-- `initial JS (index.html)`: about `~95 kB gzip` (no `vendor-ui` on the initial `/profiles` entry)
+- `initial JS (index.html)`: about `~85 kB gzip` (no `vendor-ui` / react-query on the initial `/profiles` entry)
 
 Notes:
 - We intentionally keep antd + rc-* together in `vendor-ui` to avoid cross-chunk circular init ordering issues (TDZ runtime crashes).

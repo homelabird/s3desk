@@ -120,7 +120,7 @@ export default function FullAppInner() {
 			{
 				key: '/profiles',
 				label: (
-					<Link to="/profiles" style={menuLinkStyle}>
+					<Link to="/profiles?ui=full" style={menuLinkStyle}>
 						<ProfileOutlined />
 						<span>Profiles</span>
 					</Link>

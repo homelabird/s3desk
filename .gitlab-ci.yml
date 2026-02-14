@@ -878,6 +878,20 @@ frontend_bundle_analyze:
           exit 1
         fi
       done
+    - |
+      # Guard against accidental preloading of optional heavy chunks.
+      if [ -f frontend/dist/index.html ]; then
+        if rg -n 'rel="modulepreload".*vendor-ui-' frontend/dist/index.html >/dev/null; then
+          echo "[bundle-guard] index.html unexpectedly preloads vendor-ui chunk(s)" >&2
+          rg -n 'rel="modulepreload".*vendor-ui-' frontend/dist/index.html | head -n 20 >&2 || true
+          exit 1
+        fi
+        if rg -n 'rel="modulepreload".*vendor-tanstack-virtual-' frontend/dist/index.html >/dev/null; then
+          echo "[bundle-guard] index.html unexpectedly preloads vendor-tanstack-virtual chunk(s)" >&2
+          rg -n 'rel="modulepreload".*vendor-tanstack-virtual-' frontend/dist/index.html | head -n 20 >&2 || true
+          exit 1
+        fi
+      fi
     - echo "[bundle-report] begin markdown preview"
     - sed -n '1,200p' frontend/dist/bundle-report.md
     - echo "[bundle-report] end markdown preview"
