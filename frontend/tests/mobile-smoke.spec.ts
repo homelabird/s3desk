@@ -140,8 +140,9 @@ test.describe('mobile smoke', () => {
 
 	test('profiles page renders', async ({ page }) => {
 		await page.goto('/profiles')
-		await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'New Profile' })).toBeVisible()
+		await expect(page.getByText('Profiles', { exact: true }).first()).toBeVisible()
+		await expect(page.getByText('Choose a profile')).toBeVisible()
+		await expect(page.getByRole('link', { name: /Create profile|New Profile/i })).toBeVisible()
 	})
 
 	test('objects page renders', async ({ page }) => {

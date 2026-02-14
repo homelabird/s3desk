@@ -199,14 +199,14 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 	await deleteDrawer.getByRole('combobox', { name: 'Bucket' }).fill(defaultStorage.bucket)
 	await deleteDrawer.getByLabel('Prefix', { exact: true }).fill('to-delete/')
 	await deleteDrawer.getByRole('button', { name: 'Create' }).click()
-	await expect(page.locator('[data-row-key="job-created"]')).toBeVisible()
+	await expect(page.getByRole('cell', { name: 'job-created' })).toBeVisible()
 
-	const runningRow = page.locator('[data-row-key="job-running"]')
+	const runningRow = page.getByRole('row', { name: /job-running/i })
 	await runningRow.getByRole('button', { name: 'More actions' }).click()
 	await page.getByRole('menuitem', { name: 'Cancel' }).click()
 	await expect(runningRow.getByText('canceled')).toBeVisible()
 
-	const failedRow = page.locator('[data-row-key="job-failed"]')
+	const failedRow = page.getByRole('row', { name: /job-failed/i })
 	await failedRow.getByRole('button', { name: 'Retry' }).click()
-	await expect(page.locator('[data-row-key="job-retry-1"]')).toBeVisible()
+	await expect(page.getByRole('cell', { name: 'job-retry-1' })).toBeVisible()
 })

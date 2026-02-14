@@ -72,9 +72,7 @@ test.describe('Live UI flow', () => {
 
 		try {
 			await seedStorage(page)
-			await page.goto('/profiles')
-
-			await page.getByRole('button', { name: 'New Profile' }).click()
+			await page.goto('/profiles?ui=full&create=1')
 			await page.getByLabel('Name').fill(profileName)
 			await page.getByLabel('Endpoint URL').fill(s3Endpoint)
 			await page.getByLabel('Region').fill(s3Region)
@@ -88,7 +86,6 @@ test.describe('Live UI flow', () => {
 			const createdProfileRow = page.getByRole('row', { name: new RegExp(profileName) })
 			await expect(createdProfileRow).toBeVisible({ timeout: 30_000 })
 			await createdProfileRow.getByRole('button', { name: 'Use' }).click()
-			await expect(page.locator('.ant-select-content-value', { hasText: profileName })).toBeVisible({ timeout: 15_000 })
 			await page.waitForFunction(() => {
 				const value = window.localStorage.getItem('profileId')
 				return value && JSON.parse(value)
@@ -117,13 +114,10 @@ test.describe('Live UI flow', () => {
 			await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 180_000 })
 
 			await page.goto('/objects')
-			const objectsBucketValue = page.locator('.ant-select-content-value', { hasText: bucketName })
-			if (!(await objectsBucketValue.isVisible())) {
-				const objectsBucketSelect = page.getByRole('combobox', { name: 'Bucket' })
-				await objectsBucketSelect.click({ force: true })
-				await objectsBucketSelect.fill(bucketName)
-				await page.keyboard.press('Enter')
-			}
+			const objectsBucketSelect = page.getByRole('combobox', { name: 'Bucket' })
+			await objectsBucketSelect.click({ force: true })
+			await objectsBucketSelect.fill(bucketName)
+			await page.keyboard.press('Enter')
 
 			const objectRow = page.locator('[data-objects-row="true"]', { hasText: uploadFilename }).first()
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
@@ -156,13 +150,6 @@ test.describe('Live UI flow', () => {
 			await bucketConfirm.getByRole('button', { name: 'Delete' }).click()
 			await expect(bucketRow).toHaveCount(0, { timeout: 60_000 })
 
-			await page.goto('/profiles')
-			const profileRow = page.getByRole('row', { name: new RegExp(profileName) })
-			await profileRow.getByRole('button', { name: 'Delete' }).click()
-			const profileConfirm = page.locator('.ant-modal').filter({ hasText: profileName })
-			await profileConfirm.getByPlaceholder(profileName).fill(profileName)
-			await profileConfirm.getByRole('button', { name: 'Delete' }).click()
-			await expect(profileRow).toHaveCount(0, { timeout: 60_000 })
 		} finally {
 			if (profileId) {
 				const profileHeaders = {

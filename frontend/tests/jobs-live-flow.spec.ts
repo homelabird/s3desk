@@ -208,7 +208,9 @@ test.describe('Live Jobs flow', () => {
 			const createResponse = page.waitForResponse(
 				(res) => res.url().includes('/api/v1/jobs') && res.request().method() === 'POST',
 			)
-			await page.getByRole('button', { name: 'New Delete Job' }).click()
+			const header = page.getByRole('heading', { name: 'Jobs' }).locator('..')
+			await header.getByRole('button', { name: /More/i }).click()
+			await page.getByRole('menuitem', { name: 'New Delete Job' }).click()
 			const deleteDrawer = page.getByRole('dialog', { name: 'Create delete job (S3)' })
 			await expect(deleteDrawer).toBeVisible()
 			const bucketSelect = deleteDrawer.getByRole('combobox', { name: 'Bucket' })
