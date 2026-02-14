@@ -1,20 +1,21 @@
-import type { FormInstance } from 'antd'
-import { Alert, Form, Modal, Typography } from 'antd'
+import { Alert, Modal, Typography } from 'antd'
 
+import { FormField } from '../../components/FormField'
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
 
-type DownloadPrefixForm = {
+type DownloadPrefixValues = {
 	localFolder: string
 }
 
 type ObjectsDownloadPrefixModalProps = {
 	open: boolean
 	sourceLabel: string
-	form: FormInstance<DownloadPrefixForm>
+	values: DownloadPrefixValues
+	onValuesChange: (values: DownloadPrefixValues) => void
 	isSubmitting: boolean
 	onCancel: () => void
-	onFinish: (values: DownloadPrefixForm) => void
+	onFinish: (values: DownloadPrefixValues) => void
 	onPickFolder: (handle: FileSystemDirectoryHandle) => void
 	canSubmit: boolean
 }
@@ -28,7 +29,7 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 			title="Download to this device"
 			okText="Start download"
 			okButtonProps={{ loading: props.isSubmitting, disabled: !props.canSubmit }}
-			onOk={() => props.form.submit()}
+			onOk={() => props.onFinish(props.values)}
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
@@ -50,23 +51,26 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 				/>
 			) : null}
 
-			<Form
-				form={props.form}
-				layout="vertical"
-				initialValues={{ localFolder: '' }}
-				onFinish={props.onFinish}
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					props.onFinish(props.values)
+				}}
 			>
-				<Form.Item label="Source">
+				<FormField label="Source">
 					<Typography.Text code>{props.sourceLabel}</Typography.Text>
-				</Form.Item>
-				<Form.Item name="localFolder" label="Local destination folder" rules={[{ required: true }]}>
+				</FormField>
+
+				<FormField label="Local destination folder" required>
 					<LocalDevicePathInput
+						value={props.values.localFolder}
+						onChange={(value) => props.onValuesChange({ ...props.values, localFolder: value })}
 						placeholder="Select a folder…"
 						disabled={!support.ok}
 						onPick={props.onPickFolder}
 					/>
-				</Form.Item>
-			</Form>
+				</FormField>
+			</form>
 		</Modal>
 	)
 }

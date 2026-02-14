@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Form, message } from 'antd'
+import { message } from 'antd'
 
 import type { APIClient } from '../../api/client'
 import type { TransfersContextValue } from '../../components/Transfers'
@@ -7,7 +7,7 @@ import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { listAllObjects } from '../../lib/objects'
 import { normalizePrefix } from './objectsListUtils'
 
-type DownloadPrefixFormValues = { localFolder: string }
+type DownloadPrefixValues = { localFolder: string }
 
 type UseObjectsDownloadPrefixArgs = {
 	api: APIClient
@@ -19,7 +19,7 @@ type UseObjectsDownloadPrefixArgs = {
 
 export function useObjectsDownloadPrefix({ api, profileId, bucket, prefix, transfers }: UseObjectsDownloadPrefixArgs) {
 	const [downloadPrefixOpen, setDownloadPrefixOpen] = useState(false)
-	const [downloadPrefixForm] = Form.useForm<DownloadPrefixFormValues>()
+	const [downloadPrefixValues, setDownloadPrefixValues] = useState<DownloadPrefixValues>({ localFolder: '' })
 	const [downloadPrefixFolderLabel, setDownloadPrefixFolderLabel] = useState('')
 	const [downloadPrefixFolderHandle, setDownloadPrefixFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
 	const [downloadPrefixSubmitting, setDownloadPrefixSubmitting] = useState(false)
@@ -32,14 +32,14 @@ export function useObjectsDownloadPrefix({ api, profileId, bucket, prefix, trans
 
 			setDownloadPrefixFolderHandle(null)
 			setDownloadPrefixFolderLabel('')
+			setDownloadPrefixValues({ localFolder: '' })
 			setDownloadPrefixOpen(true)
-			downloadPrefixForm.setFieldsValue({ localFolder: '' })
 		},
-		[bucket, downloadPrefixForm, prefix, profileId],
+		[bucket, prefix, profileId],
 	)
 
 	const handleDownloadPrefixSubmit = useCallback(
-		async (values: DownloadPrefixFormValues) => {
+		async (values: DownloadPrefixValues) => {
 			void values
 			if (!profileId || !bucket) return
 			const srcPrefix = normalizePrefix(prefix)
@@ -74,6 +74,7 @@ export function useObjectsDownloadPrefix({ api, profileId, bucket, prefix, trans
 				setDownloadPrefixOpen(false)
 				setDownloadPrefixFolderHandle(null)
 				setDownloadPrefixFolderLabel('')
+				setDownloadPrefixValues({ localFolder: '' })
 			} catch (err) {
 				message.error(formatErr(err))
 			} finally {
@@ -95,6 +96,7 @@ export function useObjectsDownloadPrefix({ api, profileId, bucket, prefix, trans
 		setDownloadPrefixOpen(false)
 		setDownloadPrefixFolderHandle(null)
 		setDownloadPrefixFolderLabel('')
+		setDownloadPrefixValues({ localFolder: '' })
 	}, [])
 
 	const handleDownloadPrefixPick = useCallback((handle: FileSystemDirectoryHandle) => {
@@ -104,7 +106,8 @@ export function useObjectsDownloadPrefix({ api, profileId, bucket, prefix, trans
 
 	return {
 		downloadPrefixOpen,
-		downloadPrefixForm,
+		downloadPrefixValues,
+		setDownloadPrefixValues,
 		downloadPrefixSubmitting,
 		downloadPrefixCanSubmit: !!downloadPrefixFolderHandle,
 		openDownloadPrefix,

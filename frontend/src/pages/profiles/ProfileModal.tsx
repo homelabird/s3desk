@@ -1,7 +1,9 @@
-import { Alert, Checkbox, Divider, Form, Input, Modal, Select, Space, Switch, Typography } from 'antd'
+import { Alert, Checkbox, Divider, Input, Modal, Select, Space, Switch, Typography, message } from 'antd'
+import { useMemo, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
-import type { ProfileFormValues, TLSCapability } from './profileTypes'
+import { FormField } from '../../components/FormField'
+import type { ProfileFormValues, TLSCapability, TLSAction } from './profileTypes'
 
 function validateOptionalHttpUrl(value: string | undefined): Promise<void> {
 	if (!value || !value.trim()) return Promise.resolve()
@@ -25,9 +27,7 @@ function validateRegionLike(value: string | undefined): Promise<void> {
 
 function validateDigitsOnly(value: string | undefined): Promise<void> {
 	if (!value || !value.trim()) return Promise.resolve()
-	return /^\d+$/.test(value.trim())
-		? Promise.resolve()
-		: Promise.reject(new Error('Use digits only'))
+	return /^\d+$/.test(value.trim()) ? Promise.resolve() : Promise.reject(new Error('Use digits only'))
 }
 
 function validateJsonDocument(value: string | undefined): Promise<void> {
@@ -54,6 +54,12 @@ function validateOciCompartment(value: string | undefined): Promise<void> {
 		: Promise.reject(new Error('Expected OCID that starts with ocid1.compartment.'))
 }
 
+function isBlank(value: unknown): boolean {
+	return typeof value !== 'string' ? !value : !value.trim()
+}
+
+type FieldErrors = Partial<Record<keyof ProfileFormValues, string>>
+
 export function ProfileModal(props: {
 	open: boolean
 	title: string
@@ -68,22 +74,72 @@ export function ProfileModal(props: {
 	tlsStatusLoading?: boolean
 	tlsStatusError?: string | null
 }) {
-	const [form] = Form.useForm<ProfileFormValues>()
-	const provider = Form.useWatch('provider', form)
-	const clearSessionToken = Form.useWatch('clearSessionToken', form)
-	const gcpAnonymous = Form.useWatch('gcpAnonymous', form)
-	const tlsEnabled = Form.useWatch('tlsEnabled', form)
-	const tlsAction = Form.useWatch('tlsAction', form)
+	const defaults: ProfileFormValues = useMemo(
+		() => ({
+			provider: 's3_compatible',
+			name: '',
+
+			endpoint: 'http://127.0.0.1:9000',
+			region: 'us-east-1',
+			accessKeyId: '',
+			secretAccessKey: '',
+			sessionToken: '',
+			clearSessionToken: false,
+			forcePathStyle: false,
+
+			azureAccountName: '',
+			azureAccountKey: '',
+			azureEndpoint: '',
+			azureUseEmulator: false,
+
+			gcpAnonymous: false,
+			gcpServiceAccountJson: '',
+			gcpEndpoint: '',
+			gcpProjectNumber: '',
+
+			ociNamespace: '',
+			ociCompartment: '',
+			ociEndpoint: '',
+			ociAuthProvider: '',
+			ociConfigFile: '',
+			ociConfigProfile: '',
+
+			preserveLeadingSlash: false,
+			tlsInsecureSkipVerify: false,
+
+			tlsEnabled: false,
+			tlsAction: 'keep',
+			tlsClientCertPem: '',
+			tlsClientKeyPem: '',
+			tlsCaCertPem: '',
+		}),
+		[],
+	)
+
+	const [values, setValues] = useState<ProfileFormValues>(() => ({ ...defaults, ...(props.initialValues ?? {}) }))
+	const [errors, setErrors] = useState<FieldErrors>({})
+
+	const provider = values.provider
 	const isS3Provider = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
 	const isOciObjectStorage = provider === 'oci_object_storage'
 	const isAws = provider === 'aws_s3'
 	const isAzure = provider === 'azure_blob'
 	const isGcp = provider === 'gcp_gcs'
+
 	const tlsUnavailable = props.tlsCapability?.enabled === false
 	const tlsDisabledReason = props.tlsCapability?.reason ?? 'mTLS is disabled on the server.'
-	const showTLSFields = !tlsUnavailable && (props.editMode ? tlsAction === 'enable' : !!tlsEnabled)
-		const tlsStatusLabel = tlsUnavailable ? 'unavailable' : props.tlsStatusLoading ? 'loading…' : props.tlsStatus?.mode === 'mtls' ? 'enabled' : 'disabled'
+	const tlsStatusLabel = tlsUnavailable
+		? 'unavailable'
+		: props.tlsStatusLoading
+			? 'loading…'
+			: props.tlsStatus?.mode === 'mtls'
+				? 'enabled'
+				: 'disabled'
 	const showTLSStatusError = !tlsUnavailable && props.tlsStatusError
+
+	const tlsAction = (values.tlsAction ?? 'keep') as TLSAction
+	const showTLSFields = !tlsUnavailable && (props.editMode ? tlsAction === 'enable' : !!values.tlsEnabled)
+
 	const providerGuide = (() => {
 		switch (provider) {
 			case 'aws_s3':
@@ -121,57 +177,143 @@ export function ProfileModal(props: {
 		}
 	})()
 
+	const setField = <K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
+		setValues((prev) => ({ ...prev, [key]: value }))
+		setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev))
+	}
+
+	const validateAndSubmit = async () => {
+		const next: FieldErrors = {}
+
+		const addError = (key: keyof ProfileFormValues, msg: string) => {
+			if (!next[key]) next[key] = msg
+		}
+
+		if (isBlank(values.provider)) addError('provider', 'Provider is required')
+		if (isBlank(values.name)) addError('name', 'Name is required')
+
+		if (isS3Provider) {
+			if (!isAws && isBlank(values.endpoint)) addError('endpoint', 'Endpoint URL is required')
+			try {
+				await validateOptionalHttpUrl(values.endpoint)
+			} catch (err) {
+				addError('endpoint', (err as Error).message)
+			}
+
+			if (isBlank(values.region)) addError('region', 'Region is required')
+			try {
+				await validateRegionLike(values.region)
+			} catch (err) {
+				addError('region', (err as Error).message)
+			}
+
+			if (!props.editMode) {
+				if (isBlank(values.accessKeyId)) addError('accessKeyId', 'Access Key ID is required')
+				if (isBlank(values.secretAccessKey)) addError('secretAccessKey', 'Secret is required')
+			}
+		}
+
+		if (isOciObjectStorage) {
+			if (isBlank(values.region)) addError('region', 'Region is required')
+			try {
+				await validateRegionLike(values.region)
+			} catch (err) {
+				addError('region', (err as Error).message)
+			}
+
+			if (isBlank(values.ociNamespace)) addError('ociNamespace', 'Namespace is required')
+			if (isBlank(values.ociCompartment)) addError('ociCompartment', 'Compartment OCID is required')
+			try {
+				await validateOciCompartment(values.ociCompartment)
+			} catch (err) {
+				addError('ociCompartment', (err as Error).message)
+			}
+
+			try {
+				await validateOptionalHttpUrl(values.ociEndpoint)
+			} catch (err) {
+				addError('ociEndpoint', (err as Error).message)
+			}
+		}
+
+		if (isAzure) {
+			if (isBlank(values.azureAccountName)) addError('azureAccountName', 'Storage Account Name is required')
+			try {
+				await validateAzureAccountName(values.azureAccountName)
+			} catch (err) {
+				addError('azureAccountName', (err as Error).message)
+			}
+
+			if (!props.editMode && isBlank(values.azureAccountKey)) addError('azureAccountKey', 'Account Key is required')
+			try {
+				await validateOptionalHttpUrl(values.azureEndpoint)
+			} catch (err) {
+				addError('azureEndpoint', (err as Error).message)
+			}
+		}
+
+		if (isGcp) {
+			try {
+				await validateOptionalHttpUrl(values.gcpEndpoint)
+			} catch (err) {
+				addError('gcpEndpoint', (err as Error).message)
+			}
+
+			try {
+				await validateDigitsOnly(values.gcpProjectNumber)
+			} catch (err) {
+				addError('gcpProjectNumber', (err as Error).message)
+			}
+
+			if (!values.gcpAnonymous) {
+				if (!props.editMode && isBlank(values.gcpServiceAccountJson)) {
+					addError('gcpServiceAccountJson', 'Service Account JSON is required')
+				}
+				try {
+					await validateJsonDocument(values.gcpServiceAccountJson)
+				} catch (err) {
+					addError('gcpServiceAccountJson', (err as Error).message)
+				}
+			}
+		}
+
+		if (showTLSFields) {
+			if (isBlank(values.tlsClientCertPem)) addError('tlsClientCertPem', 'Client certificate is required')
+			if (isBlank(values.tlsClientKeyPem)) addError('tlsClientKeyPem', 'Client key is required')
+		}
+
+		setErrors(next)
+		if (Object.keys(next).length > 0) {
+			message.error('Fix the highlighted fields.')
+			return
+		}
+
+		props.onSubmit(values)
+	}
+
 	return (
 		<Modal
 			open={props.open}
 			title={props.title}
 			okText={props.okText}
 			okButtonProps={{ loading: props.loading }}
-			onOk={() => form.submit()}
+			onOk={() => {
+				void validateAndSubmit()
+			}}
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
-			<Form
-				form={form}
-				layout="vertical"
-				initialValues={{
-					provider: 's3_compatible',
-					name: '',
-					endpoint: 'http://127.0.0.1:9000',
-					region: 'us-east-1',
-					accessKeyId: '',
-					secretAccessKey: '',
-					sessionToken: '',
-					clearSessionToken: false,
-					forcePathStyle: false,
-					azureAccountName: '',
-					azureAccountKey: '',
-					azureEndpoint: '',
-					azureUseEmulator: false,
-					gcpAnonymous: false,
-					gcpServiceAccountJson: '',
-					gcpEndpoint: '',
-					gcpProjectNumber: '',
-					ociNamespace: '',
-					ociCompartment: '',
-					ociEndpoint: '',
-					ociAuthProvider: '',
-					ociConfigFile: '',
-					ociConfigProfile: '',
-					preserveLeadingSlash: false,
-					tlsInsecureSkipVerify: false,
-					tlsEnabled: false,
-					tlsAction: 'keep',
-					tlsClientCertPem: '',
-					tlsClientKeyPem: '',
-					tlsCaCertPem: '',
-					...props.initialValues,
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					void validateAndSubmit()
 				}}
-				onFinish={(values) => props.onSubmit(values)}
 			>
-				<Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
+				<FormField label="Provider" required error={errors.provider}>
 					<Select
 						disabled={!!props.editMode}
+						value={values.provider}
+						onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
 						options={[
 							{ label: 'S3 Compatible (MinIO/Ceph/Custom)', value: 's3_compatible' },
 							{ label: 'AWS S3', value: 'aws_s3' },
@@ -181,7 +323,8 @@ export function ProfileModal(props: {
 							{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
 						]}
 					/>
-				</Form.Item>
+				</FormField>
+
 				{providerGuide ? (
 					<Alert
 						type="info"
@@ -191,155 +334,169 @@ export function ProfileModal(props: {
 						description={
 							<Space direction="vertical" size={2}>
 								<Typography.Text type="secondary">{providerGuide.hint}</Typography.Text>
-									<Typography.Link href={providerGuide.docsUrl} target="_blank" rel="noopener noreferrer">
-										Open provider setup docs (new tab)
-									</Typography.Link>
-								</Space>
-							}
-						/>
+								<Typography.Link href={providerGuide.docsUrl} target="_blank" rel="noopener noreferrer">
+									Open provider setup docs (new tab)
+								</Typography.Link>
+							</Space>
+						}
+					/>
 				) : null}
 
-				<Form.Item name="name" label="Name" rules={[{ required: true }]}>
-					<Input />
-				</Form.Item>
+				<FormField label="Name" required error={errors.name}>
+					<Input value={values.name} onChange={(e) => setField('name', e.target.value)} autoComplete="off" />
+				</FormField>
 
 				{isS3Provider ? (
 					<>
-						<Form.Item
-							name="endpoint"
+						<FormField
 							label={isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
-							rules={[
-								...(isAws ? [] : [{ required: true }]),
-								{ validator: (_, value) => validateOptionalHttpUrl(value) },
-							]}
+							required={!isAws}
 							extra={isAws ? 'Leave blank to use the AWS default endpoint.' : 'Use full URL including protocol (https://…).'}
+							error={errors.endpoint}
 						>
-							<Input placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'} />
-						</Form.Item>
-						<Form.Item
-							name="region"
-							label="Region"
-							rules={[{ required: true }, { validator: (_, value) => validateRegionLike(value) }]}
-							extra="Example: us-east-1"
-						>
-							<Input placeholder="us-east-1…" />
-						</Form.Item>
+							<Input
+								value={values.endpoint}
+								onChange={(e) => setField('endpoint', e.target.value)}
+								placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'}
+								autoComplete="off"
+							/>
+						</FormField>
+
+						<FormField label="Region" required extra="Example: us-east-1" error={errors.region}>
+							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1…" />
+						</FormField>
 					</>
 				) : null}
 
 				{isOciObjectStorage ? (
 					<>
-						<Form.Item
-							name="region"
-							label="Region"
-							rules={[{ required: true }, { validator: (_, value) => validateRegionLike(value) }]}
-							extra="Example: us-ashburn-1"
-						>
-							<Input placeholder="us-ashburn-1…" />
-						</Form.Item>
-						<Form.Item name="ociNamespace" label="Namespace" rules={[{ required: true }]}>
-							<Input placeholder="my-namespace…" />
-						</Form.Item>
-						<Form.Item
-							name="ociCompartment"
-							label="Compartment OCID"
-							rules={[{ required: true }, { validator: (_, value) => validateOciCompartment(value) }]}
-						>
-							<Input placeholder="ocid1.compartment.oc1..…" />
-						</Form.Item>
-						<Form.Item
-							name="ociEndpoint"
-							label="Endpoint URL (optional)"
-							rules={[{ validator: (_, value) => validateOptionalHttpUrl(value) }]}
-						>
-							<Input placeholder="https://objectstorage.{region}.oraclecloud.com…" />
-						</Form.Item>
-						<Form.Item name="ociAuthProvider" label="Auth Provider (optional)">
-							<Input placeholder="instance_principal / api_key / resource_principal…" />
-						</Form.Item>
-						<Form.Item name="ociConfigFile" label="OCI Config File (optional)">
-							<Input placeholder="/home/user/.oci/config…" />
-						</Form.Item>
-						<Form.Item name="ociConfigProfile" label="OCI Config Profile (optional)">
-							<Input placeholder="DEFAULT…" />
-						</Form.Item>
-						<Typography.Text type="secondary">
-							This uses rclone's oracleobjectstorage backend (native).
-						</Typography.Text>
+						<FormField label="Region" required extra="Example: us-ashburn-1" error={errors.region}>
+							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-ashburn-1…" />
+						</FormField>
+
+						<FormField label="Namespace" required error={errors.ociNamespace}>
+							<Input value={values.ociNamespace} onChange={(e) => setField('ociNamespace', e.target.value)} placeholder="my-namespace…" />
+						</FormField>
+
+						<FormField label="Compartment OCID" required error={errors.ociCompartment}>
+							<Input
+								value={values.ociCompartment}
+								onChange={(e) => setField('ociCompartment', e.target.value)}
+								placeholder="ocid1.compartment.oc1..…"
+							/>
+						</FormField>
+
+						<FormField label="Endpoint URL (optional)" error={errors.ociEndpoint}>
+							<Input
+								value={values.ociEndpoint}
+								onChange={(e) => setField('ociEndpoint', e.target.value)}
+								placeholder="https://objectstorage.{region}.oraclecloud.com…"
+							/>
+						</FormField>
+
+						<FormField label="Auth Provider (optional)">
+							<Input
+								value={values.ociAuthProvider}
+								onChange={(e) => setField('ociAuthProvider', e.target.value)}
+								placeholder="instance_principal / api_key / resource_principal…"
+							/>
+						</FormField>
+
+						<FormField label="OCI Config File (optional)">
+							<Input
+								value={values.ociConfigFile}
+								onChange={(e) => setField('ociConfigFile', e.target.value)}
+								placeholder="/home/user/.oci/config…"
+							/>
+						</FormField>
+
+						<FormField label="OCI Config Profile (optional)">
+							<Input
+								value={values.ociConfigProfile}
+								onChange={(e) => setField('ociConfigProfile', e.target.value)}
+								placeholder="DEFAULT…"
+							/>
+						</FormField>
+
+						<Typography.Text type="secondary">This uses rclone's oracleobjectstorage backend (native).</Typography.Text>
 					</>
 				) : null}
 
 				{isAzure ? (
 					<>
-						<Form.Item
-							name="azureAccountName"
-							label="Storage Account Name"
-							rules={[{ required: true }, { validator: (_, value) => validateAzureAccountName(value) }]}
-							extra="3-24 lowercase letters or numbers."
-						>
-							<Input placeholder="mystorageaccount…" />
-						</Form.Item>
-						<Form.Item
-							name="azureAccountKey"
-							label={props.editMode ? 'Account Key (optional)' : 'Account Key'}
-							rules={props.editMode ? [] : [{ required: true }]}
-						>
-							<Input.Password autoComplete="new-password" />
-						</Form.Item>
+						<FormField label="Storage Account Name" required extra="3-24 lowercase letters or numbers." error={errors.azureAccountName}>
+							<Input
+								value={values.azureAccountName}
+								onChange={(e) => setField('azureAccountName', e.target.value)}
+								placeholder="mystorageaccount…"
+							/>
+						</FormField>
 
-						<Space size="large" wrap>
-							<Form.Item name="azureUseEmulator" label="Use Emulator" valuePropName="checked">
-								<Switch />
-							</Form.Item>
-						</Space>
-						<Form.Item
-							name="azureEndpoint"
-							label="Endpoint URL (optional)"
-							rules={[{ validator: (_, value) => validateOptionalHttpUrl(value) }]}
-						>
-							<Input placeholder="http://127.0.0.1:10000/devstoreaccount1…" />
-						</Form.Item>
+						<FormField label={props.editMode ? 'Account Key (optional)' : 'Account Key'} required={!props.editMode} error={errors.azureAccountKey}>
+							<Input.Password
+								value={values.azureAccountKey}
+								onChange={(e) => setField('azureAccountKey', e.target.value)}
+								autoComplete="new-password"
+							/>
+						</FormField>
+
+						<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
+							<FormField label="Use Emulator" style={{ marginBottom: 0 }}>
+								<Switch checked={values.azureUseEmulator} onChange={(checked) => setField('azureUseEmulator', checked)} />
+							</FormField>
+						</div>
+
+						<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
+							<Input
+								value={values.azureEndpoint}
+								onChange={(e) => setField('azureEndpoint', e.target.value)}
+								placeholder="http://127.0.0.1:10000/devstoreaccount1…"
+							/>
+						</FormField>
+
 						<Typography.Text type="secondary">
 							If "Use Emulator" is enabled and endpoint is blank, the server may use a default Azurite endpoint.
 						</Typography.Text>
 					</>
 				) : null}
+
 				{isGcp ? (
 					<>
-						<Space size="large" wrap>
-							<Form.Item name="gcpAnonymous" label="Anonymous" valuePropName="checked">
-								<Switch />
-							</Form.Item>
-						</Space>
-						<Form.Item
-							name="gcpEndpoint"
-							label="Endpoint URL (optional)"
-							rules={[{ validator: (_, value) => validateOptionalHttpUrl(value) }]}
-						>
-							<Input placeholder="https://storage.googleapis.com…" />
-						</Form.Item>
-						<Form.Item
-							name="gcpProjectNumber"
-							label="Project Number (optional)"
-							rules={[{ validator: (_, value) => validateDigitsOnly(value) }]}
-						>
-							<Input placeholder="123456789012…" />
-						</Form.Item>
+						<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
+							<FormField label="Anonymous" style={{ marginBottom: 0 }}>
+								<Switch checked={values.gcpAnonymous} onChange={(checked) => setField('gcpAnonymous', checked)} />
+							</FormField>
+						</div>
 
-						{gcpAnonymous ? (
+						<FormField label="Endpoint URL (optional)" error={errors.gcpEndpoint}>
+							<Input
+								value={values.gcpEndpoint}
+								onChange={(e) => setField('gcpEndpoint', e.target.value)}
+								placeholder="https://storage.googleapis.com…"
+							/>
+						</FormField>
+
+						<FormField label="Project Number (optional)" error={errors.gcpProjectNumber}>
+							<Input
+								value={values.gcpProjectNumber}
+								onChange={(e) => setField('gcpProjectNumber', e.target.value)}
+								placeholder="123456789012…"
+							/>
+						</FormField>
+
+						{values.gcpAnonymous ? (
 							<Typography.Text type="secondary">
 								Anonymous mode does not use credentials. Only works if the endpoint allows unauthenticated access.
 							</Typography.Text>
 						) : (
-							<Form.Item
-								name="gcpServiceAccountJson"
+							<FormField
 								label={props.editMode ? 'Service Account JSON (optional)' : 'Service Account JSON'}
-								rules={[
-									...(props.editMode ? [] : [{ required: true }]),
-									{ validator: (_, value) => validateJsonDocument(value) },
-								]}
+								required={!props.editMode}
+								error={errors.gcpServiceAccountJson}
 							>
 								<Input.TextArea
+									value={values.gcpServiceAccountJson}
+									onChange={(e) => setField('gcpServiceAccountJson', e.target.value)}
 									autoSize={{ minRows: 6, maxRows: 12 }}
 									placeholder={`{
   "type": "service_account_json",
@@ -352,124 +509,154 @@ export function ProfileModal(props: {
   "token_uri": "https://oauth2.googleapis.com/token"
 }`}
 								/>
-							</Form.Item>
+							</FormField>
 						)}
 					</>
 				) : null}
+
 				{isS3Provider ? (
 					<>
-						<Space style={{ width: '100%' }} size="middle" align="start" wrap>
-							<Form.Item
-								name="accessKeyId"
+						<div style={{ display: 'flex', width: '100%', gap: 12, flexWrap: 'wrap' }}>
+							<FormField
 								label={props.editMode ? 'Access Key ID (optional)' : 'Access Key ID'}
-								rules={props.editMode ? [] : [{ required: true }]}
+								required={!props.editMode}
+								error={errors.accessKeyId}
 								style={{ flex: '1 1 260px', minWidth: 0 }}
 							>
-								<Input autoComplete="username" />
-							</Form.Item>
-							<Form.Item
-								name="secretAccessKey"
+								<Input
+									value={values.accessKeyId}
+									onChange={(e) => setField('accessKeyId', e.target.value)}
+									autoComplete="username"
+								/>
+							</FormField>
+							<FormField
 								label={props.editMode ? 'Secret (optional)' : 'Secret'}
-								rules={props.editMode ? [] : [{ required: true }]}
+								required={!props.editMode}
+								error={errors.secretAccessKey}
 								style={{ flex: '1 1 260px', minWidth: 0 }}
 							>
-								<Input.Password autoComplete="new-password" />
-							</Form.Item>
-						</Space>
+								<Input.Password
+									value={values.secretAccessKey}
+									onChange={(e) => setField('secretAccessKey', e.target.value)}
+									autoComplete="new-password"
+								/>
+							</FormField>
+						</div>
 
-						<Form.Item name="sessionToken" label="Session Token (optional)">
-							<Input.Password autoComplete="off" disabled={!!props.editMode && clearSessionToken} />
-						</Form.Item>
+						<FormField label="Session Token (optional)">
+							<Input.Password
+								value={values.sessionToken ?? ''}
+								onChange={(e) => setField('sessionToken', e.target.value)}
+								autoComplete="off"
+								disabled={!!props.editMode && !!values.clearSessionToken}
+							/>
+						</FormField>
+
 						{props.editMode ? (
-							<Form.Item name="clearSessionToken" valuePropName="checked">
-								<Checkbox>Clear existing session token</Checkbox>
-							</Form.Item>
+							<div style={{ marginBottom: 12 }}>
+								<Checkbox
+									checked={!!values.clearSessionToken}
+									onChange={(e) => setField('clearSessionToken', e.target.checked)}
+								>
+									Clear existing session token
+								</Checkbox>
+							</div>
 						) : null}
 					</>
 				) : null}
 
-				<Space size="large" wrap>
+				<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
 					{isS3Provider ? (
-						<Form.Item name="forcePathStyle" label="Force Path Style" valuePropName="checked">
-							<Switch />
-						</Form.Item>
+						<FormField label="Force Path Style" style={{ marginBottom: 0 }}>
+							<Switch checked={values.forcePathStyle} onChange={(checked) => setField('forcePathStyle', checked)} />
+						</FormField>
 					) : null}
-					<Form.Item name="preserveLeadingSlash" label="Preserve Leading Slash" valuePropName="checked">
-						<Switch />
-					</Form.Item>
-					<Form.Item name="tlsInsecureSkipVerify" label="TLS Insecure Skip Verify" valuePropName="checked">
-						<Switch />
-					</Form.Item>
-				</Space>
+					<FormField label="Preserve Leading Slash" style={{ marginBottom: 0 }}>
+						<Switch
+							checked={values.preserveLeadingSlash}
+							onChange={(checked) => setField('preserveLeadingSlash', checked)}
+						/>
+					</FormField>
+					<FormField label="TLS Insecure Skip Verify" style={{ marginBottom: 0 }}>
+						<Switch
+							checked={values.tlsInsecureSkipVerify}
+							onChange={(checked) => setField('tlsInsecureSkipVerify', checked)}
+						/>
+					</FormField>
+				</div>
 
 				<Divider />
 
 				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text strong>Advanced TLS (mTLS)</Typography.Text>
-					{tlsUnavailable ? <Alert type="warning" showIcon title="mTLS is disabled" description={tlsDisabledReason} /> : null}
+					{tlsUnavailable ? (
+						<Alert type="warning" showIcon title="mTLS is disabled" description={tlsDisabledReason} />
+					) : null}
 					{props.editMode ? (
 						<>
-							<Typography.Text type="secondary">
-								Current: {tlsStatusLabel}
-							</Typography.Text>
+							<Typography.Text type="secondary">Current: {tlsStatusLabel}</Typography.Text>
 							{showTLSStatusError ? (
 								<Alert type="warning" showIcon title="Failed to load TLS status" description={showTLSStatusError} />
 							) : null}
-							<Form.Item name="tlsAction" label="mTLS action">
+							<FormField label="mTLS action">
 								<Select
 									disabled={tlsUnavailable}
+									value={tlsAction}
+									onChange={(v) => setField('tlsAction', v as TLSAction)}
 									options={[
 										{ label: 'Keep current', value: 'keep' },
 										{ label: 'Enable or update', value: 'enable' },
 										{ label: 'Disable', value: 'disable' },
 									]}
 								/>
-							</Form.Item>
+							</FormField>
 							{tlsAction === 'disable' ? (
 								<Typography.Text type="secondary">mTLS will be removed for this profile.</Typography.Text>
 							) : null}
 						</>
 					) : (
-						<Form.Item name="tlsEnabled" label="Enable mTLS" valuePropName="checked">
-							<Switch disabled={tlsUnavailable} />
-						</Form.Item>
+						<FormField label="Enable mTLS">
+							<Switch
+								disabled={tlsUnavailable}
+								checked={!!values.tlsEnabled}
+								onChange={(checked) => setField('tlsEnabled', checked)}
+							/>
+						</FormField>
 					)}
 
 					{showTLSFields ? (
 						<>
-							<Form.Item
-								name="tlsClientCertPem"
-								label="Client Certificate (PEM)"
-								rules={[{ required: true, message: 'Client certificate is required' }]}
-							>
+							<FormField label="Client Certificate (PEM)" required error={errors.tlsClientCertPem}>
 								<Input.TextArea
 									disabled={tlsUnavailable}
+									value={values.tlsClientCertPem ?? ''}
+									onChange={(e) => setField('tlsClientCertPem', e.target.value)}
 									autoSize={{ minRows: 4, maxRows: 8 }}
 									placeholder="-----BEGIN CERTIFICATE-----…"
 								/>
-							</Form.Item>
-							<Form.Item
-								name="tlsClientKeyPem"
-								label="Client Key (PEM)"
-								rules={[{ required: true, message: 'Client key is required' }]}
-							>
+							</FormField>
+							<FormField label="Client Key (PEM)" required error={errors.tlsClientKeyPem}>
 								<Input.TextArea
 									disabled={tlsUnavailable}
+									value={values.tlsClientKeyPem ?? ''}
+									onChange={(e) => setField('tlsClientKeyPem', e.target.value)}
 									autoSize={{ minRows: 4, maxRows: 8 }}
 									placeholder="-----BEGIN PRIVATE KEY-----…"
 								/>
-							</Form.Item>
-							<Form.Item name="tlsCaCertPem" label="CA Certificate (optional)">
+							</FormField>
+							<FormField label="CA Certificate (optional)">
 								<Input.TextArea
 									disabled={tlsUnavailable}
+									value={values.tlsCaCertPem ?? ''}
+									onChange={(e) => setField('tlsCaCertPem', e.target.value)}
 									autoSize={{ minRows: 3, maxRows: 6 }}
 									placeholder="-----BEGIN CERTIFICATE-----…"
 								/>
-							</Form.Item>
+							</FormField>
 						</>
 					) : null}
 				</Space>
-			</Form>
+			</form>
 		</Modal>
 	)
 }

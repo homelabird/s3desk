@@ -1,10 +1,11 @@
-import type { FormInstance, SelectProps } from 'antd'
-import { Alert, Button, Descriptions, Form, Input, Modal, Select, Spin, Switch, Typography } from 'antd'
+import type { SelectProps } from 'antd'
+import { Alert, Button, Descriptions, Input, Modal, Select, Spin, Switch, Typography } from 'antd'
 
 import type { ObjectIndexSummaryResponse } from '../../api/types'
+import { FormField } from '../../components/FormField'
 import { formatBytes } from '../../lib/transfer'
 
-type CopyPrefixForm = {
+type CopyPrefixValues = {
 	dstBucket: string
 	dstPrefix: string
 	include: string
@@ -19,12 +20,13 @@ type ObjectsCopyPrefixModalProps = {
 	bucket: string
 	srcPrefix: string
 	sourceLabel: string
-	form: FormInstance<CopyPrefixForm>
+	values: CopyPrefixValues
+	onValuesChange: (values: CopyPrefixValues) => void
 	bucketOptions: SelectProps['options']
 	isBucketsLoading: boolean
 	isSubmitting: boolean
 	onCancel: () => void
-	onFinish: (values: CopyPrefixForm) => void
+	onFinish: (values: CopyPrefixValues) => void
 	isSummaryFetching: boolean
 	summary: ObjectIndexSummaryResponse | null
 	summaryNotIndexed: boolean
@@ -44,7 +46,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 			title={isMove ? 'Move folder…' : 'Copy folder…'}
 			okText={isMove ? 'Start move' : 'Start copy'}
 			okButtonProps={{ loading: props.isSubmitting, danger: isMove }}
-			onOk={() => props.form.submit()}
+			onOk={() => props.onFinish(props.values)}
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
@@ -113,79 +115,77 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				</>
 			) : null}
 
-			<Form
-				form={props.form}
-				layout="vertical"
-				initialValues={{ dstBucket: props.bucket, dstPrefix: '', include: '', exclude: '', dryRun: false, confirm: '' }}
-				onFinish={props.onFinish}
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					props.onFinish(props.values)
+				}}
 			>
-				<Form.Item label="Source">
+				<FormField label="Source">
 					<Typography.Text code>{props.sourceLabel}</Typography.Text>
-				</Form.Item>
+				</FormField>
 
-				<Form.Item name="dstBucket" label="Destination bucket" rules={[{ required: true }]}>
+				<FormField label="Destination bucket" required>
 					<Select
 						showSearch
 						options={props.bucketOptions}
+						value={props.values.dstBucket}
+						onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: String(value) })}
 						placeholder="bucket…"
 						loading={props.isBucketsLoading}
 						optionFilterProp="label"
 						aria-label="Destination bucket"
 					/>
-				</Form.Item>
+				</FormField>
 
-				<Form.Item
-					name="dstPrefix"
-					label="Destination folder"
-					rules={[
-						{ required: true },
-						{
-							validator: async (_, v: string) => {
-								const dstPrefix = props.normalizePrefix(typeof v === 'string' ? v : '')
-								if (!dstPrefix) throw new Error('destination prefix is required')
-								if (dstPrefix.includes('*')) throw new Error('wildcards are not allowed')
-
-								const dstBucket = (props.form.getFieldValue('dstBucket') ?? '') as string
-								if (dstBucket === props.bucket) {
-									if (dstPrefix === props.srcPrefix) throw new Error('destination must be different')
-									if (dstPrefix.startsWith(props.srcPrefix)) throw new Error('destination must not be under source')
-								}
-							},
-						},
-					]}
-				>
-					<Input placeholder="target-folder/…" />
-				</Form.Item>
+				<FormField label="Destination folder" required>
+					<Input
+						value={props.values.dstPrefix}
+						onChange={(e) => props.onValuesChange({ ...props.values, dstPrefix: e.target.value })}
+						placeholder="target-folder/…"
+						autoComplete="off"
+					/>
+					<div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, lineHeight: 1.35 }}>
+						Normalized as: <Typography.Text code>{props.normalizePrefix(props.values.dstPrefix)}</Typography.Text>
+					</div>
+				</FormField>
 
 				{isMove ? (
-					<Form.Item
-						name="confirm"
-						label='Type "MOVE" to confirm'
-						rules={[
-							{ required: true },
-							{
-								validator: async (_, v: string) => {
-									if (v === 'MOVE') return
-									throw new Error('Type MOVE to proceed')
-								},
-							},
-						]}
-					>
-						<Input placeholder="MOVE…" />
-					</Form.Item>
+					<FormField label='Type "MOVE" to confirm' required>
+						<Input
+							value={props.values.confirm}
+							onChange={(e) => props.onValuesChange({ ...props.values, confirm: e.target.value })}
+							placeholder="MOVE…"
+							autoComplete="off"
+						/>
+					</FormField>
 				) : null}
 
-				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch aria-label="Dry run" />
-				</Form.Item>
+				<FormField label="Dry run (no changes)">
+					<Switch
+						checked={props.values.dryRun}
+						onChange={(checked) => props.onValuesChange({ ...props.values, dryRun: checked })}
+						aria-label="Dry run"
+					/>
+				</FormField>
 
-				<Form.Item name="include" label="Include patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="*.log…" />
-				</Form.Item>
-				<Form.Item name="exclude" label="Exclude patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="tmp_*…" />
-				</Form.Item>
-			</Form>
+				<FormField label="Include patterns (one per line)">
+					<Input.TextArea
+						value={props.values.include}
+						onChange={(e) => props.onValuesChange({ ...props.values, include: e.target.value })}
+						rows={4}
+						placeholder="*.log…"
+					/>
+				</FormField>
+				<FormField label="Exclude patterns (one per line)">
+					<Input.TextArea
+						value={props.values.exclude}
+						onChange={(e) => props.onValuesChange({ ...props.values, exclude: e.target.value })}
+						rows={4}
+						placeholder="tmp_*…"
+					/>
+				</FormField>
+			</form>
 		</Modal>
 	)
 }

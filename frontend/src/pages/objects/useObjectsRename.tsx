@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Button, Form, Space, Typography, message } from 'antd'
+import { Button, Space, Typography, message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
@@ -23,7 +23,7 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseO
 	const [renameOpen, setRenameOpen] = useState(false)
 	const [renameKind, setRenameKind] = useState<'object' | 'prefix'>('object')
 	const [renameSource, setRenameSource] = useState<string | null>(null)
-	const [renameForm] = Form.useForm<RenameFormValues>()
+	const [renameValues, setRenameValues] = useState<RenameFormValues>({ name: '', confirm: '' })
 
 	const focusRenameInput = useCallback(() => {
 		window.setTimeout(() => {
@@ -37,11 +37,11 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseO
 			if (!profileId || !bucket) return
 			setRenameKind('object')
 			setRenameSource(key)
-			renameForm.setFieldsValue({ name: fileNameFromKey(key), confirm: '' })
+			setRenameValues({ name: fileNameFromKey(key), confirm: '' })
 			setRenameOpen(true)
 			focusRenameInput()
 		},
-		[bucket, focusRenameInput, profileId, renameForm],
+		[bucket, focusRenameInput, profileId],
 	)
 
 	const openRenamePrefix = useCallback(
@@ -49,11 +49,11 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseO
 			if (!profileId || !bucket) return
 			setRenameKind('prefix')
 			setRenameSource(srcPrefix)
-			renameForm.setFieldsValue({ name: folderLabelFromPrefix(srcPrefix), confirm: '' })
+			setRenameValues({ name: folderLabelFromPrefix(srcPrefix), confirm: '' })
 			setRenameOpen(true)
 			focusRenameInput()
 		},
-		[bucket, focusRenameInput, profileId, renameForm],
+		[bucket, focusRenameInput, profileId],
 	)
 
 	const renameMutation = useMutation({
@@ -116,7 +116,7 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseO
 			})
 			setRenameOpen(false)
 			setRenameSource(null)
-			renameForm.resetFields()
+			setRenameValues({ name: '', confirm: '' })
 			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 		},
 		onError: (err) => message.error(formatErr(err)),
@@ -125,6 +125,10 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseO
 	const handleRenameSubmit = useCallback(
 		(values: RenameFormValues) => {
 			if (!renameSource) return
+			if (values.confirm !== 'RENAME') {
+				message.error('Type RENAME to proceed')
+				return
+			}
 			renameMutation.mutate({ kind: renameKind, src: renameSource, name: values.name })
 		},
 		[renameKind, renameMutation, renameSource],
@@ -133,14 +137,15 @@ export function useObjectsRename({ profileId, bucket, createJobWithRetry }: UseO
 	const handleRenameCancel = useCallback(() => {
 		setRenameOpen(false)
 		setRenameSource(null)
-		renameForm.resetFields()
-	}, [renameForm])
+		setRenameValues({ name: '', confirm: '' })
+	}, [])
 
 	return {
 		renameOpen,
 		renameKind,
 		renameSource,
-		renameForm,
+		renameValues,
+		setRenameValues,
 		renameSubmitting: renameMutation.isPending,
 		openRenameObject,
 		openRenamePrefix,

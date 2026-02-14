@@ -1,7 +1,8 @@
-import { Alert, Button, Form, Input, Space, Typography } from 'antd'
+import { Alert, Button, Input, Space, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 
 import { APIClient, APIError } from '../api/client'
+import { FormField } from '../components/FormField'
 
 type Props = {
 	initialToken: string
@@ -63,15 +64,21 @@ export function LoginPage(props: Props) {
 					<Alert type={showSavedTokenWarning ? 'warning' : 'info'} showIcon title={initialHint} />
 					{localError ? <Alert type="error" showIcon title={localError} /> : null}
 
-					<Form layout="vertical" onFinish={submit} requiredMark={false}>
-						<Form.Item label="API Token" required>
+					<form
+						onSubmit={(e) => {
+							e.preventDefault()
+							void submit()
+						}}
+					>
+						<FormField label="API Token" required htmlFor="login-api-token">
 							<Input.Password
+								id="login-api-token"
 								value={token}
 								onChange={(e) => setToken(e.target.value)}
 								placeholder="API_TOKEN…"
 								autoFocus={shouldAutoFocus}
 							/>
-						</Form.Item>
+						</FormField>
 						<Space wrap>
 							<Button type="primary" htmlType="submit" loading={submitting} disabled={!token.trim()}>
 								Login
@@ -82,7 +89,7 @@ export function LoginPage(props: Props) {
 								</Button>
 							) : null}
 						</Space>
-					</Form>
+					</form>
 
 					<Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
 						This is not your S3 access key. It must match the server{' '}

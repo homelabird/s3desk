@@ -1,10 +1,10 @@
-import type { FormInstance } from 'antd'
-import { Alert, Checkbox, Form, Modal, Typography } from 'antd'
+import { Alert, Checkbox, Modal, Typography } from 'antd'
 
+import { FormField } from '../../components/FormField'
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
 
-type UploadFolderForm = {
+type UploadFolderValues = {
 	localFolder: string
 	moveAfterUpload: boolean
 	cleanupEmptyDirs: boolean
@@ -13,12 +13,11 @@ type UploadFolderForm = {
 type ObjectsUploadFolderModalProps = {
 	open: boolean
 	destinationLabel: string
-	form: FormInstance<UploadFolderForm>
-	defaultMoveAfterUpload: boolean
-	defaultCleanupEmptyDirs: boolean
+	values: UploadFolderValues
+	onValuesChange: (values: UploadFolderValues) => void
 	isSubmitting: boolean
 	onCancel: () => void
-	onFinish: (values: UploadFolderForm) => void
+	onFinish: (values: UploadFolderValues) => void
 	onPickFolder: (handle: FileSystemDirectoryHandle) => void
 	canSubmit: boolean
 	onDefaultsChange?: (values: { moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => void
@@ -33,7 +32,7 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 			title="Upload folder from this device"
 			okText="Start upload"
 			okButtonProps={{ loading: props.isSubmitting, disabled: !props.canSubmit }}
-			onOk={() => props.form.submit()}
+			onOk={() => props.onFinish(props.values)}
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
@@ -55,43 +54,52 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 				/>
 			) : null}
 
-			<Form
-				form={props.form}
-				layout="vertical"
-				initialValues={{
-					localFolder: '',
-					moveAfterUpload: props.defaultMoveAfterUpload,
-					cleanupEmptyDirs: props.defaultCleanupEmptyDirs,
-				}}
-				onFinish={props.onFinish}
-				onValuesChange={(_, values) => {
-					props.onDefaultsChange?.({
-						moveAfterUpload: values.moveAfterUpload,
-						cleanupEmptyDirs: values.cleanupEmptyDirs,
-					})
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					props.onFinish(props.values)
 				}}
 			>
-				<Form.Item label="Destination">
+				<FormField label="Destination">
 					<Typography.Text code>{props.destinationLabel}</Typography.Text>
-				</Form.Item>
-				<Form.Item name="localFolder" label="Local folder" rules={[{ required: true }]}>
+				</FormField>
+
+				<FormField label="Local folder" required>
 					<LocalDevicePathInput
+						value={props.values.localFolder}
+						onChange={(value) => props.onValuesChange({ ...props.values, localFolder: value })}
 						placeholder="Select a folder…"
 						disabled={!support.ok}
 						onPick={props.onPickFolder}
 					/>
-				</Form.Item>
-				<Form.Item name="moveAfterUpload" valuePropName="checked">
-					<Checkbox>Move after upload (delete local files after the job succeeds)</Checkbox>
-				</Form.Item>
-				<Form.Item shouldUpdate={(prev, next) => prev.moveAfterUpload !== next.moveAfterUpload} noStyle>
-					{({ getFieldValue }) => (
-						<Form.Item name="cleanupEmptyDirs" valuePropName="checked">
-							<Checkbox disabled={!getFieldValue('moveAfterUpload')}>Auto-clean empty folders</Checkbox>
-						</Form.Item>
-					)}
-				</Form.Item>
-			</Form>
+				</FormField>
+
+				<div style={{ marginBottom: 10 }}>
+					<Checkbox
+						checked={props.values.moveAfterUpload}
+						onChange={(e) => {
+							const moveAfterUpload = e.target.checked
+							const cleanupEmptyDirs = moveAfterUpload ? props.values.cleanupEmptyDirs : false
+							props.onValuesChange({ ...props.values, moveAfterUpload, cleanupEmptyDirs })
+							props.onDefaultsChange?.({ moveAfterUpload, cleanupEmptyDirs })
+						}}
+					>
+						Move after upload (delete local files after the job succeeds)
+					</Checkbox>
+				</div>
+
+				<Checkbox
+					checked={props.values.cleanupEmptyDirs}
+					disabled={!props.values.moveAfterUpload}
+					onChange={(e) => {
+						const cleanupEmptyDirs = e.target.checked
+						props.onValuesChange({ ...props.values, cleanupEmptyDirs })
+						props.onDefaultsChange?.({ moveAfterUpload: props.values.moveAfterUpload, cleanupEmptyDirs })
+					}}
+				>
+					Auto-clean empty folders
+				</Checkbox>
+			</form>
 		</Modal>
 	)
 }

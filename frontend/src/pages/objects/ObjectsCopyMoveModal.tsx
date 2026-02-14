@@ -1,7 +1,9 @@
-import type { FormInstance, SelectProps } from 'antd'
-import { Alert, Form, Input, Modal, Select, Switch, Typography } from 'antd'
+import type { SelectProps } from 'antd'
+import { Alert, Input, Modal, Select, Switch, Typography } from 'antd'
 
-type CopyMoveForm = {
+import { FormField } from '../../components/FormField'
+
+type CopyMoveValues = {
 	dstBucket: string
 	dstKey: string
 	dryRun: boolean
@@ -13,12 +15,13 @@ type ObjectsCopyMoveModalProps = {
 	mode: 'copy' | 'move'
 	bucket: string
 	srcKey: string | null
-	form: FormInstance<CopyMoveForm>
+	values: CopyMoveValues
+	onValuesChange: (values: CopyMoveValues) => void
 	bucketOptions: SelectProps['options']
 	isBucketsLoading: boolean
 	isSubmitting: boolean
 	onCancel: () => void
-	onFinish: (values: CopyMoveForm) => void
+	onFinish: (values: CopyMoveValues) => void
 }
 
 export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
@@ -30,7 +33,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 			title={isMove ? 'Move/Rename object…' : 'Copy object…'}
 			okText={isMove ? 'Start move' : 'Start copy'}
 			okButtonProps={{ loading: props.isSubmitting, danger: isMove }}
-			onOk={() => props.form.submit()}
+			onOk={() => props.onFinish(props.values)}
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
@@ -52,76 +55,59 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 				/>
 			)}
 
-			<Form
-				form={props.form}
-				layout="vertical"
-				initialValues={{ dstBucket: props.bucket, dstKey: props.srcKey ?? '', dryRun: false, confirm: '' }}
-				onFinish={props.onFinish}
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					props.onFinish(props.values)
+				}}
 			>
-				<Form.Item label="Source">
-					<Typography.Text code>{props.srcKey ? `s3://${props.bucket}/${props.srcKey}` : '-'}</Typography.Text>
-				</Form.Item>
+				<FormField label="Source">
+					<Typography.Text code>
+						{props.srcKey ? `s3://${props.bucket}/${props.srcKey}` : '-'}
+					</Typography.Text>
+				</FormField>
 
-				<Form.Item name="dstBucket" label="Destination bucket" rules={[{ required: true }]}>
+				<FormField label="Destination bucket" required>
 					<Select
 						showSearch
 						options={props.bucketOptions}
+						value={props.values.dstBucket}
+						onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: String(value) })}
 						placeholder="bucket…"
 						loading={props.isBucketsLoading}
 						optionFilterProp="label"
 						aria-label="Destination bucket"
 					/>
-				</Form.Item>
+				</FormField>
 
-				<Form.Item
-					name="dstKey"
-					label="Destination key"
-					rules={[
-						{ required: true },
-						{
-							validator: async (_, v: string) => {
-								const dstKey = typeof v === 'string' ? v.trim() : ''
-								if (!dstKey) throw new Error('destination key is required')
-								if (dstKey.includes('*')) throw new Error('wildcards are not allowed')
+				<FormField label="Destination key" required>
+					<Input
+						value={props.values.dstKey}
+						onChange={(e) => props.onValuesChange({ ...props.values, dstKey: e.target.value })}
+						placeholder="path/to/object…"
+						autoComplete="off"
+					/>
+				</FormField>
 
-								const dstBucket = (props.form.getFieldValue('dstBucket') ?? '') as string
-								const srcBucket = props.bucket
-								const srcKey = props.srcKey ?? ''
-								if (dstBucket === srcBucket && dstKey === srcKey) throw new Error('destination must be different')
-							},
-						},
-					]}
-				>
-					<Input placeholder="path/to/object…" />
-				</Form.Item>
+				<FormField label="Dry run (no changes)">
+					<Switch
+						checked={props.values.dryRun}
+						onChange={(checked) => props.onValuesChange({ ...props.values, dryRun: checked })}
+						aria-label="Dry run"
+					/>
+				</FormField>
 
-				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch aria-label="Dry run" />
-				</Form.Item>
-
-				{isMove ? (
-					<Form.Item shouldUpdate={(prev, next) => prev.dryRun !== next.dryRun} noStyle>
-						{({ getFieldValue }) =>
-							getFieldValue('dryRun') ? null : (
-								<Form.Item
-									name="confirm"
-									label='Type "MOVE" to confirm'
-									rules={[
-										{
-											validator: async (_, v: string) => {
-												if (v === 'MOVE') return
-												throw new Error('Type MOVE to proceed')
-											},
-										},
-									]}
-								>
-									<Input placeholder="MOVE…" autoComplete="off" />
-								</Form.Item>
-							)
-						}
-					</Form.Item>
+				{isMove && !props.values.dryRun ? (
+					<FormField label='Type "MOVE" to confirm' required>
+						<Input
+							value={props.values.confirm}
+							onChange={(e) => props.onValuesChange({ ...props.values, confirm: e.target.value })}
+							placeholder="MOVE…"
+							autoComplete="off"
+						/>
+					</FormField>
 				) : null}
-			</Form>
+			</form>
 		</Modal>
 	)
 }

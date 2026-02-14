@@ -1,5 +1,4 @@
-import type { FormInstance } from 'antd'
-import { Alert, Button, Checkbox, Form, Input, Modal, Typography } from 'antd'
+import { Alert, Button, Checkbox, Input, Modal, Typography } from 'antd'
 
 type ObjectsNewFolderModalProps = {
 	open: boolean
@@ -8,15 +7,15 @@ type ObjectsNewFolderModalProps = {
 	errorMessage?: string | null
 	partialKey?: string | null
 	onOpenPrefix: (prefix: string) => void
-	form: FormInstance<{ name: string; allowPath?: boolean }>
+	values: { name: string; allowPath: boolean }
+	onValuesChange: (values: { name: string; allowPath: boolean }) => void
 	isSubmitting: boolean
 	onCancel: () => void
-	onFinish: (values: { name: string; allowPath?: boolean }) => void
+	onFinish: (values: { name: string; allowPath: boolean }) => void
 }
 
 export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
-	const rawName = props.form.getFieldValue('name')
-	const rawInput = typeof rawName === 'string' ? rawName.trim().replace(/\/+$/, '').replace(/^\/+/, '') : ''
+	const rawInput = typeof props.values.name === 'string' ? props.values.name.trim().replace(/\/+$/, '').replace(/^\/+/, '') : ''
 	const parent = props.parentPrefix.trim()
 	const parentNormalized = !parent ? '' : parent.endsWith('/') ? parent : `${parent}/`
 	const typedKey = rawInput ? `${parentNormalized}${rawInput}/` : ''
@@ -33,7 +32,7 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 			title="New folder"
 			okText="Create folder"
 			okButtonProps={{ loading: props.isSubmitting }}
-			onOk={() => props.form.submit()}
+			onOk={() => props.onFinish(props.values)}
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
@@ -82,8 +81,14 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 				/>
 			</details>
 
-			<Form form={props.form} layout="vertical" initialValues={{ name: '', allowPath: false }} onFinish={props.onFinish}>
-				<Form.Item label="Parent">
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					props.onFinish(props.values)
+				}}
+			>
+				<div style={{ marginBottom: 12 }}>
+					<div style={{ fontWeight: 700, marginBottom: 6 }}>Parent</div>
 					<Typography.Text
 						code
 						ellipsis={{ tooltip: props.parentLabel }}
@@ -92,36 +97,29 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 					>
 						{props.parentLabel}
 					</Typography.Text>
-				</Form.Item>
-				<Form.Item
-					name="name"
-					label="Folder name"
-					dependencies={['allowPath']}
-					rules={[
-						{ required: true, message: 'folder name is required' },
-						{
-							validator: async (_, v: string) => {
-								const allowPath = !!props.form.getFieldValue('allowPath')
-								const rawInput = typeof v === 'string' ? v.trim().replace(/\/+$/, '').replace(/^\/+/, '') : ''
-								if (!rawInput) throw new Error('folder name is required')
-								if (rawInput.includes('\u0000')) throw new Error('invalid folder name')
-								const parts = rawInput.split('/').filter(Boolean)
-								if (parts.length === 0) throw new Error('folder name is required')
-								if (!allowPath && parts.length > 1) throw new Error("folder name must not contain '/'")
-								for (const part of parts) {
-									if (part === '.' || part === '..') throw new Error('invalid folder name')
-								}
-							},
-						},
-					]}
-				>
-					<Input placeholder="new-folder…" autoComplete="off" autoFocus />
-				</Form.Item>
+				</div>
 
-				<Form.Item name="allowPath" valuePropName="checked">
-					<Checkbox>Allow nested path (a/b/c)</Checkbox>
-				</Form.Item>
-			</Form>
+				<div style={{ marginBottom: 12 }}>
+					<label htmlFor="objectsNewFolderName" style={{ display: 'block', fontWeight: 700, marginBottom: 6 }}>
+						Folder name
+					</label>
+					<Input
+						id="objectsNewFolderName"
+						value={props.values.name}
+						onChange={(e) => props.onValuesChange({ ...props.values, name: e.target.value })}
+						placeholder="new-folder…"
+						autoComplete="off"
+						autoFocus
+					/>
+				</div>
+
+				<Checkbox
+					checked={props.values.allowPath}
+					onChange={(e) => props.onValuesChange({ ...props.values, allowPath: e.target.checked })}
+				>
+					Allow nested path (a/b/c)
+				</Checkbox>
+			</form>
 		</Modal>
 	)
 }

@@ -1124,17 +1124,19 @@ const objectsQuery = useInfiniteQuery({
 		renameOpen,
 		renameKind,
 		renameSource,
-		renameForm,
+		renameValues,
+		setRenameValues,
 		renameSubmitting,
 		openRenameObject,
 		openRenamePrefix,
 		handleRenameSubmit,
 		handleRenameCancel,
-		} = useObjectsRename({
-			profileId: props.profileId,
-			bucket,
-			createJobWithRetry,
-		})
+	} = useObjectsRename({
+		profileId: props.profileId,
+		bucket,
+		createJobWithRetry,
+	})
+
 	const { presignOpen, presign, presignKey, presignMutation, closePresign } = useObjectsPresign({
 		api,
 		profileId: props.profileId,
@@ -1145,7 +1147,8 @@ const objectsQuery = useInfiniteQuery({
 		copyMoveOpen,
 		copyMoveMode,
 		copyMoveSrcKey,
-		copyMoveForm,
+		copyMoveValues,
+		setCopyMoveValues,
 		copyMoveSubmitting,
 		openCopyMove,
 		handleCopyMoveSubmit,
@@ -1153,7 +1156,8 @@ const objectsQuery = useInfiniteQuery({
 		copyPrefixOpen,
 		copyPrefixMode,
 		copyPrefixSrcPrefix,
-		copyPrefixForm,
+		copyPrefixValues,
+		setCopyPrefixValues,
 		copyPrefixSubmitting,
 		openCopyPrefix,
 		handleCopyPrefixSubmit,
@@ -1165,6 +1169,7 @@ const objectsQuery = useInfiniteQuery({
 		createJobWithRetry,
 		splitLines,
 	})
+
 	const { deletingKey, deleteMutation, deletePrefixJobMutation } = useObjectsDelete({
 		api,
 		profileId: props.profileId,
@@ -1173,32 +1178,35 @@ const objectsQuery = useInfiniteQuery({
 		setSelectedKeys,
 	})
 	const {
-			newFolderOpen,
-			newFolderForm,
-			newFolderSubmitting,
-			newFolderError,
-			newFolderPartialKey,
-			newFolderParentPrefix,
-			openNewFolder,
-			handleNewFolderSubmit,
-			handleNewFolderCancel,
-			} = useObjectsNewFolder({
-				api,
-				profileId: props.profileId,
-				bucket,
-				prefix,
-				typeFilter,
-				favoritesOnly,
-				searchText: deferredSearch,
-				onClearSearch: clearSearch,
-				onDisableFavoritesOnly: () => setFavoritesOnly(false),
-				onShowFolders: () => setTypeFilter('all'),
-				refreshTreeNode,
-				onOpenPrefix,
-			})
+		newFolderOpen,
+		newFolderValues,
+		setNewFolderValues,
+		newFolderSubmitting,
+		newFolderError,
+		newFolderPartialKey,
+		newFolderParentPrefix,
+		openNewFolder,
+		handleNewFolderSubmit,
+		handleNewFolderCancel,
+	} = useObjectsNewFolder({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		typeFilter,
+		favoritesOnly,
+		searchText: deferredSearch,
+		onClearSearch: clearSearch,
+		onDisableFavoritesOnly: () => setFavoritesOnly(false),
+		onShowFolders: () => setTypeFilter('all'),
+		refreshTreeNode,
+		onOpenPrefix,
+	})
+
 	const {
 		downloadPrefixOpen,
-		downloadPrefixForm,
+		downloadPrefixValues,
+		setDownloadPrefixValues,
 		downloadPrefixSubmitting,
 		downloadPrefixCanSubmit,
 		openDownloadPrefix,
@@ -1212,6 +1220,7 @@ const objectsQuery = useInfiniteQuery({
 		prefix,
 		transfers,
 	})
+
 	const {
 		uploadDropActive,
 		startUploadFromFiles,
@@ -1275,7 +1284,8 @@ const objectsQuery = useInfiniteQuery({
 	})
 	const {
 		uploadFolderOpen,
-		uploadFolderForm,
+		uploadFolderValues,
+		setUploadFolderValues,
 		uploadFolderSubmitting,
 		uploadFolderCanSubmit,
 		openUploadFolderModal,
@@ -1289,6 +1299,8 @@ const objectsQuery = useInfiniteQuery({
 		uploadsEnabled: uploadSupported,
 		uploadsDisabledReason: uploadDisabledReason,
 		transfers,
+		defaultMoveAfterUpload: moveAfterUploadDefault,
+		defaultCleanupEmptyDirs: cleanupEmptyDirsDefault,
 	})
 
 	useEffect(() => {
@@ -3234,7 +3246,8 @@ const objectsQuery = useInfiniteQuery({
 					<ObjectsDownloadPrefixModal
 						open={downloadPrefixOpen}
 						sourceLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}*` : '-'}
-						form={downloadPrefixForm}
+						values={downloadPrefixValues}
+						onValuesChange={setDownloadPrefixValues}
 						isSubmitting={downloadPrefixSubmitting}
 						onCancel={handleDownloadPrefixCancel}
 						onFinish={handleDownloadPrefixSubmit}
@@ -3247,15 +3260,14 @@ const objectsQuery = useInfiniteQuery({
 					<ObjectsUploadFolderModal
 						open={uploadFolderOpen}
 						destinationLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
-						form={uploadFolderForm}
-						defaultMoveAfterUpload={moveAfterUploadDefault}
-						defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
+						values={uploadFolderValues}
+						onValuesChange={setUploadFolderValues}
 						isSubmitting={uploadFolderSubmitting}
 						onCancel={handleUploadFolderCancel}
 						onDefaultsChange={(values) => {
-							setMoveAfterUploadDefault(values.moveAfterUpload)
-							setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
-						}}
+						setMoveAfterUploadDefault(values.moveAfterUpload)
+						setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
+					}}
 						onFinish={handleUploadFolderSubmit}
 						onPickFolder={handleUploadFolderPick}
 						canSubmit={uploadFolderCanSubmit}
@@ -3269,7 +3281,8 @@ const objectsQuery = useInfiniteQuery({
 						bucket={bucket}
 						srcPrefix={copyPrefixSrcPrefix}
 						sourceLabel={copyPrefixSrcPrefix ? `s3://${bucket}/${copyPrefixSrcPrefix}*` : '-'}
-						form={copyPrefixForm}
+						values={copyPrefixValues}
+						onValuesChange={setCopyPrefixValues}
 						bucketOptions={bucketOptions}
 						isBucketsLoading={bucketsQuery.isFetching}
 						isSubmitting={copyPrefixSubmitting}
@@ -3281,9 +3294,9 @@ const objectsQuery = useInfiniteQuery({
 						isSummaryError={copyPrefixSummaryQuery.isError}
 						summaryErrorMessage={copyPrefixSummaryError}
 						onIndexPrefix={() => {
-							if (!copyPrefixSrcPrefix) return
-							indexObjectsJobMutation.mutate({ prefix: copyPrefixSrcPrefix, fullReindex: false })
-						}}
+						if (!copyPrefixSrcPrefix) return
+						indexObjectsJobMutation.mutate({ prefix: copyPrefixSrcPrefix, fullReindex: false })
+					}}
 						normalizePrefix={normalizePrefix}
 					/>
 				) : null}
@@ -3294,7 +3307,8 @@ const objectsQuery = useInfiniteQuery({
 						mode={copyMoveMode}
 						bucket={bucket}
 						srcKey={copyMoveSrcKey}
-						form={copyMoveForm}
+						values={copyMoveValues}
+						onValuesChange={setCopyMoveValues}
 						bucketOptions={bucketOptions}
 						isBucketsLoading={bucketsQuery.isFetching}
 						isSubmitting={copyMoveSubmitting}
@@ -3303,19 +3317,20 @@ const objectsQuery = useInfiniteQuery({
 					/>
 				) : null}
 
-					{newFolderOpen ? (
-						<ObjectsNewFolderModal
-							open={newFolderOpen}
-							parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(newFolderParentPrefix)}` : '-'}
-							parentPrefix={newFolderParentPrefix}
-							errorMessage={newFolderError}
-							partialKey={newFolderPartialKey}
-							onOpenPrefix={onOpenPrefix}
-							form={newFolderForm}
-							isSubmitting={newFolderSubmitting}
-							onCancel={handleNewFolderCancel}
-							onFinish={handleNewFolderSubmit}
-						/>
+				{newFolderOpen ? (
+					<ObjectsNewFolderModal
+						open={newFolderOpen}
+						parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(newFolderParentPrefix)}` : '-'}
+						parentPrefix={newFolderParentPrefix}
+						errorMessage={newFolderError}
+						partialKey={newFolderPartialKey}
+						onOpenPrefix={onOpenPrefix}
+						values={newFolderValues}
+						onValuesChange={setNewFolderValues}
+						isSubmitting={newFolderSubmitting}
+						onCancel={handleNewFolderCancel}
+						onFinish={handleNewFolderSubmit}
+					/>
 				) : null}
 
 				{renameOpen ? (
@@ -3324,7 +3339,8 @@ const objectsQuery = useInfiniteQuery({
 						kind={renameKind}
 						source={renameSource}
 						bucket={bucket}
-						form={renameForm}
+						values={renameValues}
+						onValuesChange={setRenameValues}
 						isSubmitting={renameSubmitting}
 						onCancel={handleRenameCancel}
 						onFinish={handleRenameSubmit}

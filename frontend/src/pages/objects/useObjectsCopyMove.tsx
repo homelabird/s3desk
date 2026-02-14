@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Form, message } from 'antd'
+import { message } from 'antd'
 import { useMutation } from '@tanstack/react-query'
 
 import type { Job, JobCreateRequest } from '../../api/types'
@@ -8,8 +8,16 @@ import { normalizePrefix, suggestCopyPrefix } from './objectsListUtils'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
-type CopyMoveFormValues = { dstBucket: string; dstKey: string; dryRun: boolean; confirm: string }
-type CopyPrefixFormValues = { dstBucket: string; dstPrefix: string; include: string; exclude: string; dryRun: boolean; confirm: string }
+type CopyMoveValues = { dstBucket: string; dstKey: string; dryRun: boolean; confirm: string }
+
+type CopyPrefixValues = {
+	dstBucket: string
+	dstPrefix: string
+	include: string
+	exclude: string
+	dryRun: boolean
+	confirm: string
+}
 
 type UseObjectsCopyMoveArgs = {
 	profileId: string | null
@@ -19,32 +27,38 @@ type UseObjectsCopyMoveArgs = {
 	splitLines: (value: string) => string[]
 }
 
-export function useObjectsCopyMove({
-	profileId,
-	bucket,
-	prefix,
-	createJobWithRetry,
-	splitLines,
-}: UseObjectsCopyMoveArgs) {
+export function useObjectsCopyMove({ profileId, bucket, prefix, createJobWithRetry, splitLines }: UseObjectsCopyMoveArgs) {
 	const [copyMoveOpen, setCopyMoveOpen] = useState(false)
 	const [copyMoveMode, setCopyMoveMode] = useState<'copy' | 'move'>('copy')
 	const [copyMoveSrcKey, setCopyMoveSrcKey] = useState<string | null>(null)
-	const [copyMoveForm] = Form.useForm<CopyMoveFormValues>()
+	const [copyMoveValues, setCopyMoveValues] = useState<CopyMoveValues>({
+		dstBucket: '',
+		dstKey: '',
+		dryRun: false,
+		confirm: '',
+	})
 
 	const [copyPrefixOpen, setCopyPrefixOpen] = useState(false)
 	const [copyPrefixMode, setCopyPrefixMode] = useState<'copy' | 'move'>('copy')
 	const [copyPrefixSrcPrefix, setCopyPrefixSrcPrefix] = useState('')
-	const [copyPrefixForm] = Form.useForm<CopyPrefixFormValues>()
+	const [copyPrefixValues, setCopyPrefixValues] = useState<CopyPrefixValues>({
+		dstBucket: '',
+		dstPrefix: '',
+		include: '',
+		exclude: '',
+		dryRun: false,
+		confirm: '',
+	})
 
 	const openCopyMove = useCallback(
 		(mode: 'copy' | 'move', key: string) => {
 			if (!profileId || !bucket) return
 			setCopyMoveMode(mode)
 			setCopyMoveSrcKey(key)
+			setCopyMoveValues({ dstBucket: bucket, dstKey: key, dryRun: false, confirm: '' })
 			setCopyMoveOpen(true)
-			copyMoveForm.setFieldsValue({ dstBucket: bucket, dstKey: key, dryRun: false, confirm: '' })
 		},
-		[bucket, copyMoveForm, profileId],
+		[bucket, profileId],
 	)
 
 	const openCopyPrefix = useCallback(
@@ -55,8 +69,7 @@ export function useObjectsCopyMove({
 
 			setCopyPrefixMode(mode)
 			setCopyPrefixSrcPrefix(srcPrefix)
-			setCopyPrefixOpen(true)
-			copyPrefixForm.setFieldsValue({
+			setCopyPrefixValues({
 				dstBucket: bucket,
 				dstPrefix: suggestCopyPrefix(srcPrefix),
 				include: '',
@@ -64,8 +77,9 @@ export function useObjectsCopyMove({
 				dryRun: false,
 				confirm: '',
 			})
+			setCopyPrefixOpen(true)
 		},
-		[bucket, copyPrefixForm, prefix, profileId],
+		[bucket, prefix, profileId],
 	)
 
 	const copyPrefixJobMutation = useMutation({
@@ -94,6 +108,7 @@ export function useObjectsCopyMove({
 			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
 			setCopyPrefixOpen(false)
 			setCopyPrefixSrcPrefix('')
+			setCopyPrefixValues({ dstBucket: '', dstPrefix: '', include: '', exclude: '', dryRun: false, confirm: '' })
 		},
 		onError: (err) => message.error(formatErr(err)),
 	})
@@ -116,18 +131,52 @@ export function useObjectsCopyMove({
 			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
 			setCopyMoveOpen(false)
 			setCopyMoveSrcKey(null)
+			setCopyMoveValues({ dstBucket: '', dstKey: '', dryRun: false, confirm: '' })
 		},
 		onError: (err) => message.error(formatErr(err)),
 	})
 
 	const handleCopyPrefixSubmit = useCallback(
-		(values: CopyPrefixFormValues) => {
+		(values: CopyPrefixValues) => {
 			if (!profileId || !bucket || !copyPrefixSrcPrefix) return
+
+			const dstBucket = values.dstBucket.trim()
+			if (!dstBucket) {
+				message.error('Destination bucket is required')
+				return
+			}
+
+			const dstPrefix = normalizePrefix(values.dstPrefix)
+			if (!dstPrefix) {
+				message.error('Destination prefix is required')
+				return
+			}
+			if (dstPrefix.includes('*')) {
+				message.error('Wildcards are not allowed')
+				return
+			}
+
+			if (copyPrefixMode === 'move' && !values.dryRun && values.confirm !== 'MOVE') {
+				message.error('Type MOVE to proceed')
+				return
+			}
+
+			if (dstBucket === bucket) {
+				if (dstPrefix === copyPrefixSrcPrefix) {
+					message.error('Destination must be different')
+					return
+				}
+				if (dstPrefix.startsWith(copyPrefixSrcPrefix)) {
+					message.error('Destination must not be under source')
+					return
+				}
+			}
+
 			copyPrefixJobMutation.mutate({
 				mode: copyPrefixMode,
 				srcPrefix: copyPrefixSrcPrefix,
-				dstBucket: values.dstBucket.trim(),
-				dstPrefix: normalizePrefix(values.dstPrefix),
+				dstBucket,
+				dstPrefix,
 				include: splitLines(values.include),
 				exclude: splitLines(values.exclude),
 				dryRun: values.dryRun,
@@ -137,13 +186,40 @@ export function useObjectsCopyMove({
 	)
 
 	const handleCopyMoveSubmit = useCallback(
-		(values: CopyMoveFormValues) => {
+		(values: CopyMoveValues) => {
 			if (!profileId || !bucket || !copyMoveSrcKey) return
+
+			const dstBucket = values.dstBucket.trim()
+			if (!dstBucket) {
+				message.error('Destination bucket is required')
+				return
+			}
+
+			const dstKey = values.dstKey.trim().replace(/^\/+/, '')
+			if (!dstKey) {
+				message.error('Destination key is required')
+				return
+			}
+			if (dstKey.includes('*')) {
+				message.error('Wildcards are not allowed')
+				return
+			}
+
+			if (copyMoveMode === 'move' && !values.dryRun && values.confirm !== 'MOVE') {
+				message.error('Type MOVE to proceed')
+				return
+			}
+
+			if (dstBucket === bucket && dstKey === copyMoveSrcKey) {
+				message.error('Destination must be different')
+				return
+			}
+
 			copyMoveMutation.mutate({
 				mode: copyMoveMode,
 				srcKey: copyMoveSrcKey,
-				dstBucket: values.dstBucket.trim(),
-				dstKey: values.dstKey.trim(),
+				dstBucket,
+				dstKey,
 				dryRun: values.dryRun,
 			})
 		},
@@ -153,18 +229,21 @@ export function useObjectsCopyMove({
 	const handleCopyPrefixCancel = useCallback(() => {
 		setCopyPrefixOpen(false)
 		setCopyPrefixSrcPrefix('')
+		setCopyPrefixValues({ dstBucket: '', dstPrefix: '', include: '', exclude: '', dryRun: false, confirm: '' })
 	}, [])
 
 	const handleCopyMoveCancel = useCallback(() => {
 		setCopyMoveOpen(false)
 		setCopyMoveSrcKey(null)
+		setCopyMoveValues({ dstBucket: '', dstKey: '', dryRun: false, confirm: '' })
 	}, [])
 
 	return {
 		copyMoveOpen,
 		copyMoveMode,
 		copyMoveSrcKey,
-		copyMoveForm,
+		copyMoveValues,
+		setCopyMoveValues,
 		copyMoveSubmitting: copyMoveMutation.isPending,
 		openCopyMove,
 		handleCopyMoveSubmit,
@@ -172,7 +251,8 @@ export function useObjectsCopyMove({
 		copyPrefixOpen,
 		copyPrefixMode,
 		copyPrefixSrcPrefix,
-		copyPrefixForm,
+		copyPrefixValues,
+		setCopyPrefixValues,
 		copyPrefixSubmitting: copyPrefixJobMutation.isPending,
 		openCopyPrefix,
 		handleCopyPrefixSubmit,

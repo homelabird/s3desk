@@ -1,5 +1,5 @@
-import { Alert, AutoComplete, Button, Checkbox, Drawer, Form, Grid, Input, Space, Switch } from 'antd'
-import { useEffect, useRef } from 'react'
+import { Alert, AutoComplete, Button, Checkbox, Drawer, Grid, Input, Space, Switch, message } from 'antd'
+import { useState } from 'react'
 
 export function DeletePrefixJobModal(props: {
 	open: boolean
@@ -20,40 +20,60 @@ export function DeletePrefixJobModal(props: {
 	bucketOptions: { label: string; value: string }[]
 	prefill?: { prefix: string; deleteAll: boolean } | null
 }) {
+
 	const screens = Grid.useBreakpoint()
 	const drawerWidth = screens.md ? 520 : '100%'
-	const [form] = Form.useForm<{
-		bucket: string
-		prefix: string
-		deleteAll: boolean
-		confirm: string
-		unsafePrefixOk: boolean
-		include: string
-		exclude: string
-		dryRun: boolean
-	}>()
-	const prevOpenRef = useRef(false)
+	const [bucket, setBucket] = useState(props.bucket)
+	const [prefix, setPrefix] = useState(props.prefill?.prefix ?? '')
+	const [deleteAll, setDeleteAll] = useState(props.prefill?.deleteAll ?? false)
+	const [confirm, setConfirm] = useState('')
+	const [unsafePrefixOk, setUnsafePrefixOk] = useState(false)
+	const [include, setInclude] = useState('')
+	const [exclude, setExclude] = useState('')
+	const [dryRun, setDryRun] = useState(false)
 
-	useEffect(() => {
-		const wasOpen = prevOpenRef.current
-		prevOpenRef.current = props.open
-		if (!props.open || wasOpen) return
-		if (!props.prefill) {
-			form.resetFields()
-			form.setFieldsValue({ bucket: props.bucket })
+	const normalizedPrefix = prefix.trim().replace(/^\/+/, '')
+	const unsafePrefix = !deleteAll && normalizedPrefix !== '' && !normalizedPrefix.endsWith('/')
+
+	const handleSubmit = () => {
+		const trimmedBucket = bucket.trim()
+		if (!trimmedBucket) {
+			message.error('Bucket is required')
 			return
 		}
-		form.setFieldsValue({
-			bucket: props.bucket,
-			prefix: props.prefill.prefix,
-			deleteAll: props.prefill.deleteAll,
-			confirm: '',
-			unsafePrefixOk: false,
-			include: '',
-			exclude: '',
-			dryRun: false,
+		if (props.isOffline) return
+
+		if (!deleteAll) {
+			if (!normalizedPrefix) {
+				message.error('Prefix is required unless deleteAll is enabled')
+				return
+			}
+			if (normalizedPrefix.includes('*')) {
+				message.error('Wildcards are not allowed in prefix')
+				return
+			}
+			if (unsafePrefix && !unsafePrefixOk) {
+				message.error('Acknowledge unsafe prefix to proceed')
+				return
+			}
+		} else {
+			if (confirm !== 'DELETE') {
+				message.error('Type DELETE to proceed')
+				return
+			}
+		}
+
+		props.setBucket(trimmedBucket)
+		props.onSubmit({
+			bucket: trimmedBucket,
+			prefix: deleteAll ? '' : normalizedPrefix,
+			deleteAll,
+			allowUnsafePrefix: unsafePrefix,
+			include: splitLines(include),
+			exclude: splitLines(exclude),
+			dryRun,
 		})
-	}, [form, props.bucket, props.open, props.prefill])
+	}
 
 	return (
 		<Drawer
@@ -64,7 +84,7 @@ export function DeletePrefixJobModal(props: {
 			extra={
 				<Space>
 					<Button onClick={props.onCancel}>Close</Button>
-					<Button type="primary" danger loading={props.loading} onClick={() => form.submit()} disabled={props.isOffline}>
+					<Button type="primary" danger loading={props.loading} onClick={handleSubmit} disabled={props.isOffline}>
 						Create
 					</Button>
 				</Space>
@@ -78,142 +98,70 @@ export function DeletePrefixJobModal(props: {
 				style={{ marginBottom: 12 }}
 			/>
 
-			<Form
-				form={form}
-				layout="vertical"
-				initialValues={{
-					bucket: props.bucket,
-					prefix: '',
-					deleteAll: false,
-					confirm: '',
-					unsafePrefixOk: false,
-					include: '',
-					exclude: '',
-					dryRun: false,
-				}}
-				onFinish={(values) => {
-					const normalizedPrefix = values.prefix.trim().replace(/^\/+/, '')
-					const unsafePrefix = !values.deleteAll && normalizedPrefix !== '' && !normalizedPrefix.endsWith('/')
+			<div style={{ marginBottom: 12 }}>
+				<div style={{ fontWeight: 700, marginBottom: 6 }}>Bucket</div>
+				<AutoComplete
+					value={bucket}
+					options={props.bucketOptions}
+					onChange={(value) => setBucket(String(value))}
+					filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
+				>
+					<Input placeholder="my-bucket…" />
+				</AutoComplete>
+			</div>
 
-					props.setBucket(values.bucket)
-					props.onSubmit({
-						bucket: values.bucket.trim(),
-						prefix: values.deleteAll ? '' : normalizedPrefix,
-						deleteAll: values.deleteAll,
-						allowUnsafePrefix: unsafePrefix,
-						include: splitLines(values.include),
-						exclude: splitLines(values.exclude),
-						dryRun: values.dryRun,
-					})
-				}}
-			>
-				<Form.Item name="bucket" label="Bucket" rules={[{ required: true }]}>
-					<AutoComplete
-						options={props.bucketOptions}
-						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-					>
-						<Input placeholder="my-bucket…" />
-					</AutoComplete>
-				</Form.Item>
+			<div style={{ marginBottom: 12 }}>
+				<div style={{ fontWeight: 700, marginBottom: 6 }}>Delete ALL objects in bucket</div>
+				<Switch checked={deleteAll} onChange={(checked) => setDeleteAll(checked)} />
+			</div>
 
-				<Form.Item name="deleteAll" label="Delete ALL objects in bucket" valuePropName="checked">
-					<Switch />
-				</Form.Item>
+			<div style={{ marginBottom: 12 }}>
+				<div style={{ fontWeight: 700, marginBottom: 6 }}>Prefix</div>
+				<Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" disabled={deleteAll} />
+				<div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+					Required unless deleteAll is enabled. Use trailing '/' to avoid accidental matches.
+				</div>
+			</div>
 
-				<Form.Item shouldUpdate={(prev, cur) => prev.deleteAll !== cur.deleteAll} noStyle>
-					{({ getFieldValue }) => {
-						const deleteAll = getFieldValue('deleteAll')
-						const prefix = (getFieldValue('prefix') ?? '') as string
-						const normalizedPrefix = typeof prefix === 'string' ? prefix.trim().replace(/^\/+/, '') : ''
-						const unsafePrefix = !deleteAll && normalizedPrefix !== '' && !normalizedPrefix.endsWith('/')
+			{unsafePrefix ? (
+				<>
+					<Alert
+						type="warning"
+						showIcon
+						title="Prefix does not end with '/'"
+						description={
+							"Without a trailing '/', delete will match keys with the prefix (e.g., 'abc' also matches 'abcd'). Prefer using a trailing '/'. To proceed anyway, acknowledge below."
+						}
+						style={{ marginBottom: 12 }}
+					/>
+					<div style={{ marginBottom: 12 }}>
+						<Checkbox checked={unsafePrefixOk} onChange={(e) => setUnsafePrefixOk(e.target.checked)}>
+							I understand and want to proceed
+						</Checkbox>
+					</div>
+				</>
+			) : null}
 
-						return (
-							<>
-								<Form.Item
-									name="prefix"
-									label="Prefix"
-									dependencies={['deleteAll']}
-									rules={[
-										({ getFieldValue }) => ({
-											validator: async (_, v: string) => {
-												if (getFieldValue('deleteAll')) return
-												const normalized = typeof v === 'string' ? v.trim().replace(/^\/+/, '') : ''
-												if (!normalized) throw new Error('prefix is required unless deleteAll is enabled')
-												if (normalized.includes('*')) throw new Error('wildcards are not allowed')
-											},
-										}),
-									]}
-								>
-									<Input placeholder="path/…" disabled={deleteAll} />
-								</Form.Item>
+			{deleteAll ? (
+				<div style={{ marginBottom: 12 }}>
+					<div style={{ fontWeight: 700, marginBottom: 6 }}>Type &quot;DELETE&quot; to confirm</div>
+					<Input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="DELETE…" />
+				</div>
+			) : null}
 
-								{unsafePrefix ? (
-									<>
-										<Alert
-											type="warning"
-											showIcon
-											title="Prefix does not end with '/'"
-											description={
-												"Without a trailing '/', delete will match keys with the prefix (e.g., 'abc' also matches 'abcd'). Prefer using a trailing '/'. To proceed anyway, acknowledge below."
-											}
-											style={{ marginBottom: 12 }}
-										/>
-										<Form.Item
-											name="unsafePrefixOk"
-											valuePropName="checked"
-											dependencies={['prefix', 'deleteAll']}
-											rules={[
-												({ getFieldValue }) => ({
-													validator: async (_, v: boolean) => {
-														const deleteAll = getFieldValue('deleteAll')
-														const prefix = (getFieldValue('prefix') ?? '') as string
-														const normalizedPrefix = typeof prefix === 'string' ? prefix.trim().replace(/^\/+/, '') : ''
-														const unsafePrefix = !deleteAll && normalizedPrefix !== '' && !normalizedPrefix.endsWith('/')
-														if (!unsafePrefix) return
-														if (v === true) return
-														throw new Error('Acknowledge to proceed')
-													},
-												}),
-											]}
-										>
-											<Checkbox>I understand and want to proceed</Checkbox>
-										</Form.Item>
-									</>
-								) : null}
+			<div style={{ marginBottom: 12 }}>
+				<div style={{ fontWeight: 700, marginBottom: 6 }}>Dry run (no changes)</div>
+				<Switch checked={dryRun} onChange={setDryRun} />
+			</div>
 
-								{deleteAll ? (
-									<Form.Item
-										name="confirm"
-										label='Type "DELETE" to confirm'
-										rules={[
-											{ required: true },
-											{
-												validator: async (_, v: string) => {
-													if (v === 'DELETE') return
-													throw new Error('Type DELETE to proceed')
-												},
-											},
-										]}
-									>
-										<Input placeholder="DELETE…" />
-									</Form.Item>
-								) : null}
-							</>
-						)
-					}}
-				</Form.Item>
-
-				<Form.Item name="dryRun" label="Dry run (no changes)" valuePropName="checked">
-					<Switch />
-				</Form.Item>
-
-				<Form.Item name="include" label="Include patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="*.log…" />
-				</Form.Item>
-				<Form.Item name="exclude" label="Exclude patterns (one per line)">
-					<Input.TextArea rows={4} placeholder="tmp_*…" />
-				</Form.Item>
-			</Form>
+			<div style={{ marginBottom: 12 }}>
+				<div style={{ fontWeight: 700, marginBottom: 6 }}>Include patterns (one per line)</div>
+				<Input.TextArea value={include} onChange={(e) => setInclude(e.target.value)} rows={4} placeholder="*.log…" />
+			</div>
+			<div style={{ marginBottom: 12 }}>
+				<div style={{ fontWeight: 700, marginBottom: 6 }}>Exclude patterns (one per line)</div>
+				<Input.TextArea value={exclude} onChange={(e) => setExclude(e.target.value)} rows={4} placeholder="tmp_*…" />
+			</div>
 		</Drawer>
 	)
 }

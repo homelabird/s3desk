@@ -1,6 +1,8 @@
-import { Form, Input, Modal } from 'antd'
+import { Input, Modal } from 'antd'
+import { useState } from 'react'
 
 import type { BucketCreateRequest, Profile } from '../../api/types'
+import { FormField } from '../../components/FormField'
 
 export function BucketModal(props: {
 	open: boolean
@@ -9,7 +11,8 @@ export function BucketModal(props: {
 	loading: boolean
 	provider?: Profile['provider']
 }) {
-	const [form] = Form.useForm<{ name: string; region?: string }>()
+	const [name, setName] = useState('')
+	const [region, setRegion] = useState('')
 
 	const regionMeta = (() => {
 		switch (props.provider) {
@@ -22,33 +25,60 @@ export function BucketModal(props: {
 		}
 	})()
 
+	const canSubmit = !!name.trim()
+	const reset = () => {
+		setName('')
+		setRegion('')
+	}
+	const handleSubmit = () => {
+		const trimmedName = name.trim()
+		if (!trimmedName) return
+		const trimmedRegion = region.trim()
+		props.onSubmit({ name: trimmedName, region: trimmedRegion ? trimmedRegion : undefined })
+	}
+	const handleCancel = () => {
+		reset()
+		props.onCancel()
+	}
+
 	return (
 		<Modal
 			open={props.open}
 			title="Create Bucket"
 			okText="Create"
-			okButtonProps={{ loading: props.loading }}
-			onOk={() => form.submit()}
-			onCancel={props.onCancel}
+			okButtonProps={{ loading: props.loading, disabled: !canSubmit }}
+			onOk={handleSubmit}
+			onCancel={handleCancel}
 			destroyOnHidden
 		>
-			<Form
-				form={form}
-				layout="vertical"
-				initialValues={{ name: '', region: '' }}
-				onFinish={(values) => {
-					props.onSubmit({ name: values.name, region: values.region || undefined })
+			<form
+				onSubmit={(e) => {
+					e.preventDefault()
+					handleSubmit()
 				}}
 			>
-				<Form.Item name="name" label="Bucket name" rules={[{ required: true }]}>
-					<Input />
-				</Form.Item>
+				<FormField label="Bucket name" required htmlFor="bucket-create-name">
+					<Input
+						id="bucket-create-name"
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						placeholder="my-bucket…"
+						autoComplete="off"
+					/>
+				</FormField>
+
 				{regionMeta.show ? (
-					<Form.Item name="region" label={regionMeta.label}>
-						<Input placeholder={regionMeta.placeholder} />
-					</Form.Item>
+					<FormField label={regionMeta.label} htmlFor="bucket-create-region">
+						<Input
+							id="bucket-create-region"
+							value={region}
+							onChange={(e) => setRegion(e.target.value)}
+							placeholder={regionMeta.placeholder}
+							autoComplete="off"
+						/>
+					</FormField>
 				) : null}
-			</Form>
+			</form>
 		</Modal>
 	)
 }

@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react'
-import { Form, message } from 'antd'
+import { message } from 'antd'
 
 import type { TransfersContextValue } from '../../components/Transfers'
 import { collectFilesFromDirectoryHandle, normalizeRelativePath } from '../../lib/deviceFs'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 
-type UploadFolderFormValues = {
+type UploadFolderValues = {
 	localFolder: string
 	moveAfterUpload: boolean
 	cleanupEmptyDirs: boolean
@@ -18,6 +18,8 @@ type UseObjectsUploadFolderArgs = {
 	uploadsEnabled: boolean
 	uploadsDisabledReason?: string | null
 	transfers: TransfersContextValue
+	defaultMoveAfterUpload: boolean
+	defaultCleanupEmptyDirs: boolean
 }
 
 export function useObjectsUploadFolder({
@@ -27,9 +29,15 @@ export function useObjectsUploadFolder({
 	uploadsEnabled,
 	uploadsDisabledReason,
 	transfers,
+	defaultMoveAfterUpload,
+	defaultCleanupEmptyDirs,
 }: UseObjectsUploadFolderArgs) {
 	const [uploadFolderOpen, setUploadFolderOpen] = useState(false)
-	const [uploadFolderForm] = Form.useForm<UploadFolderFormValues>()
+	const [uploadFolderValues, setUploadFolderValues] = useState<UploadFolderValues>(() => ({
+		localFolder: '',
+		moveAfterUpload: defaultMoveAfterUpload,
+		cleanupEmptyDirs: defaultCleanupEmptyDirs,
+	}))
 	const [uploadFolderHandle, setUploadFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
 	const [uploadFolderLabel, setUploadFolderLabel] = useState('')
 	const [uploadFolderSubmitting, setUploadFolderSubmitting] = useState(false)
@@ -39,8 +47,15 @@ export function useObjectsUploadFolder({
 			message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
 			return
 		}
+		setUploadFolderHandle(null)
+		setUploadFolderLabel('')
+		setUploadFolderValues({
+			localFolder: '',
+			moveAfterUpload: defaultMoveAfterUpload,
+			cleanupEmptyDirs: defaultCleanupEmptyDirs,
+		})
 		setUploadFolderOpen(true)
-	}, [uploadsDisabledReason, uploadsEnabled])
+	}, [defaultCleanupEmptyDirs, defaultMoveAfterUpload, uploadsDisabledReason, uploadsEnabled])
 
 	const handleUploadFolderPick = useCallback((handle: FileSystemDirectoryHandle) => {
 		setUploadFolderHandle(handle)
@@ -51,28 +66,31 @@ export function useObjectsUploadFolder({
 		setUploadFolderOpen(false)
 		setUploadFolderHandle(null)
 		setUploadFolderLabel('')
-		uploadFolderForm.resetFields()
-	}, [uploadFolderForm])
+		setUploadFolderValues({
+			localFolder: '',
+			moveAfterUpload: defaultMoveAfterUpload,
+			cleanupEmptyDirs: defaultCleanupEmptyDirs,
+		})
+	}, [defaultCleanupEmptyDirs, defaultMoveAfterUpload])
 
 	const handleUploadFolderSubmit = useCallback(
-		async (values: UploadFolderFormValues) => {
-			void values
+		async (values: UploadFolderValues) => {
 			if (!profileId) {
 				message.info('Select a profile first')
 				return
 			}
-				if (!bucket) {
-					message.info('Select a bucket first')
-					return
-				}
-				if (!uploadsEnabled) {
-					message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
-					return
-				}
-				if (!uploadFolderHandle) {
-					message.info('Select a local folder first')
-					return
-				}
+			if (!bucket) {
+				message.info('Select a bucket first')
+				return
+			}
+			if (!uploadsEnabled) {
+				message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+				return
+			}
+			if (!uploadFolderHandle) {
+				message.info('Select a local folder first')
+				return
+			}
 
 			setUploadFolderSubmitting(true)
 			try {
@@ -98,45 +116,51 @@ export function useObjectsUploadFolder({
 					label,
 					moveSource: values.moveAfterUpload
 						? {
-								rootHandle: uploadFolderHandle,
-								relPaths,
-								label,
-								cleanupEmptyDirs: values.cleanupEmptyDirs,
-							}
+							rootHandle: uploadFolderHandle,
+							relPaths,
+							label,
+							cleanupEmptyDirs: values.cleanupEmptyDirs,
+						}
 						: undefined,
 				})
 				transfers.openTransfers('uploads')
 				setUploadFolderOpen(false)
 				setUploadFolderHandle(null)
 				setUploadFolderLabel('')
-				uploadFolderForm.resetFields()
+				setUploadFolderValues({
+					localFolder: '',
+					moveAfterUpload: defaultMoveAfterUpload,
+					cleanupEmptyDirs: defaultCleanupEmptyDirs,
+				})
 			} catch (err) {
 				message.error(formatErr(err))
 			} finally {
 				setUploadFolderSubmitting(false)
 			}
 		},
-			[
-				bucket,
-				prefix,
-				profileId,
-				transfers,
-				uploadFolderForm,
-				uploadFolderHandle,
-				uploadFolderLabel,
-				uploadsDisabledReason,
-				uploadsEnabled,
-			],
-		)
+		[
+			bucket,
+			defaultCleanupEmptyDirs,
+			defaultMoveAfterUpload,
+			prefix,
+			profileId,
+			transfers,
+			uploadFolderHandle,
+			uploadFolderLabel,
+			uploadsDisabledReason,
+			uploadsEnabled,
+		],
+	)
 
-		return {
-			uploadFolderOpen,
-			uploadFolderForm,
-			uploadFolderSubmitting,
-			uploadFolderCanSubmit: !!uploadFolderHandle && uploadsEnabled,
-			openUploadFolderModal,
-			handleUploadFolderSubmit,
-			handleUploadFolderCancel,
-			handleUploadFolderPick,
-		}
+	return {
+		uploadFolderOpen,
+		uploadFolderValues,
+		setUploadFolderValues,
+		uploadFolderSubmitting,
+		uploadFolderCanSubmit: !!uploadFolderHandle && uploadsEnabled,
+		openUploadFolderModal,
+		handleUploadFolderSubmit,
+		handleUploadFolderCancel,
+		handleUploadFolderPick,
+	}
 }

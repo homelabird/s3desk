@@ -868,6 +868,7 @@ frontend_bundle_analyze:
         "@rc-component/tree" \
         "@rc-component/table" \
         "@rc-component/tabs" \
+        "@rc-component/form" \
         "@rc-component/picker/es/index.js" \
         "antd/es/date-picker/index.js" \
         "antd/es/time-picker/index.js" \

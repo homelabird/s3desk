@@ -4,7 +4,6 @@ import {
 	Alert,
 	Button,
 	Descriptions,
-	Form,
 	Input,
 	InputNumber,
 	message,
@@ -31,6 +30,7 @@ import {
 } from '../api/client'
 import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
 import { AppTabs } from '../components/AppTabs'
+import { FormField } from '../components/FormField'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatTime } from '../lib/format'
@@ -274,24 +274,24 @@ export function SettingsPage(props: Props) {
 						label: 'Access',
 						children: (
 							<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-								<Form layout="vertical" requiredMark={false}>
-									<Form.Item label="Backend API Token (X-Api-Token)">
+								<div>
+									<FormField label="Backend API Token (X-Api-Token)">
 										<ApiTokenField key={props.apiToken} apiToken={props.apiToken} setApiToken={props.setApiToken} />
 										<Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
 											This must match the server's <Typography.Text code>API_TOKEN</Typography.Text> (or{' '}
 											<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials.
 										</Typography.Paragraph>
-									</Form.Item>
+									</FormField>
 
-									<Form.Item label="Selected Profile" extra="Used by most pages to scope S3 operations.">
+									<FormField label="Selected Profile" extra="Used by most pages to scope S3 operations.">
 										<Space.Compact style={{ width: '100%' }}>
 											<Input value={props.profileId ?? ''} placeholder="(none)…" readOnly />
 											<Button danger onClick={() => props.setProfileId(null)}>
 												Clear
 											</Button>
 										</Space.Compact>
-									</Form.Item>
-								</Form>
+									</FormField>
+								</div>
 
 								<Collapse
 									size="small"
@@ -322,24 +322,24 @@ export function SettingsPage(props: Props) {
 						key: 'transfers',
 						label: 'Transfers',
 						children: (
-							<Form layout="vertical" requiredMark={false}>
-								<Form.Item label="Default: Move after upload" extra="Applies to folder uploads from this device.">
+							<div>
+								<FormField label="Default: Move after upload" extra="Applies to folder uploads from this device.">
 									<Switch
 										checked={moveAfterUploadDefault}
 										onChange={setMoveAfterUploadDefault}
 										aria-label="Default: Move after upload"
 									/>
-								</Form.Item>
-								<Form.Item label="Default: Auto-clean empty folders" extra="Used only when move-after-upload is enabled.">
+								</FormField>
+								<FormField label="Default: Auto-clean empty folders" extra="Used only when move-after-upload is enabled.">
 									<Switch
 										checked={cleanupEmptyDirsDefault}
 										onChange={setCleanupEmptyDirsDefault}
 										disabled={!moveAfterUploadDefault}
 										aria-label="Default: Auto-clean empty folders"
 									/>
-								</Form.Item>
+								</FormField>
 
-								<Form.Item
+								<FormField
 									label="Downloads: Use server proxy"
 									extra="When enabled, downloads and 'Link…' always use /download-proxy. When disabled, downloads try presigned URLs first and fall back to the proxy only if CORS blocks the request."
 								>
@@ -348,7 +348,7 @@ export function SettingsPage(props: Props) {
 										onChange={setDownloadLinkProxyEnabled}
 										aria-label="Downloads: Use server proxy"
 									/>
-								</Form.Item>
+								</FormField>
 
 								<Collapse
 									size="small"
@@ -358,7 +358,7 @@ export function SettingsPage(props: Props) {
 											label: 'Advanced',
 											children: (
 												<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-													<Form.Item
+													<FormField
 														label="Upload auto-tuning"
 														extra="Automatically adjusts batch/chunk settings based on file size."
 													>
@@ -367,8 +367,8 @@ export function SettingsPage(props: Props) {
 															onChange={setUploadAutoTuneEnabled}
 															aria-label="Upload auto-tuning"
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Upload batch concurrency"
 														extra="Number of parallel upload batches per client. Higher values can improve throughput on fast networks."
 													>
@@ -382,8 +382,8 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Upload batch size (MiB)"
 														extra="Target size per upload batch. Larger batches reduce request overhead but increase memory use."
 													>
@@ -398,8 +398,8 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Upload tuning presets"
 														extra="Quick presets for batch + chunk settings. You can still fine-tune below."
 													>
@@ -439,8 +439,8 @@ export function SettingsPage(props: Props) {
 																Max Throughput
 															</Button>
 														</Space>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Upload chunk size (MiB)"
 														extra="Single-file uploads above the threshold are split into chunks of this size."
 													>
@@ -455,8 +455,8 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Upload chunk concurrency"
 														extra="Parallel chunk uploads for a single large file."
 													>
@@ -470,8 +470,8 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Upload file concurrency (chunked)"
 														extra="Number of large files uploaded in parallel when chunking."
 													>
@@ -485,8 +485,8 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Chunking threshold (MiB)"
 														extra="Files larger than this threshold use chunked uploads."
 													>
@@ -501,8 +501,8 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Resume conversion mode"
 														extra="Allows resuming uploads even if chunk sizes changed between sessions."
 													>
@@ -511,8 +511,8 @@ export function SettingsPage(props: Props) {
 															onChange={setUploadResumeConversionEnabled}
 															aria-label="Resume conversion mode"
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Move cleanup report filename template"
 														extra="Available tokens: {bucket} {prefix} {label} {timestamp}"
 													>
@@ -521,8 +521,8 @@ export function SettingsPage(props: Props) {
 															onChange={(e) => setMoveCleanupFilenameTemplate(e.target.value)}
 															placeholder={MOVE_CLEANUP_FILENAME_TEMPLATE}
 														/>
-													</Form.Item>
-													<Form.Item label="Move cleanup report filename max length">
+													</FormField>
+													<FormField label="Move cleanup report filename max length">
 														<InputNumber
 															min={40}
 															max={200}
@@ -532,21 +532,21 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
+													</FormField>
 												</Space>
 											),
 										},
 									]}
 								/>
-							</Form>
+							</div>
 						),
 					},
 					{
 						key: 'objects',
 						label: 'Objects',
 						children: (
-							<Form layout="vertical" requiredMark={false}>
-								<Form.Item
+							<div>
+								<FormField
 									label="Show image thumbnails"
 									extra="Controls thumbnails in the object list and details panel."
 								>
@@ -555,7 +555,7 @@ export function SettingsPage(props: Props) {
 										onChange={setObjectsShowThumbnails}
 										aria-label="Show image thumbnails"
 									/>
-								</Form.Item>
+								</FormField>
 								<Collapse
 									size="small"
 									items={[
@@ -564,7 +564,7 @@ export function SettingsPage(props: Props) {
 											label: 'Advanced',
 											children: (
 												<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-													<Form.Item label="Thumbnail cache size" extra="Max cached thumbnails kept in memory (LRU).">
+													<FormField label="Thumbnail cache size" extra="Max cached thumbnails kept in memory (LRU).">
 														<InputNumber
 															min={THUMBNAIL_CACHE_MIN_ENTRIES}
 															max={THUMBNAIL_CACHE_MAX_ENTRIES}
@@ -583,8 +583,8 @@ export function SettingsPage(props: Props) {
 															}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Auto index current prefix"
 														extra="When Global Search is used, build/refresh the index for the current prefix automatically."
 													>
@@ -593,8 +593,8 @@ export function SettingsPage(props: Props) {
 															onChange={setObjectsAutoIndexEnabled}
 															aria-label="Auto index current prefix"
 														/>
-													</Form.Item>
-													<Form.Item
+													</FormField>
+													<FormField
 														label="Auto index TTL (hours)"
 														extra="Rebuild prefix index when it is older than this value."
 													>
@@ -617,21 +617,21 @@ export function SettingsPage(props: Props) {
 															disabled={!objectsAutoIndexEnabled}
 															style={{ width: '100%' }}
 														/>
-													</Form.Item>
+													</FormField>
 												</Space>
 											),
 										},
 									]}
 								/>
-							</Form>
+							</div>
 						),
 					},
 					{
 						key: 'network',
 						label: 'Network',
 						children: (
-							<Form layout="vertical" requiredMark={false}>
-								<Form.Item label="HTTP retry count" extra="Applies to GET and other idempotent requests.">
+							<div>
+								<FormField label="HTTP retry count" extra="Applies to GET and other idempotent requests.">
 									<InputNumber
 										min={RETRY_COUNT_MIN}
 										max={RETRY_COUNT_MAX}
@@ -646,8 +646,8 @@ export function SettingsPage(props: Props) {
 										}
 										style={{ width: '100%' }}
 									/>
-								</Form.Item>
-								<Form.Item label="Retry base delay (ms)" extra={`Exponential backoff, capped at ${RETRY_DELAY_MAX_MS}ms.`}>
+								</FormField>
+								<FormField label="Retry base delay (ms)" extra={`Exponential backoff, capped at ${RETRY_DELAY_MAX_MS}ms.`}>
 									<InputNumber
 										min={RETRY_DELAY_MIN_MS}
 										max={RETRY_DELAY_MAX_MS}
@@ -662,7 +662,7 @@ export function SettingsPage(props: Props) {
 										}
 										style={{ width: '100%' }}
 									/>
-								</Form.Item>
+								</FormField>
 								<Collapse
 									size="small"
 									items={[
@@ -670,7 +670,7 @@ export function SettingsPage(props: Props) {
 											key: 'advanced',
 											label: 'Advanced',
 											children: (
-												<Form.Item
+												<FormField
 													label="Network diagnostics"
 													extra="Recent network events and retries (this session)."
 													style={{ marginBottom: 0 }}
@@ -708,12 +708,12 @@ export function SettingsPage(props: Props) {
 																</Space>
 															</div>
 													</Space>
-												</Form.Item>
+												</FormField>
 											),
 										},
 									]}
 								/>
-							</Form>
+							</div>
 						),
 					},
 					{
