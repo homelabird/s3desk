@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Dropdown, Empty, Input, Modal, Space, Spin, Table, Typography, message } from 'antd'
+import { Alert, Button, Checkbox, Dropdown, Empty, Input, Modal, Space, Spin, Typography, message } from 'antd'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { MoreOutlined } from '@ant-design/icons'
 import { useSearchParams } from 'react-router-dom'
@@ -25,6 +25,15 @@ const ProfileModal = lazy(async () => {
 	const m = await import('./profiles/ProfileModal')
 	return { default: m.ProfileModal }
 })
+
+const PROFILE_PROVIDER_LABELS: Record<string, string> = {
+	aws_s3: 'AWS S3',
+	s3_compatible: 'S3 Compatible',
+	oci_s3_compat: 'OCI S3 Compat',
+	azure_blob: 'Azure Blob',
+	gcp_gcs: 'GCP GCS',
+	oci_object_storage: 'OCI Object Storage',
+}
 
 export function ProfilesPage(props: Props) {
 	const queryClient = useQueryClient()
@@ -342,193 +351,184 @@ export function ProfilesPage(props: Props) {
 				<Alert type="error" showIcon title="Failed to load profiles" description={formatErr(profilesQuery.error)} />
 			) : null}
 
-			<Table
-				rowKey="id"
-				loading={profilesQuery.isFetching}
-				dataSource={profiles}
-				pagination={false}
-				scroll={{ x: true }}
-				locale={{
-					emptyText: showProfilesEmpty ? (
-						<Empty description="No profiles yet">
-							<Button type="primary" onClick={() => setCreateOpen(true)}>
-								Create profile
-							</Button>
-						</Empty>
-					) : null,
-				}}
-				columns={[
-					{
-						title: 'Name',
-						dataIndex: 'name',
-						render: (v: string, row: Profile) => (
-							<Space>
-								<Typography.Text strong>{v}</Typography.Text>
-								{props.profileId === row.id ? <Typography.Text type="success">Active</Typography.Text> : null}
-							</Space>
-						),
-					},
-						{
-							title: 'Provider',
-							render: (_, row: Profile) => {
+			{profilesQuery.isFetching && profiles.length === 0 ? (
+				<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+					<Spin />
+				</div>
+			) : showProfilesEmpty ? (
+				<Empty description="No profiles yet">
+					<Button type="primary" onClick={() => setCreateOpen(true)}>
+						Create profile
+					</Button>
+				</Empty>
+			) : (
+				<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
+					<table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
+						<thead>
+							<tr style={{ background: '#fafafa' }}>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 240 }}>Name</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 180 }}>Provider</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>Connection</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>Flags</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 240 }}>Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{profiles.map((row) => {
 								const provider = row.provider
-								const labels: Record<string, string> = {
-									aws_s3: 'AWS S3',
-									s3_compatible: 'S3 Compatible',
-									oci_s3_compat: 'OCI S3 Compat',
-								azure_blob: 'Azure Blob',
-								gcp_gcs: 'GCP GCS',
-								oci_object_storage: 'OCI Object Storage',
-							}
-							const label = provider ? labels[provider] || provider : 'unknown'
-							return <Typography.Text code>{label}</Typography.Text>
-						},
-					},
+								const providerLabel = provider ? PROFILE_PROVIDER_LABELS[provider] || provider : 'unknown'
 
-						{
-							title: 'Connection',
-							render: (_, row: Profile) => {
-								const provider = row.provider
+								const connectionNode = (() => {
+									if (provider === 'azure_blob') {
+										const accountName = row.accountName || ''
+										const endpoint = row.endpoint
+										const useEmulator = !!row.useEmulator
+										const parts: string[] = [useEmulator ? 'emulator' : 'storage account']
+										if (endpoint) parts.push(endpoint)
+										const secondary = parts.join(' · ')
+										return (
+											<Space orientation="vertical" size={0} style={{ width: '100%' }}>
+												<Typography.Text>{accountName}</Typography.Text>
+												<Typography.Text type="secondary">{secondary}</Typography.Text>
+											</Space>
+										)
+									}
 
-								if (provider === 'azure_blob') {
-									const accountName = row.accountName || ''
-									const endpoint = row.endpoint
-									const useEmulator = !!row.useEmulator
-									const parts: string[] = [useEmulator ? 'emulator' : 'storage account']
-									if (endpoint) parts.push(endpoint)
-									const secondary = parts.join(' · ')
+									if (provider === 'gcp_gcs') {
+										const projectId = row.projectId
+										const clientEmail = row.clientEmail
+										const endpoint = row.endpoint
+										const primary = projectId || clientEmail || ''
+										const secondary = endpoint || (projectId && clientEmail ? clientEmail : '')
+										return (
+											<Space orientation="vertical" size={0} style={{ width: '100%' }}>
+												<Typography.Text>{primary}</Typography.Text>
+												{secondary ? <Typography.Text type="secondary">{secondary}</Typography.Text> : null}
+											</Space>
+										)
+									}
+
+									if (provider === 'oci_object_storage') {
+										const namespace = row.namespace
+										const compartment = row.compartment
+										const region = row.region
+										const endpoint = row.endpoint
+
+										const top = namespace || endpoint || ''
+										const bottomParts: string[] = []
+										if (region) bottomParts.push(region)
+										if (compartment) bottomParts.push(compartment)
+										const bottom = bottomParts.join(' · ')
+
+										return (
+											<Space orientation="vertical" size={0} style={{ width: '100%' }}>
+												<Typography.Text>{top}</Typography.Text>
+												{bottom ? <Typography.Text type="secondary">{bottom}</Typography.Text> : null}
+											</Space>
+										)
+									}
+
+									const endpoint = 'endpoint' in row ? row.endpoint ?? '' : ''
+									const region = 'region' in row ? row.region ?? '' : ''
+									const endpointLabel = endpoint || (provider === 'aws_s3' ? 'AWS default endpoint' : '')
 									return (
-									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-										<Typography.Text>{accountName}</Typography.Text>
-										<Typography.Text type="secondary">{secondary}</Typography.Text>
-									</Space>
-								)
-							}
-
-								if (provider === 'gcp_gcs') {
-									const projectId = row.projectId
-									const clientEmail = row.clientEmail
-									const endpoint = row.endpoint
-									const primary = projectId || clientEmail || ''
-									const secondary = endpoint || (projectId && clientEmail ? clientEmail : '')
-									return (
-									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-										<Typography.Text>{primary}</Typography.Text>
-										{secondary ? <Typography.Text type="secondary">{secondary}</Typography.Text> : null}
-									</Space>
-								)
-							}
-
-								if (provider === 'oci_object_storage') {
-									const namespace = row.namespace
-									const compartment = row.compartment
-									const region = row.region
-									const endpoint = row.endpoint
-
-									const top = namespace || endpoint || ''
-									const bottomParts: string[] = []
-									if (region) bottomParts.push(region)
-								if (compartment) bottomParts.push(compartment)
-								const bottom = bottomParts.join(' · ')
-
-								return (
-									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-										<Typography.Text>{top}</Typography.Text>
-										{bottom ? <Typography.Text type="secondary">{bottom}</Typography.Text> : null}
-									</Space>
+										<Space orientation="vertical" size={0} style={{ width: '100%' }}>
+											<Typography.Text>{endpointLabel}</Typography.Text>
+											{region ? <Typography.Text type="secondary">{region}</Typography.Text> : null}
+										</Space>
 									)
-								}
+								})()
 
-								const endpoint = 'endpoint' in row ? row.endpoint ?? '' : ''
-								const region = 'region' in row ? row.region ?? '' : ''
-								const endpointLabel = endpoint || (provider === 'aws_s3' ? 'AWS default endpoint' : '')
+								const flagsNode = (() => {
+									const isS3 = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
+									const parts: string[] = []
+									if (isS3 && 'forcePathStyle' in row) parts.push(row.forcePathStyle ? 'path-style' : 'virtual-host')
+									parts.push(row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash')
+									parts.push(row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify')
+									return <Typography.Text type="secondary">{parts.join(' / ')}</Typography.Text>
+								})()
+
 								return (
-									<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-									<Typography.Text>{endpointLabel}</Typography.Text>
-									{region ? <Typography.Text type="secondary">{region}</Typography.Text> : null}
-								</Space>
-							)
-						},
-					},
-
-						{
-							title: 'Flags',
-							render: (_, row: Profile) => {
-								const provider = row.provider
-								const isS3 = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
-								const parts: string[] = []
-								if (isS3 && 'forcePathStyle' in row) parts.push(row.forcePathStyle ? 'path-style' : 'virtual-host')
-								parts.push(row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash')
-								parts.push(row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify')
-								return <Typography.Text type="secondary">{parts.join(' / ')}</Typography.Text>
-							},
-						},
-					{
-						title: 'Actions',
-						render: (_, row: Profile) => (
-							<Space>
-								<Button size="small" onClick={() => props.setProfileId(row.id)}>
-									Use
-								</Button>
-								<Dropdown
-									trigger={['click']}
-									menu={{
-										items: [
-											{ key: 'edit', label: 'Edit' },
-												{
-													key: 'test',
-													label: testMutation.isPending && testingProfileId === row.id ? 'Testing…' : 'Test',
-													disabled: testMutation.isPending && testingProfileId === row.id,
-												},
-												{
-													key: 'yaml',
-													label: exportYamlMutation.isPending && exportingProfileId === row.id ? 'Exporting YAML…' : 'YAML',
-													disabled: exportYamlMutation.isPending && exportingProfileId === row.id,
-												},
-											{ type: 'divider' },
-												{
-													key: 'delete',
-													label: deleteMutation.isPending && deletingProfileId === row.id ? 'Deleting…' : 'Delete',
-													danger: true,
-													disabled: deleteMutation.isPending && deletingProfileId === row.id,
-												},
-										],
-										onClick: ({ key }) => {
-											if (key === 'edit') {
-												setEditProfile(row)
-												return
-											}
-											if (key === 'test') {
-												testMutation.mutate(row.id)
-												return
-											}
-											if (key === 'yaml') {
-												openYamlModal(row)
-												return
-											}
-											if (key === 'delete') {
-												confirmDangerAction({
-													title: `Delete profile "${row.name}"?`,
-													description: 'This removes the profile and any TLS settings associated with it.',
-													confirmText: row.name,
-													confirmHint: `Type "${row.name}" to confirm`,
-													onConfirm: async () => {
-														await deleteMutation.mutateAsync(row.id)
-													},
-												})
-											}
-										},
-									}}
-								>
-									<Button size="small" icon={<MoreOutlined />} aria-label={`More actions for ${row.name}`}>
-										More
-									</Button>
-								</Dropdown>
-							</Space>
-						),
-					},
-				]}
-			/>
+									<tr key={row.id}>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+											<Space>
+												<Typography.Text strong>{row.name}</Typography.Text>
+												{props.profileId === row.id ? <Typography.Text type="success">Active</Typography.Text> : null}
+											</Space>
+										</td>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+											<Typography.Text code>{providerLabel}</Typography.Text>
+										</td>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>{connectionNode}</td>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>{flagsNode}</td>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+											<Space wrap>
+												<Button size="small" onClick={() => props.setProfileId(row.id)}>
+													Use
+												</Button>
+												<Dropdown
+													trigger={['click']}
+													menu={{
+														items: [
+															{ key: 'edit', label: 'Edit' },
+															{
+																key: 'test',
+																label: testMutation.isPending && testingProfileId === row.id ? 'Testing…' : 'Test',
+																disabled: testMutation.isPending && testingProfileId === row.id,
+															},
+															{
+																key: 'yaml',
+																label: exportYamlMutation.isPending && exportingProfileId === row.id ? 'Exporting YAML…' : 'YAML',
+																disabled: exportYamlMutation.isPending && exportingProfileId === row.id,
+															},
+															{ type: 'divider' },
+															{
+																key: 'delete',
+																label: deleteMutation.isPending && deletingProfileId === row.id ? 'Deleting…' : 'Delete',
+																danger: true,
+																disabled: deleteMutation.isPending && deletingProfileId === row.id,
+															},
+														],
+														onClick: ({ key }) => {
+															if (key === 'edit') {
+																setEditProfile(row)
+																return
+															}
+															if (key === 'test') {
+																testMutation.mutate(row.id)
+																return
+															}
+															if (key === 'yaml') {
+																openYamlModal(row)
+																return
+															}
+															if (key === 'delete') {
+																confirmDangerAction({
+																	title: `Delete profile "${row.name}"?`,
+																	description: 'This removes the profile and any TLS settings associated with it.',
+																	confirmText: row.name,
+																	confirmHint: `Type "${row.name}" to confirm`,
+																	onConfirm: async () => {
+																		await deleteMutation.mutateAsync(row.id)
+																	},
+																})
+															}
+														},
+													}}
+												>
+													<Button size="small" icon={<MoreOutlined />} aria-label={`More actions for ${row.name}`}>
+														More
+													</Button>
+												</Dropdown>
+											</Space>
+										</td>
+									</tr>
+								)
+							})}
+						</tbody>
+					</table>
+				</div>
+			)}
 
 			<Suspense fallback={null}>
 					{createOpen ? (
