@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Empty, Modal, Space, Table, Tooltip, Typography, message } from 'antd'
+import { Alert, Button, Empty, Modal, Space, Spin, Tooltip, Typography, message } from 'antd'
 import { DeleteOutlined, FileTextOutlined } from '@ant-design/icons'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -138,78 +138,90 @@ export function BucketsPage(props: Props) {
 				<Alert type="error" showIcon title="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
 			) : null}
 
-			<Table
-				rowKey="name"
-				loading={bucketsQuery.isFetching}
-				dataSource={buckets}
-				pagination={false}
-				scroll={{ x: true }}
-				locale={{
-					emptyText: showBucketsEmpty ? (
-						<Empty description="No buckets yet">
-							<Button type="primary" onClick={() => setCreateOpen(true)}>
-								Create bucket
-							</Button>
-						</Empty>
-					) : null,
-				}}
-				columns={[
-					{ title: 'Name', dataIndex: 'name' },
-					{
-						title: 'CreatedAt',
-						dataIndex: 'createdAt',
-						render: (v?: string) =>
-							v ? (
-								<Typography.Text code title={v}>
-									{formatDateTime(v)}
-								</Typography.Text>
-							) : (
-								'-'
-							),
-					},
-					{
-						title: 'Actions',
-						render: (_, row: { name: string }) => (
-							<Space wrap>
-								<Tooltip title={policySupported ? 'Manage bucket policy' : policyUnsupportedReason}>
-									<span>
-										<Button
-											size="small"
-											icon={<FileTextOutlined />}
-											disabled={!policySupported}
-											onClick={() => {
-												setPolicyBucket(row.name)
-											}}
-										>
-											Policy
-										</Button>
-									</span>
-								</Tooltip>
+			{bucketsQuery.isFetching && buckets.length === 0 ? (
+				<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+					<Spin />
+				</div>
+			) : showBucketsEmpty ? (
+				<Empty description="No buckets yet">
+					<Button type="primary" onClick={() => setCreateOpen(true)}>
+						Create bucket
+					</Button>
+				</Empty>
+			) : (
+				<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
+					<table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
+						<thead>
+							<tr style={{ background: '#fafafa' }}>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>Name</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+									CreatedAt
+								</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+									Actions
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{buckets.map((row) => (
+								<tr key={row.name}>
+									<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+										<Typography.Text strong>{row.name}</Typography.Text>
+									</td>
+									<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+										{row.createdAt ? (
+											<Typography.Text code title={row.createdAt}>
+												{formatDateTime(row.createdAt)}
+											</Typography.Text>
+										) : (
+											<Typography.Text type="secondary">-</Typography.Text>
+										)}
+									</td>
+									<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+										<Space wrap>
+											<Tooltip title={policySupported ? 'Manage bucket policy' : policyUnsupportedReason}>
+												<span>
+													<Button
+														size="small"
+														icon={<FileTextOutlined />}
+														disabled={!policySupported}
+														onClick={() => {
+															setPolicyBucket(row.name)
+														}}
+													>
+														Policy
+													</Button>
+												</span>
+											</Tooltip>
 
-								<Button
-									size="small"
-									danger
-									icon={<DeleteOutlined />}
-									loading={deleteMutation.isPending && deletingBucket === row.name}
-									onClick={() => {
-										confirmDangerAction({
-											title: `Delete bucket "${row.name}"?`,
-											description: 'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
-											confirmText: row.name,
-											confirmHint: `Type "${row.name}" to confirm`,
-											onConfirm: async () => {
-												await deleteMutation.mutateAsync(row.name)
-											},
-										})
-									}}
-								>
-									Delete
-								</Button>
-							</Space>
-						),
-					},
-				]}
-			/>
+											<Button
+												size="small"
+												danger
+												icon={<DeleteOutlined />}
+												loading={deleteMutation.isPending && deletingBucket === row.name}
+												onClick={() => {
+													confirmDangerAction({
+														title: `Delete bucket "${row.name}"?`,
+														description:
+															'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
+														confirmText: row.name,
+														confirmHint: `Type "${row.name}" to confirm`,
+														onConfirm: async () => {
+															await deleteMutation.mutateAsync(row.name)
+														},
+													})
+												}}
+											>
+												Delete
+											</Button>
+										</Space>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
 
 			<Suspense fallback={null}>
 				{createOpen ? (
