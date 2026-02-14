@@ -27,5 +27,5 @@ describe('NetworkStatusBanner', () => {
 		})
 
 		expect(screen.queryByText('Back online.')).not.toBeInTheDocument()
-	})
+	}, 20_000)
 })

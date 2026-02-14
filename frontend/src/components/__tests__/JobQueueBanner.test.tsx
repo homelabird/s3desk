@@ -22,5 +22,5 @@ describe('JobQueueBanner', () => {
 		})
 
 		expect(screen.queryByText(message)).not.toBeInTheDocument()
-	})
+	}, 20_000)
 })

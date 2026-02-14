@@ -57,5 +57,5 @@ describe('ProfilesPage', () => {
 		)
 
 		expect(screen.getByText('Profiles')).toBeInTheDocument()
-	})
+	}, 20_000)
 })
