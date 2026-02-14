@@ -1,3 +1,32 @@
+diff --git a/node_modules/antd/es/index.js b/node_modules/antd/es/index.js
+index e554169..4e717bd 100644
+--- a/node_modules/antd/es/index.js
++++ b/node_modules/antd/es/index.js
+@@ -15,7 +15,6 @@ export { default as Button } from './button';
+ export { default as Calendar } from './calendar';
+ export { default as Card } from './card';
+ export { default as Carousel } from './carousel';
+-export { default as Cascader } from './cascader';
+ export { default as Checkbox } from './checkbox';
+ export { default as Col } from './col';
+ export { default as Collapse } from './collapse';
+@@ -61,7 +60,6 @@ export { default as Splitter } from './splitter';
+ export { default as Statistic } from './statistic';
+ export { default as Steps } from './steps';
+ export { default as Switch } from './switch';
+-export { default as Table } from './table';
+ export { default as Tabs } from './tabs';
+ export { default as Tag } from './tag';
+ export { default as theme } from './theme';
+@@ -70,8 +68,6 @@ export { default as Timeline } from './timeline';
+ export { default as Tooltip } from './tooltip';
+ export { default as Tour } from './tour';
+ export { default as Transfer } from './transfer';
+-export { default as Tree } from './tree';
+-export { default as TreeSelect } from './tree-select';
+ export { default as Typography } from './typography';
+ export { default as Upload } from './upload';
+ export { default as version } from './version';
 diff --git a/node_modules/antd/es/table/hooks/useFilter/FilterDropdown.js b/node_modules/antd/es/table/hooks/useFilter/FilterDropdown.js
 index 9cad6f8..00f17e0 100644
 --- a/node_modules/antd/es/table/hooks/useFilter/FilterDropdown.js
@@ -55,6 +84,80 @@ index 9cad6f8..00f17e0 100644
        const items = renderFilterItems({
          filters: column.filters || [],
          filterSearch,
+diff --git a/node_modules/antd/lib/index.js b/node_modules/antd/lib/index.js
+index 5bd346d..81042be 100644
+--- a/node_modules/antd/lib/index.js
++++ b/node_modules/antd/lib/index.js
+@@ -83,12 +83,6 @@ Object.defineProperty(exports, "Carousel", {
+     return _carousel.default;
+   }
+ });
+-Object.defineProperty(exports, "Cascader", {
+-  enumerable: true,
+-  get: function () {
+-    return _cascader.default;
+-  }
+-});
+ Object.defineProperty(exports, "Checkbox", {
+   enumerable: true,
+   get: function () {
+@@ -347,12 +341,6 @@ Object.defineProperty(exports, "Switch", {
+     return _switch.default;
+   }
+ });
+-Object.defineProperty(exports, "Table", {
+-  enumerable: true,
+-  get: function () {
+-    return _table.default;
+-  }
+-});
+ Object.defineProperty(exports, "Tabs", {
+   enumerable: true,
+   get: function () {
+@@ -395,18 +383,6 @@ Object.defineProperty(exports, "Transfer", {
+     return _transfer.default;
+   }
+ });
+-Object.defineProperty(exports, "Tree", {
+-  enumerable: true,
+-  get: function () {
+-    return _tree.default;
+-  }
+-});
+-Object.defineProperty(exports, "TreeSelect", {
+-  enumerable: true,
+-  get: function () {
+-    return _treeSelect.default;
+-  }
+-});
+ Object.defineProperty(exports, "Typography", {
+   enumerable: true,
+   get: function () {
+@@ -465,7 +441,6 @@ var _button = _interopRequireDefault(require("./button"));
+ var _calendar = _interopRequireDefault(require("./calendar"));
+ var _card = _interopRequireDefault(require("./card"));
+ var _carousel = _interopRequireDefault(require("./carousel"));
+-var _cascader = _interopRequireDefault(require("./cascader"));
+ var _checkbox = _interopRequireDefault(require("./checkbox"));
+ var _col = _interopRequireDefault(require("./col"));
+ var _collapse = _interopRequireDefault(require("./collapse"));
+@@ -511,7 +486,6 @@ var _splitter = _interopRequireDefault(require("./splitter"));
+ var _statistic = _interopRequireDefault(require("./statistic"));
+ var _steps = _interopRequireDefault(require("./steps"));
+ var _switch = _interopRequireDefault(require("./switch"));
+-var _table = _interopRequireDefault(require("./table"));
+ var _tabs = _interopRequireDefault(require("./tabs"));
+ var _tag = _interopRequireDefault(require("./tag"));
+ var _theme = _interopRequireDefault(require("./theme"));
+@@ -520,8 +494,6 @@ var _timeline = _interopRequireDefault(require("./timeline"));
+ var _tooltip = _interopRequireDefault(require("./tooltip"));
+ var _tour = _interopRequireDefault(require("./tour"));
+ var _transfer = _interopRequireDefault(require("./transfer"));
+-var _tree = _interopRequireDefault(require("./tree"));
+-var _treeSelect = _interopRequireDefault(require("./tree-select"));
+ var _typography = _interopRequireDefault(require("./typography"));
+ var _upload = _interopRequireDefault(require("./upload"));
+ var _version = _interopRequireDefault(require("./version"));
 diff --git a/node_modules/antd/lib/table/hooks/useFilter/FilterDropdown.js b/node_modules/antd/lib/table/hooks/useFilter/FilterDropdown.js
 index 8c8b7de..ca177bb 100644
 --- a/node_modules/antd/lib/table/hooks/useFilter/FilterDropdown.js

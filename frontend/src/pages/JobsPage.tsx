@@ -14,7 +14,6 @@ import {
 	Select,
 	Space,
 	Spin,
-	Table,
 	Tag,
 	Tooltip,
 	Typography,
@@ -70,6 +69,7 @@ import {
 } from './jobs/jobUtils'
 import { useJobsColumnsVisibility, type ColumnKey } from './jobs/useJobsColumnsVisibility'
 import { useJobsFilters } from './jobs/useJobsFilters'
+import { JobsVirtualTable, type SortState } from './jobs/JobsVirtualTable'
 
 type Props = {
 	apiToken: string
@@ -393,38 +393,15 @@ export function JobsPage(props: Props) {
 		}))
 	}, [uploadDetails, uploadEtagsQuery.data])
 
-	const uploadTableColumns = useMemo(() => {
-		const status = jobDetailsQuery.data?.status
-		const etags = uploadEtagsQuery.data?.etags ?? {}
-		const isLoading = uploadEtagsQuery.isFetching
-		return [
-			{
-				title: 'Path',
-				dataIndex: 'path',
-				key: 'path',
-				render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
-			},
-			{
-				title: 'Size',
-				dataIndex: 'size',
-				key: 'size',
-				align: 'right' as const,
-				render: (value?: number) =>
-					value != null ? formatBytes(value) : <Typography.Text type="secondary">-</Typography.Text>,
-			},
-			{
-				title: 'Hash',
-				dataIndex: 'etag',
-				key: 'etag',
-				render: (_: string | null, record: { key: string }) => {
-					if (status !== 'succeeded') return <Typography.Text type="secondary">Pending</Typography.Text>
-						if (isLoading) return <Typography.Text type="secondary">Loading…</Typography.Text>
-						const etag = etags[record.key]
-						return etag ? <Typography.Text code>{etag}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>
-					},
-				},
-		]
-	}, [jobDetailsQuery.data?.status, uploadEtagsQuery.data, uploadEtagsQuery.isFetching])
+	const uploadTablePageSize = 20
+	const [uploadTablePage, setUploadTablePage] = useState(1)
+	useEffect(() => {
+		setUploadTablePage(1)
+	}, [uploadItemsKey])
+	const uploadTableTotalPages = Math.max(1, Math.ceil(uploadTableData.length / uploadTablePageSize))
+	const uploadTablePageSafe = Math.min(uploadTablePage, uploadTableTotalPages)
+	const uploadTablePageStart = (uploadTablePageSafe - 1) * uploadTablePageSize
+	const uploadTablePageItems = uploadTableData.slice(uploadTablePageStart, uploadTablePageStart + uploadTablePageSize)
 
 	const uploadRootLabel = useMemo(() => {
 		if (!uploadDetails) return null
@@ -978,7 +955,6 @@ export function JobsPage(props: Props) {
 		]
 	}, [typeFilterNormalized])
 	const isLoading = jobsQuery.isFetching && !jobsQuery.isFetchingNextPage
-	const showJobsEmpty = !isLoading && jobs.length === 0
 	useEffect(() => {
 		updateTableScroll()
 	}, [updateTableScroll, bucketsQuery.isError, eventsConnected, eventsRetryCount, jobs.length, jobsQuery.isError])
@@ -1259,6 +1235,24 @@ export function JobsPage(props: Props) {
 		retryingJobId,
 		transfers,
 	])
+
+	const [sortState, setSortState] = useState<SortState>(null)
+	useEffect(() => {
+		if (!sortState) return
+		const column = columns.find((c) => c.key === sortState.key)
+		if (!column || !column.sorter) setSortState(null)
+	}, [columns, sortState])
+
+	const sortedJobs = useMemo(() => {
+		if (!sortState) return jobs
+		const column = columns.find((c) => c.key === sortState.key)
+		const sorter = column?.sorter
+		if (!sorter) return jobs
+		const next = [...jobs].sort(sorter)
+		if (sortState.direction === 'desc') next.reverse()
+		return next
+	}, [columns, jobs, sortState])
+
 	const activeLogEntries = useMemo(
 		() => (activeLogJobId ? (logByJobId[activeLogJobId] ?? []) : []),
 		[activeLogJobId, logByJobId],
@@ -1457,34 +1451,36 @@ export function JobsPage(props: Props) {
 
 			<div ref={tableContainerRef}>
 				<Profiler id="JobsTable" onRender={logReactRender}>
-					<Table
-						rowKey="id"
-						loading={isLoading}
-						dataSource={jobs}
-						pagination={false}
-						tableLayout="fixed"
-						scroll={{ x: true, y: tableScrollY }}
-						virtual
-						locale={{
-								emptyText: showJobsEmpty ? (
-									<Empty description="No jobs yet">
-										<Space wrap>
-											<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)} disabled={isOffline || !uploadSupported}>
-												Upload folder
-											</Button>
-										<Button
-											danger
-											icon={<DeleteOutlined />}
-											onClick={openDeleteJobModal}
-											disabled={isOffline}
-										>
-											New delete job
-										</Button>
-									</Space>
-								</Empty>
-							) : null,
-						}}
+					<JobsVirtualTable
+						rows={sortedJobs}
 						columns={columns}
+						height={tableScrollY}
+						loading={isLoading}
+						empty={
+							<Empty description="No jobs yet">
+								<Space wrap>
+									<Button
+										type="primary"
+										icon={<PlusOutlined />}
+										onClick={() => setCreateOpen(true)}
+										disabled={isOffline || !uploadSupported}
+									>
+										Upload folder
+									</Button>
+									<Button danger icon={<DeleteOutlined />} onClick={openDeleteJobModal} disabled={isOffline}>
+										New delete job
+									</Button>
+								</Space>
+							</Empty>
+						}
+						sort={sortState}
+						onSortChange={setSortState}
+						ariaLabel="Jobs"
+						theme={{
+							borderColor: token.colorBorderSecondary,
+							bg: token.colorBgContainer,
+							hoverBg: token.colorFillAlter,
+						}}
 					/>
 				</Profiler>
 			</div>
@@ -1750,12 +1746,121 @@ export function JobsPage(props: Props) {
 																			{uploadDetails.totalFiles ?? uploadDetails.items.length} files.
 																		</Typography.Text>
 																	) : null}
-																	<Table
-																		size="small"
-																		columns={uploadTableColumns}
-																		dataSource={uploadTableData}
-																		pagination={uploadTableData.length > 20 ? { pageSize: 20, size: 'small' } : false}
-																	/>
+																	<div
+																		style={{
+																			border: `1px solid ${token.colorBorderSecondary}`,
+																			borderRadius: token.borderRadiusLG,
+																			overflow: 'hidden',
+																		}}
+																	>
+																		<table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }}>
+																			<thead>
+																				<tr>
+																					<th
+																						style={{
+																							textAlign: 'left',
+																							padding: '8px 12px',
+																							borderBottom: `1px solid ${token.colorBorderSecondary}`,
+																							background: token.colorBgContainer,
+																							fontWeight: 600,
+																						}}
+																					>
+																						Path
+																					</th>
+																					<th
+																						style={{
+																							textAlign: 'right',
+																							padding: '8px 12px',
+																							borderBottom: `1px solid ${token.colorBorderSecondary}`,
+																							background: token.colorBgContainer,
+																							fontWeight: 600,
+																							width: 120,
+																						}}
+																					>
+																						Size
+																					</th>
+																					<th
+																						style={{
+																							textAlign: 'left',
+																							padding: '8px 12px',
+																							borderBottom: `1px solid ${token.colorBorderSecondary}`,
+																							background: token.colorBgContainer,
+																							fontWeight: 600,
+																							width: 220,
+																						}}
+																					>
+																						Hash
+																					</th>
+																				</tr>
+																			</thead>
+																			<tbody>
+																				{uploadTablePageItems.map((item) => (
+																					<tr key={item.key}>
+																						<td
+																							style={{
+																								padding: '8px 12px',
+																								borderBottom: `1px solid ${token.colorBorderSecondary}`,
+																								verticalAlign: 'middle',
+																							}}
+																						>
+																							<Typography.Text code>{item.path}</Typography.Text>
+																						</td>
+																						<td
+																							style={{
+																								padding: '8px 12px',
+																								borderBottom: `1px solid ${token.colorBorderSecondary}`,
+																								verticalAlign: 'middle',
+																								textAlign: 'right',
+																								whiteSpace: 'nowrap',
+																							}}
+																						>
+																							{item.size != null ? (
+																								formatBytes(item.size)
+																							) : (
+																								<Typography.Text type="secondary">-</Typography.Text>
+																							)}
+																						</td>
+																						<td
+																							style={{
+																								padding: '8px 12px',
+																								borderBottom: `1px solid ${token.colorBorderSecondary}`,
+																								verticalAlign: 'middle',
+																							}}
+																						>
+																							{jobDetailsQuery.data?.status !== 'succeeded' ? (
+																								<Typography.Text type="secondary">Pending</Typography.Text>
+																							) : uploadEtagsQuery.isFetching ? (
+																								<Typography.Text type="secondary">Loading…</Typography.Text>
+																							) : item.etag ? (
+																								<Typography.Text code>{item.etag}</Typography.Text>
+																							) : (
+																								<Typography.Text type="secondary">-</Typography.Text>
+																							)}
+																						</td>
+																					</tr>
+																				))}
+																			</tbody>
+																		</table>
+																	</div>
+																	{uploadTableData.length > uploadTablePageSize ? (
+																		<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+																			<Space size={8}>
+																				<Button size="small" disabled={uploadTablePageSafe <= 1} onClick={() => setUploadTablePage((p) => Math.max(1, p - 1))}>
+																					Prev
+																				</Button>
+																				<Button
+																					size="small"
+																					disabled={uploadTablePageSafe >= uploadTableTotalPages}
+																					onClick={() => setUploadTablePage((p) => Math.min(uploadTableTotalPages, p + 1))}
+																				>
+																					Next
+																				</Button>
+																			</Space>
+																			<Typography.Text type="secondary">
+																				Page {uploadTablePageSafe} / {uploadTableTotalPages}
+																			</Typography.Text>
+																		</div>
+																	) : null}
 																	{jobDetailsQuery.data?.status !== 'succeeded' ? (
 																		<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
 																			Hashes appear after the job completes.

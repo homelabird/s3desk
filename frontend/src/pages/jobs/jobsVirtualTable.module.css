@@ -1,0 +1,76 @@
+.frame {
+	border: 1px solid var(--jvt-border);
+	border-radius: 10px;
+	background: var(--jvt-bg);
+	overflow: hidden;
+}
+
+.scroll {
+	overflow: auto;
+}
+
+.table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	table-layout: fixed;
+}
+
+.headerCell {
+	position: sticky;
+	top: 0;
+	z-index: 3;
+	background: var(--jvt-bg);
+	border-bottom: 1px solid var(--jvt-border);
+	text-align: left;
+	padding: 8px 12px;
+	font-weight: 600;
+}
+
+.cell {
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--jvt-border);
+	vertical-align: middle;
+}
+
+.table tbody tr:hover td {
+	background: var(--jvt-hover);
+}
+
+.sortButton {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	background: none;
+	border: 0;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	text-align: inherit;
+}
+
+.sortIndicator {
+	font-size: 12px;
+	opacity: 0.8;
+}
+
+.stickyRightHeader {
+	right: 0;
+	z-index: 4;
+	box-shadow: -1px 0 0 var(--jvt-border);
+}
+
+.stickyRightCell {
+	position: sticky;
+	right: 0;
+	z-index: 2;
+	background: var(--jvt-bg);
+	box-shadow: -1px 0 0 var(--jvt-border);
+}
+
+.spacerCell {
+	padding: 0;
+	border: 0;
+	height: 0;
+}
