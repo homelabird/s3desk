@@ -1,7 +1,8 @@
-import { Alert, Tabs, Typography } from 'antd'
+import { Alert, Typography } from 'antd'
 
 import type { ObjectsToolbarProps } from './ObjectsToolbar'
 import { ObjectsToolbar } from './ObjectsToolbar'
+import { AppTabs } from '../../components/AppTabs'
 import { SetupCallout } from '../../components/SetupCallout'
 
 type LocationTab = {
@@ -35,6 +36,7 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 				</Typography.Text>
 			),
 			closable: props.tabs.length > 1,
+			ariaLabel: label,
 		}
 	})
 
@@ -48,7 +50,7 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 			) : null}
 
 			{props.isAdvanced && props.tabs.length > 1 ? (
-				<Tabs
+				<AppTabs
 					type="editable-card"
 					size="small"
 					activeKey={activeKey}

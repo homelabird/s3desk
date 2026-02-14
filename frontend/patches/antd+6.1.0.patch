@@ -1,13 +1,13 @@
 diff --git a/node_modules/antd/es/index.js b/node_modules/antd/es/index.js
-index e554169..845d565 100644
+index e554169..f42f03c 100644
 --- a/node_modules/antd/es/index.js
 +++ b/node_modules/antd/es/index.js
-@@ -12,16 +12,13 @@ export { default as BackTop } from './back-top';
+@@ -12,16 +12,12 @@ export { default as BackTop } from './back-top';
  export { default as Badge } from './badge';
  export { default as Breadcrumb } from './breadcrumb';
  export { default as Button } from './button';
 -export { default as Calendar } from './calendar';
- export { default as Card } from './card';
+-export { default as Card } from './card';
  export { default as Carousel } from './carousel';
 -export { default as Cascader } from './cascader';
  export { default as Checkbox } from './checkbox';
@@ -19,12 +19,12 @@ index e554169..845d565 100644
  export { default as Descriptions } from './descriptions';
  export { default as Divider } from './divider';
  export { default as Drawer } from './drawer';
-@@ -61,17 +58,13 @@ export { default as Splitter } from './splitter';
+@@ -61,17 +57,12 @@ export { default as Splitter } from './splitter';
  export { default as Statistic } from './statistic';
  export { default as Steps } from './steps';
  export { default as Switch } from './switch';
 -export { default as Table } from './table';
- export { default as Tabs } from './tabs';
+-export { default as Tabs } from './tabs';
  export { default as Tag } from './tag';
  export { default as theme } from './theme';
 -export { default as TimePicker } from './time-picker';
@@ -95,10 +95,10 @@ index 9cad6f8..00f17e0 100644
          filters: column.filters || [],
          filterSearch,
 diff --git a/node_modules/antd/lib/index.js b/node_modules/antd/lib/index.js
-index 5bd346d..93b3a0d 100644
+index 5bd346d..7c2882e 100644
 --- a/node_modules/antd/lib/index.js
 +++ b/node_modules/antd/lib/index.js
-@@ -65,12 +65,6 @@ Object.defineProperty(exports, "Button", {
+@@ -65,30 +65,12 @@ Object.defineProperty(exports, "Button", {
      return _button.default;
    }
  });
@@ -108,10 +108,15 @@ index 5bd346d..93b3a0d 100644
 -    return _calendar.default;
 -  }
 -});
- Object.defineProperty(exports, "Card", {
+-Object.defineProperty(exports, "Card", {
+-  enumerable: true,
+-  get: function () {
+-    return _card.default;
+-  }
+-});
+ Object.defineProperty(exports, "Carousel", {
    enumerable: true,
    get: function () {
-@@ -83,12 +77,6 @@ Object.defineProperty(exports, "Carousel", {
      return _carousel.default;
    }
  });
@@ -124,7 +129,7 @@ index 5bd346d..93b3a0d 100644
  Object.defineProperty(exports, "Checkbox", {
    enumerable: true,
    get: function () {
-@@ -119,12 +107,6 @@ Object.defineProperty(exports, "ConfigProvider", {
+@@ -119,12 +101,6 @@ Object.defineProperty(exports, "ConfigProvider", {
      return _configProvider.default;
    }
  });
@@ -137,7 +142,7 @@ index 5bd346d..93b3a0d 100644
  Object.defineProperty(exports, "Descriptions", {
    enumerable: true,
    get: function () {
-@@ -347,12 +329,6 @@ Object.defineProperty(exports, "Switch", {
+@@ -347,30 +323,12 @@ Object.defineProperty(exports, "Switch", {
      return _switch.default;
    }
  });
@@ -147,10 +152,15 @@ index 5bd346d..93b3a0d 100644
 -    return _table.default;
 -  }
 -});
- Object.defineProperty(exports, "Tabs", {
+-Object.defineProperty(exports, "Tabs", {
+-  enumerable: true,
+-  get: function () {
+-    return _tabs.default;
+-  }
+-});
+ Object.defineProperty(exports, "Tag", {
    enumerable: true,
    get: function () {
-@@ -365,12 +341,6 @@ Object.defineProperty(exports, "Tag", {
      return _tag.default;
    }
  });
@@ -163,7 +173,7 @@ index 5bd346d..93b3a0d 100644
  Object.defineProperty(exports, "Timeline", {
    enumerable: true,
    get: function () {
-@@ -395,18 +365,6 @@ Object.defineProperty(exports, "Transfer", {
+@@ -395,18 +353,6 @@ Object.defineProperty(exports, "Transfer", {
      return _transfer.default;
    }
  });
@@ -182,12 +192,12 @@ index 5bd346d..93b3a0d 100644
  Object.defineProperty(exports, "Typography", {
    enumerable: true,
    get: function () {
-@@ -462,16 +420,13 @@ var _backTop = _interopRequireDefault(require("./back-top"));
+@@ -462,16 +408,12 @@ var _backTop = _interopRequireDefault(require("./back-top"));
  var _badge = _interopRequireDefault(require("./badge"));
  var _breadcrumb = _interopRequireDefault(require("./breadcrumb"));
  var _button = _interopRequireDefault(require("./button"));
 -var _calendar = _interopRequireDefault(require("./calendar"));
- var _card = _interopRequireDefault(require("./card"));
+-var _card = _interopRequireDefault(require("./card"));
  var _carousel = _interopRequireDefault(require("./carousel"));
 -var _cascader = _interopRequireDefault(require("./cascader"));
  var _checkbox = _interopRequireDefault(require("./checkbox"));
@@ -199,12 +209,12 @@ index 5bd346d..93b3a0d 100644
  var _descriptions = _interopRequireDefault(require("./descriptions"));
  var _divider = _interopRequireDefault(require("./divider"));
  var _drawer = _interopRequireDefault(require("./drawer"));
-@@ -511,17 +466,13 @@ var _splitter = _interopRequireDefault(require("./splitter"));
+@@ -511,17 +453,12 @@ var _splitter = _interopRequireDefault(require("./splitter"));
  var _statistic = _interopRequireDefault(require("./statistic"));
  var _steps = _interopRequireDefault(require("./steps"));
  var _switch = _interopRequireDefault(require("./switch"));
 -var _table = _interopRequireDefault(require("./table"));
- var _tabs = _interopRequireDefault(require("./tabs"));
+-var _tabs = _interopRequireDefault(require("./tabs"));
  var _tag = _interopRequireDefault(require("./tag"));
  var _theme = _interopRequireDefault(require("./theme"));
 -var _timePicker = _interopRequireDefault(require("./time-picker"));

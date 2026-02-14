@@ -867,10 +867,12 @@ frontend_bundle_analyze:
       for needle in \
         "@rc-component/tree" \
         "@rc-component/table" \
+        "@rc-component/tabs" \
         "@rc-component/picker/es/index.js" \
         "antd/es/date-picker/index.js" \
         "antd/es/time-picker/index.js" \
         "antd/es/calendar/index.js" \
+        "antd/es/tabs" \
       ; do
         if rg -Fq "$needle" frontend/dist/stats.json; then
           echo "[bundle-guard] unexpected module in bundle output: $needle" >&2

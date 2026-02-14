@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Input, Modal, Radio, Select, Space, Switch, Tabs, Tooltip, Typography, message } from 'antd'
+import { Alert, Button, Input, Modal, Radio, Select, Space, Switch, Tooltip, Typography, message } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useMemo, useRef, useState } from 'react'
 
 import { APIClient, APIError } from '../../api/client'
 import type { BucketPolicyPutRequest, BucketPolicyResponse, BucketPolicyValidateResponse, Profile } from '../../api/types'
+import { AppTabs } from '../../components/AppTabs'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { getPolicyPresets, getPolicyTemplate, type PolicyKind } from './policyPresets'
@@ -761,7 +762,7 @@ function BucketPolicyEditor(props: {
 			width={920}
 			destroyOnHidden
 		>
-			<Tabs
+			<AppTabs
 				activeKey={activeTab}
 				onChange={(k) => setActiveTab(k as 'validate' | 'preview' | 'diff')}
 				items={[

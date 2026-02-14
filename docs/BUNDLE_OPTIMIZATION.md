@@ -15,7 +15,7 @@ Artifacts:
 ## Current Baseline (bundle-report.md)
 
 Key numbers to watch (local build, 2026-02-14):
-- `vendor-ui` (antd + rc-*): about `~228 kB gzip`
+- `vendor-ui` (antd + rc-*): about `~218 kB gzip`
 - `vendor-tanstack-virtual` (`@tanstack/react-virtual`): about `~4.8 kB gzip` (excluded from `/profiles` HTML preload)
 - `initial JS (index.html)`: about `~85 kB gzip` (no `vendor-ui` / react-query on the initial `/profiles` entry)
 
@@ -32,6 +32,7 @@ Notes:
 | P1 | `@rc-component/table` | Formerly: antd `Table` in Jobs/Buckets/Profiles/Policy/GlobalSearch | **Done:** Replace antd `Table` usages with native tables + lightweight virtualization where needed | Removes rc-table from `vendor-ui` |
 | P1 | `@rc-component/tree` | Formerly: antd `DirectoryTree`, plus antd Table filter tree-mode | **Done:** Replace tree UI with a minimal in-house component; patch antd FilterDropdown tree-mode | Removes rc-tree from `vendor-ui` |
 | P1 | `@rc-component/picker` (`DatePicker/TimePicker/Calendar`) | antd barrel export pulling picker stack | **Done:** Avoid picker widgets and patch antd exports so picker modules don’t enter the bundle | Keeps picker stack out of `vendor-ui` |
+| P1 | `@rc-component/tabs` | antd `Tabs` (plus antd `Card` tabList support pulling tabs) | **Done:** Replace antd `Tabs` with internal `AppTabs`; patch antd exports so `Tabs`/`Card` don’t enter `vendor-ui` via the barrel | Removes rc-tabs from `vendor-ui` |
 | P2 | `@rc-component/form` (useForm, Field) | `frontend/src/pages/profiles/ProfileModal.tsx`, many modals/hooks | For simple dialogs, use native `<form>` + controlled inputs; keep antd Form only where it adds real value | Long-term `vendor-ui` shrink; less form magic to debug |
 | P2 | `@ant-design/icons` | Widely imported across pages/components | Replace hot-path icons with inline SVGs (local) or a tiny icon set | Smaller `vendor-ui`, fewer icon-related modules |
 

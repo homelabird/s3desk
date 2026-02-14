@@ -1,0 +1,142 @@
+.root {
+  width: 100%;
+}
+
+.tabList {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tabListLine {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.tabListCard {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 4px 4px 0;
+}
+
+.tabWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.tabButton {
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 8px 8px 0 0;
+}
+
+.tabButtonLine {
+  border: none;
+  background: transparent;
+  padding: 10px 12px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.tabButtonLineActive {
+  border-bottom-color: #1677ff;
+  color: #1677ff;
+  font-weight: 700;
+}
+
+.tabButtonCard {
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  padding: 6px 10px;
+  color: rgba(0, 0, 0, 0.88);
+}
+
+.tabButtonCardActive {
+  border-color: #d9d9d9;
+  background: #fff;
+  font-weight: 700;
+}
+
+.tabButtonDisabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tabButton:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.closeButton {
+  border: none;
+  background: transparent;
+  padding: 0 6px;
+  color: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.closeButton:hover {
+  color: rgba(0, 0, 0, 0.88);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.addButton {
+  margin-left: auto;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: rgba(0, 0, 0, 0.88);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.addButton:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.addButton:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.panel {
+  padding-top: 12px;
+}
+
+.sizeSmall .tabButtonLine {
+  padding: 6px 10px;
+}
+
+.sizeSmall .tabButtonCard {
+  padding: 5px 8px;
+}
+
+.sizeSmall .addButton {
+  padding: 5px 8px;
+}
+
+.sizeLarge .tabButtonLine {
+  padding: 12px 14px;
+}
+
+.sizeLarge .tabButtonCard {
+  padding: 8px 12px;
+}
+
+.sizeLarge .addButton {
+  padding: 8px 12px;
+}
+

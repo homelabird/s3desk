@@ -1,6 +1,7 @@
-import { Badge, Button, Drawer, Empty, Space, Tabs, Tag, Typography } from 'antd'
+import { Badge, Button, Drawer, Empty, Space, Tag, Typography } from 'antd'
 import { CloudUploadOutlined, DownloadOutlined } from '@ant-design/icons'
 
+import { AppTabs } from '../AppTabs'
 import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
 import { TransferDownloadRow } from './TransferDownloadRow'
 import { TransferUploadRow } from './TransferUploadRow'
@@ -64,7 +65,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 				</Space>
 			}
 		>
-			<Tabs
+			<AppTabs
 				size="small"
 				activeKey={props.tab}
 				onChange={(key) => props.onTabChange(key as TransfersTab)}

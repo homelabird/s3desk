@@ -12,7 +12,6 @@ import {
 	Spin,
 	Switch,
 	Tag,
-	Tabs,
 	Collapse,
 	Tooltip,
 	Typography,
@@ -31,6 +30,7 @@ import {
 	RETRY_DELAY_STORAGE_KEY,
 } from '../api/client'
 import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
+import { AppTabs } from '../components/AppTabs'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatTime } from '../lib/format'
@@ -266,7 +266,7 @@ export function SettingsPage(props: Props) {
 
 	return (
 		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
-			<Tabs
+			<AppTabs
 				defaultActiveKey="access"
 				items={[
 					{
