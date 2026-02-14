@@ -2,7 +2,6 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { Alert, Button, Dropdown, Grid, Menu, Typography, message } from 'antd'
 import { SnippetsOutlined } from '@ant-design/icons'
 import {
-	lazy,
 	Suspense,
 	useCallback,
 	useDeferredValue,
@@ -19,7 +18,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { APIClient, APIError } from '../api/client'
 import type { InputRef } from 'antd'
-import type { Bucket, JobCreateRequest, ListObjectsResponse, ObjectItem, Profile } from '../api/types'
+import type { Bucket, JobCreateRequest, ObjectItem, Profile } from '../api/types'
 import { useTransfers } from '../components/useTransfers'
 import { getDevicePickerSupport } from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
@@ -97,97 +96,41 @@ import { useObjectsDownloadPrefix } from './objects/useObjectsDownloadPrefix'
 import { useObjectsUploadDrop } from './objects/useObjectsUploadDrop'
 import { useObjectsDeleteConfirm } from './objects/useObjectsDeleteConfirm'
 import { useObjectsPrefixSummary } from './objects/useObjectsPrefixSummary'
-
-const ObjectsCommandPaletteModal = lazy(async () => {
-	const m = await import('./objects/ObjectsCommandPaletteModal')
-	return { default: m.ObjectsCommandPaletteModal }
-})
-const ObjectsCopyMoveModal = lazy(async () => {
-	const m = await import('./objects/ObjectsCopyMoveModal')
-	return { default: m.ObjectsCopyMoveModal }
-})
-const ObjectsCopyPrefixModal = lazy(async () => {
-	const m = await import('./objects/ObjectsCopyPrefixModal')
-	return { default: m.ObjectsCopyPrefixModal }
-})
-const ObjectsDeletePrefixConfirmModal = lazy(async () => {
-	const m = await import('./objects/ObjectsDeletePrefixConfirmModal')
-	return { default: m.ObjectsDeletePrefixConfirmModal }
-})
-const ObjectsDownloadPrefixModal = lazy(async () => {
-	const m = await import('./objects/ObjectsDownloadPrefixModal')
-	return { default: m.ObjectsDownloadPrefixModal }
-})
-const ObjectsUploadFolderModal = lazy(async () => {
-	const m = await import('./objects/ObjectsUploadFolderModal')
-	return { default: m.ObjectsUploadFolderModal }
-})
-const ObjectsFiltersDrawer = lazy(async () => {
-	const m = await import('./objects/ObjectsFiltersDrawer')
-	return { default: m.ObjectsFiltersDrawer }
-})
-const ObjectsGlobalSearchDrawer = lazy(async () => {
-	const m = await import('./objects/ObjectsGlobalSearchDrawer')
-	return { default: m.ObjectsGlobalSearchDrawer }
-})
-const ObjectsGoToPathModal = lazy(async () => {
-	const m = await import('./objects/ObjectsGoToPathModal')
-	return { default: m.ObjectsGoToPathModal }
-})
-const ObjectsNewFolderModal = lazy(async () => {
-	const m = await import('./objects/ObjectsNewFolderModal')
-	return { default: m.ObjectsNewFolderModal }
-})
-const ObjectsPresignModal = lazy(async () => {
-	const m = await import('./objects/ObjectsPresignModal')
-	return { default: m.ObjectsPresignModal }
-})
-const ObjectsRenameModal = lazy(async () => {
-	const m = await import('./objects/ObjectsRenameModal')
-	return { default: m.ObjectsRenameModal }
-})
-const ObjectsToolbarSection = lazy(async () => {
-	const m = await import('./objects/ObjectsToolbarSection')
-	return { default: m.ObjectsToolbarSection }
-})
-const ObjectsTreeSection = lazy(async () => {
-	const m = await import('./objects/ObjectsTreeSection')
-	return { default: m.ObjectsTreeSection }
-})
-const ObjectsListControls = lazy(async () => {
-	const m = await import('./objects/ObjectsListControls')
-	return { default: m.ObjectsListControls }
-})
-const ObjectsListContent = lazy(async () => {
-	const m = await import('./objects/ObjectsListContent')
-	return { default: m.ObjectsListContent }
-})
-const ObjectsDetailsPanelSection = lazy(async () => {
-	const m = await import('./objects/ObjectsDetailsPanelSection')
-	return { default: m.ObjectsDetailsPanelSection }
-})
+import { useObjectsPrefetch } from './objects/useObjectsPrefetch'
+import {
+	AUTO_INDEX_COOLDOWN_MS,
+	COMPACT_ROW_HEIGHT_PX,
+	type Location,
+	type LocationTab,
+	OBJECTS_LIST_PAGE_SIZE,
+	type ObjectsUIMode,
+	WIDE_ROW_HEIGHT_PX,
+} from './objects/objectsPageConstants'
+import { isContextMenuDebugEnabled, isObjectsListDebugEnabled, logContextMenuDebug, logObjectsDebug } from './objects/objectsPageDebug'
+import {
+	ObjectsCommandPaletteModal,
+	ObjectsCopyMoveModal,
+	ObjectsCopyPrefixModal,
+	ObjectsDeletePrefixConfirmModal,
+	ObjectsDetailsPanelSection,
+	ObjectsDownloadPrefixModal,
+	ObjectsFiltersDrawer,
+	ObjectsGlobalSearchDrawer,
+	ObjectsGoToPathModal,
+	ObjectsListContent,
+	ObjectsListControls,
+	ObjectsNewFolderModal,
+	ObjectsPresignModal,
+	ObjectsRenameModal,
+	ObjectsToolbarSection,
+	ObjectsTreeSection,
+	ObjectsUploadFolderModal,
+} from './objects/objectsPageLazy'
 
 type Props = {
 	apiToken: string
 	profileId: string | null
 }
-
-type Location = { bucket: string; prefix: string }
-
-type LocationTab = {
-	id: string
-	bucket: string
-	prefix: string
-	history: Location[]
-	historyIndex: number
-}
-
-type ObjectsUIMode = 'simple' | 'advanced'
-
-const OBJECTS_LIST_PAGE_SIZE = 200
-const AUTO_INDEX_COOLDOWN_MS = 5 * 60 * 1000
-const COMPACT_ROW_HEIGHT_PX = 52
-const WIDE_ROW_HEIGHT_PX = 40
 
 export function ObjectsPage(props: Props) {
 	const queryClient = useQueryClient()
@@ -796,91 +739,17 @@ const objectsQuery = useInfiniteQuery({
 	}, [listScrollerEl])
 
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
-	const prefetchObjectsPage = useCallback(
-		async (bucketName: string) => {
-			if (!props.profileId || !bucketName) return
-			const savedPrefix = prefixByBucketRef.current[bucketName] ?? ''
-			const queryKey = ['objects', props.profileId, bucketName, savedPrefix, props.apiToken]
-			const existing = queryClient.getQueryState(queryKey)
-			if (existing?.status === 'success' || existing?.fetchStatus === 'fetching') return
-			try {
-				await queryClient.prefetchInfiniteQuery({
-					queryKey,
-					initialPageParam: undefined as string | undefined,
-					staleTime: 15_000,
-					queryFn: ({ pageParam }) =>
-						api.listObjects({
-							profileId: props.profileId!,
-							bucket: bucketName,
-							prefix: savedPrefix || undefined,
-							delimiter: '/',
-							maxKeys: OBJECTS_LIST_PAGE_SIZE,
-							continuationToken: pageParam,
-						}),
-					getNextPageParam: (lastPage: ListObjectsResponse) =>
-						lastPage.isTruncated ? lastPage.nextContinuationToken ?? undefined : undefined,
-				})
-			} catch {
-				// ignore prefetch failures
-			}
-		},
-		[api, props.apiToken, props.profileId, queryClient],
-	)
-	const handleBucketDropdownVisibleChange = useCallback(
-		(open: boolean) => {
-			if (!open) return
-			if (!props.profileId || bucketOptions.length === 0) return
-			const recent = new Set<string>()
-			if (bucket) recent.add(bucket)
-			for (const tab of tabs) {
-				if (tab.bucket) recent.add(tab.bucket)
-			}
-			const recentBuckets = Array.from(recent).filter((name) => name && name !== bucket).slice(0, 3)
-			const fallbackBuckets = bucketOptions
-				.map((option) => String(option.value))
-				.filter((name) => name && !recent.has(name))
-				.slice(0, Math.max(0, 3 - recentBuckets.length))
-			for (const name of [...recentBuckets, ...fallbackBuckets]) {
-				prefetchObjectsPage(name)
-			}
-		},
-		[bucket, bucketOptions, prefetchObjectsPage, props.profileId, tabs],
-	)
-	const prefetchQueueRef = useRef<string[]>([])
-	const prefetchInFlightRef = useRef(0)
-	const prefetchStartedRef = useRef(false)
-	const pumpPrefetchQueue = useCallback(() => {
-		const maxConcurrent = 2
-		if (prefetchInFlightRef.current >= maxConcurrent) return
-		const next = prefetchQueueRef.current.shift()
-		if (!next) return
-		prefetchInFlightRef.current += 1
-		void prefetchObjectsPage(next).finally(() => {
-			prefetchInFlightRef.current -= 1
-			pumpPrefetchQueue()
-		})
-	}, [prefetchObjectsPage])
-	useEffect(() => {
-		if (prefetchStartedRef.current) return
-		if (!props.profileId) return
-		const names = bucketOptions.map((option) => String(option.value)).filter(Boolean)
-		if (names.length === 0) return
-		prefetchStartedRef.current = true
-		const queue = names.filter((name) => name !== bucket).slice(0, 12)
-		if (queue.length === 0) return
-		prefetchQueueRef.current = queue
-		const schedule = (cb: () => void) => {
-			const idleCallback = (window as typeof window & {
-				requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
-			}).requestIdleCallback
-			if (idleCallback) {
-				idleCallback(cb, { timeout: 1500 })
-				return
-			}
-			window.setTimeout(cb, 300)
-		}
-		schedule(() => pumpPrefetchQueue())
-	}, [bucket, bucketOptions, props.profileId, pumpPrefetchQueue])
+	const { handleBucketDropdownVisibleChange } = useObjectsPrefetch({
+		api,
+		apiToken: props.apiToken,
+		profileId: props.profileId,
+		queryClient,
+		bucket,
+		tabs,
+		bucketOptions,
+		prefixByBucketRef,
+		pageSize: OBJECTS_LIST_PAGE_SIZE,
+	})
 	const extOptions = useMemo(() => {
 		const counts = new Map<string, number>()
 		for (const page of objectsQuery.data?.pages ?? []) {
@@ -1436,486 +1305,6 @@ const objectsQuery = useInfiniteQuery({
 		}
 		uploadFolderInputRef.current?.click()
 	}
-
-	/*
-	 * Transfers were refactored into a global provider (`frontend/src/components/Transfers.tsx`).
-	 * The old local queue implementation is kept temporarily for reference.
-	 */
-	/*
-	const downloadConcurrency = isWideDesktop ? 3 : 2
-	const uploadConcurrency = 1
-	
-	const updateDownloadTask = useCallback((taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
-	setDownloadTasks((prev) => prev.map((t) => (t.id === taskId ? updater(t) : t)))
-	}, [])
-	
-	const cancelDownloadTask = useCallback(
-	(taskId: string) => {
-	const abort = downloadAbortByTaskIdRef.current[taskId]
-	if (abort) abort()
-	updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-	},
-	[updateDownloadTask],
-	)
-	
-	const retryDownloadTask = useCallback(
-	(taskId: string) => {
-	updateDownloadTask(taskId, (t) => ({
-		...t,
-		status: 'queued',
-		startedAtMs: undefined,
-		finishedAtMs: undefined,
-		loadedBytes: 0,
-		speedBps: 0,
-		etaSeconds: 0,
-		error: undefined,
-	}))
-	},
-	[updateDownloadTask],
-	)
-	
-	const removeDownloadTask = useCallback(
-	(taskId: string) => {
-	const abort = downloadAbortByTaskIdRef.current[taskId]
-	if (abort) abort()
-	delete downloadAbortByTaskIdRef.current[taskId]
-	delete downloadEstimatorByTaskIdRef.current[taskId]
-	setDownloadTasks((prev) => prev.filter((t) => t.id !== taskId))
-	},
-	[],
-	)
-	
-	const clearCompletedDownloads = useCallback(() => {
-	setDownloadTasks((prev) => prev.filter((t) => t.status !== 'succeeded'))
-	}, [])
-	
-	const startDownloadTask = useCallback(
-	async (taskId: string) => {
-	const profileId = props.profileId
-	if (!profileId) return
-	
-	const current = downloadTasksRef.current.find((t) => t.id === taskId)
-	if (!current || current.status !== 'queued') return
-	
-	const estimator = new TransferEstimator({ totalBytes: current.totalBytes })
-	downloadEstimatorByTaskIdRef.current[taskId] = estimator
-	updateDownloadTask(taskId, (t) => ({
-		...t,
-		status: 'running',
-		startedAtMs: estimator.getStartedAtMs(),
-		finishedAtMs: undefined,
-		loadedBytes: 0,
-		speedBps: 0,
-		etaSeconds: 0,
-		error: undefined,
-	}))
-	
-	const handle =
-		current.kind === 'object'
-			? api.downloadObject(
-					{ profileId, bucket: current.bucket, key: current.key },
-					{
-						onProgress: (p) => {
-							const e = downloadEstimatorByTaskIdRef.current[taskId]
-							if (!e) return
-							const stats = e.update(p.loadedBytes, p.totalBytes)
-							updateDownloadTask(taskId, (t) => ({
-								...t,
-								loadedBytes: stats.loadedBytes,
-								totalBytes: stats.totalBytes ?? t.totalBytes,
-								speedBps: stats.speedBps,
-								etaSeconds: stats.etaSeconds,
-							}))
-						},
-					},
-				)
-			: api.downloadJobArtifact(
-					{ profileId, jobId: current.jobId },
-					{
-						onProgress: (p) => {
-							const e = downloadEstimatorByTaskIdRef.current[taskId]
-							if (!e) return
-							const stats = e.update(p.loadedBytes, p.totalBytes)
-							updateDownloadTask(taskId, (t) => ({
-								...t,
-								loadedBytes: stats.loadedBytes,
-								totalBytes: stats.totalBytes ?? t.totalBytes,
-								speedBps: stats.speedBps,
-								etaSeconds: stats.etaSeconds,
-							}))
-						},
-					},
-				)
-	
-	downloadAbortByTaskIdRef.current[taskId] = handle.abort
-	
-	try {
-		const resp = await handle.promise
-		const fallbackName =
-			current.kind === 'object'
-				? defaultFilenameFromKey(current.key)
-				: current.filenameHint?.trim() || `job-${current.jobId}.zip`
-		const filename = filenameFromContentDisposition(resp.contentDisposition) ?? (current.filenameHint?.trim() || fallbackName)
-		saveBlob(resp.blob, filename)
-		updateDownloadTask(taskId, (t) => ({
-			...t,
-			status: 'succeeded',
-			finishedAtMs: Date.now(),
-			loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
-			filenameHint: filename,
-		}))
-		message.success(`Downloaded ${filename}`)
-	} catch (err) {
-		if (err instanceof RequestAbortedError) {
-			updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-			return
-		}
-		const msg = formatErr(err)
-		updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-		message.error(msg)
-	} finally {
-		delete downloadAbortByTaskIdRef.current[taskId]
-		delete downloadEstimatorByTaskIdRef.current[taskId]
-	}
-	},
-	[api, props.profileId, updateDownloadTask],
-	)
-	
-	useEffect(() => {
-	if (!props.profileId) return
-	const running = downloadTasks.filter((t) => t.status === 'running').length
-	const capacity = downloadConcurrency - running
-	if (capacity <= 0) return
-	const toStart = downloadTasks.filter((t) => t.status === 'queued').slice(0, capacity)
-	for (const t of toStart) void startDownloadTask(t.id)
-	}, [downloadConcurrency, downloadTasks, props.profileId, startDownloadTask])
-	
-	const hasWaitingJobArtifactDownloads = downloadTasks.some((t) => t.kind === 'job_artifact' && t.status === 'waiting')
-	useEffect(() => {
-	if (!props.profileId) return
-	if (!hasWaitingJobArtifactDownloads) return
-	
-	let stopped = false
-	const tick = async () => {
-	const waiting = downloadTasksRef.current.filter(
-		(t): t is JobArtifactDownloadTask => t.kind === 'job_artifact' && t.status === 'waiting',
-	)
-	for (const t of waiting) {
-		if (stopped) return
-		try {
-			const job = await api.getJob(props.profileId!, t.jobId)
-			if (stopped) return
-	
-			if (job.status === 'succeeded') {
-				updateDownloadTask(t.id, (prev) => ({ ...prev, status: 'queued', error: undefined }))
-				continue
-			}
-			if (job.status === 'failed') {
-				updateDownloadTask(t.id, (prev) => ({
-					...prev,
-					status: 'failed',
-					finishedAtMs: Date.now(),
-					error: job.error ?? 'job failed',
-				}))
-				continue
-			}
-			if (job.status === 'canceled') {
-				updateDownloadTask(t.id, (prev) => ({
-					...prev,
-					status: 'canceled',
-					finishedAtMs: Date.now(),
-					error: job.error ?? prev.error,
-				}))
-			}
-		} catch (err) {
-			updateDownloadTask(t.id, (prev) => ({ ...prev, error: formatErr(err) }))
-		}
-	}
-	}
-	
-	void tick()
-	const id = window.setInterval(() => void tick(), 1500)
-	return () => {
-		stopped = true
-		window.clearInterval(id)
-	}
-	}, [api, hasWaitingJobArtifactDownloads, props.profileId, updateDownloadTask])
-	
-		const bucketName = bucket
-	const existing = downloadTasksRef.current.find(
-		(t) => t.kind === 'object' && t.bucket === bucketName && t.key === key && (t.status === 'queued' || t.status === 'running'),
-	)
-	if (existing) {
-		setTransfersTab('downloads')
-		setDownloadsOpen(true)
-		message.info('Download already queued')
-		return
-	}
-	
-	const totalBytes = typeof expectedBytes === 'number' && expectedBytes >= 0 ? expectedBytes : undefined
-	const taskId =
-		typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-			? crypto.randomUUID()
-			: `${Date.now()}_${Math.random().toString(16).slice(2)}`
-	const task: ObjectDownloadTask = {
-		id: taskId,
-		kind: 'object',
-		label: displayNameForKey(key, prefix),
-		status: 'queued',
-		createdAtMs: Date.now(),
-		loadedBytes: 0,
-		totalBytes,
-		speedBps: 0,
-		etaSeconds: 0,
-		bucket: bucketName,
-		key,
-		filenameHint: defaultFilenameFromKey(key),
-	}
-	
-	setDownloadTasks((prev) => [task, ...prev])
-	setTransfersTab('downloads')
-	setDownloadsOpen(true)
-	}
-	
-	const updateUploadTask = useCallback((taskId: string, updater: (task: UploadTask) => UploadTask) => {
-	setUploadTasks((prev) => prev.map((t) => (t.id === taskId ? updater(t) : t)))
-	}, [])
-	
-	const cancelUploadTask = useCallback(
-	(taskId: string) => {
-		const abort = uploadAbortByTaskIdRef.current[taskId]
-		if (abort) abort()
-		updateUploadTask(taskId, (t) => {
-			if (t.status === 'succeeded') return t
-			return { ...t, status: 'canceled', finishedAtMs: Date.now() }
-		})
-	},
-	[updateUploadTask],
-	)
-	
-	const retryUploadTask = useCallback(
-	(taskId: string) => {
-		updateUploadTask(taskId, (t) => ({
-			...t,
-			status: 'queued',
-			startedAtMs: undefined,
-			finishedAtMs: undefined,
-			loadedBytes: 0,
-			speedBps: 0,
-			etaSeconds: 0,
-			error: undefined,
-			jobId: undefined,
-		}))
-	},
-	[updateUploadTask],
-	)
-	
-	const removeUploadTask = useCallback((taskId: string) => {
-	const abort = uploadAbortByTaskIdRef.current[taskId]
-	if (abort) abort()
-	delete uploadAbortByTaskIdRef.current[taskId]
-	delete uploadEstimatorByTaskIdRef.current[taskId]
-	delete uploadItemsByTaskIdRef.current[taskId]
-	setUploadTasks((prev) => prev.filter((t) => t.id !== taskId))
-	}, [])
-	
-	const clearCompletedUploads = useCallback(() => {
-	setUploadTasks((prev) => {
-		for (const t of prev) {
-			if (t.status !== 'succeeded') continue
-			delete uploadAbortByTaskIdRef.current[t.id]
-			delete uploadEstimatorByTaskIdRef.current[t.id]
-			delete uploadItemsByTaskIdRef.current[t.id]
-		}
-		return prev.filter((t) => t.status !== 'succeeded')
-	})
-	}, [])
-	
-	const clearAllTransfers = useCallback(() => {
-	for (const abort of Object.values(downloadAbortByTaskIdRef.current)) abort()
-	for (const abort of Object.values(uploadAbortByTaskIdRef.current)) abort()
-	downloadAbortByTaskIdRef.current = {}
-	downloadEstimatorByTaskIdRef.current = {}
-	uploadAbortByTaskIdRef.current = {}
-	uploadEstimatorByTaskIdRef.current = {}
-	uploadItemsByTaskIdRef.current = {}
-	setDownloadTasks([])
-	setUploadTasks([])
-	}, [])
-	
-	const startUploadTask = useCallback(
-	async (taskId: string) => {
-		const profileId = props.profileId
-		if (!profileId) return
-	
-		const current = uploadTasksRef.current.find((t) => t.id === taskId)
-		if (!current || current.status !== 'queued') return
-	
-		const items = uploadItemsByTaskIdRef.current[taskId]
-		if (!items || items.length === 0) {
-			updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: 'missing files (remove and re-add)' }))
-			return
-		}
-	
-		const estimator = new TransferEstimator({ totalBytes: current.totalBytes })
-		uploadEstimatorByTaskIdRef.current[taskId] = estimator
-		updateUploadTask(taskId, (t) => ({
-			...t,
-			status: 'staging',
-			startedAtMs: estimator.getStartedAtMs(),
-			finishedAtMs: undefined,
-			loadedBytes: 0,
-			speedBps: 0,
-			etaSeconds: 0,
-			error: undefined,
-			jobId: undefined,
-		}))
-	
-		let committed = false
-		let uploadId = ''
-		try {
-			const session = await api.createUpload(profileId, { bucket: current.bucket, prefix: current.prefix })
-			uploadId = session.uploadId
-			if (session.maxBytes && current.totalBytes > session.maxBytes) {
-				throw new Error(`selected files exceed maxBytes (${current.totalBytes} > ${session.maxBytes})`)
-			}
-	
-			const handle = api.uploadFilesWithProgress(profileId, uploadId, items, {
-				onProgress: (p) => {
-					const e = uploadEstimatorByTaskIdRef.current[taskId]
-					if (!e) return
-					const stats = e.update(p.loadedBytes, p.totalBytes)
-					updateUploadTask(taskId, (t) => ({
-						...t,
-						loadedBytes: stats.loadedBytes,
-						totalBytes: stats.totalBytes ?? t.totalBytes,
-						speedBps: stats.speedBps,
-						etaSeconds: stats.etaSeconds,
-					}))
-				},
-			})
-			uploadAbortByTaskIdRef.current[taskId] = handle.abort
-			await handle.promise
-			delete uploadAbortByTaskIdRef.current[taskId]
-	
-			updateUploadTask(taskId, (t) => ({
-				...t,
-				status: 'commit',
-				loadedBytes: t.totalBytes,
-				speedBps: 0,
-				etaSeconds: 0,
-			}))
-	
-			const resp = await commitUploadWithRetry(profileId, uploadId)
-			committed = true
-			delete uploadItemsByTaskIdRef.current[taskId]
-			updateUploadTask(taskId, (t) => ({
-				...t,
-				status: 'succeeded',
-				finishedAtMs: Date.now(),
-				jobId: resp.jobId,
-			}))
-	
-				message.open({
-					type: 'success',
-					content: (
-						<Space>
-							<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-							<Button
-								size="small"
-								type="link"
-								onClick={() => {
-									navigate('/jobs')
-								}}
-							>
-									Open Jobs
-								</Button>
-							<Button size="small" type="link" onClick={() => setDownloadsOpen(true)}>
-								Open Transfers
-							</Button>
-						</Space>
-				),
-				duration: 6,
-			})
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-		} catch (err) {
-			if (err instanceof RequestAbortedError) {
-				updateUploadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-				message.info('Upload canceled')
-				return
-			}
-			const msg = formatErr(err)
-			updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-			message.error(msg)
-		} finally {
-			delete uploadAbortByTaskIdRef.current[taskId]
-			delete uploadEstimatorByTaskIdRef.current[taskId]
-			if (!committed && uploadId) {
-				await api.deleteUpload(profileId, uploadId).catch(() => {})
-			}
-		}
-	},
-	[api, navigate, props.profileId, queryClient, updateUploadTask],
-	)
-	
-	useEffect(() => {
-	if (!props.profileId) return
-	const running = uploadTasks.filter((t) => t.status === 'staging' || t.status === 'commit').length
-	const capacity = uploadConcurrency - running
-	if (capacity <= 0) return
-	const toStart = uploadTasks.filter((t) => t.status === 'queued').slice(0, capacity)
-	for (const t of toStart) void startUploadTask(t.id)
-	}, [props.profileId, startUploadTask, uploadConcurrency, uploadTasks])
-	
-	const queueUploadFromFiles = useCallback(
-	(files: File[]) => {
-		if (!props.profileId) {
-			message.info('Select a profile first')
-			return
-		}
-		if (!bucket) {
-			message.info('Select a bucket first')
-			return
-		}
-		const cleanedFiles = files.filter((f) => !!f)
-		if (cleanedFiles.length === 0) return
-	
-		const taskId =
-			typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-				? crypto.randomUUID()
-				: `${Date.now()}_${Math.random().toString(16).slice(2)}`
-		const items: UploadFileItem[] = cleanedFiles.map((file) => {
-			const relPath = ((file as File & { webkitRelativePath?: string }).webkitRelativePath ?? '').trim()
-			return { file, relPath: relPath || file.name }
-		})
-		const totalBytes = items.reduce((sum, i) => sum + (i.file.size ?? 0), 0)
-		const label =
-			items.length === 1 ? `Upload: ${items[0]?.file?.name ?? '1 file'}` : `Upload: ${items.length} file(s)`
-	
-		uploadItemsByTaskIdRef.current[taskId] = items
-		const task: UploadTask = {
-			id: taskId,
-			bucket,
-			prefix,
-			fileCount: items.length,
-			status: 'queued',
-			createdAtMs: Date.now(),
-			loadedBytes: 0,
-			totalBytes,
-			speedBps: 0,
-			etaSeconds: 0,
-			error: undefined,
-			jobId: undefined,
-			label,
-		}
-		setUploadTasks((prev) => [task, ...prev])
-		setTransfersTab('uploads')
-		setDownloadsOpen(true)
-	},
-	[bucket, prefix, props.profileId, setTransfersTab],
-	)
-	
-	*/
 
 	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
 
@@ -3396,53 +2785,4 @@ const objectsQuery = useInfiniteQuery({
 			</Suspense>
 		</div>
 	)
-}
-
-const DEBUG_OBJECTS_LIST_KEY = 'debugObjectsList'
-const DEBUG_CONTEXT_MENU_KEY = 'debugObjectsContextMenu'
-
-function isObjectsListDebugEnabled(): boolean {
-	if (typeof window === 'undefined') return false
-	try {
-		return window.localStorage.getItem(DEBUG_OBJECTS_LIST_KEY) === 'true'
-	} catch {
-		return false
-	}
-}
-
-function isContextMenuDebugEnabled(): boolean {
-	if (typeof window === 'undefined') return false
-	try {
-		return window.localStorage.getItem(DEBUG_CONTEXT_MENU_KEY) === 'true'
-	} catch {
-		return false
-	}
-}
-
-function logObjectsDebug(
-	enabled: boolean,
-	level: 'debug' | 'warn',
-	message: string,
-	context?: Record<string, unknown>,
-): void {
-	if (!enabled) return
-	const prefix = `[objects] ${message}`
-	if (level === 'warn') {
-		if (context) console.warn(prefix, context)
-		else console.warn(prefix)
-		return
-	}
-	if (context) console.debug(prefix, context)
-	else console.debug(prefix)
-}
-
-function logContextMenuDebug(
-	enabled: boolean,
-	message: string,
-	context?: Record<string, unknown>,
-): void {
-	if (!enabled) return
-	const prefix = `[objects][context-menu] ${message}`
-	if (context) console.debug(prefix, context)
-	else console.debug(prefix)
 }
