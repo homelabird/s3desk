@@ -48,6 +48,7 @@ import {
 	saveBlob,
 	shouldFallbackToProxy,
 } from './transfers/transferDownloadUtils'
+import { useTransfersTaskActions } from './transfers/useTransfersTaskActions'
 
 type UploadMovePlan = {
 	rootHandle: FileSystemDirectoryHandle
@@ -702,50 +703,27 @@ export function TransfersProvider(props: {
 
 	const closeTransfers = useCallback(() => setIsOpen(false), [])
 
-	const updateDownloadTask = useCallback((taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
-		setDownloadTasks((prev) => prev.map((t) => (t.id === taskId ? updater(t) : t)))
-	}, [])
-
-	const cancelDownloadTask = useCallback(
-		(taskId: string) => {
-			const abort = downloadAbortByTaskIdRef.current[taskId]
-			if (abort) abort()
-			updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-		},
-		[updateDownloadTask],
-	)
-
-	const retryDownloadTask = useCallback(
-		(taskId: string) => {
-			updateDownloadTask(taskId, (t) => ({
-				...t,
-				status: 'queued',
-				startedAtMs: undefined,
-				finishedAtMs: undefined,
-				loadedBytes: 0,
-				speedBps: 0,
-				etaSeconds: 0,
-				error: undefined,
-			}))
-		},
-		[updateDownloadTask],
-	)
-
-	const removeDownloadTask = useCallback((taskId: string) => {
-		const abort = downloadAbortByTaskIdRef.current[taskId]
-		if (abort) abort()
-		delete downloadAbortByTaskIdRef.current[taskId]
-		delete downloadEstimatorByTaskIdRef.current[taskId]
-		setDownloadTasks((prev) => prev.filter((t) => t.id !== taskId))
-	}, [])
-
-	const clearCompletedDownloads = useCallback(() => {
-		setDownloadTasks((prev) => prev.filter((t) => t.status !== 'succeeded'))
-	}, [])
-
-	const updateUploadTask = useCallback((taskId: string, updater: (task: UploadTask) => UploadTask) => {
-		setUploadTasks((prev) => prev.map((t) => (t.id === taskId ? updater(t) : t)))
-	}, [])
+	const {
+		updateDownloadTask,
+		cancelDownloadTask,
+		retryDownloadTask,
+		removeDownloadTask,
+		clearCompletedDownloads,
+		updateUploadTask,
+		cancelUploadTask,
+		removeUploadTask,
+		clearCompletedUploads,
+		clearAllTransfers,
+	} = useTransfersTaskActions({
+		setDownloadTasks,
+		setUploadTasks,
+		downloadAbortByTaskIdRef,
+		downloadEstimatorByTaskIdRef,
+		uploadAbortByTaskIdRef,
+		uploadEstimatorByTaskIdRef,
+		uploadItemsByTaskIdRef,
+		uploadMoveByTaskIdRef,
+	})
 
 	const updateUploadTaskProgressFromJob = useCallback(
 		(taskId: string, progress?: JobProgress | null) => {
@@ -912,18 +890,6 @@ export function TransfersProvider(props: {
 		[finalizeUploadJob, updateUploadTaskProgressFromJob],
 	)
 
-	const cancelUploadTask = useCallback(
-		(taskId: string) => {
-			const abort = uploadAbortByTaskIdRef.current[taskId]
-			if (abort) abort()
-			updateUploadTask(taskId, (t) => {
-				if (t.status === 'succeeded') return t
-				return { ...t, status: 'canceled', finishedAtMs: Date.now() }
-			})
-		},
-		[updateUploadTask],
-	)
-
 	const retryUploadTask = useCallback(
 		async (taskId: string) => {
 			const current = uploadTasksRef.current.find((t) => t.id === taskId)
@@ -1015,42 +981,6 @@ export function TransfersProvider(props: {
 		},
 		[updateUploadTask],
 	)
-
-	const removeUploadTask = useCallback((taskId: string) => {
-		const abort = uploadAbortByTaskIdRef.current[taskId]
-		if (abort) abort()
-		delete uploadAbortByTaskIdRef.current[taskId]
-		delete uploadEstimatorByTaskIdRef.current[taskId]
-		delete uploadItemsByTaskIdRef.current[taskId]
-		delete uploadMoveByTaskIdRef.current[taskId]
-		setUploadTasks((prev) => prev.filter((t) => t.id !== taskId))
-	}, [])
-
-	const clearCompletedUploads = useCallback(() => {
-		setUploadTasks((prev) => {
-			for (const t of prev) {
-				if (t.status !== 'succeeded') continue
-				delete uploadAbortByTaskIdRef.current[t.id]
-				delete uploadEstimatorByTaskIdRef.current[t.id]
-				delete uploadItemsByTaskIdRef.current[t.id]
-				delete uploadMoveByTaskIdRef.current[t.id]
-			}
-			return prev.filter((t) => t.status !== 'succeeded')
-		})
-	}, [])
-
-	const clearAllTransfers = useCallback(() => {
-		for (const abort of Object.values(downloadAbortByTaskIdRef.current)) abort()
-		for (const abort of Object.values(uploadAbortByTaskIdRef.current)) abort()
-		downloadAbortByTaskIdRef.current = {}
-		downloadEstimatorByTaskIdRef.current = {}
-		uploadAbortByTaskIdRef.current = {}
-		uploadEstimatorByTaskIdRef.current = {}
-		uploadItemsByTaskIdRef.current = {}
-		uploadMoveByTaskIdRef.current = {}
-		setDownloadTasks([])
-		setUploadTasks([])
-	}, [])
 
 	const startDownloadTask = useCallback(
 		async (taskId: string) => {
