@@ -1,8 +1,9 @@
-import { Alert, Checkbox, Divider, Input, Modal, Select, Space, Switch, Typography, message } from 'antd'
+import { Alert, Checkbox, Divider, Input, Modal, Space, Switch, Typography, message } from 'antd'
 import { useMemo, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
 import { FormField } from '../../components/FormField'
+import { NativeSelect } from '../../components/NativeSelect'
 import type { ProfileFormValues, TLSCapability, TLSAction } from './profileTypes'
 
 function validateOptionalHttpUrl(value: string | undefined): Promise<void> {
@@ -309,21 +310,22 @@ export function ProfileModal(props: {
 					void validateAndSubmit()
 				}}
 			>
-				<FormField label="Provider" required error={errors.provider}>
-					<Select
-						disabled={!!props.editMode}
-						value={values.provider}
-						onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
-						options={[
-							{ label: 'S3 Compatible (MinIO/Ceph/Custom)', value: 's3_compatible' },
-							{ label: 'AWS S3', value: 'aws_s3' },
-							{ label: 'Oracle OCI (S3 Compat)', value: 'oci_s3_compat' },
-							{ label: 'Oracle OCI Object Storage (Native)', value: 'oci_object_storage' },
-							{ label: 'Azure Blob Storage', value: 'azure_blob' },
-							{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
-						]}
-					/>
-				</FormField>
+					<FormField label="Provider" required error={errors.provider}>
+						<NativeSelect
+							disabled={!!props.editMode}
+							value={values.provider}
+							onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
+							options={[
+								{ label: 'S3 Compatible (MinIO/Ceph/Custom)', value: 's3_compatible' },
+								{ label: 'AWS S3', value: 'aws_s3' },
+								{ label: 'Oracle OCI (S3 Compat)', value: 'oci_s3_compat' },
+								{ label: 'Oracle OCI Object Storage (Native)', value: 'oci_object_storage' },
+								{ label: 'Azure Blob Storage', value: 'azure_blob' },
+								{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
+							]}
+							ariaLabel="Provider"
+						/>
+					</FormField>
 
 				{providerGuide ? (
 					<Alert
@@ -343,7 +345,7 @@ export function ProfileModal(props: {
 				) : null}
 
 				<FormField label="Name" required error={errors.name}>
-					<Input value={values.name} onChange={(e) => setField('name', e.target.value)} autoComplete="off" />
+					<Input value={values.name} onChange={(e) => setField('name', e.target.value)} autoComplete="off" aria-label="Name" />
 				</FormField>
 
 				{isS3Provider ? (
@@ -359,11 +361,12 @@ export function ProfileModal(props: {
 								onChange={(e) => setField('endpoint', e.target.value)}
 								placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'}
 								autoComplete="off"
+								aria-label={isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
 							/>
 						</FormField>
 
 						<FormField label="Region" required extra="Example: us-east-1" error={errors.region}>
-							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1…" />
+							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1…" aria-label="Region" />
 						</FormField>
 					</>
 				) : null}
@@ -527,6 +530,7 @@ export function ProfileModal(props: {
 									value={values.accessKeyId}
 									onChange={(e) => setField('accessKeyId', e.target.value)}
 									autoComplete="username"
+									aria-label={props.editMode ? 'Access Key ID (optional)' : 'Access Key ID'}
 								/>
 							</FormField>
 							<FormField
@@ -539,6 +543,7 @@ export function ProfileModal(props: {
 									value={values.secretAccessKey}
 									onChange={(e) => setField('secretAccessKey', e.target.value)}
 									autoComplete="new-password"
+									aria-label={props.editMode ? 'Secret (optional)' : 'Secret'}
 								/>
 							</FormField>
 						</div>
@@ -568,7 +573,7 @@ export function ProfileModal(props: {
 				<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
 					{isS3Provider ? (
 						<FormField label="Force Path Style" style={{ marginBottom: 0 }}>
-							<Switch checked={values.forcePathStyle} onChange={(checked) => setField('forcePathStyle', checked)} />
+							<Switch checked={values.forcePathStyle} onChange={(checked) => setField('forcePathStyle', checked)} aria-label="Force Path Style" />
 						</FormField>
 					) : null}
 					<FormField label="Preserve Leading Slash" style={{ marginBottom: 0 }}>
@@ -581,6 +586,7 @@ export function ProfileModal(props: {
 						<Switch
 							checked={values.tlsInsecureSkipVerify}
 							onChange={(checked) => setField('tlsInsecureSkipVerify', checked)}
+							aria-label="TLS Insecure Skip Verify"
 						/>
 					</FormField>
 				</div>
@@ -597,19 +603,20 @@ export function ProfileModal(props: {
 							<Typography.Text type="secondary">Current: {tlsStatusLabel}</Typography.Text>
 							{showTLSStatusError ? (
 								<Alert type="warning" showIcon title="Failed to load TLS status" description={showTLSStatusError} />
-							) : null}
-							<FormField label="mTLS action">
-								<Select
-									disabled={tlsUnavailable}
-									value={tlsAction}
-									onChange={(v) => setField('tlsAction', v as TLSAction)}
-									options={[
-										{ label: 'Keep current', value: 'keep' },
-										{ label: 'Enable or update', value: 'enable' },
-										{ label: 'Disable', value: 'disable' },
-									]}
-								/>
-							</FormField>
+								) : null}
+								<FormField label="mTLS action">
+									<NativeSelect
+										disabled={tlsUnavailable}
+										value={tlsAction}
+										onChange={(v) => setField('tlsAction', v as TLSAction)}
+										options={[
+											{ label: 'Keep current', value: 'keep' },
+											{ label: 'Enable or update', value: 'enable' },
+											{ label: 'Disable', value: 'disable' },
+										]}
+										ariaLabel="mTLS action"
+									/>
+								</FormField>
 							{tlsAction === 'disable' ? (
 								<Typography.Text type="secondary">mTLS will be removed for this profile.</Typography.Text>
 							) : null}

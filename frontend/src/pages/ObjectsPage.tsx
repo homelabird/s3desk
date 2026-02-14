@@ -3192,12 +3192,6 @@ const objectsQuery = useInfiniteQuery({
 						options={pathOptions}
 						inputRef={pathInputRef}
 						onChangeDraft={setPathDraft}
-						onSelectPath={(v) => {
-							if (!bucket) return
-							setPathDraft(v)
-							navigateToLocation(bucket, v, { recordHistory: true })
-							setPathModalOpen(false)
-						}}
 						onCommit={commitPathDraft}
 						onClose={() => setPathModalOpen(false)}
 					/>

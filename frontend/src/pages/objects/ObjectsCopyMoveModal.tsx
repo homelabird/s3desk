@@ -1,7 +1,7 @@
-import type { SelectProps } from 'antd'
-import { Alert, Input, Modal, Select, Switch, Typography } from 'antd'
+import { Alert, Input, Modal, Switch, Typography } from 'antd'
 
 import { FormField } from '../../components/FormField'
+import { DatalistInput } from '../../components/DatalistInput'
 
 type CopyMoveValues = {
 	dstBucket: string
@@ -17,7 +17,7 @@ type ObjectsCopyMoveModalProps = {
 	srcKey: string | null
 	values: CopyMoveValues
 	onValuesChange: (values: CopyMoveValues) => void
-	bucketOptions: SelectProps['options']
+	bucketOptions: Array<{ label: string; value: string }>
 	isBucketsLoading: boolean
 	isSubmitting: boolean
 	onCancel: () => void
@@ -68,16 +68,15 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 				</FormField>
 
 				<FormField label="Destination bucket" required>
-					<Select
-						showSearch
-						options={props.bucketOptions}
-						value={props.values.dstBucket}
-						onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: String(value) })}
-						placeholder="bucket…"
-						loading={props.isBucketsLoading}
-						optionFilterProp="label"
-						aria-label="Destination bucket"
-					/>
+					<DatalistInput
+											value={props.values.dstBucket}
+											onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: value })}
+											placeholder="bucket…"
+											ariaLabel="Destination bucket"
+											allowClear
+											disabled={props.isBucketsLoading && props.bucketOptions.length === 0}
+											options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+										/>
 				</FormField>
 
 				<FormField label="Destination key" required>

@@ -1,7 +1,6 @@
-import type { AutoCompleteProps } from 'antd'
-import { AutoComplete, Button, Input } from 'antd'
+import { Button, Input } from 'antd'
 import { LoadingOutlined } from '@ant-design/icons'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import { APIClient } from '../api/client'
 
@@ -22,7 +21,7 @@ type SuggestionParams = {
 }
 
 export function LocalPathInput(props: LocalPathInputProps) {
-	const [options, setOptions] = useState<AutoCompleteProps['options']>([])
+	const [options, setOptions] = useState<Array<{ value: string; label?: string }>>([])
 	const [loading, setLoading] = useState(false)
 	const fetchIdRef = useRef(0)
 	const debounceRef = useRef<number | null>(null)
@@ -77,20 +76,27 @@ export function LocalPathInput(props: LocalPathInputProps) {
 	)
 
 	useEffect(() => {
+		if (!props.profileId) setOptions([])
+	}, [props.profileId])
+
+	useEffect(() => {
 		return () => {
 			if (debounceRef.current) window.clearTimeout(debounceRef.current)
 		}
 	}, [])
 
+	const listId = useId()
+
 	return (
-		<AutoComplete
-			value={props.value}
-			options={options}
-			onChange={(next) => props.onChange?.(String(next))}
-			onSearch={(value) => scheduleFetch(value)}
-			filterOption={false}
-		>
+		<>
 			<Input
+				list={`local-path-${listId}`}
+				value={props.value}
+				onChange={(e) => {
+				const next = e.target.value
+				props.onChange?.(next)
+				scheduleFetch(next)
+			}}
 				placeholder={props.placeholder}
 				disabled={props.disabled}
 				onFocus={() => scheduleFetch(props.value ?? '')}
@@ -103,7 +109,14 @@ export function LocalPathInput(props: LocalPathInputProps) {
 					) : undefined
 				}
 			/>
-		</AutoComplete>
+			<datalist id={`local-path-${listId}`}>
+				{options.map((opt) => (
+					<option key={opt.value} value={opt.value} label={opt.label}>
+						{opt.label}
+					</option>
+				))}
+			</datalist>
+		</>
 	)
 }
 

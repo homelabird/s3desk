@@ -1,7 +1,8 @@
-import { Alert, AutoComplete, Button, Drawer, Grid, Input, Space, message } from 'antd'
+import { Alert, Button, Drawer, Grid, Input, Space, message } from 'antd'
 import { useState } from 'react'
 
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
+import { DatalistInput } from '../../components/DatalistInput'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
 
 export function DownloadJobModal(props: {
@@ -99,14 +100,14 @@ export function DownloadJobModal(props: {
 			>
 				<div style={{ marginBottom: 12 }}>
 					<div style={{ fontWeight: 700, marginBottom: 6 }}>Bucket</div>
-					<AutoComplete
-						value={bucket}
-						options={props.bucketOptions}
-						onChange={(value) => setBucket(String(value))}
-						filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-					>
-						<Input placeholder="my-bucket…" />
-					</AutoComplete>
+					<DatalistInput
+							value={bucket}
+							onChange={setBucket}
+							placeholder="my-bucket…"
+							ariaLabel="Bucket"
+							allowClear
+							options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+						/>
 				</div>
 
 				<div style={{ marginBottom: 12 }}>

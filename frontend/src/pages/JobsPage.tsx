@@ -1,7 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import {
 	Alert,
-	AutoComplete,
 	Checkbox,
 	Button,
 	Collapse,
@@ -11,7 +10,6 @@ import {
 	Empty,
 	Grid,
 	Input,
-	Select,
 	Space,
 	Spin,
 	Tag,
@@ -49,12 +47,14 @@ import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatDateTime, toTimestamp } from '../lib/format'
-import { getJobTypeInfo, jobTypeSelectOptions } from '../lib/jobTypes'
+import { allJobTypes, getJobTypeInfo } from '../lib/jobTypes'
 import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
 import { formatBytes, formatDurationSeconds } from '../lib/transfer'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
+import { DatalistInput } from '../components/DatalistInput'
+import { NativeSelect } from '../components/NativeSelect'
 import { logReactRender, measurePerf } from '../lib/perf'
 import {
 	formatS3Destination,
@@ -943,17 +943,21 @@ export function JobsPage(props: Props) {
 			.sort()
 			.map((value) => ({ value }))
 	}, [jobs])
-	const typeFilterOptions = useMemo(() => {
-		if (!typeFilterNormalized) return jobTypeSelectOptions
-		if (getJobTypeInfo(typeFilterNormalized)) return jobTypeSelectOptions
-		return [
-			...jobTypeSelectOptions,
-			{
-				label: 'Other',
-				options: [{ label: typeFilterNormalized, value: typeFilterNormalized }],
-			},
-		]
-	}, [typeFilterNormalized])
+	const typeFilterSuggestions = useMemo(() => {
+		const seen = new Set<string>()
+		const out: Array<{ value: string; label?: string }> = []
+		for (const t of allJobTypes) {
+			seen.add(t.type)
+			out.push({ value: t.type, label: t.label })
+		}
+		for (const j of jobs) {
+			if (!j.type) continue
+			if (seen.has(j.type)) continue
+			seen.add(j.type)
+			out.push({ value: j.type, label: j.type })
+		}
+		return out
+	}, [jobs])
 	const isLoading = jobsQuery.isFetching && !jobsQuery.isFetchingNextPage
 	useEffect(() => {
 		updateTableScroll()
@@ -1349,52 +1353,38 @@ export function JobsPage(props: Props) {
 			) : null}
 
 			<Space wrap style={{ width: '100%' }}>
-				<Select
-					value={statusFilter}
-					onChange={(v) => setStatusFilter(v)}
-					style={{ width: screens.md ? 200 : '100%', maxWidth: '100%' }}
-					aria-label="Job status filter"
-					options={[
-						{ label: 'All statuses', value: 'all' },
-						{ label: 'queued', value: 'queued' },
-						{ label: 'running', value: 'running' },
-						{ label: 'succeeded', value: 'succeeded' },
-						{ label: 'failed', value: 'failed' },
-						{ label: 'canceled', value: 'canceled' },
-					]}
-				/>
-					<Select
-						value={typeFilterNormalized || undefined}
-						onChange={(v) => setTypeFilter(v ?? '')}
-						placeholder="Type (exact, optional)…"
-						aria-label="Job type filter"
-					style={{ width: screens.md ? 340 : '100%', maxWidth: '100%' }}
-					allowClear
-					showSearch
-					optionFilterProp="label"
-					filterOption={(input, option) => {
-						const s = input.toLowerCase()
-						const label = String(option?.label ?? '').toLowerCase()
-						const value =
-							option && 'value' in option ? String(option.value ?? '').toLowerCase() : ''
-						return label.includes(s) || value.includes(s)
-					}}
-					options={typeFilterOptions}
-				/>
-					<AutoComplete
-						value={errorCodeFilterNormalized}
-						onChange={(v) => setErrorCodeFilter(v)}
-						placeholder="Error code (exact, optional)…"
-						aria-label="Job error code filter"
-						style={{ width: screens.md ? 260 : '100%', maxWidth: '100%' }}
-						allowClear
-						options={errorCodeSuggestions}
-					filterOption={(input, option) =>
-						String(option?.value ?? '')
-							.toLowerCase()
-							.includes(input.toLowerCase())
-					}
-				/>
+				<NativeSelect
+									value={statusFilter}
+									onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+									ariaLabel="Job status filter"
+									style={{ width: screens.md ? 200 : '100%', maxWidth: '100%' }}
+									options={[
+										{ label: 'All statuses', value: 'all' },
+										{ label: 'queued', value: 'queued' },
+										{ label: 'running', value: 'running' },
+										{ label: 'succeeded', value: 'succeeded' },
+										{ label: 'failed', value: 'failed' },
+										{ label: 'canceled', value: 'canceled' },
+									]}
+								/>
+					<DatalistInput
+									value={typeFilterNormalized}
+									onChange={(v) => setTypeFilter(v)}
+									placeholder="Type (exact, optional)…"
+									ariaLabel="Job type filter"
+									allowClear
+									style={{ width: screens.md ? 340 : '100%', maxWidth: '100%' }}
+									options={typeFilterSuggestions}
+								/>
+					<DatalistInput
+									value={errorCodeFilterNormalized}
+									onChange={(v) => setErrorCodeFilter(v)}
+									placeholder="Error code (exact, optional)…"
+									ariaLabel="Job error code filter"
+									allowClear
+									style={{ width: screens.md ? 260 : '100%', maxWidth: '100%' }}
+									options={errorCodeSuggestions}
+								/>
 				<Button onClick={resetFilters} disabled={!filtersDirty}>
 					Reset filters
 				</Button>

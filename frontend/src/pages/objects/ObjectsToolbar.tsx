@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
-import type { MenuProps, SelectProps } from 'antd'
-import { Badge, Button, Dropdown, Select, Space, Tooltip } from 'antd'
+import type { MenuProps } from 'antd'
+import { Badge, Button, Dropdown, Space, Tooltip } from 'antd'
 import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined, UpOutlined } from '@ant-design/icons'
 
 import type { UIAction } from './objectsActions'
 import styles from './objects.module.css'
+import { DatalistInput } from '../../components/DatalistInput'
 
 export type ObjectsToolbarProps = {
 	isDesktop: boolean
@@ -14,7 +15,7 @@ export type ObjectsToolbarProps = {
 	hasProfile: boolean
 	bucket: string
 	selectedCount: number
-	bucketOptions: SelectProps['options']
+	bucketOptions: Array<{ label: string; value: string }>
 	bucketsLoading: boolean
 	onBucketChange: (value: string | null) => void
 	onBucketDropdownVisibleChange?: (open: boolean) => void
@@ -152,20 +153,18 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						</>
 					) : null}
 
-					<Select
-						allowClear
-						showSearch
-						placeholder="Bucket…"
-						aria-label="Bucket"
-						style={{ width: 260, maxWidth: '100%' }}
-						value={props.bucket || undefined}
-						options={props.bucketOptions}
-						loading={props.bucketsLoading}
-						onChange={(value) => props.onBucketChange(value ?? null)}
-						onDropdownVisibleChange={props.onBucketDropdownVisibleChange}
-						optionFilterProp="label"
-						disabled={!canUseBucket}
-					/>
+					<DatalistInput
+									value={props.bucket}
+									onChange={(value) => props.onBucketChange(value.trim() ? value : null)}
+									placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? 'Loading buckets…' : 'Bucket…'}
+									ariaLabel="Bucket"
+									allowClear
+									style={{ width: 260, maxWidth: '100%' }}
+									disabled={!canUseBucket || (props.bucketsLoading && props.bucketOptions.length === 0)}
+									onFocus={() => props.onBucketDropdownVisibleChange?.(true)}
+									onBlur={() => props.onBucketDropdownVisibleChange?.(false)}
+									options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+								/>
 				</Space>
 
 					<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
@@ -296,20 +295,18 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				</Dropdown>
 			</Space>
 
-			<Select
-				allowClear
-				showSearch
-				placeholder="Bucket…"
-				aria-label="Bucket"
-				style={{ width: '100%', maxWidth: '100%' }}
-				value={props.bucket || undefined}
-				options={props.bucketOptions}
-				loading={props.bucketsLoading}
-				onChange={(value) => props.onBucketChange(value ?? null)}
-				onDropdownVisibleChange={props.onBucketDropdownVisibleChange}
-				optionFilterProp="label"
-				disabled={!canUseBucket}
-			/>
+			<DatalistInput
+						value={props.bucket}
+					onChange={(value) => props.onBucketChange(value.trim() ? value : null)}
+					placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? 'Loading buckets…' : 'Bucket…'}
+					ariaLabel="Bucket"
+					allowClear
+					style={{ width: '100%', maxWidth: '100%' }}
+					disabled={!canUseBucket || (props.bucketsLoading && props.bucketOptions.length === 0)}
+					onFocus={() => props.onBucketDropdownVisibleChange?.(true)}
+					onBlur={() => props.onBucketDropdownVisibleChange?.(false)}
+					options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+				/>
 		</div>
 	)
 }

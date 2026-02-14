@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Dropdown, Empty, Grid, Input, Select, Space, Switch, Tooltip, Typography, Upload, message, type MenuProps } from 'antd'
+import { Alert, Button, Dropdown, Empty, Grid, Input, Space, Switch, Tooltip, Typography, Upload, message, type MenuProps } from 'antd'
 import type { UploadFile } from 'antd'
 import { EllipsisOutlined, UploadOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
@@ -13,6 +13,7 @@ import { formatBytes } from '../lib/transfer'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
 import { SetupCallout } from '../components/SetupCallout'
+import { DatalistInput } from '../components/DatalistInput'
 import { LinkButton } from '../components/LinkButton'
 
 type Props = {
@@ -168,17 +169,15 @@ export function UploadsPage(props: Props) {
 			) : null}
 
 			<Space wrap style={{ width: '100%' }}>
-				<Select
-					showSearch
-					placeholder="Bucket…"
+				<DatalistInput
+					value={bucket}
+					onChange={setBucket}
+					placeholder={bucketsQuery.isFetching && !bucketsQuery.data ? 'Loading buckets…' : 'Bucket…'}
+					ariaLabel="Bucket"
+					allowClear
 					style={{ width: screens.md ? 320 : '100%', maxWidth: '100%' }}
-					aria-label="Bucket"
-					value={bucket || undefined}
-					options={bucketOptions}
-					loading={bucketsQuery.isFetching}
-					onChange={(v) => setBucket(v)}
-					optionFilterProp="label"
-					disabled={isOffline || !uploadsSupported}
+					disabled={isOffline || !uploadsSupported || (bucketsQuery.isFetching && !bucketsQuery.data)}
+					options={bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
 				/>
 					<Input
 						placeholder="prefix (optional)…"

@@ -1,5 +1,7 @@
-import { Alert, AutoComplete, Button, Checkbox, Drawer, Grid, Input, Space, Switch, message } from 'antd'
+import { Alert, Button, Checkbox, Drawer, Grid, Input, Space, Switch, message } from 'antd'
 import { useState } from 'react'
+
+import { DatalistInput } from '../../components/DatalistInput'
 
 export function DeletePrefixJobModal(props: {
 	open: boolean
@@ -100,14 +102,14 @@ export function DeletePrefixJobModal(props: {
 
 			<div style={{ marginBottom: 12 }}>
 				<div style={{ fontWeight: 700, marginBottom: 6 }}>Bucket</div>
-				<AutoComplete
+				<DatalistInput
 					value={bucket}
-					options={props.bucketOptions}
-					onChange={(value) => setBucket(String(value))}
-					filterOption={(input, option) => (option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-				>
-					<Input placeholder="my-bucket…" />
-				</AutoComplete>
+					onChange={setBucket}
+					placeholder="my-bucket…"
+					ariaLabel="Bucket"
+					allowClear
+					options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+				/>
 			</div>
 
 			<div style={{ marginBottom: 12 }}>
@@ -117,7 +119,13 @@ export function DeletePrefixJobModal(props: {
 
 			<div style={{ marginBottom: 12 }}>
 				<div style={{ fontWeight: 700, marginBottom: 6 }}>Prefix</div>
-				<Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" disabled={deleteAll} />
+				<Input
+					value={prefix}
+					onChange={(e) => setPrefix(e.target.value)}
+					placeholder="path/…"
+					disabled={deleteAll}
+					aria-label="Prefix"
+				/>
 				<div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
 					Required unless deleteAll is enabled. Use trailing '/' to avoid accidental matches.
 				</div>

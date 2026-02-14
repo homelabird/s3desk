@@ -1,10 +1,11 @@
-import type { BreadcrumbProps, SelectProps } from 'antd'
-import { Alert, Button, Breadcrumb, Input, Select, Space, Spin, Switch, Tooltip, Typography, message } from 'antd'
+import type { BreadcrumbProps } from 'antd'
+import { Alert, Button, Breadcrumb, Input, Space, Spin, Switch, Tooltip, Typography, message } from 'antd'
 import { CopyOutlined, FilterOutlined, SearchOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import styles from './objects.module.css'
 import type { ObjectSort } from './objectsTypes'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
+import { NativeSelect } from '../../components/NativeSelect'
 
 type ObjectsListControlsProps = {
 	bucket: string
@@ -30,7 +31,7 @@ type ObjectsListControlsProps = {
 	canInteract: boolean
 	favoritesOnly: boolean
 	sort: ObjectSort
-	sortOptions: SelectProps['options']
+	sortOptions: Array<{ label: string; value: ObjectSort }>
 	onSortChange: (value: ObjectSort) => void
 	favoritesFirst: boolean
 	onFavoritesFirstChange: (value: boolean) => void
@@ -93,14 +94,14 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 
 	const sortControls = props.isAdvanced ? (
 		<Space wrap size="small" align="center">
-			<Select
-				value={props.sort}
-				options={props.sortOptions}
-				style={{ minWidth: 180 }}
-				aria-label="Sort objects"
-				onChange={(value) => props.onSortChange(value as ObjectSort)}
-				disabled={!props.canInteract}
-			/>
+			<NativeSelect
+									value={props.sort}
+									onChange={(value) => props.onSortChange(value as ObjectSort)}
+									ariaLabel="Sort objects"
+									style={{ minWidth: 180 }}
+									disabled={!props.canInteract}
+									options={props.sortOptions}
+								/>
 			<Space size={6} align="center">
 				<Switch
 					size="small"

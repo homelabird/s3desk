@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Input, Modal, Radio, Select, Space, Switch, Tooltip, Typography, message } from 'antd'
+import { Alert, Button, Input, Modal, Radio, Space, Switch, Tooltip, Typography, message } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useMemo, useRef, useState } from 'react'
 
 import { APIClient, APIError } from '../../api/client'
 import type { BucketPolicyPutRequest, BucketPolicyResponse, BucketPolicyValidateResponse, Profile } from '../../api/types'
 import { AppTabs } from '../../components/AppTabs'
+import { NativeSelect } from '../../components/NativeSelect'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { getPolicyPresets, getPolicyTemplate, type PolicyKind } from './policyPresets'
@@ -540,16 +541,25 @@ function BucketPolicyEditor(props: {
 												/>
 											</td>
 											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
-												<Select
-													mode="tags"
-													value={row.members}
-													aria-label="Members"
-													onChange={(vals: string[]) => {
-														setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, members: vals } : b)))
-													}}
-													style={{ width: '100%', minWidth: 320 }}
-													placeholder="allUsers, user:alice@example.com…"
-												/>
+												<Input.TextArea
+											value={row.members.join('\n')}
+											aria-label="Members"
+											onChange={(e) => {
+												const raw = e.target.value
+												const uniq = new Set(
+													raw
+														.split(/[\n,]+/)
+														.map((s) => s.trim())
+														.filter(Boolean),
+												)
+												setGcsBindings((prev) =>
+													prev.map((b) => (b.key === row.key ? { ...b, members: Array.from(uniq) } : b)),
+												)
+											}}
+											autoSize={{ minRows: 2, maxRows: 6 }}
+											style={{ width: '100%', minWidth: 320 }}
+											placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
+										/>
 											</td>
 											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
 												<Button danger size="small" onClick={() => setGcsBindings((prev) => prev.filter((b) => b.key !== row.key))}>
@@ -578,17 +588,17 @@ function BucketPolicyEditor(props: {
 				<Space orientation="vertical" style={{ width: '100%' }} size="middle">
 						<Space align="center" wrap>
 							<Typography.Text strong>Public access:</Typography.Text>
-							<Select
-								value={azurePublicAccess}
-								aria-label="Public access"
-								onChange={(v) => setAzurePublicAccess(v as 'private' | 'blob' | 'container')}
-								options={[
-									{ value: 'private', label: 'private' },
-									{ value: 'blob', label: 'blob (public read for blobs)' },
-								{ value: 'container', label: 'container (public read for container + blobs)' },
-							]}
-							style={{ width: 360 }}
-						/>
+							<NativeSelect
+											value={azurePublicAccess}
+											onChange={(v) => setAzurePublicAccess(v as 'private' | 'blob' | 'container')}
+											ariaLabel="Public access"
+											style={{ width: 360 }}
+											options={[
+												{ value: 'private', label: 'private' },
+												{ value: 'blob', label: 'blob (public read for blobs)' },
+												{ value: 'container', label: 'container (public read for container + blobs)' },
+											]}
+										/>
 					</Space>
 
 					{azureStoredPolicies.length > 5 ? (
@@ -814,18 +824,20 @@ function BucketPolicyEditor(props: {
 
 								<Space align="center" wrap>
 									<Typography.Text type="secondary">Template:</Typography.Text>
-									<Select
-										placeholder="Load provider preset"
-										style={{ minWidth: 320 }}
-										value={selectedPresetKey}
-										options={policyPresets.map((item) => ({
-											value: item.key,
-											label: item.label,
-										}))}
-										onChange={(value) => {
-											applyPolicyPreset(String(value))
-										}}
-									/>
+									<NativeSelect
+											value={selectedPresetKey ?? ''}
+											onChange={(value) => {
+												if (!value) {
+													setSelectedPresetKey(undefined)
+													return
+												}
+												applyPolicyPreset(String(value))
+											}}
+											ariaLabel="Template preset"
+											style={{ minWidth: 320 }}
+											placeholder="Load provider preset"
+											options={policyPresets.map((item) => ({ value: item.key, label: item.label }))}
+										/>
 								</Space>
 
 								{selectedPresetDescription ? (

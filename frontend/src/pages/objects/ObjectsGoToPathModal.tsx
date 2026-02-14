@@ -1,6 +1,8 @@
 import type { InputRef } from 'antd'
-import { AutoComplete, Input, Modal, Space, Typography } from 'antd'
+import { Modal, Space, Typography } from 'antd'
 import type { RefObject } from 'react'
+
+import { DatalistInput } from '../../components/DatalistInput'
 
 type ObjectsGoToPathModalProps = {
 	open: boolean
@@ -10,7 +12,6 @@ type ObjectsGoToPathModalProps = {
 	options: { value: string }[]
 	inputRef: RefObject<InputRef | null>
 	onChangeDraft: (value: string) => void
-	onSelectPath: (value: string) => void
 	onCommit: () => void
 	onClose: () => void
 }
@@ -23,7 +24,6 @@ export function ObjectsGoToPathModal({
 	options,
 	inputRef,
 	onChangeDraft,
-	onSelectPath,
 	onCommit,
 	onClose,
 }: ObjectsGoToPathModalProps) {
@@ -44,22 +44,18 @@ export function ObjectsGoToPathModal({
 					Bucket: <Typography.Text code>{bucket || '(none)'}</Typography.Text>
 				</Typography.Text>
 
-				<AutoComplete
+				<DatalistInput
 					style={{ width: '100%' }}
+					ref={inputRef}
 					value={pathDraft}
-					options={options}
 					onChange={onChangeDraft}
-					onSelect={(v) => onSelectPath(String(v))}
+					options={options}
+					placeholder="Prefix (e.g. logs/2025/)…"
+					allowClear
+					ariaLabel="Path"
+					onPressEnter={onCommit}
 					disabled={disabled}
-				>
-					<Input
-						ref={inputRef}
-						placeholder="Prefix (e.g. logs/2025/)…"
-						onPressEnter={onCommit}
-						allowClear
-						disabled={disabled}
-					/>
-				</AutoComplete>
+				/>
 
 				<Typography.Text type="secondary">Ctrl+L · Enter to navigate</Typography.Text>
 			</Space>

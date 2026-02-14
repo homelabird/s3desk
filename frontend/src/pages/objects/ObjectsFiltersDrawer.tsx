@@ -1,7 +1,9 @@
-import type { SelectProps } from 'antd'
-import { Button, Drawer, InputNumber, Select, Space, Switch, Typography } from 'antd'
+import { Button, Drawer, InputNumber, Space, Switch, Typography } from 'antd'
 
 import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
+import { NativeSelect } from '../../components/NativeSelect'
+import { DatalistInput } from '../../components/DatalistInput'
+
 import {
 	formatLocalDateInputValue,
 	localDayEndMsFromDateInput,
@@ -19,7 +21,7 @@ type ObjectsFiltersDrawerProps = {
 	favoritesFirst: boolean
 	onFavoritesFirstChange: (value: boolean) => void
 	extFilter: string
-	extOptions: SelectProps['options']
+	extOptions: Array<{ label: string; value: string }>
 	onExtFilterChange: (value: string) => void
 	minSizeBytes: number | null
 	maxSizeBytes: number | null
@@ -78,33 +80,32 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 
 				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Typography.Text type="secondary">Type</Typography.Text>
-					<Select
-						value={props.typeFilter}
-						style={{ width: '100%' }}
-						aria-label="Type filter"
-						options={[
-							{ label: 'All', value: 'all' },
-							{ label: 'Folders', value: 'folders' },
-							{ label: 'Files', value: 'files' },
-						]}
-						onChange={(value) => props.onTypeFilterChange(value as ObjectTypeFilter)}
-					/>
+					<NativeSelect
+									value={props.typeFilter}
+									onChange={(value) => props.onTypeFilterChange(value as ObjectTypeFilter)}
+									ariaLabel="Type filter"
+									style={{ width: '100%' }}
+									options={[
+										{ label: 'All', value: 'all' },
+										{ label: 'Folders', value: 'folders' },
+										{ label: 'Files', value: 'files' },
+									]}
+								/>
 				</Space>
 
 				{props.isAdvanced ? (
 					<>
 						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 							<Typography.Text type="secondary">Extension</Typography.Text>
-							<Select
-								allowClear
-								placeholder="Ext…"
-								value={props.extFilter || undefined}
-								style={{ width: '100%' }}
-								aria-label="Extension filter"
-								options={props.extOptions}
-								onChange={(value) => props.onExtFilterChange(value ?? '')}
-								disabled={fileFiltersDisabled}
-							/>
+							<DatalistInput
+									value={props.extFilter}
+									onChange={props.onExtFilterChange}
+									placeholder="Ext…"
+									ariaLabel="Extension filter"
+									allowClear
+									disabled={fileFiltersDisabled}
+									options={props.extOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+								/>
 						</Space>
 
 						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
@@ -164,20 +165,20 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 				{props.isAdvanced ? (
 					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 						<Typography.Text type="secondary">Sort</Typography.Text>
-						<Select
-							value={props.sort}
-							style={{ width: '100%' }}
-							aria-label="Sort"
-							options={[
-								{ label: 'Name (A -> Z)', value: 'name_asc' },
-								{ label: 'Name (Z -> A)', value: 'name_desc' },
-								{ label: 'Size (smallest)', value: 'size_asc' },
-								{ label: 'Size (largest)', value: 'size_desc' },
-								{ label: 'Last modified (oldest)', value: 'time_asc' },
-								{ label: 'Last modified (newest)', value: 'time_desc' },
-							]}
-							onChange={(value) => props.onSortChange(value as ObjectSort)}
-						/>
+						<NativeSelect
+									value={props.sort}
+									onChange={(value) => props.onSortChange(value as ObjectSort)}
+									ariaLabel="Sort"
+									style={{ width: '100%' }}
+									options={[
+										{ label: 'Name (A -> Z)', value: 'name_asc' },
+										{ label: 'Name (Z -> A)', value: 'name_desc' },
+										{ label: 'Size (smallest)', value: 'size_asc' },
+										{ label: 'Size (largest)', value: 'size_desc' },
+										{ label: 'Last modified (oldest)', value: 'time_asc' },
+										{ label: 'Last modified (newest)', value: 'time_desc' },
+									]}
+								/>
 					</Space>
 				) : null}
 

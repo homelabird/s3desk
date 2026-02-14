@@ -1,4 +1,4 @@
-import { Alert, Button, Collapse, Divider, Drawer, Empty, Input, InputNumber, Select, Space, Spin, Switch, Typography } from 'antd'
+import { Alert, Button, Collapse, Divider, Drawer, Empty, Input, InputNumber, Space, Spin, Switch, Typography } from 'antd'
 import { CopyOutlined, DownloadOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 
 import type { ObjectItem } from '../../api/types'
@@ -9,6 +9,7 @@ import {
 	localDayStartMsFromDateInput,
 } from '../../lib/localDate'
 import { formatBytes } from '../../lib/transfer'
+import { NativeSelect } from '../../components/NativeSelect'
 
 type ObjectsGlobalSearchDrawerProps = {
 	open: boolean
@@ -109,17 +110,17 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							value={props.prefixFilter}
 							onChange={(e) => props.onPrefixFilterChange(e.target.value)}
 						/>
-						<Select
-							value={props.limit}
-							style={{ width: limitWidth, maxWidth: '100%' }}
-							aria-label="Result limit"
-							options={[
-								{ label: 'Limit 50', value: 50 },
-								{ label: 'Limit 100', value: 100 },
-								{ label: 'Limit 200', value: 200 },
-							]}
-							onChange={(value) => props.onLimitChange(Number(value))}
-						/>
+						<NativeSelect
+									value={String(props.limit)}
+									onChange={(value) => props.onLimitChange(Number(value))}
+									ariaLabel="Result limit"
+									style={{ width: limitWidth, maxWidth: '100%' }}
+									options={[
+										{ label: 'Limit 50', value: '50' },
+										{ label: 'Limit 100', value: '100' },
+										{ label: 'Limit 200', value: '200' },
+									]}
+								/>
 						<Button icon={<ReloadOutlined />} onClick={props.onRefresh} loading={props.isRefreshing}>
 							Refresh
 						</Button>
