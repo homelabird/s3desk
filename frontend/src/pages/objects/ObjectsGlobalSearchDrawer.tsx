@@ -1,4 +1,4 @@
-import { Alert, Button, Collapse, Divider, Drawer, Empty, Input, InputNumber, Select, Space, Spin, Switch, Table, Typography } from 'antd'
+import { Alert, Button, Collapse, Divider, Drawer, Empty, Input, InputNumber, Select, Space, Spin, Switch, Typography } from 'antd'
 import { CopyOutlined, DownloadOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 
 import type { ObjectItem } from '../../api/types'
@@ -80,6 +80,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 	const tableScrollY = props.isMd ? 520 : undefined
 	const modifiedAfterValue = formatLocalDateInputValue(props.modifiedAfterMs)
 	const modifiedBeforeValue = formatLocalDateInputValue(props.modifiedBeforeMs)
+	const tableMinWidth = props.isMd ? 920 : 720
 
 	return (
 		<Drawer open={props.open} onClose={props.onClose} width={drawerWidth} title="Global Search (Indexed)" destroyOnHidden>
@@ -251,72 +252,134 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								{props.items.length} result(s)
 								{props.hasNextPage ? ' (more available)' : ''}
 							</Typography.Text>
-							<Table
-								size="small"
-								rowKey="key"
-								dataSource={props.items}
-								pagination={false}
-								scroll={{ x: true, y: tableScrollY }}
-								columns={[
-									{
-										title: 'Key',
-										dataIndex: 'key',
-										render: (key: string) => (
-											<Typography.Text code ellipsis={{ tooltip: key }} style={{ maxWidth: tableKeyWidth, display: 'inline-block' }}>
-												{key}
-											</Typography.Text>
-										),
-									},
-									{
-										title: 'Size',
-										dataIndex: 'size',
-										width: 120,
-										render: (value: number) => (typeof value === 'number' && value >= 0 ? formatBytes(value) : '-'),
-									},
-									{
-										title: 'Last modified',
-										dataIndex: 'lastModified',
-										width: 220,
-										render: (value: string) =>
-											value ? (
-												<Typography.Text code title={value}>
-													{formatDateTime(value)}
-												</Typography.Text>
-											) : (
-												<Typography.Text type="secondary">-</Typography.Text>
-											),
-									},
-									{
-										title: 'Actions',
-										width: 260,
-										render: (_: unknown, row: ObjectItem) => (
-											<Space size="small">
-												<Button size="small" onClick={() => props.onOpenPrefixForKey(row.key)}>
-													Open
-												</Button>
-												<Button
-													size="small"
-													icon={<CopyOutlined />}
-													aria-label="Copy key"
-													onClick={() => props.onCopyKey(row.key)}
-												/>
-												<Button
-													size="small"
-													icon={<DownloadOutlined />}
-													aria-label="Download"
-													onClick={() => props.onDownloadKey(row.key, row.size)}
-												/>
-												<Button
-													size="small"
-													icon={<InfoCircleOutlined />}
-													aria-label="Open details"
-													onClick={() => props.onOpenDetails(row.key)}
-												/>
-											</Space>
-										),
-									},
-								]}
-							/>
+							<div
+								style={{
+									border: '1px solid #f0f0f0',
+									borderRadius: 8,
+									overflow: 'auto',
+									maxHeight: tableScrollY ? `${tableScrollY}px` : undefined,
+								}}
+							>
+								<table style={{ width: '100%', minWidth: tableMinWidth, borderCollapse: 'collapse' }}>
+									<thead>
+										<tr>
+											<th
+												style={{
+													position: 'sticky',
+													top: 0,
+													zIndex: 1,
+													background: '#fafafa',
+													textAlign: 'left',
+													padding: '10px 12px',
+													borderBottom: '1px solid #f0f0f0',
+												}}
+											>
+												Key
+											</th>
+											<th
+												style={{
+													position: 'sticky',
+													top: 0,
+													zIndex: 1,
+													background: '#fafafa',
+													textAlign: 'left',
+													padding: '10px 12px',
+													borderBottom: '1px solid #f0f0f0',
+													width: 120,
+												}}
+											>
+												Size
+											</th>
+											<th
+												style={{
+													position: 'sticky',
+													top: 0,
+													zIndex: 1,
+													background: '#fafafa',
+													textAlign: 'left',
+													padding: '10px 12px',
+													borderBottom: '1px solid #f0f0f0',
+													width: 220,
+												}}
+											>
+												Last modified
+											</th>
+											<th
+												style={{
+													position: 'sticky',
+													top: 0,
+													zIndex: 1,
+													background: '#fafafa',
+													textAlign: 'left',
+													padding: '10px 12px',
+													borderBottom: '1px solid #f0f0f0',
+													width: 260,
+												}}
+											>
+												Actions
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{props.items.map((row) => (
+											<tr key={row.key}>
+												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+													<Typography.Text
+														code
+														title={row.key}
+														style={{
+															maxWidth: tableKeyWidth,
+															display: 'inline-block',
+															overflow: 'hidden',
+															textOverflow: 'ellipsis',
+															whiteSpace: 'nowrap',
+															verticalAlign: 'top',
+														}}
+													>
+														{row.key}
+													</Typography.Text>
+												</td>
+												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+													{typeof row.size === 'number' && row.size >= 0 ? (
+														<Typography.Text type="secondary">{formatBytes(row.size)}</Typography.Text>
+													) : (
+														<Typography.Text type="secondary">-</Typography.Text>
+													)}
+												</td>
+												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+													{row.lastModified ? (
+														<Typography.Text code title={row.lastModified}>
+															{formatDateTime(row.lastModified)}
+														</Typography.Text>
+													) : (
+														<Typography.Text type="secondary">-</Typography.Text>
+													)}
+												</td>
+												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+													<Space size="small">
+														<Button size="small" onClick={() => props.onOpenPrefixForKey(row.key)}>
+															Open
+														</Button>
+														<Button size="small" icon={<CopyOutlined />} aria-label="Copy key" onClick={() => props.onCopyKey(row.key)} />
+														<Button
+															size="small"
+															icon={<DownloadOutlined />}
+															aria-label="Download"
+															onClick={() => props.onDownloadKey(row.key, row.size)}
+														/>
+														<Button
+															size="small"
+															icon={<InfoCircleOutlined />}
+															aria-label="Open details"
+															onClick={() => props.onOpenDetails(row.key)}
+														/>
+													</Space>
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
 							<div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
 								<Button onClick={props.onLoadMore} disabled={!props.hasNextPage} loading={props.isFetchingNextPage}>
 									Load more
