@@ -6,6 +6,8 @@ FROM harbor.k8s.homelabird.com/library/node:22-alpine AS frontend
 WORKDIR /src
 COPY openapi.yml /src/openapi.yml
 COPY frontend/package.json frontend/package-lock.json /src/frontend/
+# patch-package runs on postinstall; ensure patches exist before `npm ci` for reproducible builds.
+COPY frontend/patches/ /src/frontend/patches/
 WORKDIR /src/frontend
 RUN npm ci --no-audit --no-fund
 COPY frontend/ /src/frontend/
