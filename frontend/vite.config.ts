@@ -16,6 +16,18 @@ function chunkGroupForModule(id: string): string | undefined {
 	// into the initial bundle via helper re-exports.
 	if (id.includes('commonjsHelpers')) return 'vendor-misc'
 	if (!id.includes('node_modules/')) return undefined
+	// Keep antd's CSS-in-JS deps out of the /profiles light-shell preload.
+	if (
+		id.includes('/node_modules/stylis/') ||
+		id.includes('/node_modules/@emotion/') ||
+		id.includes('/node_modules/scroll-into-view-if-needed/') ||
+		id.includes('/node_modules/compute-scroll-into-view/') ||
+		id.includes('/node_modules/is-mobile/') ||
+		id.includes('/node_modules/react-is/') ||
+		id.includes('/node_modules/throttle-debounce/')
+	) {
+		return 'vendor-ui'
+	}
 	// Keep antd + rc-* in the same chunk to avoid cross-chunk circular init ordering issues.
 	if (
 		id.includes('/node_modules/antd/') ||
@@ -24,6 +36,10 @@ function chunkGroupForModule(id: string): string | undefined {
 		id.includes('/node_modules/rc-')
 	) {
 		return 'vendor-ui'
+	}
+	// Keep virtualization libs out of the base tanstack chunk so /profiles stays light.
+	if (id.includes('/node_modules/@tanstack/virtual-core/') || id.includes('/node_modules/@tanstack/react-virtual/')) {
+		return 'vendor-tanstack-virtual'
 	}
 	if (id.includes('/node_modules/@tanstack/')) return 'vendor-tanstack'
 	if (id.includes('/node_modules/react-dom/')) return 'vendor-react-dom'
