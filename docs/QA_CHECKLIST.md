@@ -4,31 +4,31 @@
 
 ## 0) 환경 정보
 
-- 날짜: 2026-02-13
+- 날짜: 2026-02-15
 - 환경: local
-- UI URL: `http://127.0.0.1:8080`
+- UI URL: `http://192.168.0.200:8080`
 - API Token: `change-me`
-- 스토리지 종류/엔드포인트: MinIO (`http://127.0.0.1:9000`)
+- 스토리지 종류/엔드포인트: MinIO (`http://192.168.0.200:9000`)
 - presigned 미지원 프로필: `azure_blob` (dummy credential, live API 검증용)
 - CORS 제한 환경(Origin/설정): 브라우저 기본 보안 모드에서 direct URL 요청을 `failed`로 중단해 CORS-like 실패를 재현
 
 ## 1) 기본 연결
 
-- [ ] `/api/v1/meta` 응답 정상 (토큰 필요 시 `X-Api-Token` 포함)
-- [ ] 프로필 생성/연결 테스트 성공
-- [ ] 네트워크 오프라인 배너/상태 표시 정상
+- [x] `/api/v1/meta` 응답 정상 (토큰 필요 시 `X-Api-Token` 포함)
+- [x] 프로필 생성/연결 테스트 성공
+- [x] 네트워크 오프라인 배너/상태 표시 정상 (unit: `NetworkStatusBanner.test.tsx`)
 
 ## 2) 모바일/반응형 (iPhone/Pixel 기준)
 
 - [ ] 모바일 내비게이션 Drawer 열림/닫힘 정상
-- [ ] Profiles/Buckets/Objects/Uploads/Jobs 페이지 레이아웃 깨짐 없음
+- [x] Profiles/Buckets/Objects/Uploads/Jobs 페이지 레이아웃 깨짐 없음
 - [ ] 주요 CTA 버튼(생성/업로드/다운로드/잡 생성) 접근 가능
 - [ ] 테이블/리스트 가로 스크롤/줄바꿈 동작 정상
 
 ## 3) 업로드 (Presigned/Direct)
 
-- [ ] Presigned 지원 프로필: 파일 업로드 성공
-- [ ] Presigned 지원 프로필: 폴더 업로드 성공
+- [x] Presigned 지원 프로필: 파일 업로드 성공
+- [x] Presigned 지원 프로필: 폴더 업로드 성공
 - [ ] 업로드 진행률/ETA/취소/재시도 정상
 - [x] Presigned 미지원 프로필: **staging fallback** 동작 확인
 - [ ] CORS 제한 환경: 업로드 실패 시 에러 메시지 확인
@@ -45,7 +45,7 @@
 - [ ] 업로드/다운로드 Job 생성
 - [ ] delete/copy/move Job 생성 및 진행률 확인
 - [ ] Job 로그/이벤트 스트림 표시 정상
-- [ ] 실패/재시도/취소 플로우 정상
+- [x] 실패/재시도/취소 플로우 정상
 
 ## 6) Profiles
 
@@ -57,7 +57,10 @@
 
 - [x] `frontend` lint
 - [x] `frontend` build
+- [x] `frontend` unit tests (`npm run test:unit`)
+- [x] `backend` tests (`go test ./...`)
 - [x] Playwright mobile smoke (`tests/mobile-smoke.spec.ts`, iPhone/Pixel 프로젝트)
+- [x] Playwright chromium smoke (`tests/objects-smoke.spec.ts`, `tests/jobs-flow.spec.ts`, `tests/uploads-folder.spec.ts`)
 - [x] Playwright docs smoke live (`E2E_LIVE=1`, `tests/docs-smoke.spec.ts`)
 - [x] Playwright presigned fallback/CORS mock (`tests/transfers-presigned.spec.ts`)
 - [x] Live E2E core (`tests/api-crud.spec.ts`, `tests/jobs-live-flow.spec.ts`, `tests/objects-live-flow.spec.ts`, `tests/docs-smoke.spec.ts`)

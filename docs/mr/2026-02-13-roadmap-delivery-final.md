@@ -2,7 +2,7 @@
 - 제목: `Reliability/UX roadmap delivery: rclone retry jitter + transfers rerender reduction`
 - Source branch: `mr/roadmap-delivery-2026-02-13`
 - Target branch: `main`
-- Linked issue: `#TBD` (이슈 번호 확정 후 교체)
+- Linked issue: `N/A` (연결 이슈 없음)
 
 ## 요약
 - 로드맵 P2-6/7/8 항목을 한 배치로 정리했습니다.

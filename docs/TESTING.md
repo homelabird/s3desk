@@ -71,11 +71,12 @@ test.describe('@transfer', () => {
 
 | Date | Pipeline type | Duration | Jobs | Cache notes | Notes |
 | --- | --- | --- | --- | --- | --- |
-| TBD | Baseline (before changes) | TBD | TBD | TBD | TBD |
+| 2026-02-15 | Baseline (before changes) | N/A | N/A | N/A | 이번 사이클에서 baseline CI 미실행 |
 | 2026-01-30 | `FRONTEND_PARALLEL=1` + `RUN_FULL_CHECK=1` + `RUN_DEV_AUDIT=1` (project vars) | 15m25s (failed) | 22 (18 ok, 4 failed) | N/A | Failed `helm_k8s_*` jobs (RUN_HELM_SMOKE likely enabled). |
-| TBD | `FRONTEND_PARALLEL=1` | TBD | TBD | TBD | TBD |
-| TBD | `RUN_FULL_CHECK=1` | TBD | TBD | TBD | TBD |
-| TBD | `RUN_DEV_AUDIT=1` | TBD | TBD | TBD | TBD |
+| 2026-02-15 | `FRONTEND_PARALLEL=1` | N/A | N/A | N/A | CI 측정값 미수집 |
+| 2026-02-15 | `RUN_FULL_CHECK=1` | N/A | N/A | N/A | CI 측정값 미수집 |
+| 2026-02-15 | `RUN_DEV_AUDIT=1` | N/A | N/A | N/A | CI 측정값 미수집 |
+| 2026-02-15 | Local live suite (`run_live_e2e_local`) | 16.0s | 12 tests (10 passed, 2 skipped) | Local cache warm | `api-crud/jobs-live-flow/objects-live-flow/transfers-live-fallback/bucket-policy-live/docs-smoke` 재검증 |
 ## CI environment variables (Live UI tests)
 
 Set these in CI when running `e2e_live` (or local live runs):
