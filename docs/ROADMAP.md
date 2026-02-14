@@ -136,11 +136,14 @@
   - Reduce the initial JS payload while keeping runtime stability (avoid fragile chunk splits across `antd`/`rc-*`).
 - **Done**
   - Added `npm run build:analyze` to generate a bundle treemap (`frontend/dist/stats.html`) and raw data (`frontend/dist/stats.json`).
+  - Removed antd `Table`/`Tree` usage paths and patched antd to keep `@rc-component/table` + `@rc-component/tree` out of the bundle.
+  - Patched antd barrel exports to avoid unused heavy widgets (for example `DatePicker/TimePicker/Calendar`) being pulled into `vendor-ui`.
+  - Split `@tanstack/react-virtual` into `vendor-tanstack-virtual` and excluded it from `/profiles` HTML preload.
 - **Notes**
   - We attempted to split `antd`/`rc-*` into multiple vendor chunks, but this caused production runtime init-order crashes (TDZ / circular import ordering) and was reverted.
   - Current strategy: keep `antd` + `rc-*` in a single `vendor-ui` chunk for correctness; optimize by removing optional heavy UI dependencies and deferring feature routes/modals.
-  - Current size (local build, 2026-02-14): `vendor-ui` ~869 kB / 276 kB (raw / gzip).
+  - Current size (local build, 2026-02-14): initial JS ~302 kB / 95 kB (raw / gzip), `vendor-ui` ~708 kB / 228 kB (raw / gzip), `vendor-tanstack-virtual` ~14 kB / 4.8 kB (raw / gzip).
 - **Next**
   - Keep tracking `frontend/dist/stats.json` per change; establish a soft budget and investigate growth.
-  - Reduce initial usage of table/tree-heavy components on `/profiles` (prefer route-level loading and lighter primitives).
+  - Further reduce `/profiles` preload by keeping non-essential deps out of the light shell (candidate: remove react-query from LightApp).
   - Prefer native inputs over optional UI widgets where UX is acceptable (for example date filters).

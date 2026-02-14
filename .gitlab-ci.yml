@@ -864,11 +864,20 @@ frontend_bundle_analyze:
     - cd ..
     - node scripts/bundle_report.js frontend/dist/stats.json frontend/dist/bundle-report.md
     - |
-      if rg -q "@rc-component/tree" frontend/dist/stats.json; then
-        echo "[bundle-guard] unexpected @rc-component/tree in bundle output" >&2
-        rg -n "@rc-component/tree" frontend/dist/stats.json | head -n 20 >&2 || true
-        exit 1
-      fi
+      for needle in \
+        "@rc-component/tree" \
+        "@rc-component/table" \
+        "@rc-component/picker/es/index.js" \
+        "antd/es/date-picker/index.js" \
+        "antd/es/time-picker/index.js" \
+        "antd/es/calendar/index.js" \
+      ; do
+        if rg -Fq "$needle" frontend/dist/stats.json; then
+          echo "[bundle-guard] unexpected module in bundle output: $needle" >&2
+          rg -n -F "$needle" frontend/dist/stats.json | head -n 20 >&2 || true
+          exit 1
+        fi
+      done
     - echo "[bundle-report] begin markdown preview"
     - sed -n '1,200p' frontend/dist/bundle-report.md
     - echo "[bundle-report] end markdown preview"

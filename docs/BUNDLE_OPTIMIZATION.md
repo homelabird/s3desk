@@ -14,21 +14,24 @@ Artifacts:
 
 ## Current Baseline (bundle-report.md)
 
-Key numbers to watch:
-- `vendor-ui` (antd + rc-*): about `~270 kB gzip`
-- `initial JS (index.html)`: about `~106 kB gzip` (no `vendor-ui` on the initial `/profiles` entry)
+Key numbers to watch (local build, 2026-02-14):
+- `vendor-ui` (antd + rc-*): about `~228 kB gzip`
+- `vendor-tanstack-virtual` (`@tanstack/react-virtual`): about `~4.8 kB gzip` (excluded from `/profiles` HTML preload)
+- `initial JS (index.html)`: about `~95 kB gzip` (no `vendor-ui` on the initial `/profiles` entry)
 
 Notes:
 - We intentionally keep antd + rc-* together in `vendor-ui` to avoid cross-chunk circular init ordering issues (TDZ runtime crashes).
 - That means meaningful `vendor-ui` reduction comes primarily from removing/replacing specific antd/rc features, not from splitting chunks.
+- Ant Design ships a large barrel export (`import { Button } from 'antd'`). To avoid unused heavy widgets sneaking into the bundle via that barrel, we patch antd exports in `frontend/patches/antd+6.1.0.patch`.
 
 ## Priority Targets (Top Offenders)
 
 | Priority | Target (from stats) | Where It Comes From (code) | Proposed Change | Expected Outcome |
 |---:|---|---|---|---|
-| P0 | `/profiles` initial entry pulling `vendor-ui` | `frontend/src/main.tsx`, `frontend/src/App.tsx`, `frontend/src/App.tsx` -> `frontend/src/FullApp*` | Keep `/profiles` lightweight shell and lazy-load FullApp/antd only when leaving `/profiles` or when query params are present | Major reduction in initial JS and faster first paint on `/profiles` |
-| P1 | `@rc-component/table` (`Table.js`, table selection hooks) | `frontend/src/pages/JobsPage.tsx`, `frontend/src/pages/BucketsPage.tsx`, `frontend/src/pages/ProfilesPage.tsx`, `frontend/src/pages/buckets/BucketPolicyModal.tsx`, `frontend/src/pages/objects/ObjectsGlobalSearchDrawer.tsx` | Gradually replace antd `Table` with a lightweight table/list (plain HTML, or TanStack table if we need sorting/virtualization) | Shrinks `vendor-ui` by removing rc-table and related code paths |
-| P1 | `@rc-component/tree` (`Tree.js`) | Formerly `frontend/src/pages/objects/ObjectsTreeView.tsx`, `frontend/src/components/LocalPathBrowseModal.tsx` (now removed). antd `Table` filter dropdown (tree-mode) also pulled `antd/tree` but we now patch antd to disable tree-mode filters. | Keep the app on a minimal in-house tree UI, and avoid antd Table tree-mode filters (patched via `frontend/patches/antd+6.1.0.patch`). | Shrinks `vendor-ui` and reduces complex tree behaviors/bugs |
+| P0 | `/profiles` initial entry pulling `vendor-ui` | `frontend/src/App.tsx`, `frontend/src/LightApp.tsx`, `frontend/src/FullApp.tsx` | **Done:** Keep `/profiles` on a lightweight shell and lazy-load FullApp/antd only when leaving `/profiles` or when query params are present | Faster first paint on `/profiles` and smaller initial JS |
+| P1 | `@rc-component/table` | Formerly: antd `Table` in Jobs/Buckets/Profiles/Policy/GlobalSearch | **Done:** Replace antd `Table` usages with native tables + lightweight virtualization where needed | Removes rc-table from `vendor-ui` |
+| P1 | `@rc-component/tree` | Formerly: antd `DirectoryTree`, plus antd Table filter tree-mode | **Done:** Replace tree UI with a minimal in-house component; patch antd FilterDropdown tree-mode | Removes rc-tree from `vendor-ui` |
+| P1 | `@rc-component/picker` (`DatePicker/TimePicker/Calendar`) | antd barrel export pulling picker stack | **Done:** Avoid picker widgets and patch antd exports so picker modules don’t enter the bundle | Keeps picker stack out of `vendor-ui` |
 | P2 | `@rc-component/form` (useForm, Field) | `frontend/src/pages/profiles/ProfileModal.tsx`, many modals/hooks | For simple dialogs, use native `<form>` + controlled inputs; keep antd Form only where it adds real value | Long-term `vendor-ui` shrink; less form magic to debug |
 | P2 | `@ant-design/icons` | Widely imported across pages/components | Replace hot-path icons with inline SVGs (local) or a tiny icon set | Smaller `vendor-ui`, fewer icon-related modules |
 

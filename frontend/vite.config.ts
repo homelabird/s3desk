@@ -8,6 +8,7 @@ const OPTIONAL_INITIAL_UI_CHUNK_MARKERS = [
 	'vendor-ui-form-',
 	'vendor-ui-upload-',
 	'vendor-ui-tabs-',
+	'vendor-tanstack-virtual-',
 ] as const
 
 function chunkGroupForModule(id: string): string | undefined {
