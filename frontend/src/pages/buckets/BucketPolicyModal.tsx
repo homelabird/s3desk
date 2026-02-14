@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Input, Modal, Radio, Select, Space, Switch, Table, Tabs, Tooltip, Typography, message } from 'antd'
+import { Alert, Button, Input, Modal, Radio, Select, Space, Switch, Tabs, Tooltip, Typography, message } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useMemo, useRef, useState } from 'react'
 
@@ -506,58 +506,61 @@ function BucketPolicyEditor(props: {
 						/>
 					)}
 
-					<Table
-						size="small"
-						rowKey="key"
-						pagination={false}
-						dataSource={gcsBindings}
-						locale={{ emptyText: 'No bindings' }}
-						columns={[
-							{
-								title: 'Role',
-								dataIndex: 'role',
-									render: (_: unknown, row: GcsBindingRow) => (
-										<Input
-											value={row.role}
-											aria-label="Role"
-											onChange={(e) => {
-												const v = e.target.value
-												setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, role: v } : b)))
-											}}
-											placeholder="roles/storage.objectViewer…"
-										/>
-									),
-								},
-								{
-									title: 'Members',
-									render: (_: unknown, row: GcsBindingRow) => (
-										<Select
-											mode="tags"
-											value={row.members}
-											aria-label="Members"
-											onChange={(vals: string[]) => {
-												setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, members: vals } : b)))
-											}}
-											style={{ width: '100%' }}
-										placeholder="allUsers, user:alice@example.com…"
-									/>
-								),
-							},
-							{
-								title: 'Actions',
-								width: 90,
-								render: (_: unknown, row: GcsBindingRow) => (
-									<Button
-										danger
-										size="small"
-										onClick={() => setGcsBindings((prev) => prev.filter((b) => b.key !== row.key))}
-									>
-										Remove
-									</Button>
-								),
-							},
-						]}
-					/>
+					{gcsBindings.length === 0 ? (
+						<Typography.Text type="secondary">No bindings</Typography.Text>
+					) : (
+						<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
+							<table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse' }}>
+								<thead>
+									<tr style={{ background: '#fafafa' }}>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 260 }}>
+											Role
+										</th>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+											Members
+										</th>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 90 }}>
+											Actions
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{gcsBindings.map((row) => (
+										<tr key={row.key}>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Input
+													value={row.role}
+													aria-label="Role"
+													onChange={(e) => {
+														const v = e.target.value
+														setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, role: v } : b)))
+													}}
+													placeholder="roles/storage.objectViewer…"
+												/>
+											</td>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Select
+													mode="tags"
+													value={row.members}
+													aria-label="Members"
+													onChange={(vals: string[]) => {
+														setGcsBindings((prev) => prev.map((b) => (b.key === row.key ? { ...b, members: vals } : b)))
+													}}
+													style={{ width: '100%', minWidth: 320 }}
+													placeholder="allUsers, user:alice@example.com…"
+												/>
+											</td>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Button danger size="small" onClick={() => setGcsBindings((prev) => prev.filter((b) => b.key !== row.key))}>
+													Remove
+												</Button>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
 
 					<Button
 						icon={<PlusOutlined />}
@@ -591,84 +594,86 @@ function BucketPolicyEditor(props: {
 						<Alert type="warning" showIcon title="Azure supports at most 5 stored access policies" />
 					) : null}
 
-					<Table
-						size="small"
-						rowKey="key"
-						pagination={false}
-						dataSource={azureStoredPolicies}
-						locale={{ emptyText: 'No stored access policies' }}
-						columns={[
-							{
-								title: 'ID',
-									render: (_: unknown, row: AzureStoredPolicyRow) => (
-										<Input
-											value={row.id}
-											aria-label="ID"
-											onChange={(e) => {
-												const v = e.target.value
-												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, id: v } : p)))
-											}}
-										placeholder="policy-id…"
-									/>
-								),
-							},
-							{
-								title: 'Start (optional)',
-									render: (_: unknown, row: AzureStoredPolicyRow) => (
-										<Input
-											value={row.start}
-											aria-label="Start"
-											onChange={(e) => {
-												const v = e.target.value
-												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, start: v } : p)))
-											}}
-										placeholder="2024-01-01T00:00:00Z…"
-									/>
-								),
-							},
-							{
-								title: 'Expiry (optional)',
-									render: (_: unknown, row: AzureStoredPolicyRow) => (
-										<Input
-											value={row.expiry}
-											aria-label="Expiry"
-											onChange={(e) => {
-												const v = e.target.value
-												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, expiry: v } : p)))
-											}}
-										placeholder="2024-02-01T00:00:00Z…"
-									/>
-								),
-							},
-							{
-								title: 'Permission',
-									render: (_: unknown, row: AzureStoredPolicyRow) => (
-										<Input
-											value={row.permission}
-											aria-label="Permission"
-											onChange={(e) => {
-												const v = e.target.value
-												setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, permission: v } : p)))
-											}}
-										placeholder="rl…"
-									/>
-								),
-							},
-							{
-								title: 'Actions',
-								width: 90,
-								render: (_: unknown, row: AzureStoredPolicyRow) => (
-									<Button
-										danger
-										size="small"
-										onClick={() => setAzureStoredPolicies((prev) => prev.filter((p) => p.key !== row.key))}
-									>
-										Remove
-									</Button>
-								),
-							},
-						]}
-					/>
+					{azureStoredPolicies.length === 0 ? (
+						<Typography.Text type="secondary">No stored access policies</Typography.Text>
+					) : (
+						<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
+							<table style={{ width: '100%', minWidth: 860, borderCollapse: 'collapse' }}>
+								<thead>
+									<tr style={{ background: '#fafafa' }}>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 240 }}>ID</th>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+											Start (optional)
+										</th>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+											Expiry (optional)
+										</th>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 140 }}>
+											Permission
+										</th>
+										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 90 }}>
+											Actions
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{azureStoredPolicies.map((row) => (
+										<tr key={row.key}>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Input
+													value={row.id}
+													aria-label="ID"
+													onChange={(e) => {
+														const v = e.target.value
+														setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, id: v } : p)))
+													}}
+													placeholder="policy-id…"
+												/>
+											</td>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Input
+													value={row.start}
+													aria-label="Start"
+													onChange={(e) => {
+														const v = e.target.value
+														setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, start: v } : p)))
+													}}
+													placeholder="2024-01-01T00:00:00Z…"
+												/>
+											</td>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Input
+													value={row.expiry}
+													aria-label="Expiry"
+													onChange={(e) => {
+														const v = e.target.value
+														setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, expiry: v } : p)))
+													}}
+													placeholder="2024-02-01T00:00:00Z…"
+												/>
+											</td>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Input
+													value={row.permission}
+													aria-label="Permission"
+													onChange={(e) => {
+														const v = e.target.value
+														setAzureStoredPolicies((prev) => prev.map((p) => (p.key === row.key ? { ...p, permission: v } : p)))
+													}}
+													placeholder="rl…"
+												/>
+											</td>
+											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<Button danger size="small" onClick={() => setAzureStoredPolicies((prev) => prev.filter((p) => p.key !== row.key))}>
+													Remove
+												</Button>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
 
 					<Button
 						icon={<PlusOutlined />}
