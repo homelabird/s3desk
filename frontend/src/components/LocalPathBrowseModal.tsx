@@ -1,10 +1,12 @@
-import { Alert, Button, Modal, Space, Spin, Tree, Typography } from 'antd'
+import { Alert, Button, Modal, Space, Spin, Typography } from 'antd'
 import { FolderOutlined, ReloadOutlined } from '@ant-design/icons'
-import type { DataNode, EventDataNode } from 'antd/es/tree'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { APIClient } from '../api/client'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
+import type { TreeNode } from '../lib/tree'
+import { upsertTreeChildren } from '../lib/tree'
+import { SimpleTree } from './SimpleTree'
 
 type Props = {
 	api: APIClient
@@ -16,7 +18,9 @@ type Props = {
 }
 
 export function LocalPathBrowseModal(props: Props) {
-	const [treeData, setTreeData] = useState<DataNode[]>([])
+	const [treeData, setTreeData] = useState<TreeNode[]>([])
+	const [expandedKeys, setExpandedKeys] = useState<string[]>([])
+	const [loadingKeys, setLoadingKeys] = useState<string[]>([])
 	const loadedKeysRef = useRef<Set<string>>(new Set())
 	const epochRef = useRef(0)
 	const [loadingRoot, setLoadingRoot] = useState(false)
@@ -29,12 +33,14 @@ export function LocalPathBrowseModal(props: Props) {
 		setLoadingRoot(true)
 		setError(null)
 		setSelectedPath(null)
+		setExpandedKeys([])
+		setLoadingKeys([])
 		loadedKeysRef.current.clear()
 		try {
 			const resp = await props.api.listLocalEntries({ profileId: props.profileId })
 			if (epochRef.current !== epoch) return
 
-			const roots = (resp.entries ?? []).map((e): DataNode => ({
+			const roots = (resp.entries ?? []).map((e): TreeNode => ({
 				key: e.path,
 				title: (
 					<Space size={8}>
@@ -63,19 +69,20 @@ export function LocalPathBrowseModal(props: Props) {
 	}, [loadRoot, props.open])
 
 	const onLoadData = useCallback(
-		async (node: EventDataNode<DataNode>) => {
+		async (nodeKey: string) => {
 			if (!props.profileId) return
-			const key = String(node.key)
+			const key = String(nodeKey)
 			if (!key) return
 			if (loadedKeysRef.current.has(key)) return
 			setError(null)
 			loadedKeysRef.current.add(key)
+			setLoadingKeys((prev) => (prev.includes(key) ? prev : [...prev, key]))
 
 			const epoch = epochRef.current
 			try {
 				const resp = await props.api.listLocalEntries({ profileId: props.profileId, path: key })
 				if (epochRef.current !== epoch) return
-				const children = (resp.entries ?? []).map((e): DataNode => ({
+				const children = (resp.entries ?? []).map((e): TreeNode => ({
 					key: e.path,
 					title: (
 						<Space size={8}>
@@ -86,9 +93,11 @@ export function LocalPathBrowseModal(props: Props) {
 					isLeaf: false,
 				}))
 				setTreeData((prev) => upsertTreeChildren(prev, key, children))
+				setLoadingKeys((prev) => prev.filter((k) => k !== key))
 			} catch (err) {
 				loadedKeysRef.current.delete(key)
 				setError(formatErr(err))
+				setLoadingKeys((prev) => prev.filter((k) => k !== key))
 			}
 		},
 		[props.api, props.profileId],
@@ -137,12 +146,16 @@ export function LocalPathBrowseModal(props: Props) {
 						) : treeData.length === 0 ? (
 							<Typography.Text type="secondary">No directories.</Typography.Text>
 						) : (
-							<Tree.DirectoryTree
-								blockNode
-								showIcon={false}
-								treeData={treeData}
+							<SimpleTree
+								nodes={treeData}
 								loadData={onLoadData}
-								onSelect={(keys) => setSelectedPath(keys.length ? String(keys[0]) : null)}
+								selectedKeys={selectedPath ? [selectedPath] : []}
+								expandedKeys={expandedKeys}
+								onExpandedKeysChange={setExpandedKeys}
+								onSelectKey={(key) => setSelectedPath(key ? String(key) : null)}
+								showIcon={false}
+								loadingKeys={loadingKeys}
+								indentPx={12}
 							/>
 						)}
 					</div>
@@ -151,18 +164,3 @@ export function LocalPathBrowseModal(props: Props) {
 		</Modal>
 	)
 }
-
-function upsertTreeChildren(nodes: DataNode[], targetKey: string, children: DataNode[]): DataNode[] {
-	return nodes.map((node) => {
-		if (String(node.key) === targetKey) {
-			const nextChildren = children.length ? children : undefined
-			return { ...node, children: nextChildren, isLeaf: children.length === 0 }
-		}
-		if (node.children && Array.isArray(node.children)) {
-			return { ...node, children: upsertTreeChildren(node.children as DataNode[], targetKey, children) }
-		}
-		return node
-	})
-}
-
-// formatErr lives in ../lib/errors

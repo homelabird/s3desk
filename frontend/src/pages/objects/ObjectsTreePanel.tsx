@@ -1,5 +1,4 @@
 import { Button, Drawer, Tooltip } from 'antd'
-import type { DataNode, EventDataNode } from 'antd/es/tree'
 import { FolderAddOutlined } from '@ant-design/icons'
 import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 
@@ -8,6 +7,7 @@ import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
 import { ObjectsTreePane } from './ObjectsTreePane'
 import { ObjectsTreeView } from './ObjectsTreeView'
 import type { FavoriteObjectItem } from '../../api/types'
+import type { TreeNode } from '../../lib/tree'
 
 type ObjectsTreePanelProps = {
 	dockTree: boolean
@@ -25,13 +25,14 @@ type ObjectsTreePanelProps = {
 	onSelectFavoriteFromDrawer: (key: string) => void
 	favoritesLoading: boolean
 	favoritesError?: string | null
-	treeData: DataNode[]
+	treeData: TreeNode[]
+	loadingKeys?: string[]
 	expandedKeys: string[]
 	selectedKeys: string[]
 	onExpandedKeysChange: (keys: string[]) => void
 	onSelectKey: (key: string) => void
 	onSelectKeyFromDrawer: (key: string) => void
-	onLoadData: (node: EventDataNode<DataNode>) => Promise<void>
+	onLoadData: (nodeKey: string) => Promise<void>
 	getDropTargetPrefix: (nodeKey: string) => string
 	canDragDrop: boolean
 	dndHoverPrefix: string | null
@@ -54,6 +55,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 			hasProfile={props.hasProfile}
 			hasBucket={props.hasBucket}
 			treeData={props.treeData}
+			loadingKeys={props.loadingKeys}
 			onLoadData={props.onLoadData}
 			selectedKeys={props.selectedKeys}
 			expandedKeys={props.expandedKeys}
@@ -74,47 +76,47 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 		const newFolderLabel = selectedKey === '/' ? 'New folder' : 'New subfolder'
 		return (
 			<div className={styles.treeStack}>
-			<ObjectsFavoritesPane
-				hasProfile={props.hasProfile}
-				hasBucket={props.hasBucket}
-				favorites={props.favorites}
-				favoritesOnly={props.favoritesOnly}
-				onFavoritesOnlyChange={props.onFavoritesOnlyChange}
-				openDetailsOnClick={props.favoritesOpenDetails}
-				onOpenDetailsOnClickChange={props.onFavoritesOpenDetailsChange}
-				query={props.favoritesSearch}
-				onQueryChange={props.onFavoritesSearchChange}
-				onSelectFavorite={onSelectFavorite}
-				isLoading={props.favoritesLoading}
-				errorMessage={props.favoritesError}
-			/>
-			<ObjectsTreePane
-				title="Folders"
-				extra={
-					<Tooltip
-						title={
-							props.canCreateFolder
-								? selectedKey === '/'
-									? 'New folder (Ctrl+Shift+N)'
-									: 'New subfolder'
-								: props.createFolderTooltipText
-						}
-					>
-						<span>
-							<Button
-								size="small"
-								type="text"
-								icon={<FolderAddOutlined />}
-								disabled={!props.canCreateFolder}
-								aria-label={newFolderLabel}
-								onClick={() => props.onNewFolderAtPrefix(selectedKey)}
-							/>
-						</span>
-					</Tooltip>
-				}
-			>
-				{renderTreeView(onSelectKey)}
-			</ObjectsTreePane>
+				<ObjectsFavoritesPane
+					hasProfile={props.hasProfile}
+					hasBucket={props.hasBucket}
+					favorites={props.favorites}
+					favoritesOnly={props.favoritesOnly}
+					onFavoritesOnlyChange={props.onFavoritesOnlyChange}
+					openDetailsOnClick={props.favoritesOpenDetails}
+					onOpenDetailsOnClickChange={props.onFavoritesOpenDetailsChange}
+					query={props.favoritesSearch}
+					onQueryChange={props.onFavoritesSearchChange}
+					onSelectFavorite={onSelectFavorite}
+					isLoading={props.favoritesLoading}
+					errorMessage={props.favoritesError}
+				/>
+				<ObjectsTreePane
+					title="Folders"
+					extra={
+						<Tooltip
+							title={
+								props.canCreateFolder
+									? selectedKey === '/'
+										? 'New folder (Ctrl+Shift+N)'
+										: 'New subfolder'
+									: props.createFolderTooltipText
+							}
+						>
+							<span>
+								<Button
+									size="small"
+									type="text"
+									icon={<FolderAddOutlined />}
+									disabled={!props.canCreateFolder}
+									aria-label={newFolderLabel}
+									onClick={() => props.onNewFolderAtPrefix(selectedKey)}
+								/>
+							</span>
+						</Tooltip>
+					}
+				>
+					{renderTreeView(onSelectKey)}
+				</ObjectsTreePane>
 			</div>
 		)
 	}

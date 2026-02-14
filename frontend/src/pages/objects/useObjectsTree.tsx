@@ -1,12 +1,13 @@
 import { FolderOutlined } from '@ant-design/icons'
 import { message } from 'antd'
-import type { DataNode, EventDataNode } from 'antd/es/tree'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { TreeNode } from '../../lib/tree'
+import { upsertTreeChildren } from '../../lib/tree'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
-import { folderLabelFromPrefix, treeAncestorKeys, treeKeyFromPrefix, upsertTreeChildren } from './objectsListUtils'
+import { folderLabelFromPrefix, treeAncestorKeys, treeKeyFromPrefix } from './objectsListUtils'
 
 type LogFn = (
 	enabled: boolean,
@@ -26,13 +27,14 @@ type UseObjectsTreeArgs = {
 
 export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, log }: UseObjectsTreeArgs) {
 	const [, setTreeExpandedByBucket] = useLocalStorageState<Record<string, string[]>>('objectsTreeExpandedByBucket', {})
-	const [treeData, setTreeData] = useState<DataNode[]>(() => [
+	const [treeData, setTreeData] = useState<TreeNode[]>(() => [
 		{ key: '/', title: '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: '#1677ff' }} /> },
 	])
 	const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([])
 	const [treeSelectedKeys, setTreeSelectedKeys] = useState<string[]>(['/'])
 	const treeLoadedKeysRef = useRef<Set<string>>(new Set())
 	const treeLoadingKeysRef = useRef<Set<string>>(new Set())
+	const [treeLoadingKeys, setTreeLoadingKeys] = useState<string[]>([])
 	const treeEpochRef = useRef(0)
 	const [treeDrawerOpen, setTreeDrawerOpen] = useState(false)
 
@@ -42,6 +44,7 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 			if (treeLoadedKeysRef.current.has(nodeKey)) return
 			if (treeLoadingKeysRef.current.has(nodeKey)) return
 			treeLoadingKeysRef.current.add(nodeKey)
+			setTreeLoadingKeys((prev) => (prev.includes(nodeKey) ? prev : [...prev, nodeKey]))
 
 			const epoch = treeEpochRef.current
 			const prefixesSet = new Set<string>()
@@ -103,15 +106,17 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 			} catch (err) {
 				message.error(formatErr(err))
 				treeLoadingKeysRef.current.delete(nodeKey)
+				setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
 				return
 			}
 
 			if (treeEpochRef.current !== epoch) {
 				treeLoadingKeysRef.current.delete(nodeKey)
+				setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
 				return
 			}
 
-			const children: DataNode[] = Array.from(prefixesSet)
+			const children: TreeNode[] = Array.from(prefixesSet)
 				.sort((a, b) => a.localeCompare(b))
 				.map((p) => ({
 					key: p,
@@ -123,13 +128,13 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 			setTreeData((prev) => upsertTreeChildren(prev, nodeKey, children))
 			treeLoadedKeysRef.current.add(nodeKey)
 			treeLoadingKeysRef.current.delete(nodeKey)
+			setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
 		},
 		[api, bucket, debugEnabled, log, profileId],
 	)
 
-	const onTreeLoadData = useCallback(async (node: EventDataNode<DataNode>) => {
-		const key = String(node.key)
-		await loadTreeChildren(key)
+	const onTreeLoadData = useCallback(async (nodeKey: string) => {
+		await loadTreeChildren(String(nodeKey))
 	}, [loadTreeChildren])
 
 	const refreshTreeNode = useCallback(
@@ -144,6 +149,7 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 		treeEpochRef.current++
 		treeLoadedKeysRef.current.clear()
 		treeLoadingKeysRef.current.clear()
+		setTreeLoadingKeys([])
 		setTreeExpandedKeys([])
 		setTreeData([
 			{ key: '/', title: bucket || '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: '#1677ff' }} /> },
@@ -176,6 +182,7 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 		setTreeSelectedKeys,
 		onTreeLoadData,
 		refreshTreeNode,
+		treeLoadingKeys,
 		treeDrawerOpen,
 		setTreeDrawerOpen,
 	}

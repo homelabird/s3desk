@@ -1,5 +1,3 @@
-import type { DataNode } from 'antd/es/tree'
-
 import type { ListObjectsResponse, ObjectItem } from '../../api/types'
 import { parseTimeMs } from '../../lib/format'
 import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
@@ -84,18 +82,6 @@ export function fileNameFromKey(key: string): string {
 	const trimmed = key.replace(/\/+$/, '')
 	const parts = trimmed.split('/').filter(Boolean)
 	return parts.length ? parts[parts.length - 1] : trimmed || key
-}
-
-export function upsertTreeChildren(nodes: DataNode[], targetKey: string, children: DataNode[]): DataNode[] {
-	return nodes.map((node) => {
-		if (String(node.key) === targetKey) {
-			return { ...node, children, isLeaf: children.length === 0 }
-		}
-		if (node.children && Array.isArray(node.children)) {
-			return { ...node, children: upsertTreeChildren(node.children as DataNode[], targetKey, children) }
-		}
-		return node
-	})
 }
 
 export function displayNameForKey(key: string, currentPrefix: string): string {

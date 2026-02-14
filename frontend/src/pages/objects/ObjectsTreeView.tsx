@@ -1,16 +1,19 @@
-import { Tree, Typography } from 'antd'
-import type { DataNode, EventDataNode } from 'antd/es/tree'
+import { Typography } from 'antd'
 import type { DragEvent, MouseEvent as ReactMouseEvent } from 'react'
+
+import { SimpleTree } from '../../components/SimpleTree'
+import { renderTreeNodeTitle, type TreeNode } from '../../lib/tree'
 
 type ObjectsTreeViewProps = {
 	hasProfile: boolean
 	hasBucket: boolean
-	treeData: DataNode[]
+	treeData: TreeNode[]
+	loadingKeys?: string[]
 	expandedKeys: string[]
 	selectedKeys: string[]
 	onExpandedKeysChange: (keys: string[]) => void
 	onSelectKey: (key: string) => void
-	onLoadData: (node: EventDataNode<DataNode>) => Promise<void>
+	onLoadData: (nodeKey: string) => Promise<void>
 	getDropTargetPrefix: (nodeKey: string) => string
 	canDragDrop: boolean
 	dndHoverPrefix: string | null
@@ -29,16 +32,20 @@ export function ObjectsTreeView(props: ObjectsTreeViewProps) {
 	}
 
 	return (
-		<Tree.DirectoryTree
-			blockNode
-			showIcon
-			treeData={props.treeData}
+		<SimpleTree
+			nodes={props.treeData}
 			loadData={props.onLoadData}
-			titleRender={(node: DataNode) => {
+			selectedKeys={props.selectedKeys}
+			expandedKeys={props.expandedKeys}
+			onExpandedKeysChange={(keys) => props.onExpandedKeysChange(keys.map(String))}
+			onSelectKey={(key) => props.onSelectKey(String(key))}
+			showIcon
+			loadingKeys={props.loadingKeys}
+			renderTitle={(node) => {
 				const nodeKey = String(node.key ?? '/')
 				const target = props.getDropTargetPrefix(nodeKey)
 				const active = props.canDragDrop && props.dndHoverPrefix === target
-				const renderedTitle = typeof node.title === 'function' ? node.title(node) : node.title
+				const renderedTitle = renderTreeNodeTitle(node)
 				return (
 					<span
 						onContextMenu={
@@ -65,13 +72,6 @@ export function ObjectsTreeView(props: ObjectsTreeViewProps) {
 						{renderedTitle}
 					</span>
 				)
-			}}
-			selectedKeys={props.selectedKeys}
-			expandedKeys={props.expandedKeys}
-			onExpand={(keys) => props.onExpandedKeysChange(keys.map(String))}
-			onSelect={(keys) => {
-				const key = String(keys[0] ?? '/')
-				props.onSelectKey(key)
 			}}
 		/>
 	)

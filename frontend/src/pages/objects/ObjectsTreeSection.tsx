@@ -1,6 +1,6 @@
 import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
-import type { DataNode, EventDataNode } from 'antd/es/tree'
 import type { FavoriteObjectItem } from '../../api/types'
+import type { TreeNode } from '../../lib/tree'
 
 import { ObjectsTreePanel } from './ObjectsTreePanel'
 
@@ -20,8 +20,9 @@ type ObjectsTreeSectionProps = {
 	onSelectFavoriteFromDrawer: (key: string) => void
 	favoritesLoading: boolean
 	favoritesError?: string | null
-	treeData: DataNode[]
-	onLoadData: (node: EventDataNode<DataNode>) => Promise<void>
+	treeData: TreeNode[]
+	loadingKeys?: string[]
+	onLoadData: (nodeKey: string) => Promise<void>
 	selectedKeys: string[]
 	expandedKeys: string[]
 	onExpandedKeysChange: (keys: string[]) => void

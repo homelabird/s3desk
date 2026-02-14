@@ -344,6 +344,7 @@ export function ObjectsPage(props: Props) {
 		setTreeSelectedKeys,
 		onTreeLoadData,
 		refreshTreeNode,
+		treeLoadingKeys,
 		treeDrawerOpen,
 		setTreeDrawerOpen,
 	} = useObjectsTree({
@@ -2674,6 +2675,7 @@ const objectsQuery = useInfiniteQuery({
 						favoritesLoading={favoritesQuery.isFetching}
 						favoritesError={favoritesQuery.isError ? formatErr(favoritesQuery.error) : null}
 						treeData={treeData}
+						loadingKeys={treeLoadingKeys}
 						onLoadData={onTreeLoadData}
 						selectedKeys={treeSelectedKeys}
 						expandedKeys={treeExpandedKeys}
