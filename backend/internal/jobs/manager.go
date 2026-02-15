@@ -1161,11 +1161,15 @@ func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID 
 }
 
 func (m *Manager) runTransferCopyObject(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	srcBucket, _ := payload["srcBucket"].(string)
-	srcKey, _ := payload["srcKey"].(string)
-	dstBucket, _ := payload["dstBucket"].(string)
-	dstKey, _ := payload["dstKey"].(string)
-	dryRun, _ := payload["dryRun"].(bool)
+	parsed, err := parseTransferCopyMoveObjectPayload(payload)
+	if err != nil {
+		return err
+	}
+	srcBucket := parsed.SrcBucket
+	srcKey := parsed.SrcKey
+	dstBucket := parsed.DstBucket
+	dstKey := parsed.DstKey
+	dryRun := parsed.DryRun
 
 	srcBucket = strings.TrimSpace(srcBucket)
 	srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
@@ -1189,11 +1193,15 @@ func (m *Manager) runTransferCopyObject(ctx context.Context, profileID, jobID st
 }
 
 func (m *Manager) runTransferMoveObject(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	srcBucket, _ := payload["srcBucket"].(string)
-	srcKey, _ := payload["srcKey"].(string)
-	dstBucket, _ := payload["dstBucket"].(string)
-	dstKey, _ := payload["dstKey"].(string)
-	dryRun, _ := payload["dryRun"].(bool)
+	parsed, err := parseTransferCopyMoveObjectPayload(payload)
+	if err != nil {
+		return err
+	}
+	srcBucket := parsed.SrcBucket
+	srcKey := parsed.SrcKey
+	dstBucket := parsed.DstBucket
+	dstKey := parsed.DstKey
+	dryRun := parsed.DryRun
 
 	srcBucket = strings.TrimSpace(srcBucket)
 	srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
