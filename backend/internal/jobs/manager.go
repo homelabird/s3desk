@@ -990,7 +990,11 @@ func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt 
 }
 
 func (m *Manager) runTransferSyncStagingToS3(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	uploadID, _ := payload["uploadId"].(string)
+	parsed, err := parseTransferSyncStagingToS3Payload(payload)
+	if err != nil {
+		return err
+	}
+	uploadID := parsed.UploadID
 	if uploadID == "" {
 		return errors.New("payload.uploadId is required")
 	}
@@ -1031,17 +1035,21 @@ func (m *Manager) runTransferSyncStagingToS3(ctx context.Context, profileID, job
 }
 
 func (m *Manager) runTransferSyncLocalToS3(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	bucket, _ := payload["bucket"].(string)
-	prefix, _ := payload["prefix"].(string)
-	localPath, _ := payload["localPath"].(string)
+	parsed, err := parseTransferSyncLocalPathPayload(payload)
+	if err != nil {
+		return err
+	}
+	bucket := parsed.Bucket
+	prefix := parsed.Prefix
+	localPath := parsed.LocalPath
 	if bucket == "" || localPath == "" {
 		return errors.New("payload.bucket and payload.localPath are required")
 	}
 
-	dryRun, _ := payload["dryRun"].(bool)
-	deleteExtraneous, _ := payload["deleteExtraneous"].(bool)
-	include := stringSlice(payload["include"])
-	exclude := stringSlice(payload["exclude"])
+	dryRun := parsed.DryRun
+	deleteExtraneous := parsed.DeleteExtraneous
+	include := parsed.Include
+	exclude := parsed.Exclude
 
 	src := filepath.Clean(localPath)
 	if err := m.ensureLocalPathAllowed(src); err != nil {
@@ -1058,17 +1066,21 @@ func (m *Manager) runTransferSyncLocalToS3(ctx context.Context, profileID, jobID
 }
 
 func (m *Manager) runTransferSyncS3ToLocal(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	bucket, _ := payload["bucket"].(string)
-	prefix, _ := payload["prefix"].(string)
-	localPath, _ := payload["localPath"].(string)
+	parsed, err := parseTransferSyncLocalPathPayload(payload)
+	if err != nil {
+		return err
+	}
+	bucket := parsed.Bucket
+	prefix := parsed.Prefix
+	localPath := parsed.LocalPath
 	if bucket == "" || localPath == "" {
 		return errors.New("payload.bucket and payload.localPath are required")
 	}
 
-	dryRun, _ := payload["dryRun"].(bool)
-	deleteExtraneous, _ := payload["deleteExtraneous"].(bool)
-	include := stringSlice(payload["include"])
-	exclude := stringSlice(payload["exclude"])
+	dryRun := parsed.DryRun
+	deleteExtraneous := parsed.DeleteExtraneous
+	include := parsed.Include
+	exclude := parsed.Exclude
 
 	bucket = strings.TrimSpace(bucket)
 	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
@@ -1225,30 +1237,28 @@ func (m *Manager) runTransferMoveObject(ctx context.Context, profileID, jobID st
 }
 
 func (m *Manager) runTransferCopyBatch(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	srcBucket, _ := payload["srcBucket"].(string)
-	dstBucket, _ := payload["dstBucket"].(string)
-	rawItems, _ := payload["items"].([]any)
-	dryRun, _ := payload["dryRun"].(bool)
+	parsed, err := parseTransferBatchPayload(payload)
+	if err != nil {
+		return err
+	}
+	srcBucket := parsed.SrcBucket
+	dstBucket := parsed.DstBucket
+	items := parsed.Items
+	dryRun := parsed.DryRun
 
 	srcBucket = strings.TrimSpace(srcBucket)
 	dstBucket = strings.TrimSpace(dstBucket)
 	if srcBucket == "" || dstBucket == "" {
 		return errors.New("payload.srcBucket and payload.dstBucket are required")
 	}
-	if len(rawItems) < 1 {
+	if len(items) < 1 {
 		return errors.New("payload.items is required")
 	}
 
-	pairs := make([]s3KeyPair, 0, len(rawItems))
-	for i, item := range rawItems {
-		mm, ok := item.(map[string]any)
-		if !ok {
-			return fmt.Errorf("payload.items[%d] must be an object", i)
-		}
-		srcKey, _ := mm["srcKey"].(string)
-		dstKey, _ := mm["dstKey"].(string)
-		srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
-		dstKey = normalizeKeyInput(dstKey, preserveLeadingSlash)
+	pairs := make([]s3KeyPair, 0, len(items))
+	for i, item := range items {
+		srcKey := normalizeKeyInput(item.SrcKey, preserveLeadingSlash)
+		dstKey := normalizeKeyInput(item.DstKey, preserveLeadingSlash)
 		if srcKey == "" || dstKey == "" {
 			return fmt.Errorf("payload.items[%d].srcKey and payload.items[%d].dstKey are required", i, i)
 		}
@@ -1270,30 +1280,28 @@ func (m *Manager) runTransferCopyBatch(ctx context.Context, profileID, jobID str
 }
 
 func (m *Manager) runTransferMoveBatch(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	srcBucket, _ := payload["srcBucket"].(string)
-	dstBucket, _ := payload["dstBucket"].(string)
-	rawItems, _ := payload["items"].([]any)
-	dryRun, _ := payload["dryRun"].(bool)
+	parsed, err := parseTransferBatchPayload(payload)
+	if err != nil {
+		return err
+	}
+	srcBucket := parsed.SrcBucket
+	dstBucket := parsed.DstBucket
+	items := parsed.Items
+	dryRun := parsed.DryRun
 
 	srcBucket = strings.TrimSpace(srcBucket)
 	dstBucket = strings.TrimSpace(dstBucket)
 	if srcBucket == "" || dstBucket == "" {
 		return errors.New("payload.srcBucket and payload.dstBucket are required")
 	}
-	if len(rawItems) < 1 {
+	if len(items) < 1 {
 		return errors.New("payload.items is required")
 	}
 
-	pairs := make([]s3KeyPair, 0, len(rawItems))
-	for i, item := range rawItems {
-		mm, ok := item.(map[string]any)
-		if !ok {
-			return fmt.Errorf("payload.items[%d] must be an object", i)
-		}
-		srcKey, _ := mm["srcKey"].(string)
-		dstKey, _ := mm["dstKey"].(string)
-		srcKey = normalizeKeyInput(srcKey, preserveLeadingSlash)
-		dstKey = normalizeKeyInput(dstKey, preserveLeadingSlash)
+	pairs := make([]s3KeyPair, 0, len(items))
+	for i, item := range items {
+		srcKey := normalizeKeyInput(item.SrcKey, preserveLeadingSlash)
+		dstKey := normalizeKeyInput(item.DstKey, preserveLeadingSlash)
 		if srcKey == "" || dstKey == "" {
 			return fmt.Errorf("payload.items[%d].srcKey and payload.items[%d].dstKey are required", i, i)
 		}
@@ -1485,13 +1493,17 @@ func (m *Manager) trySetJobObjectsTotalFromS3Prefix(ctx context.Context, profile
 }
 
 func (m *Manager) runTransferCopyPrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	srcBucket, _ := payload["srcBucket"].(string)
-	srcPrefix, _ := payload["srcPrefix"].(string)
-	dstBucket, _ := payload["dstBucket"].(string)
-	dstPrefix, _ := payload["dstPrefix"].(string)
-	dryRun, _ := payload["dryRun"].(bool)
-	include := stringSlice(payload["include"])
-	exclude := stringSlice(payload["exclude"])
+	parsed, err := parseTransferCopyMovePrefixPayload(payload)
+	if err != nil {
+		return err
+	}
+	srcBucket := parsed.SrcBucket
+	srcPrefix := parsed.SrcPrefix
+	dstBucket := parsed.DstBucket
+	dstPrefix := parsed.DstPrefix
+	dryRun := parsed.DryRun
+	include := parsed.Include
+	exclude := parsed.Exclude
 
 	srcBucket = strings.TrimSpace(srcBucket)
 	srcPrefix = normalizeKeyInput(srcPrefix, preserveLeadingSlash)
@@ -1552,13 +1564,17 @@ func (m *Manager) runTransferCopyPrefix(ctx context.Context, profileID, jobID st
 }
 
 func (m *Manager) runTransferMovePrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	srcBucket, _ := payload["srcBucket"].(string)
-	srcPrefix, _ := payload["srcPrefix"].(string)
-	dstBucket, _ := payload["dstBucket"].(string)
-	dstPrefix, _ := payload["dstPrefix"].(string)
-	dryRun, _ := payload["dryRun"].(bool)
-	include := stringSlice(payload["include"])
-	exclude := stringSlice(payload["exclude"])
+	parsed, err := parseTransferCopyMovePrefixPayload(payload)
+	if err != nil {
+		return err
+	}
+	srcBucket := parsed.SrcBucket
+	srcPrefix := parsed.SrcPrefix
+	dstBucket := parsed.DstBucket
+	dstPrefix := parsed.DstPrefix
+	dryRun := parsed.DryRun
+	include := parsed.Include
+	exclude := parsed.Exclude
 
 	srcBucket = strings.TrimSpace(srcBucket)
 	srcPrefix = normalizeKeyInput(srcPrefix, preserveLeadingSlash)
