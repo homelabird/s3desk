@@ -10,7 +10,7 @@ import {
 	type MouseEvent as ReactMouseEvent,
 } from 'react'
 
-import { APIClient, APIError } from '../api/client'
+import { APIClient } from '../api/client'
 	import type { Bucket, JobCreateRequest, ObjectItem, Profile } from '../api/types'
 	import { useTransfers } from '../components/useTransfers'
 	import { withJobQueueRetry } from '../lib/jobQueue'
@@ -41,7 +41,6 @@ import {
 import { useObjectsListKeydownHandler } from './objects/useObjectsListKeydownHandler'
 import { useObjectsCommandPaletteOverlayState } from './objects/useObjectsCommandPaletteOverlayState'
 import { useObjectsGlobalSearchOverlayState } from './objects/useObjectsGlobalSearchOverlayState'
-import { useObjectsListVirtualizer } from './objects/useObjectsListVirtualizer'
 import { useObjectPreview } from './objects/useObjectPreview'
 import { useObjectDownloads } from './objects/useObjectDownloads'
 	import { useObjectsAutoScan } from './objects/useObjectsAutoScan'
@@ -81,6 +80,9 @@ import { useObjectsLocationState } from './objects/useObjectsLocationState'
 	import { useObjectsUploadPickers } from './objects/useObjectsUploadPickers'
 	import { useObjectsRowRenderers } from './objects/useObjectsRowRenderers'
 	import { useObjectsSearchState } from './objects/useObjectsSearchState'
+	import { useObjectsIndexedSearchQuery } from './objects/useObjectsIndexedSearchQuery'
+	import { useObjectsListViewport } from './objects/useObjectsListViewport'
+	import { useObjectsDeferredOpener } from './objects/useObjectsDeferredOpener'
 import {
 	AUTO_INDEX_COOLDOWN_MS,
 	COMPACT_ROW_HEIGHT_PX,
@@ -118,6 +120,7 @@ export function ObjectsPage(props: Props) {
 	const isOffline = useIsOffline()
 	const debugObjectsList = isObjectsListDebugEnabled()
 	const debugContextMenu = isContextMenuDebugEnabled()
+	const commandPaletteOpener = useObjectsDeferredOpener()
 
 	const createJobWithRetry = useCallback(
 		(req: JobCreateRequest) => {
@@ -162,7 +165,6 @@ export function ObjectsPage(props: Props) {
 	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
 	const isAdvanced = uiMode === 'advanced'
 	const { search, searchDraft, setSearchDraft, clearSearch, deferredSearch } = useObjectsSearchState()
-	const openCommandPaletteRef = useRef<(() => void) | null>(null)
 
 	const {
 		globalSearch,
@@ -444,59 +446,28 @@ const objectsQuery = useInfiniteQuery({
 		objectsPages: objectsQuery.data?.pages ?? [],
 	})
 
-	const globalSearchQueryText = deferredGlobalSearch.trim()
-	const globalSearchPrefixNormalized = normalizePrefix(globalSearchPrefix)
-	const globalSearchLimitClamped = Math.max(1, Math.min(200, globalSearchLimit))
-	const globalSearchExtNormalized = globalSearchExt.trim().replace(/^\./, '').toLowerCase()
-	let globalSearchMinSizeBytes =
-		typeof globalSearchMinSize === 'number' && Number.isFinite(globalSearchMinSize) ? globalSearchMinSize : null
-	let globalSearchMaxSizeBytes =
-		typeof globalSearchMaxSize === 'number' && Number.isFinite(globalSearchMaxSize) ? globalSearchMaxSize : null
-	if (globalSearchMinSizeBytes != null && globalSearchMaxSizeBytes != null && globalSearchMinSizeBytes > globalSearchMaxSizeBytes) {
-		;[globalSearchMinSizeBytes, globalSearchMaxSizeBytes] = [globalSearchMaxSizeBytes, globalSearchMinSizeBytes]
-	}
-	let globalSearchMinTimeMs =
-		typeof globalSearchMinModifiedMs === 'number' && Number.isFinite(globalSearchMinModifiedMs) ? globalSearchMinModifiedMs : null
-	let globalSearchMaxTimeMs =
-		typeof globalSearchMaxModifiedMs === 'number' && Number.isFinite(globalSearchMaxModifiedMs) ? globalSearchMaxModifiedMs : null
-	if (globalSearchMinTimeMs != null && globalSearchMaxTimeMs != null && globalSearchMinTimeMs > globalSearchMaxTimeMs) {
-		;[globalSearchMinTimeMs, globalSearchMaxTimeMs] = [globalSearchMaxTimeMs, globalSearchMinTimeMs]
-	}
-	const globalSearchModifiedAfter = globalSearchMinTimeMs != null ? new Date(globalSearchMinTimeMs).toISOString() : undefined
-	const globalSearchModifiedBefore = globalSearchMaxTimeMs != null ? new Date(globalSearchMaxTimeMs).toISOString() : undefined
-
-	const indexedSearchQuery = useInfiniteQuery({
-		queryKey: [
-			'objectsIndexSearch',
-			props.profileId,
-			bucket,
-			globalSearchQueryText,
-			globalSearchPrefixNormalized,
-			globalSearchLimitClamped,
-			globalSearchExtNormalized,
-			globalSearchMinSizeBytes,
-			globalSearchMaxSizeBytes,
-			globalSearchModifiedAfter,
-			globalSearchModifiedBefore,
-			props.apiToken,
-		],
-		enabled: globalSearchOpen && !!props.profileId && !!bucket && !!globalSearchQueryText,
-		initialPageParam: undefined as string | undefined,
-		queryFn: async ({ pageParam }) =>
-			api.searchObjectsIndex({
-				profileId: props.profileId!,
-				bucket,
-				q: globalSearchQueryText,
-				prefix: globalSearchPrefixNormalized || undefined,
-				limit: globalSearchLimitClamped,
-				cursor: pageParam,
-				ext: globalSearchExtNormalized || undefined,
-				minSize: globalSearchMinSizeBytes ?? undefined,
-				maxSize: globalSearchMaxSizeBytes ?? undefined,
-				modifiedAfter: globalSearchModifiedAfter,
-				modifiedBefore: globalSearchModifiedBefore,
-		}),
-		getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+	const {
+		globalSearchQueryText,
+		globalSearchPrefixNormalized,
+		globalSearchLimitClamped,
+		indexedSearchQuery,
+		indexedSearchItems,
+		indexedSearchNotIndexed,
+		indexedSearchErrorMessage,
+	} = useObjectsIndexedSearchQuery({
+		api,
+		apiToken: props.apiToken,
+		profileId: props.profileId,
+		bucket,
+		globalSearchOpen,
+		deferredGlobalSearch,
+		globalSearchPrefix,
+		globalSearchLimit,
+		globalSearchExt,
+		globalSearchMinSize,
+		globalSearchMaxSize,
+		globalSearchMinModifiedMs,
+		globalSearchMaxModifiedMs,
 	})
 
 		const { zipPrefixJobMutation, zipObjectsJobMutation } = useObjectsZipJobs({
@@ -863,10 +834,6 @@ const objectsQuery = useInfiniteQuery({
 		}
 	}, [showThumbnails, thumbnailCache])
 
-	const indexedSearchItems = indexedSearchQuery.data?.pages.flatMap((p) => p.items) ?? []
-	const indexedSearchNotIndexed = indexedSearchQuery.error instanceof APIError && indexedSearchQuery.error.code === 'not_indexed'
-	const indexedSearchErrorMessage = indexedSearchQuery.isError ? formatErr(indexedSearchQuery.error) : ''
-
 	const objectByKey = useMemo(() => {
 		const out = new Map<string, ObjectItem>()
 		if (favoritesOnly) {
@@ -907,26 +874,21 @@ const objectsQuery = useInfiniteQuery({
 		virtualItems,
 		virtualItemsForRender,
 		totalSize,
-	} = useObjectsListVirtualizer({
+	} = useObjectsListViewport({
 		rowCount: rows.length,
 		isCompactList,
-		rowHeightCompactPx: COMPACT_ROW_HEIGHT_PX,
-		rowHeightWidePx: WIDE_ROW_HEIGHT_PX,
-		overscan: 10,
-		scrollToTopDeps: {
-			bucket,
-			prefix,
-			search,
-			sort,
-			typeFilter,
-			favoritesOnly,
-			favoritesFirst,
-			extFilter,
-			minSize,
-			maxSize,
-			minModifiedMs,
-			maxModifiedMs,
-		},
+		bucket,
+		prefix,
+		search,
+		sort,
+		typeFilter,
+		favoritesOnly,
+		favoritesFirst,
+		extFilter,
+		minSize,
+		maxSize,
+		minModifiedMs,
+		maxModifiedMs,
 	})
 
 	useEffect(() => {
@@ -1101,7 +1063,7 @@ const objectsQuery = useInfiniteQuery({
 		onOpenUploadFiles: openUploadFilesPicker,
 		onOpenUploadFolder: openUploadFolderPicker,
 		onOpenNewFolder: openNewFolder,
-		onOpenCommandPalette: () => openCommandPaletteRef.current?.(),
+		onOpenCommandPalette: commandPaletteOpener.open,
 		onOpenTransfers: () => transfers.openTransfers(),
 		onAddTab: addTab,
 		onCloseTab: closeTab,
@@ -1159,8 +1121,9 @@ const objectsQuery = useInfiniteQuery({
 	} = useObjectsCommandPaletteOverlayState({ items: commandItems })
 
 	useEffect(() => {
-		openCommandPaletteRef.current = openCommandPalette
-	}, [openCommandPalette])
+		commandPaletteOpener.bind(openCommandPalette)
+		return () => commandPaletteOpener.bind(null)
+	}, [commandPaletteOpener, openCommandPalette])
 
 	const listGridClassName = isCompactList ? styles.listGridCompact : styles.listGridWide
 	const { clearSelectionAction, deleteSelectionAction, downloadSelectionAction } = useObjectsSelectionBarActions({
