@@ -1,7 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Grid, Typography } from 'antd'
+import { Grid } from 'antd'
 import {
-	Suspense,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -91,8 +90,8 @@ import {
 	WIDE_ROW_HEIGHT_PX,
 } from './objects/objectsPageConstants'
 import { isContextMenuDebugEnabled, isObjectsListDebugEnabled, logContextMenuDebug, logObjectsDebug } from './objects/objectsPageDebug'
+import { ObjectsPageHeader } from './objects/ObjectsPageHeader'
 import { ObjectsPageOverlays } from './objects/ObjectsPageOverlays'
-import { ObjectsToolbarSection } from './objects/objectsPageLazy'
 
 type Props = {
 	apiToken: string
@@ -1188,11 +1187,6 @@ const objectsQuery = useInfiniteQuery({
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
 	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
 	const canInteract = !!props.profileId && !!bucket && !isOffline
-		const toolbarFallback = (
-			<div className={styles.toolbarSkeleton}>
-				<Typography.Text type="secondary">Loading toolbar…</Typography.Text>
-			</div>
-		)
 
 		const { topMoreMenu } = useObjectsTopMenus({
 			isAdvanced,
@@ -1281,50 +1275,27 @@ const objectsQuery = useInfiniteQuery({
 
 		return (
 			<div className={styles.page}>
-				<Typography.Title level={3} style={{ margin: 0 }}>
-					Objects
-				</Typography.Title>
-				{!uploadSupported ? (
-					<Alert
-						type="info"
-						showIcon
-						title="Uploads are disabled for this provider"
-						description={uploadDisabledReason ?? 'Object uploads are not supported by the selected provider.'}
-					/>
-				) : null}
-
-					<input
-						ref={uploadFilesInputRef}
-						type="file"
-						multiple
-						aria-label="Select files to upload"
-						style={{ display: 'none' }}
-						onChange={onUploadFilesInputChange}
-					/>
-					<input
-						ref={uploadFolderInputRef}
-						type="file"
-						multiple
-						aria-label="Select folder to upload"
-						style={{ display: 'none' }}
-						onChange={onUploadFolderInputChange}
-					/>
-
-					<Suspense fallback={toolbarFallback}>
-						<ObjectsToolbarSection
-							apiToken={props.apiToken}
-							profileId={props.profileId}
-							bucketsErrorMessage={bucketsQuery.isError ? formatErr(bucketsQuery.error) : null}
-							isAdvanced={isAdvanced}
-							tabs={tabs}
-							activeTabId={activeTabId}
-							onTabChange={setActiveTabId}
-							onTabAdd={addTab}
-							onTabClose={closeTab}
-							tabLabelMaxWidth={screens.md ? 320 : 220}
-							toolbarProps={toolbarProps}
-						/>
-					</Suspense>
+				<ObjectsPageHeader
+					uploadSupported={uploadSupported}
+					uploadDisabledReason={uploadDisabledReason}
+					uploadFilesInputRef={uploadFilesInputRef}
+					onUploadFilesInputChange={onUploadFilesInputChange}
+					uploadFolderInputRef={uploadFolderInputRef}
+					onUploadFolderInputChange={onUploadFolderInputChange}
+					toolbarSectionProps={{
+						apiToken: props.apiToken,
+						profileId: props.profileId,
+						bucketsErrorMessage: bucketsQuery.isError ? formatErr(bucketsQuery.error) : null,
+						isAdvanced,
+						tabs,
+						activeTabId,
+						onTabChange: setActiveTabId,
+						onTabAdd: addTab,
+						onTabClose: closeTab,
+						tabLabelMaxWidth: screens.md ? 320 : 220,
+						toolbarProps,
+					}}
+				/>
 
 			<ObjectsPagePanes
 				layoutRef={layoutRef}
