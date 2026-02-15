@@ -1,17 +1,14 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Dropdown, Grid, Menu, Typography, message } from 'antd'
-import { SnippetsOutlined } from '@ant-design/icons'
+import { Alert, Grid, Menu, Typography, message } from 'antd'
 import {
 	Suspense,
 	useCallback,
-	useDeferredValue,
 	useEffect,
 	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 	type MouseEvent as ReactMouseEvent,
-	type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -28,14 +25,11 @@ import { useIsOffline } from '../lib/useIsOffline'
 import styles from './objects/objects.module.css'
 import type { UIActionOrDivider } from './objects/objectsActions'
 import {
-	actionToMenuItem,
 	buildActionMenu,
-	compactMenuItems,
 	trimActionDividers,
 } from './objects/objectsActions'
 import { ObjectsLayout } from './objects/ObjectsLayout'
 import { ObjectsListHeader } from './objects/ObjectsListHeader'
-import { ObjectsObjectRowItem, ObjectsPrefixRowItem } from './objects/ObjectsListRowItems'
 import { ObjectsListSectionContainer } from './objects/ObjectsListSectionContainer'
 import { ObjectThumbnail } from './objects/ObjectThumbnail'
 import { ObjectsSelectionBarSection } from './objects/ObjectsSelectionBarSection'
@@ -97,6 +91,10 @@ import { useObjectsDeleteConfirm } from './objects/useObjectsDeleteConfirm'
 import { useObjectsPrefixSummary } from './objects/useObjectsPrefixSummary'
 import { useObjectsPrefetch } from './objects/useObjectsPrefetch'
 import { useObjectsLocationState } from './objects/useObjectsLocationState'
+import { useObjectsBreadcrumbItems } from './objects/useObjectsBreadcrumbItems'
+import { useObjectsTopMenus } from './objects/useObjectsTopMenus'
+import { useObjectsRowRenderers } from './objects/useObjectsRowRenderers'
+import { useObjectsSearchState } from './objects/useObjectsSearchState'
 import {
 	AUTO_INDEX_COOLDOWN_MS,
 	COMPACT_ROW_HEIGHT_PX,
@@ -181,16 +179,9 @@ export function ObjectsPage(props: Props) {
 	} = useObjectsLocationState({ profileId: props.profileId })
 	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
 	const isAdvanced = uiMode === 'advanced'
-
-		const [search, setSearch] = useLocalStorageState<string>('objectsSearch', '')
-		const [searchDraft, setSearchDraft] = useState(search)
-		const clearSearch = useCallback(() => {
-			setSearchDraft('')
-			setSearch('')
-		}, [setSearch, setSearchDraft])
-		const deferredSearch = useDeferredValue(search)
-		const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
-		const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+	const { search, searchDraft, setSearchDraft, clearSearch, deferredSearch } = useObjectsSearchState()
+	const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
+	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 
 	const {
 		globalSearch,
@@ -371,18 +362,6 @@ export function ObjectsPage(props: Props) {
 		ro.observe(el)
 		return () => ro.disconnect()
 	}, [])
-
-	useEffect(() => {
-		setSearchDraft(search)
-	}, [search])
-
-	useEffect(() => {
-		if (searchDraft === search) return
-		const id = window.setTimeout(() => {
-			setSearch(searchDraft)
-		}, 250)
-		return () => window.clearTimeout(id)
-	}, [search, searchDraft, setSearch])
 
 	useEffect(() => {
 		setGlobalSearchDraft(globalSearch)
@@ -1180,93 +1159,18 @@ const objectsQuery = useInfiniteQuery({
 			queryClient,
 		})
 
-	const breadcrumbItems: { title: ReactNode }[] = (() => {
-		const parts = prefix.split('/').filter(Boolean)
-		const items: { title: ReactNode }[] = []
-		const canNavigate = !!bucket
-
-		const wrap = (targetPrefixRaw: string, node: ReactNode) => {
-			const target = normalizeDropTargetPrefix(targetPrefixRaw)
-			const active = canDragDrop && dndHoverPrefix === target
-			return (
-				<span
-					onDragOver={(e) => onDndTargetDragOver(e, targetPrefixRaw)}
-					onDragLeave={(e) => onDndTargetDragLeave(e, targetPrefixRaw)}
-					onDrop={(e) => onDndTargetDrop(e, targetPrefixRaw)}
-					style={{
-						display: 'inline-flex',
-						alignItems: 'center',
-						paddingInline: 4,
-						borderRadius: 4,
-						background: active ? 'rgba(22, 119, 255, 0.12)' : undefined,
-					}}
-				>
-					{node}
-				</span>
-			)
-		}
-
-		const linkToPrefix = (targetPrefix: string, label: string) => (
-			<Button
-				type="link"
-				size="small"
-				onClick={() => (canNavigate ? navigateToLocation(bucket, targetPrefix, { recordHistory: true }) : undefined)}
-				disabled={!canNavigate}
-				style={{ padding: 0, height: 'auto', whiteSpace: 'nowrap' }}
-			>
-				{label}
-			</Button>
-		)
-
-		items.push({
-			title: wrap('', linkToPrefix('', '(root)')),
-		})
-
-		if (!parts.length) return items
-
-		if (!screens.md && parts.length > 2) {
-			const collapsedParts = parts.slice(0, -1)
-			const collapsedPrefix = normalizePrefix(collapsedParts.join('/'))
-			const menuItems = collapsedParts.map((part, index) => {
-				const targetPrefix = normalizePrefix(collapsedParts.slice(0, index + 1).join('/'))
-				return {
-					key: targetPrefix || part,
-					label: targetPrefix,
-					disabled: !canNavigate,
-					onClick: () => (canNavigate ? navigateToLocation(bucket, targetPrefix, { recordHistory: true }) : undefined),
-				}
-			})
-
-			items.push({
-				title: wrap(
-					collapsedPrefix,
-					<Dropdown trigger={['click']} menu={{ items: menuItems }} disabled={!canNavigate}>
-						<Button type="link" size="small" disabled={!canNavigate} style={{ padding: 0, height: 'auto', whiteSpace: 'nowrap' }}>
-							.../
-						</Button>
-					</Dropdown>,
-				),
-			})
-
-			const lastPart = parts[parts.length - 1]
-			const lastPrefix = normalizePrefix(`${collapsedPrefix}${lastPart}`)
-			items.push({
-				title: wrap(lastPrefix, linkToPrefix(lastPrefix, `${lastPart}/`)),
-			})
-
-			return items
-		}
-
-		let current = ''
-		for (const part of parts) {
-			current += part + '/'
-			items.push({
-				title: wrap(current, linkToPrefix(current, `${part}/`)),
-			})
-		}
-
-		return items
-	})()
+	const { breadcrumbItems } = useObjectsBreadcrumbItems({
+		bucket,
+		prefix,
+		isMd: !!screens.md,
+		canDragDrop,
+		dndHoverPrefix,
+		normalizeDropTargetPrefix,
+		onDndTargetDragOver,
+		onDndTargetDragLeave,
+		onDndTargetDrop,
+		navigateToLocation,
+	})
 
 	const {
 		getObjectActions,
@@ -1433,158 +1337,52 @@ const objectsQuery = useInfiniteQuery({
 		selectAllLoaded,
 		scrollToIndex: (index) => rowVirtualizer.scrollToIndex(index),
 	})
-	const handleListScrollerScroll = () => {
-		closeContextMenu(undefined, 'list_scroll')
-	}
-	const handleListScrollerWheel = () => {
-		closeContextMenu(undefined, 'list_wheel')
-	}
-	const listScrollerRef = useCallback((node: HTMLDivElement | null) => {
-		setListScrollerEl(node)
-		scrollContainerRef.current = node?.closest('[data-scroll-container="app-content"]') as HTMLDivElement | null
-	}, [])
-	const getContextMenuPopupContainer = useCallback((triggerNode: HTMLElement) => {
-		if (scrollContainerRef.current) return scrollContainerRef.current
-		if (typeof document !== 'undefined') return document.body
-		return triggerNode
-	}, [])
-		const handleClearSearch = clearSearch
+	const {
+		handleListScrollerScroll,
+		handleListScrollerWheel,
+		listScrollerRef,
+		renderPrefixRow,
+		renderObjectRow,
+	} = useObjectsRowRenderers({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		canDragDrop,
+		isCompactList,
+		isAdvanced,
+		isOffline,
+		listGridClassName,
+		rowHeightCompactPx: COMPACT_ROW_HEIGHT_PX,
+		rowHeightWidePx: WIDE_ROW_HEIGHT_PX,
+		showThumbnails,
+		thumbnailCache,
+		highlightText,
+		contextMenuState,
+		withContextMenuClassName,
+		getPrefixActions,
+		getObjectActions,
+		selectionContextMenuActions,
+		recordContextMenuPoint,
+		openPrefixContextMenu,
+		openObjectContextMenu,
+		closeContextMenu,
+		onOpenPrefix,
+		onRowDragStartPrefix,
+		onRowDragStartObjects,
+		clearDndHover,
+		selectObjectFromPointerEvent,
+		selectObjectFromCheckboxEvent,
+		selectedCount,
+		selectedKeys,
+		favoriteKeys,
+		favoritePendingKeys,
+		toggleFavorite,
+		setListScrollerEl,
+		scrollContainerRef,
+	})
+	const handleClearSearch = clearSearch
 	const canClearSearch = !!search.trim() || !!searchDraft.trim()
-	const renderPrefixRow = useCallback(
-		(p: string, offset: number) => {
-			const prefixButtonMenuOpen =
-				contextMenuState.open &&
-				contextMenuState.kind === 'prefix' &&
-				contextMenuState.key === p &&
-				contextMenuState.source === 'button'
-			return (
-				<ObjectsPrefixRowItem
-					key={p}
-					prefixKey={p}
-					currentPrefix={prefix}
-					offset={offset}
-					rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
-					listGridClassName={listGridClassName}
-					isCompact={isCompactList}
-					canDragDrop={canDragDrop}
-					highlightText={highlightText}
-					isAdvanced={isAdvanced}
-					getPrefixActions={getPrefixActions}
-					withContextMenuClassName={withContextMenuClassName}
-					buttonMenuOpen={prefixButtonMenuOpen}
-					getPopupContainer={getContextMenuPopupContainer}
-					recordContextMenuPoint={recordContextMenuPoint}
-					openPrefixContextMenu={openPrefixContextMenu}
-					closeContextMenu={closeContextMenu}
-					onOpenPrefix={onOpenPrefix}
-					onRowDragStartPrefix={onRowDragStartPrefix}
-					onRowDragEnd={clearDndHover}
-				/>
-			)
-		},
-		[
-			canDragDrop,
-			clearDndHover,
-			closeContextMenu,
-			contextMenuState.key,
-			contextMenuState.kind,
-			contextMenuState.open,
-			contextMenuState.source,
-			getContextMenuPopupContainer,
-			getPrefixActions,
-			highlightText,
-			isAdvanced,
-			isCompactList,
-			listGridClassName,
-			onOpenPrefix,
-			onRowDragStartPrefix,
-			openPrefixContextMenu,
-			prefix,
-			recordContextMenuPoint,
-			withContextMenuClassName,
-		],
-	)
-	const renderObjectRow = useCallback(
-		(object: ObjectItem, offset: number) => {
-			const key = object.key
-			const objectButtonMenuOpen =
-				contextMenuState.open &&
-				contextMenuState.kind === 'object' &&
-				contextMenuState.key === key &&
-				contextMenuState.source === 'button'
-			const useSelectionMenu = selectedCount > 1 && selectedKeys.has(key)
-			return (
-					<ObjectsObjectRowItem
-						key={key}
-						object={object}
-					currentPrefix={prefix}
-					offset={offset}
-					rowMinHeight={isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX}
-					listGridClassName={listGridClassName}
-					isCompact={isCompactList}
-					canDragDrop={canDragDrop}
-					highlightText={highlightText}
-					isAdvanced={isAdvanced}
-						getObjectActions={getObjectActions}
-						selectionContextMenuActions={selectionContextMenuActions}
-						useSelectionMenu={useSelectionMenu}
-						withContextMenuClassName={withContextMenuClassName}
-						isSelected={selectedKeys.has(key)}
-					isFavorite={favoriteKeys.has(key)}
-					favoriteDisabled={favoritePendingKeys.has(key) || isOffline || !props.profileId || !bucket}
-					buttonMenuOpen={objectButtonMenuOpen}
-					getPopupContainer={getContextMenuPopupContainer}
-					recordContextMenuPoint={recordContextMenuPoint}
-					openObjectContextMenu={openObjectContextMenu}
-					closeContextMenu={closeContextMenu}
-					onSelectObject={selectObjectFromPointerEvent}
-					onSelectCheckbox={selectObjectFromCheckboxEvent}
-					onRowDragStartObjects={onRowDragStartObjects}
-					onRowDragEnd={clearDndHover}
-					onToggleFavorite={toggleFavorite}
-					api={api}
-					profileId={props.profileId}
-					bucket={bucket}
-					showThumbnails={showThumbnails}
-					thumbnailCache={thumbnailCache}
-				/>
-			)
-		},
-		[
-			api,
-			bucket,
-			canDragDrop,
-			clearDndHover,
-			closeContextMenu,
-			contextMenuState.key,
-			contextMenuState.kind,
-			contextMenuState.open,
-			contextMenuState.source,
-			favoriteKeys,
-			favoritePendingKeys,
-			getContextMenuPopupContainer,
-			getObjectActions,
-			highlightText,
-			isAdvanced,
-			isCompactList,
-			isOffline,
-			listGridClassName,
-			onRowDragStartObjects,
-			openObjectContextMenu,
-			prefix,
-			props.profileId,
-			recordContextMenuPoint,
-			selectedCount,
-			selectedKeys,
-			selectionContextMenuActions,
-			selectObjectFromCheckboxEvent,
-			selectObjectFromPointerEvent,
-			showThumbnails,
-			thumbnailCache,
-			toggleFavorite,
-			withContextMenuClassName,
-		],
-	)
 	const listIsFetching = favoritesOnly ? favoritesQuery.isFetching : objectsQuery.isFetching
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
 	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
@@ -1655,80 +1453,15 @@ const objectsQuery = useInfiniteQuery({
 		navigateToLocation(nextBucket, saved ?? '', { recordHistory: true })
 	}
 
-	const prefixMenuItems = compactMenuItems([
-		actionToMenuItem(currentPrefixActionMap.get('copy'), undefined, isAdvanced),
-		{ type: 'divider' as const },
-		actionToMenuItem(currentPrefixActionMap.get('downloadZip'), undefined, isAdvanced),
-		actionToMenuItem(currentPrefixActionMap.get('downloadToDevice'), undefined, isAdvanced),
-		{ type: 'divider' as const },
-		actionToMenuItem(currentPrefixActionMap.get('rename'), undefined, isAdvanced),
-		actionToMenuItem(currentPrefixActionMap.get('copyJob'), undefined, isAdvanced),
-		actionToMenuItem(currentPrefixActionMap.get('moveJob'), undefined, isAdvanced),
-		{ type: 'divider' as const },
-		actionToMenuItem(currentPrefixActionMap.get('delete'), undefined, isAdvanced),
-		actionToMenuItem(currentPrefixActionMap.get('deleteDry'), undefined, isAdvanced),
-	])
-
-	const topMoreMenuItems = compactMenuItems([
-		actionToMenuItem(globalActionMap.get('nav_back'), undefined, isAdvanced),
-		actionToMenuItem(globalActionMap.get('nav_forward'), undefined, isAdvanced),
-		actionToMenuItem(globalActionMap.get('nav_up'), undefined, isAdvanced),
-		{ type: 'divider' as const },
-		actionToMenuItem(globalActionMap.get('toggle_details'), undefined, isAdvanced),
-		...(dockTree ? [] : [actionToMenuItem(globalActionMap.get('open_folders'), undefined, isAdvanced)]),
-		{ type: 'divider' as const },
-		actionToMenuItem(globalActionMap.get('refresh'), undefined, isAdvanced),
-		actionToMenuItem(globalActionMap.get('go_to_path'), undefined, isAdvanced),
-		...(isAdvanced
-			? [
-					actionToMenuItem(globalActionMap.get('upload_files'), undefined, isAdvanced),
-					actionToMenuItem(globalActionMap.get('upload_folder'), undefined, isAdvanced),
-					actionToMenuItem(globalActionMap.get('new_folder'), undefined, isAdvanced),
-				]
-			: []),
-		{ type: 'divider' as const },
-		actionToMenuItem(globalActionMap.get('commands'), undefined, isAdvanced),
-		{ type: 'divider' as const },
-		actionToMenuItem(globalActionMap.get('transfers'), undefined, isAdvanced),
-		...(bucket && prefix.trim() && !isAdvanced
-			? [
-					{ type: 'divider' as const },
-					actionToMenuItem(currentPrefixActionMap.get('downloadZip'), undefined, isAdvanced),
-					actionToMenuItem(currentPrefixActionMap.get('delete'), undefined, isAdvanced),
-				]
-			: []),
-		...(isAdvanced
-			? [
-					{ type: 'divider' as const },
-					actionToMenuItem(globalActionMap.get('new_tab'), undefined, isAdvanced),
-					actionToMenuItem(globalActionMap.get('global_search'), undefined, isAdvanced),
-					...(
-						prefixMenuItems.length > 0
-							? [
-									{
-										key: 'prefix_actions',
-										label: 'Folder actions',
-										icon: <SnippetsOutlined />,
-										disabled: !props.profileId || !bucket || !prefix.trim(),
-										children: prefixMenuItems,
-									},
-								]
-							: []
-					),
-				]
-			: []),
-		{ type: 'divider' as const },
-		actionToMenuItem(globalActionMap.get('ui_mode'), undefined, isAdvanced),
-	])
-
-	const topMoreMenu = {
-		items: topMoreMenuItems,
-		onClick: ({ key }: { key: string }) => {
-			const action = globalActionMap.get(key) ?? currentPrefixActionMap.get(key)
-			if (!action || !action.enabled) return
-			action.run()
-		},
-	}
+	const { topMoreMenu } = useObjectsTopMenus({
+		isAdvanced,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		dockTree,
+		globalActionMap,
+		currentPrefixActionMap,
+	})
 
 	const openGlobalSearchPrefix = (key: string) => {
 		setGlobalSearchOpen(false)
