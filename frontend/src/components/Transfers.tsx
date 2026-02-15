@@ -23,7 +23,6 @@ import {
 	ensureReadWritePermission,
 	getDevicePickerSupport,
 	getFileHandleForPath,
-	removeEntriesFromDirectoryHandle,
 	type RemoveEntriesResult,
 	writeResponseToFile,
 } from '../lib/deviceFs'
@@ -48,65 +47,15 @@ import {
 	saveBlob,
 	shouldFallbackToProxy,
 } from './transfers/transferDownloadUtils'
+import { useTransfersPersistence } from './transfers/useTransfersPersistence'
 import { useTransfersTaskActions } from './transfers/useTransfersTaskActions'
+import { useTransfersUploadJobLifecycle } from './transfers/useTransfersUploadJobLifecycle'
 
 type UploadMovePlan = {
 	rootHandle: FileSystemDirectoryHandle
 	relPaths: string[]
 	label?: string
 	cleanupEmptyDirs?: boolean
-}
-
-type PersistedDownloadTask = ObjectDownloadTask | JobArtifactDownloadTask
-type PersistedTransfers = {
-	version: 1
-	savedAtMs: number
-	downloads: PersistedDownloadTask[]
-	uploads: UploadTask[]
-}
-
-const TRANSFERS_STORAGE_KEY = 'transfersHistoryV1'
-const MAX_PERSISTED_TRANSFERS = 200
-
-const isActiveDownloadStatus = (status: DownloadTask['status']) =>
-	status === 'queued' || status === 'waiting' || status === 'running'
-
-const isActiveUploadStatus = (status: UploadTask['status']) =>
-	status === 'queued' || status === 'staging' || status === 'commit' || status === 'waiting_job' || status === 'cleanup'
-
-const normalizeDownloadTask = (task: PersistedDownloadTask, now: number): DownloadTask => {
-	if (!isActiveDownloadStatus(task.status)) return task
-	return {
-		...task,
-		status: 'canceled',
-		finishedAtMs: now,
-		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
-	}
-}
-
-const normalizeUploadTask = (task: UploadTask, now: number): UploadTask => {
-	if (!isActiveUploadStatus(task.status)) return task
-	return {
-		...task,
-		status: 'canceled',
-		finishedAtMs: now,
-		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
-	}
-}
-
-const loadPersistedTransfers = (): PersistedTransfers | null => {
-	if (typeof window === 'undefined') return null
-	try {
-		const raw = window.localStorage.getItem(TRANSFERS_STORAGE_KEY)
-		if (!raw) return null
-		const parsed = JSON.parse(raw) as PersistedTransfers
-		if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.downloads) || !Array.isArray(parsed.uploads)) {
-			return null
-		}
-		return parsed
-	} catch {
-		return null
-	}
 }
 
 const normalizeRelPath = (value: string): string => {
@@ -552,36 +501,13 @@ export function TransfersProvider(props: {
 	)
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
 	const [uploadEventsConnected, setUploadEventsConnected] = useState(false)
-	const hasLoadedPersistedRef = useRef(false)
 
-	useEffect(() => {
-		if (hasLoadedPersistedRef.current) return
-		hasLoadedPersistedRef.current = true
-		const persisted = loadPersistedTransfers()
-		if (!persisted) return
-		const now = Date.now()
-		setDownloadTasks(persisted.downloads.map((task) => normalizeDownloadTask(task, now)))
-		setUploadTasks(persisted.uploads.map((task) => normalizeUploadTask(task, now)))
-	}, [])
-
-	useEffect(() => {
-		if (typeof window === 'undefined') return
-		const downloads = downloadTasks
-			.filter((task): task is PersistedDownloadTask => task.kind !== 'object_device')
-			.slice(0, MAX_PERSISTED_TRANSFERS)
-		const uploads = uploadTasks.slice(0, MAX_PERSISTED_TRANSFERS)
-		const payload: PersistedTransfers = {
-			version: 1,
-			savedAtMs: Date.now(),
-			downloads,
-			uploads,
-		}
-		try {
-			window.localStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
-		} catch {
-			// ignore
-		}
-	}, [downloadTasks, uploadTasks])
+	useTransfersPersistence({
+		downloadTasks,
+		uploadTasks,
+		setDownloadTasks,
+		setUploadTasks,
+	})
 
 	useEffect(() => {
 		downloadTasksRef.current = downloadTasks
@@ -725,170 +651,15 @@ export function TransfersProvider(props: {
 		uploadMoveByTaskIdRef,
 	})
 
-	const updateUploadTaskProgressFromJob = useCallback(
-		(taskId: string, progress?: JobProgress | null) => {
-			if (!progress) return
-			updateUploadTask(taskId, (prev) => {
-				const loadedBytes = progress.bytesDone ?? prev.loadedBytes
-				const totalBytes = progress.bytesTotal ?? prev.totalBytes
-				const speedBps = progress.speedBps ?? prev.speedBps
-				const etaSeconds = progress.etaSeconds ?? prev.etaSeconds
-				if (
-					loadedBytes === prev.loadedBytes &&
-					totalBytes === prev.totalBytes &&
-					speedBps === prev.speedBps &&
-					etaSeconds === prev.etaSeconds
-				) {
-					return prev
-				}
-				return {
-					...prev,
-					loadedBytes,
-					totalBytes,
-					speedBps,
-					etaSeconds,
-				}
-			})
-		},
-		[updateUploadTask],
-	)
-
-	const finalizeUploadJob = useCallback(
-		async (taskId: string, status: JobStatus, error?: string | null) => {
-			const current = uploadTasksRef.current.find((t) => t.id === taskId)
-			if (!current || current.status !== 'waiting_job') return
-
-			if (status === 'succeeded') {
-				const movePlan = uploadMoveByTaskIdRef.current[taskId]
-				if (!current.moveAfterUpload || !movePlan) {
-					updateUploadTask(taskId, (prev) => ({
-						...prev,
-						status: 'succeeded',
-						finishedAtMs: Date.now(),
-						error: undefined,
-						cleanupFailed: false,
-						speedBps: 0,
-						etaSeconds: 0,
-						loadedBytes: prev.totalBytes,
-					}))
-					delete uploadMoveByTaskIdRef.current[taskId]
-					return
-				}
-
-				updateUploadTask(taskId, (prev) => ({
-					...prev,
-					status: 'cleanup',
-					error: undefined,
-					cleanupFailed: false,
-				}))
-
-				try {
-					const result = await removeEntriesFromDirectoryHandle({
-						root: movePlan.rootHandle,
-						relPaths: movePlan.relPaths,
-						cleanupEmptyDirs: movePlan.cleanupEmptyDirs,
-					})
-					const summary = formatMoveCleanupSummary(result, movePlan.label ?? '')
-					if (result.failed.length > 0) {
-						updateUploadTask(taskId, (prev) => ({
-							...prev,
-							status: 'failed',
-							finishedAtMs: Date.now(),
-							error: summary,
-							cleanupFailed: true,
-						}))
-						showMoveCleanupReport({
-							title: 'Move completed with errors',
-							label: movePlan.label,
-							bucket: current.bucket,
-							prefix: current.prefix,
-							filenameTemplate: moveCleanupFilenameTemplate,
-							filenameMaxLen: moveCleanupFilenameMaxLen,
-							result,
-						})
-					} else {
-						updateUploadTask(taskId, (prev) => ({
-							...prev,
-							status: 'succeeded',
-							finishedAtMs: Date.now(),
-							speedBps: 0,
-							etaSeconds: 0,
-							loadedBytes: prev.totalBytes,
-						}))
-						const label = movePlan.label ? ` from ${movePlan.label}` : ''
-						message.success(`Moved ${result.removed.length} item(s)${label}`)
-						if (result.skipped.length > 0 || result.removedDirs.length > 0) {
-							showMoveCleanupReport({
-								title: 'Move completed with notes',
-								label: movePlan.label,
-								bucket: current.bucket,
-								prefix: current.prefix,
-								filenameTemplate: moveCleanupFilenameTemplate,
-								filenameMaxLen: moveCleanupFilenameMaxLen,
-								result,
-								kind: 'info',
-							})
-						}
-						delete uploadMoveByTaskIdRef.current[taskId]
-					}
-				} catch (err) {
-					maybeReportNetworkError(err)
-					const msg = formatErr(err)
-					updateUploadTask(taskId, (prev) => ({
-						...prev,
-						status: 'failed',
-						finishedAtMs: Date.now(),
-						error: msg,
-						cleanupFailed: true,
-					}))
-					message.error(msg)
-				}
-				return
-			}
-
-			if (status === 'failed') {
-				updateUploadTask(taskId, (prev) => ({
-					...prev,
-					status: 'failed',
-					finishedAtMs: Date.now(),
-					error: error ?? 'upload job failed',
-					cleanupFailed: false,
-					speedBps: 0,
-					etaSeconds: 0,
-				}))
-				delete uploadMoveByTaskIdRef.current[taskId]
-				return
-			}
-
-			if (status === 'canceled') {
-				updateUploadTask(taskId, (prev) => ({
-					...prev,
-					status: 'canceled',
-					finishedAtMs: Date.now(),
-					error: error ?? prev.error,
-					cleanupFailed: false,
-					speedBps: 0,
-					etaSeconds: 0,
-				}))
-				delete uploadMoveByTaskIdRef.current[taskId]
-			}
-		},
-		[moveCleanupFilenameMaxLen, moveCleanupFilenameTemplate, updateUploadTask],
-	)
-
-	const handleUploadJobUpdate = useCallback(
-		async (taskId: string, job: { status?: JobStatus; progress?: JobProgress | null; error?: string | null }) => {
-			const current = uploadTasksRef.current.find((t) => t.id === taskId)
-			if (!current || current.status !== 'waiting_job') return
-			if (job.progress) {
-				updateUploadTaskProgressFromJob(taskId, job.progress)
-			}
-			if (job.status === 'succeeded' || job.status === 'failed' || job.status === 'canceled') {
-				await finalizeUploadJob(taskId, job.status, job.error ?? null)
-			}
-		},
-		[finalizeUploadJob, updateUploadTaskProgressFromJob],
-	)
+	const { handleUploadJobUpdate } = useTransfersUploadJobLifecycle({
+		uploadTasksRef,
+		uploadMoveByTaskIdRef,
+		moveCleanupFilenameTemplate,
+		moveCleanupFilenameMaxLen,
+		updateUploadTask,
+		formatMoveCleanupSummary,
+		showMoveCleanupReport,
+	})
 
 	const retryUploadTask = useCallback(
 		async (taskId: string) => {
