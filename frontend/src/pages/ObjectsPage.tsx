@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Grid, Menu, Typography, message } from 'antd'
+import { Alert, Grid, Menu, Typography } from 'antd'
 import {
 	Suspense,
 	useCallback,
@@ -12,37 +12,25 @@ import {
 import { createPortal } from 'react-dom'
 
 import { APIClient, APIError } from '../api/client'
-import type { Bucket, JobCreateRequest, ObjectItem, Profile } from '../api/types'
-import { useTransfers } from '../components/useTransfers'
-import { getDevicePickerSupport } from '../lib/deviceFs'
-import { withJobQueueRetry } from '../lib/jobQueue'
-import { formatErrorWithHint as formatErr } from '../lib/errors'
-import { getProviderCapabilities, getProviderCapabilityReason, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
-import { useLocalStorageState } from '../lib/useLocalStorageState'
-import { useIsOffline } from '../lib/useIsOffline'
-import styles from './objects/objects.module.css'
-import type { UIActionOrDivider } from './objects/objectsActions'
-import {
-	buildActionMenu,
-	trimActionDividers,
-} from './objects/objectsActions'
-import { ObjectsLayout } from './objects/ObjectsLayout'
-import { ObjectsListHeader } from './objects/ObjectsListHeader'
-import { ObjectsListSectionContainer } from './objects/ObjectsListSectionContainer'
-import { ObjectThumbnail } from './objects/ObjectThumbnail'
+	import type { Bucket, JobCreateRequest, ObjectItem, Profile } from '../api/types'
+	import { useTransfers } from '../components/useTransfers'
+	import { withJobQueueRetry } from '../lib/jobQueue'
+	import { formatErrorWithHint as formatErr } from '../lib/errors'
+	import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
+	import { useLocalStorageState } from '../lib/useLocalStorageState'
+	import { useIsOffline } from '../lib/useIsOffline'
+	import styles from './objects/objects.module.css'
+	import { ObjectsLayout } from './objects/ObjectsLayout'
+	import { ObjectsListHeader } from './objects/ObjectsListHeader'
+	import { ObjectsListSectionContainer } from './objects/ObjectsListSectionContainer'
+	import { ObjectThumbnail } from './objects/ObjectThumbnail'
 import { ObjectsSelectionBarSection } from './objects/ObjectsSelectionBarSection'
-import type { ObjectRow } from './objects/objectsListUtils'
-import {
-	buildObjectRows,
-	fileExtensionFromKey,
-	guessPreviewKind,
-	normalizeForSearch,
-	normalizePrefix,
-	parentPrefixFromKey,
-	splitLines,
-	splitSearchTokens,
-	uniquePrefixes,
-} from './objects/objectsListUtils'
+	import {
+		guessPreviewKind,
+		normalizePrefix,
+		parentPrefixFromKey,
+		splitLines,
+	} from './objects/objectsListUtils'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
@@ -60,12 +48,11 @@ import { useObjectsGlobalSearchOverlayState } from './objects/useObjectsGlobalSe
 import { useObjectsListVirtualizer } from './objects/useObjectsListVirtualizer'
 import { useObjectPreview } from './objects/useObjectPreview'
 import { useObjectDownloads } from './objects/useObjectDownloads'
-import { useObjectsAutoScan } from './objects/useObjectsAutoScan'
-import { useSearchHighlight } from './objects/useSearchHighlight'
-import { useObjectsTree } from './objects/useObjectsTree'
-import { useObjectsLayout } from './objects/useObjectsLayout'
-import { useObjectsActionCatalog } from './objects/useObjectsActionCatalog'
-import { useObjectsClipboard } from './objects/useObjectsClipboard'
+	import { useObjectsAutoScan } from './objects/useObjectsAutoScan'
+	import { useObjectsTree } from './objects/useObjectsTree'
+	import { useObjectsLayout } from './objects/useObjectsLayout'
+	import { useObjectsActionCatalog } from './objects/useObjectsActionCatalog'
+	import { useObjectsClipboard } from './objects/useObjectsClipboard'
 import { useObjectsDnd } from './objects/useObjectsDnd'
 import { useObjectsSelection } from './objects/useObjectsSelection'
 import { useObjectsContextMenu } from './objects/useObjectsContextMenu'
@@ -91,10 +78,13 @@ import { useObjectsDeleteConfirm } from './objects/useObjectsDeleteConfirm'
 import { useObjectsPrefixSummary } from './objects/useObjectsPrefixSummary'
 import { useObjectsPrefetch } from './objects/useObjectsPrefetch'
 import { useObjectsLocationState } from './objects/useObjectsLocationState'
-import { useObjectsBreadcrumbItems } from './objects/useObjectsBreadcrumbItems'
-import { useObjectsTopMenus } from './objects/useObjectsTopMenus'
-import { useObjectsRowRenderers } from './objects/useObjectsRowRenderers'
-import { useObjectsSearchState } from './objects/useObjectsSearchState'
+	import { useObjectsBreadcrumbItems } from './objects/useObjectsBreadcrumbItems'
+	import { useObjectsListDerivedState } from './objects/useObjectsListDerivedState'
+	import { useObjectsToolbarProps } from './objects/useObjectsToolbarProps'
+	import { useObjectsTopMenus } from './objects/useObjectsTopMenus'
+	import { useObjectsUploadPickers } from './objects/useObjectsUploadPickers'
+	import { useObjectsRowRenderers } from './objects/useObjectsRowRenderers'
+	import { useObjectsSearchState } from './objects/useObjectsSearchState'
 import {
 	AUTO_INDEX_COOLDOWN_MS,
 	COMPACT_ROW_HEIGHT_PX,
@@ -316,29 +306,20 @@ export function ObjectsPage(props: Props) {
 		onDetailsResizePointerDown,
 		onDetailsResizePointerMove,
 		onDetailsResizePointerUp,
-	} = useObjectsLayout({
-		layoutWidthPx,
-		isDesktop,
-		isWideDesktop,
-		isAdvanced,
+		} = useObjectsLayout({
+			layoutWidthPx,
+			isDesktop,
+			isWideDesktop,
+			isAdvanced,
 		detailsOpen,
 		detailsDrawerOpen,
-		setDetailsDrawerOpen,
-		setTreeDrawerOpen,
-	})
-	const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
-	const uploadFolderInputRef = useRef<HTMLInputElement | null>(null)
-	useEffect(() => {
-		const el = uploadFolderInputRef.current
-		if (!el) return
-		el.setAttribute('webkitdirectory', '')
-		el.setAttribute('directory', '')
-	}, [uploadFolderInputRef])
+			setDetailsDrawerOpen,
+			setTreeDrawerOpen,
+		})
 
-
-	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
-	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
-	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
+		const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
+		const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
+		const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
 		queryFn: () => api.getMeta(),
@@ -533,104 +514,51 @@ const objectsQuery = useInfiniteQuery({
 			transfers,
 			createJobWithRetry,
 		})
-	const { indexObjectsJobMutation } = useObjectsIndexing({
-		api,
-		profileId: props.profileId,
-		bucket,
-		prefix,
-		globalSearchOpen,
-		globalSearchQueryText,
-		globalSearchPrefixNormalized,
-			autoIndexEnabled,
-			autoIndexTtlMs,
-			autoIndexCooldownMs: AUTO_INDEX_COOLDOWN_MS,
-			setIndexPrefix,
-			createJobWithRetry,
-		})
+		const { indexObjectsJobMutation } = useObjectsIndexing({
+			api,
+			profileId: props.profileId,
+			bucket,
+			prefix,
+			globalSearchOpen,
+			globalSearchQueryText,
+			globalSearchPrefixNormalized,
+				autoIndexEnabled,
+				autoIndexTtlMs,
+				autoIndexCooldownMs: AUTO_INDEX_COOLDOWN_MS,
+				setIndexPrefix,
+				createJobWithRetry,
+			})
 
-	const searchTokens = useMemo(() => splitSearchTokens(deferredSearch), [deferredSearch])
-	const searchTokensNormalized = useMemo(() => searchTokens.map((token) => normalizeForSearch(token)), [searchTokens])
-	const { highlightText } = useSearchHighlight(searchTokens)
-
-	const rows: ObjectRow[] = useMemo(
-		() =>
-			buildObjectRows({
-				pages: objectsQuery.data?.pages ?? [],
-				favoriteItems,
-				favoritesOnly,
-				favoriteKeys,
-				prefix,
-				searchTokens,
-				searchTokensNormalized,
-				extFilter,
-				minSize,
-				maxSize,
-				minModifiedMs,
-				maxModifiedMs,
-				typeFilter,
-				sort,
-				favoritesFirst,
-			}),
-		[
-			extFilter,
-			favoriteKeys,
+		const {
+			highlightText,
+			rows,
+			rowIndexByObjectKey,
+			rawTotalCount,
+			emptyKind,
+			visibleObjectKeys,
+			orderedVisibleObjectKeys,
+			visiblePrefixCount,
+			visibleFileCount,
+			allLoadedSelected,
+			someLoadedSelected,
+			extOptions,
+		} = useObjectsListDerivedState({
+			deferredSearch,
+			objectsPages: objectsQuery.data?.pages ?? [],
 			favoriteItems,
-			favoritesFirst,
 			favoritesOnly,
-			maxModifiedMs,
+			favoriteKeys,
+			prefix,
+			extFilter,
+			minSize,
 			maxSize,
 			minModifiedMs,
-			minSize,
-			objectsQuery.data,
-			prefix,
-			searchTokens,
-			searchTokensNormalized,
-			sort,
+			maxModifiedMs,
 			typeFilter,
-		],
-	)
-
-	const rowIndexByObjectKey = useMemo(() => {
-		const out = new Map<string, number>()
-		for (let i = 0; i < rows.length; i++) {
-			const row = rows[i]
-			if (row && row.kind === 'object') {
-				out.set(row.object.key, i)
-			}
-		}
-		return out
-	}, [rows])
-
-	const { rawPrefixCount, rawFileCount } = useMemo(() => {
-		if (favoritesOnly) {
-			const activePrefix = normalizePrefix(prefix)
-			const items = activePrefix ? favoriteItems.filter((item) => item.key.startsWith(activePrefix)) : favoriteItems
-			return { rawPrefixCount: 0, rawFileCount: items.length }
-		}
-		const pages = objectsQuery.data?.pages ?? []
-		return {
-			rawPrefixCount: uniquePrefixes(pages).length,
-			rawFileCount: pages.reduce((sum, p) => sum + p.items.length, 0),
-		}
-	}, [favoriteItems, favoritesOnly, objectsQuery.data, prefix])
-	const rawTotalCount = rawPrefixCount + rawFileCount
-	const emptyKind = rawTotalCount === 0 ? 'empty' : rows.length === 0 ? 'noresults' : null
-
-	const visibleObjectKeys = useMemo(() => {
-		const set = new Set<string>()
-		for (const row of rows) {
-			if (row.kind === 'object') set.add(row.object.key)
-		}
-		return Array.from(set)
-	}, [rows])
-
-	const orderedVisibleObjectKeys = useMemo(() => {
-		const out: string[] = []
-		for (const row of rows) {
-			if (row.kind === 'object') out.push(row.object.key)
-		}
-		return out
-	}, [rows])
+			sort,
+			favoritesFirst,
+			selectedKeys,
+		})
 
 	const {
 		selectObjectFromPointerEvent,
@@ -642,64 +570,29 @@ const objectsQuery = useInfiniteQuery({
 		setSelectedKeys,
 		setLastSelectedObjectKey,
 	})
-	const { handleToggleSelectAll, selectRange, selectAllLoaded } = useObjectsSelectionBulk({
-		visibleObjectKeys,
-		orderedVisibleObjectKeys,
-		setSelectedKeys,
-		setLastSelectedObjectKey,
-	})
+		const { handleToggleSelectAll, selectRange, selectAllLoaded } = useObjectsSelectionBulk({
+			visibleObjectKeys,
+			orderedVisibleObjectKeys,
+			setSelectedKeys,
+			setLastSelectedObjectKey,
+		})
 
-	const { visiblePrefixCount, visibleFileCount } = useMemo(() => {
-		let prefixCount = 0
-		let fileCount = 0
-		for (const row of rows) {
-			if (row.kind === 'prefix') prefixCount++
-			if (row.kind === 'object') fileCount++
-		}
-		return { visiblePrefixCount: prefixCount, visibleFileCount: fileCount }
-	}, [rows])
-
-	const loadedSelectedCount = useMemo(() => {
-		if (visibleObjectKeys.length === 0 || selectedKeys.size === 0) return 0
-		let count = 0
-		for (const k of visibleObjectKeys) {
-			if (selectedKeys.has(k)) count++
-		}
-		return count
-	}, [visibleObjectKeys, selectedKeys])
-	const allLoadedSelected = visibleObjectKeys.length > 0 && loadedSelectedCount === visibleObjectKeys.length
-	const someLoadedSelected = loadedSelectedCount > 0 && loadedSelectedCount < visibleObjectKeys.length
-
-	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
-	const { handleBucketDropdownVisibleChange } = useObjectsPrefetch({
-		api,
+		const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
+		const { handleBucketDropdownVisibleChange } = useObjectsPrefetch({
+			api,
 		apiToken: props.apiToken,
 		profileId: props.profileId,
 		queryClient,
 		bucket,
 		tabs,
 		bucketOptions,
-		prefixByBucketRef,
-		pageSize: OBJECTS_LIST_PAGE_SIZE,
-	})
-	const extOptions = useMemo(() => {
-		const counts = new Map<string, number>()
-		for (const page of objectsQuery.data?.pages ?? []) {
-			for (const obj of page.items) {
-				const ext = fileExtensionFromKey(obj.key)
-				if (!ext) continue
-				counts.set(ext, (counts.get(ext) ?? 0) + 1)
-			}
-		}
-		return Array.from(counts.entries())
-			.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-			.slice(0, 20)
-			.map(([ext, count]) => ({ label: `.${ext} (${count})`, value: ext }))
-	}, [objectsQuery.data])
+			prefixByBucketRef,
+			pageSize: OBJECTS_LIST_PAGE_SIZE,
+		})
 
-	const handleTreeSelect = useCallback(
-		(key: string, closeDrawer: boolean) => {
-			setTreeSelectedKeys([key])
+		const handleTreeSelect = useCallback(
+			(key: string, closeDrawer: boolean) => {
+				setTreeSelectedKeys([key])
 			if (!bucket) return
 			navigateToLocation(bucket, key === '/' ? '' : key, { recordHistory: true })
 			if (closeDrawer) setTreeDrawerOpen(false)
@@ -940,20 +833,35 @@ const objectsQuery = useInfiniteQuery({
 		handleUploadFolderSubmit,
 		handleUploadFolderCancel,
 		handleUploadFolderPick,
-	} = useObjectsUploadFolder({
-		profileId: props.profileId,
-		bucket,
-		prefix,
-		uploadsEnabled: uploadSupported,
-		uploadsDisabledReason: uploadDisabledReason,
-		transfers,
-		defaultMoveAfterUpload: moveAfterUploadDefault,
-		defaultCleanupEmptyDirs: cleanupEmptyDirsDefault,
-	})
+		} = useObjectsUploadFolder({
+			profileId: props.profileId,
+			bucket,
+			prefix,
+			uploadsEnabled: uploadSupported,
+			uploadsDisabledReason: uploadDisabledReason,
+			transfers,
+			defaultMoveAfterUpload: moveAfterUploadDefault,
+			defaultCleanupEmptyDirs: cleanupEmptyDirsDefault,
+		})
 
-	useEffect(() => {
-		return () => {
-			thumbnailCache.clear()
+		const {
+			uploadFilesInputRef,
+			uploadFolderInputRef,
+			onUploadFilesInputChange,
+			onUploadFolderInputChange,
+			openUploadFilesPicker,
+			openUploadFolderPicker,
+		} = useObjectsUploadPickers({
+			isOffline,
+			uploadsEnabled: uploadSupported,
+			uploadsDisabledReason: uploadDisabledReason,
+			startUploadFromFiles,
+			openUploadFolderModal,
+		})
+
+		useEffect(() => {
+			return () => {
+				thumbnailCache.clear()
 		}
 	}, [bucket, props.profileId, thumbnailCache])
 
@@ -1055,47 +963,19 @@ const objectsQuery = useInfiniteQuery({
 		maxModifiedMs != null
 	const hasNonDefaultSort = sort !== 'name_asc' || favoritesFirst
 	const hasActiveView = hasActiveFilters || hasNonDefaultSort
-	const resetFilters = () => {
-		setTypeFilter('all')
-		setFavoritesOnly(false)
-		setFavoritesFirst(false)
-		setExtFilter('')
-		setMinSize(null)
-		setMaxSize(null)
-		setMinModifiedMs(null)
-		setMaxModifiedMs(null)
-		setSort('name_asc')
-	}
+		const resetFilters = () => {
+			setTypeFilter('all')
+			setFavoritesOnly(false)
+			setFavoritesFirst(false)
+			setExtFilter('')
+			setMinSize(null)
+			setMaxSize(null)
+			setMinModifiedMs(null)
+			setMaxModifiedMs(null)
+			setSort('name_asc')
+		}
 
-	const openUploadFilesPicker = () => {
-		if (isOffline) {
-			message.warning('Offline: uploads are disabled.')
-			return
-		}
-		if (!uploadSupported) {
-			message.warning(uploadDisabledReason ?? 'Uploads are not supported by this provider.')
-			return
-		}
-		uploadFilesInputRef.current?.click()
-	}
-	const openUploadFolderPicker = () => {
-		if (isOffline) {
-			message.warning('Offline: uploads are disabled.')
-			return
-		}
-		if (!uploadSupported) {
-			message.warning(uploadDisabledReason ?? 'Uploads are not supported by this provider.')
-			return
-		}
-		const support = getDevicePickerSupport()
-		if (support.ok) {
-			openUploadFolderModal()
-			return
-		}
-		uploadFolderInputRef.current?.click()
-	}
-
-	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
+		const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
 
 	const { showLoadMore, loadMoreLabel, handleLoadMore, searchAutoScanCap } = useObjectsAutoScan({
 		favoritesOnly,
@@ -1388,10 +1268,10 @@ const objectsQuery = useInfiniteQuery({
 				<Typography.Text type="secondary">Loading toolbar…</Typography.Text>
 			</div>
 		)
-	const listContent = (
-		<Suspense fallback={listFallback}>
-			<ObjectsListContent
-				rows={rows}
+		const listContent = (
+			<Suspense fallback={listFallback}>
+				<ObjectsListContent
+					rows={rows}
 				virtualItems={virtualItemsForRender}
 				totalSize={totalSize}
 				hasProfile={!!props.profileId}
@@ -1408,46 +1288,63 @@ const objectsQuery = useInfiniteQuery({
 				loadMoreDisabled={loadMoreDisabled}
 				onLoadMore={handleLoadMore}
 			/>
-		</Suspense>
-	)
+			</Suspense>
+		)
 
-		const uploadMenuActions = trimActionDividers([globalActionMap.get('upload_files'), globalActionMap.get('upload_folder')].filter(Boolean) as UIActionOrDivider[])
-		const uploadButtonMenu = buildActionMenu(uploadMenuActions, isAdvanced)
-		const canCreateFolder = !!props.profileId && !!bucket && !isOffline && objectCrudSupported
-		const createFolderTooltipText = !props.profileId
-			? 'Select a profile first'
-			: isOffline
-				? 'Offline: check your network connection'
-				: !bucket
-					? 'Select a bucket first'
-					: !objectCrudSupported
-						? getProviderCapabilityReason(profileCapabilities, 'objectCrud', 'Selected provider does not support object APIs.') ??
-							'Selected provider does not support object APIs.'
-						: 'Create a new folder marker object'
-	const handleBucketChange = (value: string | null) => {
-		const nextBucket = value ?? ''
-		if (!nextBucket) {
-			navigateToLocation('', '', { recordHistory: true })
-			return
-		}
-		const saved = prefixByBucketRef.current[nextBucket]
-		navigateToLocation(nextBucket, saved ?? '', { recordHistory: true })
-	}
-
-	const { topMoreMenu } = useObjectsTopMenus({
-		isAdvanced,
-		profileId: props.profileId,
+		const { topMoreMenu } = useObjectsTopMenus({
+			isAdvanced,
+			profileId: props.profileId,
 		bucket,
 		prefix,
 		dockTree,
 		globalActionMap,
-		currentPrefixActionMap,
-	})
+			currentPrefixActionMap,
+		})
 
-	const openGlobalSearchPrefix = (key: string) => {
-		closeGlobalSearch()
-		if (!bucket) return
-		navigateToLocation(bucket, parentPrefixFromKey(key), { recordHistory: true })
+		const { toolbarProps, canCreateFolder, createFolderTooltipText } = useObjectsToolbarProps({
+			isDesktop: !!screens.lg,
+			showLabels: !!screens.sm,
+			isAdvanced,
+			isOffline,
+			profileId: props.profileId,
+			bucket,
+			selectedCount,
+			bucketOptions,
+			bucketsLoading: bucketsQuery.isFetching,
+			onBucketDropdownVisibleChange: handleBucketDropdownVisibleChange,
+			canGoBack,
+			canGoForward,
+			canGoUp,
+			onGoBack: goBack,
+			onGoForward: goForward,
+			onGoUp: onUp,
+			globalActionMap,
+			uploadEnabled: uploadSupported,
+			uploadDisabledReason: uploadDisabledReason,
+			onUploadFiles: openUploadFilesPicker,
+			objectCrudSupported,
+			profileCapabilities,
+			topMoreMenu,
+			showPrimaryActions: !isAdvanced,
+			primaryDownloadAction: downloadSelectionAction,
+			primaryDeleteAction: deleteSelectionAction,
+			activeTransferCount: transfers.activeTransferCount,
+			onOpenTransfers: () => transfers.openTransfers(),
+			dockTree,
+			dockDetails,
+			onOpenTree: () => setTreeDrawerOpen(true),
+			onOpenDetails: () => setDetailsDrawerOpen(true),
+			onNewFolder: () => openNewFolder(),
+			onRefresh: () => void refresh(),
+			isRefreshing: listIsFetching,
+			prefixByBucketRef,
+			navigateToLocation,
+		})
+
+		const openGlobalSearchPrefix = (key: string) => {
+			closeGlobalSearch()
+			if (!bucket) return
+			navigateToLocation(bucket, parentPrefixFromKey(key), { recordHistory: true })
 	}
 
 	const openGlobalSearchDetails = (key: string) => {
@@ -1493,83 +1390,38 @@ const objectsQuery = useInfiniteQuery({
 					/>
 				) : null}
 
-				<input
-				ref={uploadFilesInputRef}
-				type="file"
-				multiple
-				aria-label="Select files to upload"
-				style={{ display: 'none' }}
-				onChange={(e) => {
-					const files = Array.from(e.target.files ?? [])
-					startUploadFromFiles(files)
-					e.target.value = ''
-				}}
-			/>
-			<input
-				ref={uploadFolderInputRef}
-				type="file"
-				multiple
-				aria-label="Select folder to upload"
-				style={{ display: 'none' }}
-				onChange={(e) => {
-					const files = Array.from(e.target.files ?? [])
-					startUploadFromFiles(files)
-					e.target.value = ''
-				}}
-			/>
+					<input
+						ref={uploadFilesInputRef}
+						type="file"
+						multiple
+						aria-label="Select files to upload"
+						style={{ display: 'none' }}
+						onChange={onUploadFilesInputChange}
+					/>
+					<input
+						ref={uploadFolderInputRef}
+						type="file"
+						multiple
+						aria-label="Select folder to upload"
+						style={{ display: 'none' }}
+						onChange={onUploadFolderInputChange}
+					/>
 
-			<Suspense fallback={toolbarFallback}>
-					<ObjectsToolbarSection
-					apiToken={props.apiToken}
-					profileId={props.profileId}
-					bucketsErrorMessage={bucketsQuery.isError ? formatErr(bucketsQuery.error) : null}
-					isAdvanced={isAdvanced}
-					tabs={tabs}
-					activeTabId={activeTabId}
-					onTabChange={setActiveTabId}
-					onTabAdd={addTab}
-					onTabClose={closeTab}
-					tabLabelMaxWidth={screens.md ? 320 : 220}
-						toolbarProps={{
-							isDesktop: !!screens.lg,
-							showLabels: !!screens.sm,
-							isAdvanced,
-							isOffline,
-							hasProfile: !!props.profileId,
-							bucket,
-							selectedCount,
-							bucketOptions,
-							bucketsLoading: bucketsQuery.isFetching,
-							onBucketChange: handleBucketChange,
-							onBucketDropdownVisibleChange: handleBucketDropdownVisibleChange,
-							canGoBack,
-							canGoForward,
-							canGoUp,
-							onGoBack: goBack,
-							onGoForward: goForward,
-							onGoUp: onUp,
-							uploadMenu: uploadButtonMenu,
-							uploadEnabled: uploadSupported,
-							uploadDisabledReason: uploadDisabledReason,
-							onUploadFiles: openUploadFilesPicker,
-							canCreateFolder: canCreateFolder,
-							createFolderTooltipText: createFolderTooltipText,
-							onNewFolder: () => openNewFolder(),
-							onRefresh: refresh,
-							isRefreshing: listIsFetching,
-							topMoreMenu,
-							showPrimaryActions: !isAdvanced,
-							primaryDownloadAction: downloadSelectionAction,
-						primaryDeleteAction: deleteSelectionAction,
-						activeTransferCount: transfers.activeTransferCount,
-						onOpenTransfers: () => transfers.openTransfers(),
-						dockTree,
-						dockDetails,
-						onOpenTree: () => setTreeDrawerOpen(true),
-						onOpenDetails: () => setDetailsDrawerOpen(true),
-					}}
-				/>
-			</Suspense>
+					<Suspense fallback={toolbarFallback}>
+						<ObjectsToolbarSection
+							apiToken={props.apiToken}
+							profileId={props.profileId}
+							bucketsErrorMessage={bucketsQuery.isError ? formatErr(bucketsQuery.error) : null}
+							isAdvanced={isAdvanced}
+							tabs={tabs}
+							activeTabId={activeTabId}
+							onTabChange={setActiveTabId}
+							onTabAdd={addTab}
+							onTabClose={closeTab}
+							tabLabelMaxWidth={screens.md ? 320 : 220}
+							toolbarProps={toolbarProps}
+						/>
+					</Suspense>
 
 			<ObjectsLayout
 				ref={layoutRef}
