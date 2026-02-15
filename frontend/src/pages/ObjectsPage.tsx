@@ -868,7 +868,7 @@ const objectsQuery = useInfiniteQuery({
 
 	const {
 		listScrollerEl,
-		setListScrollerEl,
+		listScrollerRef,
 		scrollContainerRef,
 		rowVirtualizer,
 		virtualItems,
@@ -1156,7 +1156,6 @@ const objectsQuery = useInfiniteQuery({
 	const {
 		handleListScrollerScroll,
 		handleListScrollerWheel,
-		listScrollerRef,
 		renderPrefixRow,
 		renderObjectRow,
 	} = useObjectsRowRenderers({
@@ -1194,7 +1193,6 @@ const objectsQuery = useInfiniteQuery({
 		favoriteKeys,
 		favoritePendingKeys,
 		toggleFavorite,
-		setListScrollerEl,
 		scrollContainerRef,
 	})
 	const handleClearSearch = clearSearch

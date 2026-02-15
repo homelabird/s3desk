@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { Dispatch, DragEvent, MouseEvent, ReactNode, RefObject, SetStateAction } from 'react'
+import type { DragEvent, MouseEvent, ReactNode, RefObject } from 'react'
 import type { MenuProps } from 'antd'
 
 import type { APIClient } from '../../api/client'
@@ -44,7 +44,6 @@ type UseObjectsRowRenderersArgs = {
 	favoriteKeys: Set<string>
 	favoritePendingKeys: Set<string>
 	toggleFavorite: (key: string) => void
-	setListScrollerEl: Dispatch<SetStateAction<HTMLDivElement | null>>
 	scrollContainerRef: RefObject<HTMLDivElement | null>
 }
 
@@ -83,7 +82,6 @@ export function useObjectsRowRenderers({
 	favoriteKeys,
 	favoritePendingKeys,
 	toggleFavorite,
-	setListScrollerEl,
 	scrollContainerRef,
 }: UseObjectsRowRenderersArgs) {
 	const getContextMenuPopupContainer = useCallback((triggerNode: HTMLElement) => {
@@ -99,11 +97,6 @@ export function useObjectsRowRenderers({
 	const handleListScrollerWheel = useCallback(() => {
 		closeContextMenu(undefined, 'list_wheel')
 	}, [closeContextMenu])
-
-	const listScrollerRef = useCallback((node: HTMLDivElement | null) => {
-		setListScrollerEl(node)
-		scrollContainerRef.current = node?.closest('[data-scroll-container="app-content"]') as HTMLDivElement | null
-	}, [scrollContainerRef, setListScrollerEl])
 
 	const renderPrefixRow = useCallback(
 		(prefixKey: string, offset: number) => {
@@ -249,7 +242,6 @@ export function useObjectsRowRenderers({
 	return {
 		handleListScrollerScroll,
 		handleListScrollerWheel,
-		listScrollerRef,
 		renderPrefixRow,
 		renderObjectRow,
 	}

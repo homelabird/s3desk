@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 type UseObjectsListVirtualizerArgs = {
@@ -34,6 +34,12 @@ export function useObjectsListVirtualizer({
 	const [listScrollerEl, setListScrollerEl] = useState<HTMLDivElement | null>(null)
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 	const [scrollMargin, setScrollMargin] = useState(0)
+
+	const listScrollerRef = useCallback((node: HTMLDivElement | null) => {
+		setListScrollerEl(node)
+		// The list scroller lives inside the app content scroller.
+		scrollContainerRef.current = node?.closest('[data-scroll-container="app-content"]') as HTMLDivElement | null
+	}, [])
 
 	useLayoutEffect(() => {
 		const container = scrollContainerRef.current
@@ -79,7 +85,7 @@ export function useObjectsListVirtualizer({
 
 	return {
 		listScrollerEl,
-		setListScrollerEl,
+		listScrollerRef,
 		scrollContainerRef,
 		rowVirtualizer,
 		virtualItems,
@@ -87,4 +93,3 @@ export function useObjectsListVirtualizer({
 		totalSize,
 	}
 }
-
