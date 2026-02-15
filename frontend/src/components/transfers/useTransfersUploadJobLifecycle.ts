@@ -6,6 +6,7 @@ import type { JobProgress, JobStatus } from '../../api/types'
 import { type RemoveEntriesResult, removeEntriesFromDirectoryHandle } from '../../lib/deviceFs'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { maybeReportNetworkError } from './transferDownloadUtils'
+import type { MoveCleanupReportArgs } from './moveCleanupReport'
 import type { UploadTask } from './transferTypes'
 
 type UploadMovePlan = {
@@ -13,17 +14,6 @@ type UploadMovePlan = {
 	relPaths: string[]
 	label?: string
 	cleanupEmptyDirs?: boolean
-}
-
-type MoveCleanupReportArgs = {
-	title: string
-	label?: string
-	bucket?: string
-	prefix?: string
-	filenameTemplate: string
-	filenameMaxLen: number
-	result: RemoveEntriesResult
-	kind?: 'warning' | 'info'
 }
 
 type UseTransfersUploadJobLifecycleArgs = {
