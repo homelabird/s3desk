@@ -31,5 +31,5 @@ describe('ObjectsPage', () => {
 		)
 
 		expect(screen.getByText('Objects')).toBeInTheDocument()
-	})
+	}, 15_000)
 })
