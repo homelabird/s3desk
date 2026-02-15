@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Grid, Menu, Typography } from 'antd'
+import { Alert, Grid, Typography } from 'antd'
 import {
 	Suspense,
 	useCallback,
@@ -9,7 +9,6 @@ import {
 	useState,
 	type MouseEvent as ReactMouseEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
 
 import { APIClient, APIError } from '../api/client'
 	import type { Bucket, JobCreateRequest, ObjectItem, Profile } from '../api/types'
@@ -20,11 +19,8 @@ import { APIClient, APIError } from '../api/client'
 	import { useLocalStorageState } from '../lib/useLocalStorageState'
 	import { useIsOffline } from '../lib/useIsOffline'
 	import styles from './objects/objects.module.css'
-	import { ObjectsLayout } from './objects/ObjectsLayout'
-	import { ObjectsListHeader } from './objects/ObjectsListHeader'
-	import { ObjectsListSectionContainer } from './objects/ObjectsListSectionContainer'
 	import { ObjectThumbnail } from './objects/ObjectThumbnail'
-import { ObjectsSelectionBarSection } from './objects/ObjectsSelectionBarSection'
+	import { ObjectsPagePanes } from './objects/ObjectsPagePanes'
 	import {
 		guessPreviewKind,
 		normalizePrefix,
@@ -98,18 +94,14 @@ import {
 	ObjectsCopyMoveModal,
 	ObjectsCopyPrefixModal,
 	ObjectsDeletePrefixConfirmModal,
-	ObjectsDetailsPanelSection,
 	ObjectsDownloadPrefixModal,
 	ObjectsFiltersDrawer,
 	ObjectsGlobalSearchDrawer,
 	ObjectsGoToPathModal,
-	ObjectsListContent,
-	ObjectsListControls,
 	ObjectsNewFolderModal,
 	ObjectsPresignModal,
 	ObjectsRenameModal,
 	ObjectsToolbarSection,
-	ObjectsTreeSection,
 	ObjectsUploadFolderModal,
 } from './objects/objectsPageLazy'
 
@@ -1248,47 +1240,10 @@ const objectsQuery = useInfiniteQuery({
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
 	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
 	const canInteract = !!props.profileId && !!bucket && !isOffline
-		const paneFallback = (
-			<div className={styles.paneSkeleton}>
-				<Typography.Text type="secondary">Loading…</Typography.Text>
-			</div>
-		)
-		const listFallback = (
-			<div className={styles.listSkeleton}>
-				<Typography.Text type="secondary">Loading list…</Typography.Text>
-			</div>
-		)
-		const controlsFallback = (
-			<div className={styles.controlsSkeleton}>
-				<Typography.Text type="secondary">Loading controls…</Typography.Text>
-			</div>
-		)
 		const toolbarFallback = (
 			<div className={styles.toolbarSkeleton}>
 				<Typography.Text type="secondary">Loading toolbar…</Typography.Text>
 			</div>
-		)
-		const listContent = (
-			<Suspense fallback={listFallback}>
-				<ObjectsListContent
-					rows={rows}
-				virtualItems={virtualItemsForRender}
-				totalSize={totalSize}
-				hasProfile={!!props.profileId}
-				hasBucket={!!bucket}
-				isFetching={listIsFetching}
-				isFetchingNextPage={listIsFetchingNextPage}
-				emptyKind={emptyKind}
-				canClearSearch={canClearSearch}
-				onClearSearch={handleClearSearch}
-				renderPrefixRow={renderPrefixRow}
-				renderObjectRow={renderObjectRow}
-				showLoadMore={showLoadMore}
-				loadMoreLabel={loadMoreLabel}
-				loadMoreDisabled={loadMoreDisabled}
-				onLoadMore={handleLoadMore}
-			/>
-			</Suspense>
 		)
 
 		const { topMoreMenu } = useObjectsTopMenus({
@@ -1423,222 +1378,212 @@ const objectsQuery = useInfiniteQuery({
 						/>
 					</Suspense>
 
-			<ObjectsLayout
-				ref={layoutRef}
-				treeWidthPx={dockTree ? treeWidthUsed : 0}
-				treeHandleWidthPx={treeResizeHandleWidth}
-				detailsWidthPx={dockDetails ? detailsWidthUsed : 0}
-				detailsHandleWidthPx={dockDetails && detailsOpen ? detailsResizeHandleWidth : 0}
-				treeDocked={dockTree}
-				detailsDocked={dockDetails}
-				detailsOpen={detailsOpen}
-			>
-				<Suspense fallback={paneFallback}>
-					<ObjectsTreeSection
-						dockTree={dockTree}
-						treeDrawerOpen={treeDrawerOpen}
-						hasProfile={!!props.profileId}
-						hasBucket={!!bucket}
-						favorites={favoriteItems}
-						favoritesSearch={favoritesSearch}
-						onFavoritesSearchChange={setFavoritesSearch}
-						favoritesOnly={favoritesOnly}
-						onFavoritesOnlyChange={setFavoritesOnly}
-						favoritesOpenDetails={favoritesOpenDetails}
-						onFavoritesOpenDetailsChange={setFavoritesOpenDetails}
-						onSelectFavorite={(key) => handleFavoriteSelect(key, false)}
-						onSelectFavoriteFromDrawer={(key) => handleFavoriteSelect(key, true)}
-						favoritesLoading={favoritesQuery.isFetching}
-						favoritesError={favoritesQuery.isError ? formatErr(favoritesQuery.error) : null}
-						treeData={treeData}
-						loadingKeys={treeLoadingKeys}
-						onLoadData={onTreeLoadData}
-						selectedKeys={treeSelectedKeys}
-						expandedKeys={treeExpandedKeys}
-						onExpandedKeysChange={setTreeExpandedKeys}
-						onSelectKey={(key) => handleTreeSelect(key, false)}
-						onSelectKeyFromDrawer={(key) => handleTreeSelect(key, true)}
-						getDropTargetPrefix={normalizeDropTargetPrefix}
-						canDragDrop={canDragDrop}
-						dndHoverPrefix={dndHoverPrefix}
-						onDndTargetDragOver={onDndTargetDragOver}
-						onDndTargetDragLeave={onDndTargetDragLeave}
-							onDndTargetDrop={onDndTargetDrop}
-							onResizePointerDown={onTreeResizePointerDown}
-							onResizePointerMove={onTreeResizePointerMove}
-							onResizePointerUp={onTreeResizePointerUp}
-						canCreateFolder={canCreateFolder}
-						createFolderTooltipText={createFolderTooltipText}
-						onNewFolderAtPrefix={openNewFolder}
-						onPrefixContextMenu={handleTreePrefixContextMenu}
-						onCloseDrawer={() => setTreeDrawerOpen(false)}
-						/>
-					</Suspense>
-
-				{contextMenuVisible && contextMenuProps && contextMenuStyle && typeof document !== 'undefined'
-					? createPortal(
-							<div
-								ref={contextMenuRef}
-								className={`${contextMenuClassName} ant-dropdown`}
-								style={contextMenuStyle}
-								onContextMenu={(event) => event.preventDefault()}
-							>
-								<Menu {...contextMenuProps} selectable={false} />
-							</div>,
-							document.body,
-					  )
-					: null}
-
-				<ObjectsListSectionContainer
-					controls={
-						<Suspense fallback={controlsFallback}>
-							<ObjectsListControls
-								bucket={bucket}
-								prefix={prefix}
-								breadcrumbItems={breadcrumbItems}
-								isBookmarked={isBookmarked}
-								onToggleBookmark={toggleBookmark}
-								onOpenPath={openPathModal}
-								isCompact={isCompactList}
-								searchDraft={searchDraft}
-								onSearchDraftChange={setSearchDraft}
-								hasActiveView={hasActiveView}
-								onOpenFilters={() => setFiltersDrawerOpen(true)}
-								isAdvanced={isAdvanced}
-								visiblePrefixCount={visiblePrefixCount}
-								visibleFileCount={visibleFileCount}
-								search={search}
-								hasNextPage={favoritesOnly ? false : objectsQuery.hasNextPage}
-								isFetchingNextPage={favoritesOnly ? false : objectsQuery.isFetchingNextPage}
-								rawTotalCount={rawTotalCount}
-								searchAutoScanCap={searchAutoScanCap}
-									onOpenGlobalSearch={() => {
-										if (!isAdvanced) setUiMode('advanced')
-										openGlobalSearch()
-									}}
-									canInteract={canInteract}
-									favoritesOnly={favoritesOnly}
-									sort={sort}
-								sortOptions={[
-									{ label: 'Name (A -> Z)', value: 'name_asc' },
-									{ label: 'Name (Z -> A)', value: 'name_desc' },
-									{ label: 'Size (smallest)', value: 'size_asc' },
-									{ label: 'Size (largest)', value: 'size_desc' },
-									{ label: 'Last modified (oldest)', value: 'time_asc' },
-									{ label: 'Last modified (newest)', value: 'time_desc' },
-								]}
-								onSortChange={(value) => setSort(value)}
-								favoritesFirst={favoritesFirst}
-								onFavoritesFirstChange={setFavoritesFirst}
-							/>
-						</Suspense>
-					}
-					alerts={
-						<>
-							{isOffline ? <Alert type="warning" showIcon title="Offline: object actions are disabled." /> : null}
-							{favoritesOnly ? (
-								favoritesQuery.isError ? (
-									<Alert type="error" showIcon title="Failed to load favorites" description={formatErr(favoritesQuery.error)} />
-								) : null
-							) : objectsQuery.isError ? (
-								<Alert type="error" showIcon title="Failed to list objects" description={formatErr(objectsQuery.error)} />
-							) : null}
-							{bucket ? null : <Alert type="info" showIcon title="Select a bucket to browse objects." />}
-						</>
-					}
-					uploadDropActive={showUploadDropOverlay}
-					uploadDropLabel={uploadDropLabel}
-					onUploadDragEnter={onUploadDragEnter}
-					onUploadDragLeave={onUploadDragLeave}
-					onUploadDragOver={onUploadDragOver}
-					onUploadDrop={onUploadDrop}
-					selectionBar={
-						<ObjectsSelectionBarSection
-							selectedCount={selectedCount}
-							singleSelectedKey={singleSelectedKey}
-							singleSelectedSize={singleSelectedItem?.size}
-							isAdvanced={isAdvanced}
-							clearAction={clearSelectionAction}
-							deleteAction={deleteSelectionAction}
-							downloadAction={downloadSelectionAction}
-							selectionMenuActions={selectionMenuActions}
-							getObjectActions={getObjectActions}
-							isDownloadLoading={zipObjectsJobMutation.isPending}
-							isDeleteLoading={deleteMutation.isPending && deletingKey === null}
-						/>
-					}
-					listHeader={
-						<ObjectsListHeader
-							isCompact={isCompactList}
-							listGridClassName={listGridClassName}
-							allLoadedSelected={allLoadedSelected}
-							someLoadedSelected={someLoadedSelected}
-							hasRows={visibleObjectKeys.length > 0}
-							onToggleSelectAll={handleToggleSelectAll}
-							sortDirForColumn={sortDirForColumn}
-							onToggleSort={toggleSortColumn}
-						/>
-					}
-					listScrollerRef={listScrollerRef}
-					listScrollerTabIndex={0}
-					onListScrollerClick={() => getListScrollerElement()?.focus()}
-					onListScrollerKeyDown={listKeydownHandler}
-					onListScrollerScroll={handleListScrollerScroll}
-					onListScrollerWheel={handleListScrollerWheel}
-					onListScrollerContextMenu={handleListScrollerContextMenu}
-					listContent={listContent}
-				/>
-				<Suspense fallback={paneFallback}>
-					<ObjectsDetailsPanelSection
-						profileId={props.profileId}
-						bucket={bucket}
-						isAdvanced={isAdvanced}
-						selectedCount={selectedCount}
-						detailsKey={detailsKey}
-						detailsMeta={detailsMeta}
-						isMetaFetching={detailsMetaQuery.isFetching}
-						isMetaError={detailsMetaQuery.isError}
-						metaErrorMessage={detailsMetaQuery.isError ? formatErr(detailsMetaQuery.error) : ''}
-						onRetryMeta={() => detailsMetaQuery.refetch()}
-						onCopyKey={() => {
-							if (!detailsKey) return
-							onCopy(detailsKey)
-						}}
-						onDownload={() => {
-							if (!detailsKey) return
-							onDownload(detailsKey, detailsMeta?.size ?? singleSelectedItem?.size)
-						}}
-						onPresign={() => {
-							if (!detailsKey) return
-							presignMutation.mutate(detailsKey)
-						}}
-						isPresignLoading={presignMutation.isPending && presignKey === detailsKey}
-						onCopyMove={(mode) => {
-							if (!detailsKey) return
-							openCopyMove(mode, detailsKey)
-						}}
-						onDelete={() => {
-							if (!detailsKey) return
-							confirmDeleteObjects([detailsKey])
-						}}
-						isDeleteLoading={deleteMutation.isPending && deletingKey === detailsKey}
-						thumbnail={detailsThumbnail}
-						preview={preview}
-						onLoadPreview={loadPreview}
-						onCancelPreview={cancelPreview}
-						canCancelPreview={canCancelPreview}
-						dockDetails={dockDetails}
-						detailsOpen={detailsOpen}
-						detailsDrawerOpen={detailsDrawerOpen}
-						onOpenDetails={openDetails}
-						onCloseDetails={() => setDetailsOpen(false)}
-						onCloseDrawer={() => setDetailsDrawerOpen(false)}
-						onResizePointerDown={onDetailsResizePointerDown}
-						onResizePointerMove={onDetailsResizePointerMove}
-						onResizePointerUp={onDetailsResizePointerUp}
-					/>
-				</Suspense>
-			</ObjectsLayout>
+			<ObjectsPagePanes
+				layoutRef={layoutRef}
+				layoutProps={{
+					treeWidthPx: dockTree ? treeWidthUsed : 0,
+					treeHandleWidthPx: treeResizeHandleWidth,
+					detailsWidthPx: dockDetails ? detailsWidthUsed : 0,
+					detailsHandleWidthPx: dockDetails && detailsOpen ? detailsResizeHandleWidth : 0,
+					treeDocked: dockTree,
+					detailsDocked: dockDetails,
+					detailsOpen,
+				}}
+				treeProps={{
+					dockTree,
+					treeDrawerOpen,
+					hasProfile: !!props.profileId,
+					hasBucket: !!bucket,
+					favorites: favoriteItems,
+					favoritesSearch,
+					onFavoritesSearchChange: setFavoritesSearch,
+					favoritesOnly,
+					onFavoritesOnlyChange: setFavoritesOnly,
+					favoritesOpenDetails,
+					onFavoritesOpenDetailsChange: setFavoritesOpenDetails,
+					onSelectFavorite: (key) => handleFavoriteSelect(key, false),
+					onSelectFavoriteFromDrawer: (key) => handleFavoriteSelect(key, true),
+					favoritesLoading: favoritesQuery.isFetching,
+					favoritesError: favoritesQuery.isError ? formatErr(favoritesQuery.error) : null,
+					treeData,
+					loadingKeys: treeLoadingKeys,
+					onLoadData: onTreeLoadData,
+					selectedKeys: treeSelectedKeys,
+					expandedKeys: treeExpandedKeys,
+					onExpandedKeysChange: setTreeExpandedKeys,
+					onSelectKey: (key) => handleTreeSelect(key, false),
+					onSelectKeyFromDrawer: (key) => handleTreeSelect(key, true),
+					getDropTargetPrefix: normalizeDropTargetPrefix,
+					canDragDrop,
+					dndHoverPrefix,
+					onDndTargetDragOver,
+					onDndTargetDragLeave,
+					onDndTargetDrop,
+					onResizePointerDown: onTreeResizePointerDown,
+					onResizePointerMove: onTreeResizePointerMove,
+					onResizePointerUp: onTreeResizePointerUp,
+					canCreateFolder,
+					createFolderTooltipText,
+					onNewFolderAtPrefix: openNewFolder,
+					onPrefixContextMenu: handleTreePrefixContextMenu,
+					onCloseDrawer: () => setTreeDrawerOpen(false),
+				}}
+				contextMenuPortalProps={{
+					contextMenuClassName,
+					contextMenuRef,
+					contextMenuVisible,
+					contextMenuProps,
+					contextMenuStyle,
+				}}
+				listProps={{
+					controlsProps: {
+						bucket,
+						prefix,
+						breadcrumbItems,
+						isBookmarked,
+						onToggleBookmark: toggleBookmark,
+						onOpenPath: openPathModal,
+						isCompact: isCompactList,
+						searchDraft,
+						onSearchDraftChange: setSearchDraft,
+						hasActiveView: hasActiveView,
+						onOpenFilters: () => setFiltersDrawerOpen(true),
+						isAdvanced,
+						visiblePrefixCount,
+						visibleFileCount,
+						search,
+						hasNextPage: favoritesOnly ? false : objectsQuery.hasNextPage,
+						isFetchingNextPage: favoritesOnly ? false : objectsQuery.isFetchingNextPage,
+						rawTotalCount,
+						searchAutoScanCap,
+						onOpenGlobalSearch: () => {
+							if (!isAdvanced) setUiMode('advanced')
+							openGlobalSearch()
+						},
+						canInteract,
+						favoritesOnly,
+						sort,
+						sortOptions: [
+							{ label: 'Name (A -> Z)', value: 'name_asc' },
+							{ label: 'Name (Z -> A)', value: 'name_desc' },
+							{ label: 'Size (smallest)', value: 'size_asc' },
+							{ label: 'Size (largest)', value: 'size_desc' },
+							{ label: 'Last modified (oldest)', value: 'time_asc' },
+							{ label: 'Last modified (newest)', value: 'time_desc' },
+						],
+						onSortChange: (value) => setSort(value),
+						favoritesFirst,
+						onFavoritesFirstChange: setFavoritesFirst,
+					},
+					isOffline,
+					favoritesOnly,
+					favoritesErrorMessage: favoritesQuery.isError ? formatErr(favoritesQuery.error) : null,
+					objectsErrorMessage: objectsQuery.isError ? formatErr(objectsQuery.error) : null,
+					hasBucket: !!bucket,
+					uploadDropActive: showUploadDropOverlay,
+					uploadDropLabel,
+					onUploadDragEnter,
+					onUploadDragLeave,
+					onUploadDragOver,
+					onUploadDrop,
+					selectionBarProps: {
+						selectedCount,
+						singleSelectedKey,
+						singleSelectedSize: singleSelectedItem?.size,
+						isAdvanced,
+						clearAction: clearSelectionAction,
+						deleteAction: deleteSelectionAction,
+						downloadAction: downloadSelectionAction,
+						selectionMenuActions,
+						getObjectActions,
+						isDownloadLoading: zipObjectsJobMutation.isPending,
+						isDeleteLoading: deleteMutation.isPending && deletingKey === null,
+					},
+					listHeaderProps: {
+						isCompact: isCompactList,
+						listGridClassName,
+						allLoadedSelected,
+						someLoadedSelected,
+						hasRows: visibleObjectKeys.length > 0,
+						onToggleSelectAll: handleToggleSelectAll,
+						sortDirForColumn: sortDirForColumn,
+						onToggleSort: toggleSortColumn,
+					},
+					listScrollerRef,
+					listScrollerTabIndex: 0,
+					onListScrollerClick: () => getListScrollerElement()?.focus(),
+					onListScrollerKeyDown: listKeydownHandler,
+					onListScrollerScroll: handleListScrollerScroll,
+					onListScrollerWheel: handleListScrollerWheel,
+					onListScrollerContextMenu: handleListScrollerContextMenu,
+					contentProps: {
+						rows,
+						virtualItems: virtualItemsForRender,
+						totalSize,
+						hasProfile: !!props.profileId,
+						hasBucket: !!bucket,
+						isFetching: listIsFetching,
+						isFetchingNextPage: listIsFetchingNextPage,
+						emptyKind,
+						canClearSearch,
+						onClearSearch: handleClearSearch,
+						renderPrefixRow,
+						renderObjectRow,
+						showLoadMore,
+						loadMoreLabel,
+						loadMoreDisabled,
+						onLoadMore: handleLoadMore,
+					},
+				}}
+				detailsProps={{
+					profileId: props.profileId,
+					bucket,
+					isAdvanced,
+					selectedCount,
+					detailsKey,
+					detailsMeta,
+					isMetaFetching: detailsMetaQuery.isFetching,
+					isMetaError: detailsMetaQuery.isError,
+					metaErrorMessage: detailsMetaQuery.isError ? formatErr(detailsMetaQuery.error) : '',
+					onRetryMeta: () => detailsMetaQuery.refetch(),
+					onCopyKey: () => {
+						if (!detailsKey) return
+						onCopy(detailsKey)
+					},
+					onDownload: () => {
+						if (!detailsKey) return
+						onDownload(detailsKey, detailsMeta?.size ?? singleSelectedItem?.size)
+					},
+					onPresign: () => {
+						if (!detailsKey) return
+						presignMutation.mutate(detailsKey)
+					},
+					isPresignLoading: presignMutation.isPending && presignKey === detailsKey,
+					onCopyMove: (mode) => {
+						if (!detailsKey) return
+						openCopyMove(mode, detailsKey)
+					},
+					onDelete: () => {
+						if (!detailsKey) return
+						confirmDeleteObjects([detailsKey])
+					},
+					isDeleteLoading: deleteMutation.isPending && deletingKey === detailsKey,
+					thumbnail: detailsThumbnail,
+					preview,
+					onLoadPreview: loadPreview,
+					onCancelPreview: cancelPreview,
+					canCancelPreview,
+					dockDetails,
+					detailsOpen,
+					detailsDrawerOpen,
+					onOpenDetails: openDetails,
+					onCloseDetails: () => setDetailsOpen(false),
+					onCloseDrawer: () => setDetailsDrawerOpen(false),
+					onResizePointerDown: onDetailsResizePointerDown,
+					onResizePointerMove: onDetailsResizePointerMove,
+					onResizePointerUp: onDetailsResizePointerUp,
+				}}
+			/>
 
 			<Suspense fallback={null}>
 				{filtersDrawerOpen ? (
