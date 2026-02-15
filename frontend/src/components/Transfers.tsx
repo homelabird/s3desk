@@ -1,4 +1,4 @@
-import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, Button, Space, Typography, message } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
@@ -15,34 +15,17 @@ import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { TransfersContext, useTransfers } from './useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { TransferEstimator } from '../lib/transfer'
-import {
-	ensureReadWritePermission,
-	getDevicePickerSupport,
-	getFileHandleForPath,
-	writeResponseToFile,
-} from '../lib/deviceFs'
 import { withJobQueueRetry } from '../lib/jobQueue'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
 import type {
 	DownloadTask,
-	JobArtifactDownloadTask,
-	ObjectDeviceDownloadTask,
-	ObjectDownloadTask,
 	TransfersTab,
 	UploadTask,
 } from './transfers/transferTypes'
-import {
-	defaultFilenameFromKey,
-	downloadURLWithProgress,
-	filenameFromContentDisposition,
-	maybeReportNetworkError,
-	normalizeDevicePath,
-	normalizePrefixForDevice,
-	randomId,
-	saveBlob,
-	shouldFallbackToProxy,
-} from './transfers/transferDownloadUtils'
+import { maybeReportNetworkError, randomId } from './transfers/transferDownloadUtils'
 import { formatMoveCleanupSummary, showMoveCleanupReport } from './transfers/moveCleanupReport'
+import { TransfersDrawerHost } from './transfers/TransfersDrawerHost'
+import { useTransfersDownloadQueue } from './transfers/useTransfersDownloadQueue'
 import { useTransfersPersistence } from './transfers/useTransfersPersistence'
 import { useTransfersTaskActions } from './transfers/useTransfersTaskActions'
 import { useTransfersUploadJobEvents } from './transfers/useTransfersUploadJobEvents'
@@ -53,7 +36,7 @@ import {
 	normalizeUploadPath,
 	resolveUploadItemPath,
 	resolveUploadItemPathNormalized,
-} from './transfers/uploadPaths'
+	} from './transfers/uploadPaths'
 
 type UploadMovePlan = {
 	rootHandle: FileSystemDirectoryHandle
@@ -89,11 +72,6 @@ const buildUploadItems = (files: File[]): UploadFileItem[] =>
 		const relPathRaw = (fileWithPath.webkitRelativePath ?? fileWithPath.relativePath ?? '').trim()
 		return { file, relPath: relPathRaw || file.name }
 	})
-
-const TransfersDrawer = lazy(async () => {
-	const m = await import('./transfers/TransfersDrawer')
-	return { default: m.TransfersDrawer }
-})
 
 export type TransfersContextValue = {
 	isOpen: boolean
@@ -147,7 +125,6 @@ export function TransfersProvider(props: {
 	const [tab, setTab] = useLocalStorageState<TransfersTab>('transfersTab', 'downloads')
 
 	const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
-	const downloadTasksRef = useRef<DownloadTask[]>([])
 	const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
 	const downloadEstimatorByTaskIdRef = useRef<Record<string, TransferEstimator>>({})
 
@@ -174,9 +151,6 @@ export function TransfersProvider(props: {
 		setUploadTasks,
 	})
 
-	useEffect(() => {
-		downloadTasksRef.current = downloadTasks
-	}, [downloadTasks])
 	useEffect(() => {
 		uploadTasksRef.current = uploadTasks
 	}, [uploadTasks])
@@ -418,286 +392,17 @@ export function TransfersProvider(props: {
 		[updateUploadTask],
 	)
 
-	const startDownloadTask = useCallback(
-		async (taskId: string) => {
-			const current = downloadTasksRef.current.find((t) => t.id === taskId)
-			if (!current || current.status !== 'queued') return
-
-			const estimator = new TransferEstimator({ totalBytes: current.totalBytes })
-			downloadEstimatorByTaskIdRef.current[taskId] = estimator
-			updateDownloadTask(taskId, (t) => ({
-				...t,
-				status: 'running',
-				startedAtMs: estimator.getStartedAtMs(),
-				finishedAtMs: undefined,
-				loadedBytes: 0,
-				speedBps: 0,
-				etaSeconds: 0,
-				error: undefined,
-			}))
-
-			if (current.kind === 'object_device') {
-				const controller = new AbortController()
-				downloadAbortByTaskIdRef.current[taskId] = () => controller.abort()
-
-				try {
-					await ensureReadWritePermission(current.targetDirHandle)
-					let res: Response
-					if (downloadLinkProxyEnabled) {
-						const proxy = await api.getObjectDownloadURL({
-							profileId: current.profileId,
-							bucket: current.bucket,
-							key: current.key,
-							proxy: true,
-						})
-						res = await fetch(proxy.url, { signal: controller.signal })
-					} else {
-						try {
-							const direct = await api.getObjectDownloadURL({
-								profileId: current.profileId,
-								bucket: current.bucket,
-								key: current.key,
-							})
-							res = await fetch(direct.url, { signal: controller.signal })
-						} catch (err) {
-							if (!shouldFallbackToProxy(err) || controller.signal.aborted) {
-								throw err
-							}
-							const proxy = await api.getObjectDownloadURL({
-								profileId: current.profileId,
-								bucket: current.bucket,
-								key: current.key,
-								proxy: true,
-							})
-							res = await fetch(proxy.url, { signal: controller.signal })
-						}
-					}
-					if (!res.ok) {
-						throw new Error(`Download failed (HTTP ${res.status})`)
-					}
-					const fileHandle = await getFileHandleForPath(current.targetDirHandle, current.targetPath)
-
-					await writeResponseToFile({
-						response: res,
-						fileHandle,
-						signal: controller.signal,
-						onProgress: (p) => {
-							const e = downloadEstimatorByTaskIdRef.current[taskId]
-							if (!e) return
-							const stats = e.update(p.loadedBytes, p.totalBytes)
-							updateDownloadTask(taskId, (t) => ({
-								...t,
-								loadedBytes: stats.loadedBytes,
-								totalBytes: stats.totalBytes ?? t.totalBytes,
-								speedBps: stats.speedBps,
-								etaSeconds: stats.etaSeconds,
-							}))
-						},
-					})
-
-					updateDownloadTask(taskId, (t) => ({
-						...t,
-						status: 'succeeded',
-						finishedAtMs: Date.now(),
-						loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
-					}))
-					message.success(`Downloaded ${current.targetPath}`)
-				} catch (err) {
-					const error = err as Error
-					if (error?.name === 'AbortError' || err instanceof RequestAbortedError) {
-						updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-						return
-					}
-					maybeReportNetworkError(err)
-					const msg = formatErr(err)
-					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-					message.error(msg)
-				} finally {
-					delete downloadAbortByTaskIdRef.current[taskId]
-					delete downloadEstimatorByTaskIdRef.current[taskId]
-				}
-				return
-			}
-
-			if (current.kind === 'object') {
-				try {
-					const runDownload = async (proxy: boolean) => {
-						const presigned = await api.getObjectDownloadURL({
-							profileId: current.profileId,
-							bucket: current.bucket,
-							key: current.key,
-							proxy,
-						})
-						const latest = downloadTasksRef.current.find((t) => t.id === taskId)
-						if (!latest || latest.status !== 'running') {
-							throw new RequestAbortedError()
-						}
-						const handle = downloadURLWithProgress(presigned.url, {
-							onProgress: (p) => {
-								const e = downloadEstimatorByTaskIdRef.current[taskId]
-								if (!e) return
-								const stats = e.update(p.loadedBytes, p.totalBytes)
-								updateDownloadTask(taskId, (t) => ({
-									...t,
-									loadedBytes: stats.loadedBytes,
-									totalBytes: stats.totalBytes ?? t.totalBytes,
-									speedBps: stats.speedBps,
-									etaSeconds: stats.etaSeconds,
-								}))
-							},
-						})
-						downloadAbortByTaskIdRef.current[taskId] = handle.abort
-						return await handle.promise
-					}
-
-					let resp: { blob: Blob; contentDisposition: string | null; contentType: string | null }
-					if (downloadLinkProxyEnabled) {
-						resp = await runDownload(true)
-					} else {
-						try {
-							resp = await runDownload(false)
-						} catch (err) {
-							if (!shouldFallbackToProxy(err)) {
-								throw err
-							}
-							resp = await runDownload(true)
-						}
-					}
-					const fallbackName = defaultFilenameFromKey(current.key)
-					const filename = filenameFromContentDisposition(resp.contentDisposition) ?? (current.filenameHint?.trim() || fallbackName)
-					saveBlob(resp.blob, filename)
-					updateDownloadTask(taskId, (t) => ({
-						...t,
-						status: 'succeeded',
-						finishedAtMs: Date.now(),
-						loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
-						filenameHint: filename,
-					}))
-					message.success(`Downloaded ${filename}`)
-				} catch (err) {
-					if (err instanceof RequestAbortedError) {
-						updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-						return
-					}
-					maybeReportNetworkError(err)
-					const msg = formatErr(err)
-					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-					message.error(msg)
-				} finally {
-					delete downloadAbortByTaskIdRef.current[taskId]
-					delete downloadEstimatorByTaskIdRef.current[taskId]
-				}
-				return
-			}
-
-			const handle = api.downloadJobArtifact(
-				{ profileId: current.profileId, jobId: current.jobId },
-				{
-					onProgress: (p) => {
-						const e = downloadEstimatorByTaskIdRef.current[taskId]
-						if (!e) return
-						const stats = e.update(p.loadedBytes, p.totalBytes)
-						updateDownloadTask(taskId, (t) => ({
-							...t,
-							loadedBytes: stats.loadedBytes,
-							totalBytes: stats.totalBytes ?? t.totalBytes,
-							speedBps: stats.speedBps,
-							etaSeconds: stats.etaSeconds,
-						}))
-					},
-				},
-			)
-
-			downloadAbortByTaskIdRef.current[taskId] = handle.abort
-
-			try {
-				const resp = await handle.promise
-				const fallbackName = current.filenameHint?.trim() || `job-${current.jobId}.zip`
-				const filename = filenameFromContentDisposition(resp.contentDisposition) ?? fallbackName
-				saveBlob(resp.blob, filename)
-				updateDownloadTask(taskId, (t) => ({
-					...t,
-					status: 'succeeded',
-					finishedAtMs: Date.now(),
-					loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
-					filenameHint: filename,
-				}))
-				message.success(`Downloaded ${filename}`)
-			} catch (err) {
-				if (err instanceof RequestAbortedError) {
-					updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-					return
-				}
-				maybeReportNetworkError(err)
-				const msg = formatErr(err)
-				updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-				message.error(msg)
-			} finally {
-				delete downloadAbortByTaskIdRef.current[taskId]
-				delete downloadEstimatorByTaskIdRef.current[taskId]
-			}
-		},
-		[api, downloadLinkProxyEnabled, updateDownloadTask],
-	)
-
-	useEffect(() => {
-		const running = downloadTasks.filter((t) => t.status === 'running').length
-		const capacity = downloadConcurrency - running
-		if (capacity <= 0) return
-		const toStart = downloadTasks.filter((t) => t.status === 'queued').slice(0, capacity)
-		for (const t of toStart) void startDownloadTask(t.id)
-	}, [downloadConcurrency, downloadTasks, startDownloadTask])
-
-	const hasWaitingJobArtifactDownloads = downloadTasks.some((t) => t.kind === 'job_artifact' && t.status === 'waiting')
-	useEffect(() => {
-		if (!hasWaitingJobArtifactDownloads) return
-
-		let stopped = false
-		const tick = async () => {
-			const waiting = downloadTasksRef.current.filter(
-				(t): t is JobArtifactDownloadTask => t.kind === 'job_artifact' && t.status === 'waiting',
-			)
-			for (const t of waiting) {
-				if (stopped) return
-				try {
-					const job = await api.getJob(t.profileId, t.jobId)
-					if (stopped) return
-
-					if (job.status === 'succeeded') {
-						updateDownloadTask(t.id, (prev) => ({ ...prev, status: 'queued', error: undefined }))
-						continue
-					}
-					if (job.status === 'failed') {
-						updateDownloadTask(t.id, (prev) => ({
-							...prev,
-							status: 'failed',
-							finishedAtMs: Date.now(),
-							error: job.error ?? 'job failed',
-						}))
-						continue
-					}
-					if (job.status === 'canceled') {
-						updateDownloadTask(t.id, (prev) => ({
-							...prev,
-							status: 'canceled',
-							finishedAtMs: Date.now(),
-							error: job.error ?? prev.error,
-						}))
-					}
-				} catch (err) {
-					maybeReportNetworkError(err)
-					updateDownloadTask(t.id, (prev) => ({ ...prev, error: formatErr(err) }))
-				}
-			}
-		}
-
-		void tick()
-		const id = window.setInterval(() => void tick(), 1500)
-		return () => {
-			stopped = true
-			window.clearInterval(id)
-		}
-	}, [api, hasWaitingJobArtifactDownloads, updateDownloadTask])
+	const { queueDownloadObject, queueDownloadObjectsToDevice, queueDownloadJobArtifact } = useTransfersDownloadQueue({
+		api,
+		downloadLinkProxyEnabled,
+		downloadConcurrency,
+		downloadTasks,
+		setDownloadTasks,
+		downloadAbortByTaskIdRef,
+		downloadEstimatorByTaskIdRef,
+		updateDownloadTask,
+		openTransfers,
+	})
 
 	const startUploadTask = useCallback(
 		async (taskId: string) => {
@@ -1028,152 +733,18 @@ export function TransfersProvider(props: {
 	}, [startUploadTask, uploadConcurrency, uploadTasks])
 
 	const hasPendingUploadJobs = uploadTasks.some((t) => t.status === 'waiting_job')
-	useTransfersUploadJobEvents({
-		api,
-		apiToken: props.apiToken,
-		hasPendingUploadJobs,
-		uploadTasksRef,
-		handleUploadJobUpdate,
-		updateUploadTask,
-	})
+		useTransfersUploadJobEvents({
+			api,
+			apiToken: props.apiToken,
+			hasPendingUploadJobs,
+			uploadTasksRef,
+			handleUploadJobUpdate,
+			updateUploadTask,
+		})
 
-	const queueDownloadObject = useCallback(
-		(args: { profileId: string; bucket: string; key: string; expectedBytes?: number; label?: string; filenameHint?: string }) => {
-			const existing = downloadTasksRef.current.find(
-				(t) =>
-					t.kind === 'object' &&
-					t.profileId === args.profileId &&
-					t.bucket === args.bucket &&
-					t.key === args.key &&
-					(t.status === 'queued' || t.status === 'waiting' || t.status === 'running'),
-			)
-			if (existing) {
-				openTransfers('downloads')
-				message.info('Download already queued')
-				return
-			}
-
-			const totalBytes = typeof args.expectedBytes === 'number' && args.expectedBytes >= 0 ? args.expectedBytes : undefined
-			const taskId = randomId()
-			const task: ObjectDownloadTask = {
-				id: taskId,
-				kind: 'object',
-				profileId: args.profileId,
-				label: args.label?.trim() || args.key,
-				status: 'queued',
-				createdAtMs: Date.now(),
-				loadedBytes: 0,
-				totalBytes,
-				speedBps: 0,
-				etaSeconds: 0,
-				bucket: args.bucket,
-				key: args.key,
-				filenameHint: args.filenameHint?.trim() || defaultFilenameFromKey(args.key),
-			}
-
-			setDownloadTasks((prev) => [task, ...prev])
-			openTransfers('downloads')
-		},
-		[openTransfers],
-	)
-
-	const queueDownloadObjectsToDevice = useCallback(
-		(args: {
-			profileId: string
-			bucket: string
-			items: { key: string; size?: number }[]
-			targetDirHandle: FileSystemDirectoryHandle
-			targetLabel?: string
-			prefix?: string
-		}) => {
-			const support = getDevicePickerSupport()
-			if (!support.ok) {
-				message.error(support.reason ?? 'Directory picker is not available.')
-				return
-			}
-
-			const prefix = normalizePrefixForDevice(args.prefix)
-			const tasks: ObjectDeviceDownloadTask[] = []
-			for (const item of args.items) {
-				if (!item?.key) continue
-				if (item.key.endsWith('/')) continue
-				const relative = prefix && item.key.startsWith(prefix) ? item.key.slice(prefix.length) : item.key
-				const targetPath = normalizeDevicePath(relative || defaultFilenameFromKey(item.key))
-				const label = relative || item.key
-				const taskId = randomId()
-				tasks.push({
-					id: taskId,
-					kind: 'object_device',
-					profileId: args.profileId,
-					bucket: args.bucket,
-					key: item.key,
-					label,
-					status: 'queued',
-					createdAtMs: Date.now(),
-					loadedBytes: 0,
-					totalBytes: typeof item.size === 'number' && item.size >= 0 ? item.size : undefined,
-					speedBps: 0,
-					etaSeconds: 0,
-					error: undefined,
-					filenameHint: targetPath.split('/').pop() || defaultFilenameFromKey(item.key),
-					targetDirHandle: args.targetDirHandle,
-					targetPath,
-					targetLabel: args.targetLabel,
-				})
-			}
-
-			if (tasks.length === 0) {
-				message.info('No objects to download')
-				return
-			}
-
-			setDownloadTasks((prev) => [...tasks, ...prev])
-			openTransfers('downloads')
-		},
-		[openTransfers],
-	)
-
-	const queueDownloadJobArtifact = useCallback(
-		(args: { profileId: string; jobId: string; label?: string; filenameHint?: string; waitForJob?: boolean }) => {
-			const existing = downloadTasksRef.current.find(
-				(t) =>
-					t.kind === 'job_artifact' &&
-					t.profileId === args.profileId &&
-					t.jobId === args.jobId &&
-					(t.status === 'queued' || t.status === 'waiting' || t.status === 'running'),
-			)
-			if (existing) {
-				openTransfers('downloads')
-				message.info('Artifact download already queued')
-				return
-			}
-
-			const taskId = randomId()
-			const task: JobArtifactDownloadTask = {
-				id: taskId,
-				kind: 'job_artifact',
-				profileId: args.profileId,
-				jobId: args.jobId,
-				label: args.label?.trim() || `Job artifact: ${args.jobId}`,
-				status: args.waitForJob ? 'waiting' : 'queued',
-				createdAtMs: Date.now(),
-				loadedBytes: 0,
-				totalBytes: undefined,
-				speedBps: 0,
-				etaSeconds: 0,
-				error: undefined,
-				filenameHint: args.filenameHint?.trim() || `job-${args.jobId}.zip`,
-			}
-
-			setDownloadTasks((prev) => [task, ...prev])
-			openTransfers('downloads')
-		},
-		[openTransfers],
-	)
-
-	const queueUploadFiles = useCallback(
-		(args: { profileId: string; bucket: string; prefix: string; files: File[]; label?: string; moveSource?: UploadMovePlan }) => {
-			const files = args.files.filter((f) => !!f)
+		const queueUploadFiles = useCallback(
+			(args: { profileId: string; bucket: string; prefix: string; files: File[]; label?: string; moveSource?: UploadMovePlan }) => {
+				const files = args.files.filter((f) => !!f)
 			if (files.length === 0) return
 
 			const items: UploadFileItem[] = buildUploadItems(files)
@@ -1252,11 +823,10 @@ export function TransfersProvider(props: {
 		],
 	)
 
-	return (
-		<TransfersContext.Provider value={ctx}>
-			{props.children}
-			<Suspense fallback={null}>
-				<TransfersDrawer
+		return (
+			<TransfersContext.Provider value={ctx}>
+				{props.children}
+				<TransfersDrawerHost
 					open={isOpen}
 					onClose={closeTransfers}
 					tab={tab}
@@ -1281,10 +851,9 @@ export function TransfersProvider(props: {
 					onRemoveUpload={removeUploadTask}
 					onOpenJobs={() => navigate('/jobs')}
 				/>
-			</Suspense>
-		</TransfersContext.Provider>
-	)
-}
+			</TransfersContext.Provider>
+		)
+	}
 
 export function TransfersButton(props: { showLabel?: boolean } = {}) {
 	const transfers = useTransfers()

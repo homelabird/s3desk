@@ -6,7 +6,7 @@ import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
 import { TransferDownloadRow } from './TransferDownloadRow'
 import { TransferUploadRow } from './TransferUploadRow'
 
-type TransfersDrawerProps = {
+export type TransfersDrawerProps = {
 	open: boolean
 	onClose: () => void
 	tab: TransfersTab
