@@ -1098,13 +1098,17 @@ func (m *Manager) runTransferSyncS3ToLocal(ctx context.Context, profileID, jobID
 }
 
 func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	bucket, _ := payload["bucket"].(string)
-	prefix, _ := payload["prefix"].(string)
-	deleteAll, _ := payload["deleteAll"].(bool)
-	dryRun, _ := payload["dryRun"].(bool)
-	allowUnsafePrefix, _ := payload["allowUnsafePrefix"].(bool)
-	include := stringSlice(payload["include"])
-	exclude := stringSlice(payload["exclude"])
+	parsed, err := parseTransferDeletePrefixPayload(payload)
+	if err != nil {
+		return err
+	}
+	bucket := parsed.Bucket
+	prefix := parsed.Prefix
+	deleteAll := parsed.DeleteAll
+	dryRun := parsed.DryRun
+	allowUnsafePrefix := parsed.AllowUnsafePrefix
+	include := parsed.Include
+	exclude := parsed.Exclude
 
 	bucket = strings.TrimSpace(bucket)
 	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
