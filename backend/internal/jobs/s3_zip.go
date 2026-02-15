@@ -28,11 +28,13 @@ type s3ZipObject struct {
 const maxObjectsForZip = 50_000
 
 func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	bucket, _ := payload["bucket"].(string)
-	prefix, _ := payload["prefix"].(string)
+	parsed, err := parseS3ZipPrefixPayload(payload)
+	if err != nil {
+		return err
+	}
 
-	bucket = strings.TrimSpace(bucket)
-	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
+	bucket := strings.TrimSpace(parsed.Bucket)
+	prefix := normalizeKeyInput(parsed.Prefix, preserveLeadingSlash)
 
 	if bucket == "" {
 		return errors.New("payload.bucket is required")
@@ -66,12 +68,14 @@ func (m *Manager) runS3ZipPrefix(ctx context.Context, profileID, jobID string, p
 }
 
 func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	bucket, _ := payload["bucket"].(string)
-	rawKeys := stringSlice(payload["keys"])
-	stripPrefix, _ := payload["stripPrefix"].(string)
+	parsed, err := parseS3ZipObjectsPayload(payload)
+	if err != nil {
+		return err
+	}
 
-	bucket = strings.TrimSpace(bucket)
-	stripPrefix = normalizeKeyInput(stripPrefix, preserveLeadingSlash)
+	bucket := strings.TrimSpace(parsed.Bucket)
+	rawKeys := parsed.Keys
+	stripPrefix := normalizeKeyInput(parsed.StripPrefix, preserveLeadingSlash)
 
 	keys := trimEmpty(rawKeys)
 	if bucket == "" {

@@ -2205,23 +2205,7 @@ func progressFromStats(stats *rcloneStats, mode rcloneProgressMode) (rcloneStats
 		update.EtaSeconds = &eta
 	}
 	return update, true
-}
-
-func stringSlice(v any) []string {
-	raw, ok := v.([]any)
-	if !ok {
-		return nil
 	}
-	out := make([]string, 0, len(raw))
-	for _, item := range raw {
-		s, ok := item.(string)
-		if !ok {
-			continue
-		}
-		out = append(out, s)
-	}
-	return out
-}
 
 func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
 	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)

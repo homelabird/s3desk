@@ -14,17 +14,14 @@ import (
 )
 
 func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
-	bucket, _ := payload["bucket"].(string)
-	prefix, _ := payload["prefix"].(string)
-	fullReindex := true
-	if v, ok := payload["fullReindex"]; ok {
-		if b, ok := v.(bool); ok {
-			fullReindex = b
-		}
+	parsed, err := parseS3IndexObjectsPayload(payload)
+	if err != nil {
+		return err
 	}
 
-	bucket = strings.TrimSpace(bucket)
-	prefix = normalizeKeyInput(prefix, preserveLeadingSlash)
+	bucket := strings.TrimSpace(parsed.Bucket)
+	prefix := normalizeKeyInput(parsed.Prefix, preserveLeadingSlash)
+	fullReindex := parsed.FullReindex
 
 	if bucket == "" {
 		return errors.New("payload.bucket is required")

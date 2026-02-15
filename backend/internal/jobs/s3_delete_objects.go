@@ -18,11 +18,13 @@ import (
 )
 
 func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID string, payload map[string]any) error {
-	bucket, _ := payload["bucket"].(string)
-	keys := stringSlice(payload["keys"])
+	parsed, err := parseS3DeleteObjectsPayload(payload)
+	if err != nil {
+		return err
+	}
 
-	bucket = strings.TrimSpace(bucket)
-	keys = trimEmpty(keys)
+	bucket := strings.TrimSpace(parsed.Bucket)
+	keys := trimEmpty(parsed.Keys)
 
 	if bucket == "" {
 		return errors.New("payload.bucket is required")
