@@ -91,21 +91,8 @@ import {
 	WIDE_ROW_HEIGHT_PX,
 } from './objects/objectsPageConstants'
 import { isContextMenuDebugEnabled, isObjectsListDebugEnabled, logContextMenuDebug, logObjectsDebug } from './objects/objectsPageDebug'
-import {
-	ObjectsCommandPaletteModal,
-	ObjectsCopyMoveModal,
-	ObjectsCopyPrefixModal,
-	ObjectsDeletePrefixConfirmModal,
-	ObjectsDownloadPrefixModal,
-	ObjectsFiltersDrawer,
-	ObjectsGlobalSearchDrawer,
-	ObjectsGoToPathModal,
-	ObjectsNewFolderModal,
-	ObjectsPresignModal,
-	ObjectsRenameModal,
-	ObjectsToolbarSection,
-	ObjectsUploadFolderModal,
-} from './objects/objectsPageLazy'
+import { ObjectsPageOverlays } from './objects/ObjectsPageOverlays'
+import { ObjectsToolbarSection } from './objects/objectsPageLazy'
 
 type Props = {
 	apiToken: string
@@ -1546,524 +1533,266 @@ const objectsQuery = useInfiniteQuery({
 				}}
 			/>
 
-			<Suspense fallback={null}>
-				{filtersDrawerOpen ? (
-					<ObjectsFiltersDrawer
-						open={filtersDrawerOpen}
-						onClose={() => setFiltersDrawerOpen(false)}
-						isAdvanced={isAdvanced}
-						typeFilter={typeFilter}
-						onTypeFilterChange={(value) => setTypeFilter(value)}
-						favoritesOnly={favoritesOnly}
-						onFavoritesOnlyChange={setFavoritesOnly}
-						favoritesFirst={favoritesFirst}
-						onFavoritesFirstChange={setFavoritesFirst}
-						extFilter={extFilter}
-						extOptions={extOptions}
-						onExtFilterChange={(value) => setExtFilter(value)}
-						minSizeBytes={minSize}
-						maxSizeBytes={maxSize}
-						onMinSizeBytesChange={(value) => setMinSize(value)}
-						onMaxSizeBytesChange={(value) => setMaxSize(value)}
-						modifiedAfterMs={minModifiedMs}
-						modifiedBeforeMs={maxModifiedMs}
-						onModifiedRangeChange={(startMs, endMs) => {
-							setMinModifiedMs(startMs)
-							setMaxModifiedMs(endMs)
-						}}
-						sort={sort}
-						onSortChange={(value) => setSort(value)}
-						onResetView={resetFilters}
-						hasActiveView={hasActiveView}
-					/>
-				) : null}
-
-				{/* <Drawer
-					open={downloadsOpen}
-					onClose={() => setDownloadsOpen(false)}
-					title={
-					<Space size="small">
-						<Typography.Text strong>Transfers</Typography.Text>
-						{activeTransferCount > 0 ? <Tag color="processing">{activeTransferCount} active</Tag> : null}
-					</Space>
+			<ObjectsPageOverlays
+				filtersDrawerProps={
+					filtersDrawerOpen
+						? {
+							open: filtersDrawerOpen,
+							onClose: () => setFiltersDrawerOpen(false),
+							isAdvanced,
+							typeFilter,
+							onTypeFilterChange: (value) => setTypeFilter(value),
+							favoritesOnly,
+							onFavoritesOnlyChange: setFavoritesOnly,
+							favoritesFirst,
+							onFavoritesFirstChange: setFavoritesFirst,
+							extFilter,
+							extOptions,
+							onExtFilterChange: (value) => setExtFilter(value),
+							minSizeBytes: minSize,
+							maxSizeBytes: maxSize,
+							onMinSizeBytesChange: (value) => setMinSize(value),
+							onMaxSizeBytesChange: (value) => setMaxSize(value),
+							modifiedAfterMs: minModifiedMs,
+							modifiedBeforeMs: maxModifiedMs,
+							onModifiedRangeChange: (startMs, endMs) => {
+								setMinModifiedMs(startMs)
+								setMaxModifiedMs(endMs)
+							},
+							sort,
+							onSortChange: (value) => setSort(value),
+							onResetView: resetFilters,
+							hasActiveView,
+						}
+						: null
 				}
-				placement="bottom"
-				height={440}
-				extra={
-					<Space>
-						<Button
-							size="small"
-							onClick={transfersTab === 'downloads' ? clearCompletedDownloads : clearCompletedUploads}
-							disabled={transfersTab === 'downloads' ? !hasCompletedDownloads : !hasCompletedUploads}
-						>
-							Clear done
-						</Button>
-						<Button
-							size="small"
-							danger
-							onClick={clearAllTransfers}
-							disabled={downloadTasks.length + uploadTasks.length === 0}
-						>
-							Clear all
-						</Button>
-					</Space>
+				presignModalProps={
+					presignOpen
+						? { open: presignOpen, presign, onClose: closePresign }
+						: null
 				}
-			>
-				<Tabs
-					size="small"
-					activeKey={transfersTab}
-					onChange={(key) => setTransfersTab(key as 'downloads' | 'uploads')}
-					items={[
-						{
-							key: 'downloads',
-							label: (
-								<Space size={8}>
-									<Badge count={activeDownloadCount} size="small" showZero={false}>
-										<DownloadOutlined />
-									</Badge>
-									Downloads
-								</Space>
-							),
-							children: (
-								<div style={{ paddingTop: 8 }}>
-									{downloadTasks.length === 0 ? (
-										<Empty description="No downloads yet" />
-									) : (
-										<div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-											{downloadTasks.map((t) => {
-												const percent = t.totalBytes && t.totalBytes > 0 ? Math.floor((t.loadedBytes / t.totalBytes) * 100) : 0
-												const status =
-													t.status === 'failed' ? 'exception' : t.status === 'succeeded' ? 'success' : t.status === 'running' ? 'active' : 'normal'
-												const tagColor =
-													t.status === 'running'
-														? 'processing'
-														: t.status === 'queued'
-															? 'default'
-															: t.status === 'waiting'
-																? 'processing'
-																: t.status === 'succeeded'
-																	? 'success'
-																	: t.status === 'failed'
-																		? 'error'
-																		: 'default'
-												const tagText =
-													t.status === 'queued'
-														? 'Queued'
-														: t.status === 'waiting'
-															? 'Waiting'
-															: t.status === 'running'
-																? 'Downloading'
-																: t.status === 'succeeded'
-																	? 'Done'
-																	: t.status === 'failed'
-																		? 'Failed'
-																		: 'Canceled'
-												const progressText =
-													t.status === 'queued' || t.status === 'waiting'
-														? null
-														: `${formatBytes(t.loadedBytes)}${t.totalBytes != null ? `/${formatBytes(t.totalBytes)}` : ''} · ${
-																t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'
-															} · ${t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'}`
-												const subtitle = t.kind === 'object' ? `s3://${t.bucket}/${t.key}` : `job ${t.jobId} artifact`
-												return (
-													<div key={t.id} style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 12, background: '#fff' }}>
-														<div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-															<div style={{ minWidth: 0 }}>
-																<Space size="small" wrap>
-																	<Typography.Text strong ellipsis={{ tooltip: t.label }} style={{ maxWidth: 520 }}>
-																		{t.label}
-																	</Typography.Text>
-																	<Tag color={tagColor}>{tagText}</Tag>
-																</Space>
-																<div style={{ marginTop: 4 }}>
-																	<Typography.Text type="secondary" code ellipsis={{ tooltip: subtitle }}>
-																		{subtitle}
-																	</Typography.Text>
-																</div>
-																{t.error ? (
-																	<div style={{ marginTop: 6 }}>
-																		<Typography.Text type="danger">{t.error}</Typography.Text>
-																	</div>
-																) : null}
-															</div>
-
-															<Space size="small" wrap>
-																{t.status === 'running' || t.status === 'queued' || t.status === 'waiting' ? (
-																	<Button size="small" onClick={() => cancelDownloadTask(t.id)}>
-																		Cancel
-																	</Button>
-																) : null}
-																{t.status === 'failed' || t.status === 'canceled' ? (
-																	<Button size="small" icon={<ReloadOutlined />} onClick={() => retryDownloadTask(t.id)}>
-																		Retry
-																	</Button>
-																) : null}
-																<Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeDownloadTask(t.id)}>
-																	Remove
-																</Button>
-															</Space>
-														</div>
-
-														<div style={{ marginTop: 10 }}>
-															<Progress
-																percent={t.status === 'succeeded' ? 100 : percent}
-																status={status}
-																showInfo={t.status !== 'queued' && t.status !== 'waiting'}
-															/>
-															{progressText ? <Typography.Text type="secondary">{progressText}</Typography.Text> : null}
-														</div>
-													</div>
-												)
-											})}
-										</div>
-									)}
-								</div>
-							),
-						},
-						{
-							key: 'uploads',
-							label: (
-								<Space size={8}>
-									<Badge count={activeUploadCount} size="small" showZero={false}>
-										<CloudUploadOutlined />
-									</Badge>
-									Uploads
-								</Space>
-							),
-							children: (
-								<div style={{ paddingTop: 8 }}>
-									{uploadTasks.length === 0 ? (
-										<Empty
-											description={
-												<Space orientation="vertical" size={4} align="center">
-													<span>No uploads yet</span>
-													<Typography.Text type="secondary">Tip: drag & drop files into the object list to queue uploads.</Typography.Text>
-												</Space>
-											}
-										/>
-									) : (
-										<div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-											{uploadTasks.map((t) => {
-												const percent = t.totalBytes > 0 ? Math.floor((t.loadedBytes / t.totalBytes) * 100) : 0
-												const status =
-													t.status === 'failed'
-														? 'exception'
-														: t.status === 'succeeded'
-															? 'success'
-															: t.status === 'staging' || t.status === 'commit'
-																? 'active'
-																: 'normal'
-												const tagColor =
-													t.status === 'staging' || t.status === 'commit'
-														? 'processing'
-														: t.status === 'queued'
-															? 'default'
-															: t.status === 'succeeded'
-																? 'success'
-																: t.status === 'failed'
-																	? 'error'
-																	: 'default'
-												const tagText =
-													t.status === 'queued'
-														? 'Queued'
-														: t.status === 'staging'
-															? 'Uploading'
-															: t.status === 'commit'
-																? 'Committing'
-																: t.status === 'succeeded'
-																	? 'Done'
-																	: t.status === 'failed'
-																		? 'Failed'
-																		: 'Canceled'
-												const progressText =
-													t.status === 'staging'
-														? `${formatBytes(t.loadedBytes)}/${formatBytes(t.totalBytes)} · ${t.speedBps ? `${formatBytes(t.speedBps)}/s` : '-'} · ${
-																t.etaSeconds ? `${formatDurationSeconds(t.etaSeconds)} eta` : '-'
-															}`
-														: t.status === 'commit'
-															? 'Committing…'
-															: null
-												const subtitle = `s3://${t.bucket}/${normalizePrefix(t.prefix)}`
-												return (
-													<div key={t.id} style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 12, background: '#fff' }}>
-														<div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-															<div style={{ minWidth: 0 }}>
-																<Space size="small" wrap>
-																	<Typography.Text strong ellipsis={{ tooltip: t.label }} style={{ maxWidth: 520 }}>
-																		{t.label}
-																	</Typography.Text>
-																	<Tag color={tagColor}>{tagText}</Tag>
-																	{t.jobId ? <Tag>{t.jobId}</Tag> : null}
-																</Space>
-																<div style={{ marginTop: 4 }}>
-																	<Typography.Text type="secondary" code ellipsis={{ tooltip: subtitle }}>
-																		{subtitle}
-																	</Typography.Text>
-																</div>
-																{t.error ? (
-																	<div style={{ marginTop: 6 }}>
-																		<Typography.Text type="danger">{t.error}</Typography.Text>
-																	</div>
-																) : null}
-															</div>
-
-															<Space size="small" wrap>
-																	{t.jobId ? (
-																		<LinkButton size="small" type="link" to="/jobs">
-																			Jobs
-																		</LinkButton>
-																	) : null}
-																{t.status === 'queued' || t.status === 'staging' ? (
-																	<Button size="small" onClick={() => cancelUploadTask(t.id)}>
-																		Cancel
-																	</Button>
-																) : null}
-																{t.status === 'failed' || t.status === 'canceled' ? (
-																	<Button size="small" icon={<ReloadOutlined />} onClick={() => retryUploadTask(t.id)}>
-																		Retry
-																	</Button>
-																) : null}
-																<Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeUploadTask(t.id)}>
-																	Remove
-																</Button>
-															</Space>
-														</div>
-
-														<div style={{ marginTop: 10 }}>
-															<Progress percent={t.status === 'queued' ? 0 : percent} status={status} showInfo={t.status !== 'queued'} />
-															{progressText ? <Typography.Text type="secondary">{progressText}</Typography.Text> : null}
-														</div>
-													</div>
-												)
-											})}
-										</div>
-									)}
-								</div>
-							),
-						},
-					]}
-				/>
-			</Drawer> */}
-
-				{presignOpen ? (
-					<ObjectsPresignModal
-						open={presignOpen}
-						presign={presign}
-						onClose={closePresign}
-					/>
-				) : null}
-
-				{pathModalOpen ? (
-					<ObjectsGoToPathModal
-						open={pathModalOpen}
-						bucket={bucket}
-						hasProfile={!!props.profileId}
-						pathDraft={pathDraft}
-						options={pathOptions}
-						inputRef={pathInputRef}
-						onChangeDraft={setPathDraft}
-						onCommit={commitPathDraft}
-						onClose={() => setPathModalOpen(false)}
-					/>
-				) : null}
-
-				{commandPaletteOpen ? (
-					<ObjectsCommandPaletteModal
-						open={commandPaletteOpen}
-						query={commandPaletteQuery}
-						commands={commandPaletteItems}
-						activeIndex={commandPaletteActiveIndex}
-						onQueryChange={onCommandPaletteQueryChange}
-						onActiveIndexChange={setCommandPaletteActiveIndex}
-						onRunCommand={runCommandPaletteItem}
-						onCancel={closeCommandPalette}
-						onKeyDown={onCommandPaletteKeyDown}
-					/>
-				) : null}
-
-				{deletePrefixConfirmOpen ? (
-					<ObjectsDeletePrefixConfirmModal
-						open={deletePrefixConfirmOpen}
-						dryRun={deletePrefixConfirmDryRun}
-						bucket={bucket}
-						prefix={deletePrefixConfirmPrefix}
-						confirmText={deletePrefixConfirmText}
-						onConfirmTextChange={setDeletePrefixConfirmText}
-						hasProfile={!!props.profileId}
-						hasBucket={!!bucket}
-						isConfirming={deletePrefixJobMutation.isPending}
-						onConfirm={handleDeletePrefixConfirm}
-						onCancel={handleDeletePrefixCancel}
-						isSummaryFetching={deletePrefixSummaryQuery.isFetching}
-						summary={deletePrefixSummary}
-						summaryNotIndexed={deletePrefixSummaryNotIndexed}
-						isSummaryError={deletePrefixSummaryQuery.isError}
-						summaryErrorMessage={deletePrefixSummaryError}
-						onIndexPrefix={() => {
-							if (!deletePrefixConfirmPrefix) return
-							indexObjectsJobMutation.mutate({ prefix: deletePrefixConfirmPrefix, fullReindex: false })
-						}}
-					/>
-				) : null}
-
-				{downloadPrefixOpen ? (
-					<ObjectsDownloadPrefixModal
-						open={downloadPrefixOpen}
-						sourceLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}*` : '-'}
-						values={downloadPrefixValues}
-						onValuesChange={setDownloadPrefixValues}
-						isSubmitting={downloadPrefixSubmitting}
-						onCancel={handleDownloadPrefixCancel}
-						onFinish={handleDownloadPrefixSubmit}
-						onPickFolder={handleDownloadPrefixPick}
-						canSubmit={downloadPrefixCanSubmit}
-					/>
-				) : null}
-
-				{uploadFolderOpen ? (
-					<ObjectsUploadFolderModal
-						open={uploadFolderOpen}
-						destinationLabel={bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-'}
-						values={uploadFolderValues}
-						onValuesChange={setUploadFolderValues}
-						isSubmitting={uploadFolderSubmitting}
-						onCancel={handleUploadFolderCancel}
-						onDefaultsChange={(values) => {
-						setMoveAfterUploadDefault(values.moveAfterUpload)
-						setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
-					}}
-						onFinish={handleUploadFolderSubmit}
-						onPickFolder={handleUploadFolderPick}
-						canSubmit={uploadFolderCanSubmit}
-					/>
-				) : null}
-
-				{copyPrefixOpen ? (
-					<ObjectsCopyPrefixModal
-						open={copyPrefixOpen}
-						mode={copyPrefixMode}
-						bucket={bucket}
-						srcPrefix={copyPrefixSrcPrefix}
-						sourceLabel={copyPrefixSrcPrefix ? `s3://${bucket}/${copyPrefixSrcPrefix}*` : '-'}
-						values={copyPrefixValues}
-						onValuesChange={setCopyPrefixValues}
-						bucketOptions={bucketOptions}
-						isBucketsLoading={bucketsQuery.isFetching}
-						isSubmitting={copyPrefixSubmitting}
-						onCancel={handleCopyPrefixCancel}
-						onFinish={handleCopyPrefixSubmit}
-						isSummaryFetching={copyPrefixSummaryQuery.isFetching}
-						summary={copyPrefixSummary}
-						summaryNotIndexed={copyPrefixSummaryNotIndexed}
-						isSummaryError={copyPrefixSummaryQuery.isError}
-						summaryErrorMessage={copyPrefixSummaryError}
-						onIndexPrefix={() => {
-						if (!copyPrefixSrcPrefix) return
-						indexObjectsJobMutation.mutate({ prefix: copyPrefixSrcPrefix, fullReindex: false })
-					}}
-						normalizePrefix={normalizePrefix}
-					/>
-				) : null}
-
-				{copyMoveOpen ? (
-					<ObjectsCopyMoveModal
-						open={copyMoveOpen}
-						mode={copyMoveMode}
-						bucket={bucket}
-						srcKey={copyMoveSrcKey}
-						values={copyMoveValues}
-						onValuesChange={setCopyMoveValues}
-						bucketOptions={bucketOptions}
-						isBucketsLoading={bucketsQuery.isFetching}
-						isSubmitting={copyMoveSubmitting}
-						onCancel={handleCopyMoveCancel}
-						onFinish={handleCopyMoveSubmit}
-					/>
-				) : null}
-
-				{newFolderOpen ? (
-					<ObjectsNewFolderModal
-						open={newFolderOpen}
-						parentLabel={bucket ? `s3://${bucket}/${normalizePrefix(newFolderParentPrefix)}` : '-'}
-						parentPrefix={newFolderParentPrefix}
-						errorMessage={newFolderError}
-						partialKey={newFolderPartialKey}
-						onOpenPrefix={onOpenPrefix}
-						values={newFolderValues}
-						onValuesChange={setNewFolderValues}
-						isSubmitting={newFolderSubmitting}
-						onCancel={handleNewFolderCancel}
-						onFinish={handleNewFolderSubmit}
-					/>
-				) : null}
-
-				{renameOpen ? (
-					<ObjectsRenameModal
-						open={renameOpen}
-						kind={renameKind}
-						source={renameSource}
-						bucket={bucket}
-						values={renameValues}
-						onValuesChange={setRenameValues}
-						isSubmitting={renameSubmitting}
-						onCancel={handleRenameCancel}
-						onFinish={handleRenameSubmit}
-					/>
-				) : null}
-
-				{globalSearchOpen ? (
-					<ObjectsGlobalSearchDrawer
-						open={globalSearchOpen}
-						onClose={closeGlobalSearch}
-						hasProfile={!!props.profileId}
-						hasBucket={!!bucket}
-						bucket={bucket}
-						currentPrefix={prefix}
-						isMd={!!screens.md}
-						queryDraft={globalSearchDraft}
-						onQueryDraftChange={setGlobalSearchDraft}
-						prefixFilter={globalSearchPrefix}
-						onPrefixFilterChange={setGlobalSearchPrefix}
-						limit={globalSearchLimitClamped}
-						onLimitChange={setGlobalSearchLimit}
-						extFilter={globalSearchExt}
-						onExtFilterChange={setGlobalSearchExt}
-						minSizeBytes={globalSearchMinSize}
-						maxSizeBytes={globalSearchMaxSize}
-						onMinSizeBytesChange={setGlobalSearchMinSize}
-						onMaxSizeBytesChange={setGlobalSearchMaxSize}
-						modifiedAfterMs={globalSearchMinModifiedMs}
-						modifiedBeforeMs={globalSearchMaxModifiedMs}
-						onModifiedRangeChange={(startMs, endMs) => {
-							setGlobalSearchMinModifiedMs(startMs)
-							setGlobalSearchMaxModifiedMs(endMs)
-						}}
-						onReset={resetGlobalSearch}
-						onRefresh={() => indexedSearchQuery.refetch()}
-						isRefreshing={indexedSearchQuery.isFetching}
-						isError={indexedSearchQuery.isError}
-						isNotIndexed={indexedSearchNotIndexed}
-						errorMessage={indexedSearchErrorMessage}
-						onCreateIndexJob={createIndexJob}
-						isCreatingIndexJob={indexObjectsJobMutation.isPending}
-						indexPrefix={indexPrefix}
-						onIndexPrefixChange={setIndexPrefix}
-						indexFullReindex={indexFullReindex}
-						onIndexFullReindexChange={setIndexFullReindex}
-						searchQueryText={globalSearchQueryText}
-						isFetching={indexedSearchQuery.isFetching}
-						hasNextPage={indexedSearchQuery.hasNextPage}
-						isFetchingNextPage={indexedSearchQuery.isFetchingNextPage}
-						items={indexedSearchItems}
-						onLoadMore={() => indexedSearchQuery.fetchNextPage()}
-						onUseCurrentPrefix={() => setIndexPrefix(prefix)}
-						onOpenPrefixForKey={openGlobalSearchPrefix}
-						onCopyKey={onCopy}
-						onDownloadKey={onDownload}
-						onOpenDetails={openGlobalSearchDetails}
-					/>
-				) : null}
-			</Suspense>
+				goToPathModalProps={
+					pathModalOpen
+						? {
+							open: pathModalOpen,
+							bucket,
+							hasProfile: !!props.profileId,
+							pathDraft,
+							options: pathOptions,
+							inputRef: pathInputRef,
+							onChangeDraft: setPathDraft,
+							onCommit: commitPathDraft,
+							onClose: () => setPathModalOpen(false),
+						}
+						: null
+				}
+				commandPaletteModalProps={
+					commandPaletteOpen
+						? {
+							open: commandPaletteOpen,
+							query: commandPaletteQuery,
+							commands: commandPaletteItems,
+							activeIndex: commandPaletteActiveIndex,
+							onQueryChange: onCommandPaletteQueryChange,
+							onActiveIndexChange: setCommandPaletteActiveIndex,
+							onRunCommand: runCommandPaletteItem,
+							onCancel: closeCommandPalette,
+							onKeyDown: onCommandPaletteKeyDown,
+						}
+						: null
+				}
+				deletePrefixConfirmModalProps={
+					deletePrefixConfirmOpen
+						? {
+							open: deletePrefixConfirmOpen,
+							dryRun: deletePrefixConfirmDryRun,
+							bucket,
+							prefix: deletePrefixConfirmPrefix,
+							confirmText: deletePrefixConfirmText,
+							onConfirmTextChange: setDeletePrefixConfirmText,
+							hasProfile: !!props.profileId,
+							hasBucket: !!bucket,
+							isConfirming: deletePrefixJobMutation.isPending,
+							onConfirm: handleDeletePrefixConfirm,
+							onCancel: handleDeletePrefixCancel,
+							isSummaryFetching: deletePrefixSummaryQuery.isFetching,
+							summary: deletePrefixSummary,
+							summaryNotIndexed: deletePrefixSummaryNotIndexed,
+							isSummaryError: deletePrefixSummaryQuery.isError,
+							summaryErrorMessage: deletePrefixSummaryError,
+							onIndexPrefix: () => {
+								if (!deletePrefixConfirmPrefix) return
+								indexObjectsJobMutation.mutate({ prefix: deletePrefixConfirmPrefix, fullReindex: false })
+							},
+						}
+						: null
+				}
+				downloadPrefixModalProps={
+					downloadPrefixOpen
+						? {
+							open: downloadPrefixOpen,
+							sourceLabel: bucket ? `s3://${bucket}/${normalizePrefix(prefix)}*` : '-',
+							values: downloadPrefixValues,
+							onValuesChange: setDownloadPrefixValues,
+							isSubmitting: downloadPrefixSubmitting,
+							onCancel: handleDownloadPrefixCancel,
+							onFinish: handleDownloadPrefixSubmit,
+							onPickFolder: handleDownloadPrefixPick,
+							canSubmit: downloadPrefixCanSubmit,
+						}
+						: null
+				}
+				uploadFolderModalProps={
+					uploadFolderOpen
+						? {
+							open: uploadFolderOpen,
+							destinationLabel: bucket ? `s3://${bucket}/${normalizePrefix(prefix)}` : '-',
+							values: uploadFolderValues,
+							onValuesChange: setUploadFolderValues,
+							isSubmitting: uploadFolderSubmitting,
+							onCancel: handleUploadFolderCancel,
+							onDefaultsChange: (values) => {
+								setMoveAfterUploadDefault(values.moveAfterUpload)
+								setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
+							},
+							onFinish: handleUploadFolderSubmit,
+							onPickFolder: handleUploadFolderPick,
+							canSubmit: uploadFolderCanSubmit,
+						}
+						: null
+				}
+				copyPrefixModalProps={
+					copyPrefixOpen
+						? {
+							open: copyPrefixOpen,
+							mode: copyPrefixMode,
+							bucket,
+							srcPrefix: copyPrefixSrcPrefix,
+							sourceLabel: copyPrefixSrcPrefix ? `s3://${bucket}/${copyPrefixSrcPrefix}*` : '-',
+							values: copyPrefixValues,
+							onValuesChange: setCopyPrefixValues,
+							bucketOptions,
+							isBucketsLoading: bucketsQuery.isFetching,
+							isSubmitting: copyPrefixSubmitting,
+							onCancel: handleCopyPrefixCancel,
+							onFinish: handleCopyPrefixSubmit,
+							isSummaryFetching: copyPrefixSummaryQuery.isFetching,
+							summary: copyPrefixSummary,
+							summaryNotIndexed: copyPrefixSummaryNotIndexed,
+							isSummaryError: copyPrefixSummaryQuery.isError,
+							summaryErrorMessage: copyPrefixSummaryError,
+							onIndexPrefix: () => {
+								if (!copyPrefixSrcPrefix) return
+								indexObjectsJobMutation.mutate({ prefix: copyPrefixSrcPrefix, fullReindex: false })
+							},
+							normalizePrefix,
+						}
+						: null
+				}
+				copyMoveModalProps={
+					copyMoveOpen
+						? {
+							open: copyMoveOpen,
+							mode: copyMoveMode,
+							bucket,
+							srcKey: copyMoveSrcKey,
+							values: copyMoveValues,
+							onValuesChange: setCopyMoveValues,
+							bucketOptions,
+							isBucketsLoading: bucketsQuery.isFetching,
+							isSubmitting: copyMoveSubmitting,
+							onCancel: handleCopyMoveCancel,
+							onFinish: handleCopyMoveSubmit,
+						}
+						: null
+				}
+				newFolderModalProps={
+					newFolderOpen
+						? {
+							open: newFolderOpen,
+							parentLabel: bucket ? `s3://${bucket}/${normalizePrefix(newFolderParentPrefix)}` : '-',
+							parentPrefix: newFolderParentPrefix,
+							errorMessage: newFolderError,
+							partialKey: newFolderPartialKey,
+							onOpenPrefix,
+							values: newFolderValues,
+							onValuesChange: setNewFolderValues,
+							isSubmitting: newFolderSubmitting,
+							onCancel: handleNewFolderCancel,
+							onFinish: handleNewFolderSubmit,
+						}
+						: null
+				}
+				renameModalProps={
+					renameOpen
+						? {
+							open: renameOpen,
+							kind: renameKind,
+							source: renameSource,
+							bucket,
+							values: renameValues,
+							onValuesChange: setRenameValues,
+							isSubmitting: renameSubmitting,
+							onCancel: handleRenameCancel,
+							onFinish: handleRenameSubmit,
+						}
+						: null
+				}
+				globalSearchDrawerProps={
+					globalSearchOpen
+						? {
+							open: globalSearchOpen,
+							onClose: closeGlobalSearch,
+							hasProfile: !!props.profileId,
+							hasBucket: !!bucket,
+							bucket,
+							currentPrefix: prefix,
+							isMd: !!screens.md,
+							queryDraft: globalSearchDraft,
+							onQueryDraftChange: setGlobalSearchDraft,
+							prefixFilter: globalSearchPrefix,
+							onPrefixFilterChange: setGlobalSearchPrefix,
+							limit: globalSearchLimitClamped,
+							onLimitChange: setGlobalSearchLimit,
+							extFilter: globalSearchExt,
+							onExtFilterChange: setGlobalSearchExt,
+							minSizeBytes: globalSearchMinSize,
+							maxSizeBytes: globalSearchMaxSize,
+							onMinSizeBytesChange: setGlobalSearchMinSize,
+							onMaxSizeBytesChange: setGlobalSearchMaxSize,
+							modifiedAfterMs: globalSearchMinModifiedMs,
+							modifiedBeforeMs: globalSearchMaxModifiedMs,
+							onModifiedRangeChange: (startMs, endMs) => {
+								setGlobalSearchMinModifiedMs(startMs)
+								setGlobalSearchMaxModifiedMs(endMs)
+							},
+							onReset: resetGlobalSearch,
+							onRefresh: () => indexedSearchQuery.refetch(),
+							isRefreshing: indexedSearchQuery.isFetching,
+							isError: indexedSearchQuery.isError,
+							isNotIndexed: indexedSearchNotIndexed,
+							errorMessage: indexedSearchErrorMessage,
+							onCreateIndexJob: createIndexJob,
+							isCreatingIndexJob: indexObjectsJobMutation.isPending,
+							indexPrefix,
+							onIndexPrefixChange: setIndexPrefix,
+							indexFullReindex,
+							onIndexFullReindexChange: setIndexFullReindex,
+							searchQueryText: globalSearchQueryText,
+							isFetching: indexedSearchQuery.isFetching,
+							hasNextPage: indexedSearchQuery.hasNextPage,
+							isFetchingNextPage: indexedSearchQuery.isFetchingNextPage,
+							items: indexedSearchItems,
+							onLoadMore: () => indexedSearchQuery.fetchNextPage(),
+							onUseCurrentPrefix: () => setIndexPrefix(prefix),
+							onOpenPrefixForKey: openGlobalSearchPrefix,
+							onCopyKey: onCopy,
+							onDownloadKey: onDownload,
+							onOpenDetails: openGlobalSearchDetails,
+						}
+						: null
+				}
+			/>
 		</div>
 	)
 }
