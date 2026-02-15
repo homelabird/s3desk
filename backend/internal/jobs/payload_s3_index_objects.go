@@ -1,7 +1,5 @@
 package jobs
 
-import "fmt"
-
 type s3IndexObjectsPayload struct {
 	Bucket      string
 	Prefix      string
@@ -18,13 +16,9 @@ func parseS3IndexObjectsPayload(payload map[string]any) (s3IndexObjectsPayload, 
 		return s3IndexObjectsPayload{}, err
 	}
 
-	fullReindex := true
-	if v, ok := payload["fullReindex"]; ok && v != nil {
-		b, ok := v.(bool)
-		if !ok {
-			return s3IndexObjectsPayload{}, fmt.Errorf("payload.fullReindex must be a boolean")
-		}
-		fullReindex = b
+	fullReindex, err := payloadOptionalBoolOr(payload, "fullReindex", true)
+	if err != nil {
+		return s3IndexObjectsPayload{}, err
 	}
 
 	return s3IndexObjectsPayload{
@@ -33,4 +27,3 @@ func parseS3IndexObjectsPayload(payload map[string]any) (s3IndexObjectsPayload, 
 		FullReindex: fullReindex,
 	}, nil
 }
-

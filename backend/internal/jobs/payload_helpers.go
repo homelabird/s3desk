@@ -26,6 +26,30 @@ func payloadOptionalBool(payload map[string]any, key string) (bool, error) {
 	return b, nil
 }
 
+func payloadOptionalBoolOr(payload map[string]any, key string, defaultValue bool) (bool, error) {
+	v, ok := payload[key]
+	if !ok || v == nil {
+		return defaultValue, nil
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return false, fmt.Errorf("payload.%s must be a boolean", key)
+	}
+	return b, nil
+}
+
+func payloadOptionalAnySlice(payload map[string]any, key string) ([]any, bool) {
+	v, ok := payload[key]
+	if !ok || v == nil {
+		return nil, false
+	}
+	vv, ok := v.([]any)
+	if !ok {
+		return nil, false
+	}
+	return vv, true
+}
+
 func payloadOptionalStringSlice(payload map[string]any, key string) ([]string, error) {
 	v, ok := payload[key]
 	if !ok || v == nil {
@@ -51,4 +75,3 @@ func payloadOptionalStringSlice(payload map[string]any, key string) ([]string, e
 		return nil, fmt.Errorf("payload.%s must be an array of strings", key)
 	}
 }
-

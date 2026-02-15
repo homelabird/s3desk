@@ -28,19 +28,9 @@ func parseTransferBatchPayload(payload map[string]any) (transferBatchPayload, er
 		return transferBatchPayload{}, err
 	}
 
-	rawItems, ok := payload["items"]
-	if !ok || rawItems == nil {
-		return transferBatchPayload{
-			SrcBucket: srcBucket,
-			DstBucket: dstBucket,
-			Items:     nil,
-			DryRun:    dryRun,
-		}, nil
-	}
-
-	itemsSlice, ok := rawItems.([]any)
+	itemsSlice, ok := payloadOptionalAnySlice(payload, "items")
 	if !ok {
-		// Preserve existing behavior: treat type mismatch like missing.
+		// Preserve existing behavior: treat missing/mismatched types like an empty item list.
 		return transferBatchPayload{
 			SrcBucket: srcBucket,
 			DstBucket: dstBucket,
