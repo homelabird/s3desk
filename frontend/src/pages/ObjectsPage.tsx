@@ -4,14 +4,12 @@ import {
 	Suspense,
 	useCallback,
 	useEffect,
-	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 	type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { useVirtualizer } from '@tanstack/react-virtual'
 
 import { APIClient, APIError } from '../api/client'
 import type { Bucket, JobCreateRequest, ObjectItem, Profile } from '../api/types'
@@ -57,7 +55,9 @@ import {
 	THUMBNAIL_CACHE_MIN_ENTRIES,
 } from '../lib/thumbnailCache'
 import { useObjectsListKeydownHandler } from './objects/useObjectsListKeydownHandler'
-import { useObjectsCommandPalette } from './objects/useObjectsCommandPalette'
+import { useObjectsCommandPaletteOverlayState } from './objects/useObjectsCommandPaletteOverlayState'
+import { useObjectsGlobalSearchOverlayState } from './objects/useObjectsGlobalSearchOverlayState'
+import { useObjectsListVirtualizer } from './objects/useObjectsListVirtualizer'
 import { useObjectPreview } from './objects/useObjectPreview'
 import { useObjectDownloads } from './objects/useObjectDownloads'
 import { useObjectsAutoScan } from './objects/useObjectsAutoScan'
@@ -180,8 +180,7 @@ export function ObjectsPage(props: Props) {
 	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
 	const isAdvanced = uiMode === 'advanced'
 	const { search, searchDraft, setSearchDraft, clearSearch, deferredSearch } = useObjectsSearchState()
-	const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
-	const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+	const openCommandPaletteRef = useRef<(() => void) | null>(null)
 
 	const {
 		globalSearch,
@@ -209,6 +208,13 @@ export function ObjectsPage(props: Props) {
 		setIndexFullReindex,
 		resetGlobalSearch,
 	} = useObjectsGlobalSearchState()
+
+	const { globalSearchOpen, openGlobalSearch, closeGlobalSearch } = useObjectsGlobalSearchOverlayState({
+		globalSearch,
+		setGlobalSearch,
+		globalSearchDraft,
+		setGlobalSearchDraft,
+	})
 
 	const {
 		typeFilter,
@@ -243,10 +249,18 @@ export function ObjectsPage(props: Props) {
 	const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
 	const layoutRef = useRef<HTMLDivElement | null>(null)
 	const [layoutWidthPx, setLayoutWidthPx] = useState(0)
-	const [listScrollerEl, setListScrollerEl] = useState<HTMLDivElement | null>(null)
-	const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-	const [scrollMargin, setScrollMargin] = useState(0)
-	const [autoScanReady, setAutoScanReady] = useState(false)
+	const [autoScanReadyKey, setAutoScanReadyKey] = useState('')
+	const autoScanKey = bucket ? `${bucket}|${prefix}` : ''
+	const autoScanReady = !!bucket && autoScanReadyKey === autoScanKey
+	const handleToggleUiMode = useCallback(() => {
+		if (isAdvanced) {
+			setDetailsOpen(false)
+			setDetailsDrawerOpen(false)
+			setUiMode('simple')
+			return
+		}
+		setUiMode('advanced')
+	}, [isAdvanced, setDetailsDrawerOpen, setDetailsOpen, setUiMode])
 	const normalizedThumbnailCacheSize = useMemo(() => {
 		if (typeof thumbnailCacheSize !== 'number' || !Number.isFinite(thumbnailCacheSize)) {
 			return THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES
@@ -364,18 +378,6 @@ export function ObjectsPage(props: Props) {
 	}, [])
 
 	useEffect(() => {
-		setGlobalSearchDraft(globalSearch)
-	}, [globalSearch, setGlobalSearchDraft])
-
-	useEffect(() => {
-		if (globalSearchDraft === globalSearch) return
-		const id = window.setTimeout(() => {
-			setGlobalSearch(globalSearchDraft)
-		}, 250)
-		return () => window.clearTimeout(id)
-	}, [globalSearch, globalSearchDraft, setGlobalSearch])
-
-	useEffect(() => {
 		if (uiMode !== 'simple') return
 		setExtFilter('')
 		setMinSize(null)
@@ -385,8 +387,7 @@ export function ObjectsPage(props: Props) {
 	useEffect(() => {
 		if (uiMode !== 'simple') return
 		setDetailsOpen(false)
-		setDetailsDrawerOpen(false)
-	}, [setDetailsDrawerOpen, setDetailsOpen, uiMode])
+	}, [setDetailsOpen, uiMode])
 
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
@@ -668,16 +669,6 @@ const objectsQuery = useInfiniteQuery({
 	}, [visibleObjectKeys, selectedKeys])
 	const allLoadedSelected = visibleObjectKeys.length > 0 && loadedSelectedCount === visibleObjectKeys.length
 	const someLoadedSelected = loadedSelectedCount > 0 && loadedSelectedCount < visibleObjectKeys.length
-
-	useLayoutEffect(() => {
-		const container = scrollContainerRef.current
-		const listEl = listScrollerEl
-		if (!container || !listEl) return
-		const listRect = listEl.getBoundingClientRect()
-		const containerRect = container.getBoundingClientRect()
-		const next = Math.max(0, Math.round(listRect.top - containerRect.top + container.scrollTop))
-		setScrollMargin((prev) => (prev === next ? prev : next))
-	}, [listScrollerEl])
 
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
 	const { handleBucketDropdownVisibleChange } = useObjectsPrefetch({
@@ -1008,32 +999,40 @@ const objectsQuery = useInfiniteQuery({
 		downloadLinkProxyEnabled,
 	})
 
-	const rowVirtualizer = useVirtualizer({
-		count: rows.length,
-		getScrollElement: () => scrollContainerRef.current,
-		estimateSize: () => (isCompactList ? COMPACT_ROW_HEIGHT_PX : WIDE_ROW_HEIGHT_PX),
+	const {
+		listScrollerEl,
+		setListScrollerEl,
+		scrollContainerRef,
+		rowVirtualizer,
+		virtualItems,
+		virtualItemsForRender,
+		totalSize,
+	} = useObjectsListVirtualizer({
+		rowCount: rows.length,
+		isCompactList,
+		rowHeightCompactPx: COMPACT_ROW_HEIGHT_PX,
+		rowHeightWidePx: WIDE_ROW_HEIGHT_PX,
 		overscan: 10,
-		scrollMargin,
+		scrollToTopDeps: {
+			bucket,
+			prefix,
+			search,
+			sort,
+			typeFilter,
+			favoritesOnly,
+			favoritesFirst,
+			extFilter,
+			minSize,
+			maxSize,
+			minModifiedMs,
+			maxModifiedMs,
+		},
 	})
 
-	const virtualItems = rowVirtualizer.getVirtualItems()
-	const virtualItemsForRender = useMemo(
-		() => virtualItems.map((vi) => ({ index: vi.index, start: vi.start - scrollMargin })),
-		[scrollMargin, virtualItems],
-	)
-	const totalSize = rowVirtualizer.getTotalSize()
-
 	useEffect(() => {
-		scrollContainerRef.current?.scrollTo({ top: 0 })
-	}, [bucket, extFilter, favoritesFirst, favoritesOnly, maxModifiedMs, maxSize, minModifiedMs, minSize, prefix, search, sort, typeFilter])
-
-	useEffect(() => {
-		if (!bucket) {
-			setAutoScanReady(false)
-			return
-		}
-		setAutoScanReady(false)
-		const id = window.setTimeout(() => setAutoScanReady(true), 400)
+		if (!bucket) return
+		const key = `${bucket}|${prefix}`
+		const id = window.setTimeout(() => setAutoScanReadyKey(key), 400)
 		return () => window.clearTimeout(id)
 	}, [bucket, prefix])
 
@@ -1041,8 +1040,10 @@ const objectsQuery = useInfiniteQuery({
 		if (!bucket) return
 		if (!objectsQuery.data) return
 		if (objectsQuery.isFetching) return
-		setAutoScanReady(true)
-	}, [bucket, objectsQuery.data, objectsQuery.isFetching])
+		const key = `${bucket}|${prefix}`
+		const id = window.setTimeout(() => setAutoScanReadyKey(key), 0)
+		return () => window.clearTimeout(id)
+	}, [bucket, objectsQuery.data, objectsQuery.isFetching, prefix])
 
 	const hasActiveFilters =
 		typeFilter !== 'all' ||
@@ -1228,12 +1229,12 @@ const objectsQuery = useInfiniteQuery({
 		onOpenUploadFiles: openUploadFilesPicker,
 		onOpenUploadFolder: openUploadFolderPicker,
 		onOpenNewFolder: openNewFolder,
-		onOpenCommandPalette: () => setCommandPaletteOpen(true),
+		onOpenCommandPalette: () => openCommandPaletteRef.current?.(),
 		onOpenTransfers: () => transfers.openTransfers(),
 		onAddTab: addTab,
 		onCloseTab: closeTab,
-		onOpenGlobalSearch: () => setGlobalSearchOpen(true),
-		onToggleUiMode: () => setUiMode(isAdvanced ? 'simple' : 'advanced'),
+		onOpenGlobalSearch: openGlobalSearch,
+		onToggleUiMode: handleToggleUiMode,
 	})
 	const {
 		contextMenuClassName,
@@ -1273,41 +1274,21 @@ const objectsQuery = useInfiniteQuery({
 		[openPrefixContextMenu, recordContextMenuPoint],
 	)
 	const {
-		query: commandPaletteQuery,
-		setQuery: setCommandPaletteQuery,
-		activeIndex: commandPaletteActiveIndex,
-		setActiveIndex: setCommandPaletteActiveIndex,
-		filtered: commandPaletteItems,
-		run: runCommandPaletteItem,
-		onQueryChange: onCommandPaletteQueryChange,
-		onKeyDown: onCommandPaletteKeyDown,
-	} = useObjectsCommandPalette({
-		items: commandItems,
-		open: commandPaletteOpen,
-		setOpen: setCommandPaletteOpen,
-	})
+		commandPaletteOpen,
+		openCommandPalette,
+		closeCommandPalette,
+		commandPaletteQuery,
+		commandPaletteActiveIndex,
+		setCommandPaletteActiveIndex,
+		commandPaletteItems,
+		runCommandPaletteItem,
+		onCommandPaletteQueryChange,
+		onCommandPaletteKeyDown,
+	} = useObjectsCommandPaletteOverlayState({ items: commandItems })
 
 	useEffect(() => {
-		const onKeyDown = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-				e.preventDefault()
-				setCommandPaletteOpen((prev) => !prev)
-			}
-		}
-		window.addEventListener('keydown', onKeyDown)
-		return () => window.removeEventListener('keydown', onKeyDown)
-	}, [setCommandPaletteOpen])
-
-	useEffect(() => {
-		if (!commandPaletteOpen) return
-		setCommandPaletteQuery('')
-		setCommandPaletteActiveIndex(0)
-		const id = window.setTimeout(() => {
-			const el = document.getElementById('objectsCommandPaletteInput') as HTMLInputElement | null
-			el?.focus()
-		}, 0)
-		return () => window.clearTimeout(id)
-	}, [commandPaletteOpen, setCommandPaletteActiveIndex, setCommandPaletteQuery])
+		openCommandPaletteRef.current = openCommandPalette
+	}, [openCommandPalette])
 
 	const listGridClassName = isCompactList ? styles.listGridCompact : styles.listGridWide
 	const { clearSelectionAction, deleteSelectionAction, downloadSelectionAction } = useObjectsSelectionBarActions({
@@ -1464,13 +1445,13 @@ const objectsQuery = useInfiniteQuery({
 	})
 
 	const openGlobalSearchPrefix = (key: string) => {
-		setGlobalSearchOpen(false)
+		closeGlobalSearch()
 		if (!bucket) return
 		navigateToLocation(bucket, parentPrefixFromKey(key), { recordHistory: true })
 	}
 
 	const openGlobalSearchDetails = (key: string) => {
-		setGlobalSearchOpen(false)
+		closeGlobalSearch()
 		openDetailsForKey(key)
 	}
 
@@ -1679,13 +1660,13 @@ const objectsQuery = useInfiniteQuery({
 								isFetchingNextPage={favoritesOnly ? false : objectsQuery.isFetchingNextPage}
 								rawTotalCount={rawTotalCount}
 								searchAutoScanCap={searchAutoScanCap}
-								onOpenGlobalSearch={() => {
-									if (!isAdvanced) setUiMode('advanced')
-									setGlobalSearchOpen(true)
-								}}
-								canInteract={canInteract}
-								favoritesOnly={favoritesOnly}
-								sort={sort}
+									onOpenGlobalSearch={() => {
+										if (!isAdvanced) setUiMode('advanced')
+										openGlobalSearch()
+									}}
+									canInteract={canInteract}
+									favoritesOnly={favoritesOnly}
+									sort={sort}
 								sortOptions={[
 									{ label: 'Name (A -> Z)', value: 'name_asc' },
 									{ label: 'Name (Z -> A)', value: 'name_desc' },
@@ -2137,7 +2118,7 @@ const objectsQuery = useInfiniteQuery({
 						onQueryChange={onCommandPaletteQueryChange}
 						onActiveIndexChange={setCommandPaletteActiveIndex}
 						onRunCommand={runCommandPaletteItem}
-						onCancel={() => setCommandPaletteOpen(false)}
+						onCancel={closeCommandPalette}
 						onKeyDown={onCommandPaletteKeyDown}
 					/>
 				) : null}
@@ -2275,7 +2256,7 @@ const objectsQuery = useInfiniteQuery({
 				{globalSearchOpen ? (
 					<ObjectsGlobalSearchDrawer
 						open={globalSearchOpen}
-						onClose={() => setGlobalSearchOpen(false)}
+						onClose={closeGlobalSearch}
 						hasProfile={!!props.profileId}
 						hasBucket={!!bucket}
 						bucket={bucket}
