@@ -23,7 +23,7 @@ type MoveCleanupReportArgs = {
 	filenameTemplate: string
 	filenameMaxLen: number
 	result: RemoveEntriesResult
-	kind?: 'error' | 'info'
+	kind?: 'warning' | 'info'
 }
 
 type UseTransfersUploadJobLifecycleArgs = {
