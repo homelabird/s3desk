@@ -12,7 +12,7 @@ import {
 	type UploadFileItem,
 } from '../api/client'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
-import { TransfersContext, useTransfers } from './useTransfers'
+import { useTransfers } from './useTransfers'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { TransferEstimator } from '../lib/transfer'
 import { withJobQueueRetry } from '../lib/jobQueue'
@@ -24,7 +24,8 @@ import type {
 } from './transfers/transferTypes'
 import { maybeReportNetworkError, randomId } from './transfers/transferDownloadUtils'
 import { formatMoveCleanupSummary, showMoveCleanupReport } from './transfers/moveCleanupReport'
-import { TransfersDrawerHost } from './transfers/TransfersDrawerHost'
+import { TransfersProviderView } from './transfers/TransfersProviderView'
+import { useTransfersDrawerProps } from './transfers/useTransfersDrawerProps'
 import { useTransfersDownloadQueue } from './transfers/useTransfersDownloadQueue'
 import { useTransfersPersistence } from './transfers/useTransfersPersistence'
 import { useTransfersTaskActions } from './transfers/useTransfersTaskActions'
@@ -36,7 +37,7 @@ import {
 	normalizeUploadPath,
 	resolveUploadItemPath,
 	resolveUploadItemPathNormalized,
-	} from './transfers/uploadPaths'
+} from './transfers/uploadPaths'
 
 type UploadMovePlan = {
 	rootHandle: FileSystemDirectoryHandle
@@ -154,17 +155,6 @@ export function TransfersProvider(props: {
 	useEffect(() => {
 		uploadTasksRef.current = uploadTasks
 	}, [uploadTasks])
-
-	const activeDownloadCount = downloadTasks.filter((t) => t.status === 'queued' || t.status === 'waiting' || t.status === 'running').length
-	const hasCompletedDownloads = downloadTasks.some((t) => t.status === 'succeeded')
-	const activeUploadCount = uploadTasks.filter(
-		(t) => t.status === 'queued' || t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job' || t.status === 'cleanup',
-	).length
-	const hasCompletedUploads = uploadTasks.some((t) => t.status === 'succeeded')
-	const activeTransferCount = activeDownloadCount + activeUploadCount
-
-	const downloadSummaryText = useMemo(() => summarizeDownloadTasks(downloadTasks), [downloadTasks])
-	const uploadSummaryText = useMemo(() => summarizeUploadTasks(uploadTasks), [uploadTasks])
 
 	const downloadConcurrency = 2
 	const uploadConcurrency = 1
@@ -790,13 +780,32 @@ export function TransfersProvider(props: {
 		[openTransfers],
 	)
 
+	const drawerProps = useTransfersDrawerProps({
+		open: isOpen,
+		onClose: closeTransfers,
+		tab,
+		onTabChange: (nextTab) => setTab(nextTab),
+		downloadTasks,
+		uploadTasks,
+		onClearCompletedDownloads: clearCompletedDownloads,
+		onClearCompletedUploads: clearCompletedUploads,
+		onClearAll: clearAllTransfers,
+		onCancelDownload: cancelDownloadTask,
+		onRetryDownload: retryDownloadTask,
+		onRemoveDownload: removeDownloadTask,
+		onCancelUpload: cancelUploadTask,
+		onRetryUpload: retryUploadTask,
+		onRemoveUpload: removeUploadTask,
+		onOpenJobs: () => navigate('/jobs'),
+	})
+
 	const ctx = useMemo<TransfersContextValue>(
 		() => ({
 			isOpen,
 			tab,
-			activeDownloadCount,
-			activeUploadCount,
-			activeTransferCount,
+			activeDownloadCount: drawerProps.activeDownloadCount,
+			activeUploadCount: drawerProps.activeUploadCount,
+			activeTransferCount: drawerProps.activeTransferCount,
 			downloadTasks,
 			uploadTasks,
 			openTransfers,
@@ -807,53 +816,28 @@ export function TransfersProvider(props: {
 			queueUploadFiles,
 		}),
 		[
-			activeDownloadCount,
-			activeTransferCount,
-			activeUploadCount,
 			closeTransfers,
 			downloadTasks,
+			drawerProps.activeDownloadCount,
+			drawerProps.activeTransferCount,
+			drawerProps.activeUploadCount,
 			isOpen,
 			openTransfers,
-			queueDownloadObjectsToDevice,
 			queueDownloadJobArtifact,
 			queueDownloadObject,
+			queueDownloadObjectsToDevice,
 			queueUploadFiles,
 			tab,
 			uploadTasks,
 		],
 	)
 
-		return (
-			<TransfersContext.Provider value={ctx}>
-				{props.children}
-				<TransfersDrawerHost
-					open={isOpen}
-					onClose={closeTransfers}
-					tab={tab}
-					onTabChange={(nextTab) => setTab(nextTab)}
-					activeDownloadCount={activeDownloadCount}
-					activeUploadCount={activeUploadCount}
-					activeTransferCount={activeTransferCount}
-					downloadTasks={downloadTasks}
-					uploadTasks={uploadTasks}
-					downloadSummaryText={downloadSummaryText}
-					uploadSummaryText={uploadSummaryText}
-					hasCompletedDownloads={hasCompletedDownloads}
-					hasCompletedUploads={hasCompletedUploads}
-					onClearCompletedDownloads={clearCompletedDownloads}
-					onClearCompletedUploads={clearCompletedUploads}
-					onClearAll={clearAllTransfers}
-					onCancelDownload={cancelDownloadTask}
-					onRetryDownload={retryDownloadTask}
-					onRemoveDownload={removeDownloadTask}
-					onCancelUpload={cancelUploadTask}
-					onRetryUpload={retryUploadTask}
-					onRemoveUpload={removeUploadTask}
-					onOpenJobs={() => navigate('/jobs')}
-				/>
-			</TransfersContext.Provider>
-		)
-	}
+	return (
+		<TransfersProviderView ctx={ctx} drawerProps={drawerProps}>
+			{props.children}
+		</TransfersProviderView>
+	)
+}
 
 export function TransfersButton(props: { showLabel?: boolean } = {}) {
 	const transfers = useTransfers()
@@ -869,48 +853,6 @@ export function TransfersButton(props: { showLabel?: boolean } = {}) {
 			{props.showLabel ? 'Transfers' : null}
 		</Button>
 	)
-}
-
-function summarizeDownloadTasks(tasks: DownloadTask[]): string {
-	if (tasks.length === 0) return ''
-	const counts = {
-		queued: 0,
-		waiting: 0,
-		running: 0,
-		succeeded: 0,
-		failed: 0,
-		canceled: 0,
-	}
-	for (const t of tasks) {
-		switch (t.status) {
-			case 'queued':
-				counts.queued++
-				break
-			case 'waiting':
-				counts.waiting++
-				break
-			case 'running':
-				counts.running++
-				break
-			case 'succeeded':
-				counts.succeeded++
-				break
-			case 'failed':
-				counts.failed++
-				break
-			case 'canceled':
-				counts.canceled++
-				break
-		}
-	}
-	const parts: string[] = [`Total ${tasks.length}`]
-	if (counts.queued) parts.push(`Queued ${counts.queued}`)
-	if (counts.waiting) parts.push(`Waiting ${counts.waiting}`)
-	if (counts.running) parts.push(`Running ${counts.running}`)
-	if (counts.succeeded) parts.push(`Done ${counts.succeeded}`)
-	if (counts.failed) parts.push(`Failed ${counts.failed}`)
-	if (counts.canceled) parts.push(`Canceled ${counts.canceled}`)
-	return parts.join(' · ')
 }
 
 const maxUploadCommitItems = 200
@@ -964,56 +906,4 @@ function buildUploadCommitRequest(task: UploadTask, items: UploadFileItem[]): Up
 	}
 }
 
-	function summarizeUploadTasks(tasks: UploadTask[]): string {
-	if (tasks.length === 0) return ''
-	const counts = {
-		queued: 0,
-		staging: 0,
-		commit: 0,
-		waitingJob: 0,
-		cleanup: 0,
-		succeeded: 0,
-		failed: 0,
-		canceled: 0,
-	}
-	for (const t of tasks) {
-		switch (t.status) {
-			case 'queued':
-				counts.queued++
-				break
-			case 'staging':
-				counts.staging++
-				break
-			case 'commit':
-				counts.commit++
-				break
-			case 'waiting_job':
-				counts.waitingJob++
-				break
-			case 'cleanup':
-				counts.cleanup++
-				break
-			case 'succeeded':
-				counts.succeeded++
-				break
-			case 'failed':
-				counts.failed++
-				break
-			case 'canceled':
-				counts.canceled++
-				break
-		}
-	}
-	const parts: string[] = [`Total ${tasks.length}`]
-	if (counts.queued) parts.push(`Queued ${counts.queued}`)
-	if (counts.staging) parts.push(`Uploading ${counts.staging}`)
-	if (counts.commit) parts.push(`Committing ${counts.commit}`)
-	if (counts.waitingJob) parts.push(`Transferring ${counts.waitingJob}`)
-	if (counts.cleanup) parts.push(`Cleaning ${counts.cleanup}`)
-	if (counts.succeeded) parts.push(`Done ${counts.succeeded}`)
-	if (counts.failed) parts.push(`Failed ${counts.failed}`)
-	if (counts.canceled) parts.push(`Canceled ${counts.canceled}`)
-		return parts.join(' · ')
-	}
-
-	// formatErr lives in ../lib/errors
+// formatErr lives in ../lib/errors
