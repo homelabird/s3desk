@@ -1,0 +1,39 @@
+interface:
+  display_name: "S3Desk"
+  short_description: "S3Desk backend, frontend, CI, helm, and e2e operations"
+  default_prompt: "Use $skill-name to handle S3Desk repository tasks with command mappings and policy-safe outputs."
+  policy:
+    allow_implicit_invocation: true
+    enforce_lang: "en"
+    require_trigger_file: "SKILL.md"
+    branch_gate:
+      required_branch: "main"
+      allow_explicit_override: true
+    preflight:
+      - "Confirm current CI context: CI_PIPELINE_SOURCE, CI_COMMIT_TAG, CI_COMMIT_BRANCH, CI_OPEN_MERGE_REQUESTS."
+      - "If write/release/build actions are requested, require CI_COMMIT_BRANCH == \"main\" unless explicitly authorized."
+      - "Resolve flags before execution: RUN_FULL_CHECK, FRONTEND_PARALLEL, RUN_IMAGE_BUILD, RUN_HELM_SMOKE, E2E_LIVE, PERF_TESTS, RUN_TRIVY, RUN_DEV_AUDIT, SKIP_DOCKERHUB_DESCRIPTION."
+      - "Prefer the CI execution governance matrix and mention rule justification in responses."
+    forbidden_patterns:
+      - "localhost"
+      - "127.0.0.1"
+      - "change-me"
+      - "Do not use destructive git commands without explicit request."
+      - "Do not omit API_TOKEN when suggesting remote starts."
+      - "Do not propose placeholder secrets (for example, change-me) in reusable/shared environments."
+    env_contract:
+      required_when_remote:
+        - "ADDR=0.0.0.0:8080"
+        - "ALLOW_REMOTE=true"
+        - "API_TOKEN"
+      allowed_host:
+        - "192.168.0.200"
+      preferred_endpoints:
+        - "http://192.168.0.200:8080"
+        - "http://192.168.0.200:8080/docs"
+        - "http://192.168.0.200:8080/openapi.yml"
+        - "http://192.168.0.200:5173"
+    ci_mapping:
+      must_reference: true
+      include_identifier_matrix: true
+      include_preflight_checks: true
