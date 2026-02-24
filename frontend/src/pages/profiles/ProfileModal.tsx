@@ -344,7 +344,7 @@ export function ProfileModal(props: {
 					/>
 				) : null}
 
-				<FormField label="Name" required error={errors.name}>
+				<FormField label="Name" required error={errors.name} extra="A friendly name for this profile (e.g. 'Production S3', 'Dev MinIO').">
 					<Input value={values.name} onChange={(e) => setField('name', e.target.value)} autoComplete="off" aria-label="Name" />
 				</FormField>
 
@@ -377,11 +377,11 @@ export function ProfileModal(props: {
 							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-ashburn-1…" />
 						</FormField>
 
-						<FormField label="Namespace" required error={errors.ociNamespace}>
+						<FormField label="Namespace" required error={errors.ociNamespace} extra="Your OCI tenancy namespace (found in Tenancy Details).">
 							<Input value={values.ociNamespace} onChange={(e) => setField('ociNamespace', e.target.value)} placeholder="my-namespace…" />
 						</FormField>
 
-						<FormField label="Compartment OCID" required error={errors.ociCompartment}>
+						<FormField label="Compartment OCID" required error={errors.ociCompartment} extra="The OCID of the compartment containing your buckets.">
 							<Input
 								value={values.ociCompartment}
 								onChange={(e) => setField('ociCompartment', e.target.value)}
@@ -427,7 +427,7 @@ export function ProfileModal(props: {
 
 				{isAzure ? (
 					<>
-						<FormField label="Storage Account Name" required extra="3-24 lowercase letters or numbers." error={errors.azureAccountName}>
+						<FormField label="Storage Account Name" required extra="Your Azure storage account name (3-24 lowercase letters or numbers)." error={errors.azureAccountName}>
 							<Input
 								value={values.azureAccountName}
 								onChange={(e) => setField('azureAccountName', e.target.value)}
@@ -479,7 +479,7 @@ export function ProfileModal(props: {
 							/>
 						</FormField>
 
-						<FormField label="Project Number (optional)" error={errors.gcpProjectNumber}>
+						<FormField label="Project Number (optional)" error={errors.gcpProjectNumber} extra="Required for bucket list/create/delete. Find it in the GCP Console.">
 							<Input
 								value={values.gcpProjectNumber}
 								onChange={(e) => setField('gcpProjectNumber', e.target.value)}
@@ -525,6 +525,7 @@ export function ProfileModal(props: {
 								required={!props.editMode}
 								error={errors.accessKeyId}
 								style={{ flex: '1 1 260px', minWidth: 0 }}
+								extra="Your S3 access key (e.g. AKIAIOSFODNN7EXAMPLE)."
 							>
 								<Input
 									value={values.accessKeyId}
@@ -538,6 +539,7 @@ export function ProfileModal(props: {
 								required={!props.editMode}
 								error={errors.secretAccessKey}
 								style={{ flex: '1 1 260px', minWidth: 0 }}
+								extra="Your S3 secret access key. Never share this publicly."
 							>
 								<Input.Password
 									value={values.secretAccessKey}
@@ -572,17 +574,17 @@ export function ProfileModal(props: {
 
 				<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
 					{isS3Provider ? (
-						<FormField label="Force Path Style" style={{ marginBottom: 0 }}>
+						<FormField label="Force Path Style" style={{ marginBottom: 0 }} extra="Enable for S3-compatible stores (MinIO, Ceph).">
 							<Switch checked={values.forcePathStyle} onChange={(checked) => setField('forcePathStyle', checked)} aria-label="Force Path Style" />
 						</FormField>
 					) : null}
-					<FormField label="Preserve Leading Slash" style={{ marginBottom: 0 }}>
+					<FormField label="Preserve Leading Slash" style={{ marginBottom: 0 }} extra="Keep leading / in object keys (strict S3 semantics).">
 						<Switch
 							checked={values.preserveLeadingSlash}
 							onChange={(checked) => setField('preserveLeadingSlash', checked)}
 						/>
 					</FormField>
-					<FormField label="TLS Insecure Skip Verify" style={{ marginBottom: 0 }}>
+					<FormField label="TLS Insecure Skip Verify" style={{ marginBottom: 0 }} extra="Skip TLS cert check (self-signed certs). Not for production.">
 						<Switch
 							checked={values.tlsInsecureSkipVerify}
 							onChange={(checked) => setField('tlsInsecureSkipVerify', checked)}

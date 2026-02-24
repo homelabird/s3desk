@@ -143,10 +143,20 @@ export function BucketsPage(props: Props) {
 					<Spin />
 				</div>
 			) : showBucketsEmpty ? (
-				<Empty description="No buckets yet">
-					<Button type="primary" onClick={() => setCreateOpen(true)}>
-						Create bucket
-					</Button>
+				<Empty description={
+					<Space direction="vertical" size={4}>
+						<Typography.Text>No buckets found in this storage.</Typography.Text>
+						<Typography.Text type="secondary">Create a new bucket, or check that your profile has the right permissions to list buckets.</Typography.Text>
+					</Space>
+				}>
+					<Space>
+						<Button type="primary" onClick={() => setCreateOpen(true)}>
+							Create bucket
+						</Button>
+						<Button onClick={() => navigate('/profiles?ui=full')}>
+							Check profiles
+						</Button>
+					</Space>
 				</Empty>
 			) : (
 				<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>

@@ -11,17 +11,19 @@ import {
 	SettingOutlined,
 	ToolOutlined,
 } from '@ant-design/icons'
-import { Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Suspense, lazy, useMemo, useState, type CSSProperties } from 'react'
 
 import { APIClient, APIError } from './api/client'
 import { getApiBaseUrl } from './api/baseUrl'
 import { JobQueueBanner } from './components/JobQueueBanner'
+import { KeyboardShortcutGuide } from './components/KeyboardShortcutGuide'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/Transfers'
 import { LoginPage } from './pages/LoginPage'
 import { getProviderCapabilities } from './lib/providerCapabilities'
+import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
 
 const menuLinkStyle: CSSProperties = {
@@ -62,6 +64,7 @@ const { Header, Content, Sider } = Layout
 
 export default function FullAppInner() {
 	const location = useLocation()
+	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
 	const isDesktop = !!screens.lg
 
@@ -70,6 +73,7 @@ export default function FullAppInner() {
 	const [navOpen, setNavOpen] = useState(false)
 	const [searchParams, setSearchParams] = useSearchParams()
 	const settingsOpen = searchParams.has('settings')
+	const { guideOpen, setGuideOpen } = useKeyboardShortcuts((path) => navigate(path))
 
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
 	const apiBaseLabel = useMemo(() => {
@@ -420,6 +424,7 @@ export default function FullAppInner() {
 					/>
 				</Suspense>
 			</Layout>
+			<KeyboardShortcutGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
 		</TransfersProvider>
 	)
 }

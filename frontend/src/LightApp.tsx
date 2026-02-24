@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from './api/client'
+import { WelcomeScreen } from './components/WelcomeScreen'
 import { useLocalStorageState } from './lib/useLocalStorageState'
 
 type LightProfile = {
@@ -341,7 +342,9 @@ function ProfilesList(props: {
 							</div>
 						</div>
 					) : !hasProfiles ? (
-						<div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>No profiles yet. Create one to get started.</div>
+						<div style={{ padding: 14 }}>
+							<WelcomeScreen onGetStarted={() => navigate('/profiles?create=1')} />
+						</div>
 					) : (
 						<ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
 							{profiles.map((p) => {

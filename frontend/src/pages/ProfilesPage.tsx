@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router-dom'
 import { APIClient } from '../api/client'
 import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../api/types'
 import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
+import { getConnectionTroubleshootingHint } from '../lib/connectionHints'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { LinkButton } from '../components/LinkButton'
@@ -173,7 +174,11 @@ export function ProfilesPage(props: Props) {
 			if (normRetryable === true && !resp.ok) suffixParts.push('retryable')
 			const suffix = suffixParts.length ? ` (${suffixParts.join(', ')})` : ''
 			if (resp.ok) message.success(`Profile test OK${suffix}`)
-			else message.warning(`${resp.message ?? 'Profile test failed'}${suffix}`)
+			else {
+				const troubleshootHint = normCode ? getConnectionTroubleshootingHint(normCode) : undefined
+				const base = `${resp.message ?? 'Profile test failed'}${suffix}`
+				message.warning(troubleshootHint ? `${base} · ${troubleshootHint}` : base, troubleshootHint ? 8 : 5)
+			}
 		},
 		onSettled: (_, __, id) => setTestingProfileId((prev) => (prev === id ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),
