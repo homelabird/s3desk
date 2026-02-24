@@ -6,11 +6,14 @@ type Props = {
 	required?: boolean
 	extra?: ReactNode
 	error?: ReactNode
+	errorId?: string
 	style?: CSSProperties
 	children: ReactNode
 }
 
 export function FormField(props: Props) {
+	const errorId = props.errorId ?? (props.htmlFor ? `${props.htmlFor}-error` : undefined)
+
 	const label =
 		typeof props.label === 'string' ? (
 			<span>
@@ -42,7 +45,7 @@ export function FormField(props: Props) {
 			) : null}
 
 			{props.error ? (
-				<div role="alert" style={{ marginTop: 6, fontSize: 12, color: '#b91c1c', lineHeight: 1.35 }}>
+				<div id={errorId} role="alert" style={{ marginTop: 6, fontSize: 12, color: '#b91c1c', lineHeight: 1.35 }}>
 					{props.error}
 				</div>
 			) : null}

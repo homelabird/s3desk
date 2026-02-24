@@ -64,7 +64,7 @@ export function JobsToolbar(props: Props) {
 					flexWrap: 'wrap',
 				}}
 			>
-				<Typography.Title level={3} style={{ margin: 0 }}>
+				<Typography.Title level={2} style={{ margin: 0 }}>
 					Jobs
 				</Typography.Title>
 				<Space wrap>

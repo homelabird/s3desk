@@ -126,7 +126,7 @@ export function BucketsPage(props: Props) {
 	return (
 		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
 			<div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-				<Typography.Title level={3} style={{ margin: 0 }}>
+				<Typography.Title level={2} style={{ margin: 0 }}>
 					Buckets
 				</Typography.Title>
 				<Button type="primary" onClick={() => setCreateOpen(true)}>
@@ -143,21 +143,32 @@ export function BucketsPage(props: Props) {
 					<Spin />
 				</div>
 			) : showBucketsEmpty ? (
-				<Empty description="No buckets yet">
-					<Button type="primary" onClick={() => setCreateOpen(true)}>
-						Create bucket
-					</Button>
+				<Empty description={
+					<Space direction="vertical" size={4}>
+						<Typography.Text>No buckets found in this storage.</Typography.Text>
+						<Typography.Text type="secondary">Create a new bucket, or check that your profile has the right permissions to list buckets.</Typography.Text>
+					</Space>
+				}>
+					<Space>
+						<Button type="primary" onClick={() => setCreateOpen(true)}>
+							Create bucket
+						</Button>
+						<Button onClick={() => navigate('/profiles?ui=full')} aria-label="View and edit profiles">
+							Check profiles
+						</Button>
+					</Space>
 				</Empty>
 			) : (
 				<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
 					<table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
+						<caption className="sr-only">List of buckets</caption>
 						<thead>
 							<tr style={{ background: '#fafafa' }}>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>Name</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>Name</th>
+								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
 									CreatedAt
 								</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
 									Actions
 								</th>
 							</tr>

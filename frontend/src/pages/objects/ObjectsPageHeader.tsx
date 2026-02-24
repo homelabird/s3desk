@@ -34,7 +34,7 @@ export function ObjectsPageHeader({
 
 	return (
 		<>
-			<Typography.Title level={3} style={{ margin: 0 }}>
+			<Typography.Title level={2} style={{ margin: 0 }}>
 				Objects
 			</Typography.Title>
 			{!uploadSupported ? (

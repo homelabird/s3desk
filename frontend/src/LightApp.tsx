@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from './api/client'
+import { WelcomeScreen } from './components/WelcomeScreen'
 import { useLocalStorageState } from './lib/useLocalStorageState'
 
 type LightProfile = {
@@ -314,7 +315,7 @@ function ProfilesList(props: {
 					</div>
 
 					{profilesState.status === 'loading' ? (
-						<div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>Loading profiles…</div>
+						<div role="status" style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>Loading profiles…</div>
 					) : profilesState.status === 'error' ? (
 						<div style={{ padding: 14, fontSize: 13 }}>
 							<div>
@@ -341,7 +342,9 @@ function ProfilesList(props: {
 							</div>
 						</div>
 					) : !hasProfiles ? (
-						<div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>No profiles yet. Create one to get started.</div>
+						<div style={{ padding: 14 }}>
+							<WelcomeScreen onGetStarted={() => navigate('/profiles?create=1')} />
+						</div>
 					) : (
 						<ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
 							{profiles.map((p) => {
@@ -452,7 +455,7 @@ export default function LightApp() {
 
 	if (metaState.status === 'loading') {
 		return (
-			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+			<div role="status" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
 				<div style={{ width: 520, maxWidth: '100%', textAlign: 'center' }}>
 					<div style={{ fontSize: 18, fontWeight: 700 }}>Loading…</div>
 					<div style={{ marginTop: 8, opacity: 0.75 }}>Connecting to the backend.</div>

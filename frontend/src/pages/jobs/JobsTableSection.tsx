@@ -71,7 +71,12 @@ export function JobsTableSection({
 						height={tableScrollY}
 						loading={isLoading}
 						empty={
-							<Empty description="No jobs yet">
+							<Empty description={
+								<Space direction="vertical" size={4}>
+									<span>No jobs yet.</span>
+									<span style={{ color: 'rgba(0,0,0,0.45)' }}>Upload files or create a sync/copy/delete job to get started.</span>
+								</Space>
+							}>
 								<Space wrap>
 									<Button
 										type="primary"

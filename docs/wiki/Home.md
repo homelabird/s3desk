@@ -8,4 +8,5 @@ S3Desk is a local-first dashboard for object storage browsing and bulk transfers
 - Providers and tiers: see ../PROVIDERS.md
 - Usage guide: see ../USAGE.md
 - Runbook: see ../RUNBOOK.md
-- Roadmap: see ../ROADMAP.md
+- Roadmap (technical): see ../ROADMAP.md
+- Roadmap (UX): see ../UX_ROADMAP.md
