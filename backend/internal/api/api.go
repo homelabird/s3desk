@@ -62,6 +62,7 @@ func New(dep Dependencies) http.Handler {
 			r.Patch("/", api.handleUpdateProfile)
 			r.Delete("/", api.handleDeleteProfile)
 			r.Post("/test", api.handleTestProfile)
+			r.Post("/benchmark", api.handleBenchmarkProfile)
 			r.Get("/export", api.handleExportProfile)
 			r.Get("/tls", api.handleGetProfileTLS)
 			r.Put("/tls", api.handlePutProfileTLS)

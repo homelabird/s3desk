@@ -20,6 +20,7 @@ import type {
 	CreateFolderRequest,
 	CreateFolderResponse,
 	Profile,
+	ProfileBenchmarkResponse,
 	ProfileCreateRequest,
 	ProfileTestResponse,
 	ProfileTLSConfig,
@@ -281,6 +282,10 @@ export class APIClient {
 
 	testProfile(profileId: string): Promise<ProfileTestResponse> {
 		return this.request(`/profiles/${encodeURIComponent(profileId)}/test`, { method: 'POST' }, { timeoutMs: defaultTimeoutMs })
+	}
+
+	benchmarkProfile(profileId: string): Promise<ProfileBenchmarkResponse> {
+		return this.request(`/profiles/${encodeURIComponent(profileId)}/benchmark`, { method: 'POST' }, { timeoutMs: 120_000 })
 	}
 
 	getProfileTLS(profileId: string): Promise<ProfileTLSStatus> {

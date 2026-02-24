@@ -138,3 +138,73 @@ func TestListJobsFiltersAndCursor(t *testing.T) {
 		t.Fatalf("expected 3 unique jobs, got %d", len(ids))
 	}
 }
+
+func TestListJobsSkipsCorruptedPayload(t *testing.T) {
+	dataDir := t.TempDir()
+	gormDB, err := db.Open(db.Config{
+		Backend:    db.BackendSQLite,
+		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
+	})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("open sql db: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	st, err := New(gormDB, Options{})
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	endpoint := "http://localhost:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	forcePathStyle := false
+
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "test",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		ForcePathStyle:        &forcePathStyle,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	ctx := context.Background()
+	goodJob, err := st.CreateJob(ctx, profile.ID, CreateJobInput{
+		Type:    "test",
+		Payload: map[string]any{"key": "good"},
+	})
+	if err != nil {
+		t.Fatalf("create good job: %v", err)
+	}
+
+	// Insert a row with corrupted payload JSON directly via GORM.
+	if err := gormDB.Exec(
+		"INSERT INTO jobs (id, profile_id, type, status, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		"CORRUPT01", profile.ID, "test", "queued", "not-valid-json", time.Now().UTC().Format(time.RFC3339Nano),
+	).Error; err != nil {
+		t.Fatalf("insert corrupted row: %v", err)
+	}
+
+	resp, err := st.ListJobs(ctx, profile.ID, JobFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list jobs should not fail: %v", err)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 valid job, got %d", len(resp.Items))
+	}
+	if resp.Items[0].ID != goodJob.ID {
+		t.Fatalf("expected job ID %q, got %q", goodJob.ID, resp.Items[0].ID)
+	}
+}

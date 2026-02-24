@@ -36,6 +36,13 @@ const PROFILE_PROVIDER_LABELS: Record<string, string> = {
 	oci_object_storage: 'OCI Object Storage',
 }
 
+function formatBps(bps: number): string {
+	if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(1)} Gbps`
+	if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`
+	if (bps >= 1_000) return `${(bps / 1_000).toFixed(1)} Kbps`
+	return `${bps} bps`
+}
+
 export function ProfilesPage(props: Props) {
 	const queryClient = useQueryClient()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
@@ -44,6 +51,7 @@ export function ProfilesPage(props: Props) {
 	const [createOpen, setCreateOpen] = useState(() => createRequested)
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
 	const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
+	const [benchmarkingProfileId, setBenchmarkingProfileId] = useState<string | null>(null)
 	const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null)
 	const [onboardingDismissed, setOnboardingDismissed] = useState(false)
 	const [yamlOpen, setYamlOpen] = useState(false)
@@ -181,6 +189,25 @@ export function ProfilesPage(props: Props) {
 			}
 		},
 		onSettled: (_, __, id) => setTestingProfileId((prev) => (prev === id ? null : prev)),
+		onError: (err) => message.error(formatErr(err)),
+	})
+
+	const benchmarkMutation = useMutation({
+		mutationFn: (id: string) => api.benchmarkProfile(id),
+		onMutate: (id) => setBenchmarkingProfileId(id),
+		onSuccess: (resp) => {
+			if (resp.ok) {
+				const parts: string[] = []
+				if (resp.uploadBps != null) parts.push(`↑ ${formatBps(resp.uploadBps)}`)
+				if (resp.downloadBps != null) parts.push(`↓ ${formatBps(resp.downloadBps)}`)
+				if (resp.uploadMs != null) parts.push(`upload ${resp.uploadMs}ms`)
+				if (resp.downloadMs != null) parts.push(`download ${resp.downloadMs}ms`)
+				message.success(`Benchmark OK: ${parts.join(' · ')}`, 8)
+			} else {
+				message.warning(resp.message ?? 'Benchmark failed', 5)
+			}
+		},
+		onSettled: (_, __, id) => setBenchmarkingProfileId((prev) => (prev === id ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),
 	})
 
@@ -482,6 +509,11 @@ export function ProfilesPage(props: Props) {
 																disabled: testMutation.isPending && testingProfileId === row.id,
 															},
 															{
+																key: 'benchmark',
+																label: benchmarkMutation.isPending && benchmarkingProfileId === row.id ? 'Benchmarking…' : 'Benchmark',
+																disabled: benchmarkMutation.isPending && benchmarkingProfileId === row.id,
+															},
+															{
 																key: 'yaml',
 																label: exportYamlMutation.isPending && exportingProfileId === row.id ? 'Exporting YAML…' : 'YAML',
 																disabled: exportYamlMutation.isPending && exportingProfileId === row.id,
@@ -501,6 +533,10 @@ export function ProfilesPage(props: Props) {
 															}
 															if (key === 'test') {
 																testMutation.mutate(row.id)
+																return
+															}
+															if (key === 'benchmark') {
+																benchmarkMutation.mutate(row.id)
 																return
 															}
 															if (key === 'yaml') {

@@ -6,6 +6,7 @@ export type Profile = components['schemas']['Profile']
 export type ProfileCreateRequest = components['schemas']['ProfileCreateRequest']
 export type ProfileUpdateRequest = components['schemas']['ProfileUpdateRequest']
 export type ProfileTestResponse = components['schemas']['ProfileTestResponse']
+export type ProfileBenchmarkResponse = components['schemas']['ProfileBenchmarkResponse']
 
 export type ProfileTLSMode = 'disabled' | 'mtls'
 export type ProfileTLSConfig = {

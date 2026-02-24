@@ -52,4 +52,24 @@ describe('FormField', () => {
 		const asterisk = container.querySelector('[aria-hidden="true"]')
 		expect(asterisk).toHaveTextContent('*')
 	})
+
+	it('adds role=group and aria-describedby when error is present with errorId', () => {
+		const { container } = render(
+			<FormField label="Email" htmlFor="email-input" error="Required field">
+				<input id="email-input" />
+			</FormField>,
+		)
+		const group = screen.getByRole('group')
+		expect(group).toHaveAttribute('aria-describedby', 'email-input-error')
+		expect(container.querySelector('[role="group"]')).toBeTruthy()
+	})
+
+	it('does not add role=group when no error is present', () => {
+		render(
+			<FormField label="Email" htmlFor="email-input">
+				<input id="email-input" />
+			</FormField>,
+		)
+		expect(screen.queryByRole('group')).not.toBeInTheDocument()
+	})
 })

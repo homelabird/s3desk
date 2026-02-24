@@ -28,8 +28,14 @@ export function FormField(props: Props) {
 			props.label
 		)
 
+	const hasError = Boolean(props.error && errorId)
+
 	return (
-		<div style={{ marginBottom: 12, ...props.style }}>
+		<div
+			style={{ marginBottom: 12, ...props.style }}
+			role={hasError ? 'group' : undefined}
+			aria-describedby={hasError ? errorId : undefined}
+		>
 			{props.htmlFor ? (
 				<label htmlFor={props.htmlFor} style={{ display: 'block', fontWeight: 700, marginBottom: 6 }}>
 					{label}

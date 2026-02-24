@@ -1052,12 +1052,12 @@ func (s *Store) ListJobs(ctx context.Context, profileID string, f JobFilter) (mo
 			CreatedAt: row.CreatedAt,
 		}
 		if err := json.Unmarshal([]byte(row.PayloadJSON), &job.Payload); err != nil {
-			return models.JobsListResponse{}, err
+			continue
 		}
 		if row.ProgressJSON != nil && *row.ProgressJSON != "" {
 			var jp models.JobProgress
 			if err := json.Unmarshal([]byte(*row.ProgressJSON), &jp); err != nil {
-				return models.JobsListResponse{}, err
+				continue
 			}
 			job.Progress = &jp
 		}

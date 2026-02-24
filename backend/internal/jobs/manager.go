@@ -3,6 +3,7 @@ package jobs
 import (
 	"bufio"
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -2274,4 +2275,117 @@ func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bo
 // TestS3Connectivity is kept for backwards compatibility.
 func (m *Manager) TestS3Connectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
 	return m.TestConnectivity(ctx, profileID)
+}
+
+// BenchmarkConnectivity uploads a small test file, downloads it back, then deletes it,
+// returning upload/download throughput so users can gauge their connection speed.
+func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (models.ProfileBenchmarkResponse, error) {
+	const benchFileSize = 1 << 20 // 1 MiB
+	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)
+	if err != nil {
+		return models.ProfileBenchmarkResponse{}, err
+	}
+	if !found {
+		return models.ProfileBenchmarkResponse{}, ErrProfileNotFound
+	}
+
+	// List buckets so we can pick the first one available.
+	listCtx, listCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer listCancel()
+	configID := fmt.Sprintf("profile-bench-%s-%d", profileID, time.Now().UnixNano())
+	listProc, err := m.startRcloneCommand(listCtx, profileSecrets, configID, []string{"lsjson", "--dirs-only", rcloneRemoteBucket("")})
+	if err != nil {
+		return models.ProfileBenchmarkResponse{OK: false, Message: "failed to list buckets: " + err.Error()}, nil
+	}
+	var firstBucket string
+	_ = decodeRcloneList(listProc.stdout, func(entry rcloneListEntry) error {
+		if firstBucket == "" && (entry.IsDir || entry.IsBucket) {
+			firstBucket = strings.TrimSuffix(entry.Path, "/")
+		}
+		return nil
+	})
+	_ = listProc.wait()
+	if firstBucket == "" {
+		return models.ProfileBenchmarkResponse{OK: false, Message: "no buckets found; create a bucket first"}, nil
+	}
+
+	// Write a temporary 1 MiB file filled with random data.
+	tmpFile, err := os.CreateTemp("", "s3desk-bench-*.bin")
+	if err != nil {
+		return models.ProfileBenchmarkResponse{}, fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := io.CopyN(tmpFile, cryptorand.Reader, benchFileSize); err != nil {
+		tmpFile.Close()
+		return models.ProfileBenchmarkResponse{}, fmt.Errorf("write temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	benchKey := fmt.Sprintf(".s3desk-benchmark-%d.bin", time.Now().UnixNano())
+	remoteObj := rcloneRemoteObject(firstBucket, benchKey, false)
+
+	// --- upload ---
+	uploadCtx, uploadCancel := context.WithTimeout(ctx, 60*time.Second)
+	defer uploadCancel()
+	uploadConfigID := fmt.Sprintf("profile-bench-up-%s-%d", profileID, time.Now().UnixNano())
+	uploadStart := time.Now()
+	upProc, err := m.startRcloneCommand(uploadCtx, profileSecrets, uploadConfigID, []string{"copyto", tmpPath, remoteObj})
+	if err != nil {
+		return models.ProfileBenchmarkResponse{OK: false, Message: "upload failed: " + err.Error()}, nil
+	}
+	_, _ = io.Copy(io.Discard, upProc.stdout)
+	if err := upProc.wait(); err != nil {
+		return models.ProfileBenchmarkResponse{OK: false, Message: "upload failed: " + strings.TrimSpace(upProc.stderr.String())}, nil
+	}
+	uploadMs := time.Since(uploadStart).Milliseconds()
+	var uploadBps int64
+	if uploadMs > 0 {
+		uploadBps = benchFileSize * 8 * 1000 / uploadMs
+	}
+
+	// --- download ---
+	dlCtx, dlCancel := context.WithTimeout(ctx, 60*time.Second)
+	defer dlCancel()
+	dlConfigID := fmt.Sprintf("profile-bench-dl-%s-%d", profileID, time.Now().UnixNano())
+	dlStart := time.Now()
+	dlProc, err := m.startRcloneCommand(dlCtx, profileSecrets, dlConfigID, []string{"cat", remoteObj})
+	if err != nil {
+		return models.ProfileBenchmarkResponse{OK: false, Message: "download failed: " + err.Error()}, nil
+	}
+	dlBytes, _ := io.Copy(io.Discard, dlProc.stdout)
+	if err := dlProc.wait(); err != nil {
+		return models.ProfileBenchmarkResponse{OK: false, Message: "download failed: " + strings.TrimSpace(dlProc.stderr.String())}, nil
+	}
+	downloadMs := time.Since(dlStart).Milliseconds()
+	var downloadBps int64
+	if downloadMs > 0 {
+		downloadBps = dlBytes * 8 * 1000 / downloadMs
+	}
+
+	// --- cleanup ---
+	cleanCtx, cleanCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cleanCancel()
+	cleanConfigID := fmt.Sprintf("profile-bench-rm-%s-%d", profileID, time.Now().UnixNano())
+	cleanProc, err := m.startRcloneCommand(cleanCtx, profileSecrets, cleanConfigID, []string{"deletefile", remoteObj})
+	cleanedUp := false
+	if err == nil {
+		_, _ = io.Copy(io.Discard, cleanProc.stdout)
+		if err := cleanProc.wait(); err == nil {
+			cleanedUp = true
+		}
+	}
+
+	fileSize := int64(benchFileSize)
+	return models.ProfileBenchmarkResponse{
+		OK:            true,
+		Message:       "ok",
+		UploadBps:     &uploadBps,
+		DownloadBps:   &downloadBps,
+		UploadMs:      &uploadMs,
+		DownloadMs:    &downloadMs,
+		FileSizeBytes: &fileSize,
+		CleanedUp:     cleanedUp,
+	}, nil
 }
