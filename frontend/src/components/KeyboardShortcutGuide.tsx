@@ -59,7 +59,7 @@ function ShortcutRow(props: { shortcut: Shortcut }) {
 			<span style={{ fontSize: 13 }}>{props.shortcut.description}</span>
 			<span>
 				{props.shortcut.keys.split(' ').map((part, i) => (
-					<span key={i}>
+					<span key={`${part}-${i}`}>
 						{part.toLowerCase() === 'then' ? (
 							<span style={{ margin: '0 4px', fontSize: 11, opacity: 0.6 }}>then</span>
 						) : (

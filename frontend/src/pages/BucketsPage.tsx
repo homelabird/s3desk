@@ -153,7 +153,7 @@ export function BucketsPage(props: Props) {
 						<Button type="primary" onClick={() => setCreateOpen(true)}>
 							Create bucket
 						</Button>
-						<Button onClick={() => navigate('/profiles?ui=full')}>
+						<Button onClick={() => navigate('/profiles?ui=full')} aria-label="View and edit profiles">
 							Check profiles
 						</Button>
 					</Space>

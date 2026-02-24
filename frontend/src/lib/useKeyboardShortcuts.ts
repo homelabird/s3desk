@@ -13,7 +13,7 @@ export function useKeyboardShortcuts(navigate: (path: string) => void) {
 		const handler = (e: KeyboardEvent) => {
 			const target = e.target as HTMLElement | null
 			const tag = target?.tagName?.toLowerCase()
-			const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable
+			const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable === true
 			if (isInput) return
 
 			if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
