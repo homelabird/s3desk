@@ -331,6 +331,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profiles/{profileId}/benchmark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a bandwidth benchmark against the profile storage
+         * @description Uploads a small test file, downloads it back, then deletes it.
+         *     Returns upload/download throughput so users can gauge connection speed.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    profileId: components["parameters"]["ProfileId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileBenchmarkResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profiles/{profileId}/export": {
         parameters: {
             query?: never;
@@ -2434,6 +2481,37 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        ProfileBenchmarkResponse: {
+            ok: boolean;
+            message?: string;
+            /**
+             * Format: int64
+             * @description Upload throughput in bits per second.
+             */
+            uploadBps?: number | null;
+            /**
+             * Format: int64
+             * @description Download throughput in bits per second.
+             */
+            downloadBps?: number | null;
+            /**
+             * Format: int64
+             * @description Upload duration in milliseconds.
+             */
+            uploadMs?: number | null;
+            /**
+             * Format: int64
+             * @description Download duration in milliseconds.
+             */
+            downloadMs?: number | null;
+            /**
+             * Format: int64
+             * @description Size of the test file in bytes.
+             */
+            fileSizeBytes?: number | null;
+            /** @description Whether the test file was successfully deleted. */
+            cleanedUp: boolean;
         };
         /** @enum {string} */
         ProfileTLSMode: "disabled" | "mtls";

@@ -203,6 +203,17 @@ type ProfileTestResponse struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
+type ProfileBenchmarkResponse struct {
+	OK             bool    `json:"ok"`
+	Message        string  `json:"message,omitempty"`
+	UploadBps      *int64  `json:"uploadBps,omitempty"`
+	DownloadBps    *int64  `json:"downloadBps,omitempty"`
+	UploadMs       *int64  `json:"uploadMs,omitempty"`
+	DownloadMs     *int64  `json:"downloadMs,omitempty"`
+	FileSizeBytes  *int64  `json:"fileSizeBytes,omitempty"`
+	CleanedUp      bool    `json:"cleanedUp"`
+}
+
 type ProfileTLSMode string
 
 const (

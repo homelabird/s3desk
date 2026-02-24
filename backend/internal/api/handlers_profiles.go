@@ -312,6 +312,36 @@ func (s *server) handleTestProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+func (s *server) handleBenchmarkProfile(w http.ResponseWriter, r *http.Request) {
+	profileID := chi.URLParam(r, "profileId")
+	if profileID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "profileId is required", nil)
+		return
+	}
+
+	resp, err := s.jobs.BenchmarkConnectivity(r.Context(), profileID)
+	if err != nil {
+		switch {
+		case errors.Is(err, jobs.ErrProfileNotFound):
+			writeError(w, http.StatusNotFound, "not_found", "profile not found", map[string]any{"profileId": profileID})
+			return
+		case errors.Is(err, jobs.ErrRcloneNotFound):
+			writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required to run benchmarks (install it or set RCLONE_PATH)", nil)
+			return
+		default:
+			var inc *jobs.RcloneIncompatibleError
+			if errors.As(err, &inc) {
+				writeError(w, http.StatusBadRequest, "transfer_engine_incompatible", "rclone version is incompatible", map[string]any{"currentVersion": inc.CurrentVersion, "minVersion": inc.MinVersion})
+				return
+			}
+		}
+		writeError(w, http.StatusBadRequest, "benchmark_failed", "benchmark failed", map[string]any{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (s *server) handleExportProfile(w http.ResponseWriter, r *http.Request) {
 	profileID := chi.URLParam(r, "profileId")
 	if profileID == "" {

@@ -202,6 +202,28 @@ paths:
         "404":
           $ref: "#/components/responses/ErrorResponse"
 
+  /profiles/{profileId}/benchmark:
+    post:
+      tags: [Profiles]
+      summary: Run a bandwidth benchmark against the profile storage
+      description: |
+        Uploads a small test file, downloads it back, then deletes it.
+        Returns upload/download throughput so users can gauge connection speed.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileBenchmarkResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+
   /profiles/{profileId}/export:
     get:
       tags: [Profiles]
@@ -1704,6 +1726,41 @@ components:
               - storageType: detected storage type (ceph, aws-s3, s3-compatible, unknown).
               - storageTypeSource: detection source (server-header, endpoint, default, none).
               - error: error string when ok=false.
+
+    ProfileBenchmarkResponse:
+      type: object
+      required: [ok, cleanedUp]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        uploadBps:
+          type: integer
+          format: int64
+          nullable: true
+          description: Upload throughput in bits per second.
+        downloadBps:
+          type: integer
+          format: int64
+          nullable: true
+          description: Download throughput in bits per second.
+        uploadMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: Upload duration in milliseconds.
+        downloadMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: Download duration in milliseconds.
+        fileSizeBytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: Size of the test file in bytes.
+        cleanedUp:
+          type: boolean
+          description: Whether the test file was successfully deleted.
 
     ProfileTLSMode:
       type: string
