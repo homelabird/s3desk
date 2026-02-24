@@ -201,12 +201,6 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	trimPtr(&req.AuthProvider)
 	trimPtr(&req.ConfigFile)
 	trimPtr(&req.ConfigProfile)
-	trimPtr(&req.ProjectNumber)
-	trimPtr(&req.Namespace)
-	trimPtr(&req.Compartment)
-	trimPtr(&req.AuthProvider)
-	trimPtr(&req.ConfigFile)
-	trimPtr(&req.ConfigProfile)
 
 	if req.Name != nil && *req.Name == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "name must not be empty", nil)
