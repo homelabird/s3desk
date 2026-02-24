@@ -3,6 +3,7 @@ package jobs
 import (
 	"bufio"
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -2316,7 +2317,7 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	if _, err := io.CopyN(tmpFile, rand.New(rand.NewSource(time.Now().UnixNano())), benchFileSize); err != nil { //nolint:gosec // not crypto, just benchmark filler
+	if _, err := io.CopyN(tmpFile, cryptorand.Reader, benchFileSize); err != nil {
 		tmpFile.Close()
 		return models.ProfileBenchmarkResponse{}, fmt.Errorf("write temp file: %w", err)
 	}
