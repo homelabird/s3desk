@@ -64,7 +64,7 @@
 
 .tabButtonDisabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.65;
 }
 
 .tabButton:focus-visible {

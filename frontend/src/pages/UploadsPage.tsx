@@ -136,7 +136,7 @@ export function UploadsPage(props: Props) {
 					flexWrap: 'wrap',
 				}}
 			>
-				<Typography.Title level={3} style={{ margin: 0 }}>
+				<Typography.Title level={2} style={{ margin: 0 }}>
 					Uploads
 				</Typography.Title>
 				<Space wrap>

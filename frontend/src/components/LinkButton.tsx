@@ -62,7 +62,7 @@ export function LinkButton(props: LinkButtonProps) {
 
 	if (disabled) {
 		return (
-			<span className={classes} style={style} aria-disabled="true">
+			<span className={classes} style={style} role="link" aria-disabled="true">
 				{children}
 			</span>
 		)

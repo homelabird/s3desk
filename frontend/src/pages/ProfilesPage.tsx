@@ -286,7 +286,7 @@ export function ProfilesPage(props: Props) {
 	return (
 		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
 				<div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-					<Typography.Title level={3} style={{ margin: 0 }}>
+					<Typography.Title level={2} style={{ margin: 0 }}>
 						Profiles
 					</Typography.Title>
 					<Space wrap>

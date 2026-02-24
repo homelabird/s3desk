@@ -314,7 +314,7 @@ function ProfilesList(props: {
 					</div>
 
 					{profilesState.status === 'loading' ? (
-						<div style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>Loading profiles…</div>
+						<div role="status" style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>Loading profiles…</div>
 					) : profilesState.status === 'error' ? (
 						<div style={{ padding: 14, fontSize: 13 }}>
 							<div>
@@ -452,7 +452,7 @@ export default function LightApp() {
 
 	if (metaState.status === 'loading') {
 		return (
-			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+			<div role="status" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
 				<div style={{ width: 520, maxWidth: '100%', textAlign: 'center' }}>
 					<div style={{ fontSize: 18, fontWeight: 700 }}>Loading…</div>
 					<div style={{ marginTop: 8, opacity: 0.75 }}>Connecting to the backend.</div>
