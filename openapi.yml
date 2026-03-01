@@ -783,6 +783,45 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
         "404":
           $ref: "#/components/responses/ErrorResponse"
+    head:
+      tags: [Objects]
+      summary: Check object metadata via signed proxy URL
+      description: |
+        Same as GET but returns only headers (Content-Type, Content-Length, ETag,
+        Last-Modified, Content-Disposition) without the response body.
+      servers:
+        - url: http://127.0.0.1:8080
+          description: Default local server (no /api/v1 prefix)
+      parameters:
+        - name: profileId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: bucket
+          in: query
+          required: true
+          schema: { type: string }
+        - name: key
+          in: query
+          required: true
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK (headers only, no body)
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
 
   /buckets/{bucket}/objects/favorites:
     get:

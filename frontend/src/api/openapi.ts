@@ -1259,7 +1259,38 @@ export interface paths {
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Check object metadata via signed proxy URL
+         * @description Same as GET but returns only headers (Content-Type, Content-Length, ETag,
+         *     Last-Modified, Content-Disposition) without the response body.
+         */
+        head: {
+            parameters: {
+                query: {
+                    profileId: string;
+                    bucket: string;
+                    key: string;
+                    expires: number;
+                    sig: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK (headers only, no body) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+            };
+        };
         patch?: never;
         trace?: never;
     };
