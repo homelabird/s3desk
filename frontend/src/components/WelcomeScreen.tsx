@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 
 type StepItem = {
 	icon: ReactNode
@@ -46,15 +46,17 @@ type Props = {
 }
 
 export function WelcomeScreen(props: Props) {
+	const [hovered, setHovered] = useState(false)
+
 	return (
 		<div style={cardStyle} data-testid="welcome-screen">
 			<div style={{ textAlign: 'center' }}>
-				<div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Welcome to S3Desk</div>
-				<div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.5, maxWidth: 480, margin: '0 auto' }}>
+				<h2 style={{ fontSize: 15, fontWeight: 800, marginBottom: 6, marginTop: 0 }}>Welcome to S3Desk</h2>
+				<p style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.5, maxWidth: 480, margin: '0 auto' }}>
 					A dashboard for managing cloud object storage.
 					<br />
 					Connect your S3, Azure, or GCS account and start browsing in minutes.
-				</div>
+				</p>
 			</div>
 
 			<div style={{ height: 20 }} />
@@ -62,9 +64,9 @@ export function WelcomeScreen(props: Props) {
 			<div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
 				{steps.map((step) => (
 					<div key={step.title} style={stepCardStyle}>
-						<div style={{ fontSize: 24, marginBottom: 8 }}>{step.icon}</div>
+						<div style={{ fontSize: 24, marginBottom: 8 }} aria-hidden="true">{step.icon}</div>
 						<div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{step.title}</div>
-						<div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.4 }}>{step.description}</div>
+						<div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.4 }}>{step.description}</div>
 					</div>
 				))}
 			</div>
@@ -76,15 +78,19 @@ export function WelcomeScreen(props: Props) {
 					type="button"
 					onClick={props.onGetStarted}
 					data-testid="welcome-get-started"
+					onMouseEnter={() => setHovered(true)}
+					onMouseLeave={() => setHovered(false)}
 					style={{
-						border: '1px solid #1d4ed8',
-						background: '#1d4ed8',
+						border: '1px solid',
+						borderColor: hovered ? '#1e40af' : '#1d4ed8',
+						background: hovered ? '#1e40af' : '#1d4ed8',
 						color: '#fff',
 						borderRadius: 10,
 						padding: '10px 24px',
 						fontWeight: 700,
 						fontSize: 14,
 						cursor: 'pointer',
+						transition: 'background 150ms ease, border-color 150ms ease',
 					}}
 				>
 					Get started — Create your first profile

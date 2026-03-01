@@ -37,4 +37,14 @@ describe('KeyboardShortcutGuide', () => {
 		fireEvent.keyDown(document, { key: 'Escape' })
 		expect(onClose).toHaveBeenCalledTimes(1)
 	})
+
+	it('dialog has aria-modal attribute', () => {
+		render(<KeyboardShortcutGuide open={true} onClose={vi.fn()} />)
+		expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true')
+	})
+
+	it('uses a semantic heading for the title', () => {
+		render(<KeyboardShortcutGuide open={true} onClose={vi.fn()} />)
+		expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Keyboard shortcuts')
+	})
 })

@@ -16,7 +16,7 @@ const iconStyle: CSSProperties = {
 	border: '1px solid #94a3b8',
 	fontSize: 10,
 	fontWeight: 700,
-	color: '#64748b',
+	color: '#475569',
 	cursor: 'help',
 	userSelect: 'none',
 	verticalAlign: 'middle',
