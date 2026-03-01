@@ -169,7 +169,7 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 		}
 
 	default:
-		return fmt.Errorf("unknown provider")
+		return fmt.Errorf("unknown provider: %s", req.Provider)
 	}
 	return nil
 }

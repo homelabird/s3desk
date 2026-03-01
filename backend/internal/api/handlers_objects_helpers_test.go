@@ -298,7 +298,7 @@ func TestValidateCreateProfileProvider(t *testing.T) {
 			req: models.ProfileCreateRequest{
 				Provider: "unknown_provider",
 			},
-			wantErr: "unknown provider",
+			wantErr: "unknown provider: unknown_provider",
 		},
 	}
 
