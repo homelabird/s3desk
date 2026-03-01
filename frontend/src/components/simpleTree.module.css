@@ -15,11 +15,11 @@
 }
 
 .row:hover {
-  background: #f5f5f5;
+  background: var(--s3d-color-bg-tertiary);
 }
 
 .rowSelected {
-  background: rgba(11, 94, 215, 0.12);
+  background: var(--s3d-color-primary-bg);
 }
 
 .toggleButton {
@@ -33,7 +33,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--s3d-color-text-secondary);
 }
 
 .toggleButton:hover {
@@ -77,7 +77,7 @@
 }
 
 .labelButton:focus-visible {
-  outline: 2px solid #1677ff;
+  outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
 }
 
@@ -92,8 +92,8 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  border: 2px solid #d9d9d9;
-  border-top-color: #0b5ed7;
+  border: 2px solid var(--s3d-color-border-strong);
+  border-top-color: var(--s3d-color-primary);
   animation: spin 0.9s linear infinite;
   flex: 0 0 auto;
 }

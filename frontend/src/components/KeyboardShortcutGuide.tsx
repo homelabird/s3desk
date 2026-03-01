@@ -30,20 +30,20 @@ const overlayStyle: CSSProperties = {
 }
 
 const cardStyle: CSSProperties = {
-	background: '#fff',
-	borderRadius: 12,
+	background: 'var(--s3d-color-bg)',
+	borderRadius: 'var(--s3d-radius-lg)',
 	padding: 24,
 	width: 480,
 	maxWidth: '100%',
 	maxHeight: '80vh',
 	overflow: 'auto',
-	boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+	boxShadow: 'var(--s3d-shadow-md)',
 }
 
 const kbdStyle: CSSProperties = {
 	display: 'inline-block',
 	background: '#f1f5f9',
-	border: '1px solid #cbd5e1',
+	border: '1px solid var(--s3d-color-border-input)',
 	borderRadius: 4,
 	padding: '2px 6px',
 	fontSize: 12,

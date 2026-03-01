@@ -19,7 +19,7 @@ export function FormField(props: Props) {
 			<span>
 				{props.label}
 				{props.required ? (
-					<span aria-hidden="true" style={{ marginLeft: 4, color: '#dc2626' }}>
+					<span aria-hidden="true" style={{ marginLeft: 4, color: 'var(--s3d-color-error)' }}>
 						*
 					</span>
 				) : null}
@@ -51,7 +51,7 @@ export function FormField(props: Props) {
 			) : null}
 
 			{props.error ? (
-				<div id={errorId} role="alert" style={{ marginTop: 6, fontSize: 12, color: '#b91c1c', lineHeight: 1.35 }}>
+				<div id={errorId} role="alert" style={{ marginTop: 6, fontSize: 12, color: 'var(--s3d-color-error-dark)', lineHeight: 1.35 }}>
 					{props.error}
 				</div>
 			) : null}

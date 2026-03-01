@@ -11,11 +11,11 @@
 }
 
 .tabListLine {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--s3d-color-border);
 }
 
 .tabListCard {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--s3d-color-border);
   padding: 4px 4px 0;
 }
 
@@ -39,12 +39,12 @@
   padding: 10px 12px;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  color: rgba(0, 0, 0, 0.88);
+  color: var(--s3d-color-text);
 }
 
 .tabButtonLineActive {
-  border-bottom-color: #1677ff;
-  color: #1677ff;
+  border-bottom-color: var(--s3d-color-focus);
+  color: var(--s3d-color-focus);
   font-weight: 700;
 }
 
@@ -53,12 +53,12 @@
   border-bottom: none;
   background: transparent;
   padding: 6px 10px;
-  color: rgba(0, 0, 0, 0.88);
+  color: var(--s3d-color-text);
 }
 
 .tabButtonCardActive {
-  border-color: #d9d9d9;
-  background: #fff;
+  border-color: var(--s3d-color-border-strong);
+  background: var(--s3d-color-bg);
   font-weight: 700;
 }
 
@@ -68,7 +68,7 @@
 }
 
 .tabButton:focus-visible {
-  outline: 2px solid #1677ff;
+  outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
 }
 
@@ -76,39 +76,39 @@
   border: none;
   background: transparent;
   padding: 0 6px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--s3d-color-text-muted);
   cursor: pointer;
   border-radius: 6px;
 }
 
 .closeButton:hover {
-  color: rgba(0, 0, 0, 0.88);
+  color: var(--s3d-color-text);
   background: rgba(0, 0, 0, 0.04);
 }
 
 .closeButton:focus-visible {
-  outline: 2px solid #1677ff;
+  outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
 }
 
 .addButton {
   margin-left: auto;
-  border: 1px solid #d9d9d9;
-  background: #fff;
-  color: rgba(0, 0, 0, 0.88);
-  border-radius: 8px;
+  border: 1px solid var(--s3d-color-border-strong);
+  background: var(--s3d-color-bg);
+  color: var(--s3d-color-text);
+  border-radius: var(--s3d-radius-sm);
   padding: 6px 10px;
   cursor: pointer;
   flex: 0 0 auto;
 }
 
 .addButton:hover {
-  border-color: #1677ff;
-  color: #1677ff;
+  border-color: var(--s3d-color-focus);
+  color: var(--s3d-color-focus);
 }
 
 .addButton:focus-visible {
-  outline: 2px solid #1677ff;
+  outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
 }
 

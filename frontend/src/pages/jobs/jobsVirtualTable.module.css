@@ -1,6 +1,6 @@
 .frame {
 	border: 1px solid var(--jvt-border);
-	border-radius: 10px;
+	border-radius: var(--s3d-radius-md);
 	background: var(--jvt-bg);
 	overflow: hidden;
 }

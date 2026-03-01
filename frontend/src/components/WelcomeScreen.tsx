@@ -25,19 +25,19 @@ const steps: StepItem[] = [
 ]
 
 const cardStyle: CSSProperties = {
-	border: '1px solid #e5e7eb',
-	borderRadius: 12,
+	border: '1px solid var(--s3d-color-border-secondary)',
+	borderRadius: 'var(--s3d-radius-lg)',
 	padding: 20,
-	background: '#fff',
+	background: 'var(--s3d-color-bg)',
 }
 
 const stepCardStyle: CSSProperties = {
 	flex: '1 1 0',
 	minWidth: 160,
-	border: '1px solid #e5e7eb',
-	borderRadius: 10,
+	border: '1px solid var(--s3d-color-border-secondary)',
+	borderRadius: 'var(--s3d-radius-md)',
 	padding: 16,
-	background: '#fafbfc',
+	background: 'var(--s3d-color-bg-card)',
 	textAlign: 'center',
 }
 
@@ -82,10 +82,10 @@ export function WelcomeScreen(props: Props) {
 					onMouseLeave={() => setHovered(false)}
 					style={{
 						border: '1px solid',
-						borderColor: hovered ? '#1e40af' : '#1d4ed8',
-						background: hovered ? '#1e40af' : '#1d4ed8',
-						color: '#fff',
-						borderRadius: 10,
+						borderColor: hovered ? 'var(--s3d-color-primary-hover)' : 'var(--s3d-color-primary-btn)',
+						background: hovered ? 'var(--s3d-color-primary-hover)' : 'var(--s3d-color-primary-btn)',
+						color: 'var(--s3d-color-bg)',
+						borderRadius: 'var(--s3d-radius-md)',
 						padding: '10px 24px',
 						fontWeight: 700,
 						fontSize: 14,

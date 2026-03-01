@@ -30,14 +30,14 @@ const popoverStyle: CSSProperties = {
 	transform: 'translateX(-50%)',
 	background: '#1e293b',
 	color: '#f1f5f9',
-	borderRadius: 8,
+	borderRadius: 'var(--s3d-radius-sm)',
 	padding: '8px 12px',
 	fontSize: 12,
 	lineHeight: 1.45,
 	maxWidth: 280,
 	width: 'max-content',
 	zIndex: 100,
-	boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+	boxShadow: 'var(--s3d-shadow-sm)',
 	whiteSpace: 'normal',
 }
 

@@ -73,8 +73,8 @@
 }
 
 .panelCard {
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-sm);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -83,8 +83,8 @@
 
 .panelHeader {
   padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-bottom: 1px solid var(--s3d-color-border);
+  background: var(--s3d-color-bg-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -131,11 +131,11 @@
 }
 
 .favoritesItem:hover {
-  background: #f5f5f5;
+  background: var(--s3d-color-bg-tertiary);
 }
 
 .favoritesItem:disabled {
-  color: #bfbfbf;
+  color: var(--s3d-color-border-strong);
   cursor: not-allowed;
 }
 
@@ -147,7 +147,7 @@
 }
 
 .favoritesStar {
-  color: #faad14;
+  color: var(--s3d-color-star);
   font-size: 12px;
 }
 
@@ -176,7 +176,7 @@
 .detailsCollapsed {
   align-items: center;
   justify-content: center;
-  background: #fafafa;
+  background: var(--s3d-color-bg-secondary);
 }
 
 .resizeHandle {
@@ -192,7 +192,7 @@
 .resizeBar {
   width: 2px;
   border-radius: 999px;
-  background: #f0f0f0;
+  background: var(--s3d-color-border);
   flex: 1;
 }
 
@@ -246,8 +246,8 @@
 }
 
 .dropZoneCard {
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-sm);
   overflow: hidden;
   position: relative;
   display: flex;
@@ -259,8 +259,8 @@
 
 .selectionBar {
   padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #e6f4ff;
+  border-bottom: 1px solid var(--s3d-color-border);
+  background: var(--s3d-color-primary-light);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -271,25 +271,25 @@
 
 .listHeaderRow {
   padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-bottom: 1px solid var(--s3d-color-border);
+  background: var(--s3d-color-bg-secondary);
   min-width: 0;
   overflow: hidden;
 }
 
 .toolbarSkeleton {
   padding: 10px 12px;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  background: #fafafa;
-  color: rgba(0, 0, 0, 0.65);
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-sm);
+  background: var(--s3d-color-bg-secondary);
+  color: var(--s3d-color-text-secondary);
 }
 
 .controlsSkeleton {
   padding: 8px 12px;
   border: 1px dashed #e5e5e5;
-  border-radius: 8px;
-  color: rgba(0, 0, 0, 0.65);
+  border-radius: var(--s3d-radius-sm);
+  color: var(--s3d-color-text-secondary);
 }
 
 .listSkeleton,
@@ -299,7 +299,7 @@
   justify-content: center;
   padding: 16px;
   min-height: 120px;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--s3d-color-text-secondary);
 }
 
 .listGridBase {
@@ -330,7 +330,7 @@
 }
 
 .listScroller:focus-visible {
-  outline: 2px solid #1677ff;
+  outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
 }
 
