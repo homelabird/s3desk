@@ -1557,6 +1557,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/{uploadId}/chunks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get upload chunk status
+         * @description Returns which chunks have been successfully uploaded for a given file within an upload session. Works for both staging and multipart upload modes.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Relative file path within the upload session */
+                    path: string;
+                    /** @description Size of each chunk in bytes */
+                    chunkSize: number;
+                    /** @description Total file size in bytes */
+                    fileSize: number;
+                    /** @description Total number of chunks (staging mode only) */
+                    total?: number;
+                };
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    uploadId: components["parameters"]["UploadId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UploadChunkState"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                502: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/uploads/{uploadId}/multipart/complete": {
         parameters: {
             query?: never;
@@ -2735,6 +2792,10 @@ export interface components {
             headers?: {
                 [key: string]: string;
             };
+        };
+        UploadChunkState: {
+            /** @description Zero-based indices of chunks that have been successfully uploaded */
+            present: number[];
         };
         UploadMultipartCompleteRequest: {
             path: string;
