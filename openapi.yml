@@ -783,6 +783,45 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
         "404":
           $ref: "#/components/responses/ErrorResponse"
+    head:
+      tags: [Objects]
+      summary: Check object metadata via signed proxy URL
+      description: |
+        Same as GET but returns only headers (Content-Type, Content-Length, ETag,
+        Last-Modified, Content-Disposition) without the response body.
+      servers:
+        - url: http://127.0.0.1:8080
+          description: Default local server (no /api/v1 prefix)
+      parameters:
+        - name: profileId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: bucket
+          in: query
+          required: true
+          schema: { type: string }
+        - name: key
+          in: query
+          required: true
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: sig
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK (headers only, no body)
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
 
   /buckets/{bucket}/objects/favorites:
     get:
@@ -954,6 +993,48 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
         "404":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /uploads/{uploadId}/chunks:
+    get:
+      tags: [Uploads]
+      summary: Get upload chunk status
+      description: Returns which chunks have been successfully uploaded for a given file within an upload session. Works for both staging and multipart upload modes.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/UploadId"
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: Relative file path within the upload session
+        - name: chunkSize
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+          description: Size of each chunk in bytes
+        - name: fileSize
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+          description: Total file size in bytes
+        - name: total
+          in: query
+          schema: { type: integer, minimum: 1 }
+          description: Total number of chunks (staging mode only)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadChunkState"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "502":
           $ref: "#/components/responses/ErrorResponse"
 
   /uploads/{uploadId}/multipart/complete:
@@ -2098,6 +2179,15 @@ components:
         headers:
           type: object
           additionalProperties: { type: string }
+
+    UploadChunkState:
+      type: object
+      required: [present]
+      properties:
+        present:
+          type: array
+          items: { type: integer }
+          description: Zero-based indices of chunks that have been successfully uploaded
 
     UploadMultipartCompleteRequest:
       type: object

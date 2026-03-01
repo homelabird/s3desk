@@ -74,6 +74,13 @@ func openSQLite(dbPath string) (*gorm.DB, error) {
 	if err := sqlDB.Exec(`PRAGMA journal_mode=WAL;`).Error; err != nil {
 		return nil, err
 	}
+	// NORMAL is safe with WAL and avoids an fsync on every commit, which
+	// significantly improves write throughput on spinning disks and
+	// cloud-backed volumes while keeping the durability guarantees
+	// needed for a desktop application.
+	if err := sqlDB.Exec(`PRAGMA synchronous=NORMAL;`).Error; err != nil {
+		return nil, err
+	}
 
 	if err := migrate(sqlDB); err != nil {
 		return nil, err
