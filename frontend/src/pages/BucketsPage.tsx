@@ -159,16 +159,16 @@ export function BucketsPage(props: Props) {
 					</Space>
 				</Empty>
 			) : (
-				<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
+				<div style={{ border: '1px solid var(--s3d-color-border)', borderRadius: 'var(--s3d-radius-sm)', overflowX: 'auto' }}>
 					<table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
 						<caption className="sr-only">List of buckets</caption>
 						<thead>
-							<tr style={{ background: '#fafafa' }}>
-								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>Name</th>
-								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+							<tr style={{ background: 'var(--s3d-color-bg-secondary)' }}>
+								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>Name</th>
+								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 220 }}>
 									CreatedAt
 								</th>
-								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
+								<th scope="col" style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 220 }}>
 									Actions
 								</th>
 							</tr>
@@ -176,10 +176,10 @@ export function BucketsPage(props: Props) {
 						<tbody>
 							{buckets.map((row) => (
 								<tr key={row.name}>
-									<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+									<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
 										<Typography.Text strong>{row.name}</Typography.Text>
 									</td>
-									<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+									<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
 										{row.createdAt ? (
 											<Typography.Text code title={row.createdAt}>
 												{formatDateTime(row.createdAt)}
@@ -188,7 +188,7 @@ export function BucketsPage(props: Props) {
 											<Typography.Text type="secondary">-</Typography.Text>
 										)}
 									</td>
-									<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+									<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
 										<Space wrap>
 											<Tooltip title={policySupported ? 'Manage bucket policy' : policyUnsupportedReason}>
 												<span>

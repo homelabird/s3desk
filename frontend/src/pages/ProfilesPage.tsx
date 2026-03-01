@@ -394,15 +394,15 @@ export function ProfilesPage(props: Props) {
 					</Button>
 				</Empty>
 			) : (
-				<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
+				<div style={{ border: '1px solid var(--s3d-color-border)', borderRadius: 'var(--s3d-radius-sm)', overflowX: 'auto' }}>
 					<table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
 						<thead>
-							<tr style={{ background: '#fafafa' }}>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 240 }}>Name</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 180 }}>Provider</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>Connection</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>Flags</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 240 }}>Actions</th>
+							<tr style={{ background: 'var(--s3d-color-bg-secondary)' }}>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 240 }}>Name</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 180 }}>Provider</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>Connection</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 220 }}>Flags</th>
+								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 240 }}>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -482,18 +482,18 @@ export function ProfilesPage(props: Props) {
 
 								return (
 									<tr key={row.id}>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
 											<Space>
 												<Typography.Text strong>{row.name}</Typography.Text>
 												{props.profileId === row.id ? <Typography.Text type="success">Active</Typography.Text> : null}
 											</Space>
 										</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
 											<Typography.Text code>{providerLabel}</Typography.Text>
 										</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>{connectionNode}</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>{flagsNode}</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>{connectionNode}</td>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>{flagsNode}</td>
+										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
 											<Space wrap>
 												<Button size="small" onClick={() => props.setProfileId(row.id)}>
 													Use

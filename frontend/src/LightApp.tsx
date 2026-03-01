@@ -41,7 +41,7 @@ function LightErrorCard(props: { title: string; hint?: ReactNode; onRetry?: () =
 
 			<div style={{ height: 16 }} />
 
-			<div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, background: '#fff' }}>
+			<div style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', padding: 16, background: 'var(--s3d-color-bg)' }}>
 				<div style={{ fontWeight: 700 }}>Backend connection failed</div>
 				<div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>{props.title}</div>
 				{props.hint ? <div>{props.hint}</div> : null}
@@ -51,9 +51,9 @@ function LightErrorCard(props: { title: string; hint?: ReactNode; onRetry?: () =
 							type="button"
 							onClick={props.onRetry}
 							style={{
-								border: '1px solid #cbd5e1',
-								background: '#fff',
-								borderRadius: 10,
+								border: '1px solid var(--s3d-color-border-input)',
+								background: 'var(--s3d-color-bg)',
+								borderRadius: 'var(--s3d-radius-md)',
 								padding: '8px 12px',
 								fontWeight: 600,
 								cursor: 'pointer',
@@ -101,12 +101,12 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 
 			<div style={{ height: 16 }} />
 
-			<div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, background: '#fff' }}>
+			<div style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', padding: 16, background: 'var(--s3d-color-bg)' }}>
 				<div
 					style={{
-						border: `1px solid ${showSavedTokenWarning ? '#facc15' : '#93c5fd'}`,
-						background: showSavedTokenWarning ? '#fffbeb' : '#eff6ff',
-						borderRadius: 10,
+						border: `1px solid ${showSavedTokenWarning ? 'var(--s3d-color-warning-border)' : 'var(--s3d-color-info-border)'}`,
+						background: showSavedTokenWarning ? 'var(--s3d-color-warning-bg)' : 'var(--s3d-color-info-bg)',
+						borderRadius: 'var(--s3d-radius-md)',
 						padding: 12,
 						fontSize: 13,
 						lineHeight: 1.45,
@@ -121,8 +121,8 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 						style={{
 							marginTop: 12,
 							border: '1px solid #fca5a5',
-							background: '#fef2f2',
-							borderRadius: 10,
+							background: 'var(--s3d-color-error-bg)',
+							borderRadius: 'var(--s3d-radius-md)',
 							padding: 12,
 							fontSize: 13,
 						}}
@@ -151,8 +151,8 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 						style={{
 							marginTop: 6,
 							width: '100%',
-							border: '1px solid #cbd5e1',
-							borderRadius: 10,
+							border: '1px solid var(--s3d-color-border-input)',
+							borderRadius: 'var(--s3d-radius-md)',
 							padding: '10px 12px',
 							fontSize: 14,
 						}}
@@ -163,10 +163,10 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 							type="submit"
 							disabled={!token.trim() || submitting}
 							style={{
-								border: '1px solid #1d4ed8',
-								background: submitting ? '#93c5fd' : '#1d4ed8',
-								color: '#fff',
-								borderRadius: 10,
+								border: '1px solid var(--s3d-color-primary-btn)',
+								background: submitting ? 'var(--s3d-color-info-border)' : '#1d4ed8',
+								color: 'var(--s3d-color-bg)',
+								borderRadius: 'var(--s3d-radius-md)',
 								padding: '9px 12px',
 								fontWeight: 700,
 								cursor: submitting ? 'default' : 'pointer',
@@ -180,9 +180,9 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 								onClick={props.onClearSavedToken}
 								disabled={submitting}
 								style={{
-									border: '1px solid #cbd5e1',
-									background: '#fff',
-									borderRadius: 10,
+									border: '1px solid var(--s3d-color-border-input)',
+									background: 'var(--s3d-color-bg)',
+									borderRadius: 'var(--s3d-radius-md)',
 									padding: '9px 12px',
 									fontWeight: 700,
 									cursor: submitting ? 'default' : 'pointer',
@@ -257,10 +257,10 @@ function ProfilesList(props: {
 					<Link
 						to="/profiles?create=1"
 						style={{
-							border: '1px solid #1d4ed8',
-							background: '#1d4ed8',
-							color: '#fff',
-							borderRadius: 10,
+							border: '1px solid var(--s3d-color-primary-btn)',
+							background: 'var(--s3d-color-primary-btn)',
+							color: 'var(--s3d-color-bg)',
+							borderRadius: 'var(--s3d-radius-md)',
 							padding: '9px 12px',
 							fontWeight: 700,
 							textDecoration: 'none',
@@ -271,10 +271,10 @@ function ProfilesList(props: {
 					<Link
 						to="/profiles?advanced=1"
 						style={{
-							border: '1px solid #cbd5e1',
-							background: '#fff',
-							color: '#111827',
-							borderRadius: 10,
+							border: '1px solid var(--s3d-color-border-input)',
+							background: 'var(--s3d-color-bg)',
+							color: 'var(--s3d-color-text-dark)',
+							borderRadius: 'var(--s3d-radius-md)',
 							padding: '9px 12px',
 							fontWeight: 700,
 							textDecoration: 'none',
@@ -285,10 +285,10 @@ function ProfilesList(props: {
 					<Link
 						to="/profiles?settings=1"
 						style={{
-							border: '1px solid #cbd5e1',
-							background: '#fff',
-							color: '#111827',
-							borderRadius: 10,
+							border: '1px solid var(--s3d-color-border-input)',
+							background: 'var(--s3d-color-bg)',
+							color: 'var(--s3d-color-text-dark)',
+							borderRadius: 'var(--s3d-radius-md)',
 							padding: '9px 12px',
 							fontWeight: 700,
 							textDecoration: 'none',
@@ -302,7 +302,7 @@ function ProfilesList(props: {
 			<div style={{ height: 12 }} />
 
 			<main id="main">
-				<section style={{ border: '1px solid #e5e7eb', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
+				<section style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', background: 'var(--s3d-color-bg)', overflow: 'hidden' }}>
 					<div style={{ padding: 14, borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
 						<div style={{ fontWeight: 800 }}>Choose a profile</div>
 						{props.profileId ? (
@@ -329,9 +329,9 @@ function ProfilesList(props: {
 										setReloadNonce((v) => v + 1)
 									}}
 									style={{
-										border: '1px solid #cbd5e1',
-										background: '#fff',
-										borderRadius: 10,
+										border: '1px solid var(--s3d-color-border-input)',
+										background: 'var(--s3d-color-bg)',
+										borderRadius: 'var(--s3d-radius-md)',
 										padding: '8px 12px',
 										fontWeight: 700,
 										cursor: 'pointer',
@@ -361,7 +361,7 @@ function ProfilesList(props: {
 												textAlign: 'left',
 												padding: '12px 14px',
 												border: 'none',
-												background: selected ? '#eff6ff' : '#fff',
+												background: selected ? 'var(--s3d-color-info-bg)' : 'var(--s3d-color-bg)',
 												cursor: 'pointer',
 											}}
 											aria-pressed={selected}
@@ -382,7 +382,7 @@ function ProfilesList(props: {
 
 				<div style={{ height: 12 }} />
 
-				<section style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, background: '#fff' }}>
+				<section style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', padding: 14, background: 'var(--s3d-color-bg)' }}>
 					<div style={{ fontWeight: 800 }}>Open</div>
 					<div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 						{(['/buckets', '/objects', '/uploads', '/jobs'] as const).map((path) => (
@@ -392,9 +392,9 @@ function ProfilesList(props: {
 								onClick={() => openDashboard(path)}
 								disabled={!props.profileId}
 								style={{
-									border: '1px solid #cbd5e1',
+									border: '1px solid var(--s3d-color-border-input)',
 									background: props.profileId ? '#fff' : '#f8fafc',
-									borderRadius: 10,
+									borderRadius: 'var(--s3d-radius-md)',
 									padding: '9px 12px',
 									fontWeight: 700,
 									cursor: props.profileId ? 'pointer' : 'not-allowed',
@@ -489,7 +489,7 @@ export default function LightApp() {
 	}
 
 	return (
-		<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#f8fafc' }}>
+		<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'var(--s3d-color-bg-page)' }}>
 			<div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 				{apiToken ? (
 					<button
@@ -499,9 +499,9 @@ export default function LightApp() {
 							setProfileId(null)
 						}}
 						style={{
-							border: '1px solid #cbd5e1',
-							background: '#fff',
-							borderRadius: 10,
+							border: '1px solid var(--s3d-color-border-input)',
+							background: 'var(--s3d-color-bg)',
+							borderRadius: 'var(--s3d-radius-md)',
 							padding: '8px 12px',
 							fontWeight: 700,
 							cursor: 'pointer',

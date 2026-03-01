@@ -1,5 +1,6 @@
 :root,
 .css-var-root {
+  /* ── Ant Design overrides ── */
   --ant-color-text-secondary: rgba(0, 0, 0, 0.82) !important;
   --ant-color-text-tertiary: rgba(0, 0, 0, 0.76) !important;
   --ant-color-text-quaternary: rgba(0, 0, 0, 0.7) !important;
@@ -10,6 +11,63 @@
   --ant-color-link: #0958d9 !important;
   --ant-color-link-hover: #0b5ed7 !important;
   --ant-color-link-active: #0b5ed7 !important;
+
+  /* ── S3Desk design tokens ── */
+
+  /* Primary / brand */
+  --s3d-color-primary: #0b5ed7;
+  --s3d-color-primary-hover: #1e40af;
+  --s3d-color-primary-btn: #1d4ed8;
+  --s3d-color-primary-light: #e6f4ff;
+  --s3d-color-primary-bg: rgba(22, 119, 255, 0.12);
+  --s3d-color-focus: #1677ff;
+
+  /* Backgrounds */
+  --s3d-color-bg: #fff;
+  --s3d-color-bg-secondary: #fafafa;
+  --s3d-color-bg-tertiary: #f5f5f5;
+  --s3d-color-bg-page: #f8fafc;
+  --s3d-color-bg-card: #fafbfc;
+
+  /* Borders */
+  --s3d-color-border: #f0f0f0;
+  --s3d-color-border-secondary: #e5e7eb;
+  --s3d-color-border-strong: #d9d9d9;
+  --s3d-color-border-input: #cbd5e1;
+
+  /* Text */
+  --s3d-color-text: rgba(0, 0, 0, 0.88);
+  --s3d-color-text-secondary: rgba(0, 0, 0, 0.65);
+  --s3d-color-text-muted: rgba(0, 0, 0, 0.45);
+  --s3d-color-text-dark: #111827;
+  --s3d-color-text-on-dark: rgba(255, 255, 255, 0.9);
+
+  /* Semantic – error */
+  --s3d-color-error: #dc2626;
+  --s3d-color-error-dark: #b91c1c;
+  --s3d-color-error-border: #fca5a5;
+  --s3d-color-error-bg: #fef2f2;
+
+  /* Semantic – warning */
+  --s3d-color-warning-border: #facc15;
+  --s3d-color-warning-bg: #fffbeb;
+
+  /* Semantic – info */
+  --s3d-color-info-bg: #eff6ff;
+  --s3d-color-info-border: #93c5fd;
+
+  /* Accent */
+  --s3d-color-star: #faad14;
+  --s3d-color-highlight: #fff1b8;
+
+  /* Radii */
+  --s3d-radius-sm: 8px;
+  --s3d-radius-md: 10px;
+  --s3d-radius-lg: 12px;
+
+  /* Shadows */
+  --s3d-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --s3d-shadow-md: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
 .ant-typography.ant-typography-secondary {
