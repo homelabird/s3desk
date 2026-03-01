@@ -40,18 +40,7 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		delimiter = "/"
 	}
 
-	maxKeys := 500
-	if raw := r.URL.Query().Get("maxKeys"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil {
-			maxKeys = parsed
-		}
-	}
-	if maxKeys < 1 {
-		maxKeys = 1
-	}
-	if maxKeys > 1000 {
-		maxKeys = 1000
-	}
+	maxKeys, _ := parseIntQueryClamped(r, "maxKeys", 500, 1, 1000)
 
 	token := r.URL.Query().Get("continuationToken")
 
@@ -87,14 +76,13 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		Items:          make([]models.ObjectItem, 0, maxKeys),
 	}
 
-	commonPrefixSet := make(map[string]struct{}, 64)
-	foundToken := token == ""
-	var (
-		returned  int
-		truncated bool
-		nextToken string
-		stopped   bool
-	)
+	pag := listPaginator{
+		token:           token,
+		maxKeys:         maxKeys,
+		foundToken:      token == "",
+		commonPrefixSet: make(map[string]struct{}, 64),
+		cancel:          cancel,
+	}
 
 	listErr := decodeRcloneList(proc.stdout, func(entry rcloneListEntry) error {
 		key := entry.Path
@@ -112,27 +100,7 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 			if prefixKey == prefix && prefixKey != "" {
 				return nil
 			}
-			entryToken := rcloneTokenForPrefix(prefixKey)
-			if !foundToken {
-				if rcloneMatchToken(token, entryToken, prefixKey) {
-					foundToken = true
-				}
-				return nil
-			}
-			if _, ok := commonPrefixSet[prefixKey]; ok {
-				return nil
-			}
-			commonPrefixSet[prefixKey] = struct{}{}
-			resp.CommonPrefixes = append(resp.CommonPrefixes, prefixKey)
-			returned++
-			if returned >= maxKeys {
-				truncated = true
-				nextToken = entryToken
-				stopped = true
-				cancel()
-				return errRcloneListStop
-			}
-			return nil
+			return pag.addPrefix(rcloneTokenForPrefix(prefixKey), prefixKey, &resp)
 		}
 
 		objKey := rcloneObjectKey(prefix, key, secrets.PreserveLeadingSlash)
@@ -143,34 +111,11 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 			if objKey == prefix {
 				return nil
 			}
-			entryToken := rcloneTokenForPrefix(objKey)
-			if !foundToken {
-				if rcloneMatchToken(token, entryToken, objKey) {
-					foundToken = true
-				}
-				return nil
-			}
-			if _, ok := commonPrefixSet[objKey]; ok {
-				return nil
-			}
-			commonPrefixSet[objKey] = struct{}{}
-			resp.CommonPrefixes = append(resp.CommonPrefixes, objKey)
-			returned++
-			if returned >= maxKeys {
-				truncated = true
-				nextToken = entryToken
-				stopped = true
-				cancel()
-				return errRcloneListStop
-			}
-			return nil
+			return pag.addPrefix(rcloneTokenForPrefix(objKey), objKey, &resp)
 		}
 
 		entryToken := rcloneTokenForObject(objKey)
-		if !foundToken {
-			if rcloneMatchToken(token, entryToken, objKey) {
-				foundToken = true
-			}
+		if !pag.advanceToken(entryToken, objKey) {
 			return nil
 		}
 
@@ -185,15 +130,7 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 			item.LastModified = lm
 		}
 		resp.Items = append(resp.Items, item)
-		returned++
-		if returned >= maxKeys {
-			truncated = true
-			nextToken = entryToken
-			stopped = true
-			cancel()
-			return errRcloneListStop
-		}
-		return nil
+		return pag.incrementAndCheck(entryToken)
 	})
 
 	waitErr := proc.wait()
@@ -204,7 +141,7 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "s3_error", "failed to list objects", map[string]any{"error": listErr.Error()})
 		return
 	}
-	if waitErr != nil && !stopped {
+	if waitErr != nil && !pag.stopped {
 		writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to list objects (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -214,9 +151,9 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp.IsTruncated = truncated
-	if truncated && nextToken != "" {
-		resp.NextContinuationToken = &nextToken
+	resp.IsTruncated = pag.truncated
+	if pag.truncated && pag.nextToken != "" {
+		resp.NextContinuationToken = &pag.nextToken
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -245,18 +182,7 @@ func (s *server) handleSearchObjects(w http.ResponseWriter, r *http.Request) {
 
 	prefix := strings.TrimSpace(r.URL.Query().Get("prefix"))
 
-	limit := 50
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil {
-			limit = parsed
-		}
-	}
-	if limit < 1 {
-		limit = 1
-	}
-	if limit > 200 {
-		limit = 200
-	}
+	limit, _ := parseIntQueryClamped(r, "limit", 50, 1, 200)
 
 	var cursor *string
 	if raw := strings.TrimSpace(r.URL.Query().Get("cursor")); raw != "" {
@@ -273,45 +199,29 @@ func (s *server) handleSearchObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var minSizePtr *int64
-	if raw := strings.TrimSpace(r.URL.Query().Get("minSize")); raw != "" {
-		val, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || val < 0 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "minSize is invalid", map[string]any{"minSize": raw})
-			return
-		}
-		minSizePtr = &val
+	minSizePtr, err := parseSizeQueryParam(r, "minSize")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "minSize is invalid", map[string]any{"minSize": r.URL.Query().Get("minSize")})
+		return
 	}
-	var maxSizePtr *int64
-	if raw := strings.TrimSpace(r.URL.Query().Get("maxSize")); raw != "" {
-		val, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || val < 0 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "maxSize is invalid", map[string]any{"maxSize": raw})
-			return
-		}
-		maxSizePtr = &val
+	maxSizePtr, err := parseSizeQueryParam(r, "maxSize")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "maxSize is invalid", map[string]any{"maxSize": r.URL.Query().Get("maxSize")})
+		return
 	}
 	if minSizePtr != nil && maxSizePtr != nil && *minSizePtr > *maxSizePtr {
 		minSizePtr, maxSizePtr = maxSizePtr, minSizePtr
 	}
 
-	var modifiedAfter string
-	var modifiedBefore string
-	if raw := strings.TrimSpace(r.URL.Query().Get("modifiedAfter")); raw != "" {
-		tm, err := parseSearchTimeParam(raw)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "modifiedAfter is invalid", map[string]any{"modifiedAfter": raw})
-			return
-		}
-		modifiedAfter = tm.UTC().Format(time.RFC3339Nano)
+	modifiedAfter, err := parseTimeQueryParam(r, "modifiedAfter")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "modifiedAfter is invalid", map[string]any{"modifiedAfter": r.URL.Query().Get("modifiedAfter")})
+		return
 	}
-	if raw := strings.TrimSpace(r.URL.Query().Get("modifiedBefore")); raw != "" {
-		tm, err := parseSearchTimeParam(raw)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "modifiedBefore is invalid", map[string]any{"modifiedBefore": raw})
-			return
-		}
-		modifiedBefore = tm.UTC().Format(time.RFC3339Nano)
+	modifiedBefore, err := parseTimeQueryParam(r, "modifiedBefore")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "modifiedBefore is invalid", map[string]any{"modifiedBefore": r.URL.Query().Get("modifiedBefore")})
+		return
 	}
 	if modifiedAfter != "" && modifiedBefore != "" && modifiedAfter > modifiedBefore {
 		modifiedAfter, modifiedBefore = modifiedBefore, modifiedAfter
@@ -361,18 +271,7 @@ func (s *server) handleGetObjectIndexSummary(w http.ResponseWriter, r *http.Requ
 
 	prefix := strings.TrimSpace(r.URL.Query().Get("prefix"))
 
-	sampleLimit := 10
-	if raw := r.URL.Query().Get("sampleLimit"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil {
-			sampleLimit = parsed
-		}
-	}
-	if sampleLimit < 0 {
-		sampleLimit = 0
-	}
-	if sampleLimit > 100 {
-		sampleLimit = 100
-	}
+	sampleLimit, _ := parseIntQueryClamped(r, "sampleLimit", 10, 0, 100)
 
 	resp, err := s.store.SummarizeObjectIndex(r.Context(), profileID, store.SummarizeObjectIndexInput{
 		Bucket:      bucket,
@@ -523,18 +422,7 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	expiresSeconds := 900
-	if raw := r.URL.Query().Get("expiresSeconds"); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil {
-			expiresSeconds = parsed
-		}
-	}
-	if expiresSeconds < 60 {
-		expiresSeconds = 60
-	}
-	if expiresSeconds > 3600 {
-		expiresSeconds = 3600
-	}
+	expiresSeconds, _ := parseIntQueryClamped(r, "expiresSeconds", 900, 60, 3600)
 	expires := time.Duration(expiresSeconds) * time.Second
 
 	proxyRaw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("proxy")))
@@ -701,31 +589,12 @@ func (s *server) handleDeleteObjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tmpFile, err := os.CreateTemp("", "rclone-delete-*.txt")
+	tmpPath, err := writeLinesToTempFile("rclone-delete-*.txt", keys)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
 		return
 	}
-	tmpPath := tmpFile.Name()
 	defer func() { _ = os.Remove(tmpPath) }()
-
-	writer := bufio.NewWriter(tmpFile)
-	for _, k := range keys {
-		if _, err := writer.WriteString(k + "\n"); err != nil {
-			_ = tmpFile.Close()
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
-			return
-		}
-	}
-	if err := writer.Flush(); err != nil {
-		_ = tmpFile.Close()
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
-		return
-	}
-	if err := tmpFile.Close(); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare delete list", map[string]any{"error": err.Error()})
-		return
-	}
 
 	args := []string{"delete", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
 	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, args, "delete-objects")
@@ -760,4 +629,80 @@ func parseSearchTimeParam(raw string) (time.Time, error) {
 		return time.Unix(0, ms*int64(time.Millisecond)).UTC(), nil
 	}
 	return time.Time{}, errors.New("invalid time")
+}
+
+// parseIntQueryClamped reads an integer query parameter, falling back to
+// defaultVal when missing or unparseable, and clamps the result to [min, max].
+func parseIntQueryClamped(r *http.Request, name string, defaultVal, min, max int) (int, error) {
+	v := defaultVal
+	if raw := r.URL.Query().Get(name); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return defaultVal, err
+		}
+		v = parsed
+	}
+	if v < min {
+		v = min
+	}
+	if v > max {
+		v = max
+	}
+	return v, nil
+}
+
+// parseSizeQueryParam reads an optional non-negative int64 query parameter.
+func parseSizeQueryParam(r *http.Request, name string) (*int64, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get(name))
+	if raw == "" {
+		return nil, nil
+	}
+	val, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || val < 0 {
+		return nil, errors.New(name + " is invalid")
+	}
+	return &val, nil
+}
+
+// parseTimeQueryParam reads an optional time query parameter and returns it as
+// an RFC3339Nano string, or "" if absent.
+func parseTimeQueryParam(r *http.Request, name string) (string, error) {
+	raw := strings.TrimSpace(r.URL.Query().Get(name))
+	if raw == "" {
+		return "", nil
+	}
+	tm, err := parseSearchTimeParam(raw)
+	if err != nil {
+		return "", err
+	}
+	return tm.UTC().Format(time.RFC3339Nano), nil
+}
+
+// writeLinesToTempFile creates a temporary file with each string written on a
+// separate line.  The caller is responsible for removing the file.
+func writeLinesToTempFile(pattern string, lines []string) (string, error) {
+	f, err := os.CreateTemp("", pattern)
+	if err != nil {
+		return "", err
+	}
+	tmpPath := f.Name()
+
+	w := bufio.NewWriter(f)
+	for _, line := range lines {
+		if _, err := w.WriteString(line + "\n"); err != nil {
+			_ = f.Close()
+			_ = os.Remove(tmpPath)
+			return "", err
+		}
+	}
+	if err := w.Flush(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	return tmpPath, nil
 }
