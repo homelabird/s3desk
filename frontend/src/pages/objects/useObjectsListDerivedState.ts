@@ -93,15 +93,30 @@ export function useObjectsListDerivedState(args: {
 		],
 	)
 
-	const rowIndexByObjectKey = useMemo(() => {
-		const out = new Map<string, number>()
+	const { rowIndexByObjectKey, visibleObjectKeys, orderedVisibleObjectKeys, visiblePrefixCount, visibleFileCount } = useMemo(() => {
+		const indexMap = new Map<string, number>()
+		const uniqueKeys = new Set<string>()
+		const ordered: string[] = []
+		let prefixCount = 0
+		let fileCount = 0
 		for (let i = 0; i < rows.length; i++) {
 			const row = rows[i]
 			if (row && row.kind === 'object') {
-				out.set(row.object.key, i)
+				indexMap.set(row.object.key, i)
+				uniqueKeys.add(row.object.key)
+				ordered.push(row.object.key)
+				fileCount++
+			} else if (row && row.kind === 'prefix') {
+				prefixCount++
 			}
 		}
-		return out
+		return {
+			rowIndexByObjectKey: indexMap,
+			visibleObjectKeys: Array.from(uniqueKeys),
+			orderedVisibleObjectKeys: ordered,
+			visiblePrefixCount: prefixCount,
+			visibleFileCount: fileCount,
+		}
 	}, [rows])
 
 	const { rawPrefixCount, rawFileCount } = useMemo(() => {
@@ -118,32 +133,6 @@ export function useObjectsListDerivedState(args: {
 
 	const rawTotalCount = rawPrefixCount + rawFileCount
 	const emptyKind = rawTotalCount === 0 ? 'empty' : rows.length === 0 ? 'noresults' : null
-
-	const visibleObjectKeys = useMemo(() => {
-		const set = new Set<string>()
-		for (const row of rows) {
-			if (row.kind === 'object') set.add(row.object.key)
-		}
-		return Array.from(set)
-	}, [rows])
-
-	const orderedVisibleObjectKeys = useMemo(() => {
-		const out: string[] = []
-		for (const row of rows) {
-			if (row.kind === 'object') out.push(row.object.key)
-		}
-		return out
-	}, [rows])
-
-	const { visiblePrefixCount, visibleFileCount } = useMemo(() => {
-		let prefixCount = 0
-		let fileCount = 0
-		for (const row of rows) {
-			if (row.kind === 'prefix') prefixCount++
-			if (row.kind === 'object') fileCount++
-		}
-		return { visiblePrefixCount: prefixCount, visibleFileCount: fileCount }
-	}, [rows])
 
 	const loadedSelectedCount = useMemo(() => {
 		if (visibleObjectKeys.length === 0 || args.selectedKeys.size === 0) return 0

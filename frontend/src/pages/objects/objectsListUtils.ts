@@ -199,23 +199,20 @@ export function buildObjectRows(args: BuildObjectRowsArgs): ObjectRow[] {
 		;[minTime, maxTime] = [maxTime, minTime]
 	}
 
-	const filteredItems = items
-		.filter((o) => match(displayNameForKey(o.key, args.prefix)) || match(o.key))
-		.filter((o) => {
-			if (ext) {
-				if (fileExtensionFromKey(o.key) !== ext) return false
-			}
-			const size = o.size ?? 0
-			if (min != null && size < min) return false
-			if (max != null && size > max) return false
-			if (minTime != null || maxTime != null) {
-				const modified = parseTimeMs(o.lastModified)
-				if (!modified) return false
-				if (minTime != null && modified < minTime) return false
-				if (maxTime != null && modified > maxTime) return false
-			}
-			return true
-		})
+	const filteredItems = items.filter((o) => {
+		if (!match(displayNameForKey(o.key, args.prefix)) && !match(o.key)) return false
+		if (ext && fileExtensionFromKey(o.key) !== ext) return false
+		const size = o.size ?? 0
+		if (min != null && size < min) return false
+		if (max != null && size > max) return false
+		if (minTime != null || maxTime != null) {
+			const modified = parseTimeMs(o.lastModified)
+			if (!modified) return false
+			if (minTime != null && modified < minTime) return false
+			if (maxTime != null && modified > maxTime) return false
+		}
+		return true
+	})
 
 	const visiblePrefixes = args.typeFilter === 'files' ? [] : filteredPrefixes
 	const visibleItems = args.typeFilter === 'folders' ? [] : filteredItems

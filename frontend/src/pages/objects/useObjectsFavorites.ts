@@ -30,16 +30,19 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	const favoriteItems = useMemo(() => favoritesQuery.data?.items ?? [], [favoritesQuery.data?.items])
 	const favoriteKeys = useMemo(() => new Set(favoriteItems.map((item) => item.key)), [favoriteItems])
 
+	const objectsItemMap = useMemo(() => {
+		const map = new Map<string, ObjectItem>()
+		for (const page of objectsPages) {
+			for (const item of page.items) {
+				map.set(item.key, item)
+			}
+		}
+		return map
+	}, [objectsPages])
+
 	const buildFavoriteItem = useCallback(
 		(key: string, createdAt: string) => {
-			let found: ObjectItem | undefined
-			for (const page of objectsPages) {
-				found = page.items.find((item) => item.key === key)
-				if (found) break
-			}
-			if (!found) {
-				found = favoriteItems.find((item) => item.key === key)
-			}
+			const found = objectsItemMap.get(key) ?? favoriteItems.find((item) => item.key === key)
 			return {
 				key,
 				size: found?.size ?? 0,
@@ -49,7 +52,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 				createdAt,
 			}
 		},
-		[favoriteItems, objectsPages],
+		[favoriteItems, objectsItemMap],
 	)
 
 	const addFavoriteMutation = useMutation({

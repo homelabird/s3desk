@@ -50,15 +50,22 @@ func (s *Store) AddObjectFavorite(ctx context.Context, profileID, bucket, key st
 		ObjectKey: key,
 		CreatedAt: now,
 	}
-	if err := s.db.WithContext(ctx).
+	res := s.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "profile_id"}, {Name: "bucket"}, {Name: "object_key"}},
 			DoNothing: true,
 		}).
-		Create(&row).Error; err != nil {
-		return models.ObjectFavorite{}, err
+		Create(&row)
+	if res.Error != nil {
+		return models.ObjectFavorite{}, res.Error
 	}
 
+	// Fresh insert – we already know created_at; skip the extra SELECT.
+	if res.RowsAffected > 0 {
+		return models.ObjectFavorite{Key: key, CreatedAt: now}, nil
+	}
+
+	// Conflict (already exists) – fetch the original created_at.
 	var fetched objectFavoriteRow
 	if err := s.db.WithContext(ctx).
 		Select("created_at").
