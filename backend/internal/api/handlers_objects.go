@@ -53,7 +53,7 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 
 	args := []string{"lsjson", "--no-mimetype"}
 	if delimiter == "" {
-		args = append(args, "-R")
+		args = append(args, "-R", "--fast-list")
 	}
 	args = append(args, rcloneRemoteDir(bucket, prefix, secrets.PreserveLeadingSlash))
 

@@ -106,7 +106,7 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		return nil
 	}
 
-	args := []string{"lsjson", "-R", "--no-mimetype", "--hash", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
+	args := []string{"lsjson", "-R", "--fast-list", "--no-mimetype", "--hash", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
 	proc, err := m.startRcloneCommand(ctx, secrets, jobID, args)
 	if err != nil {
 		return err

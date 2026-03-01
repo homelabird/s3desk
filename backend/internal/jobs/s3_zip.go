@@ -278,7 +278,7 @@ func (m *Manager) writeZipArtifact(
 }
 
 func listRcloneZipObjectsForPrefix(ctx context.Context, m *Manager, profile models.ProfileSecrets, jobID, bucket, prefix string, preserveLeadingSlash bool) ([]s3ZipObject, error) {
-	args := []string{"lsjson", "-R", "--no-mimetype", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
+	args := []string{"lsjson", "-R", "--fast-list", "--no-mimetype", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
 	proc, err := m.startRcloneCommand(ctx, profile, jobID, args)
 	if err != nil {
 		return nil, err

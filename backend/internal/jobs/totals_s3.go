@@ -30,7 +30,7 @@ func computeS3PrefixTotals(
 		maxObjects = 50_000
 	}
 
-	args := []string{"lsjson", "-R", "--no-mimetype", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
+	args := []string{"lsjson", "-R", "--fast-list", "--no-mimetype", rcloneRemoteDir(bucket, prefix, preserveLeadingSlash)}
 	proc, err := m.startRcloneCommand(ctx, profile, jobID, args)
 	if err != nil {
 		return s3PrefixTotals{}, false, err

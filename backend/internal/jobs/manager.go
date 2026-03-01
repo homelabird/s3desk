@@ -96,6 +96,7 @@ type Manager struct {
 	rcloneMaxCheckers         int
 	rcloneS3ChunkSizeMiB      int
 	rcloneS3UploadConcurrency int
+	rcloneLowLevelRetries     int
 	rcloneStatsInterval       time.Duration
 
 	// Retry/backoff for transient rclone failures (rate limit, network, timeouts).
@@ -213,6 +214,7 @@ func NewManager(cfg Config) *Manager {
 		rcloneMaxCheckers:          envInt("RCLONE_MAX_CHECKERS", defaultMaxCheckers),
 		rcloneS3ChunkSizeMiB:       envInt("RCLONE_S3_CHUNK_SIZE_MIB", 0),
 		rcloneS3UploadConcurrency:  envInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0),
+		rcloneLowLevelRetries:     envInt("RCLONE_LOW_LEVEL_RETRIES", 10),
 		rcloneStatsInterval:        statsInterval,
 		rcloneRetryAttempts:        retryAttempts,
 		rcloneRetryBaseDelay:       retryBaseDelay,
@@ -1879,6 +1881,9 @@ func (m *Manager) runRclone(ctx context.Context, profileID, jobID string, comman
 	isS3 := rcloneconfig.IsS3LikeProvider(profileSecrets.Provider)
 	if isS3 && m.rcloneS3ChunkSizeMiB > 0 && !hasAnyFlag(args, "--s3-chunk-size") {
 		args = append(args, "--s3-chunk-size", fmt.Sprintf("%dM", m.rcloneS3ChunkSizeMiB))
+	}
+	if m.rcloneLowLevelRetries > 0 && !hasAnyFlag(args, "--low-level-retries") {
+		args = append(args, "--low-level-retries", strconv.Itoa(m.rcloneLowLevelRetries))
 	}
 
 	tune, tuneOK := m.computeRcloneTune(commandArgs, isS3)
