@@ -84,7 +84,6 @@ export function WelcomeScreen(props: Props) {
 					onMouseLeave={() => setHovered(false)}
 					style={{
 						border: 'none',
-						borderColor: hovered ? 'var(--s3d-color-primary-hover)' : 'var(--s3d-color-primary-btn)',
 						background: hovered ? 'var(--s3d-color-primary-hover)' : 'var(--s3d-color-primary-btn)',
 						color: '#fff',
 						borderRadius: '20px',
