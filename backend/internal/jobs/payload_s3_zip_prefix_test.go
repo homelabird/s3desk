@@ -57,4 +57,3 @@ func TestParseS3ZipPrefixPayloadTypeErrors(t *testing.T) {
 		})
 	}
 }
-

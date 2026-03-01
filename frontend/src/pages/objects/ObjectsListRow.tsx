@@ -54,7 +54,8 @@ const rowBaseStyle = {
 	left: 0,
 	width: '100%',
 	padding: '6px 12px',
-	borderBottom: '1px solid #f5f5f5',
+	borderBottom: '1px solid var(--s3d-color-border)',
+	transition: 'background 150ms cubic-bezier(0.4, 0, 0.2, 1)',
 } as const
 
 function rowStyle(offset: number, background?: string, minHeight?: number) {
@@ -119,7 +120,7 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 			>
 				<div />
 				<div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-					<FolderOutlined style={{ color: '#1677ff' }} />
+					<FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} />
 					<Typography.Text style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
 						{props.highlightText(props.displayName)}
 					</Typography.Text>
@@ -161,7 +162,7 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 	const metaLabel = `${props.sizeLabel} · ${props.timeLabel}`
 	return (
-		<div style={rowStyle(props.offset, props.isSelected ? '#e6f4ff' : undefined, props.rowMinHeight)} role="listitem">
+		<div style={rowStyle(props.offset, props.isSelected ? 'var(--s3d-color-primary-light)' : undefined, props.rowMinHeight)} role="listitem">
 			<div
 				onClick={props.onClick}
 				onContextMenu={props.onContextMenu}
@@ -190,7 +191,7 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 							<Button
 								type="text"
 								size="small"
-								icon={props.isFavorite ? <StarFilled style={{ color: '#faad14' }} /> : <StarOutlined />}
+								icon={props.isFavorite ? <StarFilled style={{ color: 'var(--s3d-color-star)' }} /> : <StarOutlined />}
 								onClick={(e) => {
 									e.stopPropagation()
 									props.onToggleFavorite()

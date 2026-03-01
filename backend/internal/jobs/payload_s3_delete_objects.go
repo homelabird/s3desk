@@ -20,4 +20,3 @@ func parseS3DeleteObjectsPayload(payload map[string]any) (s3DeleteObjectsPayload
 		Keys:   keys,
 	}, nil
 }
-

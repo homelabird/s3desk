@@ -5,69 +5,80 @@
   --ant-color-text-tertiary: rgba(0, 0, 0, 0.76) !important;
   --ant-color-text-quaternary: rgba(0, 0, 0, 0.7) !important;
   --ant-color-text-placeholder: rgba(0, 0, 0, 0.78) !important;
-  --ant-color-primary: #0b5ed7 !important;
-  --ant-color-primary-hover: #0a58ca !important;
-  --ant-color-primary-active: #0a58ca !important;
-  --ant-color-link: #0958d9 !important;
-  --ant-color-link-hover: #0b5ed7 !important;
-  --ant-color-link-active: #0b5ed7 !important;
+  --ant-color-primary: #1a73e8 !important;
+  --ant-color-primary-hover: #1765cc !important;
+  --ant-color-primary-active: #1765cc !important;
+  --ant-color-link: #1a73e8 !important;
+  --ant-color-link-hover: #1765cc !important;
+  --ant-color-link-active: #1765cc !important;
 
   /* ── S3Desk design tokens ── */
 
-  /* Primary / brand */
-  --s3d-color-primary: #0b5ed7;
-  --s3d-color-primary-hover: #1e40af;
-  --s3d-color-primary-btn: #1d4ed8;
-  --s3d-color-primary-light: #e6f4ff;
-  --s3d-color-primary-bg: rgba(22, 119, 255, 0.12);
-  --s3d-color-focus: #1677ff;
+  /* Primary / brand (Google-style blue) */
+  --s3d-color-primary: #1a73e8;
+  --s3d-color-primary-hover: #1765cc;
+  --s3d-color-primary-btn: #1a73e8;
+  --s3d-color-primary-light: #e8f0fe;
+  --s3d-color-primary-bg: rgba(26, 115, 232, 0.08);
+  --s3d-color-focus: #1a73e8;
 
   /* Backgrounds */
   --s3d-color-bg: #fff;
-  --s3d-color-bg-secondary: #fafafa;
-  --s3d-color-bg-tertiary: #f5f5f5;
-  --s3d-color-bg-page: #f8fafc;
-  --s3d-color-bg-card: #fafbfc;
+  --s3d-color-bg-secondary: #f8f9fa;
+  --s3d-color-bg-tertiary: #f1f3f4;
+  --s3d-color-bg-page: #f8f9fa;
+  --s3d-color-bg-card: #fff;
 
   /* Borders */
-  --s3d-color-border: #f0f0f0;
-  --s3d-color-border-secondary: #e5e7eb;
-  --s3d-color-border-strong: #d9d9d9;
-  --s3d-color-border-input: #cbd5e1;
+  --s3d-color-border: #e0e0e0;
+  --s3d-color-border-secondary: #dadce0;
+  --s3d-color-border-strong: #c0c0c0;
+  --s3d-color-border-input: #dadce0;
 
   /* Text */
-  --s3d-color-text: rgba(0, 0, 0, 0.88);
-  --s3d-color-text-secondary: rgba(0, 0, 0, 0.65);
-  --s3d-color-text-muted: rgba(0, 0, 0, 0.45);
-  --s3d-color-text-dark: #111827;
+  --s3d-color-text: #202124;
+  --s3d-color-text-secondary: #5f6368;
+  --s3d-color-text-muted: #80868b;
+  --s3d-color-text-dark: #202124;
   --s3d-color-text-on-dark: rgba(255, 255, 255, 0.9);
 
   /* Semantic – error */
-  --s3d-color-error: #dc2626;
-  --s3d-color-error-dark: #b91c1c;
-  --s3d-color-error-border: #fca5a5;
-  --s3d-color-error-bg: #fef2f2;
+  --s3d-color-error: #d93025;
+  --s3d-color-error-dark: #c5221f;
+  --s3d-color-error-border: #f28b82;
+  --s3d-color-error-bg: #fce8e6;
 
   /* Semantic – warning */
-  --s3d-color-warning-border: #facc15;
-  --s3d-color-warning-bg: #fffbeb;
+  --s3d-color-warning-border: #fbbc04;
+  --s3d-color-warning-bg: #fef7e0;
 
   /* Semantic – info */
-  --s3d-color-info-bg: #eff6ff;
-  --s3d-color-info-border: #93c5fd;
+  --s3d-color-info-bg: #e8f0fe;
+  --s3d-color-info-border: #aecbfa;
 
   /* Accent */
-  --s3d-color-star: #faad14;
-  --s3d-color-highlight: #fff1b8;
+  --s3d-color-star: #fbbc04;
+  --s3d-color-highlight: #fef7e0;
+
+  /* Sidebar (light theme) */
+  --s3d-sidebar-bg: #f8f9fa;
+  --s3d-sidebar-hover: #e8eaed;
+  --s3d-sidebar-active: #d2e3fc;
+  --s3d-sidebar-text: #202124;
+  --s3d-sidebar-text-secondary: #5f6368;
 
   /* Radii */
   --s3d-radius-sm: 8px;
   --s3d-radius-md: 10px;
-  --s3d-radius-lg: 12px;
+  --s3d-radius-lg: 16px;
 
   /* Shadows */
-  --s3d-shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.15);
-  --s3d-shadow-md: 0 8px 32px rgba(0, 0, 0, 0.2);
+  --s3d-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --s3d-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+
+  /* Transitions */
+  --s3d-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --s3d-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .ant-typography.ant-typography-secondary {
@@ -81,34 +92,66 @@
   color: rgba(0, 0, 0, 0.82) !important;
 }
 
-.ant-menu-dark .ant-menu-item .ant-menu-title-content,
-.ant-menu-dark .ant-menu-item .anticon,
-.ant-menu-dark .ant-menu-submenu-title,
-.ant-menu-dark .ant-menu-submenu-title .ant-menu-title-content {
-  color: rgba(255, 255, 255, 0.9);
+/* Light sidebar menu styling */
+.ant-layout-sider {
+  background: var(--s3d-sidebar-bg) !important;
+  border-right: 1px solid var(--s3d-color-border) !important;
 }
 
-.ant-menu-dark .ant-menu-item-selected .ant-menu-title-content,
-.ant-menu-dark .ant-menu-item-selected .anticon {
-  color: #fff;
+.ant-layout-sider .ant-menu {
+  background: transparent !important;
+  border-inline-end: none !important;
+}
+
+.ant-layout-sider .ant-menu-item {
+  margin-inline: 8px !important;
+  border-radius: 20px !important;
+  transition: background var(--s3d-transition-fast), color var(--s3d-transition-fast) !important;
 }
 
 .ant-layout-sider .ant-menu-item .ant-menu-title-content,
 .ant-layout-sider .ant-menu-item .anticon {
-  color: rgba(255, 255, 255, 0.9) !important;
+  color: var(--s3d-sidebar-text) !important;
+}
+
+.ant-layout-sider .ant-menu-item:hover {
+  background: var(--s3d-sidebar-hover) !important;
 }
 
 .ant-layout-sider .ant-menu-item-selected {
-  background: #0b5ed7 !important;
+  background: var(--s3d-sidebar-active) !important;
 }
 
 .ant-layout-sider .ant-menu-item-selected .ant-menu-title-content,
 .ant-layout-sider .ant-menu-item-selected .anticon {
-  color: #fff !important;
+  color: var(--s3d-color-primary) !important;
+  font-weight: 600;
 }
 
 .ant-empty-description {
   color: rgba(0, 0, 0, 0.7);
+}
+
+/* Smoother button transitions */
+.ant-btn {
+  transition: all var(--s3d-transition-fast) !important;
+}
+
+/* Refined dropdown/menu transitions */
+.ant-dropdown .ant-dropdown-menu-item {
+  transition: background var(--s3d-transition-fast) !important;
+  border-radius: 4px !important;
+}
+
+/* Smoother modal appearances */
+.ant-modal .ant-modal-content {
+  border-radius: var(--s3d-radius-lg) !important;
+}
+
+/* Refined input styling */
+.ant-input,
+.ant-select-selector {
+  transition: border-color var(--s3d-transition-fast), box-shadow var(--s3d-transition-fast) !important;
 }
 
 html,
@@ -126,7 +169,7 @@ body {
   top: 8px;
   left: 8px;
   padding: 8px 12px;
-  background: #0b5ed7;
+  background: var(--s3d-color-primary);
   color: #fff;
   border-radius: 6px;
   text-decoration: none;

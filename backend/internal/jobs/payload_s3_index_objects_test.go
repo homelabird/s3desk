@@ -82,4 +82,3 @@ func TestParseS3IndexObjectsPayloadTypeErrors(t *testing.T) {
 		})
 	}
 }
-

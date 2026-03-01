@@ -28,7 +28,7 @@ type UseObjectsTreeArgs = {
 export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, log }: UseObjectsTreeArgs) {
 	const [, setTreeExpandedByBucket] = useLocalStorageState<Record<string, string[]>>('objectsTreeExpandedByBucket', {})
 	const [treeData, setTreeData] = useState<TreeNode[]>(() => [
-		{ key: '/', title: '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: '#1677ff' }} /> },
+		{ key: '/', title: '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} /> },
 	])
 	const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([])
 	const [treeSelectedKeys, setTreeSelectedKeys] = useState<string[]>(['/'])
@@ -122,7 +122,7 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 					key: p,
 					title: folderLabelFromPrefix(p),
 					isLeaf: false,
-					icon: <FolderOutlined style={{ color: '#1677ff' }} />,
+					icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} />,
 				}))
 
 			setTreeData((prev) => upsertTreeChildren(prev, nodeKey, children))
@@ -152,7 +152,7 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 		setTreeLoadingKeys([])
 		setTreeExpandedKeys([])
 		setTreeData([
-			{ key: '/', title: bucket || '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: '#1677ff' }} /> },
+			{ key: '/', title: bucket || '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} /> },
 		])
 	}, [bucket])
 

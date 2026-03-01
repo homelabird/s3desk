@@ -214,7 +214,7 @@ func NewManager(cfg Config) *Manager {
 		rcloneMaxCheckers:          envInt("RCLONE_MAX_CHECKERS", defaultMaxCheckers),
 		rcloneS3ChunkSizeMiB:       envInt("RCLONE_S3_CHUNK_SIZE_MIB", 0),
 		rcloneS3UploadConcurrency:  envInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0),
-		rcloneLowLevelRetries:     envInt("RCLONE_LOW_LEVEL_RETRIES", 10),
+		rcloneLowLevelRetries:      envInt("RCLONE_LOW_LEVEL_RETRIES", 10),
 		rcloneStatsInterval:        statsInterval,
 		rcloneRetryAttempts:        retryAttempts,
 		rcloneRetryBaseDelay:       retryBaseDelay,
@@ -2211,7 +2211,7 @@ func progressFromStats(stats *rcloneStats, mode rcloneProgressMode) (rcloneStats
 		update.EtaSeconds = &eta
 	}
 	return update, true
-	}
+}
 
 func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
 	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)

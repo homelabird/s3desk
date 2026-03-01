@@ -11,15 +11,16 @@
   min-width: 0;
   gap: 4px;
   padding: 2px 4px;
-  border-radius: 6px;
+  border-radius: 20px;
+  transition: background var(--s3d-transition-fast);
 }
 
 .row:hover {
-  background: var(--s3d-color-bg-tertiary);
+  background: var(--s3d-sidebar-hover, var(--s3d-color-bg-tertiary));
 }
 
 .rowSelected {
-  background: var(--s3d-color-primary-bg);
+  background: var(--s3d-sidebar-active, var(--s3d-color-primary-bg));
 }
 
 .toggleButton {
