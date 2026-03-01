@@ -15,7 +15,6 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParam
 import { Suspense, lazy, useMemo, useState, type CSSProperties } from 'react'
 
 import { APIClient, APIError } from './api/client'
-import { getApiBaseUrl } from './api/baseUrl'
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { KeyboardShortcutGuide } from './components/KeyboardShortcutGuide'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
@@ -76,17 +75,6 @@ export default function FullAppInner() {
 	const { guideOpen, setGuideOpen } = useKeyboardShortcuts((path) => navigate(path))
 
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
-	const apiBaseLabel = useMemo(() => {
-		const raw = getApiBaseUrl()
-		try {
-			const url = new URL(raw, window.location.origin)
-			const path = url.pathname.replace(/\/+$/, '') || '/'
-			if (url.origin === window.location.origin) return path
-			return `${url.host}${path}`
-		} catch {
-			return raw
-		}
-	}, [])
 	const metaQuery = useQuery({
 		queryKey: ['meta', apiToken],
 		queryFn: () => api.getMeta(),
@@ -266,15 +254,14 @@ export default function FullAppInner() {
 		>
 			<Layout style={{ minHeight: '100dvh' }}>
 				{isDesktop ? (
-					<Sider width={220}>
-						<div style={{ padding: 16 }}>
-							<Typography.Title level={5} style={{ margin: 0, color: 'white' }}>
+					<Sider width={220} style={{ background: 'var(--s3d-sidebar-bg)' }}>
+						<div style={{ padding: '20px 16px 12px' }}>
+							<Typography.Title level={5} style={{ margin: 0, color: 'var(--s3d-sidebar-text)', letterSpacing: '-0.01em' }}>
 								S3Desk
 							</Typography.Title>
-							<Typography.Text style={{ color: 'rgba(255,255,255,0.65)' }}>Local Dashboard</Typography.Text>
+							<Typography.Text style={{ color: 'var(--s3d-sidebar-text-secondary)', fontSize: 12 }}>Local Dashboard</Typography.Text>
 						</div>
 							<Menu
-								theme="dark"
 								mode="inline"
 								selectedKeys={[selectedKey]}
 								items={menuItems}
@@ -286,13 +273,14 @@ export default function FullAppInner() {
 					<Header
 						style={{
 							background: 'white',
-							borderBottom: '1px solid #f0f0f0',
-							paddingInline: screens.md ? 16 : 8,
+							borderBottom: '1px solid var(--s3d-color-border)',
+							paddingInline: screens.md ? 20 : 12,
+							height: 56,
+							lineHeight: '56px',
 							display: 'flex',
 							alignItems: 'center',
 							justifyContent: 'space-between',
-							gap: 8,
-							flexWrap: 'wrap',
+							gap: 12,
 						}}
 					>
 						<Space wrap>
@@ -304,15 +292,8 @@ export default function FullAppInner() {
 									aria-label="Open navigation"
 								/>
 							)}
-								{screens.sm ? (
-									<>
-										<Typography.Text strong>API</Typography.Text>
-										<Typography.Text type="secondary" code ellipsis={{ tooltip: apiBaseLabel }} style={{ maxWidth: 260 }}>
-											{apiBaseLabel}
-										</Typography.Text>
-									</>
-								) : (
-									<Typography.Text strong>S3Desk</Typography.Text>
+								{isDesktop ? null : (
+									<Typography.Text strong style={{ fontSize: 16, letterSpacing: '-0.01em' }}>S3Desk</Typography.Text>
 								)}
 						</Space>
 						<Space wrap style={{ justifyContent: 'flex-end' }}>
@@ -352,10 +333,11 @@ export default function FullAppInner() {
 					</Header>
 						<Content
 							style={{
-								padding: screens.md ? 16 : 8,
+								padding: screens.md ? 20 : 12,
 								minHeight: 0,
 								display: 'flex',
 								flexDirection: 'column',
+								background: '#fff',
 							}}
 						>
 							<main id="main" tabIndex={-1} style={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-scroll-container="app-content">
@@ -397,11 +379,11 @@ export default function FullAppInner() {
 					width="80%"
 					bodyStyle={{ padding: 0 }}
 				>
-					<div style={{ padding: 16 }}>
-						<Typography.Title level={5} style={{ margin: 0 }}>
+					<div style={{ padding: '20px 16px 12px' }}>
+						<Typography.Title level={5} style={{ margin: 0, letterSpacing: '-0.01em' }}>
 							S3Desk
 						</Typography.Title>
-						<Typography.Text type="secondary">Local Dashboard</Typography.Text>
+						<Typography.Text type="secondary" style={{ fontSize: 12 }}>Local Dashboard</Typography.Text>
 					</div>
 						<Menu
 							mode="inline"

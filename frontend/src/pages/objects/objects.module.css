@@ -79,10 +79,12 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  box-shadow: var(--s3d-shadow-sm);
+  transition: box-shadow var(--s3d-transition-normal);
 }
 
 .panelHeader {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--s3d-color-border);
   background: var(--s3d-color-bg-secondary);
   display: flex;
@@ -124,10 +126,11 @@
 .favoritesItem {
   border: 1px solid transparent;
   background: transparent;
-  border-radius: 6px;
-  padding: 6px 8px;
+  border-radius: 20px;
+  padding: 6px 10px;
   text-align: left;
   cursor: pointer;
+  transition: background var(--s3d-transition-fast);
 }
 
 .favoritesItem:hover {
@@ -255,6 +258,8 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
+  box-shadow: var(--s3d-shadow-sm);
+  transition: box-shadow var(--s3d-transition-normal);
 }
 
 .selectionBar {

@@ -61,8 +61,8 @@ export function ObjectsListSection({
 							style={{
 								position: 'absolute',
 								inset: 0,
-								background: 'rgba(22, 119, 255, 0.06)',
-								border: '2px dashed #1677ff',
+								background: 'var(--s3d-color-primary-bg)',
+								border: '2px dashed var(--s3d-color-primary)',
 								borderRadius: 8,
 								display: 'flex',
 								alignItems: 'center',
@@ -72,7 +72,7 @@ export function ObjectsListSection({
 							}}
 						>
 							<Space orientation="vertical" align="center" size="small">
-								<CloudUploadOutlined style={{ fontSize: 32, color: '#1677ff' }} />
+								<CloudUploadOutlined style={{ fontSize: 32, color: 'var(--s3d-color-primary)' }} />
 								<Typography.Text>
 									Drop to upload to <Typography.Text code>{uploadDropLabel}</Typography.Text>
 								</Typography.Text>

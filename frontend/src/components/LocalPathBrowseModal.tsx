@@ -44,7 +44,7 @@ export function LocalPathBrowseModal(props: Props) {
 				key: e.path,
 				title: (
 					<Space size={8}>
-						<FolderOutlined style={{ color: '#1677ff' }} />
+						<FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} />
 						<Typography.Text>{e.name || e.path}</Typography.Text>
 						<Typography.Text type="secondary" ellipsis={{ tooltip: e.path }} style={{ maxWidth: 260 }}>
 							{e.path}
@@ -86,7 +86,7 @@ export function LocalPathBrowseModal(props: Props) {
 					key: e.path,
 					title: (
 						<Space size={8}>
-							<FolderOutlined style={{ color: '#1677ff' }} />
+							<FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} />
 							<Typography.Text>{e.name || e.path}</Typography.Text>
 						</Space>
 					),

@@ -55,7 +55,7 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 					count={availableFavorites.length}
 					overflowCount={999}
 					showZero
-					style={{ backgroundColor: availableFavorites.length > 0 ? '#1677ff' : '#d9d9d9' }}
+					style={{ backgroundColor: availableFavorites.length > 0 ? 'var(--s3d-color-primary)' : 'var(--s3d-color-border-strong)' }}
 				/>
 			}
 		>
