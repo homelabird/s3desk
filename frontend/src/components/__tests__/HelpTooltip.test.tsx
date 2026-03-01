@@ -31,4 +31,15 @@ describe('HelpTooltip', () => {
 		fireEvent.mouseEnter(screen.getByTestId('help-tooltip-trigger').parentElement!)
 		expect(screen.getByRole('tooltip')).toBeInTheDocument()
 	})
+
+	it('trigger has accessible aria-label', () => {
+		render(<HelpTooltip text="Example help" />)
+		expect(screen.getByLabelText('Help')).toBeInTheDocument()
+	})
+
+	it('trigger is focusable for keyboard users', () => {
+		render(<HelpTooltip text="Example help" />)
+		const trigger = screen.getByTestId('help-tooltip-trigger')
+		expect(trigger).toHaveAttribute('tabIndex', '0')
+	})
 })

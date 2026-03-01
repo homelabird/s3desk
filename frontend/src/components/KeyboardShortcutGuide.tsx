@@ -1,4 +1,4 @@
-import { useEffect, type CSSProperties } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 
 type Shortcut = {
 	keys: string
@@ -61,7 +61,7 @@ function ShortcutRow(props: { shortcut: Shortcut }) {
 				{props.shortcut.keys.split(' ').map((part, i) => (
 					<span key={`${part}-${i}`}>
 						{part.toLowerCase() === 'then' ? (
-							<span style={{ margin: '0 4px', fontSize: 11, opacity: 0.6 }}>then</span>
+							<span style={{ margin: '0 4px', fontSize: 11, opacity: 0.75 }}>then</span>
 						) : (
 							<kbd style={kbdStyle}>{part}</kbd>
 						)}
@@ -79,9 +79,11 @@ type Props = {
 
 export function KeyboardShortcutGuide(props: Props) {
 	const { open, onClose } = props
+	const closeRef = useRef<HTMLButtonElement>(null)
 
 	useEffect(() => {
 		if (!open) return
+		closeRef.current?.focus()
 		const handler = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') onClose()
 		}
@@ -93,21 +95,22 @@ export function KeyboardShortcutGuide(props: Props) {
 
 	return (
 		<div style={overlayStyle} onClick={props.onClose} data-testid="keyboard-shortcut-guide">
-			<div style={cardStyle} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Keyboard shortcuts">
+			<div style={cardStyle} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
 				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-					<div style={{ fontSize: 16, fontWeight: 700 }}>Keyboard shortcuts</div>
+					<h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Keyboard shortcuts</h2>
 					<button
+						ref={closeRef}
 						type="button"
 						onClick={props.onClose}
 						aria-label="Close"
-						style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', opacity: 0.6 }}
+						style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', opacity: 0.75 }}
 					>
 						✕
 					</button>
 				</div>
 
 				<div style={{ marginBottom: 16 }}>
-					<div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, opacity: 0.75, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+					<div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.5 }}>
 						Navigation
 					</div>
 					{navigationShortcuts.map((s) => (
@@ -116,7 +119,7 @@ export function KeyboardShortcutGuide(props: Props) {
 				</div>
 
 				<div>
-					<div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, opacity: 0.75, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+					<div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.5 }}>
 						General
 					</div>
 					{actionShortcuts.map((s) => (
@@ -124,7 +127,7 @@ export function KeyboardShortcutGuide(props: Props) {
 					))}
 				</div>
 
-				<div style={{ marginTop: 16, fontSize: 12, opacity: 0.6 }}>
+				<div style={{ marginTop: 16, fontSize: 12, opacity: 0.75 }}>
 					Press <kbd style={kbdStyle}>?</kbd> anytime to open this guide.
 				</div>
 			</div>

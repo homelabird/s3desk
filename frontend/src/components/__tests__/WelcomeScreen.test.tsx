@@ -23,4 +23,9 @@ describe('WelcomeScreen', () => {
 		fireEvent.click(screen.getByTestId('welcome-get-started'))
 		expect(onGetStarted).toHaveBeenCalledTimes(1)
 	})
+
+	it('uses a semantic heading for the title', () => {
+		render(<WelcomeScreen onGetStarted={vi.fn()} />)
+		expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Welcome to S3Desk')
+	})
 })
