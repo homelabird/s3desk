@@ -38,6 +38,60 @@ type rcloneProcess struct {
 
 var errRcloneListStop = errors.New("rclone list stop")
 
+// listPaginator manages token-based pagination and truncation state for
+// handleListObjects, eliminating the three identical check-and-truncate blocks.
+type listPaginator struct {
+	token           string
+	maxKeys         int
+	foundToken      bool
+	returned        int
+	truncated       bool
+	nextToken       string
+	stopped         bool
+	commonPrefixSet map[string]struct{}
+	cancel          context.CancelFunc
+}
+
+// advanceToken checks whether the continuation token has been matched yet.
+// Returns true when the caller should include the current entry, false to skip.
+func (p *listPaginator) advanceToken(entryToken, rawKey string) bool {
+	if p.foundToken {
+		return true
+	}
+	if rcloneMatchToken(p.token, entryToken, rawKey) {
+		p.foundToken = true
+	}
+	return false
+}
+
+// incrementAndCheck increments the returned counter and, when maxKeys is
+// reached, marks the response as truncated and signals a stop.
+func (p *listPaginator) incrementAndCheck(entryToken string) error {
+	p.returned++
+	if p.returned >= p.maxKeys {
+		p.truncated = true
+		p.nextToken = entryToken
+		p.stopped = true
+		p.cancel()
+		return errRcloneListStop
+	}
+	return nil
+}
+
+// addPrefix handles a common-prefix (directory) entry: skips duplicates,
+// performs token advancement, appends to the response, and checks truncation.
+func (p *listPaginator) addPrefix(entryToken, prefixKey string, resp *models.ListObjectsResponse) error {
+	if !p.advanceToken(entryToken, prefixKey) {
+		return nil
+	}
+	if _, ok := p.commonPrefixSet[prefixKey]; ok {
+		return nil
+	}
+	p.commonPrefixSet[prefixKey] = struct{}{}
+	resp.CommonPrefixes = append(resp.CommonPrefixes, prefixKey)
+	return p.incrementAndCheck(entryToken)
+}
+
 func rcloneRemoteBucket(bucket string) string {
 	return rcloneconfig.RemoteBucket(bucket)
 }
@@ -85,6 +139,14 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 		return nil, err
 	}
 
+	// cleanup consolidates all resource cleanup; on error paths before
+	// cmd.Start succeeds we call it directly instead of repeating each
+	// cleanup individually.
+	cleanup := func() {
+		configCleanup()
+		tlsCleanup()
+	}
+
 	fullArgs := []string{"--config", configPath}
 	fullArgs = append(fullArgs, tlsArgs...)
 	fullArgs = append(fullArgs, args...)
@@ -93,20 +155,17 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		configCleanup()
-		tlsCleanup()
+		cleanup()
 		return nil, err
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		configCleanup()
-		tlsCleanup()
+		cleanup()
 		return nil, err
 	}
 
 	if err := cmd.Start(); err != nil {
-		configCleanup()
-		tlsCleanup()
+		cleanup()
 		return nil, err
 	}
 
@@ -120,8 +179,7 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 	wait := func() error {
 		err := cmd.Wait()
 		<-stderrDone
-		configCleanup()
-		tlsCleanup()
+		cleanup()
 		return err
 	}
 
@@ -166,6 +224,11 @@ func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecre
 		configCleanup()
 		return "", err
 	}
+	cleanup := func() {
+		configCleanup()
+		tlsCleanup()
+	}
+	defer cleanup()
 
 	fullArgs := []string{"--config", configPath}
 	fullArgs = append(fullArgs, tlsArgs...)
@@ -179,8 +242,6 @@ func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecre
 	cmd.Stderr = &stderrBuf
 
 	err = cmd.Run()
-	configCleanup()
-	tlsCleanup()
 	return strings.TrimSpace(stderrBuf.String()), err
 }
 

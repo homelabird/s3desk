@@ -41,18 +41,6 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Provider = provider
 
-	trimPtrNilIfEmpty := func(p **string) {
-		if *p == nil {
-			return
-		}
-		v := strings.TrimSpace(**p)
-		if v == "" {
-			*p = nil
-			return
-		}
-		*p = &v
-	}
-
 	// Trim optional string fields (and normalize empty to nil where it makes sense).
 	trimPtrNilIfEmpty(&req.Endpoint)
 	trimPtrNilIfEmpty(&req.Region)
@@ -74,80 +62,8 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
-		// Validate S3-style providers.
-		if provider != models.ProfileProviderAwsS3 {
-			if req.Endpoint == nil || strings.TrimSpace(*req.Endpoint) == "" {
-				writeError(w, http.StatusBadRequest, "invalid_request", "endpoint is required", nil)
-				return
-			}
-		}
-		if req.Region == nil || strings.TrimSpace(*req.Region) == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "region is required", nil)
-			return
-		}
-		if req.AccessKeyID == nil || strings.TrimSpace(*req.AccessKeyID) == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "accessKeyId is required", nil)
-			return
-		}
-		if req.SecretAccessKey == nil || strings.TrimSpace(*req.SecretAccessKey) == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "secretAccessKey is required", nil)
-			return
-		}
-		// forcePathStyle is required by OpenAPI; default to false for leniency.
-		if req.ForcePathStyle == nil {
-			f := false
-			req.ForcePathStyle = &f
-		}
-		// Reject fields from other providers.
-		if req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for s3 provider", nil)
-			return
-		}
-
-	case models.ProfileProviderAzureBlob:
-		if req.AccountName == nil || *req.AccountName == "" || req.AccountKey == nil || *req.AccountKey == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "accountName and accountKey are required", nil)
-			return
-		}
-		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for azure_blob", nil)
-			return
-		}
-
-	case models.ProfileProviderGcpGcs:
-		anonymous := req.Anonymous != nil && *req.Anonymous
-		if !anonymous {
-			if req.ServiceAccountJSON == nil || *req.ServiceAccountJSON == "" {
-				writeError(w, http.StatusBadRequest, "invalid_request", "serviceAccountJson is required unless anonymous=true", nil)
-				return
-			}
-		}
-		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for gcp_gcs", nil)
-			return
-		}
-
-	case models.ProfileProviderOciObjectStorage:
-		if req.Region == nil || strings.TrimSpace(*req.Region) == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "region is required", nil)
-			return
-		}
-		if req.Namespace == nil || strings.TrimSpace(*req.Namespace) == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "namespace is required", nil)
-			return
-		}
-		if req.Compartment == nil || strings.TrimSpace(*req.Compartment) == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "compartment is required", nil)
-			return
-		}
-		if req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "unexpected fields for oci_object_storage", nil)
-			return
-		}
-	default:
-		writeError(w, http.StatusBadRequest, "invalid_request", "unknown provider", map[string]any{"provider": provider})
+	if err := validateCreateProfileProvider(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
 
@@ -157,6 +73,105 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, profile)
+}
+
+// trimPtrNilIfEmpty trims whitespace from a string pointer's value and nils
+// it out when the trimmed result is empty.
+func trimPtrNilIfEmpty(p **string) {
+	if *p == nil {
+		return
+	}
+	v := strings.TrimSpace(**p)
+	if v == "" {
+		*p = nil
+		return
+	}
+	*p = &v
+}
+
+// hasUnexpectedFields returns true when any of the given string/bool pointer
+// fields is non-nil.  It replaces the long per-provider boolean expressions.
+func hasUnexpectedFields(fields ...any) bool {
+	for _, f := range fields {
+		switch v := f.(type) {
+		case *string:
+			if v != nil {
+				return true
+			}
+		case *bool:
+			if v != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// validateCreateProfileProvider validates provider-specific required fields and
+// rejects fields that belong to other providers.
+func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
+	switch req.Provider {
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+		if req.Provider != models.ProfileProviderAwsS3 {
+			if req.Endpoint == nil || strings.TrimSpace(*req.Endpoint) == "" {
+				return errors.New("endpoint is required")
+			}
+		}
+		if req.Region == nil || strings.TrimSpace(*req.Region) == "" {
+			return errors.New("region is required")
+		}
+		if req.AccessKeyID == nil || strings.TrimSpace(*req.AccessKeyID) == "" {
+			return errors.New("accessKeyId is required")
+		}
+		if req.SecretAccessKey == nil || strings.TrimSpace(*req.SecretAccessKey) == "" {
+			return errors.New("secretAccessKey is required")
+		}
+		// forcePathStyle is required by OpenAPI; default to false for leniency.
+		if req.ForcePathStyle == nil {
+			f := false
+			req.ForcePathStyle = &f
+		}
+		if hasUnexpectedFields(req.AccountName, req.AccountKey, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
+			return errors.New("unexpected fields for s3 provider")
+		}
+
+	case models.ProfileProviderAzureBlob:
+		if req.AccountName == nil || *req.AccountName == "" || req.AccountKey == nil || *req.AccountKey == "" {
+			return errors.New("accountName and accountKey are required")
+		}
+		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
+			return errors.New("unexpected fields for azure_blob")
+		}
+
+	case models.ProfileProviderGcpGcs:
+		anonymous := req.Anonymous != nil && *req.Anonymous
+		if !anonymous {
+			if req.ServiceAccountJSON == nil || *req.ServiceAccountJSON == "" {
+				return errors.New("serviceAccountJson is required unless anonymous=true")
+			}
+		}
+		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.AccountName, req.AccountKey, req.UseEmulator, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
+			return errors.New("unexpected fields for gcp_gcs")
+		}
+
+	case models.ProfileProviderOciObjectStorage:
+		if req.Region == nil || strings.TrimSpace(*req.Region) == "" {
+			return errors.New("region is required")
+		}
+		if req.Namespace == nil || strings.TrimSpace(*req.Namespace) == "" {
+			return errors.New("namespace is required")
+		}
+		if req.Compartment == nil || strings.TrimSpace(*req.Compartment) == "" {
+			return errors.New("compartment is required")
+		}
+		if hasUnexpectedFields(req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.AccountName, req.AccountKey, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber) {
+			return errors.New("unexpected fields for oci_object_storage")
+		}
+
+	default:
+		return fmt.Errorf("unknown provider")
+	}
+	return nil
 }
 
 func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
