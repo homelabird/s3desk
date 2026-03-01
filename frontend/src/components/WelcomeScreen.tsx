@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 
 type StepItem = {
 	icon: ReactNode
@@ -46,6 +46,8 @@ type Props = {
 }
 
 export function WelcomeScreen(props: Props) {
+	const [hovered, setHovered] = useState(false)
+
 	return (
 		<div style={cardStyle} data-testid="welcome-screen">
 			<div style={{ textAlign: 'center' }}>
@@ -76,9 +78,12 @@ export function WelcomeScreen(props: Props) {
 					type="button"
 					onClick={props.onGetStarted}
 					data-testid="welcome-get-started"
+					onMouseEnter={() => setHovered(true)}
+					onMouseLeave={() => setHovered(false)}
 					style={{
-						border: '1px solid #1d4ed8',
-						background: '#1d4ed8',
+						border: '1px solid',
+						borderColor: hovered ? '#1e40af' : '#1d4ed8',
+						background: hovered ? '#1e40af' : '#1d4ed8',
 						color: '#fff',
 						borderRadius: 10,
 						padding: '10px 24px',
@@ -86,14 +91,6 @@ export function WelcomeScreen(props: Props) {
 						fontSize: 14,
 						cursor: 'pointer',
 						transition: 'background 150ms ease, border-color 150ms ease',
-					}}
-					onMouseEnter={(e) => {
-						e.currentTarget.style.background = '#1e40af'
-						e.currentTarget.style.borderColor = '#1e40af'
-					}}
-					onMouseLeave={(e) => {
-						e.currentTarget.style.background = '#1d4ed8'
-						e.currentTarget.style.borderColor = '#1d4ed8'
 					}}
 				>
 					Get started — Create your first profile
