@@ -164,7 +164,7 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 							disabled={!token.trim() || submitting}
 							style={{
 								border: '1px solid var(--s3d-color-primary-btn)',
-								background: submitting ? 'var(--s3d-color-info-border)' : '#1d4ed8',
+								background: submitting ? 'var(--s3d-color-info-border)' : 'var(--s3d-color-primary-btn)',
 								color: 'var(--s3d-color-bg)',
 								borderRadius: 'var(--s3d-radius-md)',
 								padding: '9px 12px',
@@ -393,7 +393,7 @@ function ProfilesList(props: {
 								disabled={!props.profileId}
 								style={{
 									border: '1px solid var(--s3d-color-border-input)',
-									background: props.profileId ? '#fff' : '#f8fafc',
+									background: props.profileId ? 'var(--s3d-color-bg)' : 'var(--s3d-color-bg-page)',
 									borderRadius: 'var(--s3d-radius-md)',
 									padding: '9px 12px',
 									fontWeight: 700,
