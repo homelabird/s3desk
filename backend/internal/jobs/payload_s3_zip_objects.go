@@ -26,4 +26,3 @@ func parseS3ZipObjectsPayload(payload map[string]any) (s3ZipObjectsPayload, erro
 		StripPrefix: stripPrefix,
 	}, nil
 }
-

@@ -71,4 +71,3 @@ func TestParseS3DeleteObjectsPayloadTypeErrors(t *testing.T) {
 		})
 	}
 }
-

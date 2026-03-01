@@ -263,10 +263,10 @@ func TestValidateCreateProfileProvider(t *testing.T) {
 		{
 			name: "valid s3_compatible",
 			req: models.ProfileCreateRequest{
-				Provider:       models.ProfileProviderS3Compatible,
-				Endpoint:       &endpoint,
-				Region:         &region,
-				AccessKeyID:    &accessKey,
+				Provider:        models.ProfileProviderS3Compatible,
+				Endpoint:        &endpoint,
+				Region:          &region,
+				AccessKeyID:     &accessKey,
 				SecretAccessKey: &secretKey,
 			},
 			wantErr: "",
@@ -274,9 +274,9 @@ func TestValidateCreateProfileProvider(t *testing.T) {
 		{
 			name: "s3_compatible missing region",
 			req: models.ProfileCreateRequest{
-				Provider:       models.ProfileProviderS3Compatible,
-				Endpoint:       &endpoint,
-				AccessKeyID:    &accessKey,
+				Provider:        models.ProfileProviderS3Compatible,
+				Endpoint:        &endpoint,
+				AccessKeyID:     &accessKey,
 				SecretAccessKey: &secretKey,
 			},
 			wantErr: "region is required",
@@ -284,12 +284,12 @@ func TestValidateCreateProfileProvider(t *testing.T) {
 		{
 			name: "s3 with azure fields",
 			req: models.ProfileCreateRequest{
-				Provider:       models.ProfileProviderS3Compatible,
-				Endpoint:       &endpoint,
-				Region:         &region,
-				AccessKeyID:    &accessKey,
+				Provider:        models.ProfileProviderS3Compatible,
+				Endpoint:        &endpoint,
+				Region:          &region,
+				AccessKeyID:     &accessKey,
 				SecretAccessKey: &secretKey,
-				AccountName:    &endpoint, // unexpected
+				AccountName:     &endpoint, // unexpected
 			},
 			wantErr: "unexpected fields for s3 provider",
 		},

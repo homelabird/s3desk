@@ -80,4 +80,3 @@ func TestParseS3ZipObjectsPayloadTypeErrors(t *testing.T) {
 		})
 	}
 }
-

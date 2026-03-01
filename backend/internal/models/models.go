@@ -204,14 +204,14 @@ type ProfileTestResponse struct {
 }
 
 type ProfileBenchmarkResponse struct {
-	OK             bool    `json:"ok"`
-	Message        string  `json:"message,omitempty"`
-	UploadBps      *int64  `json:"uploadBps,omitempty"`
-	DownloadBps    *int64  `json:"downloadBps,omitempty"`
-	UploadMs       *int64  `json:"uploadMs,omitempty"`
-	DownloadMs     *int64  `json:"downloadMs,omitempty"`
-	FileSizeBytes  *int64  `json:"fileSizeBytes,omitempty"`
-	CleanedUp      bool    `json:"cleanedUp"`
+	OK            bool   `json:"ok"`
+	Message       string `json:"message,omitempty"`
+	UploadBps     *int64 `json:"uploadBps,omitempty"`
+	DownloadBps   *int64 `json:"downloadBps,omitempty"`
+	UploadMs      *int64 `json:"uploadMs,omitempty"`
+	DownloadMs    *int64 `json:"downloadMs,omitempty"`
+	FileSizeBytes *int64 `json:"fileSizeBytes,omitempty"`
+	CleanedUp     bool   `json:"cleanedUp"`
 }
 
 type ProfileTLSMode string

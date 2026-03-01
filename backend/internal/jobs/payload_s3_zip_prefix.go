@@ -20,4 +20,3 @@ func parseS3ZipPrefixPayload(payload map[string]any) (s3ZipPrefixPayload, error)
 		Prefix: prefix,
 	}, nil
 }
-
