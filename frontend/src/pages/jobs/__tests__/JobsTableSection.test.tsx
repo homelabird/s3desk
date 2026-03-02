@@ -35,6 +35,8 @@ describe('JobsTableSection', () => {
 		expect(screen.getByText('No jobs yet.')).toBeInTheDocument()
 		const triggers = screen.getAllByTestId('help-tooltip-trigger')
 		expect(triggers).toHaveLength(2)
+		expect(triggers[0]?.parentElement).not.toBeNull()
+		expect(triggers[1]?.parentElement).not.toBeNull()
 
 		fireEvent.mouseEnter(triggers[0].parentElement!)
 		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
@@ -42,6 +44,7 @@ describe('JobsTableSection', () => {
 		)
 
 		fireEvent.mouseLeave(triggers[0].parentElement!)
+		expect(screen.queryByTestId('help-tooltip-content')).not.toBeInTheDocument()
 		fireEvent.mouseEnter(triggers[1].parentElement!)
 		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
 			'Delete or copy objects matching patterns (prefix, wildcards)',
