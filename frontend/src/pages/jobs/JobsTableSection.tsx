@@ -3,6 +3,7 @@ import { Alert, Button, Empty, Space } from 'antd'
 import { Profiler } from 'react'
 
 import type { Job } from '../../api/types'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { logReactRender } from '../../lib/perf'
 import { JobsVirtualTable, type JobsVirtualTableColumn, type SortState } from './JobsVirtualTable'
@@ -72,7 +73,7 @@ export function JobsTableSection({
 						loading={isLoading}
 						empty={
 							<Empty description={
-								<Space direction="vertical" size={4}>
+								<Space orientation="vertical" size={4}>
 									<span>No jobs yet.</span>
 									<span style={{ color: 'rgba(0,0,0,0.45)' }}>Upload files or create a sync/copy/delete job to get started.</span>
 								</Space>
@@ -86,9 +87,11 @@ export function JobsTableSection({
 									>
 										Upload folder
 									</Button>
+									<HelpTooltip text="Uploads selected files from your device to the bucket" />
 									<Button danger icon={<DeleteOutlined />} onClick={onOpenDeleteJob} disabled={isOffline}>
 										New delete job
 									</Button>
+									<HelpTooltip text="Delete or copy objects matching patterns (prefix, wildcards)" />
 								</Space>
 							</Empty>
 						}
