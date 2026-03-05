@@ -1,11 +1,10 @@
-import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { APIClient } from '../../api/client'
-import { BucketsPage } from '../BucketsPage'
 import { ensureDomShims } from '../../test/domShims'
+import { BucketsPage } from '../BucketsPage'
 
 beforeAll(() => {
 	ensureDomShims()
@@ -16,9 +15,7 @@ afterEach(() => {
 })
 
 describe('BucketsPage', () => {
-	it('renders without crashing', () => {
-		vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([])
-
+	it('navigates to profiles from setup callout', () => {
 		const client = new QueryClient({
 			defaultOptions: {
 				queries: { retry: false },
@@ -27,12 +24,17 @@ describe('BucketsPage', () => {
 
 		render(
 			<QueryClientProvider client={client}>
-				<MemoryRouter>
-					<BucketsPage apiToken="" profileId={null} />
+				<MemoryRouter initialEntries={['/buckets']}>
+					<Routes>
+						<Route path="/buckets" element={<BucketsPage apiToken="" profileId={null} />} />
+						<Route path="/profiles" element={<div>Profiles Route</div>} />
+					</Routes>
 				</MemoryRouter>
 			</QueryClientProvider>,
 		)
 
 		expect(screen.getByText('Select a profile to view buckets')).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('link', { name: 'Profiles' }))
+		expect(screen.getByText('Profiles Route')).toBeInTheDocument()
 	})
 })

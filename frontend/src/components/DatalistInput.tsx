@@ -17,6 +17,7 @@ type DatalistInputProps = {
 	disabled?: boolean
 	ariaLabel?: string
 	allowClear?: boolean
+	className?: string
 	style?: CSSProperties
 	prefix?: ReactNode
 	suffix?: ReactNode
@@ -41,6 +42,7 @@ export const DatalistInput = forwardRef<InputRef, DatalistInputProps>(function D
 				list={listId}
 				autoComplete="off"
 				allowClear={props.allowClear}
+				className={props.className}
 				style={props.style}
 				prefix={props.prefix}
 				suffix={props.suffix}

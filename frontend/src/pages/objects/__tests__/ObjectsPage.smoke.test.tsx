@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -13,7 +13,7 @@ beforeAll(() => {
 })
 
 describe('ObjectsPage', () => {
-	it('renders without crashing', () => {
+	it('toggles sort direction from list header', () => {
 		const client = new QueryClient({
 			defaultOptions: {
 				queries: { retry: false },
@@ -31,5 +31,7 @@ describe('ObjectsPage', () => {
 		)
 
 		expect(screen.getByText('Objects')).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: /Name caret-up/i }))
+		expect(screen.getByRole('button', { name: /Name caret-down/i })).toBeInTheDocument()
 	}, 15_000)
 })

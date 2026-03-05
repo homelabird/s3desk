@@ -1,0 +1,50 @@
+.headerRow {
+	display: flex;
+	width: 100%;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.pageTitle {
+	margin: 0 !important;
+}
+
+.filtersRow {
+	width: 100%;
+}
+
+.statusFilterControl,
+.typeFilterControl,
+.errorCodeFilterControl {
+	width: 100%;
+	max-width: 100%;
+}
+
+.columnsDropdown {
+	padding: 8px;
+	width: 220px;
+	background: var(--s3d-color-bg-secondary, #fff);
+	border: 1px solid var(--s3d-color-border, #d9d9d9);
+	border-radius: var(--s3d-radius-sm, 8px);
+	box-shadow: var(--s3d-shadow-sm, 0 6px 16px rgba(0, 0, 0, 0.12));
+}
+
+.columnsDropdownList {
+	width: 100%;
+}
+
+@media (min-width: 768px) {
+	.statusFilterControl {
+		width: 200px;
+	}
+
+	.typeFilterControl {
+		width: 340px;
+	}
+
+	.errorCodeFilterControl {
+		width: 260px;
+	}
+}

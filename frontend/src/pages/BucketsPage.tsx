@@ -11,6 +11,7 @@ import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatDateTime } from '../lib/format'
 import { getProviderCapabilities, getProviderCapabilityReason } from '../lib/providerCapabilities'
+import styles from './BucketsPage.module.css'
 
 type Props = {
 	apiToken: string
@@ -89,22 +90,22 @@ export function BucketsPage(props: Props) {
 				Modal.confirm({
 					title: `Bucket "${bucketName}" isn’t empty`,
 					content: (
-						<Space orientation="vertical" style={{ width: '100%' }}>
-								<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
-								<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
-								<Button
-									type="link"
-									onClick={() => {
-										Modal.destroyAll()
-										window.localStorage.setItem('bucket', JSON.stringify(bucketName))
-										window.localStorage.setItem('prefix', JSON.stringify(''))
-										navigate('/objects')
-									}}
-								>
-									Open Objects
-								</Button>
-							</Space>
-						),
+						<Space orientation="vertical" className={styles.dialogBody}>
+							<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
+							<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
+							<Button
+								type="link"
+								onClick={() => {
+									Modal.destroyAll()
+									window.localStorage.setItem('bucket', JSON.stringify(bucketName))
+									window.localStorage.setItem('prefix', JSON.stringify(''))
+									navigate('/objects')
+								}}
+							>
+								Open Objects
+							</Button>
+						</Space>
+					),
 					okText: 'Delete all objects (job)',
 					okType: 'danger',
 					cancelText: 'Close',
@@ -124,9 +125,9 @@ export function BucketsPage(props: Props) {
 	}
 
 	return (
-		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
-			<div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-				<Typography.Title level={2} style={{ margin: 0 }}>
+		<Space orientation="vertical" size="large" className={styles.fullWidth}>
+			<div className={styles.headerRow}>
+				<Typography.Title level={2} className={styles.title}>
 					Buckets
 				</Typography.Title>
 				<Button type="primary" onClick={() => setCreateOpen(true)}>
@@ -139,7 +140,7 @@ export function BucketsPage(props: Props) {
 			) : null}
 
 			{bucketsQuery.isFetching && buckets.length === 0 ? (
-				<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+				<div className={styles.loadingRow}>
 					<Spin />
 				</div>
 			) : showBucketsEmpty ? (
@@ -159,16 +160,18 @@ export function BucketsPage(props: Props) {
 					</Space>
 				</Empty>
 			) : (
-				<div style={{ border: '1px solid var(--s3d-color-border)', borderRadius: 'var(--s3d-radius-sm)', overflowX: 'auto', boxShadow: 'var(--s3d-shadow-sm)' }}>
-					<table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
+				<div className={styles.tableWrap}>
+					<table className={styles.table}>
 						<caption className="sr-only">List of buckets</caption>
 						<thead>
-							<tr style={{ background: 'var(--s3d-color-bg-secondary)' }}>
-								<th scope="col" style={{ textAlign: 'left', padding: '12px 14px', borderBottom: '1px solid var(--s3d-color-border)', fontSize: 13, fontWeight: 600, color: 'var(--s3d-color-text-secondary)' }}>Name</th>
-								<th scope="col" style={{ textAlign: 'left', padding: '12px 14px', borderBottom: '1px solid var(--s3d-color-border)', width: 220, fontSize: 13, fontWeight: 600, color: 'var(--s3d-color-text-secondary)' }}>
+							<tr className={styles.headRow}>
+								<th scope="col" className={styles.th}>
+									Name
+								</th>
+								<th scope="col" className={`${styles.th} ${styles.thCreated}`}>
 									CreatedAt
 								</th>
-								<th scope="col" style={{ textAlign: 'left', padding: '12px 14px', borderBottom: '1px solid var(--s3d-color-border)', width: 220, fontSize: 13, fontWeight: 600, color: 'var(--s3d-color-text-secondary)' }}>
+								<th scope="col" className={`${styles.th} ${styles.thActions}`}>
 									Actions
 								</th>
 							</tr>
@@ -176,10 +179,10 @@ export function BucketsPage(props: Props) {
 						<tbody>
 							{buckets.map((row) => (
 								<tr key={row.name}>
-									<td style={{ padding: '12px 14px', borderBottom: '1px solid var(--s3d-color-border)' }}>
+									<td className={styles.td}>
 										<Typography.Text strong>{row.name}</Typography.Text>
 									</td>
-									<td style={{ padding: '12px 14px', borderBottom: '1px solid var(--s3d-color-border)' }}>
+									<td className={styles.td}>
 										{row.createdAt ? (
 											<Typography.Text code title={row.createdAt}>
 												{formatDateTime(row.createdAt)}
@@ -188,7 +191,7 @@ export function BucketsPage(props: Props) {
 											<Typography.Text type="secondary">-</Typography.Text>
 										)}
 									</td>
-									<td style={{ padding: '12px 14px', borderBottom: '1px solid var(--s3d-color-border)' }}>
+									<td className={styles.td}>
 										<Space wrap>
 											<Tooltip title={policySupported ? 'Manage bucket policy' : policyUnsupportedReason}>
 												<span>

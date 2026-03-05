@@ -1,0 +1,104 @@
+.fullWidth {
+	width: 100%;
+}
+
+.headerRow {
+	display: flex;
+	width: 100%;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.title {
+	margin: 0;
+}
+
+.tableWrap {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	overflow-x: auto;
+}
+
+.table {
+	width: 100%;
+	min-width: 980px;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.headRow {
+	background: var(--s3d-color-bg-secondary);
+}
+
+.th {
+	text-align: left;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--s3d-color-border);
+}
+
+.thName {
+	width: 240px;
+}
+
+.thProvider {
+	width: 180px;
+}
+
+.thFlags {
+	width: 220px;
+}
+
+.thActions {
+	width: 240px;
+}
+
+.td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--s3d-color-border);
+	overflow-wrap: anywhere;
+}
+
+.connectionStack {
+	width: 100%;
+}
+
+.loadingRow {
+	display: flex;
+	justify-content: center;
+	padding: 24px;
+}
+
+@media (max-width: 992px) {
+	.table {
+		min-width: 840px;
+	}
+
+	.thName {
+		width: 200px;
+	}
+
+	.thProvider {
+		width: 150px;
+	}
+
+	.thFlags {
+		width: 180px;
+	}
+
+	.thActions {
+		width: 200px;
+	}
+}
+
+@media (max-width: 768px) {
+	.table {
+		min-width: 720px;
+	}
+
+	.th,
+	.td {
+		padding: 8px 10px;
+	}
+}

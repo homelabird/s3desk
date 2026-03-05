@@ -1,0 +1,130 @@
+.fullWidth {
+	width: 100%;
+}
+
+.tableWrap {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	overflow-x: auto;
+}
+
+.policyTable {
+	width: 100%;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.gcsTable {
+	min-width: 720px;
+}
+
+.azureTable {
+	min-width: 860px;
+}
+
+.headRow {
+	background: var(--s3d-color-bg-secondary);
+}
+
+.th {
+	text-align: left;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--s3d-color-border);
+}
+
+.td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--s3d-color-border);
+	vertical-align: top;
+	overflow-wrap: anywhere;
+}
+
+.thRole {
+	width: 260px;
+}
+
+.thActions {
+	width: 90px;
+}
+
+.thId {
+	width: 240px;
+}
+
+.thTime {
+	width: 220px;
+}
+
+.thPermission {
+	width: 140px;
+}
+
+.membersInput {
+	width: 100%;
+	min-width: 320px;
+}
+
+.footerActions {
+	width: 100%;
+	justify-content: space-between;
+}
+
+.presetSelect {
+	min-width: 320px;
+	max-width: 100%;
+}
+
+.publicAccessSelect {
+	width: 360px;
+	max-width: 100%;
+}
+
+@media (max-width: 992px) {
+	.gcsTable {
+		min-width: 640px;
+	}
+
+	.azureTable {
+		min-width: 760px;
+	}
+
+	.thRole {
+		width: 220px;
+	}
+
+	.thId {
+		width: 200px;
+	}
+
+	.thTime {
+		width: 180px;
+	}
+}
+
+@media (max-width: 768px) {
+	.gcsTable {
+		min-width: 560px;
+	}
+
+	.azureTable {
+		min-width: 680px;
+	}
+
+	.th,
+	.td {
+		padding: 8px 10px;
+	}
+
+	.membersInput {
+		min-width: 240px;
+	}
+
+	.publicAccessSelect {
+		width: 100%;
+	}
+
+	.presetSelect {
+		min-width: 240px;
+		width: 100%;
+	}
+}

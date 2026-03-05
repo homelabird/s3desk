@@ -13,6 +13,7 @@ type NativeSelectProps = {
 	placeholder?: string
 	disabled?: boolean
 	ariaLabel?: string
+	className?: string
 	style?: CSSProperties
 }
 
@@ -23,6 +24,7 @@ export function NativeSelect(props: NativeSelectProps) {
 			onChange={(e) => props.onChange(e.target.value)}
 			disabled={props.disabled}
 			aria-label={props.ariaLabel}
+			className={props.className}
 			style={{
 				height: 32,
 				padding: '4px 10px',

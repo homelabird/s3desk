@@ -528,11 +528,6 @@ export function JobsPage(props: Props) {
 				}}
 				jobsRefreshing={jobsQuery.isFetching}
 				jobsCount={jobs.length}
-				isMdScreen={!!screens.md}
-				dropdownBg={token.colorBgElevated}
-				dropdownBorder={token.colorBorderSecondary}
-				dropdownBorderRadius={token.borderRadiusLG}
-				dropdownShadow={token.boxShadowSecondary}
 			/>
 
 			<JobsTableSection

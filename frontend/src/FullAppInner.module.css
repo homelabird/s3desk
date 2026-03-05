@@ -1,0 +1,120 @@
+.menuLink {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	color: inherit;
+	text-decoration: none;
+}
+
+.fullscreenCenter {
+	min-height: 100dvh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+}
+
+.fullWidth {
+	width: 100%;
+}
+
+.errorPanel {
+	width: 520px;
+	max-width: 100%;
+}
+
+.noMarginTop {
+	margin-top: 0;
+}
+
+.appLayout {
+	min-height: 100dvh;
+}
+
+.desktopSider {
+	background: var(--s3d-sidebar-bg);
+}
+
+.brandBlock {
+	padding: 20px 16px 12px;
+}
+
+.brandTitle {
+	margin: 0;
+	letter-spacing: -0.01em;
+}
+
+.brandTitleDesktop {
+	color: var(--s3d-sidebar-text);
+}
+
+.brandSubtitle {
+	font-size: 12px;
+}
+
+.brandSubtitleDesktop {
+	color: var(--s3d-sidebar-text-secondary);
+}
+
+.header {
+	background: #fff;
+	border-bottom: 1px solid var(--s3d-color-border);
+	height: 56px;
+	line-height: 56px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.headerPadMd {
+	padding-inline: 20px;
+}
+
+.headerPadSm {
+	padding-inline: 12px;
+}
+
+.mobileBrand {
+	font-size: 16px;
+	letter-spacing: -0.01em;
+}
+
+.headerActions {
+	justify-content: flex-end;
+}
+
+.content {
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+}
+
+.contentPadMd {
+	padding: 20px;
+}
+
+.contentPadSm {
+	padding: 12px;
+}
+
+.mainScroll {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+.stickyBanners {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: #fff;
+}
+
+.loadingFallback {
+	padding: 24px;
+	display: flex;
+	justify-content: center;
+}

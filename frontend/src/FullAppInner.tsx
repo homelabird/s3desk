@@ -12,7 +12,7 @@ import {
 	ToolOutlined,
 } from '@ant-design/icons'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Suspense, lazy, useMemo, useState, type CSSProperties } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 
 import { APIClient, APIError } from './api/client'
 import { JobQueueBanner } from './components/JobQueueBanner'
@@ -24,15 +24,7 @@ import { LoginPage } from './pages/LoginPage'
 import { getProviderCapabilities } from './lib/providerCapabilities'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
-
-const menuLinkStyle: CSSProperties = {
-	display: 'flex',
-	alignItems: 'center',
-	gap: 8,
-	width: '100%',
-	color: 'inherit',
-	textDecoration: 'none',
-}
+import styles from './FullAppInner.module.css'
 
 const ProfilesPage = lazy(async () => {
 	const m = await import('./pages/ProfilesPage')
@@ -112,7 +104,7 @@ export default function FullAppInner() {
 			{
 				key: '/profiles',
 				label: (
-					<Link to="/profiles?ui=full" style={menuLinkStyle}>
+					<Link to="/profiles?ui=full" className={styles.menuLink}>
 						<ProfileOutlined />
 						<span>Profiles</span>
 					</Link>
@@ -121,7 +113,7 @@ export default function FullAppInner() {
 			{
 				key: '/buckets',
 				label: (
-					<Link to="/buckets" style={menuLinkStyle}>
+					<Link to="/buckets" className={styles.menuLink}>
 						<AppstoreOutlined />
 						<span>Buckets</span>
 					</Link>
@@ -130,7 +122,7 @@ export default function FullAppInner() {
 			{
 				key: '/objects',
 				label: (
-					<Link to="/objects" style={menuLinkStyle}>
+					<Link to="/objects" className={styles.menuLink}>
 						<FolderOpenOutlined />
 						<span>Objects</span>
 					</Link>
@@ -139,7 +131,7 @@ export default function FullAppInner() {
 			{
 				key: '/uploads',
 				label: (
-					<Link to="/uploads" style={menuLinkStyle}>
+					<Link to="/uploads" className={styles.menuLink}>
 						<CloudUploadOutlined />
 						<span>Uploads</span>
 					</Link>
@@ -148,7 +140,7 @@ export default function FullAppInner() {
 			{
 				key: '/jobs',
 				label: (
-					<Link to="/jobs" style={menuLinkStyle}>
+					<Link to="/jobs" className={styles.menuLink}>
 						<ToolOutlined />
 						<span>Jobs</span>
 					</Link>
@@ -186,7 +178,7 @@ export default function FullAppInner() {
 	// - If server doesn't require a token, /api/v1/meta works with an empty token.
 	if (metaQuery.isPending) {
 		return (
-			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+			<div className={styles.fullscreenCenter}>
 				<Spin />
 			</div>
 		)
@@ -209,7 +201,7 @@ export default function FullAppInner() {
 		const title = err instanceof APIError ? `${err.code}: ${err.message}` : err instanceof Error ? err.message : 'Unknown error'
 		const hint =
 			err instanceof APIError && err.status === 403 ? (
-				<Space orientation="vertical" size={2} style={{ width: '100%' }}>
+				<Space orientation="vertical" size={2} className={styles.fullWidth}>
 					<Typography.Text type="secondary">Access blocked by server policy.</Typography.Text>
 					<Typography.Text type="secondary">On the server host: open the UI from the same machine (loopback).</Typography.Text>
 					<Typography.Text type="secondary">
@@ -224,9 +216,9 @@ export default function FullAppInner() {
 			)
 
 		return (
-			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-				<div style={{ width: 520, maxWidth: '100%' }}>
-					<Typography.Title level={3} style={{ marginTop: 0 }}>
+			<div className={styles.fullscreenCenter}>
+				<div className={styles.errorPanel}>
+					<Typography.Title level={3} className={styles.noMarginTop}>
 						S3Desk
 					</Typography.Title>
 					<Alert
@@ -234,13 +226,13 @@ export default function FullAppInner() {
 						showIcon
 						title="Backend connection failed"
 						description={
-								<Space orientation="vertical" size={8} style={{ width: '100%' }}>
-									<Typography.Text>{title}</Typography.Text>
-									{hint}
-									<Button onClick={() => metaQuery.refetch()}>Retry</Button>
-								</Space>
-							}
-						/>
+							<Space orientation="vertical" size={8} className={styles.fullWidth}>
+								<Typography.Text>{title}</Typography.Text>
+								{hint}
+								<Button onClick={() => metaQuery.refetch()}>Retry</Button>
+							</Space>
+						}
+					/>
 				</div>
 			</div>
 		)
@@ -252,37 +244,21 @@ export default function FullAppInner() {
 			uploadDirectStream={uploadDirectStream}
 			uploadCapabilityByProfileId={uploadCapabilityByProfileId}
 		>
-			<Layout style={{ minHeight: '100dvh' }}>
+			<Layout className={styles.appLayout}>
 				{isDesktop ? (
-					<Sider width={220} style={{ background: 'var(--s3d-sidebar-bg)' }}>
-						<div style={{ padding: '20px 16px 12px' }}>
-							<Typography.Title level={5} style={{ margin: 0, color: 'var(--s3d-sidebar-text)', letterSpacing: '-0.01em' }}>
+					<Sider width={220} className={styles.desktopSider}>
+						<div className={styles.brandBlock}>
+							<Typography.Title level={5} className={`${styles.brandTitle} ${styles.brandTitleDesktop}`}>
 								S3Desk
 							</Typography.Title>
-							<Typography.Text style={{ color: 'var(--s3d-sidebar-text-secondary)', fontSize: 12 }}>Local Dashboard</Typography.Text>
+							<Typography.Text className={`${styles.brandSubtitle} ${styles.brandSubtitleDesktop}`}>Local Dashboard</Typography.Text>
 						</div>
-							<Menu
-								mode="inline"
-								selectedKeys={[selectedKey]}
-								items={menuItems}
-							/>
+						<Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} />
 					</Sider>
 				) : null}
 
-				<Layout>
-					<Header
-						style={{
-							background: 'white',
-							borderBottom: '1px solid var(--s3d-color-border)',
-							paddingInline: screens.md ? 20 : 12,
-							height: 56,
-							lineHeight: '56px',
-							display: 'flex',
-							alignItems: 'center',
-							justifyContent: 'space-between',
-							gap: 12,
-						}}
-					>
+				<Layout className={styles.appLayout}>
+					<Header className={`${styles.header} ${screens.md ? styles.headerPadMd : styles.headerPadSm}`}>
 						<Space wrap>
 							{isDesktop ? null : (
 								<Button
@@ -292,11 +268,13 @@ export default function FullAppInner() {
 									aria-label="Open navigation"
 								/>
 							)}
-								{isDesktop ? null : (
-									<Typography.Text strong style={{ fontSize: 16, letterSpacing: '-0.01em' }}>S3Desk</Typography.Text>
-								)}
+							{isDesktop ? null : (
+								<Typography.Text strong className={styles.mobileBrand}>
+									S3Desk
+								</Typography.Text>
+							)}
 						</Space>
-						<Space wrap style={{ justifyContent: 'flex-end' }}>
+						<Space wrap className={styles.headerActions}>
 							<TopBarProfileSelect profileId={profileId} setProfileId={setProfileId} apiToken={apiToken} />
 							<TransfersButton showLabel={!!screens.sm} />
 							{screens.sm ? (
@@ -328,26 +306,18 @@ export default function FullAppInner() {
 								>
 									<Button type="text" icon={<EllipsisOutlined />} aria-label="More actions" />
 								</Dropdown>
-							)}
+								)}
 						</Space>
 					</Header>
-						<Content
-							style={{
-								padding: screens.md ? 20 : 12,
-								minHeight: 0,
-								display: 'flex',
-								flexDirection: 'column',
-								background: '#fff',
-							}}
-						>
-							<main id="main" tabIndex={-1} style={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-scroll-container="app-content">
-								<div style={{ position: 'sticky', top: 0, zIndex: 10, background: 'white' }}>
-									<NetworkStatusBanner />
-									<JobQueueBanner />
-								</div>
+					<Content className={`${styles.content} ${screens.md ? styles.contentPadMd : styles.contentPadSm}`}>
+						<main id="main" tabIndex={-1} className={styles.mainScroll} data-scroll-container="app-content">
+							<div className={styles.stickyBanners}>
+								<NetworkStatusBanner />
+								<JobQueueBanner />
+							</div>
 							<Suspense
 								fallback={
-									<div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
+									<div className={styles.loadingFallback}>
 										<Spin />
 									</div>
 								}
@@ -365,34 +335,36 @@ export default function FullAppInner() {
 									<Route path="/objects" element={<ObjectsPage apiToken={apiToken} profileId={profileId} />} />
 									<Route path="/uploads" element={<UploadsPage apiToken={apiToken} profileId={profileId} />} />
 									<Route path="/jobs" element={<JobsPage apiToken={apiToken} profileId={profileId} />} />
-										<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
-									</Routes>
-								</Suspense>
-							</main>
-						</Content>
-					</Layout>
+									<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
+								</Routes>
+							</Suspense>
+						</main>
+					</Content>
+				</Layout>
 
-					<Drawer
+				<Drawer
 					open={!isDesktop && navOpen}
 					onClose={() => setNavOpen(false)}
 					placement="left"
 					width="80%"
 					bodyStyle={{ padding: 0 }}
 				>
-					<div style={{ padding: '20px 16px 12px' }}>
-						<Typography.Title level={5} style={{ margin: 0, letterSpacing: '-0.01em' }}>
+					<div className={styles.brandBlock}>
+						<Typography.Title level={5} className={styles.brandTitle}>
 							S3Desk
 						</Typography.Title>
-						<Typography.Text type="secondary" style={{ fontSize: 12 }}>Local Dashboard</Typography.Text>
+						<Typography.Text type="secondary" className={styles.brandSubtitle}>
+							Local Dashboard
+						</Typography.Text>
 					</div>
-						<Menu
-							mode="inline"
-							selectedKeys={[selectedKey]}
-							items={menuItems}
-							onClick={() => {
-								setNavOpen(false)
-							}}
-						/>
+					<Menu
+						mode="inline"
+						selectedKeys={[selectedKey]}
+						items={menuItems}
+						onClick={() => {
+							setNavOpen(false)
+						}}
+					/>
 				</Drawer>
 
 				<Suspense fallback={null}>

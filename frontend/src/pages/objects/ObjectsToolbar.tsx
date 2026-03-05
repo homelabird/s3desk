@@ -1,11 +1,10 @@
-import type { ReactNode } from 'react'
-import type { MenuProps } from 'antd'
-import { Badge, Button, Dropdown, Space, Tooltip } from 'antd'
 import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined, UpOutlined } from '@ant-design/icons'
+import { Badge, Button, Dropdown, Space, Tooltip, type MenuProps } from 'antd'
+import type { ReactNode } from 'react'
 
+import { DatalistInput } from '../../components/DatalistInput'
 import type { UIAction } from './objectsActions'
 import styles from './objects.module.css'
-import { DatalistInput } from '../../components/DatalistInput'
 
 export type ObjectsToolbarProps = {
 	isDesktop: boolean
@@ -52,34 +51,37 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	const uploadTooltipText = !props.hasProfile
 		? 'Select a profile first'
 		: props.isOffline
-				? 'Offline: check your network connection'
-				: !props.bucket
-					? 'Select a bucket first'
-					: !props.uploadEnabled
-						? props.uploadDisabledReason ?? 'Uploads are not supported by this provider'
-						: 'Upload files or folders'
+			? 'Offline: check your network connection'
+			: !props.bucket
+				? 'Select a bucket first'
+				: !props.uploadEnabled
+					? props.uploadDisabledReason ?? 'Uploads are not supported by this provider'
+					: 'Upload files or folders'
 	const createFolderTooltipText = props.createFolderTooltipText
 	const showSelectionPrimaryActions = props.showPrimaryActions && props.selectedCount > 0
 	const downloadDisabledReason = !props.hasProfile
 		? 'Select a profile first'
 		: props.isOffline
 			? 'Offline: check your network connection'
-		: !props.bucket
-			? 'Select a bucket first'
-			: props.selectedCount === 0
-				? 'Select objects to download'
-				: 'Download to your browser'
+			: !props.bucket
+				? 'Select a bucket first'
+				: props.selectedCount === 0
+					? 'Select objects to download'
+					: 'Download to your browser'
 	const deleteDisabledReason = !props.hasProfile
 		? 'Select a profile first'
 		: props.isOffline
 			? 'Offline: check your network connection'
-		: !props.bucket
-			? 'Select a bucket first'
-			: props.selectedCount === 0
-				? 'Select objects to delete'
-				: 'Delete selected objects'
+			: !props.bucket
+				? 'Select a bucket first'
+				: props.selectedCount === 0
+					? 'Select objects to delete'
+					: 'Delete selected objects'
 
-	const renderPrimaryActionButton = (action: UIAction | undefined, opts: { icon: ReactNode; fallbackLabel: string; danger?: boolean; tooltip: string }) => {
+	const renderPrimaryActionButton = (
+		action: UIAction | undefined,
+		opts: { icon: ReactNode; fallbackLabel: string; danger?: boolean; tooltip: string },
+	) => {
 		if (!action) return null
 		const label = props.showLabels ? action.shortLabel ?? action.label ?? opts.fallbackLabel : null
 		const disabled = !action.enabled
@@ -154,30 +156,30 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					) : null}
 
 					<DatalistInput
-									value={props.bucket}
-									onChange={(value) => props.onBucketChange(value.trim() ? value : null)}
-									placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? 'Loading buckets…' : 'Bucket…'}
-									ariaLabel="Bucket"
-									allowClear
-									style={{ width: 260, maxWidth: '100%' }}
-									disabled={!canUseBucket || (props.bucketsLoading && props.bucketOptions.length === 0)}
-									onFocus={() => props.onBucketDropdownVisibleChange?.(true)}
-									onBlur={() => props.onBucketDropdownVisibleChange?.(false)}
-									options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
-								/>
+						value={props.bucket}
+						onChange={(value) => props.onBucketChange(value.trim() ? value : null)}
+						placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? 'Loading buckets…' : 'Bucket…'}
+						ariaLabel="Bucket"
+						allowClear
+						className={styles.toolbarBucketDesktop}
+						disabled={!canUseBucket || (props.bucketsLoading && props.bucketOptions.length === 0)}
+						onFocus={() => props.onBucketDropdownVisibleChange?.(true)}
+						onBlur={() => props.onBucketDropdownVisibleChange?.(false)}
+						options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+					/>
 				</Space>
 
-					<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
-						<Tooltip title={uploadTooltipText}>
-							<span>{uploadButtonDesktop}</span>
-						</Tooltip>
-						<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
-							<span>{newFolderButton}</span>
-						</Tooltip>
-						{showSelectionPrimaryActions ? (
-							<>
-								{renderPrimaryActionButton(props.primaryDownloadAction, {
-									icon: <DownloadOutlined />,
+				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
+					<Tooltip title={uploadTooltipText}>
+						<span>{uploadButtonDesktop}</span>
+					</Tooltip>
+					<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
+						<span>{newFolderButton}</span>
+					</Tooltip>
+					{showSelectionPrimaryActions ? (
+						<>
+							{renderPrimaryActionButton(props.primaryDownloadAction, {
+								icon: <DownloadOutlined />,
 								fallbackLabel: 'Download',
 								tooltip: downloadDisabledReason,
 							})}
@@ -191,12 +193,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					) : null}
 					<Dropdown trigger={['click']} menu={props.topMoreMenu}>
 						<Badge count={props.activeTransferCount} size="small" showZero={false}>
-							<Button
-								icon={<EllipsisOutlined />}
-								disabled={!props.hasProfile}
-								data-testid="objects-toolbar-more"
-								aria-label="More actions"
-							>
+							<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} data-testid="objects-toolbar-more" aria-label="More actions">
 								More
 							</Button>
 						</Badge>
@@ -207,9 +204,9 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	}
 
 	return (
-			<div className={styles.toolbarColumn}>
-				<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-					<Space wrap className={styles.toolbarGroup}>
+		<div className={styles.toolbarColumn}>
+			<Space wrap className={styles.toolbarTopRow}>
+				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarTopActions}`}>
 					{props.isAdvanced ? (
 						<>
 							<Tooltip title="Back">
@@ -238,16 +235,16 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							</Button>
 						</>
 					) : null}
-						<Tooltip title={uploadTooltipText}>
-							<span>{uploadButtonMobile}</span>
-						</Tooltip>
-						<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
-							<span>{newFolderButton}</span>
-						</Tooltip>
-						{showSelectionPrimaryActions ? (
-							<>
-								{renderPrimaryActionButton(props.primaryDownloadAction, {
-									icon: <DownloadOutlined />,
+					<Tooltip title={uploadTooltipText}>
+						<span>{uploadButtonMobile}</span>
+					</Tooltip>
+					<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
+						<span>{newFolderButton}</span>
+					</Tooltip>
+					{showSelectionPrimaryActions ? (
+						<>
+							{renderPrimaryActionButton(props.primaryDownloadAction, {
+								icon: <DownloadOutlined />,
 								fallbackLabel: 'Download',
 								tooltip: downloadDisabledReason,
 							})}
@@ -260,22 +257,12 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						</>
 					) : null}
 					{props.isAdvanced && !props.dockTree ? (
-						<Button
-							icon={<FolderOutlined />}
-							onClick={props.onOpenTree}
-							disabled={!props.hasProfile || props.isOffline}
-							aria-label="Folders"
-						>
+						<Button icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile || props.isOffline} aria-label="Folders">
 							{props.showLabels ? 'Folders' : null}
 						</Button>
 					) : null}
 					{props.isAdvanced && !props.dockDetails ? (
-						<Button
-							icon={<InfoCircleOutlined />}
-							onClick={props.onOpenDetails}
-							disabled={!props.hasProfile || props.isOffline}
-							aria-label="Details"
-						>
+						<Button icon={<InfoCircleOutlined />} onClick={props.onOpenDetails} disabled={!props.hasProfile || props.isOffline} aria-label="Details">
 							{props.showLabels ? 'Details' : null}
 						</Button>
 					) : null}
@@ -283,12 +270,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 
 				<Dropdown trigger={['click']} menu={props.topMoreMenu}>
 					<Badge count={props.activeTransferCount} size="small" showZero={false}>
-						<Button
-							icon={<EllipsisOutlined />}
-							disabled={!props.hasProfile}
-							data-testid="objects-toolbar-more"
-							aria-label="More actions"
-						>
+						<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} data-testid="objects-toolbar-more" aria-label="More actions">
 							{props.showLabels ? 'Actions' : null}
 						</Button>
 					</Badge>
@@ -296,17 +278,17 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 			</Space>
 
 			<DatalistInput
-						value={props.bucket}
-					onChange={(value) => props.onBucketChange(value.trim() ? value : null)}
-					placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? 'Loading buckets…' : 'Bucket…'}
-					ariaLabel="Bucket"
-					allowClear
-					style={{ width: '100%', maxWidth: '100%' }}
-					disabled={!canUseBucket || (props.bucketsLoading && props.bucketOptions.length === 0)}
-					onFocus={() => props.onBucketDropdownVisibleChange?.(true)}
-					onBlur={() => props.onBucketDropdownVisibleChange?.(false)}
-					options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
-				/>
+				value={props.bucket}
+				onChange={(value) => props.onBucketChange(value.trim() ? value : null)}
+				placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? 'Loading buckets…' : 'Bucket…'}
+				ariaLabel="Bucket"
+				allowClear
+				className={styles.toolbarBucketMobile}
+				disabled={!canUseBucket || (props.bucketsLoading && props.bucketOptions.length === 0)}
+				onFocus={() => props.onBucketDropdownVisibleChange?.(true)}
+				onBlur={() => props.onBucketDropdownVisibleChange?.(false)}
+				options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+			/>
 		</div>
 	)
 }

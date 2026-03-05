@@ -9,6 +9,7 @@ import { AppTabs } from '../../components/AppTabs'
 import { NativeSelect } from '../../components/NativeSelect'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import styles from './BucketPolicyModal.module.css'
 import { getPolicyPresets, getPolicyTemplate, type PolicyKind } from './policyPresets'
 
 type ParsedPolicy =
@@ -453,9 +454,9 @@ function BucketPolicyEditor(props: {
 	}
 
 	const renderStructuredEditor = () => {
-		if (policyKind === 'gcs') {
-			return (
-						<Space orientation="vertical" style={{ width: '100%' }} size="middle">
+			if (policyKind === 'gcs') {
+				return (
+					<Space orientation="vertical" className={styles.fullWidth} size="middle">
 							<Space align="center" wrap>
 								<Switch
 									checked={gcsPublicRead}
@@ -499,39 +500,39 @@ function BucketPolicyEditor(props: {
 							type="info"
 							showIcon
 							title="etag preserved"
-							description={
-								<Space orientation="vertical" size={4} style={{ width: '100%' }}>
-									<Typography.Text type="secondary">This value will be sent back on save.</Typography.Text>
-									<Typography.Text code>{gcsEtag}</Typography.Text>
-								</Space>
-							}
-						/>
+								description={
+									<Space orientation="vertical" size={4} className={styles.fullWidth}>
+										<Typography.Text type="secondary">This value will be sent back on save.</Typography.Text>
+										<Typography.Text code>{gcsEtag}</Typography.Text>
+									</Space>
+								}
+							/>
 					)}
 
 					{gcsBindings.length === 0 ? (
 						<Typography.Text type="secondary">No bindings</Typography.Text>
-					) : (
-						<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
-							<table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse' }}>
-								<thead>
-									<tr style={{ background: '#fafafa' }}>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 260 }}>
-											Role
-										</th>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
-											Members
-										</th>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 90 }}>
-											Actions
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{gcsBindings.map((row) => (
-										<tr key={row.key}>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
-												<Input
-													value={row.role}
+						) : (
+							<div className={styles.tableWrap}>
+								<table className={`${styles.policyTable} ${styles.gcsTable}`}>
+									<thead>
+										<tr className={styles.headRow}>
+											<th className={`${styles.th} ${styles.thRole}`}>
+												Role
+											</th>
+											<th className={styles.th}>
+												Members
+											</th>
+											<th className={`${styles.th} ${styles.thActions}`}>
+												Actions
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{gcsBindings.map((row) => (
+											<tr key={row.key}>
+												<td className={styles.td}>
+													<Input
+														value={row.role}
 													aria-label="Role"
 													onChange={(e) => {
 														const v = e.target.value
@@ -540,9 +541,9 @@ function BucketPolicyEditor(props: {
 													placeholder="roles/storage.objectViewer…"
 												/>
 											</td>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
-												<Input.TextArea
-											value={row.members.join('\n')}
+												<td className={styles.td}>
+													<Input.TextArea
+												value={row.members.join('\n')}
 											aria-label="Members"
 											onChange={(e) => {
 												const raw = e.target.value
@@ -556,15 +557,15 @@ function BucketPolicyEditor(props: {
 													prev.map((b) => (b.key === row.key ? { ...b, members: Array.from(uniq) } : b)),
 												)
 											}}
-											autoSize={{ minRows: 2, maxRows: 6 }}
-											style={{ width: '100%', minWidth: 320 }}
-											placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
-										/>
-											</td>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
-												<Button danger size="small" onClick={() => setGcsBindings((prev) => prev.filter((b) => b.key !== row.key))}>
-													Remove
-												</Button>
+												autoSize={{ minRows: 2, maxRows: 6 }}
+												className={styles.membersInput}
+												placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
+											/>
+												</td>
+												<td className={styles.td}>
+													<Button danger size="small" onClick={() => setGcsBindings((prev) => prev.filter((b) => b.key !== row.key))}>
+														Remove
+													</Button>
 											</td>
 										</tr>
 									))}
@@ -583,23 +584,23 @@ function BucketPolicyEditor(props: {
 			)
 		}
 
-		if (policyKind === 'azure') {
-			return (
-				<Space orientation="vertical" style={{ width: '100%' }} size="middle">
+			if (policyKind === 'azure') {
+				return (
+					<Space orientation="vertical" className={styles.fullWidth} size="middle">
 						<Space align="center" wrap>
 							<Typography.Text strong>Public access:</Typography.Text>
 							<NativeSelect
-											value={azurePublicAccess}
-											onChange={(v) => setAzurePublicAccess(v as 'private' | 'blob' | 'container')}
-											ariaLabel="Public access"
-											style={{ width: 360 }}
-											options={[
-												{ value: 'private', label: 'private' },
-												{ value: 'blob', label: 'blob (public read for blobs)' },
-												{ value: 'container', label: 'container (public read for container + blobs)' },
-											]}
-										/>
-					</Space>
+								value={azurePublicAccess}
+								onChange={(v) => setAzurePublicAccess(v as 'private' | 'blob' | 'container')}
+								ariaLabel="Public access"
+								className={styles.publicAccessSelect}
+								options={[
+									{ value: 'private', label: 'private' },
+									{ value: 'blob', label: 'blob (public read for blobs)' },
+									{ value: 'container', label: 'container (public read for container + blobs)' },
+								]}
+							/>
+						</Space>
 
 					{azureStoredPolicies.length > 5 ? (
 						<Alert type="warning" showIcon title="Azure supports at most 5 stored access policies" />
@@ -607,30 +608,30 @@ function BucketPolicyEditor(props: {
 
 					{azureStoredPolicies.length === 0 ? (
 						<Typography.Text type="secondary">No stored access policies</Typography.Text>
-					) : (
-						<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflowX: 'auto' }}>
-							<table style={{ width: '100%', minWidth: 860, borderCollapse: 'collapse' }}>
-								<thead>
-									<tr style={{ background: '#fafafa' }}>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 240 }}>ID</th>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
-											Start (optional)
-										</th>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 220 }}>
-											Expiry (optional)
-										</th>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 140 }}>
-											Permission
-										</th>
-										<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #f0f0f0', width: 90 }}>
-											Actions
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{azureStoredPolicies.map((row) => (
-										<tr key={row.key}>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+						) : (
+							<div className={styles.tableWrap}>
+								<table className={`${styles.policyTable} ${styles.azureTable}`}>
+									<thead>
+										<tr className={styles.headRow}>
+											<th className={`${styles.th} ${styles.thId}`}>ID</th>
+											<th className={`${styles.th} ${styles.thTime}`}>
+												Start (optional)
+											</th>
+											<th className={`${styles.th} ${styles.thTime}`}>
+												Expiry (optional)
+											</th>
+											<th className={`${styles.th} ${styles.thPermission}`}>
+												Permission
+											</th>
+											<th className={`${styles.th} ${styles.thActions}`}>
+												Actions
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										{azureStoredPolicies.map((row) => (
+											<tr key={row.key}>
+												<td className={styles.td}>
 												<Input
 													value={row.id}
 													aria-label="ID"
@@ -641,7 +642,7 @@ function BucketPolicyEditor(props: {
 													placeholder="policy-id…"
 												/>
 											</td>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<td className={styles.td}>
 												<Input
 													value={row.start}
 													aria-label="Start"
@@ -652,7 +653,7 @@ function BucketPolicyEditor(props: {
 													placeholder="2024-01-01T00:00:00Z…"
 												/>
 											</td>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<td className={styles.td}>
 												<Input
 													value={row.expiry}
 													aria-label="Expiry"
@@ -663,7 +664,7 @@ function BucketPolicyEditor(props: {
 													placeholder="2024-02-01T00:00:00Z…"
 												/>
 											</td>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<td className={styles.td}>
 												<Input
 													value={row.permission}
 													aria-label="Permission"
@@ -674,7 +675,7 @@ function BucketPolicyEditor(props: {
 													placeholder="rl…"
 												/>
 											</td>
-											<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<td className={styles.td}>
 												<Button danger size="small" onClick={() => setAzureStoredPolicies((prev) => prev.filter((p) => p.key !== row.key))}>
 													Remove
 												</Button>
@@ -739,7 +740,7 @@ function BucketPolicyEditor(props: {
 				putMutation.mutate({ policy: parsed.value } as BucketPolicyPutRequest)
 			}}
 			footer={(_, { OkBtn, CancelBtn }) => (
-				<Space style={{ width: '100%', justifyContent: 'space-between' }}>
+				<Space className={styles.footerActions}>
 					<Tooltip title={deleteDisabledReason || null}>
 						<span>
 							<Button
@@ -780,7 +781,7 @@ function BucketPolicyEditor(props: {
 						key: 'validate',
 						label: 'Validate',
 						children: (
-							<Space orientation="vertical" style={{ width: '100%' }} size="middle">
+							<Space orientation="vertical" className={styles.fullWidth} size="middle">
 								{parsed.ok ? (
 									<Alert
 										type="success"
@@ -825,19 +826,19 @@ function BucketPolicyEditor(props: {
 								<Space align="center" wrap>
 									<Typography.Text type="secondary">Template:</Typography.Text>
 									<NativeSelect
-											value={selectedPresetKey ?? ''}
-											onChange={(value) => {
-												if (!value) {
-													setSelectedPresetKey(undefined)
-													return
-												}
-												applyPolicyPreset(String(value))
-											}}
-											ariaLabel="Template preset"
-											style={{ minWidth: 320 }}
-											placeholder="Load provider preset"
-											options={policyPresets.map((item) => ({ value: item.key, label: item.label }))}
-										/>
+										value={selectedPresetKey ?? ''}
+										onChange={(value) => {
+											if (!value) {
+												setSelectedPresetKey(undefined)
+												return
+											}
+											applyPolicyPreset(String(value))
+										}}
+										ariaLabel="Template preset"
+										className={styles.presetSelect}
+										placeholder="Load provider preset"
+										options={policyPresets.map((item) => ({ value: item.key, label: item.label }))}
+									/>
 								</Space>
 
 								{selectedPresetDescription ? (
@@ -847,7 +848,7 @@ function BucketPolicyEditor(props: {
 								{editorMode === 'form' && policyKind !== 's3' ? renderStructuredEditor() : null}
 
 								{editorMode === 'json' || policyKind === 's3' ? (
-									<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+									<Space orientation="vertical" size="small" className={styles.fullWidth}>
 										<Input.TextArea
 											value={policyText}
 											onChange={(e) => {
@@ -874,7 +875,7 @@ function BucketPolicyEditor(props: {
 									title={hasBlockingValidationIssues ? 'Local validation found issues' : parsed.ok ? 'Local validation OK' : 'Local validation failed'}
 									description={
 										hasBlockingValidationIssues ? (
-											<Space orientation="vertical" size={2} style={{ width: '100%' }}>
+											<Space orientation="vertical" size={2} className={styles.fullWidth}>
 												{localValidationErrors.map((row, idx) => (
 													<Typography.Text key={`${idx}-${row}`} type="secondary">
 														{row}
@@ -923,7 +924,7 @@ function BucketPolicyEditor(props: {
 											showIcon
 											title={serverValidation.ok ? 'Server validation OK' : 'Server validation found issues'}
 											description={
-												<Space orientation="vertical" size={4} style={{ width: '100%' }}>
+												<Space orientation="vertical" size={4} className={styles.fullWidth}>
 													{serverValidationMessages.map((row, idx) => (
 														<Typography.Text key={`${idx}-${row}`} type="secondary">
 															{row}
@@ -944,7 +945,7 @@ function BucketPolicyEditor(props: {
 											showIcon
 											title="Provider rejected the policy"
 											description={
-												<Space orientation="vertical" size={4} style={{ width: '100%' }}>
+												<Space orientation="vertical" size={4} className={styles.fullWidth}>
 													<Typography.Text type="secondary">{lastProviderError.message}</Typography.Text>
 													{providerCause ? <Typography.Text type="secondary">Cause: {providerCause}</Typography.Text> : null}
 													{providerError ? (
@@ -961,7 +962,7 @@ function BucketPolicyEditor(props: {
 						key: 'preview',
 						label: 'Preview',
 						children: (
-							<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+							<Space orientation="vertical" size="small" className={styles.fullWidth}>
 								{!parsed.ok ? (
 									<Alert type="warning" showIcon title="Fix JSON errors first" description={parsed.error ?? 'Invalid JSON'} />
 									) : null}
@@ -973,7 +974,7 @@ function BucketPolicyEditor(props: {
 							key: 'diff',
 							label: hasPolicyChanges ? `Diff (+${diffStats.added}/-${diffStats.removed})` : 'Diff',
 							children: (
-								<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+								<Space orientation="vertical" size="small" className={styles.fullWidth}>
 									<Alert
 										type={hasPolicyChanges ? 'info' : 'success'}
 										showIcon

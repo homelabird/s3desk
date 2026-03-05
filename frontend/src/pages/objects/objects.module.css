@@ -32,6 +32,26 @@
   justify-content: flex-end;
 }
 
+.toolbarTopRow {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.toolbarTopActions {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.toolbarBucketDesktop {
+  width: 260px;
+  max-width: 100%;
+}
+
+.toolbarBucketMobile {
+  width: 100%;
+  max-width: 100%;
+}
+
 .layout {
   width: 100%;
   flex: 1 1 auto;
@@ -451,4 +471,128 @@
   .listHeaderRow {
     padding: 6px 8px;
   }
+}
+
+.drawerFullWidth {
+  width: 100%;
+}
+
+.drawerResponsiveField {
+  width: 100%;
+  max-width: 100%;
+}
+
+.drawerHalfInput {
+  flex: 1;
+  max-width: 100%;
+}
+
+.drawerActions {
+  justify-content: flex-end;
+}
+
+.globalSearchInputMd {
+  width: 360px;
+}
+
+.globalSearchPrefixMd {
+  width: 260px;
+}
+
+.globalSearchLimitMd {
+  width: 140px;
+}
+
+.globalSearchExtMd {
+  width: 160px;
+}
+
+.globalSearchSizeMd {
+  width: 160px;
+}
+
+.globalSearchDateMd {
+  width: 152px;
+}
+
+.globalSearchDivider {
+  margin-block: 8px;
+}
+
+.loadingRow {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.globalSearchTableWrap {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.globalSearchTableWrapMd {
+  max-height: 520px;
+}
+
+.globalSearchTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.globalSearchTableMd {
+  min-width: 920px;
+}
+
+.globalSearchTableSm {
+  min-width: 720px;
+}
+
+.globalSearchTh {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fafafa;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.globalSearchThSize {
+  width: 120px;
+}
+
+.globalSearchThModified {
+  width: 220px;
+}
+
+.globalSearchThActions {
+  width: 260px;
+}
+
+.globalSearchTd {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.globalSearchKeyText {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.globalSearchKeyTextMd {
+  max-width: 520px;
+}
+
+.globalSearchKeyTextSm {
+  max-width: 260px;
+}
+
+.globalSearchLoadMoreRow {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
 }

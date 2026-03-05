@@ -7,6 +7,7 @@ type Props = {
 	extra?: ReactNode
 	error?: ReactNode
 	errorId?: string
+	className?: string
 	style?: CSSProperties
 	children: ReactNode
 }
@@ -32,6 +33,7 @@ export function FormField(props: Props) {
 
 	return (
 		<div
+			className={props.className}
 			style={{ marginBottom: 12, ...props.style }}
 			role={hasError ? 'group' : undefined}
 			aria-describedby={hasError ? errorId : undefined}
@@ -58,4 +60,3 @@ export function FormField(props: Props) {
 		</div>
 	)
 }
-

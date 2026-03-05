@@ -4,6 +4,7 @@ import { Alert, Button, Checkbox, Dropdown, Space, Tag, Tooltip, Typography, typ
 import type { JobStatus } from '../../api/types'
 import { DatalistInput } from '../../components/DatalistInput'
 import { NativeSelect } from '../../components/NativeSelect'
+import styles from './JobsToolbar.module.css'
 import type { ColumnKey, ColumnOption, ToggleableColumnKey } from './useJobsColumnsVisibility'
 
 type TypeSuggestion = {
@@ -44,27 +45,13 @@ type Props = {
 	onRefreshJobs: () => void
 	jobsRefreshing: boolean
 	jobsCount: number
-	isMdScreen: boolean
-	dropdownBg: string
-	dropdownBorder: string
-	dropdownBorderRadius: number
-	dropdownShadow: string
 }
 
 export function JobsToolbar(props: Props) {
 	return (
 		<>
-			<div
-				style={{
-					display: 'flex',
-					width: '100%',
-					justifyContent: 'space-between',
-					alignItems: 'center',
-					gap: 12,
-					flexWrap: 'wrap',
-				}}
-			>
-				<Typography.Title level={2} style={{ margin: 0 }}>
+			<div className={styles.headerRow}>
+				<Typography.Title level={2} className={styles.pageTitle}>
 					Jobs
 				</Typography.Title>
 				<Space wrap>
@@ -126,12 +113,12 @@ export function JobsToolbar(props: Props) {
 				/>
 			) : null}
 
-			<Space wrap style={{ width: '100%' }}>
+			<Space wrap className={styles.filtersRow}>
 				<NativeSelect
 					value={props.statusFilter}
 					onChange={(next) => props.onStatusFilterChange(next as JobStatus | 'all')}
 					ariaLabel="Job status filter"
-					style={{ width: props.isMdScreen ? 200 : '100%', maxWidth: '100%' }}
+					className={styles.statusFilterControl}
 					options={[
 						{ label: 'All statuses', value: 'all' },
 						{ label: 'queued', value: 'queued' },
@@ -147,7 +134,7 @@ export function JobsToolbar(props: Props) {
 					placeholder="Type (exact, optional)…"
 					ariaLabel="Job type filter"
 					allowClear
-					style={{ width: props.isMdScreen ? 340 : '100%', maxWidth: '100%' }}
+					className={styles.typeFilterControl}
 					options={props.typeFilterSuggestions}
 				/>
 				<DatalistInput
@@ -156,7 +143,7 @@ export function JobsToolbar(props: Props) {
 					placeholder="Error code (exact, optional)…"
 					ariaLabel="Job error code filter"
 					allowClear
-					style={{ width: props.isMdScreen ? 260 : '100%', maxWidth: '100%' }}
+					className={styles.errorCodeFilterControl}
 					options={props.errorCodeSuggestions}
 				/>
 				<Button onClick={props.onResetFilters} disabled={!props.filtersDirty}>
@@ -165,17 +152,8 @@ export function JobsToolbar(props: Props) {
 				<Dropdown
 					trigger={['click']}
 					dropdownRender={() => (
-						<div
-							style={{
-								padding: 8,
-								width: 220,
-								background: props.dropdownBg,
-								border: `1px solid ${props.dropdownBorder}`,
-								borderRadius: props.dropdownBorderRadius,
-								boxShadow: props.dropdownShadow,
-							}}
-						>
-							<Space direction="vertical" size={4} style={{ width: '100%' }}>
+						<div className={styles.columnsDropdown}>
+							<Space direction="vertical" size={4} className={styles.columnsDropdownList}>
 								{props.columnOptions.map((option) => (
 									<Checkbox
 										key={option.key}

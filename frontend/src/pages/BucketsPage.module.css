@@ -1,0 +1,97 @@
+.fullWidth {
+	width: 100%;
+}
+
+.headerRow {
+	display: flex;
+	width: 100%;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.title {
+	margin: 0;
+}
+
+.loadingRow {
+	display: flex;
+	justify-content: center;
+	padding: 24px;
+}
+
+.dialogBody {
+	width: 100%;
+}
+
+.tableWrap {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	overflow-x: auto;
+	box-shadow: var(--s3d-shadow-sm);
+}
+
+.table {
+	width: 100%;
+	min-width: 640px;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.headRow {
+	background: var(--s3d-color-bg-secondary);
+}
+
+.th {
+	text-align: left;
+	padding: 12px 14px;
+	border-bottom: 1px solid var(--s3d-color-border);
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--s3d-color-text-secondary);
+}
+
+.thCreated {
+	width: 220px;
+}
+
+.thActions {
+	width: 220px;
+}
+
+.td {
+	padding: 12px 14px;
+	border-bottom: 1px solid var(--s3d-color-border);
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+	.table {
+		min-width: 560px;
+	}
+
+	.th,
+	.td {
+		padding: 10px;
+	}
+
+	.thCreated {
+		width: 180px;
+	}
+
+	.thActions {
+		width: 180px;
+	}
+}
+
+@media (max-width: 480px) {
+	.table {
+		min-width: 520px;
+	}
+
+	.th,
+	.td {
+		padding: 8px;
+	}
+}

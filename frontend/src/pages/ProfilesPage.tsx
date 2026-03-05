@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Dropdown, Empty, Input, Modal, Space, Spin, Typography, message } from 'antd'
-import { lazy, Suspense, useMemo, useState } from 'react'
-import { MoreOutlined } from '@ant-design/icons'
+import { Alert, Button, Checkbox, Empty, Space, Spin, Typography, message } from 'antd'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
@@ -11,7 +10,12 @@ import { getConnectionTroubleshootingHint } from '../lib/connectionHints'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { LinkButton } from '../components/LinkButton'
-import type { ProfileFormValues, ProfileProvider } from './profiles/profileTypes'
+import type { ProfileFormValues } from './profiles/profileTypes'
+import { ProfilesModals } from './profiles/ProfilesModals'
+import { ProfilesTable } from './profiles/ProfilesTable'
+import { buildProfileExportFilename, parseProfileYaml } from './profiles/profileYaml'
+import { buildProfilesTableRows, formatBps, toProfileEditInitialValues } from './profiles/profileViewModel'
+import styles from './ProfilesPage.module.css'
 
 type Props = {
 	apiToken: string
@@ -19,34 +23,34 @@ type Props = {
 	setProfileId: (v: string | null) => void
 }
 
+function useProfilesPageOrchestration(apiToken: string) {
+	const queryClient = useQueryClient()
+	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
+	const [searchParams, setSearchParams] = useSearchParams()
+	return { queryClient, api, searchParams, setSearchParams }
+}
+
+function ProfilesPageHeader(props: { onImport: () => void; onCreate: () => void }) {
+	return (
+		<div className={styles.headerRow}>
+			<Typography.Title level={2} className={styles.title}>
+				Profiles
+			</Typography.Title>
+			<Space wrap>
+				<Button onClick={props.onImport}>Import YAML</Button>
+				<Button type="primary" onClick={props.onCreate}>
+					New Profile
+				</Button>
+			</Space>
+		</div>
+	)
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const ProfileModal = lazy(async () => {
-	const m = await import('./profiles/ProfileModal')
-	return { default: m.ProfileModal }
-})
-
-const PROFILE_PROVIDER_LABELS: Record<string, string> = {
-	aws_s3: 'AWS S3',
-	s3_compatible: 'S3 Compatible',
-	oci_s3_compat: 'OCI S3 Compat',
-	azure_blob: 'Azure Blob',
-	gcp_gcs: 'GCP GCS',
-	oci_object_storage: 'OCI Object Storage',
-}
-
-function formatBps(bps: number): string {
-	if (bps >= 1_000_000_000) return `${(bps / 1_000_000_000).toFixed(1)} Gbps`
-	if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`
-	if (bps >= 1_000) return `${(bps / 1_000).toFixed(1)} Kbps`
-	return `${bps} bps`
-}
-
 export function ProfilesPage(props: Props) {
-	const queryClient = useQueryClient()
-	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
-	const [searchParams, setSearchParams] = useSearchParams()
+	const { queryClient, api, searchParams, setSearchParams } = useProfilesPageOrchestration(props.apiToken)
 	const createRequested = searchParams.has('create')
 	const [createOpen, setCreateOpen] = useState(() => createRequested)
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
@@ -67,7 +71,7 @@ export function ProfilesPage(props: Props) {
 		queryKey: ['profiles', props.apiToken],
 		queryFn: () => api.listProfiles(),
 	})
-	const profiles = profilesQuery.data ?? []
+	const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data])
 	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
 	const closeCreateModal = () => {
 		setCreateOpen(false)
@@ -289,52 +293,22 @@ export function ProfilesPage(props: Props) {
 	const transferEngine = metaQuery.data?.transferEngine
 	const onboardingVisible = !onboardingDismissed && (profiles.length === 0 || !props.profileId)
 	const yamlFilename = buildProfileExportFilename(yamlProfile)
-	const editInitialValues: Partial<ProfileFormValues> | undefined = editProfile
-		? {
-				provider: editProfile.provider,
-				name: editProfile.name,
-				endpoint: 'endpoint' in editProfile ? editProfile.endpoint ?? '' : '',
-				region: 'region' in editProfile ? editProfile.region ?? '' : '',
-				forcePathStyle: 'forcePathStyle' in editProfile ? editProfile.forcePathStyle ?? false : false,
-				preserveLeadingSlash: editProfile.preserveLeadingSlash,
-				tlsInsecureSkipVerify: editProfile.tlsInsecureSkipVerify,
-				azureAccountName: editProfile.provider === 'azure_blob' ? editProfile.accountName : '',
-				azureAccountKey: '',
-				azureEndpoint: editProfile.provider === 'azure_blob' ? editProfile.endpoint ?? '' : '',
-				azureUseEmulator: editProfile.provider === 'azure_blob' ? !!editProfile.useEmulator : false,
-				gcpAnonymous: editProfile.provider === 'gcp_gcs' ? !!editProfile.anonymous : false,
-				gcpEndpoint: editProfile.provider === 'gcp_gcs' ? editProfile.endpoint ?? '' : '',
-				gcpProjectNumber: editProfile.provider === 'gcp_gcs' ? editProfile.projectNumber ?? '' : '',
-				gcpServiceAccountJson: '',
-				ociNamespace: editProfile.provider === 'oci_object_storage' ? editProfile.namespace : '',
-				ociCompartment: editProfile.provider === 'oci_object_storage' ? editProfile.compartment : '',
-				ociEndpoint: editProfile.provider === 'oci_object_storage' ? editProfile.endpoint ?? '' : '',
-				ociAuthProvider: editProfile.provider === 'oci_object_storage' ? editProfile.authProvider ?? '' : '',
-				ociConfigFile: editProfile.provider === 'oci_object_storage' ? editProfile.configFile ?? '' : '',
-				ociConfigProfile: editProfile.provider === 'oci_object_storage' ? editProfile.configProfile ?? '' : '',
-			}
-		: undefined
+	const editInitialValues: Partial<ProfileFormValues> | undefined = useMemo(
+		() => toProfileEditInitialValues(editProfile),
+		[editProfile],
+	)
+	const tableRows = useMemo(() => buildProfilesTableRows(profiles, props.profileId), [profiles, props.profileId])
 
 	return (
-		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
-				<div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-					<Typography.Title level={2} style={{ margin: 0 }}>
-						Profiles
-					</Typography.Title>
-					<Space wrap>
-						<Button onClick={() => setImportOpen(true)}>Import YAML</Button>
-						<Button type="primary" onClick={() => setCreateOpen(true)}>
-							New Profile
-						</Button>
-					</Space>
-				</div>
+		<Space orientation="vertical" size="large" className={styles.fullWidth}>
+			<ProfilesPageHeader onImport={() => setImportOpen(true)} onCreate={() => setCreateOpen(true)} />
 			{onboardingVisible ? (
 				<Alert
 					type="info"
 					showIcon
 					title="Getting started"
 					description={
-						<Space orientation="vertical" size={12} style={{ width: '100%' }}>
+						<Space orientation="vertical" size={12} className={styles.fullWidth}>
 							<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
 							<Space orientation="vertical" size={6}>
 								<Checkbox checked={metaQuery.isSuccess} disabled>
@@ -347,10 +321,7 @@ export function ProfilesPage(props: Props) {
 									Transfer engine compatible
 									{transferEngine?.minVersion ? ` (>= ${transferEngine.minVersion})` : ''}
 								</Checkbox>
-								<Checkbox
-									checked={apiTokenEnabled ? !!props.apiToken.trim() : true}
-									disabled
-								>
+								<Checkbox checked={apiTokenEnabled ? !!props.apiToken.trim() : true} disabled>
 									API token configured{apiTokenEnabled ? '' : ' (not required)'}
 								</Checkbox>
 								<Checkbox checked={profiles.length > 0} disabled>
@@ -360,20 +331,20 @@ export function ProfilesPage(props: Props) {
 									Active profile selected
 								</Checkbox>
 							</Space>
-										<Space wrap>
-											<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
-												Create profile
-											</Button>
-											<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
-												Buckets
-											</LinkButton>
-											<LinkButton to="/objects" size="small" disabled={!props.profileId}>
-												Objects
-											</LinkButton>
-										<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
-											Dismiss
-										</Button>
-								</Space>
+							<Space wrap>
+								<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
+									Create profile
+								</Button>
+								<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
+									Buckets
+								</LinkButton>
+								<LinkButton to="/objects" size="small" disabled={!props.profileId}>
+									Objects
+								</LinkButton>
+								<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
+									Dismiss
+								</Button>
+							</Space>
 						</Space>
 					}
 				/>
@@ -384,7 +355,7 @@ export function ProfilesPage(props: Props) {
 			) : null}
 
 			{profilesQuery.isFetching && profiles.length === 0 ? (
-				<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+				<div className={styles.loadingRow}>
 					<Spin />
 				</div>
 			) : showProfilesEmpty ? (
@@ -394,299 +365,69 @@ export function ProfilesPage(props: Props) {
 					</Button>
 				</Empty>
 			) : (
-				<div style={{ border: '1px solid var(--s3d-color-border)', borderRadius: 'var(--s3d-radius-sm)', overflowX: 'auto' }}>
-					<table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
-						<thead>
-							<tr style={{ background: 'var(--s3d-color-bg-secondary)' }}>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 240 }}>Name</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 180 }}>Provider</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>Connection</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 220 }}>Flags</th>
-								<th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)', width: 240 }}>Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							{profiles.map((row) => {
-								const provider = row.provider
-								const providerLabel = provider ? PROFILE_PROVIDER_LABELS[provider] || provider : 'unknown'
-
-								const connectionNode = (() => {
-									if (provider === 'azure_blob') {
-										const accountName = row.accountName || ''
-										const endpoint = row.endpoint
-										const useEmulator = !!row.useEmulator
-										const parts: string[] = [useEmulator ? 'emulator' : 'storage account']
-										if (endpoint) parts.push(endpoint)
-										const secondary = parts.join(' · ')
-										return (
-											<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-												<Typography.Text>{accountName}</Typography.Text>
-												<Typography.Text type="secondary">{secondary}</Typography.Text>
-											</Space>
-										)
-									}
-
-									if (provider === 'gcp_gcs') {
-										const projectId = row.projectId
-										const clientEmail = row.clientEmail
-										const endpoint = row.endpoint
-										const primary = projectId || clientEmail || ''
-										const secondary = endpoint || (projectId && clientEmail ? clientEmail : '')
-										return (
-											<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-												<Typography.Text>{primary}</Typography.Text>
-												{secondary ? <Typography.Text type="secondary">{secondary}</Typography.Text> : null}
-											</Space>
-										)
-									}
-
-									if (provider === 'oci_object_storage') {
-										const namespace = row.namespace
-										const compartment = row.compartment
-										const region = row.region
-										const endpoint = row.endpoint
-
-										const top = namespace || endpoint || ''
-										const bottomParts: string[] = []
-										if (region) bottomParts.push(region)
-										if (compartment) bottomParts.push(compartment)
-										const bottom = bottomParts.join(' · ')
-
-										return (
-											<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-												<Typography.Text>{top}</Typography.Text>
-												{bottom ? <Typography.Text type="secondary">{bottom}</Typography.Text> : null}
-											</Space>
-										)
-									}
-
-									const endpoint = 'endpoint' in row ? row.endpoint ?? '' : ''
-									const region = 'region' in row ? row.region ?? '' : ''
-									const endpointLabel = endpoint || (provider === 'aws_s3' ? 'AWS default endpoint' : '')
-									return (
-										<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-											<Typography.Text>{endpointLabel}</Typography.Text>
-											{region ? <Typography.Text type="secondary">{region}</Typography.Text> : null}
-										</Space>
-									)
-								})()
-
-								const flagsNode = (() => {
-									const isS3 = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
-									const parts: string[] = []
-									if (isS3 && 'forcePathStyle' in row) parts.push(row.forcePathStyle ? 'path-style' : 'virtual-host')
-									parts.push(row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash')
-									parts.push(row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify')
-									return <Typography.Text type="secondary">{parts.join(' / ')}</Typography.Text>
-								})()
-
-								return (
-									<tr key={row.id}>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
-											<Space>
-												<Typography.Text strong>{row.name}</Typography.Text>
-												{props.profileId === row.id ? <Typography.Text type="success">Active</Typography.Text> : null}
-											</Space>
-										</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
-											<Typography.Text code>{providerLabel}</Typography.Text>
-										</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>{connectionNode}</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>{flagsNode}</td>
-										<td style={{ padding: '10px 12px', borderBottom: '1px solid var(--s3d-color-border)' }}>
-											<Space wrap>
-												<Button size="small" onClick={() => props.setProfileId(row.id)}>
-													Use
-												</Button>
-												<Dropdown
-													trigger={['click']}
-													menu={{
-														items: [
-															{ key: 'edit', label: 'Edit' },
-															{
-																key: 'test',
-																label: testMutation.isPending && testingProfileId === row.id ? 'Testing…' : 'Test',
-																disabled: testMutation.isPending && testingProfileId === row.id,
-															},
-															{
-																key: 'benchmark',
-																label: benchmarkMutation.isPending && benchmarkingProfileId === row.id ? 'Benchmarking…' : 'Benchmark',
-																disabled: benchmarkMutation.isPending && benchmarkingProfileId === row.id,
-															},
-															{
-																key: 'yaml',
-																label: exportYamlMutation.isPending && exportingProfileId === row.id ? 'Exporting YAML…' : 'YAML',
-																disabled: exportYamlMutation.isPending && exportingProfileId === row.id,
-															},
-															{ type: 'divider' },
-															{
-																key: 'delete',
-																label: deleteMutation.isPending && deletingProfileId === row.id ? 'Deleting…' : 'Delete',
-																danger: true,
-																disabled: deleteMutation.isPending && deletingProfileId === row.id,
-															},
-														],
-														onClick: ({ key }) => {
-															if (key === 'edit') {
-																setEditProfile(row)
-																return
-															}
-															if (key === 'test') {
-																testMutation.mutate(row.id)
-																return
-															}
-															if (key === 'benchmark') {
-																benchmarkMutation.mutate(row.id)
-																return
-															}
-															if (key === 'yaml') {
-																openYamlModal(row)
-																return
-															}
-															if (key === 'delete') {
-																confirmDangerAction({
-																	title: `Delete profile "${row.name}"?`,
-																	description: 'This removes the profile and any TLS settings associated with it.',
-																	confirmText: row.name,
-																	confirmHint: `Type "${row.name}" to confirm`,
-																	onConfirm: async () => {
-																		await deleteMutation.mutateAsync(row.id)
-																	},
-																})
-															}
-														},
-													}}
-												>
-													<Button size="small" icon={<MoreOutlined />} aria-label={`More actions for ${row.name}`}>
-														More
-													</Button>
-												</Dropdown>
-											</Space>
-										</td>
-									</tr>
-								)
-							})}
-						</tbody>
-					</table>
-				</div>
+				<ProfilesTable
+					rows={tableRows}
+					onUseProfile={props.setProfileId}
+					onEdit={setEditProfile}
+					onTest={(id) => testMutation.mutate(id)}
+					onBenchmark={(id) => benchmarkMutation.mutate(id)}
+					onOpenYaml={openYamlModal}
+					onDelete={(profile) => {
+						confirmDangerAction({
+							title: `Delete profile "${profile.name}"?`,
+							description: 'This removes the profile and any TLS settings associated with it.',
+							confirmText: profile.name,
+							confirmHint: `Type "${profile.name}" to confirm`,
+							onConfirm: async () => {
+								await deleteMutation.mutateAsync(profile.id)
+							},
+						})
+					}}
+					isTestPending={testMutation.isPending}
+					testingProfileId={testingProfileId}
+					isBenchmarkPending={benchmarkMutation.isPending}
+					benchmarkingProfileId={benchmarkingProfileId}
+					isExportYamlPending={exportYamlMutation.isPending}
+					exportingProfileId={exportingProfileId}
+					isDeletePending={deleteMutation.isPending}
+					deletingProfileId={deletingProfileId}
+				/>
 			)}
 
-			<Suspense fallback={null}>
-					{createOpen ? (
-						<ProfileModal
-							open
-							title="Create Profile"
-							okText="Create"
-							onCancel={closeCreateModal}
-							onSubmit={(values) => createMutation.mutate(values)}
-							loading={createMutation.isPending}
-							tlsCapability={tlsCapability ?? null}
-						/>
-					) : null}
-
-				{editProfile ? (
-					<ProfileModal
-						open
-						title="Edit Profile"
-						okText="Save"
-						onCancel={() => setEditProfile(null)}
-						onSubmit={(values) => {
-							updateMutation.mutate({ id: editProfile.id, values })
-						}}
-						loading={updateMutation.isPending}
-						initialValues={editInitialValues}
-						editMode
-						tlsCapability={tlsCapability ?? null}
-						tlsStatus={profileTLSQuery.data ?? null}
-						tlsStatusLoading={profileTLSQuery.isFetching}
-						tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
-					/>
-				) : null}
-			</Suspense>
-
-				<Modal
-					open={yamlOpen}
-				title="Profile YAML"
-				onCancel={closeYamlModal}
-				footer={[
-					<Button key="copy" disabled={!yamlContent} onClick={handleYamlCopy}>
-						Copy
-					</Button>,
-					<Button key="download" type="primary" disabled={!yamlContent} onClick={handleYamlDownload}>
-						Download
-					</Button>,
-					<Button key="close" onClick={closeYamlModal}>
-						Close
-					</Button>,
-				]}
-				destroyOnHidden
-			>
-				<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-					<Alert
-						type="warning"
-						showIcon
-						title="Contains credentials"
-						description="This export includes access keys and secrets. Store it securely."
-					/>
-					{yamlProfile ? (
-						<Typography.Text>
-							Profile: <Typography.Text code>{yamlProfile.name}</Typography.Text>
-						</Typography.Text>
-					) : null}
-					{yamlError ? <Alert type="error" showIcon title="Failed to load YAML" description={yamlError} /> : null}
-					{exportYamlMutation.isPending && !yamlContent ? (
-						<Spin />
-					) : (
-						<Input.TextArea value={yamlContent} readOnly autoSize={{ minRows: 6, maxRows: 16 }} />
-					)}
-					{yamlContent ? (
-						<Typography.Text type="secondary">Filename: {yamlFilename}</Typography.Text>
-					) : null}
-				</Space>
-				</Modal>
-
-				<Modal
-					open={importOpen}
-					title="Import Profile YAML"
-					onCancel={closeImportModal}
-					okText="Import"
-					onOk={() => importMutation.mutate(importText)}
-					okButtonProps={{ disabled: importMutation.isPending || importText.trim() === '' }}
-					confirmLoading={importMutation.isPending}
-					destroyOnHidden
-				>
-					<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-						<Typography.Text type="secondary">
-							Import a profile exported from S3Desk. This will create a new profile (the YAML id is ignored).
-						</Typography.Text>
-						<input
-							type="file"
-							accept=".yaml,.yml"
-							aria-label="Import profile YAML file"
-							onChange={(e) => {
-								const file = e.target.files?.[0]
-								if (!file) return
-								const reader = new FileReader()
-								reader.onload = () => {
-									const text = typeof reader.result === 'string' ? reader.result : ''
-									setImportText(text)
-									setImportError(null)
-								}
-								reader.readAsText(file)
-							}}
-						/>
-						<Input.TextArea
-							value={importText}
-							onChange={(e) => {
-								setImportText(e.target.value)
-								setImportError(null)
-							}}
-							autoSize={{ minRows: 8, maxRows: 16 }}
-							placeholder="Paste YAML here…"
-						/>
-						{importError ? <Alert type="error" showIcon title={importError} /> : null}
-					</Space>
-				</Modal>
+			<ProfilesModals
+				createOpen={createOpen}
+				closeCreateModal={closeCreateModal}
+				onCreateSubmit={(values) => createMutation.mutate(values)}
+				createLoading={createMutation.isPending}
+				editProfile={editProfile}
+				closeEditModal={() => setEditProfile(null)}
+				onEditSubmit={(id, values) => {
+					updateMutation.mutate({ id, values })
+				}}
+				editLoading={updateMutation.isPending}
+				editInitialValues={editInitialValues}
+				tlsCapability={tlsCapability ?? null}
+				tlsStatus={profileTLSQuery.data ?? null}
+				tlsStatusLoading={profileTLSQuery.isFetching}
+				tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
+				yamlOpen={yamlOpen}
+				closeYamlModal={closeYamlModal}
+				yamlProfile={yamlProfile}
+				yamlError={yamlError}
+				yamlContent={yamlContent}
+				yamlFilename={yamlFilename}
+				exportYamlLoading={exportYamlMutation.isPending}
+				onYamlCopy={() => void handleYamlCopy()}
+				onYamlDownload={handleYamlDownload}
+				importOpen={importOpen}
+				closeImportModal={closeImportModal}
+				importText={importText}
+				importError={importError}
+				importLoading={importMutation.isPending}
+				onImportSubmit={() => importMutation.mutate(importText)}
+				onImportTextChange={setImportText}
+				onImportErrorClear={() => setImportError(null)}
+			/>
 		</Space>
 	)
 }
@@ -704,213 +445,6 @@ function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig |
 	}
 	if (caCertPem) cfg.caCertPem = caCertPem
 	return cfg
-}
-
-type ProfileYamlProfile = {
-	id?: string
-	name?: string
-	provider?: ProfileProvider
-	endpoint?: string
-	region?: string
-	accessKeyId?: string
-	secretAccessKey?: string
-	sessionToken?: string | null
-	forcePathStyle?: boolean
-	accountName?: string
-	accountKey?: string
-	useEmulator?: boolean
-	serviceAccountJson?: string
-	anonymous?: boolean
-	projectNumber?: string
-	namespace?: string
-	compartment?: string
-	authProvider?: string
-	configFile?: string
-	configProfile?: string
-	preserveLeadingSlash?: boolean
-	tlsInsecureSkipVerify?: boolean
-}
-
-type ProfileYamlTLS = {
-	mode?: string
-	clientCertPem?: string
-	clientKeyPem?: string
-	caCertPem?: string
-}
-
-const PROFILE_PROVIDERS: ProfileProvider[] = [
-	'aws_s3',
-	's3_compatible',
-	'oci_s3_compat',
-	'azure_blob',
-	'gcp_gcs',
-	'oci_object_storage',
-]
-
-const isProfileProvider = (value: unknown): value is ProfileProvider =>
-	typeof value === 'string' && PROFILE_PROVIDERS.includes(value as ProfileProvider)
-
-const toOptionalString = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() !== '' ? value : undefined)
-
-function extractProfileYaml(raw: unknown): { profile: ProfileYamlProfile; tls?: ProfileYamlTLS } {
-	if (!isRecord(raw)) {
-		throw new Error('YAML must be an object')
-	}
-	if ('profile' in raw) {
-		const profile = raw.profile
-		if (!isRecord(profile)) {
-			throw new Error('profile must be an object')
-		}
-		const tls = 'tls' in raw && isRecord(raw.tls) ? (raw.tls as ProfileYamlTLS) : undefined
-		return { profile: profile as ProfileYamlProfile, tls }
-	}
-	return { profile: raw as ProfileYamlProfile }
-}
-
-function inferProvider(profile: ProfileYamlProfile): ProfileProvider {
-	if (profile.accountName || profile.accountKey || profile.useEmulator) return 'azure_blob'
-	if (profile.serviceAccountJson || profile.anonymous !== undefined || profile.projectNumber) return 'gcp_gcs'
-	if (profile.namespace || profile.compartment || profile.authProvider || profile.configFile || profile.configProfile) {
-		return 'oci_object_storage'
-	}
-	if (profile.endpoint) return 's3_compatible'
-	return 'aws_s3'
-}
-
-async function parseProfileYaml(yamlText: string): Promise<{ request: ProfileCreateRequest; tlsConfig?: ProfileTLSConfig }> {
-	// YAML parsing is an optional Profiles-only feature. Keep it out of the initial bundle.
-	const { parse: parseYaml } = await import('yaml')
-	const parsed = parseYaml(yamlText) as unknown
-	const { profile, tls } = extractProfileYaml(parsed)
-	const name = toOptionalString(profile.name)
-	if (!name) {
-		throw new Error('profile.name is required')
-	}
-
-	const provider = isProfileProvider(profile.provider) ? profile.provider : inferProvider(profile)
-	const preserveLeadingSlash = profile.preserveLeadingSlash ?? false
-	const tlsInsecureSkipVerify = profile.tlsInsecureSkipVerify ?? false
-
-	let request: ProfileCreateRequest
-	switch (provider) {
-		case 'azure_blob': {
-			const accountName = toOptionalString(profile.accountName)
-			const accountKey = toOptionalString(profile.accountKey)
-			if (!accountName || !accountKey) {
-				throw new Error('azure_blob requires accountName and accountKey')
-			}
-			request = {
-				provider,
-				name,
-				accountName,
-				accountKey,
-				endpoint: toOptionalString(profile.endpoint),
-				useEmulator: profile.useEmulator ?? false,
-				preserveLeadingSlash,
-				tlsInsecureSkipVerify,
-			}
-			break
-		}
-		case 'gcp_gcs': {
-			const anonymous = profile.anonymous ?? false
-			const serviceAccountJson = toOptionalString(profile.serviceAccountJson)
-			if (!anonymous && !serviceAccountJson) {
-				throw new Error('gcp_gcs requires serviceAccountJson unless anonymous=true')
-			}
-			request = {
-				provider,
-				name,
-				anonymous,
-				serviceAccountJson: anonymous ? '' : serviceAccountJson,
-				endpoint: toOptionalString(profile.endpoint),
-				projectNumber: toOptionalString(profile.projectNumber),
-				preserveLeadingSlash,
-				tlsInsecureSkipVerify,
-			}
-			break
-		}
-		case 'oci_object_storage': {
-			const region = toOptionalString(profile.region)
-			const namespace = toOptionalString(profile.namespace)
-			const compartment = toOptionalString(profile.compartment)
-			if (!region || !namespace || !compartment) {
-				throw new Error('oci_object_storage requires region, namespace, and compartment')
-			}
-			request = {
-				provider,
-				name,
-				region,
-				namespace,
-				compartment,
-				endpoint: toOptionalString(profile.endpoint),
-				authProvider: toOptionalString(profile.authProvider),
-				configFile: toOptionalString(profile.configFile),
-				configProfile: toOptionalString(profile.configProfile),
-				preserveLeadingSlash,
-				tlsInsecureSkipVerify,
-			}
-			break
-		}
-		default: {
-			const region = toOptionalString(profile.region)
-			const accessKeyId = toOptionalString(profile.accessKeyId)
-			const secretAccessKey = toOptionalString(profile.secretAccessKey)
-			if (!region || !accessKeyId || !secretAccessKey) {
-				throw new Error(`${provider} requires region, accessKeyId, and secretAccessKey`)
-			}
-			const endpoint = toOptionalString(profile.endpoint)
-			if ((provider === 's3_compatible' || provider === 'oci_s3_compat') && !endpoint) {
-				throw new Error(`${provider} requires endpoint`)
-			}
-			const base = {
-				name,
-				region,
-				accessKeyId,
-				secretAccessKey,
-				sessionToken: profile.sessionToken ?? null,
-				forcePathStyle: profile.forcePathStyle ?? false,
-				preserveLeadingSlash,
-				tlsInsecureSkipVerify,
-			}
-			if (provider === 'aws_s3') {
-				request = {
-					provider: 'aws_s3',
-					...base,
-					endpoint,
-				}
-			} else if (provider === 's3_compatible') {
-				request = {
-					provider: 's3_compatible',
-					...base,
-					endpoint: endpoint as string,
-				}
-			} else {
-				request = {
-					provider: 'oci_s3_compat',
-					...base,
-					endpoint: endpoint as string,
-				}
-			}
-		}
-	}
-
-	const tlsMode = typeof tls?.mode === 'string' ? tls.mode : ''
-	const tlsConfig = tlsMode === 'mtls'
-		? {
-				mode: 'mtls' as const,
-				clientCertPem: toOptionalString(tls?.clientCertPem),
-				clientKeyPem: toOptionalString(tls?.clientKeyPem),
-				caCertPem: toOptionalString(tls?.caCertPem),
-			}
-		: undefined
-
-	if (tlsConfig) {
-		if (!tlsConfig.clientCertPem || !tlsConfig.clientKeyPem) {
-			throw new Error('tls.mode=mtls requires clientCertPem and clientKeyPem')
-		}
-	}
-
-	return { request, tlsConfig }
 }
 
 function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest {
@@ -1088,21 +622,4 @@ function downloadTextFile(filename: string, content: string): void {
 	a.click()
 	a.remove()
 	window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-function buildProfileExportFilename(profile: Profile | null): string {
-	const base = sanitizeExportFilename(profile?.name ?? profile?.id ?? '')
-	return `${base || 'profile'}.yaml`
-}
-
-function sanitizeExportFilename(value: string): string {
-	const cleaned = value.trim()
-	if (!cleaned) return ''
-	return cleaned
-		.replace(/[\\/:*?"<>|]/g, '-')
-		.replace(/\s+/g, '_')
-		.replace(/-+/g, '-')
-		.replace(/_+/g, '_')
-		.replace(/[-_]+$/g, '')
-		.replace(/^[-_]+/g, '')
 }

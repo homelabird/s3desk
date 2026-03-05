@@ -10,6 +10,7 @@ import {
 } from '../../lib/localDate'
 import { formatBytes } from '../../lib/transfer'
 import { NativeSelect } from '../../components/NativeSelect'
+import styles from './objects.module.css'
 
 type ObjectsGlobalSearchDrawerProps = {
 	open: boolean
@@ -71,17 +72,17 @@ const bytesFromMb = (value: number | null) => {
 
 export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps) {
 	const drawerWidth = props.isMd ? 920 : '100%'
-	const inputWidth = props.isMd ? 360 : '100%'
-	const prefixWidth = props.isMd ? 260 : '100%'
-	const limitWidth = props.isMd ? 140 : '100%'
-	const extWidth = props.isMd ? 160 : '100%'
-	const sizeWidth = props.isMd ? 160 : '100%'
-	const dateWidth = props.isMd ? 152 : '100%'
-	const tableKeyWidth = props.isMd ? 520 : 260
-	const tableScrollY = props.isMd ? 520 : undefined
 	const modifiedAfterValue = formatLocalDateInputValue(props.modifiedAfterMs)
 	const modifiedBeforeValue = formatLocalDateInputValue(props.modifiedBeforeMs)
-	const tableMinWidth = props.isMd ? 920 : 720
+	const inputFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchInputMd : ''}`
+	const prefixFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchPrefixMd : ''}`
+	const limitFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchLimitMd : ''}`
+	const extFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchExtMd : ''}`
+	const sizeFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchSizeMd : ''}`
+	const dateFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchDateMd : ''}`
+	const tableWrapClass = `${styles.globalSearchTableWrap} ${props.isMd ? styles.globalSearchTableWrapMd : ''}`
+	const tableClass = `${styles.globalSearchTable} ${props.isMd ? styles.globalSearchTableMd : styles.globalSearchTableSm}`
+	const keyTextClass = `${styles.globalSearchKeyText} ${props.isMd ? styles.globalSearchKeyTextMd : styles.globalSearchKeyTextSm}`
 
 	return (
 		<Drawer open={props.open} onClose={props.onClose} width={drawerWidth} title="Global Search (Indexed)" destroyOnHidden>
@@ -90,7 +91,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 			) : !props.hasBucket ? (
 				<Alert type="warning" showIcon title="Select a bucket first" />
 			) : (
-				<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+				<Space orientation="vertical" size="middle" className={styles.drawerFullWidth}>
 					<Typography.Text strong>Search</Typography.Text>
 					<Space wrap>
 						<Input
@@ -98,7 +99,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							prefix={<SearchOutlined />}
 							placeholder="Search query (substring)…"
 							aria-label="Search query"
-							style={{ width: inputWidth, maxWidth: '100%' }}
+							className={inputFieldClass}
 							value={props.queryDraft}
 							onChange={(e) => props.onQueryDraftChange(e.target.value)}
 						/>
@@ -106,35 +107,35 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							allowClear
 							placeholder="Prefix filter (optional)…"
 							aria-label="Prefix filter"
-							style={{ width: prefixWidth, maxWidth: '100%' }}
+							className={prefixFieldClass}
 							value={props.prefixFilter}
 							onChange={(e) => props.onPrefixFilterChange(e.target.value)}
 						/>
 						<NativeSelect
-									value={String(props.limit)}
-									onChange={(value) => props.onLimitChange(Number(value))}
-									ariaLabel="Result limit"
-									style={{ width: limitWidth, maxWidth: '100%' }}
-									options={[
-										{ label: 'Limit 50', value: '50' },
-										{ label: 'Limit 100', value: '100' },
-										{ label: 'Limit 200', value: '200' },
-									]}
-								/>
+							value={String(props.limit)}
+							onChange={(value) => props.onLimitChange(Number(value))}
+							ariaLabel="Result limit"
+							className={limitFieldClass}
+							options={[
+								{ label: 'Limit 50', value: '50' },
+								{ label: 'Limit 100', value: '100' },
+								{ label: 'Limit 200', value: '200' },
+							]}
+						/>
 						<Button icon={<ReloadOutlined />} onClick={props.onRefresh} loading={props.isRefreshing}>
 							Refresh
 						</Button>
 						<Button onClick={props.onReset}>Reset</Button>
 					</Space>
 
-					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+					<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
 						<Typography.Text type="secondary">Filters</Typography.Text>
 						<Space wrap>
 							<Input
 								allowClear
 								placeholder="Ext (e.g. log)…"
 								aria-label="Extension filter"
-								style={{ width: extWidth, maxWidth: '100%' }}
+								className={extFieldClass}
 								value={props.extFilter}
 								onChange={(e) => props.onExtFilterChange(e.target.value)}
 							/>
@@ -143,7 +144,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								step={0.1}
 								placeholder="Min MB…"
 								aria-label="Minimum size (MB)"
-								style={{ width: sizeWidth, maxWidth: '100%' }}
+								className={sizeFieldClass}
 								value={mbFromBytes(props.minSizeBytes)}
 								onChange={(value) => props.onMinSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
 							/>
@@ -152,14 +153,14 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								step={0.1}
 								placeholder="Max MB…"
 								aria-label="Maximum size (MB)"
-								style={{ width: sizeWidth, maxWidth: '100%' }}
+								className={sizeFieldClass}
 								value={mbFromBytes(props.maxSizeBytes)}
 								onChange={(value) => props.onMaxSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
 							/>
 							<input
 								type="date"
 								aria-label="Modified after date"
-								style={{ width: dateWidth, maxWidth: '100%' }}
+								className={dateFieldClass}
 								value={modifiedAfterValue}
 								onChange={(event) => {
 									props.onModifiedRangeChange(localDayStartMsFromDateInput(event.currentTarget.value), props.modifiedBeforeMs)
@@ -168,7 +169,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<input
 								type="date"
 								aria-label="Modified before date"
-								style={{ width: dateWidth, maxWidth: '100%' }}
+								className={dateFieldClass}
 								value={modifiedBeforeValue}
 								onChange={(event) => {
 									props.onModifiedRangeChange(props.modifiedAfterMs, localDayEndMsFromDateInput(event.currentTarget.value))
@@ -203,19 +204,19 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								key: 'index',
 								label: 'Index management',
 								children: (
-									<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+									<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
 										<Typography.Text type="secondary">
 											Build/rebuild the index for <Typography.Text code>{props.bucket}</Typography.Text>:
 										</Typography.Text>
 										<Space wrap>
-											<Input
-												allowClear
-												placeholder="Index prefix (optional)…"
-												aria-label="Index prefix"
-												style={{ width: inputWidth, maxWidth: '100%' }}
-												value={props.indexPrefix}
-												onChange={(e) => props.onIndexPrefixChange(e.target.value)}
-											/>
+												<Input
+													allowClear
+													placeholder="Index prefix (optional)…"
+													aria-label="Index prefix"
+													className={inputFieldClass}
+													value={props.indexPrefix}
+													onChange={(e) => props.onIndexPrefixChange(e.target.value)}
+												/>
 											<Button size="small" onClick={props.onUseCurrentPrefix} disabled={!props.currentPrefix.trim()}>
 												Use current prefix
 											</Button>
@@ -234,15 +235,15 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 									</Space>
 								),
 							},
-						]}
-					/>
+							]}
+						/>
 
-					<Divider style={{ marginBlock: 8 }} />
+					<Divider className={styles.globalSearchDivider} />
 
 					{!props.searchQueryText ? (
 						<Empty description="Type a query to search" />
 					) : props.isFetching && props.items.length === 0 ? (
-						<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+						<div className={styles.loadingRow}>
 							<Spin />
 						</div>
 					) : props.items.length === 0 ? (
@@ -253,70 +254,20 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								{props.items.length} result(s)
 								{props.hasNextPage ? ' (more available)' : ''}
 							</Typography.Text>
-							<div
-								style={{
-									border: '1px solid #f0f0f0',
-									borderRadius: 8,
-									overflow: 'auto',
-									maxHeight: tableScrollY ? `${tableScrollY}px` : undefined,
-								}}
-							>
-								<table style={{ width: '100%', minWidth: tableMinWidth, borderCollapse: 'collapse' }}>
+							<div className={tableWrapClass}>
+								<table className={tableClass}>
 									<thead>
 										<tr>
-											<th
-												style={{
-													position: 'sticky',
-													top: 0,
-													zIndex: 1,
-													background: '#fafafa',
-													textAlign: 'left',
-													padding: '10px 12px',
-													borderBottom: '1px solid #f0f0f0',
-												}}
-											>
+											<th className={styles.globalSearchTh}>
 												Key
 											</th>
-											<th
-												style={{
-													position: 'sticky',
-													top: 0,
-													zIndex: 1,
-													background: '#fafafa',
-													textAlign: 'left',
-													padding: '10px 12px',
-													borderBottom: '1px solid #f0f0f0',
-													width: 120,
-												}}
-											>
+											<th className={`${styles.globalSearchTh} ${styles.globalSearchThSize}`}>
 												Size
 											</th>
-											<th
-												style={{
-													position: 'sticky',
-													top: 0,
-													zIndex: 1,
-													background: '#fafafa',
-													textAlign: 'left',
-													padding: '10px 12px',
-													borderBottom: '1px solid #f0f0f0',
-													width: 220,
-												}}
-											>
+											<th className={`${styles.globalSearchTh} ${styles.globalSearchThModified}`}>
 												Last modified
 											</th>
-											<th
-												style={{
-													position: 'sticky',
-													top: 0,
-													zIndex: 1,
-													background: '#fafafa',
-													textAlign: 'left',
-													padding: '10px 12px',
-													borderBottom: '1px solid #f0f0f0',
-													width: 260,
-												}}
-											>
+											<th className={`${styles.globalSearchTh} ${styles.globalSearchThActions}`}>
 												Actions
 											</th>
 										</tr>
@@ -324,30 +275,19 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 									<tbody>
 										{props.items.map((row) => (
 											<tr key={row.key}>
-												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
-													<Typography.Text
-														code
-														title={row.key}
-														style={{
-															maxWidth: tableKeyWidth,
-															display: 'inline-block',
-															overflow: 'hidden',
-															textOverflow: 'ellipsis',
-															whiteSpace: 'nowrap',
-															verticalAlign: 'top',
-														}}
-													>
+												<td className={styles.globalSearchTd}>
+													<Typography.Text code title={row.key} className={keyTextClass}>
 														{row.key}
 													</Typography.Text>
 												</td>
-												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<td className={styles.globalSearchTd}>
 													{typeof row.size === 'number' && row.size >= 0 ? (
 														<Typography.Text type="secondary">{formatBytes(row.size)}</Typography.Text>
 													) : (
 														<Typography.Text type="secondary">-</Typography.Text>
 													)}
 												</td>
-												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<td className={styles.globalSearchTd}>
 													{row.lastModified ? (
 														<Typography.Text code title={row.lastModified}>
 															{formatDateTime(row.lastModified)}
@@ -356,7 +296,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 														<Typography.Text type="secondary">-</Typography.Text>
 													)}
 												</td>
-												<td style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0' }}>
+												<td className={styles.globalSearchTd}>
 													<Space size="small">
 														<Button size="small" onClick={() => props.onOpenPrefixForKey(row.key)}>
 															Open
@@ -381,7 +321,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 									</tbody>
 								</table>
 							</div>
-							<div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
+							<div className={styles.globalSearchLoadMoreRow}>
 								<Button onClick={props.onLoadMore} disabled={!props.hasNextPage} loading={props.isFetchingNextPage}>
 									Load more
 								</Button>

@@ -1,0 +1,36 @@
+.pageStack {
+	width: 100%;
+}
+
+.headerRow {
+	display: flex;
+	width: 100%;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.pageTitle {
+	margin: 0 !important;
+}
+
+.controlsRow {
+	width: 100%;
+}
+
+.bucketField,
+.prefixField {
+	width: 100%;
+	max-width: 100%;
+}
+
+@media (min-width: 768px) {
+	.bucketField {
+		width: 320px;
+	}
+
+	.prefixField {
+		width: 420px;
+	}
+}

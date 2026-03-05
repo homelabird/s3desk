@@ -112,11 +112,10 @@ export type TransfersContextValue = {
 
 type UploadCapabilityByProfileId = Record<string, { presignedUpload: boolean; directUpload: boolean }>
 
-export function TransfersProvider(props: {
+function useTransfersProviderOrchestration(props: {
 	apiToken: string
 	uploadDirectStream?: boolean
 	uploadCapabilityByProfileId?: UploadCapabilityByProfileId
-	children: ReactNode
 }) {
 	const queryClient = useQueryClient()
 	const navigate = useNavigate()
@@ -832,11 +831,17 @@ export function TransfersProvider(props: {
 		],
 	)
 
-	return (
-		<TransfersProviderView ctx={ctx} drawerProps={drawerProps}>
-			{props.children}
-		</TransfersProviderView>
-	)
+	return { ctx, drawerProps }
+}
+
+export function TransfersProvider(props: {
+	apiToken: string
+	uploadDirectStream?: boolean
+	uploadCapabilityByProfileId?: UploadCapabilityByProfileId
+	children: ReactNode
+}) {
+	const { ctx, drawerProps } = useTransfersProviderOrchestration(props)
+	return <TransfersProviderView ctx={ctx} drawerProps={drawerProps}>{props.children}</TransfersProviderView>
 }
 
 export function TransfersButton(props: { showLabel?: boolean } = {}) {

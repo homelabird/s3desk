@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from './api/client'
+import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { useLocalStorageState } from './lib/useLocalStorageState'
 
@@ -22,10 +23,10 @@ function formatApiErrorTitle(err: unknown): string {
 
 function LightHint403() {
 	return (
-		<div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45, opacity: 0.85 }}>
+		<div className={styles.hint403}>
 			<div>Access blocked by server policy.</div>
-			<div style={{ marginTop: 6 }}>On the server host: open the UI from the same machine (loopback).</div>
-			<div style={{ marginTop: 6 }}>
+			<div className={styles.rowGap6}>On the server host: open the UI from the same machine (loopback).</div>
+			<div className={styles.rowGap6}>
 				From another device: open the server&apos;s LAN IP (for example, 192.168.0.200) and verify <code>ALLOW_REMOTE=true</code>,{' '}
 				<code>API_TOKEN</code>, and (if using a hostname) <code>ALLOWED_HOSTS</code>.
 			</div>
@@ -35,29 +36,22 @@ function LightHint403() {
 
 function LightErrorCard(props: { title: string; hint?: ReactNode; onRetry?: () => void }) {
 	return (
-		<div style={{ width: 560, maxWidth: '100%' }}>
-			<h1 style={{ margin: 0, fontSize: 28 }}>S3Desk</h1>
-			<div style={{ marginTop: 4, opacity: 0.75 }}>Local Dashboard</div>
+		<div className={styles.panelSmall}>
+			<h1 className={styles.brandTitle}>S3Desk</h1>
+			<div className={styles.brandSubtitle}>Local Dashboard</div>
 
-			<div style={{ height: 16 }} />
+			<div className={styles.spacer16} />
 
-			<div style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', padding: 16, background: 'var(--s3d-color-bg)' }}>
-				<div style={{ fontWeight: 700 }}>Backend connection failed</div>
-				<div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>{props.title}</div>
+			<div className={styles.card}>
+				<div className={styles.cardTitle}>Backend connection failed</div>
+				<div className={`${styles.rowGap8} ${styles.bodyText}`}>{props.title}</div>
 				{props.hint ? <div>{props.hint}</div> : null}
 				{props.onRetry ? (
-					<div style={{ marginTop: 12 }}>
+					<div className={styles.rowGap12}>
 						<button
 							type="button"
 							onClick={props.onRetry}
-							style={{
-								border: '1px solid var(--s3d-color-border-input)',
-								background: 'var(--s3d-color-bg)',
-								borderRadius: 'var(--s3d-radius-md)',
-								padding: '8px 12px',
-								fontWeight: 600,
-								cursor: 'pointer',
-							}}
+							className={`${styles.button} ${styles.buttonSecondary} ${styles.buttonClickable}`}
 						>
 							Retry
 						</button>
@@ -95,38 +89,17 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 	}
 
 	return (
-		<div style={{ width: 560, maxWidth: '100%' }}>
-			<h1 style={{ margin: 0, fontSize: 28 }}>S3Desk</h1>
-			<div style={{ marginTop: 4, opacity: 0.75 }}>Local Dashboard</div>
+		<div className={styles.panelSmall}>
+			<h1 className={styles.brandTitle}>S3Desk</h1>
+			<div className={styles.brandSubtitle}>Local Dashboard</div>
 
-			<div style={{ height: 16 }} />
+			<div className={styles.spacer16} />
 
-			<div style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', padding: 16, background: 'var(--s3d-color-bg)' }}>
-				<div
-					style={{
-						border: `1px solid ${showSavedTokenWarning ? 'var(--s3d-color-warning-border)' : 'var(--s3d-color-info-border)'}`,
-						background: showSavedTokenWarning ? 'var(--s3d-color-warning-bg)' : 'var(--s3d-color-info-bg)',
-						borderRadius: 'var(--s3d-radius-md)',
-						padding: 12,
-						fontSize: 13,
-						lineHeight: 1.45,
-					}}
-				>
-					{hint}
-				</div>
+			<div className={styles.card}>
+				<div className={`${styles.statusCard} ${showSavedTokenWarning ? styles.statusWarning : styles.statusInfo}`}>{hint}</div>
 
 				{error ? (
-					<div
-						role="alert"
-						style={{
-							marginTop: 12,
-							border: '1px solid #fca5a5',
-							background: 'var(--s3d-color-error-bg)',
-							borderRadius: 'var(--s3d-radius-md)',
-							padding: 12,
-							fontSize: 13,
-						}}
-					>
+					<div role="alert" className={`${styles.rowGap12} ${styles.statusCard} ${styles.statusError}`}>
 						{error}
 					</div>
 				) : null}
@@ -136,9 +109,9 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 						e.preventDefault()
 						void submit()
 					}}
-					style={{ marginTop: 12 }}
+					className={styles.rowGap12}
 				>
-					<label htmlFor="api-token" style={{ display: 'block', fontWeight: 700, fontSize: 13 }}>
+					<label htmlFor="api-token" className={styles.label}>
 						API Token
 					</label>
 					<input
@@ -148,29 +121,14 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 						value={token}
 						onChange={(e) => setToken(e.target.value)}
 						placeholder="API_TOKEN…"
-						style={{
-							marginTop: 6,
-							width: '100%',
-							border: '1px solid var(--s3d-color-border-input)',
-							borderRadius: 'var(--s3d-radius-md)',
-							padding: '10px 12px',
-							fontSize: 14,
-						}}
+						className={styles.tokenInput}
 					/>
 
-					<div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+					<div className={styles.buttonRow}>
 						<button
 							type="submit"
 							disabled={!token.trim() || submitting}
-							style={{
-								border: '1px solid var(--s3d-color-primary-btn)',
-								background: submitting ? 'var(--s3d-color-info-border)' : 'var(--s3d-color-primary-btn)',
-								color: 'var(--s3d-color-bg)',
-								borderRadius: 'var(--s3d-radius-md)',
-								padding: '9px 12px',
-								fontWeight: 700,
-								cursor: submitting ? 'default' : 'pointer',
-							}}
+							className={`${styles.button} ${styles.buttonPrimary} ${submitting ? styles.buttonPrimaryDisabled : styles.buttonClickable}`}
 						>
 							{submitting ? 'Logging in…' : 'Login'}
 						</button>
@@ -179,14 +137,7 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 								type="button"
 								onClick={props.onClearSavedToken}
 								disabled={submitting}
-								style={{
-									border: '1px solid var(--s3d-color-border-input)',
-									background: 'var(--s3d-color-bg)',
-									borderRadius: 'var(--s3d-radius-md)',
-									padding: '9px 12px',
-									fontWeight: 700,
-									cursor: submitting ? 'default' : 'pointer',
-								}}
+								className={`${styles.button} ${styles.buttonSecondary} ${submitting ? styles.buttonSecondaryDisabled : styles.buttonClickable}`}
 							>
 								Clear saved token
 							</button>
@@ -194,7 +145,7 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 					</div>
 				</form>
 
-				<div style={{ marginTop: 12, fontSize: 13, opacity: 0.8 }}>
+				<div className={`${styles.rowGap12} ${styles.metaText}`}>
 					This is not your S3 access key. It must match the server <code>API_TOKEN</code>.
 				</div>
 			</div>
@@ -243,134 +194,87 @@ function ProfilesList(props: {
 	}
 
 	return (
-		<div style={{ width: 760, maxWidth: '100%' }}>
+		<div className={styles.panelLarge}>
 			<a className="skip-link" href="#main">
 				Skip to content
 			</a>
 
-			<header style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+			<header className={styles.header}>
 				<div>
-					<h1 style={{ margin: 0, fontSize: 28 }}>S3Desk</h1>
-					<div style={{ marginTop: 4, opacity: 0.75 }}>Profiles</div>
+					<h1 className={styles.brandTitle}>S3Desk</h1>
+					<div className={styles.brandSubtitle}>Profiles</div>
 				</div>
-				<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-					<Link
-						to="/profiles?create=1"
-						style={{
-							border: '1px solid var(--s3d-color-primary-btn)',
-							background: 'var(--s3d-color-primary-btn)',
-							color: 'var(--s3d-color-bg)',
-							borderRadius: 'var(--s3d-radius-md)',
-							padding: '9px 12px',
-							fontWeight: 700,
-							textDecoration: 'none',
-						}}
-					>
+				<div className={styles.headerActions}>
+					<Link to="/profiles?create=1" className={`${styles.linkButton} ${styles.linkButtonPrimary}`}>
 						Create profile
 					</Link>
-					<Link
-						to="/profiles?advanced=1"
-						style={{
-							border: '1px solid var(--s3d-color-border-input)',
-							background: 'var(--s3d-color-bg)',
-							color: 'var(--s3d-color-text-dark)',
-							borderRadius: 'var(--s3d-radius-md)',
-							padding: '9px 12px',
-							fontWeight: 700,
-							textDecoration: 'none',
-						}}
-					>
+					<Link to="/profiles?advanced=1" className={`${styles.linkButton} ${styles.linkButtonSecondary}`}>
 						Advanced
 					</Link>
-					<Link
-						to="/profiles?settings=1"
-						style={{
-							border: '1px solid var(--s3d-color-border-input)',
-							background: 'var(--s3d-color-bg)',
-							color: 'var(--s3d-color-text-dark)',
-							borderRadius: 'var(--s3d-radius-md)',
-							padding: '9px 12px',
-							fontWeight: 700,
-							textDecoration: 'none',
-						}}
-					>
+					<Link to="/profiles?settings=1" className={`${styles.linkButton} ${styles.linkButtonSecondary}`}>
 						Settings
 					</Link>
 				</div>
 			</header>
 
-			<div style={{ height: 12 }} />
+			<div className={styles.spacer12} />
 
 			<main id="main">
-				<section style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', background: 'var(--s3d-color-bg)', overflow: 'hidden' }}>
-					<div style={{ padding: 14, borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-						<div style={{ fontWeight: 800 }}>Choose a profile</div>
+				<section className={`${styles.section} ${styles.sectionOverflowHidden}`}>
+					<div className={styles.sectionHeader}>
+						<div className={styles.sectionHeading}>Choose a profile</div>
 						{props.profileId ? (
-							<div style={{ fontSize: 13, opacity: 0.8 }}>
+							<div className={styles.sectionSubtle}>
 								Selected: <code>{props.profileId}</code>
 							</div>
 						) : (
-							<div style={{ fontSize: 13, opacity: 0.8 }}>No profile selected</div>
+							<div className={styles.sectionSubtle}>No profile selected</div>
 						)}
 					</div>
 
 					{profilesState.status === 'loading' ? (
-						<div role="status" style={{ padding: 14, fontSize: 13, opacity: 0.8 }}>Loading profiles…</div>
+						<div role="status" className={styles.statusLine}>Loading profiles…</div>
 					) : profilesState.status === 'error' ? (
-						<div style={{ padding: 14, fontSize: 13 }}>
+						<div className={styles.sectionBody}>
 							<div>
-								Failed to load profiles: <span style={{ opacity: 0.85 }}>{formatApiErrorTitle(profilesState.error)}</span>
+								Failed to load profiles: <span className={styles.sectionSubtle}>{formatApiErrorTitle(profilesState.error)}</span>
 							</div>
-							<div style={{ marginTop: 10 }}>
+							<div className={styles.rowGap10}>
 								<button
 									type="button"
 									onClick={() => {
 										setProfilesState({ status: 'loading' })
 										setReloadNonce((v) => v + 1)
 									}}
-									style={{
-										border: '1px solid var(--s3d-color-border-input)',
-										background: 'var(--s3d-color-bg)',
-										borderRadius: 'var(--s3d-radius-md)',
-										padding: '8px 12px',
-										fontWeight: 700,
-										cursor: 'pointer',
-									}}
+									className={`${styles.button} ${styles.buttonSecondary} ${styles.buttonClickable}`}
 								>
 									Retry
 								</button>
 							</div>
 						</div>
 					) : !hasProfiles ? (
-						<div style={{ padding: 14 }}>
+						<div className={styles.sectionBody}>
 							<WelcomeScreen onGetStarted={() => navigate('/profiles?create=1')} />
 						</div>
 					) : (
-						<ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+						<ul className={styles.profileList}>
 							{profiles.map((p) => {
 								const selected = p.id === props.profileId
 								const subtitleParts = [p.provider, p.region, p.endpoint].filter(Boolean)
 								const subtitle = subtitleParts.join(' · ')
 								return (
-									<li key={p.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+									<li key={p.id} className={styles.profileItem}>
 										<button
 											type="button"
 											onClick={() => props.setProfileId(p.id)}
-											style={{
-												width: '100%',
-												textAlign: 'left',
-												padding: '12px 14px',
-												border: 'none',
-												background: selected ? 'var(--s3d-color-info-bg)' : 'var(--s3d-color-bg)',
-												cursor: 'pointer',
-											}}
+											className={`${styles.profileButton} ${selected ? styles.profileButtonSelected : ''}`}
 											aria-pressed={selected}
 										>
-											<div style={{ fontWeight: 800 }}>{p.name || p.id}</div>
-											{subtitle ? <div style={{ marginTop: 3, fontSize: 12, opacity: 0.75 }}>{subtitle}</div> : null}
-											<div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
+											<div className={styles.profileName}>{p.name || p.id}</div>
+											{subtitle ? <div className={styles.profileSubtitle}>{subtitle}</div> : null}
+											<div className={styles.profileMeta}>
 												<code>{p.id}</code>
-												{selected ? <span style={{ marginLeft: 8, fontWeight: 800 }}>(selected)</span> : null}
+												{selected ? <span className={styles.profileSelectedMark}>(selected)</span> : null}
 											</div>
 										</button>
 									</li>
@@ -380,34 +284,24 @@ function ProfilesList(props: {
 					)}
 				</section>
 
-				<div style={{ height: 12 }} />
+				<div className={styles.spacer12} />
 
-				<section style={{ border: '1px solid var(--s3d-color-border-secondary)', borderRadius: 'var(--s3d-radius-lg)', padding: 14, background: 'var(--s3d-color-bg)' }}>
-					<div style={{ fontWeight: 800 }}>Open</div>
-					<div style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+				<section className={`${styles.section} ${styles.sectionPadded}`}>
+					<div className={styles.sectionHeading}>Open</div>
+					<div className={styles.openButtons}>
 						{(['/buckets', '/objects', '/uploads', '/jobs'] as const).map((path) => (
 							<button
 								key={path}
 								type="button"
 								onClick={() => openDashboard(path)}
 								disabled={!props.profileId}
-								style={{
-									border: '1px solid var(--s3d-color-border-input)',
-									background: props.profileId ? 'var(--s3d-color-bg)' : 'var(--s3d-color-bg-page)',
-									borderRadius: 'var(--s3d-radius-md)',
-									padding: '9px 12px',
-									fontWeight: 700,
-									cursor: props.profileId ? 'pointer' : 'not-allowed',
-									opacity: props.profileId ? 1 : 0.65,
-								}}
+								className={`${styles.button} ${styles.buttonSecondary} ${props.profileId ? styles.buttonClickable : styles.openButtonDisabled}`}
 							>
 								{path.slice(1)}
 							</button>
 						))}
 					</div>
-					{props.profileId ? null : (
-						<div style={{ marginTop: 10, fontSize: 12, opacity: 0.75 }}>Select a profile first to open the dashboard.</div>
-					)}
+					{props.profileId ? null : <div className={styles.openHint}>Select a profile first to open the dashboard.</div>}
 				</section>
 			</main>
 		</div>
@@ -455,10 +349,10 @@ export default function LightApp() {
 
 	if (metaState.status === 'loading') {
 		return (
-			<div role="status" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-				<div style={{ width: 520, maxWidth: '100%', textAlign: 'center' }}>
-					<div style={{ fontSize: 18, fontWeight: 700 }}>Loading…</div>
-					<div style={{ marginTop: 8, opacity: 0.75 }}>Connecting to the backend.</div>
+			<div role="status" className={styles.centerShell}>
+				<div className={styles.loadingCard}>
+					<div className={styles.loadingTitle}>Loading…</div>
+					<div className={styles.loadingSubtitle}>Connecting to the backend.</div>
 				</div>
 			</div>
 		)
@@ -469,7 +363,7 @@ export default function LightApp() {
 		const isUnauthorized = err instanceof APIError && err.status === 401
 		if (isUnauthorized) {
 			return (
-				<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+				<div className={styles.centerShell}>
 					<LightLogin
 						initialToken={apiToken}
 						onLogin={(token) => applyApiToken(token)}
@@ -482,15 +376,15 @@ export default function LightApp() {
 		const title = formatApiErrorTitle(err)
 		const hint = err instanceof APIError && err.status === 403 ? <LightHint403 /> : undefined
 		return (
-			<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+			<div className={styles.centerShell}>
 				<LightErrorCard title={title} hint={hint} onRetry={retryMeta} />
 			</div>
 		)
 	}
 
 	return (
-		<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'var(--s3d-color-bg-page)' }}>
-			<div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+		<div className={`${styles.centerShell} ${styles.centerShellPage}`}>
+			<div className={styles.topRightActions}>
 				{apiToken ? (
 					<button
 						type="button"
@@ -498,14 +392,7 @@ export default function LightApp() {
 							applyApiToken('')
 							setProfileId(null)
 						}}
-						style={{
-							border: '1px solid var(--s3d-color-border-input)',
-							background: 'var(--s3d-color-bg)',
-							borderRadius: 'var(--s3d-radius-md)',
-							padding: '8px 12px',
-							fontWeight: 700,
-							cursor: 'pointer',
-						}}
+						className={`${styles.button} ${styles.buttonSecondary} ${styles.buttonClickable}`}
 					>
 						Logout
 					</button>

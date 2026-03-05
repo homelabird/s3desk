@@ -1,20 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Dropdown, Empty, Grid, Input, Space, Switch, Tooltip, Typography, Upload, message, type MenuProps } from 'antd'
+import { Alert, Button, Dropdown, Empty, Input, Space, Switch, Tooltip, Typography, Upload, message, type MenuProps } from 'antd'
 import type { UploadFile } from 'antd'
 import { EllipsisOutlined, UploadOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
 
 import { APIClient } from '../api/client'
 import type { Bucket, Profile } from '../api/types'
+import { SetupCallout } from '../components/SetupCallout'
+import { DatalistInput } from '../components/DatalistInput'
+import { LinkButton } from '../components/LinkButton'
 import { useTransfers } from '../components/useTransfers'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
 import { formatBytes } from '../lib/transfer'
-import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { useIsOffline } from '../lib/useIsOffline'
-import { SetupCallout } from '../components/SetupCallout'
-import { DatalistInput } from '../components/DatalistInput'
-import { LinkButton } from '../components/LinkButton'
+import { useLocalStorageState } from '../lib/useLocalStorageState'
+import styles from './UploadsPage.module.css'
 
 type Props = {
 	apiToken: string
@@ -24,7 +25,6 @@ type Props = {
 export function UploadsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const transfers = useTransfers()
-	const screens = Grid.useBreakpoint()
 	const isOffline = useIsOffline()
 
 	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
@@ -125,18 +125,9 @@ export function UploadsPage(props: Props) {
 	}
 
 	return (
-		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
-			<div
-				style={{
-					display: 'flex',
-					width: '100%',
-					justifyContent: 'space-between',
-					alignItems: 'center',
-					gap: 12,
-					flexWrap: 'wrap',
-				}}
-			>
-				<Typography.Title level={2} style={{ margin: 0 }}>
+		<Space orientation="vertical" size="large" className={styles.pageStack}>
+			<div className={styles.headerRow}>
+				<Typography.Title level={2} className={styles.pageTitle}>
 					Uploads
 				</Typography.Title>
 				<Space wrap>
@@ -158,45 +149,45 @@ export function UploadsPage(props: Props) {
 				<Alert type="info" showIcon title="Uploads are not available for this provider" description={uploadsUnsupportedReason} />
 			) : null}
 
-				{showBucketsEmpty ? (
-					<Empty description="No buckets available">
-						<LinkButton to="/buckets">Go to Buckets</LinkButton>
-					</Empty>
-				) : null}
+			{showBucketsEmpty ? (
+				<Empty description="No buckets available">
+					<LinkButton to="/buckets">Go to Buckets</LinkButton>
+				</Empty>
+			) : null}
 
 			{bucketsQuery.isError ? (
 				<Alert type="error" showIcon title="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
 			) : null}
 
-			<Space wrap style={{ width: '100%' }}>
+			<Space wrap className={styles.controlsRow}>
 				<DatalistInput
 					value={bucket}
 					onChange={setBucket}
 					placeholder={bucketsQuery.isFetching && !bucketsQuery.data ? 'Loading buckets…' : 'Bucket…'}
 					ariaLabel="Bucket"
 					allowClear
-					style={{ width: screens.md ? 320 : '100%', maxWidth: '100%' }}
+					className={styles.bucketField}
 					disabled={isOffline || !uploadsSupported || (bucketsQuery.isFetching && !bucketsQuery.data)}
 					options={bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
 				/>
-					<Input
-						placeholder="prefix (optional)…"
-						style={{ width: screens.md ? 420 : '100%', maxWidth: '100%' }}
-						aria-label="Upload prefix (optional)"
-						value={prefix}
-						onChange={(e) => setPrefix(e.target.value)}
+				<Input
+					placeholder="prefix (optional)…"
+					className={styles.prefixField}
+					aria-label="Upload prefix (optional)"
+					value={prefix}
+					onChange={(e) => setPrefix(e.target.value)}
+					disabled={isOffline || !uploadsSupported}
+				/>
+				<Space>
+					<Typography.Text type="secondary">Folder mode</Typography.Text>
+					<Switch
+						checked={folderMode}
+						onChange={setFolderMode}
 						disabled={isOffline || !uploadsSupported}
+						aria-label="Folder mode"
 					/>
-					<Space>
-						<Typography.Text type="secondary">Folder mode</Typography.Text>
-						<Switch
-							checked={folderMode}
-							onChange={setFolderMode}
-							disabled={isOffline || !uploadsSupported}
-							aria-label="Folder mode"
-						/>
-					</Space>
 				</Space>
+			</Space>
 
 			<Upload
 				multiple

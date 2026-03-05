@@ -4,42 +4,30 @@ import { describe, expect, it } from 'vitest'
 import { HelpTooltip } from '../HelpTooltip'
 
 describe('HelpTooltip', () => {
-	it('renders the (?) trigger', () => {
-		render(<HelpTooltip text="Example help" />)
-		expect(screen.getByTestId('help-tooltip-trigger')).toBeInTheDocument()
-		expect(screen.getByTestId('help-tooltip-trigger')).toHaveTextContent('?')
-	})
-
-	it('shows tooltip content on hover', () => {
+	it('shows and hides tooltip content on hover', () => {
 		render(<HelpTooltip text="Example help" />)
 		expect(screen.queryByTestId('help-tooltip-content')).not.toBeInTheDocument()
-		fireEvent.mouseEnter(screen.getByTestId('help-tooltip-trigger').parentElement!)
+		const host = screen.getByTestId('help-tooltip-trigger').parentElement!
+		fireEvent.mouseEnter(host)
 		expect(screen.getByTestId('help-tooltip-content')).toBeInTheDocument()
 		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent('Example help')
-	})
-
-	it('hides tooltip content on mouse leave', () => {
-		render(<HelpTooltip text="Example help" />)
-		fireEvent.mouseEnter(screen.getByTestId('help-tooltip-trigger').parentElement!)
-		expect(screen.getByTestId('help-tooltip-content')).toBeInTheDocument()
-		fireEvent.mouseLeave(screen.getByTestId('help-tooltip-trigger').parentElement!)
+		fireEvent.mouseLeave(host)
 		expect(screen.queryByTestId('help-tooltip-content')).not.toBeInTheDocument()
 	})
 
-	it('has accessible role="tooltip" on content', () => {
+	it('shows and hides tooltip content on focus/blur', () => {
 		render(<HelpTooltip text="Example help" />)
-		fireEvent.mouseEnter(screen.getByTestId('help-tooltip-trigger').parentElement!)
+		const host = screen.getByTestId('help-tooltip-trigger').parentElement!
+		fireEvent.focus(host)
 		expect(screen.getByRole('tooltip')).toBeInTheDocument()
+		fireEvent.blur(host)
+		expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
 	})
 
-	it('trigger has accessible aria-label', () => {
+	it('keeps an accessible trigger', () => {
 		render(<HelpTooltip text="Example help" />)
-		expect(screen.getByLabelText('Help')).toBeInTheDocument()
-	})
-
-	it('trigger is focusable for keyboard users', () => {
-		render(<HelpTooltip text="Example help" />)
-		const trigger = screen.getByTestId('help-tooltip-trigger')
+		const trigger = screen.getByLabelText('Help')
+		expect(trigger).toHaveTextContent('?')
 		expect(trigger).toHaveAttribute('tabIndex', '0')
 	})
 })

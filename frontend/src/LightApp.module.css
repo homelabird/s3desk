@@ -1,0 +1,322 @@
+.panelSmall {
+	width: 560px;
+	max-width: 100%;
+}
+
+.panelLarge {
+	width: 760px;
+	max-width: 100%;
+}
+
+.brandTitle {
+	margin: 0;
+	font-size: 28px;
+}
+
+.brandSubtitle {
+	margin-top: 4px;
+	opacity: 0.75;
+}
+
+.spacer16 {
+	height: 16px;
+}
+
+.spacer12 {
+	height: 12px;
+}
+
+.card {
+	border: 1px solid var(--s3d-color-border-secondary);
+	border-radius: var(--s3d-radius-lg);
+	padding: 16px;
+	background: var(--s3d-color-bg);
+}
+
+.cardTitle {
+	font-weight: 700;
+}
+
+.bodyText {
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.metaText {
+	font-size: 13px;
+	opacity: 0.8;
+}
+
+.rowGap6 {
+	margin-top: 6px;
+}
+
+.rowGap8 {
+	margin-top: 8px;
+}
+
+.rowGap10 {
+	margin-top: 10px;
+}
+
+.rowGap12 {
+	margin-top: 12px;
+}
+
+.hint403 {
+	margin-top: 8px;
+	font-size: 13px;
+	line-height: 1.45;
+	opacity: 0.85;
+}
+
+.statusCard {
+	border-radius: var(--s3d-radius-md);
+	padding: 12px;
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+.statusWarning {
+	border: 1px solid var(--s3d-color-warning-border);
+	background: var(--s3d-color-warning-bg);
+}
+
+.statusInfo {
+	border: 1px solid var(--s3d-color-info-border);
+	background: var(--s3d-color-info-bg);
+}
+
+.statusError {
+	border: 1px solid var(--s3d-color-error-border);
+	background: var(--s3d-color-error-bg);
+}
+
+.label {
+	display: block;
+	font-weight: 700;
+	font-size: 13px;
+}
+
+.tokenInput {
+	margin-top: 6px;
+	width: 100%;
+	border: 1px solid var(--s3d-color-border-input);
+	border-radius: var(--s3d-radius-md);
+	padding: 10px 12px;
+	font-size: 14px;
+}
+
+.buttonRow {
+	margin-top: 12px;
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.button {
+	border-radius: var(--s3d-radius-md);
+	padding: 9px 12px;
+	font-weight: 700;
+}
+
+.buttonPrimary {
+	border: 1px solid var(--s3d-color-primary-btn);
+	background: var(--s3d-color-primary-btn);
+	color: var(--s3d-color-bg);
+}
+
+.buttonPrimaryDisabled {
+	background: var(--s3d-color-info-border);
+	cursor: default;
+}
+
+.buttonSecondary {
+	border: 1px solid var(--s3d-color-border-input);
+	background: var(--s3d-color-bg);
+	color: var(--s3d-color-text-dark);
+}
+
+.buttonSecondaryDisabled {
+	cursor: default;
+}
+
+.buttonClickable {
+	cursor: pointer;
+}
+
+.header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.headerActions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.linkButton {
+	border-radius: var(--s3d-radius-md);
+	padding: 9px 12px;
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.linkButtonPrimary {
+	border: 1px solid var(--s3d-color-primary-btn);
+	background: var(--s3d-color-primary-btn);
+	color: var(--s3d-color-bg);
+}
+
+.linkButtonSecondary {
+	border: 1px solid var(--s3d-color-border-input);
+	background: var(--s3d-color-bg);
+	color: var(--s3d-color-text-dark);
+}
+
+.section {
+	border: 1px solid var(--s3d-color-border-secondary);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-color-bg);
+}
+
+.sectionOverflowHidden {
+	overflow: hidden;
+}
+
+.sectionPadded {
+	padding: 14px;
+}
+
+.sectionHeader {
+	padding: 14px;
+	border-bottom: 1px solid var(--s3d-color-border);
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.sectionHeading {
+	font-weight: 800;
+}
+
+.sectionSubtle {
+	font-size: 13px;
+	opacity: 0.8;
+}
+
+.statusLine {
+	padding: 14px;
+	font-size: 13px;
+	opacity: 0.8;
+}
+
+.sectionBody {
+	padding: 14px;
+	font-size: 13px;
+}
+
+.profileList {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.profileItem {
+	border-top: 1px solid var(--s3d-color-border);
+}
+
+.profileButton {
+	width: 100%;
+	text-align: left;
+	padding: 12px 14px;
+	border: none;
+	background: var(--s3d-color-bg);
+	cursor: pointer;
+}
+
+.profileButtonSelected {
+	background: var(--s3d-color-info-bg);
+}
+
+.profileName {
+	font-weight: 800;
+}
+
+.profileSubtitle {
+	margin-top: 3px;
+	font-size: 12px;
+	opacity: 0.75;
+}
+
+.profileMeta {
+	margin-top: 8px;
+	font-size: 12px;
+	opacity: 0.8;
+}
+
+.profileSelectedMark {
+	margin-left: 8px;
+	font-weight: 800;
+}
+
+.openButtons {
+	margin-top: 10px;
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.openButtonDisabled {
+	background: var(--s3d-color-bg-page);
+	cursor: not-allowed;
+	opacity: 0.65;
+}
+
+.openHint {
+	margin-top: 10px;
+	font-size: 12px;
+	opacity: 0.75;
+}
+
+.centerShell {
+	min-height: 100dvh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+}
+
+.centerShellPage {
+	background: var(--s3d-color-bg-page);
+}
+
+.loadingCard {
+	width: 520px;
+	max-width: 100%;
+	text-align: center;
+}
+
+.loadingTitle {
+	font-size: 18px;
+	font-weight: 700;
+}
+
+.loadingSubtitle {
+	margin-top: 8px;
+	opacity: 0.75;
+}
+
+.topRightActions {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+}
