@@ -193,6 +193,9 @@ func TestCORS_PreflightReturnsNoContentAndSetsHeadersForAllowedOrigin(t *testing
 	if got := rr.Header().Get("Access-Control-Allow-Headers"); got == "" {
 		t.Fatalf("Access-Control-Allow-Headers is empty")
 	}
+	if got := rr.Header().Get("Access-Control-Expose-Headers"); got != corsExposeHeaders {
+		t.Fatalf("Access-Control-Expose-Headers=%q, want %q", got, corsExposeHeaders)
+	}
 	if got := rr.Header().Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
 		t.Fatalf("Cross-Origin-Resource-Policy=%q, want %q", got, "cross-origin")
 	}

@@ -604,22 +604,38 @@ func (s *server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	responseJob := job
 	switch job.Status {
 	case models.JobStatusQueued:
 		finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 		code := jobs.ErrorCodeCanceled
-		_ = s.store.UpdateJobStatus(r.Context(), jobID, models.JobStatusCanceled, nil, &finishedAt, nil, nil, &code)
+		if err := s.store.UpdateJobStatus(r.Context(), jobID, models.JobStatusCanceled, nil, &finishedAt, nil, nil, &code); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to update job", nil)
+			return
+		}
 		payload := map[string]any{"status": models.JobStatusCanceled, "errorCode": code}
 		s.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
+		responseJob.Status = models.JobStatusCanceled
+		responseJob.FinishedAt = &finishedAt
+		responseJob.ErrorCode = &code
 	case models.JobStatusRunning:
 		s.jobs.Cancel(jobID)
+		updated, ok, err := s.store.GetJob(r.Context(), profileID, jobID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to load job", nil)
+			return
+		}
+		if !ok {
+			writeError(w, http.StatusNotFound, "not_found", "job not found", map[string]any{"jobId": jobID})
+			return
+		}
+		responseJob = updated
 	default:
 		writeError(w, http.StatusBadRequest, "invalid_request", "job is not cancelable (only queued/running)", map[string]any{"status": job.Status})
 		return
 	}
 
-	job, _, _ = s.store.GetJob(r.Context(), profileID, jobID)
-	writeJSON(w, http.StatusOK, job)
+	writeJSON(w, http.StatusOK, responseJob)
 }
 
 func isTransferJobType(jobType string) bool {

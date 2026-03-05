@@ -50,7 +50,10 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 
 	ot := int64(len(keys))
 	startedAt := time.Now()
-	m.updateAndPublishProgress(jobID, &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: int64Ptr(0)})
+	if err := m.updateAndPublishProgress(jobID, &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: int64Ptr(0)}); err != nil {
+		m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to persist initial progress: %v", err))
+		return err
+	}
 	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("deleting %d object(s) from s3://%s", ot, bucket))
 
 	const batchSize = 1000
@@ -135,7 +138,10 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 				}
 			}
 		}
-		m.updateAndPublishProgress(jobID, jp)
+		if err := m.updateAndPublishProgress(jobID, jp); err != nil {
+			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to persist progress: %v", err))
+			return err
+		}
 	}
 
 	m.writeJobLog(logFile, jobID, "info", "completed")
@@ -169,19 +175,11 @@ func (m *Manager) emitJobLogStdout(jobID, level, message string) {
 	})
 }
 
-func (m *Manager) updateAndPublishProgress(jobID string, jp *models.JobProgress) {
-	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
-	cancel()
-
-	m.hub.Publish(ws.Event{
-		Type:  "job.progress",
-		JobID: jobID,
-		Payload: map[string]any{
-			"status":   models.JobStatusRunning,
-			"progress": jp,
-		},
-	})
+func (m *Manager) updateAndPublishProgress(jobID string, jp *models.JobProgress) error {
+	if err := m.persistAndPublishRunningProgress(jobID, jp); err != nil {
+		return err
+	}
+	return nil
 }
 
 func trimEmpty(in []string) []string {

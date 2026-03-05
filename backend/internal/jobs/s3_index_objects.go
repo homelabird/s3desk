@@ -10,7 +10,6 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/store"
-	"s3desk/internal/ws"
 )
 
 func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
@@ -79,19 +78,9 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 			ObjectsDone: &od,
 			BytesDone:   &bd,
 		}
-
-		updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
-		cancel()
-
-		m.hub.Publish(ws.Event{
-			Type:  "job.progress",
-			JobID: jobID,
-			Payload: map[string]any{
-				"status":   models.JobStatusRunning,
-				"progress": jp,
-			},
-		})
+		if err := m.persistAndPublishRunningProgress(jobID, jp); err != nil {
+			m.logProgressPersistenceError(jobID, err)
+		}
 	}
 
 	batch := make([]store.ObjectIndexEntry, 0, 500)

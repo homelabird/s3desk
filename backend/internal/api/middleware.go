@@ -17,6 +17,8 @@ import (
 	"s3desk/internal/store"
 )
 
+const corsExposeHeaders = "Retry-After, Content-Disposition, X-Log-Next-Offset, X-Upload-Skipped"
+
 func (s *server) requireAPIToken(next http.Handler) http.Handler {
 	if s.cfg.APIToken == "" {
 		return next
@@ -245,7 +247,7 @@ func (s *server) cors(next http.Handler) http.Handler {
 					h.Add("Vary", "Origin")
 					h.Set("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS,HEAD")
 					h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Api-Token, X-Profile-Id")
-					h.Set("Access-Control-Expose-Headers", "Retry-After")
+					h.Set("Access-Control-Expose-Headers", corsExposeHeaders)
 					h.Set("Access-Control-Max-Age", "600")
 					// securityHeaders() defaults CORP to same-origin, which breaks cross-origin API calls
 					// even when CORS is enabled. For allowed origins, explicitly allow cross-origin reads.

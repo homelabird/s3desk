@@ -27,6 +27,7 @@ func TestJobLogsTailAndOffsets(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake rclone uses a shell script")
 	}
+	t.Setenv("RCLONE_TUNE", "true")
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)
@@ -55,8 +56,8 @@ func TestJobLogsTailAndOffsets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read log body: %v", err)
 	}
-	if !bytes.Contains(logBody, []byte("hello from rclone")) {
-		t.Fatalf("expected log output to contain rclone message, got %q", string(logBody))
+	if !bytes.Contains(logBody, []byte("rclone tune:")) {
+		t.Fatalf("expected log output to contain tune message, got %q", string(logBody))
 	}
 
 	offsetHeader := logRes.Header.Get("X-Log-Next-Offset")
@@ -141,6 +142,17 @@ func TestJobCancelQueued(t *testing.T) {
 	defer cancelRes.Body.Close()
 	if cancelRes.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", cancelRes.StatusCode)
+	}
+	var canceled models.Job
+	decodeJSONResponse(t, cancelRes, &canceled)
+	if canceled.Status != models.JobStatusCanceled {
+		t.Fatalf("expected canceled response status, got %s", canceled.Status)
+	}
+	if canceled.ErrorCode == nil || *canceled.ErrorCode != jobs.ErrorCodeCanceled {
+		t.Fatalf("expected response error code %q, got %v", jobs.ErrorCodeCanceled, canceled.ErrorCode)
+	}
+	if canceled.FinishedAt == nil || *canceled.FinishedAt == "" {
+		t.Fatalf("expected finishedAt in cancel response")
 	}
 
 	updated := getJob(t, srv, profile.ID, job.ID)

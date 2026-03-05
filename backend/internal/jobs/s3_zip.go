@@ -152,7 +152,9 @@ func (m *Manager) runS3ZipObjects(ctx context.Context, profileID, jobID string, 
 	}
 
 	ot := int64(len(objs))
-	m.updateAndPublishProgress(jobID, &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: int64Ptr(0), BytesDone: int64Ptr(0)})
+	if err := m.updateAndPublishProgress(jobID, &models.JobProgress{ObjectsTotal: &ot, ObjectsDone: int64Ptr(0), BytesDone: int64Ptr(0)}); err != nil {
+		return err
+	}
 
 	m.writeJobLog(logFile, jobID, "info", fmt.Sprintf("creating zip from %d object(s) in s3://%s", ot, bucket))
 	artifactName := defaultZipNameFromKeys(bucket, stripPrefix, objs)
@@ -240,7 +242,9 @@ func (m *Manager) writeZipArtifact(
 			}
 		}
 
-		m.updateAndPublishProgress(jobID, jp)
+		if err := m.updateAndPublishProgress(jobID, jp); err != nil {
+			m.logProgressPersistenceError(jobID, err)
+		}
 	}
 
 	if err := write(zw, publish); err != nil {

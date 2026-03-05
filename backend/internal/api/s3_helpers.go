@@ -23,14 +23,6 @@ func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
 	}
 
 	endpoint := strings.TrimSpace(secrets.Endpoint)
-	if endpoint != "" {
-		cfg.EndpointResolverWithOptions = aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...any) (aws.Endpoint, error) {
-			return aws.Endpoint{
-				URL:               endpoint,
-				HostnameImmutable: true,
-			}, nil
-		})
-	}
 
 	if secrets.TLSInsecureSkipVerify {
 		transport := &http.Transport{
@@ -41,6 +33,9 @@ func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
 
 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = secrets.ForcePathStyle
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
 	}), nil
 }
 

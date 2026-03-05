@@ -232,152 +232,6 @@ func NewManager(cfg Config) *Manager {
 	return m
 }
 
-func envInt(key string, defaultValue int) int {
-	val := strings.TrimSpace(os.Getenv(key))
-	if val == "" {
-		return defaultValue
-	}
-	parsed, err := strconv.Atoi(val)
-	if err != nil {
-		return defaultValue
-	}
-	return parsed
-}
-
-func envFloat(key string, defaultValue float64) float64 {
-	val := strings.TrimSpace(os.Getenv(key))
-	if val == "" {
-		return defaultValue
-	}
-	parsed, err := strconv.ParseFloat(val, 64)
-	if err != nil {
-		return defaultValue
-	}
-	return parsed
-}
-
-func envBool(key string, defaultValue bool) bool {
-	val := strings.TrimSpace(os.Getenv(key))
-	if val == "" {
-		return defaultValue
-	}
-	switch strings.ToLower(val) {
-	case "1", "true", "t", "yes", "y", "on":
-		return true
-	case "0", "false", "f", "no", "n", "off":
-		return false
-	default:
-		return defaultValue
-	}
-}
-
-func envDuration(key string, defaultValue time.Duration) time.Duration {
-	val := strings.TrimSpace(os.Getenv(key))
-	if val == "" {
-		return defaultValue
-	}
-	parsed, err := time.ParseDuration(val)
-	if err != nil {
-		return defaultValue
-	}
-	return parsed
-}
-
-type rcloneTune struct {
-	Transfers         int
-	Checkers          int
-	UploadConcurrency int
-	ActiveJobs        int
-}
-
-func hasAnyFlag(args []string, flags ...string) bool {
-	for _, a := range args {
-		for _, f := range flags {
-			if a == f {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (m *Manager) computeRcloneTune(commandArgs []string, isS3 bool) (tune rcloneTune, ok bool) {
-	if !m.rcloneTuneEnabled {
-		return rcloneTune{}, false
-	}
-	if len(commandArgs) == 0 {
-		return rcloneTune{}, false
-	}
-
-	switch commandArgs[0] {
-	case "sync", "copy", "move", "copyto", "moveto", "delete", "purge":
-		// supported
-	default:
-		return rcloneTune{}, false
-	}
-
-	activeJobs := len(m.sem)
-	if activeJobs < 1 {
-		activeJobs = 1
-	}
-
-	maxTransfers := m.rcloneMaxTransfers
-	if maxTransfers <= 0 {
-		maxTransfers = 4
-	}
-	maxCheckers := m.rcloneMaxCheckers
-	if maxCheckers <= 0 {
-		maxCheckers = 8
-	}
-
-	transfers := maxTransfers / activeJobs
-	if transfers < 1 {
-		transfers = 1
-	}
-	if transfers > maxTransfers {
-		transfers = maxTransfers
-	}
-
-	checkers := maxCheckers / activeJobs
-	if checkers < 1 {
-		checkers = 1
-	}
-	if checkers > maxCheckers {
-		checkers = maxCheckers
-	}
-
-	uploadConcurrency := 0
-	if isS3 && m.rcloneS3UploadConcurrency > 0 {
-		uploadConcurrency = m.rcloneS3UploadConcurrency / activeJobs
-		if uploadConcurrency < 1 {
-			uploadConcurrency = 1
-		}
-		if uploadConcurrency > m.rcloneS3UploadConcurrency {
-			uploadConcurrency = m.rcloneS3UploadConcurrency
-		}
-	}
-
-	return rcloneTune{
-		Transfers:         transfers,
-		Checkers:          checkers,
-		UploadConcurrency: uploadConcurrency,
-		ActiveJobs:        activeJobs,
-	}, true
-}
-
-func applyRcloneTune(args []string, tune rcloneTune, isS3 bool) []string {
-	if tune.Transfers > 0 && !hasAnyFlag(args, "--transfers") {
-		args = append(args, "--transfers", strconv.Itoa(tune.Transfers))
-	}
-	if tune.Checkers > 0 && !hasAnyFlag(args, "--checkers") {
-		args = append(args, "--checkers", strconv.Itoa(tune.Checkers))
-	}
-	if isS3 && tune.UploadConcurrency > 0 && !hasAnyFlag(args, "--s3-upload-concurrency") {
-		args = append(args, "--s3-upload-concurrency", strconv.Itoa(tune.UploadConcurrency))
-	}
-	return args
-}
-
 func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 	runningIDs, err := m.store.ListJobIDsByStatus(ctx, models.JobStatusRunning)
 	if err != nil {
@@ -681,7 +535,14 @@ func (m *Manager) Run(ctx context.Context) {
 			m.sem <- struct{}{}
 			go func() {
 				defer func() { <-m.sem }()
-				_ = m.runJob(ctx, jobID)
+				if err := m.runJob(ctx, jobID); err != nil {
+					logging.ErrorFields("job execution failed", map[string]any{
+						"event":   "job.run_failed",
+						"job_id":  jobID,
+						"error":   err.Error(),
+						"message": "job terminated before a consistent completion state was published",
+					})
+				}
 			}()
 		}
 	}
@@ -856,7 +717,18 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	duration := time.Since(start)
 	if errors.Is(ctx.Err(), context.Canceled) {
 		code := ErrorCodeCanceled
-		_ = m.finalizeJob(jobID, models.JobStatusCanceled, &finishedAt, nil, &code)
+		if err := m.finalizeJob(jobID, models.JobStatusCanceled, &finishedAt, nil, &code); err != nil {
+			logging.ErrorFields("failed to finalize canceled job", map[string]any{
+				"event":      "job.finalize_failed",
+				"job_id":     jobID,
+				"job_type":   job.Type,
+				"profile_id": profileID,
+				"status":     models.JobStatusCanceled,
+				"error_code": code,
+				"error":      err.Error(),
+			})
+			return err
+		}
 
 		payload := map[string]any{"status": models.JobStatusCanceled, "errorCode": code}
 		if jp := m.loadJobProgress(jobID); jp != nil {
@@ -905,7 +777,18 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 				}
 			}
 		}
-		_ = m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg, &code)
+		if err := m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg, &code); err != nil {
+			logging.ErrorFields("failed to finalize failed job", map[string]any{
+				"event":      "job.finalize_failed",
+				"job_id":     jobID,
+				"job_type":   job.Type,
+				"profile_id": profileID,
+				"status":     models.JobStatusFailed,
+				"error_code": code,
+				"error":      err.Error(),
+			})
+			return errors.Join(runErr, err)
+		}
 		payload := map[string]any{"status": models.JobStatusFailed, "error": msg, "errorCode": code}
 		if jp := m.loadJobProgress(jobID); jp != nil {
 			payload["progress"] = jp
@@ -936,7 +819,17 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return runErr
 	}
 
-	_ = m.finalizeJob(jobID, models.JobStatusSucceeded, &finishedAt, nil, nil)
+	if err := m.finalizeJob(jobID, models.JobStatusSucceeded, &finishedAt, nil, nil); err != nil {
+		logging.ErrorFields("failed to finalize succeeded job", map[string]any{
+			"event":      "job.finalize_failed",
+			"job_id":     jobID,
+			"job_type":   job.Type,
+			"profile_id": profileID,
+			"status":     models.JobStatusSucceeded,
+			"error":      err.Error(),
+		})
+		return err
+	}
 	payload := map[string]any{"status": models.JobStatusSucceeded}
 	if jp := m.loadJobProgress(jobID); jp != nil {
 		payload["progress"] = jp
@@ -990,6 +883,32 @@ func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt 
 	err = m.store.UpdateJobStatus(updateCtx, jobID, status, nil, finishedAt, jp, errMsg, errorCode)
 	cancel()
 	return err
+}
+
+func (m *Manager) persistAndPublishRunningProgress(jobID string, jp *models.JobProgress) error {
+	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	err := m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
+	cancel()
+	if err != nil {
+		return err
+	}
+	m.hub.Publish(ws.Event{
+		Type:  "job.progress",
+		JobID: jobID,
+		Payload: map[string]any{
+			"status":   models.JobStatusRunning,
+			"progress": jp,
+		},
+	})
+	return nil
+}
+
+func (m *Manager) logProgressPersistenceError(jobID string, err error) {
+	logging.WarnFields("job progress persistence failed", map[string]any{
+		"event":   "job.progress_persist_failed",
+		"job_id":  jobID,
+		"warning": err.Error(),
+	})
 }
 
 func (m *Manager) runTransferSyncStagingToS3(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {
@@ -1348,36 +1267,18 @@ func (m *Manager) trySetJobTotals(jobID string, objectsTotal, bytesTotal int64) 
 	bt := bytesTotal
 	jp := &models.JobProgress{ObjectsTotal: &ot, BytesTotal: &bt}
 
-	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
-	cancel()
-
-	m.hub.Publish(ws.Event{
-		Type:  "job.progress",
-		JobID: jobID,
-		Payload: map[string]any{
-			"status":   models.JobStatusRunning,
-			"progress": jp,
-		},
-	})
+	if err := m.persistAndPublishRunningProgress(jobID, jp); err != nil {
+		m.logProgressPersistenceError(jobID, err)
+	}
 }
 
 func (m *Manager) trySetJobObjectsTotal(jobID string, objectsTotal int64) {
 	ot := objectsTotal
 	jp := &models.JobProgress{ObjectsTotal: &ot}
 
-	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
-	cancel()
-
-	m.hub.Publish(ws.Event{
-		Type:  "job.progress",
-		JobID: jobID,
-		Payload: map[string]any{
-			"status":   models.JobStatusRunning,
-			"progress": jp,
-		},
-	})
+	if err := m.persistAndPublishRunningProgress(jobID, jp); err != nil {
+		m.logProgressPersistenceError(jobID, err)
+	}
 }
 
 func (m *Manager) incrementJobObjectsDone(jobID string, delta int64) {
@@ -1403,18 +1304,9 @@ func (m *Manager) incrementJobObjectsDone(jobID string, delta int64) {
 	}
 	jp.ObjectsDone = &done
 
-	updateCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, &jp, nil, nil)
-	cancel()
-
-	m.hub.Publish(ws.Event{
-		Type:  "job.progress",
-		JobID: jobID,
-		Payload: map[string]any{
-			"status":   models.JobStatusRunning,
-			"progress": &jp,
-		},
-	})
+	if err := m.persistAndPublishRunningProgress(jobID, &jp); err != nil {
+		m.logProgressPersistenceError(jobID, err)
+	}
 }
 
 func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jobID, bucket, key string, preserveLeadingSlash bool) {
@@ -1453,18 +1345,9 @@ func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jo
 		jp.BytesTotal = &bt
 	}
 
-	updateCtx, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
-	_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
-	cancel2()
-
-	m.hub.Publish(ws.Event{
-		Type:  "job.progress",
-		JobID: jobID,
-		Payload: map[string]any{
-			"status":   models.JobStatusRunning,
-			"progress": jp,
-		},
-	})
+	if err := m.persistAndPublishRunningProgress(jobID, jp); err != nil {
+		m.logProgressPersistenceError(jobID, err)
+	}
 }
 
 func (m *Manager) trySetJobTotalsFromS3Prefix(ctx context.Context, profileID, jobID, bucket, prefix string, include, exclude []string, preserveLeadingSlash bool) {
@@ -1635,159 +1518,6 @@ func (m *Manager) runTransferMovePrefix(ctx context.Context, profileID, jobID st
 	args = append(args, src, dst)
 
 	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressTransfers})
-}
-
-func (m *Manager) ensureLocalPathAllowed(localPath string) error {
-	if len(m.allowedLocalDirs) == 0 {
-		return nil
-	}
-
-	abs, err := filepath.Abs(localPath)
-	if err != nil {
-		return fmt.Errorf("invalid localPath %q: %w", localPath, err)
-	}
-	real, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		return fmt.Errorf("localPath %q not found: %w", localPath, err)
-	}
-
-	for _, dir := range m.allowedLocalDirs {
-		if isUnderDir(dir, real) {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("localPath %q is not allowed; must be under one of: %s", real, strings.Join(m.allowedLocalDirs, ", "))
-}
-
-func (m *Manager) prepareLocalDestination(localPath string) (string, error) {
-	clean := filepath.Clean(localPath)
-	if clean == "" || clean == "." {
-		return "", fmt.Errorf("invalid localPath %q", localPath)
-	}
-	abs, err := filepath.Abs(clean)
-	if err != nil {
-		return "", fmt.Errorf("invalid localPath %q: %w", localPath, err)
-	}
-
-	if err := m.ensureLocalPathAllowedForCreate(abs); err != nil {
-		return "", err
-	}
-
-	if info, err := os.Stat(abs); err == nil {
-		if !info.IsDir() {
-			return "", fmt.Errorf("localPath %q must be a directory", abs)
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("invalid localPath %q: %w", abs, err)
-	} else {
-		if err := os.MkdirAll(abs, 0o700); err != nil {
-			return "", fmt.Errorf("failed to create localPath %q: %w", abs, err)
-		}
-	}
-
-	// Normalize to a directory target for transfer operations.
-	if !strings.HasSuffix(abs, string(os.PathSeparator)) {
-		abs += string(os.PathSeparator)
-	}
-	return abs, nil
-}
-
-func (m *Manager) ensureLocalPathAllowedForCreate(localPath string) error {
-	if len(m.allowedLocalDirs) == 0 {
-		return nil
-	}
-
-	abs, err := filepath.Abs(localPath)
-	if err != nil {
-		return fmt.Errorf("invalid localPath %q: %w", localPath, err)
-	}
-
-	real, err := evalSymlinksBestEffort(abs)
-	if err != nil {
-		return fmt.Errorf("invalid localPath %q: %w", localPath, err)
-	}
-
-	for _, dir := range m.allowedLocalDirs {
-		if isUnderDir(dir, real) {
-			return nil
-		}
-	}
-	return fmt.Errorf("localPath %q is not allowed; must be under one of: %s", real, strings.Join(m.allowedLocalDirs, ", "))
-}
-
-func isUnderDir(dir, path string) bool {
-	rel, err := filepath.Rel(dir, path)
-	if err != nil {
-		return false
-	}
-	if rel == "." {
-		return true
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return false
-	}
-	return true
-}
-
-func evalSymlinksBestEffort(path string) (string, error) {
-	clean := filepath.Clean(path)
-	if clean == "" || clean == "." {
-		return "", errors.New("invalid path")
-	}
-
-	p := clean
-	var missing []string
-	for {
-		info, err := os.Stat(p)
-		if err == nil {
-			if !info.IsDir() && len(missing) > 0 {
-				return "", fmt.Errorf("parent is not a directory: %q", p)
-			}
-			real, err := filepath.EvalSymlinks(p)
-			if err != nil {
-				return "", err
-			}
-			for i := len(missing) - 1; i >= 0; i-- {
-				real = filepath.Join(real, missing[i])
-			}
-			return real, nil
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return "", err
-		}
-
-		parent := filepath.Dir(p)
-		if parent == p {
-			real, err := filepath.EvalSymlinks(p)
-			if err != nil {
-				return "", err
-			}
-			for i := len(missing) - 1; i >= 0; i-- {
-				real = filepath.Join(real, missing[i])
-			}
-			return real, nil
-		}
-
-		missing = append(missing, filepath.Base(p))
-		p = parent
-	}
-}
-
-func normalizeKeyInput(value string, preserveLeadingSlash bool) string {
-	return rcloneconfig.NormalizePathInput(value, preserveLeadingSlash)
-}
-
-func rcloneRemoteBucket(bucket string) string {
-	return rcloneconfig.RemoteBucket(bucket)
-}
-
-func rcloneRemoteDir(bucket, prefix string, preserveLeadingSlash bool) string {
-	return rcloneconfig.RemoteDir(bucket, prefix, preserveLeadingSlash)
-}
-
-func rcloneRemoteObject(bucket, key string, preserveLeadingSlash bool) string {
-	return rcloneconfig.RemoteObject(bucket, key, preserveLeadingSlash)
 }
 
 func (m *Manager) runRcloneSync(ctx context.Context, profileID, jobID, src, dst string, deleteExtraneous bool, include, exclude []string, dryRun bool, mode rcloneProgressMode) error {
@@ -2019,18 +1749,9 @@ func (m *Manager) trackRcloneProgress(ctx context.Context, jobID string, progres
 				jp.EtaSeconds = update.EtaSeconds
 			}
 
-			updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			_ = m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
-			cancel()
-
-			m.hub.Publish(ws.Event{
-				Type:  "job.progress",
-				JobID: jobID,
-				Payload: map[string]any{
-					"status":   models.JobStatusRunning,
-					"progress": jp,
-				},
-			})
+			if err := m.persistAndPublishRunningProgress(jobID, jp); err != nil {
+				m.logProgressPersistenceError(jobID, err)
+			}
 		}
 	}
 }
