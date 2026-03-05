@@ -2635,6 +2635,18 @@ components:
       properties:
         jobId: { type: string }
 
+    WSEvent:
+      type: object
+      required: [type, ts, seq]
+      properties:
+        type: { type: string }
+        ts: { type: string, format: date-time }
+        seq: { type: integer, format: int64 }
+        jobId: { type: string }
+        payload:
+          description: Event-specific payload
+          nullable: true
+
     JobsListResponse:
       type: object
       required: [items]

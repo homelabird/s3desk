@@ -3145,6 +3145,16 @@ export interface components {
         JobCreatedResponse: {
             jobId: string;
         };
+        WSEvent: {
+            type: string;
+            /** Format: date-time */
+            ts: string;
+            /** Format: int64 */
+            seq: number;
+            jobId?: string;
+            /** @description Event-specific payload */
+            payload?: unknown;
+        };
         JobsListResponse: {
             items: components["schemas"]["Job"][];
             nextCursor?: string | null;

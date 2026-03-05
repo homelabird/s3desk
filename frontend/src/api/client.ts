@@ -31,6 +31,7 @@ import type {
 	ObjectFavoritesResponse,
 	UploadCreateRequest,
 	UploadCreateResponse,
+	UploadChunkState,
 	UploadMultipartAbortRequest,
 	UploadMultipartCompleteRequest,
 	UploadPresignRequest,
@@ -118,10 +119,6 @@ export type UploadCommitRequest = {
 
 export type UploadFilesResult = {
 	skipped: number
-}
-
-export type UploadChunkState = {
-	present: number[]
 }
 
 function normalizeListObjectsResponse(
