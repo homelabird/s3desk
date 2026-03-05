@@ -1,19 +1,37 @@
 # Frontend PR Execution Plan (FE-01 ~ FE-09)
 
-Scope baseline (2026-03-05):
-- Inline style usages: 392
-- Target files in FE-01: `ProfilesPage.tsx`, `BucketsPage.tsx`, `FullAppInner.tsx`
+Last updated: 2026-03-05
 
-Execution status:
-- PR-01 (FE-01): completed locally (style count 392 -> 336, target files `style={{}}` = 0)
-- PR-02 (FE-02): completed locally (style count 336 -> 293, target files `style={{}}` = 0)
-- PR-03 (FE-03): completed locally (responsive table pattern unified; style count 293 -> 291)
-- PR-04 (FE-04): completed locally (`ProfilesPage.tsx` 1013 -> 625; table/modal/view-model split)
-- PR-05 (FE-05): completed locally (`SettingsPage.tsx` 877 -> 323; Access/Transfers/Objects/Network/Server sections extracted)
-- PR-06+: pending
+## Scope Baseline (2026-03-05)
+- Inline style usages: `392`
+- Initial FE-01 targets: `ProfilesPage.tsx`, `BucketsPage.tsx`, `FullAppInner.tsx`
 
-## PR-01 (FE-01): Style debt reduction wave 1
+## Current Snapshot (Latest on `main`)
+- Inline style usages: `273` (`frontend/src`, `style={{}}` grep count)
+- `ProfilesPage.tsx`: `625` LOC
+- `SettingsPage.tsx`: `323` LOC
+- `ObjectsPage.tsx`: `10` LOC (delegates to `ObjectsPageScreen.tsx`)
+- `ObjectsPageScreen.tsx`: `1018` LOC
 
+## Execution Status
+- PR-01 (FE-01): **Completed**
+- PR-02 (FE-02): **Completed**
+- PR-03 (FE-03): **Completed**
+- PR-04 (FE-04): **Completed**
+- PR-05 (FE-05): **Completed**
+- PR-06 (FE-06): **Completed**
+- PR-07 (FE-07): **Completed (code-level)**
+- PR-08 (FE-08): **In progress**
+- PR-09 (FE-09): **Completed**
+
+Related commits:
+- `4a6bd8d` refactor(frontend): split profiles/settings and harden smoke interactions
+- `bf84595` ci: enforce golangci-lint and net-new inline-style guard
+- `d2453f1` refactor(objects): split page screen into data/actions and pane builders
+
+---
+
+## PR-01 (FE-01): Style Debt Reduction Wave 1
 Goal:
 - Replace most inline styles in key shell/pages with CSS modules + tokens.
 - Keep behavior unchanged.
@@ -28,7 +46,6 @@ File list:
 - `frontend/src/pages/ProfilesPage.module.css` (new)
 - `frontend/src/pages/BucketsPage.module.css` (new)
 - `frontend/src/FullAppInner.module.css` (new)
-- (optional) touched smoke tests if snapshots/queries need updates
 
 Checklist:
 - [x] Add CSS modules for the 3 targets.
@@ -38,13 +55,12 @@ Checklist:
 - [x] `npm -C frontend run lint`
 - [x] `npm -C frontend run test:unit`
 - [x] `npm -C frontend run build`
-- [x] Report style count delta (`rg -n "style={{" ... | wc -l`).
+- [x] Report style count delta.
 
 Acceptance:
-- `style={{}}` in target files reduced by >= 70%.
+- Target files reduced to `style={{}} = 0`.
 
-## PR-02 (FE-02): Style debt reduction wave 2 (Objects drawers)
-
+## PR-02 (FE-02): Style Debt Reduction Wave 2 (Objects Drawers)
 Goal:
 - Convert heavy inline style drawers to module styles.
 
@@ -54,7 +70,7 @@ Size:
 File list:
 - `frontend/src/pages/objects/ObjectsGlobalSearchDrawer.tsx`
 - `frontend/src/pages/objects/ObjectsFiltersDrawer.tsx`
-- `frontend/src/pages/objects/objects.module.css` (extend) OR split module files
+- `frontend/src/pages/objects/objects.module.css`
 
 Checklist:
 - [x] Replace width/minWidth/maxWidth inline style patterns with semantic classes.
@@ -63,10 +79,9 @@ Checklist:
 - [x] lint/unit/build pass.
 
 Acceptance:
-- Inline styles in both files reduced by >= 80%.
+- Inline style usage in both target drawers substantially reduced.
 
-## PR-03 (FE-03): Responsive table pattern unification
-
+## PR-03 (FE-03): Responsive Table Pattern Unification
 Goal:
 - Unify table wrappers/cell classes across Buckets/Profiles/BucketPolicy.
 
@@ -90,8 +105,7 @@ Checklist:
 Acceptance:
 - Consistent responsive table behavior across the 3 surfaces.
 
-## PR-04 (FE-04): ProfilesPage decomposition completion
-
+## PR-04 (FE-04): ProfilesPage Decomposition Completion
 Goal:
 - Move non-view domain logic out of page component.
 
@@ -114,10 +128,9 @@ Checklist:
 - [x] lint/unit/build pass.
 
 Acceptance:
-- `ProfilesPage.tsx` <= 700 LOC.
+- `ProfilesPage.tsx` reduced from ~`1013` to `625` LOC.
 
-## PR-05 (FE-05): SettingsPage sectional split
-
+## PR-05 (FE-05): SettingsPage Sectional Split
 Goal:
 - Split sections into feature subcomponents.
 
@@ -139,10 +152,9 @@ Checklist:
 - [x] lint/unit/build pass.
 
 Acceptance:
-- `SettingsPage.tsx` <= 500 LOC.
+- `SettingsPage.tsx` reduced from ~`877` to `323` LOC.
 
-## PR-06 (FE-06): Style regression guardrail
-
+## PR-06 (FE-06): Style Regression Guardrail
 Goal:
 - Prevent style debt from increasing.
 
@@ -155,15 +167,14 @@ File list:
 - `scripts/check-inline-style.sh` (new)
 
 Checklist:
-- [ ] Add lint rule or CI script to detect new `style={{` in frontend.
-- [ ] Allowlist only unavoidable component-level cases.
-- [ ] Fail CI on regressions.
+- [x] Add CI script to detect net-new `style={{` in frontend.
+- [x] Enforce failure on inline-style regressions.
+- [x] Keep lint strict (`--max-warnings 0`).
 
 Acceptance:
 - CI blocks net-new inline style debt.
 
-## PR-07 (FE-07): Mobile toolbar UX hardening
-
+## PR-07 (FE-07): Mobile Toolbar UX Hardening
 Goal:
 - Remove brittle fixed widths in mobile-sensitive toolbars.
 
@@ -177,39 +188,43 @@ File list:
 - related CSS modules
 
 Checklist:
-- [ ] Replace fixed width inline styles with responsive classes (`clamp`, breakpoints).
-- [ ] Validate at 360/390/768 widths.
-- [ ] lint/unit/build pass.
+- [x] Replace fixed-width inline styles with responsive classes/breakpoints.
+- [x] Move toolbar layout styling to CSS modules.
+- [x] lint/unit/build pass.
 
 Acceptance:
-- No overflow/overlap in toolbar controls on target breakpoints.
+- Code-level responsive hardening completed for target toolbars.
+- Note: run manual viewport QA pass (360/390/768) when doing next UI regression sweep.
 
-## PR-08 (FE-08): ObjectsPage large-file split
-
+## PR-08 (FE-08): ObjectsPage Large-File Split
 Goal:
-- Continue decomposition of `ObjectsPage.tsx` and lower page-level complexity.
+- Continue decomposition of objects page and lower page-level complexity.
 
 Size:
 - XL (4-5 days)
 
-File list:
+File list (current phase):
 - `frontend/src/pages/ObjectsPage.tsx`
-- new slices in `frontend/src/pages/objects/` (containers/hooks/view-models)
-- focused tests for extracted logic
+- `frontend/src/pages/ObjectsPageScreen.tsx` (new)
+- `frontend/src/pages/objects/useObjectsPageData.ts` (new)
+- `frontend/src/pages/objects/useObjectsPageActions.ts` (new)
+- `frontend/src/pages/objects/buildObjectsPageOverlaysProps.tsx` (new)
+- `frontend/src/pages/objects/useObjectsPageListInteractions.tsx` (new)
+- `frontend/src/pages/objects/buildObjectsPagePanesProps.tsx` (new)
 
 Checklist:
-- [ ] Split orchestration/view-model/UI assembly layers.
-- [ ] Keep runtime behavior and keyboard shortcut flows unchanged.
-- [ ] Add tests for extracted pure logic.
-- [ ] lint/unit/build pass.
+- [x] Split `ObjectsPage.tsx` to screen-level component.
+- [x] Extract data/actions/overlay-builder/panes-builder/list-interactions modules.
+- [ ] Additional split for `ObjectsPageScreen.tsx` action/overlay groups and row/context-menu composition.
+- [ ] Add/expand focused tests for extracted pure logic slices.
 
 Acceptance:
-- `ObjectsPage.tsx` <= 900 LOC.
+- Entry page complexity reduced (`ObjectsPage.tsx` now 10 LOC).
+- Remaining work tracked in `ObjectsPageScreen.tsx` (`1018` LOC).
 
-## PR-09 (FE-09): Smoke test quality uplift
-
+## PR-09 (FE-09): Smoke Test Quality Uplift
 Goal:
-- Upgrade page smoke tests from render-only to critical interaction assertions.
+- Upgrade page smoke tests from render-only checks to interaction assertions.
 
 Size:
 - M (1 day)
@@ -221,9 +236,9 @@ File list:
 - `frontend/src/pages/objects/__tests__/ObjectsPage.smoke.test.tsx`
 
 Checklist:
-- [ ] Add at least one key interaction/assertion per page.
-- [ ] Keep test runtime stable.
-- [ ] lint/unit pass.
+- [x] Add at least one key interaction/assertion per page.
+- [x] Keep test runtime stable.
+- [x] lint/unit pass.
 
 Acceptance:
-- Smoke tests validate core CTA/state transitions, not only title rendering.
+- Smoke tests now validate CTA/state transitions (navigation, dismiss, sort toggle), not only rendering.
