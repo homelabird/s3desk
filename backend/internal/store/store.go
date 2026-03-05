@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -118,6 +119,17 @@ func extractGcpServiceAccountInfo(raw string) (projectID, clientEmail string) {
 	return projectID, clientEmail
 }
 
+func unmarshalProfileJSON(profileID string, provider models.ProfileProvider, field, raw string, dest any) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(raw), dest); err != nil {
+		return fmt.Errorf("profile %s (%s): invalid %s: %w", profileID, provider, field, err)
+	}
+	return nil
+}
+
 func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 	provider := normalizeProfileProvider(models.ProfileProvider(row.Provider))
 	out := models.Profile{
@@ -139,8 +151,8 @@ func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 		out.Region = strings.TrimSpace(row.Region)
 	case models.ProfileProviderAzureBlob:
 		var cfg azureProfileConfig
-		if strings.TrimSpace(row.ConfigJSON) != "" {
-			_ = json.Unmarshal([]byte(row.ConfigJSON), &cfg)
+		if err := unmarshalProfileJSON(row.ID, provider, "config_json", row.ConfigJSON, &cfg); err != nil {
+			return models.Profile{}, err
 		}
 		out.AccountName = strings.TrimSpace(cfg.AccountName)
 		out.Endpoint = strings.TrimSpace(cfg.Endpoint)
@@ -150,8 +162,8 @@ func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 		}
 	case models.ProfileProviderGcpGcs:
 		var cfg gcpProfileConfig
-		if strings.TrimSpace(row.ConfigJSON) != "" {
-			_ = json.Unmarshal([]byte(row.ConfigJSON), &cfg)
+		if err := unmarshalProfileJSON(row.ID, provider, "config_json", row.ConfigJSON, &cfg); err != nil {
+			return models.Profile{}, err
 		}
 		out.ProjectID = strings.TrimSpace(cfg.ProjectID)
 		out.ClientEmail = strings.TrimSpace(cfg.ClientEmail)
@@ -163,8 +175,8 @@ func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 		out.ProjectNumber = strings.TrimSpace(cfg.ProjectNumber)
 	case models.ProfileProviderOciObjectStorage:
 		var cfg ociObjectStorageProfileConfig
-		if strings.TrimSpace(row.ConfigJSON) != "" {
-			_ = json.Unmarshal([]byte(row.ConfigJSON), &cfg)
+		if err := unmarshalProfileJSON(row.ID, provider, "config_json", row.ConfigJSON, &cfg); err != nil {
+			return models.Profile{}, err
 		}
 		out.Endpoint = strings.TrimSpace(cfg.Endpoint)
 		out.Region = strings.TrimSpace(cfg.Region)
@@ -469,9 +481,8 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 				raw = "{}"
 			}
 			var sec map[string]any
-			if err := json.Unmarshal([]byte(raw), &sec); err != nil {
-				// If secrets_json is corrupted, skip encryption for this row.
-				continue
+			if err := unmarshalProfileJSON(p.ID, provider, "secrets_json", raw, &sec); err != nil {
+				return updated, err
 			}
 
 			var key string
@@ -615,15 +626,15 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 
 	case models.ProfileProviderAzureBlob:
 		var cfg azureProfileConfig
-		if strings.TrimSpace(row.ConfigJSON) != "" {
-			_ = json.Unmarshal([]byte(row.ConfigJSON), &cfg)
+		if err := unmarshalProfileJSON(row.ID, provider, "config_json", row.ConfigJSON, &cfg); err != nil {
+			return models.ProfileSecrets{}, false, err
 		}
 		profile.AzureAccountName = strings.TrimSpace(cfg.AccountName)
 		profile.AzureEndpoint = strings.TrimSpace(cfg.Endpoint)
 		profile.AzureUseEmulator = cfg.UseEmulator
 		var sec azureProfileSecrets
-		if strings.TrimSpace(row.SecretsJSON) != "" {
-			_ = json.Unmarshal([]byte(row.SecretsJSON), &sec)
+		if err := unmarshalProfileJSON(row.ID, provider, "secrets_json", row.SecretsJSON, &sec); err != nil {
+			return models.ProfileSecrets{}, false, err
 		}
 		key := strings.TrimSpace(sec.AccountKey)
 		if strings.HasPrefix(key, encryptedPrefix) {
@@ -640,16 +651,16 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 
 	case models.ProfileProviderGcpGcs:
 		var cfg gcpProfileConfig
-		if strings.TrimSpace(row.ConfigJSON) != "" {
-			_ = json.Unmarshal([]byte(row.ConfigJSON), &cfg)
+		if err := unmarshalProfileJSON(row.ID, provider, "config_json", row.ConfigJSON, &cfg); err != nil {
+			return models.ProfileSecrets{}, false, err
 		}
 		profile.GcpEndpoint = strings.TrimSpace(cfg.Endpoint)
 		profile.GcpAnonymous = cfg.Anonymous
 		profile.GcpProjectNumber = strings.TrimSpace(cfg.ProjectNumber)
 
 		var sec gcpProfileSecrets
-		if strings.TrimSpace(row.SecretsJSON) != "" {
-			_ = json.Unmarshal([]byte(row.SecretsJSON), &sec)
+		if err := unmarshalProfileJSON(row.ID, provider, "secrets_json", row.SecretsJSON, &sec); err != nil {
+			return models.ProfileSecrets{}, false, err
 		}
 		sa := strings.TrimSpace(sec.ServiceAccountJSON)
 		if strings.HasPrefix(sa, encryptedPrefix) {
@@ -666,8 +677,8 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 
 	case models.ProfileProviderOciObjectStorage:
 		var cfg ociObjectStorageProfileConfig
-		if strings.TrimSpace(row.ConfigJSON) != "" {
-			_ = json.Unmarshal([]byte(row.ConfigJSON), &cfg)
+		if err := unmarshalProfileJSON(row.ID, provider, "config_json", row.ConfigJSON, &cfg); err != nil {
+			return models.ProfileSecrets{}, false, err
 		}
 		profile.OciNamespace = strings.TrimSpace(cfg.Namespace)
 		profile.OciCompartment = strings.TrimSpace(cfg.Compartment)

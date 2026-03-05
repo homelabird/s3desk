@@ -601,7 +601,7 @@ govulncheck:
     - when: never
   variables:
     GOVULNCHECK_TIMEOUT: "30m"
-    GOVULNCHECK_PATTERN: "./internal/api/..."
+    GOVULNCHECK_PATTERN: "./..."
     GOPROXY: "https://proxy.golang.org,direct"
     GOSUMDB: "sum.golang.org"
   script:
