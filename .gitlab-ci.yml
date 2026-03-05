@@ -86,6 +86,7 @@ variables:
   GOMODCACHE: "$CI_PROJECT_DIR/.cache/go-mod"
   GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
   GOVULNCHECK_VERSION: "latest"
+  GOLANGCI_LINT_VERSION: "v1.64.8"
 
 .node_cache: &node_cache
   cache:
@@ -590,6 +591,31 @@ go_test:
     - go vet ./...
     - go test ./...
 
+golangci_lint:
+  stage: test
+  image: "$GO_IMAGE"
+  interruptible: true
+  <<: *go_cache
+  rules:
+    - changes:
+        - backend/**/*
+        - .golangci.yml
+        - .golangci.yaml
+        - .golangci.toml
+        - .golangci.json
+    - when: never
+  variables:
+    GOLANGCI_LINT_TIMEOUT: "10m"
+  script:
+    - |
+      GOBIN="$(go env GOBIN)"
+      if [ -z "$GOBIN" ]; then
+        GOBIN="$(go env GOPATH)/bin"
+      fi
+      go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
+      cd backend
+      "$GOBIN/golangci-lint" run --timeout "${GOLANGCI_LINT_TIMEOUT}" ./...
+
 govulncheck:
   stage: test
   image: "$GO_IMAGE"
@@ -753,6 +779,22 @@ frontend_openapi_types:
     - npm run gen:openapi
     - cd ..
     - git diff --exit-code frontend/src/api/openapi.ts
+
+frontend_inline_style_guard:
+  stage: test
+  image: "$NODE_IMAGE"
+  interruptible: true
+  variables:
+    GIT_STRATEGY: fetch
+    GIT_DEPTH: "200"
+  rules:
+    - changes:
+        - frontend/**/*
+        - scripts/check-inline-style.sh
+        - .gitlab-ci.yml
+    - when: never
+  script:
+    - bash scripts/check-inline-style.sh
 
 frontend_lint:
   stage: test

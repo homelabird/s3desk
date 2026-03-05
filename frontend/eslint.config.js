@@ -17,6 +17,7 @@ export default defineConfig([
     ],
     rules: {
       'react-hooks/incompatible-library': 'off',
+      // Inline-style debt is enforced by scripts/check-inline-style.sh in CI.
     },
     languageOptions: {
       ecmaVersion: 2020,
