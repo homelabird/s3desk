@@ -46,10 +46,22 @@ export function useJobsRealtimeEvents({
 		let ws: WebSocket | null = null
 		let es: EventSource | null = null
 		let stopped = false
+		let hadConnected = false
+		let shouldRefreshOnOpen = false
 		let currentTransport: EventsTransport = null
 		let reconnectTimer: number | null = null
 		let wsProbeTimer: number | null = null
 		let reconnectAttempt = 0
+
+		const refreshJobs = () => {
+			queryClient.invalidateQueries({ queryKey: ['jobs'], exact: false }).catch(() => {})
+		}
+
+		const markRefreshOnReconnect = () => {
+			if (hadConnected) {
+				shouldRefreshOnOpen = true
+			}
+		}
 
 		const setTransport = (next: EventsTransport) => {
 			currentTransport = next
@@ -92,11 +104,28 @@ export function useJobsRealtimeEvents({
 			}, 15_000)
 		}
 
+		const handleTransportOpen = (transport: Exclude<EventsTransport, null>) => {
+			setTransport(transport)
+			setEventsConnected(true)
+			setEventsRetryCount(0)
+			reconnectAttempt = 0
+			if (shouldRefreshOnOpen) {
+				shouldRefreshOnOpen = false
+				refreshJobs()
+			}
+			hadConnected = true
+		}
+
 		const handleEvent = (data: string) => {
 			try {
 				const msg = JSON.parse(data) as WSEvent
-				if (typeof msg.seq === 'number' && msg.seq > lastSeqRef.current) {
-					lastSeqRef.current = msg.seq
+				if (typeof msg.seq === 'number') {
+					if (lastSeqRef.current > 0 && msg.seq > lastSeqRef.current + 1) {
+						refreshJobs()
+					}
+					if (msg.seq > lastSeqRef.current) {
+						lastSeqRef.current = msg.seq
+					}
 				}
 
 				if (msg.type === 'jobs.deleted' && typeof msg.payload === 'object' && msg.payload !== null) {
@@ -105,13 +134,13 @@ export function useJobsRealtimeEvents({
 						? payload.jobIds.filter((v): v is string => typeof v === 'string' && v.length > 0)
 						: []
 					if (jobIds.length > 0) {
-						queryClient.invalidateQueries({ queryKey: ['jobs'], exact: false }).catch(() => {})
+						refreshJobs()
 						onJobsDeleted?.(jobIds)
 					}
 				}
 
 				if (msg.type === 'job.created') {
-					queryClient.invalidateQueries({ queryKey: ['jobs'] }).catch(() => {})
+					refreshJobs()
 				}
 
 				if (
@@ -154,13 +183,11 @@ export function useJobsRealtimeEvents({
 				return
 			}
 			es.onopen = () => {
-				setTransport('sse')
-				setEventsConnected(true)
-				setEventsRetryCount(0)
-				reconnectAttempt = 0
+				handleTransportOpen('sse')
 				scheduleWSProbe()
 			}
 			es.onerror = () => {
+				markRefreshOnReconnect()
 				setTransport('sse')
 				setEventsConnected(false)
 				scheduleReconnect()
@@ -197,10 +224,7 @@ export function useJobsRealtimeEvents({
 			ws.onopen = () => {
 				opened = true
 				window.clearTimeout(fallbackTimer)
-				setTransport('ws')
-				setEventsConnected(true)
-				setEventsRetryCount(0)
-				reconnectAttempt = 0
+				handleTransportOpen('ws')
 				clearWsProbeTimer()
 				clearReconnectTimer()
 				if (es) {
@@ -216,6 +240,7 @@ export function useJobsRealtimeEvents({
 			const onDisconnect = () => {
 				window.clearTimeout(fallbackTimer)
 				if (stopped) return
+				markRefreshOnReconnect()
 				setTransport(null)
 				setEventsConnected(false)
 				connectSSE()

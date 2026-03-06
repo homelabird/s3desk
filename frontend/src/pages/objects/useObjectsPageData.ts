@@ -1,9 +1,9 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { Grid } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { APIClient } from '../../api/client'
-import type { Bucket, JobCreateRequest, Profile } from '../../api/types'
+import type { JobCreateRequest } from '../../api/types'
 import { useTransfers } from '../../components/useTransfers'
 import { withJobQueueRetry } from '../../lib/jobQueue'
 import {
@@ -11,7 +11,6 @@ import {
 	OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MIN_HOURS,
 } from '../../lib/objectIndexing'
-import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../../lib/providerCapabilities'
 import {
 	createThumbnailCache,
 	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
@@ -22,7 +21,6 @@ import { useIsOffline } from '../../lib/useIsOffline'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { useObjectsDeferredOpener } from './useObjectsDeferredOpener'
 import { useObjectsFiltersState } from './useObjectsFiltersState'
-import { useObjectsFavorites } from './useObjectsFavorites'
 import { useObjectsGlobalSearchOverlayState } from './useObjectsGlobalSearchOverlayState'
 import { useObjectsGlobalSearchState } from './useObjectsGlobalSearchState'
 import { useObjectsIndexedSearchQuery } from './useObjectsIndexedSearchQuery'
@@ -30,6 +28,7 @@ import { useObjectsIndexing } from './useObjectsIndexing'
 import { useObjectsLayout } from './useObjectsLayout'
 import { useObjectsListDerivedState } from './useObjectsListDerivedState'
 import { useObjectsLocationState } from './useObjectsLocationState'
+import { useObjectsPageQueries } from './useObjectsPageQueries'
 import { useObjectsPrefetch } from './useObjectsPrefetch'
 import { useObjectsSearchState } from './useObjectsSearchState'
 import { useObjectsSelection } from './useObjectsSelection'
@@ -237,45 +236,40 @@ export function useObjectsPageData(props: Props) {
 		onDetailsResizePointerDown,
 		onDetailsResizePointerMove,
 		onDetailsResizePointerUp,
-		} = useObjectsLayout({
-			layoutWidthPx,
-			isDesktop,
-			isWideDesktop,
-			isAdvanced,
+	} = useObjectsLayout({
+		layoutWidthPx,
+		isDesktop,
+		isWideDesktop,
+		isAdvanced,
 		detailsOpen,
 		detailsDrawerOpen,
-			setDetailsDrawerOpen,
-			setTreeDrawerOpen,
-		})
-
-		const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
-		const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
-		const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
-	const metaQuery = useQuery({
-		queryKey: ['meta', props.apiToken],
-		queryFn: () => api.getMeta(),
-		enabled: !!props.apiToken,
+		setDetailsDrawerOpen,
+		setTreeDrawerOpen,
 	})
-	const profilesQuery = useQuery({
-		queryKey: ['profiles', props.apiToken],
-		queryFn: () => api.listProfiles(),
-		enabled: !!props.apiToken,
-	})
-	const selectedProfile: Profile | null = useMemo(() => {
-		if (!props.profileId) return null
-		return profilesQuery.data?.find((profile) => profile.id === props.profileId) ?? null
-	}, [profilesQuery.data, props.profileId])
-	const profileCapabilities = selectedProfile?.provider
-		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers)
-		: null
-	const objectCrudSupported = profileCapabilities ? profileCapabilities.objectCrud : true
-	const uploadSupported = profileCapabilities ? profileCapabilities.objectCrud && profileCapabilities.jobTransfer : true
-	const uploadDisabledReason = getUploadCapabilityDisabledReason(profileCapabilities)
 
-	const bucketsQuery = useQuery({
-		queryKey: ['buckets', props.profileId, props.apiToken],
-		queryFn: () => api.listBuckets(props.profileId!),
-		enabled: !!props.profileId,
+	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
+	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
+	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
+	const {
+		profileCapabilities,
+		objectCrudSupported,
+		uploadSupported,
+		uploadDisabledReason,
+		bucketsQuery,
+		bucketOptions,
+		objectsQuery,
+		favoritesQuery,
+		favoriteItems,
+		favoriteKeys,
+		favoritePendingKeys,
+		toggleFavorite,
+	} = useObjectsPageQueries({
+		api,
+		apiToken: props.apiToken,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		debugObjectsList,
 	})
 
 	useEffect(() => {
@@ -312,77 +306,6 @@ export function useObjectsPageData(props: Props) {
 		return () => window.removeEventListener('keydown', onKeyDown)
 	}, [openPathModal])
 
-
-const objectsQuery = useInfiniteQuery({
-		queryKey: ['objects', props.profileId, bucket, prefix, props.apiToken],
-		enabled: !!props.profileId && !!bucket,
-		initialPageParam: undefined as string | undefined,
-		staleTime: 15_000,
-		queryFn: async ({ pageParam }) => {
-			return api.listObjects({
-				profileId: props.profileId!,
-				bucket,
-				prefix,
-				delimiter: '/',
-				maxKeys: OBJECTS_LIST_PAGE_SIZE,
-				continuationToken: pageParam,
-			})
-		},
-		getNextPageParam: (lastPage, _allPages, lastPageParam, allPageParams) => {
-			if (!lastPage.isTruncated) return undefined
-			const nextToken = lastPage.nextContinuationToken ?? undefined
-			if (!nextToken) {
-				logObjectsDebug(debugObjectsList, 'warn', 'List objects missing continuation token; stopping pagination', {
-					bucket,
-					prefix,
-				})
-				return undefined
-			}
-
-			const lastCommonPrefixes = Array.isArray(lastPage.commonPrefixes) ? lastPage.commonPrefixes : []
-			const pageEmpty = lastPage.items.length === 0 && lastCommonPrefixes.length === 0
-			if (pageEmpty) {
-				logObjectsDebug(debugObjectsList, 'warn', 'List objects returned empty page; stopping pagination', {
-					bucket,
-					prefix,
-					nextToken,
-				})
-				return undefined
-			}
-
-			if (typeof lastPageParam === 'string' && lastPageParam && nextToken === lastPageParam) {
-				logObjectsDebug(debugObjectsList, 'warn', 'List objects repeated continuation token; stopping pagination', {
-					bucket,
-					prefix,
-					nextToken,
-				})
-				return undefined
-			}
-
-			const seen = new Set<string>()
-			for (const param of allPageParams) {
-				if (typeof param === 'string' && param) seen.add(param)
-			}
-			if (seen.has(nextToken)) {
-				logObjectsDebug(debugObjectsList, 'warn', 'List objects hit previously seen continuation token; stopping pagination', {
-					bucket,
-					prefix,
-					nextToken,
-				})
-				return undefined
-			}
-			return nextToken
-		},
-	})
-
-	const { favoritesQuery, favoriteItems, favoriteKeys, favoritePendingKeys, toggleFavorite } = useObjectsFavorites({
-		api,
-		profileId: props.profileId,
-		bucket,
-		apiToken: props.apiToken,
-		objectsPages: objectsQuery.data?.pages ?? [],
-	})
-
 	const {
 		globalSearchQueryText,
 		globalSearchPrefixNormalized,
@@ -407,58 +330,58 @@ const objectsQuery = useInfiniteQuery({
 		globalSearchMaxModifiedMs,
 	})
 
-		const { zipPrefixJobMutation, zipObjectsJobMutation } = useObjectsZipJobs({
-			profileId: props.profileId,
-			bucket,
-			prefix,
-			transfers,
-			createJobWithRetry,
-		})
-		const { indexObjectsJobMutation } = useObjectsIndexing({
-			api,
-			profileId: props.profileId,
-			bucket,
-			prefix,
-			globalSearchOpen,
-			globalSearchQueryText,
-			globalSearchPrefixNormalized,
-				autoIndexEnabled,
-				autoIndexTtlMs,
-				autoIndexCooldownMs: AUTO_INDEX_COOLDOWN_MS,
-				setIndexPrefix,
-				createJobWithRetry,
-			})
+	const { zipPrefixJobMutation, zipObjectsJobMutation } = useObjectsZipJobs({
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		transfers,
+		createJobWithRetry,
+	})
+	const { indexObjectsJobMutation } = useObjectsIndexing({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		globalSearchOpen,
+		globalSearchQueryText,
+		globalSearchPrefixNormalized,
+		autoIndexEnabled,
+		autoIndexTtlMs,
+		autoIndexCooldownMs: AUTO_INDEX_COOLDOWN_MS,
+		setIndexPrefix,
+		createJobWithRetry,
+	})
 
-		const {
-			highlightText,
-			rows,
-			rowIndexByObjectKey,
-			rawTotalCount,
-			emptyKind,
-			visibleObjectKeys,
-			orderedVisibleObjectKeys,
-			visiblePrefixCount,
-			visibleFileCount,
-			allLoadedSelected,
-			someLoadedSelected,
-			extOptions,
-		} = useObjectsListDerivedState({
-			deferredSearch,
-			objectsPages: objectsQuery.data?.pages ?? [],
-			favoriteItems,
-			favoritesOnly,
-			favoriteKeys,
-			prefix,
-			extFilter,
-			minSize,
-			maxSize,
-			minModifiedMs,
-			maxModifiedMs,
-			typeFilter,
-			sort,
-			favoritesFirst,
-			selectedKeys,
-		})
+	const {
+		highlightText,
+		rows,
+		rowIndexByObjectKey,
+		rawTotalCount,
+		emptyKind,
+		visibleObjectKeys,
+		orderedVisibleObjectKeys,
+		visiblePrefixCount,
+		visibleFileCount,
+		allLoadedSelected,
+		someLoadedSelected,
+		extOptions,
+	} = useObjectsListDerivedState({
+		deferredSearch,
+		objectsPages: objectsQuery.data?.pages ?? [],
+		favoriteItems,
+		favoritesOnly,
+		favoriteKeys,
+		prefix,
+		extFilter,
+		minSize,
+		maxSize,
+		minModifiedMs,
+		maxModifiedMs,
+		typeFilter,
+		sort,
+		favoritesFirst,
+		selectedKeys,
+	})
 
 	const {
 		selectObjectFromPointerEvent,
@@ -470,29 +393,28 @@ const objectsQuery = useInfiniteQuery({
 		setSelectedKeys,
 		setLastSelectedObjectKey,
 	})
-		const { handleToggleSelectAll, selectRange, selectAllLoaded } = useObjectsSelectionBulk({
-			visibleObjectKeys,
-			orderedVisibleObjectKeys,
-			setSelectedKeys,
-			setLastSelectedObjectKey,
-		})
+	const { handleToggleSelectAll, selectRange, selectAllLoaded } = useObjectsSelectionBulk({
+		visibleObjectKeys,
+		orderedVisibleObjectKeys,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+	})
 
-		const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
-		const { handleBucketDropdownVisibleChange } = useObjectsPrefetch({
-			api,
+	const { handleBucketDropdownVisibleChange } = useObjectsPrefetch({
+		api,
 		apiToken: props.apiToken,
 		profileId: props.profileId,
 		queryClient,
 		bucket,
 		tabs,
 		bucketOptions,
-			prefixByBucketRef,
-			pageSize: OBJECTS_LIST_PAGE_SIZE,
-		})
+		prefixByBucketRef,
+		pageSize: OBJECTS_LIST_PAGE_SIZE,
+	})
 
-		const handleTreeSelect = useCallback(
-			(key: string, closeDrawer: boolean) => {
-				setTreeSelectedKeys([key])
+	const handleTreeSelect = useCallback(
+		(key: string, closeDrawer: boolean) => {
+			setTreeSelectedKeys([key])
 			if (!bucket) return
 			navigateToLocation(bucket, key === '/' ? '' : key, { recordHistory: true })
 			if (closeDrawer) setTreeDrawerOpen(false)
