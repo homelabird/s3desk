@@ -130,10 +130,10 @@ func New(dep Dependencies) http.Handler {
 
 	r.Mount("/api/v1", apiRouter)
 
-	r.Get("/download-proxy", api.handleDownloadProxy)
-	r.Head("/download-proxy", api.handleDownloadProxy)
+	r.With(api.requireLocalHost).Get("/download-proxy", api.handleDownloadProxy)
+	r.With(api.requireLocalHost).Head("/download-proxy", api.handleDownloadProxy)
 
-	r.Get("/openapi.yml", func(w http.ResponseWriter, r *http.Request) {
+	r.With(api.requireLocalHost).Get("/openapi.yml", func(w http.ResponseWriter, r *http.Request) {
 		specPath, ok := findOpenAPISpecPath(dep.Config.StaticDir)
 		if !ok {
 			http.NotFound(w, r)
@@ -142,11 +142,11 @@ func New(dep Dependencies) http.Handler {
 		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
 		http.ServeFile(w, r, specPath)
 	})
-	r.Get("/docs", serveOpenAPIDocs)
-	r.Get("/docs/", serveOpenAPIDocs)
+	r.With(api.requireLocalHost).Get("/docs", serveOpenAPIDocs)
+	r.With(api.requireLocalHost).Get("/docs/", serveOpenAPIDocs)
 
-	r.Get("/healthz", api.handleHealthz)
-	r.Get("/readyz", api.handleReadyz)
+	r.With(api.requireLocalHost).Get("/healthz", api.handleHealthz)
+	r.With(api.requireLocalHost).Get("/readyz", api.handleReadyz)
 	r.With(api.requireLocalHost, api.requireAPIToken).Get("/metrics", api.handleMetrics)
 
 	staticIndex := filepath.Join(dep.Config.StaticDir, "index.html")
@@ -154,16 +154,16 @@ func New(dep Dependencies) http.Handler {
 	if dep.Config.StaticDir != "" {
 		if info, err := os.Stat(staticIndex); err == nil && !info.IsDir() {
 			spa := spaHandler(dep.Config.StaticDir)
-			r.Get("/", spa)
-			r.Get("/*", spa)
-			r.Head("/", spa)
-			r.Head("/*", spa)
+			r.With(api.requireLocalHost).Get("/", spa)
+			r.With(api.requireLocalHost).Get("/*", spa)
+			r.With(api.requireLocalHost).Head("/", spa)
+			r.With(api.requireLocalHost).Head("/*", spa)
 			uiEnabled = true
 		}
 	}
 
 	if !uiEnabled {
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		r.With(api.requireLocalHost).Get("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			_, _ = w.Write([]byte("s3desk backend is running\n\nHint: build the frontend and point --static-dir to ../frontend/dist\n"))
 		})

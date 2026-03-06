@@ -5,11 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"mime"
 	"net/http"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -528,26 +525,12 @@ func (s *server) handleDownloadObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Cache-Control", "no-store")
-	if entry.Size > 0 {
-		w.Header().Set("Content-Length", strconv.FormatInt(entry.Size, 10))
-	}
-	if etag := rcloneETagFromHashes(entry.Hashes); etag != "" {
-		w.Header().Set("ETag", etag)
-	}
-	if lm := rcloneParseTime(entry.ModTime); lm != "" {
-		if parsed, err := time.Parse(time.RFC3339Nano, lm); err == nil {
-			w.Header().Set("Last-Modified", parsed.UTC().Format(http.TimeFormat))
-		}
-	}
-	if filename := path.Base(key); filename != "" && filename != "." && filename != "/" {
-		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, proc.stdout)
-	_ = proc.wait()
+	s.streamRcloneDownload(w, proc, entry, key, rcloneAPIErrorContext{
+		MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
+		DefaultStatus:  http.StatusBadRequest,
+		DefaultCode:    "s3_error",
+		DefaultMessage: "failed to download object",
+	}, map[string]any{"bucket": bucket, "key": key})
 }
 
 func (s *server) handleDeleteObjects(w http.ResponseWriter, r *http.Request) {
