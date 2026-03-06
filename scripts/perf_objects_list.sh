@@ -16,7 +16,7 @@ PREFIX_SIZES=${PREFIX_SIZES:-10000,50000}
 REQUESTS=${REQUESTS:-5}
 KEEP_BUCKET=${KEEP_BUCKET:-0}
 APPEND_PERF_NOTES=${APPEND_PERF_NOTES:-1}
-PERF_NOTES_PATH=${PERF_NOTES_PATH:-$ROOT_DIR/docs/PERF_NOTES.md}
+PERF_NOTES_PATH=${PERF_NOTES_PATH:-/tmp/s3desk-perf-notes.md}
 
 if ! command -v podman >/dev/null 2>&1; then
   echo "podman is required" >&2
