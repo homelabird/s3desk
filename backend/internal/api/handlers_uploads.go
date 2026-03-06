@@ -1232,91 +1232,10 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload := map[string]any{
-		"uploadId": uploadID,
-		"bucket":   us.Bucket,
-	}
-	if us.Prefix != "" {
-		payload["prefix"] = us.Prefix
-	}
-
-	label := strings.TrimSpace(req.Label)
-	if label != "" {
-		payload["label"] = label
-	}
-	rootName := strings.TrimSpace(req.RootName)
-	if rootName != "" {
-		payload["rootName"] = rootName
-	}
-	if req.RootKind != "" {
-		switch req.RootKind {
-		case "file", "folder", "collection":
-			payload["rootKind"] = req.RootKind
-		}
-	}
-	if req.TotalFiles != nil {
-		payload["totalFiles"] = *req.TotalFiles
-	}
-	if req.TotalBytes != nil {
-		payload["totalBytes"] = *req.TotalBytes
-	}
-
-	itemsTruncated := req.ItemsTruncated
-	items := req.Items
-	if len(items) > maxCommitItems {
-		items = items[:maxCommitItems]
-		itemsTruncated = true
-	}
-	indexEntries := make([]store.ObjectIndexEntry, 0, len(items))
-	if len(items) > 0 {
-		cleaned := make([]map[string]any, 0, len(items))
-		for _, item := range items {
-			cleanedPath := sanitizeUploadPath(item.Path)
-			if cleanedPath == "" {
-				continue
-			}
-			key := cleanedPath
-			if us.Prefix != "" {
-				key = path.Join(us.Prefix, cleanedPath)
-			}
-			entry := map[string]any{
-				"path": cleanedPath,
-				"key":  key,
-			}
-			if item.Size != nil && *item.Size >= 0 {
-				entry["size"] = *item.Size
-				indexEntries = append(indexEntries, store.ObjectIndexEntry{
-					Key:  key,
-					Size: *item.Size,
-				})
-			}
-			cleaned = append(cleaned, entry)
-		}
-		if len(cleaned) > 0 {
-			payload["items"] = cleaned
-		}
-	}
-	if itemsTruncated {
-		payload["itemsTruncated"] = true
-	}
-
-	buildProgress := func() *models.JobProgress {
-		if req.TotalBytes == nil && req.TotalFiles == nil {
-			return nil
-		}
-		p := models.JobProgress{}
-		if req.TotalBytes != nil && *req.TotalBytes >= 0 {
-			total := *req.TotalBytes
-			p.BytesTotal = &total
-			p.BytesDone = &total
-		}
-		if req.TotalFiles != nil && *req.TotalFiles >= 0 {
-			total := int64(*req.TotalFiles)
-			p.ObjectsTotal = &total
-			p.ObjectsDone = &total
-		}
-		return &p
-	}
+	artifacts := buildUploadCommitArtifacts(uploadID, us, req)
+	payload := artifacts.payload
+	indexEntries := artifacts.indexEntries
+	progress := artifacts.progress
 
 	if mode == uploadModePresigned {
 		multipartUploads, err := s.store.ListMultipartUploads(r.Context(), profileID, uploadID)
@@ -1329,32 +1248,12 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		job, err := s.store.CreateJob(r.Context(), profileID, store.CreateJobInput{
-			Type:    jobs.JobTypeTransferDirectUpload,
-			Payload: payload,
-		})
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create job", nil)
+		job, uploadErr := s.finalizeImmediateUploadCommit(r.Context(), profileID, uploadID, us, payload, progress, indexEntries)
+		if uploadErr != nil {
+			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 			return
 		}
 
-		now := time.Now().UTC().Format(time.RFC3339Nano)
-		progress := buildProgress()
-		if err := s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusSucceeded, &now, &now, progress, nil, nil); err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to finalize job", nil)
-			return
-		}
-		if len(indexEntries) > 0 {
-			_ = s.store.UpsertObjectIndexBatch(r.Context(), profileID, us.Bucket, indexEntries, now)
-		}
-
-		_ = s.store.DeleteMultipartUploadsBySession(r.Context(), profileID, uploadID)
-		_, _ = s.store.DeleteUploadSession(r.Context(), profileID, uploadID)
-		payload := map[string]any{"status": models.JobStatusSucceeded}
-		if progress != nil {
-			payload["progress"] = progress
-		}
-		s.hub.Publish(ws.Event{Type: "job.completed", JobID: job.ID, Payload: payload})
 		writeJSON(w, http.StatusCreated, models.JobCreatedResponse{JobID: job.ID})
 		return
 	}
@@ -1382,84 +1281,22 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare multipart client", nil)
 				return
 			}
-
-			for _, meta := range multipartUploads {
-				if meta.ChunkSize <= 0 || meta.FileSize <= 0 {
-					writeError(w, http.StatusBadRequest, "invalid_request", "multipart metadata missing size", map[string]any{"path": meta.Path})
+			if err := s.completeDirectMultipartUploads(r.Context(), profileID, client, multipartUploads); err != nil {
+				var uploadErr *uploadHTTPError
+				if errors.As(err, &uploadErr) {
+					writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 					return
 				}
-				parts, err := s.listMultipartParts(r.Context(), client, meta)
-				if err != nil {
-					writeError(w, http.StatusBadGateway, "upload_failed", "failed to list multipart parts", map[string]any{"path": meta.Path})
-					return
-				}
-				expectedTotal := int(math.Ceil(float64(meta.FileSize) / float64(meta.ChunkSize)))
-				partByNumber := make(map[int32]types.Part, len(parts))
-				for _, part := range parts {
-					if part.PartNumber == nil {
-						continue
-					}
-					partByNumber[*part.PartNumber] = part
-				}
-				if len(partByNumber) < expectedTotal {
-					writeError(w, http.StatusBadRequest, "upload_incomplete", "multipart upload is missing parts", map[string]any{"path": meta.Path})
-					return
-				}
-				completed := make([]types.CompletedPart, 0, expectedTotal)
-				for i := 1; i <= expectedTotal; i++ {
-					part, ok := partByNumber[int32(i)]
-					if !ok || part.ETag == nil {
-						writeError(w, http.StatusBadRequest, "upload_incomplete", "multipart upload is missing parts", map[string]any{"path": meta.Path})
-						return
-					}
-					completed = append(completed, types.CompletedPart{
-						ETag:       part.ETag,
-						PartNumber: part.PartNumber,
-					})
-				}
-
-				_, err = client.CompleteMultipartUpload(r.Context(), &s3.CompleteMultipartUploadInput{
-					Bucket:   &meta.Bucket,
-					Key:      &meta.ObjectKey,
-					UploadId: &meta.S3UploadID,
-					MultipartUpload: &types.CompletedMultipartUpload{
-						Parts: completed,
-					},
-				})
-				if err != nil {
-					writeError(w, http.StatusBadGateway, "upload_failed", "failed to complete multipart upload", map[string]any{"path": meta.Path})
-					return
-				}
-				_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, meta.Path)
+				writeError(w, http.StatusInternalServerError, "internal_error", "failed to finalize multipart upload", nil)
+				return
 			}
 		}
 
-		job, err := s.store.CreateJob(r.Context(), profileID, store.CreateJobInput{
-			Type:    jobs.JobTypeTransferDirectUpload,
-			Payload: payload,
-		})
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create job", nil)
+		job, uploadErr := s.finalizeImmediateUploadCommit(r.Context(), profileID, uploadID, us, payload, progress, indexEntries)
+		if uploadErr != nil {
+			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 			return
 		}
-
-		now := time.Now().UTC().Format(time.RFC3339Nano)
-		progress := buildProgress()
-		if err := s.store.UpdateJobStatus(r.Context(), job.ID, models.JobStatusSucceeded, &now, &now, progress, nil, nil); err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to finalize job", nil)
-			return
-		}
-		if len(indexEntries) > 0 {
-			_ = s.store.UpsertObjectIndexBatch(r.Context(), profileID, us.Bucket, indexEntries, now)
-		}
-
-		_ = s.store.DeleteMultipartUploadsBySession(r.Context(), profileID, uploadID)
-		_, _ = s.store.DeleteUploadSession(r.Context(), profileID, uploadID)
-		payload := map[string]any{"status": models.JobStatusSucceeded}
-		if progress != nil {
-			payload["progress"] = progress
-		}
-		s.hub.Publish(ws.Event{Type: "job.completed", JobID: job.ID, Payload: payload})
 		writeJSON(w, http.StatusCreated, models.JobCreatedResponse{JobID: job.ID})
 		return
 	}
