@@ -15,7 +15,7 @@ import type { JobsUploadDetails, JobsUploadTableRow } from './jobsUploadTypes'
 type Props = {
 	open: boolean
 	onClose: () => void
-	width: number | string
+	drawerWidth: number | string
 	isOffline: boolean
 	detailsJobId: string | null
 	job: Job | undefined
@@ -48,8 +48,8 @@ export function JobsDetailsDrawer(props: Props) {
 			open={props.open}
 			onClose={props.onClose}
 			title="Job Details"
-			width={props.width}
 			destroyOnHidden
+			styles={{ wrapper: { width: typeof props.drawerWidth === 'number' ? `${props.drawerWidth}px` : props.drawerWidth } }}
 			extra={
 				<Space>
 					<Button icon={<ReloadOutlined />} disabled={!props.detailsJobId || props.isOffline} loading={props.isFetching} onClick={props.onRefresh}>
@@ -69,7 +69,7 @@ export function JobsDetailsDrawer(props: Props) {
 							confirmDangerAction({
 								title: 'Delete job record?',
 								description: (
-									<Space direction="vertical" style={{ width: '100%' }}>
+									<Space orientation="vertical" style={{ width: '100%' }}>
 										<Typography.Text>
 											Job ID: <Typography.Text code>{props.detailsJobId}</Typography.Text>
 										</Typography.Text>
@@ -110,7 +110,7 @@ export function JobsDetailsDrawer(props: Props) {
 									const info = getJobTypeInfo(props.job.type)
 									if (!info) return <Typography.Text code>{props.job.type}</Typography.Text>
 									return (
-										<Space direction="vertical" size={0} style={{ width: '100%' }}>
+										<Space orientation="vertical" size={0} style={{ width: '100%' }}>
 											<Typography.Text strong>{info.label}</Typography.Text>
 											<Typography.Text type="secondary">{info.description}</Typography.Text>
 											<Typography.Text code>{props.job.type}</Typography.Text>
@@ -169,7 +169,7 @@ export function JobsDetailsDrawer(props: Props) {
 												key: 'upload',
 												label: 'Upload details',
 												children: (
-													<Space direction="vertical" size="middle" style={{ width: '100%' }}>
+													<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
 														<Descriptions size="small" bordered column={1}>
 															<Descriptions.Item label="Destination">
 																{props.uploadDetails.bucket ? (

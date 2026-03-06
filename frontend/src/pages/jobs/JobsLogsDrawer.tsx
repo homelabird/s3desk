@@ -4,7 +4,7 @@ import { Alert, Button, Drawer, Input, Space, Switch, Typography } from 'antd'
 type Props = {
 	open: boolean
 	onClose: () => void
-	width: number | string
+	drawerWidth: number | string
 	activeLogJobId: string | null
 	isLogsLoading: boolean
 	onRefresh: () => void
@@ -28,7 +28,7 @@ export function JobsLogsDrawer(props: Props) {
 	const {
 		open,
 		onClose,
-		width,
+		drawerWidth,
 		activeLogJobId,
 		isLogsLoading,
 		onRefresh,
@@ -53,8 +53,8 @@ export function JobsLogsDrawer(props: Props) {
 			open={open}
 			onClose={onClose}
 			title="Job Logs"
-			width={width}
 			destroyOnHidden
+			styles={{ wrapper: { width: typeof drawerWidth === 'number' ? `${drawerWidth}px` : drawerWidth } }}
 			extra={
 				<Space>
 					<Button icon={<ReloadOutlined />} disabled={!activeLogJobId} loading={isLogsLoading} onClick={onRefresh}>

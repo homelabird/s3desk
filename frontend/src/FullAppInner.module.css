@@ -33,7 +33,7 @@
 }
 
 .desktopSider {
-	background: var(--s3d-sidebar-bg);
+	background: linear-gradient(180deg, #fbfcff 0%, #f2f6fb 100%);
 }
 
 .brandBlock {
@@ -58,7 +58,7 @@
 }
 
 .header {
-	background: #fff;
+	background: rgba(255, 255, 255, 0.9);
 	border-bottom: 1px solid var(--s3d-color-border);
 	height: 56px;
 	line-height: 56px;
@@ -66,6 +66,7 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
+	backdrop-filter: blur(12px);
 }
 
 .headerPadMd {
@@ -89,7 +90,7 @@
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	background: #fff;
+	background: var(--s3d-color-bg-page);
 }
 
 .contentPadMd {
@@ -110,7 +111,7 @@
 	position: sticky;
 	top: 0;
 	z-index: 10;
-	background: #fff;
+	background: linear-gradient(180deg, var(--s3d-color-bg-page), rgba(248, 249, 250, 0.78));
 }
 
 .loadingFallback {

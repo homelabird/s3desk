@@ -346,8 +346,7 @@ export default function FullAppInner() {
 					open={!isDesktop && navOpen}
 					onClose={() => setNavOpen(false)}
 					placement="left"
-					width="80%"
-					bodyStyle={{ padding: 0 }}
+					styles={{ body: { padding: 0 }, wrapper: { width: 'min(80vw, 360px)' } }}
 				>
 					<div className={styles.brandBlock}>
 						<Typography.Title level={5} className={styles.brandTitle}>

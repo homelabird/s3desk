@@ -43,6 +43,7 @@ import { useJobsLogsState } from './jobs/useJobsLogsState'
 import { useJobsRealtimeEvents } from './jobs/useJobsRealtimeEvents'
 import { useJobsTableColumns } from './jobs/useJobsTableColumns'
 import { useJobsUploadDetails } from './jobs/useJobsUploadDetails'
+import styles from './JobsPage.module.css'
 
 type Props = {
 	apiToken: string
@@ -473,6 +474,15 @@ export function JobsPage(props: Props) {
 		requestDeleteJob,
 		queueDownloadJobArtifact: transfers.queueDownloadJobArtifact,
 	})
+	const renderJobActions = useCallback(
+		(job: Job) => {
+			const actionColumn = columns.find((column) => column.key === 'actions')
+			if (!actionColumn?.render) return null
+			return actionColumn.render(undefined, job)
+		},
+		[columns],
+	)
+	const isCompact = !screens.md
 
 	const [sortState, setSortState] = useState<SortState>(null)
 	useEffect(() => {
@@ -496,8 +506,9 @@ export function JobsPage(props: Props) {
 	}
 
 	return (
-		<Space orientation="vertical" size="large" style={{ width: '100%' }}>
+		<Space orientation="vertical" size="large" className={styles.pageStack}>
 			<JobsToolbar
+				activeProfileName={selectedProfile?.name ?? null}
 				isOffline={isOffline}
 				uploadSupported={uploadSupported}
 				uploadDisabledReason={uploadDisabledReason}
@@ -535,12 +546,17 @@ export function JobsPage(props: Props) {
 				jobsError={jobsQuery.isError ? jobsQuery.error : null}
 				sortedJobs={sortedJobs}
 				columns={columns}
+				isCompact={isCompact}
 				tableScrollY={tableScrollY}
 				isLoading={isLoading}
 				isOffline={isOffline}
 				uploadSupported={uploadSupported}
 				onOpenCreateUpload={() => setCreateOpen(true)}
 				onOpenDeleteJob={openDeleteJobModal}
+				onOpenDetails={openDetailsForJob}
+				onOpenLogs={openLogsForJob}
+				getJobSummary={getJobSummary}
+				renderJobActions={renderJobActions}
 				sortState={sortState}
 				onSortChange={setSortState}
 				theme={{
@@ -596,7 +612,7 @@ export function JobsPage(props: Props) {
 				<JobsDetailsDrawer
 					open={detailsOpen}
 					onClose={() => setDetailsOpen(false)}
-					width={screens.md ? 720 : '100%'}
+					drawerWidth={screens.md ? 720 : '100%'}
 					isOffline={isOffline}
 					detailsJobId={detailsJobId}
 					job={jobDetailsQuery.data}
@@ -631,7 +647,7 @@ export function JobsPage(props: Props) {
 				<JobsLogsDrawer
 					open={logsOpen}
 					onClose={closeLogs}
-					width={screens.md ? 720 : '100%'}
+					drawerWidth={screens.md ? 720 : '100%'}
 					activeLogJobId={activeLogJobId}
 					isLogsLoading={isLogsLoading}
 					onRefresh={refreshActiveLogs}

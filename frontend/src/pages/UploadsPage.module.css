@@ -1,22 +1,31 @@
 .pageStack {
 	width: 100%;
-}
-
-.headerRow {
+	max-width: 1120px;
+	margin: 0 auto;
 	display: flex;
-	width: 100%;
-	justify-content: space-between;
-	align-items: center;
-	gap: 12px;
-	flex-wrap: wrap;
+	flex-direction: column;
+	gap: 24px;
 }
 
-.pageTitle {
-	margin: 0 !important;
+.controlsGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 18px;
+	align-items: stretch;
 }
 
-.controlsRow {
-	width: 100%;
+.fieldBlock {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.fieldLabel {
+	font-size: 12px;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
 }
 
 .bucketField,
@@ -25,12 +34,156 @@
 	max-width: 100%;
 }
 
-@media (min-width: 768px) {
-	.bucketField {
-		width: 320px;
+.modeCard {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 18px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 18px;
+	background:
+		linear-gradient(135deg, rgba(26, 115, 232, 0.08), rgba(26, 115, 232, 0) 55%),
+		var(--s3d-color-bg-secondary);
+}
+
+.modeHint {
+	margin: 8px 0 0;
+	color: var(--s3d-color-text-secondary);
+}
+
+.switchRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.selectionStack {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.selectionActions {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+
+.selectionHint {
+	max-width: 520px;
+	line-height: 1.6;
+}
+
+.summaryGrid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.summaryCard {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 16px 18px;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 18px;
+	background: rgba(248, 250, 252, 0.85);
+	min-width: 0;
+}
+
+.summaryLabel {
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
+}
+
+.summaryValue {
+	font-size: 16px;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.previewWrap {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.previewList {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border: 1px solid rgba(15, 23, 42, 0.08);
+	border-radius: 18px;
+	overflow: hidden;
+}
+
+.previewItem {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	padding: 14px 18px;
+	border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.previewItem:first-child {
+	border-top: none;
+}
+
+.previewName {
+	min-width: 0;
+	font-weight: 600;
+	line-height: 1.55;
+	overflow-wrap: anywhere;
+}
+
+.previewMeta {
+	flex: 0 0 auto;
+	color: var(--s3d-color-text-secondary);
+	font-size: 13px;
+}
+
+.emptyPreview {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 18px;
+	border: 1px dashed rgba(15, 23, 42, 0.16);
+	border-radius: 18px;
+	background: rgba(248, 250, 252, 0.72);
+}
+
+@media (max-width: 992px) {
+	.controlsGrid,
+	.summaryGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 768px) {
+	.pageStack {
+		gap: 20px;
 	}
 
-	.prefixField {
-		width: 420px;
+	.modeCard,
+	.summaryCard,
+	.previewItem,
+	.emptyPreview {
+		border-radius: 16px;
+	}
+
+	.previewItem {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.previewMeta {
+		font-size: 12px;
 	}
 }

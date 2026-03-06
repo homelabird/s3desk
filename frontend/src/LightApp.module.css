@@ -1,21 +1,27 @@
 .panelSmall {
-	width: 560px;
+	width: 620px;
 	max-width: 100%;
 }
 
 .panelLarge {
-	width: 760px;
+	width: 920px;
 	max-width: 100%;
 }
 
 .brandTitle {
 	margin: 0;
-	font-size: 28px;
+	font-size: clamp(2.25rem, 3vw, 3.25rem);
+	line-height: 1;
+	letter-spacing: -0.05em;
 }
 
 .brandSubtitle {
-	margin-top: 4px;
-	opacity: 0.75;
+	margin-top: 8px;
+	font-size: 12px;
+	font-weight: 800;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
 }
 
 .spacer16 {
@@ -26,25 +32,32 @@
 	height: 12px;
 }
 
+.card,
+.section {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 24px;
+	background: rgba(255, 255, 255, 0.94);
+	box-shadow: var(--s3d-shadow-sm);
+}
+
 .card {
-	border: 1px solid var(--s3d-color-border-secondary);
-	border-radius: var(--s3d-radius-lg);
-	padding: 16px;
-	background: var(--s3d-color-bg);
+	padding: 20px;
 }
 
 .cardTitle {
-	font-weight: 700;
+	font-size: 18px;
+	font-weight: 800;
+	letter-spacing: -0.02em;
 }
 
 .bodyText {
-	font-size: 13px;
-	line-height: 1.45;
+	font-size: 14px;
+	line-height: 1.55;
 }
 
 .metaText {
 	font-size: 13px;
-	opacity: 0.8;
+	color: var(--s3d-color-text-secondary);
 }
 
 .rowGap6 {
@@ -66,15 +79,15 @@
 .hint403 {
 	margin-top: 8px;
 	font-size: 13px;
-	line-height: 1.45;
-	opacity: 0.85;
+	line-height: 1.55;
+	color: var(--s3d-color-text-secondary);
 }
 
 .statusCard {
-	border-radius: var(--s3d-radius-md);
-	padding: 12px;
+	border-radius: 16px;
+	padding: 14px 16px;
 	font-size: 13px;
-	line-height: 1.45;
+	line-height: 1.5;
 }
 
 .statusWarning {
@@ -99,41 +112,69 @@
 }
 
 .tokenInput {
-	margin-top: 6px;
+	margin-top: 8px;
 	width: 100%;
 	border: 1px solid var(--s3d-color-border-input);
-	border-radius: var(--s3d-radius-md);
-	padding: 10px 12px;
+	border-radius: 14px;
+	padding: 12px 14px;
 	font-size: 14px;
+	background: rgba(255, 255, 255, 0.96);
+	transition: border-color var(--s3d-transition-fast), box-shadow var(--s3d-transition-fast);
 }
 
-.buttonRow {
-	margin-top: 12px;
+.tokenInput:focus-visible {
+	outline: none;
+	border-color: var(--s3d-color-primary);
+	box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.16);
+}
+
+.buttonRow,
+.headerActions,
+.openButtons,
+.topRightActions {
 	display: flex;
 	gap: 10px;
 	flex-wrap: wrap;
 }
 
-.button {
-	border-radius: var(--s3d-radius-md);
-	padding: 9px 12px;
+.button,
+.linkButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	padding: 10px 16px;
 	font-weight: 700;
+	text-decoration: none;
+	transition:
+		transform var(--s3d-transition-fast),
+		box-shadow var(--s3d-transition-fast),
+		background var(--s3d-transition-fast),
+		border-color var(--s3d-transition-fast);
 }
 
-.buttonPrimary {
-	border: 1px solid var(--s3d-color-primary-btn);
+.button {
+	border: 1px solid transparent;
+}
+
+.buttonPrimary,
+.linkButtonPrimary {
+	border-color: var(--s3d-color-primary-btn);
 	background: var(--s3d-color-primary-btn);
 	color: var(--s3d-color-bg);
+	box-shadow: 0 10px 20px rgba(26, 115, 232, 0.18);
 }
 
 .buttonPrimaryDisabled {
 	background: var(--s3d-color-info-border);
 	cursor: default;
+	box-shadow: none;
 }
 
-.buttonSecondary {
-	border: 1px solid var(--s3d-color-border-input);
-	background: var(--s3d-color-bg);
+.buttonSecondary,
+.linkButtonSecondary {
+	border-color: var(--s3d-color-border-input);
+	background: rgba(255, 255, 255, 0.92);
 	color: var(--s3d-color-text-dark);
 }
 
@@ -145,43 +186,25 @@
 	cursor: pointer;
 }
 
+.buttonClickable:hover,
+.linkButton:hover {
+	transform: translateY(-1px);
+	box-shadow: var(--s3d-shadow-sm);
+}
+
+.button:focus-visible,
+.linkButton:focus-visible,
+.profileButton:focus-visible {
+	outline: 2px solid var(--s3d-color-focus);
+	outline-offset: 2px;
+}
+
 .header {
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
+	gap: 16px;
 	flex-wrap: wrap;
-}
-
-.headerActions {
-	display: flex;
-	gap: 10px;
-	flex-wrap: wrap;
-}
-
-.linkButton {
-	border-radius: var(--s3d-radius-md);
-	padding: 9px 12px;
-	font-weight: 700;
-	text-decoration: none;
-}
-
-.linkButtonPrimary {
-	border: 1px solid var(--s3d-color-primary-btn);
-	background: var(--s3d-color-primary-btn);
-	color: var(--s3d-color-bg);
-}
-
-.linkButtonSecondary {
-	border: 1px solid var(--s3d-color-border-input);
-	background: var(--s3d-color-bg);
-	color: var(--s3d-color-text-dark);
-}
-
-.section {
-	border: 1px solid var(--s3d-color-border-secondary);
-	border-radius: var(--s3d-radius-lg);
-	background: var(--s3d-color-bg);
 }
 
 .sectionOverflowHidden {
@@ -189,36 +212,38 @@
 }
 
 .sectionPadded {
-	padding: 14px;
+	padding: 18px;
 }
 
 .sectionHeader {
-	padding: 14px;
+	padding: 18px 20px;
 	border-bottom: 1px solid var(--s3d-color-border);
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	flex-wrap: wrap;
+	background: linear-gradient(180deg, #f8fbff, #f3f7fd);
 }
 
 .sectionHeading {
+	font-size: 1.125rem;
 	font-weight: 800;
+	letter-spacing: -0.02em;
 }
 
 .sectionSubtle {
 	font-size: 13px;
-	opacity: 0.8;
+	color: var(--s3d-color-text-secondary);
+}
+
+.statusLine,
+.sectionBody {
+	padding: 18px 20px;
+	font-size: 14px;
 }
 
 .statusLine {
-	padding: 14px;
-	font-size: 13px;
-	opacity: 0.8;
-}
-
-.sectionBody {
-	padding: 14px;
-	font-size: 13px;
+	color: var(--s3d-color-text-secondary);
 }
 
 .profileList {
@@ -234,66 +259,76 @@
 .profileButton {
 	width: 100%;
 	text-align: left;
-	padding: 12px 14px;
+	padding: 18px 20px;
 	border: none;
-	background: var(--s3d-color-bg);
+	background: rgba(255, 255, 255, 0.96);
 	cursor: pointer;
+	transition: background var(--s3d-transition-fast), transform var(--s3d-transition-fast);
+}
+
+.profileButton:hover {
+	background: rgba(26, 115, 232, 0.05);
 }
 
 .profileButtonSelected {
-	background: var(--s3d-color-info-bg);
+	background: linear-gradient(135deg, rgba(26, 115, 232, 0.12), rgba(26, 115, 232, 0.05));
 }
 
 .profileName {
+	font-size: 1.05rem;
 	font-weight: 800;
+	letter-spacing: -0.02em;
 }
 
 .profileSubtitle {
-	margin-top: 3px;
-	font-size: 12px;
-	opacity: 0.75;
+	margin-top: 6px;
+	font-size: 13px;
+	color: var(--s3d-color-text-secondary);
 }
 
 .profileMeta {
-	margin-top: 8px;
+	margin-top: 10px;
 	font-size: 12px;
-	opacity: 0.8;
+	color: var(--s3d-color-text-secondary);
 }
 
 .profileSelectedMark {
 	margin-left: 8px;
 	font-weight: 800;
+	color: var(--s3d-color-primary);
 }
 
 .openButtons {
-	margin-top: 10px;
-	display: flex;
-	gap: 10px;
-	flex-wrap: wrap;
+	margin-top: 12px;
 }
 
 .openButtonDisabled {
 	background: var(--s3d-color-bg-page);
 	cursor: not-allowed;
 	opacity: 0.65;
+	box-shadow: none;
 }
 
 .openHint {
 	margin-top: 10px;
 	font-size: 12px;
-	opacity: 0.75;
+	color: var(--s3d-color-text-secondary);
 }
 
 .centerShell {
+	position: relative;
 	min-height: 100dvh;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: 24px;
+	padding: 40px 24px;
 }
 
 .centerShellPage {
-	background: var(--s3d-color-bg-page);
+	background:
+		radial-gradient(circle at top left, rgba(26, 115, 232, 0.14), transparent 28%),
+		radial-gradient(circle at top right, rgba(251, 188, 4, 0.12), transparent 24%),
+		var(--s3d-color-bg-page);
 }
 
 .loadingCard {
@@ -309,14 +344,43 @@
 
 .loadingSubtitle {
 	margin-top: 8px;
-	opacity: 0.75;
+	color: var(--s3d-color-text-secondary);
 }
 
 .topRightActions {
 	position: absolute;
-	top: 12px;
-	right: 12px;
-	display: flex;
-	gap: 10px;
-	flex-wrap: wrap;
+	top: 18px;
+	right: 18px;
+}
+
+@media (max-width: 768px) {
+	.panelLarge {
+		width: 100%;
+	}
+
+	.brandTitle {
+		font-size: 2.2rem;
+	}
+
+	.card,
+	.section {
+		border-radius: 20px;
+	}
+
+	.card,
+	.sectionPadded,
+	.sectionHeader,
+	.statusLine,
+	.sectionBody,
+	.profileButton {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.topRightActions {
+		position: static;
+		width: 100%;
+		justify-content: flex-end;
+		margin-bottom: 12px;
+	}
 }

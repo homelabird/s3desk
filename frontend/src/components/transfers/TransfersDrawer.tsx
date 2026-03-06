@@ -44,7 +44,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 				</Space>
 			}
 			placement="bottom"
-			height={440}
+			size={440}
 			extra={
 				<Space>
 					<Button

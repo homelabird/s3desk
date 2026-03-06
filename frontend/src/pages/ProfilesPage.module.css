@@ -1,23 +1,19 @@
 .fullWidth {
 	width: 100%;
-}
-
-.headerRow {
-	display: flex;
-	width: 100%;
-	justify-content: space-between;
-	align-items: center;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-
-.title {
-	margin: 0;
+	max-width: 1240px;
+	margin: 0 auto;
 }
 
 .tableWrap {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: 22px;
+	background: var(--s3d-color-bg);
+	box-shadow: var(--s3d-shadow-sm);
+	overflow: hidden;
+}
+
+.desktopTable {
+	display: block;
 	overflow-x: auto;
 }
 
@@ -29,13 +25,18 @@
 }
 
 .headRow {
-	background: var(--s3d-color-bg-secondary);
+	background: linear-gradient(180deg, #f8fbff, #f3f7fd);
 }
 
 .th {
 	text-align: left;
-	padding: 10px 12px;
+	padding: 14px 18px;
 	border-bottom: 1px solid var(--s3d-color-border);
+	font-size: 12px;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
 }
 
 .thName {
@@ -47,27 +48,172 @@
 }
 
 .thFlags {
-	width: 220px;
-}
-
-.thActions {
 	width: 240px;
 }
 
+.thActions {
+	width: 220px;
+}
+
+.tableRow {
+	transition: background var(--s3d-transition-fast);
+}
+
+.tableRow:hover {
+	background: rgba(26, 115, 232, 0.035);
+}
+
 .td {
-	padding: 10px 12px;
+	padding: 16px 18px;
 	border-bottom: 1px solid var(--s3d-color-border);
 	overflow-wrap: anywhere;
+	vertical-align: top;
+}
+
+.table tbody tr:last-child .td {
+	border-bottom: none;
+}
+
+.nameCell {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.statusBadge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: rgba(47, 158, 68, 0.12);
+	color: #20743a;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.providerBadge {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 10px;
+	border: 1px solid rgba(26, 115, 232, 0.12);
+	border-radius: 999px;
+	background: rgba(26, 115, 232, 0.08);
+	color: var(--s3d-color-primary);
+	font-size: 12px;
+	font-weight: 700;
 }
 
 .connectionStack {
 	width: 100%;
 }
 
+.connectionPrimary {
+	font-weight: 600;
+	color: var(--s3d-color-text);
+}
+
+.flagList {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.flagChip {
+	display: inline-flex;
+	align-items: center;
+	padding: 5px 10px;
+	border-radius: 999px;
+	background: var(--s3d-color-bg-secondary);
+	color: var(--s3d-color-text-secondary);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.actionGroup {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
 .loadingRow {
 	display: flex;
 	justify-content: center;
 	padding: 24px;
+}
+
+.mobileList {
+	display: none;
+}
+
+.mobileCard {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 18px;
+	border-top: 1px solid var(--s3d-color-border);
+}
+
+.mobileCard:first-child {
+	border-top: none;
+}
+
+.mobileCardTop {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.mobileCardCopy {
+	min-width: 0;
+}
+
+.mobileTitleRow {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.mobileId {
+	display: block;
+	margin-top: 4px;
+}
+
+.mobileMetaGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.mobileMetaLabel {
+	margin-bottom: 6px;
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
+}
+
+.mobileMetaValue {
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--s3d-color-text);
+}
+
+.mobileMetaSecondary {
+	margin-top: 4px;
+	color: var(--s3d-color-text-secondary);
+}
+
+.mobileActionRow {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
 }
 
 @media (max-width: 992px) {
@@ -84,7 +230,7 @@
 	}
 
 	.thFlags {
-		width: 180px;
+		width: 200px;
 	}
 
 	.thActions {
@@ -93,12 +239,25 @@
 }
 
 @media (max-width: 768px) {
-	.table {
-		min-width: 720px;
+	.desktopTable {
+		display: none;
 	}
 
-	.th,
-	.td {
-		padding: 8px 10px;
+	.mobileList {
+		display: block;
+	}
+
+	.mobileMetaGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 480px) {
+	.tableWrap {
+		border-radius: 18px;
+	}
+
+	.mobileCard {
+		padding: 16px;
 	}
 }

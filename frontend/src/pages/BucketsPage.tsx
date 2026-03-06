@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { BucketCreateRequest, Profile } from '../api/types'
+import { PageHeader } from '../components/PageHeader'
 import { SetupCallout } from '../components/SetupCallout'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
@@ -124,16 +125,61 @@ export function BucketsPage(props: Props) {
 		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view buckets" />
 	}
 
+	const renderBucketActions = (bucketName: string) => (
+		<div className={styles.actionGroup}>
+			<Tooltip title={policySupported ? 'Manage bucket policy' : policyUnsupportedReason}>
+				<span>
+					<Button
+						size="small"
+						icon={<FileTextOutlined />}
+						disabled={!policySupported}
+						onClick={() => {
+							setPolicyBucket(bucketName)
+						}}
+					>
+						Policy
+					</Button>
+				</span>
+			</Tooltip>
+
+			<Button
+				size="small"
+				danger
+				icon={<DeleteOutlined />}
+				loading={deleteMutation.isPending && deletingBucket === bucketName}
+				onClick={() => {
+					confirmDangerAction({
+						title: `Delete bucket "${bucketName}"?`,
+						description: 'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
+						confirmText: bucketName,
+						confirmHint: `Type "${bucketName}" to confirm`,
+						onConfirm: async () => {
+							await deleteMutation.mutateAsync(bucketName)
+						},
+					})
+				}}
+			>
+				Delete
+			</Button>
+		</div>
+	)
+
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
-			<div className={styles.headerRow}>
-				<Typography.Title level={2} className={styles.title}>
-					Buckets
-				</Typography.Title>
-				<Button type="primary" onClick={() => setCreateOpen(true)}>
-					New Bucket
-				</Button>
-			</div>
+			<PageHeader
+				eyebrow="Storage"
+				title="Buckets"
+				subtitle={
+					selectedProfile
+						? `${selectedProfile.name} profile is active. Review bucket inventory, open policy management, and create new buckets from one place.`
+						: 'Review bucket inventory, open policy management, and create new buckets from one place.'
+				}
+				actions={
+					<Button type="primary" onClick={() => setCreateOpen(true)}>
+						New Bucket
+					</Button>
+				}
+			/>
 
 			{bucketsQuery.isError ? (
 				<Alert type="error" showIcon title="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
@@ -161,79 +207,68 @@ export function BucketsPage(props: Props) {
 				</Empty>
 			) : (
 				<div className={styles.tableWrap}>
-					<table className={styles.table}>
-						<caption className="sr-only">List of buckets</caption>
-						<thead>
-							<tr className={styles.headRow}>
-								<th scope="col" className={styles.th}>
-									Name
-								</th>
-								<th scope="col" className={`${styles.th} ${styles.thCreated}`}>
-									CreatedAt
-								</th>
-								<th scope="col" className={`${styles.th} ${styles.thActions}`}>
-									Actions
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							{buckets.map((row) => (
-								<tr key={row.name}>
-									<td className={styles.td}>
-										<Typography.Text strong>{row.name}</Typography.Text>
-									</td>
-									<td className={styles.td}>
-										{row.createdAt ? (
-											<Typography.Text code title={row.createdAt}>
-												{formatDateTime(row.createdAt)}
-											</Typography.Text>
-										) : (
-											<Typography.Text type="secondary">-</Typography.Text>
-										)}
-									</td>
-									<td className={styles.td}>
-										<Space wrap>
-											<Tooltip title={policySupported ? 'Manage bucket policy' : policyUnsupportedReason}>
-												<span>
-													<Button
-														size="small"
-														icon={<FileTextOutlined />}
-														disabled={!policySupported}
-														onClick={() => {
-															setPolicyBucket(row.name)
-														}}
-													>
-														Policy
-													</Button>
-												</span>
-											</Tooltip>
-
-											<Button
-												size="small"
-												danger
-												icon={<DeleteOutlined />}
-												loading={deleteMutation.isPending && deletingBucket === row.name}
-												onClick={() => {
-													confirmDangerAction({
-														title: `Delete bucket "${row.name}"?`,
-														description:
-															'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
-														confirmText: row.name,
-														confirmHint: `Type "${row.name}" to confirm`,
-														onConfirm: async () => {
-															await deleteMutation.mutateAsync(row.name)
-														},
-													})
-												}}
-											>
-												Delete
-											</Button>
-										</Space>
-									</td>
+					<div className={styles.desktopTable}>
+						<table className={styles.table}>
+							<caption className="sr-only">List of buckets</caption>
+							<thead>
+								<tr className={styles.headRow}>
+									<th scope="col" className={styles.th}>
+										Name
+									</th>
+									<th scope="col" className={`${styles.th} ${styles.thCreated}`}>
+										CreatedAt
+									</th>
+									<th scope="col" className={`${styles.th} ${styles.thActions}`}>
+										Actions
+									</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{buckets.map((row) => (
+									<tr key={row.name} className={styles.tableRow}>
+										<td className={styles.td}>
+											<Typography.Text strong className={styles.bucketName}>
+												{row.name}
+											</Typography.Text>
+										</td>
+										<td className={styles.td}>
+											{row.createdAt ? (
+												<Typography.Text code title={row.createdAt}>
+													{formatDateTime(row.createdAt)}
+												</Typography.Text>
+											) : (
+												<Typography.Text type="secondary">-</Typography.Text>
+											)}
+										</td>
+										<td className={styles.td}>{renderBucketActions(row.name)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+
+					<div className={styles.mobileList}>
+						{buckets.map((row) => (
+							<article key={row.name} className={styles.mobileCard}>
+								<Typography.Text strong className={styles.mobileCardTitle}>
+									{row.name}
+								</Typography.Text>
+								<div className={styles.mobileMetaGrid}>
+									<div>
+										<div className={styles.metaLabel}>Created</div>
+										<div className={styles.metaValue}>
+											{row.createdAt ? formatDateTime(row.createdAt) : '-'}
+										</div>
+									</div>
+									<div>
+										<div className={styles.metaLabel}>Policy</div>
+										<div className={styles.metaValue}>{policySupported ? 'Available' : 'Unsupported'}</div>
+									</div>
+								</div>
+								<div className={styles.mobileActionRow}>{renderBucketActions(row.name)}</div>
+							</article>
+						))}
+					</div>
 				</div>
 			)}
 

@@ -160,8 +160,18 @@ body,
   height: 100%;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
+  background: var(--s3d-color-bg-page);
+  color: var(--s3d-color-text);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
 }
 
 .skip-link {

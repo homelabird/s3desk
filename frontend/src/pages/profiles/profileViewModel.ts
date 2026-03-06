@@ -10,7 +10,7 @@ export type ProfileTableRowViewModel = {
 	profile: Profile
 	providerLabel: string
 	connection: ProfileConnectionViewModel
-	flagsText: string
+	flags: string[]
 	isActive: boolean
 }
 
@@ -58,14 +58,14 @@ function toProfileConnectionViewModel(row: Profile): ProfileConnectionViewModel 
 	return { primary: endpointLabel, secondary: region || undefined }
 }
 
-function toProfileFlagsText(row: Profile): string {
+function toProfileFlags(row: Profile): string[] {
 	const provider = row.provider
 	const isS3 = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
 	const parts: string[] = []
 	if (isS3 && 'forcePathStyle' in row) parts.push(row.forcePathStyle ? 'path-style' : 'virtual-host')
 	parts.push(row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash')
 	parts.push(row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify')
-	return parts.join(' / ')
+	return parts
 }
 
 export function buildProfilesTableRows(profiles: Profile[], activeProfileId: string | null): ProfileTableRowViewModel[] {
@@ -73,7 +73,7 @@ export function buildProfilesTableRows(profiles: Profile[], activeProfileId: str
 		profile,
 		providerLabel: profile.provider ? PROFILE_PROVIDER_LABELS[profile.provider] || profile.provider : 'unknown',
 		connection: toProfileConnectionViewModel(profile),
-		flagsText: toProfileFlagsText(profile),
+		flags: toProfileFlags(profile),
 		isActive: activeProfileId === profile.id,
 	}))
 }

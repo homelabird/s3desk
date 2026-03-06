@@ -13,7 +13,14 @@ type Props = {
 
 export function SettingsDrawer(props: Props) {
 	return (
-		<Drawer open={props.open} onClose={props.onClose} title="Settings" placement="right" width="90%" destroyOnHidden>
+		<Drawer
+			open={props.open}
+			onClose={props.onClose}
+			title="Settings"
+			placement="right"
+			styles={{ wrapper: { width: 'min(90vw, 960px)' } }}
+			destroyOnHidden
+		>
 			<SettingsPage
 				apiToken={props.apiToken}
 				setApiToken={props.setApiToken}

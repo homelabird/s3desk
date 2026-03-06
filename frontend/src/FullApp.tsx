@@ -5,6 +5,7 @@ import { Suspense, lazy } from 'react'
 
 import { AntdToastAnnouncer } from './components/AntdToastAnnouncer'
 import FullAppInner from './FullAppInner'
+import { appTheme } from './theme'
 
 const Devtools =
 	import.meta.env.DEV
@@ -27,7 +28,7 @@ const queryClient = new QueryClient({
 export default function FullApp() {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<ConfigProvider getPopupContainer={() => document.body}>
+			<ConfigProvider getPopupContainer={() => document.body} theme={appTheme}>
 				<AntdToastAnnouncer />
 				<FullAppInner />
 			</ConfigProvider>

@@ -1,18 +1,26 @@
-.headerRow {
+.headerActions {
 	display: flex;
-	width: 100%;
-	justify-content: space-between;
 	align-items: center;
-	gap: 12px;
+	justify-content: flex-end;
+	gap: 10px;
 	flex-wrap: wrap;
 }
 
-.pageTitle {
-	margin: 0 !important;
+.alertStack {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.sectionMeta {
+	font-size: 13px;
 }
 
 .filtersRow {
-	width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
 }
 
 .statusFilterControl,
@@ -33,6 +41,12 @@
 
 .columnsDropdownList {
 	width: 100%;
+}
+
+@media (max-width: 768px) {
+	.headerActions {
+		justify-content: flex-start;
+	}
 }
 
 @media (min-width: 768px) {

@@ -1,0 +1,145 @@
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.surfaceBody {
+	display: flex;
+	flex-direction: column;
+}
+
+.loadingState,
+.emptyState {
+	padding: 24px;
+}
+
+.emptyCopy {
+	max-width: 420px;
+}
+
+.emptyHint {
+	line-height: 1.6;
+}
+
+.emptyActionRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+.mobileList {
+	display: flex;
+	flex-direction: column;
+}
+
+.mobileCard {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 18px;
+	border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.mobileCard:first-child {
+	border-top: none;
+}
+
+.mobileCardTop {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.mobileCardCopy {
+	min-width: 0;
+}
+
+.mobileTitleRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.mobileSummary {
+	margin: 10px 0 8px;
+	color: var(--s3d-color-text-secondary);
+	line-height: 1.6;
+}
+
+.mobileJobId {
+	display: inline-block;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
+
+.mobileMetaGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.mobileMetaLabel {
+	margin-bottom: 6px;
+	font-size: 11px;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
+}
+
+.mobileMetaValue {
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--s3d-color-text);
+	overflow-wrap: anywhere;
+}
+
+.mobileError {
+	padding: 12px 14px;
+	border: 1px solid rgba(220, 38, 38, 0.18);
+	border-radius: 14px;
+	background: rgba(254, 242, 242, 0.82);
+	color: #b42318;
+	font-size: 13px;
+	line-height: 1.55;
+	overflow-wrap: anywhere;
+}
+
+.mobileActionRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.mobileInlineActions {
+	display: flex;
+	align-items: center;
+}
+
+.footer {
+	display: flex;
+	justify-content: center;
+	padding: 18px 24px 24px;
+	border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 768px) {
+	.loadingState,
+	.emptyState {
+		padding: 18px;
+	}
+
+	.mobileMetaGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.footer {
+		padding: 16px 18px 18px;
+	}
+}

@@ -1,8 +1,5 @@
 .frame {
-	border: 1px solid var(--jvt-border);
-	border-radius: var(--s3d-radius-md);
-	background: var(--jvt-bg);
-	overflow: hidden;
+	background: transparent;
 }
 
 .scroll {
@@ -20,15 +17,19 @@
 	position: sticky;
 	top: 0;
 	z-index: 3;
-	background: var(--jvt-bg);
+	background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(243, 247, 253, 0.98));
 	border-bottom: 1px solid var(--jvt-border);
 	text-align: left;
-	padding: 8px 12px;
-	font-weight: 600;
+	padding: 14px 18px;
+	font-size: 12px;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
 }
 
 .cell {
-	padding: 8px 12px;
+	padding: 14px 18px;
 	border-bottom: 1px solid var(--jvt-border);
 	vertical-align: middle;
 }
@@ -69,8 +70,24 @@
 	box-shadow: -1px 0 0 var(--jvt-border);
 }
 
+.loadingState,
+.emptyState {
+	padding: 24px;
+}
+
+.spinWrap {
+	width: 100%;
+}
+
 .spacerCell {
 	padding: 0;
 	border: 0;
 	height: 0;
+}
+
+@media (max-width: 768px) {
+	.loadingState,
+	.emptyState {
+		padding: 18px;
+	}
 }

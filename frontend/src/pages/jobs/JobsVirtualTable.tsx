@@ -90,13 +90,13 @@ export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>)
 	const content =
 		props.rows.length === 0 ? (
 			props.loading ? (
-				<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+				<div className={styles.loadingState}>
 					<Spin />
 				</div>
 			) : props.empty ? (
-				<div style={{ padding: 16 }}>{props.empty}</div>
+				<div className={styles.emptyState}>{props.empty}</div>
 			) : (
-				<div style={{ padding: 16 }}>
+				<div className={styles.emptyState}>
 					<Empty />
 				</div>
 			)
@@ -186,7 +186,9 @@ export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>)
 
 	return (
 		<div className={styles.frame} style={styleVars}>
-			<Spin spinning={props.loading && props.rows.length > 0}>{content}</Spin>
+			<Spin spinning={props.loading && props.rows.length > 0} className={styles.spinWrap}>
+				{content}
+			</Spin>
 		</div>
 	)
 }

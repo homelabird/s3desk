@@ -16,12 +16,17 @@ describe('JobsTableSection', () => {
 				jobsError={null}
 				sortedJobs={[]}
 				columns={[]}
+				isCompact={false}
 				tableScrollY={300}
 				isLoading={false}
 				isOffline={false}
 				uploadSupported
 				onOpenCreateUpload={vi.fn()}
 				onOpenDeleteJob={vi.fn()}
+				onOpenDetails={vi.fn()}
+				onOpenLogs={vi.fn()}
+				getJobSummary={vi.fn(() => null)}
+				renderJobActions={vi.fn(() => null)}
 				sortState={null}
 				onSortChange={vi.fn()}
 				theme={{ borderColor: '#ddd', bg: '#fff', hoverBg: '#f5f5f5' }}

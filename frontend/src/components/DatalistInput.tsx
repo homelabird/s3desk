@@ -30,6 +30,7 @@ type DatalistInputProps = {
 export const DatalistInput = forwardRef<InputRef, DatalistInputProps>(function DatalistInput(props, ref) {
 	const autoId = useId()
 	const listId = props.listId ?? `datalist-${autoId}`
+	const addonAfterProps = props.addonAfter === undefined ? {} : { addonAfter: props.addonAfter }
 	return (
 		<>
 			<Input
@@ -46,7 +47,7 @@ export const DatalistInput = forwardRef<InputRef, DatalistInputProps>(function D
 				style={props.style}
 				prefix={props.prefix}
 				suffix={props.suffix}
-				addonAfter={props.addonAfter}
+				{...addonAfterProps}
 				onFocus={props.onFocus}
 				onBlur={props.onBlur}
 				onPressEnter={props.onPressEnter}

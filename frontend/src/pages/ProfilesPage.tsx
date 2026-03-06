@@ -10,6 +10,7 @@ import { getConnectionTroubleshootingHint } from '../lib/connectionHints'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { LinkButton } from '../components/LinkButton'
+import { PageHeader } from '../components/PageHeader'
 import type { ProfileFormValues } from './profiles/profileTypes'
 import { ProfilesModals } from './profiles/ProfilesModals'
 import { ProfilesTable } from './profiles/ProfilesTable'
@@ -28,22 +29,6 @@ function useProfilesPageOrchestration(apiToken: string) {
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
 	const [searchParams, setSearchParams] = useSearchParams()
 	return { queryClient, api, searchParams, setSearchParams }
-}
-
-function ProfilesPageHeader(props: { onImport: () => void; onCreate: () => void }) {
-	return (
-		<div className={styles.headerRow}>
-			<Typography.Title level={2} className={styles.title}>
-				Profiles
-			</Typography.Title>
-			<Space wrap>
-				<Button onClick={props.onImport}>Import YAML</Button>
-				<Button type="primary" onClick={props.onCreate}>
-					New Profile
-				</Button>
-			</Space>
-		</div>
-	)
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -301,7 +286,19 @@ export function ProfilesPage(props: Props) {
 
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
-			<ProfilesPageHeader onImport={() => setImportOpen(true)} onCreate={() => setCreateOpen(true)} />
+			<PageHeader
+				eyebrow="Workspace"
+				title="Profiles"
+				subtitle="Create connection profiles, verify endpoints, and choose the active workspace used across buckets, objects, uploads, and jobs."
+				actions={
+					<Space wrap>
+						<Button onClick={() => setImportOpen(true)}>Import YAML</Button>
+						<Button type="primary" onClick={() => setCreateOpen(true)}>
+							New Profile
+						</Button>
+					</Space>
+				}
+			/>
 			{onboardingVisible ? (
 				<Alert
 					type="info"
