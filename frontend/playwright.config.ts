@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'http://127.0.0.1:8080'
+const recordVideos = ['1', 'true', 'on'].includes((process.env.PLAYWRIGHT_RECORD_VIDEOS || '').toLowerCase())
+const recordingOutputDir = process.env.PLAYWRIGHT_OUTPUT_DIR
 
 export default defineConfig({
 	testDir: './tests',
@@ -10,7 +12,9 @@ export default defineConfig({
 		baseURL,
 		headless: true,
 		viewport: { width: 1280, height: 720 },
+		video: recordVideos ? 'on' : 'off',
 	},
+	...(recordingOutputDir ? { outputDir: recordingOutputDir } : {}),
 	projects: [
 		{
 			name: 'chromium',
