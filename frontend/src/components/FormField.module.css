@@ -1,0 +1,29 @@
+.root {
+	margin-bottom: 12px;
+}
+
+.label,
+.labelText {
+	display: block;
+	font-weight: 700;
+	margin-bottom: 6px;
+}
+
+.requiredMark {
+	margin-left: 4px;
+	color: var(--s3d-color-error);
+}
+
+.extra {
+	margin-top: 6px;
+	font-size: 12px;
+	opacity: 0.75;
+	line-height: 1.35;
+}
+
+.error {
+	margin-top: 6px;
+	font-size: 12px;
+	line-height: 1.35;
+	color: var(--s3d-color-error-dark);
+}

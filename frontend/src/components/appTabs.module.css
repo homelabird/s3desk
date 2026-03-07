@@ -83,7 +83,7 @@
 
 .closeButton:hover {
   color: var(--s3d-color-text);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--s3d-color-bg-tertiary);
 }
 
 .closeButton:focus-visible {
@@ -139,4 +139,3 @@
 .sizeLarge .addButton {
   padding: 8px 12px;
 }
-

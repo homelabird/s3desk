@@ -133,31 +133,49 @@ async function stubCoreApi(page: Page, overrides?: Partial<StorageSeed>) {
 }
 
 test.describe('mobile smoke', () => {
-	test.beforeEach(async ({ page }) => {
+	test('setup page renders', async ({ page }) => {
 		await stubCoreApi(page)
-		await seedStorage(page)
+		await seedStorage(page, { profileId: null })
+		await page.goto('/setup')
+		await expect(page.getByText('Choose a profile')).toBeVisible()
+		await expect(page.getByRole('link', { name: /Create profile/i })).toBeVisible()
 	})
 
 	test('profiles page renders', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
 		await page.goto('/profiles')
 		await expect(page.getByText('Profiles', { exact: true }).first()).toBeVisible()
-		await expect(page.getByText('Choose a profile')).toBeVisible()
-		await expect(page.getByRole('link', { name: /Create profile|New Profile/i })).toBeVisible()
+		await expect(page.getByRole('button', { name: /New Profile/i })).toBeVisible()
+		await expect(page.getByRole('button', { name: /^Selected$/ }).first()).toBeVisible()
+	})
+
+	test('root redirects to objects when an active profile is stored', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
+		await page.goto('/')
+		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
 	})
 
 	test('objects page renders', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
 		await page.goto('/objects')
 		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
 		await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible()
 	})
 
 	test('jobs page renders', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
 		await page.goto('/jobs')
 		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 		await expect(page.getByRole('button', { name: /Upload folder(\s*\(device\))?/i }).first()).toBeVisible()
 	})
 
 	test('uploads page renders', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
 		await page.goto('/uploads')
 		await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible()
 		await expect(page.getByRole('combobox', { name: 'Bucket' })).toBeVisible()

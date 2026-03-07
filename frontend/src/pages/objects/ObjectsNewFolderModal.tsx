@@ -1,5 +1,8 @@
 import { Alert, Button, Checkbox, Input, Modal, Typography } from 'antd'
 
+import { FormField } from '../../components/FormField'
+import styles from './ObjectsDialogs.module.css'
+
 type ObjectsNewFolderModalProps = {
 	open: boolean
 	parentLabel: string
@@ -42,16 +45,14 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 					showIcon
 					title="Failed to create folder"
 					description={
-						<div>
+						<div className={styles.errorDescription}>
 							<div>{props.errorMessage}</div>
 							{partialKey ? (
-								<div style={{ marginTop: 6 }}>
-									<Typography.Text type="secondary">
-										Some intermediate folders may already exist: <Typography.Text code>{partialKey}</Typography.Text>
-									</Typography.Text>
-								</div>
+								<Typography.Text type="secondary" className={styles.partialKeyNote}>
+									Some intermediate folders may already exist: <Typography.Text code>{partialKey}</Typography.Text>
+								</Typography.Text>
 							) : null}
-							<div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+							<div className={styles.partialKeyActions}>
 								<Button size="small" onClick={() => openPrefix(props.parentPrefix)}>
 									Open parent
 								</Button>
@@ -66,43 +67,40 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 							</div>
 						</div>
 					}
-					style={{ marginBottom: 12 }}
+					className={styles.alertBlock}
 				/>
 			) : null}
 
-			<details style={{ marginBottom: 12 }}>
-				<summary style={{ cursor: 'pointer', userSelect: 'none' }}>About “folders” in S3</summary>
+			<details className={styles.detailsHint}>
+				<summary className={styles.detailsSummary}>About “folders” in S3</summary>
 				<Alert
 					type="info"
 					showIcon
 					title="Creates a folder marker object"
 					description="S3 folders are prefixes; this creates a zero-byte object whose key ends with '/'."
-					style={{ marginTop: 8 }}
+					className={styles.detailsAlert}
 				/>
 			</details>
 
 			<form
+				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
 					props.onFinish(props.values)
 				}}
 			>
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Parent</div>
+				<FormField label="Parent">
 					<Typography.Text
 						code
 						ellipsis={{ tooltip: props.parentLabel }}
 						copyable
-						style={{ maxWidth: '100%', display: 'inline-block' }}
+						className={styles.sourceCode}
 					>
 						{props.parentLabel}
 					</Typography.Text>
-				</div>
+				</FormField>
 
-				<div style={{ marginBottom: 12 }}>
-					<label htmlFor="objectsNewFolderName" style={{ display: 'block', fontWeight: 700, marginBottom: 6 }}>
-						Folder name
-					</label>
+				<FormField label="Folder name" htmlFor="objectsNewFolderName">
 					<Input
 						id="objectsNewFolderName"
 						value={props.values.name}
@@ -111,7 +109,7 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 						autoComplete="off"
 						autoFocus
 					/>
-				</div>
+				</FormField>
 
 				<Checkbox
 					checked={props.values.allowPath}

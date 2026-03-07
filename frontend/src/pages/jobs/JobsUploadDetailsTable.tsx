@@ -1,8 +1,10 @@
-import { Button, Space, Typography } from 'antd'
+import { Button, Typography } from 'antd'
+import type { CSSProperties } from 'react'
 
 import type { JobStatus } from '../../api/types'
 import { formatBytes } from '../../lib/transfer'
 import type { JobsUploadTableRow } from './jobsUploadTypes'
+import styles from './JobsShared.module.css'
 
 type Props = {
 	uploadItemsCount: number
@@ -41,6 +43,12 @@ export function JobsUploadDetailsTable({
 	backgroundColor,
 	borderRadius,
 }: Props) {
+	const tableVars = {
+		'--jobs-upload-table-border': borderColor,
+		'--jobs-upload-table-bg': backgroundColor,
+		'--jobs-upload-table-radius': `${borderRadius}px`,
+	} as CSSProperties
+
 	if (uploadItemsCount === 0) {
 		return <Typography.Text type="secondary">No file details recorded for this upload.</Typography.Text>
 	}
@@ -48,53 +56,21 @@ export function JobsUploadDetailsTable({
 	return (
 		<>
 			{uploadItemsTruncated ? (
-				<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+				<Typography.Text type="secondary" className={styles.uploadTableNote}>
 					Showing first {uploadItemsCount} of {uploadTotalFiles ?? uploadItemsCount} files.
 				</Typography.Text>
 			) : null}
-			<div
-				style={{
-					border: `1px solid ${borderColor}`,
-					borderRadius,
-					overflow: 'hidden',
-				}}
-			>
-				<table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }}>
+			<div className={styles.uploadTableShell} style={tableVars}>
+				<table className={styles.uploadTable}>
 					<thead>
 						<tr>
-							<th
-								style={{
-									textAlign: 'left',
-									padding: '8px 12px',
-									borderBottom: `1px solid ${borderColor}`,
-									background: backgroundColor,
-									fontWeight: 600,
-								}}
-							>
+							<th className={styles.uploadTableHeadCell}>
 								Path
 							</th>
-							<th
-								style={{
-									textAlign: 'right',
-									padding: '8px 12px',
-									borderBottom: `1px solid ${borderColor}`,
-									background: backgroundColor,
-									fontWeight: 600,
-									width: 120,
-								}}
-							>
+							<th className={`${styles.uploadTableHeadCell} ${styles.uploadTableHeadCellRight} ${styles.uploadTableSizeColumn}`}>
 								Size
 							</th>
-							<th
-								style={{
-									textAlign: 'left',
-									padding: '8px 12px',
-									borderBottom: `1px solid ${borderColor}`,
-									background: backgroundColor,
-									fontWeight: 600,
-									width: 220,
-								}}
-							>
+							<th className={`${styles.uploadTableHeadCell} ${styles.uploadTableHashColumn}`}>
 								Hash
 							</th>
 						</tr>
@@ -102,21 +78,13 @@ export function JobsUploadDetailsTable({
 					<tbody>
 						{uploadTablePageItems.map((item) => (
 							<tr key={item.key}>
-								<td style={{ padding: '8px 12px', borderBottom: `1px solid ${borderColor}`, verticalAlign: 'middle' }}>
+								<td className={styles.uploadTableCell}>
 									<Typography.Text code>{item.path}</Typography.Text>
 								</td>
-								<td
-									style={{
-										padding: '8px 12px',
-										borderBottom: `1px solid ${borderColor}`,
-										verticalAlign: 'middle',
-										textAlign: 'right',
-										whiteSpace: 'nowrap',
-									}}
-								>
+								<td className={`${styles.uploadTableCell} ${styles.uploadTableCellRight}`}>
 									{item.size != null ? formatBytes(item.size) : <Typography.Text type="secondary">-</Typography.Text>}
 								</td>
-								<td style={{ padding: '8px 12px', borderBottom: `1px solid ${borderColor}`, verticalAlign: 'middle' }}>
+								<td className={styles.uploadTableCell}>
 									{jobStatus !== 'succeeded' ? (
 										<Typography.Text type="secondary">Pending</Typography.Text>
 									) : uploadHashesLoading ? (
@@ -133,26 +101,26 @@ export function JobsUploadDetailsTable({
 				</table>
 			</div>
 			{uploadTableDataLength > uploadTablePageSize ? (
-				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-					<Space size={8}>
+				<div className={styles.uploadTablePagination}>
+					<div className={styles.uploadTablePaginationActions}>
 						<Button size="small" disabled={uploadTablePageSafe <= 1} onClick={onUploadTablePrevPage}>
 							Prev
 						</Button>
 						<Button size="small" disabled={uploadTablePageSafe >= uploadTableTotalPages} onClick={onUploadTableNextPage}>
 							Next
 						</Button>
-					</Space>
+					</div>
 					<Typography.Text type="secondary">
 						Page {uploadTablePageSafe} / {uploadTableTotalPages}
 					</Typography.Text>
 				</div>
 			) : null}
 			{jobStatus !== 'succeeded' ? (
-				<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+				<Typography.Text type="secondary" className={styles.uploadTableStatusNote}>
 					Hashes appear after the job completes.
 				</Typography.Text>
 			) : uploadHashFailures ? (
-				<Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+				<Typography.Text type="secondary" className={styles.uploadTableStatusNote}>
 					{uploadHashFailures} file(s) missing hash data.
 				</Typography.Text>
 			) : null}

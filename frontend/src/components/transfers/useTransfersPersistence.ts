@@ -3,12 +3,13 @@ import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { DownloadTask, JobArtifactDownloadTask, ObjectDownloadTask, UploadTask } from './transferTypes'
 
 type PersistedDownloadTask = ObjectDownloadTask | JobArtifactDownloadTask
+type PersistedUploadTask = Omit<UploadTask, 'preview'>
 
 type PersistedTransfers = {
 	version: 1
 	savedAtMs: number
 	downloads: PersistedDownloadTask[]
-	uploads: UploadTask[]
+	uploads: PersistedUploadTask[]
 }
 
 const TRANSFERS_STORAGE_KEY = 'transfersHistoryV1'
@@ -30,14 +31,20 @@ const normalizeDownloadTask = (task: PersistedDownloadTask, now: number): Downlo
 	}
 }
 
-const normalizeUploadTask = (task: UploadTask, now: number): UploadTask => {
-	if (!isActiveUploadStatus(task.status)) return task
+const normalizeUploadTask = (task: PersistedUploadTask, now: number): UploadTask => {
+	const { preview: _preview, ...normalized } = task as PersistedUploadTask & { preview?: unknown }
+	if (!isActiveUploadStatus(task.status)) return normalized
 	return {
-		...task,
+		...normalized,
 		status: 'canceled',
 		finishedAtMs: now,
 		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
 	}
+}
+
+const toPersistedUploadTask = (task: UploadTask): PersistedUploadTask => {
+	const { preview: _preview, ...persisted } = task
+	return persisted
 }
 
 const loadPersistedTransfers = (): PersistedTransfers | null => {
@@ -85,7 +92,7 @@ export function useTransfersPersistence({
 		const downloads = downloadTasks
 			.filter((task): task is PersistedDownloadTask => task.kind !== 'object_device')
 			.slice(0, MAX_PERSISTED_TRANSFERS)
-		const uploads = uploadTasks.slice(0, MAX_PERSISTED_TRANSFERS)
+		const uploads = uploadTasks.slice(0, MAX_PERSISTED_TRANSFERS).map(toPersistedUploadTask)
 		const payload: PersistedTransfers = {
 			version: 1,
 			savedAtMs: Date.now(),

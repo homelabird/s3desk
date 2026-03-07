@@ -39,6 +39,7 @@ type UseObjectsRowRenderersArgs = {
 	clearDndHover: () => void
 	selectObjectFromPointerEvent: (event: MouseEvent, key: string) => void
 	selectObjectFromCheckboxEvent: (event: MouseEvent, key: string) => void
+	onOpenLargePreviewForKey: (key: string) => void
 	selectedCount: number
 	selectedKeys: Set<string>
 	favoriteKeys: Set<string>
@@ -77,6 +78,7 @@ export function useObjectsRowRenderers({
 	clearDndHover,
 	selectObjectFromPointerEvent,
 	selectObjectFromCheckboxEvent,
+	onOpenLargePreviewForKey,
 	selectedCount,
 	selectedKeys,
 	favoriteKeys,
@@ -190,6 +192,7 @@ export function useObjectsRowRenderers({
 					closeContextMenu={closeContextMenu}
 					onSelectObject={selectObjectFromPointerEvent}
 					onSelectCheckbox={selectObjectFromCheckboxEvent}
+					onOpenLargePreviewForKey={onOpenLargePreviewForKey}
 					onRowDragStartObjects={onRowDragStartObjects}
 					onRowDragEnd={clearDndHover}
 					onToggleFavorite={toggleFavorite}
@@ -220,6 +223,7 @@ export function useObjectsRowRenderers({
 			isCompactList,
 			isOffline,
 			listGridClassName,
+			onOpenLargePreviewForKey,
 			onRowDragStartObjects,
 			openObjectContextMenu,
 			prefix,

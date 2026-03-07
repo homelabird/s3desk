@@ -7,14 +7,17 @@ import {
 	FolderOpenOutlined,
 	LogoutOutlined,
 	MenuOutlined,
+	MoonOutlined,
 	ProfileOutlined,
 	SettingOutlined,
+	SunOutlined,
 	ToolOutlined,
 } from '@ant-design/icons'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Suspense, lazy, useMemo, useState } from 'react'
 
 import { APIClient, APIError } from './api/client'
+import { BrandLockup } from './components/BrandLockup'
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { KeyboardShortcutGuide } from './components/KeyboardShortcutGuide'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
@@ -24,6 +27,7 @@ import { LoginPage } from './pages/LoginPage'
 import { getProviderCapabilities } from './lib/providerCapabilities'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
+import { useThemeMode } from './themeMode'
 import styles from './FullAppInner.module.css'
 
 const ProfilesPage = lazy(async () => {
@@ -58,6 +62,7 @@ export default function FullAppInner() {
 	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
 	const isDesktop = !!screens.lg
+	const { mode, toggleMode } = useThemeMode()
 
 	const [apiToken, setApiToken] = useLocalStorageState('apiToken', '')
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
@@ -104,7 +109,7 @@ export default function FullAppInner() {
 			{
 				key: '/profiles',
 				label: (
-					<Link to="/profiles?ui=full" className={styles.menuLink}>
+					<Link to="/profiles" className={styles.menuLink}>
 						<ProfileOutlined />
 						<span>Profiles</span>
 					</Link>
@@ -215,14 +220,12 @@ export default function FullAppInner() {
 				</Typography.Text>
 			)
 
-		return (
-			<div className={styles.fullscreenCenter}>
-				<div className={styles.errorPanel}>
-					<Typography.Title level={3} className={styles.noMarginTop}>
-						S3Desk
-					</Typography.Title>
-					<Alert
-						type="error"
+			return (
+				<div className={styles.fullscreenCenter}>
+					<div className={styles.errorPanel}>
+						<BrandLockup titleAs="h1" subtitle="Local Dashboard" variant="hero" />
+						<Alert
+							type="error"
 						showIcon
 						title="Backend connection failed"
 						description={
@@ -245,16 +248,13 @@ export default function FullAppInner() {
 			uploadCapabilityByProfileId={uploadCapabilityByProfileId}
 		>
 			<Layout className={styles.appLayout}>
-				{isDesktop ? (
-					<Sider width={220} className={styles.desktopSider}>
-						<div className={styles.brandBlock}>
-							<Typography.Title level={5} className={`${styles.brandTitle} ${styles.brandTitleDesktop}`}>
-								S3Desk
-							</Typography.Title>
-							<Typography.Text className={`${styles.brandSubtitle} ${styles.brandSubtitleDesktop}`}>Local Dashboard</Typography.Text>
-						</div>
-						<Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} />
-					</Sider>
+					{isDesktop ? (
+						<Sider width={220} className={styles.desktopSider}>
+							<div className={styles.brandBlock}>
+								<BrandLockup subtitle="Local Dashboard" variant="sidebar" />
+							</div>
+							<Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} />
+						</Sider>
 				) : null}
 
 				<Layout className={styles.appLayout}>
@@ -267,14 +267,20 @@ export default function FullAppInner() {
 									onClick={() => setNavOpen(true)}
 									aria-label="Open navigation"
 								/>
-							)}
-							{isDesktop ? null : (
-								<Typography.Text strong className={styles.mobileBrand}>
-									S3Desk
-								</Typography.Text>
-							)}
-						</Space>
+								)}
+								{isDesktop ? null : (
+									<BrandLockup variant="compact" />
+								)}
+							</Space>
 						<Space wrap className={styles.headerActions}>
+							<Button
+								type={screens.sm ? 'link' : 'text'}
+								icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+								onClick={toggleMode}
+								aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+							>
+								{screens.sm ? (mode === 'dark' ? 'Light mode' : 'Dark mode') : null}
+							</Button>
 							<TopBarProfileSelect profileId={profileId} setProfileId={setProfileId} apiToken={apiToken} />
 							<TransfersButton showLabel={!!screens.sm} />
 							{screens.sm ? (
@@ -347,16 +353,11 @@ export default function FullAppInner() {
 					onClose={() => setNavOpen(false)}
 					placement="left"
 					styles={{ body: { padding: 0 }, wrapper: { width: 'min(80vw, 360px)' } }}
-				>
-					<div className={styles.brandBlock}>
-						<Typography.Title level={5} className={styles.brandTitle}>
-							S3Desk
-						</Typography.Title>
-						<Typography.Text type="secondary" className={styles.brandSubtitle}>
-							Local Dashboard
-						</Typography.Text>
-					</div>
-					<Menu
+					>
+						<div className={styles.brandBlock}>
+							<BrandLockup subtitle="Local Dashboard" />
+						</div>
+						<Menu
 						mode="inline"
 						selectedKeys={[selectedKey]}
 						items={menuItems}

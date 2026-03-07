@@ -25,7 +25,7 @@ FROM harbor.k8s.homelabird.com/library/rclone/rclone:${RCLONE_VERSION} AS rclone
 FROM harbor.k8s.homelabird.com/library/alpine:3.21 AS runtime
 ARG DB_BACKEND=sqlite
 RUN set -e; \
-    apk add --no-cache ca-certificates; \
+    apk add --no-cache ca-certificates ffmpeg; \
     if [ "$DB_BACKEND" = "sqlite" ]; then apk add --no-cache sqlite; fi; \
     addgroup -S s3desk; \
     adduser -S -G s3desk -h /home/s3desk s3desk; \

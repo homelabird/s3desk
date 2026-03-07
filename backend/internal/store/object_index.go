@@ -249,6 +249,9 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 		sampleLimit = 100
 	}
 
+	bucketBase := s.db.WithContext(ctx).
+		Model(&objectIndexRow{}).
+		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket)
 	base := s.db.WithContext(ctx).
 		Model(&objectIndexRow{}).
 		Where("profile_id = ? AND bucket = ?", profileID, in.Bucket)
@@ -257,7 +260,7 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 	}
 
 	var probe objectIndexRow
-	if err := base.
+	if err := bucketBase.
 		Select("object_key").
 		Limit(1).
 		Take(&probe).Error; err != nil {
@@ -303,6 +306,18 @@ func (s *Store) SummarizeObjectIndex(ctx context.Context, profileID string, in S
 	resp.TotalBytes = summary.Total
 	if summary.IndexedAt != nil && strings.TrimSpace(*summary.IndexedAt) != "" {
 		resp.IndexedAt = summary.IndexedAt
+	} else if in.Prefix != "" {
+		var bucketSummary struct {
+			IndexedAt *string `gorm:"column:indexed_at"`
+		}
+		if err := bucketBase.
+			Select("MAX(indexed_at) AS indexed_at").
+			Scan(&bucketSummary).Error; err != nil {
+			return models.ObjectIndexSummaryResponse{}, err
+		}
+		if bucketSummary.IndexedAt != nil && strings.TrimSpace(*bucketSummary.IndexedAt) != "" {
+			resp.IndexedAt = bucketSummary.IndexedAt
+		}
 	}
 	return resp, nil
 }

@@ -1060,6 +1060,18 @@ func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID 
 		return errors.New("payload.prefix must end with '/' (or set payload.allowUnsafePrefix=true)")
 	}
 
+	var profileSecrets models.ProfileSecrets
+	if !deleteAll && !dryRun {
+		secrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrProfileNotFound
+		}
+		profileSecrets = secrets
+	}
+
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	m.trySetJobObjectsTotalFromS3Prefix(preflightCtx, profileID, jobID, bucket, prefix, include, exclude, preserveLeadingSlash)
 	cancel()
@@ -1088,7 +1100,17 @@ func (m *Manager) runTransferDeletePrefix(ctx context.Context, profileID, jobID 
 	}
 	args = append(args, target)
 
-	return m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressDeletes})
+	if err := m.runRclone(ctx, profileID, jobID, args, runRcloneOptions{TrackProgress: true, DryRun: dryRun, ProgressMode: rcloneProgressDeletes}); err != nil {
+		return err
+	}
+
+	if !deleteAll && !dryRun {
+		if err := cleanupS3PrefixMarkerIfEmpty(ctx, profileSecrets, bucket, prefix); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (m *Manager) runTransferCopyObject(ctx context.Context, profileID, jobID string, payload map[string]any, preserveLeadingSlash bool) error {

@@ -1,5 +1,8 @@
 import { Alert, Input, Modal, Typography } from 'antd'
 
+import { FormField } from '../../components/FormField'
+import styles from './ObjectsDialogs.module.css'
+
 type RenameForm = {
 	name: string
 	confirm: string
@@ -32,29 +35,29 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
-			<Alert
-				type="warning"
-				showIcon
-				title={isPrefix ? 'Folder rename moves all objects under it' : 'Rename is destructive'}
-				description="This creates a move job (copy then delete source)."
-				style={{ marginBottom: 12 }}
-			/>
+			<div className={styles.alertStack}>
+				<Alert
+					type="warning"
+					showIcon
+					title={isPrefix ? 'Folder rename moves all objects under it' : 'Rename is destructive'}
+					description="This creates a move job (copy then delete source)."
+				/>
+			</div>
 
 			<form
+				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
 					props.onFinish(props.values)
 				}}
 			>
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Source</div>
-					<Typography.Text code>{sourceLabel}</Typography.Text>
-				</div>
+				<FormField label="Source">
+					<Typography.Text code className={styles.sourceCode}>
+						{sourceLabel}
+					</Typography.Text>
+				</FormField>
 
-				<div style={{ marginBottom: 12 }}>
-					<label htmlFor="objectsRenameInput" style={{ display: 'block', fontWeight: 700, marginBottom: 6 }}>
-						New name
-					</label>
+				<FormField label="New name" htmlFor="objectsRenameInput">
 					<Input
 						id="objectsRenameInput"
 						value={props.values.name}
@@ -62,12 +65,9 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 						placeholder={isPrefix ? 'folder-name' : 'file-name'}
 						autoComplete="off"
 					/>
-				</div>
+				</FormField>
 
-				<div style={{ marginBottom: 12 }}>
-					<label htmlFor="objectsRenameConfirm" style={{ display: 'block', fontWeight: 700, marginBottom: 6 }}>
-						Type &quot;RENAME&quot; to confirm
-					</label>
+				<FormField label='Type "RENAME" to confirm' htmlFor="objectsRenameConfirm">
 					<Input
 						id="objectsRenameConfirm"
 						value={props.values.confirm}
@@ -75,7 +75,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 						placeholder="RENAME…"
 						autoComplete="off"
 					/>
-				</div>
+				</FormField>
 			</form>
 		</Modal>
 	)

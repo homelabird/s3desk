@@ -34,7 +34,7 @@ export function useSearchHighlight(searchTokens: string[]): SearchHighlightResul
 					{parts.map((part, idx) => {
 						if (idx % 2 === 0) return <span key={idx}>{part}</span>
 						return (
-							<span key={idx} style={{ background: '#fff1b8', paddingInline: 2, borderRadius: 2 }}>
+							<span key={idx} style={{ background: 'var(--s3d-color-highlight)', paddingInline: 2, borderRadius: 2 }}>
 								{part}
 							</span>
 						)

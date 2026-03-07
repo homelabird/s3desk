@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { ObjectItem } from '../api/types'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import styles from './objects/objects.module.css'
+import { ObjectsImageViewerModal } from './objects/ObjectsImageViewerModal'
 import { ObjectThumbnail } from './objects/ObjectThumbnail'
 import { ObjectsPageHeader } from './objects/ObjectsPageHeader'
 import { ObjectsPageOverlays } from './objects/ObjectsPageOverlays'
@@ -21,10 +22,12 @@ import { useObjectsListKeydownHandler } from './objects/useObjectsListKeydownHan
 import { useObjectsListViewport } from './objects/useObjectsListViewport'
 import { COMPACT_ROW_HEIGHT_PX, WIDE_ROW_HEIGHT_PX } from './objects/objectsPageConstants'
 import { logContextMenuDebug, logObjectsDebug } from './objects/objectsPageDebug'
-import { guessPreviewKind, normalizePrefix, parentPrefixFromKey } from './objects/objectsListUtils'
+import { isImageKey, isThumbnailCandidate, normalizePrefix, parentPrefixFromKey } from './objects/objectsListUtils'
+import { useObjectsGridRenderers } from './objects/useObjectsGridRenderers'
 import { useObjectsPageActions } from './objects/useObjectsPageActions'
 import { useObjectsPageData } from './objects/useObjectsPageData'
 import { useObjectsPageListInteractions } from './objects/useObjectsPageListInteractions'
+import { isObjectsRefreshRelevant, objectsRefreshEventName, type ObjectsRefreshEventDetail } from './objects/objectsRefreshEvents'
 import { useObjectsSelectionBarActions } from './objects/useObjectsSelectionBarActions'
 import { useObjectsToolbarProps } from './objects/useObjectsToolbarProps'
 import { useObjectsTopMenus } from './objects/useObjectsTopMenus'
@@ -140,6 +143,7 @@ export function ObjectsPageScreen(props: Props) {
 		profileCapabilities,
 		queryClient,
 		rawTotalCount,
+		recentBuckets,
 		refreshTreeNode,
 		resetGlobalSearch,
 		rowIndexByObjectKey,
@@ -184,6 +188,7 @@ export function ObjectsPageScreen(props: Props) {
 		setSearchDraft,
 		setSelectedKeys,
 		setSort,
+		setViewMode,
 		setAutoScanReadyKey,
 		setTreeDrawerOpen,
 		setTreeExpandedKeys,
@@ -210,6 +215,7 @@ export function ObjectsPageScreen(props: Props) {
 		visibleFileCount,
 		visibleObjectKeys,
 		visiblePrefixCount,
+		viewMode,
 		zipObjectsJobMutation,
 		zipPrefixJobMutation,
 	} = useObjectsPageData(props)
@@ -221,6 +227,21 @@ export function ObjectsPageScreen(props: Props) {
 		}
 		await Promise.all([objectsQuery.refetch(), favoritesQuery.refetch()])
 	}
+
+	useEffect(() => {
+		if (typeof window === 'undefined' || !props.profileId || !bucket) return
+
+		const handleObjectsRefresh = (event: Event) => {
+			if (!(event instanceof CustomEvent)) return
+			const detail = event.detail as ObjectsRefreshEventDetail | undefined
+			if (!detail) return
+			if (!isObjectsRefreshRelevant({ profileId: props.profileId!, bucket, prefix }, detail)) return
+			void refreshTreeNode(normalizePrefix(prefix) || '/')
+		}
+
+		window.addEventListener(objectsRefreshEventName, handleObjectsRefresh as EventListener)
+		return () => window.removeEventListener(objectsRefreshEventName, handleObjectsRefresh as EventListener)
+	}, [bucket, prefix, props.profileId, refreshTreeNode])
 
 	const toggleSortColumn = (col: 'name' | 'size' | 'time') => {
 		if (col === 'name') {
@@ -318,10 +339,25 @@ export function ObjectsPageScreen(props: Props) {
 		openUploadFilesPicker,
 		openUploadFolderPicker,
 	} = actions
+	const [largePreviewKey, setLargePreviewKey] = useState<string | null>(null)
+	const [largePreviewOpen, setLargePreviewOpen] = useState(false)
+	const openLargePreviewForKey = useCallback((key: string) => {
+		openDetailsForKey(key)
+		setLargePreviewKey(key)
+		setLargePreviewOpen(true)
+	}, [openDetailsForKey])
+	const closeLargePreview = useCallback(() => {
+		setLargePreviewOpen(false)
+	}, [])
 
-		useEffect(() => {
-			return () => {
-				thumbnailCache.clear()
+	useEffect(() => {
+		setLargePreviewOpen(false)
+		setLargePreviewKey(null)
+	}, [bucket, props.profileId])
+
+	useEffect(() => {
+		return () => {
+			thumbnailCache.clear()
 		}
 	}, [bucket, props.profileId, thumbnailCache])
 
@@ -360,6 +396,27 @@ export function ObjectsPageScreen(props: Props) {
 		detailsKey,
 		detailsVisible,
 		detailsMeta,
+		downloadLinkProxyEnabled,
+	})
+	const largePreviewMetaQuery = useQuery({
+		queryKey: ['objectMeta', props.profileId, bucket, largePreviewKey, props.apiToken, 'largePreview'],
+		enabled: !!props.profileId && !!bucket && !!largePreviewKey && largePreviewOpen,
+		queryFn: () => api.getObjectMeta({ profileId: props.profileId!, bucket, key: largePreviewKey! }),
+		retry: false,
+	})
+	const largePreviewMeta = largePreviewMetaQuery.data ?? null
+	const {
+		preview: largePreview,
+		loadPreview: loadLargePreview,
+		cancelPreview: cancelLargePreview,
+		canCancelPreview: canCancelLargePreview,
+	} = useObjectPreview({
+		api,
+		profileId: props.profileId,
+		bucket,
+		detailsKey: largePreviewKey,
+		detailsVisible: largePreviewOpen,
+		detailsMeta: largePreviewMeta,
 		downloadLinkProxyEnabled,
 	})
 
@@ -493,8 +550,10 @@ export function ObjectsPageScreen(props: Props) {
 	const listGridClassName = isCompactList ? styles.listGridCompact : styles.listGridWide
 	const {
 		getObjectActions,
+		getPrefixActions,
 		currentPrefixActionMap,
 		selectionActionMap,
+		selectionContextMenuActions,
 		selectionMenuActions,
 		globalActionMap,
 		commandItems,
@@ -504,6 +563,10 @@ export function ObjectsPageScreen(props: Props) {
 		contextMenuProps,
 		contextMenuStyle,
 		getListScrollerElement,
+		recordContextMenuPoint,
+		openPrefixContextMenu,
+		openObjectContextMenu,
+		withContextMenuClassName,
 		handleListScrollerContextMenu,
 		handleListScrollerScroll,
 		handleListScrollerWheel,
@@ -536,6 +599,7 @@ export function ObjectsPageScreen(props: Props) {
 			onDownloadToDevice,
 			onPresign: (key) => presignMutation.mutate(key),
 			onCopy,
+			onOpenLargePreviewForKey: openLargePreviewForKey,
 			onOpenDetailsForKey: openDetailsForKey,
 			onOpenRenameObject: openRenameObject,
 			onOpenCopyMove: openCopyMove,
@@ -597,6 +661,7 @@ export function ObjectsPageScreen(props: Props) {
 			clearDndHover,
 			selectObjectFromPointerEvent,
 			selectObjectFromCheckboxEvent,
+			onOpenLargePreviewForKey: openLargePreviewForKey,
 			selectedCount,
 			selectedKeys,
 			favoriteKeys,
@@ -604,6 +669,38 @@ export function ObjectsPageScreen(props: Props) {
 			toggleFavorite,
 			scrollContainerRef,
 		},
+	})
+	const { renderPrefixGridItem, renderObjectGridItem } = useObjectsGridRenderers({
+		api,
+		profileId: props.profileId,
+		bucket,
+		prefix,
+		canDragDrop,
+		isAdvanced,
+		isOffline,
+		showThumbnails,
+		thumbnailCache,
+		highlightText,
+		withContextMenuClassName,
+		getPrefixActions,
+		getObjectActions,
+		selectionContextMenuActions,
+		recordContextMenuPoint,
+		openPrefixContextMenu,
+		openObjectContextMenu,
+		onOpenPrefix,
+		onOpenLargePreviewForKey: openLargePreviewForKey,
+		onRowDragStartPrefix,
+		onRowDragStartObjects,
+		clearDndHover,
+		selectObjectFromPointerEvent,
+		selectObjectFromCheckboxEvent,
+		selectedCount,
+		selectedKeys,
+		favoriteKeys,
+		favoritePendingKeys,
+		toggleFavorite,
+		scrollContainerRef,
 	})
 	const { breadcrumbItems } = useObjectsBreadcrumbItems({
 		bucket,
@@ -686,6 +783,7 @@ export function ObjectsPageScreen(props: Props) {
 			isOffline,
 			profileId: props.profileId,
 			bucket,
+			recentBuckets,
 			selectedCount,
 			bucketOptions,
 			bucketsLoading: bucketsQuery.isFetching,
@@ -737,7 +835,7 @@ export function ObjectsPageScreen(props: Props) {
 		detailsKey &&
 		props.profileId &&
 		bucket &&
-		guessPreviewKind(detailsMeta.contentType, detailsKey) === 'image' ? (
+		isThumbnailCandidate(detailsMeta.contentType, detailsKey) ? (
 			<ObjectThumbnail
 				api={api}
 				profileId={props.profileId}
@@ -746,6 +844,23 @@ export function ObjectsPageScreen(props: Props) {
 				size={detailsThumbnailSize}
 				cache={thumbnailCache}
 				cacheKeySuffix={detailsMeta.etag || detailsMeta.lastModified || undefined}
+				fit="contain"
+			/>
+		) : null
+
+	const largePreviewThumbnail =
+		largePreviewKey &&
+		props.profileId &&
+		bucket &&
+		isImageKey(largePreviewKey) ? (
+			<ObjectThumbnail
+				api={api}
+				profileId={props.profileId}
+				bucket={bucket}
+				objectKey={largePreviewKey}
+				size={512}
+				cache={thumbnailCache}
+				cacheKeySuffix={largePreviewMeta?.etag || largePreviewMeta?.lastModified || undefined}
 				fit="contain"
 			/>
 		) : null
@@ -912,6 +1027,8 @@ export function ObjectsPageScreen(props: Props) {
 		setSort,
 		favoritesFirst,
 		setFavoritesFirst,
+		viewMode,
+		setViewMode,
 		isOffline,
 		objectsErrorMessage: objectsQuery.isError ? formatErr(objectsQuery.error) : null,
 		uploadDropActive: showUploadDropOverlay,
@@ -953,6 +1070,8 @@ export function ObjectsPageScreen(props: Props) {
 		handleClearSearch,
 		renderPrefixRow,
 		renderObjectRow,
+		renderPrefixGridItem,
+		renderObjectGridItem,
 		showLoadMore,
 		loadMoreLabel,
 		loadMoreDisabled,
@@ -975,6 +1094,11 @@ export function ObjectsPageScreen(props: Props) {
 		loadPreview,
 		cancelPreview,
 		canCancelPreview,
+		openLargePreview: () => {
+			if (!detailsKey) return
+			setLargePreviewKey(detailsKey)
+			setLargePreviewOpen(true)
+		},
 		dockDetails,
 		detailsOpen,
 		detailsDrawerOpen,
@@ -986,33 +1110,54 @@ export function ObjectsPageScreen(props: Props) {
 		onDetailsResizePointerUp,
 	})
 
-		return (
-			<div className={styles.page}>
-				<ObjectsPageHeader
-					uploadSupported={uploadSupported}
-					uploadDisabledReason={uploadDisabledReason}
-					uploadFilesInputRef={uploadFilesInputRef}
-					onUploadFilesInputChange={onUploadFilesInputChange}
-					uploadFolderInputRef={uploadFolderInputRef}
-					onUploadFolderInputChange={onUploadFolderInputChange}
-					toolbarSectionProps={{
-						apiToken: props.apiToken,
-						profileId: props.profileId,
-						bucketsErrorMessage: bucketsQuery.isError ? formatErr(bucketsQuery.error) : null,
-						isAdvanced,
-						tabs,
-						activeTabId,
-						onTabChange: setActiveTabId,
-						onTabAdd: addTab,
-						onTabClose: closeTab,
-						tabLabelMaxWidth: screens.md ? 320 : 220,
-						toolbarProps,
-					}}
-				/>
+	return (
+		<div className={styles.page}>
+			<ObjectsPageHeader
+				uploadSupported={uploadSupported}
+				uploadDisabledReason={uploadDisabledReason}
+				uploadFilesInputRef={uploadFilesInputRef}
+				onUploadFilesInputChange={onUploadFilesInputChange}
+				uploadFolderInputRef={uploadFolderInputRef}
+				onUploadFolderInputChange={onUploadFolderInputChange}
+				toolbarSectionProps={{
+					apiToken: props.apiToken,
+					profileId: props.profileId,
+					bucketsErrorMessage: bucketsQuery.isError ? formatErr(bucketsQuery.error) : null,
+					isAdvanced,
+					tabs,
+					activeTabId,
+					onTabChange: setActiveTabId,
+					onTabAdd: addTab,
+					onTabClose: closeTab,
+					tabLabelMaxWidth: screens.md ? 320 : 220,
+					toolbarProps,
+				}}
+			/>
 
 			<ObjectsPagePanes layoutRef={layoutRef} {...panesProps} />
-
-				<ObjectsPageOverlays {...overlaysProps} />
+			<ObjectsImageViewerModal
+				open={largePreviewOpen}
+				isMobile={!screens.md}
+				objectKey={largePreviewKey}
+				objectMeta={largePreviewMeta}
+				isMetaFetching={largePreviewMetaQuery.isFetching}
+				thumbnail={largePreviewThumbnail}
+				preview={largePreview}
+				onLoadPreview={loadLargePreview}
+				onCancelPreview={cancelLargePreview}
+				canCancelPreview={canCancelLargePreview}
+				onClose={closeLargePreview}
+				onDownload={() => {
+					if (!largePreviewKey) return
+					onDownload(largePreviewKey, largePreviewMeta?.size ?? objectByKey.get(largePreviewKey)?.size)
+				}}
+				onPresign={() => {
+					if (!largePreviewKey) return
+					presignMutation.mutate(largePreviewKey)
+				}}
+				isPresignLoading={presignMutation.isPending && presignKey === largePreviewKey}
+			/>
+			<ObjectsPageOverlays {...overlaysProps} />
 		</div>
 	)
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
@@ -277,13 +279,13 @@ func (s *server) handleGetObjectIndexSummary(w http.ResponseWriter, r *http.Requ
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrObjectIndexNotFound) {
-			writeError(
-				w,
-				http.StatusConflict,
-				"not_indexed",
-				"object index is not available; create an s3_index_objects job first",
-				map[string]any{"bucket": bucket},
-			)
+			writeJSON(w, http.StatusOK, models.ObjectIndexSummaryResponse{
+				Bucket:      bucket,
+				Prefix:      strings.TrimPrefix(prefix, "/"),
+				ObjectCount: 0,
+				TotalBytes:  0,
+				SampleKeys:  []string{},
+			})
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to summarize object index", map[string]any{"error": err.Error()})
@@ -391,15 +393,41 @@ func (s *server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, []string{"mkdir", rcloneRemoteDir(bucket, key, secrets.PreserveLeadingSlash)}, "create-folder")
-	if err != nil {
-		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
-			MissingMessage: "rclone is required to create folders (install it or set RCLONE_PATH)",
-			DefaultStatus:  http.StatusBadRequest,
-			DefaultCode:    "s3_error",
-			DefaultMessage: "failed to create folder",
-		}, map[string]any{"bucket": bucket, "key": key})
-		return
+	if rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+		client, err := s3ClientFromProfile(secrets)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare S3 client", nil)
+			return
+		}
+		_, err = client.PutObject(r.Context(), &s3.PutObjectInput{
+			Bucket: &bucket,
+			Key:    &key,
+			Body:   bytes.NewReader(nil),
+		})
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "s3_error", "failed to create folder", map[string]any{
+				"bucket": bucket,
+				"key":    key,
+				"error":  err.Error(),
+			})
+			return
+		}
+	} else {
+		_, stderr, err := s.runRcloneCapture(
+			r.Context(),
+			secrets,
+			[]string{"mkdir", rcloneRemoteDir(bucket, key, secrets.PreserveLeadingSlash)},
+			"create-folder",
+		)
+		if err != nil {
+			writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to create folders (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to create folder",
+			}, map[string]any{"bucket": bucket, "key": key})
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, models.CreateFolderResponse{Key: key})
@@ -589,6 +617,30 @@ func (s *server) handleDeleteObjects(w http.ResponseWriter, r *http.Request) {
 			DefaultMessage: "failed to delete objects",
 		}, map[string]any{"bucket": bucket})
 		return
+	}
+
+	if rcloneconfig.IsS3LikeProvider(secrets.Provider) {
+		client, err := s3ClientFromProfile(secrets)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare S3 client", nil)
+			return
+		}
+		for _, key := range keys {
+			if !strings.HasSuffix(key, "/") {
+				continue
+			}
+			if _, err := client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
+				Bucket: &bucket,
+				Key:    &key,
+			}); err != nil {
+				writeError(w, http.StatusBadRequest, "s3_error", "failed to delete object", map[string]any{
+					"bucket": bucket,
+					"key":    key,
+					"error":  err.Error(),
+				})
+				return
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, models.DeleteObjectsResponse{Deleted: len(keys)})

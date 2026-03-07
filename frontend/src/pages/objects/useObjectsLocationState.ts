@@ -15,6 +15,7 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 	const [prefix, setPrefix] = useLocalStorageState<string>('prefix', '')
 	const [tabs, setTabs] = useLocalStorageState<LocationTab[]>('objectsTabs', [])
 	const [activeTabId, setActiveTabId] = useLocalStorageState<string>('objectsActiveTabId', '')
+	const [recentBuckets, setRecentBuckets] = useLocalStorageState<string[]>('objectsRecentBuckets', [])
 	const [recentPrefixesByBucket, setRecentPrefixesByBucket] = useLocalStorageState<Record<string, string[]>>(
 		'objectsRecentPrefixesByBucket',
 		{},
@@ -60,6 +61,11 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 		if (!bucket) return
 		setPrefixByBucket((prev) => ({ ...prev, [bucket]: prefix }))
 	}, [bucket, prefix, setPrefixByBucket])
+
+	useEffect(() => {
+		if (!bucket) return
+		setRecentBuckets((prev) => [bucket, ...prev.filter((entry) => entry !== bucket)].slice(0, 12))
+	}, [bucket, setRecentBuckets])
 
 	const normalizePathInput = useCallback((raw: string): string => {
 		const cleaned = raw.trim().replace(/^\/+/, '')
@@ -246,6 +252,7 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 		prefix,
 		tabs,
 		activeTabId,
+		recentBuckets,
 		setActiveTabId,
 		pathDraft,
 		setPathDraft,

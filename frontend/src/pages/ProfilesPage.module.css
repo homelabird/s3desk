@@ -25,7 +25,7 @@
 }
 
 .headRow {
-	background: linear-gradient(180deg, #f8fbff, #f3f7fd);
+	background: var(--s3d-gradient-section);
 }
 
 .th {
@@ -60,7 +60,7 @@
 }
 
 .tableRow:hover {
-	background: rgba(26, 115, 232, 0.035);
+	background: var(--s3d-color-primary-bg);
 }
 
 .td {
@@ -87,8 +87,8 @@
 	gap: 6px;
 	padding: 4px 10px;
 	border-radius: 999px;
-	background: rgba(47, 158, 68, 0.12);
-	color: #20743a;
+	background: var(--s3d-color-success-bg);
+	color: var(--s3d-color-success-text);
 	font-size: 12px;
 	font-weight: 700;
 }
@@ -97,9 +97,9 @@
 	display: inline-flex;
 	align-items: center;
 	padding: 6px 10px;
-	border: 1px solid rgba(26, 115, 232, 0.12);
+	border: 1px solid var(--s3d-color-info-border);
 	border-radius: 999px;
-	background: rgba(26, 115, 232, 0.08);
+	background: var(--s3d-color-primary-bg);
 	color: var(--s3d-color-primary);
 	font-size: 12px;
 	font-weight: 700;

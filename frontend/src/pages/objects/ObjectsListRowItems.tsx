@@ -7,12 +7,16 @@ import type { ObjectItem } from '../../api/types'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
+import styles from './objects.module.css'
 import type { UIActionOrDivider } from './objectsActions'
 import { buildActionMenu } from './objectsActions'
+import { COMPACT_LIST_THUMBNAIL_PX, WIDE_LIST_THUMBNAIL_PX } from './objectsPageConstants'
 import { ObjectsObjectRow, ObjectsPrefixRow } from './ObjectsListRow'
 import { ObjectThumbnail } from './ObjectThumbnail'
-import { displayNameForKey, displayNameForPrefix, isImageKey } from './objectsListUtils'
+import { displayNameForKey, displayNameForPrefix, isThumbnailKey } from './objectsListUtils'
 import type { ContextMenuMatch, ContextMenuPoint } from './useObjectsContextMenu'
+
+type MenuClickInfo = Parameters<NonNullable<MenuProps['onClick']>>[0]
 
 type ObjectsPrefixRowItemProps = {
 	prefixKey: string
@@ -63,11 +67,21 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 		[currentPrefix, prefixKey],
 	)
 	const menu = useMemo(
-		() => withContextMenuClassName(buildActionMenu(getPrefixActions(prefixKey), isAdvanced)),
-		[getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName],
+		() => {
+			const baseMenu = withContextMenuClassName(buildActionMenu(getPrefixActions(prefixKey), isAdvanced))
+			return {
+				...baseMenu,
+				onClick: (info: MenuClickInfo) => {
+					baseMenu.onClick?.(info)
+					closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, 'menu_item')
+				},
+			}
+		},
+		[closeContextMenu, getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName],
 	)
 	const handleButtonMenuOpenChange = useCallback(
-		(open: boolean) => {
+		(open: boolean, info?: { source: 'trigger' | 'menu' }) => {
+			if (!open && info?.source === 'menu') return
 			if (open) openPrefixContextMenu(prefixKey, 'button')
 			else closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, 'button_menu')
 		},
@@ -135,6 +149,7 @@ type ObjectsObjectRowItemProps = {
 	closeContextMenu: (match: ContextMenuMatch, reason?: string) => void
 	onSelectObject: (event: MouseEvent, key: string) => void
 	onSelectCheckbox: (event: MouseEvent, key: string) => void
+	onOpenLargePreviewForKey: (key: string) => void
 	onRowDragStartObjects: (event: DragEvent, key: string) => void
 	onRowDragEnd: () => void
 	onToggleFavorite: (key: string) => void
@@ -169,6 +184,7 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		closeContextMenu,
 		onSelectObject,
 		onSelectCheckbox,
+		onOpenLargePreviewForKey,
 		onRowDragStartObjects,
 		onRowDragEnd,
 		onToggleFavorite,
@@ -185,8 +201,8 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 	)
 	const sizeLabel = useMemo(() => formatBytes(object.size), [object.size])
 	const timeLabel = useMemo(() => formatDateTime(object.lastModified), [object.lastModified])
-	const thumbnailSize = isCompact ? 24 : 32
-	const canShowThumbnail = showThumbnails && isImageKey(object.key)
+	const thumbnailSize = isCompact ? COMPACT_LIST_THUMBNAIL_PX : WIDE_LIST_THUMBNAIL_PX
+	const canShowThumbnail = showThumbnails && isThumbnailKey(object.key)
 	const thumbnail =
 		canShowThumbnail && profileId && bucket ? (
 			<ObjectThumbnail
@@ -203,8 +219,16 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 
 	const menu = useMemo(() => {
 		const actions = useSelectionMenu ? selectionContextMenuActions : getObjectActions(object.key, object.size)
-		return withContextMenuClassName(buildActionMenu(actions, isAdvanced))
+		const baseMenu = withContextMenuClassName(buildActionMenu(actions, isAdvanced))
+		return {
+			...baseMenu,
+			onClick: (info: MenuClickInfo) => {
+				baseMenu.onClick?.(info)
+				closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, 'menu_item')
+			},
+		}
 	}, [
+		closeContextMenu,
 		object.key,
 		object.size,
 		getObjectActions,
@@ -214,7 +238,8 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		withContextMenuClassName,
 	])
 	const handleButtonMenuOpenChange = useCallback(
-		(open: boolean) => {
+		(open: boolean, info?: { source: 'trigger' | 'menu' }) => {
+			if (!open && info?.source === 'menu') return
 			if (open) openObjectContextMenu(object.key, 'button')
 			else closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, 'button_menu')
 		},
@@ -233,6 +258,14 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 	const handleCheckboxClick = useCallback(
 		(event: MouseEvent) => onSelectCheckbox(event, object.key),
 		[object.key, onSelectCheckbox],
+	)
+	const handleOpenLargePreview = useCallback(
+		(event: MouseEvent) => {
+			event.preventDefault()
+			event.stopPropagation()
+			onOpenLargePreviewForKey(object.key)
+		},
+		[object.key, onOpenLargePreviewForKey],
 	)
 	const handleDragStart = useCallback(
 		(event: DragEvent) => onRowDragStartObjects(event, object.key),
@@ -268,7 +301,18 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 			onDragStart={handleDragStart}
 			onDragEnd={onRowDragEnd}
 			onToggleFavorite={handleToggleFavorite}
-			thumbnail={thumbnail}
+			thumbnail={
+				thumbnail ? (
+					<button
+						type="button"
+						className={styles.listThumbnailButton}
+						onClick={handleOpenLargePreview}
+						aria-label={`Open large preview for ${object.key}`}
+					>
+						{thumbnail}
+					</button>
+				) : undefined
+			}
 		/>
 	)
 })

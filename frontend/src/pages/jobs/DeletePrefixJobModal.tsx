@@ -1,7 +1,9 @@
-import { Alert, Button, Checkbox, Drawer, Grid, Input, Space, Switch, message } from 'antd'
+import { Alert, Button, Checkbox, Drawer, Grid, Input, Switch, message } from 'antd'
 import { useState } from 'react'
 
 import { DatalistInput } from '../../components/DatalistInput'
+import { FormField } from '../../components/FormField'
+import styles from './JobsShared.module.css'
 
 export function DeletePrefixJobModal(props: {
 	open: boolean
@@ -84,55 +86,22 @@ export function DeletePrefixJobModal(props: {
 			title="Create delete job (S3)"
 			width={drawerWidth}
 			extra={
-				<Space>
+				<div className={styles.drawerExtra}>
 					<Button onClick={props.onCancel}>Close</Button>
 					<Button type="primary" danger loading={props.loading} onClick={handleSubmit} disabled={props.isOffline}>
 						Create
 					</Button>
-				</Space>
+				</div>
 			}
 		>
-			<Alert
-				type="warning"
-				showIcon
-				title="Dangerous operation"
-				description="This job deletes remote objects via the transfer engine. It cannot be undone."
-				style={{ marginBottom: 12 }}
-			/>
-
-			<div style={{ marginBottom: 12 }}>
-				<div style={{ fontWeight: 700, marginBottom: 6 }}>Bucket</div>
-				<DatalistInput
-					value={bucket}
-					onChange={setBucket}
-					placeholder="my-bucket…"
-					ariaLabel="Bucket"
-					allowClear
-					options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+			<div className={styles.alertStack}>
+				<Alert
+					type="warning"
+					showIcon
+					title="Dangerous operation"
+					description="This job deletes remote objects via the transfer engine. It cannot be undone."
 				/>
-			</div>
-
-			<div style={{ marginBottom: 12 }}>
-				<div style={{ fontWeight: 700, marginBottom: 6 }}>Delete ALL objects in bucket</div>
-				<Switch checked={deleteAll} onChange={(checked) => setDeleteAll(checked)} />
-			</div>
-
-			<div style={{ marginBottom: 12 }}>
-				<div style={{ fontWeight: 700, marginBottom: 6 }}>Prefix</div>
-				<Input
-					value={prefix}
-					onChange={(e) => setPrefix(e.target.value)}
-					placeholder="path/…"
-					disabled={deleteAll}
-					aria-label="Prefix"
-				/>
-				<div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-					Required unless deleteAll is enabled. Use trailing '/' to avoid accidental matches.
-				</div>
-			</div>
-
-			{unsafePrefix ? (
-				<>
+				{unsafePrefix ? (
 					<Alert
 						type="warning"
 						showIcon
@@ -140,36 +109,71 @@ export function DeletePrefixJobModal(props: {
 						description={
 							"Without a trailing '/', delete will match keys with the prefix (e.g., 'abc' also matches 'abcd'). Prefer using a trailing '/'. To proceed anyway, acknowledge below."
 						}
-						style={{ marginBottom: 12 }}
 					/>
-					<div style={{ marginBottom: 12 }}>
+				) : null}
+			</div>
+
+			<form
+				className={styles.form}
+				onSubmit={(event) => {
+					event.preventDefault()
+					handleSubmit()
+				}}
+			>
+				<FormField label="Bucket">
+					<DatalistInput
+						value={bucket}
+						onChange={setBucket}
+						placeholder="my-bucket…"
+						ariaLabel="Bucket"
+						allowClear
+						options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+					/>
+				</FormField>
+
+				<FormField label="Delete ALL objects in bucket">
+					<Switch checked={deleteAll} onChange={(checked) => setDeleteAll(checked)} />
+				</FormField>
+
+				<FormField
+					label="Prefix"
+					extra="Required unless deleteAll is enabled. Use trailing '/' to avoid accidental matches."
+				>
+					<Input
+						value={prefix}
+						onChange={(e) => setPrefix(e.target.value)}
+						placeholder="path/…"
+						disabled={deleteAll}
+						aria-label="Prefix"
+					/>
+				</FormField>
+
+				{unsafePrefix ? (
+					<div className={styles.checkboxField}>
 						<Checkbox checked={unsafePrefixOk} onChange={(e) => setUnsafePrefixOk(e.target.checked)}>
 							I understand and want to proceed
 						</Checkbox>
 					</div>
-				</>
-			) : null}
+				) : null}
 
-			{deleteAll ? (
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Type &quot;DELETE&quot; to confirm</div>
-					<Input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="DELETE…" />
-				</div>
-			) : null}
+				{deleteAll ? (
+					<FormField label='Type "DELETE" to confirm'>
+						<Input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="DELETE…" />
+					</FormField>
+				) : null}
 
-			<div style={{ marginBottom: 12 }}>
-				<div style={{ fontWeight: 700, marginBottom: 6 }}>Dry run (no changes)</div>
-				<Switch checked={dryRun} onChange={setDryRun} />
-			</div>
+				<FormField label="Dry run (no changes)">
+					<Switch checked={dryRun} onChange={setDryRun} />
+				</FormField>
 
-			<div style={{ marginBottom: 12 }}>
-				<div style={{ fontWeight: 700, marginBottom: 6 }}>Include patterns (one per line)</div>
-				<Input.TextArea value={include} onChange={(e) => setInclude(e.target.value)} rows={4} placeholder="*.log…" />
-			</div>
-			<div style={{ marginBottom: 12 }}>
-				<div style={{ fontWeight: 700, marginBottom: 6 }}>Exclude patterns (one per line)</div>
-				<Input.TextArea value={exclude} onChange={(e) => setExclude(e.target.value)} rows={4} placeholder="tmp_*…" />
-			</div>
+				<FormField label="Include patterns (one per line)">
+					<Input.TextArea value={include} onChange={(e) => setInclude(e.target.value)} rows={4} placeholder="*.log…" />
+				</FormField>
+
+				<FormField label="Exclude patterns (one per line)">
+					<Input.TextArea value={exclude} onChange={(e) => setExclude(e.target.value)} rows={4} placeholder="tmp_*…" />
+				</FormField>
+			</form>
 		</Drawer>
 	)
 }

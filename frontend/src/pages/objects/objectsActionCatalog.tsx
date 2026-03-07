@@ -1,6 +1,7 @@
 import { CloudUploadOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, LinkOutlined, ReloadOutlined, RightOutlined, SearchOutlined, SnippetsOutlined, UpOutlined } from '@ant-design/icons'
 
 import type { UIAction, UIActionOrDivider } from './objectsActions'
+import { isImageKey } from './objectsListUtils'
 
 export type ClipboardObjects = {
 	mode: 'copy' | 'move'
@@ -32,6 +33,7 @@ type ObjectsActionDeps = {
 	onDownloadToDevice: (key: string, size?: number) => void
 	onPresign: (key: string) => void
 	onCopy: (value: string) => void
+	onOpenLargePreviewForKey: (key: string) => void
 	onOpenDetailsForKey: (key: string) => void
 	onOpenRenameObject: (key: string) => void
 	onOpenCopyMove: (mode: 'copy' | 'move', key: string) => void
@@ -118,6 +120,16 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			audience: 'advanced',
 			run: () => deps.onOpenDetailsForKey(objectKey),
 		}
+		const largePreviewAction: UIAction | null = isImageKey(objectKey)
+			? {
+					id: 'open_large_preview',
+					label: 'Open large preview',
+					icon: <SearchOutlined />,
+					keywords: 'preview image zoom large',
+					enabled: canUseObjectActions,
+					run: () => deps.onOpenLargePreviewForKey(objectKey),
+				}
+			: null
 		const renameAction: UIAction = {
 			id: 'rename',
 			label: 'Rename (F2)…',
@@ -164,6 +176,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			presignAction,
 			{ type: 'divider' },
 			copyAction,
+			...(largePreviewAction ? [largePreviewAction] : []),
 			detailsAction,
 			{ type: 'divider' },
 			renameAction,

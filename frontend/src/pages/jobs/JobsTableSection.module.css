@@ -40,7 +40,7 @@
 	flex-direction: column;
 	gap: 16px;
 	padding: 18px;
-	border-top: 1px solid rgba(15, 23, 42, 0.08);
+	border-top: 1px solid var(--s3d-color-border-soft);
 }
 
 .mobileCard:first-child {
@@ -101,10 +101,10 @@
 
 .mobileError {
 	padding: 12px 14px;
-	border: 1px solid rgba(220, 38, 38, 0.18);
+	border: 1px solid var(--s3d-color-error-border);
 	border-radius: 14px;
-	background: rgba(254, 242, 242, 0.82);
-	color: #b42318;
+	background: var(--s3d-color-error-bg);
+	color: var(--s3d-color-error-dark);
 	font-size: 13px;
 	line-height: 1.55;
 	overflow-wrap: anywhere;
@@ -126,7 +126,7 @@
 	display: flex;
 	justify-content: center;
 	padding: 18px 24px 24px;
-	border-top: 1px solid rgba(15, 23, 42, 0.08);
+	border-top: 1px solid var(--s3d-color-border-soft);
 }
 
 @media (max-width: 768px) {

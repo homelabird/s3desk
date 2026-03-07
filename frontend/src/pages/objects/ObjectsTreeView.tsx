@@ -66,7 +66,7 @@ export function ObjectsTreeView(props: ObjectsTreeViewProps) {
 							width: '100%',
 							paddingInline: 4,
 							borderRadius: 4,
-							background: active ? 'rgba(22, 119, 255, 0.12)' : undefined,
+							background: active ? 'var(--s3d-color-primary-light)' : undefined,
 						}}
 					>
 						{renderedTitle}

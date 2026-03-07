@@ -32,23 +32,16 @@ type MenuItem = Exclude<MenuItemEntry, MenuDivider>
 type MenuItemOverrides = Partial<Omit<MenuItem, 'children' | 'type'>>
 
 export function buildActionMenu(items: UIActionOrDivider[], isAdvanced?: boolean): MenuProps {
-	const actionById = new Map<string, UIAction>()
 	const visibleItems = typeof isAdvanced === 'boolean' ? filterActionItems(items, isAdvanced) : items
 	const menuItems = compactMenuItems(
 		visibleItems.map((item) => {
 			if ('type' in item) return { type: 'divider' as const }
-			actionById.set(item.id, item)
 			return actionToMenuItem(item)
 		}),
 	)
 
 	return {
 		items: menuItems,
-		onClick: ({ key }) => {
-			const action = actionById.get(String(key))
-			if (!action || !action.enabled) return
-			action.run()
-		},
 	}
 }
 
@@ -84,6 +77,10 @@ export function actionToMenuItem(action: UIAction | undefined, overrides?: MenuI
 		icon: action.icon,
 		danger: action.danger,
 		disabled: !action.enabled,
+		onClick: () => {
+			if (!action.enabled) return
+			action.run()
+		},
 		type: 'item' as const,
 		...overrides,
 	}

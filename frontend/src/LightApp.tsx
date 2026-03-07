@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from './api/client'
+import { BrandLockup } from './components/BrandLockup'
 import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { useLocalStorageState } from './lib/useLocalStorageState'
+import { useThemeMode } from './themeMode'
 
 type LightProfile = {
 	id: string
@@ -35,12 +37,11 @@ function LightHint403() {
 }
 
 function LightErrorCard(props: { title: string; hint?: ReactNode; onRetry?: () => void }) {
-	return (
-		<div className={styles.panelSmall}>
-			<h1 className={styles.brandTitle}>S3Desk</h1>
-			<div className={styles.brandSubtitle}>Local Dashboard</div>
+		return (
+			<div className={styles.panelSmall}>
+				<BrandLockup titleAs="h1" subtitle="Setup" variant="hero" />
 
-			<div className={styles.spacer16} />
+				<div className={styles.spacer16} />
 
 			<div className={styles.card}>
 				<div className={styles.cardTitle}>Backend connection failed</div>
@@ -90,8 +91,7 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 
 	return (
 		<div className={styles.panelSmall}>
-			<h1 className={styles.brandTitle}>S3Desk</h1>
-			<div className={styles.brandSubtitle}>Local Dashboard</div>
+			<BrandLockup titleAs="h1" subtitle="Setup" variant="hero" />
 
 			<div className={styles.spacer16} />
 
@@ -200,10 +200,7 @@ function ProfilesList(props: {
 			</a>
 
 			<header className={styles.header}>
-				<div>
-					<h1 className={styles.brandTitle}>S3Desk</h1>
-					<div className={styles.brandSubtitle}>Profiles</div>
-				</div>
+				<BrandLockup titleAs="h1" subtitle="Setup" variant="hero" />
 				<div className={styles.headerActions}>
 					<Link to="/profiles?create=1" className={`${styles.linkButton} ${styles.linkButtonPrimary}`}>
 						Create profile
@@ -311,6 +308,7 @@ function ProfilesList(props: {
 export default function LightApp() {
 	const [apiToken, setApiToken] = useLocalStorageState('apiToken', '')
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
+	const { mode, toggleMode } = useThemeMode()
 
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
 	const [metaReloadNonce, setMetaReloadNonce] = useState(0)
@@ -346,10 +344,23 @@ export default function LightApp() {
 		setMetaState({ status: 'loading' })
 		setApiToken(nextToken)
 	}
+	const themeLabel = `Theme: ${mode === 'dark' ? 'Dark' : 'Light'}`
+	const themeAriaLabel = mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
+	const themeToggleButton = (
+		<button
+			type="button"
+			onClick={toggleMode}
+			aria-label={themeAriaLabel}
+			className={`${styles.button} ${styles.buttonSecondary} ${styles.buttonClickable}`}
+		>
+			{themeLabel}
+		</button>
+	)
 
 	if (metaState.status === 'loading') {
 		return (
 			<div role="status" className={styles.centerShell}>
+				<div className={styles.topRightActions}>{themeToggleButton}</div>
 				<div className={styles.loadingCard}>
 					<div className={styles.loadingTitle}>Loading…</div>
 					<div className={styles.loadingSubtitle}>Connecting to the backend.</div>
@@ -364,6 +375,7 @@ export default function LightApp() {
 		if (isUnauthorized) {
 			return (
 				<div className={styles.centerShell}>
+					<div className={styles.topRightActions}>{themeToggleButton}</div>
 					<LightLogin
 						initialToken={apiToken}
 						onLogin={(token) => applyApiToken(token)}
@@ -377,6 +389,7 @@ export default function LightApp() {
 		const hint = err instanceof APIError && err.status === 403 ? <LightHint403 /> : undefined
 		return (
 			<div className={styles.centerShell}>
+				<div className={styles.topRightActions}>{themeToggleButton}</div>
 				<LightErrorCard title={title} hint={hint} onRetry={retryMeta} />
 			</div>
 		)
@@ -385,6 +398,7 @@ export default function LightApp() {
 	return (
 		<div className={`${styles.centerShell} ${styles.centerShellPage}`}>
 			<div className={styles.topRightActions}>
+				{themeToggleButton}
 				{apiToken ? (
 					<button
 						type="button"

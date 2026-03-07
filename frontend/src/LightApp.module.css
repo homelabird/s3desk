@@ -36,7 +36,7 @@
 .section {
 	border: 1px solid var(--s3d-color-border);
 	border-radius: 24px;
-	background: rgba(255, 255, 255, 0.94);
+	background: var(--s3d-color-bg-elevated);
 	box-shadow: var(--s3d-shadow-sm);
 }
 
@@ -118,14 +118,14 @@
 	border-radius: 14px;
 	padding: 12px 14px;
 	font-size: 14px;
-	background: rgba(255, 255, 255, 0.96);
+	background: var(--s3d-color-bg-input);
 	transition: border-color var(--s3d-transition-fast), box-shadow var(--s3d-transition-fast);
 }
 
 .tokenInput:focus-visible {
 	outline: none;
 	border-color: var(--s3d-color-primary);
-	box-shadow: 0 0 0 4px rgba(26, 115, 232, 0.16);
+	box-shadow: 0 0 0 4px var(--s3d-color-focus-ring);
 }
 
 .buttonRow,
@@ -162,7 +162,7 @@
 	border-color: var(--s3d-color-primary-btn);
 	background: var(--s3d-color-primary-btn);
 	color: var(--s3d-color-bg);
-	box-shadow: 0 10px 20px rgba(26, 115, 232, 0.18);
+	box-shadow: 0 10px 20px var(--s3d-color-primary-shadow);
 }
 
 .buttonPrimaryDisabled {
@@ -174,7 +174,7 @@
 .buttonSecondary,
 .linkButtonSecondary {
 	border-color: var(--s3d-color-border-input);
-	background: rgba(255, 255, 255, 0.92);
+	background: var(--s3d-color-bg-elevated);
 	color: var(--s3d-color-text-dark);
 }
 
@@ -222,7 +222,7 @@
 	align-items: center;
 	gap: 12px;
 	flex-wrap: wrap;
-	background: linear-gradient(180deg, #f8fbff, #f3f7fd);
+	background: var(--s3d-gradient-section);
 }
 
 .sectionHeading {
@@ -261,17 +261,17 @@
 	text-align: left;
 	padding: 18px 20px;
 	border: none;
-	background: rgba(255, 255, 255, 0.96);
+	background: var(--s3d-color-bg-elevated);
 	cursor: pointer;
 	transition: background var(--s3d-transition-fast), transform var(--s3d-transition-fast);
 }
 
 .profileButton:hover {
-	background: rgba(26, 115, 232, 0.05);
+	background: var(--s3d-color-primary-bg);
 }
 
 .profileButtonSelected {
-	background: linear-gradient(135deg, rgba(26, 115, 232, 0.12), rgba(26, 115, 232, 0.05));
+	background: linear-gradient(135deg, var(--s3d-color-primary-light), var(--s3d-color-primary-bg));
 }
 
 .profileName {
@@ -325,10 +325,7 @@
 }
 
 .centerShellPage {
-	background:
-		radial-gradient(circle at top left, rgba(26, 115, 232, 0.14), transparent 28%),
-		radial-gradient(circle at top right, rgba(251, 188, 4, 0.12), transparent 24%),
-		var(--s3d-color-bg-page);
+	background: var(--s3d-gradient-page);
 }
 
 .loadingCard {

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -15,6 +17,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -28,12 +31,15 @@ import (
 )
 
 const (
-	thumbnailDefaultSize = 96
-	thumbnailMinSize     = 24
-	thumbnailMaxSize     = 512
-	thumbnailMaxBytes    = 25 * 1024 * 1024
-	thumbnailCacheTTL    = 24 * time.Hour
+	thumbnailDefaultSize   = 96
+	thumbnailMinSize       = 24
+	thumbnailMaxSize       = 512
+	thumbnailImageMaxBytes = 25 * 1024 * 1024
+	thumbnailVideoMaxBytes = 256 * 1024 * 1024
+	thumbnailCacheTTL      = 24 * time.Hour
 )
+
+var errFFmpegNotFound = errors.New("ffmpeg not found in PATH (or set FFMPEG_PATH)")
 
 func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request) {
 	secrets, ok := profileFromContext(r.Context())
@@ -50,12 +56,7 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 	}
 
 	size := parseThumbnailSize(r.URL.Query().Get("size"))
-	cachePath := thumbnailCachePath(s.cfg.DataDir, secrets.ID, bucket, key, size)
-	if serveCachedThumbnail(w, r, cachePath) {
-		return
-	}
-
-	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), false, false, "thumbnail-meta")
+	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "thumbnail-meta")
 	if err != nil {
 		if rcloneIsNotFound(err, stderr) {
 			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
@@ -70,19 +71,51 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if !isThumbnailCandidate(entry.MimeType, key) {
+	kind := thumbnailObjectKind(entry.MimeType, key)
+	if kind == "" {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "thumbnail not supported for this object", map[string]any{"key": key})
 		return
 	}
-	if entry.Size > thumbnailMaxBytes {
+	maxBytes := thumbnailMaxBytesForKind(kind)
+	if entry.Size > maxBytes {
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "object is too large for thumbnail", map[string]any{
-			"maxBytes": thumbnailMaxBytes,
+			"kind":     kind,
+			"maxBytes": maxBytes,
 			"size":     entry.Size,
 		})
 		return
 	}
 
-	proc, err := s.startRclone(r.Context(), secrets, []string{"cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)}, "thumbnail")
+	cachePath := thumbnailCachePath(s.cfg.DataDir, secrets.ID, bucket, key, size, thumbnailObjectFingerprint(entry))
+	if serveCachedThumbnail(w, r, cachePath) {
+		return
+	}
+
+	ffmpegPath := ""
+	if kind == "video" {
+		ffmpegPath, err = resolveFFmpegPath()
+		if err != nil {
+			writeError(
+				w,
+				http.StatusBadRequest,
+				"thumbnail_engine_missing",
+				"ffmpeg is required to fetch video thumbnails (install it or set FFMPEG_PATH)",
+				map[string]any{"key": key},
+			)
+			return
+		}
+	}
+
+	downloadCtx := r.Context()
+	cancelDownload := func() {}
+	if kind == "video" {
+		var cancel context.CancelFunc
+		downloadCtx, cancel = context.WithCancel(r.Context())
+		cancelDownload = cancel
+		defer cancelDownload()
+	}
+
+	proc, err := s.startRclone(downloadCtx, secrets, []string{"cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)}, "thumbnail")
 	if err != nil {
 		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
@@ -93,10 +126,26 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	img, err := decodeThumbnailImage(proc.stdout)
+	var img image.Image
+	videoStreamStopped := false
+	switch kind {
+	case "image":
+		img, err = decodeThumbnailImage(proc.stdout)
+	case "video":
+		img, err = decodeThumbnailVideoFrame(r.Context(), ffmpegPath, proc.stdout)
+		if err == nil {
+			cancelDownload()
+			videoStreamStopped = true
+		}
+	default:
+		err = errors.New("unsupported thumbnail kind")
+	}
 	waitErr := proc.wait()
+	if videoStreamStopped {
+		waitErr = nil
+	}
 	if err != nil {
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode image", map[string]any{"error": err.Error()})
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode thumbnail source", map[string]any{"error": err.Error()})
 		return
 	}
 	if waitErr != nil {
@@ -134,27 +183,90 @@ func parseThumbnailSize(raw string) int {
 	return thumbnailDefaultSize
 }
 
-func isThumbnailCandidate(contentType, key string) bool {
+func thumbnailObjectKind(contentType, key string) string {
 	ct := strings.ToLower(strings.TrimSpace(contentType))
 	if strings.HasPrefix(ct, "image/") && ct != "image/svg+xml" {
-		return true
+		return "image"
+	}
+	if strings.HasPrefix(ct, "video/") {
+		return "video"
 	}
 	ext := strings.TrimPrefix(strings.ToLower(path.Ext(key)), ".")
 	switch ext {
 	case "jpg", "jpeg", "png", "gif", "webp", "bmp":
-		return true
+		return "image"
+	case "mp4", "mov", "m4v", "webm", "mkv", "avi":
+		return "video"
 	default:
-		return false
+		return ""
 	}
 }
 
 func decodeThumbnailImage(r io.Reader) (image.Image, error) {
-	limited := io.LimitReader(r, thumbnailMaxBytes+1)
+	limited := io.LimitReader(r, thumbnailImageMaxBytes+1)
 	img, _, err := image.Decode(limited)
 	if err != nil {
 		return nil, err
 	}
 	return img, nil
+}
+
+func thumbnailMaxBytesForKind(kind string) int64 {
+	if kind == "video" {
+		return thumbnailVideoMaxBytes
+	}
+	return thumbnailImageMaxBytes
+}
+
+func decodeThumbnailVideoFrame(ctx context.Context, ffmpegPath string, r io.Reader) (image.Image, error) {
+	cmd := exec.CommandContext(
+		ctx,
+		ffmpegPath,
+		"-hide_banner",
+		"-loglevel", "error",
+		"-i", "pipe:0",
+		"-vf", "thumbnail",
+		"-frames:v", "1",
+		"-f", "image2pipe",
+		"-vcodec", "png",
+		"pipe:1",
+	)
+	cmd.Stdin = r
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	out, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return nil, errors.New(msg)
+		}
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, errors.New("ffmpeg returned empty frame output")
+	}
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
+func resolveFFmpegPath() (string, error) {
+	ffmpegPath := strings.TrimSpace(os.Getenv("FFMPEG_PATH"))
+	if ffmpegPath == "" {
+		p, err := exec.LookPath("ffmpeg")
+		if err != nil {
+			return "", errFFmpegNotFound
+		}
+		return p, nil
+	}
+	if _, err := os.Stat(ffmpegPath); err != nil {
+		return "", fmt.Errorf("invalid FFMPEG_PATH %q: %w", ffmpegPath, err)
+	}
+	return ffmpegPath, nil
 }
 
 func resizeForThumbnail(src image.Image, size int) image.Image {
@@ -181,8 +293,22 @@ func resizeForThumbnail(src image.Image, size int) image.Image {
 	return dst
 }
 
-func thumbnailCachePath(baseDir, profileID, bucket, key string, size int) string {
-	sum := sha256.Sum256([]byte(profileID + "\n" + bucket + "\n" + key))
+func thumbnailObjectFingerprint(entry rcloneListEntry) string {
+	parts := []string{fmt.Sprintf("v2:size=%d", entry.Size)}
+	if etag := rcloneETagFromHashes(entry.Hashes); etag != "" {
+		parts = append(parts, "etag="+etag)
+	}
+	if lm := rcloneParseTime(entry.ModTime); lm != "" {
+		parts = append(parts, "lastModified="+lm)
+	}
+	if mimeType := strings.ToLower(strings.TrimSpace(entry.MimeType)); mimeType != "" {
+		parts = append(parts, "mimeType="+mimeType)
+	}
+	return strings.Join(parts, "|")
+}
+
+func thumbnailCachePath(baseDir, profileID, bucket, key string, size int, fingerprint string) string {
+	sum := sha256.Sum256([]byte(profileID + "\n" + bucket + "\n" + key + "\n" + strings.TrimSpace(fingerprint)))
 	hexSum := hex.EncodeToString(sum[:])
 	dir := filepath.Join(baseDir, "thumbnails", profileID, hexSum[:2])
 	name := fmt.Sprintf("%s_%d.jpg", hexSum, size)

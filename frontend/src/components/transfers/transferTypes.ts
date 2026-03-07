@@ -41,6 +41,15 @@ export type JobArtifactDownloadTask = DownloadTaskBase & {
 
 export type DownloadTask = ObjectDownloadTask | ObjectDeviceDownloadTask | JobArtifactDownloadTask
 
+export type UploadTaskPreview = {
+	kind: 'video_frame'
+	source: 'local'
+	url: string
+	label: string
+	width: number
+	height: number
+}
+
 export type UploadTask = {
 	id: string
 	profileId: string
@@ -67,4 +76,5 @@ export type UploadTask = {
 	resumeChunkSizeBytes?: number
 	resumeFileSize?: number
 	resumeFiles?: Array<{ path: string; size: number; chunkSizeBytes: number }>
+	preview?: UploadTaskPreview
 }

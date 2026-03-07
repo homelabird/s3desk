@@ -1,0 +1,37 @@
+.loadingScreen {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100dvh;
+	padding: 24px;
+	background: var(--s3d-gradient-page);
+}
+
+.loadingPanel {
+	width: min(520px, 100%);
+	padding: 28px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 24px;
+	background: var(--s3d-gradient-surface);
+	box-shadow: var(--s3d-shadow-md);
+	text-align: center;
+}
+
+.loadingTitle {
+	font-size: 18px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+.loadingCopy {
+	margin-top: 8px;
+	color: var(--s3d-color-text-secondary);
+	line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+	.loadingPanel {
+		padding: 24px 20px;
+		border-radius: 20px;
+	}
+}

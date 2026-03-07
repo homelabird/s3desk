@@ -5,7 +5,7 @@ import {
 } from '../../lib/objectIndexing'
 import { THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES } from '../../lib/thumbnailCache'
 
-import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
+import type { ObjectSort, ObjectTypeFilter, ObjectsViewMode } from './objectsTypes'
 
 export type ObjectsFiltersState = {
 	typeFilter: ObjectTypeFilter
@@ -30,6 +30,8 @@ export type ObjectsFiltersState = {
 	setMaxModifiedMs: (next: number | null) => void
 	sort: ObjectSort
 	setSort: (next: ObjectSort) => void
+	viewMode: ObjectsViewMode
+	setViewMode: (next: ObjectsViewMode) => void
 	showThumbnails: boolean
 	thumbnailCacheSize: number
 	autoIndexEnabled: boolean
@@ -48,6 +50,7 @@ export function useObjectsFiltersState(): ObjectsFiltersState {
 	const [minModifiedMs, setMinModifiedMs] = useLocalStorageState<number | null>('objectsMinModifiedMs', null)
 	const [maxModifiedMs, setMaxModifiedMs] = useLocalStorageState<number | null>('objectsMaxModifiedMs', null)
 	const [sort, setSort] = useLocalStorageState<ObjectSort>('objectsSort', 'name_asc')
+	const [viewMode, setViewMode] = useLocalStorageState<ObjectsViewMode>('objectsViewMode', 'list')
 	const [showThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
 	const [thumbnailCacheSize] = useLocalStorageState<number>('objectsThumbnailCacheSize', THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES)
 	const [autoIndexEnabled] = useLocalStorageState<boolean>('objectsAutoIndexEnabled', OBJECTS_AUTO_INDEX_DEFAULT_ENABLED)
@@ -76,10 +79,11 @@ export function useObjectsFiltersState(): ObjectsFiltersState {
 		setMaxModifiedMs,
 		sort,
 		setSort,
+		viewMode,
+		setViewMode,
 		showThumbnails,
 		thumbnailCacheSize,
 		autoIndexEnabled,
 		autoIndexTtlHours,
 	}
 }
-

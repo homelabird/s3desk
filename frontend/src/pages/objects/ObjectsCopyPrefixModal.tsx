@@ -4,6 +4,7 @@ import type { ObjectIndexSummaryResponse } from '../../api/types'
 import { FormField } from '../../components/FormField'
 import { DatalistInput } from '../../components/DatalistInput'
 import { formatBytes } from '../../lib/transfer'
+import styles from './ObjectsDialogs.module.css'
 
 type CopyPrefixValues = {
 	dstBucket: string
@@ -50,26 +51,26 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 			onCancel={props.onCancel}
 			destroyOnHidden
 		>
-			{isMove ? (
-				<Alert
-					type="warning"
-					showIcon
-					title="Move folder is destructive"
-					description="This creates a move job (copy then delete source)."
-					style={{ marginBottom: 12 }}
-				/>
-			) : (
-				<Alert
-					type="info"
-					showIcon
-					title="Copy this folder to another folder"
-					description="This creates a copy job and may copy many objects."
-					style={{ marginBottom: 12 }}
-				/>
-			)}
+			<div className={styles.alertStack}>
+				{isMove ? (
+					<Alert
+						type="warning"
+						showIcon
+						title="Move folder is destructive"
+						description="This creates a move job (copy then delete source)."
+					/>
+				) : (
+					<Alert
+						type="info"
+						showIcon
+						title="Copy this folder to another folder"
+						description="This creates a copy job and may copy many objects."
+					/>
+				)}
+			</div>
 
 			{props.isSummaryFetching && !props.summary ? (
-				<div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+				<div className={styles.loadingState}>
 					<Spin />
 				</div>
 			) : props.summaryNotIndexed ? (
@@ -83,7 +84,7 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 							Index prefix
 						</Button>
 					}
-					style={{ marginBottom: 12 }}
+					className={styles.alertBlock}
 				/>
 			) : props.isSummaryError ? (
 				<Alert
@@ -91,11 +92,11 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 					showIcon
 					title="Failed to load impact preview"
 					description={props.summaryErrorMessage}
-					style={{ marginBottom: 12 }}
+					className={styles.alertBlock}
 				/>
 			) : props.summary ? (
 				<>
-					<Descriptions size="small" bordered column={1} style={{ marginBottom: 12 }}>
+					<Descriptions size="small" bordered column={1} className={styles.summaryDescriptions}>
 						<Descriptions.Item label="Objects">{props.summary.objectCount}</Descriptions.Item>
 						<Descriptions.Item label="Total size">{formatBytes(props.summary.totalBytes)}</Descriptions.Item>
 						<Descriptions.Item label="Indexed at">
@@ -107,46 +108,48 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 						</Descriptions.Item>
 					</Descriptions>
 					{props.summary.sampleKeys?.length ? (
-						<>
+						<div className={styles.sampleKeysBlock}>
 							<Typography.Text type="secondary">Sample keys</Typography.Text>
 							<Input.TextArea value={props.summary.sampleKeys.join('\n')} readOnly autoSize={{ minRows: 3, maxRows: 6 }} />
-						</>
+						</div>
 					) : null}
 				</>
 			) : null}
 
 			<form
+				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
 					props.onFinish(props.values)
 				}}
 			>
 				<FormField label="Source">
-					<Typography.Text code>{props.sourceLabel}</Typography.Text>
+					<Typography.Text code className={styles.sourceCode}>{props.sourceLabel}</Typography.Text>
 				</FormField>
 
 				<FormField label="Destination bucket" required>
 					<DatalistInput
-											value={props.values.dstBucket}
-											onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: value })}
-											placeholder="bucket…"
-											ariaLabel="Destination bucket"
-											allowClear
-											disabled={props.isBucketsLoading && props.bucketOptions.length === 0}
-											options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
-										/>
+						value={props.values.dstBucket}
+						onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: value })}
+						placeholder="bucket…"
+						ariaLabel="Destination bucket"
+						allowClear
+						disabled={props.isBucketsLoading && props.bucketOptions.length === 0}
+						options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+					/>
 				</FormField>
 
-				<FormField label="Destination folder" required>
+				<FormField
+					label="Destination folder"
+					required
+					extra={<span className={styles.summaryNote}>Normalized as: <Typography.Text code>{props.normalizePrefix(props.values.dstPrefix)}</Typography.Text></span>}
+				>
 					<Input
 						value={props.values.dstPrefix}
 						onChange={(e) => props.onValuesChange({ ...props.values, dstPrefix: e.target.value })}
 						placeholder="target-folder/…"
 						autoComplete="off"
 					/>
-					<div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, lineHeight: 1.35 }}>
-						Normalized as: <Typography.Text code>{props.normalizePrefix(props.values.dstPrefix)}</Typography.Text>
-					</div>
 				</FormField>
 
 				{isMove ? (

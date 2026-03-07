@@ -72,7 +72,7 @@ test.describe('Live UI flow', () => {
 
 		try {
 			await seedStorage(page)
-			await page.goto('/profiles?ui=full&create=1')
+			await page.goto('/profiles?create=1')
 			await page.getByLabel('Name').fill(profileName)
 			await page.getByLabel('Endpoint URL').fill(s3Endpoint)
 			await page.getByLabel('Region').fill(s3Region)

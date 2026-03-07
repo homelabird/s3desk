@@ -141,12 +141,29 @@ export function isImageKey(key: string): boolean {
 	return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)
 }
 
+export function isVideoKey(key: string): boolean {
+	const ext = fileExtensionFromKey(key)
+	return ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi'].includes(ext)
+}
+
+export function isThumbnailKey(key: string): boolean {
+	return isImageKey(key) || isVideoKey(key)
+}
+
+export function isThumbnailCandidate(contentType: string | null | undefined, key: string): boolean {
+	const ct = (contentType ?? '').toLowerCase()
+	if (ct.startsWith('image/') && ct !== 'image/svg+xml') return true
+	if (ct.startsWith('video/')) return true
+	return isThumbnailKey(key)
+}
+
 export function guessPreviewKind(
 	contentType: string | null | undefined,
 	key: string,
-): 'image' | 'text' | 'json' | 'unsupported' {
+): 'image' | 'video' | 'text' | 'json' | 'unsupported' {
 	const ct = (contentType ?? '').toLowerCase()
 	if (ct.startsWith('image/')) return 'image'
+	if (ct.startsWith('video/')) return 'video'
 	if (ct.includes('json')) return 'json'
 	if (ct.startsWith('text/') || ct.includes('xml') || ct.includes('yaml') || ct.includes('csv') || ct.includes('log')) return 'text'
 
@@ -155,6 +172,7 @@ export function guessPreviewKind(
 	if (ext === 'svg') return 'text'
 	if (['txt', 'log', 'md', 'csv', 'tsv', 'yml', 'yaml', 'xml'].includes(ext)) return 'text'
 	if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(ext)) return 'image'
+	if (['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi'].includes(ext)) return 'video'
 	return 'unsupported'
 }
 

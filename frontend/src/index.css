@@ -1,10 +1,11 @@
 :root,
-.css-var-root {
-  /* ── Ant Design overrides ── */
-  --ant-color-text-secondary: rgba(0, 0, 0, 0.82) !important;
-  --ant-color-text-tertiary: rgba(0, 0, 0, 0.76) !important;
-  --ant-color-text-quaternary: rgba(0, 0, 0, 0.7) !important;
-  --ant-color-text-placeholder: rgba(0, 0, 0, 0.78) !important;
+:root[data-theme='light'],
+.css-var-root,
+.css-var-root[data-theme='light'] {
+  --ant-color-text-secondary: rgba(32, 33, 36, 0.82) !important;
+  --ant-color-text-tertiary: rgba(32, 33, 36, 0.76) !important;
+  --ant-color-text-quaternary: rgba(32, 33, 36, 0.7) !important;
+  --ant-color-text-placeholder: rgba(32, 33, 36, 0.78) !important;
   --ant-color-primary: #1a73e8 !important;
   --ant-color-primary-hover: #1765cc !important;
   --ant-color-primary-active: #1765cc !important;
@@ -12,87 +13,230 @@
   --ant-color-link-hover: #1765cc !important;
   --ant-color-link-active: #1765cc !important;
 
-  /* ── S3Desk design tokens ── */
-
-  /* Primary / brand (Google-style blue) */
   --s3d-color-primary: #1a73e8;
   --s3d-color-primary-hover: #1765cc;
   --s3d-color-primary-btn: #1a73e8;
   --s3d-color-primary-light: #e8f0fe;
   --s3d-color-primary-bg: rgba(26, 115, 232, 0.08);
   --s3d-color-focus: #1a73e8;
+  --s3d-color-focus-ring: rgba(26, 115, 232, 0.16);
+  --s3d-color-primary-shadow: rgba(26, 115, 232, 0.18);
 
-  /* Backgrounds */
-  --s3d-color-bg: #fff;
+  --s3d-color-bg: #ffffff;
   --s3d-color-bg-secondary: #f8f9fa;
   --s3d-color-bg-tertiary: #f1f3f4;
   --s3d-color-bg-page: #f8f9fa;
-  --s3d-color-bg-card: #fff;
+  --s3d-color-bg-card: #ffffff;
+  --s3d-color-bg-glass: rgba(255, 255, 255, 0.9);
+  --s3d-color-bg-elevated: rgba(255, 255, 255, 0.96);
+  --s3d-color-bg-input: rgba(255, 255, 255, 0.96);
+  --s3d-color-bg-muted: rgba(248, 250, 252, 0.85);
+  --s3d-color-bg-subtle: rgba(248, 250, 252, 0.72);
+  --s3d-color-bg-code: #fafafa;
+  --s3d-color-bg-disabled: #f5f5f5;
 
-  /* Borders */
   --s3d-color-border: #e0e0e0;
   --s3d-color-border-secondary: #dadce0;
   --s3d-color-border-strong: #c0c0c0;
   --s3d-color-border-input: #dadce0;
+  --s3d-color-border-soft: rgba(15, 23, 42, 0.08);
+  --s3d-color-border-dashed: rgba(15, 23, 42, 0.16);
 
-  /* Text */
   --s3d-color-text: #202124;
   --s3d-color-text-secondary: #5f6368;
   --s3d-color-text-muted: #80868b;
   --s3d-color-text-dark: #202124;
   --s3d-color-text-on-dark: rgba(255, 255, 255, 0.9);
 
-  /* Semantic – error */
   --s3d-color-error: #d93025;
   --s3d-color-error-dark: #c5221f;
   --s3d-color-error-border: #f28b82;
   --s3d-color-error-bg: #fce8e6;
 
-  /* Semantic – warning */
   --s3d-color-warning-border: #fbbc04;
   --s3d-color-warning-bg: #fef7e0;
 
-  /* Semantic – info */
   --s3d-color-info-bg: #e8f0fe;
   --s3d-color-info-border: #aecbfa;
 
-  /* Accent */
-  --s3d-color-star: #fbbc04;
-  --s3d-color-highlight: #fef7e0;
+  --s3d-color-success-bg: rgba(47, 158, 68, 0.12);
+  --s3d-color-success-text: #20743a;
 
-  /* Sidebar (light theme) */
+  --s3d-color-star: #fbbc04;
+  --s3d-color-highlight: #fff1b8;
+
   --s3d-sidebar-bg: #f8f9fa;
   --s3d-sidebar-hover: #e8eaed;
   --s3d-sidebar-active: #d2e3fc;
   --s3d-sidebar-text: #202124;
   --s3d-sidebar-text-secondary: #5f6368;
 
-  /* Radii */
+  --s3d-gradient-page: radial-gradient(circle at top left, rgba(26, 115, 232, 0.14), transparent 28%),
+    radial-gradient(circle at top right, rgba(251, 188, 4, 0.12), transparent 24%),
+    var(--s3d-color-bg-page);
+  --s3d-gradient-sider: linear-gradient(180deg, #fbfcff 0%, #f2f6fb 100%);
+  --s3d-gradient-section: linear-gradient(180deg, #f8fbff, #f3f7fd);
+  --s3d-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 255, 0.98));
+  --s3d-gradient-page-header: linear-gradient(135deg, rgba(26, 115, 232, 0.09), rgba(26, 115, 232, 0) 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98));
+  --s3d-gradient-sticky: linear-gradient(180deg, var(--s3d-color-bg-page), rgba(248, 249, 250, 0.78));
+
+  --s3d-color-tooltip-bg: #1e293b;
+  --s3d-color-tooltip-border: #94a3b8;
+  --s3d-color-tooltip-text: #f1f5f9;
+  --s3d-color-scrim: rgba(0, 0, 0, 0.45);
+  --s3d-color-kbd-bg: #f1f5f9;
+
   --s3d-radius-sm: 8px;
   --s3d-radius-md: 10px;
   --s3d-radius-lg: 16px;
 
-  /* Shadows */
   --s3d-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
   --s3d-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
 
-  /* Transitions */
   --s3d-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --s3d-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+:root[data-theme='dark'],
+.css-var-root[data-theme='dark'] {
+  --ant-color-text-secondary: rgba(229, 238, 249, 0.8) !important;
+  --ant-color-text-tertiary: rgba(229, 238, 249, 0.7) !important;
+  --ant-color-text-quaternary: rgba(229, 238, 249, 0.62) !important;
+  --ant-color-text-placeholder: rgba(229, 238, 249, 0.56) !important;
+  --ant-color-primary: #6ba8ff !important;
+  --ant-color-primary-hover: #8abaff !important;
+  --ant-color-primary-active: #5c9bff !important;
+  --ant-color-link: #8abaff !important;
+  --ant-color-link-hover: #b6d4ff !important;
+  --ant-color-link-active: #6ba8ff !important;
+
+  --s3d-color-primary: #6ba8ff;
+  --s3d-color-primary-hover: #8abaff;
+  --s3d-color-primary-btn: #5d9cff;
+  --s3d-color-primary-light: rgba(93, 156, 255, 0.18);
+  --s3d-color-primary-bg: rgba(93, 156, 255, 0.12);
+  --s3d-color-focus: #8abaff;
+  --s3d-color-focus-ring: rgba(107, 168, 255, 0.24);
+  --s3d-color-primary-shadow: rgba(20, 73, 163, 0.42);
+
+  --s3d-color-bg: #0f1b2d;
+  --s3d-color-bg-secondary: #101b2c;
+  --s3d-color-bg-tertiary: #162338;
+  --s3d-color-bg-page: #07111f;
+  --s3d-color-bg-card: #0f1b2d;
+  --s3d-color-bg-glass: rgba(11, 19, 34, 0.86);
+  --s3d-color-bg-elevated: rgba(16, 27, 44, 0.96);
+  --s3d-color-bg-input: rgba(11, 22, 38, 0.96);
+  --s3d-color-bg-muted: rgba(16, 27, 44, 0.82);
+  --s3d-color-bg-subtle: rgba(16, 27, 44, 0.72);
+  --s3d-color-bg-code: #0b1322;
+  --s3d-color-bg-disabled: #18263b;
+
+  --s3d-color-border: rgba(148, 163, 184, 0.18);
+  --s3d-color-border-secondary: rgba(148, 163, 184, 0.14);
+  --s3d-color-border-strong: rgba(148, 163, 184, 0.34);
+  --s3d-color-border-input: rgba(148, 163, 184, 0.28);
+  --s3d-color-border-soft: rgba(148, 163, 184, 0.16);
+  --s3d-color-border-dashed: rgba(148, 163, 184, 0.26);
+
+  --s3d-color-text: #e5eef9;
+  --s3d-color-text-secondary: #9db0c5;
+  --s3d-color-text-muted: #7d92ab;
+  --s3d-color-text-dark: #f5f8fc;
+  --s3d-color-text-on-dark: rgba(255, 255, 255, 0.92);
+
+  --s3d-color-error: #ff8a80;
+  --s3d-color-error-dark: #ffd0cc;
+  --s3d-color-error-border: rgba(255, 138, 128, 0.34);
+  --s3d-color-error-bg: rgba(127, 36, 36, 0.3);
+
+  --s3d-color-warning-border: rgba(247, 197, 90, 0.34);
+  --s3d-color-warning-bg: rgba(108, 79, 18, 0.26);
+
+  --s3d-color-info-bg: rgba(46, 115, 255, 0.18);
+  --s3d-color-info-border: rgba(107, 168, 255, 0.34);
+
+  --s3d-color-success-bg: rgba(47, 158, 68, 0.2);
+  --s3d-color-success-text: #8ce99a;
+
+  --s3d-color-star: #f6c85f;
+  --s3d-color-highlight: rgba(250, 204, 21, 0.26);
+
+  --s3d-sidebar-bg: #0b1628;
+  --s3d-sidebar-hover: rgba(107, 168, 255, 0.1);
+  --s3d-sidebar-active: rgba(107, 168, 255, 0.18);
+  --s3d-sidebar-text: #dce7f5;
+  --s3d-sidebar-text-secondary: #8ea3bb;
+
+  --s3d-gradient-page: radial-gradient(circle at top left, rgba(107, 168, 255, 0.15), transparent 28%),
+    radial-gradient(circle at top right, rgba(247, 197, 90, 0.08), transparent 24%),
+    var(--s3d-color-bg-page);
+  --s3d-gradient-sider: linear-gradient(180deg, #0d182b 0%, #091220 100%);
+  --s3d-gradient-section: linear-gradient(180deg, rgba(18, 32, 52, 0.96), rgba(12, 22, 36, 0.98));
+  --s3d-gradient-surface: linear-gradient(180deg, rgba(15, 29, 47, 0.98), rgba(11, 21, 36, 0.98));
+  --s3d-gradient-page-header: linear-gradient(135deg, rgba(107, 168, 255, 0.18), rgba(107, 168, 255, 0) 44%),
+    linear-gradient(180deg, rgba(14, 24, 41, 0.98), rgba(11, 19, 34, 0.98));
+  --s3d-gradient-sticky: linear-gradient(180deg, var(--s3d-color-bg-page), rgba(8, 17, 31, 0.82));
+
+  --s3d-color-tooltip-bg: #dbe7f4;
+  --s3d-color-tooltip-border: rgba(148, 163, 184, 0.34);
+  --s3d-color-tooltip-text: #102033;
+  --s3d-color-scrim: rgba(2, 6, 23, 0.62);
+  --s3d-color-kbd-bg: #162338;
+
+  --s3d-shadow-sm: 0 10px 28px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.18);
+  --s3d-shadow-md: 0 18px 40px rgba(0, 0, 0, 0.32), 0 4px 14px rgba(0, 0, 0, 0.24);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--s3d-color-bg-page);
+  color: var(--s3d-color-text);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+  transition:
+    background-color var(--s3d-transition-normal),
+    color var(--s3d-transition-normal);
+}
+
 .ant-typography.ant-typography-secondary {
-  color: rgba(0, 0, 0, 0.82) !important;
+  color: var(--s3d-color-text-secondary) !important;
 }
 
-.ant-select .ant-select-placeholder,
+.ant-select .ant-select-placeholder {
+  color: var(--s3d-color-text-muted) !important;
+}
+
 .ant-select .ant-select-content-value,
-.ant-select .ant-select-selection-placeholder,
 .ant-select .ant-select-selection-item {
-  color: rgba(0, 0, 0, 0.82) !important;
+  color: var(--s3d-color-text) !important;
 }
 
-/* Light sidebar menu styling */
+.ant-layout,
+.ant-layout-content,
+.ant-layout-header,
+.ant-layout-sider,
+.ant-drawer-content,
+.ant-modal .ant-modal-content {
+  transition:
+    background-color var(--s3d-transition-normal),
+    border-color var(--s3d-transition-normal),
+    color var(--s3d-transition-normal);
+}
+
 .ant-layout-sider {
   background: var(--s3d-sidebar-bg) !important;
   border-right: 1px solid var(--s3d-color-border) !important;
@@ -129,49 +273,25 @@
 }
 
 .ant-empty-description {
-  color: rgba(0, 0, 0, 0.7);
+  color: var(--s3d-color-text-secondary);
 }
 
-/* Smoother button transitions */
 .ant-btn {
   transition: all var(--s3d-transition-fast) !important;
 }
 
-/* Refined dropdown/menu transitions */
 .ant-dropdown .ant-dropdown-menu-item {
   transition: background var(--s3d-transition-fast) !important;
   border-radius: 4px !important;
 }
 
-/* Smoother modal appearances */
 .ant-modal .ant-modal-content {
   border-radius: var(--s3d-radius-lg) !important;
 }
 
-/* Refined input styling */
 .ant-input,
 .ant-select-selector {
   transition: border-color var(--s3d-transition-fast), box-shadow var(--s3d-transition-fast) !important;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--s3d-color-bg-page);
-  color: var(--s3d-color-text);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.5;
 }
 
 .skip-link {

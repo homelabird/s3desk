@@ -7,9 +7,7 @@
 	padding: 24px 28px;
 	border: 1px solid var(--s3d-color-border);
 	border-radius: 24px;
-	background:
-		linear-gradient(135deg, rgba(26, 115, 232, 0.09), rgba(26, 115, 232, 0) 44%),
-		linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.98));
+	background: var(--s3d-gradient-page-header);
 	box-shadow: var(--s3d-shadow-sm);
 }
 

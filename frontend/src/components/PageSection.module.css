@@ -1,7 +1,7 @@
 .section {
 	border: 1px solid var(--s3d-color-border);
 	border-radius: 22px;
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 255, 0.98));
+	background: var(--s3d-gradient-surface);
 	box-shadow: var(--s3d-shadow-sm);
 	overflow: hidden;
 }
@@ -12,7 +12,7 @@
 	justify-content: space-between;
 	gap: 18px;
 	padding: 22px 24px 18px;
-	border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+	border-bottom: 1px solid var(--s3d-color-border-soft);
 }
 
 .copy {

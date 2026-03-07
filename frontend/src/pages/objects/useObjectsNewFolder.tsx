@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react'
 import { Button, message, Typography } from 'antd'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import type { APIClient } from '../../api/client'
+import type { ListObjectsResponse } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import type { ObjectTypeFilter } from './objectsTypes'
+import { getVisibleCreatedPrefix, insertOptimisticPrefixIntoObjectsData } from './objectsQueryCache'
 import {
 	displayNameForPrefix,
 	matchesSearchTokens,
@@ -15,6 +17,7 @@ import {
 
 type UseObjectsNewFolderArgs = {
 	api: APIClient
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -29,9 +32,38 @@ type UseObjectsNewFolderArgs = {
 }
 
 type NewFolderFormValues = { name: string; allowPath: boolean }
+type CreateFolderPlan = { parentPrefix: string; parts: string[]; key: string; visiblePrefix: string }
+
+function buildCreateFolderPlan(values: NewFolderFormValues, parentPrefix: string): CreateFolderPlan {
+	const allowPath = !!values.allowPath
+	const rawInput = values.name.trim().replace(/\/+$/, '').replace(/^\/+/, '')
+	if (!rawInput) throw new Error('folder name is required')
+	if (rawInput.includes('\u0000')) throw new Error('invalid folder name')
+
+	const parts = rawInput.split('/').filter(Boolean)
+	if (parts.length === 0) throw new Error('folder name is required')
+	if (!allowPath && parts.length > 1) throw new Error("folder name must not contain '/'")
+	for (const part of parts) {
+		if (part === '.' || part === '..') throw new Error('invalid folder name')
+	}
+
+	const normalizedParentPrefix = normalizePrefix(parentPrefix)
+	let key = normalizedParentPrefix
+	for (const part of parts) {
+		key = `${key}${part}/`
+	}
+
+	return {
+		parentPrefix: normalizedParentPrefix,
+		parts,
+		key,
+		visiblePrefix: getVisibleCreatedPrefix(normalizedParentPrefix, key),
+	}
+}
 
 export function useObjectsNewFolder({
 	api,
+	apiToken,
 	profileId,
 	bucket,
 	prefix,
@@ -68,24 +100,11 @@ export function useObjectsNewFolder({
 		mutationFn: async (args: NewFolderFormValues) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
-
-			const allowPath = !!args.allowPath
-			const rawInput = args.name.trim().replace(/\/+$/, '').replace(/^\/+/, '')
-			if (!rawInput) throw new Error('folder name is required')
-			if (rawInput.includes('\u0000')) throw new Error('invalid folder name')
-
-			const parts = rawInput.split('/').filter(Boolean)
-			if (parts.length === 0) throw new Error('folder name is required')
-			if (!allowPath && parts.length > 1) throw new Error("folder name must not contain '/'")
-			for (const part of parts) {
-				if (part === '.' || part === '..') throw new Error('invalid folder name')
-			}
-
-			const parent = normalizePrefix(newFolderParentPrefix)
-			let current = parent
+			const plan = buildCreateFolderPlan(args, newFolderParentPrefix)
+			let current = plan.parentPrefix
 			let last = ''
 			try {
-				for (const part of parts) {
+				for (const part of plan.parts) {
 					current = `${current}${part}/`
 					await api.createFolder({ profileId, bucket, key: current })
 					last = current
@@ -96,6 +115,26 @@ export function useObjectsNewFolder({
 				throw e
 			}
 			return { key: last }
+		},
+		onMutate: async (values: NewFolderFormValues) => {
+			if (!profileId || !bucket) return null
+
+			const parentPrefixNormalized = normalizePrefix(newFolderParentPrefix)
+			const currentPrefixNormalized = normalizePrefix(prefix)
+			if (parentPrefixNormalized !== currentPrefixNormalized) return null
+
+			const plan = buildCreateFolderPlan(values, newFolderParentPrefix)
+			const objectsQueryKey = ['objects', profileId, bucket, prefix, apiToken] as const
+			await queryClient.cancelQueries({ queryKey: objectsQueryKey, exact: true })
+			const previous = queryClient.getQueryData<InfiniteData<ListObjectsResponse, string | undefined>>(objectsQueryKey)
+			queryClient.setQueryData<InfiniteData<ListObjectsResponse, string | undefined> | undefined>(objectsQueryKey, (data) =>
+				insertOptimisticPrefixIntoObjectsData(data, plan.visiblePrefix),
+			)
+
+			return {
+				objectsQueryKey,
+				previousObjectsData: previous,
+			}
 		},
 		onSuccess: async (resp: { key: string }) => {
 			const createdKey = resp.key
@@ -188,11 +227,16 @@ export function useObjectsNewFolder({
 			setNewFolderOpen(false)
 			setNewFolderValues({ name: '', allowPath: false })
 			setNewFolderPartialKey(null)
-			await queryClient.invalidateQueries({ queryKey: ['objects'] })
+			if (profileId) {
+				await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
+			}
 			const parentKey = normalizePrefix(newFolderParentPrefix) || '/'
 			void refreshTreeNode(parentKey)
 		},
-		onError: (err) => {
+		onError: (err, _values, context) => {
+			if (context?.objectsQueryKey) {
+				queryClient.setQueryData(context.objectsQueryKey, context.previousObjectsData)
+			}
 			const partialKey =
 				typeof (err as { partialKey?: unknown })?.partialKey === 'string' && (err as { partialKey?: string }).partialKey
 					? (err as { partialKey?: string }).partialKey!
