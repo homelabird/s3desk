@@ -1,0 +1,46 @@
+name: License Audit
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  license-audit:
+    if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'license-audit') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+          cache-dependency-path: backend/go.sum
+
+      - name: Run license audit (runtime-only)
+        run: |
+          bash scripts/license-audit.sh runtime-only
+
+      - name: Upload license audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-audit
+          path: .license-audit
+          if-no-files-found: error
