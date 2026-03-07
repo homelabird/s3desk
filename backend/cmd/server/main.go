@@ -36,6 +36,8 @@ func main() {
 	flag.StringVar(&cfg.DataDir, "data-dir", getEnv("DATA_DIR", "./data"), "data directory (sqlite db, staging, logs)")
 	flag.StringVar(&cfg.DBBackend, "db-backend", getEnv("DB_BACKEND", "sqlite"), "database backend (sqlite or postgres)")
 	flag.StringVar(&cfg.DatabaseURL, "database-url", getEnv("DATABASE_URL", ""), "postgres connection string (required when db-backend=postgres)")
+	flag.DurationVar(&cfg.DBStartupTimeout, "db-startup-timeout", getEnvDuration("DB_STARTUP_TIMEOUT", 30*time.Second), "max time to wait for initial postgres availability")
+	flag.DurationVar(&cfg.DBStartupRetryInterval, "db-startup-retry-interval", getEnvDuration("DB_STARTUP_RETRY_INTERVAL", time.Second), "delay between postgres startup retries")
 	flag.IntVar(&cfg.DBMaxOpenConns, "db-max-open-conns", getEnvInt("DB_MAX_OPEN_CONNS", 0), "max open db connections (0=default)")
 	flag.IntVar(&cfg.DBMaxIdleConns, "db-max-idle-conns", getEnvInt("DB_MAX_IDLE_CONNS", 0), "max idle db connections (0=default)")
 	flag.DurationVar(&cfg.DBConnMaxLifetime, "db-conn-max-lifetime", getEnvDuration("DB_CONN_MAX_LIFETIME", 0), "max db connection lifetime (0=default)")

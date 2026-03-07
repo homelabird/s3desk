@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,7 +28,13 @@ import (
 const (
 	defaultUploadSessionTTL            = 24 * time.Hour
 	defaultUploadMaxConcurrentRequests = 16
+	defaultDBStartupTimeout            = 30 * time.Second
+	defaultDBStartupRetryInterval      = time.Second
 )
+
+type dbOpenFunc func() (*gorm.DB, error)
+
+type retrySleepFunc func(context.Context, time.Duration) error
 
 func Run(ctx context.Context, cfg config.Config) error {
 	if err := validateListenAddr(cfg.Addr, cfg.AllowRemote); err != nil {
@@ -83,10 +91,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			SQLitePath: dbPath,
 		})
 	case db.BackendPostgres:
-		gormDB, err = db.Open(db.Config{
-			Backend:     dbBackend,
-			DatabaseURL: cfg.DatabaseURL,
-		})
+		gormDB, err = openPostgresWithRetry(ctx, cfg)
 	default:
 		return fmt.Errorf("unsupported db backend %q", dbBackend)
 	}
@@ -196,6 +201,12 @@ func applySafeDefaults(cfg *config.Config) {
 	if cfg.JobConcurrency <= 0 {
 		cfg.JobConcurrency = 1
 	}
+	if cfg.DBStartupTimeout <= 0 {
+		cfg.DBStartupTimeout = defaultDBStartupTimeout
+	}
+	if cfg.DBStartupRetryInterval <= 0 {
+		cfg.DBStartupRetryInterval = defaultDBStartupRetryInterval
+	}
 	if cfg.JobLogMaxBytes < 0 {
 		cfg.JobLogMaxBytes = 0
 	}
@@ -214,6 +225,120 @@ func applySafeDefaults(cfg *config.Config) {
 	if cfg.UploadMaxConcurrentRequests < 0 {
 		cfg.UploadMaxConcurrentRequests = defaultUploadMaxConcurrentRequests
 	}
+}
+
+func openPostgresWithRetry(ctx context.Context, cfg config.Config) (*gorm.DB, error) {
+	return openWithRetry(
+		ctx,
+		cfg.DBStartupTimeout,
+		cfg.DBStartupRetryInterval,
+		func() (*gorm.DB, error) {
+			return db.Open(db.Config{
+				Backend:     db.BackendPostgres,
+				DatabaseURL: cfg.DatabaseURL,
+			})
+		},
+		isRetriablePostgresStartupError,
+		sleepWithContext,
+	)
+}
+
+func openWithRetry(
+	ctx context.Context,
+	timeout time.Duration,
+	retryInterval time.Duration,
+	open dbOpenFunc,
+	isRetriable func(error) bool,
+	sleep retrySleepFunc,
+) (*gorm.DB, error) {
+	if open == nil {
+		return nil, errors.New("database open func is required")
+	}
+	if isRetriable == nil {
+		return nil, errors.New("database retry classifier is required")
+	}
+	if sleep == nil {
+		sleep = sleepWithContext
+	}
+	if retryInterval <= 0 {
+		retryInterval = defaultDBStartupRetryInterval
+	}
+
+	attemptCtx := ctx
+	cancel := func() {}
+	if timeout > 0 {
+		attemptCtx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	defer cancel()
+
+	attempt := 1
+	for {
+		gormDB, err := open()
+		if err == nil {
+			return gormDB, nil
+		}
+		if !isRetriable(err) {
+			return nil, err
+		}
+		logging.Warnf("postgres not ready yet; retrying in %s (attempt %d): %v", retryInterval, attempt, err)
+		if err := sleep(attemptCtx, retryInterval); err != nil {
+			if timeout > 0 && errors.Is(attemptCtx.Err(), context.DeadlineExceeded) {
+				return nil, fmt.Errorf("postgres did not become ready within %s: %w", timeout, err)
+			}
+			if errors.Is(ctx.Err(), context.Canceled) {
+				return nil, fmt.Errorf("postgres startup canceled: %w", err)
+			}
+			return nil, err
+		}
+		attempt++
+	}
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			return nil
+		}
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func isRetriablePostgresStartupError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ETIMEDOUT) ||
+		errors.Is(err, syscall.EHOSTUNREACH) ||
+		errors.Is(err, syscall.ENETUNREACH) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "connection refused") ||
+		strings.Contains(message, "dial error") ||
+		strings.Contains(message, "connection reset by peer") ||
+		strings.Contains(message, "no such host") ||
+		strings.Contains(message, "i/o timeout") ||
+		strings.Contains(message, "network is unreachable")
 }
 
 func validateListenAddr(addr string, allowRemote bool) error {

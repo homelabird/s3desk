@@ -4,6 +4,7 @@ S3Desk is a self-hosted dashboard for multi-provider object storage. It provides
 
 # UI
 ![alt text](img/image.png)
+![alt text](img/objects.png)
 
 ## Core Features
 
@@ -46,6 +47,19 @@ Remote access requirements:
 - `ALLOW_REMOTE=true`
 - `API_TOKEN` must be set
 - `ALLOWED_HOSTS` is only required for non-private hostnames
+
+### Docker Compose From Local Source
+
+If you want Docker Compose to build the current local frontend and backend sources instead of pulling a published image, use the local-build stack.
+
+1. Update `API_TOKEN` in `docker-compose.local-build.yml` before exposing the service.
+2. Build and start the stack:
+
+```bash
+docker compose -f docker-compose.local-build.yml up --build -d
+```
+
+This uses `Containerfile.local`, which builds the frontend bundle and backend binary from the current checkout using public base images.
 
 ### Local Development
 

@@ -7,6 +7,8 @@ type Config struct {
 	DataDir                            string
 	DBBackend                          string
 	DatabaseURL                        string
+	DBStartupTimeout                   time.Duration
+	DBStartupRetryInterval             time.Duration
 	DBMaxOpenConns                     int
 	DBMaxIdleConns                     int
 	DBConnMaxLifetime                  time.Duration

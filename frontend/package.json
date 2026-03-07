@@ -17,7 +17,8 @@
     "test:e2e:record:gif": "node ./scripts/record-e2e-gif.mjs",
     "test:e2e:record": "PLAYWRIGHT_RECORD_VIDEOS=1 npx playwright test --project=chromium",
     "preview": "vite preview",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
