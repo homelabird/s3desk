@@ -300,6 +300,17 @@ func TestValidateCreateProfileProvider(t *testing.T) {
 			},
 			wantErr: "unknown provider: unknown_provider",
 		},
+		{
+			name: "oci object storage invalid auth provider",
+			req: models.ProfileCreateRequest{
+				Provider:     models.ProfileProviderOciObjectStorage,
+				Region:       &region,
+				Namespace:    ptrString("ns"),
+				Compartment:  ptrString("compartment"),
+				AuthProvider: ptrString("invalid"),
+			},
+			wantErr: "authProvider must be one of",
+		},
 	}
 
 	for _, tt := range tests {

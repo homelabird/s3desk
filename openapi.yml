@@ -1518,7 +1518,9 @@ components:
             namespace: { type: string }
             compartment: { type: string }
             endpoint: { type: string }
-            authProvider: { type: string }
+            authProvider:
+              type: string
+              enum: [user_principal, instance_principal, resource_principal]
             configFile: { type: string }
             configProfile: { type: string }
 
@@ -1639,7 +1641,9 @@ components:
         namespace: { type: string }
         compartment: { type: string }
         endpoint: { type: string }
-        authProvider: { type: string }
+        authProvider:
+          type: string
+          enum: [user_principal, instance_principal, resource_principal]
         configFile: { type: string }
         configProfile: { type: string }
         preserveLeadingSlash: { type: boolean, default: false }
@@ -1767,7 +1771,9 @@ components:
         namespace: { type: string }
         compartment: { type: string }
         endpoint: { type: string }
-        authProvider: { type: string }
+        authProvider:
+          type: string
+          enum: [user_principal, instance_principal, resource_principal]
         configFile: { type: string }
         configProfile: { type: string }
         preserveLeadingSlash: { type: boolean }

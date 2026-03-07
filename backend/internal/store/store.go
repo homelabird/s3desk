@@ -387,6 +387,11 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		if req.AuthProvider != nil {
 			authProvider = strings.TrimSpace(*req.AuthProvider)
 		}
+		var err error
+		authProvider, err = models.NormalizeOCIAuthProvider(authProvider)
+		if err != nil {
+			return models.Profile{}, err
+		}
 		configFile := ""
 		if req.ConfigFile != nil {
 			configFile = strings.TrimSpace(*req.ConfigFile)
@@ -918,6 +923,10 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		}
 		if req.AuthProvider != nil {
 			authProvider = strings.TrimSpace(*req.AuthProvider)
+		}
+		authProvider, err = models.NormalizeOCIAuthProvider(authProvider)
+		if err != nil {
+			return models.Profile{}, true, err
 		}
 		if req.ConfigFile != nil {
 			configFile = strings.TrimSpace(*req.ConfigFile)

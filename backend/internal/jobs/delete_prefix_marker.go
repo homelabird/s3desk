@@ -22,7 +22,10 @@ func cleanupS3PrefixMarkerIfEmpty(ctx context.Context, secrets models.ProfileSec
 		return nil
 	}
 
-	client := s3ClientFromProfile(secrets)
+	client, err := s3ClientFromProfile(secrets)
+	if err != nil {
+		return err
+	}
 	resp, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket:  aws.String(bucket),
 		Prefix:  aws.String(prefix),

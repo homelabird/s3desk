@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"crypto/tls"
 	"net/http"
 	"strings"
 
@@ -10,9 +9,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profiletls"
 )
 
-func s3ClientFromProfile(secrets models.ProfileSecrets) *s3.Client {
+func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
 	region := strings.TrimSpace(secrets.Region)
 	if region == "" {
 		region = "us-east-1"
@@ -30,11 +30,17 @@ func s3ClientFromProfile(secrets models.ProfileSecrets) *s3.Client {
 	}
 
 	endpoint := strings.TrimSpace(secrets.Endpoint)
-	if secrets.TLSInsecureSkipVerify {
+	tlsCfg, err := profiletls.BuildConfig(secrets)
+	if err != nil {
+		return nil, err
+	}
+	if tlsCfg != nil {
 		cfg.HTTPClient = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
+			Transport: func() *http.Transport {
+				transport := http.DefaultTransport.(*http.Transport).Clone()
+				transport.TLSClientConfig = tlsCfg
+				return transport
+			}(),
 		}
 	}
 
@@ -43,7 +49,7 @@ func s3ClientFromProfile(secrets models.ProfileSecrets) *s3.Client {
 		if endpoint != "" {
 			o.BaseEndpoint = aws.String(endpoint)
 		}
-	})
+	}), nil
 }
 
 func derefString(value *string) string {
