@@ -2,7 +2,8 @@
 
 S3Desk is a self-hosted dashboard for multi-provider object storage. It provides one UI and API for profiles, buckets, objects, uploads, and long-running transfer jobs powered by `rclone`.
 
-
+# UI
+![alt text](img/image.png)
 
 ## Core Features
 
