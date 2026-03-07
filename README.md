@@ -120,13 +120,13 @@ If no ffmpeg binary is available, install system `ffmpeg` or keep `ffmpeg-static
 
 ## License
 
-본 프로젝트는 Apache License 2.0으로 운영됩니다.
+This project is licensed under Apache License 2.0.
 
-라이선스 전문은 [LICENSE](LICENSE)를 확인하세요.
+See the full [LICENSE](LICENSE).
 
 ## License migration notes
 
-- npm 빌드 의존성 중 `ffmpeg-static`은 `optionalDependencies`로 이동되어, 빌드 산출물 생성 시 기본적으로 제외하도록 구성했습니다.
-- 운영 환경에 포함되는 산출물(배포 바이너리/이미지)에는 `frontend/dist`와 백엔드 바이너리만 포함되며, `node_modules` 전체는 포함되지 않습니다.
-- 제3자 라이선스 공지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에서 확인하며, 필요 시 `scripts/license-audit.sh`로 감사 가능합니다.
-- Apache-2.0 NOTICE 문구는 NOTICE 파일 또는 `LICENSE` 부속문서에 별도 추가하여 배포 정책을 맞춥니다.
+- `ffmpeg-static` was moved to `optionalDependencies` in frontend package configuration, so it is excluded by default from runtime build outputs.
+- Runtime artifacts for deployment (container image/binaries) include only `frontend/dist` and the backend binary; the full `node_modules` tree is not included.
+- Third-party license notices are tracked in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); when needed, run `scripts/license-audit.sh`.
+- Apache-2.0 NOTICE text should be added in a dedicated NOTICE file (or as part of LICENSE-related documentation) to match release packaging policy.
