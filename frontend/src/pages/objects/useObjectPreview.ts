@@ -72,14 +72,14 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		const controller = new AbortController()
 		previewAbortRef.current = () => controller.abort()
 		try {
-			const fetchPreview = async (useProxy: boolean) => {
+			const fetchPreview = async (useProxy: boolean, signal: AbortSignal) => {
 				const presigned = await args.api.getObjectDownloadURL({
 					profileId: args.profileId!,
 					bucket: args.bucket,
 					key,
 					proxy: useProxy,
 				})
-				const res = await fetch(presigned.url, { signal: controller.signal })
+				const res = await fetch(presigned.url, { signal })
 				if (!res.ok) {
 					throw new Error(`Download failed (HTTP ${res.status})`)
 				}
@@ -98,18 +98,44 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 				return false
 			}
 
-			let resp: { blob: Blob; contentType: string | null }
-			if (args.downloadLinkProxyEnabled) {
-				resp = await fetchPreview(true)
-			} else {
+			const proxyFirst = args.downloadLinkProxyEnabled || size > maxBytes / 2
+			const allowDirect = !args.downloadLinkProxyEnabled
+			const directTimeoutMs = 1500
+			const fetchDirectWithTimeout = async () => {
+				const directController = new AbortController()
+				const onAbort = () => directController.abort()
+				const timeoutId = setTimeout(() => directController.abort(), directTimeoutMs)
+				controller.signal.addEventListener('abort', onAbort)
 				try {
-					resp = await fetchPreview(false)
+					return await fetchPreview(false, directController.signal)
 				} catch (err) {
-					if (!shouldFallback(err)) {
+					if (controller.signal.aborted) throw err
+					if (directController.signal.aborted) return null
+					if (!shouldFallback(err)) throw err
+					return null
+				} finally {
+					clearTimeout(timeoutId)
+					controller.signal.removeEventListener('abort', onAbort)
+				}
+			}
+
+			let resp: { blob: Blob; contentType: string | null } | null = null
+			if (proxyFirst) {
+				try {
+					resp = await fetchPreview(true, controller.signal)
+				} catch (err) {
+					if (!shouldFallback(err) || !allowDirect) {
 						throw err
 					}
-					resp = await fetchPreview(true)
 				}
+			}
+
+			if (!resp && allowDirect) {
+				resp = await fetchDirectWithTimeout()
+			}
+
+			if (!resp) {
+				resp = await fetchPreview(true, controller.signal)
 			}
 			previewAbortRef.current = null
 			const effectiveContentType = resp.contentType ?? contentType

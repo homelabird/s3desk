@@ -53,13 +53,13 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 			</FormField>
 
 			<FormField
-				label="Downloads: Use server proxy"
-				extra="When enabled, downloads and 'Link…' always use /download-proxy. When disabled, downloads try presigned URLs first and fall back to the proxy only if CORS blocks the request."
+				label="Downloads and previews: Use server proxy"
+				extra="When enabled, downloads, previews, and 'Link…' always use /download-proxy. When disabled, downloads try presigned URLs first and fall back to the proxy only if CORS blocks the request."
 			>
 				<Switch
 					checked={props.downloadLinkProxyEnabled}
 					onChange={props.setDownloadLinkProxyEnabled}
-					aria-label="Downloads: Use server proxy"
+					aria-label="Downloads and previews: Use server proxy"
 				/>
 			</FormField>
 
