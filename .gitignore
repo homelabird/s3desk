@@ -17,6 +17,7 @@ frontend/test-results/
 
 artifacts/
 .lighthouseci/
+.license-audit/
 
 # Python
 __pycache__/
