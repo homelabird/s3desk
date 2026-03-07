@@ -88,7 +88,7 @@ test('login gate and settings persist local state', async ({ page }) => {
 	expect(storedToken).toBe(updatedToken)
 
 	await drawer.getByRole('tab', { name: 'Transfers' }).click()
-	await setSwitch(page, 'Downloads: Use server proxy', true)
+	await setSwitch(page, 'Downloads and previews: Use server proxy', true)
 	const downloadProxy = await page.evaluate(() => JSON.parse(window.localStorage.getItem('downloadLinkProxyEnabled') ?? 'false'))
 	expect(downloadProxy).toBe(true)
 })
