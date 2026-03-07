@@ -69,14 +69,14 @@ test('login gate and settings persist local state', async ({ page }) => {
 	await seedStorage(page)
 	await setupApiMocks(page, [validToken, updatedToken])
 
-	await page.goto('/profiles')
+	await page.goto('/setup')
 	await expect(page.getByRole('heading', { name: 'S3Desk' })).toBeVisible()
 
 	await page.getByPlaceholder('API_TOKEN').fill(validToken)
 	await page.getByRole('button', { name: 'Login' }).click()
-	await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible({ timeout: 10_000 })
+	await expect(page.getByText('Choose a profile')).toBeVisible({ timeout: 10_000 })
 
-	await page.getByRole('button', { name: 'Settings' }).click()
+	await page.getByRole('link', { name: 'Settings' }).click()
 	const drawer = page.locator('.ant-drawer').filter({ hasText: 'Settings' })
 	await expect(drawer).toBeVisible()
 

@@ -32,6 +32,7 @@ type UseObjectsActionCatalogArgs = {
 	onDownloadToDevice: (key: string) => void
 	onPresign: (key: string) => void
 	onCopy: (value: string) => void
+	onOpenLargePreviewForKey: (key: string) => void
 	onOpenDetailsForKey: (key: string) => void
 	onOpenRenameObject: (key: string) => void
 	onOpenCopyMove: (mode: 'copy' | 'move', key: string) => void
@@ -87,6 +88,7 @@ export function useObjectsActionCatalog({
 	onDownloadToDevice,
 	onPresign,
 	onCopy,
+	onOpenLargePreviewForKey,
 	onOpenDetailsForKey,
 	onOpenRenameObject,
 	onOpenCopyMove,
@@ -140,6 +142,7 @@ export function useObjectsActionCatalog({
 		onDownloadToDevice,
 		onPresign,
 		onCopy,
+		onOpenLargePreviewForKey,
 		onOpenDetailsForKey,
 		onOpenRenameObject,
 		onOpenCopyMove,

@@ -1,9 +1,9 @@
 import type { BreadcrumbProps } from 'antd'
-import { Alert, Button, Breadcrumb, Input, Space, Spin, Switch, Tooltip, Typography, message } from 'antd'
-import { CopyOutlined, FilterOutlined, SearchOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { Alert, Button, Breadcrumb, Input, Spin, Switch, Tooltip, Typography, message } from 'antd'
+import { AppstoreOutlined, BarsOutlined, CopyOutlined, FilterOutlined, SearchOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import styles from './objects.module.css'
-import type { ObjectSort } from './objectsTypes'
+import type { ObjectSort, ObjectsViewMode } from './objectsTypes'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 import { NativeSelect } from '../../components/NativeSelect'
 
@@ -35,6 +35,8 @@ type ObjectsListControlsProps = {
 	onSortChange: (value: ObjectSort) => void
 	favoritesFirst: boolean
 	onFavoritesFirstChange: (value: boolean) => void
+	viewMode: ObjectsViewMode
+	onViewModeChange: (value: ObjectsViewMode) => void
 }
 
 function buildS3Location(bucket: string, prefix: string): string {
@@ -60,10 +62,10 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 	) : null
 
 	const searchScopeRow = (
-		<Space wrap size="small" align="center">
+		<div className={styles.listControlsScopeRow}>
 			<Typography.Text type="secondary">Search in this folder</Typography.Text>
 			{globalSearchButton}
-		</Space>
+		</div>
 	)
 
 	const searchStatus =
@@ -80,29 +82,29 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							Global Search (Indexed)
 						</Button>
 					}
-					style={{ width: '100%' }}
+					className={styles.listControlsStatusAlert}
 				/>
 			) : (
-				<Typography.Text type="secondary">
-					<Space size={6}>
+				<Typography.Text type="secondary" className={styles.listControlsStatusText}>
+					<span className={styles.listControlsStatusInline}>
 						{props.isFetchingNextPage ? <Spin size="small" /> : null}
 						Searching more…
-					</Space>
+					</span>
 				</Typography.Text>
 			)
 		) : null
 
 	const sortControls = props.isAdvanced ? (
-		<Space wrap size="small" align="center">
+		<div className={styles.listControlsSortGroup}>
 			<NativeSelect
-									value={props.sort}
-									onChange={(value) => props.onSortChange(value as ObjectSort)}
-									ariaLabel="Sort objects"
-									style={{ minWidth: 180 }}
-									disabled={!props.canInteract}
-									options={props.sortOptions}
-								/>
-			<Space size={6} align="center">
+				value={props.sort}
+				onChange={(value) => props.onSortChange(value as ObjectSort)}
+				ariaLabel="Sort objects"
+				className={styles.listControlsSortSelect}
+				disabled={!props.canInteract}
+				options={props.sortOptions}
+			/>
+			<div className={styles.listControlsToggleRow}>
 				<Switch
 					size="small"
 					checked={props.favoritesFirst}
@@ -111,22 +113,44 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					aria-label="Favorites first"
 				/>
 				<Typography.Text type="secondary">Favorites first</Typography.Text>
-			</Space>
-		</Space>
+			</div>
+		</div>
 	) : null
+	const viewModeToggle = (
+		<div className={styles.listControlsViewToggle} role="group" aria-label="View mode">
+			<Button
+				size="small"
+				icon={<BarsOutlined />}
+				type={props.viewMode === 'list' ? 'primary' : 'default'}
+				aria-pressed={props.viewMode === 'list'}
+				onClick={() => props.onViewModeChange('list')}
+			>
+				List
+			</Button>
+			<Button
+				size="small"
+				icon={<AppstoreOutlined />}
+				type={props.viewMode === 'grid' ? 'primary' : 'default'}
+				aria-pressed={props.viewMode === 'grid'}
+				onClick={() => props.onViewModeChange('grid')}
+			>
+				Grid
+			</Button>
+		</div>
+	)
 
 	return (
 		<>
 			<div className={styles.breadcrumbRow}>
 				<div className={styles.breadcrumbLeft}>
-					<Space orientation="vertical" size={2} style={{ width: '100%' }}>
+					<div className={styles.listControlsLocationStack}>
 						{location ? (
-							<Space size={6} wrap style={{ minWidth: 0 }}>
+							<div className={styles.listControlsLocationRow}>
 								<Typography.Text type="secondary">Location</Typography.Text>
 								<Typography.Text
 									code
 									ellipsis={{ tooltip: location }}
-									style={{ maxWidth: 640, minWidth: 0, display: 'inline-block' }}
+									className={styles.listControlsLocationCode}
 								>
 									{location}
 								</Typography.Text>
@@ -140,12 +164,12 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 										aria-label="Copy location"
 									/>
 								</Tooltip>
-							</Space>
+							</div>
 						) : null}
 						<Breadcrumb items={props.breadcrumbItems} />
-					</Space>
+					</div>
 				</div>
-				<Space size="small">
+				<div className={styles.listControlsTopActions}>
 					<Tooltip title={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}>
 						<Button
 							type="text"
@@ -164,21 +188,21 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							aria-label="Go to path"
 						/>
 					</Tooltip>
-				</Space>
+				</div>
 			</div>
 
 			{props.isCompact ? (
-				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+				<div className={styles.listControlsStack}>
 					{searchScopeRow}
-						<Input
-							allowClear
-							placeholder="Search current folder…"
-							aria-label="Search current folder"
-							style={{ width: '100%', maxWidth: '100%' }}
-							value={props.searchDraft}
-							onChange={(e) => props.onSearchDraftChange(e.target.value)}
-						/>
-					<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+					<Input
+						allowClear
+						placeholder="Search current folder…"
+						aria-label="Search current folder"
+						className={styles.listControlsSearchInputFull}
+						value={props.searchDraft}
+						onChange={(e) => props.onSearchDraftChange(e.target.value)}
+					/>
+					<div className={styles.listControlsCompactFooter}>
 						<Button
 							icon={<FilterOutlined />}
 							type={props.hasActiveView ? 'primary' : 'default'}
@@ -187,28 +211,29 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						>
 							{props.isAdvanced ? 'View' : 'Filter'}
 						</Button>
+						{viewModeToggle}
 						{props.isAdvanced ? (
-							<Typography.Text type="secondary">
+							<Typography.Text type="secondary" className={styles.listControlsSummaryText}>
 								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
 							</Typography.Text>
 						) : null}
-					</Space>
+					</div>
 					{sortControls}
 					{searchStatus}
-				</Space>
+				</div>
 			) : (
-				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+				<div className={styles.listControlsStack}>
 					{searchScopeRow}
-					<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-						<Space wrap>
-								<Input
-									allowClear
-									placeholder="Search current folder…"
-									aria-label="Search current folder"
-									style={{ width: 320, maxWidth: '100%' }}
-									value={props.searchDraft}
-									onChange={(e) => props.onSearchDraftChange(e.target.value)}
-								/>
+					<div className={styles.listControlsDesktopRow}>
+						<div className={styles.listControlsDesktopLeft}>
+							<Input
+								allowClear
+								placeholder="Search current folder…"
+								aria-label="Search current folder"
+								className={styles.listControlsSearchInput}
+								value={props.searchDraft}
+								onChange={(e) => props.onSearchDraftChange(e.target.value)}
+							/>
 							<Button
 								icon={<FilterOutlined />}
 								type={props.hasActiveView ? 'primary' : 'default'}
@@ -217,17 +242,18 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							>
 								{props.isAdvanced ? 'View' : 'Filter'}
 							</Button>
+							{viewModeToggle}
 							{sortControls}
-						</Space>
+						</div>
 						{props.isAdvanced ? (
-							<Typography.Text type="secondary">
+							<Typography.Text type="secondary" className={styles.listControlsSummaryText}>
 								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
 							</Typography.Text>
 						) : null}
-					</Space>
+					</div>
 
 					{searchStatus}
-				</Space>
+				</div>
 			)}
 		</>
 	)

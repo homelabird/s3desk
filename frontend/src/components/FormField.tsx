@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 
+import styles from './FormField.module.css'
+
 type Props = {
 	label: ReactNode
 	htmlFor?: string
@@ -14,13 +16,14 @@ type Props = {
 
 export function FormField(props: Props) {
 	const errorId = props.errorId ?? (props.htmlFor ? `${props.htmlFor}-error` : undefined)
+	const rootClassName = [styles.root, props.className].filter(Boolean).join(' ')
 
 	const label =
 		typeof props.label === 'string' ? (
 			<span>
 				{props.label}
 				{props.required ? (
-					<span aria-hidden="true" style={{ marginLeft: 4, color: 'var(--s3d-color-error)' }}>
+					<span aria-hidden="true" className={styles.requiredMark}>
 						*
 					</span>
 				) : null}
@@ -33,27 +36,25 @@ export function FormField(props: Props) {
 
 	return (
 		<div
-			className={props.className}
-			style={{ marginBottom: 12, ...props.style }}
+			className={rootClassName}
+			style={props.style}
 			role={hasError ? 'group' : undefined}
 			aria-describedby={hasError ? errorId : undefined}
 		>
 			{props.htmlFor ? (
-				<label htmlFor={props.htmlFor} style={{ display: 'block', fontWeight: 700, marginBottom: 6 }}>
+				<label htmlFor={props.htmlFor} className={styles.label}>
 					{label}
 				</label>
 			) : (
-				<div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+				<div className={styles.labelText}>{label}</div>
 			)}
 
 			{props.children}
 
-			{props.extra ? (
-				<div style={{ marginTop: 6, fontSize: 12, opacity: 0.75, lineHeight: 1.35 }}>{props.extra}</div>
-			) : null}
+			{props.extra ? <div className={styles.extra}>{props.extra}</div> : null}
 
 			{props.error ? (
-				<div id={errorId} role="alert" style={{ marginTop: 6, fontSize: 12, color: 'var(--s3d-color-error-dark)', lineHeight: 1.35 }}>
+				<div id={errorId} role="alert" className={styles.error}>
 					{props.error}
 				</div>
 			) : null}

@@ -596,7 +596,7 @@ paths:
       summary: Get object index summary for a prefix
       description: |
         Returns an estimate of impact (count/bytes/sample) using the local object index.
-        If the index has not been created yet, the server returns `409 not_indexed`.
+        If the index has not been created yet, the server returns an empty summary with no `indexedAt`.
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"
@@ -886,7 +886,7 @@ paths:
   /buckets/{bucket}/objects/thumbnail:
     get:
       tags: [Objects]
-      summary: Get an image thumbnail
+      summary: Get an object thumbnail
       parameters:
         - $ref: "#/components/parameters/XProfileId"
         - $ref: "#/components/parameters/XApiToken"

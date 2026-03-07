@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
-import { RequestAbortedError } from '../../api/client'
+import { APIError, RequestAbortedError } from '../../api/client'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 
 type Props = {
@@ -20,10 +20,9 @@ export function ObjectThumbnail(props: Props) {
 		const suffix = props.cacheKeySuffix ? `:${props.cacheKeySuffix}` : ''
 		return `${props.profileId}:${props.bucket}:${props.objectKey}:${props.size}${suffix}`
 	}, [props.bucket, props.cacheKeySuffix, props.objectKey, props.profileId, props.size])
-	const [failedKey, setFailedKey] = useState<string | null>(null)
 	const [, bumpCacheVersion] = useState(0)
 	const url = props.cache.get(cacheKey) ?? null
-	const failed = failedKey === cacheKey
+	const failed = props.cache.isFailed(cacheKey)
 
 	useEffect(() => {
 		if (url || failed) return
@@ -42,11 +41,14 @@ export function ObjectThumbnail(props: Props) {
 				props.cache.set(cacheKey, objectURL)
 				bumpCacheVersion((version) => version + 1)
 			})
-			.catch((err) => {
-				if (!active) return
-				if (err instanceof RequestAbortedError) return
-				setFailedKey(cacheKey)
-			})
+				.catch((err) => {
+					if (!active) return
+					if (err instanceof RequestAbortedError) return
+					if (shouldCacheThumbnailFailure(err)) {
+						props.cache.markFailed(cacheKey)
+						bumpCacheVersion((version) => version + 1)
+					}
+				})
 
 		return () => {
 			active = false
@@ -69,8 +71,8 @@ export function ObjectThumbnail(props: Props) {
 		height: props.size,
 		borderRadius: 4,
 		objectFit: props.fit ?? 'cover',
-		background: '#f5f5f5',
-		border: '1px solid #f0f0f0',
+		background: 'var(--s3d-color-bg-disabled)',
+		border: '1px solid var(--s3d-color-border)',
 		flex: '0 0 auto',
 	}
 
@@ -80,4 +82,10 @@ export function ObjectThumbnail(props: Props) {
 
 	const fileName = props.objectKey.split('/').pop() ?? props.objectKey
 	return <img src={url} style={style} loading="lazy" alt={`Thumbnail of ${fileName}`} width={props.size} height={props.size} />
+}
+
+function shouldCacheThumbnailFailure(err: unknown): boolean {
+	if (!(err instanceof APIError)) return false
+	if (err.code === 'too_large' || err.code === 'unsupported' || err.code === 'not_found') return true
+	return err.status === 404 || err.status === 413 || err.status === 415
 }

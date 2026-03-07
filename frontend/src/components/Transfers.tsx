@@ -38,6 +38,7 @@ import {
 	resolveUploadItemPath,
 	resolveUploadItemPathNormalized,
 } from './transfers/uploadPaths'
+import { createLocalVideoUploadPreview, isVideoUploadFile, revokeObjectURLSafe } from './transfers/uploadPreview'
 
 type UploadMovePlan = {
 	rootHandle: FileSystemDirectoryHandle
@@ -134,6 +135,7 @@ function useTransfersProviderOrchestration(props: {
 	const uploadEstimatorByTaskIdRef = useRef<Record<string, TransferEstimator>>({})
 	const uploadItemsByTaskIdRef = useRef<Record<string, UploadFileItem[]>>({})
 	const uploadMoveByTaskIdRef = useRef<Record<string, UploadMovePlan>>({})
+	const uploadPreviewUrlByTaskIdRef = useRef<Record<string, string>>({})
 	const [moveCleanupFilenameTemplate] = useLocalStorageState<string>(
 		'moveCleanupFilenameTemplate',
 		MOVE_CLEANUP_FILENAME_TEMPLATE,
@@ -154,6 +156,29 @@ function useTransfersProviderOrchestration(props: {
 	useEffect(() => {
 		uploadTasksRef.current = uploadTasks
 	}, [uploadTasks])
+
+	useEffect(() => {
+		const nextPreviewUrls: Record<string, string> = {}
+		for (const task of uploadTasks) {
+			if (!task.preview?.url) continue
+			nextPreviewUrls[task.id] = task.preview.url
+		}
+		for (const [taskId, url] of Object.entries(uploadPreviewUrlByTaskIdRef.current)) {
+			if (nextPreviewUrls[taskId] === url) continue
+			revokeObjectURLSafe(url)
+		}
+		uploadPreviewUrlByTaskIdRef.current = nextPreviewUrls
+	}, [uploadTasks])
+
+	useEffect(
+		() => () => {
+			for (const url of Object.values(uploadPreviewUrlByTaskIdRef.current)) {
+				revokeObjectURLSafe(url)
+			}
+			uploadPreviewUrlByTaskIdRef.current = {}
+		},
+		[],
+	)
 
 	const downloadConcurrency = 2
 	const uploadConcurrency = 1
@@ -280,6 +305,7 @@ function useTransfersProviderOrchestration(props: {
 	})
 
 	const { handleUploadJobUpdate } = useTransfersUploadJobLifecycle({
+		queryClient,
 		uploadTasksRef,
 		uploadMoveByTaskIdRef,
 		moveCleanupFilenameTemplate,
@@ -580,8 +606,8 @@ function useTransfersProviderOrchestration(props: {
 					resumeFiles: resumeFilesNext,
 				}))
 
-				const handle =
-					sessionMode === 'presigned'
+					const handle =
+						sessionMode === 'presigned'
 						? uploadPresignedFilesWithProgress({
 								api,
 								profileId: current.profileId,
@@ -605,7 +631,7 @@ function useTransfersProviderOrchestration(props: {
 								chunkThresholdBytes,
 								chunkSizeBytes,
 							})
-						: api.uploadFilesWithProgress(current.profileId, uploadId, items, {
+							: api.uploadFilesWithProgress(current.profileId, uploadId, items, {
 								onProgress: (p) => {
 									const e = uploadEstimatorByTaskIdRef.current[taskId]
 									if (!e) return
@@ -621,97 +647,97 @@ function useTransfersProviderOrchestration(props: {
 								concurrency: tuning.batchConcurrency,
 								maxBatchBytes: tuning.batchBytes,
 								maxBatchItems: 50,
-								chunkSizeBytes,
-								chunkConcurrency: tuning.chunkConcurrency,
-								chunkThresholdBytes,
-								existingChunksByPath,
-								chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
-								chunkFileConcurrency: uploadChunkFileConcurrency,
+									chunkSizeBytes,
+									chunkConcurrency: tuning.chunkConcurrency,
+									chunkThresholdBytes,
+									existingChunksByPath,
+									chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
+									chunkFileConcurrency: uploadChunkFileConcurrency,
+								})
+					uploadAbortByTaskIdRef.current[taskId] = handle.abort
+					const result = await handle.promise
+					delete uploadAbortByTaskIdRef.current[taskId]
+					if (result.skipped > 0) {
+						message.warning(`Skipped ${result.skipped} file(s) with invalid paths.`)
+					}
+
+					updateUploadTask(taskId, (t) => ({
+						...t,
+						status: 'commit',
+						loadedBytes: t.totalBytes,
+						speedBps: 0,
+						etaSeconds: 0,
+					}))
+
+					const commitReq = buildUploadCommitRequest(current, items)
+					const resp = await withJobQueueRetry(() => api.commitUpload(current.profileId, uploadId, commitReq))
+					committed = true
+					delete uploadItemsByTaskIdRef.current[taskId]
+					updateUploadTask(taskId, (t) => ({
+						...t,
+						status: 'waiting_job',
+						finishedAtMs: undefined,
+						jobId: resp.jobId,
+						cleanupFailed: false,
+						loadedBytes: 0,
+						speedBps: 0,
+						etaSeconds: 0,
+					}))
+
+					if (resp.jobId) {
+						void api
+							.getJob(current.profileId, resp.jobId)
+							.then((job) => handleUploadJobUpdate(taskId, job))
+							.catch((err) => {
+								maybeReportNetworkError(err)
+								updateUploadTask(taskId, (prev) => ({ ...prev, error: formatErr(err) }))
 							})
-				uploadAbortByTaskIdRef.current[taskId] = handle.abort
-				const result = await handle.promise
-				delete uploadAbortByTaskIdRef.current[taskId]
-				if (result.skipped > 0) {
-					message.warning(`Skipped ${result.skipped} file(s) with invalid paths.`)
-				}
+					}
 
-				updateUploadTask(taskId, (t) => ({
-					...t,
-					status: 'commit',
-					loadedBytes: t.totalBytes,
-					speedBps: 0,
-					etaSeconds: 0,
-				}))
-
-				const commitReq = buildUploadCommitRequest(current, items)
-				const resp = await withJobQueueRetry(() => api.commitUpload(current.profileId, uploadId, commitReq))
-				committed = true
-				delete uploadItemsByTaskIdRef.current[taskId]
-				updateUploadTask(taskId, (t) => ({
-					...t,
-					status: 'waiting_job',
-					finishedAtMs: undefined,
-					jobId: resp.jobId,
-					cleanupFailed: false,
-					loadedBytes: 0,
-					speedBps: 0,
-					etaSeconds: 0,
-				}))
-
-				if (resp.jobId) {
-					void api
-						.getJob(current.profileId, resp.jobId)
-						.then((job) => handleUploadJobUpdate(taskId, job))
-						.catch((err) => {
-							maybeReportNetworkError(err)
-							updateUploadTask(taskId, (prev) => ({ ...prev, error: formatErr(err) }))
-						})
-				}
-
-							message.open({
-								type: 'success',
-								content: (
-									<Space>
-										<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
-										<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-											Open Jobs
-										</Button>
-									</Space>
-								),
-								duration: 6,
-							})
-				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
-			} catch (err) {
-				if (err instanceof RequestAbortedError) {
-					updateUploadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-					message.info('Upload canceled')
-					return
-				}
-				maybeReportNetworkError(err)
-				const msg = formatErr(err)
-				updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-				message.error(msg)
-			} finally {
+					message.open({
+						type: 'success',
+						content: (
+							<Space>
+								<Typography.Text>Upload committed (job {resp.jobId})</Typography.Text>
+								<Button size="small" type="link" onClick={() => navigate('/jobs')}>
+									Open Jobs
+								</Button>
+							</Space>
+						),
+						duration: 6,
+					})
+					await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+				} catch (err) {
+					if (err instanceof RequestAbortedError) {
+						updateUploadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
+						message.info('Upload canceled')
+						return
+					}
+					maybeReportNetworkError(err)
+					const msg = formatErr(err)
+					updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
+					message.error(msg)
+				} finally {
 				delete uploadAbortByTaskIdRef.current[taskId]
 				delete uploadEstimatorByTaskIdRef.current[taskId]
 				if (!committed && uploadId) {
 					await api.deleteUpload(current.profileId, uploadId).catch(() => {})
 				}
 			}
-		},
-				[
-					api,
-					handleUploadJobUpdate,
-					navigate,
-					pickUploadTuning,
-					props.uploadCapabilityByProfileId,
-					props.uploadDirectStream,
-					queryClient,
-					updateUploadTask,
+			},
+			[
+				api,
+				handleUploadJobUpdate,
+				navigate,
+				pickUploadTuning,
+				props.uploadCapabilityByProfileId,
+				props.uploadDirectStream,
+				queryClient,
+				updateUploadTask,
 				uploadChunkFileConcurrency,
 				uploadResumeConversionEnabled,
 			],
-	)
+		)
 
 	useEffect(() => {
 		const running = uploadTasks.filter((t) => t.status === 'staging' || t.status === 'commit').length
@@ -722,18 +748,18 @@ function useTransfersProviderOrchestration(props: {
 	}, [startUploadTask, uploadConcurrency, uploadTasks])
 
 	const hasPendingUploadJobs = uploadTasks.some((t) => t.status === 'waiting_job')
-		useTransfersUploadJobEvents({
-			api,
-			apiToken: props.apiToken,
-			hasPendingUploadJobs,
-			uploadTasksRef,
-			handleUploadJobUpdate,
-			updateUploadTask,
-		})
+	useTransfersUploadJobEvents({
+		api,
+		apiToken: props.apiToken,
+		hasPendingUploadJobs,
+		uploadTasksRef,
+		handleUploadJobUpdate,
+		updateUploadTask,
+	})
 
-		const queueUploadFiles = useCallback(
-			(args: { profileId: string; bucket: string; prefix: string; files: File[]; label?: string; moveSource?: UploadMovePlan }) => {
-				const files = args.files.filter((f) => !!f)
+	const queueUploadFiles = useCallback(
+		(args: { profileId: string; bucket: string; prefix: string; files: File[]; label?: string; moveSource?: UploadMovePlan }) => {
+			const files = args.files.filter((f) => !!f)
 			if (files.length === 0) return
 
 			const items: UploadFileItem[] = buildUploadItems(files)
@@ -775,8 +801,21 @@ function useTransfersProviderOrchestration(props: {
 
 			setUploadTasks((prev) => [task, ...prev])
 			openTransfers('uploads')
+
+			const previewItem = items.find((item) => isVideoUploadFile(item.file))
+			if (!previewItem) return
+
+			void createLocalVideoUploadPreview(previewItem.file, { label: resolveUploadItemPath(previewItem) }).then((preview) => {
+				if (!preview) return
+				if (!uploadTasksRef.current.some((entry) => entry.id === taskId)) {
+					revokeObjectURLSafe(preview.url)
+					return
+				}
+				uploadPreviewUrlByTaskIdRef.current[taskId] = preview.url
+				updateUploadTask(taskId, (current) => ({ ...current, preview }))
+			})
 		},
-		[openTransfers],
+		[openTransfers, updateUploadTask],
 	)
 
 	const drawerProps = useTransfersDrawerProps({

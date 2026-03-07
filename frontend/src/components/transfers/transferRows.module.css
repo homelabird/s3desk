@@ -1,0 +1,109 @@
+.rowCard {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	padding: 12px;
+	background: var(--s3d-color-bg-card);
+	box-shadow: var(--s3d-shadow-sm);
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.rowTop {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.rowCopy {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.rowCopyWithPreview {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+}
+
+.rowPreview {
+	width: 88px;
+	height: 56px;
+	flex: 0 0 auto;
+	overflow: hidden;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-elevated);
+}
+
+.rowPreviewImage {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.rowHeader {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.rowTitle {
+	display: inline-block;
+	max-width: min(520px, 100%);
+}
+
+.rowSubtitle {
+	display: block;
+	margin-top: 4px;
+}
+
+.rowPreviewLabel,
+.rowError {
+	display: block;
+	margin-top: 4px;
+}
+
+.rowError {
+	margin-top: 6px;
+}
+
+.rowActions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.rowProgress {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+@media (max-width: 768px) {
+	.rowCard {
+		padding: 10px;
+	}
+
+	.rowTitle {
+		max-width: 100%;
+	}
+}
+
+@media (max-width: 640px) {
+	.rowTop,
+	.rowCopyWithPreview {
+		flex-direction: column;
+	}
+
+	.rowActions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+}

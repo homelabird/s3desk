@@ -162,6 +162,7 @@ export function useObjectsPageActions({
 		api,
 		profileId,
 		bucket,
+		prefix,
 		createJobWithRetry,
 		setSelectedKeys,
 	})
@@ -179,6 +180,7 @@ export function useObjectsPageActions({
 		handleNewFolderCancel,
 	} = useObjectsNewFolder({
 		api,
+		apiToken,
 		profileId,
 		bucket,
 		prefix,

@@ -3,7 +3,7 @@ import { Button, Space, Typography, message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
-import { APIError, type APIClient } from '../../api/client'
+import type { APIClient } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { normalizePrefix } from './objectsListUtils'
@@ -97,20 +97,14 @@ export function useObjectsIndexing({
 		autoIndexPendingRef.current = true
 		;(async () => {
 			let indexedAtMs = 0
-			try {
-				const summary = await api.getObjectIndexSummary({
-					profileId,
-					bucket,
-					prefix: targetPrefix,
-					sampleLimit: 1,
-				})
-				if (summary.indexedAt) {
-					indexedAtMs = Date.parse(summary.indexedAt)
-				}
-			} catch (err) {
-				if (!(err instanceof APIError) || err.code !== 'not_indexed') {
-					return
-				}
+			const summary = await api.getObjectIndexSummary({
+				profileId,
+				bucket,
+				prefix: targetPrefix,
+				sampleLimit: 1,
+			})
+			if (summary.indexedAt) {
+				indexedAtMs = Date.parse(summary.indexedAt)
 			}
 
 			const stale = !indexedAtMs || Date.now() - indexedAtMs > autoIndexTtlMs

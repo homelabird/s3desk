@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query'
 import { message } from 'antd'
 import { useCallback } from 'react'
 import type { MutableRefObject } from 'react'
@@ -5,6 +6,7 @@ import type { MutableRefObject } from 'react'
 import type { JobProgress, JobStatus } from '../../api/types'
 import { type RemoveEntriesResult, removeEntriesFromDirectoryHandle } from '../../lib/deviceFs'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { publishObjectsRefresh } from '../../pages/objects/objectsRefreshEvents'
 import { maybeReportNetworkError } from './transferDownloadUtils'
 import type { MoveCleanupReportArgs } from './moveCleanupReport'
 import type { UploadTask } from './transferTypes'
@@ -17,6 +19,7 @@ type UploadMovePlan = {
 }
 
 type UseTransfersUploadJobLifecycleArgs = {
+	queryClient: QueryClient
 	uploadTasksRef: MutableRefObject<UploadTask[]>
 	uploadMoveByTaskIdRef: MutableRefObject<Record<string, UploadMovePlan>>
 	moveCleanupFilenameTemplate: string
@@ -27,6 +30,7 @@ type UseTransfersUploadJobLifecycleArgs = {
 }
 
 export function useTransfersUploadJobLifecycle({
+	queryClient,
 	uploadTasksRef,
 	uploadMoveByTaskIdRef,
 	moveCleanupFilenameTemplate,
@@ -69,6 +73,14 @@ export function useTransfersUploadJobLifecycle({
 			if (!current || current.status !== 'waiting_job') return
 
 			if (status === 'succeeded') {
+				void queryClient.invalidateQueries({ queryKey: ['objects', current.profileId, current.bucket] })
+				publishObjectsRefresh({
+					profileId: current.profileId,
+					bucket: current.bucket,
+					prefix: current.prefix,
+					source: 'upload',
+				})
+
 				const movePlan = uploadMoveByTaskIdRef.current[taskId]
 				if (!current.moveAfterUpload || !movePlan) {
 					updateUploadTask(taskId, (prev) => ({
@@ -182,6 +194,7 @@ export function useTransfersUploadJobLifecycle({
 			delete uploadMoveByTaskIdRef.current[taskId]
 		},
 		[
+			queryClient,
 			formatMoveCleanupSummary,
 			moveCleanupFilenameMaxLen,
 			moveCleanupFilenameTemplate,

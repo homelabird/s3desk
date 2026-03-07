@@ -1,9 +1,11 @@
-import { Alert, Button, Checkbox, Drawer, Grid, Input, Space, message } from 'antd'
+import { Alert, Button, Checkbox, Drawer, Grid, Input, message } from 'antd'
 import { useState } from 'react'
 
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { DatalistInput } from '../../components/DatalistInput'
+import { FormField } from '../../components/FormField'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
+import styles from './JobsShared.module.css'
 
 export function CreateJobModal(props: {
 	profileId: string | null
@@ -90,65 +92,62 @@ export function CreateJobModal(props: {
 			width={drawerWidth}
 			destroyOnHidden
 			extra={
-				<Space>
+				<div className={styles.drawerExtra}>
 					<Button onClick={handleCancel}>Close</Button>
 					<Button type="primary" loading={props.loading} onClick={handleSubmit} disabled={!canSubmit}>
 						Upload
 					</Button>
-				</Space>
+				</div>
 			}
 		>
-			{!support.ok ? (
-				<Alert
-					type="warning"
-					showIcon
-					title="Local folder access is not available"
-					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
-					style={{ marginBottom: 12 }}
-				/>
-			) : null}
-			{!uploadSupported ? (
+			<div className={styles.alertStack}>
+				{!support.ok ? (
+					<Alert
+						type="warning"
+						showIcon
+						title="Local folder access is not available"
+						description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
+					/>
+				) : null}
+				{!uploadSupported ? (
+					<Alert
+						type="info"
+						showIcon
+						title="Uploads are not available for this provider"
+						description={props.uploadUnsupportedReason ?? 'This provider does not support upload transfers.'}
+					/>
+				) : null}
 				<Alert
 					type="info"
 					showIcon
-					title="Uploads are not available for this provider"
-					description={props.uploadUnsupportedReason ?? 'This provider does not support upload transfers.'}
-					style={{ marginBottom: 12 }}
+					title="Uploads from this device"
+					description="Files are uploaded by the browser and appear in Transfers (not as server jobs)."
 				/>
-			) : null}
-			<Alert
-				type="info"
-				showIcon
-				title="Uploads from this device"
-				description="Files are uploaded by the browser and appear in Transfers (not as server jobs)."
-				style={{ marginBottom: 12 }}
-			/>
+			</div>
 
 			<form
+				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
 					handleSubmit()
 				}}
 			>
-					<div style={{ marginBottom: 12 }}>
-						<div style={{ fontWeight: 700, marginBottom: 6 }}>Bucket</div>
-						<DatalistInput
-							value={bucket}
-							onChange={setBucket}
-							placeholder="my-bucket…"
-							ariaLabel="Bucket"
-							allowClear
-							options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
-						/>
-					</div>
+				<FormField label="Bucket">
+					<DatalistInput
+						value={bucket}
+						onChange={setBucket}
+						placeholder="my-bucket…"
+						ariaLabel="Bucket"
+						allowClear
+						options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+					/>
+				</FormField>
 
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Prefix (optional)</div>
+				<FormField label="Prefix (optional)">
 					<Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" />
-				</div>
+				</FormField>
 
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Local folder</div>
+				<FormField label="Local folder">
 					<LocalDevicePathInput
 						value={localFolder}
 						onChange={setLocalFolder}
@@ -159,9 +158,9 @@ export function CreateJobModal(props: {
 							setDirLabel(handle.name)
 						}}
 					/>
-				</div>
+				</FormField>
 
-				<div style={{ marginBottom: 10 }}>
+				<div className={styles.checkboxFieldTight}>
 					<Checkbox
 						checked={moveAfterUpload}
 						onChange={(e) => {
@@ -178,17 +177,19 @@ export function CreateJobModal(props: {
 					</Checkbox>
 				</div>
 
-				<Checkbox
-					checked={cleanupEmptyDirs}
-					disabled={!moveAfterUpload}
-					onChange={(e) => {
-						const checked = e.target.checked
-						setCleanupEmptyDirs(checked)
-						props.onDefaultsChange?.({ moveAfterUpload, cleanupEmptyDirs: checked })
-					}}
-				>
-					Auto-clean empty folders
-				</Checkbox>
+				<div className={styles.checkboxField}>
+					<Checkbox
+						checked={cleanupEmptyDirs}
+						disabled={!moveAfterUpload}
+						onChange={(e) => {
+							const checked = e.target.checked
+							setCleanupEmptyDirs(checked)
+							props.onDefaultsChange?.({ moveAfterUpload, cleanupEmptyDirs: checked })
+						}}
+					>
+						Auto-clean empty folders
+					</Checkbox>
+				</div>
 			</form>
 		</Drawer>
 	)

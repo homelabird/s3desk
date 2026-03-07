@@ -43,7 +43,7 @@
 	border: 1px solid var(--s3d-color-border);
 	border-radius: 18px;
 	background:
-		linear-gradient(135deg, rgba(26, 115, 232, 0.08), rgba(26, 115, 232, 0) 55%),
+		linear-gradient(135deg, var(--s3d-color-primary-bg), rgba(26, 115, 232, 0) 55%),
 		var(--s3d-color-bg-secondary);
 }
 
@@ -88,9 +88,9 @@
 	flex-direction: column;
 	gap: 10px;
 	padding: 16px 18px;
-	border: 1px solid rgba(15, 23, 42, 0.08);
+	border: 1px solid var(--s3d-color-border-soft);
 	border-radius: 18px;
-	background: rgba(248, 250, 252, 0.85);
+	background: var(--s3d-color-bg-muted);
 	min-width: 0;
 }
 
@@ -118,7 +118,7 @@
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	border: 1px solid rgba(15, 23, 42, 0.08);
+	border: 1px solid var(--s3d-color-border-soft);
 	border-radius: 18px;
 	overflow: hidden;
 }
@@ -129,7 +129,7 @@
 	justify-content: space-between;
 	gap: 14px;
 	padding: 14px 18px;
-	border-top: 1px solid rgba(15, 23, 42, 0.08);
+	border-top: 1px solid var(--s3d-color-border-soft);
 }
 
 .previewItem:first-child {
@@ -154,9 +154,9 @@
 	flex-direction: column;
 	gap: 6px;
 	padding: 18px;
-	border: 1px dashed rgba(15, 23, 42, 0.16);
+	border: 1px dashed var(--s3d-color-border-dashed);
 	border-radius: 18px;
-	background: rgba(248, 250, 252, 0.72);
+	background: var(--s3d-color-bg-subtle);
 }
 
 @media (max-width: 992px) {

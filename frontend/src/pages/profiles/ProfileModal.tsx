@@ -1,9 +1,12 @@
-import { Alert, Checkbox, Divider, Input, Modal, Space, Switch, Typography, message } from 'antd'
-import { useMemo, useState } from 'react'
+import { LinkOutlined, LockOutlined, SettingOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { Alert, Button, Checkbox, Collapse, Drawer, Grid, Input, Space, Switch, Tag, Typography, message } from 'antd'
+import type { ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
 import { FormField } from '../../components/FormField'
 import { NativeSelect } from '../../components/NativeSelect'
+import styles from './ProfileModal.module.css'
 import type { ProfileFormValues, TLSCapability, TLSAction } from './profileTypes'
 
 function validateOptionalHttpUrl(value: string | undefined): Promise<void> {
@@ -60,6 +63,74 @@ function isBlank(value: unknown): boolean {
 }
 
 type FieldErrors = Partial<Record<keyof ProfileFormValues, string>>
+type SectionKey = 'basic' | 'credentials' | 'advanced' | 'security'
+
+const DEFAULT_CREATE_SECTIONS: SectionKey[] = ['basic', 'credentials']
+const DEFAULT_EDIT_SECTIONS: SectionKey[] = ['basic']
+const PROVIDER_LABELS: Record<ProfileFormValues['provider'], string> = {
+	s3_compatible: 'S3 Compatible',
+	aws_s3: 'AWS S3',
+	oci_s3_compat: 'OCI S3 Compat',
+	oci_object_storage: 'OCI Object Storage',
+	azure_blob: 'Azure Blob',
+	gcp_gcs: 'Google Cloud Storage',
+}
+const FIELD_SECTION_MAP: Partial<Record<keyof ProfileFormValues, SectionKey>> = {
+	provider: 'basic',
+	name: 'basic',
+	endpoint: 'basic',
+	region: 'basic',
+	azureAccountName: 'basic',
+	azureEndpoint: 'basic',
+	gcpEndpoint: 'basic',
+	gcpProjectNumber: 'basic',
+	ociNamespace: 'basic',
+	ociCompartment: 'basic',
+	ociEndpoint: 'basic',
+	accessKeyId: 'credentials',
+	secretAccessKey: 'credentials',
+	sessionToken: 'credentials',
+	clearSessionToken: 'credentials',
+	azureAccountKey: 'credentials',
+	gcpAnonymous: 'credentials',
+	gcpServiceAccountJson: 'credentials',
+	ociAuthProvider: 'credentials',
+	ociConfigFile: 'credentials',
+	ociConfigProfile: 'credentials',
+	forcePathStyle: 'advanced',
+	preserveLeadingSlash: 'advanced',
+	tlsInsecureSkipVerify: 'advanced',
+	azureUseEmulator: 'advanced',
+	tlsEnabled: 'security',
+	tlsAction: 'security',
+	tlsClientCertPem: 'security',
+	tlsClientKeyPem: 'security',
+	tlsCaCertPem: 'security',
+}
+
+function SectionHeader(props: { title: string; description: string; tags?: ReactNode }) {
+	return (
+		<div className={styles.sectionHeader}>
+			<div className={styles.sectionText}>
+				<Typography.Text className={styles.sectionTitle}>{props.title}</Typography.Text>
+				<Typography.Text className={styles.sectionDescription}>{props.description}</Typography.Text>
+			</div>
+			{props.tags ? <div className={styles.sectionMeta}>{props.tags}</div> : null}
+		</div>
+	)
+}
+
+function SwitchCard(props: { title: string; description: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean; ariaLabel?: string }) {
+	return (
+		<div className={styles.switchCard}>
+			<div className={styles.switchCardCopy}>
+				<Typography.Text className={styles.switchCardTitle}>{props.title}</Typography.Text>
+				<Typography.Text className={styles.switchCardDescription}>{props.description}</Typography.Text>
+			</div>
+			<Switch checked={props.checked} onChange={props.onChange} disabled={props.disabled} aria-label={props.ariaLabel ?? props.title} />
+		</div>
+	)
+}
 
 export function ProfileModal(props: {
 	open: boolean
@@ -79,7 +150,6 @@ export function ProfileModal(props: {
 		() => ({
 			provider: 's3_compatible',
 			name: '',
-
 			endpoint: 'http://127.0.0.1:9000',
 			region: 'us-east-1',
 			accessKeyId: '',
@@ -87,27 +157,22 @@ export function ProfileModal(props: {
 			sessionToken: '',
 			clearSessionToken: false,
 			forcePathStyle: false,
-
 			azureAccountName: '',
 			azureAccountKey: '',
 			azureEndpoint: '',
 			azureUseEmulator: false,
-
 			gcpAnonymous: false,
 			gcpServiceAccountJson: '',
 			gcpEndpoint: '',
 			gcpProjectNumber: '',
-
 			ociNamespace: '',
 			ociCompartment: '',
 			ociEndpoint: '',
 			ociAuthProvider: '',
 			ociConfigFile: '',
 			ociConfigProfile: '',
-
 			preserveLeadingSlash: false,
 			tlsInsecureSkipVerify: false,
-
 			tlsEnabled: false,
 			tlsAction: 'keep',
 			tlsClientCertPem: '',
@@ -117,8 +182,10 @@ export function ProfileModal(props: {
 		[],
 	)
 
+	const screens = Grid.useBreakpoint()
 	const [values, setValues] = useState<ProfileFormValues>(() => ({ ...defaults, ...(props.initialValues ?? {}) }))
 	const [errors, setErrors] = useState<FieldErrors>({})
+	const [openSections, setOpenSections] = useState<SectionKey[]>(props.editMode ? DEFAULT_EDIT_SECTIONS : DEFAULT_CREATE_SECTIONS)
 
 	const provider = values.provider
 	const isS3Provider = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
@@ -126,16 +193,17 @@ export function ProfileModal(props: {
 	const isAws = provider === 'aws_s3'
 	const isAzure = provider === 'azure_blob'
 	const isGcp = provider === 'gcp_gcs'
+	const providerLabel = PROVIDER_LABELS[provider]
 
 	const tlsUnavailable = props.tlsCapability?.enabled === false
 	const tlsDisabledReason = props.tlsCapability?.reason ?? 'mTLS is disabled on the server.'
 	const tlsStatusLabel = tlsUnavailable
-		? 'unavailable'
+		? 'Unavailable'
 		: props.tlsStatusLoading
-			? 'loading…'
+			? 'Checking…'
 			: props.tlsStatus?.mode === 'mtls'
-				? 'enabled'
-				: 'disabled'
+				? 'mTLS enabled'
+				: 'mTLS disabled'
 	const showTLSStatusError = !tlsUnavailable && props.tlsStatusError
 
 	const tlsAction = (values.tlsAction ?? 'keep') as TLSAction
@@ -145,32 +213,32 @@ export function ProfileModal(props: {
 		switch (provider) {
 			case 'aws_s3':
 				return {
-					hint: 'Use AWS region code (for example us-east-1). Endpoint is usually left empty.',
+					hint: 'Use your AWS region. Leave endpoint blank unless you need a custom gateway.',
 					docsUrl: 'https://rclone.org/s3/#amazon-s3',
 				}
 			case 's3_compatible':
 				return {
-					hint: 'Set the full endpoint URL and keep region consistent with your server.',
+					hint: 'Use the full endpoint URL. MinIO and Ceph usually also need Force Path Style in Advanced options.',
 					docsUrl: 'https://rclone.org/s3/',
 				}
 			case 'oci_s3_compat':
 				return {
-					hint: 'Use OCI S3-compatible endpoint + region + access keys.',
+					hint: 'Use the OCI S3-compatible endpoint, region, and S3-style keys.',
 					docsUrl: 'https://rclone.org/s3/#oracle-oci-object-storage',
 				}
 			case 'oci_object_storage':
 				return {
-					hint: 'Use namespace, compartment OCID, and region for native OCI backend.',
+					hint: 'Use the native OCI backend when you want namespace and compartment-aware access.',
 					docsUrl: 'https://rclone.org/oracleobjectstorage/',
 				}
 			case 'azure_blob':
 				return {
-					hint: 'Account name is lowercase only. Use emulator mode for Azurite.',
+					hint: 'Storage account name is required. Emulator mode is only for local Azurite-style setups.',
 					docsUrl: 'https://rclone.org/azureblob/',
 				}
 			case 'gcp_gcs':
 				return {
-					hint: 'Use Service Account JSON unless anonymous mode is intended.',
+					hint: 'Service Account JSON is the standard path unless you intentionally need anonymous access.',
 					docsUrl: 'https://rclone.org/googlecloudstorage/',
 				}
 			default:
@@ -178,10 +246,25 @@ export function ProfileModal(props: {
 		}
 	})()
 
+	const drawerPlacement = screens.md ? 'right' : 'bottom'
+	useEffect(() => {
+		if (!props.open) return
+		setOpenSections(props.editMode ? DEFAULT_EDIT_SECTIONS : DEFAULT_CREATE_SECTIONS)
+	}, [props.editMode, props.open])
+
 	const setField = <K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
 		setValues((prev) => ({ ...prev, [key]: value }))
 		setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev))
 	}
+
+	const ensureSectionsOpenForErrors = useCallback((nextErrors: FieldErrors) => {
+		const nextSections = new Set(openSections)
+		for (const key of Object.keys(nextErrors) as Array<keyof ProfileFormValues>) {
+			const sectionKey = FIELD_SECTION_MAP[key]
+			if (sectionKey) nextSections.add(sectionKey)
+		}
+		setOpenSections(Array.from(nextSections))
+	}, [openSections])
 
 	const validateAndSubmit = async () => {
 		const next: FieldErrors = {}
@@ -285,6 +368,7 @@ export function ProfileModal(props: {
 
 		setErrors(next)
 		if (Object.keys(next).length > 0) {
+			ensureSectionsOpenForErrors(next)
 			message.error('Fix the highlighted fields.')
 			return
 		}
@@ -292,380 +376,485 @@ export function ProfileModal(props: {
 		props.onSubmit(values)
 	}
 
-	return (
-		<Modal
-			open={props.open}
-			title={props.title}
-			okText={props.okText}
-			okButtonProps={{ loading: props.loading }}
-			onOk={() => {
-				void validateAndSubmit()
-			}}
-			onCancel={props.onCancel}
-			destroyOnHidden
-		>
-			<form
-				onSubmit={(e) => {
-					e.preventDefault()
-					void validateAndSubmit()
-				}}
-			>
-					<FormField label="Provider" required error={errors.provider}>
-						<NativeSelect
-							disabled={!!props.editMode}
-							value={values.provider}
-							onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
-							options={[
-								{ label: 'S3 Compatible (MinIO/Ceph/Custom)', value: 's3_compatible' },
-								{ label: 'AWS S3', value: 'aws_s3' },
-								{ label: 'Oracle OCI (S3 Compat)', value: 'oci_s3_compat' },
-								{ label: 'Oracle OCI Object Storage (Native)', value: 'oci_object_storage' },
-								{ label: 'Azure Blob Storage', value: 'azure_blob' },
-								{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
-							]}
-							ariaLabel="Provider"
-						/>
-					</FormField>
-
-				{providerGuide ? (
-					<Alert
-						type="info"
-						showIcon
-						title="Provider setup hint"
-						style={{ marginBottom: 12 }}
-						description={
-							<Space direction="vertical" size={2}>
-								<Typography.Text type="secondary">{providerGuide.hint}</Typography.Text>
-								<Typography.Link href={providerGuide.docsUrl} target="_blank" rel="noopener noreferrer">
-									Open provider setup docs (new tab)
-								</Typography.Link>
-							</Space>
-						}
+	const basicSection = (
+		<div className={styles.sectionBody}>
+			<div className={styles.formGrid}>
+				<FormField label="Provider" required error={errors.provider}>
+					<NativeSelect
+						disabled={!!props.editMode}
+						value={values.provider}
+						onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
+						options={[
+							{ label: 'S3 Compatible (MinIO/Ceph/Custom)', value: 's3_compatible' },
+							{ label: 'AWS S3', value: 'aws_s3' },
+							{ label: 'Oracle OCI (S3 Compat)', value: 'oci_s3_compat' },
+							{ label: 'Oracle OCI Object Storage (Native)', value: 'oci_object_storage' },
+							{ label: 'Azure Blob Storage', value: 'azure_blob' },
+							{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
+						]}
+						ariaLabel="Provider"
 					/>
-				) : null}
-
-				<FormField label="Name" required error={errors.name} extra="A friendly name for this profile (e.g. 'Production S3', 'Dev MinIO').">
-					<Input value={values.name} onChange={(e) => setField('name', e.target.value)} autoComplete="off" aria-label="Name" />
 				</FormField>
 
-				{isS3Provider ? (
-					<>
-						<FormField
-							label={isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
-							required={!isAws}
-							extra={isAws ? 'Leave blank to use the AWS default endpoint.' : 'Use full URL including protocol (https://…).'}
-							error={errors.endpoint}
-						>
+				<FormField label="Name" required error={errors.name}>
+					<Input value={values.name} onChange={(e) => setField('name', e.target.value)} autoComplete="off" aria-label="Name" placeholder="Production S3" />
+				</FormField>
+			</div>
+
+			{providerGuide ? (
+				<div className={styles.providerGuide}>
+					<Space size={8} align="center">
+						<LinkOutlined />
+						<Typography.Text strong>Provider setup hint</Typography.Text>
+					</Space>
+					<Typography.Text type="secondary">{providerGuide.hint}</Typography.Text>
+					<Typography.Link href={providerGuide.docsUrl} target="_blank" rel="noopener noreferrer">
+						Open provider setup docs
+					</Typography.Link>
+				</div>
+			) : null}
+
+			{isS3Provider ? (
+				<div className={styles.formGrid}>
+					<FormField label={isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'} required={!isAws} error={errors.endpoint}>
+						<Input
+							value={values.endpoint}
+							onChange={(e) => setField('endpoint', e.target.value)}
+							placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'}
+							autoComplete="off"
+							aria-label={isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
+						/>
+					</FormField>
+					<FormField label="Region" required error={errors.region}>
+						<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1" aria-label="Region" />
+					</FormField>
+				</div>
+			) : null}
+
+			{isOciObjectStorage ? (
+				<div className={styles.formGrid}>
+					<FormField label="Region" required error={errors.region}>
+						<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-ashburn-1" aria-label="Region" />
+					</FormField>
+					<FormField label="Namespace" required error={errors.ociNamespace}>
+						<Input value={values.ociNamespace} onChange={(e) => setField('ociNamespace', e.target.value)} placeholder="my-namespace" aria-label="Namespace" />
+					</FormField>
+					<FormField label="Compartment OCID" required error={errors.ociCompartment}>
+						<Input
+							value={values.ociCompartment}
+							onChange={(e) => setField('ociCompartment', e.target.value)}
+							placeholder="ocid1.compartment.oc1..…"
+							aria-label="Compartment OCID"
+						/>
+					</FormField>
+					<FormField label="Endpoint URL (optional)" error={errors.ociEndpoint}>
+						<Input
+							value={values.ociEndpoint}
+							onChange={(e) => setField('ociEndpoint', e.target.value)}
+							placeholder="https://objectstorage.{region}.oraclecloud.com"
+							aria-label="Endpoint URL (optional)"
+						/>
+					</FormField>
+				</div>
+			) : null}
+
+			{isAzure ? (
+				<div className={styles.formGrid}>
+					<FormField label="Storage Account Name" required error={errors.azureAccountName}>
+						<Input
+							value={values.azureAccountName}
+							onChange={(e) => setField('azureAccountName', e.target.value)}
+							placeholder="mystorageaccount"
+							aria-label="Storage Account Name"
+						/>
+					</FormField>
+					<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
+						<Input
+							value={values.azureEndpoint}
+							onChange={(e) => setField('azureEndpoint', e.target.value)}
+							placeholder="http://127.0.0.1:10000/devstoreaccount1"
+							aria-label="Endpoint URL (optional)"
+						/>
+					</FormField>
+				</div>
+			) : null}
+
+			{isGcp ? (
+				<div className={styles.formGrid}>
+					<FormField label="Endpoint URL (optional)" error={errors.gcpEndpoint}>
+						<Input
+							value={values.gcpEndpoint}
+							onChange={(e) => setField('gcpEndpoint', e.target.value)}
+							placeholder="https://storage.googleapis.com"
+							aria-label="Endpoint URL (optional)"
+						/>
+					</FormField>
+					<FormField label="Project Number (optional)" error={errors.gcpProjectNumber}>
+						<Input
+							value={values.gcpProjectNumber}
+							onChange={(e) => setField('gcpProjectNumber', e.target.value)}
+							placeholder="123456789012"
+							aria-label="Project Number (optional)"
+						/>
+					</FormField>
+				</div>
+			) : null}
+		</div>
+	)
+
+	const credentialsSection = (
+		<div className={styles.sectionBody}>
+			<Typography.Text type="secondary" className={styles.sectionNote}>
+				{props.editMode ? 'Leave credential fields blank to keep the existing stored values.' : 'Enter the auth material required by this provider.'}
+			</Typography.Text>
+
+			{isS3Provider ? (
+				<>
+					<div className={styles.formGrid}>
+						<FormField label="Access Key ID" required={!props.editMode} error={errors.accessKeyId}>
 							<Input
-								value={values.endpoint}
-								onChange={(e) => setField('endpoint', e.target.value)}
-								placeholder={isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'}
-								autoComplete="off"
-								aria-label={isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
+								value={values.accessKeyId}
+								onChange={(e) => setField('accessKeyId', e.target.value)}
+								autoComplete="username"
+								aria-label="Access Key ID"
 							/>
 						</FormField>
-
-						<FormField label="Region" required extra="Example: us-east-1" error={errors.region}>
-							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1…" aria-label="Region" />
-						</FormField>
-					</>
-				) : null}
-
-				{isOciObjectStorage ? (
-					<>
-						<FormField label="Region" required extra="Example: us-ashburn-1" error={errors.region}>
-							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-ashburn-1…" />
-						</FormField>
-
-						<FormField label="Namespace" required error={errors.ociNamespace} extra="Your OCI tenancy namespace (found in Tenancy Details).">
-							<Input value={values.ociNamespace} onChange={(e) => setField('ociNamespace', e.target.value)} placeholder="my-namespace…" />
-						</FormField>
-
-						<FormField label="Compartment OCID" required error={errors.ociCompartment} extra="The OCID of the compartment containing your buckets.">
-							<Input
-								value={values.ociCompartment}
-								onChange={(e) => setField('ociCompartment', e.target.value)}
-								placeholder="ocid1.compartment.oc1..…"
-							/>
-						</FormField>
-
-						<FormField label="Endpoint URL (optional)" error={errors.ociEndpoint}>
-							<Input
-								value={values.ociEndpoint}
-								onChange={(e) => setField('ociEndpoint', e.target.value)}
-								placeholder="https://objectstorage.{region}.oraclecloud.com…"
-							/>
-						</FormField>
-
-						<FormField label="Auth Provider (optional)">
-							<Input
-								value={values.ociAuthProvider}
-								onChange={(e) => setField('ociAuthProvider', e.target.value)}
-								placeholder="instance_principal / api_key / resource_principal…"
-							/>
-						</FormField>
-
-						<FormField label="OCI Config File (optional)">
-							<Input
-								value={values.ociConfigFile}
-								onChange={(e) => setField('ociConfigFile', e.target.value)}
-								placeholder="/home/user/.oci/config…"
-							/>
-						</FormField>
-
-						<FormField label="OCI Config Profile (optional)">
-							<Input
-								value={values.ociConfigProfile}
-								onChange={(e) => setField('ociConfigProfile', e.target.value)}
-								placeholder="DEFAULT…"
-							/>
-						</FormField>
-
-						<Typography.Text type="secondary">This uses rclone's oracleobjectstorage backend (native).</Typography.Text>
-					</>
-				) : null}
-
-				{isAzure ? (
-					<>
-						<FormField label="Storage Account Name" required extra="Your Azure storage account name (3-24 lowercase letters or numbers)." error={errors.azureAccountName}>
-							<Input
-								value={values.azureAccountName}
-								onChange={(e) => setField('azureAccountName', e.target.value)}
-								placeholder="mystorageaccount…"
-							/>
-						</FormField>
-
-						<FormField label={props.editMode ? 'Account Key (optional)' : 'Account Key'} required={!props.editMode} error={errors.azureAccountKey}>
+						<FormField label="Secret" required={!props.editMode} error={errors.secretAccessKey}>
 							<Input.Password
-								value={values.azureAccountKey}
-								onChange={(e) => setField('azureAccountKey', e.target.value)}
+								value={values.secretAccessKey}
+								onChange={(e) => setField('secretAccessKey', e.target.value)}
 								autoComplete="new-password"
+								aria-label="Secret"
 							/>
 						</FormField>
+					</div>
 
-						<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
-							<FormField label="Use Emulator" style={{ marginBottom: 0 }}>
-								<Switch checked={values.azureUseEmulator} onChange={(checked) => setField('azureUseEmulator', checked)} />
-							</FormField>
-						</div>
-
-						<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
-							<Input
-								value={values.azureEndpoint}
-								onChange={(e) => setField('azureEndpoint', e.target.value)}
-								placeholder="http://127.0.0.1:10000/devstoreaccount1…"
-							/>
-						</FormField>
-
-						<Typography.Text type="secondary">
-							If "Use Emulator" is enabled and endpoint is blank, the server may use a default Azurite endpoint.
-						</Typography.Text>
-					</>
-				) : null}
-
-				{isGcp ? (
-					<>
-						<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
-							<FormField label="Anonymous" style={{ marginBottom: 0 }}>
-								<Switch checked={values.gcpAnonymous} onChange={(checked) => setField('gcpAnonymous', checked)} />
-							</FormField>
-						</div>
-
-						<FormField label="Endpoint URL (optional)" error={errors.gcpEndpoint}>
-							<Input
-								value={values.gcpEndpoint}
-								onChange={(e) => setField('gcpEndpoint', e.target.value)}
-								placeholder="https://storage.googleapis.com…"
-							/>
-						</FormField>
-
-						<FormField label="Project Number (optional)" error={errors.gcpProjectNumber} extra="Required for bucket list/create/delete. Find it in the GCP Console.">
-							<Input
-								value={values.gcpProjectNumber}
-								onChange={(e) => setField('gcpProjectNumber', e.target.value)}
-								placeholder="123456789012…"
-							/>
-						</FormField>
-
-						{values.gcpAnonymous ? (
-							<Typography.Text type="secondary">
-								Anonymous mode does not use credentials. Only works if the endpoint allows unauthenticated access.
-							</Typography.Text>
-						) : (
-							<FormField
-								label={props.editMode ? 'Service Account JSON (optional)' : 'Service Account JSON'}
-								required={!props.editMode}
-								error={errors.gcpServiceAccountJson}
-							>
-								<Input.TextArea
-									value={values.gcpServiceAccountJson}
-									onChange={(e) => setField('gcpServiceAccountJson', e.target.value)}
-									autoSize={{ minRows: 6, maxRows: 12 }}
-									placeholder={`{
-  "type": "service_account_json",
-  "project_id": "example-project",
-  "private_key_id": "...",
-  "private_key": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n",
-  "client_email": "example@project.iam.gserviceaccount.com",
-  "client_id": "...",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token"
-}`}
-								/>
-							</FormField>
-						)}
-					</>
-				) : null}
-
-				{isS3Provider ? (
-					<>
-						<div style={{ display: 'flex', width: '100%', gap: 12, flexWrap: 'wrap' }}>
-							<FormField
-								label={props.editMode ? 'Access Key ID (optional)' : 'Access Key ID'}
-								required={!props.editMode}
-								error={errors.accessKeyId}
-								style={{ flex: '1 1 260px', minWidth: 0 }}
-								extra="Your S3 access key (e.g. AKIAIOSFODNN7EXAMPLE)."
-							>
-								<Input
-									value={values.accessKeyId}
-									onChange={(e) => setField('accessKeyId', e.target.value)}
-									autoComplete="username"
-									aria-label={props.editMode ? 'Access Key ID (optional)' : 'Access Key ID'}
-								/>
-							</FormField>
-							<FormField
-								label={props.editMode ? 'Secret (optional)' : 'Secret'}
-								required={!props.editMode}
-								error={errors.secretAccessKey}
-								style={{ flex: '1 1 260px', minWidth: 0 }}
-								extra="Your S3 secret access key. Never share this publicly."
-							>
-								<Input.Password
-									value={values.secretAccessKey}
-									onChange={(e) => setField('secretAccessKey', e.target.value)}
-									autoComplete="new-password"
-									aria-label={props.editMode ? 'Secret (optional)' : 'Secret'}
-								/>
-							</FormField>
-						</div>
-
+					<div className={styles.formGrid}>
 						<FormField label="Session Token (optional)">
 							<Input.Password
 								value={values.sessionToken ?? ''}
 								onChange={(e) => setField('sessionToken', e.target.value)}
 								autoComplete="off"
+								aria-label="Session Token (optional)"
 								disabled={!!props.editMode && !!values.clearSessionToken}
 							/>
 						</FormField>
+					</div>
 
-						{props.editMode ? (
-							<div style={{ marginBottom: 12 }}>
-								<Checkbox
-									checked={!!values.clearSessionToken}
-									onChange={(e) => setField('clearSessionToken', e.target.checked)}
-								>
-									Clear existing session token
-								</Checkbox>
-							</div>
-						) : null}
-					</>
-				) : null}
-
-				<div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 12 }}>
-					{isS3Provider ? (
-						<FormField label="Force Path Style" style={{ marginBottom: 0 }} extra="Enable for S3-compatible stores (MinIO, Ceph).">
-							<Switch checked={values.forcePathStyle} onChange={(checked) => setField('forcePathStyle', checked)} aria-label="Force Path Style" />
-						</FormField>
+					{props.editMode ? (
+						<div className={styles.checkboxRow}>
+							<Checkbox checked={!!values.clearSessionToken} onChange={(e) => setField('clearSessionToken', e.target.checked)}>
+								Clear existing session token
+							</Checkbox>
+						</div>
 					) : null}
-					<FormField label="Preserve Leading Slash" style={{ marginBottom: 0 }} extra="Keep leading / in object keys (strict S3 semantics).">
-						<Switch
-							checked={values.preserveLeadingSlash}
-							onChange={(checked) => setField('preserveLeadingSlash', checked)}
-						/>
-					</FormField>
-					<FormField label="TLS Insecure Skip Verify" style={{ marginBottom: 0 }} extra="Skip TLS cert check (self-signed certs). Not for production.">
-						<Switch
-							checked={values.tlsInsecureSkipVerify}
-							onChange={(checked) => setField('tlsInsecureSkipVerify', checked)}
-							aria-label="TLS Insecure Skip Verify"
+				</>
+			) : null}
+
+			{isAzure ? (
+				<div className={styles.formGrid}>
+					<FormField label="Account Key" required={!props.editMode} error={errors.azureAccountKey}>
+						<Input.Password
+							value={values.azureAccountKey}
+							onChange={(e) => setField('azureAccountKey', e.target.value)}
+							autoComplete="new-password"
+							aria-label="Account Key"
 						/>
 					</FormField>
 				</div>
+			) : null}
 
-				<Divider />
+			{isGcp ? (
+				<>
+					<div className={styles.toggleGrid}>
+						<SwitchCard
+							title="Anonymous"
+							description="Skip credentials and only use public access."
+							checked={values.gcpAnonymous}
+							onChange={(checked) => setField('gcpAnonymous', checked)}
+							ariaLabel="Anonymous"
+						/>
+					</div>
 
-				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
-					<Typography.Text strong>Advanced TLS (mTLS)</Typography.Text>
-					{tlsUnavailable ? (
-						<Alert type="warning" showIcon title="mTLS is disabled" description={tlsDisabledReason} />
-					) : null}
-					{props.editMode ? (
-						<>
-							<Typography.Text type="secondary">Current: {tlsStatusLabel}</Typography.Text>
-							{showTLSStatusError ? (
-								<Alert type="warning" showIcon title="Failed to load TLS status" description={showTLSStatusError} />
-								) : null}
-								<FormField label="mTLS action">
-									<NativeSelect
-										disabled={tlsUnavailable}
-										value={tlsAction}
-										onChange={(v) => setField('tlsAction', v as TLSAction)}
-										options={[
-											{ label: 'Keep current', value: 'keep' },
-											{ label: 'Enable or update', value: 'enable' },
-											{ label: 'Disable', value: 'disable' },
-										]}
-										ariaLabel="mTLS action"
-									/>
-								</FormField>
-							{tlsAction === 'disable' ? (
-								<Typography.Text type="secondary">mTLS will be removed for this profile.</Typography.Text>
-							) : null}
-						</>
+					{values.gcpAnonymous ? (
+						<Typography.Text type="secondary" className={styles.sectionNote}>
+							Anonymous mode only works when the endpoint allows unauthenticated access.
+						</Typography.Text>
 					) : (
-						<FormField label="Enable mTLS">
-							<Switch
-								disabled={tlsUnavailable}
-								checked={!!values.tlsEnabled}
-								onChange={(checked) => setField('tlsEnabled', checked)}
+						<FormField label="Service Account JSON" required={!props.editMode} error={errors.gcpServiceAccountJson}>
+							<Input.TextArea
+								value={values.gcpServiceAccountJson}
+								onChange={(e) => setField('gcpServiceAccountJson', e.target.value)}
+								autoSize={{ minRows: 8, maxRows: 14 }}
+								aria-label="Service Account JSON"
+								placeholder={`{
+  "type": "service_account_json",
+  "project_id": "example-project",
+  "private_key_id": "...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n",
+  "client_email": "example@project.iam.gserviceaccount.com"
+}`}
 							/>
 						</FormField>
 					)}
+				</>
+			) : null}
 
-					{showTLSFields ? (
-						<>
-							<FormField label="Client Certificate (PEM)" required error={errors.tlsClientCertPem}>
-								<Input.TextArea
-									disabled={tlsUnavailable}
-									value={values.tlsClientCertPem ?? ''}
-									onChange={(e) => setField('tlsClientCertPem', e.target.value)}
-									autoSize={{ minRows: 4, maxRows: 8 }}
-									placeholder="-----BEGIN CERTIFICATE-----…"
-								/>
-							</FormField>
-							<FormField label="Client Key (PEM)" required error={errors.tlsClientKeyPem}>
-								<Input.TextArea
-									disabled={tlsUnavailable}
-									value={values.tlsClientKeyPem ?? ''}
-									onChange={(e) => setField('tlsClientKeyPem', e.target.value)}
-									autoSize={{ minRows: 4, maxRows: 8 }}
-									placeholder="-----BEGIN PRIVATE KEY-----…"
-								/>
-							</FormField>
-							<FormField label="CA Certificate (optional)">
-								<Input.TextArea
-									disabled={tlsUnavailable}
-									value={values.tlsCaCertPem ?? ''}
-									onChange={(e) => setField('tlsCaCertPem', e.target.value)}
-									autoSize={{ minRows: 3, maxRows: 6 }}
-									placeholder="-----BEGIN CERTIFICATE-----…"
-								/>
-							</FormField>
-						</>
-					) : null}
-				</Space>
+			{isOciObjectStorage ? (
+				<div className={styles.formGrid}>
+					<FormField label="Auth Provider (optional)">
+						<Input
+							value={values.ociAuthProvider}
+							onChange={(e) => setField('ociAuthProvider', e.target.value)}
+							placeholder="instance_principal / api_key / resource_principal"
+							aria-label="Auth Provider (optional)"
+						/>
+					</FormField>
+					<FormField label="OCI Config File (optional)">
+						<Input
+							value={values.ociConfigFile}
+							onChange={(e) => setField('ociConfigFile', e.target.value)}
+							placeholder="/home/user/.oci/config"
+							aria-label="OCI Config File (optional)"
+						/>
+					</FormField>
+					<FormField label="OCI Config Profile (optional)">
+						<Input
+							value={values.ociConfigProfile}
+							onChange={(e) => setField('ociConfigProfile', e.target.value)}
+							placeholder="DEFAULT"
+							aria-label="OCI Config Profile (optional)"
+						/>
+					</FormField>
+				</div>
+			) : null}
+		</div>
+	)
+
+	const advancedSection = (
+		<div className={styles.sectionBody}>
+			<Typography.Text type="secondary" className={styles.sectionNote}>
+				Only change these when your provider requires non-default behavior.
+			</Typography.Text>
+			<div className={styles.toggleGrid}>
+				{isS3Provider ? (
+					<SwitchCard
+						title="Force Path Style"
+						description="Recommended for MinIO, Ceph, and most custom S3 gateways."
+						checked={values.forcePathStyle}
+						onChange={(checked) => setField('forcePathStyle', checked)}
+						ariaLabel="Force Path Style"
+					/>
+				) : null}
+				{isAzure ? (
+					<SwitchCard
+						title="Use Emulator"
+						description="Enable this only for local Azurite or compatible emulators."
+						checked={values.azureUseEmulator}
+						onChange={(checked) => setField('azureUseEmulator', checked)}
+						ariaLabel="Use Emulator"
+					/>
+				) : null}
+				<SwitchCard
+					title="Preserve Leading Slash"
+					description="Keep a leading slash in object keys for strict S3 semantics."
+					checked={values.preserveLeadingSlash}
+					onChange={(checked) => setField('preserveLeadingSlash', checked)}
+					ariaLabel="Preserve Leading Slash"
+				/>
+				<SwitchCard
+					title="TLS Insecure Skip Verify"
+					description="Skip certificate validation for self-signed or development endpoints."
+					checked={values.tlsInsecureSkipVerify}
+					onChange={(checked) => setField('tlsInsecureSkipVerify', checked)}
+					ariaLabel="TLS Insecure Skip Verify"
+				/>
+			</div>
+		</div>
+	)
+
+	const securitySection = (
+		<div className={styles.sectionBody}>
+			<div className={styles.securityStatusRow}>
+				<Typography.Text type="secondary">Current status: {tlsStatusLabel}</Typography.Text>
+				<Tag color={tlsUnavailable ? 'default' : props.tlsStatus?.mode === 'mtls' ? 'success' : 'default'}>{tlsStatusLabel}</Tag>
+			</div>
+
+			{tlsUnavailable ? <Alert type="warning" showIcon title="mTLS is disabled" description={tlsDisabledReason} /> : null}
+			{showTLSStatusError ? <Alert type="warning" showIcon title="Failed to load TLS status" description={showTLSStatusError} /> : null}
+
+			{props.editMode ? (
+				<FormField label="mTLS action">
+					<NativeSelect
+						disabled={tlsUnavailable}
+						value={tlsAction}
+						onChange={(v) => setField('tlsAction', v as TLSAction)}
+						options={[
+							{ label: 'Keep current', value: 'keep' },
+							{ label: 'Enable or update', value: 'enable' },
+							{ label: 'Disable', value: 'disable' },
+						]}
+						ariaLabel="mTLS action"
+					/>
+				</FormField>
+			) : (
+				<div className={styles.toggleGrid}>
+					<SwitchCard
+						title="Enable mTLS"
+						description="Attach a client certificate and key for mutual TLS."
+						checked={!!values.tlsEnabled}
+						onChange={(checked) => setField('tlsEnabled', checked)}
+						disabled={tlsUnavailable}
+						ariaLabel="Enable mTLS"
+					/>
+				</div>
+			)}
+
+			{props.editMode && tlsAction === 'disable' ? (
+				<Typography.Text type="secondary" className={styles.sectionNote}>
+					Saving will remove the current mTLS material from this profile.
+				</Typography.Text>
+			) : null}
+
+			{showTLSFields ? (
+				<>
+					<FormField label="Client Certificate (PEM)" required error={errors.tlsClientCertPem}>
+						<Input.TextArea
+							disabled={tlsUnavailable}
+							value={values.tlsClientCertPem ?? ''}
+							onChange={(e) => setField('tlsClientCertPem', e.target.value)}
+							autoSize={{ minRows: 5, maxRows: 10 }}
+							aria-label="Client Certificate (PEM)"
+							placeholder="-----BEGIN CERTIFICATE-----…"
+						/>
+					</FormField>
+					<FormField label="Client Key (PEM)" required error={errors.tlsClientKeyPem}>
+						<Input.TextArea
+							disabled={tlsUnavailable}
+							value={values.tlsClientKeyPem ?? ''}
+							onChange={(e) => setField('tlsClientKeyPem', e.target.value)}
+							autoSize={{ minRows: 5, maxRows: 10 }}
+							aria-label="Client Key (PEM)"
+							placeholder="-----BEGIN PRIVATE KEY-----…"
+						/>
+					</FormField>
+					<FormField label="CA Certificate (optional)">
+						<Input.TextArea
+							disabled={tlsUnavailable}
+							value={values.tlsCaCertPem ?? ''}
+							onChange={(e) => setField('tlsCaCertPem', e.target.value)}
+							autoSize={{ minRows: 4, maxRows: 8 }}
+							aria-label="CA Certificate (optional)"
+							placeholder="-----BEGIN CERTIFICATE-----…"
+						/>
+					</FormField>
+				</>
+			) : null}
+		</div>
+	)
+
+	const sectionItems = [
+		{
+			key: 'basic',
+			label: (
+				<SectionHeader
+					title="Basic Connection"
+					description="Provider, display name, and the main endpoint or region values."
+					tags={<Tag icon={<LinkOutlined />}>{providerLabel}</Tag>}
+				/>
+			),
+			children: basicSection,
+		},
+		{
+			key: 'credentials',
+			label: (
+				<SectionHeader
+					title="Credentials"
+					description="Secrets and auth material used to sign requests."
+					tags={props.editMode ? <Tag color="default">Collapsed by default</Tag> : <Tag color="blue">Required on create</Tag>}
+				/>
+			),
+			children: credentialsSection,
+		},
+		{
+			key: 'advanced',
+			label: (
+				<SectionHeader
+					title="Advanced Options"
+					description="Compatibility and transport toggles for unusual environments."
+					tags={<Tag icon={<SettingOutlined />}>Optional</Tag>}
+				/>
+			),
+			children: advancedSection,
+		},
+		{
+			key: 'security',
+			label: (
+				<SectionHeader
+					title="Security & TLS"
+					description="mTLS certificate material and connection trust settings."
+					tags={<Tag icon={<SafetyCertificateOutlined />}>{tlsStatusLabel}</Tag>}
+				/>
+			),
+			children: securitySection,
+		},
+	]
+
+	return (
+		<Drawer
+			open={props.open}
+			onClose={props.onCancel}
+			title={props.title}
+			placement={drawerPlacement}
+			height="100%"
+			styles={{
+				wrapper: screens.md ? { width: 'min(92vw, 980px)' } : { height: '100dvh' },
+				body: { padding: 20 },
+				footer: { padding: 16 },
+			}}
+			footer={
+				<div className={styles.drawerFooter}>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button type="primary" loading={props.loading} onClick={() => void validateAndSubmit()}>
+						{props.okText}
+					</Button>
+				</div>
+			}
+			destroyOnHidden
+		>
+			<form
+				onSubmit={(event) => {
+					event.preventDefault()
+					void validateAndSubmit()
+				}}
+			>
+				<div className={styles.formShell}>
+					<div className={styles.hero}>
+						<div className={styles.heroCopy}>
+							<Typography.Text className={styles.heroEyebrow}>Profiles</Typography.Text>
+							<Typography.Text className={styles.heroDescription}>
+								Configure connection details first, then open the advanced sections only if this provider needs them.
+							</Typography.Text>
+						</div>
+						<div className={styles.heroMeta}>
+							<Tag>{providerLabel}</Tag>
+							<Tag icon={<LockOutlined />} color={props.editMode ? 'gold' : 'blue'}>
+								{props.editMode ? 'Editing existing profile' : 'Creating new profile'}
+							</Tag>
+						</div>
+					</div>
+
+					<Collapse
+						className={styles.sections}
+						activeKey={openSections}
+						onChange={(keys) => {
+							const next = Array.isArray(keys) ? keys.map((key) => String(key) as SectionKey) : [String(keys) as SectionKey]
+							setOpenSections(next)
+						}}
+						items={sectionItems}
+					/>
+				</div>
 			</form>
-		</Modal>
+		</Drawer>
 	)
 }

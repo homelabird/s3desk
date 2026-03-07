@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { APIClient } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { publishObjectsRefresh, type ObjectsRefreshEventDetail } from './objectsRefreshEvents'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
@@ -12,6 +13,7 @@ type UseObjectsDeleteArgs = {
 	api: APIClient
 	profileId: string | null
 	bucket: string
+	prefix: string
 	createJobWithRetry: CreateJobWithRetry
 	setSelectedKeys: React.Dispatch<React.SetStateAction<Set<string>>>
 }
@@ -20,11 +22,46 @@ export function useObjectsDelete({
 	api,
 	profileId,
 	bucket,
+	prefix,
 	createJobWithRetry,
 	setSelectedKeys,
 }: UseObjectsDeleteArgs) {
 	const queryClient = useQueryClient()
 	const [deletingKey, setDeletingKey] = useState<string | null>(null)
+
+	const watchDeleteJobCompletion = async (
+		jobId: string,
+		refreshPrefix: string,
+		source: ObjectsRefreshEventDetail['source'],
+	) => {
+		if (!profileId) return
+
+		for (let attempt = 0; attempt < 60; attempt += 1) {
+			try {
+				const job = await api.getJob(profileId, jobId)
+				if (job.status === 'succeeded') {
+					await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
+					publishObjectsRefresh({
+						profileId,
+						bucket,
+						prefix: refreshPrefix,
+						source,
+					})
+					return
+				}
+				if (job.status === 'failed' || job.status === 'canceled') {
+					if (job.error) {
+						message.error(job.error)
+					}
+					return
+				}
+			} catch {
+				// ignore transient poll errors and retry until timeout
+			}
+			await new Promise((resolve) => window.setTimeout(resolve, 1000))
+		}
+	}
+
 	const deleteMutation = useMutation({
 		mutationFn: async (keys: string[]) => {
 			if (keys.length < 1) throw new Error('select objects first')
@@ -51,6 +88,7 @@ export function useObjectsDelete({
 			} else {
 				message.success(`Delete task started: ${result.job.id}`)
 				await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+				void watchDeleteJobCompletion(result.job.id, prefix, 'delete_objects')
 			}
 			setSelectedKeys((prev) => {
 				if (prev.size === 0) return prev
@@ -58,7 +96,15 @@ export function useObjectsDelete({
 				for (const k of keys) next.delete(k)
 				return next
 			})
-			await queryClient.invalidateQueries({ queryKey: ['objects'] })
+			await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
+			if (profileId) {
+				publishObjectsRefresh({
+					profileId,
+					bucket,
+					prefix,
+					source: 'delete_objects',
+				})
+			}
 		},
 		onSettled: (_, __, keys) => setDeletingKey((prev) => (keys.length === 1 && prev === keys[0] ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),
@@ -78,7 +124,11 @@ export function useObjectsDelete({
 					dryRun: args.dryRun,
 				},
 			}),
-		onSuccess: (job: Job) => message.success(`Delete task started: ${job.id}`),
+		onSuccess: async (job: Job, variables) => {
+			message.success(`Delete task started: ${job.id}`)
+			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+			void watchDeleteJobCompletion(job.id, variables.prefix, 'delete_prefix')
+		},
 		onError: (err) => message.error(formatErr(err)),
 	})
 

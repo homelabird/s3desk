@@ -1,0 +1,107 @@
+.drawerExtra {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.alertStack {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.checkboxField {
+	margin-bottom: 12px;
+}
+
+.checkboxFieldTight {
+	margin-bottom: 10px;
+}
+
+.uploadTableNote {
+	display: block;
+	margin-bottom: 8px;
+}
+
+.uploadTableShell {
+	border: 1px solid var(--jobs-upload-table-border, var(--s3d-color-border));
+	border-radius: var(--jobs-upload-table-radius, 12px);
+	overflow: hidden;
+}
+
+.uploadTable {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	table-layout: fixed;
+}
+
+.uploadTableHeadCell,
+.uploadTableCell {
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--jobs-upload-table-border, var(--s3d-color-border));
+	vertical-align: middle;
+}
+
+.uploadTableHeadCell {
+	text-align: left;
+	background: var(--jobs-upload-table-bg, var(--s3d-color-bg-secondary));
+	font-weight: 600;
+}
+
+.uploadTableHeadCellRight,
+.uploadTableCellRight {
+	text-align: right;
+}
+
+.uploadTableSizeColumn {
+	width: 120px;
+}
+
+.uploadTableHashColumn {
+	width: 220px;
+}
+
+.uploadTableCellRight {
+	white-space: nowrap;
+}
+
+.uploadTable tbody tr:last-child .uploadTableCell {
+	border-bottom: none;
+}
+
+.uploadTablePagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-top: 8px;
+}
+
+.uploadTablePaginationActions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.uploadTableStatusNote {
+	display: block;
+	margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+	.uploadTablePagination {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}

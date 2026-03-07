@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 
+import styles from './App.module.css'
 import LightApp from './LightApp'
 
 const FullApp = lazy(async () => {
@@ -10,25 +11,36 @@ const FullApp = lazy(async () => {
 
 function LoadingScreen() {
 	return (
-		<div role="status" style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-			<div style={{ width: 520, maxWidth: '100%', textAlign: 'center' }}>
-				<div style={{ fontSize: 18, fontWeight: 600 }}>Loading…</div>
-				<div style={{ marginTop: 8, opacity: 0.75 }}>Preparing the dashboard UI.</div>
+		<div role="status" className={styles.loadingScreen}>
+			<div className={styles.loadingPanel}>
+				<div className={styles.loadingTitle}>Loading…</div>
+				<div className={styles.loadingCopy}>Preparing the dashboard UI.</div>
 			</div>
 		</div>
 	)
+}
+
+function readStoredProfileId(): string | null {
+	if (typeof window === 'undefined') return null
+	try {
+		const raw = window.localStorage.getItem('profileId')
+		if (!raw) return null
+		const parsed = JSON.parse(raw)
+		return typeof parsed === 'string' && parsed.trim() ? parsed : null
+	} catch {
+		return null
+	}
 }
 
 export default function App() {
 	const location = useLocation()
 
 	if (location.pathname === '/') {
-		return <Navigate to="/profiles" replace />
+		return <Navigate to={readStoredProfileId() ? '/objects' : '/setup'} replace />
 	}
 
-	// Keep /profiles (no query params) lightweight: avoid loading antd/rc UI until needed.
-	const shouldUseLightShell = location.pathname === '/profiles' && location.search === ''
-	if (shouldUseLightShell) {
+	// Keep setup/auth/profile-selection lightweight and separate from the full dashboard shell.
+	if (location.pathname === '/setup') {
 		return <LightApp />
 	}
 

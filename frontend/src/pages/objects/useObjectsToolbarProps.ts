@@ -14,6 +14,7 @@ export function useObjectsToolbarProps(args: {
 	isOffline: boolean
 	profileId: string | null
 	bucket: string
+	recentBuckets: string[]
 	selectedCount: number
 	bucketOptions: Array<{ label: string; value: string }>
 	bucketsLoading: boolean
@@ -53,6 +54,7 @@ export function useObjectsToolbarProps(args: {
 		isOffline,
 		profileId,
 		bucket,
+		recentBuckets,
 		selectedCount,
 		bucketOptions,
 		bucketsLoading,
@@ -126,6 +128,7 @@ export function useObjectsToolbarProps(args: {
 			isOffline,
 			hasProfile: !!profileId,
 			bucket,
+			recentBuckets,
 			selectedCount,
 			bucketOptions,
 			bucketsLoading,
@@ -184,6 +187,7 @@ export function useObjectsToolbarProps(args: {
 			primaryDeleteAction,
 			primaryDownloadAction,
 			profileId,
+			recentBuckets,
 			selectedCount,
 			showLabels,
 			showPrimaryActions,

@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
 import type { APIClient } from '../../api/client'
-import { APIError } from '../../api/client'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 
 type UseObjectsPrefixSummaryArgs = {
@@ -29,7 +28,7 @@ export function useObjectsPrefixSummary({
 	})
 
 	const summary = summaryQuery.data ?? null
-	const summaryNotIndexed = summaryQuery.error instanceof APIError && summaryQuery.error.code === 'not_indexed'
+	const summaryNotIndexed = !!summary && !summary.indexedAt
 	const summaryError = summaryQuery.isError ? formatErr(summaryQuery.error) : ''
 
 	return {

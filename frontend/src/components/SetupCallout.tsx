@@ -41,8 +41,8 @@ export function SetupCallout(props: Props) {
 			description={description}
 			action={
 				<Space orientation={actionDirection} size="small">
-					<LinkButton to="/profiles?ui=full" size="small">
-						Profiles
+					<LinkButton to="/setup" size="small">
+						Setup
 					</LinkButton>
 					{showSettings ? (
 						<LinkButton to={settingsHref} size="small">

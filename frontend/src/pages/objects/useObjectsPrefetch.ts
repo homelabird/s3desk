@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import type { APIClient } from '../../api/client'
 import type { ListObjectsResponse } from '../../api/types'
-import type { LocationTab } from './objectsPageConstants'
 
 type BucketOption = {
 	value: string
@@ -15,7 +14,7 @@ type UseObjectsPrefetchParams = {
 	profileId: string | null
 	queryClient: QueryClient
 	bucket: string
-	tabs: LocationTab[]
+	recentBuckets: string[]
 	bucketOptions: BucketOption[]
 	prefixByBucketRef: { current: Record<string, string> }
 	pageSize: number
@@ -27,7 +26,7 @@ export function useObjectsPrefetch({
 	profileId,
 	queryClient,
 	bucket,
-	tabs,
+	recentBuckets,
 	bucketOptions,
 	prefixByBucketRef,
 	pageSize,
@@ -69,19 +68,19 @@ export function useObjectsPrefetch({
 			if (!profileId || bucketOptions.length === 0) return
 			const recent = new Set<string>()
 			if (bucket) recent.add(bucket)
-			for (const tab of tabs) {
-				if (tab.bucket) recent.add(tab.bucket)
+			for (const name of recentBuckets) {
+				if (name) recent.add(name)
 			}
-			const recentBuckets = Array.from(recent).filter((name) => name && name !== bucket).slice(0, 3)
+			const preferredBuckets = recentBuckets.filter((name) => name && name !== bucket).slice(0, 3)
 			const fallbackBuckets = bucketOptions
 				.map((option) => option.value)
 				.filter((name) => name && !recent.has(name))
-				.slice(0, Math.max(0, 3 - recentBuckets.length))
-			for (const name of [...recentBuckets, ...fallbackBuckets]) {
+				.slice(0, Math.max(0, 3 - preferredBuckets.length))
+			for (const name of [...preferredBuckets, ...fallbackBuckets]) {
 				void prefetchObjectsPage(name)
 			}
 		},
-		[bucket, bucketOptions, prefetchObjectsPage, profileId, tabs],
+		[bucket, bucketOptions, prefetchObjectsPage, profileId, recentBuckets],
 	)
 
 	const prefetchQueueRef = useRef<string[]>([])

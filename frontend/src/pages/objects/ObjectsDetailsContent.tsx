@@ -1,11 +1,13 @@
-import { Alert, Button, Descriptions, Divider, Empty, Space, Spin, Typography } from 'antd'
 import { CopyOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, LinkOutlined, ReloadOutlined, SnippetsOutlined } from '@ant-design/icons'
+import { Alert, Button, Descriptions, Divider, Empty, Spin, Typography } from 'antd'
 import type { ReactNode } from 'react'
 
 import type { ObjectMeta } from '../../api/types'
-import type { ObjectPreview } from './objectsTypes'
 import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
+import styles from './objects.module.css'
+import { guessPreviewKind } from './objectsListUtils'
+import type { ObjectPreview } from './objectsTypes'
 
 export type ObjectsDetailsContentProps = {
 	hasProfile: boolean
@@ -14,7 +16,6 @@ export type ObjectsDetailsContentProps = {
 	selectedCount: number
 	detailsKey: string | null
 	detailsMeta: ObjectMeta | null
-	fallbackSize?: number
 	isMetaFetching: boolean
 	isMetaError: boolean
 	metaErrorMessage: string
@@ -31,9 +32,15 @@ export type ObjectsDetailsContentProps = {
 	onLoadPreview: () => void
 	onCancelPreview: () => void
 	canCancelPreview: boolean
+	onOpenLargePreview: () => void
 }
 
 export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
+	const previewKind = props.detailsMeta ? guessPreviewKind(props.detailsMeta.contentType, props.detailsMeta.key) : null
+	const isImageObject = previewKind === 'image'
+	const isVideoObject = previewKind === 'video'
+	const canOpenLargePreview = isImageObject || isVideoObject
+
 	if (!props.hasProfile) {
 		return <Typography.Text type="secondary">Select a profile first.</Typography.Text>
 	}
@@ -45,10 +52,10 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 	}
 	if (props.selectedCount > 1) {
 		return (
-			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
+			<div className={styles.detailsMessageStack}>
 				<Typography.Text strong>{props.selectedCount} selected</Typography.Text>
 				<Typography.Text type="secondary">Use the selection bar for bulk actions.</Typography.Text>
-			</Space>
+			</div>
 		)
 	}
 	if (!props.detailsKey) {
@@ -56,8 +63,8 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 	}
 
 	return (
-		<Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-			<Space wrap>
+		<div className={styles.detailsContent}>
+			<div className={styles.detailsActionRow}>
 				<Button size="small" icon={<CopyOutlined />} onClick={props.onCopyKey}>
 					Copy key
 				</Button>
@@ -80,10 +87,10 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 				<Button size="small" danger icon={<DeleteOutlined />} onClick={props.onDelete} loading={props.isDeleteLoading}>
 					Delete
 				</Button>
-			</Space>
+			</div>
 
 			{props.isMetaFetching && !props.detailsMeta ? (
-				<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+				<div className={styles.detailsFeedback}>
 					<Spin />
 				</div>
 			) : props.isMetaError ? (
@@ -147,31 +154,51 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 					)}
 
 					{props.thumbnail ? (
-						<Space orientation="vertical" size="small" style={{ width: '100%' }}>
-							<Typography.Text strong>Thumbnail</Typography.Text>
-							<div style={{ display: 'flex', justifyContent: 'center' }}>{props.thumbnail}</div>
-						</Space>
+						<div className={styles.detailsSection}>
+							<div className={styles.detailsSectionHeader}>
+								<Typography.Text strong>Thumbnail</Typography.Text>
+								{canOpenLargePreview ? (
+									<Button data-testid="objects-details-thumbnail-open-large" size="small" type="text" onClick={props.onOpenLargePreview}>
+										Open large
+									</Button>
+								) : null}
+							</div>
+							<div className={styles.detailsMediaCenter}>
+								{canOpenLargePreview ? (
+									<button type="button" className={styles.previewTriggerButton} onClick={props.onOpenLargePreview} aria-label={`Open large preview for ${props.detailsKey}`}>
+										{props.thumbnail}
+									</button>
+								) : (
+									props.thumbnail
+								)}
+							</div>
+						</div>
 					) : null}
 
-					<Divider style={{ marginBlock: 8 }} />
+					<Divider className={styles.detailsDivider} />
 
-					<Space orientation="vertical" size="small" style={{ width: '100%' }}>
-						<Space style={{ width: '100%', justifyContent: 'space-between' }}>
+					<div className={styles.detailsSection}>
+						<div className={styles.detailsSectionHeader}>
 							<Typography.Text strong>Preview</Typography.Text>
-							<Space>
+							<div className={styles.detailsSectionActions}>
 								{props.preview?.status === 'loading' ? (
 									<Button size="small" onClick={props.onCancelPreview} disabled={!props.canCancelPreview}>
 										Cancel
 									</Button>
 								) : null}
+								{canOpenLargePreview ? (
+									<Button data-testid="objects-details-preview-open-large" size="small" onClick={props.onOpenLargePreview} disabled={!props.detailsMeta}>
+										Open large
+									</Button>
+								) : null}
 								<Button size="small" icon={<ReloadOutlined />} onClick={props.onLoadPreview} disabled={!props.detailsMeta}>
 									{props.preview ? 'Reload' : 'Load'}
 								</Button>
-							</Space>
-						</Space>
+							</div>
+						</div>
 
 						{props.preview?.status === 'loading' ? (
-							<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+							<div className={styles.detailsFeedback}>
 								<Spin />
 							</div>
 						) : props.preview?.status === 'error' ? (
@@ -179,32 +206,54 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 						) : props.preview?.status === 'unsupported' ? (
 							<Empty description="Preview not available for this type" />
 						) : props.preview?.status === 'ready' && props.preview.kind === 'image' && props.preview.url ? (
-							<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 8, background: '#fafafa' }}>
-								<img
-									src={props.preview.url}
-									alt={props.detailsKey}
-									width={360}
-									height={360}
-									style={{ maxWidth: '100%', maxHeight: 360, objectFit: 'contain', display: 'block', marginInline: 'auto' }}
-								/>
-							</div>
+							<button type="button" className={styles.previewTriggerButton} onClick={props.onOpenLargePreview} aria-label={`Open large preview for ${props.detailsKey}`}>
+								<div className={styles.previewFrame}>
+									<img
+										src={props.preview.url}
+										alt={props.detailsKey}
+										width={360}
+										height={360}
+										className={styles.detailsPreviewImage}
+									/>
+								</div>
+							</button>
+						) : props.preview?.status === 'ready' && props.preview.kind === 'video' && props.preview.url ? (
+							<button type="button" className={styles.previewTriggerButton} onClick={props.onOpenLargePreview} aria-label={`Open large preview for ${props.detailsKey}`}>
+								<div className={styles.previewFrame}>
+									<img
+										src={props.preview.url}
+										alt={`Thumbnail preview of ${props.detailsKey}`}
+										width={360}
+										height={360}
+										className={styles.detailsPreviewImage}
+									/>
+									<Typography.Text type="secondary" className={styles.detailsPreviewCaption}>
+										Video preview shows an extracted thumbnail frame.
+									</Typography.Text>
+								</div>
+							</button>
 						) : props.preview?.status === 'ready' && (props.preview.kind === 'text' || props.preview.kind === 'json') ? (
-							<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 8, background: '#fafafa', maxHeight: 360, overflow: 'auto' }}>
-								<pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+							<div className={styles.detailsCodePreview}>
+								<pre className={styles.detailsCodePre}>
 									{props.preview.text}
 									{props.preview.truncated ? '\n\n…(truncated)…' : ''}
 								</pre>
 							</div>
+						) : isVideoObject && props.thumbnail ? (
+							<div className={styles.previewFrame}>
+								<div className={styles.detailsMediaCenter}>{props.thumbnail}</div>
+								<Typography.Text type="secondary" className={styles.detailsPreviewCaption}>
+									Load to fetch a larger thumbnail frame for this video.
+								</Typography.Text>
+							</div>
 						) : (
 							<Typography.Text type="secondary">Click “Load” to fetch a larger preview.</Typography.Text>
 						)}
-					</Space>
+					</div>
 				</>
 			) : (
 				<Typography.Text type="secondary">Select an object to load metadata.</Typography.Text>
 			)}
-		</Space>
+		</div>
 	)
 }
-
-// formatDateTime lives in ../../lib/format

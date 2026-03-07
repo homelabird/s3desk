@@ -38,7 +38,7 @@
 }
 
 .toggleButton:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--s3d-color-bg-tertiary);
 }
 
 .toggleChevron {
@@ -74,7 +74,7 @@
 }
 
 .labelButton:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--s3d-color-primary-bg);
 }
 
 .labelButton:focus-visible {
@@ -104,4 +104,3 @@
     transform: rotate(360deg);
   }
 }
-

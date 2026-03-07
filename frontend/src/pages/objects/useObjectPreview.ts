@@ -8,6 +8,10 @@ import { formatBytes } from '../../lib/transfer'
 import type { ObjectPreview } from './objectsTypes'
 import { guessPreviewKind } from './objectsListUtils'
 
+export const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
+export const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
+const VIDEO_PREVIEW_THUMBNAIL_SIZE = 360
+
 type UseObjectPreviewArgs = {
 	api: APIClient
 	profileId: string | null
@@ -60,14 +64,41 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			return
 		}
 
-		const maxBytes = kind === 'image' ? 10 * 1024 * 1024 : 2 * 1024 * 1024
-		if (size > maxBytes) {
+		const maxBytes = kind === 'image' ? IMAGE_PREVIEW_MAX_BYTES : TEXT_PREVIEW_MAX_BYTES
+		if (kind !== 'video' && size > maxBytes) {
 			message.info(`Preview is limited to ${formatBytes(maxBytes)} (object is ${formatBytes(size)})`)
 			return
 		}
 
 		cleanupPreview()
 		setPreview({ key, status: 'loading', kind, contentType })
+
+		if (kind === 'video') {
+			const handle = args.api.downloadObjectThumbnail({
+				profileId: args.profileId!,
+				bucket: args.bucket,
+				key,
+				size: VIDEO_PREVIEW_THUMBNAIL_SIZE,
+			})
+			previewAbortRef.current = handle.abort
+			try {
+				const resp = await handle.promise
+				previewAbortRef.current = null
+				const url = URL.createObjectURL(resp.blob)
+				previewURLRef.current = url
+				setPreview({ key, status: 'ready', kind: 'video', contentType: resp.contentType ?? contentType, url })
+				return
+			} catch (err) {
+				previewAbortRef.current = null
+				if (err instanceof RequestAbortedError) {
+					message.info('Preview canceled')
+					setPreview(null)
+					return
+				}
+				setPreview({ key, status: 'error', kind, contentType, error: formatErr(err) })
+				return
+			}
+		}
 
 		const controller = new AbortController()
 		previewAbortRef.current = () => controller.abort()

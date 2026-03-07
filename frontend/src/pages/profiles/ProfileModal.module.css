@@ -1,0 +1,217 @@
+.formShell {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.hero {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	padding: 18px 20px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 20px;
+	background: var(--s3d-gradient-section);
+	box-shadow: var(--s3d-shadow-sm);
+}
+
+.heroCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: 620px;
+	min-width: 0;
+}
+
+.heroEyebrow {
+	font-size: 12px;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--s3d-color-text-secondary);
+}
+
+.heroDescription {
+	line-height: 1.55;
+	color: var(--s3d-color-text-secondary);
+}
+
+.heroMeta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: flex-start;
+}
+
+.sections {
+	background: transparent;
+}
+
+.sections :global(.ant-collapse-item) {
+	border: 1px solid var(--s3d-color-border) !important;
+	border-radius: 18px !important;
+	background: var(--s3d-color-bg-card);
+	box-shadow: var(--s3d-shadow-sm);
+	overflow: hidden;
+	margin-bottom: 12px;
+}
+
+.sections :global(.ant-collapse-item:last-child) {
+	margin-bottom: 0;
+}
+
+.sections :global(.ant-collapse-header) {
+	padding: 16px 18px !important;
+	align-items: flex-start !important;
+}
+
+.sections :global(.ant-collapse-content-box) {
+	padding: 0 18px 18px !important;
+}
+
+.sectionHeader {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	width: 100%;
+	min-width: 0;
+}
+
+.sectionText {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.sectionTitle {
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--s3d-color-text);
+}
+
+.sectionDescription {
+	line-height: 1.45;
+	color: var(--s3d-color-text-secondary);
+}
+
+.sectionMeta {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.sectionBody {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding-top: 4px;
+}
+
+.providerGuide {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 14px 16px;
+	border: 1px solid var(--s3d-color-info-border);
+	border-radius: 14px;
+	background: var(--s3d-color-primary-bg);
+}
+
+.formGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	column-gap: 16px;
+	align-items: start;
+}
+
+.toggleGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 12px;
+}
+
+.switchCard {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 16px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 14px;
+	background: var(--s3d-color-bg-secondary);
+}
+
+.switchCardCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.switchCardTitle {
+	font-weight: 700;
+	color: var(--s3d-color-text);
+}
+
+.switchCardDescription {
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--s3d-color-text-secondary);
+}
+
+.sectionNote {
+	line-height: 1.5;
+	color: var(--s3d-color-text-secondary);
+}
+
+.securityStatusRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.checkboxRow {
+	margin-top: -4px;
+}
+
+.drawerFooter {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+@media (max-width: 768px) {
+	.hero {
+		padding: 16px;
+		border-radius: 18px;
+	}
+
+	.formGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.toggleGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sectionHeader {
+		gap: 10px;
+	}
+
+	.drawerFooter {
+		width: 100%;
+	}
+
+	.drawerFooter :global(.ant-btn) {
+		flex: 1 1 0;
+	}
+}

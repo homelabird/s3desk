@@ -138,7 +138,16 @@ export function LocalPathBrowseModal(props: Props) {
 						</Button>
 					</Space>
 
-					<div style={{ height: 420, overflow: 'auto', border: '1px solid #f0f0f0', borderRadius: 8, padding: 8 }}>
+					<div
+						style={{
+							height: 420,
+							overflow: 'auto',
+							border: '1px solid var(--s3d-color-border)',
+							borderRadius: 8,
+							padding: 8,
+							background: 'var(--s3d-color-bg-elevated)',
+						}}
+					>
 						{loadingRoot ? (
 							<div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
 								<Spin />

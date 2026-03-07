@@ -1,9 +1,10 @@
 import { memo } from 'react'
-import { Button, Progress, Space, Tag, Typography } from 'antd'
+import { Button, Progress, Tag, Typography } from 'antd'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 
 import type { DownloadTask } from './transferTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
+import styles from './transferRows.module.css'
 
 type TransferDownloadRowProps = {
 	task: DownloadTask
@@ -57,28 +58,28 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 				: `job ${t.jobId} artifact`
 
 	return (
-		<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 12, background: '#fff' }}>
-			<div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-				<div style={{ minWidth: 0 }}>
-					<Space size="small" wrap>
-						<Typography.Text strong ellipsis={{ tooltip: t.label }} style={{ maxWidth: 520 }}>
+		<div className={styles.rowCard}>
+			<div className={styles.rowTop}>
+				<div className={styles.rowCopy}>
+					<div className={styles.rowHeader}>
+						<Typography.Text strong ellipsis={{ tooltip: t.label }} className={styles.rowTitle}>
 							{t.label}
 						</Typography.Text>
 						<Tag color={tagColor}>{tagText}</Tag>
-					</Space>
-					<div style={{ marginTop: 4 }}>
-						<Typography.Text type="secondary" code ellipsis={{ tooltip: subtitle }}>
+					</div>
+					<div className={styles.rowSubtitle}>
+						<Typography.Text type="secondary" code ellipsis={{ tooltip: subtitle }} className={styles.rowTitle}>
 							{subtitle}
 						</Typography.Text>
 					</div>
 					{t.error ? (
-						<div style={{ marginTop: 6 }}>
+						<div className={styles.rowError}>
 							<Typography.Text type="danger">{t.error}</Typography.Text>
 						</div>
 					) : null}
 				</div>
 
-				<Space size="small" wrap>
+				<div className={styles.rowActions}>
 					{t.kind === 'job_artifact' && props.onOpenJobs ? (
 						<Button size="small" type="link" onClick={props.onOpenJobs}>
 							Jobs
@@ -97,10 +98,10 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => props.onRemove(t.id)}>
 						Remove
 					</Button>
-				</Space>
+				</div>
 			</div>
 
-			<div style={{ marginTop: 10 }}>
+			<div className={styles.rowProgress}>
 				<Progress percent={t.status === 'succeeded' ? 100 : percent} status={status} showInfo={t.status !== 'queued' && t.status !== 'waiting'} />
 				{progressText ? <Typography.Text type="secondary">{progressText}</Typography.Text> : null}
 			</div>

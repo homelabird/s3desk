@@ -28,6 +28,7 @@ type ObjectsDetailsPanelSectionProps = {
 	onLoadPreview: () => void
 	onCancelPreview: () => void
 	canCancelPreview: boolean
+	onOpenLargePreview: () => void
 	dockDetails: boolean
 	detailsOpen: boolean
 	detailsDrawerOpen: boolean
@@ -64,6 +65,7 @@ export function ObjectsDetailsPanelSection(props: ObjectsDetailsPanelSectionProp
 			onLoadPreview={props.onLoadPreview}
 			onCancelPreview={props.onCancelPreview}
 			canCancelPreview={props.canCancelPreview}
+			onOpenLargePreview={props.onOpenLargePreview}
 		/>
 	)
 

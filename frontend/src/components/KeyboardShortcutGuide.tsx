@@ -21,7 +21,7 @@ const actionShortcuts: Shortcut[] = [
 const overlayStyle: CSSProperties = {
 	position: 'fixed',
 	inset: 0,
-	background: 'rgba(0,0,0,0.45)',
+	background: 'var(--s3d-color-scrim)',
 	zIndex: 1050,
 	display: 'flex',
 	alignItems: 'center',
@@ -42,7 +42,7 @@ const cardStyle: CSSProperties = {
 
 const kbdStyle: CSSProperties = {
 	display: 'inline-block',
-	background: '#f1f5f9',
+	background: 'var(--s3d-color-kbd-bg)',
 	border: '1px solid var(--s3d-color-border-input)',
 	borderRadius: 4,
 	padding: '2px 6px',

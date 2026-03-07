@@ -55,6 +55,14 @@ function buildUploadTask(id: string, status: UploadTask['status']): UploadTask {
 		speedBps: 0,
 		etaSeconds: 0,
 		label: `upload-${id}`,
+		preview: {
+			kind: 'video_frame',
+			source: 'local',
+			url: `blob:preview-${id}`,
+			label: `clip-${id}.mp4`,
+			width: 160,
+			height: 90,
+		},
 	}
 }
 
@@ -94,9 +102,10 @@ describe('useTransfersPersistence', () => {
 		expect(result.current.downloadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
 		expect(result.current.uploadTasks[0]?.status).toBe('canceled')
 		expect(result.current.uploadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
-		expect(result.current.downloadTasks[0]?.finishedAtMs).toBeTypeOf('number')
-		expect(result.current.uploadTasks[0]?.finishedAtMs).toBeTypeOf('number')
-	})
+			expect(result.current.downloadTasks[0]?.finishedAtMs).toBeTypeOf('number')
+			expect(result.current.uploadTasks[0]?.finishedAtMs).toBeTypeOf('number')
+			expect(result.current.uploadTasks[0]?.preview).toBeUndefined()
+		})
 
 	it('persists only non-device downloads', async () => {
 		const { result } = renderHook(() => {
@@ -117,10 +126,11 @@ describe('useTransfersPersistence', () => {
 
 		const saved = JSON.parse(window.localStorage.getItem('transfersHistoryV1') ?? '{}') as {
 			downloads?: Array<{ id: string; kind: string }>
-			uploads?: Array<{ id: string }>
+			uploads?: Array<{ id: string; preview?: unknown }>
 		}
 		expect(saved.downloads?.map((item) => item.id)).toEqual(['d1'])
 		expect(saved.downloads?.every((item) => item.kind !== 'object_device')).toBe(true)
 		expect(saved.uploads?.map((item) => item.id)).toEqual(['u1'])
+		expect(saved.uploads?.[0]?.preview).toBeUndefined()
 	})
 })

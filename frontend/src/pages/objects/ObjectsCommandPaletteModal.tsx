@@ -30,7 +30,7 @@ export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProp
 					allowClear
 				/>
 
-				<div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'auto', maxHeight: 360 }}>
+				<div style={{ border: '1px solid var(--s3d-color-border)', borderRadius: 8, overflow: 'auto', maxHeight: 360 }}>
 					{props.commands.length === 0 ? (
 						<Empty description="No commands" style={{ padding: 24 }} />
 					) : (
@@ -47,7 +47,7 @@ export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProp
 										justifyContent: 'space-between',
 										gap: 12,
 										padding: '8px 12px',
-										background: active ? '#e6f4ff' : undefined,
+										background: active ? 'var(--s3d-color-primary-light)' : undefined,
 										cursor: cmd.enabled ? 'pointer' : 'not-allowed',
 										opacity: cmd.enabled ? 1 : 0.45,
 									}}

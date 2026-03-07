@@ -1,9 +1,11 @@
-import { Alert, Button, Drawer, Grid, Input, Space, message } from 'antd'
+import { Alert, Button, Drawer, Grid, Input, message } from 'antd'
 import { useState } from 'react'
 
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { DatalistInput } from '../../components/DatalistInput'
+import { FormField } from '../../components/FormField'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
+import styles from './JobsShared.module.css'
 
 export function DownloadJobModal(props: {
 	profileId: string | null
@@ -67,56 +69,54 @@ export function DownloadJobModal(props: {
 			width={drawerWidth}
 			destroyOnHidden
 			extra={
-				<Space>
+				<div className={styles.drawerExtra}>
 					<Button onClick={handleCancel}>Close</Button>
 					<Button type="primary" loading={props.loading} onClick={handleSubmit} disabled={!canSubmit}>
 						Download
 					</Button>
-				</Space>
+				</div>
 			}
 		>
-			{!support.ok ? (
+			<div className={styles.alertStack}>
+				{!support.ok ? (
+					<Alert
+						type="warning"
+						showIcon
+						title="Local folder access is not available"
+						description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
+					/>
+				) : null}
 				<Alert
-					type="warning"
+					type="info"
 					showIcon
-					title="Local folder access is not available"
-					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
-					style={{ marginBottom: 12 }}
+					title="Downloads to this device"
+					description="Files are saved by the browser and appear in Transfers (not as server jobs)."
 				/>
-			) : null}
-			<Alert
-				type="info"
-				showIcon
-				title="Downloads to this device"
-				description="Files are saved by the browser and appear in Transfers (not as server jobs)."
-				style={{ marginBottom: 12 }}
-			/>
+			</div>
 
 			<form
+				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
 					handleSubmit()
 				}}
 			>
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Bucket</div>
+				<FormField label="Bucket">
 					<DatalistInput
-							value={bucket}
-							onChange={setBucket}
-							placeholder="my-bucket…"
-							ariaLabel="Bucket"
-							allowClear
-							options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
-						/>
-				</div>
+						value={bucket}
+						onChange={setBucket}
+						placeholder="my-bucket…"
+						ariaLabel="Bucket"
+						allowClear
+						options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+					/>
+				</FormField>
 
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Prefix (optional)</div>
+				<FormField label="Prefix (optional)">
 					<Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" />
-				</div>
+				</FormField>
 
-				<div style={{ marginBottom: 12 }}>
-					<div style={{ fontWeight: 700, marginBottom: 6 }}>Local destination folder</div>
+				<FormField label="Local destination folder">
 					<LocalDevicePathInput
 						value={localFolder}
 						onChange={setLocalFolder}
@@ -127,7 +127,7 @@ export function DownloadJobModal(props: {
 							setDirLabel(handle.name)
 						}}
 					/>
-				</div>
+				</FormField>
 			</form>
 		</Drawer>
 	)

@@ -1,11 +1,12 @@
 import { ConfigProvider } from 'antd'
 import 'antd/dist/reset.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useMemo } from 'react'
 
 import { AntdToastAnnouncer } from './components/AntdToastAnnouncer'
 import FullAppInner from './FullAppInner'
-import { appTheme } from './theme'
+import { getAppTheme } from './theme'
+import { useThemeMode } from './themeMode'
 
 const Devtools =
 	import.meta.env.DEV
@@ -26,6 +27,9 @@ const queryClient = new QueryClient({
 })
 
 export default function FullApp() {
+	const { mode } = useThemeMode()
+	const appTheme = useMemo(() => getAppTheme(mode), [mode])
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ConfigProvider getPopupContainer={() => document.body} theme={appTheme}>

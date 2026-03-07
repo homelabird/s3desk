@@ -35,7 +35,7 @@
 }
 
 .headRow {
-	background: linear-gradient(180deg, #f8fbff, #f3f7fd);
+	background: var(--s3d-gradient-section);
 }
 
 .th {
@@ -72,7 +72,7 @@
 }
 
 .tableRow:hover {
-	background: rgba(26, 115, 232, 0.035);
+	background: var(--s3d-color-primary-bg);
 }
 
 .bucketName {

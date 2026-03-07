@@ -1,8 +1,11 @@
+import { MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { Alert, Button, Input, Space, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 
 import { APIClient, APIError } from '../api/client'
+import { BrandLockup } from '../components/BrandLockup'
 import { FormField } from '../components/FormField'
+import { useThemeMode } from '../themeMode'
 
 type Props = {
 	initialToken: string
@@ -16,6 +19,7 @@ export function LoginPage(props: Props) {
 	const [submitting, setSubmitting] = useState(false)
 	const [localError, setLocalError] = useState<string | null>(null)
 	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
+	const { mode, toggleMode } = useThemeMode()
 
 	const showSavedTokenWarning = !!props.initialToken
 	const initialHint = useMemo(() => {
@@ -51,12 +55,14 @@ export function LoginPage(props: Props) {
 	}
 
 	return (
-		<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+		<div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative' }}>
+			<div style={{ position: 'absolute', top: 24, right: 24 }}>
+				<Button icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />} onClick={toggleMode}>
+					{mode === 'dark' ? 'Light mode' : 'Dark mode'}
+				</Button>
+			</div>
 			<div style={{ width: 520, maxWidth: '100%' }}>
-				<Typography.Title level={2} style={{ marginTop: 0 }}>
-					S3Desk
-				</Typography.Title>
-				<Typography.Text type="secondary">Local Dashboard</Typography.Text>
+				<BrandLockup titleAs="h1" subtitle="Local Dashboard" variant="hero" />
 
 				<div style={{ height: 16 }} />
 

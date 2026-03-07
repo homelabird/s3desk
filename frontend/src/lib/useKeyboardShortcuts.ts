@@ -25,7 +25,7 @@ export function useKeyboardShortcuts(navigate: (path: string) => void) {
 			if (pendingG) {
 				setPendingG(false)
 				if (gTimer) clearTimeout(gTimer)
-				const routes: Record<string, string> = { p: '/profiles?ui=full', b: '/buckets', o: '/objects', u: '/uploads', j: '/jobs' }
+				const routes: Record<string, string> = { p: '/profiles', b: '/buckets', o: '/objects', u: '/uploads', j: '/jobs' }
 				const path = routes[e.key.toLowerCase()]
 				if (path) {
 					e.preventDefault()

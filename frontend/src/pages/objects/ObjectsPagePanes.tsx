@@ -129,6 +129,7 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 			<ObjectsListContent {...listProps.contentProps} />
 		</Suspense>
 	)
+	const listHeader = listProps.controlsProps.viewMode === 'grid' ? null : <ObjectsListHeader {...listProps.listHeaderProps} />
 
 	return (
 		<ObjectsLayout ref={layoutRef} {...layoutProps}>
@@ -148,7 +149,7 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 				onUploadDragOver={listProps.onUploadDragOver}
 				onUploadDrop={listProps.onUploadDrop}
 				selectionBar={<ObjectsSelectionBarSection {...listProps.selectionBarProps} />}
-				listHeader={<ObjectsListHeader {...listProps.listHeaderProps} />}
+				listHeader={listHeader}
 				listScrollerRef={listProps.listScrollerRef}
 				listScrollerTabIndex={listProps.listScrollerTabIndex}
 				onListScrollerClick={listProps.onListScrollerClick}

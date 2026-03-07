@@ -1,7 +1,7 @@
 import type { MenuProps } from 'antd'
 import { Button, Checkbox, Dropdown, Tooltip, Typography } from 'antd'
 import { EllipsisOutlined, FolderOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
-import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 
 import styles from './objects.module.css'
 
@@ -19,7 +19,7 @@ type ObjectsPrefixRowProps = BaseRowProps & {
 	menu: MenuProps
 	buttonMenuOpen: boolean
 	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
-	onButtonMenuOpenChange: (open: boolean) => void
+	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' }) => void
 	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onOpen: () => void
 	onDragStart: (e: DragEvent) => void
@@ -38,7 +38,7 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	menu: MenuProps
 	buttonMenuOpen: boolean
 	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
-	onButtonMenuOpenChange: (open: boolean) => void
+	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' }) => void
 	onClick: (e: MouseEvent) => void
 	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onCheckboxClick: (e: MouseEvent) => void
@@ -48,23 +48,15 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	thumbnail?: ReactNode
 }
 
-const rowBaseStyle = {
-	position: 'absolute',
-	top: 0,
-	left: 0,
-	width: '100%',
-	padding: '6px 12px',
-	borderBottom: '1px solid var(--s3d-color-border)',
-	transition: 'background 150ms cubic-bezier(0.4, 0, 0.2, 1)',
-} as const
-
-function rowStyle(offset: number, background?: string, minHeight?: number) {
+function rowStyle(offset: number, minHeight?: number) {
 	return {
-		...rowBaseStyle,
-		transform: `translateY(${offset}px)`,
-		background,
-		minHeight,
-	}
+		'--objects-row-offset': `${offset}px`,
+		'--objects-row-min-height': typeof minHeight === 'number' ? `${minHeight}px` : undefined,
+	} as CSSProperties
+}
+
+function joinClassNames(...values: Array<string | false | null | undefined>) {
+	return values.filter(Boolean).join(' ')
 }
 
 function handleRowKeyDown(event: KeyboardEvent<HTMLDivElement>, onActivate: (event: KeyboardEvent<HTMLDivElement>) => void) {
@@ -76,7 +68,7 @@ function handleRowKeyDown(event: KeyboardEvent<HTMLDivElement>, onActivate: (eve
 function renderRowMenu(
 	menu: MenuProps,
 	open: boolean,
-	onOpenChange: (open: boolean) => void,
+	onOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' }) => void,
 	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement,
 	label = 'Row actions',
 ) {
@@ -84,7 +76,6 @@ function renderRowMenu(
 		<Dropdown
 			trigger={['click']}
 			menu={menu}
-			open={open}
 			onOpenChange={onOpenChange}
 			getPopupContainer={getPopupContainer}
 			autoAdjustOverflow
@@ -103,8 +94,16 @@ function renderRowMenu(
 }
 
 export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
+	const outerClassName = joinClassNames(styles.listRowShell)
+	const innerClassName = joinClassNames(
+		styles.listRowInteractive,
+		props.canDragDrop ? styles.listRowDraggable : styles.listRowClickable,
+		styles.listGridBase,
+		props.listGridClassName,
+	)
+
 	return (
-		<div style={rowStyle(props.offset, undefined, props.rowMinHeight)} role="listitem">
+		<div style={rowStyle(props.offset, props.rowMinHeight)} className={outerClassName} role="listitem">
 			<div
 				onClick={props.onOpen}
 				onContextMenu={props.onContextMenu}
@@ -112,21 +111,20 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 				draggable={props.canDragDrop}
 				onDragStart={props.onDragStart}
 				onDragEnd={props.onDragEnd}
-				className={`${styles.listGridBase} ${props.listGridClassName}`}
+				className={innerClassName}
 				data-objects-row="true"
 				role="button"
 				tabIndex={0}
-				style={{ cursor: props.canDragDrop ? 'grab' : 'pointer' }}
 			>
 				<div />
-				<div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-					<FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} />
-					<Typography.Text style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
+				<div className={styles.listRowNameCell}>
+					<FolderOutlined className={styles.listRowPrefixIcon} />
+					<Typography.Text className={styles.listRowTextEllipsis}>
 						{props.highlightText(props.displayName)}
 					</Typography.Text>
 				</div>
 				{props.isCompact ? (
-					<div style={{ justifySelf: 'end' }}>
+					<div className={styles.listRowMenuCell}>
 						{renderRowMenu(
 							props.menu,
 							props.buttonMenuOpen,
@@ -137,13 +135,13 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 					</div>
 				) : (
 					<>
-						<div style={{ textAlign: 'right' }}>
+						<div className={styles.listRowMetricCellRight}>
 							<Typography.Text type="secondary">-</Typography.Text>
 						</div>
 						<div>
 							<Typography.Text type="secondary">-</Typography.Text>
 						</div>
-						<div style={{ justifySelf: 'end' }}>
+						<div className={styles.listRowMenuCell}>
 							{renderRowMenu(
 								props.menu,
 								props.buttonMenuOpen,
@@ -161,8 +159,16 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 
 export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 	const metaLabel = `${props.sizeLabel} · ${props.timeLabel}`
+	const outerClassName = joinClassNames(styles.listRowShell, props.isSelected && styles.listRowSelected)
+	const innerClassName = joinClassNames(
+		styles.listRowInteractive,
+		props.canDragDrop ? styles.listRowDraggable : styles.listRowClickable,
+		styles.listGridBase,
+		props.listGridClassName,
+	)
+
 	return (
-		<div style={rowStyle(props.offset, props.isSelected ? 'var(--s3d-color-primary-light)' : undefined, props.rowMinHeight)} role="listitem">
+		<div style={rowStyle(props.offset, props.rowMinHeight)} className={outerClassName} role="listitem">
 			<div
 				onClick={props.onClick}
 				onContextMenu={props.onContextMenu}
@@ -170,11 +176,10 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 				draggable={props.canDragDrop}
 				onDragStart={props.onDragStart}
 				onDragEnd={props.onDragEnd}
-				className={`${styles.listGridBase} ${props.listGridClassName}`}
+				className={innerClassName}
 				data-objects-row="true"
 				role="button"
 				tabIndex={0}
-				style={{ cursor: props.canDragDrop ? 'grab' : 'pointer' }}
 			>
 				<div>
 					<Checkbox
@@ -184,14 +189,14 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 					/>
 				</div>
 
-				<div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-					<div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-						{props.thumbnail ? <div style={{ display: 'flex', alignItems: 'center' }}>{props.thumbnail}</div> : null}
+				<div className={styles.listRowObjectMain}>
+					<div className={styles.listRowNameCell}>
+						{props.thumbnail ? <div className={styles.listRowThumbnailWrap}>{props.thumbnail}</div> : null}
 						<Tooltip title={props.isFavorite ? 'Remove favorite' : 'Add favorite'}>
 							<Button
 								type="text"
 								size="small"
-								icon={props.isFavorite ? <StarFilled style={{ color: 'var(--s3d-color-star)' }} /> : <StarOutlined />}
+								icon={props.isFavorite ? <StarFilled className={styles.listRowFavoriteIcon} /> : <StarOutlined />}
 								onClick={(e) => {
 									e.stopPropagation()
 									props.onToggleFavorite()
@@ -201,27 +206,20 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 							/>
 						</Tooltip>
 						<Tooltip title={props.objectKey}>
-							<Typography.Text
-								style={{
-									whiteSpace: 'nowrap',
-									overflow: 'hidden',
-									textOverflow: 'ellipsis',
-									display: 'block',
-								}}
-							>
+							<Typography.Text className={styles.listRowTextEllipsis}>
 								{props.highlightText(props.displayName)}
 							</Typography.Text>
 						</Tooltip>
 					</div>
 					{props.isCompact ? (
-						<Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.2 }}>
+						<Typography.Text type="secondary" className={styles.listRowMetaCompact}>
 							{metaLabel}
 						</Typography.Text>
 					) : null}
 				</div>
 
 				{props.isCompact ? null : (
-					<div style={{ textAlign: 'right' }}>
+					<div className={styles.listRowMetricCellRight}>
 						<Typography.Text type="secondary">{props.sizeLabel}</Typography.Text>
 					</div>
 				)}
@@ -232,7 +230,7 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 					</div>
 				)}
 
-				<div style={{ justifySelf: 'end' }}>
+				<div className={styles.listRowMenuCell}>
 					{renderRowMenu(
 						props.menu,
 						props.buttonMenuOpen,

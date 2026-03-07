@@ -1,5 +1,5 @@
 import type { ObjectSort } from './objectsTypes'
-import type { ObjectPreview } from './objectsTypes'
+import type { ObjectPreview, ObjectsViewMode } from './objectsTypes'
 import type { ObjectsPagePanesProps } from './ObjectsPagePanes'
 
 type TreeProps = ObjectsPagePanesProps['treeProps']
@@ -84,6 +84,8 @@ type BuildObjectsPagePanesPropsArgs = {
 	setSort: (value: ObjectSort) => void
 	favoritesFirst: boolean
 	setFavoritesFirst: (value: boolean) => void
+	viewMode: ObjectsViewMode
+	setViewMode: (value: ObjectsViewMode) => void
 	isOffline: boolean
 	objectsErrorMessage: string | null
 	uploadDropActive: boolean
@@ -125,6 +127,8 @@ type BuildObjectsPagePanesPropsArgs = {
 	handleClearSearch: () => void
 	renderPrefixRow: ContentProps['renderPrefixRow']
 	renderObjectRow: ContentProps['renderObjectRow']
+	renderPrefixGridItem: ContentProps['renderPrefixGridItem']
+	renderObjectGridItem: ContentProps['renderObjectGridItem']
 	showLoadMore: boolean
 	loadMoreLabel: string
 	loadMoreDisabled: boolean
@@ -148,6 +152,7 @@ type BuildObjectsPagePanesPropsArgs = {
 	loadPreview: DetailsProps['onLoadPreview']
 	cancelPreview: DetailsProps['onCancelPreview']
 	canCancelPreview: boolean
+	openLargePreview: () => void
 	dockDetails: boolean
 	detailsOpen: boolean
 	detailsDrawerOpen: boolean
@@ -237,6 +242,8 @@ export function buildObjectsPagePanesProps(args: BuildObjectsPagePanesPropsArgs)
 				onSortChange: args.setSort,
 				favoritesFirst: args.favoritesFirst,
 				onFavoritesFirstChange: args.setFavoritesFirst,
+				viewMode: args.viewMode,
+				onViewModeChange: args.setViewMode,
 			},
 			isOffline: args.isOffline,
 			favoritesOnly: args.favoritesOnly,
@@ -290,8 +297,11 @@ export function buildObjectsPagePanesProps(args: BuildObjectsPagePanesPropsArgs)
 				emptyKind: args.emptyKind,
 				canClearSearch: args.canClearSearch,
 				onClearSearch: args.handleClearSearch,
+				viewMode: args.viewMode,
 				renderPrefixRow: args.renderPrefixRow,
 				renderObjectRow: args.renderObjectRow,
+				renderPrefixGridItem: args.renderPrefixGridItem,
+				renderObjectGridItem: args.renderObjectGridItem,
 				showLoadMore: args.showLoadMore,
 				loadMoreLabel: args.loadMoreLabel,
 				loadMoreDisabled: args.loadMoreDisabled,
@@ -336,6 +346,7 @@ export function buildObjectsPagePanesProps(args: BuildObjectsPagePanesPropsArgs)
 			onLoadPreview: args.loadPreview,
 			onCancelPreview: args.cancelPreview,
 			canCancelPreview: args.canCancelPreview,
+			onOpenLargePreview: args.openLargePreview,
 			dockDetails: args.dockDetails,
 			detailsOpen: args.detailsOpen,
 			detailsDrawerOpen: args.detailsDrawerOpen,
