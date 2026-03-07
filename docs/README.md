@@ -7,6 +7,7 @@ This folder intentionally keeps only the small set of docs needed to run and wor
 - [USAGE.md](USAGE.md): product workflow and day-to-day UI usage
 - [PROVIDERS.md](PROVIDERS.md): provider support summary and capability model
 - [RUNBOOK.md](RUNBOOK.md): operating the service in real environments
+- [RESPONSIVE_DESIGN_AUDIT.md](RESPONSIVE_DESIGN_AUDIT.md): responsive-design gaps, priorities, and validation checklist
 - [TESTING.md](TESTING.md): local and CI-oriented test commands
 
 ## Built-In Endpoints
