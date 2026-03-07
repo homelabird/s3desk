@@ -106,6 +106,24 @@ func TestRenderConfigOciObjectStorage(t *testing.T) {
 	}
 }
 
+func TestRenderConfigOciObjectStorageRejectsInvalidAuthProvider(t *testing.T) {
+	profile := models.ProfileSecrets{
+		Provider:        models.ProfileProviderOciObjectStorage,
+		OciNamespace:    "ns",
+		OciCompartment:  "comp",
+		Region:          "us-ashburn-1",
+		OciAuthProvider: "invalid",
+	}
+
+	_, err := RenderConfig(profile, RemoteName)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "authProvider must be one of") {
+		t.Fatalf("expected authProvider validation error, got %v", err)
+	}
+}
+
 func TestRenderConfigUnsupportedProvider(t *testing.T) {
 	profile := models.ProfileSecrets{Provider: models.ProfileProvider("nope")}
 	_, err := RenderConfig(profile, RemoteName)

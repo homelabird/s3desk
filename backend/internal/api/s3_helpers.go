@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/tls"
 	"net/http"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profiletls"
 )
 
 func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
@@ -24,10 +24,13 @@ func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
 
 	endpoint := strings.TrimSpace(secrets.Endpoint)
 
-	if secrets.TLSInsecureSkipVerify {
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
+	tlsCfg, err := profiletls.BuildConfig(secrets)
+	if err != nil {
+		return nil, err
+	}
+	if tlsCfg != nil {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = tlsCfg
 		cfg.HTTPClient = &http.Client{Transport: transport}
 	}
 

@@ -165,7 +165,9 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 				return "", err
 			}
 		}
-		if ap := strings.TrimSpace(profile.OciAuthProvider); ap != "" {
+		if ap, err := models.NormalizeOCIAuthProvider(profile.OciAuthProvider); err != nil {
+			return "", err
+		} else if ap != "" {
 			// rclone's oracleobjectstorage backend uses OCI SDK auth providers.
 			if _, err := fmt.Fprintf(&b, "auth_provider = %s\n", ap); err != nil {
 				return "", err

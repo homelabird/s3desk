@@ -164,6 +164,9 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 		if req.Compartment == nil || strings.TrimSpace(*req.Compartment) == "" {
 			return errors.New("compartment is required")
 		}
+		if _, err := models.NormalizeOCIAuthProvider(derefString(req.AuthProvider)); err != nil {
+			return err
+		}
 		if hasUnexpectedFields(req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.AccountName, req.AccountKey, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber) {
 			return errors.New("unexpected fields for oci_object_storage")
 		}

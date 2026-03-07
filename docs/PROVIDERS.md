@@ -41,4 +41,12 @@ If a capability is unavailable, the UI hides or disables the action and shows th
 - Use `aws_s3` for standard AWS accounts
 - Use `s3_compatible` when you must provide a custom S3 endpoint
 - Use `oci_s3_compat` only when your OCI environment is intentionally exposed through an S3-compatible endpoint
+- Use OCI native `authProvider` values only from the supported OCI SDK set: `user_principal`, `instance_principal`, or `resource_principal`
 - Prefer Tier 1 providers when you need the most tested path
+
+## Best-Practice Review Notes
+
+- **AWS S3**: direct SDK operations now keep TLS 1.2 as the minimum and can apply profile-level custom CA / mTLS settings, matching the stricter paths already used elsewhere in the backend.
+- **Google Cloud Storage**: authenticated access is based on a service account JSON key; anonymous access is intentionally limited to explicit custom endpoints such as emulators.
+- **Azure Blob Storage**: direct REST operations use TLS 1.2 minimum by default and support profile TLS overrides for custom CA / mTLS scenarios.
+- **OCI Object Storage**: native OCI profiles now validate `authProvider` against the supported OCI SDK auth modes before saving or rendering the rclone configuration.
