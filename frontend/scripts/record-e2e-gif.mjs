@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { mkdirSync, readdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
+const repoRoot = resolve(projectRoot, '..');
 
 const cliArgs = process.argv.slice(2);
 let ffmpegStatic = null;
@@ -27,6 +28,8 @@ const explicitOutputDir = extractOutputDir(cliArgs);
 const defaultRecordDir = resolve(baseRecordDir, runId);
 const runRecordDir = explicitOutputDir ? resolve(explicitOutputDir) : defaultRecordDir;
 const gifOutputDir = explicitOutputDir ? resolve(runRecordDir, 'gifs') : resolve(baseRecordDir, 'gifs', runId);
+const docsGifDir = resolve(repoRoot, 'docs', 'assets', 'gifs', runId);
+const docsLatestGif = resolve(repoRoot, 'docs', 'assets', 'gifs', 'latest.gif');
 
 const projectArg = hasProjectArg ? [] : ['--project', process.env.PLAYWRIGHT_PROJECT || 'chromium'];
 const outputArg = hasOutputArg ? [] : ['--output', runRecordDir];
@@ -39,6 +42,7 @@ process.env.PLAYWRIGHT_RECORD_VIDEOS = '1';
 
 mkdirSync(runRecordDir, { recursive: true });
 mkdirSync(gifOutputDir, { recursive: true });
+mkdirSync(docsGifDir, { recursive: true });
 
 const exit = runCommand('npx', ['playwright', 'test', ...playwrightArgs], {
 	cwd: projectRoot,
@@ -66,6 +70,7 @@ for (const webm of videos) {
 	const base = stem.split('/').pop() || stem;
 	const mp4Path = join(gifOutputDir, `${base}.mp4`);
 	const gifPath = join(gifOutputDir, `${base}.gif`);
+	const docsGifPath = join(docsGifDir, `${base}.gif`);
 
 	runCommand(ffmpegBinary, [
 		'-y',
@@ -93,12 +98,18 @@ for (const webm of videos) {
 		gifPath,
 	]);
 
+	copyFileSync(gifPath, docsGifPath);
+	copyFileSync(gifPath, docsLatestGif);
+
 	console.log(`변환 완료: ${webm}`);
 	console.log(`  - mp4: ${mp4Path}`);
 	console.log(`  - gif: ${gifPath}`);
+	console.log(`  - docs gif: ${docsGifPath}`);
+	console.log(`  - latest gif: ${docsLatestGif}`);
 }
 
 console.log(`완료: ${videos.length}개 녹화 파일 -> ${gifOutputDir}`);
+console.log(`레포 문서용 GIF 저장: ${docsGifDir}`);
 
 function collectVideos(dir, out = []) {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
