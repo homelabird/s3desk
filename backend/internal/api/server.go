@@ -17,6 +17,7 @@ type server struct {
 	metrics     *metrics.Metrics
 	serverAddr  string
 	proxySecret []byte
+	authLimit   *authFailureLimiter
 	uploadLimit *requestLimiter
 	bucketGov   *bucketgov.Service
 }

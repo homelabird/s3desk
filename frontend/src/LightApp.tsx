@@ -6,6 +6,7 @@ import { BrandLockup } from './components/BrandLockup'
 import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { useLocalStorageState } from './lib/useLocalStorageState'
+import { useSessionStorageState } from './lib/useSessionStorageState'
 import { useThemeMode } from './useThemeMode'
 
 type LightProfile = {
@@ -69,7 +70,7 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 	const [error, setError] = useState<string | null>(null)
 	const showSavedTokenWarning = !!props.initialToken
 	const hint = showSavedTokenWarning
-		? 'Saved API token is invalid. Please log in again with a valid token.'
+		? 'Stored API token for this browser session is invalid. Please log in again with a valid token.'
 		: 'This server requires an API token. Enter the backend API_TOKEN used to start the server.'
 
 	const submit = async () => {
@@ -139,14 +140,14 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 								disabled={submitting}
 								className={`${styles.button} ${styles.buttonSecondary} ${submitting ? styles.buttonSecondaryDisabled : styles.buttonClickable}`}
 							>
-								Clear saved token
+								Clear stored token
 							</button>
 						) : null}
 					</div>
 				</form>
 
 				<div className={`${styles.rowGap12} ${styles.metaText}`}>
-					This is not your S3 access key. It must match the server <code>API_TOKEN</code>.
+					This is not your S3 access key. It must match the server <code>API_TOKEN</code> and is stored only for this browser session.
 				</div>
 			</div>
 		</div>
@@ -306,7 +307,7 @@ function ProfilesList(props: {
 }
 
 export default function LightApp() {
-	const [apiToken, setApiToken] = useLocalStorageState('apiToken', '')
+	const [apiToken, setApiToken] = useSessionStorageState('apiToken', '', { legacyLocalStorageKey: 'apiToken' })
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
 	const { mode, toggleMode } = useThemeMode()
 

@@ -25,7 +25,7 @@ export function LoginPage(props: Props) {
 	const showSavedTokenWarning = !!props.initialToken
 	const initialHint = useMemo(() => {
 		if (showSavedTokenWarning) {
-			return 'Saved API token is invalid. Please log in again with a valid token.'
+			return 'Stored API token for this browser session is invalid. Please log in again with a valid token.'
 		}
 		return 'This server requires an API token. Enter the backend API_TOKEN used to start the server.'
 	}, [showSavedTokenWarning])
@@ -97,7 +97,7 @@ export function LoginPage(props: Props) {
 							</Button>
 							{props.onClearSavedToken ? (
 								<Button onClick={props.onClearSavedToken} disabled={submitting}>
-									Clear saved token
+									Clear stored token
 								</Button>
 							) : null}
 						</Space>
@@ -105,7 +105,7 @@ export function LoginPage(props: Props) {
 
 					<Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
 						This is not your S3 access key. It must match the server{' '}
-						<Typography.Text code>API_TOKEN</Typography.Text>.
+						<Typography.Text code>API_TOKEN</Typography.Text> and is stored only for this browser session.
 					</Typography.Paragraph>
 				</Space>
 			</div>

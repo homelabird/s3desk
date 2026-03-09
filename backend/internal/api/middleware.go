@@ -2,11 +2,15 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"errors"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,11 +23,146 @@ import (
 
 const corsExposeHeaders = "Retry-After, Content-Disposition, X-Log-Next-Offset, X-Upload-Skipped"
 
+const maxAPITokenBytes = 4096
+
+type authFailureLimiter struct {
+	mu          sync.Mutex
+	entries     map[string]authFailureEntry
+	maxFailures int
+	window      time.Duration
+	lockout     time.Duration
+}
+
+type authFailureEntry struct {
+	failures     []time.Time
+	blockedUntil time.Time
+	lastSeen     time.Time
+}
+
+func newAuthFailureLimiter(maxFailures int, window time.Duration, lockout time.Duration) *authFailureLimiter {
+	if maxFailures <= 0 || window <= 0 || lockout <= 0 {
+		return nil
+	}
+	return &authFailureLimiter{
+		entries:     make(map[string]authFailureEntry),
+		maxFailures: maxFailures,
+		window:      window,
+		lockout:     lockout,
+	}
+}
+
+func (l *authFailureLimiter) allow(key string, now time.Time) (time.Duration, bool) {
+	if l == nil || key == "" {
+		return 0, true
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.pruneLocked(now)
+	entry, ok := l.entries[key]
+	if !ok {
+		return 0, true
+	}
+	entry.failures = trimAuthFailures(entry.failures, now, l.window)
+	entry.lastSeen = now
+	if entry.blockedUntil.After(now) {
+		l.entries[key] = entry
+		return entry.blockedUntil.Sub(now), false
+	}
+	if len(entry.failures) == 0 {
+		delete(l.entries, key)
+		return 0, true
+	}
+	l.entries[key] = entry
+	return 0, true
+}
+
+func (l *authFailureLimiter) recordFailure(key string, now time.Time) time.Duration {
+	if l == nil || key == "" {
+		return 0
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.pruneLocked(now)
+	entry := l.entries[key]
+	entry.failures = trimAuthFailures(entry.failures, now, l.window)
+	entry.failures = append(entry.failures, now)
+	entry.lastSeen = now
+	if len(entry.failures) >= l.maxFailures {
+		entry.blockedUntil = now.Add(l.lockout)
+	}
+	l.entries[key] = entry
+	if entry.blockedUntil.After(now) {
+		return entry.blockedUntil.Sub(now)
+	}
+	return 0
+}
+
+func (l *authFailureLimiter) reset(key string) {
+	if l == nil || key == "" {
+		return
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.entries, key)
+}
+
+func (l *authFailureLimiter) pruneLocked(now time.Time) {
+	staleAfter := l.window
+	if l.lockout > staleAfter {
+		staleAfter = l.lockout
+	}
+	staleAfter *= 2
+	for key, entry := range l.entries {
+		entry.failures = trimAuthFailures(entry.failures, now, l.window)
+		if entry.blockedUntil.Before(now) && len(entry.failures) == 0 && now.Sub(entry.lastSeen) >= staleAfter {
+			delete(l.entries, key)
+			continue
+		}
+		l.entries[key] = entry
+	}
+}
+
+func trimAuthFailures(failures []time.Time, now time.Time, window time.Duration) []time.Time {
+	if len(failures) == 0 {
+		return failures
+	}
+	cutoff := now.Add(-window)
+	idx := 0
+	for idx < len(failures) && failures[idx].Before(cutoff) {
+		idx++
+	}
+	if idx == 0 {
+		return failures
+	}
+	return append([]time.Time(nil), failures[idx:]...)
+}
+
+func apiTokenEqual(actual string, expected string) bool {
+	actualSum := sha256.Sum256([]byte(actual))
+	expectedSum := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(actualSum[:], expectedSum[:]) == 1
+}
+
 func (s *server) requireAPIToken(next http.Handler) http.Handler {
 	if s.cfg.APIToken == "" {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientKey := requestRemoteAddr(r)
+		now := time.Now()
+		if retryAfter, allowed := s.authLimit.allow(clientKey, now); !allowed {
+			w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
+			writeError(w, http.StatusTooManyRequests, "too_many_attempts", "too many authentication attempts", map[string]any{
+				"retryAfterSeconds": int(mathCeilSeconds(retryAfter)),
+			})
+			return
+		}
+
 		token := r.Header.Get("X-Api-Token")
 		if token == "" {
 			// Prometheus/ServiceMonitor and many HTTP clients support Bearer tokens
@@ -37,12 +176,44 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 		if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
 			token = r.URL.Query().Get("apiToken")
 		}
-		if token != s.cfg.APIToken {
+		if len(token) > maxAPITokenBytes {
+			retryAfter := s.authLimit.recordFailure(clientKey, now)
+			if retryAfter > 0 {
+				w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
+			}
 			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid api token", nil)
 			return
 		}
+		if !apiTokenEqual(token, s.cfg.APIToken) {
+			retryAfter := s.authLimit.recordFailure(clientKey, now)
+			if retryAfter > 0 {
+				w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
+			}
+			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid api token", nil)
+			return
+		}
+		s.authLimit.reset(clientKey)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func formatRetryAfterSeconds(d time.Duration) string {
+	seconds := mathCeilSeconds(d)
+	if seconds < 1 {
+		seconds = 1
+	}
+	return strconv.Itoa(int(seconds))
+}
+
+func mathCeilSeconds(d time.Duration) int64 {
+	if d <= 0 {
+		return 0
+	}
+	seconds := d / time.Second
+	if d%time.Second != 0 {
+		seconds++
+	}
+	return int64(seconds)
 }
 
 func securityHeaders(next http.Handler) http.Handler {

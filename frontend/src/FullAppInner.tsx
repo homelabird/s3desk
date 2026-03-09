@@ -28,6 +28,7 @@ import { getProviderCapabilities } from './lib/providerCapabilities'
 import { reloadPage } from './lib/reloadPage'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
+import { useSessionStorageState } from './lib/useSessionStorageState'
 import { useThemeMode } from './useThemeMode'
 import styles from './FullAppInner.module.css'
 
@@ -82,7 +83,7 @@ export default function FullAppInner() {
 	const usesCompactHeader = !isDesktop
 	const { mode, toggleMode } = useThemeMode()
 
-	const [apiToken, setApiToken] = useLocalStorageState('apiToken', '')
+	const [apiToken, setApiToken] = useSessionStorageState('apiToken', '', { legacyLocalStorageKey: 'apiToken' })
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
 	const [navOpen, setNavOpen] = useState(false)
 	const [searchParams, setSearchParams] = useSearchParams()

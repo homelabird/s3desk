@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -39,6 +40,7 @@ func New(dep Dependencies) http.Handler {
 		metrics:     dep.Metrics,
 		serverAddr:  dep.ServerAddr,
 		proxySecret: resolveProxySecret(dep.Config.APIToken),
+		authLimit:   newAuthFailureLimiter(10, time.Minute, time.Minute),
 		uploadLimit: newRequestLimiter(dep.Config.UploadMaxConcurrentRequests),
 		bucketGov:   bucketgov.NewService(bucketgov.NewDefaultRegistry()),
 	}

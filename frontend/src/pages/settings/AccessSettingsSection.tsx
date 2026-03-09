@@ -53,7 +53,7 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 					<ApiTokenField key={props.apiToken} apiToken={props.apiToken} setApiToken={props.setApiToken} />
 					<Typography.Paragraph type="secondary" className={styles.paragraphTop8}>
 						This must match the server's <Typography.Text code>API_TOKEN</Typography.Text> (or{' '}
-						<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials.
+						<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials and is stored only for the current browser session.
 					</Typography.Paragraph>
 				</FormField>
 
