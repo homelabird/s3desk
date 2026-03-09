@@ -81,6 +81,8 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		setFavoritesSearch,
 		favoritesOpenDetails,
 		setFavoritesOpenDetails,
+		favoritesPaneExpanded,
+		setFavoritesPaneExpanded,
 		extFilter,
 		setExtFilter,
 		minSize,
@@ -104,8 +106,6 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 	const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false)
 	const [detailsOpen, setDetailsOpen] = useLocalStorageState<boolean>('objectsDetailsOpen', true)
 	const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
-	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
-	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
 	const layoutRef = useRef<HTMLDivElement | null>(null)
 	const [layoutWidthPx, setLayoutWidthPx] = useState(0)
@@ -212,7 +212,6 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		autoIndexTtlMs,
 		autoScanReady,
 		canDragDrop,
-		cleanupEmptyDirsDefault,
 		clearSearch,
 		closeGlobalSearch,
 		deferredGlobalSearch,
@@ -229,6 +228,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		favoritesFirst,
 		favoritesOnly,
 		favoritesOpenDetails,
+		favoritesPaneExpanded,
 		favoritesSearch,
 		filtersDrawerOpen,
 		globalSearch,
@@ -252,7 +252,6 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		maxSize,
 		minModifiedMs,
 		minSize,
-		moveAfterUploadDefault,
 		onDetailsResizePointerDown,
 		onDetailsResizePointerMove,
 		onDetailsResizePointerUp,
@@ -264,13 +263,13 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		search,
 		searchDraft,
 		setAutoScanReadyKey,
-		setCleanupEmptyDirsDefault,
 		setDetailsDrawerOpen,
 		setDetailsOpen,
 		setExtFilter,
 		setFavoritesFirst,
 		setFavoritesOnly,
 		setFavoritesOpenDetails,
+		setFavoritesPaneExpanded,
 		setFavoritesSearch,
 		setFiltersDrawerOpen,
 		setGlobalSearch,
@@ -288,7 +287,6 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		setMaxSize,
 		setMinModifiedMs,
 		setMinSize,
-		setMoveAfterUploadDefault,
 		setSearchDraft,
 		setSort,
 		setTypeFilter,

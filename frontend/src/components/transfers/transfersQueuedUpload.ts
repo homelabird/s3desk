@@ -1,13 +1,12 @@
 import type { UploadFileItem } from '../../api/client'
 import type { UploadTask } from './transferTypes'
-import type { QueueUploadFilesArgs, UploadMovePlan } from './transfersTypes'
+import type { QueueUploadFilesArgs } from './transfersTypes'
 import { buildUploadItems } from './transfersUploadUtils'
 import { normalizeRelPath } from './uploadPaths'
 
 export function buildQueuedUpload(args: { taskId: string; queueArgs: QueueUploadFilesArgs }): {
 	items: UploadFileItem[]
 	task: UploadTask
-	movePlan?: UploadMovePlan
 } | null {
 	const files = args.queueArgs.files.filter((file) => !!file)
 	if (files.length === 0) return null
@@ -15,19 +14,9 @@ export function buildQueuedUpload(args: { taskId: string; queueArgs: QueueUpload
 	const items = buildUploadItems(files)
 	const totalBytes = items.reduce((sum, item) => sum + (item.file.size ?? 0), 0)
 	const filePaths = items.map((item) => normalizeRelPath(item.relPath ?? item.file.name)).filter(Boolean)
-	const movePlan = args.queueArgs.moveSource
-		? {
-				...args.queueArgs.moveSource,
-				relPaths:
-					args.queueArgs.moveSource.relPaths.length > 0
-						? args.queueArgs.moveSource.relPaths
-						: items.map((item) => item.relPath || item.file.name).filter(Boolean),
-			}
-		: undefined
 
 	return {
 		items,
-		movePlan,
 		task: {
 			id: args.taskId,
 			profileId: args.queueArgs.profileId,
@@ -35,8 +24,6 @@ export function buildQueuedUpload(args: { taskId: string; queueArgs: QueueUpload
 			prefix: args.queueArgs.prefix,
 			fileCount: items.length,
 			status: 'queued',
-			moveAfterUpload: !!args.queueArgs.moveSource,
-			moveSourceLabel: args.queueArgs.moveSource?.label,
 			createdAtMs: Date.now(),
 			loadedBytes: 0,
 			totalBytes,

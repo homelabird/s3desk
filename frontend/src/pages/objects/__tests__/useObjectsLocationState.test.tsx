@@ -64,4 +64,33 @@ describe('useObjectsLocationState', () => {
 		})
 		expect(result.current.prefix).toBe('docs/reports/')
 	})
+
+	it('scopes stored location state by profile id', async () => {
+		const { result, rerender } = renderHook(({ profileId }) => useObjectsLocationState({ profileId }), {
+			initialProps: { profileId: 'profile-a' },
+		})
+
+		await waitFor(() => expect(result.current.tabs.length).toBe(1))
+
+		act(() => {
+			result.current.navigateToLocation('bucket-a', 'folder-a', { recordHistory: true })
+		})
+		expect(result.current.bucket).toBe('bucket-a')
+		expect(result.current.prefix).toBe('folder-a/')
+
+		rerender({ profileId: 'profile-b' })
+		await waitFor(() => expect(result.current.tabs.length).toBe(1))
+		expect(result.current.bucket).toBe('')
+		expect(result.current.prefix).toBe('')
+
+		act(() => {
+			result.current.navigateToLocation('bucket-b', 'folder-b', { recordHistory: true })
+		})
+		expect(result.current.bucket).toBe('bucket-b')
+		expect(result.current.prefix).toBe('folder-b/')
+
+		rerender({ profileId: 'profile-a' })
+		await waitFor(() => expect(result.current.bucket).toBe('bucket-a'))
+		expect(result.current.prefix).toBe('folder-a/')
+	})
 })

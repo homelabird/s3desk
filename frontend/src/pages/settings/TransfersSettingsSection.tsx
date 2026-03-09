@@ -1,16 +1,11 @@
-import { Button, Collapse, Input, Space } from 'antd'
+import { Button, Collapse, Space } from 'antd'
 
 import { FormField } from '../../components/FormField'
 import { NumberField } from '../../components/NumberField'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
-import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../../lib/moveCleanupDefaults'
 import styles from '../SettingsPage.module.css'
 
 type TransfersSettingsSectionProps = {
-	moveAfterUploadDefault: boolean
-	setMoveAfterUploadDefault: (v: boolean) => void
-	cleanupEmptyDirsDefault: boolean
-	setCleanupEmptyDirsDefault: (v: boolean) => void
 	downloadLinkProxyEnabled: boolean
 	setDownloadLinkProxyEnabled: (v: boolean) => void
 	uploadAutoTuneEnabled: boolean
@@ -29,31 +24,11 @@ type TransfersSettingsSectionProps = {
 	setUploadChunkFileConcurrencySetting: (v: number) => void
 	uploadResumeConversionEnabled: boolean
 	setUploadResumeConversionEnabled: (v: boolean) => void
-	moveCleanupFilenameTemplate: string
-	setMoveCleanupFilenameTemplate: (v: string) => void
-	moveCleanupFilenameMaxLen: number
-	setMoveCleanupFilenameMaxLen: (v: number) => void
 }
 
 export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 	return (
 		<div>
-			<FormField label="Default: Move after upload" extra="Applies to folder uploads from this device.">
-				<ToggleSwitch
-					checked={props.moveAfterUploadDefault}
-					onChange={props.setMoveAfterUploadDefault}
-					aria-label="Default: Move after upload"
-				/>
-			</FormField>
-			<FormField label="Default: Auto-clean empty folders" extra="Used only when move-after-upload is enabled.">
-				<ToggleSwitch
-					checked={props.cleanupEmptyDirsDefault}
-					onChange={props.setCleanupEmptyDirsDefault}
-					disabled={!props.moveAfterUploadDefault}
-					aria-label="Default: Auto-clean empty folders"
-				/>
-			</FormField>
-
 			<FormField
 				label="Downloads and previews: Use server proxy"
 				extra="When enabled, downloads, previews, and 'Link…' always use /download-proxy. When disabled, downloads try presigned URLs first and fall back to the proxy only if CORS blocks the request."
@@ -211,29 +186,6 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										checked={props.uploadResumeConversionEnabled}
 										onChange={props.setUploadResumeConversionEnabled}
 										aria-label="Resume conversion mode"
-									/>
-								</FormField>
-								<FormField
-									label="Move cleanup report filename template"
-									extra="Available tokens: {bucket} {prefix} {label} {timestamp}"
-								>
-									<Input
-										value={props.moveCleanupFilenameTemplate}
-										onChange={(e) => props.setMoveCleanupFilenameTemplate(e.target.value)}
-										placeholder={MOVE_CLEANUP_FILENAME_TEMPLATE}
-									/>
-								</FormField>
-								<FormField label="Move cleanup report filename max length">
-									<NumberField
-										min={40}
-										max={200}
-										value={props.moveCleanupFilenameMaxLen}
-										onChange={(value) =>
-											props.setMoveCleanupFilenameMaxLen(
-												typeof value === 'number' ? value : MOVE_CLEANUP_FILENAME_MAX_LEN,
-											)
-										}
-										className={styles.fullWidth}
 									/>
 								</FormField>
 							</Space>

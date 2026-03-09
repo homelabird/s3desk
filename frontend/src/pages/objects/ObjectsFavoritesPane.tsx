@@ -9,6 +9,7 @@ import { ObjectsTreePane } from './ObjectsTreePane'
 type ObjectsFavoritesPaneProps = {
 	hasProfile: boolean
 	hasBucket: boolean
+	favoriteCount: number
 	isLoading: boolean
 	errorMessage?: string | null
 	favorites: FavoriteObjectItem[]
@@ -19,6 +20,8 @@ type ObjectsFavoritesPaneProps = {
 	query: string
 	onQueryChange: (value: string) => void
 	onSelectFavorite: (key: string) => void
+	expanded?: boolean
+	onExpandedChange?: (expanded: boolean) => void
 }
 
 function splitFavoriteKey(key: string): { name: string; path: string } {
@@ -34,9 +37,13 @@ function splitFavoriteKey(key: string): { name: string; path: string } {
 export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 	const disabled = !props.hasProfile || !props.hasBucket
 	const availableFavorites = disabled ? [] : props.favorites
+	const favoriteCount = disabled ? 0 : props.favoriteCount
 	const query = props.query.trim().toLowerCase()
 	const filtered = query ? availableFavorites.filter((item) => item.key.toLowerCase().includes(query)) : availableFavorites
 	const sorted = [...filtered].sort((a, b) => a.key.localeCompare(b.key))
+	const hasFavorites = favoriteCount > 0
+	const showSearch = hasFavorites || query.length > 0
+	const showBehaviorControls = hasFavorites || props.favoritesOnly
 
 	let emptyMessage: string | null = null
 	if (!props.hasProfile) emptyMessage = 'Select a profile to view favorites.'
@@ -51,46 +58,54 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 	return (
 		<ObjectsTreePane
 			title="Favorites"
+			testId="objects-favorites-pane"
+			collapsible
+			expanded={props.expanded}
+			onExpandedChange={props.onExpandedChange}
 			extra={
 				<Badge
-					count={availableFavorites.length}
+					count={favoriteCount}
 					overflowCount={999}
 					showZero
-					style={{ backgroundColor: availableFavorites.length > 0 ? 'var(--s3d-color-primary)' : 'var(--s3d-color-border-strong)' }}
+					style={{ backgroundColor: favoriteCount > 0 ? 'var(--s3d-color-primary)' : 'var(--s3d-color-border-strong)' }}
 				/>
 			}
 		>
 			<div className={styles.favoritesPane}>
-				<Input
-					allowClear
-					size="small"
-					placeholder="Find favorite…"
-					aria-label="Find favorite"
-					prefix={<SearchOutlined />}
-					value={props.query}
-					onChange={(e) => props.onQueryChange(e.target.value)}
-					disabled={disabled}
-				/>
-				<Space size="small" wrap>
-					<Space size={6} align="center">
-						<ToggleSwitch
-							checked={props.favoritesOnly}
-							onChange={props.onFavoritesOnlyChange}
-							disabled={disabled}
-							ariaLabel="Favorites only"
-						/>
-						<Typography.Text type="secondary">Favorites only</Typography.Text>
+				{showSearch ? (
+					<Input
+						allowClear
+						size="small"
+						placeholder="Find favorite…"
+						aria-label="Find favorite"
+						prefix={<SearchOutlined />}
+						value={props.query}
+						onChange={(e) => props.onQueryChange(e.target.value)}
+						disabled={disabled}
+					/>
+				) : null}
+				{showBehaviorControls ? (
+					<Space size="small" wrap>
+						<Space size={6} align="center">
+							<ToggleSwitch
+								checked={props.favoritesOnly}
+								onChange={props.onFavoritesOnlyChange}
+								disabled={disabled}
+								ariaLabel="Favorites only"
+							/>
+							<Typography.Text type="secondary">Favorites only</Typography.Text>
+						</Space>
+						<Space size={6} align="center">
+							<ToggleSwitch
+								checked={props.openDetailsOnClick}
+								onChange={props.onOpenDetailsOnClickChange}
+								disabled={disabled}
+								ariaLabel="Open details on click"
+							/>
+							<Typography.Text type="secondary">Open details on click</Typography.Text>
+						</Space>
 					</Space>
-					<Space size={6} align="center">
-						<ToggleSwitch
-							checked={props.openDetailsOnClick}
-							onChange={props.onOpenDetailsOnClickChange}
-							disabled={disabled}
-							ariaLabel="Open details on click"
-						/>
-						<Typography.Text type="secondary">Open details on click</Typography.Text>
-					</Space>
-				</Space>
+				) : null}
 				<div className={styles.favoritesList}>
 					{sorted.map((item) => {
 						const { name, path } = splitFavoriteKey(item.key)
@@ -116,7 +131,16 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 							</button>
 						)
 					})}
-					{emptyMessage ? <Typography.Text type={emptyMessageType}>{emptyMessage}</Typography.Text> : null}
+					{emptyMessage ? (
+						<div className={styles.favoritesEmptyState}>
+							<Typography.Text type={emptyMessageType}>{emptyMessage}</Typography.Text>
+							{props.hasProfile && props.hasBucket && !props.errorMessage && !props.isLoading && !hasFavorites ? (
+								<Typography.Text type="secondary" className={styles.favoritesEmptyHint}>
+									Star objects from the list to pin quick paths here.
+								</Typography.Text>
+							) : null}
+						</div>
+					) : null}
 				</div>
 			</div>
 		</ObjectsTreePane>

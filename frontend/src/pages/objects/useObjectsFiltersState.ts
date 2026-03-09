@@ -18,6 +18,8 @@ export type ObjectsFiltersState = {
 	setFavoritesSearch: (next: string) => void
 	favoritesOpenDetails: boolean
 	setFavoritesOpenDetails: (next: boolean) => void
+	favoritesPaneExpanded: boolean
+	setFavoritesPaneExpanded: (next: boolean) => void
 	extFilter: string
 	setExtFilter: (next: string) => void
 	minSize: number | null
@@ -44,6 +46,7 @@ export function useObjectsFiltersState(): ObjectsFiltersState {
 	const [favoritesFirst, setFavoritesFirst] = useLocalStorageState<boolean>('objectsFavoritesFirst', false)
 	const [favoritesSearch, setFavoritesSearch] = useLocalStorageState<string>('objectsFavoritesSearch', '')
 	const [favoritesOpenDetails, setFavoritesOpenDetails] = useLocalStorageState<boolean>('objectsFavoritesOpenDetails', false)
+	const [favoritesPaneExpanded, setFavoritesPaneExpanded] = useLocalStorageState<boolean>('objectsFavoritesPaneExpanded', false)
 	const [extFilter, setExtFilter] = useLocalStorageState<string>('objectsExtFilter', '')
 	const [minSize, setMinSize] = useLocalStorageState<number | null>('objectsMinSize', null)
 	const [maxSize, setMaxSize] = useLocalStorageState<number | null>('objectsMaxSize', null)
@@ -67,6 +70,8 @@ export function useObjectsFiltersState(): ObjectsFiltersState {
 		setFavoritesSearch,
 		favoritesOpenDetails,
 		setFavoritesOpenDetails,
+		favoritesPaneExpanded,
+		setFavoritesPaneExpanded,
 		extFilter,
 		setExtFilter,
 		minSize,

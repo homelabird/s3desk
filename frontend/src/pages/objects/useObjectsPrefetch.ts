@@ -12,6 +12,7 @@ type UseObjectsPrefetchParams = {
 	api: APIClient
 	apiToken: string
 	profileId: string | null
+	profileProvider?: string | null
 	queryClient: QueryClient
 	bucket: string
 	recentBuckets: string[]
@@ -24,6 +25,7 @@ export function useObjectsPrefetch({
 	api,
 	apiToken,
 	profileId,
+	profileProvider,
 	queryClient,
 	bucket,
 	recentBuckets,
@@ -71,16 +73,20 @@ export function useObjectsPrefetch({
 			for (const name of recentBuckets) {
 				if (name) recent.add(name)
 			}
-			const preferredBuckets = recentBuckets.filter((name) => name && name !== bucket).slice(0, 3)
-			const fallbackBuckets = bucketOptions
-				.map((option) => option.value)
-				.filter((name) => name && !recent.has(name))
-				.slice(0, Math.max(0, 3 - preferredBuckets.length))
+			const isOciNative = profileProvider === 'oci_object_storage'
+			const preferredLimit = isOciNative ? 1 : 3
+			const preferredBuckets = recentBuckets.filter((name) => name && name !== bucket).slice(0, preferredLimit)
+			const fallbackBuckets = isOciNative
+				? []
+				: bucketOptions
+						.map((option) => option.value)
+						.filter((name) => name && !recent.has(name))
+						.slice(0, Math.max(0, 3 - preferredBuckets.length))
 			for (const name of [...preferredBuckets, ...fallbackBuckets]) {
 				void prefetchObjectsPage(name)
 			}
 		},
-		[bucket, bucketOptions, prefetchObjectsPage, profileId, recentBuckets],
+		[bucket, bucketOptions, prefetchObjectsPage, profileId, profileProvider, recentBuckets],
 	)
 
 	const prefetchQueueRef = useRef<string[]>([])
@@ -102,6 +108,7 @@ export function useObjectsPrefetch({
 	useEffect(() => {
 		if (prefetchStartedRef.current) return
 		if (!profileId) return
+		if (profileProvider === 'oci_object_storage') return
 		const names = bucketOptions.map((option) => option.value).filter(Boolean)
 		if (names.length === 0) return
 		prefetchStartedRef.current = true
@@ -119,7 +126,7 @@ export function useObjectsPrefetch({
 			window.setTimeout(cb, 300)
 		}
 		schedule(() => pumpPrefetchQueue())
-	}, [bucket, bucketOptions, profileId, pumpPrefetchQueue])
+	}, [bucket, bucketOptions, profileId, profileProvider, pumpPrefetchQueue])
 
 	return { handleBucketDropdownVisibleChange }
 }

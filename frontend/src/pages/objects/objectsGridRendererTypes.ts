@@ -9,6 +9,7 @@ import type { ContextMenuMatch, ContextMenuPoint, ContextMenuState } from './obj
 export type UseObjectsGridRenderersArgs = {
 	api: APIClient
 	profileId: string | null
+	profileProvider?: string | null
 	bucket: string
 	prefix: string
 	canDragDrop: boolean
@@ -30,6 +31,11 @@ export type UseObjectsGridRenderersArgs = {
 	onOpenLargePreviewForKey: (key: string) => void
 	onRowDragStartPrefix: (event: DragEvent, prefix: string) => void
 	onRowDragStartObjects: (event: DragEvent, key: string) => void
+	dndHoverPrefix: string | null
+	normalizeDropTargetPrefix: (raw: string) => string
+	onDndTargetDragOver: (event: DragEvent, targetPrefixRaw: string) => void
+	onDndTargetDragLeave: (event: DragEvent, targetPrefixRaw: string) => void
+	onDndTargetDrop: (event: DragEvent, targetPrefixRaw: string) => void
 	clearDndHover: () => void
 	selectObjectFromPointerEvent: (event: MouseEvent, key: string) => void
 	selectObjectFromCheckboxEvent: (event: MouseEvent, key: string) => void

@@ -1,4 +1,4 @@
-import { Alert, Button, Checkbox, Typography } from 'antd'
+import { Alert, Button, Typography } from 'antd'
 
 import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
@@ -7,8 +7,6 @@ import { getDevicePickerSupport } from '../../lib/deviceFs'
 
 type UploadFolderValues = {
 	localFolder: string
-	moveAfterUpload: boolean
-	cleanupEmptyDirs: boolean
 }
 
 type ObjectsUploadFolderModalProps = {
@@ -21,7 +19,6 @@ type ObjectsUploadFolderModalProps = {
 	onFinish: (values: UploadFolderValues) => void
 	onPickFolder: (handle: FileSystemDirectoryHandle) => void
 	canSubmit: boolean
-	onDefaultsChange?: (values: { moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => void
 }
 
 export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
@@ -76,35 +73,10 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 						onChange={(value) => props.onValuesChange({ ...props.values, localFolder: value })}
 						placeholder="Select a folder…"
 						disabled={!support.ok}
+						pickerMode="read"
 						onPick={props.onPickFolder}
 					/>
 				</FormField>
-
-				<div style={{ marginBottom: 10 }}>
-					<Checkbox
-						checked={props.values.moveAfterUpload}
-						onChange={(e) => {
-							const moveAfterUpload = e.target.checked
-							const cleanupEmptyDirs = moveAfterUpload ? props.values.cleanupEmptyDirs : false
-							props.onValuesChange({ ...props.values, moveAfterUpload, cleanupEmptyDirs })
-							props.onDefaultsChange?.({ moveAfterUpload, cleanupEmptyDirs })
-						}}
-					>
-						Move after upload (delete local files after the job succeeds)
-					</Checkbox>
-				</div>
-
-				<Checkbox
-					checked={props.values.cleanupEmptyDirs}
-					disabled={!props.values.moveAfterUpload}
-					onChange={(e) => {
-						const cleanupEmptyDirs = e.target.checked
-						props.onValuesChange({ ...props.values, cleanupEmptyDirs })
-						props.onDefaultsChange?.({ moveAfterUpload: props.values.moveAfterUpload, cleanupEmptyDirs })
-					}}
-				>
-					Auto-clean empty folders
-				</Checkbox>
 			</form>
 		</DialogModal>
 	)

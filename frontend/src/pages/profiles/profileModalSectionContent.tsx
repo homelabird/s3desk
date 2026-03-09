@@ -37,7 +37,6 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 						options={[
 							{ label: 'S3 Compatible (MinIO/Ceph/Custom)', value: 's3_compatible' },
 							{ label: 'AWS S3', value: 'aws_s3' },
-							{ label: 'Oracle OCI (S3 Compat)', value: 'oci_s3_compat' },
 							{ label: 'Oracle OCI Object Storage (Native)', value: 'oci_object_storage' },
 							{ label: 'Azure Blob Storage', value: 'azure_blob' },
 							{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
@@ -67,7 +66,11 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 						<Input
 							value={values.endpoint}
 							onChange={(e) => setField('endpoint', e.target.value)}
-							placeholder={viewState.isAws ? 'Leave blank for AWS default' : 'https://s3.example.com'}
+							placeholder={
+								viewState.isAws
+									? 'Leave blank for AWS default'
+									: 'https://s3.example.com'
+							}
 							autoComplete="off"
 							aria-label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
 						/>
@@ -257,7 +260,7 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 						<Input
 							value={values.ociAuthProvider}
 							onChange={(e) => setField('ociAuthProvider', e.target.value)}
-							placeholder="instance_principal / api_key / resource_principal"
+							placeholder="user_principal_auth / instance_principal / api_key / resource_principal"
 							aria-label="Auth Provider (optional)"
 						/>
 					</FormField>

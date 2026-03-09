@@ -4,6 +4,7 @@ import type { MenuProps } from 'antd'
 
 import type { APIClient } from '../../api/client'
 import type { ObjectItem } from '../../api/types'
+import type { PopoverOpenSource } from '../../components/PopoverSurface'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
@@ -13,7 +14,7 @@ import { buildActionMenu } from './objectsActions'
 import { COMPACT_LIST_THUMBNAIL_PX, WIDE_LIST_THUMBNAIL_PX } from './objectsPageConstants'
 import { ObjectsObjectRow, ObjectsPrefixRow } from './ObjectsListRow'
 import { ObjectThumbnail } from './ObjectThumbnail'
-import { displayNameForKey, displayNameForPrefix, isThumbnailKey } from './objectsListUtils'
+import { displayNameForKey, displayNameForPrefix, isThumbnailKey, isVideoKey } from './objectsListUtils'
 import type { ContextMenuMatch, ContextMenuPoint } from './useObjectsContextMenu'
 
 type ObjectsPrefixRowItemProps = {
@@ -35,6 +36,10 @@ type ObjectsPrefixRowItemProps = {
 	onOpenPrefix: (prefix: string) => void
 	onRowDragStartPrefix: (event: DragEvent, prefix: string) => void
 	onRowDragEnd: () => void
+	isDropTargetActive: boolean
+	onDropTargetDragOver: (event: DragEvent, prefix: string) => void
+	onDropTargetDragLeave: (event: DragEvent, prefix: string) => void
+	onDropTargetDrop: (event: DragEvent, prefix: string) => void
 }
 
 export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: ObjectsPrefixRowItemProps) {
@@ -57,6 +62,10 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 		onOpenPrefix,
 		onRowDragStartPrefix,
 		onRowDragEnd,
+		isDropTargetActive,
+		onDropTargetDragOver,
+		onDropTargetDragLeave,
+		onDropTargetDrop,
 	} = props
 	const displayName = useMemo(
 		() => displayNameForPrefix(prefixKey, currentPrefix),
@@ -69,7 +78,7 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 		[getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName],
 	)
 	const handleButtonMenuOpenChange = useCallback(
-		(open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => {
+		(open: boolean, info?: { source: PopoverOpenSource }) => {
 			if (open) openPrefixContextMenu(prefixKey, 'button')
 			else closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
 		},
@@ -89,9 +98,22 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 		(event: DragEvent) => onRowDragStartPrefix(event, prefixKey),
 		[onRowDragStartPrefix, prefixKey],
 	)
+	const handleDropTargetDragOver = useCallback(
+		(event: DragEvent<HTMLDivElement>) => onDropTargetDragOver(event, prefixKey),
+		[onDropTargetDragOver, prefixKey],
+	)
+	const handleDropTargetDragLeave = useCallback(
+		(event: DragEvent<HTMLDivElement>) => onDropTargetDragLeave(event, prefixKey),
+		[onDropTargetDragLeave, prefixKey],
+	)
+	const handleDropTargetDrop = useCallback(
+		(event: DragEvent<HTMLDivElement>) => onDropTargetDrop(event, prefixKey),
+		[onDropTargetDrop, prefixKey],
+	)
 
 	return (
 		<ObjectsPrefixRow
+			prefixKey={prefixKey}
 			offset={offset}
 			rowMinHeight={rowMinHeight}
 			listGridClassName={listGridClassName}
@@ -106,6 +128,10 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 			onOpen={handleOpen}
 			onDragStart={handleDragStart}
 			onDragEnd={onRowDragEnd}
+			isDropTargetActive={isDropTargetActive}
+			onDropTargetDragOver={handleDropTargetDragOver}
+			onDropTargetDragLeave={handleDropTargetDragLeave}
+			onDropTargetDrop={handleDropTargetDrop}
 		/>
 	)
 })
@@ -141,6 +167,7 @@ type ObjectsObjectRowItemProps = {
 	onToggleFavorite: (key: string) => void
 	api: APIClient
 	profileId: string | null
+	profileProvider?: string | null
 	bucket: string
 	showThumbnails: boolean
 	thumbnailCache: ThumbnailCache
@@ -175,6 +202,7 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		onToggleFavorite,
 		api,
 		profileId,
+		profileProvider,
 		bucket,
 		showThumbnails,
 		thumbnailCache,
@@ -187,7 +215,8 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 	const sizeLabel = useMemo(() => formatBytes(object.size), [object.size])
 	const timeLabel = useMemo(() => formatDateTime(object.lastModified), [object.lastModified])
 	const thumbnailSize = isCompact ? COMPACT_LIST_THUMBNAIL_PX : WIDE_LIST_THUMBNAIL_PX
-	const canShowThumbnail = showThumbnails && isThumbnailKey(object.key)
+	const deferVideoThumbnail = profileProvider === 'oci_object_storage' && isVideoKey(object.key)
+	const canShowThumbnail = showThumbnails && isThumbnailKey(object.key) && !deferVideoThumbnail
 	const thumbnail =
 		canShowThumbnail && profileId && bucket ? (
 			<ObjectThumbnail
@@ -200,6 +229,10 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 				cache={thumbnailCache}
 				cacheKeySuffix={object.etag || object.lastModified || undefined}
 			/>
+		) : deferVideoThumbnail ? (
+			<span className={styles.listThumbnailDeferredHint} aria-hidden>
+				Preview
+			</span>
 		) : null
 
 	const menu = useMemo(() => {
@@ -215,7 +248,7 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		withContextMenuClassName,
 	])
 	const handleButtonMenuOpenChange = useCallback(
-		(open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => {
+		(open: boolean, info?: { source: PopoverOpenSource }) => {
 			if (open) openObjectContextMenu(object.key, 'button')
 			else closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
 		},

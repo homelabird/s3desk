@@ -9,9 +9,9 @@ type DialogOverlayProps = Pick<
 	| 'commandPaletteModalProps'
 	| 'deletePrefixConfirmModalProps'
 	| 'downloadPrefixModalProps'
-	| 'uploadFolderModalProps'
 	| 'copyPrefixModalProps'
 	| 'copyMoveModalProps'
+	| 'selectionMoveSheetProps'
 	| 'newFolderModalProps'
 	| 'renameModalProps'
 >
@@ -86,23 +86,6 @@ export function buildObjectsDialogsProps(args: BuildObjectsPageOverlaysPropsArgs
 				canSubmit: actions.downloadPrefixCanSubmit,
 			}
 			: null,
-		uploadFolderModalProps: actions.uploadFolderOpen
-			? {
-				open: actions.uploadFolderOpen,
-				destinationLabel: bucket ? `s3://${bucket}/${normalizePrefix(args.prefix)}` : '-',
-				values: actions.uploadFolderValues,
-				onValuesChange: actions.setUploadFolderValues,
-				isSubmitting: actions.uploadFolderSubmitting,
-				onCancel: actions.handleUploadFolderCancel,
-				onDefaultsChange: (values) => {
-					args.setMoveAfterUploadDefault(values.moveAfterUpload)
-					args.setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
-				},
-				onFinish: actions.handleUploadFolderSubmit,
-				onPickFolder: actions.handleUploadFolderPick,
-				canSubmit: actions.uploadFolderCanSubmit,
-			}
-			: null,
 		copyPrefixModalProps: actions.copyPrefixOpen
 			? {
 				open: actions.copyPrefixOpen,
@@ -142,6 +125,22 @@ export function buildObjectsDialogsProps(args: BuildObjectsPageOverlaysPropsArgs
 				isSubmitting: actions.copyMoveSubmitting,
 				onCancel: actions.handleCopyMoveCancel,
 				onFinish: actions.handleCopyMoveSubmit,
+			}
+			: null,
+		selectionMoveSheetProps: actions.moveSelectionOpen
+			? {
+				open: actions.moveSelectionOpen,
+				useBottomSheet: !args.isMd,
+				selectedCount: args.selectedCount,
+				bucket,
+				prefix: normalizePrefix(args.prefix),
+				values: actions.moveSelectionValues,
+				onValuesChange: actions.setMoveSelectionValues,
+				bucketOptions: args.bucketOptions,
+				isBucketsLoading: args.bucketsLoading,
+				isSubmitting: actions.moveSelectionSubmitting,
+				onCancel: actions.handleMoveSelectionCancel,
+				onFinish: actions.handleMoveSelectionSubmit,
 			}
 			: null,
 		newFolderModalProps: actions.newFolderOpen

@@ -9,6 +9,8 @@ type ObjectsOverlaySheetProps = {
 	onClose: () => void
 	title: string
 	placement: 'left' | 'right' | 'bottom'
+	sheetId?: string
+	backdropInteractive?: boolean
 	width?: number | string
 	height?: number | string
 	dataTestId?: string
@@ -19,7 +21,21 @@ type ObjectsOverlaySheetProps = {
 }
 
 export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
-	const { open, onClose, title, placement, width, height, dataTestId, extra, children, bodyClassName, panelClassName } = props
+	const {
+		open,
+		onClose,
+		title,
+		placement,
+		sheetId,
+		backdropInteractive = true,
+		width,
+		height,
+		dataTestId,
+		extra,
+		children,
+		bodyClassName,
+		panelClassName,
+	} = props
 	const titleId = useId()
 	const closeButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -67,15 +83,17 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 
 	return createPortal(
 		<div
+			data-objects-overlay-sheet={sheetId}
 			className={[
 				styles.objectsOverlayBackdrop,
+				backdropInteractive ? '' : styles.objectsOverlayBackdropPassthrough,
 				placement === 'right'
 					? styles.objectsOverlayBackdropRight
 					: placement === 'left'
 						? styles.objectsOverlayBackdropLeft
 						: styles.objectsOverlayBackdropBottom,
 			].join(' ')}
-			onMouseDown={onClose}
+			onMouseDown={backdropInteractive ? onClose : undefined}
 		>
 			<div
 				role="dialog"

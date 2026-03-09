@@ -74,7 +74,7 @@ export function JobsTableSection({
 				<Space orientation="vertical" size={6} className={styles.emptyCopy}>
 					<Typography.Text strong>No jobs yet.</Typography.Text>
 					<Typography.Text type="secondary" className={styles.emptyHint}>
-						Upload files or create a sync, copy, or delete job to start populating the queue.
+						Upload from this device or create a sync, copy, or delete job to start populating the queue.
 					</Typography.Text>
 				</Space>
 			}
@@ -86,9 +86,9 @@ export function JobsTableSection({
 					onClick={onOpenCreateUpload}
 					disabled={isOffline || !uploadSupported}
 				>
-					Upload folder
+					Upload…
 				</Button>
-				<HelpTooltip text="Uploads selected files from your device to the bucket" />
+				<HelpTooltip text="Uploads selected files or folders from your device to the bucket" />
 				<Button danger icon={<DeleteOutlined />} onClick={onOpenDeleteJob} disabled={isOffline}>
 					New delete job
 				</Button>
@@ -157,7 +157,11 @@ export function JobsTableSection({
 												</div>
 											</div>
 
-											{errorText ? <div className={styles.mobileError}>{errorText}</div> : null}
+											{errorText ? (
+												<div className={styles.mobileError} title={errorText}>
+													{errorText}
+												</div>
+											) : null}
 
 											<div className={styles.mobileActionRow}>
 												<Button size="small" onClick={() => onOpenDetails(job.id)} disabled={isOffline}>

@@ -5,7 +5,7 @@ import type { APIClient } from '../../api/client'
 import type { ObjectItem, ObjectMeta } from '../../api/types'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import { ObjectThumbnail } from './ObjectThumbnail'
-import { isImageKey, isThumbnailCandidate } from './objectsListUtils'
+import { guessPreviewKind, isImageKey, isThumbnailCandidate } from './objectsListUtils'
 import type { ObjectPreview } from './objectsTypes'
 import { useObjectPreview } from './useObjectPreview'
 
@@ -17,6 +17,7 @@ type Args = {
 	api: APIClient
 	apiToken: string
 	profileId: string | null
+	profileProvider?: string | null
 	bucket: string
 	selectedKeys: Set<string>
 	selectedCount: number
@@ -25,9 +26,12 @@ type Args = {
 	favoriteItems: ObjectItem[]
 	objectPages?: PageLike[]
 	downloadLinkProxyEnabled: boolean
+	presignedDownloadSupported: boolean
 	showThumbnails: boolean
 	thumbnailCache: ThumbnailCache
-	openDetailsForKey: (key: string) => void
+	setSelectedKeys: (next: Set<string>) => void
+	setLastSelectedObjectKey: (key: string | null) => void
+	setDetailsDrawerOpen: (open: boolean) => void
 }
 
 type PreviewState = {
@@ -49,6 +53,7 @@ export function useObjectsScreenPreviewState({
 	api,
 	apiToken,
 	profileId,
+	profileProvider,
 	bucket,
 	selectedKeys,
 	selectedCount,
@@ -57,9 +62,12 @@ export function useObjectsScreenPreviewState({
 	favoriteItems,
 	objectPages,
 	downloadLinkProxyEnabled,
+	presignedDownloadSupported,
 	showThumbnails,
 	thumbnailCache,
-	openDetailsForKey,
+	setSelectedKeys,
+	setLastSelectedObjectKey,
+	setDetailsDrawerOpen,
 }: Args) {
 	const previewScopeKey = `${profileId ?? ''}:${bucket}`
 	const [largePreviewSession, setLargePreviewSession] = useState<{ scopeKey: string; key: string | null; open: boolean }>({
@@ -110,6 +118,7 @@ export function useObjectsScreenPreviewState({
 		detailsVisible,
 		detailsMeta,
 		downloadLinkProxyEnabled,
+		presignedDownloadSupported,
 	})
 
 	const largePreviewMetaQueryRaw = useQuery({
@@ -127,18 +136,21 @@ export function useObjectsScreenPreviewState({
 		detailsVisible: largePreviewOpen,
 		detailsMeta: largePreviewMeta,
 		downloadLinkProxyEnabled,
+		presignedDownloadSupported,
 	})
 
 	const openLargePreviewForKey = useCallback(
 		(key: string) => {
-			openDetailsForKey(key)
+			setSelectedKeys(new Set([key]))
+			setLastSelectedObjectKey(key)
+			setDetailsDrawerOpen(false)
 			setLargePreviewSession({
 				scopeKey: previewScopeKey,
 				key,
 				open: true,
 			})
 		},
-		[openDetailsForKey, previewScopeKey],
+		[previewScopeKey, setDetailsDrawerOpen, setLastSelectedObjectKey, setSelectedKeys],
 	)
 	const closeLargePreview = useCallback(() => {
 		setLargePreviewSession({
@@ -147,6 +159,11 @@ export function useObjectsScreenPreviewState({
 			open: false,
 		})
 	}, [previewScopeKey])
+
+	useEffect(() => {
+		if (!largePreviewOpen) return
+		setDetailsDrawerOpen(false)
+	}, [largePreviewOpen, setDetailsDrawerOpen])
 
 	useEffect(() => {
 		return () => {
@@ -163,13 +180,17 @@ export function useObjectsScreenPreviewState({
 	const detailsThumbnailSize = 160
 	const detailsThumbnailFileName = detailsKey?.split('/').pop() ?? detailsKey ?? null
 	const detailsThumbnailCacheKeySuffix = detailsMeta?.etag || detailsMeta?.lastModified || undefined
-	const detailsThumbnail =
+	const deferVideoThumbnail = profileProvider === 'oci_object_storage'
+	const shouldRenderInlineDetailsThumbnail =
 		showThumbnails &&
 		detailsMeta &&
 		detailsKey &&
 		profileId &&
 		bucket &&
-		isThumbnailCandidate(detailsMeta.contentType, detailsKey) ? (
+		isThumbnailCandidate(detailsMeta.contentType, detailsKey) &&
+		!(deferVideoThumbnail && guessPreviewKind(detailsMeta.contentType, detailsKey) === 'video')
+	const detailsThumbnail =
+		shouldRenderInlineDetailsThumbnail ? (
 			<ObjectThumbnail
 				api={api}
 				profileId={profileId}
@@ -182,12 +203,7 @@ export function useObjectsScreenPreviewState({
 			/>
 		) : null
 	const detailsPreviewThumbnail =
-		showThumbnails &&
-		detailsMeta &&
-		detailsKey &&
-		profileId &&
-		bucket &&
-		isThumbnailCandidate(detailsMeta.contentType, detailsKey) ? (
+		shouldRenderInlineDetailsThumbnail ? (
 			<ObjectThumbnail
 				api={api}
 				profileId={profileId}

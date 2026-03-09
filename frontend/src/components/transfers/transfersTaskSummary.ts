@@ -10,7 +10,6 @@ export function getActiveUploadCount(uploadTasks: UploadTask[]): number {
 			task.status === 'queued' ||
 			task.status === 'staging' ||
 			task.status === 'commit' ||
-			task.status === 'waiting_job' ||
-			task.status === 'cleanup',
+			task.status === 'waiting_job',
 	).length
 }

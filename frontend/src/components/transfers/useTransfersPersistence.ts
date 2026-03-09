@@ -19,7 +19,7 @@ const isActiveDownloadStatus = (status: DownloadTask['status']) =>
 	status === 'queued' || status === 'waiting' || status === 'running'
 
 const isActiveUploadStatus = (status: UploadTask['status']) =>
-	status === 'queued' || status === 'staging' || status === 'commit' || status === 'waiting_job' || status === 'cleanup'
+	status === 'queued' || status === 'staging' || status === 'commit' || status === 'waiting_job'
 
 function withoutPreview<T extends { preview?: unknown }>(task: T): Omit<T, 'preview'> {
 	const { preview, ...rest } = task

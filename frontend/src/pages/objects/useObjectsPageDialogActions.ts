@@ -13,6 +13,7 @@ import { useObjectsNewFolder } from './useObjectsNewFolder'
 import { useObjectsPrefixSummary } from './useObjectsPrefixSummary'
 import { useObjectsPresign } from './useObjectsPresign'
 import { useObjectsRename } from './useObjectsRename'
+import { useObjectsSelectionMove } from './useObjectsSelectionMove'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
@@ -23,6 +24,7 @@ type Args = {
 	bucket: string
 	prefix: string
 	downloadLinkProxyEnabled: boolean
+	presignedDownloadSupported: boolean
 	createJobWithRetry: CreateJobWithRetry
 	typeFilter: ObjectTypeFilter
 	favoritesOnly: boolean
@@ -44,6 +46,7 @@ export function useObjectsPageDialogActions({
 	bucket,
 	prefix,
 	downloadLinkProxyEnabled,
+	presignedDownloadSupported,
 	createJobWithRetry,
 	typeFilter,
 	favoritesOnly,
@@ -68,6 +71,7 @@ export function useObjectsPageDialogActions({
 		profileId,
 		bucket,
 		downloadLinkProxyEnabled,
+		presignedDownloadSupported,
 	})
 
 	const copyMoveActions = useObjectsCopyMove({
@@ -76,6 +80,15 @@ export function useObjectsPageDialogActions({
 		prefix,
 		createJobWithRetry,
 		splitLines,
+	})
+
+	const selectionMoveActions = useObjectsSelectionMove({
+		profileId,
+		bucket,
+		prefix,
+		selectedKeys,
+		createJobWithRetry,
+		setSelectedKeys,
 	})
 
 	const deleteActions = useObjectsDelete({
@@ -142,6 +155,7 @@ export function useObjectsPageDialogActions({
 		...renameActions,
 		...presignActions,
 		...copyMoveActions,
+		...selectionMoveActions,
 		...deleteActions,
 		...newFolderActions,
 		...downloadPrefixActions,

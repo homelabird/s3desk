@@ -17,7 +17,7 @@ var ErrUnsupportedProvider = errors.New("unsupported provider")
 
 func IsS3LikeProvider(p models.ProfileProvider) bool {
 	switch p {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		return true
 	default:
 		return false
@@ -36,7 +36,7 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 	}
 
 	switch profile.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		if _, err := fmt.Fprintln(&b, "type = s3"); err != nil {
 			return "", err
 		}
@@ -85,6 +85,9 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 		if _, err := fmt.Fprintln(&b, "type = azureblob"); err != nil {
 			return "", err
 		}
+		if _, err := fmt.Fprintln(&b, "directory_markers = true"); err != nil {
+			return "", err
+		}
 		if _, err := fmt.Fprintf(&b, "account = %s\n", strings.TrimSpace(profile.AzureAccountName)); err != nil {
 			return "", err
 		}
@@ -100,6 +103,9 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 
 	case models.ProfileProviderGcpGcs:
 		if _, err := fmt.Fprintln(&b, "type = google cloud storage"); err != nil {
+			return "", err
+		}
+		if _, err := fmt.Fprintln(&b, "directory_markers = true"); err != nil {
 			return "", err
 		}
 		if profile.GcpAnonymous {
@@ -161,8 +167,8 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 			}
 		}
 		if ap := strings.TrimSpace(profile.OciAuthProvider); ap != "" {
-			// rclone's oracleobjectstorage backend uses OCI SDK auth providers.
-			if _, err := fmt.Fprintf(&b, "auth_provider = %s\n", ap); err != nil {
+			// rclone's oracleobjectstorage backend uses `provider` for auth selection.
+			if _, err := fmt.Fprintf(&b, "provider = %s\n", ap); err != nil {
 				return "", err
 			}
 		}

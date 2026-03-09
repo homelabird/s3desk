@@ -59,7 +59,7 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 			return
 		}
 		try {
-			const dirHandle = await pickDirectory()
+			const dirHandle = await pickDirectory('readwrite')
 			args.transfers.queueDownloadObjectsToDevice({
 				profileId: args.profileId,
 				bucket: args.bucket,
@@ -96,7 +96,7 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 			return
 		}
 		try {
-			const dirHandle = await pickDirectory()
+			const dirHandle = await pickDirectory('readwrite')
 			args.transfers.queueDownloadObjectsToDevice({
 				profileId: args.profileId!,
 				bucket: args.bucket,

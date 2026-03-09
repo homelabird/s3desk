@@ -19,6 +19,7 @@ type UseObjectsPageActionsArgs = {
 	prefix: string
 	dockDetails: boolean
 	downloadLinkProxyEnabled: boolean
+	presignedDownloadSupported: boolean
 	createJobWithRetry: CreateJobWithRetry
 	typeFilter: ObjectTypeFilter
 	favoritesOnly: boolean
@@ -32,8 +33,6 @@ type UseObjectsPageActionsArgs = {
 	isOffline: boolean
 	uploadSupported: boolean
 	uploadDisabledReason?: string | null
-	moveAfterUploadDefault: boolean
-	cleanupEmptyDirsDefault: boolean
 	selectedKeys: Set<string>
 	setSelectedKeys: Dispatch<SetStateAction<Set<string>>>
 	setLastSelectedObjectKey: Dispatch<SetStateAction<string | null>>
@@ -52,6 +51,7 @@ export function useObjectsPageActions({
 	prefix,
 	dockDetails,
 	downloadLinkProxyEnabled,
+	presignedDownloadSupported,
 	createJobWithRetry,
 	typeFilter,
 	favoritesOnly,
@@ -65,8 +65,6 @@ export function useObjectsPageActions({
 	isOffline,
 	uploadSupported,
 	uploadDisabledReason,
-	moveAfterUploadDefault,
-	cleanupEmptyDirsDefault,
 	selectedKeys,
 	setSelectedKeys,
 	setLastSelectedObjectKey,
@@ -104,6 +102,7 @@ export function useObjectsPageActions({
 		bucket,
 		prefix,
 		downloadLinkProxyEnabled,
+		presignedDownloadSupported,
 		createJobWithRetry,
 		typeFilter,
 		favoritesOnly,
@@ -126,8 +125,6 @@ export function useObjectsPageActions({
 		uploadSupported,
 		uploadDisabledReason,
 		transfers,
-		moveAfterUploadDefault,
-		cleanupEmptyDirsDefault,
 	})
 
 	return {

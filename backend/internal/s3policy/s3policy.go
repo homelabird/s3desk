@@ -422,7 +422,7 @@ var ErrNotS3Profile = errors.New("profile is not S3 compatible")
 
 func ValidateS3Profile(profile models.ProfileSecrets) error {
 	switch profile.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		return nil
 	default:
 		return ErrNotS3Profile

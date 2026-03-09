@@ -16,12 +16,15 @@ type ObjectsTreePanelProps = {
 	hasProfile: boolean
 	hasBucket: boolean
 	favorites: FavoriteObjectItem[]
+	favoriteCount: number
 	favoritesSearch: string
 	onFavoritesSearchChange: (value: string) => void
 	favoritesOnly: boolean
 	onFavoritesOnlyChange: (value: boolean) => void
 	favoritesOpenDetails: boolean
 	onFavoritesOpenDetailsChange: (value: boolean) => void
+	favoritesExpanded: boolean
+	onFavoritesExpandedChange: (expanded: boolean) => void
 	onSelectFavorite: (key: string) => void
 	onSelectFavoriteFromDrawer: (key: string) => void
 	favoritesLoading: boolean
@@ -51,6 +54,9 @@ type ObjectsTreePanelProps = {
 }
 
 export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
+	const favoritesQuery = props.favoritesSearch.trim()
+	const favoritesExpanded = props.favoritesExpanded || favoritesQuery.length > 0 || props.favoritesOnly
+
 	const renderTreeView = (onSelectKey: (key: string) => void) => (
 		<ObjectsTreeView
 			hasProfile={props.hasProfile}
@@ -81,6 +87,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 					hasProfile={props.hasProfile}
 					hasBucket={props.hasBucket}
 					favorites={props.favorites}
+					favoriteCount={props.favoriteCount}
 					favoritesOnly={props.favoritesOnly}
 					onFavoritesOnlyChange={props.onFavoritesOnlyChange}
 					openDetailsOnClick={props.favoritesOpenDetails}
@@ -90,9 +97,12 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 					onSelectFavorite={onSelectFavorite}
 					isLoading={props.favoritesLoading}
 					errorMessage={props.favoritesError}
+					expanded={favoritesExpanded}
+					onExpandedChange={props.onFavoritesExpandedChange}
 				/>
 				<ObjectsTreePane
 					title="Folders"
+					testId="objects-folders-pane"
 					extra={
 						<span
 							title={

@@ -79,7 +79,7 @@ export function JobsToolbar(props: Props) {
 							title={
 								!props.uploadSupported
 									? props.uploadDisabledReason ?? 'Uploads are not supported by this provider.'
-									: 'Upload a local folder from this device'
+									: 'Upload files or folders from this device'
 							}
 						>
 							<span>
@@ -89,7 +89,7 @@ export function JobsToolbar(props: Props) {
 									onClick={props.onOpenCreateUpload}
 									disabled={props.isOffline || !props.uploadSupported}
 								>
-									Upload folder (device)
+									Upload…
 								</Button>
 							</span>
 						</Tooltip>

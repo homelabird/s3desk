@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { APIClient, APIError } from '../api/client'
 import { BrandLockup } from '../components/BrandLockup'
 import { FormField } from '../components/FormField'
+import { getHttpHeaderValueValidationError } from '../lib/httpHeaderValue'
 import { useThemeMode } from '../useThemeMode'
 
 type Props = {
@@ -32,6 +33,11 @@ export function LoginPage(props: Props) {
 	const submit = async () => {
 		const trimmed = token.trim()
 		if (!trimmed) return
+		const headerError = getHttpHeaderValueValidationError('API token', trimmed)
+		if (headerError) {
+			setLocalError(headerError)
+			return
+		}
 		setSubmitting(true)
 		setLocalError(null)
 		try {

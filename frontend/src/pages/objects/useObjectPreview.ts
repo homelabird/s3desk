@@ -4,6 +4,7 @@ import { message } from 'antd'
 import { APIClient, RequestAbortedError } from '../../api/client'
 import type { ObjectMeta } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { buildThumbnailCacheKey, getPersistentThumbnailBlob, setPersistentThumbnailBlob } from '../../lib/thumbnailCache'
 import { formatBytes } from '../../lib/transfer'
 import type { ObjectPreview } from './objectsTypes'
 import { guessPreviewKind } from './objectsListUtils'
@@ -20,6 +21,7 @@ type UseObjectPreviewArgs = {
 	detailsVisible: boolean
 	detailsMeta: ObjectMeta | null
 	downloadLinkProxyEnabled: boolean
+	presignedDownloadSupported: boolean
 }
 
 export type ObjectPreviewResult = {
@@ -74,6 +76,20 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		setPreview({ key, status: 'loading', kind, contentType })
 
 		if (kind === 'video') {
+			const cacheKey = buildThumbnailCacheKey({
+				profileId: args.profileId,
+				bucket: args.bucket,
+				objectKey: key,
+				size: VIDEO_PREVIEW_THUMBNAIL_SIZE,
+				cacheKeySuffix: args.detailsMeta.etag || args.detailsMeta.lastModified || undefined,
+			})
+			const cachedBlob = await getPersistentThumbnailBlob(cacheKey)
+			if (cachedBlob) {
+				const url = URL.createObjectURL(cachedBlob)
+				previewURLRef.current = url
+				setPreview({ key, status: 'ready', kind: 'video', contentType: cachedBlob.type || contentType, url })
+				return
+			}
 			const handle = args.api.downloadObjectThumbnail({
 				profileId: args.profileId!,
 				bucket: args.bucket,
@@ -84,6 +100,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			try {
 				const resp = await handle.promise
 				previewAbortRef.current = null
+				await setPersistentThumbnailBlob(cacheKey, resp.blob)
 				const url = URL.createObjectURL(resp.blob)
 				previewURLRef.current = url
 				setPreview({ key, status: 'ready', kind: 'video', contentType: resp.contentType ?? contentType, url })
@@ -129,8 +146,8 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 				return false
 			}
 
-			const proxyFirst = args.downloadLinkProxyEnabled || size > maxBytes / 2
-			const allowDirect = !args.downloadLinkProxyEnabled
+			const proxyFirst = args.downloadLinkProxyEnabled || !args.presignedDownloadSupported || size > maxBytes / 2
+			const allowDirect = args.presignedDownloadSupported && !args.downloadLinkProxyEnabled
 			const directTimeoutMs = 1500
 			const fetchDirectWithTimeout = async () => {
 				const directController = new AbortController()
@@ -201,7 +218,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			}
 			setPreview({ key, status: 'error', kind, contentType, error: formatErr(err) })
 		}
-	}, [args.api, args.bucket, args.detailsMeta, args.downloadLinkProxyEnabled, args.profileId, cleanupPreview, preview?.status])
+	}, [args.api, args.bucket, args.detailsMeta, args.downloadLinkProxyEnabled, args.presignedDownloadSupported, args.profileId, cleanupPreview, preview?.status])
 
 	const cancelPreview = useCallback(() => {
 		previewAbortRef.current?.()

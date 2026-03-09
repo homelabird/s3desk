@@ -95,15 +95,16 @@ test('folder upload preserves relative paths', async ({ page }) => {
 		uploadBody = body
 	})
 	await seedStorage(page)
+	await page.addInitScript(() => {
+		Reflect.deleteProperty(window, 'showDirectoryPicker')
+	})
 	await page.goto('/uploads')
 
-	const folderSwitch = page.getByRole('switch', { name: 'Folder mode' })
-	if ((await folderSwitch.getAttribute('aria-checked')) !== 'true') {
-		await folderSwitch.click()
-	}
-
-	const input = page.locator('input[type="file"]').first()
-	await input.setInputFiles(fixtureRoot)
+	await page.getByRole('button', { name: 'Add from device…' }).click()
+	const chooserPromise = page.waitForEvent('filechooser')
+	await page.getByRole('button', { name: 'Choose folder' }).click()
+	const chooser = await chooserPromise
+	await chooser.setFiles(fixtureRoot)
 
 	const queueButton = page.getByRole('button', { name: /Queue upload/i })
 	await expect(queueButton).toBeEnabled()

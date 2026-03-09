@@ -1,11 +1,9 @@
-import type { MenuProps } from 'antd'
 import { useCallback, useMemo, type MutableRefObject } from 'react'
 
 import type { ProviderCapabilityMatrix } from '../../lib/providerCapabilities'
 import { getProviderCapabilityReason } from '../../lib/providerCapabilities'
 import type { ObjectsToolbarProps } from './ObjectsToolbar'
-import type { UIAction, UIActionOrDivider } from './objectsActions'
-import { buildActionMenu, trimActionDividers } from './objectsActions'
+import type { UIAction } from './objectsActions'
 
 export function useObjectsToolbarProps(args: {
 	isDesktop: boolean
@@ -25,13 +23,12 @@ export function useObjectsToolbarProps(args: {
 	onGoBack: () => void
 	onGoForward: () => void
 	onGoUp: () => void
-	globalActionMap: Map<string, UIActionOrDivider>
 	uploadEnabled: boolean
 	uploadDisabledReason?: string | null
-	onUploadFiles: () => void
+	onUpload: () => void
 	objectCrudSupported: boolean
 	profileCapabilities: ProviderCapabilityMatrix | null
-	topMoreMenu: MenuProps
+	topMoreMenu: ObjectsToolbarProps['topMoreMenu']
 	showPrimaryActions: boolean
 	primaryDownloadAction?: UIAction
 	primaryDeleteAction?: UIAction
@@ -65,10 +62,9 @@ export function useObjectsToolbarProps(args: {
 		onGoBack,
 		onGoForward,
 		onGoUp,
-		globalActionMap,
 		uploadEnabled,
 		uploadDisabledReason,
-		onUploadFiles,
+		onUpload,
 		objectCrudSupported,
 		profileCapabilities,
 		topMoreMenu,
@@ -100,13 +96,6 @@ export function useObjectsToolbarProps(args: {
 		},
 		[navigateToLocation, prefixByBucketRef],
 	)
-
-	const uploadMenu = useMemo(() => {
-		const uploadMenuActions = trimActionDividers(
-			[globalActionMap.get('upload_files'), globalActionMap.get('upload_folder')].filter(Boolean) as UIActionOrDivider[],
-		)
-		return buildActionMenu(uploadMenuActions, isAdvanced)
-	}, [globalActionMap, isAdvanced])
 
 	const canCreateFolder = !!profileId && !!bucket && !isOffline && objectCrudSupported
 	const createFolderTooltipText = !profileId
@@ -140,10 +129,9 @@ export function useObjectsToolbarProps(args: {
 			onGoBack,
 			onGoForward,
 			onGoUp,
-			uploadMenu,
 			uploadEnabled,
 			uploadDisabledReason,
-			onUploadFiles,
+			onUpload,
 			canCreateFolder,
 			createFolderTooltipText,
 			onNewFolder,
@@ -183,7 +171,7 @@ export function useObjectsToolbarProps(args: {
 			onOpenTransfers,
 			onOpenTree,
 			onRefresh,
-			onUploadFiles,
+			onUpload,
 			primaryDeleteAction,
 			primaryDownloadAction,
 			profileId,
@@ -197,7 +185,6 @@ export function useObjectsToolbarProps(args: {
 			canCreateFolder,
 			createFolderTooltipText,
 			handleBucketChange,
-			uploadMenu,
 		],
 	)
 

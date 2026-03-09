@@ -102,7 +102,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		commandPaletteOpener,
 	})
 
-	const { clearSelectionAction, deleteSelectionAction, downloadSelectionAction } = useObjectsSelectionBarActions({
+	const { clearSelectionAction, deleteSelectionAction, downloadSelectionAction, moveSelectionAction } = useObjectsSelectionBarActions({
 		selectionActionMap: interactions.selectionActionMap,
 	})
 
@@ -147,6 +147,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		deleteSelectionAction,
 		dndHoverPrefix: interactions.dndHoverPrefix,
 		downloadSelectionAction,
+		moveSelectionAction,
 		getListScrollerElement: interactions.getListScrollerElement,
 		getObjectActions: interactions.getObjectActions,
 		globalActionMap: interactions.globalActionMap,

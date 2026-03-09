@@ -27,6 +27,9 @@ type Metrics struct {
 	transferBytesTotal  *prometheus.CounterVec
 	transferErrorsTotal *prometheus.CounterVec
 
+	storageOperationsTotal     *prometheus.CounterVec
+	storageOperationDurationMs *prometheus.HistogramVec
+
 	eventsConnections     prometheus.Gauge
 	eventsReconnectsTotal prometheus.Counter
 }
@@ -83,6 +86,15 @@ func New() *Metrics {
 		Name: "transfer_errors_total",
 		Help: "Total number of transfer errors.",
 	}, []string{"code"})
+	m.storageOperationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "storage_operations_total",
+		Help: "Total number of storage operations issued by provider, operation, and status.",
+	}, []string{"provider", "operation", "status"})
+	m.storageOperationDurationMs = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "storage_operation_duration_ms",
+		Help:    "Storage operation duration in milliseconds.",
+		Buckets: prometheus.ExponentialBuckets(10, 2, 14),
+	}, []string{"provider", "operation", "status"})
 
 	m.eventsConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "events_connections",
@@ -105,6 +117,8 @@ func New() *Metrics {
 		m.httpRequestDurationMs,
 		m.transferBytesTotal,
 		m.transferErrorsTotal,
+		m.storageOperationsTotal,
+		m.storageOperationDurationMs,
 		m.eventsConnections,
 		m.eventsReconnectsTotal,
 	)
@@ -216,6 +230,30 @@ func (m *Metrics) IncTransferErrors(code string) {
 		code = "unknown"
 	}
 	m.transferErrorsTotal.WithLabelValues(code).Inc()
+}
+
+func (m *Metrics) ObserveStorageOperation(provider, operation, status string, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		provider = "unknown"
+	}
+	operation = strings.TrimSpace(operation)
+	if operation == "" {
+		operation = "unknown"
+	}
+	status = strings.TrimSpace(status)
+	if status == "" {
+		status = "error"
+	}
+	m.storageOperationsTotal.WithLabelValues(provider, operation, status).Inc()
+	ms := float64(duration.Milliseconds())
+	if ms < 0 {
+		ms = 0
+	}
+	m.storageOperationDurationMs.WithLabelValues(provider, operation, status).Observe(ms)
 }
 
 func normalizeErrorCode(status string, errorCode *string) string {

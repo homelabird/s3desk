@@ -10,6 +10,7 @@ type LocalDevicePathInputProps = {
 	placeholder?: string
 	disabled?: boolean
 	buttonLabel?: string
+	pickerMode?: 'read' | 'readwrite'
 }
 
 export function LocalDevicePathInput(props: LocalDevicePathInputProps) {
@@ -23,7 +24,7 @@ export function LocalDevicePathInput(props: LocalDevicePathInputProps) {
 		}
 		setPicking(true)
 		try {
-			const handle = await pickDirectory()
+			const handle = await pickDirectory(props.pickerMode ?? 'read')
 			props.onPick?.(handle)
 			props.onChange?.(handle.name)
 		} catch (err) {

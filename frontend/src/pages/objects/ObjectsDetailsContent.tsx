@@ -22,6 +22,7 @@ export type ObjectsDetailsContentProps = {
 	onRetryMeta: () => void
 	onCopyKey: () => void
 	onDownload: () => void
+	showPresignAction?: boolean
 	onPresign: () => void
 	isPresignLoading: boolean
 	onCopyMove: (mode: 'copy' | 'move') => void
@@ -74,9 +75,11 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 				<Button size="small" icon={<DownloadOutlined />} onClick={props.onDownload}>
 					Download (client)
 				</Button>
-				<Button size="small" icon={<LinkOutlined />} onClick={props.onPresign} loading={props.isPresignLoading}>
-					URL
-				</Button>
+				{props.showPresignAction !== false ? (
+					<Button size="small" icon={<LinkOutlined />} onClick={props.onPresign} loading={props.isPresignLoading}>
+						URL
+					</Button>
+				) : null}
 				{props.isAdvanced ? (
 					<>
 						<Button size="small" icon={<SnippetsOutlined />} onClick={() => props.onCopyMove('copy')}>
@@ -194,7 +197,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 										Open large
 									</Button>
 								) : null}
-								<Button size="small" icon={<ReloadOutlined />} onClick={props.onLoadPreview} disabled={!props.detailsMeta}>
+								<Button data-testid="objects-details-preview-load" size="small" icon={<ReloadOutlined />} onClick={props.onLoadPreview} disabled={!props.detailsMeta}>
 									{props.preview ? 'Reload' : 'Load'}
 								</Button>
 							</div>

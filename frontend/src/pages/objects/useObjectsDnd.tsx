@@ -250,7 +250,9 @@ export function useObjectsDnd({
 	)
 
 	const onDndTargetDragLeave = useCallback(
-		(_e: React.DragEvent, targetPrefixRaw: string) => {
+		(e: React.DragEvent, targetPrefixRaw: string) => {
+			const related = e.relatedTarget
+			if (related instanceof Node && e.currentTarget.contains(related)) return
 			const target = normalizeDropTargetPrefix(targetPrefixRaw)
 			setDndHoverPrefix((prev) => (prev === target ? null : prev))
 		},

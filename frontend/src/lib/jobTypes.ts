@@ -9,8 +9,8 @@ const JOB_TYPES: JobTypeInfo[] = [
 	{
 		type: 'transfer_sync_local_to_s3',
 		category: 'transfer',
-		label: 'Upload folder (device → S3)',
-		description: 'Syncs a local folder from your device to the selected S3 bucket/prefix.',
+		label: 'Upload from device → S3',
+		description: 'Uploads files or folders from your device to the selected S3 bucket/prefix.',
 	},
 	{
 		type: 'transfer_sync_staging_to_s3',

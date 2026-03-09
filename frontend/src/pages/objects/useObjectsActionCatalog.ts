@@ -14,6 +14,7 @@ type UseObjectsActionCatalogArgs = {
 	bucket: string
 	prefix: string
 	objectCrudSupported: boolean
+	presignedDownloadSupported: boolean
 	uploadSupported: boolean
 	selectedCount: number
 	clipboardObjects: ClipboardObjects | null
@@ -44,6 +45,7 @@ type UseObjectsActionCatalogArgs = {
 	onOpenDownloadPrefix: (prefix: string) => void
 	onZipPrefix: (prefix: string) => void
 	onDownloadSelected: () => void
+	onOpenMoveSelected: () => void
 	onCopySelectionToClipboard: (mode: 'copy' | 'move') => void
 	onPasteClipboardObjects: () => void
 	onClearSelection: () => void
@@ -52,8 +54,7 @@ type UseObjectsActionCatalogArgs = {
 	onOpenTreeDrawer: () => void
 	onRefresh: () => void
 	onOpenPathModal: () => void
-	onOpenUploadFiles: () => void
-	onOpenUploadFolder: () => void
+	onOpenUpload: () => void
 	onOpenNewFolder: (parentPrefixOverride?: string) => void
 	onOpenCommandPalette: () => void
 	onOpenTransfers: () => void
@@ -70,6 +71,7 @@ export function useObjectsActionCatalog({
 	bucket,
 	prefix,
 	objectCrudSupported,
+	presignedDownloadSupported,
 	uploadSupported,
 	selectedCount,
 	clipboardObjects,
@@ -100,6 +102,7 @@ export function useObjectsActionCatalog({
 	onOpenDownloadPrefix,
 	onZipPrefix,
 	onDownloadSelected,
+	onOpenMoveSelected,
 	onCopySelectionToClipboard,
 	onPasteClipboardObjects,
 	onClearSelection,
@@ -108,8 +111,7 @@ export function useObjectsActionCatalog({
 	onOpenTreeDrawer,
 	onRefresh,
 	onOpenPathModal,
-	onOpenUploadFiles,
-	onOpenUploadFolder,
+	onOpenUpload,
 	onOpenNewFolder,
 	onOpenCommandPalette,
 	onOpenTransfers,
@@ -126,6 +128,7 @@ export function useObjectsActionCatalog({
 		bucket,
 		prefix,
 		objectCrudSupported,
+		presignedDownloadSupported,
 		uploadSupported,
 		selectedCount,
 		clipboardObjects,
@@ -154,6 +157,7 @@ export function useObjectsActionCatalog({
 		onOpenDownloadPrefix,
 		onZipPrefix,
 		onDownloadSelected,
+		onOpenMoveSelected,
 		onCopySelectionToClipboard,
 		onPasteClipboardObjects,
 		onClearSelection,
@@ -162,8 +166,7 @@ export function useObjectsActionCatalog({
 		onOpenTreeDrawer,
 		onRefresh,
 		onOpenPathModal,
-		onOpenUploadFiles,
-		onOpenUploadFolder,
+		onOpenUpload,
 		onOpenNewFolder,
 		onOpenCommandPalette,
 		onOpenTransfers,
@@ -186,6 +189,7 @@ export function useObjectsActionCatalog({
 	const selectionContextMenuActions = trimActionDividers(
 		[
 			selectionActionMap.get('download_selected'),
+			selectionActionMap.get('move_selected_to'),
 			{ type: 'divider' as const },
 			selectionActionMap.get('copy_selected_keys'),
 			selectionActionMap.get('cut_selected_keys'),
@@ -198,6 +202,7 @@ export function useObjectsActionCatalog({
 	)
 	const selectionMenuActions = trimActionDividers(
 		[
+			selectionActionMap.get('move_selected_to'),
 			selectionActionMap.get('copy_selected_keys'),
 			selectionActionMap.get('cut_selected_keys'),
 			selectionActionMap.get('paste_keys'),

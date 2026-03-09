@@ -11,20 +11,23 @@ type UseObjectsLocationStateParams = {
 }
 
 export function useObjectsLocationState({ profileId }: UseObjectsLocationStateParams) {
-	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
-	const [prefix, setPrefix] = useLocalStorageState<string>('prefix', '')
-	const [tabs, setTabs] = useLocalStorageState<LocationTab[]>('objectsTabs', [])
-	const [activeTabId, setActiveTabId] = useLocalStorageState<string>('objectsActiveTabId', '')
-	const [recentBuckets, setRecentBuckets] = useLocalStorageState<string[]>('objectsRecentBuckets', [])
+	const storageScope = profileId?.trim() || '__no_profile__'
+	const storageKey = useCallback((name: string) => `objects:${storageScope}:${name}`, [storageScope])
+
+	const [bucket, setBucket] = useLocalStorageState<string>(storageKey('bucket'), '')
+	const [prefix, setPrefix] = useLocalStorageState<string>(storageKey('prefix'), '')
+	const [tabs, setTabs] = useLocalStorageState<LocationTab[]>(storageKey('tabs'), [])
+	const [activeTabId, setActiveTabId] = useLocalStorageState<string>(storageKey('activeTabId'), '')
+	const [recentBuckets, setRecentBuckets] = useLocalStorageState<string[]>(storageKey('recentBuckets'), [])
 	const [recentPrefixesByBucket, setRecentPrefixesByBucket] = useLocalStorageState<Record<string, string[]>>(
-		'objectsRecentPrefixesByBucket',
+		storageKey('recentPrefixesByBucket'),
 		{},
 	)
 	const [bookmarksByBucket, setBookmarksByBucket] = useLocalStorageState<Record<string, string[]>>(
-		'objectsBookmarksByBucket',
+		storageKey('bookmarksByBucket'),
 		{},
 	)
-	const [prefixByBucket, setPrefixByBucket] = useLocalStorageState<Record<string, string>>('objectsPrefixByBucket', {})
+	const [prefixByBucket, setPrefixByBucket] = useLocalStorageState<Record<string, string>>(storageKey('prefixByBucket'), {})
 	const prefixByBucketRef = useRef<Record<string, string>>(prefixByBucket)
 
 	const [pathDraft, setPathDraft] = useState(prefix)
@@ -36,6 +39,10 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 	useEffect(() => {
 		prefixByBucketRef.current = prefixByBucket
 	}, [prefixByBucket])
+
+	useEffect(() => {
+		setPathDraft(prefix)
+	}, [prefix])
 
 	useEffect(() => {
 		if (tabs.length > 0) return

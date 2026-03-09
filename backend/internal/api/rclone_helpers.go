@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"path"
 	"strings"
 	"time"
 
@@ -34,6 +35,17 @@ type rcloneProcess struct {
 	stdout io.ReadCloser
 	stderr *bytes.Buffer
 	wait   func() error
+}
+
+const ociFolderMarkerName = ".__s3desk_folder_marker__"
+
+func usesVisibleFolderMarker(p models.ProfileProvider) bool {
+	switch p {
+	case models.ProfileProviderAzureBlob, models.ProfileProviderGcpGcs:
+		return true
+	default:
+		return false
+	}
 }
 
 var errRcloneListStop = errors.New("rclone list stop")
@@ -334,6 +346,34 @@ func rcloneObjectKey(prefix, name string, preserveLeadingSlash bool) string {
 		return prefix + name
 	}
 	return prefix + "/" + name
+}
+
+func ociFolderMarkerObjectKey(prefix string) string {
+	trimmed := strings.TrimSuffix(prefix, "/")
+	if trimmed == "" {
+		return ociFolderMarkerName
+	}
+	return trimmed + "/" + ociFolderMarkerName
+}
+
+func isOCIFolderMarkerObject(provider models.ProfileProvider, key string) bool {
+	if provider != models.ProfileProviderOciObjectStorage {
+		return false
+	}
+	trimmed := strings.TrimSuffix(key, "/")
+	if trimmed == "" {
+		return false
+	}
+	return path.Base(trimmed) == ociFolderMarkerName
+}
+
+func ociFolderMarkerParentPrefix(key string) string {
+	trimmed := strings.TrimSuffix(key, "/")
+	idx := strings.LastIndex(trimmed, "/")
+	if idx < 0 {
+		return ""
+	}
+	return trimmed[:idx+1]
 }
 
 func rcloneTokenForObject(key string) string {

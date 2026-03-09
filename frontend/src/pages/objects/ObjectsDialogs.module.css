@@ -70,8 +70,27 @@
 	display: block;
 }
 
+.sheetBody {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.sheetActions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px solid var(--s3d-color-border);
+}
+
 @media (max-width: 768px) {
 	.partialKeyActions {
 		align-items: stretch;
+	}
+
+	.sheetActions {
+		flex-direction: column-reverse;
 	}
 }

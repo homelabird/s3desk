@@ -111,7 +111,7 @@ func hasUnexpectedFields(fields ...any) bool {
 // rejects fields that belong to other providers.
 func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 	switch req.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		if req.Provider != models.ProfileProviderAwsS3 {
 			if req.Endpoint == nil || strings.TrimSpace(*req.Endpoint) == "" {
 				return errors.New("endpoint is required")
@@ -392,7 +392,7 @@ func (s *server) handleExportProfile(w http.ResponseWriter, r *http.Request) {
 		TLSInsecureSkipVerify: secrets.TLSInsecureSkipVerify,
 	}
 	switch secrets.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		force := secrets.ForcePathStyle
 		exportProfile.Endpoint = secrets.Endpoint
 		exportProfile.Region = secrets.Region

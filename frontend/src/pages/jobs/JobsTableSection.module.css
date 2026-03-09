@@ -107,7 +107,11 @@
 	color: var(--s3d-color-error-dark);
 	font-size: 13px;
 	line-height: 1.55;
+	display: -webkit-box;
+	overflow: hidden;
 	overflow-wrap: anywhere;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
 }
 
 .mobileActionRow {

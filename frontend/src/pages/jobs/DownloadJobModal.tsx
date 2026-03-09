@@ -124,6 +124,7 @@ export function DownloadJobModal(props: {
 						onChange={setLocalFolder}
 						placeholder="Select a folder…"
 						disabled={!support.ok || props.isOffline}
+						pickerMode="readwrite"
 						onPick={(handle) => {
 							setDirHandle(handle)
 							setDirLabel(handle.name)

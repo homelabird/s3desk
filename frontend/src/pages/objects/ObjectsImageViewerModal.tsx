@@ -32,6 +32,7 @@ type ObjectsImageViewerModalProps = {
 	canCancelPreview: boolean
 	onClose: () => void
 	onDownload: () => void
+	showPresignAction?: boolean
 	onPresign: () => void
 	isPresignLoading: boolean
 }
@@ -69,6 +70,7 @@ function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
 		canCancelPreview,
 		onClose,
 		onDownload,
+		showPresignAction,
 		onPresign,
 		isPresignLoading,
 	} = props
@@ -108,6 +110,17 @@ function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
 	useEffect(() => {
 		setOffset((current) => clampPanOffset(scale, current, stageRef.current, imageRef.current))
 	}, [scale])
+
+	useEffect(() => {
+		if (typeof document === 'undefined') return
+		if (open) {
+			document.body.dataset.objectsImageViewerOpen = 'true'
+			return () => {
+				delete document.body.dataset.objectsImageViewerOpen
+			}
+		}
+		delete document.body.dataset.objectsImageViewerOpen
+	}, [open])
 
 	const updateScale = useCallback((nextScale: number) => {
 		const normalized = Math.round(nextScale * 100) / 100
@@ -181,9 +194,11 @@ function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
 				<Button icon={<DownloadOutlined />} onClick={onDownload}>
 					Download
 				</Button>
-				<Button icon={<LinkOutlined />} onClick={onPresign} loading={isPresignLoading}>
-					URL
-				</Button>
+				{showPresignAction !== false ? (
+					<Button icon={<LinkOutlined />} onClick={onPresign} loading={isPresignLoading}>
+						URL
+					</Button>
+				) : null}
 				{!imagePreviewTooLarge ? (
 					preview?.status === 'loading' ? (
 						<Button onClick={onCancelPreview} disabled={!canCancelPreview}>

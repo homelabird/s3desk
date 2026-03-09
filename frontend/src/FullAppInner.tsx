@@ -25,6 +25,7 @@ import { OverlaySheet } from './components/OverlaySheet'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/TransfersShell'
 import { getProviderCapabilities } from './lib/providerCapabilities'
+import { reloadPage } from './lib/reloadPage'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
 import { useThemeMode } from './useThemeMode'
@@ -260,7 +261,15 @@ export default function FullAppInner() {
 				{isDesktop ? (
 					<Sider width={220} className={styles.desktopSider}>
 						<div className={styles.brandBlock}>
-							<BrandLockup subtitle="Local Dashboard" variant="sidebar" />
+							<button
+								type="button"
+								className={styles.desktopBrandButton}
+								onClick={reloadPage}
+								aria-label="Refresh current page"
+								title="Refresh current page"
+							>
+								<BrandLockup subtitle="Local Dashboard" variant="sidebar" />
+							</button>
 						</div>
 						{renderNav()}
 					</Sider>
@@ -281,15 +290,23 @@ export default function FullAppInner() {
 						<div className={styles.headerTopRow}>
 							<div className={styles.headerLeading}>
 								{isDesktop ? null : (
-								<Button
-									type="text"
-									icon={<MenuOutlined />}
-									onClick={() => setNavOpen(true)}
-									aria-label="Open navigation"
-								/>
+									<Button
+										type="text"
+										icon={<MenuOutlined />}
+										onClick={() => setNavOpen(true)}
+										aria-label="Open navigation"
+									/>
 								)}
 								{isDesktop ? null : (
-									<BrandLockup variant="compact" className={styles.mobileBrandLockup} />
+									<button
+										type="button"
+										className={styles.mobileBrandButton}
+										onClick={reloadPage}
+										aria-label="Refresh current page"
+										title="Refresh current page"
+									>
+										<BrandLockup variant="compact" className={styles.mobileBrandLockup} />
+									</button>
 								)}
 							</div>
 							<div className={styles.headerActions}>
@@ -389,7 +406,15 @@ export default function FullAppInner() {
 					bodyClassName={styles.navSheetBody}
 				>
 					<div className={styles.brandBlock}>
-						<BrandLockup subtitle="Local Dashboard" />
+						<button
+							type="button"
+							className={styles.desktopBrandButton}
+							onClick={reloadPage}
+							aria-label="Refresh current page"
+							title="Refresh current page"
+						>
+							<BrandLockup subtitle="Local Dashboard" />
+						</button>
 					</div>
 					{renderNav(() => setNavOpen(false))}
 				</OverlaySheet>

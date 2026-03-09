@@ -1,5 +1,6 @@
 import type { ObjectsPagePanesProps } from './ObjectsPagePanes'
 import type { BuildObjectsPagePanesPropsArgs } from './buildObjectsPagePanesProps'
+import type { UIAction } from './objectsActions'
 
 type ListProps = ObjectsPagePanesProps['listProps']
 type ControlsProps = ListProps['controlsProps']
@@ -16,6 +17,17 @@ const SORT_OPTIONS: ControlsProps['sortOptions'] = [
 export function buildObjectsListPaneProps(args: BuildObjectsPagePanesPropsArgs): ListProps {
 	const hasProfile = !!args.profileId
 	const hasBucket = !!args.bucket
+	const moveSelectionAction: UIAction | undefined =
+		args.moveSelectionAction ??
+		(args.selectedCount > 0
+			? {
+					id: 'move_selected_to',
+					label: args.selectedCount > 1 ? 'Move selection to…' : 'Move to…',
+					shortLabel: 'Move to…',
+					enabled: hasProfile && hasBucket && args.canInteract,
+					run: args.openMoveSelection,
+				}
+			: undefined)
 
 	return {
 		controlsProps: {
@@ -71,6 +83,7 @@ export function buildObjectsListPaneProps(args: BuildObjectsPagePanesPropsArgs):
 			clearAction: args.clearSelectionAction,
 			deleteAction: args.deleteSelectionAction,
 			downloadAction: args.downloadSelectionAction,
+			moveAction: moveSelectionAction,
 			selectionMenuActions: args.selectionMenuActions,
 			getObjectActions: args.getObjectActions,
 			isDownloadLoading: args.isDownloadLoading,

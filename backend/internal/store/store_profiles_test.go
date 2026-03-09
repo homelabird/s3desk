@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -178,5 +179,105 @@ func TestUpdateProfileGcpRejectsEmptyProjectNumber(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "projectNumber is required") {
 		t.Fatalf("expected projectNumber error, got %v", err)
+	}
+}
+
+func TestCreateProfileOciDefaultsUserPrincipalAuth(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	region := "ap-tokyo-1"
+	namespace := "nrszxupgigok"
+	compartment := "ocid1.compartment.oc1..aaaaaaaaexample"
+	endpoint := "https://objectstorage.ap-tokyo-1.oraclecloud.com"
+
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderOciObjectStorage,
+		Name:                  "oci-native",
+		Region:                &region,
+		Namespace:             &namespace,
+		Compartment:           &compartment,
+		Endpoint:              &endpoint,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("CreateProfile() err = %v", err)
+	}
+	if profile.AuthProvider != "user_principal_auth" {
+		t.Fatalf("profile authProvider=%q, want user_principal_auth", profile.AuthProvider)
+	}
+
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil || !ok {
+		t.Fatalf("GetProfileSecrets() ok=%v err=%v", ok, err)
+	}
+	if secrets.OciAuthProvider != "user_principal_auth" {
+		t.Fatalf("secrets authProvider=%q, want user_principal_auth", secrets.OciAuthProvider)
+	}
+}
+
+func TestLegacyOciS3CompatProfilesNormalizeToS3Compatible(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	now := "2026-03-09T00:00:00Z"
+	row := profileRow{
+		ID:                    "legacy-oci-compat",
+		Name:                  "legacy",
+		Provider:              "oci_s3_compat",
+		Endpoint:              "https://namespace.compat.objectstorage.ap-tokyo-1.oraclecloud.com",
+		Region:                "ap-tokyo-1",
+		ForcePathStyle:        0,
+		PreserveLeadingSlash:  0,
+		TLSInsecureSkipVerify: 0,
+		AccessKeyID:           "ak",
+		SecretAccessKey:       "sk",
+		ConfigJSON:            "{}",
+		SecretsJSON:           "{}",
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+	if err := st.db.WithContext(context.Background()).Create(&row).Error; err != nil {
+		t.Fatalf("insert legacy profile: %v", err)
+	}
+
+	profile, ok, err := st.GetProfile(context.Background(), row.ID)
+	if err != nil || !ok {
+		t.Fatalf("GetProfile() ok=%v err=%v", ok, err)
+	}
+	if profile.Provider != models.ProfileProviderS3Compatible {
+		t.Fatalf("provider=%q, want %q", profile.Provider, models.ProfileProviderS3Compatible)
+	}
+
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), row.ID)
+	if err != nil || !ok {
+		t.Fatalf("GetProfileSecrets() ok=%v err=%v", ok, err)
+	}
+	if secrets.Provider != models.ProfileProviderS3Compatible {
+		t.Fatalf("secrets provider=%q, want %q", secrets.Provider, models.ProfileProviderS3Compatible)
+	}
+
+	updatedName := "legacy-updated"
+	updatedEndpoint := "https://updated.example.com"
+	updated, ok, err := st.UpdateProfile(context.Background(), row.ID, models.ProfileUpdateRequest{
+		Provider: models.ProfileProviderS3Compatible,
+		Name:     &updatedName,
+		Endpoint: &updatedEndpoint,
+	})
+	if err != nil || !ok {
+		t.Fatalf("UpdateProfile() ok=%v err=%v", ok, err)
+	}
+	if updated.Provider != models.ProfileProviderS3Compatible {
+		t.Fatalf("updated provider=%q, want %q", updated.Provider, models.ProfileProviderS3Compatible)
+	}
+
+	var persisted profileRow
+	if err := st.db.WithContext(context.Background()).Where("id = ?", row.ID).Take(&persisted).Error; err != nil {
+		t.Fatalf("reload profile row: %v", err)
+	}
+	if persisted.Provider != string(models.ProfileProviderS3Compatible) {
+		t.Fatalf("persisted provider=%q, want %q", persisted.Provider, models.ProfileProviderS3Compatible)
+	}
+
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(persisted.ConfigJSON), &cfg); err != nil {
+		t.Fatalf("decode config_json: %v", err)
 	}
 }

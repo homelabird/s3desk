@@ -78,7 +78,7 @@ function ProfileModalSession(props: {
 			ociNamespace: '',
 			ociCompartment: '',
 			ociEndpoint: '',
-			ociAuthProvider: '',
+			ociAuthProvider: 'user_principal_auth',
 			ociConfigFile: '',
 			ociConfigProfile: '',
 			preserveLeadingSlash: false,

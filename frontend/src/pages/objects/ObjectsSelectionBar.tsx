@@ -9,6 +9,7 @@ type ObjectsSelectionBarProps = {
 	clearAction?: UIAction
 	deleteAction?: UIAction
 	downloadAction?: UIAction
+	moveAction?: UIAction
 	selectionMenuActions: UIActionOrDivider[]
 	getObjectActions: (key: string, size?: number) => UIActionOrDivider[]
 	isDownloadLoading: boolean
@@ -27,6 +28,7 @@ export function ObjectsSelectionBar(props: ObjectsSelectionBarProps) {
 			clearAction={props.clearAction}
 			deleteAction={props.deleteAction}
 			downloadAction={props.downloadAction}
+			moveAction={props.moveAction}
 			selectionMenuActions={props.selectionMenuActions}
 			getObjectActions={props.getObjectActions}
 			isDownloadLoading={props.isDownloadLoading}

@@ -21,10 +21,8 @@ type Props = {
 	onSubmitCreate: (values: {
 		bucket: string
 		prefix: string
-		dirHandle: FileSystemDirectoryHandle
+		files: File[]
 		label?: string
-		moveAfterUpload?: boolean
-		cleanupEmptyDirs?: boolean
 	}) => void
 	onSubmitDownload: (values: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
 	onSubmitDelete: (values: {
@@ -45,9 +43,6 @@ type Props = {
 	bucket: string
 	onBucketChange: (next: string) => void
 	bucketOptions: BucketOption[]
-	defaultMoveAfterUpload: boolean
-	defaultCleanupEmptyDirs: boolean
-	onUploadDefaultsChange: (values: { moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => void
 	deleteBucket: string
 	deletePrefill: DeleteJobModalPrefill | null
 	detailsOpen: boolean
@@ -89,9 +84,6 @@ export function JobsOverlaysHost(props: Props) {
 		bucket,
 		onBucketChange,
 		bucketOptions,
-		defaultMoveAfterUpload,
-		defaultCleanupEmptyDirs,
-		onUploadDefaultsChange,
 		deleteBucket,
 		deletePrefill,
 		detailsOpen,
@@ -197,9 +189,6 @@ export function JobsOverlaysHost(props: Props) {
 				bucket={bucket}
 				onBucketChange={onBucketChange}
 				bucketOptions={bucketOptions}
-				defaultMoveAfterUpload={defaultMoveAfterUpload}
-				defaultCleanupEmptyDirs={defaultCleanupEmptyDirs}
-				onUploadDefaultsChange={onUploadDefaultsChange}
 				deleteBucket={deleteBucket}
 				deletePrefill={deletePrefill}
 			/>

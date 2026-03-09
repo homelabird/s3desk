@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
 import { APIError, RequestAbortedError } from '../../api/client'
-import type { ThumbnailCache } from '../../lib/thumbnailCache'
+import {
+	buildThumbnailCacheKey,
+	getPersistentThumbnailBlob,
+	setPersistentThumbnailBlob,
+	shouldPersistThumbnailLocally,
+	type ThumbnailCache,
+} from '../../lib/thumbnailCache'
 
 type Props = {
 	api: APIClient
@@ -17,31 +23,58 @@ type Props = {
 }
 
 export function ObjectThumbnail(props: Props) {
-	const cacheKey = useMemo(() => {
-		const suffix = props.cacheKeySuffix ? `:${props.cacheKeySuffix}` : ''
-		return `${props.profileId}:${props.bucket}:${props.objectKey}:${props.size}${suffix}`
-	}, [props.bucket, props.cacheKeySuffix, props.objectKey, props.profileId, props.size])
+	const cacheKey = useMemo(
+		() =>
+			buildThumbnailCacheKey({
+				profileId: props.profileId,
+				bucket: props.bucket,
+				objectKey: props.objectKey,
+				size: props.size,
+				cacheKeySuffix: props.cacheKeySuffix,
+			}),
+		[props.bucket, props.cacheKeySuffix, props.objectKey, props.profileId, props.size],
+	)
 	const [, bumpCacheVersion] = useState(0)
 	const url = props.cache.get(cacheKey) ?? null
 	const failed = props.cache.isFailed(cacheKey)
 
 	useEffect(() => {
 		if (url || failed) return
-		const handle = props.api.downloadObjectThumbnail({
-			profileId: props.profileId,
-			bucket: props.bucket,
-			key: props.objectKey,
-			size: props.size,
-		})
 		let active = true
+		let abort = () => {}
 
-		handle.promise
-			.then(({ blob }) => {
-				if (!active) return
-				const objectURL = URL.createObjectURL(blob)
-				props.cache.set(cacheKey, objectURL)
-				bumpCacheVersion((version) => version + 1)
+		const load = async () => {
+			const shouldUsePersistentCache = shouldPersistThumbnailLocally(props.objectKey)
+			if (shouldUsePersistentCache) {
+				const cachedBlob = await getPersistentThumbnailBlob(cacheKey)
+				if (cachedBlob) {
+					if (!active) return
+					const objectURL = URL.createObjectURL(cachedBlob)
+					props.cache.set(cacheKey, objectURL)
+					bumpCacheVersion((version) => version + 1)
+					return
+				}
+			}
+
+			const handle = props.api.downloadObjectThumbnail({
+				profileId: props.profileId,
+				bucket: props.bucket,
+				key: props.objectKey,
+				size: props.size,
 			})
+			abort = handle.abort
+
+			handle.promise
+				.then(async ({ blob }) => {
+					if (!active) return
+					if (shouldUsePersistentCache) {
+						await setPersistentThumbnailBlob(cacheKey, blob)
+						if (!active) return
+					}
+					const objectURL = URL.createObjectURL(blob)
+					props.cache.set(cacheKey, objectURL)
+					bumpCacheVersion((version) => version + 1)
+				})
 				.catch((err) => {
 					if (!active) return
 					if (err instanceof RequestAbortedError) return
@@ -50,10 +83,13 @@ export function ObjectThumbnail(props: Props) {
 						bumpCacheVersion((version) => version + 1)
 					}
 				})
+		}
+
+		void load()
 
 		return () => {
 			active = false
-			handle.abort()
+			abort()
 		}
 	}, [
 		cacheKey,

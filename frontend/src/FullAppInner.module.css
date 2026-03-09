@@ -133,6 +133,44 @@
 	min-width: 0;
 }
 
+.mobileBrandButton {
+	border: none;
+	padding: 0;
+	margin: 0;
+	min-width: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	border-radius: 10px;
+}
+
+.mobileBrandButton:focus-visible {
+	outline: 2px solid var(--s3d-color-focus);
+	outline-offset: 2px;
+}
+
+.desktopBrandButton {
+	border: none;
+	padding: 0;
+	margin: 0;
+	width: 100%;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	text-align: left;
+	border-radius: 12px;
+}
+
+.desktopBrandButton:focus-visible {
+	outline: 2px solid var(--s3d-color-focus);
+	outline-offset: 2px;
+}
+
 .headerPadMd {
 	padding-inline: 20px;
 	padding-block: 12px;

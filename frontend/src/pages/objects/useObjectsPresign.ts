@@ -12,15 +12,22 @@ type UseObjectsPresignArgs = {
 	profileId: string | null
 	bucket: string
 	downloadLinkProxyEnabled: boolean
+	presignedDownloadSupported: boolean
 }
 
-export function useObjectsPresign({ api, profileId, bucket, downloadLinkProxyEnabled }: UseObjectsPresignArgs) {
+export function useObjectsPresign({ api, profileId, bucket, downloadLinkProxyEnabled, presignedDownloadSupported }: UseObjectsPresignArgs) {
 	const [presignOpen, setPresignOpen] = useState(false)
 	const [presign, setPresign] = useState<Presign | null>(null)
 	const [presignKey, setPresignKey] = useState<string | null>(null)
 
 	const presignMutation = useMutation({
-		mutationFn: (key: string) => api.getObjectDownloadURL({ profileId: profileId!, bucket, key, proxy: downloadLinkProxyEnabled }),
+		mutationFn: (key: string) =>
+			api.getObjectDownloadURL({
+				profileId: profileId!,
+				bucket,
+				key,
+				proxy: downloadLinkProxyEnabled || !presignedDownloadSupported,
+			}),
 		onMutate: (key) => setPresignKey(key),
 		onSuccess: (resp, key) => {
 			setPresign({ key, url: resp.url, expiresAt: resp.expiresAt })

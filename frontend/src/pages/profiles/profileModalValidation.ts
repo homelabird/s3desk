@@ -96,7 +96,6 @@ export const FIELD_SECTION_MAP: Partial<Record<keyof ProfileFormValues, SectionK
 const PROVIDER_LABELS: Record<ProfileFormValues['provider'], string> = {
 	s3_compatible: 'S3 Compatible',
 	aws_s3: 'AWS S3',
-	oci_s3_compat: 'OCI S3 Compat',
 	oci_object_storage: 'OCI Object Storage',
 	azure_blob: 'Azure Blob',
 	gcp_gcs: 'Google Cloud Storage',
@@ -127,7 +126,7 @@ export function buildProfileModalViewState(args: {
 	tlsStatusError?: string | null
 }): ProfileModalViewState {
 	const provider = args.values.provider
-	const isS3Provider = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
+	const isS3Provider = provider === 'aws_s3' || provider === 's3_compatible'
 	const isOciObjectStorage = provider === 'oci_object_storage'
 	const isAws = provider === 'aws_s3'
 	const isAzure = provider === 'azure_blob'
@@ -158,11 +157,6 @@ export function buildProfileModalViewState(args: {
 				return {
 					hint: 'Use the full endpoint URL. MinIO and Ceph usually also need Force Path Style in Advanced options.',
 					docsUrl: 'https://rclone.org/s3/',
-				}
-			case 'oci_s3_compat':
-				return {
-					hint: 'Use the OCI S3-compatible endpoint, region, and S3-style keys.',
-					docsUrl: 'https://rclone.org/s3/#oracle-oci-object-storage',
 				}
 			case 'oci_object_storage':
 				return {

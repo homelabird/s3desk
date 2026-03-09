@@ -8,13 +8,11 @@ import {
 import { TransferEstimator } from '../../lib/transfer'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
-import { formatMoveCleanupSummary, showMoveCleanupReport } from './moveCleanupReport'
 import type {
 	TransfersContextValue,
 	TransfersRuntimeNotifications,
 	TransfersRuntimeSnapshot,
 	UploadCapabilityByProfileId,
-	UploadMovePlan,
 } from './transfersTypes'
 import { useTransfersDownloadQueue } from './useTransfersDownloadQueue'
 import { useTransfersUploadPreferences } from './useTransfersUploadPreferences'
@@ -76,12 +74,9 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 	const uploadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
 	const uploadEstimatorByTaskIdRef = useRef<Record<string, TransferEstimator>>({})
 	const uploadItemsByTaskIdRef = useRef<Record<string, UploadFileItem[]>>({})
-	const uploadMoveByTaskIdRef = useRef<Record<string, UploadMovePlan>>({})
 	const uploadPreviewUrlByTaskIdRef = useRef<Record<string, string>>({})
 
 	const {
-		moveCleanupFilenameTemplate,
-		moveCleanupFilenameMaxLen,
 		downloadLinkProxyEnabled,
 		uploadChunkFileConcurrency,
 		uploadResumeConversionEnabled,
@@ -148,18 +143,12 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		uploadAbortByTaskIdRef,
 		uploadEstimatorByTaskIdRef,
 		uploadItemsByTaskIdRef,
-		uploadMoveByTaskIdRef,
 	})
 
 	const { handleUploadJobUpdate } = useTransfersUploadJobLifecycle({
 		queryClient,
 		uploadTasksRef,
-		uploadMoveByTaskIdRef,
-		moveCleanupFilenameTemplate,
-		moveCleanupFilenameMaxLen,
 		updateUploadTask,
-		formatMoveCleanupSummary,
-		showMoveCleanupReport,
 	})
 
 	const { queueDownloadObject, queueDownloadObjectsToDevice, queueDownloadJobArtifact } = useTransfersDownloadQueue({
@@ -192,7 +181,6 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		uploadAbortByTaskIdRef,
 		uploadEstimatorByTaskIdRef,
 		uploadItemsByTaskIdRef,
-		uploadMoveByTaskIdRef,
 		uploadPreviewUrlByTaskIdRef,
 		openTransfers,
 	})

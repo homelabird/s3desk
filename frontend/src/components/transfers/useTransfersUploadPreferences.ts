@@ -1,6 +1,5 @@
 import { useCallback } from 'react'
 
-import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../../lib/moveCleanupDefaults'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 export type UploadTuning = {
@@ -12,14 +11,6 @@ export type UploadTuning = {
 }
 
 export function useTransfersUploadPreferences() {
-	const [moveCleanupFilenameTemplate] = useLocalStorageState<string>(
-		'moveCleanupFilenameTemplate',
-		MOVE_CLEANUP_FILENAME_TEMPLATE,
-	)
-	const [moveCleanupFilenameMaxLen] = useLocalStorageState<number>(
-		'moveCleanupFilenameMaxLen',
-		MOVE_CLEANUP_FILENAME_MAX_LEN,
-	)
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
 	const [uploadAutoTuneEnabled] = useLocalStorageState<boolean>('uploadAutoTuneEnabled', true)
 	const [uploadBatchConcurrencySetting] = useLocalStorageState<number>('uploadBatchConcurrency', 16)
@@ -109,8 +100,6 @@ export function useTransfersUploadPreferences() {
 	)
 
 	return {
-		moveCleanupFilenameTemplate,
-		moveCleanupFilenameMaxLen,
 		downloadLinkProxyEnabled,
 		uploadChunkFileConcurrency,
 		uploadResumeConversionEnabled,

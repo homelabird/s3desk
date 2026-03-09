@@ -40,3 +40,16 @@ export function insertOptimisticPrefixIntoObjectsData(
 		pages: [nextFirstPage, ...data.pages.slice(1)],
 	}
 }
+
+export function hasVisiblePrefixInObjectsData(
+	data: InfiniteData<ListObjectsResponse, string | undefined> | undefined,
+	prefix: string,
+): boolean {
+	if (!data || !prefix) return false
+	for (const page of data.pages) {
+		if (Array.isArray(page.commonPrefixes) && page.commonPrefixes.includes(prefix)) {
+			return true
+		}
+	}
+	return false
+}

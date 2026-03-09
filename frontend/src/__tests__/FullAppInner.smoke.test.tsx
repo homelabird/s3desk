@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { APIClient } from '../api/client'
 import FullAppInner from '../FullAppInner'
+import * as reloadPageModule from '../lib/reloadPage'
 import { ensureDomShims } from '../test/domShims'
 import { ThemeModeProvider } from '../themeMode'
 
@@ -125,14 +126,19 @@ describe('FullAppInner header', () => {
 	it('stacks profile actions into a second row on narrow mobile screens', async () => {
 		mockViewportWidth(390)
 		mockShellApi()
+		const reloadSpy = vi.spyOn(reloadPageModule, 'reloadPage').mockImplementation(() => {})
 
 		renderShell()
 
 		expect(await screen.findByTestId('app-header-profile-row')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Refresh current page' })).toBeInTheDocument()
 		expect(screen.getByRole('combobox', { name: 'Profile' })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Refresh current page' }))
+		expect(reloadSpy).toHaveBeenCalledTimes(1)
 
 		await act(async () => {
 			fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
@@ -159,6 +165,7 @@ describe('FullAppInner header', () => {
 	it('keeps inline settings and logout actions on desktop', async () => {
 		mockViewportWidth(1280)
 		mockShellApi()
+		const reloadSpy = vi.spyOn(reloadPageModule, 'reloadPage').mockImplementation(() => {})
 
 		renderShell()
 
@@ -169,5 +176,8 @@ describe('FullAppInner header', () => {
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Settings/i })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Refresh current page' }))
+		expect(reloadSpy).toHaveBeenCalledTimes(1)
 	})
 })

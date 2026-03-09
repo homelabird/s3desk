@@ -1,7 +1,6 @@
 import {
 	CloudUploadOutlined,
 	DeleteOutlined,
-	DownOutlined,
 	DownloadOutlined,
 	EllipsisOutlined,
 	FolderAddOutlined,
@@ -38,10 +37,9 @@ export type ObjectsToolbarProps = {
 	onGoBack: () => void
 	onGoForward: () => void
 	onGoUp: () => void
-	uploadMenu: MenuProps
 	uploadEnabled: boolean
 	uploadDisabledReason?: string | null
-	onUploadFiles: () => void
+	onUpload: () => void
 	canCreateFolder: boolean
 	createFolderTooltipText: string
 	onNewFolder: () => void
@@ -121,43 +119,16 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	}
 
 	const uploadButtonDesktop = renderHinted(
-		<ObjectsMenuPopover menu={props.uploadMenu}>
-			{({ toggle }) => (
-				<div className={styles.toolbarSplitButton}>
-					<Button type="primary" icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUploadFiles}>
-						Upload
-					</Button>
-					<Button
-						type="primary"
-						icon={<DownOutlined />}
-						disabled={!canUpload}
-						onClick={toggle}
-						aria-label="Upload actions"
-						className={styles.toolbarSplitToggle}
-					/>
-				</div>
-			)}
-		</ObjectsMenuPopover>,
+		<Button type="primary" icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload}>
+			Upload…
+		</Button>,
 		uploadTooltipText,
 	)
 
 	const uploadButtonMobile = renderHinted(
-		<ObjectsMenuPopover menu={props.uploadMenu}>
-			{({ toggle }) => (
-				<div className={styles.toolbarSplitButton}>
-					<Button icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUploadFiles} aria-label="Upload">
-						{buildMenuButtonLabel('Upload', props.showLabels)}
-					</Button>
-					<Button
-						icon={<DownOutlined />}
-						disabled={!canUpload}
-						onClick={toggle}
-						aria-label="Upload actions"
-						className={styles.toolbarSplitToggle}
-					/>
-				</div>
-			)}
-		</ObjectsMenuPopover>,
+		<Button icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload} aria-label="Upload">
+			{buildMenuButtonLabel('Upload…', props.showLabels)}
+		</Button>,
 		uploadTooltipText,
 	)
 

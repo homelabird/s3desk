@@ -97,13 +97,6 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 		</Button>
 	) : null
 
-	const searchScopeRow = (
-		<div className={styles.listControlsScopeRow}>
-			<span className={styles.listControlsSecondaryText}>Search in this folder</span>
-			{globalSearchButton}
-		</div>
-	)
-
 	const searchStatus =
 		props.search.trim() && props.hasNextPage ? (
 			props.rawTotalCount >= props.searchAutoScanCap ? (
@@ -187,14 +180,24 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			<span className={styles.listControlsCopyFeedback}>{clipboardFailureHint()}</span>
 		) : null
 
+	const filterButton = (
+		<Button
+			icon={<FilterOutlined />}
+			type={props.hasActiveView ? 'primary' : 'default'}
+			onClick={props.onOpenFilters}
+			disabled={!props.canInteract}
+		>
+			{props.isAdvanced ? 'View' : 'Filter'}
+		</Button>
+	)
+
 	return (
-		<>
+		<div className={styles.listControlsSection} data-testid="objects-list-controls-root" data-compact={props.isCompact ? 'true' : 'false'}>
 			<div className={styles.breadcrumbRow}>
 				<div className={styles.breadcrumbLeft}>
 					<div className={styles.listControlsLocationStack}>
 						{location ? (
 							<div className={styles.listControlsLocationRow}>
-								<span className={styles.listControlsSecondaryText}>Location</span>
 								<span className={styles.listControlsLocationCode} title={location}>
 									{location}
 								</span>
@@ -240,7 +243,6 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 
 			{props.isCompact ? (
 				<div className={styles.listControlsStack}>
-					{searchScopeRow}
 					<Input
 						allowClear
 						placeholder="Search current folder…"
@@ -250,27 +252,21 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						onChange={(event) => props.onSearchDraftChange(event.target.value)}
 					/>
 					<div className={styles.listControlsCompactFooter}>
-						<Button
-							icon={<FilterOutlined />}
-							type={props.hasActiveView ? 'primary' : 'default'}
-							onClick={props.onOpenFilters}
-							disabled={!props.canInteract}
-						>
-							{props.isAdvanced ? 'View' : 'Filter'}
-						</Button>
+						<div className={styles.listControlsCompactActions}>
+							{filterButton}
+							{globalSearchButton}
+						</div>
 						{viewModeToggle}
-						{props.isAdvanced ? (
-							<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
-								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
-							</span>
-						) : null}
 					</div>
-					{sortControls}
+					{props.isAdvanced ? (
+						<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
+							{props.visiblePrefixCount} folders, {props.visibleFileCount} files
+						</span>
+					) : null}
 					{searchStatus}
 				</div>
 			) : (
 				<div className={styles.listControlsStack}>
-					{searchScopeRow}
 					<div className={styles.listControlsDesktopRow}>
 						<div className={styles.listControlsDesktopLeft}>
 							<Input
@@ -281,14 +277,8 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 								value={props.searchDraft}
 								onChange={(event) => props.onSearchDraftChange(event.target.value)}
 							/>
-							<Button
-								icon={<FilterOutlined />}
-								type={props.hasActiveView ? 'primary' : 'default'}
-								onClick={props.onOpenFilters}
-								disabled={!props.canInteract}
-							>
-								{props.isAdvanced ? 'View' : 'Filter'}
-							</Button>
+							{filterButton}
+							{globalSearchButton}
 							{viewModeToggle}
 							{sortControls}
 						</div>
@@ -302,6 +292,6 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					{searchStatus}
 				</div>
 			)}
-		</>
+		</div>
 	)
 }

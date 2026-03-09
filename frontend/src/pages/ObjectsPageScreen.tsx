@@ -23,16 +23,15 @@ export function ObjectsPageScreen(props: Props) {
 	const {
 		api,
 		bucket,
-		cleanupEmptyDirsDefault,
 		clearSearch,
 		deferredSearch,
 		detailsVisible,
 		dockDetails,
 		downloadLinkProxyEnabled,
+		profileCapabilities,
 		favoritesOnly,
 		favoritesOpenDetails,
 		favoritesQuery,
-		moveAfterUploadDefault,
 		navigateToLocation,
 		objectsQuery,
 		onOpenPrefix,
@@ -41,6 +40,7 @@ export function ObjectsPageScreen(props: Props) {
 		rows,
 		screens,
 		search,
+		selectedProfileProvider,
 		selectedCount,
 		selectedKeys,
 		setDetailsDrawerOpen,
@@ -96,6 +96,7 @@ export function ObjectsPageScreen(props: Props) {
 		prefix,
 		dockDetails,
 		downloadLinkProxyEnabled,
+		presignedDownloadSupported: profileCapabilities?.presignedUpload ?? false,
 		createJobWithRetry: data.createJobWithRetry,
 		typeFilter,
 		favoritesOnly,
@@ -109,8 +110,6 @@ export function ObjectsPageScreen(props: Props) {
 		isOffline: data.isOffline,
 		uploadSupported,
 		uploadDisabledReason,
-		moveAfterUploadDefault,
-		cleanupEmptyDirsDefault,
 		selectedKeys,
 		setSelectedKeys,
 		setLastSelectedObjectKey,
@@ -125,6 +124,7 @@ export function ObjectsPageScreen(props: Props) {
 		api,
 		apiToken: props.apiToken,
 		profileId: props.profileId,
+		profileProvider: selectedProfileProvider,
 		bucket,
 		selectedKeys,
 		selectedCount,
@@ -133,9 +133,12 @@ export function ObjectsPageScreen(props: Props) {
 		favoriteItems: data.favoriteItems,
 		objectPages: data.objectsQuery.data?.pages,
 		downloadLinkProxyEnabled,
+		presignedDownloadSupported: profileCapabilities?.presignedUpload ?? false,
 		showThumbnails,
 		thumbnailCache,
-		openDetailsForKey: actions.openDetailsForKey,
+		setSelectedKeys,
+		setLastSelectedObjectKey,
+		setDetailsDrawerOpen,
 	})
 
 	const viewportState = useObjectsListViewport({
@@ -169,10 +172,13 @@ export function ObjectsPageScreen(props: Props) {
 			<ObjectsPageHeader
 				uploadSupported={uploadSupported}
 				uploadDisabledReason={uploadDisabledReason}
-				uploadFilesInputRef={actions.uploadFilesInputRef}
-				onUploadFilesInputChange={actions.onUploadFilesInputChange}
-				uploadFolderInputRef={actions.uploadFolderInputRef}
-				onUploadFolderInputChange={actions.onUploadFolderInputChange}
+				uploadSourceOpen={actions.uploadSourceOpen}
+				uploadSourceBusy={actions.uploadSourceBusy}
+				folderSelectionSupported={actions.folderSelectionSupported}
+				folderSelectionReason={actions.folderSelectionReason}
+				onCloseUploadSource={actions.closeUploadSource}
+				onSelectUploadFiles={actions.chooseUploadFiles}
+				onSelectUploadFolder={actions.chooseUploadFolder}
 				toolbarSectionProps={toolbarSectionProps}
 			/>
 
@@ -196,6 +202,7 @@ export function ObjectsPageScreen(props: Props) {
 						const size = previewState.largePreviewMeta?.size ?? objectSize
 						onDownload(previewState.largePreviewKey, size)
 					}}
+					showPresignAction={profileCapabilities?.presignedUpload ?? false}
 					onPresign={() => {
 						if (!previewState.largePreviewKey) return
 						onPresign(previewState.largePreviewKey)

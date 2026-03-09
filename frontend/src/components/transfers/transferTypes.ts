@@ -1,7 +1,7 @@
 export type TransfersTab = 'downloads' | 'uploads'
 
 export type DownloadTaskStatus = 'queued' | 'waiting' | 'running' | 'succeeded' | 'failed' | 'canceled'
-export type UploadTaskStatus = 'queued' | 'staging' | 'commit' | 'waiting_job' | 'cleanup' | 'succeeded' | 'failed' | 'canceled'
+export type UploadTaskStatus = 'queued' | 'staging' | 'commit' | 'waiting_job' | 'succeeded' | 'failed' | 'canceled'
 
 export type DownloadTaskBase = {
 	id: string
@@ -57,9 +57,6 @@ export type UploadTask = {
 	prefix: string
 	fileCount: number
 	status: UploadTaskStatus
-	moveAfterUpload?: boolean
-	moveSourceLabel?: string
-	cleanupFailed?: boolean
 	createdAtMs: number
 	startedAtMs?: number
 	finishedAtMs?: number

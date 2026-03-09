@@ -45,7 +45,7 @@ describe('JobsTableSection', () => {
 
 		fireEvent.mouseEnter(triggers[0].parentElement!)
 		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
-			'Uploads selected files from your device to the bucket',
+			'Uploads selected files or folders from your device to the bucket',
 		)
 
 		fireEvent.mouseLeave(triggers[0].parentElement!)

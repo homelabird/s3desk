@@ -25,7 +25,6 @@ export type ProfileFlagViewModel = {
 const PROFILE_PROVIDER_LABELS: Record<string, string> = {
 	aws_s3: 'AWS S3',
 	s3_compatible: 'S3 Compatible',
-	oci_s3_compat: 'OCI S3 Compat',
 	azure_blob: 'Azure Blob',
 	gcp_gcs: 'GCP GCS',
 	oci_object_storage: 'OCI Object Storage',
@@ -79,7 +78,7 @@ function toProfileAttention(row: Profile): { needsAttention: boolean; attentionS
 
 function toProfileFlags(row: Profile): ProfileFlagViewModel[] {
 	const provider = row.provider
-	const isS3 = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
+	const isS3 = provider === 'aws_s3' || provider === 's3_compatible'
 	const parts: ProfileFlagViewModel[] = []
 	const attention = toProfileAttention(row)
 	if (attention.needsAttention) {
@@ -127,7 +126,7 @@ export function toProfileEditInitialValues(editProfile: Profile | null): Partial
 		ociNamespace: editProfile.provider === 'oci_object_storage' ? editProfile.namespace : '',
 		ociCompartment: editProfile.provider === 'oci_object_storage' ? editProfile.compartment : '',
 		ociEndpoint: editProfile.provider === 'oci_object_storage' ? editProfile.endpoint ?? '' : '',
-		ociAuthProvider: editProfile.provider === 'oci_object_storage' ? editProfile.authProvider ?? '' : '',
+		ociAuthProvider: editProfile.provider === 'oci_object_storage' ? editProfile.authProvider?.trim() || 'user_principal_auth' : '',
 		ociConfigFile: editProfile.provider === 'oci_object_storage' ? editProfile.configFile ?? '' : '',
 		ociConfigProfile: editProfile.provider === 'oci_object_storage' ? editProfile.configProfile ?? '' : '',
 	}

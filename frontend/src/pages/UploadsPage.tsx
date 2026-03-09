@@ -9,10 +9,14 @@ import { LinkButton } from '../components/LinkButton'
 import { PageHeader } from '../components/PageHeader'
 import { PageSection } from '../components/PageSection'
 import { SetupCallout } from '../components/SetupCallout'
-import { ToggleSwitch } from '../components/ToggleSwitch'
+import { UploadSourceSheet } from '../components/UploadSourceSheet'
 import { useTransfers } from '../components/useTransfers'
+import { promptForFiles, promptForFolderFiles } from '../components/transfers/transfersUploadUtils'
+import { getDirectorySelectionSupport } from '../lib/deviceFs'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../lib/providerCapabilities'
+import { getBucketsQueryStaleTimeMs } from '../lib/queryPolicy'
+import { inferUploadSelectionKind } from '../lib/uploadSelection'
 import { useIsOffline } from '../lib/useIsOffline'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import styles from './UploadsPage.module.css'
@@ -30,8 +34,9 @@ export function UploadsPage(props: Props) {
 
 	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
 	const [prefix, setPrefix] = useLocalStorageState<string>('uploadPrefix', '')
-	const [folderMode, setFolderMode] = useState(false)
 	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+	const [uploadSourceOpen, setUploadSourceOpen] = useState(false)
+	const [uploadSourceBusy, setUploadSourceBusy] = useState(false)
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
@@ -59,16 +64,19 @@ export function UploadsPage(props: Props) {
 		queryKey: ['buckets', props.profileId, props.apiToken],
 		queryFn: () => api.listBuckets(props.profileId!),
 		enabled: !!props.profileId,
+		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
 
 	const selectedFileCount = selectedFiles.length
+	const selectionKind = inferUploadSelectionKind(selectedFiles)
+	const folderSelectionSupport = getDirectorySelectionSupport()
 	const queueDisabledReason = useMemo(() => {
 		if (isOffline) return 'Offline: uploads are disabled.'
 		if (!uploadsSupported) return uploadsUnsupportedReason ?? 'Uploads are not supported by this provider.'
 		if (!bucket) return 'Select a bucket first.'
-		if (selectedFileCount === 0) return folderMode ? 'Select a folder first.' : 'Select files first.'
+		if (selectedFileCount === 0) return 'Add files or a folder first.'
 		return null
-	}, [bucket, folderMode, isOffline, selectedFileCount, uploadsSupported, uploadsUnsupportedReason])
+	}, [bucket, isOffline, selectedFileCount, uploadsSupported, uploadsUnsupportedReason])
 
 	if (!props.profileId) {
 		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to upload files" />
@@ -94,11 +102,51 @@ export function UploadsPage(props: Props) {
 			return
 		}
 		if (selectedFiles.length === 0) {
-			message.info(folderMode ? 'Select a folder first' : 'Select files first')
+			message.info('Add files or a folder first')
 			return
 		}
 		transfers.queueUploadFiles({ profileId: props.profileId!, bucket, prefix, files: selectedFiles })
 		setSelectedFiles([])
+	}
+
+	const openUploadPicker = () => {
+		if (isOffline) {
+			message.warning('Offline: uploads are disabled.')
+			return
+		}
+		if (!uploadsSupported) {
+			message.warning(uploadsUnsupportedReason ?? 'Uploads are not supported by this provider.')
+			return
+		}
+		setUploadSourceOpen(true)
+	}
+
+	const chooseUploadFiles = async () => {
+		setUploadSourceBusy(true)
+		try {
+			setUploadSourceOpen(false)
+			const files = await promptForFiles({ multiple: true, directory: false })
+			if (!files || files.length === 0) return
+			setSelectedFiles(files)
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setUploadSourceBusy(false)
+		}
+	}
+
+	const chooseUploadFolder = async () => {
+		setUploadSourceBusy(true)
+		try {
+			setUploadSourceOpen(false)
+			const result = await promptForFolderFiles()
+			if (!result || result.files.length === 0) return
+			setSelectedFiles(result.files)
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setUploadSourceBusy(false)
+		}
 	}
 
 	return (
@@ -154,7 +202,7 @@ export function UploadsPage(props: Props) {
 				<>
 					<PageSection
 						title="Target & source"
-						description="Choose the bucket and optional prefix, then decide whether this selection should treat the source as individual files or a whole folder tree."
+						description="Choose the bucket and optional prefix, then add files or a folder from this device. Folder structure is preserved automatically whenever relative paths are available."
 						actions={<Typography.Text type="secondary">{destinationLabel}</Typography.Text>}
 					>
 						<div className={styles.controlsGrid}>
@@ -182,40 +230,34 @@ export function UploadsPage(props: Props) {
 									disabled={isOffline || !uploadsSupported}
 								/>
 							</label>
-							<div className={styles.modeCard}>
-								<div>
-									<Typography.Text strong>Folder mode</Typography.Text>
-									<Typography.Paragraph className={styles.modeHint}>
-										Keep directory structure when selecting a folder from this device.
-									</Typography.Paragraph>
-								</div>
-								<div className={styles.switchRow}>
-									<Typography.Text type="secondary">{folderMode ? 'Folder' : 'Files'}</Typography.Text>
-									<ToggleSwitch
-										checked={folderMode}
-										onChange={(checked) => {
-											setFolderMode(checked)
-											setSelectedFiles([])
-										}}
-										disabled={isOffline || !uploadsSupported}
-										aria-label="Folder mode"
-									/>
-								</div>
-							</div>
 						</div>
 					</PageSection>
 
 					<UploadsSelectionSection
-						folderMode={folderMode}
-						onFilesChange={setSelectedFiles}
+						onOpenPicker={openUploadPicker}
 						isOffline={isOffline}
 						uploadsSupported={uploadsSupported}
 						queueDisabledReason={queueDisabledReason}
 						selectedFiles={selectedFiles}
 						destinationLabel={destinationLabel}
+						selectionKind={selectionKind}
 					/>
 				</>
 			) : null}
+			<UploadSourceSheet
+				open={uploadSourceOpen}
+				title="Add upload source"
+				destinationLabel={destinationLabel}
+				folderSelectionSupported={folderSelectionSupport.ok}
+				folderSelectionReason={folderSelectionSupport.reason}
+				busy={uploadSourceBusy}
+				onClose={() => {
+					if (uploadSourceBusy) return
+					setUploadSourceOpen(false)
+				}}
+				onSelectFiles={() => void chooseUploadFiles()}
+				onSelectFolder={() => void chooseUploadFolder()}
+			/>
 		</div>
 	)
 }

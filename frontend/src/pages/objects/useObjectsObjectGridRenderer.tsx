@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Button, Checkbox, Typography } from 'antd'
-import { EllipsisOutlined, FileOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { EllipsisOutlined, FileOutlined, PlayCircleOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import type { ObjectItem } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
@@ -12,7 +12,7 @@ import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import { buildActionMenu } from './objectsActions'
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
 import { GRID_CARD_THUMBNAIL_PX } from './objectsPageConstants'
-import { displayNameForKey, isThumbnailKey } from './objectsListUtils'
+import { displayNameForKey, isThumbnailKey, isVideoKey } from './objectsListUtils'
 import { extensionLabel, onActivateFromKeyboard } from './objectsGridRendererUtils'
 
 type UseObjectsObjectGridRendererArgs = Pick<
@@ -34,6 +34,7 @@ type UseObjectsObjectGridRendererArgs = Pick<
 	| 'openObjectContextMenu'
 	| 'prefix'
 	| 'profileId'
+	| 'profileProvider'
 	| 'recordContextMenuPoint'
 	| 'selectObjectFromCheckboxEvent'
 	| 'selectObjectFromPointerEvent'
@@ -65,6 +66,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 		openObjectContextMenu,
 		prefix,
 		profileId,
+		profileProvider,
 		recordContextMenuPoint,
 		selectObjectFromCheckboxEvent,
 		selectObjectFromPointerEvent,
@@ -87,7 +89,8 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			const menu = withContextMenuClassName(
 				buildActionMenu(useSelectionMenu ? selectionContextMenuActions : getObjectActions(key, object.size), isAdvanced),
 			)
-			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key)
+			const deferVideoThumbnail = profileProvider === 'oci_object_storage' && isVideoKey(key)
+			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key) && !deferVideoThumbnail
 			const isSelected = selectedKeys.has(key)
 			const isFavorite = favoriteKeys.has(key)
 			const favoriteDisabled = favoritePendingKeys.has(key) || isOffline || !profileId || !bucket
@@ -146,14 +149,14 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 									}}
 								/>
 								<ObjectsMenuPopover
-								menu={menu}
-								align="end"
-								open={buttonMenuOpen}
-								onOpenChange={(open, info) => {
-									if (open) openObjectContextMenu(key, 'button')
-									else closeContextMenu({ key, kind: 'object', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
-								}}
-							>
+									menu={menu}
+									align="end"
+									open={buttonMenuOpen}
+									onOpenChange={(open, info) => {
+										if (open) openObjectContextMenu(key, 'button')
+										else closeContextMenu({ key, kind: 'object', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
+									}}
+								>
 									{({ toggle }) => (
 										<Button
 											size="small"
@@ -194,6 +197,22 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 										cache={thumbnailCache}
 										cacheKeySuffix={object.etag || object.lastModified || undefined}
 									/>
+								</button>
+							) : deferVideoThumbnail ? (
+								<button
+									type="button"
+									className={`${styles.gridCardPreviewButton} ${styles.gridCardDeferredPreviewButton}`}
+									onClick={(event) => {
+										event.preventDefault()
+										event.stopPropagation()
+										onOpenLargePreviewForKey(key)
+									}}
+									aria-label={`Load preview for ${key}`}
+								>
+									<div className={styles.gridCardMediaPlaceholder}>
+										<PlayCircleOutlined className={styles.gridCardFileIcon} />
+										<Typography.Text type="secondary">Load preview</Typography.Text>
+									</div>
 								</button>
 							) : (
 								<div className={styles.gridCardMediaPlaceholder}>
@@ -239,6 +258,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			openObjectContextMenu,
 			prefix,
 			profileId,
+			profileProvider,
 			recordContextMenuPoint,
 			selectedCount,
 			selectedKeys,

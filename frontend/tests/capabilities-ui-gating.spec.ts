@@ -83,7 +83,7 @@ test('uploads page disables upload controls when provider capability blocks uplo
 	await page.goto('/uploads')
 
 	await expect(page.getByText('Uploads are not available for this provider')).toBeVisible()
-	await expect(page.getByRole('button', { name: 'Select files' })).toBeDisabled()
+	await expect(page.getByRole('button', { name: 'Add from device…' })).toBeDisabled()
 	await expect(page.getByRole('button', { name: /Queue upload/i })).toBeDisabled()
 })
 
@@ -93,5 +93,5 @@ test('objects page disables upload button when provider capability blocks upload
 	await page.goto('/objects')
 
 	await expect(page.getByText('Uploads are disabled for this provider')).toBeVisible()
-	await expect(page.getByRole('button', { name: 'Upload' }).first()).toBeDisabled()
+	await expect(page.locator('button').filter({ hasText: 'Upload…' }).first()).toBeDisabled()
 })

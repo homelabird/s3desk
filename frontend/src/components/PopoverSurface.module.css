@@ -8,7 +8,7 @@
 }
 
 .panel {
-	z-index: 40;
+	z-index: 1300;
 	min-width: 220px;
 	max-width: min(360px, calc(100vw - 32px));
 	border: 1px solid var(--s3d-color-border);
@@ -16,4 +16,5 @@
 	background: var(--s3d-color-bg);
 	box-shadow: var(--s3d-shadow-md);
 	padding: 8px;
+	pointer-events: auto;
 }

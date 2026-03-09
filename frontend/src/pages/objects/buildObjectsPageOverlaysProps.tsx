@@ -32,6 +32,7 @@ export type BuildObjectsPageOverlaysPropsArgs = {
 	isMd: boolean
 	bucketOptions: CopyMoveModalProps['bucketOptions']
 	bucketsLoading: boolean
+	selectedCount: number
 	filtersDrawerOpen: boolean
 	setFiltersDrawerOpen: (open: boolean) => void
 	isAdvanced: boolean
@@ -101,8 +102,6 @@ export type BuildObjectsPageOverlaysPropsArgs = {
 	indexFullReindex: boolean
 	setIndexFullReindex: (value: boolean) => void
 	globalSearchQueryText: string
-	setMoveAfterUploadDefault: (value: boolean) => void
-	setCleanupEmptyDirsDefault: (value: boolean) => void
 	onOpenPrefix: (prefix: string) => void
 	onCopy: (key: string) => void
 	onDownload: (key: string, size?: number) => void

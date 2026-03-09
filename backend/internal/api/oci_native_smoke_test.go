@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -261,6 +262,37 @@ func TestHandleCreateFolderOciObjectStorageSmoke(t *testing.T) {
 	if resp.Key != "folder/" {
 		t.Fatalf("key=%q, want folder/", resp.Key)
 	}
+
+	listRes := doJSONRequestWithProfile(t, srv, http.MethodGet, "/api/v1/buckets/oci-native-bucket/objects", profile.ID, nil)
+	defer listRes.Body.Close()
+	if listRes.StatusCode != http.StatusOK {
+		t.Fatalf("list status=%d, want %d", listRes.StatusCode, http.StatusOK)
+	}
+
+	var listResp models.ListObjectsResponse
+	decodeJSONResponse(t, listRes, &listResp)
+	if !containsString(listResp.CommonPrefixes, "folder/") {
+		t.Fatalf("commonPrefixes=%v, want folder/", listResp.CommonPrefixes)
+	}
+
+	childListRes := doJSONRequestWithProfile(
+		t,
+		srv,
+		http.MethodGet,
+		"/api/v1/buckets/oci-native-bucket/objects?prefix=folder%2F",
+		profile.ID,
+		nil,
+	)
+	defer childListRes.Body.Close()
+	if childListRes.StatusCode != http.StatusOK {
+		t.Fatalf("child list status=%d, want %d", childListRes.StatusCode, http.StatusOK)
+	}
+
+	var childListResp models.ListObjectsResponse
+	decodeJSONResponse(t, childListRes, &childListResp)
+	if len(childListResp.Items) != 0 || len(childListResp.CommonPrefixes) != 0 {
+		t.Fatalf("child list should hide marker objects, got items=%v prefixes=%v", childListResp.Items, childListResp.CommonPrefixes)
+	}
 }
 
 func TestHandleDeleteObjectsOciObjectStorageSmoke(t *testing.T) {
@@ -328,6 +360,7 @@ func createOciNativeSmokeProfile(t *testing.T, st *store.Store) models.Profile {
 
 func writeFakeOciNativeRclone(t *testing.T) string {
 	t.Helper()
+	stateFile := filepath.Join(t.TempDir(), "oci-folders.txt")
 
 	body := fmt.Sprintf(`config=''
 cmd=''
@@ -341,7 +374,7 @@ for arg in "$@"; do
   if [ "$prev" = "--config" ]; then config="$arg"; fi
   if [ "$prev" = "--files-from-raw" ]; then files_from_raw="$arg"; fi
   case "$arg" in
-    lsjson|mkdir|rmdir|copyto|cat|deletefile|link|delete) cmd="$arg" ;;
+    lsjson|mkdir|rmdir|copyto|cat|deletefile|link|delete|rcat) cmd="$arg" ;;
     --stat) want_stat=1 ;;
     --hash) want_hash=1 ;;
     --metadata) want_metadata=1 ;;
@@ -356,6 +389,7 @@ grep -Fxq 'namespace = %s' "$config" || { echo "missing namespace" >&2; exit 21;
 grep -Fxq 'compartment = %s' "$config" || { echo "missing compartment" >&2; exit 21; }
 grep -Fxq 'region = %s' "$config" || { echo "missing region" >&2; exit 21; }
 grep -Fxq 'endpoint = %s' "$config" || { echo "missing endpoint" >&2; exit 21; }
+state_file='%s'
 
 case "$cmd" in
   lsjson)
@@ -374,11 +408,31 @@ case "$cmd" in
       exit 22
     fi
     if [ "$target" = "remote:oci-native-bucket" ]; then
-      printf '[{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","IsDir":false,"Hashes":{"MD5":"abc"}}]'
+      printf '[{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","IsDir":false,"Hashes":{"MD5":"abc"}}'
+      if [ -f "$state_file" ]; then
+        while IFS= read -r marker; do
+          [ -n "$marker" ] || continue
+          printf ',{"Path":"%%s","Name":"%%s","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}' "$marker" "$marker"
+        done < "$state_file"
+      fi
+      printf ']'
+      exit 0
+    fi
+    if [ "$target" = "remote:oci-native-bucket/folder/" ]; then
+      printf '[{"Path":"%s","Name":"%s","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}]'
       exit 0
     fi
     printf '[{"Name":"oci-native-bucket","IsDir":true}]'
     exit 0
+    ;;
+  rcat)
+    if [ "$target" = "remote:oci-native-bucket/folder/%s" ]; then
+      cat >/dev/null
+      printf 'folder/%s\n' >> "$state_file"
+      exit 0
+    fi
+    printf 'unexpected rcat target: %%s\n' "$target" >&2
+    exit 22
     ;;
   mkdir)
     if [ "$target" = "remote:demo" ] || [ "$target" = "remote:oci-native-bucket/folder/" ]; then
@@ -423,7 +477,7 @@ esac
 
 printf 'unexpected rclone args: %%s\n' "$*" >&2
 exit 1
-`, ociNativeSmokeNamespace, ociNativeSmokeCompartment, ociNativeSmokeRegion, ociNativeSmokeEndpoint)
+`, ociNativeSmokeNamespace, ociNativeSmokeCompartment, ociNativeSmokeRegion, ociNativeSmokeEndpoint, stateFile, ociFolderMarkerName, ociFolderMarkerName, ociFolderMarkerName, ociFolderMarkerName)
 
 	return writeFakeRclone(t, body)
 }

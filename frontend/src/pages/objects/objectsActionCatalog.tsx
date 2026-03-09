@@ -17,6 +17,7 @@ type ObjectsActionDeps = {
 	bucket: string
 	prefix: string
 	objectCrudSupported: boolean
+	presignedDownloadSupported: boolean
 	uploadSupported: boolean
 	selectedCount: number
 	clipboardObjects: ClipboardObjects | null
@@ -45,6 +46,7 @@ type ObjectsActionDeps = {
 	onOpenDownloadPrefix: (prefix: string) => void
 	onZipPrefix: (prefix: string) => void
 	onDownloadSelected: () => void
+	onOpenMoveSelected: () => void
 	onCopySelectionToClipboard: (mode: 'copy' | 'move') => void
 	onPasteClipboardObjects: () => void
 	onClearSelection: () => void
@@ -53,8 +55,7 @@ type ObjectsActionDeps = {
 	onOpenTreeDrawer: () => void
 	onRefresh: () => void
 	onOpenPathModal: () => void
-	onOpenUploadFiles: () => void
-	onOpenUploadFolder: () => void
+	onOpenUpload: () => void
 	onOpenNewFolder: (parentPrefixOverride?: string) => void
 	onOpenCommandPalette: () => void
 	onOpenTransfers: () => void
@@ -173,7 +174,7 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 		return [
 			downloadAction,
 			downloadDeviceAction,
-			presignAction,
+			...(deps.presignedDownloadSupported ? [presignAction] : []),
 			{ type: 'divider' },
 			copyAction,
 			...(largePreviewAction ? [largePreviewAction] : []),
@@ -312,6 +313,15 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			run: () => deps.onDownloadSelected(),
 		},
 		{
+			id: 'move_selected_to',
+			label: selectionIsBulk ? 'Move selection to…' : 'Move to…',
+			shortLabel: 'Move to…',
+			icon: <EditOutlined />,
+			keywords: 'move destination folder target',
+			enabled: canUseSelectionActions && deps.selectedCount > 0,
+			run: () => deps.onOpenMoveSelected(),
+		},
+		{
 			id: 'copy_selected_keys',
 			label: 'Copy selected keys',
 			shortLabel: 'Copy',
@@ -425,20 +435,12 @@ export function buildObjectsActionCatalog(deps: ObjectsActionDeps): ObjectsActio
 			run: () => deps.onOpenPathModal(),
 		},
 		{
-			id: 'upload_files',
-			label: 'Upload files',
+			id: 'upload',
+			label: 'Upload…',
 			icon: <CloudUploadOutlined />,
-			keywords: 'upload files',
+			keywords: 'upload files folder device',
 			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.uploadSupported,
-			run: () => deps.onOpenUploadFiles(),
-		},
-		{
-			id: 'upload_folder',
-			label: 'Upload folder',
-			icon: <FolderOutlined />,
-			keywords: 'upload folder',
-			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.uploadSupported,
-			run: () => deps.onOpenUploadFolder(),
+			run: () => deps.onOpenUpload(),
 		},
 			{
 				id: 'new_folder',
