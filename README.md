@@ -59,6 +59,12 @@ Default local endpoints:
 - [Runbook](docs/RUNBOOK.md)
 - [Testing](docs/TESTING.md)
 
+## Demo
+
+Profile selection, bucket creation, file upload, object deletion, and jobs view:
+
+![S3Desk demo flow](img/demo-flow-1920x1080.gif)
+
 ## License
 
 This project is licensed under the Mozilla Public License 2.0 (`MPL-2.0`).
