@@ -40,6 +40,7 @@ services:
       RCLONE_RETRY_JITTER_RATIO: "0.2"
     volumes:
       - s3desk-data:/data
+      - "${OCI_CONFIG_MOUNT_DIR:-./data/oci-runtime}:/data/oci:ro,z"
 
 volumes:
   s3desk-data:

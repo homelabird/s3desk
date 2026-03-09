@@ -54,12 +54,14 @@ default:
   - k8s-smoke
 
 stages:
+  - release-validate
   - build
   - smoke
   - test
   - audit
   - publish
   - post-publish
+  - deploy
 
 variables:
   ALPINE_IMAGE: "harbor.k8s.homelabird.com/library/alpine:3.21"
@@ -174,11 +176,24 @@ variables:
       fi
       chmod +x /usr/local/bin/kubectl
 
+validate_release_tag:
+  stage: release-validate
+  image: "$ALPINE_IMAGE"
+  interruptible: true
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  before_script:
+    - apk add --no-cache bash
+  script:
+    - bash scripts/validate_release_tag.sh
+
 helm_lint:
   <<: *helm_tools
   stage: test
   interruptible: true
   rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
     - changes:
         - charts/**/*
         - charts/s3desk/ci-values.yaml
@@ -192,6 +207,8 @@ helm_template:
   stage: test
   interruptible: true
   rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
     - changes:
         - charts/**/*
         - charts/s3desk/ci-values.yaml
@@ -232,6 +249,8 @@ helm_template_negative:
   stage: test
   interruptible: true
   rules:
+    - if: '$CI_COMMIT_TAG'
+      when: on_success
     - changes:
         - charts/**/*
         - charts/s3desk/ci-values.yaml
@@ -538,14 +557,6 @@ build_release_images:
     - podman --version
     - |
       BASE_TAG="$CI_COMMIT_TAG"
-      case "$BASE_TAG" in
-        *-postgres) BASE_TAG="${BASE_TAG%-postgres}" ;;
-        *-sqlite) BASE_TAG="${BASE_TAG%-sqlite}" ;;
-      esac
-      if [ -z "$BASE_TAG" ]; then
-        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
-        exit 1
-      fi
       podman build --build-arg DB_BACKEND=postgres -f Containerfile -t "s3desk-release:${BASE_TAG}" .
       podman build --build-arg DB_BACKEND=sqlite -f Containerfile -t "s3desk-release:${BASE_TAG}-sqlite" .
       podman save -o release-postgres.tar "s3desk-release:${BASE_TAG}"
@@ -1079,14 +1090,6 @@ release_postgres_smoke:
     - podman load -i release-postgres.tar
     - |
       BASE_TAG="$CI_COMMIT_TAG"
-      case "$BASE_TAG" in
-        *-postgres) BASE_TAG="${BASE_TAG%-postgres}" ;;
-        *-sqlite) BASE_TAG="${BASE_TAG%-sqlite}" ;;
-      esac
-      if [ -z "$BASE_TAG" ]; then
-        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
-        exit 1
-      fi
       if ! podman image inspect "s3desk-release:${BASE_TAG}" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx 'DB_BACKEND=postgres'; then
         echo "release image s3desk-release:${BASE_TAG} missing DB_BACKEND=postgres" >&2
         exit 1
@@ -1094,16 +1097,16 @@ release_postgres_smoke:
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
       COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
-      S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$BASE_TAG" \
+      S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$BASE_TAG" S3DESK_PORT=18080 \
         $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml up -d
       for i in $(seq 1 30); do
-        if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+        if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
           break
         fi
         sleep 2
       done
-      curl -fsS http://127.0.0.1:8080/readyz >/dev/null
-      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:8080/api/v1/meta >/dev/null
+      curl -fsS http://127.0.0.1:18080/readyz >/dev/null
+      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:18080/api/v1/meta >/dev/null
   after_script:
     - |
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
@@ -1112,6 +1115,46 @@ release_postgres_smoke:
       LOGS_CMD="$(cat /tmp/compose_logs_cmd)"
       if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml $LOGS_CMD; fi
       $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+
+release_sqlite_smoke:
+  stage: test
+  image: "$PODMAN_IMAGE"
+  interruptible: true
+  tags: *heavy_tags
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  needs:
+    - job: build_release_images
+      artifacts: true
+  variables:
+    STORAGE_DRIVER: "vfs"
+    CONTAINERS_STORAGE_DRIVER: "vfs"
+    BUILDAH_ISOLATION: "chroot"
+  script:
+    - podman --version
+    - podman load -i release-sqlite.tar
+    - |
+      SQLITE_TAG="${CI_COMMIT_TAG}-sqlite"
+      if ! podman image inspect "s3desk-release:${SQLITE_TAG}" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -qx 'DB_BACKEND=sqlite'; then
+        echo "release image s3desk-release:${SQLITE_TAG} missing DB_BACKEND=sqlite" >&2
+        exit 1
+      fi
+      podman run --rm -d --name s3desk-release-sqlite-smoke -p 18081:8080 \
+        -e ADDR=0.0.0.0:8080 \
+        -e ALLOW_REMOTE=true \
+        -e API_TOKEN=change-me \
+        "s3desk-release:${SQLITE_TAG}"
+      for i in $(seq 1 30); do
+        if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+          break
+        fi
+        sleep 2
+      done
+      curl -fsS http://127.0.0.1:18081/readyz >/dev/null
+      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:18081/api/v1/meta >/dev/null
+  after_script:
+    - |
+      if podman container exists s3desk-release-sqlite-smoke; then podman rm -f s3desk-release-sqlite-smoke; fi
 
 e2e:
   stage: test
@@ -1278,9 +1321,6 @@ trivy_scan:
   <<: *trivy_cache
   interruptible: true
   rules:
-    - if: '$CI_COMMIT_TAG && $RUN_TRIVY != "1"'
-      when: manual
-      allow_failure: true
     - if: '$CI_COMMIT_TAG'
       when: on_success
     - when: never
@@ -1314,6 +1354,11 @@ publish_dockerhub:
   needs:
     - job: build_release_images
       artifacts: true
+    - release_postgres_smoke
+    - release_sqlite_smoke
+    - helm_lint
+    - helm_template
+    - helm_template_negative
     - trivy_scan
   rules:
     - if: '$CI_COMMIT_TAG'
@@ -1338,14 +1383,6 @@ publish_dockerhub:
       fi
       TAG="$CI_COMMIT_TAG"
       BASE_TAG="$TAG"
-      case "$TAG" in
-        *-postgres) BASE_TAG="${TAG%-postgres}" ;;
-        *-sqlite) BASE_TAG="${TAG%-sqlite}" ;;
-      esac
-      if [ -z "$BASE_TAG" ]; then
-        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
-        exit 1
-      fi
       POSTGRES_TAG="$BASE_TAG"
       SQLITE_TAG="${BASE_TAG}-sqlite"
       podman tag "s3desk-release:${POSTGRES_TAG}" "$DOCKERHUB_REPO:$POSTGRES_TAG"
@@ -1392,6 +1429,8 @@ publish_dockerhub:
 publish_helm_chart:
   <<: *helm_tools
   stage: publish
+  needs:
+    - publish_dockerhub
   rules:
     - if: '$CI_COMMIT_TAG'
   variables:
@@ -1409,6 +1448,9 @@ publish_helm_chart:
       helm_version="v${HELM_VERSION}"
       curl -fsSL -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${helm_version}-linux-${arch}.tar.gz"
+      if [ -n "${HELM_TGZ_SHA256:-}" ]; then
+        echo "${HELM_TGZ_SHA256}  /tmp/helm.tar.gz" | sha256sum -c -
+      fi
       tar -C /tmp -xzf /tmp/helm.tar.gz
       mv "/tmp/linux-${arch}/helm" /usr/local/bin/helm
       rm -rf "/tmp/linux-${arch}" /tmp/helm.tar.gz
@@ -1418,6 +1460,21 @@ publish_helm_chart:
         echo "HARBOR_USERNAME/HARBOR_PASSWORD are required to push helm charts." >&2
         exit 1
       fi
+      DOCKERHUB_REPO="$(printf '%s' "$DOCKERHUB_REPO" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#https://}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#http://}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#docker.io/}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#index.docker.io/}"
+      DOCKERHUB_REPO="${DOCKERHUB_REPO#registry-1.docker.io/}"
+      if [ -z "$DOCKERHUB_REPO" ]; then
+        echo "DOCKERHUB_REPO is empty after normalization." >&2
+        exit 1
+      fi
+      if ! printf '%s' "$DOCKERHUB_REPO" | grep -Eq '^[a-z0-9]+([._-][a-z0-9]+)*/[a-z0-9]+([._-][a-z0-9]+)*$'; then
+        echo "DOCKERHUB_REPO must be in the form 'namespace/repo' (lowercase, no scheme)." >&2
+        exit 1
+      fi
+      export IMAGE_REPOSITORY="$DOCKERHUB_REPO"
       helm registry login "$HARBOR_REGISTRY" -u "$HARBOR_USERNAME" -p "$HARBOR_PASSWORD"
     - bash scripts/update_chart_version.sh
     - mkdir -p dist/helm
@@ -1503,14 +1560,6 @@ release_image_smoke:
         exit 1
       fi
       BASE_TAG="$CI_COMMIT_TAG"
-      case "$BASE_TAG" in
-        *-postgres) BASE_TAG="${BASE_TAG%-postgres}" ;;
-        *-sqlite) BASE_TAG="${BASE_TAG%-sqlite}" ;;
-      esac
-      if [ -z "$BASE_TAG" ]; then
-        echo "CI_COMMIT_TAG '$CI_COMMIT_TAG' is invalid after suffix stripping." >&2
-        exit 1
-      fi
       POSTGRES_IMAGE="${DOCKERHUB_REPO}:${BASE_TAG}"
       SQLITE_IMAGE="${DOCKERHUB_REPO}:${BASE_TAG}-sqlite"
       podman pull "$POSTGRES_IMAGE"
@@ -1526,22 +1575,8 @@ release_image_smoke:
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
       COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
-      S3DESK_IMAGE="$DOCKERHUB_REPO" S3DESK_TAG="$BASE_TAG" \
+      S3DESK_IMAGE="$DOCKERHUB_REPO" S3DESK_TAG="$BASE_TAG" S3DESK_PORT=18080 \
         $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml up -d
-      for i in $(seq 1 30); do
-        if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
-          break
-        fi
-        sleep 2
-      done
-      curl -fsS http://127.0.0.1:8080/readyz >/dev/null
-      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:8080/api/v1/meta >/dev/null
-      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
-      podman run --rm -d --name s3desk-sqlite-smoke -p 18080:8080 \
-        -e ADDR=0.0.0.0:8080 \
-        -e ALLOW_REMOTE=true \
-        -e API_TOKEN=change-me \
-        "$SQLITE_IMAGE"
       for i in $(seq 1 30); do
         if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
           break
@@ -1550,6 +1585,20 @@ release_image_smoke:
       done
       curl -fsS http://127.0.0.1:18080/readyz >/dev/null
       curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:18080/api/v1/meta >/dev/null
+      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+      podman run --rm -d --name s3desk-sqlite-smoke -p 18081:8080 \
+        -e ADDR=0.0.0.0:8080 \
+        -e ALLOW_REMOTE=true \
+        -e API_TOKEN=change-me \
+        "$SQLITE_IMAGE"
+      for i in $(seq 1 30); do
+        if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+          break
+        fi
+        sleep 2
+      done
+      curl -fsS http://127.0.0.1:18081/readyz >/dev/null
+      curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:18081/api/v1/meta >/dev/null
       podman rm -f s3desk-sqlite-smoke
   after_script:
     - |
@@ -1560,3 +1609,60 @@ release_image_smoke:
       if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml $LOGS_CMD; fi
       $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
       if podman container exists s3desk-sqlite-smoke; then podman rm -f s3desk-sqlite-smoke; fi
+
+deploy_release_compose:
+  stage: deploy
+  image: "$ALPINE_IMAGE"
+  interruptible: false
+  needs:
+    - release_image_smoke
+  rules:
+    - if: '$CI_COMMIT_TAG && $DEPLOY_TARGET == "compose"'
+      when: on_success
+    - when: never
+  variables:
+    DEPLOY_ENVIRONMENT_NAME: "production"
+  environment:
+    name: "$DEPLOY_ENVIRONMENT_NAME"
+  before_script:
+    - apk add --no-cache bash openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - eval "$(ssh-agent -s)"
+    - |
+      if [ -z "${DEPLOY_SSH_PRIVATE_KEY:-}" ]; then
+        echo "DEPLOY_SSH_PRIVATE_KEY is required for compose deployments." >&2
+        exit 1
+      fi
+      printf '%s\n' "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
+    - |
+      if [ -n "${DEPLOY_SSH_KNOWN_HOSTS:-}" ]; then
+        printf '%s\n' "${DEPLOY_SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+      else
+        if [ -z "${DEPLOY_SSH_HOST:-}" ]; then
+          echo "DEPLOY_SSH_HOST is required to bootstrap known_hosts." >&2
+          exit 1
+        fi
+        ssh-keyscan -p "${DEPLOY_SSH_PORT:-22}" "${DEPLOY_SSH_HOST}" > ~/.ssh/known_hosts
+      fi
+    - chmod 600 ~/.ssh/known_hosts
+  script:
+    - bash scripts/deploy_compose_release.sh
+
+deploy_release_helm:
+  <<: *helm_k8s_tools
+  stage: deploy
+  interruptible: false
+  needs:
+    - publish_helm_chart
+    - release_image_smoke
+  rules:
+    - if: '$CI_COMMIT_TAG && $DEPLOY_TARGET == "helm"'
+      when: on_success
+    - when: never
+  variables:
+    DEPLOY_ENVIRONMENT_NAME: "production"
+  environment:
+    name: "$DEPLOY_ENVIRONMENT_NAME"
+  script:
+    - bash scripts/deploy_helm_release.sh
