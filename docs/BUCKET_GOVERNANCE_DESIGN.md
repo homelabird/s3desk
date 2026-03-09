@@ -2,7 +2,16 @@
 
 ## Status
 
-Draft for the provider-aware bucket governance redesign.
+This document now mixes shipped governance behavior with forward-looking design notes.
+
+Current implementation snapshot as of 2026-03-10:
+
+- AWS S3: typed access, public exposure, versioning, encryption, and lifecycle controls are shipped.
+- Google Cloud Storage: typed public exposure, uniform access, versioning, and retention are shipped; IAM bindings remain a JSON-backed editor.
+- Azure Blob: typed anonymous access, stored access policy flow, versioning, soft delete, and ARM-backed container immutability are shipped.
+- OCI Object Storage: typed bucket visibility, versioning, multi-rule retention, and pre-authenticated request controls are shipped.
+- Provider-by-provider operator guidance now lives in [`docs/PROVIDERS.md`](PROVIDERS.md).
+- Real cloud validation remains the main open rollout task.
 
 This document covers:
 
@@ -110,7 +119,8 @@ Primary controls:
 - container public access
 - stored access policies
 - versioning
-- soft delete and immutability as later protection controls
+- soft delete
+- container immutability
 
 Best-practice direction:
 

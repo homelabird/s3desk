@@ -3,6 +3,20 @@ import type { ProfileFormValues } from './profileTypes'
 
 type ProfileCreateRequestWithPublicEndpoint = ProfileCreateRequest & { publicEndpoint?: string }
 type ProfileUpdateRequestWithPublicEndpoint = ProfileUpdateRequest & { publicEndpoint?: string }
+type ProfileCreateRequestWithAzureArm = ProfileCreateRequestWithPublicEndpoint & {
+	subscriptionId?: string
+	resourceGroup?: string
+	tenantId?: string
+	clientId?: string
+	clientSecret?: string
+}
+type ProfileUpdateRequestWithAzureArm = ProfileUpdateRequestWithPublicEndpoint & {
+	subscriptionId?: string
+	resourceGroup?: string
+	tenantId?: string
+	clientId?: string
+	clientSecret?: string
+}
 
 export function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig | null {
 	const clientCertPem = values.tlsClientCertPem?.trim() ?? ''
@@ -23,7 +37,7 @@ export function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest
 	const provider = values.provider
 
 	if (provider === 'azure_blob') {
-		return {
+		const req: ProfileUpdateRequestWithAzureArm = {
 			provider,
 			name: values.name,
 			accountName: values.azureAccountName,
@@ -32,7 +46,13 @@ export function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest
 			preserveLeadingSlash: values.preserveLeadingSlash,
 			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
 			...(values.azureAccountKey ? { accountKey: values.azureAccountKey } : {}),
+			...(values.azureSubscriptionId ? { subscriptionId: values.azureSubscriptionId } : {}),
+			...(values.azureResourceGroup ? { resourceGroup: values.azureResourceGroup } : {}),
+			...(values.azureTenantId ? { tenantId: values.azureTenantId } : {}),
+			...(values.azureClientId ? { clientId: values.azureClientId } : {}),
+			...(values.azureClientSecret ? { clientSecret: values.azureClientSecret } : {}),
 		}
+		return req
 	}
 
 	if (provider === 'gcp_gcs') {
@@ -109,7 +129,7 @@ export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest
 	const provider = values.provider
 
 	if (provider === 'azure_blob') {
-		return {
+		const req: ProfileCreateRequestWithAzureArm = {
 			provider,
 			name: values.name,
 			accountName: values.azureAccountName,
@@ -118,7 +138,13 @@ export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest
 			useEmulator: values.azureUseEmulator,
 			preserveLeadingSlash: values.preserveLeadingSlash,
 			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
+			...(values.azureSubscriptionId ? { subscriptionId: values.azureSubscriptionId } : {}),
+			...(values.azureResourceGroup ? { resourceGroup: values.azureResourceGroup } : {}),
+			...(values.azureTenantId ? { tenantId: values.azureTenantId } : {}),
+			...(values.azureClientId ? { clientId: values.azureClientId } : {}),
+			...(values.azureClientSecret ? { clientSecret: values.azureClientSecret } : {}),
 		}
+		return req
 	}
 
 	if (provider === 'gcp_gcs') {

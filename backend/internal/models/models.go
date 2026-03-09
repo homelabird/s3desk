@@ -64,8 +64,12 @@ type Profile struct {
 	ForcePathStyle *bool  `json:"forcePathStyle,omitempty"`
 
 	// Azure Blob
-	AccountName string `json:"accountName,omitempty"`
-	UseEmulator *bool  `json:"useEmulator,omitempty"`
+	AccountName    string `json:"accountName,omitempty"`
+	SubscriptionID string `json:"subscriptionId,omitempty"`
+	ResourceGroup  string `json:"resourceGroup,omitempty"`
+	TenantID       string `json:"tenantId,omitempty"`
+	ClientID       string `json:"clientId,omitempty"`
+	UseEmulator    *bool  `json:"useEmulator,omitempty"`
 
 	// GCP GCS
 	ProjectID     string `json:"projectId,omitempty"`
@@ -114,10 +118,15 @@ type ProfileSecrets struct {
 	SessionToken    *string `json:"-"`
 
 	// Azure Blob secrets
-	AzureAccountName string `json:"-"`
-	AzureAccountKey  string `json:"-"`
-	AzureEndpoint    string `json:"-"`
-	AzureUseEmulator bool   `json:"-"`
+	AzureAccountName    string `json:"-"`
+	AzureAccountKey     string `json:"-"`
+	AzureEndpoint       string `json:"-"`
+	AzureUseEmulator    bool   `json:"-"`
+	AzureSubscriptionID string `json:"-"`
+	AzureResourceGroup  string `json:"-"`
+	AzureTenantID       string `json:"-"`
+	AzureClientID       string `json:"-"`
+	AzureClientSecret   string `json:"-"`
 
 	// GCP GCS secrets
 	GcpServiceAccountJSON string `json:"-"`
@@ -156,9 +165,14 @@ type ProfileCreateRequest struct {
 	ForcePathStyle  *bool   `json:"forcePathStyle,omitempty"`
 
 	// Azure Blob
-	AccountName *string `json:"accountName,omitempty"`
-	AccountKey  *string `json:"accountKey,omitempty"`
-	UseEmulator *bool   `json:"useEmulator,omitempty"`
+	AccountName    *string `json:"accountName,omitempty"`
+	AccountKey     *string `json:"accountKey,omitempty"`
+	SubscriptionID *string `json:"subscriptionId,omitempty"`
+	ResourceGroup  *string `json:"resourceGroup,omitempty"`
+	TenantID       *string `json:"tenantId,omitempty"`
+	ClientID       *string `json:"clientId,omitempty"`
+	ClientSecret   *string `json:"clientSecret,omitempty"`
+	UseEmulator    *bool   `json:"useEmulator,omitempty"`
 
 	// GCP GCS
 	ServiceAccountJSON *string `json:"serviceAccountJson,omitempty"`
@@ -196,9 +210,14 @@ type ProfileUpdateRequest struct {
 	TLSInsecureSkipVerify *bool `json:"tlsInsecureSkipVerify,omitempty"`
 
 	// Azure Blob
-	AccountName *string `json:"accountName,omitempty"`
-	AccountKey  *string `json:"accountKey,omitempty"`
-	UseEmulator *bool   `json:"useEmulator,omitempty"`
+	AccountName    *string `json:"accountName,omitempty"`
+	AccountKey     *string `json:"accountKey,omitempty"`
+	SubscriptionID *string `json:"subscriptionId,omitempty"`
+	ResourceGroup  *string `json:"resourceGroup,omitempty"`
+	TenantID       *string `json:"tenantId,omitempty"`
+	ClientID       *string `json:"clientId,omitempty"`
+	ClientSecret   *string `json:"clientSecret,omitempty"`
+	UseEmulator    *bool   `json:"useEmulator,omitempty"`
 
 	// GCP GCS
 	ServiceAccountJSON *string `json:"serviceAccountJson,omitempty"`
@@ -388,6 +407,15 @@ type BucketRetentionView struct {
 	Days        *int   `json:"days,omitempty"`
 	RetainUntil string `json:"retainUntil,omitempty"`
 	Locked      bool   `json:"locked,omitempty"`
+	Rules       []BucketRetentionRuleView `json:"rules,omitempty"`
+}
+
+type BucketRetentionRuleView struct {
+	ID           string `json:"id,omitempty"`
+	DisplayName  string `json:"displayName,omitempty"`
+	Days         *int   `json:"days,omitempty"`
+	Locked       bool   `json:"locked,omitempty"`
+	TimeModified string `json:"timeModified,omitempty"`
 }
 
 type BucketObjectLockView struct {
@@ -404,9 +432,15 @@ type BucketSoftDeleteView struct {
 }
 
 type BucketImmutabilityView struct {
-	Enabled bool   `json:"enabled"`
-	Mode    string `json:"mode,omitempty"`
-	Until   string `json:"until,omitempty"`
+	Enabled                    bool `json:"enabled"`
+	Mode                       string `json:"mode,omitempty"`
+	Until                      string `json:"until,omitempty"`
+	Days                       *int   `json:"days,omitempty"`
+	ETag                       string `json:"etag,omitempty"`
+	Editable                   bool   `json:"editable,omitempty"`
+	LegalHold                  bool   `json:"legalHold,omitempty"`
+	AllowProtectedAppendWrites bool   `json:"allowProtectedAppendWrites,omitempty"`
+	AllowProtectedAppendWritesAll bool `json:"allowProtectedAppendWritesAll,omitempty"`
 }
 
 type BucketAdvancedView struct {
@@ -475,7 +509,19 @@ type BucketSharingView struct {
 	Bucket                  string                     `json:"bucket"`
 	StoredAccessPolicies    []BucketStoredAccessPolicy `json:"storedAccessPolicies,omitempty"`
 	PreauthenticatedSupport *bool                      `json:"preauthenticatedSupport,omitempty"`
+	PreauthenticatedRequests []BucketPreauthenticatedRequestView `json:"preauthenticatedRequests,omitempty"`
 	Warnings                []string                   `json:"warnings,omitempty"`
+}
+
+type BucketPreauthenticatedRequestView struct {
+	ID                  string `json:"id,omitempty"`
+	Name                string `json:"name,omitempty"`
+	AccessType          string `json:"accessType,omitempty"`
+	BucketListingAction string `json:"bucketListingAction,omitempty"`
+	ObjectName          string `json:"objectName,omitempty"`
+	TimeCreated         string `json:"timeCreated,omitempty"`
+	TimeExpires         string `json:"timeExpires,omitempty"`
+	AccessURI           string `json:"accessUri,omitempty"`
 }
 
 type BucketGovernanceView struct {
@@ -529,7 +575,8 @@ type BucketLifecyclePutRequest struct {
 }
 
 type BucketSharingPutRequest struct {
-	StoredAccessPolicies []BucketStoredAccessPolicy `json:"storedAccessPolicies,omitempty"`
+	StoredAccessPolicies     []BucketStoredAccessPolicy          `json:"storedAccessPolicies,omitempty"`
+	PreauthenticatedRequests []BucketPreauthenticatedRequestView `json:"preauthenticatedRequests,omitempty"`
 }
 
 type ObjectItem struct {

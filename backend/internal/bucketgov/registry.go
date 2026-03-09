@@ -22,6 +22,8 @@ type Adapter interface {
 	PutEncryption(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketEncryptionPutRequest) error
 	GetLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketLifecycleView, error)
 	PutLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketLifecyclePutRequest) error
+	GetSharing(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketSharingView, error)
+	PutSharing(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketSharingPutRequest) (models.BucketSharingView, error)
 }
 
 type UnsupportedProviderError struct {

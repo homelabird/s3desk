@@ -141,4 +141,7 @@ func TestGetMetaIncludesProviderCapabilities(t *testing.T) {
 	if !oci.Governance[models.BucketGovernanceCapabilityRetention].Enabled {
 		t.Fatalf("expected oci retention governance capability, got %+v", oci.Governance)
 	}
+	if !oci.Governance[models.BucketGovernanceCapabilityPAR].Enabled {
+		t.Fatalf("expected oci PAR governance capability, got %+v", oci.Governance)
+	}
 }

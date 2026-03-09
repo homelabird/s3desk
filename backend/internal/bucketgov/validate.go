@@ -206,12 +206,34 @@ func ValidateProtectionPut(provider models.ProfileProvider, req models.BucketPro
 	}
 
 	if req.Retention != nil {
+		if len(req.Retention.Rules) > 0 && provider != models.ProfileProviderOciObjectStorage {
+			return UnsupportedFieldError(provider, "protection", "retention.rules", models.BucketGovernanceCapabilityRetention, nil)
+		}
 		if req.Retention.Enabled {
-			if req.Retention.Days == nil || *req.Retention.Days <= 0 {
-				return InvalidFieldError("retention.days", "retention.days must be greater than zero when retention is enabled", map[string]any{
-					"section": "protection",
-				})
+			if len(req.Retention.Rules) > 0 {
+				if provider == models.ProfileProviderOciObjectStorage && len(req.Retention.Rules) > 100 {
+					return InvalidFieldError("retention.rules", "OCI allows a maximum of 100 retention rules per bucket", map[string]any{
+						"section": "protection",
+					})
+				}
+				for index, rule := range req.Retention.Rules {
+					if rule.Days == nil || *rule.Days <= 0 {
+						return InvalidFieldError("retention.rules["+strconv.Itoa(index)+"].days", "retention rule days must be greater than zero when retention is enabled", map[string]any{
+							"section": "protection",
+						})
+					}
+				}
+			} else {
+				if req.Retention.Days == nil || *req.Retention.Days <= 0 {
+					return InvalidFieldError("retention.days", "retention.days must be greater than zero when retention is enabled", map[string]any{
+						"section": "protection",
+					})
+				}
 			}
+		} else if len(req.Retention.Rules) > 0 {
+			return InvalidFieldError("retention.rules", "retention.rules must be empty when retention is disabled", map[string]any{
+				"section": "protection",
+			})
 		}
 	}
 	if req.SoftDelete != nil {
@@ -223,6 +245,24 @@ func ValidateProtectionPut(provider models.ProfileProvider, req models.BucketPro
 			}
 		}
 	}
+	if provider == models.ProfileProviderAzureBlob && req.Immutability != nil {
+		mode := strings.ToLower(strings.TrimSpace(req.Immutability.Mode))
+		if mode != "" && mode != "unlocked" && mode != "locked" {
+			return InvalidEnumFieldError("immutability.mode", mode, "unlocked", "locked")
+		}
+		if req.Immutability.Enabled {
+			if req.Immutability.Days == nil || *req.Immutability.Days <= 0 {
+				return InvalidFieldError("immutability.days", "immutability.days must be greater than zero when Azure immutability is enabled", map[string]any{
+					"section": "protection",
+				})
+			}
+		}
+		if req.Immutability.AllowProtectedAppendWrites && req.Immutability.AllowProtectedAppendWritesAll {
+			return InvalidFieldError("immutability.allowProtectedAppendWritesAll", "allowProtectedAppendWrites and allowProtectedAppendWritesAll are mutually exclusive", map[string]any{
+				"section": "protection",
+			})
+		}
+	}
 
 	return nil
 }
@@ -230,6 +270,55 @@ func ValidateProtectionPut(provider models.ProfileProvider, req models.BucketPro
 func capabilityEnabled(provider models.ProfileProvider, capability models.BucketGovernanceCapability) bool {
 	state, ok := ProviderGovernanceCapabilities(provider)[capability]
 	return ok && state.Enabled
+}
+
+func ValidateSharingPut(provider models.ProfileProvider, req models.BucketSharingPutRequest) error {
+	if len(req.PreauthenticatedRequests) > 0 && !capabilityEnabled(provider, models.BucketGovernanceCapabilityPAR) {
+		return UnsupportedFieldError(provider, "sharing", "preauthenticatedRequests", models.BucketGovernanceCapabilityPAR, nil)
+	}
+	if len(req.StoredAccessPolicies) > 0 && provider != models.ProfileProviderAzureBlob {
+		return UnsupportedFieldError(provider, "sharing", "storedAccessPolicies", models.BucketGovernanceCapabilityStoredAccessPolicy, nil)
+	}
+	if provider == models.ProfileProviderOciObjectStorage {
+		if len(req.PreauthenticatedRequests) > 100 {
+			return InvalidFieldError("preauthenticatedRequests", "OCI allows a maximum of 100 pre-authenticated requests per bucket", map[string]any{
+				"section": "sharing",
+			})
+		}
+		for index, item := range req.PreauthenticatedRequests {
+			id := strings.TrimSpace(item.ID)
+			if id != "" {
+				continue
+			}
+			if strings.TrimSpace(item.Name) == "" {
+				return InvalidFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].name", "PAR name is required", map[string]any{
+					"section": "sharing",
+				})
+			}
+			switch strings.TrimSpace(item.AccessType) {
+			case "AnyObjectRead", "AnyObjectWrite", "AnyObjectReadWrite":
+			default:
+				return InvalidEnumFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].accessType", strings.TrimSpace(item.AccessType), "AnyObjectRead", "AnyObjectWrite", "AnyObjectReadWrite")
+			}
+			if strings.TrimSpace(item.TimeExpires) == "" {
+				return InvalidFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].timeExpires", "PAR timeExpires is required", map[string]any{
+					"section": "sharing",
+				})
+			}
+			if _, err := time.Parse(time.RFC3339, strings.TrimSpace(item.TimeExpires)); err != nil {
+				return InvalidFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].timeExpires", "PAR timeExpires must be RFC3339", map[string]any{
+					"section": "sharing",
+					"value":   item.TimeExpires,
+				})
+			}
+			switch value := strings.TrimSpace(item.BucketListingAction); value {
+			case "", "Deny", "ListObjects":
+			default:
+				return InvalidEnumFieldError("preauthenticatedRequests["+strconv.Itoa(index)+"].bucketListingAction", value, "Deny", "ListObjects")
+			}
+		}
+	}
+	return nil
 }
 
 func ValidateVersioningPut(provider models.ProfileProvider, req models.BucketVersioningPutRequest) error {

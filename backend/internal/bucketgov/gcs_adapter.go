@@ -335,6 +335,14 @@ func (a *gcsAdapter) PutLifecycle(context.Context, models.ProfileSecrets, string
 	return UnsupportedOperationError{Provider: models.ProfileProviderGcpGcs, Section: "lifecycle"}
 }
 
+func (a *gcsAdapter) GetSharing(context.Context, models.ProfileSecrets, string) (models.BucketSharingView, error) {
+	return models.BucketSharingView{}, UnsupportedOperationError{Provider: models.ProfileProviderGcpGcs, Section: "sharing"}
+}
+
+func (a *gcsAdapter) PutSharing(context.Context, models.ProfileSecrets, string, models.BucketSharingPutRequest) (models.BucketSharingView, error) {
+	return models.BucketSharingView{}, UnsupportedOperationError{Provider: models.ProfileProviderGcpGcs, Section: "sharing"}
+}
+
 func (a *gcsAdapter) getBucketMetadata(ctx context.Context, profile models.ProfileSecrets, bucket, operation, code string) (gcsBucketMetadata, error) {
 	if a.getBucket == nil {
 		return gcsBucketMetadata{}, nil

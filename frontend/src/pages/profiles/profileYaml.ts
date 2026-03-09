@@ -2,6 +2,13 @@ import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequ
 import type { ProfileProvider } from './profileTypes'
 
 type ProfileCreateRequestWithPublicEndpoint = ProfileCreateRequest & { publicEndpoint?: string }
+type ProfileCreateRequestWithAzureArm = ProfileCreateRequestWithPublicEndpoint & {
+	subscriptionId?: string
+	resourceGroup?: string
+	tenantId?: string
+	clientId?: string
+	clientSecret?: string
+}
 
 type ProfileYamlProfile = {
 	id?: string
@@ -16,6 +23,11 @@ type ProfileYamlProfile = {
 	forcePathStyle?: boolean
 	accountName?: string
 	accountKey?: string
+	subscriptionId?: string
+	resourceGroup?: string
+	tenantId?: string
+	clientId?: string
+	clientSecret?: string
 	useEmulator?: boolean
 	serviceAccountJson?: string
 	anonymous?: boolean
@@ -104,7 +116,7 @@ export async function parseProfileYaml(
 			if (!accountName || !accountKey) {
 				throw new Error('azure_blob requires accountName and accountKey')
 			}
-			request = {
+			const azureRequest: ProfileCreateRequestWithAzureArm = {
 				provider,
 				name,
 				accountName,
@@ -113,7 +125,13 @@ export async function parseProfileYaml(
 				useEmulator: profile.useEmulator ?? false,
 				preserveLeadingSlash,
 				tlsInsecureSkipVerify,
+				...(toOptionalString(profile.subscriptionId) ? { subscriptionId: toOptionalString(profile.subscriptionId) } : {}),
+				...(toOptionalString(profile.resourceGroup) ? { resourceGroup: toOptionalString(profile.resourceGroup) } : {}),
+				...(toOptionalString(profile.tenantId) ? { tenantId: toOptionalString(profile.tenantId) } : {}),
+				...(toOptionalString(profile.clientId) ? { clientId: toOptionalString(profile.clientId) } : {}),
+				...(toOptionalString(profile.clientSecret) ? { clientSecret: toOptionalString(profile.clientSecret) } : {}),
 			}
+			request = azureRequest
 			break
 		}
 		case 'gcp_gcs': {

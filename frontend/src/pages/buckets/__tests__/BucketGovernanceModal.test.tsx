@@ -70,6 +70,7 @@ function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_o
           bucket_stored_access_policy: { enabled: true },
           bucket_versioning: { enabled: true },
           bucket_soft_delete: { enabled: true },
+          bucket_immutability: { enabled: true },
         },
         publicExposure: {
           provider,
@@ -98,6 +99,8 @@ function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_o
           },
           immutability: {
             enabled: true,
+            days: 30,
+            editable: true,
             until: "2026-04-01T00:00:00Z",
           },
         },
@@ -115,6 +118,7 @@ function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_o
           bucket_access_public_toggle: { enabled: true },
           bucket_versioning: { enabled: true },
           bucket_retention: { enabled: true },
+          bucket_par: { enabled: true },
         },
         publicExposure: {
           provider,
@@ -127,7 +131,14 @@ function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_o
           bucket: "demo-bucket",
           retention: {
             enabled: true,
-            days: 45,
+            rules: [
+              {
+                id: "rule-1",
+                displayName: "Retention Rule 1",
+                days: 45,
+                locked: false,
+              },
+            ],
           },
         },
         versioning: {
@@ -135,7 +146,22 @@ function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_o
           bucket: "demo-bucket",
           status: "disabled",
         },
-        warnings: ["OCI bucket retention rules are modeled as a single retention control in this client; if multiple rules exist, only the first one is editable here."],
+        sharing: {
+          provider,
+          bucket: "demo-bucket",
+          preauthenticatedSupport: true,
+          preauthenticatedRequests: [
+            {
+              id: "par-1",
+              name: "Read demo",
+              accessType: "AnyObjectRead",
+              bucketListingAction: "Deny",
+              objectName: "",
+              timeCreated: "2026-03-10T00:00:00Z",
+              timeExpires: "2026-04-10T00:00:00Z",
+            },
+          ],
+        },
       };
     case "aws_s3":
     default:
@@ -202,6 +228,12 @@ function createApi(
     putBucketPublicExposure: vi.fn().mockResolvedValue(undefined),
     putBucketAccess: vi.fn().mockResolvedValue(undefined),
     putBucketProtection: vi.fn().mockResolvedValue(undefined),
+    putBucketSharing: vi.fn().mockResolvedValue({
+      provider,
+      bucket: "demo-bucket",
+      preauthenticatedSupport: true,
+      preauthenticatedRequests: [],
+    }),
     putBucketVersioning: vi.fn().mockResolvedValue(undefined),
     putBucketEncryption: vi.fn().mockResolvedValue(undefined),
     putBucketLifecycle: vi.fn().mockResolvedValue(undefined),
@@ -402,17 +434,33 @@ describe("BucketGovernanceModal", () => {
         target: { value: "etag-updated" },
       },
     );
+    const gcsBindingCard = within(accessSection).getAllByTestId(
+      "bucket-governance-gcs-binding-card",
+    )[0];
     fireEvent.change(
-      within(accessSection).getByRole("textbox", { name: /bindings json/i }),
+      within(gcsBindingCard).getByRole("textbox", { name: "Role" }),
+      {
+        target: { value: "roles/storage.objectAdmin" },
+      },
+    );
+    fireEvent.change(
+      within(gcsBindingCard).getByRole("textbox", { name: "Members" }),
+      {
+        target: { value: "allUsers\nuser:ops@example.com" },
+      },
+    );
+    fireEvent.change(
+      within(gcsBindingCard).getByRole("textbox", {
+        name: "Condition JSON (optional)",
+      }),
       {
         target: {
           value: JSON.stringify(
-            [
-              {
-                role: "roles/storage.objectViewer",
-                members: ["allUsers"],
-              },
-            ],
+            {
+              title: "Temporary access",
+              expression:
+                "request.time < timestamp('2026-12-31T00:00:00Z')",
+            },
             null,
             2,
           ),
@@ -430,8 +478,13 @@ describe("BucketGovernanceModal", () => {
         {
           bindings: [
             {
-              role: "roles/storage.objectViewer",
-              members: ["allUsers"],
+              role: "roles/storage.objectAdmin",
+              members: ["allUsers", "user:ops@example.com"],
+              condition: {
+                title: "Temporary access",
+                expression:
+                  "request.time < timestamp('2026-12-31T00:00:00Z')",
+              },
             },
           ],
           etag: "etag-updated",
@@ -587,27 +640,33 @@ describe("BucketGovernanceModal", () => {
     );
 
     const accessSection = await screen.findByTestId("bucket-governance-access");
+    const azurePolicyCard = within(accessSection).getAllByTestId(
+      "bucket-governance-azure-stored-access-policy-card",
+    )[0];
     fireEvent.change(
-      within(accessSection).getByRole("textbox", {
-        name: /stored access policies json/i,
-      }),
+      within(azurePolicyCard).getByRole("textbox", { name: "Identifier" }),
       {
-        target: {
-          value: JSON.stringify(
-            [
-              {
-                id: "upload",
-                start: "2026-03-10T00:00:00Z",
-                expiry: "2026-03-20T00:00:00Z",
-                permission: "rwd",
-              },
-            ],
-            null,
-            2,
-          ),
-        },
+        target: { value: "upload" },
       },
     );
+    fireEvent.change(
+      within(azurePolicyCard).getByRole("textbox", {
+        name: "Start (RFC3339)",
+      }),
+      {
+        target: { value: "2026-03-10T00:00:00Z" },
+      },
+    );
+    fireEvent.change(
+      within(azurePolicyCard).getByRole("textbox", {
+        name: "Expiry (RFC3339)",
+      }),
+      {
+        target: { value: "2026-03-20T00:00:00Z" },
+      },
+    );
+    fireEvent.click(within(azurePolicyCard).getByLabelText("Write"));
+    fireEvent.click(within(azurePolicyCard).getByLabelText("Delete"));
     fireEvent.click(
       within(accessSection).getByRole("button", { name: "Save" }),
     );
@@ -622,7 +681,7 @@ describe("BucketGovernanceModal", () => {
               id: "upload",
               start: "2026-03-10T00:00:00Z",
               expiry: "2026-03-20T00:00:00Z",
-              permission: "rwd",
+              permission: "rwdl",
             },
           ],
         },
@@ -658,12 +717,12 @@ describe("BucketGovernanceModal", () => {
       "bucket-governance-protection",
     );
     expect(
-      within(protectionSection).getByText(/container immutability detected/i),
+      within(protectionSection).getByText("Container immutability"),
     ).toBeInTheDocument();
     fireEvent.change(
-      within(protectionSection).getByRole("textbox", {
+      within(protectionSection).getAllByRole("textbox", {
         name: /retention days/i,
-      }),
+      })[0],
       {
         target: { value: "14" },
       },
@@ -681,12 +740,20 @@ describe("BucketGovernanceModal", () => {
             enabled: true,
             days: 14,
           },
+          immutability: {
+            enabled: true,
+            days: 30,
+            mode: "unlocked",
+            etag: undefined,
+            allowProtectedAppendWrites: false,
+            allowProtectedAppendWritesAll: false,
+          },
         },
       ),
     );
   });
 
-  it("renders OCI controls and updates visibility, versioning, and retention", async () => {
+  it("renders OCI controls and updates visibility, versioning, retention rules, and PAR sharing", async () => {
     const api = createApi("oci_object_storage");
 
     renderModal(api, { provider: "oci_object_storage" });
@@ -765,8 +832,63 @@ describe("BucketGovernanceModal", () => {
         {
           retention: {
             enabled: true,
-            days: 60,
+            rules: [
+              {
+                id: "rule-1",
+                displayName: "Retention Rule 1",
+                days: 60,
+                locked: false,
+              },
+            ],
           },
+        },
+      ),
+    );
+
+    const sharingSection = await screen.findByTestId(
+      "bucket-governance-sharing",
+    );
+    fireEvent.click(
+      within(sharingSection).getByRole("button", { name: "Add PAR" }),
+    );
+    const nameInputs = within(sharingSection).getAllByRole("textbox", {
+      name: "Name",
+    });
+    fireEvent.change(nameInputs[nameInputs.length - 1], {
+      target: { value: "Upload link" },
+    });
+    fireEvent.change(
+      within(sharingSection).getAllByRole("textbox", {
+        name: "Expires at (RFC3339)",
+      })[1],
+      {
+        target: { value: "2026-05-01T00:00:00Z" },
+      },
+    );
+    fireEvent.click(
+      within(sharingSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketSharing).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          preauthenticatedRequests: [
+            {
+              id: "par-1",
+              name: "Read demo",
+              accessType: "AnyObjectRead",
+              bucketListingAction: "Deny",
+              timeExpires: "2026-04-10T00:00:00Z",
+            },
+            {
+              name: "Upload link",
+              accessType: "AnyObjectRead",
+              bucketListingAction: "Deny",
+              timeExpires: "2026-05-01T00:00:00Z",
+            },
+          ],
         },
       ),
     );

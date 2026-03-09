@@ -127,6 +127,14 @@ func (s *stubCreateDefaultsAdapter) PutLifecycle(context.Context, models.Profile
 	return nil
 }
 
+func (s *stubCreateDefaultsAdapter) GetSharing(context.Context, models.ProfileSecrets, string) (models.BucketSharingView, error) {
+	return models.BucketSharingView{}, nil
+}
+
+func (s *stubCreateDefaultsAdapter) PutSharing(context.Context, models.ProfileSecrets, string, models.BucketSharingPutRequest) (models.BucketSharingView, error) {
+	return models.BucketSharingView{}, nil
+}
+
 func bucketObjectOwnershipPtr(mode models.BucketObjectOwnershipMode) *models.BucketObjectOwnershipMode {
 	return &mode
 }

@@ -23,6 +23,12 @@ export type ProfileFlagViewModel = {
 }
 
 type ProfileWithPublicEndpoint = Profile & { publicEndpoint?: string }
+type ProfileWithAzureArm = Profile & {
+	subscriptionId?: string
+	resourceGroup?: string
+	tenantId?: string
+	clientId?: string
+}
 
 function getPublicEndpoint(profile: Profile | null | undefined): string {
 	return (profile as ProfileWithPublicEndpoint | null | undefined)?.publicEndpoint ?? ''
@@ -41,9 +47,11 @@ function toProfileConnectionViewModel(row: Profile): ProfileConnectionViewModel 
 	if (provider === 'azure_blob') {
 		const accountName = row.accountName || ''
 		const endpoint = row.endpoint
+		const azureRow = row as ProfileWithAzureArm
 		const useEmulator = !!row.useEmulator
 		const parts: string[] = [useEmulator ? 'emulator' : 'storage account']
 		if (endpoint) parts.push(endpoint)
+		if (azureRow.resourceGroup) parts.push(`rg ${azureRow.resourceGroup}`)
 		return { primary: accountName, secondary: parts.join(' · ') }
 	}
 	if (provider === 'gcp_gcs') {
@@ -127,6 +135,11 @@ export function toProfileEditInitialValues(editProfile: Profile | null): Partial
 		azureAccountName: editProfile.provider === 'azure_blob' ? editProfile.accountName : '',
 		azureAccountKey: '',
 		azureEndpoint: editProfile.provider === 'azure_blob' ? editProfile.endpoint ?? '' : '',
+		azureSubscriptionId: editProfile.provider === 'azure_blob' ? ((editProfile as ProfileWithAzureArm).subscriptionId ?? '') : '',
+		azureResourceGroup: editProfile.provider === 'azure_blob' ? ((editProfile as ProfileWithAzureArm).resourceGroup ?? '') : '',
+		azureTenantId: editProfile.provider === 'azure_blob' ? ((editProfile as ProfileWithAzureArm).tenantId ?? '') : '',
+		azureClientId: editProfile.provider === 'azure_blob' ? ((editProfile as ProfileWithAzureArm).clientId ?? '') : '',
+		azureClientSecret: '',
 		azureUseEmulator: editProfile.provider === 'azure_blob' ? !!editProfile.useEmulator : false,
 		gcpAnonymous: editProfile.provider === 'gcp_gcs' ? !!editProfile.anonymous : false,
 		gcpEndpoint: editProfile.provider === 'gcp_gcs' ? editProfile.endpoint ?? '' : '',

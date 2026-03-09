@@ -126,6 +126,11 @@ func New(dep Dependencies) http.Handler {
 			r.Put("/", api.handlePutBucketLifecycle)
 		})
 
+		r.Route("/buckets/{bucket}/governance/sharing", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketSharing)
+			r.Put("/", api.handlePutBucketSharing)
+		})
+
 		r.Route("/buckets/{bucket}/objects", func(r chi.Router) {
 			r.Get("/", api.handleListObjects)
 			r.Delete("/", api.handleDeleteObjects)

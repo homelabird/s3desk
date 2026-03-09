@@ -126,24 +126,68 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			) : null}
 
 			{viewState.isAzure ? (
-				<div className={styles.formGrid}>
-					<FormField label="Storage Account Name" required error={errors.azureAccountName}>
-						<Input
-							value={values.azureAccountName}
-							onChange={(e) => setField('azureAccountName', e.target.value)}
-							placeholder="mystorageaccount"
-							aria-label="Storage Account Name"
-						/>
-					</FormField>
-					<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
-						<Input
-							value={values.azureEndpoint}
-							onChange={(e) => setField('azureEndpoint', e.target.value)}
-							placeholder="http://127.0.0.1:10000/devstoreaccount1"
-							aria-label="Endpoint URL (optional)"
-						/>
-					</FormField>
-				</div>
+				<>
+					<div className={styles.formGrid}>
+						<FormField label="Storage Account Name" required error={errors.azureAccountName}>
+							<Input
+								value={values.azureAccountName}
+								onChange={(e) => setField('azureAccountName', e.target.value)}
+								placeholder="mystorageaccount"
+								aria-label="Storage Account Name"
+							/>
+						</FormField>
+						<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
+							<Input
+								value={values.azureEndpoint}
+								onChange={(e) => setField('azureEndpoint', e.target.value)}
+								placeholder="http://127.0.0.1:10000/devstoreaccount1"
+								aria-label="Endpoint URL (optional)"
+							/>
+						</FormField>
+					</div>
+					<div className={styles.formGrid}>
+						<FormField label="Subscription ID (optional)" error={errors.azureSubscriptionId}>
+							<Input
+								value={values.azureSubscriptionId}
+								onChange={(e) => setField('azureSubscriptionId', e.target.value)}
+								placeholder="00000000-0000-0000-0000-000000000000"
+								aria-label="Subscription ID (optional)"
+							/>
+						</FormField>
+						<FormField label="Resource Group (optional)" error={errors.azureResourceGroup}>
+							<Input
+								value={values.azureResourceGroup}
+								onChange={(e) => setField('azureResourceGroup', e.target.value)}
+								placeholder="my-storage-rg"
+								aria-label="Resource Group (optional)"
+							/>
+						</FormField>
+					</div>
+					<div className={styles.formGrid}>
+						<FormField label="Tenant ID (optional)" error={errors.azureTenantId}>
+							<Input
+								value={values.azureTenantId}
+								onChange={(e) => setField('azureTenantId', e.target.value)}
+								placeholder="00000000-0000-0000-0000-000000000000"
+								aria-label="Tenant ID (optional)"
+							/>
+						</FormField>
+						<FormField label="Client ID (optional)" error={errors.azureClientId}>
+							<Input
+								value={values.azureClientId}
+								onChange={(e) => setField('azureClientId', e.target.value)}
+								placeholder="00000000-0000-0000-0000-000000000000"
+								aria-label="Client ID (optional)"
+							/>
+						</FormField>
+					</div>
+					<Alert
+						type="info"
+						showIcon
+						message="Azure ARM fields are optional for basic blob access"
+						description="Fill Subscription ID, Resource Group, Tenant ID, Client ID, and Client Secret together when you want management-plane features such as container immutability editing."
+					/>
+				</>
 			) : null}
 
 			{viewState.isGcp ? (
@@ -230,6 +274,14 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 							onChange={(e) => setField('azureAccountKey', e.target.value)}
 							autoComplete="new-password"
 							aria-label="Account Key"
+						/>
+					</FormField>
+					<FormField label="Client Secret (optional)" error={errors.azureClientSecret}>
+						<Input.Password
+							value={values.azureClientSecret}
+							onChange={(e) => setField('azureClientSecret', e.target.value)}
+							autoComplete="new-password"
+							aria-label="Client Secret (optional)"
 						/>
 					</FormField>
 				</div>

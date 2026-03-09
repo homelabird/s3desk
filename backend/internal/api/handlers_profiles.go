@@ -50,6 +50,11 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 	trimPtrNilIfEmpty(&req.SessionToken)
 	trimPtrNilIfEmpty(&req.AccountName)
 	trimPtrNilIfEmpty(&req.AccountKey)
+	trimPtrNilIfEmpty(&req.SubscriptionID)
+	trimPtrNilIfEmpty(&req.ResourceGroup)
+	trimPtrNilIfEmpty(&req.TenantID)
+	trimPtrNilIfEmpty(&req.ClientID)
+	trimPtrNilIfEmpty(&req.ClientSecret)
 	trimPtrNilIfEmpty(&req.ServiceAccountJSON)
 	trimPtrNilIfEmpty(&req.ProjectNumber)
 	trimPtrNilIfEmpty(&req.Namespace)
@@ -132,7 +137,7 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 			f := false
 			req.ForcePathStyle = &f
 		}
-		if hasUnexpectedFields(req.AccountName, req.AccountKey, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
+		if hasUnexpectedFields(req.AccountName, req.AccountKey, req.SubscriptionID, req.ResourceGroup, req.TenantID, req.ClientID, req.ClientSecret, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
 			return errors.New("unexpected fields for s3 provider")
 		}
 
@@ -154,7 +159,7 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 				return errors.New("serviceAccountJson is required unless anonymous=true")
 			}
 		}
-		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.AccountName, req.AccountKey, req.UseEmulator, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
+		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.AccountName, req.AccountKey, req.SubscriptionID, req.ResourceGroup, req.TenantID, req.ClientID, req.ClientSecret, req.UseEmulator, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
 			return errors.New("unexpected fields for gcp_gcs")
 		}
 
@@ -168,7 +173,7 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 		if req.Compartment == nil || strings.TrimSpace(*req.Compartment) == "" {
 			return errors.New("compartment is required")
 		}
-		if hasUnexpectedFields(req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.AccountName, req.AccountKey, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber) {
+		if hasUnexpectedFields(req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.AccountName, req.AccountKey, req.SubscriptionID, req.ResourceGroup, req.TenantID, req.ClientID, req.ClientSecret, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber) {
 			return errors.New("unexpected fields for oci_object_storage")
 		}
 
@@ -214,6 +219,11 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	trimPtr(&req.SessionToken)
 	trimPtr(&req.AccountName)
 	trimPtr(&req.AccountKey)
+	trimPtr(&req.SubscriptionID)
+	trimPtr(&req.ResourceGroup)
+	trimPtr(&req.TenantID)
+	trimPtr(&req.ClientID)
+	trimPtr(&req.ClientSecret)
 	trimPtr(&req.ServiceAccountJSON)
 	trimPtr(&req.ProjectNumber)
 	trimPtr(&req.Namespace)
@@ -407,6 +417,11 @@ func (s *server) handleExportProfile(w http.ResponseWriter, r *http.Request) {
 	case models.ProfileProviderAzureBlob:
 		exportProfile.AccountName = secrets.AzureAccountName
 		exportProfile.AccountKey = secrets.AzureAccountKey
+		exportProfile.SubscriptionID = secrets.AzureSubscriptionID
+		exportProfile.ResourceGroup = secrets.AzureResourceGroup
+		exportProfile.TenantID = secrets.AzureTenantID
+		exportProfile.ClientID = secrets.AzureClientID
+		exportProfile.ClientSecret = secrets.AzureClientSecret
 		exportProfile.Endpoint = secrets.AzureEndpoint
 		if secrets.AzureUseEmulator {
 			v := true
@@ -486,9 +501,14 @@ type profileExportProfile struct {
 	ForcePathStyle  *bool   `yaml:"forcePathStyle,omitempty"`
 
 	// Azure Blob
-	AccountName string `yaml:"accountName,omitempty"`
-	AccountKey  string `yaml:"accountKey,omitempty"`
-	UseEmulator *bool  `yaml:"useEmulator,omitempty"`
+	AccountName    string `yaml:"accountName,omitempty"`
+	AccountKey     string `yaml:"accountKey,omitempty"`
+	SubscriptionID string `yaml:"subscriptionId,omitempty"`
+	ResourceGroup  string `yaml:"resourceGroup,omitempty"`
+	TenantID       string `yaml:"tenantId,omitempty"`
+	ClientID       string `yaml:"clientId,omitempty"`
+	ClientSecret   string `yaml:"clientSecret,omitempty"`
+	UseEmulator    *bool  `yaml:"useEmulator,omitempty"`
 
 	// GCP GCS
 	ServiceAccountJSON string `yaml:"serviceAccountJson,omitempty"`

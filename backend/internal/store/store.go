@@ -70,13 +70,18 @@ func isS3LikeProvider(p models.ProfileProvider) bool {
 }
 
 type azureProfileConfig struct {
-	AccountName string `json:"accountName"`
-	Endpoint    string `json:"endpoint,omitempty"`
-	UseEmulator bool   `json:"useEmulator,omitempty"`
+	AccountName    string `json:"accountName"`
+	Endpoint       string `json:"endpoint,omitempty"`
+	UseEmulator    bool   `json:"useEmulator,omitempty"`
+	SubscriptionID string `json:"subscriptionId,omitempty"`
+	ResourceGroup  string `json:"resourceGroup,omitempty"`
+	TenantID       string `json:"tenantId,omitempty"`
+	ClientID       string `json:"clientId,omitempty"`
 }
 
 type azureProfileSecrets struct {
-	AccountKey string `json:"accountKey"`
+	AccountKey   string `json:"accountKey"`
+	ClientSecret string `json:"clientSecret,omitempty"`
 }
 
 type gcpProfileConfig struct {
@@ -166,6 +171,10 @@ func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 			return models.Profile{}, err
 		}
 		out.AccountName = strings.TrimSpace(cfg.AccountName)
+		out.SubscriptionID = strings.TrimSpace(cfg.SubscriptionID)
+		out.ResourceGroup = strings.TrimSpace(cfg.ResourceGroup)
+		out.TenantID = strings.TrimSpace(cfg.TenantID)
+		out.ClientID = strings.TrimSpace(cfg.ClientID)
 		out.Endpoint = strings.TrimSpace(cfg.Endpoint)
 		if cfg.UseEmulator {
 			v := true
@@ -320,11 +329,43 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		if req.UseEmulator != nil {
 			useEmulator = *req.UseEmulator
 		}
+		subscriptionID := ""
+		if req.SubscriptionID != nil {
+			subscriptionID = strings.TrimSpace(*req.SubscriptionID)
+		}
+		resourceGroup := ""
+		if req.ResourceGroup != nil {
+			resourceGroup = strings.TrimSpace(*req.ResourceGroup)
+		}
+		tenantID := ""
+		if req.TenantID != nil {
+			tenantID = strings.TrimSpace(*req.TenantID)
+		}
+		clientID := ""
+		if req.ClientID != nil {
+			clientID = strings.TrimSpace(*req.ClientID)
+		}
+		clientSecret := ""
+		if req.ClientSecret != nil {
+			clientSecret = strings.TrimSpace(*req.ClientSecret)
+		}
 		if accountName == "" || accountKey == "" {
 			return models.Profile{}, errors.New("missing required azure fields")
 		}
+		armFieldsProvided := subscriptionID != "" || resourceGroup != "" || tenantID != "" || clientID != "" || clientSecret != ""
+		if armFieldsProvided && (subscriptionID == "" || resourceGroup == "" || tenantID == "" || clientID == "" || clientSecret == "") {
+			return models.Profile{}, errors.New("azure ARM configuration requires subscriptionId, resourceGroup, tenantId, clientId, and clientSecret together")
+		}
 
-		cfg, _ := json.Marshal(azureProfileConfig{AccountName: accountName, Endpoint: endpoint, UseEmulator: useEmulator})
+		cfg, _ := json.Marshal(azureProfileConfig{
+			AccountName:    accountName,
+			Endpoint:       endpoint,
+			UseEmulator:    useEmulator,
+			SubscriptionID: subscriptionID,
+			ResourceGroup:  resourceGroup,
+			TenantID:       tenantID,
+			ClientID:       clientID,
+		})
 		secretVal := accountKey
 		if s.crypto != nil {
 			enc, err := s.crypto.encryptString(secretVal)
@@ -333,7 +374,15 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 			}
 			secretVal = enc
 		}
-		sec, _ := json.Marshal(azureProfileSecrets{AccountKey: secretVal})
+		clientSecretVal := clientSecret
+		if s.crypto != nil && clientSecretVal != "" {
+			enc, err := s.crypto.encryptString(clientSecretVal)
+			if err != nil {
+				return models.Profile{}, err
+			}
+			clientSecretVal = enc
+		}
+		sec, _ := json.Marshal(azureProfileSecrets{AccountKey: secretVal, ClientSecret: clientSecretVal})
 		row.ConfigJSON = string(cfg)
 		row.SecretsJSON = string(sec)
 
@@ -653,6 +702,10 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 		profile.AzureAccountName = strings.TrimSpace(cfg.AccountName)
 		profile.AzureEndpoint = strings.TrimSpace(cfg.Endpoint)
 		profile.AzureUseEmulator = cfg.UseEmulator
+		profile.AzureSubscriptionID = strings.TrimSpace(cfg.SubscriptionID)
+		profile.AzureResourceGroup = strings.TrimSpace(cfg.ResourceGroup)
+		profile.AzureTenantID = strings.TrimSpace(cfg.TenantID)
+		profile.AzureClientID = strings.TrimSpace(cfg.ClientID)
 		var sec azureProfileSecrets
 		if err := unmarshalProfileJSON(row.ID, provider, "secrets_json", row.SecretsJSON, &sec); err != nil {
 			return models.ProfileSecrets{}, false, err
@@ -669,6 +722,18 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 			key = dec
 		}
 		profile.AzureAccountKey = key
+		clientSecret := strings.TrimSpace(sec.ClientSecret)
+		if strings.HasPrefix(clientSecret, encryptedPrefix) {
+			if s.crypto == nil {
+				return models.ProfileSecrets{}, false, ErrEncryptedCredentials
+			}
+			dec, err := s.crypto.decryptString(clientSecret)
+			if err != nil {
+				return models.ProfileSecrets{}, false, err
+			}
+			clientSecret = dec
+		}
+		profile.AzureClientSecret = clientSecret
 
 	case models.ProfileProviderGcpGcs:
 		var cfg gcpProfileConfig
@@ -847,6 +912,11 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		accountKey := strings.TrimSpace(currentSecrets.AzureAccountKey)
 		endpoint := strings.TrimSpace(currentSecrets.AzureEndpoint)
 		useEmulator := currentSecrets.AzureUseEmulator
+		subscriptionID := strings.TrimSpace(currentSecrets.AzureSubscriptionID)
+		resourceGroup := strings.TrimSpace(currentSecrets.AzureResourceGroup)
+		tenantID := strings.TrimSpace(currentSecrets.AzureTenantID)
+		clientID := strings.TrimSpace(currentSecrets.AzureClientID)
+		clientSecret := strings.TrimSpace(currentSecrets.AzureClientSecret)
 		if req.AccountName != nil {
 			accountName = strings.TrimSpace(*req.AccountName)
 			if accountName == "" {
@@ -865,7 +935,37 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		if req.UseEmulator != nil {
 			useEmulator = *req.UseEmulator
 		}
-		cfg, _ := json.Marshal(azureProfileConfig{AccountName: accountName, Endpoint: endpoint, UseEmulator: useEmulator})
+		if req.SubscriptionID != nil {
+			subscriptionID = strings.TrimSpace(*req.SubscriptionID)
+		}
+		if req.ResourceGroup != nil {
+			resourceGroup = strings.TrimSpace(*req.ResourceGroup)
+		}
+		if req.TenantID != nil {
+			tenantID = strings.TrimSpace(*req.TenantID)
+		}
+		if req.ClientID != nil {
+			clientID = strings.TrimSpace(*req.ClientID)
+		}
+		if req.ClientSecret != nil {
+			clientSecret = strings.TrimSpace(*req.ClientSecret)
+			if clientSecret == "" {
+				return models.Profile{}, true, errors.New("clientSecret must not be empty")
+			}
+		}
+		armFieldsProvided := subscriptionID != "" || resourceGroup != "" || tenantID != "" || clientID != "" || clientSecret != ""
+		if armFieldsProvided && (subscriptionID == "" || resourceGroup == "" || tenantID == "" || clientID == "" || clientSecret == "") {
+			return models.Profile{}, true, errors.New("azure ARM configuration requires subscriptionId, resourceGroup, tenantId, clientId, and clientSecret together")
+		}
+		cfg, _ := json.Marshal(azureProfileConfig{
+			AccountName:    accountName,
+			Endpoint:       endpoint,
+			UseEmulator:    useEmulator,
+			SubscriptionID: subscriptionID,
+			ResourceGroup:  resourceGroup,
+			TenantID:       tenantID,
+			ClientID:       clientID,
+		})
 		secretVal := accountKey
 		if s.crypto != nil {
 			enc, err := s.crypto.encryptString(secretVal)
@@ -874,7 +974,15 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 			}
 			secretVal = enc
 		}
-		sec, _ := json.Marshal(azureProfileSecrets{AccountKey: secretVal})
+		clientSecretVal := clientSecret
+		if s.crypto != nil && clientSecretVal != "" {
+			enc, err := s.crypto.encryptString(clientSecretVal)
+			if err != nil {
+				return models.Profile{}, true, err
+			}
+			clientSecretVal = enc
+		}
+		sec, _ := json.Marshal(azureProfileSecrets{AccountKey: secretVal, ClientSecret: clientSecretVal})
 		updates["config_json"] = string(cfg)
 		updates["secrets_json"] = string(sec)
 

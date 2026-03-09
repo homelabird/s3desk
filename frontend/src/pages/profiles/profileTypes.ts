@@ -28,6 +28,11 @@ export type ProfileFormValues = {
 	azureAccountName: string
 	azureAccountKey: string
 	azureEndpoint: string
+	azureSubscriptionId: string
+	azureResourceGroup: string
+	azureTenantId: string
+	azureClientId: string
+	azureClientSecret: string
 	azureUseEmulator: boolean
 
 	// GCP GCS

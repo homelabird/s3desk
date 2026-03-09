@@ -1404,6 +1404,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/buckets/{bucket}/governance/sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get normalized bucket sharing controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketSharingView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Update normalized bucket sharing controls */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketSharingPutRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketSharingView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/buckets/{bucket}/objects": {
         parameters: {
             query?: never;
@@ -2876,6 +2950,14 @@ export interface components {
             /** @enum {string} */
             provider: "azure_blob";
             accountName: string;
+            /** @description Optional Azure subscription used for ARM-backed governance operations. */
+            subscriptionId?: string;
+            /** @description Optional Azure resource group used for ARM-backed governance operations. */
+            resourceGroup?: string;
+            /** @description Optional Microsoft Entra tenant used for ARM-backed governance operations. */
+            tenantId?: string;
+            /** @description Optional Microsoft Entra application client id used for ARM-backed governance operations. */
+            clientId?: string;
             /** @description Optional. Used for local emulators (Azurite) or custom Azure endpoints. */
             endpoint?: string;
             /** @description Optional. If true and endpoint is omitted, server may choose a default emulator endpoint. */
@@ -2970,6 +3052,16 @@ export interface components {
             name: string;
             accountName: string;
             accountKey: string;
+            /** @description Optional Azure subscription used for ARM-backed governance operations. */
+            subscriptionId?: string;
+            /** @description Optional Azure resource group used for ARM-backed governance operations. */
+            resourceGroup?: string;
+            /** @description Optional Microsoft Entra tenant used for ARM-backed governance operations. */
+            tenantId?: string;
+            /** @description Optional Microsoft Entra application client id used for ARM-backed governance operations. */
+            clientId?: string;
+            /** @description Optional Microsoft Entra application client secret used for ARM-backed governance operations. */
+            clientSecret?: string;
             /** @description Optional. Used for local emulators (Azurite) or custom Azure endpoints. */
             endpoint?: string;
             /** @description Optional. If true and endpoint is omitted, server may choose a default emulator endpoint. */
@@ -3062,6 +3154,16 @@ export interface components {
             name?: string;
             accountName?: string;
             accountKey?: string;
+            /** @description Optional Azure subscription used for ARM-backed governance operations. */
+            subscriptionId?: string;
+            /** @description Optional Azure resource group used for ARM-backed governance operations. */
+            resourceGroup?: string;
+            /** @description Optional Microsoft Entra tenant used for ARM-backed governance operations. */
+            tenantId?: string;
+            /** @description Optional Microsoft Entra application client id used for ARM-backed governance operations. */
+            clientId?: string;
+            /** @description Optional Microsoft Entra application client secret used for ARM-backed governance operations. */
+            clientSecret?: string;
             /** @description Optional. Used for local emulators (Azurite) or custom Azure endpoints. */
             endpoint?: string;
             /** @description Optional. If true and endpoint is omitted, server may choose a default emulator endpoint. */
@@ -3302,6 +3404,14 @@ export interface components {
             days?: number;
             retainUntil?: string;
             locked?: boolean;
+            rules?: components["schemas"]["BucketRetentionRuleView"][];
+        };
+        BucketRetentionRuleView: {
+            id?: string;
+            displayName?: string;
+            days?: number;
+            locked?: boolean;
+            timeModified?: string;
         };
         BucketObjectLockView: {
             enabled: boolean;
@@ -3318,6 +3428,12 @@ export interface components {
             enabled: boolean;
             mode?: string;
             until?: string;
+            days?: number;
+            etag?: string;
+            editable?: boolean;
+            legalHold?: boolean;
+            allowProtectedAppendWrites?: boolean;
+            allowProtectedAppendWritesAll?: boolean;
         };
         BucketProtectionView: {
             provider: components["schemas"]["ProfileProvider"];
@@ -3372,6 +3488,7 @@ export interface components {
             versioning?: components["schemas"]["BucketVersioningView"];
             encryption?: components["schemas"]["BucketEncryptionView"];
             lifecycle?: components["schemas"]["BucketLifecycleView"];
+            sharing?: components["schemas"]["BucketSharingView"];
             advanced?: components["schemas"]["BucketAdvancedView"];
             warnings?: string[];
         };
@@ -3387,6 +3504,28 @@ export interface components {
             rules: {
                 [key: string]: unknown;
             }[];
+        };
+        BucketPreauthenticatedRequestView: {
+            id?: string;
+            name?: string;
+            accessType?: string;
+            bucketListingAction?: string;
+            objectName?: string;
+            timeCreated?: string;
+            timeExpires?: string;
+            accessUri?: string;
+        };
+        BucketSharingView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            storedAccessPolicies?: components["schemas"]["BucketStoredAccessPolicy"][];
+            preauthenticatedSupport?: boolean;
+            preauthenticatedRequests?: components["schemas"]["BucketPreauthenticatedRequestView"][];
+            warnings?: string[];
+        };
+        BucketSharingPutRequest: {
+            storedAccessPolicies?: components["schemas"]["BucketStoredAccessPolicy"][];
+            preauthenticatedRequests?: components["schemas"]["BucketPreauthenticatedRequestView"][];
         };
         ObjectItem: {
             key: string;

@@ -130,6 +130,29 @@ export type UploadFilesResult = {
 	skipped: number
 }
 
+export type BucketPreauthenticatedRequestClientView = {
+	id?: string
+	name?: string
+	accessType?: string
+	bucketListingAction?: string
+	objectName?: string
+	timeCreated?: string
+	timeExpires?: string
+	accessUri?: string
+}
+
+export type BucketSharingClientView = {
+	provider: string
+	bucket: string
+	preauthenticatedSupport?: boolean
+	preauthenticatedRequests?: BucketPreauthenticatedRequestClientView[]
+	warnings?: string[]
+}
+
+export type BucketSharingPutClientRequest = {
+	preauthenticatedRequests?: BucketPreauthenticatedRequestClientView[]
+}
+
 function normalizeListObjectsResponse(
 	resp: ListObjectsResponse,
 	fallback: { bucket: string; prefix?: string; delimiter?: string },
@@ -470,6 +493,18 @@ export class APIClient {
 	putBucketLifecycle(profileId: string, bucket: string, req: BucketLifecyclePutRequest): Promise<void> {
 		return this.request(
 			`/buckets/${encodeURIComponent(bucket)}/governance/lifecycle`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	putBucketSharing(profileId: string, bucket: string, req: BucketSharingPutClientRequest): Promise<BucketSharingClientView> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/governance/sharing`,
 			{
 				method: 'PUT',
 				headers: { 'content-type': 'application/json' },

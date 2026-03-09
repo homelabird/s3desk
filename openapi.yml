@@ -780,6 +780,46 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
 
+  /buckets/{bucket}/governance/sharing:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket sharing controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketSharingView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Update normalized bucket sharing controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketSharingPutRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketSharingView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
 
   /buckets/{bucket}/objects:
     get:
@@ -1802,6 +1842,18 @@ components:
           properties:
             provider: { type: string, enum: [azure_blob] }
             accountName: { type: string }
+            subscriptionId:
+              type: string
+              description: Optional Azure subscription used for ARM-backed governance operations.
+            resourceGroup:
+              type: string
+              description: Optional Azure resource group used for ARM-backed governance operations.
+            tenantId:
+              type: string
+              description: Optional Microsoft Entra tenant used for ARM-backed governance operations.
+            clientId:
+              type: string
+              description: Optional Microsoft Entra application client id used for ARM-backed governance operations.
             endpoint:
               type: string
               description: Optional. Used for local emulators (Azurite) or custom Azure endpoints.
@@ -1900,6 +1952,21 @@ components:
         name: { type: string }
         accountName: { type: string }
         accountKey: { type: string }
+        subscriptionId:
+          type: string
+          description: Optional Azure subscription used for ARM-backed governance operations.
+        resourceGroup:
+          type: string
+          description: Optional Azure resource group used for ARM-backed governance operations.
+        tenantId:
+          type: string
+          description: Optional Microsoft Entra tenant used for ARM-backed governance operations.
+        clientId:
+          type: string
+          description: Optional Microsoft Entra application client id used for ARM-backed governance operations.
+        clientSecret:
+          type: string
+          description: Optional Microsoft Entra application client secret used for ARM-backed governance operations.
         endpoint:
           type: string
           description: Optional. Used for local emulators (Azurite) or custom Azure endpoints.
@@ -2011,6 +2078,21 @@ components:
         name: { type: string }
         accountName: { type: string }
         accountKey: { type: string }
+        subscriptionId:
+          type: string
+          description: Optional Azure subscription used for ARM-backed governance operations.
+        resourceGroup:
+          type: string
+          description: Optional Azure resource group used for ARM-backed governance operations.
+        tenantId:
+          type: string
+          description: Optional Microsoft Entra tenant used for ARM-backed governance operations.
+        clientId:
+          type: string
+          description: Optional Microsoft Entra application client id used for ARM-backed governance operations.
+        clientSecret:
+          type: string
+          description: Optional Microsoft Entra application client secret used for ARM-backed governance operations.
         endpoint:
           type: string
           description: Optional. Used for local emulators (Azurite) or custom Azure endpoints.
@@ -2395,6 +2477,19 @@ components:
         days: { type: integer }
         retainUntil: { type: string }
         locked: { type: boolean }
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketRetentionRuleView"
+
+    BucketRetentionRuleView:
+      type: object
+      properties:
+        id: { type: string }
+        displayName: { type: string }
+        days: { type: integer }
+        locked: { type: boolean }
+        timeModified: { type: string }
 
     BucketObjectLockView:
       type: object
@@ -2420,6 +2515,12 @@ components:
         enabled: { type: boolean }
         mode: { type: string }
         until: { type: string }
+        days: { type: integer }
+        etag: { type: string }
+        editable: { type: boolean }
+        legalHold: { type: boolean }
+        allowProtectedAppendWrites: { type: boolean }
+        allowProtectedAppendWritesAll: { type: boolean }
 
     BucketProtectionView:
       type: object
@@ -2530,6 +2631,8 @@ components:
           $ref: "#/components/schemas/BucketEncryptionView"
         lifecycle:
           $ref: "#/components/schemas/BucketLifecycleView"
+        sharing:
+          $ref: "#/components/schemas/BucketSharingView"
         advanced:
           $ref: "#/components/schemas/BucketAdvancedView"
         warnings:
@@ -2562,6 +2665,51 @@ components:
           items:
             type: object
             additionalProperties: true
+
+    BucketPreauthenticatedRequestView:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        accessType: { type: string }
+        bucketListingAction: { type: string }
+        objectName: { type: string }
+        timeCreated: { type: string }
+        timeExpires: { type: string }
+        accessUri: { type: string }
+
+    BucketSharingView:
+      type: object
+      required: [provider, bucket]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        storedAccessPolicies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketStoredAccessPolicy"
+        preauthenticatedSupport: { type: boolean }
+        preauthenticatedRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketPreauthenticatedRequestView"
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketSharingPutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        storedAccessPolicies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketStoredAccessPolicy"
+        preauthenticatedRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketPreauthenticatedRequestView"
 
 
     ObjectItem:

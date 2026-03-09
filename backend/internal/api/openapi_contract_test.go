@@ -106,6 +106,7 @@ func TestOpenAPIBucketGovernanceSchemasCoverFrontendContract(t *testing.T) {
 	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/versioning", http.MethodGet, "#/components/schemas/BucketVersioningView")
 	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/encryption", http.MethodGet, "#/components/schemas/BucketEncryptionView")
 	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/lifecycle", http.MethodGet, "#/components/schemas/BucketLifecycleView")
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/sharing", http.MethodGet, "#/components/schemas/BucketSharingView")
 
 	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/access", http.MethodPut, http.StatusNoContent)
 	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/public-exposure", http.MethodPut, http.StatusNoContent)
@@ -113,9 +114,10 @@ func TestOpenAPIBucketGovernanceSchemasCoverFrontendContract(t *testing.T) {
 	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/versioning", http.MethodPut, http.StatusNoContent)
 	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/encryption", http.MethodPut, http.StatusNoContent)
 	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/lifecycle", http.MethodPut, http.StatusNoContent)
+	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/sharing", http.MethodPut, http.StatusOK)
 
 	governanceSchema := requireOpenAPISchema(t, doc, "BucketGovernanceView")
-	for _, name := range []string{"access", "publicExposure", "protection", "versioning", "encryption", "lifecycle", "advanced"} {
+	for _, name := range []string{"access", "publicExposure", "protection", "versioning", "encryption", "lifecycle", "sharing", "advanced"} {
 		if _, ok := governanceSchema.Properties[name]; !ok {
 			t.Fatalf("BucketGovernanceView.%s missing from OpenAPI", name)
 		}

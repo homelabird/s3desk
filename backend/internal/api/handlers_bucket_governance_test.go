@@ -19,18 +19,21 @@ type fakeGovernanceAdapter struct {
 	versioning      models.BucketVersioningView
 	encryption      models.BucketEncryptionView
 	lifecycle       models.BucketLifecycleView
+	sharing         models.BucketSharingView
 	putAccessReq    *models.BucketAccessPutRequest
 	putReq          *models.BucketPublicExposurePutRequest
 	putProtection   *models.BucketProtectionPutRequest
 	putVersioning   *models.BucketVersioningPutRequest
 	putEncryption   *models.BucketEncryptionPutRequest
 	putLifecycle    *models.BucketLifecyclePutRequest
+	putSharing      *models.BucketSharingPutRequest
 	putAccessErr    error
 	putReqErr       error
 	putProtectErr   error
 	putVersionErr   error
 	putEncryptErr   error
 	putLifecycleErr error
+	putSharingErr   error
 	err             error
 }
 
@@ -108,6 +111,18 @@ func (f *fakeGovernanceAdapter) PutLifecycle(_ context.Context, _ models.Profile
 		return f.putLifecycleErr
 	}
 	return f.err
+}
+
+func (f *fakeGovernanceAdapter) GetSharing(context.Context, models.ProfileSecrets, string) (models.BucketSharingView, error) {
+	return f.sharing, f.err
+}
+
+func (f *fakeGovernanceAdapter) PutSharing(_ context.Context, _ models.ProfileSecrets, _ string, req models.BucketSharingPutRequest) (models.BucketSharingView, error) {
+	f.putSharing = &req
+	if f.putSharingErr != nil {
+		return models.BucketSharingView{}, f.putSharingErr
+	}
+	return f.sharing, f.err
 }
 
 func newGovernanceTestService(provider models.ProfileProvider, adapter bucketgov.Adapter) *bucketgov.Service {

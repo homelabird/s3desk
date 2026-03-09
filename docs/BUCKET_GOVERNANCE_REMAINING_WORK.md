@@ -8,25 +8,16 @@ The core bucket governance rollout is implemented across backend and frontend fo
 - GCS typed controls
 - Azure Blob typed controls
 - OCI Object Storage typed controls
+- Azure ARM-backed immutability editing
+- OCI multi-rule retention editing
+- OCI PAR typed sharing controls
 
-What remains is a focused set of follow-up work to close known feature gaps and harden the rollout.
+What remains is a smaller set of validation, UX hardening, and documentation cleanup tasks.
 
 ## Critical Remaining Work
 
-- [ ] Implement Azure immutability editing
-  Current state: immutability is surfaced in the controls UI as read-only status, but the client cannot create, update, or remove container immutability policy settings yet.
-
-- [ ] Support multiple OCI retention rules
-  Current state: the OCI controls surface edits only the first retention rule returned by the backend. Full parity needs create, update, delete, and ordering behavior for multiple rules.
-
-- [ ] Add OCI sharing and PAR typed controls
-  Current state: visibility, versioning, and retention are exposed, but pre-authenticated requests and OCI-native sharing controls are still outside the typed governance flow.
-
 - [ ] Run live validation against real cloud environments
-  Current state: backend round-trip tests and frontend unit tests are in place, but the rollout still needs real-provider smoke coverage for AWS, GCS, Azure, and OCI accounts.
-
-- [ ] Document provider support boundaries clearly
-  Current state: the implementation works, but the operator-facing docs should explicitly spell out which governance sections are fully editable, partially editable, or read-only per provider.
+  Current state: backend round-trip tests and frontend unit tests exist, but the rollout still needs real-provider smoke coverage for AWS, GCS, Azure, and OCI accounts.
 
 ## Recommended Follow-Ups
 
@@ -43,14 +34,28 @@ What remains is a focused set of follow-up work to close known feature gaps and 
   Current state: unit and smoke coverage exists, but the bucket governance flows do not yet have dedicated end-to-end UI coverage.
 
 - [ ] Update the governance design document with implementation status
-  Current state: the design draft still reads like a forward-looking plan in several sections. It should be updated to reflect what is already shipped and what remains open.
+  Current state: the top-level status and provider support notes have been refreshed, but the phased implementation plan still reads forward-looking in several sections.
+
+## Recently Closed
+
+- [x] Implement Azure immutability editing
+  Final state: Azure profiles can carry Azure ARM credentials, and the governance UI can create, update, lock, extend, and delete container immutability policies when those credentials are present.
+
+- [x] Support multiple OCI retention rules
+  Final state: OCI protection controls now round-trip the full retention rule list and allow create, update, and delete behavior with locked-rule safeguards.
+
+- [x] Add OCI sharing and PAR typed controls
+  Final state: OCI governance now exposes typed pre-authenticated request listing, creation, and deletion. Existing PARs are intentionally treated as delete-and-recreate for edits.
+
+- [x] Document provider support boundaries clearly
+  Final state: `docs/PROVIDERS.md` now carries the operator-facing governance support matrix and provider-specific limitations.
 
 ## Current Priority Order
 
 Recommended order for the next implementation slice:
 
-1. Azure immutability editing
-2. OCI multi-rule retention support
-3. OCI PAR and sharing typed controls
-4. Live provider validation
-5. Structured editors for GCS and Azure
+1. Live provider validation
+2. Structured editor for GCS IAM bindings
+3. Structured editor for Azure stored access policies
+4. Provider-specific warning and error copy cleanup
+5. Playwright coverage for governance flows

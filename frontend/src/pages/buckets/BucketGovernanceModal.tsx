@@ -47,6 +47,19 @@ type GovernanceControlsCommonProps = {
   onOpenAdvancedPolicy?: (bucket: string) => void;
 };
 
+type GCSBindingDraft = {
+  role: string;
+  membersText: string;
+  conditionText: string;
+};
+
+type AzureStoredAccessPolicyDraft = {
+  id: string;
+  start: string;
+  expiry: string;
+  permission: string;
+};
+
 type BucketGovernanceDraft = {
   publicAccessBlock: BucketBlockPublicAccess;
   objectOwnership: BucketObjectOwnershipMode;
@@ -60,7 +73,7 @@ type GCSGovernanceDraft = {
   publicMode: Extract<BucketPublicExposureMode, "private" | "public">;
   publicAccessPrevention: boolean;
   etag: string;
-  bindingsText: string;
+  bindings: GCSBindingDraft[];
   uniformAccess: boolean;
   versioningStatus: "enabled" | "disabled";
   retentionEnabled: boolean;
@@ -69,18 +82,114 @@ type GCSGovernanceDraft = {
 
 type AzureGovernanceDraft = {
   publicMode: Extract<BucketPublicExposureMode, "private" | "blob" | "container">;
-  storedAccessPoliciesText: string;
+  storedAccessPolicies: AzureStoredAccessPolicyDraft[];
   versioningStatus: "enabled" | "disabled";
   softDeleteEnabled: boolean;
   softDeleteDays: string;
+  immutabilityEnabled: boolean;
+  immutabilityDays: string;
+  immutabilityMode: "unlocked" | "locked";
+  immutabilityEditable: boolean;
+  legalHold: boolean;
+  allowProtectedAppendWrites: boolean;
+  allowProtectedAppendWritesAll: boolean;
 };
 
 type OCIGovernanceDraft = {
   visibility: "private" | "object_read" | "object_read_without_list";
   versioningStatus: "enabled" | "disabled";
-  retentionEnabled: boolean;
-  retentionDays: string;
+  retentionRules: OCIRetentionRuleDraft[];
 };
+
+type AzureImmutabilityView = {
+  enabled: boolean;
+  mode?: string;
+  until?: string;
+  days?: number;
+  etag?: string;
+  editable?: boolean;
+  legalHold?: boolean;
+  allowProtectedAppendWrites?: boolean;
+  allowProtectedAppendWritesAll?: boolean;
+};
+
+type BucketProtectionPutRequestWithAzureImmutability =
+  BucketProtectionPutRequest & {
+    immutability?: AzureImmutabilityView;
+  };
+
+type OCIRetentionRuleView = {
+  id?: string;
+  displayName?: string;
+  days?: number;
+  locked?: boolean;
+  timeModified?: string;
+};
+
+type OCIRetentionView = {
+  enabled: boolean;
+  days?: number;
+  locked?: boolean;
+  rules?: OCIRetentionRuleView[];
+};
+
+type OCIRetentionRuleDraft = {
+  id: string;
+  displayName: string;
+  days: string;
+  locked: boolean;
+  timeModified: string;
+};
+
+type BucketProtectionPutRequestWithOCIRetention = BucketProtectionPutRequest & {
+  retention?: OCIRetentionView;
+};
+
+type OCISharingView = {
+  provider?: string;
+  bucket?: string;
+  preauthenticatedSupport?: boolean;
+  preauthenticatedRequests?: OCIPreauthenticatedRequestDraft[];
+  warnings?: string[];
+};
+
+type OCIPreauthenticatedRequestDraft = {
+  id: string;
+  name: string;
+  accessType: "AnyObjectRead" | "AnyObjectWrite" | "AnyObjectReadWrite";
+  bucketListingAction: "Deny" | "ListObjects";
+  objectName: string;
+  timeCreated: string;
+  timeExpires: string;
+  accessUri: string;
+};
+
+type BucketSharingPutClientRequest = {
+  preauthenticatedRequests?: Array<{
+    id?: string;
+    name?: string;
+    accessType?: string;
+    bucketListingAction?: string;
+    objectName?: string;
+    timeCreated?: string;
+    timeExpires?: string;
+    accessUri?: string;
+  }>;
+};
+
+const azureStoredAccessPermissionOptions = [
+  { value: "r", label: "Read" },
+  { value: "w", label: "Write" },
+  { value: "d", label: "Delete" },
+  { value: "l", label: "List" },
+  { value: "a", label: "Add" },
+  { value: "c", label: "Create" },
+  { value: "u", label: "Update" },
+  { value: "p", label: "Process" },
+] as const;
+
+type AzureStoredAccessPermission =
+  (typeof azureStoredAccessPermissionOptions)[number]["value"];
 
 function BucketGovernanceDialogShell(props: {
   mobile: boolean;
@@ -168,10 +277,134 @@ function parseJSONArray<T>(value: string, label: string): T[] {
   return parsed as T[];
 }
 
+function formatOptionalJSON(value: unknown): string {
+  if (value == null) return "";
+  return JSON.stringify(value, null, 2);
+}
+
+function parseLineSeparatedValues(value: string): string[] {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function createEmptyGCSBindingDraft(): GCSBindingDraft {
+  return {
+    role: "",
+    membersText: "",
+    conditionText: "",
+  };
+}
+
+function createEmptyAzureStoredAccessPolicyDraft(): AzureStoredAccessPolicyDraft {
+  return {
+    id: "",
+    start: "",
+    expiry: "",
+    permission: "",
+  };
+}
+
+function normalizeAzureStoredAccessPermissions(value: string): string {
+  const allowed = new Set<AzureStoredAccessPermission>(
+    azureStoredAccessPermissionOptions.map((option) => option.value),
+  );
+  const selected = new Set<AzureStoredAccessPermission>();
+  for (const char of value.toLowerCase()) {
+    if (allowed.has(char as AzureStoredAccessPermission)) {
+      selected.add(char as AzureStoredAccessPermission);
+    }
+  }
+  return azureStoredAccessPermissionOptions
+    .map((option) => option.value)
+    .filter((value) => selected.has(value))
+    .join("");
+}
+
+function toggleAzureStoredAccessPermission(
+  current: string,
+  permission: AzureStoredAccessPermission,
+  enabled: boolean,
+): string {
+  const next = new Set<AzureStoredAccessPermission>(
+    normalizeAzureStoredAccessPermissions(current)
+      .split("")
+      .map((value) => value as AzureStoredAccessPermission),
+  );
+  if (enabled) {
+    next.add(permission);
+  } else {
+    next.delete(permission);
+  }
+  return azureStoredAccessPermissionOptions
+    .map((option) => option.value)
+    .filter((value) => next.has(value))
+    .join("");
+}
+
+function serializeGCSBindings(bindings: GCSBindingDraft[]): BucketAccessBinding[] {
+  return bindings.map((binding, index) => {
+    const role = binding.role.trim();
+    if (!role) {
+      throw new Error(`Binding ${index + 1} role is required.`);
+    }
+    const members = parseLineSeparatedValues(binding.membersText);
+    let condition: BucketAccessBinding["condition"] | undefined;
+    const rawCondition = binding.conditionText.trim();
+    if (rawCondition) {
+      try {
+        condition = JSON.parse(rawCondition) as BucketAccessBinding["condition"];
+      } catch (error) {
+        throw new Error(
+          error instanceof Error
+            ? `Binding ${index + 1} condition JSON is invalid: ${error.message}`
+            : `Binding ${index + 1} condition JSON is invalid.`,
+        );
+      }
+    }
+
+    return {
+      role,
+      ...(members.length > 0 ? { members } : {}),
+      ...(condition !== undefined ? { condition } : {}),
+    };
+  });
+}
+
+function serializeAzureStoredAccessPolicies(
+  policies: AzureStoredAccessPolicyDraft[],
+): BucketStoredAccessPolicy[] {
+  if (policies.length > 5) {
+    throw new Error("Azure stored access policies are limited to five entries.");
+  }
+  return policies.map((policy, index) => {
+    const id = policy.id.trim();
+    if (!id) {
+      throw new Error(`Stored access policy ${index + 1} identifier is required.`);
+    }
+    const start = policy.start.trim();
+    const expiry = policy.expiry.trim();
+    const permission = normalizeAzureStoredAccessPermissions(policy.permission);
+    return {
+      id,
+      ...(start ? { start } : {}),
+      ...(expiry ? { expiry } : {}),
+      ...(permission ? { permission } : {}),
+    };
+  });
+}
+
 function formatOptionalDays(value?: number): string {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? String(value)
     : "";
+}
+
+function normalizeAzureImmutabilityMode(
+  value?: string,
+): "unlocked" | "locked" {
+  return value?.trim().toLowerCase() === "locked" ? "locked" : "unlocked";
 }
 
 function parsePositiveDays(value: string, label: string): number {
@@ -217,7 +450,15 @@ function buildGCSDraft(governance: BucketGovernanceView): GCSGovernanceDraft {
     publicAccessPrevention:
       governance.publicExposure?.publicAccessPrevention === true,
     etag: governance.access?.etag ?? "",
-    bindingsText: JSON.stringify(governance.access?.bindings ?? [], null, 2),
+    bindings: Array.isArray(governance.access?.bindings)
+      ? governance.access.bindings.map((binding) => ({
+          role: binding.role ?? "",
+          membersText: Array.isArray(binding.members)
+            ? binding.members.join("\n")
+            : "",
+          conditionText: formatOptionalJSON(binding.condition),
+        }))
+      : [],
     uniformAccess: governance.protection?.uniformAccess === true,
     versioningStatus:
       governance.versioning?.status === "enabled" ? "enabled" : "disabled",
@@ -230,23 +471,60 @@ function buildAzureDraft(
   governance: BucketGovernanceView,
 ): AzureGovernanceDraft {
   const mode = governance.publicExposure?.visibility || governance.publicExposure?.mode;
+  const immutability =
+    governance.protection?.immutability as AzureImmutabilityView | undefined;
   return {
     publicMode:
       mode === "blob" || mode === "container" ? mode : "private",
-    storedAccessPoliciesText: JSON.stringify(
-      governance.access?.storedAccessPolicies ?? [],
-      null,
-      2,
-    ),
+    storedAccessPolicies: Array.isArray(governance.access?.storedAccessPolicies)
+      ? governance.access.storedAccessPolicies.map((policy) => ({
+          id: policy.id ?? "",
+          start: policy.start ?? "",
+          expiry: policy.expiry ?? "",
+          permission: normalizeAzureStoredAccessPermissions(
+            policy.permission ?? "",
+          ),
+        }))
+      : [],
     versioningStatus:
       governance.versioning?.status === "enabled" ? "enabled" : "disabled",
     softDeleteEnabled: governance.protection?.softDelete?.enabled === true,
     softDeleteDays: formatOptionalDays(governance.protection?.softDelete?.days),
+    immutabilityEnabled: immutability?.enabled === true,
+    immutabilityDays: formatOptionalDays(immutability?.days),
+    immutabilityMode: normalizeAzureImmutabilityMode(immutability?.mode),
+    immutabilityEditable: immutability?.editable !== false,
+    legalHold: immutability?.legalHold === true,
+    allowProtectedAppendWrites:
+      immutability?.allowProtectedAppendWrites === true,
+    allowProtectedAppendWritesAll:
+      immutability?.allowProtectedAppendWritesAll === true,
   };
 }
 
 function buildOCIDraft(governance: BucketGovernanceView): OCIGovernanceDraft {
   const visibility = governance.publicExposure?.visibility;
+  const retention = governance.protection?.retention as OCIRetentionView | undefined;
+  const retentionRules =
+    Array.isArray(retention?.rules) && retention.rules.length > 0
+      ? retention.rules.map((rule, index) => ({
+          id: rule.id ?? "",
+          displayName: rule.displayName ?? `Retention Rule ${index + 1}`,
+          days: formatOptionalDays(rule.days),
+          locked: rule.locked === true,
+          timeModified: rule.timeModified ?? "",
+        }))
+      : retention?.enabled && retention.days
+        ? [
+            {
+              id: "",
+              displayName: "Retention Rule 1",
+              days: formatOptionalDays(retention.days),
+              locked: retention.locked === true,
+              timeModified: "",
+            },
+          ]
+        : [];
   return {
     visibility:
       visibility === "object_read" || visibility === "object_read_without_list"
@@ -254,9 +532,32 @@ function buildOCIDraft(governance: BucketGovernanceView): OCIGovernanceDraft {
         : "private",
     versioningStatus:
       governance.versioning?.status === "enabled" ? "enabled" : "disabled",
-    retentionEnabled: governance.protection?.retention?.enabled === true,
-    retentionDays: formatOptionalDays(governance.protection?.retention?.days),
+    retentionRules,
   };
+}
+
+function buildOCISharingDraft(
+  governance: BucketGovernanceView,
+): OCIPreauthenticatedRequestDraft[] {
+  const sharing = (governance as BucketGovernanceView & { sharing?: OCISharingView })
+    .sharing;
+  return Array.isArray(sharing?.preauthenticatedRequests)
+    ? sharing.preauthenticatedRequests.map((item) => ({
+        id: item.id ?? "",
+        name: item.name ?? "",
+        accessType:
+          item.accessType === "AnyObjectWrite" ||
+          item.accessType === "AnyObjectReadWrite"
+            ? item.accessType
+            : "AnyObjectRead",
+        bucketListingAction:
+          item.bucketListingAction === "ListObjects" ? "ListObjects" : "Deny",
+        objectName: item.objectName ?? "",
+        timeCreated: item.timeCreated ?? "",
+        timeExpires: item.timeExpires ?? "",
+        accessUri: item.accessUri ?? "",
+      }))
+    : [];
 }
 
 function buildGovernanceDraftKey(
@@ -777,7 +1078,7 @@ function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps) {
     draft.publicAccessPrevention,
   );
   const [etag, setETag] = useState(draft.etag);
-  const [bindingsText, setBindingsText] = useState(draft.bindingsText);
+  const [bindings, setBindings] = useState<GCSBindingDraft[]>(draft.bindings);
   const [uniformAccess, setUniformAccess] = useState(draft.uniformAccess);
   const [versioningStatus, setVersioningStatus] = useState<
     "enabled" | "disabled"
@@ -810,12 +1111,8 @@ function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps) {
 
   const accessMutation = useMutation({
     mutationFn: () => {
-      const bindings = parseJSONArray<BucketAccessBinding>(
-        bindingsText,
-        "Bindings",
-      );
       const req: BucketAccessPutRequest = {
-        bindings,
+        bindings: serializeGCSBindings(bindings),
         etag: etag.trim() || undefined,
       };
       return props.api.putBucketAccess(props.profileId, props.bucket, req);
@@ -1138,17 +1435,29 @@ function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps) {
             <div className={styles.sectionCopy}>
               <Typography.Text strong>IAM Bindings</Typography.Text>
               <Typography.Text type="secondary">
-                Edit the full bindings array as JSON. Preserve conditional
-                bindings and keep the current etag when saving.
+                Edit bindings one entry at a time. Members are one per line,
+                while conditional expressions stay as optional JSON fragments.
               </Typography.Text>
             </div>
-            <Button
-              type="primary"
-              loading={accessMutation.isPending}
-              onClick={() => accessMutation.mutate()}
-            >
-              Save
-            </Button>
+            <div className={styles.sectionActions}>
+              <Button
+                onClick={() =>
+                  setBindings((current) => [
+                    ...current,
+                    createEmptyGCSBindingDraft(),
+                  ])
+                }
+              >
+                Add binding
+              </Button>
+              <Button
+                type="primary"
+                loading={accessMutation.isPending}
+                onClick={() => accessMutation.mutate()}
+              >
+                Save
+              </Button>
+            </div>
           </div>
           <div className={styles.sectionBody}>
             <FormField
@@ -1163,18 +1472,107 @@ function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps) {
                 autoComplete="off"
               />
             </FormField>
-            <FormField
-              label="Bindings JSON"
-              htmlFor="bucket-governance-gcs-bindings"
-            >
-              <Input.TextArea
-                id="bucket-governance-gcs-bindings"
-                className={styles.jsonArea}
-                value={bindingsText}
-                onChange={(e) => setBindingsText(e.target.value)}
-                rows={12}
+            {bindings.length === 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                title="No IAM bindings configured"
+                description="Add a binding to grant access, or leave the list empty and save to clear all bindings."
               />
-            </FormField>
+            ) : null}
+            <div className={styles.editorList}>
+              {bindings.map((binding, index) => (
+                <div
+                  key={`gcs-binding-${index}`}
+                  className={styles.editorCard}
+                  data-testid="bucket-governance-gcs-binding-card"
+                >
+                  <div className={styles.editorCardHeader}>
+                    <div className={styles.sectionCopy}>
+                      <Typography.Text strong>
+                        Binding {index + 1}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        Keep role names exact. Conditional bindings are passed
+                        through as JSON.
+                      </Typography.Text>
+                    </div>
+                    <Button
+                      danger
+                      onClick={() =>
+                        setBindings((current) =>
+                          current.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className={styles.editorCardGrid}>
+                    <FormField
+                      label="Role"
+                      htmlFor={`bucket-governance-gcs-role-${index}`}
+                    >
+                      <Input
+                        id={`bucket-governance-gcs-role-${index}`}
+                        value={binding.role}
+                        onChange={(e) =>
+                          setBindings((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, role: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        autoComplete="off"
+                      />
+                    </FormField>
+                    <FormField
+                      label="Members"
+                      htmlFor={`bucket-governance-gcs-members-${index}`}
+                      extra="One member per line, for example user:dev@example.com or allUsers."
+                    >
+                      <Input.TextArea
+                        id={`bucket-governance-gcs-members-${index}`}
+                        value={binding.membersText}
+                        onChange={(e) =>
+                          setBindings((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, membersText: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        rows={4}
+                      />
+                    </FormField>
+                    <FormField
+                      label="Condition JSON (optional)"
+                      htmlFor={`bucket-governance-gcs-condition-${index}`}
+                      extra='Example: {"title":"Temp access","expression":"request.time < timestamp(\"2026-12-31T00:00:00Z\")"}'
+                    >
+                      <Input.TextArea
+                        id={`bucket-governance-gcs-condition-${index}`}
+                        className={styles.jsonArea}
+                        value={binding.conditionText}
+                        onChange={(e) =>
+                          setBindings((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, conditionText: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        rows={4}
+                      />
+                    </FormField>
+                  </div>
+                </div>
+              ))}
+            </div>
             {renderWarningStack(extractWarningList(props.governance.access))}
           </div>
         </section>
@@ -1188,8 +1586,10 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
   const [publicMode, setPublicMode] = useState<
     Extract<BucketPublicExposureMode, "private" | "blob" | "container">
   >(draft.publicMode);
-  const [storedAccessPoliciesText, setStoredAccessPoliciesText] = useState(
-    draft.storedAccessPoliciesText,
+  const [storedAccessPolicies, setStoredAccessPolicies] = useState<
+    AzureStoredAccessPolicyDraft[]
+  >(
+    draft.storedAccessPolicies,
   );
   const [versioningStatus, setVersioningStatus] = useState<
     "enabled" | "disabled"
@@ -1198,7 +1598,26 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
     draft.softDeleteEnabled,
   );
   const [softDeleteDays, setSoftDeleteDays] = useState(draft.softDeleteDays);
-  const immutability = props.governance.protection?.immutability;
+  const [immutabilityEnabled, setImmutabilityEnabled] = useState(
+    draft.immutabilityEnabled,
+  );
+  const [immutabilityDays, setImmutabilityDays] = useState(
+    draft.immutabilityDays,
+  );
+  const [immutabilityMode, setImmutabilityMode] = useState<
+    "unlocked" | "locked"
+  >(draft.immutabilityMode);
+  const [allowProtectedAppendWrites, setAllowProtectedAppendWrites] = useState(
+    draft.allowProtectedAppendWrites,
+  );
+  const [allowProtectedAppendWritesAll, setAllowProtectedAppendWritesAll] =
+    useState(draft.allowProtectedAppendWritesAll);
+  const immutability = props.governance.protection?.immutability as
+    | AzureImmutabilityView
+    | undefined;
+  const immutabilityEditable = immutability?.editable !== false;
+  const immutabilityLocked =
+    normalizeAzureImmutabilityMode(immutability?.mode) === "locked";
 
   const invalidateGovernance = useInvalidateLinkedBucketState(
     props.queryClient,
@@ -1222,12 +1641,9 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
 
   const accessMutation = useMutation({
     mutationFn: () => {
-      const storedAccessPolicies = parseJSONArray<BucketStoredAccessPolicy>(
-        storedAccessPoliciesText,
-        "Stored access policies",
-      );
       const req: BucketAccessPutRequest = {
-        storedAccessPolicies,
+        storedAccessPolicies:
+          serializeAzureStoredAccessPolicies(storedAccessPolicies),
       };
       return props.api.putBucketAccess(props.profileId, props.bucket, req);
     },
@@ -1240,7 +1656,7 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
 
   const protectionMutation = useMutation({
     mutationFn: () => {
-      const req: BucketProtectionPutRequest = {
+      const req: BucketProtectionPutRequestWithAzureImmutability = {
         softDelete: softDeleteEnabled
           ? {
               enabled: true,
@@ -1250,10 +1666,35 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
               enabled: false,
             },
       };
-      return props.api.putBucketProtection(props.profileId, props.bucket, req);
+      if (immutabilityEditable) {
+        req.immutability = immutabilityEnabled
+          ? {
+              enabled: true,
+              days: parsePositiveDays(
+                immutabilityDays,
+                "Container immutability days",
+              ),
+              mode: immutabilityMode,
+              etag: immutability?.etag,
+              allowProtectedAppendWrites:
+                immutabilityMode === "unlocked" && allowProtectedAppendWrites,
+              allowProtectedAppendWritesAll:
+                immutabilityMode === "unlocked" &&
+                allowProtectedAppendWritesAll,
+            }
+          : {
+              enabled: false,
+              etag: immutability?.etag,
+            };
+      }
+      return props.api.putBucketProtection(
+        props.profileId,
+        props.bucket,
+        req as BucketProtectionPutRequest,
+      );
     },
     onSuccess: async () => {
-      message.success("Soft delete updated");
+      message.success("Protection updated");
       await invalidateGovernance();
     },
     onError: (err) => message.error(formatErr(err)),
@@ -1292,10 +1733,20 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
       }`,
     );
     if (immutability?.enabled) {
-      items.push("Immutability detected");
+      items.push(`Immutability: ${normalizeAzureImmutabilityMode(immutability.mode)}`);
+    }
+    if (immutability?.legalHold) {
+      items.push("Legal hold");
     }
     return items;
-  }, [props.governance, publicMode, versioningStatus, immutability?.enabled]);
+  }, [
+    props.governance,
+    publicMode,
+    versioningStatus,
+    immutability?.enabled,
+    immutability?.legalHold,
+    immutability?.mode,
+  ]);
 
   return (
     <BucketGovernanceDialogShell
@@ -1310,7 +1761,7 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
     >
       <GovernanceSummaryCard
         title="Azure Controls"
-        description="Manage anonymous access, stored access policies, account-level versioning, and soft delete from one Azure controls surface."
+        description="Manage anonymous access, stored access policies, account-level versioning, soft delete, and Azure container immutability from one controls surface."
         tags={headerTags}
         isRefreshing={
           props.isFetching ||
@@ -1435,9 +1886,9 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
             <div className={styles.sectionCopy}>
               <Typography.Text strong>Protection</Typography.Text>
               <Typography.Text type="secondary">
-                Soft delete is editable here. Immutability is surfaced as
-                read-only status until container immutability policy editing is
-                added.
+                Soft delete stays account-scoped. Container immutability can be
+                created as unlocked, then optionally locked for extend-only
+                management.
               </Typography.Text>
             </div>
             <Button
@@ -1477,25 +1928,127 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
                 autoComplete="off"
               />
             </FormField>
-            {immutability?.enabled ? (
+            {!immutabilityEditable ? (
               <Alert
                 type="info"
                 showIcon
-                title="Container immutability detected"
-                description={
-                  immutability.until
-                    ? `Immutable until ${immutability.until}. Editing immutability from this client is not implemented yet.`
-                    : "Editing container immutability from this client is not implemented yet."
+                title="Azure ARM credentials required for container immutability editing"
+                description="Add subscription ID, resource group, tenant ID, client ID, and client secret to the Azure profile to create, update, lock, or delete container immutability policies."
+              />
+            ) : null}
+            <div className={styles.toggleRow}>
+              <div className={styles.toggleCopy}>
+                <Typography.Text>Container immutability</Typography.Text>
+                <Typography.Text type="secondary">
+                  Unlocked policies can be changed or deleted. Locked policies
+                  can only be extended.
+                </Typography.Text>
+              </div>
+              <ToggleSwitch
+                checked={immutabilityEnabled}
+                onChange={setImmutabilityEnabled}
+                disabled={!immutabilityEditable || immutabilityLocked}
+                ariaLabel="Azure container immutability"
+              />
+            </div>
+            <FormField
+              label="Retention days"
+              htmlFor="bucket-governance-azure-immutability-days"
+              extra={
+                immutabilityLocked
+                  ? "Locked policies can only increase this value."
+                  : "Required when container immutability is enabled."
+              }
+            >
+              <Input
+                id="bucket-governance-azure-immutability-days"
+                value={immutabilityDays}
+                onChange={(e) => setImmutabilityDays(e.target.value)}
+                disabled={!immutabilityEditable || !immutabilityEnabled}
+                inputMode="numeric"
+                autoComplete="off"
+              />
+            </FormField>
+            <FormField
+              label="Policy mode"
+              htmlFor="bucket-governance-azure-immutability-mode"
+              extra="Switch to Locked only when you are ready to make the policy extend-only."
+            >
+              <NativeSelect
+                id="bucket-governance-azure-immutability-mode"
+                value={immutabilityMode}
+                onChange={(value) =>
+                  setImmutabilityMode(
+                    value === "locked" ? "locked" : "unlocked",
+                  )
                 }
+                disabled={!immutabilityEditable || !immutabilityEnabled || immutabilityLocked}
+                options={[
+                  { value: "unlocked", label: "Unlocked" },
+                  { value: "locked", label: "Locked" },
+                ]}
+                ariaLabel="Azure immutability mode"
               />
-            ) : (
+            </FormField>
+            <div className={styles.toggleList}>
+              <div className={styles.toggleRow}>
+                <div className={styles.toggleCopy}>
+                  <Typography.Text>Allow protected append writes</Typography.Text>
+                  <Typography.Text type="secondary">
+                    Allow append-only writes to protected append blobs.
+                  </Typography.Text>
+                </div>
+                <ToggleSwitch
+                  checked={allowProtectedAppendWrites}
+                  onChange={(checked) => {
+                    setAllowProtectedAppendWrites(checked);
+                    if (checked) {
+                      setAllowProtectedAppendWritesAll(false);
+                    }
+                  }}
+                  disabled={!immutabilityEditable || !immutabilityEnabled || immutabilityLocked}
+                  ariaLabel="Allow protected append writes"
+                />
+              </div>
+              <div className={styles.toggleRow}>
+                <div className={styles.toggleCopy}>
+                  <Typography.Text>
+                    Allow protected append writes for all
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
+                    Allow append-only writes across append and block blob
+                    workloads while the policy is unlocked.
+                  </Typography.Text>
+                </div>
+                <ToggleSwitch
+                  checked={allowProtectedAppendWritesAll}
+                  onChange={(checked) => {
+                    setAllowProtectedAppendWritesAll(checked);
+                    if (checked) {
+                      setAllowProtectedAppendWrites(false);
+                    }
+                  }}
+                  disabled={!immutabilityEditable || !immutabilityEnabled || immutabilityLocked}
+                  ariaLabel="Allow protected append writes for all"
+                />
+              </div>
+            </div>
+            {immutability?.legalHold ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="Legal hold detected"
+                description="A legal hold is active on this container. This client only edits time-based immutability policy; legal hold release remains outside this surface."
+              />
+            ) : null}
+            {immutabilityLocked ? (
               <Alert
                 type="info"
                 showIcon
-                title="No container immutability detected"
-                description="If a legal hold or immutability policy is applied later, this surface will show it as read-only state."
+                title="Policy is locked"
+                description="This Azure immutability policy is already locked. You can only increase retention days from this point."
               />
-            )}
+            ) : null}
             {renderWarningStack(extractWarningList(props.governance.protection))}
           </div>
         </section>
@@ -1508,33 +2061,172 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
             <div className={styles.sectionCopy}>
               <Typography.Text strong>Stored Access Policies</Typography.Text>
               <Typography.Text type="secondary">
-                Edit the full stored access policy array as JSON. Azure allows
-                up to five entries, and start or expiry should use RFC3339
-                timestamps.
+                Edit stored access policies as named entries instead of raw
+                JSON. Azure allows up to five policies per container.
               </Typography.Text>
             </div>
-            <Button
-              type="primary"
-              loading={accessMutation.isPending}
-              onClick={() => accessMutation.mutate()}
-            >
-              Save
-            </Button>
+            <div className={styles.sectionActions}>
+              <Button
+                onClick={() =>
+                  setStoredAccessPolicies((current) =>
+                    current.length >= 5
+                      ? current
+                      : [...current, createEmptyAzureStoredAccessPolicyDraft()],
+                  )
+                }
+                disabled={storedAccessPolicies.length >= 5}
+              >
+                Add policy
+              </Button>
+              <Button
+                type="primary"
+                loading={accessMutation.isPending}
+                onClick={() => accessMutation.mutate()}
+              >
+                Save
+              </Button>
+            </div>
           </div>
           <div className={styles.sectionBody}>
-            <FormField
-              label="Stored access policies JSON"
-              htmlFor="bucket-governance-azure-stored-access-policies"
-              extra="Permission letters follow Azure order: rwdlacup."
-            >
-              <Input.TextArea
-                id="bucket-governance-azure-stored-access-policies"
-                className={styles.jsonArea}
-                value={storedAccessPoliciesText}
-                onChange={(e) => setStoredAccessPoliciesText(e.target.value)}
-                rows={12}
+            {storedAccessPolicies.length === 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                title="No stored access policies configured"
+                description="Add a policy when you need a reusable signed identifier for SAS generation, or leave the list empty and save to clear all entries."
               />
-            </FormField>
+            ) : null}
+            <div className={styles.editorList}>
+              {storedAccessPolicies.map((policy, index) => (
+                <div
+                  key={`azure-stored-policy-${index}`}
+                  className={styles.editorCard}
+                  data-testid="bucket-governance-azure-stored-access-policy-card"
+                >
+                  <div className={styles.editorCardHeader}>
+                    <div className={styles.sectionCopy}>
+                      <Typography.Text strong>
+                        Policy {index + 1}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        SAS tokens can target this identifier. Editing the
+                        policy changes future SAS validation, but does not mint
+                        or revoke tokens by itself.
+                      </Typography.Text>
+                    </div>
+                    <Button
+                      danger
+                      onClick={() =>
+                        setStoredAccessPolicies((current) =>
+                          current.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <div className={styles.editorCardGrid}>
+                    <FormField
+                      label="Identifier"
+                      htmlFor={`bucket-governance-azure-policy-id-${index}`}
+                    >
+                      <Input
+                        id={`bucket-governance-azure-policy-id-${index}`}
+                        value={policy.id}
+                        onChange={(e) =>
+                          setStoredAccessPolicies((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, id: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        autoComplete="off"
+                      />
+                    </FormField>
+                    <FormField
+                      label="Start (RFC3339)"
+                      htmlFor={`bucket-governance-azure-policy-start-${index}`}
+                    >
+                      <Input
+                        id={`bucket-governance-azure-policy-start-${index}`}
+                        value={policy.start}
+                        onChange={(e) =>
+                          setStoredAccessPolicies((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, start: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        autoComplete="off"
+                      />
+                    </FormField>
+                    <FormField
+                      label="Expiry (RFC3339)"
+                      htmlFor={`bucket-governance-azure-policy-expiry-${index}`}
+                    >
+                      <Input
+                        id={`bucket-governance-azure-policy-expiry-${index}`}
+                        value={policy.expiry}
+                        onChange={(e) =>
+                          setStoredAccessPolicies((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index
+                                ? { ...item, expiry: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        autoComplete="off"
+                      />
+                    </FormField>
+                  </div>
+                  <FormField
+                    label="Permissions"
+                    htmlFor={`bucket-governance-azure-policy-permissions-${index}`}
+                    extra="Permission order is normalized to rwdlacup on save."
+                  >
+                    <div
+                      id={`bucket-governance-azure-policy-permissions-${index}`}
+                      className={styles.permissionGrid}
+                    >
+                      {azureStoredAccessPermissionOptions.map((option) => (
+                        <label
+                          key={`${index}-${option.value}`}
+                          className={styles.permissionItem}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={policy.permission.includes(option.value)}
+                            onChange={(e) =>
+                              setStoredAccessPolicies((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        permission:
+                                          toggleAzureStoredAccessPermission(
+                                            item.permission,
+                                            option.value,
+                                            e.target.checked,
+                                          ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </FormField>
+                </div>
+              ))}
+            </div>
             {renderWarningStack(extractWarningList(props.governance.access))}
           </div>
         </section>
@@ -1545,17 +2237,34 @@ function BucketGovernanceAzureControls(props: GovernanceControlsCommonProps) {
 
 function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps) {
   const draft = buildOCIDraft(props.governance);
+  const sharingDraft = buildOCISharingDraft(props.governance);
   const [visibility, setVisibility] = useState<
     "private" | "object_read" | "object_read_without_list"
   >(draft.visibility);
   const [versioningStatus, setVersioningStatus] = useState<
     "enabled" | "disabled"
   >(draft.versioningStatus);
-  const [retentionEnabled, setRetentionEnabled] = useState(
-    draft.retentionEnabled,
+  const [retentionRules, setRetentionRules] = useState<OCIRetentionRuleDraft[]>(
+    draft.retentionRules,
   );
-  const [retentionDays, setRetentionDays] = useState(draft.retentionDays);
-  const retentionLocked = props.governance.protection?.retention?.locked === true;
+  const [preauthenticatedRequests, setPreauthenticatedRequests] = useState<
+    OCIPreauthenticatedRequestDraft[]
+  >(sharingDraft);
+  const [createdPARs, setCreatedPARs] = useState<OCIPreauthenticatedRequestDraft[]>(
+    [],
+  );
+  const retention = props.governance.protection?.retention as
+    | OCIRetentionView
+    | undefined;
+  const sharing = (
+    props.governance as BucketGovernanceView & { sharing?: OCISharingView }
+  ).sharing;
+  const retentionRuleCount =
+    Array.isArray(retention?.rules) && retention.rules.length > 0
+      ? retention.rules.length
+      : retention?.enabled
+        ? 1
+        : 0;
 
   const invalidateGovernance = useInvalidateGovernance(
     props.queryClient,
@@ -1589,20 +2298,77 @@ function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps) {
 
   const protectionMutation = useMutation({
     mutationFn: () => {
-      const req: BucketProtectionPutRequest = {
-        retention: retentionEnabled
-          ? {
-              enabled: true,
-              days: parsePositiveDays(retentionDays, "Retention days"),
-            }
-          : {
-              enabled: false,
-            },
+      const req: BucketProtectionPutRequestWithOCIRetention = {
+        retention: {
+          enabled: retentionRules.length > 0,
+          rules: retentionRules.map((rule, index) => ({
+            id: rule.id.trim() || undefined,
+            displayName:
+              rule.displayName.trim() || `Retention Rule ${index + 1}`,
+            days: parsePositiveDays(
+              rule.days,
+              `Retention rule ${index + 1} days`,
+            ),
+            locked: rule.locked,
+            timeModified: rule.timeModified || undefined,
+          })),
+        },
       };
-      return props.api.putBucketProtection(props.profileId, props.bucket, req);
+      return props.api.putBucketProtection(
+        props.profileId,
+        props.bucket,
+        req as BucketProtectionPutRequest,
+      );
     },
     onSuccess: async () => {
-      message.success("Retention updated");
+      message.success("Retention rules updated");
+      await invalidateGovernance();
+    },
+    onError: (err) => message.error(formatErr(err)),
+  });
+
+  const sharingMutation = useMutation({
+    mutationFn: () => {
+      const req: BucketSharingPutClientRequest = {
+        preauthenticatedRequests: preauthenticatedRequests.map((item) => ({
+          id: item.id.trim() || undefined,
+          name: item.name.trim() || undefined,
+          accessType: item.accessType,
+          bucketListingAction: item.bucketListingAction,
+          objectName: item.objectName.trim() || undefined,
+          timeExpires: item.timeExpires.trim() || undefined,
+        })),
+      };
+      return props.api.putBucketSharing(props.profileId, props.bucket, req);
+    },
+    onSuccess: async (view) => {
+      const nextSharing = view as OCISharingView | undefined;
+      const nextRequests = Array.isArray(nextSharing?.preauthenticatedRequests)
+        ? nextSharing.preauthenticatedRequests
+        : [];
+      setCreatedPARs(
+        nextRequests
+          .filter(
+            (item): item is OCIPreauthenticatedRequestDraft =>
+              typeof item.accessUri === "string" && item.accessUri.trim().length > 0,
+          )
+          .map((item) => ({
+            id: item.id ?? "",
+            name: item.name ?? "",
+            accessType:
+              item.accessType === "AnyObjectWrite" ||
+              item.accessType === "AnyObjectReadWrite"
+                ? item.accessType
+                : "AnyObjectRead",
+            bucketListingAction:
+              item.bucketListingAction === "ListObjects" ? "ListObjects" : "Deny",
+            objectName: item.objectName ?? "",
+            timeCreated: item.timeCreated ?? "",
+            timeExpires: item.timeExpires ?? "",
+            accessUri: item.accessUri ?? "",
+          })),
+      );
+      message.success("Sharing updated");
       await invalidateGovernance();
     },
     onError: (err) => message.error(formatErr(err)),
@@ -1617,16 +2383,19 @@ function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps) {
       `Versioning: ${props.governance.versioning?.status ?? versioningStatus}`,
     );
     items.push(
-      props.governance.protection?.retention?.enabled
-        ? `Retention: ${
-            props.governance.protection.retention.days
-              ? `${props.governance.protection.retention.days}d`
-              : "enabled"
-          }`
-        : "Retention: off",
+      retentionRuleCount > 0
+        ? `Retention rules: ${retentionRuleCount}`
+        : "Retention rules: 0",
+    );
+    items.push(
+      `PARs: ${
+        Array.isArray(sharing?.preauthenticatedRequests)
+          ? sharing.preauthenticatedRequests.length
+          : 0
+      }`,
     );
     return items;
-  }, [props.governance, versioningStatus, visibility]);
+  }, [props.governance, retentionRuleCount, sharing?.preauthenticatedRequests, versioningStatus, visibility]);
 
   return (
     <BucketGovernanceDialogShell
@@ -1641,13 +2410,14 @@ function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps) {
     >
       <GovernanceSummaryCard
         title="OCI Controls"
-        description="Manage OCI bucket visibility, versioning, and retention from the typed controls surface. Retention editing targets the first rule returned by the backend."
+        description="Manage OCI bucket visibility, versioning, and retention rules from the typed controls surface."
         tags={headerTags}
         isRefreshing={
           props.isFetching ||
           publicExposureMutation.isPending ||
           versioningMutation.isPending ||
-          protectionMutation.isPending
+          protectionMutation.isPending ||
+          sharingMutation.isPending
         }
       />
 
@@ -1755,53 +2525,375 @@ function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps) {
         >
           <div className={styles.sectionHeader}>
             <div className={styles.sectionCopy}>
-              <Typography.Text strong>Retention</Typography.Text>
+              <Typography.Text strong>Retention Rules</Typography.Text>
               <Typography.Text type="secondary">
-                Edit the first OCI retention rule surfaced by the backend.
-                Locked rules are shown read-only.
+                Create, extend, edit, or remove OCI retention rules. Locked
+                rules can only increase in duration and cannot be removed.
               </Typography.Text>
             </div>
-            <Button
-              type="primary"
-              loading={protectionMutation.isPending}
-              onClick={() => protectionMutation.mutate()}
-              disabled={retentionLocked}
-            >
-              Save
-            </Button>
+            <div className={styles.footerActions}>
+              <Button
+                disabled={retentionRules.length >= 100}
+                onClick={() =>
+                  setRetentionRules((current) => [
+                    ...current,
+                    {
+                      id: "",
+                      displayName: `Retention Rule ${current.length + 1}`,
+                      days: "30",
+                      locked: false,
+                      timeModified: "",
+                    },
+                  ])
+                }
+              >
+                Add rule
+              </Button>
+              <Button
+                type="primary"
+                loading={protectionMutation.isPending}
+                onClick={() => protectionMutation.mutate()}
+              >
+                Save
+              </Button>
+            </div>
           </div>
           <div className={styles.sectionBody}>
-            <div className={styles.toggleRow}>
-              <div className={styles.toggleCopy}>
-                <Typography.Text>Retention enabled</Typography.Text>
-                <Typography.Text type="secondary">
-                  Disable to remove the editable retention rule when it is not
-                  locked.
-                </Typography.Text>
-              </div>
-              <ToggleSwitch
-                checked={retentionEnabled}
-                onChange={setRetentionEnabled}
-                disabled={retentionLocked}
-                ariaLabel="OCI retention enabled"
+            {retentionRules.length === 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                title="No OCI retention rules configured"
+                description="Add a rule to start managing bucket retention from this controls surface."
               />
+            ) : null}
+            <div className={styles.warningStack}>
+              {retentionRules.map((rule, index) => (
+                <section
+                  key={rule.id || `oci-retention-rule-${index}`}
+                  className={styles.sectionCard}
+                >
+                  <div className={styles.sectionHeader}>
+                    <div className={styles.sectionCopy}>
+                      <Typography.Text strong>
+                        Rule {index + 1}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        {rule.locked
+                          ? "Locked rules can only be extended."
+                          : "Unlocked rules can be edited or removed."}
+                      </Typography.Text>
+                    </div>
+                    <div className={styles.footerActions}>
+                      {rule.locked ? <Tag color="warning">Locked</Tag> : null}
+                      <Button
+                        danger
+                        onClick={() =>
+                          setRetentionRules((current) =>
+                            current.filter(
+                              (_, currentIndex) => currentIndex !== index,
+                            ),
+                          )
+                        }
+                        disabled={rule.locked}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                  <div className={styles.sectionBody}>
+                    <FormField
+                      label="Display name"
+                      htmlFor={`bucket-governance-oci-retention-name-${index}`}
+                    >
+                      <Input
+                        id={`bucket-governance-oci-retention-name-${index}`}
+                        value={rule.displayName}
+                        onChange={(e) =>
+                          setRetentionRules((current) =>
+                            current.map((item, currentIndex) =>
+                              currentIndex === index
+                                ? { ...item, displayName: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        disabled={rule.locked}
+                        autoComplete="off"
+                      />
+                    </FormField>
+                    <FormField
+                      label="Retention days"
+                      htmlFor={`bucket-governance-oci-retention-days-${index}`}
+                      extra={
+                        rule.locked
+                          ? "Locked rules can only increase this value."
+                          : "Required."
+                      }
+                    >
+                      <Input
+                        id={`bucket-governance-oci-retention-days-${index}`}
+                        value={rule.days}
+                        onChange={(e) =>
+                          setRetentionRules((current) =>
+                            current.map((item, currentIndex) =>
+                              currentIndex === index
+                                ? { ...item, days: e.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        inputMode="numeric"
+                        autoComplete="off"
+                      />
+                    </FormField>
+                    <div className={styles.tagRow}>
+                      {rule.id ? <Tag>ID {rule.id}</Tag> : <Tag>New rule</Tag>}
+                      {rule.timeModified ? (
+                        <Tag>Modified {rule.timeModified}</Tag>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+              ))}
             </div>
-            <FormField
-              label="Retention days"
-              htmlFor="bucket-governance-oci-retention-days"
-              extra="Required when retention is enabled."
-            >
-              <Input
-                id="bucket-governance-oci-retention-days"
-                value={retentionDays}
-                onChange={(e) => setRetentionDays(e.target.value)}
-                disabled={!retentionEnabled || retentionLocked}
-                inputMode="numeric"
-                autoComplete="off"
-              />
-            </FormField>
-            {retentionLocked ? <Tag color="warning">Locked retention</Tag> : null}
             {renderWarningStack(extractWarningList(props.governance.protection))}
+          </div>
+        </section>
+
+        <section
+          className={`${styles.sectionCard} ${styles.sectionWide}`}
+          data-testid="bucket-governance-sharing"
+        >
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionCopy}>
+              <Typography.Text strong>Pre-Authenticated Requests</Typography.Text>
+              <Typography.Text type="secondary">
+                Existing OCI PARs are preserved or deleted here. To change an
+                existing PAR, remove it and create a replacement.
+              </Typography.Text>
+            </div>
+            <div className={styles.footerActions}>
+              <Button
+                disabled={preauthenticatedRequests.length >= 100}
+                onClick={() =>
+                  setPreauthenticatedRequests((current) => [
+                    ...current,
+                    {
+                      id: "",
+                      name: `PAR ${current.length + 1}`,
+                      accessType: "AnyObjectRead",
+                      bucketListingAction: "Deny",
+                      objectName: "",
+                      timeCreated: "",
+                      timeExpires: "",
+                      accessUri: "",
+                    },
+                  ])
+                }
+              >
+                Add PAR
+              </Button>
+              <Button
+                type="primary"
+                loading={sharingMutation.isPending}
+                onClick={() => sharingMutation.mutate()}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+          <div className={styles.sectionBody}>
+            {createdPARs.length > 0 ? (
+              <div className={styles.warningStack}>
+                {createdPARs.map((item) => (
+                  <Alert
+                    key={item.id || item.name}
+                    type="success"
+                    showIcon
+                    title={`Created PAR: ${item.name}`}
+                    description={item.accessUri}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {preauthenticatedRequests.length === 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                title="No OCI PARs configured"
+                description="Add a pre-authenticated request to create a typed sharing link."
+              />
+            ) : null}
+            <div className={styles.warningStack}>
+              {preauthenticatedRequests.map((item, index) => {
+                const existing = item.id.trim().length > 0;
+                return (
+                  <section
+                    key={item.id || `oci-par-${index}`}
+                    className={styles.sectionCard}
+                  >
+                    <div className={styles.sectionHeader}>
+                      <div className={styles.sectionCopy}>
+                        <Typography.Text strong>PAR {index + 1}</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {existing
+                            ? "Existing PARs are immutable here. Delete and recreate to change them."
+                            : "Configure a new OCI pre-authenticated request."}
+                        </Typography.Text>
+                      </div>
+                      <div className={styles.footerActions}>
+                        {existing ? <Tag>Existing</Tag> : <Tag color="blue">New</Tag>}
+                        <Button
+                          danger
+                          onClick={() =>
+                            setPreauthenticatedRequests((current) =>
+                              current.filter((_, currentIndex) => currentIndex !== index),
+                            )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                    <div className={styles.sectionBody}>
+                      <FormField
+                        label="Name"
+                        htmlFor={`bucket-governance-oci-par-name-${index}`}
+                      >
+                        <Input
+                          id={`bucket-governance-oci-par-name-${index}`}
+                          value={item.name}
+                          onChange={(e) =>
+                            setPreauthenticatedRequests((current) =>
+                              current.map((entry, currentIndex) =>
+                                currentIndex === index
+                                  ? { ...entry, name: e.target.value }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          disabled={existing}
+                          autoComplete="off"
+                        />
+                      </FormField>
+                      <FormField
+                        label="Access type"
+                        htmlFor={`bucket-governance-oci-par-access-type-${index}`}
+                      >
+                        <NativeSelect
+                          id={`bucket-governance-oci-par-access-type-${index}`}
+                          value={item.accessType}
+                          onChange={(value) =>
+                            setPreauthenticatedRequests((current) =>
+                              current.map((entry, currentIndex) =>
+                                currentIndex === index
+                                  ? {
+                                      ...entry,
+                                      accessType:
+                                        value === "AnyObjectWrite" ||
+                                        value === "AnyObjectReadWrite"
+                                          ? value
+                                          : "AnyObjectRead",
+                                    }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          disabled={existing}
+                          options={[
+                            { value: "AnyObjectRead", label: "Any object read" },
+                            { value: "AnyObjectWrite", label: "Any object write" },
+                            {
+                              value: "AnyObjectReadWrite",
+                              label: "Any object read/write",
+                            },
+                          ]}
+                          ariaLabel={`OCI PAR access type ${index + 1}`}
+                        />
+                      </FormField>
+                      <FormField
+                        label="Object name or prefix (optional)"
+                        htmlFor={`bucket-governance-oci-par-object-name-${index}`}
+                        extra="Leave blank for bucket-wide access. Provide an object name or prefix to scope the PAR."
+                      >
+                        <Input
+                          id={`bucket-governance-oci-par-object-name-${index}`}
+                          value={item.objectName}
+                          onChange={(e) =>
+                            setPreauthenticatedRequests((current) =>
+                              current.map((entry, currentIndex) =>
+                                currentIndex === index
+                                  ? { ...entry, objectName: e.target.value }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          disabled={existing}
+                          autoComplete="off"
+                        />
+                      </FormField>
+                      <FormField
+                        label="Bucket listing"
+                        htmlFor={`bucket-governance-oci-par-listing-${index}`}
+                      >
+                        <NativeSelect
+                          id={`bucket-governance-oci-par-listing-${index}`}
+                          value={item.bucketListingAction}
+                          onChange={(value) =>
+                            setPreauthenticatedRequests((current) =>
+                              current.map((entry, currentIndex) =>
+                                currentIndex === index
+                                  ? {
+                                      ...entry,
+                                      bucketListingAction:
+                                        value === "ListObjects"
+                                          ? "ListObjects"
+                                          : "Deny",
+                                    }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          disabled={existing}
+                          options={[
+                            { value: "Deny", label: "Deny" },
+                            { value: "ListObjects", label: "List objects" },
+                          ]}
+                          ariaLabel={`OCI PAR bucket listing ${index + 1}`}
+                        />
+                      </FormField>
+                      <FormField
+                        label="Expires at (RFC3339)"
+                        htmlFor={`bucket-governance-oci-par-expires-${index}`}
+                      >
+                        <Input
+                          id={`bucket-governance-oci-par-expires-${index}`}
+                          value={item.timeExpires}
+                          onChange={(e) =>
+                            setPreauthenticatedRequests((current) =>
+                              current.map((entry, currentIndex) =>
+                                currentIndex === index
+                                  ? { ...entry, timeExpires: e.target.value }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          disabled={existing}
+                          autoComplete="off"
+                        />
+                      </FormField>
+                      <div className={styles.tagRow}>
+                        {item.id ? <Tag>ID {item.id}</Tag> : null}
+                        {item.timeCreated ? <Tag>Created {item.timeCreated}</Tag> : null}
+                        {item.accessUri ? <Tag color="success">URL captured</Tag> : null}
+                      </div>
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+            {renderWarningStack(extractWarningList(sharing))}
           </div>
         </section>
       </div>

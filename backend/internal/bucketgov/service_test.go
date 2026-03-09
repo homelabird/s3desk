@@ -73,6 +73,16 @@ func (s *stubAdapter) PutLifecycle(_ context.Context, _ models.ProfileSecrets, b
 	return s.err
 }
 
+func (s *stubAdapter) GetSharing(_ context.Context, _ models.ProfileSecrets, bucket string) (models.BucketSharingView, error) {
+	s.bucketSeen = bucket
+	return models.BucketSharingView{}, s.err
+}
+
+func (s *stubAdapter) PutSharing(_ context.Context, _ models.ProfileSecrets, bucket string, _ models.BucketSharingPutRequest) (models.BucketSharingView, error) {
+	s.bucketSeen = bucket
+	return models.BucketSharingView{}, s.err
+}
+
 func TestRegistryRegisterAndResolve(t *testing.T) {
 	t.Parallel()
 

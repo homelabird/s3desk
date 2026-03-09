@@ -26,6 +26,13 @@ function validateDigitsOnly(value: string | undefined): Promise<void> {
 	return /^\d+$/.test(value.trim()) ? Promise.resolve() : Promise.reject(new Error('Use digits only'))
 }
 
+function validateGuidLike(value: string | undefined, label: string): Promise<void> {
+	if (!value || !value.trim()) return Promise.resolve()
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
+		? Promise.resolve()
+		: Promise.reject(new Error(`${label} must be a GUID`))
+}
+
 function validateJsonDocument(value: string | undefined): Promise<void> {
 	if (!value || !value.trim()) return Promise.resolve()
 	try {
@@ -68,6 +75,10 @@ export const FIELD_SECTION_MAP: Partial<Record<keyof ProfileFormValues, SectionK
 	region: 'basic',
 	azureAccountName: 'basic',
 	azureEndpoint: 'basic',
+	azureSubscriptionId: 'basic',
+	azureResourceGroup: 'basic',
+	azureTenantId: 'basic',
+	azureClientId: 'basic',
 	gcpEndpoint: 'basic',
 	gcpProjectNumber: 'basic',
 	ociNamespace: 'basic',
@@ -78,6 +89,7 @@ export const FIELD_SECTION_MAP: Partial<Record<keyof ProfileFormValues, SectionK
 	sessionToken: 'credentials',
 	clearSessionToken: 'credentials',
 	azureAccountKey: 'credentials',
+	azureClientSecret: 'credentials',
 	gcpAnonymous: 'credentials',
 	gcpServiceAccountJson: 'credentials',
 	ociAuthProvider: 'credentials',
@@ -166,7 +178,7 @@ export function buildProfileModalViewState(args: {
 				}
 			case 'azure_blob':
 				return {
-					hint: 'Storage account name is required. Emulator mode is only for local Azurite-style setups.',
+					hint: 'Storage account name is required. Add Azure ARM app credentials when you want management-plane features such as container immutability editing.',
 					docsUrl: 'https://rclone.org/azureblob/',
 				}
 			case 'gcp_gcs':
@@ -273,6 +285,34 @@ export async function validateProfileFormValues(args: {
 			await validateOptionalHttpUrl(values.azureEndpoint)
 		} catch (err) {
 			addError('azureEndpoint', (err as Error).message)
+		}
+		const armProvided =
+			!isBlank(values.azureSubscriptionId) ||
+			!isBlank(values.azureResourceGroup) ||
+			!isBlank(values.azureTenantId) ||
+			!isBlank(values.azureClientId) ||
+			!isBlank(values.azureClientSecret)
+		if (armProvided) {
+			if (isBlank(values.azureSubscriptionId)) addError('azureSubscriptionId', 'Subscription ID is required when Azure ARM credentials are configured')
+			if (isBlank(values.azureResourceGroup)) addError('azureResourceGroup', 'Resource Group is required when Azure ARM credentials are configured')
+			if (isBlank(values.azureTenantId)) addError('azureTenantId', 'Tenant ID is required when Azure ARM credentials are configured')
+			if (isBlank(values.azureClientId)) addError('azureClientId', 'Client ID is required when Azure ARM credentials are configured')
+			if (!editMode && isBlank(values.azureClientSecret)) addError('azureClientSecret', 'Client Secret is required when Azure ARM credentials are configured')
+		}
+		try {
+			await validateGuidLike(values.azureSubscriptionId, 'Subscription ID')
+		} catch (err) {
+			addError('azureSubscriptionId', (err as Error).message)
+		}
+		try {
+			await validateGuidLike(values.azureTenantId, 'Tenant ID')
+		} catch (err) {
+			addError('azureTenantId', (err as Error).message)
+		}
+		try {
+			await validateGuidLike(values.azureClientId, 'Client ID')
+		} catch (err) {
+			addError('azureClientId', (err as Error).message)
 		}
 	}
 

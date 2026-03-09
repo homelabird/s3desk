@@ -525,8 +525,8 @@ func TestOCIAdapterGetGovernanceIncludesTypedControls(t *testing.T) {
 	if view.Protection == nil || view.Protection.Retention == nil || view.Protection.Retention.Days == nil || *view.Protection.Retention.Days != 30 {
 		t.Fatalf("protection=%+v, want 30 day retention", view.Protection)
 	}
-	if len(view.Warnings) == 0 {
-		t.Fatalf("warnings=%v, want multi-rule summary warning", view.Warnings)
+	if view.Protection == nil || len(view.Protection.Warnings) == 0 {
+		t.Fatalf("protection warnings=%+v, want locked-rule warning", view.Protection)
 	}
 }
 
@@ -549,7 +549,7 @@ func TestOCIAdapterPutPublicExposureVersioningAndProtection(t *testing.T) {
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
 			return ocicli.Response{Body: []byte(`{"data":[]}`)}, nil
 		},
-		createRetentionRule: func(_ context.Context, _ models.ProfileSecrets, _ string, days int) (ocicli.Response, error) {
+		createRetentionRule: func(_ context.Context, _ models.ProfileSecrets, _ string, days int, _ string) (ocicli.Response, error) {
 			createdDays = days
 			return ocicli.Response{Body: []byte(`{"data":{"id":"rule-1","duration":{"time-amount":7,"time-unit":"DAYS"}}}`)}, nil
 		},

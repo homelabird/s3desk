@@ -47,25 +47,34 @@ func ListRetentionRules(ctx context.Context, profile models.ProfileSecrets, buck
 	)
 }
 
-func CreateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, days int) (Response, error) {
-	return run(ctx, profile, "os", "retention-rule", "create",
+func CreateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, displayName string) (Response, error) {
+	args := []string{
+		"os", "retention-rule", "create",
 		"-bn", strings.TrimSpace(bucket),
 		"-ns", strings.TrimSpace(profile.OciNamespace),
-		"--display-name", "s3desk-retention",
 		"--time-amount", fmt.Sprintf("%d", days),
 		"--time-unit", "DAYS",
-	)
+	}
+	if value := strings.TrimSpace(displayName); value != "" {
+		args = append(args, "--display-name", value)
+	}
+	return run(ctx, profile, args...)
 }
 
-func UpdateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int) (Response, error) {
-	return run(ctx, profile, "os", "retention-rule", "update",
+func UpdateRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, displayName string) (Response, error) {
+	args := []string{
+		"os", "retention-rule", "update",
 		"-bn", strings.TrimSpace(bucket),
 		"-ns", strings.TrimSpace(profile.OciNamespace),
 		"--retention-rule-id", strings.TrimSpace(ruleID),
 		"--time-amount", fmt.Sprintf("%d", days),
 		"--time-unit", "DAYS",
 		"--force",
-	)
+	}
+	if value := strings.TrimSpace(displayName); value != "" {
+		args = append(args, "--display-name", value)
+	}
+	return run(ctx, profile, args...)
 }
 
 func DeleteRetentionRule(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string) (Response, error) {
@@ -73,6 +82,41 @@ func DeleteRetentionRule(ctx context.Context, profile models.ProfileSecrets, buc
 		"-bn", strings.TrimSpace(bucket),
 		"-ns", strings.TrimSpace(profile.OciNamespace),
 		"--retention-rule-id", strings.TrimSpace(ruleID),
+		"--force",
+	)
+}
+
+func ListPreauthenticatedRequests(ctx context.Context, profile models.ProfileSecrets, bucket string) (Response, error) {
+	return run(ctx, profile, "os", "preauth-request", "list",
+		"-bn", strings.TrimSpace(bucket),
+		"-ns", strings.TrimSpace(profile.OciNamespace),
+		"--all",
+	)
+}
+
+func CreatePreauthenticatedRequest(ctx context.Context, profile models.ProfileSecrets, bucket string, name string, accessType string, timeExpires string, objectName string, bucketListingAction string) (Response, error) {
+	args := []string{
+		"os", "preauth-request", "create",
+		"-bn", strings.TrimSpace(bucket),
+		"-ns", strings.TrimSpace(profile.OciNamespace),
+		"--name", strings.TrimSpace(name),
+		"--access-type", strings.TrimSpace(accessType),
+		"--time-expires", strings.TrimSpace(timeExpires),
+	}
+	if value := strings.TrimSpace(objectName); value != "" {
+		args = append(args, "--object-name", value)
+	}
+	if value := strings.TrimSpace(bucketListingAction); value != "" {
+		args = append(args, "--bucket-listing-action", value)
+	}
+	return run(ctx, profile, args...)
+}
+
+func DeletePreauthenticatedRequest(ctx context.Context, profile models.ProfileSecrets, bucket string, parID string) (Response, error) {
+	return run(ctx, profile, "os", "preauth-request", "delete",
+		"-bn", strings.TrimSpace(bucket),
+		"-ns", strings.TrimSpace(profile.OciNamespace),
+		"--par-id", strings.TrimSpace(parID),
 		"--force",
 	)
 }

@@ -129,6 +129,22 @@ func (s *Service) PutLifecycle(ctx context.Context, profile models.ProfileSecret
 	return adapter.PutLifecycle(ctx, profile, bucket, req)
 }
 
+func (s *Service) GetSharing(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketSharingView, error) {
+	adapter, bucket, err := s.resolve(profile, bucket)
+	if err != nil {
+		return models.BucketSharingView{}, err
+	}
+	return adapter.GetSharing(ctx, profile, bucket)
+}
+
+func (s *Service) PutSharing(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketSharingPutRequest) (models.BucketSharingView, error) {
+	adapter, bucket, err := s.resolve(profile, bucket)
+	if err != nil {
+		return models.BucketSharingView{}, err
+	}
+	return adapter.PutSharing(ctx, profile, bucket, req)
+}
+
 func (s *Service) resolve(profile models.ProfileSecrets, bucket string) (Adapter, string, error) {
 	if s == nil || s.registry == nil {
 		return nil, "", UnsupportedProviderError{Provider: profile.Provider}

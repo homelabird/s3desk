@@ -128,6 +128,14 @@ func (a *awsAdapter) PutLifecycle(ctx context.Context, profile models.ProfileSec
 	return nil
 }
 
+func (a *awsAdapter) GetSharing(context.Context, models.ProfileSecrets, string) (models.BucketSharingView, error) {
+	return models.BucketSharingView{}, UnsupportedOperationError{Provider: models.ProfileProviderAwsS3, Section: "sharing"}
+}
+
+func (a *awsAdapter) PutSharing(context.Context, models.ProfileSecrets, string, models.BucketSharingPutRequest) (models.BucketSharingView, error) {
+	return models.BucketSharingView{}, UnsupportedOperationError{Provider: models.ProfileProviderAwsS3, Section: "sharing"}
+}
+
 func newAWSLifecycleView(bucket string, rules json.RawMessage) models.BucketLifecycleView {
 	if len(bytes.TrimSpace(rules)) == 0 {
 		rules = emptyLifecycleRulesJSON
