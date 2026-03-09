@@ -1,6 +1,9 @@
 import type { ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../../api/types'
 import type { ProfileFormValues } from './profileTypes'
 
+type ProfileCreateRequestWithPublicEndpoint = ProfileCreateRequest & { publicEndpoint?: string }
+type ProfileUpdateRequestWithPublicEndpoint = ProfileUpdateRequest & { publicEndpoint?: string }
+
 export function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig | null {
 	const clientCertPem = values.tlsClientCertPem?.trim() ?? ''
 	const clientKeyPem = values.tlsClientKeyPem?.trim() ?? ''
@@ -76,24 +79,30 @@ export function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest
 		...(values.clearSessionToken ? { sessionToken: '' } : values.sessionToken ? { sessionToken: values.sessionToken } : {}),
 	}
 	if (provider === 'aws_s3') {
-		return {
+		const req: ProfileUpdateRequestWithPublicEndpoint = {
 			provider,
 			...base,
-			...(values.endpoint ? { endpoint: values.endpoint } : {}),
+			endpoint: values.endpoint,
+			publicEndpoint: values.publicEndpoint,
 		}
+		return req
 	}
 	if (provider === 's3_compatible') {
-		return {
+		const req: ProfileUpdateRequestWithPublicEndpoint = {
 			provider,
 			...base,
-			...(values.endpoint ? { endpoint: values.endpoint } : {}),
+			endpoint: values.endpoint,
+			publicEndpoint: values.publicEndpoint,
 		}
+		return req
 	}
-	return {
+	const req: ProfileUpdateRequestWithPublicEndpoint = {
 		provider: 's3_compatible',
 		...base,
-		...(values.endpoint ? { endpoint: values.endpoint } : {}),
+		endpoint: values.endpoint,
+		publicEndpoint: values.publicEndpoint,
 	}
+	return req
 }
 
 export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest {
@@ -152,24 +161,30 @@ export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest
 		tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
 	}
 	if (provider === 'aws_s3') {
-		return {
+		const req: ProfileCreateRequestWithPublicEndpoint = {
 			provider,
 			...base,
 			...(values.endpoint ? { endpoint: values.endpoint } : {}),
+			...(values.publicEndpoint ? { publicEndpoint: values.publicEndpoint } : {}),
 		}
+		return req
 	}
 	if (provider === 's3_compatible') {
-		return {
+		const req: ProfileCreateRequestWithPublicEndpoint = {
 			provider,
 			...base,
 			endpoint: values.endpoint,
+			...(values.publicEndpoint ? { publicEndpoint: values.publicEndpoint } : {}),
 		}
+		return req
 	}
-	return {
+	const req: ProfileCreateRequestWithPublicEndpoint = {
 		provider: 's3_compatible',
 		...base,
 		endpoint: values.endpoint,
+		...(values.publicEndpoint ? { publicEndpoint: values.publicEndpoint } : {}),
 	}
+	return req
 }
 
 export function downloadTextFile(filename: string, content: string): void {

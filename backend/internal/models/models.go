@@ -59,6 +59,7 @@ type Profile struct {
 
 	// S3-style providers
 	Endpoint       string `json:"endpoint,omitempty"`
+	PublicEndpoint string `json:"publicEndpoint,omitempty"`
 	Region         string `json:"region,omitempty"`
 	ForcePathStyle *bool  `json:"forcePathStyle,omitempty"`
 
@@ -105,6 +106,7 @@ type ProfileSecrets struct {
 
 	// S3-style secrets
 	Endpoint        string  `json:"-"`
+	PublicEndpoint  string  `json:"-"`
 	Region          string  `json:"-"`
 	ForcePathStyle  bool    `json:"-"`
 	AccessKeyID     string  `json:"-"`
@@ -146,6 +148,7 @@ type ProfileCreateRequest struct {
 
 	// S3-style
 	Endpoint        *string `json:"endpoint,omitempty"`
+	PublicEndpoint  *string `json:"publicEndpoint,omitempty"`
 	Region          *string `json:"region,omitempty"`
 	AccessKeyID     *string `json:"accessKeyId,omitempty"`
 	SecretAccessKey *string `json:"secretAccessKey,omitempty"`
@@ -179,9 +182,10 @@ type ProfileUpdateRequest struct {
 	// and to prevent accidental provider changes.
 	Provider ProfileProvider `json:"provider,omitempty"`
 
-	Name     *string `json:"name,omitempty"`
-	Endpoint *string `json:"endpoint,omitempty"`
-	Region   *string `json:"region,omitempty"`
+	Name           *string `json:"name,omitempty"`
+	Endpoint       *string `json:"endpoint,omitempty"`
+	PublicEndpoint *string `json:"publicEndpoint,omitempty"`
+	Region         *string `json:"region,omitempty"`
 
 	AccessKeyID     *string `json:"accessKeyId,omitempty"`
 	SecretAccessKey *string `json:"secretAccessKey,omitempty"`

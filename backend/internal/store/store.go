@@ -158,6 +158,7 @@ func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 		force := row.ForcePathStyle != 0
 		out.ForcePathStyle = &force
 		out.Endpoint = strings.TrimSpace(row.Endpoint)
+		out.PublicEndpoint = strings.TrimSpace(row.PublicEndpoint)
 		out.Region = strings.TrimSpace(row.Region)
 	case models.ProfileProviderAzureBlob:
 		var cfg azureProfileConfig
@@ -219,6 +220,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		ConfigJSON:            "{}",
 		SecretsJSON:           "{}",
 		Endpoint:              "",
+		PublicEndpoint:        "",
 		Region:                "",
 		ForcePathStyle:        0,
 		PreserveLeadingSlash:  boolToInt(req.PreserveLeadingSlash),
@@ -235,6 +237,10 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		endpoint := ""
 		if req.Endpoint != nil {
 			endpoint = strings.TrimSpace(*req.Endpoint)
+		}
+		publicEndpoint := ""
+		if req.PublicEndpoint != nil {
+			publicEndpoint = strings.TrimSpace(*req.PublicEndpoint)
 		}
 		region := ""
 		if req.Region != nil {
@@ -287,6 +293,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		}
 
 		row.Endpoint = endpoint
+		row.PublicEndpoint = publicEndpoint
 		row.Region = region
 		row.ForcePathStyle = boolToInt(force)
 		row.AccessKeyID = ak
@@ -294,7 +301,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		row.SessionToken = sessionToken
 
 	case models.ProfileProviderAzureBlob:
-		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
+		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
 			return models.Profile{}, errors.New("invalid fields for azure_blob")
 		}
 		accountName := ""
@@ -331,7 +338,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		row.SecretsJSON = string(sec)
 
 	case models.ProfileProviderGcpGcs:
-		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
+		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
 			return models.Profile{}, errors.New("invalid fields for gcp_gcs")
 		}
 		endpoint := ""
@@ -377,7 +384,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		row.SecretsJSON = string(sec)
 
 	case models.ProfileProviderOciObjectStorage:
-		if req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil {
+		if req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil {
 			return models.Profile{}, errors.New("invalid fields for oci_object_storage")
 		}
 		region := ""
@@ -545,7 +552,7 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 func (s *Store) ListProfiles(ctx context.Context) ([]models.Profile, error) {
 	var rows []profileRow
 	if err := s.db.WithContext(ctx).
-		Select("id", "name", "provider", "config_json", "endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "created_at", "updated_at").
+		Select("id", "name", "provider", "config_json", "endpoint", "public_endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "created_at", "updated_at").
 		Order("created_at DESC").
 		Find(&rows).Error; err != nil {
 		return nil, err
@@ -565,7 +572,7 @@ func (s *Store) ListProfiles(ctx context.Context) ([]models.Profile, error) {
 func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profile, bool, error) {
 	var row profileRow
 	if err := s.db.WithContext(ctx).
-		Select("id", "name", "provider", "config_json", "endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "created_at", "updated_at").
+		Select("id", "name", "provider", "config_json", "endpoint", "public_endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "created_at", "updated_at").
 		Where("id = ?", profileID).
 		Take(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -583,7 +590,7 @@ func (s *Store) GetProfile(ctx context.Context, profileID string) (models.Profil
 func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models.ProfileSecrets, bool, error) {
 	var row profileRow
 	if err := s.db.WithContext(ctx).
-		Select("id", "name", "provider", "config_json", "secrets_json", "endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "access_key_id", "secret_access_key", "session_token").
+		Select("id", "name", "provider", "config_json", "secrets_json", "endpoint", "public_endpoint", "region", "force_path_style", "preserve_leading_slash", "tls_insecure_skip_verify", "access_key_id", "secret_access_key", "session_token").
 		Where("id = ?", profileID).
 		Take(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -604,6 +611,7 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 	switch provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		profile.Endpoint = strings.TrimSpace(row.Endpoint)
+		profile.PublicEndpoint = strings.TrimSpace(row.PublicEndpoint)
 		profile.Region = strings.TrimSpace(row.Region)
 		profile.ForcePathStyle = row.ForcePathStyle != 0
 		profile.AccessKeyID = row.AccessKeyID
@@ -749,6 +757,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 	switch provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		endpoint := currentSecrets.Endpoint
+		publicEndpoint := currentSecrets.PublicEndpoint
 		region := currentSecrets.Region
 		ak := currentSecrets.AccessKeyID
 		sk := currentSecrets.SecretAccessKey
@@ -762,6 +771,10 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 				return models.Profile{}, true, errors.New("endpoint must not be empty")
 			}
 			updates["endpoint"] = endpoint
+		}
+		if req.PublicEndpoint != nil {
+			publicEndpoint = strings.TrimSpace(*req.PublicEndpoint)
+			updates["public_endpoint"] = publicEndpoint
 		}
 		if req.Region != nil {
 			region = strings.TrimSpace(*req.Region)
@@ -819,6 +832,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		}
 
 		updates["endpoint"] = endpoint
+		updates["public_endpoint"] = publicEndpoint
 		updates["region"] = region
 		updates["force_path_style"] = boolToInt(forcePathStyle)
 		updates["access_key_id"] = ak
@@ -826,7 +840,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		updates["session_token"] = sessionToken
 
 	case models.ProfileProviderAzureBlob:
-		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
+		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
 			return models.Profile{}, true, errors.New("invalid fields for azure_blob")
 		}
 		accountName := strings.TrimSpace(currentSecrets.AzureAccountName)
@@ -865,7 +879,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		updates["secrets_json"] = string(sec)
 
 	case models.ProfileProviderGcpGcs:
-		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
+		if req.Region != nil || req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.Namespace != nil || req.Compartment != nil || req.AuthProvider != nil || req.ConfigFile != nil || req.ConfigProfile != nil {
 			return models.Profile{}, true, errors.New("invalid fields for gcp_gcs")
 		}
 		endpoint := strings.TrimSpace(currentSecrets.GcpEndpoint)
@@ -912,7 +926,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		updates["secrets_json"] = string(sec)
 
 	case models.ProfileProviderOciObjectStorage:
-		if req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil {
+		if req.AccessKeyID != nil || req.SecretAccessKey != nil || req.SessionToken != nil || req.ForcePathStyle != nil || req.PublicEndpoint != nil || req.AccountName != nil || req.AccountKey != nil || req.UseEmulator != nil || req.ServiceAccountJSON != nil || req.Anonymous != nil || req.ProjectNumber != nil {
 			return models.Profile{}, true, errors.New("invalid fields for oci_object_storage")
 		}
 		region := strings.TrimSpace(currentSecrets.Region)

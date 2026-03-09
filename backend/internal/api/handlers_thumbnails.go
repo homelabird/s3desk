@@ -82,7 +82,11 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 	kind := thumbnailObjectKind(entry.MimeType, key)
 	if kind == "" {
 		metric.SetStatus("unsupported")
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "thumbnail not supported for this object", map[string]any{"key": key})
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "thumbnail not supported for this object", map[string]any{
+			"key":      key,
+			"mimeType": entry.MimeType,
+			"size":     entry.Size,
+		})
 		return
 	}
 	maxBytes := thumbnailMaxBytesForKind(kind)
@@ -159,7 +163,20 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 	}
 	if err != nil {
 		metric.SetStatus("unsupported")
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode thumbnail source", map[string]any{"error": err.Error()})
+		decoder := "image.Decode"
+		message := "failed to decode thumbnail source"
+		if kind == "video" {
+			decoder = "ffmpeg"
+			message = "failed to extract video thumbnail frame"
+		}
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported", message, map[string]any{
+			"key":      key,
+			"kind":     kind,
+			"decoder":  decoder,
+			"mimeType": entry.MimeType,
+			"size":     entry.Size,
+			"error":    err.Error(),
+		})
 		return
 	}
 	if waitErr != nil {

@@ -61,24 +61,41 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			) : null}
 
 			{viewState.isS3Provider ? (
-				<div className={styles.formGrid}>
-					<FormField label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'} required={!viewState.isAws} error={errors.endpoint}>
-						<Input
-							value={values.endpoint}
-							onChange={(e) => setField('endpoint', e.target.value)}
-							placeholder={
-								viewState.isAws
-									? 'Leave blank for AWS default'
-									: 'https://s3.example.com'
-							}
-							autoComplete="off"
-							aria-label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
-						/>
-					</FormField>
-					<FormField label="Region" required error={errors.region}>
-						<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1" aria-label="Region" />
-					</FormField>
-				</div>
+				<>
+					<div className={styles.formGrid}>
+						<FormField label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'} required={!viewState.isAws} error={errors.endpoint}>
+							<Input
+								value={values.endpoint}
+								onChange={(e) => setField('endpoint', e.target.value)}
+								placeholder={
+									viewState.isAws
+										? 'Leave blank for AWS default'
+										: 'https://s3.example.com'
+								}
+								autoComplete="off"
+								aria-label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
+							/>
+						</FormField>
+						<FormField label="Region" required error={errors.region}>
+							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1" aria-label="Region" />
+						</FormField>
+					</div>
+					<div className={styles.formGrid}>
+						<FormField label="Public Endpoint URL (optional)" error={errors.publicEndpoint}>
+							<Input
+								value={values.publicEndpoint}
+								onChange={(e) => setField('publicEndpoint', e.target.value)}
+								placeholder="http://127.0.0.1:9000"
+								autoComplete="off"
+								aria-label="Public Endpoint URL (optional)"
+							/>
+						</FormField>
+					</div>
+					<Typography.Text type="secondary" className={styles.sectionNote}>
+						Use Public Endpoint when the server reaches storage through an internal hostname like <Typography.Text code>minio:9000</Typography.Text>,
+						but the browser must use a different host like <Typography.Text code>127.0.0.1:9000</Typography.Text> for presigned uploads.
+					</Typography.Text>
+				</>
 			) : null}
 
 			{viewState.isOciObjectStorage ? (

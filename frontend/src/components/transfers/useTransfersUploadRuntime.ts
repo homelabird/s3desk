@@ -12,7 +12,7 @@ import { withJobQueueRetry } from '../../lib/jobQueue'
 import { TransferEstimator } from '../../lib/transfer'
 import type { UploadTask } from './transferTypes'
 import { maybeReportNetworkError, randomId } from './transferDownloadUtils'
-import { uploadPresignedFilesWithProgress } from './presignedUpload'
+import { PresignedUploadNetworkError, uploadPresignedFilesWithProgress } from './presignedUpload'
 import type {
 	QueueUploadFilesArgs,
 	TransfersRuntimeNotifications,
@@ -53,6 +53,10 @@ type UseTransfersUploadRuntimeArgs = {
 }
 
 const uploadConcurrency = 1
+
+function isPresignedNetworkFailure(err: unknown): boolean {
+	return err instanceof PresignedUploadNetworkError
+}
 
 export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 	const retryUploadTask = useCallback(
@@ -145,7 +149,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				return
 			}
 
-			const estimator = new TransferEstimator({ totalBytes: current.totalBytes })
+			let estimator = new TransferEstimator({ totalBytes: current.totalBytes })
 			args.uploadEstimatorByTaskIdRef.current[taskId] = estimator
 			args.updateUploadTask(taskId, (t) => ({
 				...t,
@@ -165,6 +169,12 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			try {
 				const maxFileBytes = items.length > 0 ? Math.max(...items.map((entry) => entry.file?.size ?? 0)) : current.totalBytes
 				const tuning = args.pickUploadTuning(current.totalBytes, Number.isFinite(maxFileBytes) ? maxFileBytes : null)
+				const uploadCapability = args.uploadCapabilityByProfileId?.[current.profileId]
+				const canUsePresigned = uploadCapability ? uploadCapability.presignedUpload : true
+				const canUseDirect = uploadCapability ? uploadCapability.directUpload : !!args.uploadDirectStream
+				const directModePreferred = !!args.uploadDirectStream && canUseDirect
+				const fallbackMode: 'direct' | 'staging' = directModePreferred ? 'direct' : 'staging'
+				const preferredMode: 'presigned' | 'direct' | 'staging' = canUsePresigned ? 'presigned' : fallbackMode
 
 				const allowResume = current.uploadMode !== 'presigned'
 				const resumeFilesByPath = new Map<string, { size: number; chunkSizeBytes: number }>()
@@ -235,43 +245,35 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 					}
 				}
 
-				let sessionMode = current.uploadMode
+				const createUploadSession = async (
+					mode: 'presigned' | 'direct' | 'staging',
+				): Promise<{ uploadId: string; mode: 'staging' | 'direct' | 'presigned'; maxBytes?: number | null }> => {
+					return args.api.createUpload(current.profileId, {
+						bucket: current.bucket,
+						prefix: current.prefix ?? '',
+						mode,
+					})
+				}
+
+				let sessionMode: 'staging' | 'direct' | 'presigned' = current.uploadMode ?? preferredMode
 				if (!uploadId) {
-					const uploadCapability = args.uploadCapabilityByProfileId?.[current.profileId]
-					const canUsePresigned = uploadCapability ? uploadCapability.presignedUpload : true
-					const canUseDirect = uploadCapability ? uploadCapability.directUpload : !!args.uploadDirectStream
-					const directModePreferred = !!args.uploadDirectStream && canUseDirect
-					const fallbackMode: 'direct' | 'staging' = directModePreferred ? 'direct' : 'staging'
-					const preferredMode: 'presigned' | 'direct' | 'staging' = canUsePresigned ? 'presigned' : fallbackMode
 					let session: { uploadId: string; mode: 'staging' | 'direct' | 'presigned'; maxBytes?: number | null }
 					try {
-						session = await args.api.createUpload(current.profileId, {
-							bucket: current.bucket,
-							prefix: current.prefix ?? '',
-							mode: preferredMode,
-						})
+						session = await createUploadSession(preferredMode)
 					} catch (err) {
 						if (
 							canUsePresigned &&
 							err instanceof APIError &&
 							(err.code === 'not_supported' || err.code === 'invalid_request')
 						) {
-							session = await args.api.createUpload(current.profileId, {
-								bucket: current.bucket,
-								prefix: current.prefix ?? '',
-								mode: fallbackMode,
-							})
+							session = await createUploadSession(fallbackMode)
 							args.notifications.info(`Presigned uploads are not supported here. Falling back to ${fallbackMode} uploads.`)
 						} else if (
 							preferredMode === 'direct' &&
 							err instanceof APIError &&
 							(err.code === 'not_supported' || err.code === 'invalid_request')
 						) {
-							session = await args.api.createUpload(current.profileId, {
-								bucket: current.bucket,
-								prefix: current.prefix ?? '',
-								mode: 'staging',
-							})
+							session = await createUploadSession('staging')
 						} else {
 							throw err
 						}
@@ -283,95 +285,131 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 					}
 				}
 
-				const chunkSizeBytes = resumeChunkSizeBytes > 0 && !allowPerFileChunkSize ? resumeChunkSizeBytes : tuning.chunkSizeBytes
-				const chunkThresholdBytes = tuning.chunkThresholdBytes
-				const shouldTrackResume = sessionMode !== 'presigned'
-				const chunkSizeByPath: Record<string, number> = {}
+				const runUploadAttempt = async (attemptMode: 'staging' | 'direct' | 'presigned', attemptUploadId: string) => {
+					const chunkSizeBytes = resumeChunkSizeBytes > 0 && !allowPerFileChunkSize ? resumeChunkSizeBytes : tuning.chunkSizeBytes
+					const chunkThresholdBytes = tuning.chunkThresholdBytes
+					const shouldTrackResume = attemptMode !== 'presigned'
+					const chunkSizeByPath: Record<string, number> = {}
 
-				const resumeFilesNext = shouldTrackResume
-					? items
-							.filter((item) => {
-								const pathKey = resolveUploadItemPathNormalized(item)
-								if (resumeFilesByPath.has(pathKey)) return true
-								return (item.file?.size ?? 0) >= chunkThresholdBytes
-							})
-							.map((item) => {
-								const pathKey = resolveUploadItemPathNormalized(item)
-								const pathRaw = resolveUploadItemPath(item)
-								const resumeInfo = resumeFilesByPath.get(pathKey)
-								const fileChunkSize = resumeInfo?.chunkSizeBytes ?? chunkSizeBytes
-								if (pathRaw) {
-									chunkSizeByPath[pathRaw] = fileChunkSize
-								}
-								return {
-									path: pathKey,
-									size: item.file?.size ?? 0,
-									chunkSizeBytes: fileChunkSize,
-								}
-							})
-					: undefined
+					const resumeFilesNext = shouldTrackResume
+						? items
+								.filter((item) => {
+									const pathKey = resolveUploadItemPathNormalized(item)
+									if (resumeFilesByPath.has(pathKey)) return true
+									return (item.file?.size ?? 0) >= chunkThresholdBytes
+								})
+								.map((item) => {
+									const pathKey = resolveUploadItemPathNormalized(item)
+									const pathRaw = resolveUploadItemPath(item)
+									const resumeInfo = resumeFilesByPath.get(pathKey)
+									const fileChunkSize = resumeInfo?.chunkSizeBytes ?? chunkSizeBytes
+									if (pathRaw) {
+										chunkSizeByPath[pathRaw] = fileChunkSize
+									}
+									return {
+										path: pathKey,
+										size: item.file?.size ?? 0,
+										chunkSizeBytes: fileChunkSize,
+									}
+								})
+						: undefined
 
-				args.updateUploadTask(taskId, (t) => ({
-					...t,
-					uploadId,
-					uploadMode: sessionMode,
-					resumeChunkSizeBytes: shouldTrackResume && items.length === 1 ? chunkSizeBytes : undefined,
-					resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
-					resumeFiles: resumeFilesNext,
-				}))
+					args.updateUploadTask(taskId, (t) => ({
+						...t,
+						uploadId: attemptUploadId,
+						uploadMode: attemptMode,
+						resumeChunkSizeBytes: shouldTrackResume && items.length === 1 ? chunkSizeBytes : undefined,
+						resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
+						resumeFiles: resumeFilesNext,
+					}))
 
-				const handle =
-					sessionMode === 'presigned'
-						? uploadPresignedFilesWithProgress({
-								api: args.api,
-								profileId: current.profileId,
-								uploadId,
-								items,
-								onProgress: (p) => {
-									const estimator = args.uploadEstimatorByTaskIdRef.current[taskId]
-									if (!estimator) return
-									const stats = estimator.update(p.loadedBytes, p.totalBytes)
-									args.updateUploadTask(taskId, (t) => ({
-										...t,
-										loadedBytes: stats.loadedBytes,
-										totalBytes: stats.totalBytes ?? t.totalBytes,
-										speedBps: stats.speedBps,
-										etaSeconds: stats.etaSeconds,
-									}))
-								},
-								singleConcurrency: tuning.batchConcurrency,
-								multipartFileConcurrency: args.uploadChunkFileConcurrency,
-								partConcurrency: tuning.chunkConcurrency,
-								chunkThresholdBytes,
-								chunkSizeBytes,
-							})
-						: args.api.uploadFilesWithProgress(current.profileId, uploadId, items, {
-								onProgress: (p) => {
-									const estimator = args.uploadEstimatorByTaskIdRef.current[taskId]
-									if (!estimator) return
-									const stats = estimator.update(p.loadedBytes, p.totalBytes)
-									args.updateUploadTask(taskId, (t) => ({
-										...t,
-										loadedBytes: stats.loadedBytes,
-										totalBytes: stats.totalBytes ?? t.totalBytes,
-										speedBps: stats.speedBps,
-										etaSeconds: stats.etaSeconds,
-									}))
-								},
-								concurrency: tuning.batchConcurrency,
-								maxBatchBytes: tuning.batchBytes,
-								maxBatchItems: 50,
-								chunkSizeBytes,
-								chunkConcurrency: tuning.chunkConcurrency,
-								chunkThresholdBytes,
-								existingChunksByPath,
-								chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
-								chunkFileConcurrency: args.uploadChunkFileConcurrency,
-							})
+					const handle =
+						attemptMode === 'presigned'
+							? uploadPresignedFilesWithProgress({
+									api: args.api,
+									profileId: current.profileId,
+									uploadId: attemptUploadId,
+									items,
+									onProgress: (p) => {
+										const estimator = args.uploadEstimatorByTaskIdRef.current[taskId]
+										if (!estimator) return
+										const stats = estimator.update(p.loadedBytes, p.totalBytes)
+										args.updateUploadTask(taskId, (t) => ({
+											...t,
+											loadedBytes: stats.loadedBytes,
+											totalBytes: stats.totalBytes ?? t.totalBytes,
+											speedBps: stats.speedBps,
+											etaSeconds: stats.etaSeconds,
+										}))
+									},
+									singleConcurrency: tuning.batchConcurrency,
+									multipartFileConcurrency: args.uploadChunkFileConcurrency,
+									partConcurrency: tuning.chunkConcurrency,
+									chunkThresholdBytes,
+									chunkSizeBytes,
+								})
+							: args.api.uploadFilesWithProgress(current.profileId, attemptUploadId, items, {
+									onProgress: (p) => {
+										const estimator = args.uploadEstimatorByTaskIdRef.current[taskId]
+										if (!estimator) return
+										const stats = estimator.update(p.loadedBytes, p.totalBytes)
+										args.updateUploadTask(taskId, (t) => ({
+											...t,
+											loadedBytes: stats.loadedBytes,
+											totalBytes: stats.totalBytes ?? t.totalBytes,
+											speedBps: stats.speedBps,
+											etaSeconds: stats.etaSeconds,
+										}))
+									},
+									concurrency: tuning.batchConcurrency,
+									maxBatchBytes: tuning.batchBytes,
+									maxBatchItems: 50,
+									chunkSizeBytes,
+									chunkConcurrency: tuning.chunkConcurrency,
+									chunkThresholdBytes,
+									existingChunksByPath,
+									chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
+									chunkFileConcurrency: args.uploadChunkFileConcurrency,
+								})
 
-				args.uploadAbortByTaskIdRef.current[taskId] = handle.abort
-				const result = await handle.promise
-				delete args.uploadAbortByTaskIdRef.current[taskId]
+					args.uploadAbortByTaskIdRef.current[taskId] = handle.abort
+					try {
+						return await handle.promise
+					} finally {
+						delete args.uploadAbortByTaskIdRef.current[taskId]
+					}
+				}
+
+				let result
+				try {
+					result = await runUploadAttempt(sessionMode, uploadId)
+				} catch (err) {
+					if (sessionMode !== 'presigned' || !isPresignedNetworkFailure(err)) {
+						throw err
+					}
+					await args.api.deleteUpload(current.profileId, uploadId).catch(() => {})
+					const fallbackSession = await createUploadSession(fallbackMode)
+					uploadId = fallbackSession.uploadId
+					sessionMode = fallbackSession.mode
+					if (fallbackSession.maxBytes && current.totalBytes > fallbackSession.maxBytes) {
+						throw new Error(`selected files exceed maxBytes (${current.totalBytes} > ${fallbackSession.maxBytes})`)
+					}
+					existingChunksByPath = undefined
+					estimator = new TransferEstimator({ totalBytes: current.totalBytes })
+					args.uploadEstimatorByTaskIdRef.current[taskId] = estimator
+					args.updateUploadTask(taskId, (t) => ({
+						...t,
+						status: 'staging',
+						startedAtMs: estimator.getStartedAtMs(),
+						finishedAtMs: undefined,
+						loadedBytes: 0,
+						speedBps: 0,
+						etaSeconds: 0,
+						error: undefined,
+					}))
+					args.notifications.info(`Presigned upload network path failed. Falling back to ${sessionMode} uploads.`)
+					result = await runUploadAttempt(sessionMode, uploadId)
+				}
 				if (result.skipped > 0) {
 					args.notifications.warning(`Skipped ${result.skipped} file(s) with invalid paths.`)
 				}

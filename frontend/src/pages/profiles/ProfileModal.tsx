@@ -61,6 +61,7 @@ function ProfileModalSession(props: {
 			provider: 's3_compatible',
 			name: '',
 			endpoint: 'http://127.0.0.1:9000',
+			publicEndpoint: '',
 			region: 'us-east-1',
 			accessKeyId: '',
 			secretAccessKey: '',

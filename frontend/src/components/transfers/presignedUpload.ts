@@ -12,6 +12,13 @@ const PRESIGNED_MIN_PART_BYTES = 5 * 1024 * 1024
 const PRESIGNED_MAX_PARTS = 10_000
 const PRESIGNED_UNSAFE_HEADERS = new Set(['accept-encoding', 'connection', 'content-length', 'host', 'user-agent'])
 
+export class PresignedUploadNetworkError extends Error {
+	constructor(message = 'network error') {
+		super(message)
+		this.name = 'PresignedUploadNetworkError'
+	}
+}
+
 type PresignedUploadItem = {
 	item: UploadFileItem
 	path: string
@@ -80,6 +87,11 @@ const uploadPresignedBlob = (args: {
 				resolve({ etag: xhr.getResponseHeader('etag') ?? xhr.getResponseHeader('ETag') ?? undefined })
 				return
 			}
+			if (xhr.status === 0) {
+				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+				reject(new PresignedUploadNetworkError())
+				return
+			}
 			if (xhr.status >= 500 || xhr.status === 0) {
 				publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
 			}
@@ -87,7 +99,7 @@ const uploadPresignedBlob = (args: {
 		}
 		xhr.onerror = () => {
 			publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
-			reject(new Error('network error'))
+			reject(new PresignedUploadNetworkError())
 		}
 		xhr.onabort = () => reject(new RequestAbortedError())
 	})
@@ -332,4 +344,3 @@ export const uploadPresignedFilesWithProgress = (args: {
 		},
 	}
 }
-

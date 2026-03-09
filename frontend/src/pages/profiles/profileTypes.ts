@@ -16,6 +16,7 @@ export type ProfileFormValues = {
 
 	// S3-like (AWS/S3-compatible)
 	endpoint: string
+	publicEndpoint: string
 	region: string
 	accessKeyId: string
 	secretAccessKey: string

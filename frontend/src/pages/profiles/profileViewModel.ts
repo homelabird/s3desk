@@ -22,6 +22,12 @@ export type ProfileFlagViewModel = {
 	title?: string
 }
 
+type ProfileWithPublicEndpoint = Profile & { publicEndpoint?: string }
+
+function getPublicEndpoint(profile: Profile | null | undefined): string {
+	return (profile as ProfileWithPublicEndpoint | null | undefined)?.publicEndpoint ?? ''
+}
+
 const PROFILE_PROVIDER_LABELS: Record<string, string> = {
 	aws_s3: 'AWS S3',
 	s3_compatible: 'S3 Compatible',
@@ -61,8 +67,10 @@ function toProfileConnectionViewModel(row: Profile): ProfileConnectionViewModel 
 	}
 	const endpoint = 'endpoint' in row ? row.endpoint ?? '' : ''
 	const region = 'region' in row ? row.region ?? '' : ''
+	const publicEndpoint = getPublicEndpoint(row)
 	const endpointLabel = endpoint || (provider === 'aws_s3' ? 'AWS default endpoint' : '')
-	return { primary: endpointLabel, secondary: region || undefined }
+	const secondaryParts = [region, publicEndpoint && publicEndpoint !== endpoint ? `public ${publicEndpoint}` : ''].filter(Boolean)
+	return { primary: endpointLabel, secondary: secondaryParts.join(' · ') || undefined }
 }
 
 function toProfileAttention(row: Profile): { needsAttention: boolean; attentionSummary?: string } {
@@ -111,6 +119,7 @@ export function toProfileEditInitialValues(editProfile: Profile | null): Partial
 		provider: editProfile.provider,
 		name: editProfile.name,
 		endpoint: 'endpoint' in editProfile ? editProfile.endpoint ?? '' : '',
+		publicEndpoint: getPublicEndpoint(editProfile),
 		region: 'region' in editProfile ? editProfile.region ?? '' : '',
 		forcePathStyle: 'forcePathStyle' in editProfile ? editProfile.forcePathStyle ?? false : false,
 		preserveLeadingSlash: editProfile.preserveLeadingSlash,

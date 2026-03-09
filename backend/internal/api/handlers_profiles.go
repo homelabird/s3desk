@@ -43,6 +43,7 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 
 	// Trim optional string fields (and normalize empty to nil where it makes sense).
 	trimPtrNilIfEmpty(&req.Endpoint)
+	trimPtrNilIfEmpty(&req.PublicEndpoint)
 	trimPtrNilIfEmpty(&req.Region)
 	trimPtrNilIfEmpty(&req.AccessKeyID)
 	trimPtrNilIfEmpty(&req.SecretAccessKey)
@@ -139,7 +140,7 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 		if req.AccountName == nil || *req.AccountName == "" || req.AccountKey == nil || *req.AccountKey == "" {
 			return errors.New("accountName and accountKey are required")
 		}
-		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
+		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
 			return errors.New("unexpected fields for azure_blob")
 		}
 
@@ -153,7 +154,7 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 				return errors.New("serviceAccountJson is required unless anonymous=true")
 			}
 		}
-		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.AccountName, req.AccountKey, req.UseEmulator, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
+		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.AccountName, req.AccountKey, req.UseEmulator, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
 			return errors.New("unexpected fields for gcp_gcs")
 		}
 
@@ -167,7 +168,7 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 		if req.Compartment == nil || strings.TrimSpace(*req.Compartment) == "" {
 			return errors.New("compartment is required")
 		}
-		if hasUnexpectedFields(req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.AccountName, req.AccountKey, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber) {
+		if hasUnexpectedFields(req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.AccountName, req.AccountKey, req.UseEmulator, req.ServiceAccountJSON, req.Anonymous, req.ProjectNumber) {
 			return errors.New("unexpected fields for oci_object_storage")
 		}
 
@@ -206,6 +207,7 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	trimPtr(&req.Name)
 	trimPtr(&req.Endpoint)
+	trimPtr(&req.PublicEndpoint)
 	trimPtr(&req.Region)
 	trimPtr(&req.AccessKeyID)
 	trimPtr(&req.SecretAccessKey)
@@ -395,6 +397,7 @@ func (s *server) handleExportProfile(w http.ResponseWriter, r *http.Request) {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		force := secrets.ForcePathStyle
 		exportProfile.Endpoint = secrets.Endpoint
+		exportProfile.PublicEndpoint = secrets.PublicEndpoint
 		exportProfile.Region = secrets.Region
 		exportProfile.AccessKeyID = secrets.AccessKeyID
 		exportProfile.SecretAccessKey = secrets.SecretAccessKey
@@ -472,8 +475,9 @@ type profileExportProfile struct {
 	Provider models.ProfileProvider `yaml:"provider,omitempty"`
 
 	// Common-ish (used by multiple providers)
-	Endpoint string `yaml:"endpoint,omitempty"`
-	Region   string `yaml:"region,omitempty"`
+	Endpoint       string `yaml:"endpoint,omitempty"`
+	PublicEndpoint string `yaml:"publicEndpoint,omitempty"`
+	Region         string `yaml:"region,omitempty"`
 
 	// S3-style
 	AccessKeyID     string  `yaml:"accessKeyId,omitempty"`

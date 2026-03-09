@@ -7,6 +7,7 @@ type profileRow struct {
 	ConfigJSON            string  `gorm:"column:config_json"`
 	SecretsJSON           string  `gorm:"column:secrets_json"`
 	Endpoint              string  `gorm:"column:endpoint"`
+	PublicEndpoint        string  `gorm:"column:public_endpoint"`
 	Region                string  `gorm:"column:region"`
 	ForcePathStyle        int     `gorm:"column:force_path_style"`
 	PreserveLeadingSlash  int     `gorm:"column:preserve_leading_slash"`

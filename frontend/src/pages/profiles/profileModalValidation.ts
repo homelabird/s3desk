@@ -64,6 +64,7 @@ export const FIELD_SECTION_MAP: Partial<Record<keyof ProfileFormValues, SectionK
 	provider: 'basic',
 	name: 'basic',
 	endpoint: 'basic',
+	publicEndpoint: 'basic',
 	region: 'basic',
 	azureAccountName: 'basic',
 	azureEndpoint: 'basic',
@@ -216,6 +217,11 @@ export async function validateProfileFormValues(args: {
 			await validateOptionalHttpUrl(values.endpoint)
 		} catch (err) {
 			addError('endpoint', (err as Error).message)
+		}
+		try {
+			await validateOptionalHttpUrl(values.publicEndpoint)
+		} catch (err) {
+			addError('publicEndpoint', (err as Error).message)
 		}
 
 		if (isBlank(values.region)) addError('region', 'Region is required')

@@ -8,6 +8,7 @@ function buildValues(overrides: Partial<ProfileFormValues> = {}): ProfileFormVal
 		provider: 's3_compatible',
 		name: 's3 profile',
 		endpoint: 'https://s3.example.com',
+		publicEndpoint: '',
 		region: 'ap-tokyo-1',
 		accessKeyId: 'access-key',
 		secretAccessKey: 'secret-key',

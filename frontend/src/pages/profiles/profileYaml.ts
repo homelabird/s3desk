@@ -1,11 +1,14 @@
 import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../../api/types'
 import type { ProfileProvider } from './profileTypes'
 
+type ProfileCreateRequestWithPublicEndpoint = ProfileCreateRequest & { publicEndpoint?: string }
+
 type ProfileYamlProfile = {
 	id?: string
 	name?: string
 	provider?: string
 	endpoint?: string
+	publicEndpoint?: string
 	region?: string
 	accessKeyId?: string
 	secretAccessKey?: string
@@ -93,7 +96,7 @@ export async function parseProfileYaml(
 	const preserveLeadingSlash = profile.preserveLeadingSlash ?? false
 	const tlsInsecureSkipVerify = profile.tlsInsecureSkipVerify ?? false
 
-	let request: ProfileCreateRequest
+	let request: ProfileCreateRequestWithPublicEndpoint
 	switch (provider) {
 		case 'azure_blob': {
 			const accountName = toOptionalString(profile.accountName)
@@ -165,6 +168,7 @@ export async function parseProfileYaml(
 				throw new Error(`${provider} requires region, accessKeyId, and secretAccessKey`)
 			}
 			const endpoint = toOptionalString(profile.endpoint)
+			const publicEndpoint = toOptionalString(profile.publicEndpoint)
 			if (provider === 's3_compatible' && !endpoint) {
 				throw new Error(`${provider} requires endpoint`)
 			}
@@ -183,18 +187,21 @@ export async function parseProfileYaml(
 					provider: 'aws_s3',
 					...base,
 					endpoint,
+					...(publicEndpoint ? { publicEndpoint } : {}),
 				}
 			} else if (provider === 's3_compatible') {
 				request = {
 					provider: 's3_compatible',
 					...base,
 					endpoint: endpoint as string,
+					...(publicEndpoint ? { publicEndpoint } : {}),
 				}
 			} else {
 				request = {
 					provider: 's3_compatible',
 					...base,
 					endpoint: endpoint as string,
+					...(publicEndpoint ? { publicEndpoint } : {}),
 				}
 			}
 		}

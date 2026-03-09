@@ -111,6 +111,7 @@ func migrate(db *gorm.DB) error {
 			config_json TEXT NOT NULL DEFAULT '{}',
 			secrets_json TEXT NOT NULL DEFAULT '{}',
 			endpoint TEXT NOT NULL,
+			public_endpoint TEXT NOT NULL DEFAULT '',
 			region TEXT NOT NULL,
 			force_path_style INTEGER NOT NULL,
 			preserve_leading_slash INTEGER NOT NULL DEFAULT 0,
@@ -222,6 +223,9 @@ func migrate(db *gorm.DB) error {
 		return err
 	}
 	if err := ensureProfileColumn(db, "secrets_json", "TEXT", "'{}'"); err != nil {
+		return err
+	}
+	if err := ensureProfileColumn(db, "public_endpoint", "TEXT", "''"); err != nil {
 		return err
 	}
 	if err := ensureJobsColumn(db, "error_code", "TEXT"); err != nil {

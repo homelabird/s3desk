@@ -13,6 +13,18 @@ import (
 )
 
 func FromProfile(secrets models.ProfileSecrets) *s3.Client {
+	return fromProfileWithEndpoint(secrets, strings.TrimSpace(secrets.Endpoint))
+}
+
+func PresignFromProfile(secrets models.ProfileSecrets) *s3.PresignClient {
+	endpoint := strings.TrimSpace(secrets.PublicEndpoint)
+	if endpoint == "" {
+		endpoint = strings.TrimSpace(secrets.Endpoint)
+	}
+	return s3.NewPresignClient(fromProfileWithEndpoint(secrets, endpoint))
+}
+
+func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string) *s3.Client {
 	region := strings.TrimSpace(secrets.Region)
 	if region == "" {
 		region = "us-east-1"
@@ -23,7 +35,6 @@ func FromProfile(secrets models.ProfileSecrets) *s3.Client {
 		Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(secrets.AccessKeyID, secrets.SecretAccessKey, derefString(secrets.SessionToken))),
 	}
 
-	endpoint := strings.TrimSpace(secrets.Endpoint)
 	if secrets.TLSInsecureSkipVerify {
 		cfg.HTTPClient = &http.Client{
 			Transport: &http.Transport{
@@ -38,10 +49,6 @@ func FromProfile(secrets models.ProfileSecrets) *s3.Client {
 			o.BaseEndpoint = aws.String(endpoint)
 		}
 	})
-}
-
-func PresignFromProfile(secrets models.ProfileSecrets) *s3.PresignClient {
-	return s3.NewPresignClient(FromProfile(secrets))
 }
 
 func derefString(value *string) string {
