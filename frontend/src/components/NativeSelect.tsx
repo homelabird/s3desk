@@ -9,6 +9,7 @@ export type NativeSelectOption = {
 }
 
 type NativeSelectProps = {
+	id?: string
 	value: string
 	onChange: (value: string) => void
 	options: NativeSelectOption[]
@@ -24,6 +25,7 @@ export function NativeSelect(props: NativeSelectProps) {
 
 	return (
 		<select
+			id={props.id}
 			value={props.value}
 			onChange={(e) => props.onChange(e.target.value)}
 			disabled={props.disabled}

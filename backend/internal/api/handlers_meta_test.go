@@ -35,7 +35,6 @@ func TestGetMetaIncludesProviderCapabilities(t *testing.T) {
 	expectedProviders := []models.ProfileProvider{
 		models.ProfileProviderAwsS3,
 		models.ProfileProviderS3Compatible,
-		models.ProfileProviderOciS3Compat,
 		models.ProfileProviderAzureBlob,
 		models.ProfileProviderGcpGcs,
 		models.ProfileProviderOciObjectStorage,
@@ -50,6 +49,29 @@ func TestGetMetaIncludesProviderCapabilities(t *testing.T) {
 	if !s3.BucketPolicy || !s3.PresignedUpload || !s3.PresignedMultipartUpload {
 		t.Fatalf("expected s3_compatible policy/presigned capabilities, got %+v", s3)
 	}
+	if !s3.Governance[models.BucketGovernanceCapabilityAccessRawPolicy].Enabled {
+		t.Fatalf("expected s3_compatible raw policy governance capability, got %+v", s3.Governance)
+	}
+	if s3.Governance[models.BucketGovernanceCapabilityPublicAccessBlock].Enabled {
+		t.Fatalf("expected s3_compatible public access block disabled by default, got %+v", s3.Governance)
+	}
+
+	aws := meta.Capabilities.Providers[models.ProfileProviderAwsS3]
+	if !aws.Governance[models.BucketGovernanceCapabilityPublicAccessBlock].Enabled {
+		t.Fatalf("expected aws public access block governance capability, got %+v", aws.Governance)
+	}
+	if !aws.Governance[models.BucketGovernanceCapabilityObjectOwnership].Enabled {
+		t.Fatalf("expected aws object ownership governance capability, got %+v", aws.Governance)
+	}
+	if !aws.Governance[models.BucketGovernanceCapabilityVersioning].Enabled {
+		t.Fatalf("expected aws versioning governance capability, got %+v", aws.Governance)
+	}
+	if !aws.Governance[models.BucketGovernanceCapabilityDefaultEncryption].Enabled {
+		t.Fatalf("expected aws default encryption governance capability, got %+v", aws.Governance)
+	}
+	if !aws.Governance[models.BucketGovernanceCapabilityLifecycle].Enabled {
+		t.Fatalf("expected aws lifecycle governance capability, got %+v", aws.Governance)
+	}
 	if s3.DirectUpload {
 		t.Fatalf("expected directUpload=false in default test server config")
 	}
@@ -60,6 +82,18 @@ func TestGetMetaIncludesProviderCapabilities(t *testing.T) {
 	azure := meta.Capabilities.Providers[models.ProfileProviderAzureBlob]
 	if !azure.AzureContainerAccessPolicy {
 		t.Fatalf("expected azure container access policy capability, got %+v", azure)
+	}
+	if !azure.Governance[models.BucketGovernanceCapabilityAccessPublicToggle].Enabled {
+		t.Fatalf("expected azure public toggle governance capability, got %+v", azure.Governance)
+	}
+	if !azure.Governance[models.BucketGovernanceCapabilityStoredAccessPolicy].Enabled {
+		t.Fatalf("expected azure stored access policy governance capability, got %+v", azure.Governance)
+	}
+	if !azure.Governance[models.BucketGovernanceCapabilityVersioning].Enabled {
+		t.Fatalf("expected azure versioning governance capability, got %+v", azure.Governance)
+	}
+	if !azure.Governance[models.BucketGovernanceCapabilitySoftDelete].Enabled {
+		t.Fatalf("expected azure soft delete governance capability, got %+v", azure.Governance)
 	}
 	if azure.PresignedUpload {
 		t.Fatalf("expected azure presignedUpload=false, got %+v", azure)
@@ -72,10 +106,39 @@ func TestGetMetaIncludesProviderCapabilities(t *testing.T) {
 	if !gcs.GCSIAMPolicy {
 		t.Fatalf("expected gcp IAM policy capability, got %+v", gcs)
 	}
+	if !gcs.Governance[models.BucketGovernanceCapabilityAccessBindings].Enabled {
+		t.Fatalf("expected gcp access bindings governance capability, got %+v", gcs.Governance)
+	}
+	if !gcs.Governance[models.BucketGovernanceCapabilityAccessPublicToggle].Enabled {
+		t.Fatalf("expected gcp public toggle governance capability, got %+v", gcs.Governance)
+	}
+	if !gcs.Governance[models.BucketGovernanceCapabilityPublicAccessPrevention].Enabled {
+		t.Fatalf("expected gcp public access prevention governance capability, got %+v", gcs.Governance)
+	}
+	if !gcs.Governance[models.BucketGovernanceCapabilityUniformAccess].Enabled {
+		t.Fatalf("expected gcp uniform access governance capability, got %+v", gcs.Governance)
+	}
+	if !gcs.Governance[models.BucketGovernanceCapabilityVersioning].Enabled {
+		t.Fatalf("expected gcp versioning governance capability, got %+v", gcs.Governance)
+	}
+	if !gcs.Governance[models.BucketGovernanceCapabilityRetention].Enabled {
+		t.Fatalf("expected gcp retention governance capability, got %+v", gcs.Governance)
+	}
 	if gcs.BucketPolicy {
 		t.Fatalf("expected gcp bucketPolicy=false, got %+v", gcs)
 	}
 	if gcs.Reasons == nil || gcs.Reasons.BucketPolicy == "" {
 		t.Fatalf("expected gcp bucket policy reason, got %+v", gcs.Reasons)
+	}
+
+	oci := meta.Capabilities.Providers[models.ProfileProviderOciObjectStorage]
+	if !oci.Governance[models.BucketGovernanceCapabilityAccessPublicToggle].Enabled {
+		t.Fatalf("expected oci public toggle governance capability, got %+v", oci.Governance)
+	}
+	if !oci.Governance[models.BucketGovernanceCapabilityVersioning].Enabled {
+		t.Fatalf("expected oci versioning governance capability, got %+v", oci.Governance)
+	}
+	if !oci.Governance[models.BucketGovernanceCapabilityRetention].Enabled {
+		t.Fatalf("expected oci retention governance capability, got %+v", oci.Governance)
 	}
 }

@@ -1,0 +1,774 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+import { ensureDomShims } from "../../../test/domShims";
+import { BucketGovernanceModal } from "../BucketGovernanceModal";
+
+beforeAll(() => {
+  ensureDomShims();
+});
+
+function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_object_storage") {
+  switch (provider) {
+    case "gcp_gcs":
+      return {
+        provider,
+        bucket: "demo-bucket",
+        capabilities: {
+          bucket_access_bindings: { enabled: true },
+          bucket_access_public_toggle: { enabled: true },
+          bucket_public_access_prevention: { enabled: true },
+          bucket_uniform_access: { enabled: true },
+          bucket_versioning: { enabled: true },
+          bucket_retention: { enabled: true },
+        },
+        publicExposure: {
+          provider,
+          bucket: "demo-bucket",
+          mode: "private",
+          publicAccessPrevention: false,
+        },
+        access: {
+          provider,
+          bucket: "demo-bucket",
+          etag: "BwWWja0YfJA=",
+          bindings: [
+            {
+              role: "roles/storage.objectViewer",
+              members: ["user:dev@example.com"],
+            },
+          ],
+        },
+        protection: {
+          provider,
+          bucket: "demo-bucket",
+          uniformAccess: true,
+          retention: {
+            enabled: true,
+            days: 30,
+          },
+        },
+        versioning: {
+          provider,
+          bucket: "demo-bucket",
+          status: "enabled",
+        },
+      };
+    case "azure_blob":
+      return {
+        provider,
+        bucket: "demo-bucket",
+        capabilities: {
+          bucket_access_public_toggle: { enabled: true },
+          bucket_stored_access_policy: { enabled: true },
+          bucket_versioning: { enabled: true },
+          bucket_soft_delete: { enabled: true },
+        },
+        publicExposure: {
+          provider,
+          bucket: "demo-bucket",
+          mode: "private",
+          visibility: "private",
+        },
+        access: {
+          provider,
+          bucket: "demo-bucket",
+          storedAccessPolicies: [
+            {
+              id: "readonly",
+              start: "2026-03-01T00:00:00Z",
+              expiry: "2026-03-31T00:00:00Z",
+              permission: "rl",
+            },
+          ],
+        },
+        protection: {
+          provider,
+          bucket: "demo-bucket",
+          softDelete: {
+            enabled: true,
+            days: 7,
+          },
+          immutability: {
+            enabled: true,
+            until: "2026-04-01T00:00:00Z",
+          },
+        },
+        versioning: {
+          provider,
+          bucket: "demo-bucket",
+          status: "disabled",
+        },
+      };
+    case "oci_object_storage":
+      return {
+        provider,
+        bucket: "demo-bucket",
+        capabilities: {
+          bucket_access_public_toggle: { enabled: true },
+          bucket_versioning: { enabled: true },
+          bucket_retention: { enabled: true },
+        },
+        publicExposure: {
+          provider,
+          bucket: "demo-bucket",
+          mode: "private",
+          visibility: "private",
+        },
+        protection: {
+          provider,
+          bucket: "demo-bucket",
+          retention: {
+            enabled: true,
+            days: 45,
+          },
+        },
+        versioning: {
+          provider,
+          bucket: "demo-bucket",
+          status: "disabled",
+        },
+        warnings: ["OCI bucket retention rules are modeled as a single retention control in this client; if multiple rules exist, only the first one is editable here."],
+      };
+    case "aws_s3":
+    default:
+      return {
+        provider,
+        bucket: "demo-bucket",
+        capabilities: {
+          bucket_public_access_block: { enabled: true },
+          bucket_object_ownership: { enabled: true },
+          bucket_versioning: { enabled: true },
+          bucket_default_encryption: { enabled: true },
+          bucket_lifecycle: { enabled: true },
+        },
+        publicExposure: {
+          provider,
+          bucket: "demo-bucket",
+          mode: "private",
+          blockPublicAccess: {
+            blockPublicAcls: true,
+            ignorePublicAcls: true,
+            blockPublicPolicy: true,
+            restrictPublicBuckets: true,
+          },
+        },
+        access: {
+          provider,
+          bucket: "demo-bucket",
+          objectOwnership: {
+            supported: true,
+            mode: "bucket_owner_enforced",
+          },
+        },
+        versioning: {
+          provider,
+          bucket: "demo-bucket",
+          status: "enabled",
+        },
+        encryption: {
+          provider,
+          bucket: "demo-bucket",
+          mode: "sse_s3",
+        },
+        lifecycle: {
+          provider,
+          bucket: "demo-bucket",
+          rules: [],
+        },
+        advanced: {
+          rawPolicySupported: true,
+          rawPolicyEditable: true,
+        },
+      };
+  }
+}
+
+function createApi(
+  provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_object_storage" = "aws_s3",
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    getBucketGovernance: vi
+      .fn()
+      .mockResolvedValue(createGovernance(provider)),
+    putBucketPublicExposure: vi.fn().mockResolvedValue(undefined),
+    putBucketAccess: vi.fn().mockResolvedValue(undefined),
+    putBucketProtection: vi.fn().mockResolvedValue(undefined),
+    putBucketVersioning: vi.fn().mockResolvedValue(undefined),
+    putBucketEncryption: vi.fn().mockResolvedValue(undefined),
+    putBucketLifecycle: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function renderModal(
+  api: ReturnType<typeof createApi>,
+  options: {
+    provider?: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_object_storage";
+    onOpenAdvancedPolicy?: (bucket: string) => void;
+  } = {},
+) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+
+  render(
+    <QueryClientProvider client={client}>
+      <BucketGovernanceModal
+        api={api as never}
+        apiToken="token"
+        profileId="profile-1"
+        provider={options.provider ?? "aws_s3"}
+        bucket="demo-bucket"
+        onClose={vi.fn()}
+        onOpenAdvancedPolicy={options.onOpenAdvancedPolicy}
+      />
+    </QueryClientProvider>,
+  );
+
+  return { client };
+}
+
+describe("BucketGovernanceModal", () => {
+  it("renders AWS controls summary and updates public exposure", async () => {
+    const api = createApi("aws_s3");
+
+    renderModal(api);
+
+    expect(
+      await screen.findByText("Controls: demo-bucket"),
+    ).toBeInTheDocument();
+    const publicExposureSection = await screen.findByTestId(
+      "bucket-governance-public-exposure",
+    );
+    fireEvent.click(
+      within(publicExposureSection).getByRole("switch", {
+        name: "Block public bucket policies",
+      }),
+    );
+    fireEvent.click(
+      within(publicExposureSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          blockPublicAccess: {
+            blockPublicAcls: true,
+            ignorePublicAcls: true,
+            blockPublicPolicy: false,
+            restrictPublicBuckets: true,
+          },
+        },
+      ),
+    );
+  });
+
+  it("updates encryption with sse_kms and kms key", async () => {
+    const api = createApi("aws_s3");
+
+    renderModal(api);
+
+    expect(
+      await screen.findByTestId("bucket-governance-encryption"),
+    ).toBeInTheDocument();
+    const encryptionSection = screen.getByTestId(
+      "bucket-governance-encryption",
+    );
+    fireEvent.change(
+      within(encryptionSection).getByRole("combobox", {
+        name: "Encryption mode",
+      }),
+      {
+        target: { value: "sse_kms" },
+      },
+    );
+    fireEvent.change(
+      await within(encryptionSection).findByRole("textbox", {
+        name: /kms key id/i,
+      }),
+      {
+        target: { value: "alias/demo-bucket" },
+      },
+    );
+    fireEvent.click(
+      within(encryptionSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketEncryption).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          mode: "sse_kms",
+          kmsKeyId: "alias/demo-bucket",
+        },
+      ),
+    );
+  });
+
+  it("updates lifecycle rules from JSON", async () => {
+    const api = createApi("aws_s3");
+
+    renderModal(api);
+
+    const lifecycleSection = await screen.findByTestId(
+      "bucket-governance-lifecycle",
+    );
+    fireEvent.change(
+      within(lifecycleSection).getByRole("textbox", {
+        name: /lifecycle rules json/i,
+      }),
+      {
+        target: {
+          value: JSON.stringify(
+            [
+              {
+                id: "expire-logs",
+                status: "Enabled",
+                filter: { prefix: "logs/" },
+                expiration: { days: 30 },
+              },
+            ],
+            null,
+            2,
+          ),
+        },
+      },
+    );
+    fireEvent.click(
+      within(lifecycleSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketLifecycle).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          rules: [
+            {
+              id: "expire-logs",
+              status: "Enabled",
+              filter: { prefix: "logs/" },
+              expiration: { days: 30 },
+            },
+          ],
+        },
+      ),
+    );
+  });
+
+  it("opens advanced policy from the AWS controls surface", async () => {
+    const api = createApi("aws_s3");
+    const onOpenAdvancedPolicy = vi.fn();
+
+    renderModal(api, { onOpenAdvancedPolicy });
+
+    const advancedPolicySection = await screen.findByTestId(
+      "bucket-governance-advanced-policy",
+    );
+    fireEvent.click(
+      within(advancedPolicySection).getByRole("button", {
+        name: "Open Policy",
+      }),
+    );
+
+    expect(onOpenAdvancedPolicy).toHaveBeenCalledWith("demo-bucket");
+  });
+
+  it("renders GCS controls and updates bindings plus typed protection controls", async () => {
+    const api = createApi("gcp_gcs");
+    const { client } = renderModal(api, { provider: "gcp_gcs" });
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+
+    expect(await screen.findByText("GCS Controls")).toBeInTheDocument();
+
+    const accessSection = await screen.findByTestId("bucket-governance-access");
+    fireEvent.change(
+      within(accessSection).getByRole("textbox", { name: /policy etag/i }),
+      {
+        target: { value: "etag-updated" },
+      },
+    );
+    fireEvent.change(
+      within(accessSection).getByRole("textbox", { name: /bindings json/i }),
+      {
+        target: {
+          value: JSON.stringify(
+            [
+              {
+                role: "roles/storage.objectViewer",
+                members: ["allUsers"],
+              },
+            ],
+            null,
+            2,
+          ),
+        },
+      },
+    );
+    fireEvent.click(
+      within(accessSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketAccess).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          bindings: [
+            {
+              role: "roles/storage.objectViewer",
+              members: ["allUsers"],
+            },
+          ],
+          etag: "etag-updated",
+        },
+      ),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["bucketPolicy", "profile-1", "demo-bucket"],
+      }),
+    );
+
+    const publicExposureSection = await screen.findByTestId(
+      "bucket-governance-public-exposure",
+    );
+    fireEvent.change(
+      within(publicExposureSection).getByRole("combobox", {
+        name: "GCS public exposure mode",
+      }),
+      {
+        target: { value: "public" },
+      },
+    );
+    fireEvent.click(
+      within(publicExposureSection).getByRole("switch", {
+        name: "GCS public access prevention",
+      }),
+    );
+    fireEvent.click(
+      within(publicExposureSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          mode: "public",
+          publicAccessPrevention: true,
+        },
+      ),
+    );
+
+    const protectionSection = await screen.findByTestId(
+      "bucket-governance-protection",
+    );
+    fireEvent.click(
+      within(protectionSection).getByRole("switch", {
+        name: "GCS uniform bucket-level access",
+      }),
+    );
+    fireEvent.click(
+      within(protectionSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketProtection).toHaveBeenNthCalledWith(
+        1,
+        "profile-1",
+        "demo-bucket",
+        {
+          uniformAccess: false,
+        },
+      ),
+    );
+
+    const versioningSection = await screen.findByTestId(
+      "bucket-governance-versioning",
+    );
+    fireEvent.change(
+      within(versioningSection).getByRole("combobox", {
+        name: "GCS versioning status",
+      }),
+      {
+        target: { value: "disabled" },
+      },
+    );
+    fireEvent.click(
+      within(versioningSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketVersioning).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          status: "disabled",
+        },
+      ),
+    );
+
+    const retentionSection = await screen.findByTestId(
+      "bucket-governance-retention",
+    );
+    fireEvent.change(
+      within(retentionSection).getByRole("textbox", {
+        name: /retention days/i,
+      }),
+      {
+        target: { value: "90" },
+      },
+    );
+    fireEvent.click(
+      within(retentionSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketProtection).toHaveBeenNthCalledWith(
+        2,
+        "profile-1",
+        "demo-bucket",
+        {
+          retention: {
+            enabled: true,
+            days: 90,
+          },
+        },
+      ),
+    );
+  });
+
+  it("renders Azure controls and updates visibility plus typed protection controls", async () => {
+    const api = createApi("azure_blob");
+
+    renderModal(api, { provider: "azure_blob" });
+
+    expect(await screen.findByText("Azure Controls")).toBeInTheDocument();
+
+    const publicExposureSection = await screen.findByTestId(
+      "bucket-governance-public-exposure",
+    );
+    fireEvent.change(
+      within(publicExposureSection).getByRole("combobox", {
+        name: "Azure anonymous access visibility",
+      }),
+      {
+        target: { value: "blob" },
+      },
+    );
+    fireEvent.click(
+      within(publicExposureSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          mode: "blob",
+          visibility: "blob",
+        },
+      ),
+    );
+
+    const accessSection = await screen.findByTestId("bucket-governance-access");
+    fireEvent.change(
+      within(accessSection).getByRole("textbox", {
+        name: /stored access policies json/i,
+      }),
+      {
+        target: {
+          value: JSON.stringify(
+            [
+              {
+                id: "upload",
+                start: "2026-03-10T00:00:00Z",
+                expiry: "2026-03-20T00:00:00Z",
+                permission: "rwd",
+              },
+            ],
+            null,
+            2,
+          ),
+        },
+      },
+    );
+    fireEvent.click(
+      within(accessSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketAccess).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          storedAccessPolicies: [
+            {
+              id: "upload",
+              start: "2026-03-10T00:00:00Z",
+              expiry: "2026-03-20T00:00:00Z",
+              permission: "rwd",
+            },
+          ],
+        },
+      ),
+    );
+
+    const versioningSection = await screen.findByTestId(
+      "bucket-governance-versioning",
+    );
+    fireEvent.change(
+      within(versioningSection).getByRole("combobox", {
+        name: "Azure versioning status",
+      }),
+      {
+        target: { value: "enabled" },
+      },
+    );
+    fireEvent.click(
+      within(versioningSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketVersioning).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          status: "enabled",
+        },
+      ),
+    );
+
+    const protectionSection = await screen.findByTestId(
+      "bucket-governance-protection",
+    );
+    expect(
+      within(protectionSection).getByText(/container immutability detected/i),
+    ).toBeInTheDocument();
+    fireEvent.change(
+      within(protectionSection).getByRole("textbox", {
+        name: /retention days/i,
+      }),
+      {
+        target: { value: "14" },
+      },
+    );
+    fireEvent.click(
+      within(protectionSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketProtection).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          softDelete: {
+            enabled: true,
+            days: 14,
+          },
+        },
+      ),
+    );
+  });
+
+  it("renders OCI controls and updates visibility, versioning, and retention", async () => {
+    const api = createApi("oci_object_storage");
+
+    renderModal(api, { provider: "oci_object_storage" });
+
+    expect(await screen.findByText("OCI Controls")).toBeInTheDocument();
+
+    const publicExposureSection = await screen.findByTestId(
+      "bucket-governance-public-exposure",
+    );
+    fireEvent.change(
+      within(publicExposureSection).getByRole("combobox", {
+        name: "OCI visibility",
+      }),
+      {
+        target: { value: "object_read_without_list" },
+      },
+    );
+    fireEvent.click(
+      within(publicExposureSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          visibility: "object_read_without_list",
+        },
+      ),
+    );
+
+    const versioningSection = await screen.findByTestId(
+      "bucket-governance-versioning",
+    );
+    fireEvent.change(
+      within(versioningSection).getByRole("combobox", {
+        name: "OCI versioning status",
+      }),
+      {
+        target: { value: "enabled" },
+      },
+    );
+    fireEvent.click(
+      within(versioningSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketVersioning).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          status: "enabled",
+        },
+      ),
+    );
+
+    const protectionSection = await screen.findByTestId(
+      "bucket-governance-protection",
+    );
+    fireEvent.change(
+      within(protectionSection).getByRole("textbox", {
+        name: /retention days/i,
+      }),
+      {
+        target: { value: "60" },
+      },
+    );
+    fireEvent.click(
+      within(protectionSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.putBucketProtection).toHaveBeenCalledWith(
+        "profile-1",
+        "demo-bucket",
+        {
+          retention: {
+            enabled: true,
+            days: 60,
+          },
+        },
+      ),
+    );
+  });
+});

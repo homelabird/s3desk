@@ -1,133 +1,66 @@
 # S3Desk
 
-S3Desk is a self-hosted dashboard for multi-provider object storage. It provides one UI and API for profiles, buckets, objects, uploads, and long-running transfer jobs powered by `rclone`.
+S3Desk is a self-hosted dashboard for multi-provider object storage.
 
-# UI
-![alt text](img/image.png)
-![alt text](img/objects.png)
+![S3Desk dashboard](img/image.png)
 
-## Core Features
+## Build Requirements
 
-- Multiple storage profiles in one workspace
-- Bucket and object browsing
-- Upload, download, copy, move, sync, and delete jobs
-- Job history, logs, and retry actions
-- Server backup bundle download and staged restore for migration
-- Built-in API docs and OpenAPI spec
+- Go `1.24+`
+- Node.js `22.x`
+- Docker and Docker Compose for container-based builds
 
-## Supported Providers
+## Build From Source
 
-- Tier 1: AWS S3, S3-compatible storage, Azure Blob Storage, Google Cloud Storage
-- Tier 2: OCI S3-compatible, OCI Object Storage
-
-See [docs/PROVIDERS.md](docs/PROVIDERS.md) for the short provider matrix.
-
-## Quick Start
-
-### Docker Compose
-
-The repository includes a compose file for `Postgres + S3Desk`.
-
-1. Review `.env` for the image and tag.
-2. Update `API_TOKEN` in `docker-compose.yml` before exposing the service.
-3. Start the stack:
+Build the frontend bundle, backend binary, and packaged `dist/` artifacts:
 
 ```bash
-docker compose up -d
+./scripts/build.sh
 ```
 
-Open:
+Build outputs:
 
-- UI: `http://192.168.0.200:8080`
-- API docs: `http://192.168.0.200:8080/docs`
-- OpenAPI spec: `http://192.168.0.200:8080/openapi.yml`
+- `dist/s3desk-server`
+- `dist/ui`
+- `dist/openapi.yml`
 
-Remote access requirements:
+## Docker Build
 
-- `ADDR=0.0.0.0:8080`
-- `ALLOW_REMOTE=true`
-- `API_TOKEN` must be set
-- `ALLOWED_HOSTS` is only required for non-private hostnames
-
-### Docker Compose From Local Source
-
-If you want Docker Compose to build the current local frontend and backend sources instead of pulling a published image, use the local-build stack.
-
-1. Update `API_TOKEN` in `docker-compose.local-build.yml` before exposing the service.
-2. Build and start the stack:
+Build and run the current checkout with Postgres:
 
 ```bash
 docker compose -f docker-compose.local-build.yml up --build -d
 ```
 
-This uses `Containerfile.local`, which builds the frontend bundle and backend binary from the current checkout using public base images.
+The service is exposed on `http://127.0.0.1:8080` by default.
 
-### Local Development
+## Local Development
 
-Requirements:
-
-- Go `1.24+`
-- Node.js `22.x`
-
-Start the backend and frontend together:
+Run the backend and frontend together:
 
 ```bash
 ./scripts/dev.sh
 ```
 
-Expected URLs:
+Default local endpoints:
 
-- Frontend dev server: `http://192.168.0.200:5173`
-- Backend UI/API: `http://192.168.0.200:8080`
-
-## Common Commands
-
-```bash
-./scripts/check.sh
-cd backend && go test ./...
-cd frontend && npm run lint
-cd frontend && npm run test:unit
-cd frontend && npm run build
-```
-
-### E2E GIF recording (ffmpeg-static)
-
-`ffmpeg-static` is an optional build-time dependency used only for local artifact conversion, so it is excluded from regular runtime builds.
-
-Use this when you want to generate GIFs from Playwright recordings:
-
-```bash
-cd frontend
-npm run test:e2e:record:gif:deps
-```
-
-`test:e2e:record:gif:deps` does a full dependency install and then runs `scripts/record-e2e-gif.mjs`.  
-If you already installed optional dependencies manually, use:
-
-```bash
-cd frontend
-npm run test:e2e:record:gif
-```
-
-If no ffmpeg binary is available, install system `ffmpeg` or keep `ffmpeg-static` installed.
+- Frontend dev server: `http://127.0.0.1:5173`
+- UI and API: `http://127.0.0.1:8080`
+- API docs: `http://127.0.0.1:8080/docs`
+- OpenAPI spec: `http://127.0.0.1:8080/openapi.yml`
 
 ## Documentation
 
 - [Docs index](docs/README.md)
 - [Usage](docs/USAGE.md)
 - [Providers](docs/PROVIDERS.md)
+- [Bucket governance design](docs/BUCKET_GOVERNANCE_DESIGN.md)
+- [Bucket governance remaining work](docs/BUCKET_GOVERNANCE_REMAINING_WORK.md)
 - [Runbook](docs/RUNBOOK.md)
 - [Testing](docs/TESTING.md)
 
 ## License
 
-This project is licensed under Apache License 2.0.
+This project is licensed under the Mozilla Public License 2.0 (`MPL-2.0`).
 
 See the full [LICENSE](LICENSE).
-
-## License migration notes
-
-- `ffmpeg-static` was moved to `optionalDependencies` in frontend package configuration, so it is excluded by default from runtime build outputs.
-- Runtime artifacts for deployment (container image/binaries) include only `frontend/dist` and the backend binary; the full `node_modules` tree is not included.
-- Third-party license notices are tracked in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); when needed, run `scripts/license-audit.sh`.
-- Apache-2.0 NOTICE text should be added in a dedicated NOTICE file (or as part of LICENSE-related documentation) to match release packaging policy.

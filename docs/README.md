@@ -6,6 +6,8 @@ This folder intentionally keeps only the small set of docs needed to run and wor
 
 - [USAGE.md](USAGE.md): product workflow and day-to-day UI usage
 - [PROVIDERS.md](PROVIDERS.md): provider support summary and capability model
+- [BUCKET_GOVERNANCE_DESIGN.md](BUCKET_GOVERNANCE_DESIGN.md): provider-aware bucket governance redesign draft
+- [BUCKET_GOVERNANCE_REMAINING_WORK.md](BUCKET_GOVERNANCE_REMAINING_WORK.md): remaining checklist after the bucket governance rollout
 - [UI_OPERATION_FEEDBACK.md](UI_OPERATION_FEEDBACK.md): frontend rules for `ok=true` / `ok=false` API outcomes and API error UX
 - [RUNBOOK.md](RUNBOOK.md): operating the service in real environments
 - [TESTING.md](TESTING.md): local and CI-oriented test commands
