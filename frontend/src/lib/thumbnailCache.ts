@@ -29,7 +29,20 @@ const PERSISTENT_THUMBNAIL_CACHE_INDEX_KEY = 's3desk-thumbnail-blobs-v1:index'
 const PERSISTENT_THUMBNAIL_CACHE_PREFIX = 'https://thumbnail-cache.s3desk.local/'
 export const PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const PERSISTENT_THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES = 120
-const VIDEO_THUMBNAIL_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi'])
+const PERSISTENT_THUMBNAIL_EXTENSIONS = new Set([
+	'jpg',
+	'jpeg',
+	'png',
+	'gif',
+	'webp',
+	'bmp',
+	'mp4',
+	'mov',
+	'm4v',
+	'webm',
+	'mkv',
+	'avi',
+])
 const THUMBNAIL_CACHE_KEY_VERSION = 'v2'
 
 type CacheOptions = {
@@ -60,7 +73,7 @@ export function buildThumbnailCacheKey(args: ThumbnailCacheRequest): string {
 
 export function shouldPersistThumbnailLocally(objectKey: string): boolean {
 	const ext = objectKey.split('.').pop()?.trim().toLowerCase() ?? ''
-	return VIDEO_THUMBNAIL_EXTENSIONS.has(ext)
+	return PERSISTENT_THUMBNAIL_EXTENSIONS.has(ext)
 }
 
 export async function getPersistentThumbnailBlob(
