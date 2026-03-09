@@ -676,39 +676,47 @@ Preset behavior:
 - add new governance read models
 - map old UI to the old API
 
-### Phase 1
+### Historical Phase 1
 
-- ship `Bucket controls` UI for AWS S3 first
-- leave raw policy modal available
+- shipped `Bucket controls` UI for AWS S3 first
+- kept the raw policy modal available as an advanced path
 
-### Phase 2
+### Historical Phase 2
 
-- add GCS and Azure typed sections
-- demote old provider-specific policy modal paths
+- shipped GCS and Azure typed sections
+- demoted old provider-specific policy flows behind the governance modal where possible
 
-### Phase 3
+### Historical Phase 3
 
-- add OCI native typed sections
-- convert `/policy` into advanced-only routes in UI
+- shipped OCI native typed sections
+- kept `/policy` as an advanced-only path where raw policy still makes sense
 
-### Phase 4
+### Current Phase 4
 
-- consider deprecating direct `/policy` use from the main buckets screen
+- finish real-provider validation
+- close the remaining provider-specific UX gaps
+- decide whether any direct `/policy` entry points should be further reduced after validation
 
 ## Phase Plan
 
-| Phase | Scope | Backend | Frontend | Tests |
-| --- | --- | --- | --- | --- |
-| 1 | Domain model and capability split | Add governance types and capability states | No major UI change | Unit tests for capability resolution |
-| 2 | AWS S3 typed controls | Add public exposure, ownership, versioning, encryption endpoints | Add `Bucket controls` screen for AWS | Contract tests and live AWS or MinIO-compatible tests where applicable |
-| 3 | GCS typed controls | Add IAM view, uniform access, public access prevention, versioning | Add GCS controls UI | Static and live GCS tests |
-| 4 | Azure typed controls | Add public access, stored access policies, versioning hooks | Add Azure controls UI | Static and live Azure tests |
-| 5 | OCI native controls | Add visibility, PAR, retention, versioning | Add OCI-specific sections | OCI smoke and contract tests |
-| 6 | Create-time secure defaults | Extend bucket create request and backend application flow | Add defaults in create bucket flow | End-to-end create-and-verify tests |
+| Phase | Scope | Backend | Frontend | Tests | Current status |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Domain model and capability split | Add governance types and capability states | No major UI change | Unit tests for capability resolution | Shipped |
+| 2 | AWS S3 typed controls | Add public exposure, ownership, versioning, encryption endpoints | Add `Bucket controls` screen for AWS | Contract tests and live AWS or MinIO-compatible tests where applicable | Shipped |
+| 3 | GCS typed controls | Add IAM view, uniform access, public access prevention, versioning | Add GCS controls UI | Static and live GCS tests | Shipped, with IAM conditions still using JSON fragments |
+| 4 | Azure typed controls | Add public access, stored access policies, versioning hooks | Add Azure controls UI | Static and live Azure tests | Shipped, with legal hold still read-only |
+| 5 | OCI native controls | Add visibility, PAR, retention, versioning | Add OCI-specific sections | OCI smoke and contract tests | Shipped, with PAR replacement still delete-and-recreate |
+| 6 | Create-time secure defaults | Extend bucket create request and backend application flow | Add defaults in create bucket flow | End-to-end create-and-verify tests | Not started |
 
 ## Backend Issue List
 
 Use these as the initial backend execution backlog.
+
+Current status snapshot:
+
+- shipped: `BG-BE-01` through `BG-BE-11`
+- open: `BG-BE-12`
+- additional post-rollout validation work now lives in [BUCKET_GOVERNANCE_LIVE_VALIDATION.md](BUCKET_GOVERNANCE_LIVE_VALIDATION.md)
 
 | ID | Title | Purpose | Main files | Depends on | Done when |
 | --- | --- | --- | --- | --- | --- |
@@ -727,13 +735,19 @@ Use these as the initial backend execution backlog.
 
 ### Backend Priority
 
-- must-have for Phase 1 AWS MVP: `BG-BE-01` through `BG-BE-10`
-- Phase 1.1 or later: `BG-BE-11`
-- post-MVP: `BG-BE-12`
+- historical Phase 1 AWS MVP: `BG-BE-01` through `BG-BE-10`
+- historical Phase 1.1: `BG-BE-11`
+- current open backlog: `BG-BE-12`
 
 ## Frontend Issue List
 
 Use these as the initial frontend execution backlog.
+
+Current status snapshot:
+
+- shipped: `BG-FE-01` through `BG-FE-11`
+- open: `BG-FE-12`
+- provider-specific UX refinement now continues outside the original phase table
 
 | ID | Title | Purpose | Main files | Depends on | Done when |
 | --- | --- | --- | --- | --- | --- |
@@ -752,9 +766,9 @@ Use these as the initial frontend execution backlog.
 
 ### Frontend Priority
 
-- must-have for Phase 1 AWS MVP: `BG-FE-01` through `BG-FE-10`
-- Phase 1.1 or later: `BG-FE-11`
-- post-MVP: `BG-FE-12`
+- historical Phase 1 AWS MVP: `BG-FE-01` through `BG-FE-10`
+- historical Phase 1.1: `BG-FE-11`
+- current open backlog: `BG-FE-12`
 
 ## Phase 1 AWS MVP Spec
 

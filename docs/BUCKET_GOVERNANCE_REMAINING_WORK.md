@@ -17,24 +17,24 @@ What remains is a smaller set of validation, UX hardening, and documentation cle
 ## Critical Remaining Work
 
 - [ ] Run live validation against real cloud environments
-  Current state: backend round-trip tests and frontend unit tests exist, but the rollout still needs real-provider smoke coverage for AWS, GCS, Azure, and OCI accounts.
+  Current state: backend round-trip tests, frontend unit tests, and governance Playwright smoke tests exist, but the rollout still needs real-provider smoke coverage for AWS, GCS, Azure, and OCI accounts. Use [`docs/BUCKET_GOVERNANCE_LIVE_VALIDATION.md`](BUCKET_GOVERNANCE_LIVE_VALIDATION.md).
 
 ## Recommended Follow-Ups
 
-- [ ] Replace the GCS IAM bindings JSON editor with a structured editor
-  Current state: GCS typed controls exist, but IAM bindings are still edited as raw JSON in the governance modal.
-
-- [ ] Replace the Azure stored access policies JSON editor with a structured editor
-  Current state: Azure typed controls exist, but stored access policies are still edited as raw JSON in the governance modal.
-
-- [ ] Refine provider-specific warning and error copy
-  Current state: the controls surface already returns provider-aware warnings, but some messages can be made more explicit for operators.
-
-- [ ] Add Playwright end-to-end scenarios for bucket controls
-  Current state: unit and smoke coverage exists, but the bucket governance flows do not yet have dedicated end-to-end UI coverage.
-
 - [ ] Update the governance design document with implementation status
   Current state: the top-level status and provider support notes have been refreshed, but the phased implementation plan still reads forward-looking in several sections.
+
+- [ ] Add typed handling for Azure legal hold release
+  Current state: legal hold detection is surfaced in Azure immutability warnings, but release or edit remains outside this controls surface.
+
+- [ ] Replace GCS IAM condition JSON fragments with a typed condition editor
+  Current state: GCS IAM bindings now use a structured editor for role and members, but binding conditions are still entered as JSON.
+
+- [ ] Improve OCI PAR edit UX without hiding the delete-and-recreate model
+  Current state: existing OCI PARs are intentionally immutable in place. The UI should make replace flows more explicit once live validation is complete.
+
+- [ ] Revisit S3-compatible governance capability detection after live validation
+  Current state: typed S3-compatible governance remains intentionally conservative because provider behavior still varies across MinIO, Ceph RGW, and similar targets.
 
 ## Recently Closed
 
@@ -50,12 +50,24 @@ What remains is a smaller set of validation, UX hardening, and documentation cle
 - [x] Document provider support boundaries clearly
   Final state: `docs/PROVIDERS.md` now carries the operator-facing governance support matrix and provider-specific limitations.
 
+- [x] Replace the GCS IAM bindings JSON editor with a structured editor
+  Final state: GCS IAM bindings are now edited through a structured list of roles, members, and optional condition JSON fragments.
+
+- [x] Replace the Azure stored access policies JSON editor with a structured editor
+  Final state: Azure stored access policies are now edited through structured policy cards with typed permission selection.
+
+- [x] Refine provider-specific warning and error copy
+  Final state: governance capability reasons and modal copy now use provider-specific operator language instead of generic placeholder messaging.
+
+- [x] Add Playwright end-to-end scenarios for bucket controls
+  Final state: governance smoke coverage now includes Playwright scenarios for GCS and Azure structured editors.
+
 ## Current Priority Order
 
 Recommended order for the next implementation slice:
 
 1. Live provider validation
-2. Structured editor for GCS IAM bindings
-3. Structured editor for Azure stored access policies
-4. Provider-specific warning and error copy cleanup
-5. Playwright coverage for governance flows
+2. Update the governance design document implementation status in more detail
+3. Azure legal hold typed handling
+4. GCS IAM condition structured editor
+5. OCI PAR replacement UX and S3-compatible capability review

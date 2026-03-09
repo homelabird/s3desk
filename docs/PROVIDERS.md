@@ -28,6 +28,28 @@ Section status terms used below:
 | Google Cloud Storage | Partial | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | IAM bindings are still edited as JSON. Uniform bucket-level access and retention are typed. |
 | OCI Object Storage | Unsupported | Typed | Typed | Typed | Unsupported | Unsupported | Typed | Bucket visibility, multi-rule retention, and PAR create/delete are typed. Existing PARs are immutable in-place and must be deleted/recreated to change. |
 
+## Provider-Specific Governance Limitations
+
+### Google Cloud Storage
+
+- IAM bindings are now edited in a structured list, but binding conditions still use raw JSON fragments.
+- Retention lock behavior is surfaced, but destructive changes on locked buckets remain intentionally blocked in the UI.
+- Live validation should confirm that `etag` preservation behaves correctly across concurrent edits.
+
+### Azure Blob Storage
+
+- Stored access policies are typed, but SAS issuance itself remains outside the governance modal.
+- Container immutability editing requires Azure ARM credentials in addition to storage account credentials.
+- Legal hold is detected and shown, but legal hold release is not part of the current typed flow.
+- Versioning and soft delete remain account-scoped Azure features even though they are surfaced from the container-oriented governance UI.
+
+### OCI Object Storage
+
+- Existing pre-authenticated requests are intentionally immutable in place in this client.
+- Changing an existing PAR requires delete and recreate.
+- The full PAR access URI is only returned at create time, so operators need to capture it immediately.
+- Locked retention rules are intentionally protected from delete or shorten operations in the UI.
+
 ## Common Profile Expectations
 
 - `name`: human-readable label used in the UI
