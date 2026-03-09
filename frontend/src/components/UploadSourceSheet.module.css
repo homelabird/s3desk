@@ -1,0 +1,24 @@
+.stack {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.intro {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.actions {
+	display: grid;
+	gap: 12px;
+}
+
+.button {
+	justify-content: flex-start;
+}
+
+.hint {
+	margin-top: 4px;
+}

@@ -17,7 +17,6 @@ import { APIClient } from '../api/client'
 import { useTransfers } from '../components/useTransfers'
 import type { Bucket, Job, JobCreateRequest, Profile } from '../api/types'
 import { withJobQueueRetry } from '../lib/jobQueue'
-import { collectFilesFromDirectoryHandle, normalizeRelativePath } from '../lib/deviceFs'
 import { listAllObjects } from '../lib/objects'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { allJobTypes } from '../lib/jobTypes'
@@ -30,6 +29,7 @@ import {
 	normalizePrefix as normalizeJobPrefix,
 } from './jobs/jobUtils'
 import { jobSummary } from './jobs/jobPresentation'
+import { getBucketsQueryStaleTimeMs } from '../lib/queryPolicy'
 import { useJobsActionMutations } from './jobs/useJobsActionMutations'
 import { useJobsColumnsVisibility } from './jobs/useJobsColumnsVisibility'
 import { useJobsFilters } from './jobs/useJobsFilters'
@@ -55,8 +55,6 @@ export function JobsPage(props: Props) {
 	const screens = Grid.useBreakpoint()
 	const { token } = theme.useToken()
 	const isOffline = useIsOffline()
-	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
-	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>('cleanupEmptyDirsDefault', false)
 
 	const createJobWithRetry = useCallback(
 		(req: JobCreateRequest) => {
@@ -219,6 +217,7 @@ export function JobsPage(props: Props) {
 		queryKey: ['buckets', props.profileId, props.apiToken],
 		queryFn: () => api.listBuckets(props.profileId!),
 		enabled: !!props.profileId,
+		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
 	const logsOpen = logDrawerRequest.jobId !== null
@@ -245,10 +244,8 @@ export function JobsPage(props: Props) {
 		async (args: {
 			bucket: string
 			prefix: string
-			dirHandle: FileSystemDirectoryHandle
+			files: File[]
 			label?: string
-			moveAfterUpload?: boolean
-			cleanupEmptyDirs?: boolean
 		}) => {
 			if (!props.profileId) return
 			if (!uploadSupported) {
@@ -257,32 +254,16 @@ export function JobsPage(props: Props) {
 			}
 			setDeviceUploadLoading(true)
 			try {
-				const files = await collectFilesFromDirectoryHandle(args.dirHandle)
-				if (files.length === 0) {
-					message.info('No files found in the selected folder')
+				if (args.files.length === 0) {
+					message.info('No files selected')
 					return
 				}
-				const relPaths = files
-					.map((file) => {
-						const fileWithPath = file as File & { relativePath?: string; webkitRelativePath?: string }
-						const relPath = (fileWithPath.relativePath ?? fileWithPath.webkitRelativePath ?? file.name).trim()
-						return normalizeRelativePath(relPath || file.name)
-					})
-					.filter(Boolean)
 				transfers.queueUploadFiles({
 					profileId: props.profileId,
 					bucket: args.bucket,
 					prefix: args.prefix,
-					files,
+					files: args.files,
 					label: args.label,
-					moveSource: args.moveAfterUpload
-						? {
-								rootHandle: args.dirHandle,
-								relPaths,
-								label: args.label ?? args.dirHandle.name,
-								cleanupEmptyDirs: args.cleanupEmptyDirs,
-							}
-						: undefined,
 				})
 				setCreateOpen(false)
 			} catch (err) {
@@ -556,12 +537,6 @@ export function JobsPage(props: Props) {
 							bucket={bucket}
 							onBucketChange={setBucket}
 							bucketOptions={bucketOptions as BucketOption[]}
-							defaultMoveAfterUpload={moveAfterUploadDefault}
-							defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
-							onUploadDefaultsChange={(values) => {
-								setMoveAfterUploadDefault(values.moveAfterUpload)
-								setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
-							}}
 							deleteBucket={deleteJobPrefill?.bucket ?? bucket}
 							deletePrefill={deleteJobPrefill ? { prefix: deleteJobPrefill.prefix, deleteAll: deleteJobPrefill.deleteAll } : null}
 							detailsOpen={detailsOpen}

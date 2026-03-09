@@ -1,66 +1,46 @@
 import { Button, Typography } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
-import { useEffect, useRef } from 'react'
+import type { UploadSelectionKind } from '../../lib/uploadSelection'
 
 import { PageSection } from '../../components/PageSection'
 import { formatBytes } from '../../lib/transfer'
 import styles from '../UploadsPage.module.css'
-import { buildUploadPreviewFiles, clearSelectedFileInput, getSelectedFiles, setDirectorySelectionMode } from './uploadsFileSelection'
+import { buildUploadPreviewFiles } from './uploadsFileSelection'
 
 type Props = {
-	onFilesChange: (files: File[]) => void
+	onOpenPicker: () => void
 	isOffline: boolean
 	uploadsSupported: boolean
 	queueDisabledReason: string | null
 	selectedFiles: File[]
 	destinationLabel: string
-	folderMode: boolean
+	selectionKind: UploadSelectionKind
 }
 
 export function UploadsSelectionSection(props: Props) {
-	const { destinationLabel, folderMode, isOffline, onFilesChange, queueDisabledReason, selectedFiles, uploadsSupported } = props
-	const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-	useEffect(() => {
-		setDirectorySelectionMode(fileInputRef.current, folderMode)
-		clearSelectedFileInput(fileInputRef.current)
-		onFilesChange([])
-	}, [folderMode, onFilesChange])
+	const { destinationLabel, isOffline, onOpenPicker, queueDisabledReason, selectedFiles, selectionKind, uploadsSupported } = props
 
 	const selectedFileCount = selectedFiles.length
 	const selectedTotalBytes = selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0)
 	const previewFiles = buildUploadPreviewFiles(selectedFiles)
 	const remainingPreviewCount = Math.max(0, selectedFileCount - previewFiles.length)
+	const selectionTypeLabel =
+		selectionKind === 'folder' ? 'Folder' : selectionKind === 'collection' ? 'Mixed roots' : selectionKind === 'files' ? 'Files' : 'Not selected'
 
 	return (
 		<PageSection
 				title="Selection"
-				description={
-					folderMode
-						? 'Choose a folder to preserve relative paths. The queue will upload every file under that root.'
-						: 'Choose one or more files from this device. You can review the first few items before queuing.'
-				}
+				description="Add files or folders from this device. When the browser provides relative paths, folder structure is preserved automatically."
 		>
 			<div className={styles.selectionStack}>
 				<div className={styles.selectionActions}>
-					<input
-						ref={fileInputRef}
-						type="file"
-						multiple
-						hidden
-						onClick={(event) => {
-							const input = event.currentTarget
-							input.value = ''
-						}}
-						onChange={(event) => onFilesChange(getSelectedFiles(event.currentTarget))}
-					/>
 					<Button
 						icon={<UploadOutlined />}
 						disabled={isOffline || !uploadsSupported}
 						size="large"
-						onClick={() => fileInputRef.current?.click()}
+						onClick={onOpenPicker}
 					>
-						{folderMode ? 'Select folder' : 'Select files'}
+						Add from device…
 					</Button>
 					<Typography.Text type="secondary" className={styles.selectionHint}>
 						{queueDisabledReason ?? 'Ready to queue this selection.'}
@@ -80,6 +60,10 @@ export function UploadsSelectionSection(props: Props) {
 						<span className={styles.summaryLabel}>Destination</span>
 						<strong className={styles.summaryValue}>{destinationLabel}</strong>
 					</div>
+					<div className={styles.summaryCard}>
+						<span className={styles.summaryLabel}>Detected type</span>
+						<strong className={styles.summaryValue}>{selectionTypeLabel}</strong>
+					</div>
 				</div>
 
 				{previewFiles.length > 0 ? (
@@ -98,9 +82,9 @@ export function UploadsSelectionSection(props: Props) {
 					</div>
 				) : (
 					<div className={styles.emptyPreview}>
-						<Typography.Text strong>{folderMode ? 'No folder selected.' : 'No files selected.'}</Typography.Text>
+						<Typography.Text strong>No files or folders selected.</Typography.Text>
 						<Typography.Text type="secondary">
-							Select {folderMode ? 'a folder' : 'files'} to preview the queue contents before creating a job.
+							Choose files or a folder from this device to preview the queue contents before creating a job.
 						</Typography.Text>
 					</div>
 				)}

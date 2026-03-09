@@ -265,4 +265,31 @@ test.describe('Objects context menus', () => {
 			viewportSelector: '[data-scroll-container="app-content"]',
 		})
 	})
+
+	test('mobile object menu stays clickable above the selection bar', async ({ page }) => {
+		await stubObjectsApi(page, buildObjectItems(3))
+		await seedStorage(page)
+		await page.setViewportSize({ width: 390, height: 844 })
+		await page.goto('/objects')
+
+		const row = page.locator('[data-objects-row="true"]').first()
+		await expect(row).toBeVisible()
+		await row.getByRole('checkbox', { name: /Select / }).click()
+		await expect(page.getByText('1 selected')).toBeVisible()
+
+		await row.getByRole('button', { name: 'Object actions' }).click()
+
+		const menu = page
+			.getByRole('menu')
+			.filter({ has: page.getByRole('menuitem', { name: 'Download (client)' }) })
+			.last()
+		await expect(menu).toBeVisible()
+		await expectMenuInViewport(page, menu, {
+			padding: 8,
+			viewportSelector: '[data-scroll-container="app-content"]',
+		})
+
+		await menu.getByRole('menuitem', { name: 'Details' }).click()
+		await expect(menu).toBeHidden()
+	})
 })

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"s3desk/internal/bucketgov"
 	"s3desk/internal/config"
 	"s3desk/internal/jobs"
 	"s3desk/internal/metrics"
@@ -17,6 +18,7 @@ type server struct {
 	serverAddr  string
 	proxySecret []byte
 	uploadLimit *requestLimiter
+	bucketGov   *bucketgov.Service
 }
 
 type contextKey string

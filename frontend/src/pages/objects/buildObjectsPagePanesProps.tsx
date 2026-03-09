@@ -23,12 +23,15 @@ export type BuildObjectsPagePanesPropsArgs = {
 	treeDrawerOpen: boolean
 	dockTree: boolean
 	favoriteItems: TreeProps['favorites']
+	favoriteCount: number
 	favoritesSearch: string
 	setFavoritesSearch: (value: string) => void
 	favoritesOnly: boolean
 	setFavoritesOnly: (value: boolean) => void
 	favoritesOpenDetails: boolean
 	setFavoritesOpenDetails: (value: boolean) => void
+	favoritesPaneExpanded: boolean
+	setFavoritesPaneExpanded: (value: boolean) => void
 	handleFavoriteSelect: (key: string, closeDrawer: boolean) => void
 	favoritesLoading: boolean
 	favoritesErrorMessage: string | null
@@ -91,9 +94,11 @@ export type BuildObjectsPagePanesPropsArgs = {
 	selectedCount: number
 	singleSelectedKey: string | null
 	singleSelectedSize?: number
+	openMoveSelection: () => void
 	clearSelectionAction: SelectionBarProps['clearAction']
 	deleteSelectionAction: SelectionBarProps['deleteAction']
 	downloadSelectionAction: SelectionBarProps['downloadAction']
+	moveSelectionAction: SelectionBarProps['moveAction']
 	selectionMenuActions: SelectionBarProps['selectionMenuActions']
 	getObjectActions: SelectionBarProps['getObjectActions']
 	isDownloadLoading: boolean
@@ -136,6 +141,7 @@ export type BuildObjectsPagePanesPropsArgs = {
 	refetchDetailsMeta: () => void
 	onCopy: (value: string) => void
 	onDownload: (key: string, size?: number) => void
+	presignedDownloadSupported: boolean
 	presignMutate: (key: string) => void
 	presignPendingForKey: boolean
 	openCopyMove: (mode: 'copy' | 'move', key: string) => void
@@ -151,6 +157,7 @@ export type BuildObjectsPagePanesPropsArgs = {
 	dockDetails: boolean
 	detailsOpen: boolean
 	detailsDrawerOpen: boolean
+	detailsDrawerSuspended: boolean
 	openDetails: () => void
 	setDetailsOpen: (value: boolean) => void
 	setDetailsDrawerOpen: (value: boolean) => void

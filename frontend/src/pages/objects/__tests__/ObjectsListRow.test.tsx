@@ -68,9 +68,13 @@ describe('ObjectsListRow', () => {
 
 	it('opens prefix rows on keyboard activation', () => {
 		const onOpen = vi.fn()
+		const onDropTargetDragOver = vi.fn()
+		const onDropTargetDragLeave = vi.fn()
+		const onDropTargetDrop = vi.fn()
 
 		render(
 			<ObjectsPrefixRow
+				prefixKey="archive/"
 				offset={0}
 				rowMinHeight={40}
 				listGridClassName={styles.listGridCompact}
@@ -85,10 +89,23 @@ describe('ObjectsListRow', () => {
 				onOpen={onOpen}
 				onDragStart={vi.fn()}
 				onDragEnd={vi.fn()}
+				isDropTargetActive
+				onDropTargetDragOver={onDropTargetDragOver}
+				onDropTargetDragLeave={onDropTargetDragLeave}
+				onDropTargetDrop={onDropTargetDrop}
 			/>,
 		)
 
-		fireEvent.keyDown(screen.getByRole('button', { name: /archive\//i }), { key: 'Enter' })
+		const row = screen.getByRole('button', { name: /archive\//i })
+		expect(row.className).toContain(styles.listRowDropActive)
+		fireEvent.dragOver(row)
+		fireEvent.dragLeave(row)
+		fireEvent.drop(row)
+		fireEvent.keyDown(row, { key: 'Enter' })
+
+		expect(onDropTargetDragOver).toHaveBeenCalledTimes(1)
+		expect(onDropTargetDragLeave).toHaveBeenCalledTimes(1)
+		expect(onDropTargetDrop).toHaveBeenCalledTimes(1)
 		expect(onOpen).toHaveBeenCalledTimes(1)
 	})
 })

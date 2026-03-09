@@ -27,12 +27,12 @@ export type ProviderCapabilityMatrix = {
 	reasons: ProviderCapabilityReasonMap
 }
 
-const reasonS3PolicyOnly = 'Supported only by S3-compatible providers (aws_s3, s3_compatible, oci_s3_compat).'
+const reasonS3PolicyOnly = 'Supported only by S3-compatible providers (aws_s3, s3_compatible).'
 const reasonGCSIAMOnly = 'Supported only by gcp_gcs.'
 const reasonAzureContainerPolicyOnly = 'Supported only by azure_blob.'
-const reasonPresignedS3Only = 'Presigned upload is supported only by S3-compatible providers (aws_s3, s3_compatible, oci_s3_compat).'
+const reasonPresignedS3Only = 'Presigned upload is supported only by S3-compatible providers (aws_s3, s3_compatible).'
 const reasonPresignedMultipartS3Only =
-	'Presigned multipart upload is supported only by S3-compatible providers (aws_s3, s3_compatible, oci_s3_compat).'
+	'Presigned multipart upload is supported only by S3-compatible providers (aws_s3, s3_compatible).'
 const reasonDirectUploadUnavailable = 'Direct upload is not available for this backend configuration.'
 const reasonGcpProjectNumberRequired = 'GCS bucket operations require Project Number on this profile.'
 const reasonGcpAnonymousPolicyRequiresEndpoint =
@@ -56,22 +56,6 @@ export const providerCapabilities: Record<string, ProviderCapabilityMatrix> = {
 		},
 	},
 	s3_compatible: {
-		bucketCrud: true,
-		objectCrud: true,
-		jobTransfer: true,
-		bucketPolicy: true,
-		gcsIamPolicy: false,
-		azureContainerAccessPolicy: false,
-		presignedUpload: true,
-		presignedMultipartUpload: true,
-		directUpload: false,
-		reasons: {
-			gcsIamPolicy: reasonGCSIAMOnly,
-			azureContainerAccessPolicy: reasonAzureContainerPolicyOnly,
-			directUpload: reasonDirectUploadUnavailable,
-		},
-	},
-	oci_s3_compat: {
 		bucketCrud: true,
 		objectCrud: true,
 		jobTransfer: true,

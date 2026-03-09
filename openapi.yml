@@ -542,6 +542,244 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
 
+  /buckets/{bucket}/governance:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket governance summary
+      description: |
+        Returns the provider-aware bucket governance summary used by the typed controls UI.
+
+        The initial rollout is AWS-first and returns a normalized capability map plus advanced policy affordances.
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketGovernanceView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/governance/access:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket access controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketAccessView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Update normalized bucket access controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketAccessPutRequest"
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/governance/public-exposure:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket public exposure controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketPublicExposureView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Update normalized bucket public exposure controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketPublicExposurePutRequest"
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/governance/protection:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket protection controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketProtectionView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Update normalized bucket protection controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketProtectionPutRequest"
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/governance/versioning:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket versioning controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketVersioningView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Update normalized bucket versioning controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketVersioningPutRequest"
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/governance/encryption:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket encryption controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketEncryptionView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Update normalized bucket encryption controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketEncryptionPutRequest"
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /buckets/{bucket}/governance/lifecycle:
+    get:
+      tags: [Buckets]
+      summary: Get normalized bucket lifecycle controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BucketLifecycleView"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+    put:
+      tags: [Buckets]
+      summary: Update normalized bucket lifecycle controls
+      parameters:
+        - $ref: "#/components/parameters/XProfileId"
+        - $ref: "#/components/parameters/XApiToken"
+        - $ref: "#/components/parameters/BucketName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketLifecyclePutRequest"
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
 
   /buckets/{bucket}/objects:
     get:
@@ -901,6 +1139,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: hydrate
+          in: query
+          required: false
+          schema: { type: boolean }
       responses:
         "200":
           description: OK
@@ -1491,7 +1733,7 @@ components:
     ProfileProvider:
       type: string
       description: Storage provider backend for a profile.
-      enum: [aws_s3, s3_compatible, oci_s3_compat, azure_blob, gcp_gcs, oci_object_storage]
+      enum: [aws_s3, s3_compatible, azure_blob, gcp_gcs, oci_object_storage]
 
     ProfileBase:
       type: object
@@ -1552,17 +1794,6 @@ components:
             region: { type: string }
             forcePathStyle: { type: boolean }
 
-    ProfileOciS3Compat:
-      allOf:
-        - $ref: "#/components/schemas/ProfileBase"
-        - type: object
-          required: [provider, endpoint, region, forcePathStyle]
-          properties:
-            provider: { type: string, enum: [oci_s3_compat] }
-            endpoint: { type: string }
-            region: { type: string }
-            forcePathStyle: { type: boolean }
-
     ProfileAzureBlob:
       allOf:
         - $ref: "#/components/schemas/ProfileBase"
@@ -1614,7 +1845,6 @@ components:
       oneOf:
         - $ref: "#/components/schemas/ProfileAwsS3"
         - $ref: "#/components/schemas/ProfileS3Compatible"
-        - $ref: "#/components/schemas/ProfileOciS3Compat"
         - $ref: "#/components/schemas/ProfileAzureBlob"
         - $ref: "#/components/schemas/ProfileGcpGcs"
         - $ref: "#/components/schemas/ProfileOciObjectStorage"
@@ -1623,7 +1853,6 @@ components:
         mapping:
           aws_s3: "#/components/schemas/ProfileAwsS3"
           s3_compatible: "#/components/schemas/ProfileS3Compatible"
-          oci_s3_compat: "#/components/schemas/ProfileOciS3Compat"
           azure_blob: "#/components/schemas/ProfileAzureBlob"
           gcp_gcs: "#/components/schemas/ProfileGcpGcs"
           oci_object_storage: "#/components/schemas/ProfileOciObjectStorage"
@@ -1652,22 +1881,6 @@ components:
       required: [provider, name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify]
       properties:
         provider: { type: string, enum: [s3_compatible] }
-        name: { type: string }
-        endpoint: { type: string }
-        region: { type: string }
-        accessKeyId: { type: string }
-        secretAccessKey: { type: string }
-        sessionToken: { type: string, nullable: true }
-        forcePathStyle: { type: boolean, default: false }
-        preserveLeadingSlash: { type: boolean, default: false }
-        tlsInsecureSkipVerify: { type: boolean, default: false }
-
-    ProfileCreateRequestOciS3Compat:
-      type: object
-      additionalProperties: false
-      required: [provider, name, endpoint, region, accessKeyId, secretAccessKey, forcePathStyle, preserveLeadingSlash, tlsInsecureSkipVerify]
-      properties:
-        provider: { type: string, enum: [oci_s3_compat] }
         name: { type: string }
         endpoint: { type: string }
         region: { type: string }
@@ -1739,7 +1952,6 @@ components:
       oneOf:
         - $ref: "#/components/schemas/ProfileCreateRequestAwsS3"
         - $ref: "#/components/schemas/ProfileCreateRequestS3Compatible"
-        - $ref: "#/components/schemas/ProfileCreateRequestOciS3Compat"
         - $ref: "#/components/schemas/ProfileCreateRequestAzureBlob"
         - $ref: "#/components/schemas/ProfileCreateRequestGcpGcs"
         - $ref: "#/components/schemas/ProfileCreateRequestOciObjectStorage"
@@ -1748,7 +1960,6 @@ components:
         mapping:
           aws_s3: "#/components/schemas/ProfileCreateRequestAwsS3"
           s3_compatible: "#/components/schemas/ProfileCreateRequestS3Compatible"
-          oci_s3_compat: "#/components/schemas/ProfileCreateRequestOciS3Compat"
           azure_blob: "#/components/schemas/ProfileCreateRequestAzureBlob"
           gcp_gcs: "#/components/schemas/ProfileCreateRequestGcpGcs"
           oci_object_storage: "#/components/schemas/ProfileCreateRequestOciObjectStorage"
@@ -1778,25 +1989,6 @@ components:
       required: [provider]
       properties:
         provider: { type: string, enum: [s3_compatible] }
-        name: { type: string }
-        endpoint: { type: string }
-        region: { type: string }
-        accessKeyId: { type: string }
-        secretAccessKey: { type: string }
-        sessionToken:
-          type: string
-          nullable: true
-          description: Set to empty string to clear; omit to keep unchanged.
-        forcePathStyle: { type: boolean }
-        preserveLeadingSlash: { type: boolean }
-        tlsInsecureSkipVerify: { type: boolean }
-
-    ProfileUpdateRequestOciS3Compat:
-      type: object
-      additionalProperties: false
-      required: [provider]
-      properties:
-        provider: { type: string, enum: [oci_s3_compat] }
         name: { type: string }
         endpoint: { type: string }
         region: { type: string }
@@ -1869,7 +2061,6 @@ components:
       oneOf:
         - $ref: "#/components/schemas/ProfileUpdateRequestAwsS3"
         - $ref: "#/components/schemas/ProfileUpdateRequestS3Compatible"
-        - $ref: "#/components/schemas/ProfileUpdateRequestOciS3Compat"
         - $ref: "#/components/schemas/ProfileUpdateRequestAzureBlob"
         - $ref: "#/components/schemas/ProfileUpdateRequestGcpGcs"
         - $ref: "#/components/schemas/ProfileUpdateRequestOciObjectStorage"
@@ -1878,7 +2069,6 @@ components:
         mapping:
           aws_s3: "#/components/schemas/ProfileUpdateRequestAwsS3"
           s3_compatible: "#/components/schemas/ProfileUpdateRequestS3Compatible"
-          oci_s3_compat: "#/components/schemas/ProfileUpdateRequestOciS3Compat"
           azure_blob: "#/components/schemas/ProfileUpdateRequestAzureBlob"
           gcp_gcs: "#/components/schemas/ProfileUpdateRequestGcpGcs"
           oci_object_storage: "#/components/schemas/ProfileUpdateRequestOciObjectStorage"
@@ -2003,6 +2193,21 @@ components:
       properties:
         name: { type: string }
         region: { type: string }
+        defaults:
+          $ref: "#/components/schemas/BucketCreateDefaults"
+
+    BucketCreateDefaults:
+      type: object
+      additionalProperties: false
+      properties:
+        access:
+          $ref: "#/components/schemas/BucketAccessPutRequest"
+        publicExposure:
+          $ref: "#/components/schemas/BucketPublicExposurePutRequest"
+        versioning:
+          $ref: "#/components/schemas/BucketVersioningPutRequest"
+        encryption:
+          $ref: "#/components/schemas/BucketEncryptionPutRequest"
 
     BucketPolicyResponse:
       type: object
@@ -2045,6 +2250,319 @@ components:
           type: array
           items: { type: string }
 
+    BucketGovernanceCapabilityState:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        reason: { type: string }
+
+    BucketGovernanceCapabilities:
+      type: object
+      additionalProperties:
+        $ref: "#/components/schemas/BucketGovernanceCapabilityState"
+
+    BucketAdvancedView:
+      type: object
+      properties:
+        rawPolicySupported: { type: boolean }
+        rawPolicyEditable: { type: boolean }
+        rawPolicy:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+    BucketBlockPublicAccess:
+      type: object
+      required: [blockPublicAcls, ignorePublicAcls, blockPublicPolicy, restrictPublicBuckets]
+      properties:
+        blockPublicAcls: { type: boolean }
+        ignorePublicAcls: { type: boolean }
+        blockPublicPolicy: { type: boolean }
+        restrictPublicBuckets: { type: boolean }
+
+    BucketObjectOwnershipMode:
+      type: string
+      enum: [bucket_owner_enforced, bucket_owner_preferred, object_writer]
+
+    BucketObjectOwnershipView:
+      type: object
+      required: [supported]
+      properties:
+        supported: { type: boolean }
+        mode:
+          $ref: "#/components/schemas/BucketObjectOwnershipMode"
+
+    BucketAccessBinding:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string }
+        members:
+          type: array
+          items: { type: string }
+        condition:
+          type: object
+          additionalProperties: true
+
+    BucketStoredAccessPolicy:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        start: { type: string }
+        expiry: { type: string }
+        permission: { type: string }
+
+    BucketAccessView:
+      type: object
+      required: [provider, bucket]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        objectOwnership:
+          $ref: "#/components/schemas/BucketObjectOwnershipView"
+        advanced:
+          $ref: "#/components/schemas/BucketAdvancedView"
+        bindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketAccessBinding"
+        etag: { type: string }
+        storedAccessPolicies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketStoredAccessPolicy"
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketAccessPutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        objectOwnership:
+          $ref: "#/components/schemas/BucketObjectOwnershipMode"
+        bindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketAccessBinding"
+        etag: { type: string }
+        storedAccessPolicies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketStoredAccessPolicy"
+
+    BucketPublicExposureMode:
+      type: string
+      enum: [private, public, blob, container]
+
+    BucketPublicExposureView:
+      type: object
+      required: [provider, bucket]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        mode:
+          $ref: "#/components/schemas/BucketPublicExposureMode"
+        blockPublicAccess:
+          $ref: "#/components/schemas/BucketBlockPublicAccess"
+        publicAccessPrevention: { type: boolean }
+        visibility: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketPublicExposurePutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        mode:
+          $ref: "#/components/schemas/BucketPublicExposureMode"
+        blockPublicAccess:
+          $ref: "#/components/schemas/BucketBlockPublicAccess"
+        publicAccessPrevention: { type: boolean }
+        visibility: { type: string }
+
+    BucketRetentionView:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        mode: { type: string }
+        days: { type: integer }
+        retainUntil: { type: string }
+        locked: { type: boolean }
+
+    BucketObjectLockView:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        defaultMode: { type: string }
+        defaultDays: { type: integer }
+        defaultYears: { type: integer }
+        governanceBypass: { type: boolean }
+
+    BucketSoftDeleteView:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        days: { type: integer }
+
+    BucketImmutabilityView:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        mode: { type: string }
+        until: { type: string }
+
+    BucketProtectionView:
+      type: object
+      required: [provider, bucket]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        uniformAccess: { type: boolean }
+        retention:
+          $ref: "#/components/schemas/BucketRetentionView"
+        objectLock:
+          $ref: "#/components/schemas/BucketObjectLockView"
+        softDelete:
+          $ref: "#/components/schemas/BucketSoftDeleteView"
+        immutability:
+          $ref: "#/components/schemas/BucketImmutabilityView"
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketProtectionPutRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        uniformAccess: { type: boolean }
+        retention:
+          $ref: "#/components/schemas/BucketRetentionView"
+        objectLock:
+          $ref: "#/components/schemas/BucketObjectLockView"
+        softDelete:
+          $ref: "#/components/schemas/BucketSoftDeleteView"
+        immutability:
+          $ref: "#/components/schemas/BucketImmutabilityView"
+
+    BucketVersioningStatus:
+      type: string
+      enum: [disabled, enabled, suspended]
+
+    BucketVersioningView:
+      type: object
+      required: [provider, bucket]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        status:
+          $ref: "#/components/schemas/BucketVersioningStatus"
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketVersioningPutRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [enabled, disabled, suspended]
+
+    BucketEncryptionMode:
+      type: string
+      enum: [provider_managed, sse_s3, sse_kms, customer_managed]
+
+    BucketEncryptionView:
+      type: object
+      required: [provider, bucket]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        mode:
+          $ref: "#/components/schemas/BucketEncryptionMode"
+        kmsKeyId: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketEncryptionPutRequest:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [sse_s3, sse_kms]
+        kmsKeyId: { type: string }
+
+    BucketGovernanceView:
+      type: object
+      required: [provider, bucket, capabilities]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        capabilities:
+          $ref: "#/components/schemas/BucketGovernanceCapabilities"
+        access:
+          $ref: "#/components/schemas/BucketAccessView"
+        publicExposure:
+          $ref: "#/components/schemas/BucketPublicExposureView"
+        protection:
+          $ref: "#/components/schemas/BucketProtectionView"
+        versioning:
+          $ref: "#/components/schemas/BucketVersioningView"
+        encryption:
+          $ref: "#/components/schemas/BucketEncryptionView"
+        lifecycle:
+          $ref: "#/components/schemas/BucketLifecycleView"
+        advanced:
+          $ref: "#/components/schemas/BucketAdvancedView"
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketLifecycleView:
+      type: object
+      required: [provider, bucket]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        bucket: { type: string }
+        rules:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        warnings:
+          type: array
+          items: { type: string }
+
+    BucketLifecyclePutRequest:
+      type: object
+      additionalProperties: false
+      required: [rules]
+      properties:
+        rules:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
 
     ObjectItem:
       type: object
@@ -2080,10 +2598,15 @@ components:
 
     ObjectFavoritesResponse:
       type: object
-      required: [bucket, items]
+      required: [bucket, count, keys, hydrated, items]
       properties:
         bucket: { type: string }
         prefix: { type: string }
+        count: { type: integer }
+        keys:
+          type: array
+          items: { type: string }
+        hydrated: { type: boolean }
         items:
           type: array
           items: { $ref: "#/components/schemas/FavoriteObjectItem" }

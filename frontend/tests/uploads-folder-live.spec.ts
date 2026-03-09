@@ -87,14 +87,16 @@ test.describe('Live folder uploads', () => {
 			expect(createBucket.status()).toBe(201)
 
 			await seedStorage(page, { profileId, bucket: bucketName })
+			await page.addInitScript(() => {
+				Reflect.deleteProperty(window, 'showDirectoryPicker')
+			})
 			await page.goto('/uploads')
 
-			const folderSwitch = page.getByRole('switch', { name: 'Folder mode' })
-			if ((await folderSwitch.getAttribute('aria-checked')) !== 'true') {
-				await folderSwitch.click()
-			}
-
-			await page.locator('input[type="file"]').first().setInputFiles(fixtureRoot)
+			await page.getByRole('button', { name: 'Add from device…' }).click()
+			const chooserPromise = page.waitForEvent('filechooser')
+			await page.getByRole('button', { name: 'Choose folder' }).click()
+			const chooser = await chooserPromise
+			await chooser.setFiles(fixtureRoot)
 			await page.getByRole('button', { name: /Queue upload/i }).click()
 
 			const uploadRow = transferUploadRow(page, /Upload: 2 file\(s\)/)

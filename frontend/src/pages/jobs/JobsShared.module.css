@@ -18,6 +18,18 @@
 	gap: 12px;
 }
 
+.sourceSummary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	padding: 12px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 12px;
+	background: var(--s3d-color-bg-secondary);
+}
+
 .checkboxField {
 	margin-bottom: 12px;
 }

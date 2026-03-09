@@ -1,0 +1,140 @@
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.secureDefaultsCard {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 20px;
+	padding: 18px;
+	background:
+		radial-gradient(circle at top right, color-mix(in srgb, var(--s3d-color-primary) 12%, transparent), transparent 48%),
+		var(--s3d-gradient-section);
+}
+
+.secureDefaultsHeader {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.secureDefaultsCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.secureDefaultsGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+	margin-top: 16px;
+}
+
+.settingCard {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 16px;
+	padding: 14px;
+	background: var(--s3d-color-bg);
+	box-shadow: var(--s3d-shadow-sm);
+}
+
+.settingHeader {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settingCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.settingBody {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-top: 12px;
+}
+
+.structuredCardList {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.structuredCard {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 16px;
+	padding: 14px;
+	background: var(--s3d-color-bg-secondary);
+}
+
+.structuredCardHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.structuredFieldGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.structuredField {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.structuredFieldLabel {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+}
+
+.membersInput {
+	width: 100%;
+	min-width: 0;
+}
+
+.inlineHint {
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--s3d-color-text-secondary);
+}
+
+.jsonArea {
+	font-family: var(--s3d-font-mono, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace);
+}
+
+.providerDefaultsHint {
+	margin-top: 16px;
+}
+
+.providerHint {
+	margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+	.secureDefaultsGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.structuredFieldGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.structuredCardHeader {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+}

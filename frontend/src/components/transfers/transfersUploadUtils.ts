@@ -1,4 +1,5 @@
 import type { UploadCommitRequest, UploadFileItem } from '../../api/client'
+import { collectFilesFromDirectoryHandle, getDirectorySelectionSupport, pickDirectory } from '../../lib/deviceFs'
 import type { UploadTask } from './transferTypes'
 import { normalizeUploadPath } from './uploadPaths'
 
@@ -22,6 +23,32 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 		document.body.appendChild(input)
 		input.click()
 	})
+
+export type FolderSelectionResult = {
+	files: File[]
+	label?: string
+}
+
+function deriveFolderSelectionLabel(files: File[]): string | undefined {
+	const first = files[0] as (File & { webkitRelativePath?: string; relativePath?: string }) | undefined
+	const raw = (first?.relativePath ?? first?.webkitRelativePath ?? '').trim()
+	const root = raw.split('/').filter(Boolean)[0]
+	return root || undefined
+}
+
+export async function promptForFolderFiles(): Promise<FolderSelectionResult | null> {
+	const support = getDirectorySelectionSupport()
+	if (!support.ok || !support.mode) {
+		throw new Error(support.reason ?? 'Folder selection is not supported in this browser.')
+	}
+	if (support.mode === 'picker') {
+		const handle = await pickDirectory('read')
+		const files = await collectFilesFromDirectoryHandle(handle)
+		return files.length > 0 ? { files, label: handle.name } : null
+	}
+	const files = await promptForFiles({ multiple: true, directory: true })
+	return files && files.length > 0 ? { files, label: deriveFolderSelectionLabel(files) } : null
+}
 
 export const buildUploadItems = (files: File[]): UploadFileItem[] =>
 	files.map((file) => {

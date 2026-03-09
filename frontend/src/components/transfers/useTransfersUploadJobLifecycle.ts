@@ -1,43 +1,21 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { useCallback } from 'react'
 import type { MutableRefObject } from 'react'
 
 import type { JobProgress, JobStatus } from '../../api/types'
-import { type RemoveEntriesResult, removeEntriesFromDirectoryHandle } from '../../lib/deviceFs'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { publishObjectsRefresh } from '../../pages/objects/objectsRefreshEvents'
-import { maybeReportNetworkError } from './transferDownloadUtils'
-import type { MoveCleanupReportArgs } from './moveCleanupReport'
 import type { UploadTask } from './transferTypes'
-
-type UploadMovePlan = {
-	rootHandle: FileSystemDirectoryHandle
-	relPaths: string[]
-	label?: string
-	cleanupEmptyDirs?: boolean
-}
 
 type UseTransfersUploadJobLifecycleArgs = {
 	queryClient: QueryClient
 	uploadTasksRef: MutableRefObject<UploadTask[]>
-	uploadMoveByTaskIdRef: MutableRefObject<Record<string, UploadMovePlan>>
-	moveCleanupFilenameTemplate: string
-	moveCleanupFilenameMaxLen: number
 	updateUploadTask: (taskId: string, updater: (task: UploadTask) => UploadTask) => void
-	formatMoveCleanupSummary: (result: RemoveEntriesResult, label: string) => string
-	showMoveCleanupReport: (args: MoveCleanupReportArgs) => void
 }
 
 export function useTransfersUploadJobLifecycle({
 	queryClient,
 	uploadTasksRef,
-	uploadMoveByTaskIdRef,
-	moveCleanupFilenameTemplate,
-	moveCleanupFilenameMaxLen,
 	updateUploadTask,
-	formatMoveCleanupSummary,
-	showMoveCleanupReport,
 }: UseTransfersUploadJobLifecycleArgs) {
 	const updateUploadTaskProgressFromJob = useCallback(
 		(taskId: string, progress?: JobProgress | null) => {
@@ -80,91 +58,15 @@ export function useTransfersUploadJobLifecycle({
 					prefix: current.prefix,
 					source: 'upload',
 				})
-
-				const movePlan = uploadMoveByTaskIdRef.current[taskId]
-				if (!current.moveAfterUpload || !movePlan) {
-					updateUploadTask(taskId, (prev) => ({
-						...prev,
-						status: 'succeeded',
-						finishedAtMs: Date.now(),
-						error: undefined,
-						cleanupFailed: false,
-						speedBps: 0,
-						etaSeconds: 0,
-						loadedBytes: prev.totalBytes,
-					}))
-					delete uploadMoveByTaskIdRef.current[taskId]
-					return
-				}
-
 				updateUploadTask(taskId, (prev) => ({
 					...prev,
-					status: 'cleanup',
+					status: 'succeeded',
+					finishedAtMs: Date.now(),
 					error: undefined,
-					cleanupFailed: false,
+					speedBps: 0,
+					etaSeconds: 0,
+					loadedBytes: prev.totalBytes,
 				}))
-
-				try {
-					const result = await removeEntriesFromDirectoryHandle({
-						root: movePlan.rootHandle,
-						relPaths: movePlan.relPaths,
-						cleanupEmptyDirs: movePlan.cleanupEmptyDirs,
-					})
-					const summary = formatMoveCleanupSummary(result, movePlan.label ?? '')
-					if (result.failed.length > 0) {
-						updateUploadTask(taskId, (prev) => ({
-							...prev,
-							status: 'failed',
-							finishedAtMs: Date.now(),
-							error: summary,
-							cleanupFailed: true,
-						}))
-						showMoveCleanupReport({
-							title: 'Move completed with errors',
-							label: movePlan.label,
-							bucket: current.bucket,
-							prefix: current.prefix,
-							filenameTemplate: moveCleanupFilenameTemplate,
-							filenameMaxLen: moveCleanupFilenameMaxLen,
-							result,
-						})
-					} else {
-						updateUploadTask(taskId, (prev) => ({
-							...prev,
-							status: 'succeeded',
-							finishedAtMs: Date.now(),
-							speedBps: 0,
-							etaSeconds: 0,
-							loadedBytes: prev.totalBytes,
-						}))
-						const label = movePlan.label ? ` from ${movePlan.label}` : ''
-						message.success(`Moved ${result.removed.length} item(s)${label}`)
-						if (result.skipped.length > 0 || result.removedDirs.length > 0) {
-							showMoveCleanupReport({
-								title: 'Move completed with notes',
-								label: movePlan.label,
-								bucket: current.bucket,
-								prefix: current.prefix,
-								filenameTemplate: moveCleanupFilenameTemplate,
-								filenameMaxLen: moveCleanupFilenameMaxLen,
-								result,
-								kind: 'info',
-							})
-						}
-						delete uploadMoveByTaskIdRef.current[taskId]
-					}
-				} catch (err) {
-					maybeReportNetworkError(err)
-					const msg = formatErr(err)
-					updateUploadTask(taskId, (prev) => ({
-						...prev,
-						status: 'failed',
-						finishedAtMs: Date.now(),
-						error: msg,
-						cleanupFailed: true,
-					}))
-					message.error(msg)
-				}
 				return
 			}
 
@@ -174,11 +76,9 @@ export function useTransfersUploadJobLifecycle({
 					status: 'failed',
 					finishedAtMs: Date.now(),
 					error: error ?? 'upload job failed',
-					cleanupFailed: false,
 					speedBps: 0,
 					etaSeconds: 0,
 				}))
-				delete uploadMoveByTaskIdRef.current[taskId]
 				return
 			}
 
@@ -187,22 +87,11 @@ export function useTransfersUploadJobLifecycle({
 				status: 'canceled',
 				finishedAtMs: Date.now(),
 				error: error ?? prev.error,
-				cleanupFailed: false,
 				speedBps: 0,
 				etaSeconds: 0,
 			}))
-			delete uploadMoveByTaskIdRef.current[taskId]
 		},
-		[
-			queryClient,
-			formatMoveCleanupSummary,
-			moveCleanupFilenameMaxLen,
-			moveCleanupFilenameTemplate,
-			showMoveCleanupReport,
-			updateUploadTask,
-			uploadMoveByTaskIdRef,
-			uploadTasksRef,
-		],
+		[queryClient, updateUploadTask, uploadTasksRef],
 	)
 
 	const handleUploadJobUpdate = useCallback(

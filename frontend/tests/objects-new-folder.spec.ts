@@ -27,10 +27,14 @@ const defaultStorage: StorageSeed = {
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const seed = { ...defaultStorage, ...overrides }
 	await page.addInitScript((s) => {
+		const scope = s.profileId?.trim() || '__no_profile__'
+		const scopedKey = (name: string) => `objects:${scope}:${name}`
 		window.localStorage.setItem('apiToken', JSON.stringify(s.apiToken))
 		window.localStorage.setItem('profileId', JSON.stringify(s.profileId))
 		window.localStorage.setItem('bucket', JSON.stringify(s.bucket))
 		window.localStorage.setItem('prefix', JSON.stringify(s.prefix))
+		window.localStorage.setItem(scopedKey('bucket'), JSON.stringify(s.bucket))
+		window.localStorage.setItem(scopedKey('prefix'), JSON.stringify(s.prefix))
 		window.localStorage.setItem('objectsUIMode', JSON.stringify(s.objectsUIMode))
 		window.localStorage.setItem('objectsTypeFilter', JSON.stringify(s.objectsTypeFilter))
 		window.localStorage.setItem('objectsFavoritesOnly', JSON.stringify(s.objectsFavoritesOnly))
@@ -145,7 +149,27 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 }
 
 async function getStorageString(page: Page, key: string): Promise<string> {
-	return page.evaluate((k) => JSON.parse(window.localStorage.getItem(k) ?? '""') as string, key)
+	return page.evaluate((k) => {
+		if (k === 'bucket' || k === 'prefix') {
+			const profileId = JSON.parse(window.localStorage.getItem('profileId') ?? '""') as string
+			const scope = profileId?.trim() || '__no_profile__'
+			return JSON.parse(window.localStorage.getItem(`objects:${scope}:${k}`) ?? '""') as string
+		}
+		return JSON.parse(window.localStorage.getItem(k) ?? '""') as string
+	}, key)
+}
+
+async function waitForScopedPrefix(page: Page, expected: string) {
+	await page.waitForFunction((want) => {
+		const profileId = JSON.parse(window.localStorage.getItem('profileId') ?? '""') as string
+		const scope = profileId?.trim() || '__no_profile__'
+		return JSON.parse(window.localStorage.getItem(`objects:${scope}:prefix`) ?? '""') === want
+	}, expected)
+}
+
+async function openNewFolderDialog(page: Page) {
+	await page.locator('button[aria-label="New folder"]:not([disabled])').first().click()
+	return page.getByRole('dialog', { name: 'New folder' })
 }
 
 test.describe('Objects new folder visibility', () => {
@@ -154,14 +178,13 @@ test.describe('Objects new folder visibility', () => {
 		await seedStorage(page, { objectsTypeFilter: 'files' })
 		await page.goto('/objects')
 
-		await page.getByRole('button', { name: 'New folder' }).first().click()
-		const dialog = page.getByRole('dialog', { name: 'New folder' })
+		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Folder name').fill('demo')
 		await dialog.getByRole('button', { name: 'Create folder' }).click()
 
 		await expect(page.getByRole('button', { name: 'Show folders' })).toBeVisible()
 
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('prefix') ?? '""') === 'demo/')
+		await waitForScopedPrefix(page, 'demo/')
 		await page.getByRole('button', { name: 'Show folders' }).click()
 		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('objectsTypeFilter') ?? '""') === 'all')
 	})
@@ -171,14 +194,13 @@ test.describe('Objects new folder visibility', () => {
 		await seedStorage(page, { objectsFavoritesOnly: true })
 		await page.goto('/objects')
 
-		await page.getByRole('button', { name: 'New folder' }).first().click()
-		const dialog = page.getByRole('dialog', { name: 'New folder' })
+		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Folder name').fill('fav-demo')
 		await dialog.getByRole('button', { name: 'Create folder' }).click()
 
 		await expect(page.getByRole('button', { name: 'Disable favorites-only' })).toBeVisible()
 
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('prefix') ?? '""') === 'fav-demo/')
+		await waitForScopedPrefix(page, 'fav-demo/')
 		await page.getByRole('button', { name: 'Disable favorites-only' }).click()
 		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('objectsFavoritesOnly') ?? 'false') === false)
 	})
@@ -188,14 +210,13 @@ test.describe('Objects new folder visibility', () => {
 		await seedStorage(page, { objectsSearch: 'zzz' })
 		await page.goto('/objects')
 
-		await page.getByRole('button', { name: 'New folder' }).first().click()
-		const dialog = page.getByRole('dialog', { name: 'New folder' })
+		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Folder name').fill('demo')
 		await dialog.getByRole('button', { name: 'Create folder' }).click()
 
 		await expect(page.getByRole('button', { name: 'Clear search' })).toBeVisible()
 
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('prefix') ?? '""') === 'demo/')
+		await waitForScopedPrefix(page, 'demo/')
 		await page.getByRole('button', { name: 'Clear search' }).click()
 		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('objectsSearch') ?? '""') === '')
 	})
@@ -220,7 +241,7 @@ test.describe('Objects new folder visibility', () => {
 
 		expect(await getStorageString(page, 'prefix')).toBe('')
 		await page.getByRole('button', { name: 'Parent' }).click()
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('prefix') ?? '""') === 'a/')
+		await waitForScopedPrefix(page, 'a/')
 	})
 
 	test('nested path failures report the last created folder and provide navigation CTAs', async ({ page }) => {
@@ -235,8 +256,7 @@ test.describe('Objects new folder visibility', () => {
 		await seedStorage(page)
 		await page.goto('/objects')
 
-		await page.getByRole('button', { name: 'New folder' }).first().click()
-		const dialog = page.getByRole('dialog', { name: 'New folder' })
+		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Allow nested path (a/b/c)').check()
 		await dialog.getByLabel('Folder name').fill('a/b')
 		await dialog.getByRole('button', { name: 'Create folder' }).click()
@@ -246,6 +266,6 @@ test.describe('Objects new folder visibility', () => {
 		await expect(dialog.locator('code', { hasText: 'a/' })).toBeVisible()
 
 		await dialog.getByRole('button', { name: 'Open last created' }).click()
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('prefix') ?? '""') === 'a/')
+		await waitForScopedPrefix(page, 'a/')
 	})
 })

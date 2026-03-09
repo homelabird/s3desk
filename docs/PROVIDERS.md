@@ -10,7 +10,6 @@ S3Desk uses `rclone` underneath. A provider is considered supported when S3Desk 
 | S3-compatible | Tier 1 | For MinIO, Ceph RGW, and similar systems |
 | Azure Blob Storage | Tier 1 | Container operations are surfaced as bucket-like flows in the UI |
 | Google Cloud Storage | Tier 1 | Full core workflow support |
-| OCI S3-compatible | Tier 2 | Uses an S3-compatible endpoint |
 | OCI Object Storage | Tier 2 | Native OCI backend with lower automation coverage |
 
 ## Common Profile Expectations
@@ -27,6 +26,7 @@ Provider-specific requirements that matter in practice:
 - GCS: `projectNumber` is required on profiles. Bucket list/create/delete and benchmark flows depend on it.
 - GCS anonymous mode: IAM policy management is supported only when the profile has credentials, or when anonymous mode is paired with a custom endpoint that explicitly allows unauthenticated access.
 - OCI Object Storage: the native backend requires `region`, `namespace`, and `compartment`.
+- Azure Blob and GCS empty folders rely on explicit zero-byte `folder/` markers, with `rclone` directory markers enabled as a compatibility backstop.
 
 ## Capability Model
 
@@ -47,6 +47,7 @@ If a capability is unavailable, the UI hides or disables the action and shows th
 
 - Use `aws_s3` for standard AWS accounts
 - Use `s3_compatible` when you must provide a custom S3 endpoint
-- Use `oci_s3_compat` only when your OCI environment is intentionally exposed through an S3-compatible endpoint
 - Use `oci_object_storage` when you need OCI namespace/compartment-aware access instead of the S3 compatibility layer
-- Prefer Tier 1 providers when you need the most tested path, but OCI Object Storage now has smoke coverage for bucket CRUD and connectivity/benchmark flows
+- OCI Object Storage empty folders are backed by hidden zero-byte marker objects so they remain visible after refresh without surfacing as normal files in object listings
+- Azure Blob and GCS `Create folder` writes a zero-byte `folder/` marker object, and the generated `rclone` config also enables `directory_markers = true`
+- Prefer Tier 1 providers when you need the most tested path, but OCI Object Storage now has smoke coverage for bucket CRUD, connectivity/benchmark flows, and folder marker visibility

@@ -44,6 +44,7 @@ export function ProfilesPage(props: Props) {
 	const [yamlOpen, setYamlOpen] = useState(false)
 	const [yamlProfile, setYamlProfile] = useState<Profile | null>(null)
 	const [yamlContent, setYamlContent] = useState('')
+	const [yamlDraft, setYamlDraft] = useState('')
 	const [yamlError, setYamlError] = useState<string | null>(null)
 	const [exportingProfileId, setExportingProfileId] = useState<string | null>(null)
 	const [importOpen, setImportOpen] = useState(false)
@@ -211,10 +212,12 @@ export function ProfilesPage(props: Props) {
 		onMutate: (id) => {
 			setExportingProfileId(id)
 			setYamlContent('')
+			setYamlDraft('')
 			setYamlError(null)
 		},
 		onSuccess: (content) => {
 			setYamlContent(content)
+			setYamlDraft(content)
 		},
 		onError: (err) => {
 			const msg = formatErr(err)
@@ -234,8 +237,39 @@ export function ProfilesPage(props: Props) {
 		setYamlOpen(false)
 		setYamlProfile(null)
 		setYamlContent('')
+		setYamlDraft('')
 		setYamlError(null)
 	}
+
+	const saveYamlMutation = useMutation({
+		mutationFn: async ({ profileId, yamlText }: { profileId: string; yamlText: string }) => {
+			const { updateRequest, tlsConfig, hasTLSBlock } = await parseProfileYaml(yamlText)
+			const updated = await api.updateProfile(profileId, updateRequest)
+			if (hasTLSBlock) {
+				if (tlsConfig) {
+					await api.updateProfileTLS(profileId, tlsConfig)
+				} else {
+					await api.deleteProfileTLS(profileId)
+				}
+			}
+			const canonicalYaml = await api.exportProfileYaml(profileId)
+			return { updated, canonicalYaml }
+		},
+		onSuccess: async ({ updated, canonicalYaml }) => {
+			message.success('Profile YAML saved')
+			setYamlProfile(updated)
+			setYamlContent(canonicalYaml)
+			setYamlDraft(canonicalYaml)
+			setYamlError(null)
+			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+			await queryClient.invalidateQueries({ queryKey: ['profileTls', updated.id] })
+		},
+		onError: (err) => {
+			const msg = formatErr(err)
+			setYamlError(msg)
+			message.error(msg)
+		},
+	})
 
 	const closeImportModal = () => {
 		setImportOpen(false)
@@ -265,8 +299,8 @@ export function ProfilesPage(props: Props) {
 	})
 
 	const handleYamlCopy = async () => {
-		if (!yamlContent) return
-		const res = await copyToClipboard(yamlContent)
+		if (!yamlDraft) return
+		const res = await copyToClipboard(yamlDraft)
 		if (res.ok) {
 			message.success('Copied YAML')
 			return
@@ -275,8 +309,8 @@ export function ProfilesPage(props: Props) {
 	}
 
 	const handleYamlDownload = () => {
-		if (!yamlContent) return
-		downloadTextFile(buildProfileExportFilename(yamlProfile), yamlContent)
+		if (!yamlDraft) return
+		downloadTextFile(buildProfileExportFilename(yamlProfile), yamlDraft)
 		message.success('Downloaded YAML')
 	}
 
@@ -455,10 +489,17 @@ export function ProfilesPage(props: Props) {
 						yamlProfile={yamlProfile}
 						yamlError={yamlError}
 						yamlContent={yamlContent}
+						yamlDraft={yamlDraft}
 						yamlFilename={yamlFilename}
 						exportYamlLoading={exportYamlMutation.isPending}
+						saveYamlLoading={saveYamlMutation.isPending}
 						onYamlCopy={() => void handleYamlCopy()}
 						onYamlDownload={handleYamlDownload}
+						onYamlDraftChange={setYamlDraft}
+						onYamlSave={() => {
+							if (!yamlProfile) return
+							saveYamlMutation.mutate({ profileId: yamlProfile.id, yamlText: yamlDraft })
+						}}
 						importOpen={importOpen}
 						closeImportModal={closeImportModal}
 						importText={importText}

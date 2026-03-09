@@ -48,6 +48,9 @@ func TestRenderConfigAzureBlob(t *testing.T) {
 	if !strings.Contains(out, "type = azureblob") {
 		t.Fatalf("expected type = azureblob, got:\n%s", out)
 	}
+	if !strings.Contains(out, "directory_markers = true") {
+		t.Fatalf("expected directory_markers, got:\n%s", out)
+	}
 	if !strings.Contains(out, "account = acct") {
 		t.Fatalf("expected account, got:\n%s", out)
 	}
@@ -91,6 +94,9 @@ func TestRenderConfigGcpGcsCompactsJson(t *testing.T) {
 	if !strings.Contains(out, "type = google cloud storage") {
 		t.Fatalf("expected gcs backend type, got:\n%s", out)
 	}
+	if !strings.Contains(out, "directory_markers = true") {
+		t.Fatalf("expected directory_markers, got:\n%s", out)
+	}
 	if !strings.Contains(out, `service_account_credentials = {"type":"service_account","project_id":"p","client_email":"e","private_key":"k"}`) {
 		t.Fatalf("expected compact service_account_credentials, got:\n%s", out)
 	}
@@ -102,7 +108,7 @@ func TestRenderConfigOciObjectStorage(t *testing.T) {
 		OciNamespace:    "ns",
 		OciCompartment:  "comp",
 		Region:          "us-ashburn-1",
-		OciAuthProvider: "user_principal",
+		OciAuthProvider: "user_principal_auth",
 	}
 
 	out, err := RenderConfig(profile, RemoteName)
@@ -120,6 +126,9 @@ func TestRenderConfigOciObjectStorage(t *testing.T) {
 	}
 	if !strings.Contains(out, "region = us-ashburn-1") {
 		t.Fatalf("expected region, got:\n%s", out)
+	}
+	if !strings.Contains(out, "provider = user_principal_auth") {
+		t.Fatalf("expected provider auth selection, got:\n%s", out)
 	}
 }
 

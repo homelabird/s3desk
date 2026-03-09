@@ -47,7 +47,6 @@ type ProfileProvider string
 const (
 	ProfileProviderAwsS3            ProfileProvider = "aws_s3"
 	ProfileProviderS3Compatible     ProfileProvider = "s3_compatible"
-	ProfileProviderOciS3Compat      ProfileProvider = "oci_s3_compat"
 	ProfileProviderAzureBlob        ProfileProvider = "azure_blob"
 	ProfileProviderGcpGcs           ProfileProvider = "gcp_gcs"
 	ProfileProviderOciObjectStorage ProfileProvider = "oci_object_storage"
@@ -256,8 +255,16 @@ type Bucket struct {
 }
 
 type BucketCreateRequest struct {
-	Name   string `json:"name"`
-	Region string `json:"region,omitempty"`
+	Name     string                `json:"name"`
+	Region   string                `json:"region,omitempty"`
+	Defaults *BucketCreateDefaults `json:"defaults,omitempty"`
+}
+
+type BucketCreateDefaults struct {
+	Access         *BucketAccessPutRequest         `json:"access,omitempty"`
+	PublicExposure *BucketPublicExposurePutRequest `json:"publicExposure,omitempty"`
+	Versioning     *BucketVersioningPutRequest     `json:"versioning,omitempty"`
+	Encryption     *BucketEncryptionPutRequest     `json:"encryption,omitempty"`
 }
 
 type BucketPolicyResponse struct {
@@ -277,6 +284,248 @@ type BucketPolicyValidateResponse struct {
 	Provider ProfileProvider `json:"provider"`
 	Errors   []string        `json:"errors,omitempty"`
 	Warnings []string        `json:"warnings,omitempty"`
+}
+
+// BucketGovernanceCapability identifies a typed bucket control that may or may not be
+// supported by the current provider/profile combination.
+type BucketGovernanceCapability string
+
+const (
+	BucketGovernanceCapabilityAccessRawPolicy        BucketGovernanceCapability = "bucket_access_raw_policy"
+	BucketGovernanceCapabilityAccessBindings         BucketGovernanceCapability = "bucket_access_bindings"
+	BucketGovernanceCapabilityAccessPublicToggle     BucketGovernanceCapability = "bucket_access_public_toggle"
+	BucketGovernanceCapabilityAccessACLReset         BucketGovernanceCapability = "bucket_access_acl_reset"
+	BucketGovernanceCapabilityPublicAccessBlock      BucketGovernanceCapability = "bucket_public_access_block"
+	BucketGovernanceCapabilityPublicAccessPrevention BucketGovernanceCapability = "bucket_public_access_prevention"
+	BucketGovernanceCapabilityUniformAccess          BucketGovernanceCapability = "bucket_uniform_access"
+	BucketGovernanceCapabilityObjectOwnership        BucketGovernanceCapability = "bucket_object_ownership"
+	BucketGovernanceCapabilityVersioning             BucketGovernanceCapability = "bucket_versioning"
+	BucketGovernanceCapabilityDefaultEncryption      BucketGovernanceCapability = "bucket_default_encryption"
+	BucketGovernanceCapabilityLifecycle              BucketGovernanceCapability = "bucket_lifecycle"
+	BucketGovernanceCapabilityRetention              BucketGovernanceCapability = "bucket_retention"
+	BucketGovernanceCapabilityObjectLock             BucketGovernanceCapability = "bucket_object_lock"
+	BucketGovernanceCapabilitySoftDelete             BucketGovernanceCapability = "bucket_soft_delete"
+	BucketGovernanceCapabilityImmutability           BucketGovernanceCapability = "bucket_immutability"
+	BucketGovernanceCapabilityStoredAccessPolicy     BucketGovernanceCapability = "bucket_stored_access_policy"
+	BucketGovernanceCapabilityPAR                    BucketGovernanceCapability = "bucket_par"
+	BucketGovernanceCapabilitySASPolicy              BucketGovernanceCapability = "bucket_sas_policy"
+	BucketGovernanceCapabilityCMEK                   BucketGovernanceCapability = "bucket_cmek"
+)
+
+type BucketGovernanceCapabilityState struct {
+	Enabled bool   `json:"enabled"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+type BucketGovernanceCapabilities map[BucketGovernanceCapability]BucketGovernanceCapabilityState
+
+type BucketPublicExposureMode string
+
+const (
+	BucketPublicExposureModePrivate   BucketPublicExposureMode = "private"
+	BucketPublicExposureModePublic    BucketPublicExposureMode = "public"
+	BucketPublicExposureModeBlob      BucketPublicExposureMode = "blob"
+	BucketPublicExposureModeContainer BucketPublicExposureMode = "container"
+)
+
+type BucketObjectOwnershipMode string
+
+const (
+	BucketObjectOwnershipBucketOwnerEnforced  BucketObjectOwnershipMode = "bucket_owner_enforced"
+	BucketObjectOwnershipBucketOwnerPreferred BucketObjectOwnershipMode = "bucket_owner_preferred"
+	BucketObjectOwnershipObjectWriter         BucketObjectOwnershipMode = "object_writer"
+)
+
+type BucketVersioningStatus string
+
+const (
+	BucketVersioningStatusDisabled  BucketVersioningStatus = "disabled"
+	BucketVersioningStatusEnabled   BucketVersioningStatus = "enabled"
+	BucketVersioningStatusSuspended BucketVersioningStatus = "suspended"
+)
+
+type BucketEncryptionMode string
+
+const (
+	BucketEncryptionModeProviderManaged BucketEncryptionMode = "provider_managed"
+	BucketEncryptionModeSSES3           BucketEncryptionMode = "sse_s3"
+	BucketEncryptionModeSSEKMS          BucketEncryptionMode = "sse_kms"
+	BucketEncryptionModeCustomerManaged BucketEncryptionMode = "customer_managed"
+)
+
+type BucketBlockPublicAccess struct {
+	BlockPublicAcls       bool `json:"blockPublicAcls"`
+	IgnorePublicAcls      bool `json:"ignorePublicAcls"`
+	BlockPublicPolicy     bool `json:"blockPublicPolicy"`
+	RestrictPublicBuckets bool `json:"restrictPublicBuckets"`
+}
+
+type BucketObjectOwnershipView struct {
+	Supported bool                      `json:"supported"`
+	Mode      BucketObjectOwnershipMode `json:"mode,omitempty"`
+}
+
+type BucketAccessBinding struct {
+	Role      string          `json:"role"`
+	Members   []string        `json:"members,omitempty"`
+	Condition json.RawMessage `json:"condition,omitempty"`
+}
+
+type BucketStoredAccessPolicy struct {
+	ID         string `json:"id"`
+	Start      string `json:"start,omitempty"`
+	Expiry     string `json:"expiry,omitempty"`
+	Permission string `json:"permission,omitempty"`
+}
+
+type BucketRetentionView struct {
+	Enabled     bool   `json:"enabled"`
+	Mode        string `json:"mode,omitempty"`
+	Days        *int   `json:"days,omitempty"`
+	RetainUntil string `json:"retainUntil,omitempty"`
+	Locked      bool   `json:"locked,omitempty"`
+}
+
+type BucketObjectLockView struct {
+	Enabled          bool   `json:"enabled"`
+	DefaultMode      string `json:"defaultMode,omitempty"`
+	DefaultDays      *int   `json:"defaultDays,omitempty"`
+	DefaultYears     *int   `json:"defaultYears,omitempty"`
+	GovernanceBypass bool   `json:"governanceBypass,omitempty"`
+}
+
+type BucketSoftDeleteView struct {
+	Enabled bool `json:"enabled"`
+	Days    *int `json:"days,omitempty"`
+}
+
+type BucketImmutabilityView struct {
+	Enabled bool   `json:"enabled"`
+	Mode    string `json:"mode,omitempty"`
+	Until   string `json:"until,omitempty"`
+}
+
+type BucketAdvancedView struct {
+	RawPolicySupported bool            `json:"rawPolicySupported,omitempty"`
+	RawPolicyEditable  bool            `json:"rawPolicyEditable,omitempty"`
+	RawPolicy          json.RawMessage `json:"rawPolicy,omitempty"`
+}
+
+type BucketAccessView struct {
+	Provider             ProfileProvider            `json:"provider"`
+	Bucket               string                     `json:"bucket"`
+	ObjectOwnership      *BucketObjectOwnershipView `json:"objectOwnership,omitempty"`
+	Advanced             *BucketAdvancedView        `json:"advanced,omitempty"`
+	Bindings             []BucketAccessBinding      `json:"bindings,omitempty"`
+	ETag                 string                     `json:"etag,omitempty"`
+	StoredAccessPolicies []BucketStoredAccessPolicy `json:"storedAccessPolicies,omitempty"`
+	Warnings             []string                   `json:"warnings,omitempty"`
+}
+
+type BucketPublicExposureView struct {
+	Provider               ProfileProvider          `json:"provider"`
+	Bucket                 string                   `json:"bucket"`
+	Mode                   BucketPublicExposureMode `json:"mode,omitempty"`
+	BlockPublicAccess      *BucketBlockPublicAccess `json:"blockPublicAccess,omitempty"`
+	PublicAccessPrevention *bool                    `json:"publicAccessPrevention,omitempty"`
+	Visibility             string                   `json:"visibility,omitempty"`
+	Warnings               []string                 `json:"warnings,omitempty"`
+}
+
+type BucketProtectionView struct {
+	Provider      ProfileProvider         `json:"provider"`
+	Bucket        string                  `json:"bucket"`
+	UniformAccess *bool                   `json:"uniformAccess,omitempty"`
+	Retention     *BucketRetentionView    `json:"retention,omitempty"`
+	ObjectLock    *BucketObjectLockView   `json:"objectLock,omitempty"`
+	SoftDelete    *BucketSoftDeleteView   `json:"softDelete,omitempty"`
+	Immutability  *BucketImmutabilityView `json:"immutability,omitempty"`
+	Warnings      []string                `json:"warnings,omitempty"`
+}
+
+type BucketVersioningView struct {
+	Provider ProfileProvider        `json:"provider"`
+	Bucket   string                 `json:"bucket"`
+	Status   BucketVersioningStatus `json:"status,omitempty"`
+	Warnings []string               `json:"warnings,omitempty"`
+}
+
+type BucketEncryptionView struct {
+	Provider ProfileProvider      `json:"provider"`
+	Bucket   string               `json:"bucket"`
+	Mode     BucketEncryptionMode `json:"mode,omitempty"`
+	KMSKeyID string               `json:"kmsKeyId,omitempty"`
+	Warnings []string             `json:"warnings,omitempty"`
+}
+
+// BucketLifecycleView keeps lifecycle rules provider-specific until we add a fully typed rule schema.
+type BucketLifecycleView struct {
+	Provider ProfileProvider `json:"provider"`
+	Bucket   string          `json:"bucket"`
+	Rules    json.RawMessage `json:"rules,omitempty"`
+	Warnings []string        `json:"warnings,omitempty"`
+}
+
+type BucketSharingView struct {
+	Provider                ProfileProvider            `json:"provider"`
+	Bucket                  string                     `json:"bucket"`
+	StoredAccessPolicies    []BucketStoredAccessPolicy `json:"storedAccessPolicies,omitempty"`
+	PreauthenticatedSupport *bool                      `json:"preauthenticatedSupport,omitempty"`
+	Warnings                []string                   `json:"warnings,omitempty"`
+}
+
+type BucketGovernanceView struct {
+	Provider       ProfileProvider              `json:"provider"`
+	Bucket         string                       `json:"bucket"`
+	Capabilities   BucketGovernanceCapabilities `json:"capabilities,omitempty"`
+	Access         *BucketAccessView            `json:"access,omitempty"`
+	PublicExposure *BucketPublicExposureView    `json:"publicExposure,omitempty"`
+	Protection     *BucketProtectionView        `json:"protection,omitempty"`
+	Versioning     *BucketVersioningView        `json:"versioning,omitempty"`
+	Encryption     *BucketEncryptionView        `json:"encryption,omitempty"`
+	Lifecycle      *BucketLifecycleView         `json:"lifecycle,omitempty"`
+	Sharing        *BucketSharingView           `json:"sharing,omitempty"`
+	Advanced       *BucketAdvancedView          `json:"advanced,omitempty"`
+	Warnings       []string                     `json:"warnings,omitempty"`
+}
+
+type BucketAccessPutRequest struct {
+	ObjectOwnership      *BucketObjectOwnershipMode `json:"objectOwnership,omitempty"`
+	Bindings             []BucketAccessBinding      `json:"bindings,omitempty"`
+	ETag                 string                     `json:"etag,omitempty"`
+	StoredAccessPolicies []BucketStoredAccessPolicy `json:"storedAccessPolicies,omitempty"`
+}
+
+type BucketPublicExposurePutRequest struct {
+	Mode                   BucketPublicExposureMode `json:"mode,omitempty"`
+	BlockPublicAccess      *BucketBlockPublicAccess `json:"blockPublicAccess,omitempty"`
+	PublicAccessPrevention *bool                    `json:"publicAccessPrevention,omitempty"`
+	Visibility             string                   `json:"visibility,omitempty"`
+}
+
+type BucketProtectionPutRequest struct {
+	UniformAccess *bool                   `json:"uniformAccess,omitempty"`
+	Retention     *BucketRetentionView    `json:"retention,omitempty"`
+	ObjectLock    *BucketObjectLockView   `json:"objectLock,omitempty"`
+	SoftDelete    *BucketSoftDeleteView   `json:"softDelete,omitempty"`
+	Immutability  *BucketImmutabilityView `json:"immutability,omitempty"`
+}
+
+type BucketVersioningPutRequest struct {
+	Status BucketVersioningStatus `json:"status"`
+}
+
+type BucketEncryptionPutRequest struct {
+	Mode     BucketEncryptionMode `json:"mode"`
+	KMSKeyID string               `json:"kmsKeyId,omitempty"`
+}
+
+type BucketLifecyclePutRequest struct {
+	Rules json.RawMessage `json:"rules"`
+}
+
+type BucketSharingPutRequest struct {
+	StoredAccessPolicies []BucketStoredAccessPolicy `json:"storedAccessPolicies,omitempty"`
 }
 
 type ObjectItem struct {
@@ -302,9 +551,12 @@ type FavoriteObjectItem struct {
 }
 
 type ObjectFavoritesResponse struct {
-	Bucket string               `json:"bucket"`
-	Prefix string               `json:"prefix,omitempty"`
-	Items  []FavoriteObjectItem `json:"items"`
+	Bucket   string               `json:"bucket"`
+	Prefix   string               `json:"prefix,omitempty"`
+	Count    int                  `json:"count"`
+	Keys     []string             `json:"keys"`
+	Hydrated bool                 `json:"hydrated"`
+	Items    []FavoriteObjectItem `json:"items"`
 }
 
 type ListObjectsResponse struct {
@@ -519,16 +771,17 @@ type ProviderCapabilityReasons struct {
 // ProviderCapability describes provider-level feature availability so the UI can
 // hide unsupported controls before making API calls.
 type ProviderCapability struct {
-	BucketCRUD                 bool                       `json:"bucketCrud"`
-	ObjectCRUD                 bool                       `json:"objectCrud"`
-	JobTransfer                bool                       `json:"jobTransfer"`
-	BucketPolicy               bool                       `json:"bucketPolicy"`
-	GCSIAMPolicy               bool                       `json:"gcsIamPolicy"`
-	AzureContainerAccessPolicy bool                       `json:"azureContainerAccessPolicy"`
-	PresignedUpload            bool                       `json:"presignedUpload"`
-	PresignedMultipartUpload   bool                       `json:"presignedMultipartUpload"`
-	DirectUpload               bool                       `json:"directUpload"`
-	Reasons                    *ProviderCapabilityReasons `json:"reasons,omitempty"`
+	BucketCRUD                 bool                         `json:"bucketCrud"`
+	ObjectCRUD                 bool                         `json:"objectCrud"`
+	JobTransfer                bool                         `json:"jobTransfer"`
+	BucketPolicy               bool                         `json:"bucketPolicy"`
+	GCSIAMPolicy               bool                         `json:"gcsIamPolicy"`
+	AzureContainerAccessPolicy bool                         `json:"azureContainerAccessPolicy"`
+	PresignedUpload            bool                         `json:"presignedUpload"`
+	PresignedMultipartUpload   bool                         `json:"presignedMultipartUpload"`
+	DirectUpload               bool                         `json:"directUpload"`
+	Governance                 BucketGovernanceCapabilities `json:"governance,omitempty"`
+	Reasons                    *ProviderCapabilityReasons   `json:"reasons,omitempty"`
 }
 
 type MetaResponse struct {

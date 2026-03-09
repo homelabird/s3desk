@@ -46,6 +46,21 @@ anonymous: true
 		await expect(parseProfileYaml(yamlText)).rejects.toThrow('gcp_gcs requires projectNumber')
 	})
 
+	it('rejects legacy oci_s3_compat profile imports', async () => {
+		const yamlText = `
+name: oci-legacy
+provider: oci_s3_compat
+endpoint: https://namespace.compat.objectstorage.ap-tokyo-1.oraclecloud.com
+region: ap-tokyo-1
+accessKeyId: access-key
+secretAccessKey: secret-key
+`
+
+		await expect(parseProfileYaml(yamlText)).rejects.toThrow(
+			'oci_s3_compat is no longer offered for new profiles. Use oci_object_storage instead.',
+		)
+	})
+
 	it('throws when tls mtls is missing client key', async () => {
 		const yamlText = `
 profile:

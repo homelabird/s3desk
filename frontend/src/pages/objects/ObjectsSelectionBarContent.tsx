@@ -13,6 +13,7 @@ type ObjectsSelectionBarContentProps = {
 	clearAction?: UIAction
 	deleteAction?: UIAction
 	downloadAction?: UIAction
+	moveAction?: UIAction
 	selectionMenuActions: UIActionOrDivider[]
 	getObjectActions: (key: string, size?: number) => UIActionOrDivider[]
 	isDownloadLoading: boolean
@@ -49,6 +50,11 @@ export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProp
 						disabled={!props.downloadAction?.enabled}
 					>
 						{props.downloadAction?.shortLabel ?? props.downloadAction?.label ?? 'Download'}
+					</Button>
+				) : null}
+				{props.moveAction ? (
+					<Button size="small" onClick={props.moveAction.run} disabled={!props.moveAction.enabled}>
+						{props.moveAction.shortLabel ?? props.moveAction.label}
 					</Button>
 				) : null}
 				{hasActions ? (

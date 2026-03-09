@@ -3,15 +3,16 @@ package api
 import (
 	"strings"
 
+	"s3desk/internal/bucketgov"
 	"s3desk/internal/models"
 )
 
 const (
-	reasonBucketPolicyS3Only             = "Supported only by S3-compatible providers (aws_s3, s3_compatible, oci_s3_compat)."
+	reasonBucketPolicyS3Only             = "Supported only by S3-compatible providers (aws_s3, s3_compatible)."
 	reasonGCSIAMPolicyOnly               = "Supported only by gcp_gcs."
 	reasonAzureContainerPolicyOnly       = "Supported only by azure_blob."
-	reasonPresignedUploadS3Only          = "Presigned upload is supported only by S3-compatible providers (aws_s3, s3_compatible, oci_s3_compat)."
-	reasonPresignedMultipartUploadS3Only = "Presigned multipart upload is supported only by S3-compatible providers (aws_s3, s3_compatible, oci_s3_compat)."
+	reasonPresignedUploadS3Only          = "Presigned upload is supported only by S3-compatible providers (aws_s3, s3_compatible)."
+	reasonPresignedMultipartUploadS3Only = "Presigned multipart upload is supported only by S3-compatible providers (aws_s3, s3_compatible)."
 	reasonDirectUploadDisabledByConfig   = "Direct upload mode is disabled on this server (UPLOAD_DIRECT_STREAM=false)."
 	reasonGcpProjectNumberRequired       = "GCS bucket operations require Project Number on this profile."
 	reasonGcpAnonymousPolicyEndpoint     = "GCS IAM policy requires credentials, or anonymous mode with a custom endpoint that allows unauthenticated access."
@@ -40,7 +41,6 @@ func providerCapabilityMatrix(uploadDirectStream bool) map[models.ProfileProvide
 	out := map[models.ProfileProvider]models.ProviderCapability{
 		models.ProfileProviderAwsS3:            newBase(),
 		models.ProfileProviderS3Compatible:     newBase(),
-		models.ProfileProviderOciS3Compat:      newBase(),
 		models.ProfileProviderAzureBlob:        newBase(),
 		models.ProfileProviderGcpGcs:           newBase(),
 		models.ProfileProviderOciObjectStorage: newBase(),
@@ -49,7 +49,6 @@ func providerCapabilityMatrix(uploadDirectStream bool) map[models.ProfileProvide
 	s3Like := []models.ProfileProvider{
 		models.ProfileProviderAwsS3,
 		models.ProfileProviderS3Compatible,
-		models.ProfileProviderOciS3Compat,
 	}
 	for _, provider := range s3Like {
 		cap := out[provider]
@@ -68,6 +67,7 @@ func providerCapabilityMatrix(uploadDirectStream bool) map[models.ProfileProvide
 	out[models.ProfileProviderGcpGcs] = gcs
 
 	for provider, cap := range out {
+		cap.Governance = bucketgov.ProviderGovernanceCapabilities(provider)
 		if !cap.BucketPolicy {
 			ensureCapabilityReasons(&cap).BucketPolicy = reasonBucketPolicyS3Only
 		}
@@ -123,6 +123,7 @@ func effectiveProviderCapability(profile models.Profile, uploadDirectStream bool
 	if profile.Anonymous != nil && *profile.Anonymous && strings.TrimSpace(profile.Endpoint) == "" {
 		out.GCSIAMPolicy = false
 		ensureCapabilityReasons(&out).GCSIAMPolicy = reasonGcpAnonymousPolicyEndpoint
+		setGovernanceCapability(&out, models.BucketGovernanceCapabilityAccessBindings, false, reasonGcpAnonymousPolicyEndpoint)
 	}
 
 	return out
@@ -146,6 +147,13 @@ func validateProfile(profile models.Profile) *models.ProfileValidation {
 }
 
 func cloneProviderCapability(cap models.ProviderCapability) models.ProviderCapability {
+	if cap.Governance != nil {
+		governance := make(models.BucketGovernanceCapabilities, len(cap.Governance))
+		for key, value := range cap.Governance {
+			governance[key] = value
+		}
+		cap.Governance = governance
+	}
 	if cap.Reasons == nil {
 		return cap
 	}
@@ -159,4 +167,18 @@ func ensureCapabilityReasons(cap *models.ProviderCapability) *models.ProviderCap
 		cap.Reasons = &models.ProviderCapabilityReasons{}
 	}
 	return cap.Reasons
+}
+
+func setGovernanceCapability(cap *models.ProviderCapability, capability models.BucketGovernanceCapability, enabled bool, reason string) {
+	if cap == nil {
+		return
+	}
+	if cap.Governance == nil {
+		cap.Governance = bucketgov.NewCapabilities()
+	}
+	if enabled {
+		cap.Governance[capability] = bucketgov.EnabledCapability()
+		return
+	}
+	cap.Governance[capability] = bucketgov.DisabledCapability(reason)
 }

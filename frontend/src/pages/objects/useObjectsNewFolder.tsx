@@ -175,60 +175,89 @@ export function useObjectsNewFolder({
 							? 'search filter'
 							: null
 			const createdOutsideLabel = createdOutsideView ? (parentPrefixNormalized || '/') : null
-			message.success({
-				duration: 6,
-				content: (
-					<span>
-						Folder created{autoOpened ? ' and opened' : ''}
-						{viewHideLabel ? ` (${viewHideLabel})` : createdOutsideLabel ? ` (under ${createdOutsideLabel})` : ''}: <Typography.Text code>{createdKey}</Typography.Text>{' '}
-						<Button
-							type="link"
-							size="small"
-							style={{ paddingInline: 4 }}
-							onClick={() => {
-								onOpenPrefix(createdKey)
-							}}
-						>
-							{autoOpened ? 'Reopen' : 'Open'}
-						</Button>
-						{autoOpened || createdOutsideView ? (
-							<>
-								<Button
-									type="link"
-									size="small"
-									style={{ paddingInline: 4 }}
-									onClick={() => onOpenPrefix(newFolderParentPrefix)}
-								>
-									Parent
-								</Button>
-								{autoOpened ? (
-									<>
-										{viewHideReason === 'favoritesOnly' ? (
-											<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onDisableFavoritesOnly}>
-												Disable favorites-only
-											</Button>
-										) : viewHideReason === 'filesOnly' ? (
-											<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onShowFolders}>
-												Show folders
-											</Button>
-										) : viewHideReason === 'search' ? (
-											<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onClearSearch}>
-												Clear search
-											</Button>
-										) : null}
-									</>
-								) : null}
-							</>
-						) : null}
-					</span>
-				),
-			})
+			const visiblePrefix = getVisibleCreatedPrefix(parentPrefixNormalized, createdKey)
+			let folderVisibleAfterRefresh = true
+			if (profileId) {
+				await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
+				if (parentIsCurrent && !viewHideReason && !createdOutsideView) {
+					const refreshed = await api.listObjects({
+						profileId,
+						bucket,
+						prefix: parentPrefixNormalized,
+						delimiter: '/',
+						maxKeys: 200,
+					})
+					folderVisibleAfterRefresh = Array.isArray(refreshed.commonPrefixes) && refreshed.commonPrefixes.includes(visiblePrefix)
+				}
+			}
 
 			setNewFolderOpen(false)
 			setNewFolderValues({ name: '', allowPath: false })
 			setNewFolderPartialKey(null)
-			if (profileId) {
-				await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
+
+			const toastActionLabel = autoOpened ? 'Reopen' : 'Open'
+			const toastAction = (
+				<Button
+					type="link"
+					size="small"
+					style={{ paddingInline: 4 }}
+					onClick={() => {
+						onOpenPrefix(createdKey)
+					}}
+				>
+					{toastActionLabel}
+				</Button>
+			)
+			if (!folderVisibleAfterRefresh) {
+				message.warning({
+					duration: 8,
+					content: (
+						<span>
+							Folder create request completed, but the provider did not return it after refresh: <Typography.Text code>{createdKey}</Typography.Text>{' '}
+							{toastAction}
+						</span>
+					),
+				})
+			} else {
+				message.success({
+					duration: 6,
+					content: (
+						<span>
+							Folder created{autoOpened ? ' and opened' : ''}
+							{viewHideLabel ? ` (${viewHideLabel})` : createdOutsideLabel ? ` (under ${createdOutsideLabel})` : ''}: <Typography.Text code>{createdKey}</Typography.Text>{' '}
+							{toastAction}
+							{autoOpened || createdOutsideView ? (
+								<>
+									<Button
+										type="link"
+										size="small"
+										style={{ paddingInline: 4 }}
+										onClick={() => onOpenPrefix(newFolderParentPrefix)}
+									>
+										Parent
+									</Button>
+									{autoOpened ? (
+										<>
+											{viewHideReason === 'favoritesOnly' ? (
+												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onDisableFavoritesOnly}>
+													Disable favorites-only
+												</Button>
+											) : viewHideReason === 'filesOnly' ? (
+												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onShowFolders}>
+													Show folders
+												</Button>
+											) : viewHideReason === 'search' ? (
+												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onClearSearch}>
+													Clear search
+												</Button>
+											) : null}
+										</>
+									) : null}
+								</>
+							) : null}
+						</span>
+					),
+				})
 			}
 			const parentKey = normalizePrefix(newFolderParentPrefix) || '/'
 			void refreshTreeNode(parentKey)

@@ -18,6 +18,7 @@ type ObjectsDetailsPanelSectionProps = {
 	onRetryMeta: () => void
 	onCopyKey: () => void
 	onDownload: () => void
+	showPresignAction?: boolean
 	onPresign: () => void
 	isPresignLoading: boolean
 	onCopyMove: (mode: 'copy' | 'move') => void
@@ -33,6 +34,7 @@ type ObjectsDetailsPanelSectionProps = {
 	dockDetails: boolean
 	detailsOpen: boolean
 	detailsDrawerOpen: boolean
+	detailsDrawerSuspended?: boolean
 	onOpenDetails: () => void
 	onCloseDetails: () => void
 	onCloseDrawer: () => void
@@ -56,6 +58,7 @@ export function ObjectsDetailsPanelSection(props: ObjectsDetailsPanelSectionProp
 			onRetryMeta={props.onRetryMeta}
 			onCopyKey={props.onCopyKey}
 			onDownload={props.onDownload}
+			showPresignAction={props.showPresignAction}
 			onPresign={props.onPresign}
 			isPresignLoading={props.isPresignLoading}
 			onCopyMove={props.onCopyMove}
@@ -76,6 +79,7 @@ export function ObjectsDetailsPanelSection(props: ObjectsDetailsPanelSectionProp
 			dockDetails={props.dockDetails}
 			detailsOpen={props.detailsOpen}
 			detailsDrawerOpen={props.detailsDrawerOpen}
+			detailsDrawerSuspended={props.detailsDrawerSuspended}
 			detailsPanelBody={detailsPanelBody}
 			onOpenDetails={props.onOpenDetails}
 			onCloseDetails={props.onCloseDetails}

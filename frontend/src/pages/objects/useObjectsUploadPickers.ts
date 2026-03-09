@@ -1,79 +1,81 @@
 import { message } from 'antd'
-import { useCallback, useEffect, useRef, type ChangeEvent } from 'react'
+import { useCallback, useState } from 'react'
 
-import { getDevicePickerSupport } from '../../lib/deviceFs'
+import { getDirectorySelectionSupport } from '../../lib/deviceFs'
+import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { promptForFiles, promptForFolderFiles } from '../../components/transfers/transfersUploadUtils'
 
 export function useObjectsUploadPickers(args: {
 	isOffline: boolean
 	uploadsEnabled: boolean
 	uploadsDisabledReason?: string | null
 	startUploadFromFiles: (files: File[]) => void
-	openUploadFolderModal: () => void
 }) {
-	const { isOffline, uploadsEnabled, uploadsDisabledReason, startUploadFromFiles, openUploadFolderModal } = args
-	const uploadFilesInputRef = useRef<HTMLInputElement | null>(null)
-	const uploadFolderInputRef = useRef<HTMLInputElement | null>(null)
+	const { isOffline, uploadsEnabled, uploadsDisabledReason, startUploadFromFiles } = args
+	const [uploadSourceOpen, setUploadSourceOpen] = useState(false)
+	const [uploadSourceBusy, setUploadSourceBusy] = useState(false)
+	const directorySelectionSupport = getDirectorySelectionSupport()
 
-	useEffect(() => {
-		const el = uploadFolderInputRef.current
-		if (!el) return
-		el.setAttribute('webkitdirectory', '')
-		el.setAttribute('directory', '')
-	}, [])
-
-	const onUploadFilesInputChange = useCallback(
-		(e: ChangeEvent<HTMLInputElement>) => {
-			const files = Array.from(e.target.files ?? [])
-			startUploadFromFiles(files)
-			e.target.value = ''
-		},
-		[startUploadFromFiles],
-	)
-
-	const onUploadFolderInputChange = useCallback(
-		(e: ChangeEvent<HTMLInputElement>) => {
-			const files = Array.from(e.target.files ?? [])
-			startUploadFromFiles(files)
-			e.target.value = ''
-		},
-		[startUploadFromFiles],
-	)
-
-	const openUploadFilesPicker = useCallback(() => {
+	const ensureUploadAllowed = useCallback(() => {
 		if (isOffline) {
 			message.warning('Offline: uploads are disabled.')
-			return
+			return false
 		}
 		if (!uploadsEnabled) {
 			message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
-			return
+			return false
 		}
-		uploadFilesInputRef.current?.click()
+		return true
 	}, [isOffline, uploadsDisabledReason, uploadsEnabled])
 
-	const openUploadFolderPicker = useCallback(() => {
-		if (isOffline) {
-			message.warning('Offline: uploads are disabled.')
-			return
+	const openUploadPicker = useCallback(() => {
+		if (!ensureUploadAllowed()) return
+		setUploadSourceOpen(true)
+	}, [ensureUploadAllowed])
+
+	const closeUploadSource = useCallback(() => {
+		if (uploadSourceBusy) return
+		setUploadSourceOpen(false)
+	}, [uploadSourceBusy])
+
+	const chooseUploadFiles = useCallback(async () => {
+		if (!ensureUploadAllowed()) return
+		setUploadSourceBusy(true)
+		try {
+			setUploadSourceOpen(false)
+			const files = await promptForFiles({ multiple: true, directory: false })
+			if (!files || files.length === 0) return
+			startUploadFromFiles(files)
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setUploadSourceBusy(false)
 		}
-		if (!uploadsEnabled) {
-			message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
-			return
+	}, [ensureUploadAllowed, startUploadFromFiles])
+
+	const chooseUploadFolder = useCallback(async () => {
+		if (!ensureUploadAllowed()) return
+		setUploadSourceBusy(true)
+		try {
+			setUploadSourceOpen(false)
+			const result = await promptForFolderFiles()
+			if (!result || result.files.length === 0) return
+			startUploadFromFiles(result.files)
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setUploadSourceBusy(false)
 		}
-		const support = getDevicePickerSupport()
-		if (support.ok) {
-			openUploadFolderModal()
-			return
-		}
-		uploadFolderInputRef.current?.click()
-	}, [isOffline, openUploadFolderModal, uploadsDisabledReason, uploadsEnabled])
+	}, [ensureUploadAllowed, startUploadFromFiles])
 
 	return {
-		uploadFilesInputRef,
-		uploadFolderInputRef,
-		onUploadFilesInputChange,
-		onUploadFolderInputChange,
-		openUploadFilesPicker,
-		openUploadFolderPicker,
+		uploadSourceOpen,
+		uploadSourceBusy,
+		folderSelectionSupported: directorySelectionSupport.ok,
+		folderSelectionReason: directorySelectionSupport.reason ?? null,
+		openUploadPicker,
+		closeUploadSource,
+		chooseUploadFiles,
+		chooseUploadFolder,
 	}
 }

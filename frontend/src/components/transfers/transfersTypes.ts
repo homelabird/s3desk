@@ -1,12 +1,5 @@
 import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
 
-export type UploadMovePlan = {
-	rootHandle: FileSystemDirectoryHandle
-	relPaths: string[]
-	label?: string
-	cleanupEmptyDirs?: boolean
-}
-
 export type QueueDownloadObjectArgs = {
 	profileId: string
 	bucket: string
@@ -39,7 +32,6 @@ export type QueueUploadFilesArgs = {
 	prefix: string
 	files: File[]
 	label?: string
-	moveSource?: UploadMovePlan
 }
 
 export type TransfersContextValue = {

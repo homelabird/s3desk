@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"s3desk/internal/bucketgov"
 	"s3desk/internal/config"
 	"s3desk/internal/models"
 )
@@ -223,6 +224,164 @@ exit 0
 	decodeJSONResponse(t, res, &errResp)
 	if errResp.Error.Code != "not_found" {
 		t.Fatalf("code=%q, want not_found", errResp.Error.Code)
+	}
+	if got := errResp.Error.Details["bucket"]; got != "demo" {
+		t.Fatalf("bucket=%v, want demo", got)
+	}
+}
+
+func TestHandleCreateBucketAppliesSecureDefaults(t *testing.T) {
+	lockTestEnv(t)
+	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `exit 0`))
+
+	adapter := &fakeGovernanceAdapter{}
+	srv := &server{
+		cfg:       config.Config{DataDir: t.TempDir()},
+		bucketGov: newGovernanceTestService(models.ProfileProviderAwsS3, adapter),
+	}
+
+	body := []byte(`{
+		"name":"demo",
+		"region":"ap-northeast-2",
+		"defaults":{
+			"publicExposure":{"blockPublicAccess":{"blockPublicAcls":true,"ignorePublicAcls":true,"blockPublicPolicy":true,"restrictPublicBuckets":true}},
+			"access":{"objectOwnership":"bucket_owner_enforced"},
+			"versioning":{"status":"enabled"},
+			"encryption":{"mode":"sse_s3"}
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/buckets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withProfileSecrets(req, models.ProfileSecrets{
+		Provider:        models.ProfileProviderAwsS3,
+		Region:          "us-east-1",
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+	})
+	rr := httptest.NewRecorder()
+
+	srv.handleCreateBucket(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusCreated)
+	}
+
+	var bucket models.Bucket
+	decodeJSONResponse(t, res, &bucket)
+	if bucket.Name != "demo" {
+		t.Fatalf("bucket=%q, want demo", bucket.Name)
+	}
+	if adapter.putReq == nil || adapter.putReq.BlockPublicAccess == nil || !adapter.putReq.BlockPublicAccess.BlockPublicPolicy {
+		t.Fatalf("publicExposure=%+v, want block public access request", adapter.putReq)
+	}
+	if adapter.putAccessReq == nil || adapter.putAccessReq.ObjectOwnership == nil || *adapter.putAccessReq.ObjectOwnership != models.BucketObjectOwnershipBucketOwnerEnforced {
+		t.Fatalf("access=%+v, want bucket_owner_enforced", adapter.putAccessReq)
+	}
+	if adapter.putVersioning == nil || adapter.putVersioning.Status != models.BucketVersioningStatusEnabled {
+		t.Fatalf("versioning=%+v, want enabled", adapter.putVersioning)
+	}
+	if adapter.putEncryption == nil || adapter.putEncryption.Mode != models.BucketEncryptionModeSSES3 {
+		t.Fatalf("encryption=%+v, want sse_s3", adapter.putEncryption)
+	}
+}
+
+func TestHandleCreateBucketRejectsUnsupportedSecureDefaults(t *testing.T) {
+	srv := &server{
+		cfg:       config.Config{DataDir: t.TempDir()},
+		bucketGov: bucketgov.NewService(bucketgov.NewDefaultRegistry()),
+	}
+
+	body := []byte(`{
+		"name":"demo",
+		"defaults":{
+			"access":{"objectOwnership":"bucket_owner_enforced"}
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/buckets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withProfileSecrets(req, models.ProfileSecrets{
+		Provider: models.ProfileProviderAzureBlob,
+	})
+	rr := httptest.NewRecorder()
+
+	srv.handleCreateBucket(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "invalid_request" {
+		t.Fatalf("code=%q, want invalid_request", errResp.Error.Code)
+	}
+	if got := errResp.Error.Details["field"]; got != "defaults.access.objectOwnership" {
+		t.Fatalf("field=%v, want defaults.access.objectOwnership", got)
+	}
+	if got := errResp.Error.Details["provider"]; got != string(models.ProfileProviderAzureBlob) {
+		t.Fatalf("provider=%v, want %q", got, models.ProfileProviderAzureBlob)
+	}
+	if got := errResp.Error.Details["capability"]; got != string(models.BucketGovernanceCapabilityObjectOwnership) {
+		t.Fatalf("capability=%v, want %q", got, models.BucketGovernanceCapabilityObjectOwnership)
+	}
+}
+
+func TestHandleCreateBucketReturnsBucketCreatedWhenDefaultsApplyFails(t *testing.T) {
+	lockTestEnv(t)
+	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `exit 0`))
+
+	adapter := &fakeGovernanceAdapter{
+		putEncryptErr: bucketgov.AccessDeniedError("demo", "PutBucketEncryption"),
+	}
+	srv := &server{
+		cfg:       config.Config{DataDir: t.TempDir()},
+		bucketGov: newGovernanceTestService(models.ProfileProviderAwsS3, adapter),
+	}
+
+	body := []byte(`{
+		"name":"demo",
+		"defaults":{
+			"encryption":{"mode":"sse_s3"}
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/buckets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withProfileSecrets(req, models.ProfileSecrets{
+		Provider:        models.ProfileProviderAwsS3,
+		Region:          "us-east-1",
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+	})
+	rr := httptest.NewRecorder()
+
+	srv.handleCreateBucket(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusForbidden)
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "bucket_defaults_apply_failed" {
+		t.Fatalf("code=%q, want bucket_defaults_apply_failed", errResp.Error.Code)
+	}
+	if errResp.Error.NormalizedError == nil || errResp.Error.NormalizedError.Code != models.NormalizedErrorAccessDenied {
+		t.Fatalf("normalizedError=%+v, want access_denied", errResp.Error.NormalizedError)
+	}
+	if got := errResp.Error.Details["bucketCreated"]; got != true {
+		t.Fatalf("bucketCreated=%v, want true", got)
+	}
+	if got := errResp.Error.Details["applySection"]; got != "encryption" {
+		t.Fatalf("applySection=%v, want encryption", got)
+	}
+	if got := errResp.Error.Details["applyErrorCode"]; got != string(models.NormalizedErrorAccessDenied) {
+		t.Fatalf("applyErrorCode=%v, want access_denied", got)
 	}
 	if got := errResp.Error.Details["bucket"]; got != "demo" {
 		t.Fatalf("bucket=%v, want demo", got)

@@ -29,6 +29,7 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 			treeDrawerOpen: false,
 			hasProfile: true,
 			hasBucket: true,
+			favoriteCount: 0,
 			favorites: [],
 			favoritesSearch: '',
 			onFavoritesSearchChange: () => {},
@@ -36,6 +37,8 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 			onFavoritesOnlyChange: () => {},
 			favoritesOpenDetails: false,
 			onFavoritesOpenDetailsChange: () => {},
+			favoritesExpanded: false,
+			onFavoritesExpandedChange: () => {},
 			onSelectFavorite: () => {},
 			onSelectFavoriteFromDrawer: () => {},
 			favoritesLoading: false,
@@ -121,6 +124,7 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 				clearAction: undefined,
 				deleteAction: undefined,
 				downloadAction: undefined,
+				moveAction: undefined,
 				selectionMenuActions: [],
 				getObjectActions: () => [],
 				isDownloadLoading: false,
@@ -247,6 +251,22 @@ describe('ObjectsPagePanes', () => {
 
 		expect(screen.queryByTestId('objects-details-section')).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Show details' })).toBeInTheDocument()
+	})
+
+	it('does not mount the details sheet while large preview suspends the drawer', () => {
+		render(
+			<ObjectsPagePanes
+				{...buildProps({
+					detailsProps: {
+						...buildProps().detailsProps,
+						detailsDrawerOpen: true,
+						detailsDrawerSuspended: true,
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.queryByTestId('objects-details-section')).not.toBeInTheDocument()
 	})
 
 	it('defers list controls until the idle tick after a bucket is available', async () => {

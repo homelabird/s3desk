@@ -1,10 +1,10 @@
-import type { Profile, ProfileCreateRequest, ProfileTLSConfig } from '../../api/types'
+import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../../api/types'
 import type { ProfileProvider } from './profileTypes'
 
 type ProfileYamlProfile = {
 	id?: string
 	name?: string
-	provider?: ProfileProvider
+	provider?: string
 	endpoint?: string
 	region?: string
 	accessKeyId?: string
@@ -36,7 +36,6 @@ type ProfileYamlTLS = {
 const PROFILE_PROVIDERS: ProfileProvider[] = [
 	'aws_s3',
 	's3_compatible',
-	'oci_s3_compat',
 	'azure_blob',
 	'gcp_gcs',
 	'oci_object_storage',
@@ -77,7 +76,7 @@ function inferProvider(profile: ProfileYamlProfile): ProfileProvider {
 
 export async function parseProfileYaml(
 	yamlText: string,
-): Promise<{ request: ProfileCreateRequest; tlsConfig?: ProfileTLSConfig }> {
+): Promise<{ request: ProfileCreateRequest; updateRequest: ProfileUpdateRequest; tlsConfig?: ProfileTLSConfig; hasTLSBlock: boolean }> {
 	// YAML parsing is an optional Profiles-only feature. Keep it out of the initial bundle.
 	const { parse: parseYaml } = await import('yaml')
 	const parsed = parseYaml(yamlText) as unknown
@@ -85,6 +84,9 @@ export async function parseProfileYaml(
 	const name = toOptionalString(profile.name)
 	if (!name) {
 		throw new Error('profile.name is required')
+	}
+	if (profile.provider === 'oci_s3_compat') {
+		throw new Error('oci_s3_compat is no longer offered for new profiles. Use oci_object_storage instead.')
 	}
 
 	const provider = isProfileProvider(profile.provider) ? profile.provider : inferProvider(profile)
@@ -163,7 +165,7 @@ export async function parseProfileYaml(
 				throw new Error(`${provider} requires region, accessKeyId, and secretAccessKey`)
 			}
 			const endpoint = toOptionalString(profile.endpoint)
-			if ((provider === 's3_compatible' || provider === 'oci_s3_compat') && !endpoint) {
+			if (provider === 's3_compatible' && !endpoint) {
 				throw new Error(`${provider} requires endpoint`)
 			}
 			const base = {
@@ -190,7 +192,7 @@ export async function parseProfileYaml(
 				}
 			} else {
 				request = {
-					provider: 'oci_s3_compat',
+					provider: 's3_compatible',
 					...base,
 					endpoint: endpoint as string,
 				}
@@ -215,7 +217,12 @@ export async function parseProfileYaml(
 		}
 	}
 
-	return { request, tlsConfig }
+	return {
+		request,
+		updateRequest: request as ProfileUpdateRequest,
+		tlsConfig,
+		hasTLSBlock: !!tls,
+	}
 }
 
 export function buildProfileExportFilename(profile: Profile | null): string {

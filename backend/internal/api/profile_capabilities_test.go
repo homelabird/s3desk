@@ -40,6 +40,12 @@ func TestDecorateProfileFlagsLegacyGCSForUpdate(t *testing.T) {
 	if profile.EffectiveCapabilities.Reasons == nil || profile.EffectiveCapabilities.Reasons.BucketCRUD == "" {
 		t.Fatalf("capability reasons=%+v, want bucketCrud reason", profile.EffectiveCapabilities.Reasons)
 	}
+	if profile.EffectiveCapabilities.Governance == nil {
+		t.Fatal("expected governance capabilities")
+	}
+	if !profile.EffectiveCapabilities.Governance[models.BucketGovernanceCapabilityAccessBindings].Enabled {
+		t.Fatalf("governance=%+v, want GCS access bindings available", profile.EffectiveCapabilities.Governance)
+	}
 }
 
 func TestDecorateProfileDisablesAnonymousGCSIAMWithoutEndpoint(t *testing.T) {
@@ -65,5 +71,12 @@ func TestDecorateProfileDisablesAnonymousGCSIAMWithoutEndpoint(t *testing.T) {
 	}
 	if profile.EffectiveCapabilities.Reasons == nil || profile.EffectiveCapabilities.Reasons.GCSIAMPolicy != reasonGcpAnonymousPolicyEndpoint {
 		t.Fatalf("capability reasons=%+v, want %q", profile.EffectiveCapabilities.Reasons, reasonGcpAnonymousPolicyEndpoint)
+	}
+	got := profile.EffectiveCapabilities.Governance[models.BucketGovernanceCapabilityAccessBindings]
+	if got.Enabled {
+		t.Fatalf("governance=%+v, want access bindings disabled", profile.EffectiveCapabilities.Governance)
+	}
+	if got.Reason != reasonGcpAnonymousPolicyEndpoint {
+		t.Fatalf("governance reason=%q, want %q", got.Reason, reasonGcpAnonymousPolicyEndpoint)
 	}
 }

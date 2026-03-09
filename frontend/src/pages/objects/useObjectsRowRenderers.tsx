@@ -12,6 +12,7 @@ import type { ContextMenuMatch, ContextMenuPoint, ContextMenuState } from './use
 type UseObjectsRowRenderersArgs = {
 	api: APIClient
 	profileId: string | null
+	profileProvider?: string | null
 	bucket: string
 	prefix: string
 	canDragDrop: boolean
@@ -36,6 +37,11 @@ type UseObjectsRowRenderersArgs = {
 	onOpenPrefix: (prefix: string) => void
 	onRowDragStartPrefix: (event: DragEvent, prefix: string) => void
 	onRowDragStartObjects: (event: DragEvent, key: string) => void
+	dndHoverPrefix: string | null
+	normalizeDropTargetPrefix: (raw: string) => string
+	onDndTargetDragOver: (event: DragEvent, targetPrefixRaw: string) => void
+	onDndTargetDragLeave: (event: DragEvent, targetPrefixRaw: string) => void
+	onDndTargetDrop: (event: DragEvent, targetPrefixRaw: string) => void
 	clearDndHover: () => void
 	selectObjectFromPointerEvent: (event: MouseEvent, key: string) => void
 	selectObjectFromCheckboxEvent: (event: MouseEvent, key: string) => void
@@ -50,6 +56,7 @@ type UseObjectsRowRenderersArgs = {
 export function useObjectsRowRenderers({
 	api,
 	profileId,
+	profileProvider,
 	bucket,
 	prefix,
 	canDragDrop,
@@ -74,6 +81,11 @@ export function useObjectsRowRenderers({
 	onOpenPrefix,
 	onRowDragStartPrefix,
 	onRowDragStartObjects,
+	dndHoverPrefix,
+	normalizeDropTargetPrefix,
+	onDndTargetDragOver,
+	onDndTargetDragLeave,
+	onDndTargetDrop,
 	clearDndHover,
 	selectObjectFromPointerEvent,
 	selectObjectFromCheckboxEvent,
@@ -99,6 +111,7 @@ export function useObjectsRowRenderers({
 				contextMenuState.kind === 'prefix' &&
 				contextMenuState.key === prefixKey &&
 				contextMenuState.source === 'button'
+			const dropTargetPrefix = normalizeDropTargetPrefix(prefixKey)
 			return (
 				<ObjectsPrefixRowItem
 					key={prefixKey}
@@ -120,6 +133,10 @@ export function useObjectsRowRenderers({
 					onOpenPrefix={onOpenPrefix}
 					onRowDragStartPrefix={onRowDragStartPrefix}
 					onRowDragEnd={clearDndHover}
+					isDropTargetActive={canDragDrop && dndHoverPrefix === dropTargetPrefix}
+					onDropTargetDragOver={onDndTargetDragOver}
+					onDropTargetDragLeave={onDndTargetDragLeave}
+					onDropTargetDrop={onDndTargetDrop}
 				/>
 			)
 		},
@@ -136,6 +153,11 @@ export function useObjectsRowRenderers({
 			isAdvanced,
 			isCompactList,
 			listGridClassName,
+			dndHoverPrefix,
+			normalizeDropTargetPrefix,
+			onDndTargetDragLeave,
+			onDndTargetDragOver,
+			onDndTargetDrop,
 			onOpenPrefix,
 			onRowDragStartPrefix,
 			openPrefixContextMenu,
@@ -187,6 +209,7 @@ export function useObjectsRowRenderers({
 					onToggleFavorite={toggleFavorite}
 					api={api}
 					profileId={profileId}
+					profileProvider={profileProvider}
 					bucket={bucket}
 					showThumbnails={showThumbnails}
 					thumbnailCache={thumbnailCache}
@@ -216,6 +239,7 @@ export function useObjectsRowRenderers({
 			openObjectContextMenu,
 			prefix,
 			profileId,
+			profileProvider,
 			recordContextMenuPoint,
 			rowHeightCompactPx,
 			rowHeightWidePx,

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { message } from 'antd'
 
 import type { APIClient } from '../../api/client'
-import type { ListObjectsResponse, ObjectFavoritesResponse, ObjectItem } from '../../api/types'
+import type { FavoriteObjectItem, ListObjectsResponse, ObjectFavoritesResponse, ObjectItem } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 
 type UseObjectsFavoritesArgs = {
@@ -12,23 +12,82 @@ type UseObjectsFavoritesArgs = {
 	bucket: string
 	apiToken: string
 	objectsPages: ListObjectsResponse[]
+	hydrateItems: boolean
 }
 
-export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsPages }: UseObjectsFavoritesArgs) {
+function favoriteKeysFromResponse(response: ObjectFavoritesResponse | undefined): string[] {
+	if (!response) return []
+	if (Array.isArray(response.keys) && response.keys.length > 0) {
+		return Array.from(new Set(response.keys.filter(Boolean)))
+	}
+	return Array.from(new Set((response.items ?? []).map((item) => item.key).filter(Boolean)))
+}
+
+function updateFavoriteResponse(
+	response: ObjectFavoritesResponse | undefined,
+	args: {
+		bucket: string
+		hydrated: boolean
+		favoriteKey: string
+		mode: 'add' | 'remove'
+		item?: FavoriteObjectItem
+	},
+): ObjectFavoritesResponse {
+	const nextKeys = favoriteKeysFromResponse(response)
+	if (args.mode === 'add') {
+		nextKeys.unshift(args.favoriteKey)
+	}
+	const uniqueKeys = Array.from(new Set(nextKeys.filter((key) => key && (args.mode === 'add' || key !== args.favoriteKey))))
+	const nextItems =
+		args.hydrated || response?.hydrated
+			? args.mode === 'add'
+				? [args.item, ...(response?.items ?? []).filter((item) => item.key !== args.favoriteKey)].filter(Boolean) as FavoriteObjectItem[]
+				: (response?.items ?? []).filter((item) => item.key !== args.favoriteKey)
+			: []
+	return {
+		bucket: response?.bucket ?? args.bucket,
+		prefix: response?.prefix ?? '',
+		count: uniqueKeys.length,
+		keys: uniqueKeys,
+		hydrated: args.hydrated || response?.hydrated || false,
+		items: nextItems,
+	}
+}
+
+export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsPages, hydrateItems }: UseObjectsFavoritesArgs) {
 	const queryClient = useQueryClient()
 	const [favoritePendingKeys, setFavoritePendingKeys] = useState<Set<string>>(() => new Set())
 
-	const favoritesQueryKey = useMemo(
-		() => ['objectFavorites', profileId, bucket, apiToken],
+	const favoriteSummaryQueryKey = useMemo(
+		() => ['objectFavorites', profileId, bucket, apiToken, 'summary'],
 		[apiToken, bucket, profileId],
 	)
-	const favoritesQuery = useQuery({
-		queryKey: favoritesQueryKey,
+	const favoriteItemsQueryKey = useMemo(
+		() => ['objectFavorites', profileId, bucket, apiToken, 'items'],
+		[apiToken, bucket, profileId],
+	)
+	const favoriteSummaryQuery = useQuery({
+		queryKey: favoriteSummaryQueryKey,
 		enabled: !!profileId && !!bucket,
-		queryFn: () => api.listObjectFavorites({ profileId: profileId!, bucket }),
+		queryFn: () => api.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false }),
 	})
-	const favoriteItems = useMemo(() => favoritesQuery.data?.items ?? [], [favoritesQuery.data?.items])
-	const favoriteKeys = useMemo(() => new Set(favoriteItems.map((item) => item.key)), [favoriteItems])
+	const favoriteItemsQuery = useQuery({
+		queryKey: favoriteItemsQueryKey,
+		enabled: !!profileId && !!bucket && hydrateItems,
+		queryFn: () => api.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true }),
+	})
+	const favoritesQuery = hydrateItems ? favoriteItemsQuery : favoriteSummaryQuery
+	const favoriteItems = useMemo(() => favoriteItemsQuery.data?.items ?? [], [favoriteItemsQuery.data?.items])
+	const favoriteKeys = useMemo(
+		() =>
+			new Set(
+				favoriteKeysFromResponse(favoriteSummaryQuery.data).concat(
+					favoriteItemsQuery.data?.items?.map((item) => item.key) ?? [],
+				),
+			),
+		[favoriteItemsQuery.data?.items, favoriteSummaryQuery.data],
+	)
+	const favoriteCount = favoriteSummaryQuery.data?.count ?? favoriteItemsQuery.data?.count ?? favoriteKeys.size
 
 	const objectsItemMap = useMemo(() => {
 		const map = new Map<string, ObjectItem>()
@@ -61,14 +120,13 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 			setFavoritePendingKeys((prev) => new Set(prev).add(key))
 		},
 		onSuccess: (fav) => {
-			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoritesQueryKey, (prev) => {
-				const item = buildFavoriteItem(fav.key, fav.createdAt)
-				if (!prev) {
-					return { bucket, items: [item] }
-				}
-				const items = Array.isArray(prev.items) ? prev.items.filter((entry) => entry.key !== fav.key) : []
-				return { ...prev, items: [item, ...items] }
-			})
+			const item = buildFavoriteItem(fav.key, fav.createdAt)
+			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoriteSummaryQueryKey, (prev) =>
+				updateFavoriteResponse(prev, { bucket, hydrated: false, favoriteKey: fav.key, item, mode: 'add' }),
+			)
+			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoriteItemsQueryKey, (prev) =>
+				updateFavoriteResponse(prev, { bucket, hydrated: true, favoriteKey: fav.key, item, mode: 'add' }),
+			)
 		},
 		onSettled: (_, __, key) => {
 			setFavoritePendingKeys((prev) => {
@@ -86,10 +144,12 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 			setFavoritePendingKeys((prev) => new Set(prev).add(key))
 		},
 		onSuccess: (_, key) => {
-			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoritesQueryKey, (prev) => {
-				if (!prev || !Array.isArray(prev.items)) return prev
-				return { ...prev, items: prev.items.filter((entry) => entry.key !== key) }
-			})
+			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoriteSummaryQueryKey, (prev) =>
+				updateFavoriteResponse(prev, { bucket, hydrated: false, favoriteKey: key, mode: 'remove' }),
+			)
+			queryClient.setQueryData<ObjectFavoritesResponse | undefined>(favoriteItemsQueryKey, (prev) =>
+				updateFavoriteResponse(prev, { bucket, hydrated: true, favoriteKey: key, mode: 'remove' }),
+			)
 		},
 		onSettled: (_, __, key) => {
 			setFavoritePendingKeys((prev) => {
@@ -122,6 +182,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 
 	return {
 		favoritesQuery,
+		favoriteCount,
 		favoriteItems,
 		favoriteKeys,
 		favoritePendingKeys,

@@ -2,13 +2,11 @@ import { useCallback, useState } from 'react'
 import { message } from 'antd'
 
 import type { TransfersContextValue } from '../../components/Transfers'
-import { collectFilesFromDirectoryHandle, normalizeRelativePath } from '../../lib/deviceFs'
+import { collectFilesFromDirectoryHandle } from '../../lib/deviceFs'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 
 type UploadFolderValues = {
 	localFolder: string
-	moveAfterUpload: boolean
-	cleanupEmptyDirs: boolean
 }
 
 type UseObjectsUploadFolderArgs = {
@@ -18,8 +16,6 @@ type UseObjectsUploadFolderArgs = {
 	uploadsEnabled: boolean
 	uploadsDisabledReason?: string | null
 	transfers: TransfersContextValue
-	defaultMoveAfterUpload: boolean
-	defaultCleanupEmptyDirs: boolean
 }
 
 export function useObjectsUploadFolder({
@@ -29,15 +25,9 @@ export function useObjectsUploadFolder({
 	uploadsEnabled,
 	uploadsDisabledReason,
 	transfers,
-	defaultMoveAfterUpload,
-	defaultCleanupEmptyDirs,
 }: UseObjectsUploadFolderArgs) {
 	const [uploadFolderOpen, setUploadFolderOpen] = useState(false)
-	const [uploadFolderValues, setUploadFolderValues] = useState<UploadFolderValues>(() => ({
-		localFolder: '',
-		moveAfterUpload: defaultMoveAfterUpload,
-		cleanupEmptyDirs: defaultCleanupEmptyDirs,
-	}))
+	const [uploadFolderValues, setUploadFolderValues] = useState<UploadFolderValues>(() => ({ localFolder: '' }))
 	const [uploadFolderHandle, setUploadFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
 	const [uploadFolderLabel, setUploadFolderLabel] = useState('')
 	const [uploadFolderSubmitting, setUploadFolderSubmitting] = useState(false)
@@ -49,13 +39,9 @@ export function useObjectsUploadFolder({
 		}
 		setUploadFolderHandle(null)
 		setUploadFolderLabel('')
-		setUploadFolderValues({
-			localFolder: '',
-			moveAfterUpload: defaultMoveAfterUpload,
-			cleanupEmptyDirs: defaultCleanupEmptyDirs,
-		})
+		setUploadFolderValues({ localFolder: '' })
 		setUploadFolderOpen(true)
-	}, [defaultCleanupEmptyDirs, defaultMoveAfterUpload, uploadsDisabledReason, uploadsEnabled])
+	}, [uploadsDisabledReason, uploadsEnabled])
 
 	const handleUploadFolderPick = useCallback((handle: FileSystemDirectoryHandle) => {
 		setUploadFolderHandle(handle)
@@ -66,15 +52,11 @@ export function useObjectsUploadFolder({
 		setUploadFolderOpen(false)
 		setUploadFolderHandle(null)
 		setUploadFolderLabel('')
-		setUploadFolderValues({
-			localFolder: '',
-			moveAfterUpload: defaultMoveAfterUpload,
-			cleanupEmptyDirs: defaultCleanupEmptyDirs,
-		})
-	}, [defaultCleanupEmptyDirs, defaultMoveAfterUpload])
+		setUploadFolderValues({ localFolder: '' })
+	}, [])
 
 	const handleUploadFolderSubmit = useCallback(
-		async (values: UploadFolderValues) => {
+		async () => {
 			if (!profileId) {
 				message.info('Select a profile first')
 				return
@@ -99,14 +81,6 @@ export function useObjectsUploadFolder({
 					message.info('No files found in the selected folder')
 					return
 				}
-				const relPaths = files
-					.map((file) => {
-						const fileWithPath = file as File & { relativePath?: string; webkitRelativePath?: string }
-						const relPath = (fileWithPath.relativePath ?? fileWithPath.webkitRelativePath ?? file.name).trim()
-						return normalizeRelativePath(relPath || file.name)
-					})
-					.filter(Boolean)
-
 				const label = uploadFolderLabel || uploadFolderHandle.name
 				transfers.queueUploadFiles({
 					profileId,
@@ -114,24 +88,12 @@ export function useObjectsUploadFolder({
 					prefix,
 					files,
 					label,
-					moveSource: values.moveAfterUpload
-						? {
-							rootHandle: uploadFolderHandle,
-							relPaths,
-							label,
-							cleanupEmptyDirs: values.cleanupEmptyDirs,
-						}
-						: undefined,
 				})
 				transfers.openTransfers('uploads')
 				setUploadFolderOpen(false)
 				setUploadFolderHandle(null)
 				setUploadFolderLabel('')
-				setUploadFolderValues({
-					localFolder: '',
-					moveAfterUpload: defaultMoveAfterUpload,
-					cleanupEmptyDirs: defaultCleanupEmptyDirs,
-				})
+				setUploadFolderValues({ localFolder: '' })
 			} catch (err) {
 				message.error(formatErr(err))
 			} finally {
@@ -140,8 +102,6 @@ export function useObjectsUploadFolder({
 		},
 		[
 			bucket,
-			defaultCleanupEmptyDirs,
-			defaultMoveAfterUpload,
 			prefix,
 			profileId,
 			transfers,

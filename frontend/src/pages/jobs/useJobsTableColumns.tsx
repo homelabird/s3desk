@@ -8,7 +8,7 @@ import {
 	StopOutlined,
 } from '@ant-design/icons'
 import { Button, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
-import { useCallback, useMemo, type ReactNode } from 'react'
+import { useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
 
 import type { Job, JobStatus } from '../../api/types'
 import { MenuPopover } from '../../components/MenuPopover'
@@ -19,6 +19,7 @@ import { formatBytes } from '../../lib/transfer'
 import { compareNumber, compareText, getProgressSortValue } from './jobPresentation'
 import { statusColor } from './jobUtils'
 import type { JobsVirtualTableColumn } from './JobsVirtualTable'
+import cellStyles from './JobsCellText.module.css'
 import type { ColumnKey } from './useJobsColumnsVisibility'
 
 type QueueDownloadJobArtifactArgs = {
@@ -70,36 +71,37 @@ export function useJobsTableColumns({
 	requestDeleteJob,
 	queueDownloadJobArtifact,
 }: UseJobsTableColumnsArgs): JobsVirtualTableColumn<Job>[] {
-	const clampTextStyle = useMemo(
-		() =>
-			({
-				display: '-webkit-box',
-				WebkitBoxOrient: 'vertical',
-				WebkitLineClamp: 2,
-				overflow: 'hidden',
-				whiteSpace: 'normal',
-				wordBreak: 'break-word',
-			}) as const,
-		[],
-	)
-
 	const renderClampedText = useCallback(
 		(
 			value: string | null | undefined,
 			tone?: 'secondary' | 'danger',
-			options?: { code?: boolean; tooltip?: ReactNode; forceTooltip?: boolean },
+			options?: { code?: boolean; tooltip?: ReactNode; forceTooltip?: boolean; lines?: number },
 		) => {
 			if (!value) return <Typography.Text type="secondary">-</Typography.Text>
+			const lines = options?.lines ?? 2
+			const className = lines === 1 ? cellStyles.singleLine : cellStyles.multiLine
+			const lineStyle =
+				lines === 1
+					? undefined
+					: ({
+							'--jobs-cell-lines': String(lines),
+						} as CSSProperties)
 			const content = (
-				<Typography.Text type={tone} style={clampTextStyle} code={options?.code}>
+				<Typography.Text type={tone} className={`${cellStyles.cellText} ${className}`} style={lineStyle} code={options?.code}>
 					{value}
 				</Typography.Text>
 			)
 			const showTooltip = (options?.forceTooltip ?? false) || value.length > 32 || value.includes('\n')
 			if (!showTooltip) return content
-			return <Tooltip title={options?.tooltip ?? value}>{content}</Tooltip>
+			const tooltipTitle =
+				typeof options?.tooltip === 'string' || options?.tooltip == null ? (
+					<span className={cellStyles.tooltipContent}>{options?.tooltip ?? value}</span>
+				) : (
+					options.tooltip
+				)
+			return <Tooltip title={tooltipTitle}>{content}</Tooltip>
 		},
-		[clampTextStyle],
+		[],
 	)
 
 	return useMemo(() => {
@@ -181,7 +183,10 @@ export function useJobsTableColumns({
 				title: 'Error',
 				dataIndex: 'error',
 				width: 240,
-				render: (value: unknown) => renderClampedText(typeof value === 'string' ? value : null, 'danger'),
+				render: (value: unknown) =>
+					renderClampedText(typeof value === 'string' ? value : null, 'danger', {
+						lines: 1,
+					}),
 				sorter: (a: Job, b: Job) => compareText(a.error ?? '', b.error ?? ''),
 			},
 			{

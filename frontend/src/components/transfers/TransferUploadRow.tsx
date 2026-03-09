@@ -23,11 +23,11 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 			? 'exception'
 			: t.status === 'succeeded'
 				? 'success'
-				: t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job' || t.status === 'cleanup'
+				: t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job'
 					? 'active'
 					: 'normal'
 	const tagColor =
-		t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job' || t.status === 'cleanup'
+		t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job'
 			? 'processing'
 			: t.status === 'queued'
 				? 'default'
@@ -42,11 +42,9 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 			: t.status === 'staging'
 				? 'Uploading'
 				: t.status === 'commit'
-					? 'Committing'
-					: t.status === 'waiting_job'
-						? 'Transferring'
-						: t.status === 'cleanup'
-							? 'Cleaning'
+				? 'Committing'
+				: t.status === 'waiting_job'
+					? 'Transferring'
 							: t.status === 'succeeded'
 								? 'Done'
 								: t.status === 'failed'
@@ -59,14 +57,12 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 	const progressText =
 		t.status === 'staging'
 			? transferMetricsText
-			: t.status === 'commit'
-				? 'Committing…'
-				: t.status === 'waiting_job'
-					? hasTransferMetrics
-						? transferMetricsText
-						: 'Starting upload job…'
-					: t.status === 'cleanup'
-						? 'Removing local files…'
+				: t.status === 'commit'
+					? 'Committing…'
+					: t.status === 'waiting_job'
+						? hasTransferMetrics
+							? transferMetricsText
+							: 'Starting upload job…'
 				: null
 	const subtitle = `s3://${t.bucket}/${normalizePrefix(t.prefix)}`
 
@@ -91,7 +87,6 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 							</Typography.Text>
 							<Tag color={tagColor}>{tagText}</Tag>
 							{t.uploadMode ? <Tag>{uploadModeLabel(t.uploadMode)}</Tag> : null}
-							{t.moveAfterUpload ? <Tag color="gold">Move</Tag> : null}
 							{preview ? <Tag color="blue">Local preview</Tag> : null}
 							{t.jobId ? <Tag>{t.jobId}</Tag> : null}
 						</div>

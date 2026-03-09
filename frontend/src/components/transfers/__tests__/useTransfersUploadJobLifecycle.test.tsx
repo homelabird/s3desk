@@ -32,8 +32,6 @@ describe('useTransfersUploadJobLifecycle', () => {
 	it('invalidates objects queries and publishes a refresh event when an upload job succeeds', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
-		const uploadMoveByTaskIdRef = { current: {} as Record<string, never> }
-		const showMoveCleanupReport = vi.fn()
 
 		const { result } = renderHook(() => {
 			const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([buildUploadTask()])
@@ -47,12 +45,7 @@ describe('useTransfersUploadJobLifecycle', () => {
 			const lifecycle = useTransfersUploadJobLifecycle({
 				queryClient: { invalidateQueries } as unknown as QueryClient,
 				uploadTasksRef,
-				uploadMoveByTaskIdRef,
-				moveCleanupFilenameTemplate: 'cleanup-{date}.txt',
-				moveCleanupFilenameMaxLen: 120,
 				updateUploadTask,
-				formatMoveCleanupSummary: () => 'cleanup summary',
-				showMoveCleanupReport,
 			})
 
 			return {
@@ -74,7 +67,6 @@ describe('useTransfersUploadJobLifecycle', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['objects', 'profile-1', 'bucket-a'] })
-		expect(showMoveCleanupReport).not.toHaveBeenCalled()
 		expect(result.current.uploadTasks[0]).toMatchObject({
 			status: 'succeeded',
 			loadedBytes: 100,

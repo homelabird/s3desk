@@ -3,6 +3,10 @@ export type DevicePickerSupport = {
 	reason?: string
 }
 
+export type DirectorySelectionSupport = DevicePickerSupport & {
+	mode?: 'picker' | 'input'
+}
+
 type ShowDirectoryPicker = (options?: { mode?: 'read' | 'readwrite'; startIn?: FileSystemHandle | string }) => Promise<FileSystemDirectoryHandle>
 
 export function getDevicePickerSupport(): DevicePickerSupport {
@@ -19,7 +23,19 @@ export function getDevicePickerSupport(): DevicePickerSupport {
 	return { ok: true }
 }
 
-export async function pickDirectory(): Promise<FileSystemDirectoryHandle> {
+export function getDirectorySelectionSupport(): DirectorySelectionSupport {
+	const pickerSupport = getDevicePickerSupport()
+	if (pickerSupport.ok) return { ok: true, mode: 'picker' }
+	if (typeof document !== 'undefined') {
+		const input = document.createElement('input') as HTMLInputElement & { webkitdirectory?: boolean }
+		if ('webkitdirectory' in input) {
+			return { ok: true, mode: 'input' }
+		}
+	}
+	return pickerSupport
+}
+
+export async function pickDirectory(mode: 'read' | 'readwrite' = 'read'): Promise<FileSystemDirectoryHandle> {
 	const support = getDevicePickerSupport()
 	if (!support.ok) {
 		throw new Error(support.reason ?? 'Directory picker is not available.')
@@ -28,7 +44,7 @@ export async function pickDirectory(): Promise<FileSystemDirectoryHandle> {
 	if (!picker) {
 		throw new Error('Directory picker is not available.')
 	}
-	return picker({ mode: 'readwrite' })
+	return picker({ mode })
 }
 
 export async function ensureReadWritePermission(handle: FileSystemDirectoryHandle): Promise<void> {
@@ -64,98 +80,6 @@ export async function collectFilesFromDirectoryHandle(
 
 export function normalizeRelativePath(value: string): string {
 	return value.replace(/\\/g, '/').replace(/^\/+/, '')
-}
-
-export type RemoveEntriesResult = {
-	removed: string[]
-	skipped: string[]
-	failed: string[]
-	removedDirs: string[]
-}
-
-export async function removeEntriesFromDirectoryHandle(args: {
-	root: FileSystemDirectoryHandle
-	relPaths: string[]
-	cleanupEmptyDirs?: boolean
-}): Promise<RemoveEntriesResult> {
-	const { root, relPaths, cleanupEmptyDirs } = args
-	await ensureReadWritePermission(root)
-
-	const unique = new Set(relPaths.map((p) => normalizeRelativePath(p)).filter(Boolean))
-	const removed: string[] = []
-	const skipped: string[] = []
-	const failed: string[] = []
-	const removedDirs: string[] = []
-
-	for (const relPath of unique) {
-		const parts = relPath.split('/').filter(Boolean)
-		if (parts.length === 0 || parts.some((p) => p === '..')) {
-			skipped.push(relPath)
-			continue
-		}
-		const name = parts.pop() as string
-		let dir = root
-		try {
-			for (const part of parts) {
-				dir = await dir.getDirectoryHandle(part)
-			}
-			await dir.removeEntry(name)
-			removed.push(relPath)
-		} catch (err) {
-			const error = err as DOMException
-			if (error?.name === 'NotFoundError') {
-				skipped.push(relPath)
-				continue
-			}
-			failed.push(relPath)
-		}
-	}
-
-	if (cleanupEmptyDirs && removed.length > 0) {
-		removedDirs.push(...(await pruneEmptyDirectories(root, removed)))
-	}
-
-	return { removed, skipped, failed, removedDirs }
-}
-
-async function pruneEmptyDirectories(root: FileSystemDirectoryHandle, removedPaths: string[]): Promise<string[]> {
-	const candidates = new Set<string>()
-	for (const relPath of removedPaths) {
-		const parts = normalizeRelativePath(relPath).split('/').filter(Boolean)
-		if (parts.length < 2) continue
-		parts.pop()
-		for (let i = parts.length; i > 0; i--) {
-			candidates.add(parts.slice(0, i).join('/'))
-		}
-	}
-
-	const sorted = Array.from(candidates).sort((a, b) => b.split('/').length - a.split('/').length)
-	const removedDirs: string[] = []
-	for (const dirPath of sorted) {
-		if (!dirPath) continue
-		try {
-			const parts = dirPath.split('/').filter(Boolean)
-			const name = parts.pop() as string
-			let parent = root
-			for (const part of parts) {
-				parent = await parent.getDirectoryHandle(part)
-			}
-			const dir = await parent.getDirectoryHandle(name)
-			if (!(await isDirectoryEmpty(dir))) continue
-			await parent.removeEntry(name)
-			removedDirs.push(dirPath)
-		} catch {
-			// ignore
-		}
-	}
-	return removedDirs
-}
-
-async function isDirectoryEmpty(dir: FileSystemDirectoryHandle): Promise<boolean> {
-	for await (const _ of dir.entries()) {
-		return false
-	}
-	return true
 }
 
 export async function getFileHandleForPath(

@@ -1,7 +1,7 @@
 import { Alert, Typography } from 'antd'
-import type { ChangeEventHandler, RefObject } from 'react'
 import { Suspense } from 'react'
 
+import { UploadSourceSheet } from '../../components/UploadSourceSheet'
 import styles from './objects.module.css'
 import { ObjectsToolbarSection } from './objectsPageLazy'
 
@@ -10,20 +10,26 @@ type ObjectsToolbarSectionProps = Parameters<typeof import('./ObjectsToolbarSect
 export type ObjectsPageHeaderProps = {
 	uploadSupported: boolean
 	uploadDisabledReason: string | null | undefined
-	uploadFilesInputRef: RefObject<HTMLInputElement | null>
-	onUploadFilesInputChange: ChangeEventHandler<HTMLInputElement>
-	uploadFolderInputRef: RefObject<HTMLInputElement | null>
-	onUploadFolderInputChange: ChangeEventHandler<HTMLInputElement>
+	uploadSourceOpen: boolean
+	uploadSourceBusy: boolean
+	folderSelectionSupported: boolean
+	folderSelectionReason: string | null
+	onCloseUploadSource: () => void
+	onSelectUploadFiles: () => void
+	onSelectUploadFolder: () => void
 	toolbarSectionProps: ObjectsToolbarSectionProps
 }
 
 export function ObjectsPageHeader({
 	uploadSupported,
 	uploadDisabledReason,
-	uploadFilesInputRef,
-	onUploadFilesInputChange,
-	uploadFolderInputRef,
-	onUploadFolderInputChange,
+	uploadSourceOpen,
+	uploadSourceBusy,
+	folderSelectionSupported,
+	folderSelectionReason,
+	onCloseUploadSource,
+	onSelectUploadFiles,
+	onSelectUploadFolder,
 	toolbarSectionProps,
 }: ObjectsPageHeaderProps) {
 	const toolbarFallback = (
@@ -46,26 +52,19 @@ export function ObjectsPageHeader({
 				/>
 			) : null}
 
-			<input
-				ref={uploadFilesInputRef}
-				type="file"
-				multiple
-				aria-label="Select files to upload"
-				style={{ display: 'none' }}
-				onChange={onUploadFilesInputChange}
-			/>
-			<input
-				ref={uploadFolderInputRef}
-				type="file"
-				multiple
-				aria-label="Select folder to upload"
-				style={{ display: 'none' }}
-				onChange={onUploadFolderInputChange}
-			/>
-
 			<Suspense fallback={toolbarFallback}>
 				<ObjectsToolbarSection {...toolbarSectionProps} />
 			</Suspense>
+			<UploadSourceSheet
+				open={uploadSourceOpen}
+				title="Upload to this location"
+				folderSelectionSupported={folderSelectionSupported}
+				folderSelectionReason={folderSelectionReason ?? undefined}
+				busy={uploadSourceBusy}
+				onClose={onCloseUploadSource}
+				onSelectFiles={onSelectUploadFiles}
+				onSelectFolder={onSelectUploadFolder}
+			/>
 		</>
 	)
 }

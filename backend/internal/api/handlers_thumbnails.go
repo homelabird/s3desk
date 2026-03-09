@@ -42,15 +42,21 @@ const (
 var errFFmpegNotFound = errors.New("ffmpeg not found in PATH (or set FFMPEG_PATH)")
 
 func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request) {
+	metric := s.beginStorageMetric("unknown", "get_object_thumbnail")
+	defer metric.Observe()
+
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
+		metric.SetStatus("missing_profile")
 		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
 		return
 	}
+	metric.SetProvider(string(secrets.Provider))
 
 	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
 	key := strings.TrimPrefix(strings.TrimSpace(r.URL.Query().Get("key")), "/")
 	if bucket == "" || key == "" {
+		metric.SetStatus("invalid_request")
 		writeError(w, http.StatusBadRequest, "invalid_request", "bucket and key are required", nil)
 		return
 	}
@@ -59,9 +65,11 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "thumbnail-meta")
 	if err != nil {
 		if rcloneIsNotFound(err, stderr) {
+			metric.SetStatus("not_found")
 			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
 			return
 		}
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -73,11 +81,13 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 
 	kind := thumbnailObjectKind(entry.MimeType, key)
 	if kind == "" {
+		metric.SetStatus("unsupported")
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "thumbnail not supported for this object", map[string]any{"key": key})
 		return
 	}
 	maxBytes := thumbnailMaxBytesForKind(kind)
 	if entry.Size > maxBytes {
+		metric.SetStatus("too_large")
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "object is too large for thumbnail", map[string]any{
 			"kind":     kind,
 			"maxBytes": maxBytes,
@@ -88,6 +98,7 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 
 	cachePath := thumbnailCachePath(s.cfg.DataDir, secrets.ID, bucket, key, size, thumbnailObjectFingerprint(entry))
 	if serveCachedThumbnail(w, r, cachePath) {
+		metric.SetStatus("cache_hit")
 		return
 	}
 
@@ -95,6 +106,7 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 	if kind == "video" {
 		ffmpegPath, err = resolveFFmpegPath()
 		if err != nil {
+			metric.SetStatus("thumbnail_engine_missing")
 			writeError(
 				w,
 				http.StatusBadRequest,
@@ -117,6 +129,7 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 
 	proc, err := s.startRclone(downloadCtx, secrets, []string{"cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)}, "thumbnail")
 	if err != nil {
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -145,10 +158,12 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 		waitErr = nil
 	}
 	if err != nil {
+		metric.SetStatus("unsupported")
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode thumbnail source", map[string]any{"error": err.Error()})
 		return
 	}
 	if waitErr != nil {
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -160,10 +175,12 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 
 	thumb := resizeForThumbnail(img, size)
 	if err := writeThumbnailFile(cachePath, thumb); err != nil {
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to store thumbnail", map[string]any{"error": err.Error()})
 		return
 	}
 
+	metric.SetStatus("success")
 	_ = serveCachedThumbnail(w, r, cachePath)
 }
 

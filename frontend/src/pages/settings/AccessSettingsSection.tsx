@@ -1,7 +1,8 @@
-import { Button, Collapse, Input, Space, Typography } from 'antd'
+import { Button, Collapse, Input, Space, Typography, message } from 'antd'
 import { useState } from 'react'
 
 import { FormField } from '../../components/FormField'
+import { getHttpHeaderValueValidationError } from '../../lib/httpHeaderValue'
 import styles from '../SettingsPage.module.css'
 
 type AccessSettingsSectionProps = {
@@ -16,7 +17,13 @@ type AccessSettingsSectionProps = {
 function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => void }) {
 	const [draft, setDraft] = useState(props.apiToken)
 	const apply = () => {
-		props.setApiToken(draft.trim())
+		const trimmed = draft.trim()
+		const error = getHttpHeaderValueValidationError('API token', trimmed)
+		if (error) {
+			message.error(error)
+			return
+		}
+		props.setApiToken(trimmed)
 	}
 	return (
 		<Space.Compact className={styles.fullWidth}>

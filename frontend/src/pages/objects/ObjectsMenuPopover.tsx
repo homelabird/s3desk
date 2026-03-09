@@ -1,14 +1,15 @@
 import { DownOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 
+import { PopoverSurface, type PopoverOpenSource } from '../../components/PopoverSurface'
 import styles from './objects.module.css'
 
 type MenuItems = NonNullable<MenuProps['items']>
 type MenuEntry = MenuItems[number]
 type MenuDivider = Extract<MenuEntry, { type: 'divider' }>
 type MenuItemNode = Exclude<MenuEntry, null | undefined | MenuDivider>
-type ObjectsMenuOpenSource = 'trigger' | 'menu' | 'outside'
+type ObjectsMenuOpenSource = PopoverOpenSource
 
 type ObjectsMenuContentProps = {
 	menu: MenuProps
@@ -33,6 +34,7 @@ type ObjectsMenuPopoverProps = {
 }
 
 export const OBJECTS_MENU_ROOT_SELECTOR = '[data-objects-menu-root="true"]'
+const menuRootDataAttrs = { 'data-objects-menu-root': 'true' } as HTMLAttributes<HTMLDivElement>
 
 function isDivider(item: MenuEntry): item is MenuDivider {
 	return !!item && typeof item === 'object' && 'type' in item && item.type === 'divider'
@@ -171,57 +173,19 @@ export function ObjectsMenuContent(props: ObjectsMenuContentProps) {
 }
 
 export function ObjectsMenuPopover(props: ObjectsMenuPopoverProps) {
-	const [internalOpen, setInternalOpen] = useState(false)
-	const rootRef = useRef<HTMLDivElement>(null)
-	const { align, children, className, menu, menuClassName, onOpenChange, open: controlledOpen } = props
-	const open = controlledOpen ?? internalOpen
-	const isControlled = typeof controlledOpen === 'boolean'
-
-	const setOpen = useCallback(
-		(next: boolean, source: ObjectsMenuOpenSource = 'outside') => {
-			if (!isControlled) setInternalOpen(next)
-			onOpenChange?.(next, { source })
-		},
-		[isControlled, onOpenChange],
-	)
-	const close = useCallback(() => setOpen(false, 'outside'), [setOpen])
-	const toggle = useCallback(() => setOpen(!open, 'trigger'), [open, setOpen])
-
-	useEffect(() => {
-		if (!open) return
-		const handlePointerDown = (event: PointerEvent) => {
-			if (rootRef.current?.contains(event.target as Node)) return
-			setOpen(false, 'outside')
-		}
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape') return
-			event.preventDefault()
-			setOpen(false, 'outside')
-		}
-		document.addEventListener('pointerdown', handlePointerDown)
-		document.addEventListener('keydown', handleKeyDown)
-		return () => {
-			document.removeEventListener('pointerdown', handlePointerDown)
-			document.removeEventListener('keydown', handleKeyDown)
-		}
-	}, [open, setOpen])
-
+	const { align, children, className, menu, menuClassName, onOpenChange, open } = props
 	return (
-		<div ref={rootRef} className={`${styles.toolbarMenuRoot} ${className ?? ''}`.trim()} data-objects-menu-root="true">
-			{children({
-				open,
-				toggle,
-				close,
-				setOpen,
-			})}
-			{open ? (
-				<div
-					className={`${styles.toolbarMenuPopover} ${align === 'end' ? styles.toolbarMenuPopoverEnd : ''} ${menuClassName ?? ''}`.trim()}
-					data-objects-menu-root="true"
-				>
-					<ObjectsMenuContent menu={menu} close={(source) => setOpen(false, source)} />
-				</div>
-			) : null}
-		</div>
+		<PopoverSurface
+			align={align}
+			className={`${styles.toolbarMenuRoot} ${className ?? ''}`.trim()}
+			contentClassName={`${styles.toolbarMenuPopover} ${align === 'end' ? styles.toolbarMenuPopoverEnd : ''} ${menuClassName ?? ''}`.trim()}
+			rootProps={menuRootDataAttrs}
+			contentProps={menuRootDataAttrs}
+			open={open}
+			onOpenChange={onOpenChange}
+			content={({ close }) => <ObjectsMenuContent menu={menu} close={close} />}
+		>
+			{children}
+		</PopoverSurface>
 	)
 }

@@ -1,5 +1,5 @@
 import { CheckCircleFilled, DownOutlined, SearchOutlined } from '@ant-design/icons'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import styles from './objects.module.css'
@@ -25,6 +25,20 @@ type ObjectsBucketPickerProps = {
 	onChange: (value: string | null) => void
 	onOpenChange?: (open: boolean) => void
 }
+
+type DesktopPopoverLayout = {
+	width: number
+	maxBodyHeight: number
+	align: 'left' | 'right'
+}
+
+const DESKTOP_POPOVER_MIN_WIDTH = 380
+const DESKTOP_POPOVER_DEFAULT_WIDTH = 440
+const DESKTOP_POPOVER_MAX_WIDTH = 560
+const DESKTOP_POPOVER_VIEWPORT_GUTTER = 16
+const DESKTOP_POPOVER_TRIGGER_EXPANSION = 120
+const DESKTOP_POPOVER_BODY_MIN_HEIGHT = 180
+const DESKTOP_POPOVER_BODY_MAX_HEIGHT = 420
 
 function normalizeTestIdPart(value: string): string {
 	const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -138,7 +152,13 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [mobileQuery, setMobileQuery] = useState('')
 	const desktopRootRef = useRef<HTMLDivElement>(null)
+	const desktopTriggerRef = useRef<HTMLButtonElement>(null)
 	const desktopInputRef = useRef<HTMLInputElement>(null)
+	const [desktopPopoverLayout, setDesktopPopoverLayout] = useState<DesktopPopoverLayout>({
+		width: DESKTOP_POPOVER_DEFAULT_WIDTH,
+		maxBodyHeight: DESKTOP_POPOVER_BODY_MAX_HEIGHT,
+		align: 'left',
+	})
 
 	const orderedEntries = useMemo(
 		() => buildBucketEntries(props.value, props.options, props.recentBuckets),
@@ -179,26 +199,6 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 		[closeDesktopPopover, closeMobileDrawer, props],
 	)
 
-	useEffect(() => {
-		if (!desktopOpen) return
-		desktopInputRef.current?.focus()
-		const handlePointerDown = (event: PointerEvent) => {
-			if (desktopRootRef.current?.contains(event.target as Node)) return
-			closeDesktopPopover()
-		}
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape') return
-			event.preventDefault()
-			closeDesktopPopover()
-		}
-		document.addEventListener('pointerdown', handlePointerDown)
-		document.addEventListener('keydown', handleKeyDown)
-		return () => {
-			document.removeEventListener('pointerdown', handlePointerDown)
-			document.removeEventListener('keydown', handleKeyDown)
-		}
-	}, [closeDesktopPopover, desktopOpen])
-
 	const openDesktopPopover = useCallback(() => {
 		if (props.disabled) return
 		setDesktopOpen(true)
@@ -224,10 +224,92 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 		handleSelect(nextEntry.value, 'desktop')
 	}, [filteredDesktopEntries, handleSelect])
 
+	const updateDesktopPopoverLayout = useCallback(() => {
+		const rootEl = desktopRootRef.current
+		const triggerEl = desktopTriggerRef.current
+		if (!rootEl || !triggerEl) return
+
+		const rootRect = rootEl.getBoundingClientRect()
+		const triggerRect = triggerEl.getBoundingClientRect()
+		const viewportWidth = window.innerWidth
+		const viewportHeight = window.innerHeight
+		const availableViewportWidth = Math.max(300, viewportWidth - DESKTOP_POPOVER_VIEWPORT_GUTTER * 2)
+		const minWidth = Math.min(DESKTOP_POPOVER_MIN_WIDTH, availableViewportWidth)
+		const maxWidth = Math.min(DESKTOP_POPOVER_MAX_WIDTH, availableViewportWidth)
+		const desiredWidth = Math.max(
+			minWidth,
+			Math.min(maxWidth, Math.max(DESKTOP_POPOVER_DEFAULT_WIDTH, triggerRect.width + DESKTOP_POPOVER_TRIGGER_EXPANSION)),
+		)
+		const wouldOverflowRight = rootRect.left + desiredWidth > viewportWidth - DESKTOP_POPOVER_VIEWPORT_GUTTER
+		const canAlignRight = rootRect.right - desiredWidth >= DESKTOP_POPOVER_VIEWPORT_GUTTER
+		const align: DesktopPopoverLayout['align'] = wouldOverflowRight && canAlignRight ? 'right' : 'left'
+		const availableBelow = viewportHeight - triggerRect.bottom - 24
+		const maxBodyHeight = Math.max(
+			DESKTOP_POPOVER_BODY_MIN_HEIGHT,
+			Math.min(DESKTOP_POPOVER_BODY_MAX_HEIGHT, availableBelow),
+		)
+
+		setDesktopPopoverLayout((current) => {
+			if (current.width === desiredWidth && current.maxBodyHeight === maxBodyHeight && current.align === align) {
+				return current
+			}
+			return { width: desiredWidth, maxBodyHeight, align }
+		})
+	}, [])
+
+	useEffect(() => {
+		if (!desktopOpen) return
+		updateDesktopPopoverLayout()
+		desktopInputRef.current?.focus()
+
+		const rootEl = desktopRootRef.current
+		const triggerEl = desktopTriggerRef.current
+		const resizeObserver =
+			typeof ResizeObserver !== 'undefined'
+				? new ResizeObserver(() => {
+						updateDesktopPopoverLayout()
+					})
+				: null
+		if (resizeObserver && rootEl) resizeObserver.observe(rootEl)
+		if (resizeObserver && triggerEl) resizeObserver.observe(triggerEl)
+
+		const handlePointerDown = (event: PointerEvent) => {
+			if (desktopRootRef.current?.contains(event.target as Node)) return
+			closeDesktopPopover()
+		}
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== 'Escape') return
+			event.preventDefault()
+			closeDesktopPopover()
+		}
+		const handleWindowResize = () => updateDesktopPopoverLayout()
+		document.addEventListener('pointerdown', handlePointerDown)
+		document.addEventListener('keydown', handleKeyDown)
+		window.addEventListener('resize', handleWindowResize)
+		window.addEventListener('scroll', handleWindowResize, true)
+		return () => {
+			document.removeEventListener('pointerdown', handlePointerDown)
+			document.removeEventListener('keydown', handleKeyDown)
+			window.removeEventListener('resize', handleWindowResize)
+			window.removeEventListener('scroll', handleWindowResize, true)
+			resizeObserver?.disconnect()
+		}
+	}, [closeDesktopPopover, desktopOpen, updateDesktopPopoverLayout])
+
 	if (props.isDesktop) {
+		const desktopPopoverStyle: CSSProperties = {
+			width: desktopPopoverLayout.width,
+			left: desktopPopoverLayout.align === 'left' ? 0 : 'auto',
+			right: desktopPopoverLayout.align === 'right' ? 0 : 'auto',
+		}
+		const desktopBodyStyle: CSSProperties = {
+			maxHeight: desktopPopoverLayout.maxBodyHeight,
+		}
+
 		return (
 			<div ref={desktopRootRef} className={`${styles.bucketPickerDesktop} ${props.className ?? ''}`.trim()}>
 				<button
+					ref={desktopTriggerRef}
 					type="button"
 					className={styles.bucketPickerDesktopTrigger}
 					aria-label="Bucket"
@@ -247,7 +329,13 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 				</button>
 
 				{desktopOpen ? (
-					<div className={styles.bucketPickerDesktopPopover}>
+					<div
+						className={`${styles.bucketPickerDesktopPopover} ${
+							desktopPopoverLayout.align === 'right' ? styles.bucketPickerDesktopPopoverAlignRight : ''
+						}`.trim()}
+						style={desktopPopoverStyle}
+						data-testid="objects-bucket-picker-desktop-popover"
+					>
 						<div className={styles.bucketPickerDesktopHeader}>
 							<label className={styles.bucketPickerSearchField}>
 								<SearchOutlined className={styles.bucketPickerSearchIcon} />
@@ -273,7 +361,7 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 							) : null}
 						</div>
 
-						<div className={styles.bucketPickerDesktopBody}>
+						<div className={styles.bucketPickerDesktopBody} style={desktopBodyStyle}>
 							{renderEntryList({
 								variant: 'desktop',
 								currentEntry: currentDesktopEntry,

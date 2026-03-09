@@ -1,9 +1,16 @@
 import type {
 	Bucket,
+	BucketAccessPutRequest,
 	BucketCreateRequest,
+	BucketEncryptionPutRequest,
+	BucketGovernanceView,
+	BucketLifecyclePutRequest,
+	BucketProtectionPutRequest,
+	BucketPublicExposurePutRequest,
 	BucketPolicyPutRequest,
 	BucketPolicyResponse,
 	BucketPolicyValidateResponse,
+	BucketVersioningPutRequest,
 	DeleteObjectsResponse,
 	ErrorResponse,
 	Job,
@@ -39,6 +46,7 @@ import type {
 	UploadPresignResponse,
 } from './types'
 import { clearNetworkStatus, logNetworkEvent, publishNetworkStatus } from '../lib/networkStatus'
+import { getHttpHeaderValueValidationError } from '../lib/httpHeaderValue'
 import { getApiBaseUrl, normalizeApiBaseUrl } from './baseUrl'
 
 export const RETRY_COUNT_STORAGE_KEY = 'apiRetryCount'
@@ -148,6 +156,34 @@ function resolveUploadFilename(item: UploadFileItem): string {
 	return relPath || item.file.name
 }
 
+function createInvalidHeaderValueError(name: string, value: string): Error | null {
+	const message = getHttpHeaderValueValidationError(name, value)
+	return message ? new Error(message) : null
+}
+
+function setSafeFetchHeader(headers: Headers, name: string, value?: string | null) {
+	const normalized = value?.trim()
+	if (!normalized) return
+	const err = createInvalidHeaderValueError(name, normalized)
+	if (err) throw err
+	headers.set(name, normalized)
+}
+
+function setSafeXHRHeader(xhr: XMLHttpRequest, name: string, value?: string | null) {
+	const normalized = value?.trim()
+	if (!normalized) return
+	const err = createInvalidHeaderValueError(name, normalized)
+	if (err) throw err
+	xhr.setRequestHeader(name, normalized)
+}
+
+function rejectedTransferHandle<T>(error: Error): { promise: Promise<T>; abort: () => void } {
+	return {
+		promise: Promise.reject(error),
+		abort: () => {},
+	}
+}
+
 export class APIClient {
 	private baseUrl: string
 	private apiToken: string
@@ -168,12 +204,8 @@ export class APIClient {
 	private async fetchOrThrow(path: string, init: RequestInit, options: RequestOptions = {}): Promise<Response> {
 		const headers = new Headers(init.headers ?? {})
 		const profileId = options.profileId ?? this.requestDefaults.profileId
-		if (profileId) {
-			headers.set('X-Profile-Id', profileId)
-		}
-		if (this.apiToken) {
-			headers.set('X-Api-Token', this.apiToken)
-		}
+		setSafeFetchHeader(headers, 'X-Profile-Id', profileId)
+		setSafeFetchHeader(headers, 'X-Api-Token', this.apiToken)
 
 		const res = await fetchWithRetry(this.baseUrl + path, {
 			...init,
@@ -217,12 +249,8 @@ export class APIClient {
 	private async fetchOrThrowRaw(path: string, init: RequestInit, options: RequestOptions = {}): Promise<Response> {
 		const headers = new Headers(init.headers ?? {})
 		const profileId = options.profileId ?? this.requestDefaults.profileId
-		if (profileId) {
-			headers.set('X-Profile-Id', profileId)
-		}
-		if (this.apiToken) {
-			headers.set('X-Api-Token', this.apiToken)
-		}
+		setSafeFetchHeader(headers, 'X-Profile-Id', profileId)
+		setSafeFetchHeader(headers, 'X-Api-Token', this.apiToken)
 
 		const res = await fetchWithRetry(this.baseUrl + path, {
 			...init,
@@ -259,7 +287,11 @@ export class APIClient {
 		xhr.open('GET', this.baseUrl + '/server/backup')
 		xhr.responseType = 'blob'
 
-		if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+		try {
+			setSafeXHRHeader(xhr, 'X-Api-Token', this.apiToken)
+		} catch (err) {
+			return rejectedTransferHandle(err instanceof Error ? err : new Error('invalid API token header'))
+		}
 
 		const promise = new Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>((resolve, reject) => {
 			xhr.onload = async () => {
@@ -371,6 +403,81 @@ export class APIClient {
 		return this.request(`/buckets/${encodeURIComponent(bucket)}`, { method: 'DELETE' }, { profileId })
 	}
 
+	getBucketGovernance(profileId: string, bucket: string): Promise<BucketGovernanceView> {
+		return this.request(`/buckets/${encodeURIComponent(bucket)}/governance`, { method: 'GET' }, { profileId })
+	}
+
+	putBucketAccess(profileId: string, bucket: string, req: BucketAccessPutRequest): Promise<void> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/governance/access`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	putBucketPublicExposure(profileId: string, bucket: string, req: BucketPublicExposurePutRequest): Promise<void> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/governance/public-exposure`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	putBucketProtection(profileId: string, bucket: string, req: BucketProtectionPutRequest): Promise<void> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/governance/protection`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	putBucketVersioning(profileId: string, bucket: string, req: BucketVersioningPutRequest): Promise<void> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/governance/versioning`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	putBucketEncryption(profileId: string, bucket: string, req: BucketEncryptionPutRequest): Promise<void> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/governance/encryption`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
+
+	putBucketLifecycle(profileId: string, bucket: string, req: BucketLifecyclePutRequest): Promise<void> {
+		return this.request(
+			`/buckets/${encodeURIComponent(bucket)}/governance/lifecycle`,
+			{
+				method: 'PUT',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(req),
+			},
+			{ profileId },
+		)
+	}
 
 	getBucketPolicy(profileId: string, bucket: string): Promise<BucketPolicyResponse> {
 		return this.request(`/buckets/${encodeURIComponent(bucket)}/policy`, { method: 'GET' }, { profileId })
@@ -540,9 +647,10 @@ export class APIClient {
 		)
 	}
 
-	listObjectFavorites(args: { profileId: string; bucket: string; prefix?: string }): Promise<ObjectFavoritesResponse> {
+	listObjectFavorites(args: { profileId: string; bucket: string; prefix?: string; hydrate?: boolean }): Promise<ObjectFavoritesResponse> {
 		const params = new URLSearchParams()
 		if (args.prefix) params.set('prefix', args.prefix)
+		if (typeof args.hydrate === 'boolean') params.set('hydrate', String(args.hydrate))
 		const qs = params.toString()
 		return this.request(
 			`/buckets/${encodeURIComponent(args.bucket)}/objects/favorites${qs ? `?${qs}` : ''}`,
@@ -743,8 +851,12 @@ export class APIClient {
 
 			const xhr = new XMLHttpRequest()
 			xhr.open('POST', this.baseUrl + `/uploads/${encodeURIComponent(uploadId)}/files`)
-			xhr.setRequestHeader('X-Profile-Id', profileId)
-			if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+			try {
+				setSafeXHRHeader(xhr, 'X-Profile-Id', profileId)
+				setSafeXHRHeader(xhr, 'X-Api-Token', this.apiToken)
+			} catch (err) {
+				return rejectedTransferHandle<UploadFilesResult>(err instanceof Error ? err : new Error('invalid request headers'))
+			}
 
 			xhr.upload.onprogress = (e) => {
 				perBatchLoaded[batchIndex] = e.loaded
@@ -911,13 +1023,18 @@ export class APIClient {
 
 				const xhr = new XMLHttpRequest()
 				xhr.open('POST', this.baseUrl + `/uploads/${encodeURIComponent(uploadId)}/files`)
-				xhr.setRequestHeader('X-Profile-Id', profileId)
-				if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
-				xhr.setRequestHeader('X-Upload-Chunk-Index', String(chunkIndex))
-				xhr.setRequestHeader('X-Upload-Chunk-Total', String(totalChunks))
-				xhr.setRequestHeader('X-Upload-Chunk-Size', String(chunkSizeBytes))
-				xhr.setRequestHeader('X-Upload-File-Size', String(file.size))
-				xhr.setRequestHeader('X-Upload-Relative-Path', resolveUploadFilename(item))
+				try {
+					setSafeXHRHeader(xhr, 'X-Profile-Id', profileId)
+					setSafeXHRHeader(xhr, 'X-Api-Token', this.apiToken)
+					setSafeXHRHeader(xhr, 'X-Upload-Chunk-Index', String(chunkIndex))
+					setSafeXHRHeader(xhr, 'X-Upload-Chunk-Total', String(totalChunks))
+					setSafeXHRHeader(xhr, 'X-Upload-Chunk-Size', String(chunkSizeBytes))
+					setSafeXHRHeader(xhr, 'X-Upload-File-Size', String(file.size))
+					setSafeXHRHeader(xhr, 'X-Upload-Relative-Path', resolveUploadFilename(item))
+				} catch (err) {
+					reject(err instanceof Error ? err : new Error('invalid request headers'))
+					return
+				}
 
 				xhr.upload.onprogress = (e) => {
 					if (aborted) return
@@ -1017,8 +1134,12 @@ export class APIClient {
 		xhr.open('GET', this.baseUrl + `/buckets/${encodeURIComponent(args.bucket)}/objects/download?${params.toString()}`)
 		xhr.responseType = 'blob'
 
-		xhr.setRequestHeader('X-Profile-Id', args.profileId)
-		if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+		try {
+			setSafeXHRHeader(xhr, 'X-Profile-Id', args.profileId)
+			setSafeXHRHeader(xhr, 'X-Api-Token', this.apiToken)
+		} catch (err) {
+			return rejectedTransferHandle(err instanceof Error ? err : new Error('invalid request headers'))
+		}
 
 		xhr.onprogress = (e) => {
 			if (!opts.onProgress) return
@@ -1078,8 +1199,12 @@ export class APIClient {
 		xhr.open('GET', this.baseUrl + `/buckets/${encodeURIComponent(args.bucket)}/objects/thumbnail?${params.toString()}`)
 		xhr.responseType = 'blob'
 
-		xhr.setRequestHeader('X-Profile-Id', args.profileId)
-		if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+		try {
+			setSafeXHRHeader(xhr, 'X-Profile-Id', args.profileId)
+			setSafeXHRHeader(xhr, 'X-Api-Token', this.apiToken)
+		} catch (err) {
+			return rejectedTransferHandle(err instanceof Error ? err : new Error('invalid request headers'))
+		}
 
 		const promise = new Promise<{ blob: Blob; contentType: string | null }>((resolve, reject) => {
 			xhr.onload = async () => {
@@ -1117,8 +1242,12 @@ export class APIClient {
 		xhr.open('GET', this.baseUrl + `/jobs/${encodeURIComponent(args.jobId)}/artifact`)
 		xhr.responseType = 'blob'
 
-		xhr.setRequestHeader('X-Profile-Id', args.profileId)
-		if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+		try {
+			setSafeXHRHeader(xhr, 'X-Profile-Id', args.profileId)
+			setSafeXHRHeader(xhr, 'X-Api-Token', this.apiToken)
+		} catch (err) {
+			return rejectedTransferHandle(err instanceof Error ? err : new Error('invalid request headers'))
+		}
 
 		xhr.onprogress = (e) => {
 			if (!opts.onProgress) return

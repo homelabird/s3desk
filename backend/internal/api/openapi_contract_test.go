@@ -94,6 +94,120 @@ func TestOpenAPIMetaAndMigrationSchemasCoverFrontendContract(t *testing.T) {
 	}
 }
 
+func TestOpenAPIBucketGovernanceSchemasCoverFrontendContract(t *testing.T) {
+	t.Parallel()
+
+	doc := loadOpenAPIDoc(t)
+
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance", http.MethodGet, "#/components/schemas/BucketGovernanceView")
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/access", http.MethodGet, "#/components/schemas/BucketAccessView")
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/public-exposure", http.MethodGet, "#/components/schemas/BucketPublicExposureView")
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/protection", http.MethodGet, "#/components/schemas/BucketProtectionView")
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/versioning", http.MethodGet, "#/components/schemas/BucketVersioningView")
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/encryption", http.MethodGet, "#/components/schemas/BucketEncryptionView")
+	assertOpenAPIOperationResponseSchema(t, doc, "/buckets/{bucket}/governance/lifecycle", http.MethodGet, "#/components/schemas/BucketLifecycleView")
+
+	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/access", http.MethodPut, http.StatusNoContent)
+	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/public-exposure", http.MethodPut, http.StatusNoContent)
+	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/protection", http.MethodPut, http.StatusNoContent)
+	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/versioning", http.MethodPut, http.StatusNoContent)
+	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/encryption", http.MethodPut, http.StatusNoContent)
+	assertOpenAPIOperationHasResponse(t, doc, "/buckets/{bucket}/governance/lifecycle", http.MethodPut, http.StatusNoContent)
+
+	governanceSchema := requireOpenAPISchema(t, doc, "BucketGovernanceView")
+	for _, name := range []string{"access", "publicExposure", "protection", "versioning", "encryption", "lifecycle", "advanced"} {
+		if _, ok := governanceSchema.Properties[name]; !ok {
+			t.Fatalf("BucketGovernanceView.%s missing from OpenAPI", name)
+		}
+	}
+	if !containsString(governanceSchema.Required, "provider") {
+		t.Fatal("BucketGovernanceView.provider must be required in OpenAPI")
+	}
+	if !containsString(governanceSchema.Required, "bucket") {
+		t.Fatal("BucketGovernanceView.bucket must be required in OpenAPI")
+	}
+	if !containsString(governanceSchema.Required, "capabilities") {
+		t.Fatal("BucketGovernanceView.capabilities must be required in OpenAPI")
+	}
+
+	accessViewSchema := requireOpenAPISchema(t, doc, "BucketAccessView")
+	for _, name := range []string{"objectOwnership", "advanced", "bindings", "etag", "storedAccessPolicies"} {
+		if _, ok := accessViewSchema.Properties[name]; !ok {
+			t.Fatalf("BucketAccessView.%s missing from OpenAPI", name)
+		}
+	}
+
+	accessPutSchema := requireOpenAPISchema(t, doc, "BucketAccessPutRequest")
+	for _, name := range []string{"objectOwnership", "bindings", "etag", "storedAccessPolicies"} {
+		if _, ok := accessPutSchema.Properties[name]; !ok {
+			t.Fatalf("BucketAccessPutRequest.%s missing from OpenAPI", name)
+		}
+	}
+
+	publicExposurePutSchema := requireOpenAPISchema(t, doc, "BucketPublicExposurePutRequest")
+	if _, ok := publicExposurePutSchema.Properties["publicAccessPrevention"]; !ok {
+		t.Fatal("BucketPublicExposurePutRequest.publicAccessPrevention missing from OpenAPI")
+	}
+
+	protectionViewSchema := requireOpenAPISchema(t, doc, "BucketProtectionView")
+	for _, name := range []string{"uniformAccess", "retention", "objectLock", "softDelete", "immutability"} {
+		if _, ok := protectionViewSchema.Properties[name]; !ok {
+			t.Fatalf("BucketProtectionView.%s missing from OpenAPI", name)
+		}
+	}
+
+	protectionPutSchema := requireOpenAPISchema(t, doc, "BucketProtectionPutRequest")
+	for _, name := range []string{"uniformAccess", "retention", "objectLock", "softDelete", "immutability"} {
+		if _, ok := protectionPutSchema.Properties[name]; !ok {
+			t.Fatalf("BucketProtectionPutRequest.%s missing from OpenAPI", name)
+		}
+	}
+
+	versioningPutSchema := requireOpenAPISchema(t, doc, "BucketVersioningPutRequest")
+	statusSchemaRef, ok := versioningPutSchema.Properties["status"]
+	if !ok || statusSchemaRef == nil || statusSchemaRef.Value == nil {
+		t.Fatal("BucketVersioningPutRequest.status missing from OpenAPI")
+	}
+	if got, want := statusSchemaRef.Value.Enum, []any{"enabled", "disabled", "suspended"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("BucketVersioningPutRequest.status enum=%v, want %v", got, want)
+	}
+
+	encryptionPutSchema := requireOpenAPISchema(t, doc, "BucketEncryptionPutRequest")
+	modeSchemaRef, ok := encryptionPutSchema.Properties["mode"]
+	if !ok || modeSchemaRef == nil || modeSchemaRef.Value == nil {
+		t.Fatal("BucketEncryptionPutRequest.mode missing from OpenAPI")
+	}
+	if got, want := modeSchemaRef.Value.Enum, []any{"sse_s3", "sse_kms"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("BucketEncryptionPutRequest.mode enum=%v, want %v", got, want)
+	}
+
+	if requireOpenAPISchema(t, doc, "BucketAccessBinding").Properties["role"] == nil {
+		t.Fatal("BucketAccessBinding.role missing from OpenAPI")
+	}
+	if requireOpenAPISchema(t, doc, "BucketStoredAccessPolicy").Properties["id"] == nil {
+		t.Fatal("BucketStoredAccessPolicy.id missing from OpenAPI")
+	}
+	lifecycleViewSchema := requireOpenAPISchema(t, doc, "BucketLifecycleView")
+	if lifecycleViewSchema.Properties["rules"] == nil {
+		t.Fatal("BucketLifecycleView.rules missing from OpenAPI")
+	}
+	lifecyclePutSchema := requireOpenAPISchema(t, doc, "BucketLifecyclePutRequest")
+	if lifecyclePutSchema.Properties["rules"] == nil {
+		t.Fatal("BucketLifecyclePutRequest.rules missing from OpenAPI")
+	}
+
+	createSchema := requireOpenAPISchema(t, doc, "BucketCreateRequest")
+	if createSchema.Properties["defaults"] == nil {
+		t.Fatal("BucketCreateRequest.defaults missing from OpenAPI")
+	}
+	createDefaultsSchema := requireOpenAPISchema(t, doc, "BucketCreateDefaults")
+	for _, name := range []string{"access", "publicExposure", "versioning", "encryption"} {
+		if _, ok := createDefaultsSchema.Properties[name]; !ok {
+			t.Fatalf("BucketCreateDefaults.%s missing from OpenAPI", name)
+		}
+	}
+}
+
 func loadOpenAPIDoc(t *testing.T) *openapi3.T {
 	t.Helper()
 
@@ -153,4 +267,59 @@ func containsString(items []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func requireOpenAPISchema(t *testing.T, doc *openapi3.T, name string) *openapi3.Schema {
+	t.Helper()
+
+	ref := doc.Components.Schemas[name]
+	if ref == nil || ref.Value == nil {
+		t.Fatalf("%s schema missing from OpenAPI", name)
+	}
+	return ref.Value
+}
+
+func assertOpenAPIOperationResponseSchema(t *testing.T, doc *openapi3.T, path, method, wantRef string) {
+	t.Helper()
+
+	op := requireOpenAPIOperation(t, doc, path, method)
+	resp := requireOpenAPIResponse(t, op, http.StatusOK)
+	content, ok := resp.Content["application/json"]
+	if !ok || content.Schema == nil {
+		t.Fatalf("%s %s missing application/json response schema", method, path)
+	}
+	if content.Schema.Ref != wantRef {
+		t.Fatalf("%s %s response schema=%q, want %q", method, path, content.Schema.Ref, wantRef)
+	}
+}
+
+func assertOpenAPIOperationHasResponse(t *testing.T, doc *openapi3.T, path, method string, status int) {
+	t.Helper()
+
+	op := requireOpenAPIOperation(t, doc, path, method)
+	_ = requireOpenAPIResponse(t, op, status)
+}
+
+func requireOpenAPIOperation(t *testing.T, doc *openapi3.T, path, method string) *openapi3.Operation {
+	t.Helper()
+
+	item := doc.Paths.Find(path)
+	if item == nil {
+		t.Fatalf("%s missing from OpenAPI", path)
+	}
+	op := item.GetOperation(method)
+	if op == nil {
+		t.Fatalf("%s %s missing from OpenAPI", method, path)
+	}
+	return op
+}
+
+func requireOpenAPIResponse(t *testing.T, op *openapi3.Operation, status int) *openapi3.Response {
+	t.Helper()
+
+	ref := op.Responses.Status(status)
+	if ref == nil || ref.Value == nil {
+		t.Fatalf("response %d missing from OpenAPI operation", status)
+	}
+	return ref.Value
 }

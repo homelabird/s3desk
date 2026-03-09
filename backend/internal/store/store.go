@@ -45,10 +45,12 @@ func normalizeProfileProvider(p models.ProfileProvider) models.ProfileProvider {
 	if value == "" {
 		return models.ProfileProviderS3Compatible
 	}
+	if value == "oci_s3_compat" {
+		return models.ProfileProviderS3Compatible
+	}
 	switch models.ProfileProvider(value) {
 	case models.ProfileProviderAwsS3,
 		models.ProfileProviderS3Compatible,
-		models.ProfileProviderOciS3Compat,
 		models.ProfileProviderAzureBlob,
 		models.ProfileProviderGcpGcs,
 		models.ProfileProviderOciObjectStorage:
@@ -60,7 +62,7 @@ func normalizeProfileProvider(p models.ProfileProvider) models.ProfileProvider {
 
 func isS3LikeProvider(p models.ProfileProvider) bool {
 	switch p {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		return true
 	default:
 		return false
@@ -97,6 +99,14 @@ type ociObjectStorageProfileConfig struct {
 	AuthProvider  string `json:"authProvider,omitempty"`
 	ConfigFile    string `json:"configFile,omitempty"`
 	ConfigProfile string `json:"configProfile,omitempty"`
+}
+
+func normalizeOciAuthProvider(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "user_principal_auth"
+	}
+	return trimmed
 }
 
 // extractGcpServiceAccountInfo pulls common display fields from a service account JSON.
@@ -143,7 +153,7 @@ func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 	}
 
 	switch provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		// For S3-style providers, these fields are always present in the response.
 		force := row.ForcePathStyle != 0
 		out.ForcePathStyle = &force
@@ -182,7 +192,7 @@ func (s *Store) profileFromRow(row profileRow) (models.Profile, error) {
 		out.Region = strings.TrimSpace(cfg.Region)
 		out.Namespace = strings.TrimSpace(cfg.Namespace)
 		out.Compartment = strings.TrimSpace(cfg.Compartment)
-		out.AuthProvider = strings.TrimSpace(cfg.AuthProvider)
+		out.AuthProvider = normalizeOciAuthProvider(cfg.AuthProvider)
 		out.ConfigFile = strings.TrimSpace(cfg.ConfigFile)
 		out.ConfigProfile = strings.TrimSpace(cfg.ConfigProfile)
 	default:
@@ -221,7 +231,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 	}
 
 	switch provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		endpoint := ""
 		if req.Endpoint != nil {
 			endpoint = strings.TrimSpace(*req.Endpoint)
@@ -388,7 +398,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		}
 		authProvider := ""
 		if req.AuthProvider != nil {
-			authProvider = strings.TrimSpace(*req.AuthProvider)
+			authProvider = normalizeOciAuthProvider(*req.AuthProvider)
 		}
 		configFile := ""
 		if req.ConfigFile != nil {
@@ -407,7 +417,7 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 			Compartment:   compartment,
 			Region:        region,
 			Endpoint:      endpoint,
-			AuthProvider:  authProvider,
+			AuthProvider:  normalizeOciAuthProvider(authProvider),
 			ConfigFile:    configFile,
 			ConfigProfile: configProfile,
 		})
@@ -592,7 +602,7 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 	}
 
 	switch provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		profile.Endpoint = strings.TrimSpace(row.Endpoint)
 		profile.Region = strings.TrimSpace(row.Region)
 		profile.ForcePathStyle = row.ForcePathStyle != 0
@@ -687,7 +697,7 @@ func (s *Store) GetProfileSecrets(ctx context.Context, profileID string) (models
 		profile.OciCompartment = strings.TrimSpace(cfg.Compartment)
 		profile.Region = strings.TrimSpace(cfg.Region)
 		profile.OciEndpoint = strings.TrimSpace(cfg.Endpoint)
-		profile.OciAuthProvider = strings.TrimSpace(cfg.AuthProvider)
+		profile.OciAuthProvider = normalizeOciAuthProvider(cfg.AuthProvider)
 		profile.OciConfigFile = strings.TrimSpace(cfg.ConfigFile)
 		profile.OciConfigProfile = strings.TrimSpace(cfg.ConfigProfile)
 	default:
@@ -717,7 +727,10 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	updates := map[string]any{"updated_at": now}
+	updates := map[string]any{
+		"updated_at": now,
+		"provider":   string(provider),
+	}
 
 	if req.Name != nil {
 		v := strings.TrimSpace(*req.Name)
@@ -734,7 +747,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 	}
 
 	switch provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		endpoint := currentSecrets.Endpoint
 		region := currentSecrets.Region
 		ak := currentSecrets.AccessKeyID
@@ -906,7 +919,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		namespace := strings.TrimSpace(currentSecrets.OciNamespace)
 		compartment := strings.TrimSpace(currentSecrets.OciCompartment)
 		endpoint := strings.TrimSpace(currentSecrets.OciEndpoint)
-		authProvider := strings.TrimSpace(currentSecrets.OciAuthProvider)
+		authProvider := normalizeOciAuthProvider(currentSecrets.OciAuthProvider)
 		configFile := strings.TrimSpace(currentSecrets.OciConfigFile)
 		configProfile := strings.TrimSpace(currentSecrets.OciConfigProfile)
 
@@ -923,7 +936,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 			endpoint = strings.TrimSpace(*req.Endpoint)
 		}
 		if req.AuthProvider != nil {
-			authProvider = strings.TrimSpace(*req.AuthProvider)
+			authProvider = normalizeOciAuthProvider(*req.AuthProvider)
 		}
 		if req.ConfigFile != nil {
 			configFile = strings.TrimSpace(*req.ConfigFile)
@@ -940,7 +953,7 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 			Compartment:   compartment,
 			Region:        region,
 			Endpoint:      endpoint,
-			AuthProvider:  authProvider,
+			AuthProvider:  normalizeOciAuthProvider(authProvider),
 			ConfigFile:    configFile,
 			ConfigProfile: configProfile,
 		})

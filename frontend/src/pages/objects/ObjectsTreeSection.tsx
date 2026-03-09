@@ -10,12 +10,15 @@ type ObjectsTreeSectionProps = {
 	hasProfile: boolean
 	hasBucket: boolean
 	favorites: FavoriteObjectItem[]
+	favoriteCount: number
 	favoritesSearch: string
 	onFavoritesSearchChange: (value: string) => void
 	favoritesOnly: boolean
 	onFavoritesOnlyChange: (value: boolean) => void
 	favoritesOpenDetails: boolean
 	onFavoritesOpenDetailsChange: (value: boolean) => void
+	favoritesExpanded: boolean
+	onFavoritesExpandedChange: (expanded: boolean) => void
 	onSelectFavorite: (key: string) => void
 	onSelectFavoriteFromDrawer: (key: string) => void
 	favoritesLoading: boolean

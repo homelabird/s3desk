@@ -187,9 +187,8 @@ test.describe('Objects image preview', () => {
 		await expect(heroRow).toBeVisible()
 		await heroRow.click()
 
-		const openLargeButton = page.getByTestId('objects-details-thumbnail-open-large')
-		await expect(openLargeButton).toBeVisible()
-		await openLargeButton.click()
+		await heroRow.getByRole('button', { name: 'Object actions' }).click()
+		await page.getByRole('menuitem', { name: /Open large preview/i }).click()
 
 		await expect(page.getByTestId('objects-image-viewer-modal')).toBeVisible()
 		const image = page.getByTestId('objects-image-viewer-image')
@@ -251,7 +250,7 @@ test.describe('Objects image preview', () => {
 			.toBeGreaterThan(300)
 	})
 
-	test('video objects render frame thumbnails in the list and details panel', async ({ page }) => {
+	test('video objects defer details thumbnails until the user explicitly loads a larger frame', async ({ page }) => {
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
 		await page.goto('/objects')
@@ -266,8 +265,15 @@ test.describe('Objects image preview', () => {
 		const videoRow = rowFor(page, 'clip.mp4')
 		await expect(videoRow).toBeVisible()
 		await videoRow.click()
+		await videoRow.getByRole('button', { name: 'Object actions' }).click()
+		await page.getByRole('menuitem', { name: 'Details' }).click()
 
-		await expect(page.getByAltText('Thumbnail of clip.mp4')).toHaveCount(2)
+		await expect(page.getByAltText('Thumbnail of clip.mp4')).toHaveCount(1)
 		await expect(page.getByTestId('objects-details-thumbnail-open-large')).toHaveCount(0)
+		await expect(page.getByText('Load to fetch a larger thumbnail frame for this video.')).toBeVisible()
+
+		await page.getByTestId('objects-details-preview-load').click()
+
+		await expect(page.getByAltText('Thumbnail preview of clip.mp4')).toBeVisible()
 	})
 })

@@ -117,7 +117,9 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 	const { contextMenuClassName, contextMenuRef, contextMenuVisible, contextMenuProps, contextMenuStyle } = contextMenuPortalProps
 	const [listControlsReady, setListControlsReady] = useState(false)
 	const shouldLoadTreePane = treeProps.dockTree || treeProps.treeDrawerOpen
-	const shouldLoadDetailsPane = (detailsProps.dockDetails && detailsProps.detailsOpen) || detailsProps.detailsDrawerOpen
+	const shouldLoadDetailsPane =
+		(detailsProps.dockDetails && detailsProps.detailsOpen) ||
+		(detailsProps.detailsDrawerOpen && !detailsProps.detailsDrawerSuspended)
 	const shouldShowCollapsedDetails = detailsProps.dockDetails && !detailsProps.detailsOpen
 	const shouldDeferListControls = listProps.hasBucket
 

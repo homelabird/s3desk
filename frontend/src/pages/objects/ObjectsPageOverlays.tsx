@@ -12,7 +12,7 @@ import {
 	ObjectsNewFolderModal,
 	ObjectsPresignModal,
 	ObjectsRenameModal,
-	ObjectsUploadFolderModal,
+	ObjectsMoveSelectionSheet,
 } from './objectsPageLazy'
 
 type ObjectsFiltersDrawerProps = Parameters<typeof import('./ObjectsFiltersDrawer').ObjectsFiltersDrawer>[0]
@@ -23,9 +23,9 @@ type ObjectsDeletePrefixConfirmModalProps = Parameters<
 	typeof import('./ObjectsDeletePrefixConfirmModal').ObjectsDeletePrefixConfirmModal
 >[0]
 type ObjectsDownloadPrefixModalProps = Parameters<typeof import('./ObjectsDownloadPrefixModal').ObjectsDownloadPrefixModal>[0]
-type ObjectsUploadFolderModalProps = Parameters<typeof import('./ObjectsUploadFolderModal').ObjectsUploadFolderModal>[0]
 type ObjectsCopyPrefixModalProps = Parameters<typeof import('./ObjectsCopyPrefixModal').ObjectsCopyPrefixModal>[0]
 type ObjectsCopyMoveModalProps = Parameters<typeof import('./ObjectsCopyMoveModal').ObjectsCopyMoveModal>[0]
+type ObjectsMoveSelectionSheetProps = Parameters<typeof import('./ObjectsMoveSelectionSheet').ObjectsMoveSelectionSheet>[0]
 type ObjectsNewFolderModalProps = Parameters<typeof import('./ObjectsNewFolderModal').ObjectsNewFolderModal>[0]
 type ObjectsRenameModalProps = Parameters<typeof import('./ObjectsRenameModal').ObjectsRenameModal>[0]
 type ObjectsGlobalSearchDrawerProps = Parameters<typeof import('./ObjectsGlobalSearchDrawer').ObjectsGlobalSearchDrawer>[0]
@@ -37,9 +37,9 @@ export type ObjectsPageOverlaysProps = {
 	commandPaletteModalProps: ObjectsCommandPaletteModalProps | null
 	deletePrefixConfirmModalProps: ObjectsDeletePrefixConfirmModalProps | null
 	downloadPrefixModalProps: ObjectsDownloadPrefixModalProps | null
-	uploadFolderModalProps: ObjectsUploadFolderModalProps | null
 	copyPrefixModalProps: ObjectsCopyPrefixModalProps | null
 	copyMoveModalProps: ObjectsCopyMoveModalProps | null
+	selectionMoveSheetProps: ObjectsMoveSelectionSheetProps | null
 	newFolderModalProps: ObjectsNewFolderModalProps | null
 	renameModalProps: ObjectsRenameModalProps | null
 	globalSearchDrawerProps: ObjectsGlobalSearchDrawerProps | null
@@ -52,9 +52,9 @@ export function ObjectsPageOverlays({
 	commandPaletteModalProps,
 	deletePrefixConfirmModalProps,
 	downloadPrefixModalProps,
-	uploadFolderModalProps,
 	copyPrefixModalProps,
 	copyMoveModalProps,
+	selectionMoveSheetProps,
 	newFolderModalProps,
 	renameModalProps,
 	globalSearchDrawerProps,
@@ -74,12 +74,11 @@ export function ObjectsPageOverlays({
 			) : null}
 
 			{downloadPrefixModalProps ? <ObjectsDownloadPrefixModal {...downloadPrefixModalProps} /> : null}
-
-			{uploadFolderModalProps ? <ObjectsUploadFolderModal {...uploadFolderModalProps} /> : null}
-
 			{copyPrefixModalProps ? <ObjectsCopyPrefixModal {...copyPrefixModalProps} /> : null}
 
 			{copyMoveModalProps ? <ObjectsCopyMoveModal {...copyMoveModalProps} /> : null}
+
+			{selectionMoveSheetProps ? <ObjectsMoveSelectionSheet {...selectionMoveSheetProps} /> : null}
 
 			{newFolderModalProps ? <ObjectsNewFolderModal {...newFolderModalProps} /> : null}
 

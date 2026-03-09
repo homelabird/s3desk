@@ -1,15 +1,49 @@
 import { render, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
 import { createThumbnailCache } from '../../../lib/thumbnailCache'
 import { ObjectThumbnail } from '../ObjectThumbnail'
 
+const originalCreateObjectURL = URL.createObjectURL
+const originalRevokeObjectURL = URL.revokeObjectURL
+
+beforeEach(() => {
+	URL.createObjectURL = vi.fn(() => 'blob:thumbnail')
+	URL.revokeObjectURL = vi.fn()
+})
+
 afterEach(() => {
+	URL.createObjectURL = originalCreateObjectURL
+	URL.revokeObjectURL = originalRevokeObjectURL
 	vi.restoreAllMocks()
+	Reflect.deleteProperty(window as typeof window & { caches?: CacheStorage }, 'caches')
 })
 
 describe('ObjectThumbnail', () => {
+	it('uses persistent local cache for video thumbnails before hitting the network', async () => {
+		const cache = createThumbnailCache()
+		const downloadObjectThumbnail = vi.fn()
+		const match = vi.fn().mockResolvedValue(
+			new Response(new Blob(['thumb'], { type: 'image/jpeg' }), {
+				status: 200,
+				headers: { 'content-type': 'image/jpeg' },
+			}),
+		)
+		;(window as typeof window & { caches?: CacheStorage }).caches = {
+			open: vi.fn().mockResolvedValue({
+				match,
+				put: vi.fn(),
+			}),
+		} as unknown as CacheStorage
+		const api = { downloadObjectThumbnail } as never
+
+		render(<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
+
+		await waitFor(() => expect(match).toHaveBeenCalled())
+		expect(downloadObjectThumbnail).not.toHaveBeenCalled()
+	})
+
 	it('does not refetch thumbnails after a deterministic 413 failure', async () => {
 		const cache = createThumbnailCache()
 		const downloadObjectThumbnail = vi.fn(() => ({

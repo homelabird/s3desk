@@ -5,6 +5,7 @@ import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode } f
 
 import styles from './objects.module.css'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
+import type { PopoverOpenSource } from '../../components/PopoverSurface'
 
 type BaseRowProps = {
 	offset: number
@@ -15,15 +16,20 @@ type BaseRowProps = {
 }
 
 type ObjectsPrefixRowProps = BaseRowProps & {
+	prefixKey: string
 	displayName: string
 	highlightText: (value: string) => ReactNode
 	menu: MenuProps
 	buttonMenuOpen: boolean
-	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => void
+	onButtonMenuOpenChange: (open: boolean, info?: { source: PopoverOpenSource }) => void
 	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onOpen: () => void
 	onDragStart: (e: DragEvent) => void
 	onDragEnd: () => void
+	isDropTargetActive?: boolean
+	onDropTargetDragOver?: (e: DragEvent<HTMLDivElement>) => void
+	onDropTargetDragLeave?: (e: DragEvent<HTMLDivElement>) => void
+	onDropTargetDrop?: (e: DragEvent<HTMLDivElement>) => void
 }
 
 type ObjectsObjectRowProps = BaseRowProps & {
@@ -37,7 +43,7 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	highlightText: (value: string) => ReactNode
 	menu: MenuProps
 	buttonMenuOpen: boolean
-	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => void
+	onButtonMenuOpenChange: (open: boolean, info?: { source: PopoverOpenSource }) => void
 	onClick: (e: MouseEvent) => void
 	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onCheckboxClick: (e: MouseEvent) => void
@@ -67,7 +73,7 @@ function handleRowKeyDown(event: KeyboardEvent<HTMLDivElement>, onActivate: (eve
 function renderRowMenu(
 	menu: MenuProps,
 	open: boolean,
-	onOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => void,
+	onOpenChange: (open: boolean, info?: { source: PopoverOpenSource }) => void,
 	label = 'Row actions',
 ) {
 	return (
@@ -105,6 +111,8 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 		props.canDragDrop ? styles.listRowDraggable : styles.listRowClickable,
 		styles.listGridBase,
 		props.listGridClassName,
+		styles.listRowDropTarget,
+		props.isDropTargetActive && styles.listRowDropActive,
 	)
 
 	return (
@@ -116,8 +124,12 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 				draggable={props.canDragDrop}
 				onDragStart={props.onDragStart}
 				onDragEnd={props.onDragEnd}
+				onDragOver={props.onDropTargetDragOver}
+				onDragLeave={props.onDropTargetDragLeave}
+				onDrop={props.onDropTargetDrop}
 				className={innerClassName}
 				data-objects-row="true"
+				data-testid={`objects-prefix-drop-target-${encodeURIComponent(props.prefixKey)}`}
 				role="button"
 				tabIndex={0}
 			>

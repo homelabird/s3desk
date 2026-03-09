@@ -90,7 +90,7 @@ export function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest
 		}
 	}
 	return {
-		provider: 'oci_s3_compat',
+		provider: 's3_compatible',
 		...base,
 		...(values.endpoint ? { endpoint: values.endpoint } : {}),
 	}
@@ -166,7 +166,7 @@ export function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest
 		}
 	}
 	return {
-		provider: 'oci_s3_compat',
+		provider: 's3_compatible',
 		...base,
 		endpoint: values.endpoint,
 	}

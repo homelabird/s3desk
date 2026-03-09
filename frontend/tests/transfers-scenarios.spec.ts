@@ -199,7 +199,7 @@ test('transfer scenarios cover job types, progress, cancel, and retry', async ({
 	const failedRow = page.getByRole('row', { name: /job-copy/ })
 	const deleteRow = page.getByRole('row', { name: /job-delete/ })
 
-	await expect(localRow).toContainText(/Upload folder \(device \u2192 S3\)/)
+	await expect(localRow).toContainText(/Upload from device \u2192 S3/)
 	await expect(stagingRow).toContainText(/Finalize upload \(staging \u2192 S3\)/)
 	await expect(runningRow).toContainText(/Download folder \(S3 \u2192 device\)/)
 	await expect(failedRow).toContainText('Copy object')

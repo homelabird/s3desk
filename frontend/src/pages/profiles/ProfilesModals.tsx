@@ -30,10 +30,14 @@ type ProfilesModalsProps = {
 	yamlProfile: Profile | null
 	yamlError: string | null
 	yamlContent: string
+	yamlDraft: string
 	yamlFilename: string
 	exportYamlLoading: boolean
+	saveYamlLoading: boolean
 	onYamlCopy: () => void
 	onYamlDownload: () => void
+	onYamlDraftChange: (value: string) => void
+	onYamlSave: () => void
 	importOpen: boolean
 	closeImportModal: () => void
 	importText: string
@@ -89,8 +93,17 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 					<Button key="copy" disabled={!props.yamlContent} onClick={props.onYamlCopy}>
 						Copy
 					</Button>,
-					<Button key="download" type="primary" disabled={!props.yamlContent} onClick={props.onYamlDownload}>
+					<Button key="download" disabled={!props.yamlContent} onClick={props.onYamlDownload}>
 						Download
+					</Button>,
+					<Button
+						key="save"
+						type="primary"
+						disabled={!props.yamlDraft.trim() || props.exportYamlLoading}
+						loading={props.saveYamlLoading}
+						onClick={props.onYamlSave}
+					>
+						Save
 					</Button>,
 					<Button key="close" onClick={props.closeYamlModal}>
 						Close
@@ -109,13 +122,17 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 							Profile: <Typography.Text code>{props.yamlProfile.name}</Typography.Text>
 						</Typography.Text>
 					) : null}
-					{props.yamlError ? <Alert type="error" showIcon title="Failed to load YAML" description={props.yamlError} /> : null}
+					{props.yamlError ? <Alert type="error" showIcon title="YAML action failed" description={props.yamlError} /> : null}
 					{props.exportYamlLoading && !props.yamlContent ? (
 						<Spin />
 					) : (
-						<Input.TextArea value={props.yamlContent} readOnly autoSize={{ minRows: 6, maxRows: 16 }} />
+						<Input.TextArea
+							value={props.yamlDraft}
+							onChange={(e) => props.onYamlDraftChange(e.target.value)}
+							autoSize={{ minRows: 6, maxRows: 16 }}
+						/>
 					)}
-					{props.yamlContent ? <Typography.Text type="secondary">Filename: {props.yamlFilename}</Typography.Text> : null}
+					{props.yamlDraft ? <Typography.Text type="secondary">Filename: {props.yamlFilename}</Typography.Text> : null}
 				</Space>
 			</DialogModal>
 

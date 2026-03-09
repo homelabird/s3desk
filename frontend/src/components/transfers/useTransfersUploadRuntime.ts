@@ -17,7 +17,6 @@ import type {
 	QueueUploadFilesArgs,
 	TransfersRuntimeNotifications,
 	UploadCapabilityByProfileId,
-	UploadMovePlan,
 } from './transfersTypes'
 import { useTransfersUploadJobEvents } from './useTransfersUploadJobEvents'
 import {
@@ -49,7 +48,6 @@ type UseTransfersUploadRuntimeArgs = {
 	uploadAbortByTaskIdRef: MutableRefObject<Record<string, () => void>>
 	uploadEstimatorByTaskIdRef: MutableRefObject<Record<string, TransferEstimator>>
 	uploadItemsByTaskIdRef: MutableRefObject<Record<string, UploadFileItem[]>>
-	uploadMoveByTaskIdRef: MutableRefObject<Record<string, UploadMovePlan>>
 	uploadPreviewUrlByTaskIdRef: MutableRefObject<Record<string, string>>
 	openTransfers: (tab?: 'downloads' | 'uploads') => void
 }
@@ -61,18 +59,6 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 		async (taskId: string) => {
 			const current = args.uploadTasksRef.current.find((t) => t.id === taskId)
 			if (!current) return
-
-			const movePlan = args.uploadMoveByTaskIdRef.current[taskId]
-			if (current.cleanupFailed && current.moveAfterUpload && current.jobId && movePlan) {
-				args.updateUploadTask(taskId, (t) => ({
-					...t,
-					status: 'waiting_job',
-					finishedAtMs: undefined,
-					error: undefined,
-					cleanupFailed: false,
-				}))
-				return
-			}
 
 			let items = args.uploadItemsByTaskIdRef.current[taskId]
 			if (!items || items.length === 0) {
@@ -143,7 +129,6 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				etaSeconds: 0,
 				error: undefined,
 				jobId: undefined,
-				cleanupFailed: false,
 			}))
 		},
 		[args],
@@ -408,7 +393,6 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 					status: 'waiting_job',
 					finishedAtMs: undefined,
 					jobId: resp.jobId,
-					cleanupFailed: false,
 					loadedBytes: 0,
 					speedBps: 0,
 					etaSeconds: 0,
@@ -471,11 +455,8 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			const queuedUpload = buildQueuedUpload({ taskId, queueArgs })
 			if (!queuedUpload) return
 
-			const { items, movePlan, task } = queuedUpload
+			const { items, task } = queuedUpload
 			args.uploadItemsByTaskIdRef.current[taskId] = items
-			if (movePlan) {
-				args.uploadMoveByTaskIdRef.current[taskId] = movePlan
-			}
 
 			args.setUploadTasks((prev) => [task, ...prev])
 			args.openTransfers('uploads')

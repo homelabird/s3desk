@@ -18,7 +18,12 @@ type UseObjectsPrefixGridRendererArgs = Pick<
 	| 'getPrefixActions'
 	| 'highlightText'
 	| 'isAdvanced'
+	| 'dndHoverPrefix'
+	| 'normalizeDropTargetPrefix'
 	| 'onOpenPrefix'
+	| 'onDndTargetDragOver'
+	| 'onDndTargetDragLeave'
+	| 'onDndTargetDrop'
 	| 'onRowDragStartPrefix'
 	| 'openPrefixContextMenu'
 	| 'prefix'
@@ -35,7 +40,12 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 		getPrefixActions,
 		highlightText,
 		isAdvanced,
+		dndHoverPrefix,
+		normalizeDropTargetPrefix,
 		onOpenPrefix,
+		onDndTargetDragOver,
+		onDndTargetDragLeave,
+		onDndTargetDrop,
 		onRowDragStartPrefix,
 		openPrefixContextMenu,
 		prefix,
@@ -46,6 +56,7 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 	return useCallback(
 		(prefixKey: string) => {
 			const displayName = displayNameForPrefix(prefixKey, prefix)
+			const dropTargetPrefix = normalizeDropTargetPrefix(prefixKey)
 			const menu = withContextMenuClassName(buildActionMenu(getPrefixActions(prefixKey), isAdvanced))
 			const buttonMenuOpen =
 				contextMenuState.open &&
@@ -55,7 +66,7 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 			return (
 				<div key={prefixKey} className={styles.gridCardShell} role="listitem">
 					<div
-						className={styles.gridCard}
+						className={`${styles.gridCard} ${styles.gridCardDropTarget} ${canDragDrop && dndHoverPrefix === dropTargetPrefix ? styles.gridCardDropActive : ''}`}
 						onClick={() => onOpenPrefix(prefixKey)}
 						onContextMenu={(event) => {
 							event.preventDefault()
@@ -63,11 +74,15 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 							const point = recordContextMenuPoint(event)
 							openPrefixContextMenu(prefixKey, 'context', point)
 						}}
+						onDragOver={(event) => onDndTargetDragOver(event, prefixKey)}
+						onDragLeave={(event) => onDndTargetDragLeave(event, prefixKey)}
+						onDrop={(event) => onDndTargetDrop(event, prefixKey)}
 						onKeyDown={(event) => onActivateFromKeyboard(event, () => onOpenPrefix(prefixKey))}
 						draggable={canDragDrop}
 						onDragStart={(event) => onRowDragStartPrefix(event, prefixKey)}
 						onDragEnd={clearDndHover}
 						data-objects-row="true"
+						data-testid={`objects-prefix-drop-target-${encodeURIComponent(prefixKey)}`}
 						role="button"
 						tabIndex={0}
 					>
@@ -124,9 +139,14 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 			contextMenuState.kind,
 			contextMenuState.open,
 			contextMenuState.source,
+			dndHoverPrefix,
 			getPrefixActions,
 			highlightText,
 			isAdvanced,
+			normalizeDropTargetPrefix,
+			onDndTargetDragLeave,
+			onDndTargetDragOver,
+			onDndTargetDrop,
 			onOpenPrefix,
 			onRowDragStartPrefix,
 			openPrefixContextMenu,

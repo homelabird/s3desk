@@ -1,0 +1,25 @@
+.cellText {
+	display: block;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.singleLine {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.multiLine {
+	display: -webkit-box;
+	overflow: hidden;
+	white-space: normal;
+	word-break: break-word;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: var(--jobs-cell-lines, 2);
+}
+
+.tooltipContent {
+	white-space: pre-wrap;
+	word-break: break-word;
+}

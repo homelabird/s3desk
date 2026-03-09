@@ -1,11 +1,14 @@
-import { Alert, Button, Checkbox, Grid, Input, message } from 'antd'
+import { Alert, Button, Grid, Input, Typography, message } from 'antd'
 import { useState } from 'react'
 
-import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { DatalistInput } from '../../components/DatalistInput'
 import { FormField } from '../../components/FormField'
 import { OverlaySheet } from '../../components/OverlaySheet'
-import { getDevicePickerSupport } from '../../lib/deviceFs'
+import { UploadSourceSheet } from '../../components/UploadSourceSheet'
+import { promptForFiles, promptForFolderFiles } from '../../components/transfers/transfersUploadUtils'
+import { getDirectorySelectionSupport } from '../../lib/deviceFs'
+import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { describeUploadSelection } from '../../lib/uploadSelection'
 import styles from './JobsShared.module.css'
 
 export function CreateJobModal(props: {
@@ -15,10 +18,8 @@ export function CreateJobModal(props: {
 	onSubmit: (payload: {
 		bucket: string
 		prefix: string
-		dirHandle: FileSystemDirectoryHandle
+		files: File[]
 		label?: string
-		moveAfterUpload?: boolean
-		cleanupEmptyDirs?: boolean
 	}) => void
 	loading: boolean
 	isOffline: boolean
@@ -27,33 +28,28 @@ export function CreateJobModal(props: {
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
-	defaultMoveAfterUpload: boolean
-	defaultCleanupEmptyDirs: boolean
-	onDefaultsChange?: (values: { moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => void
 }) {
 	const screens = Grid.useBreakpoint()
 	const drawerWidth = screens.md ? 520 : '100%'
 	const [bucket, setBucket] = useState(props.bucket)
 	const [prefix, setPrefix] = useState('')
-	const [localFolder, setLocalFolder] = useState('')
-	const [moveAfterUpload, setMoveAfterUpload] = useState(props.defaultMoveAfterUpload)
-	const [cleanupEmptyDirs, setCleanupEmptyDirs] = useState(props.defaultCleanupEmptyDirs)
-	const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
-	const [dirLabel, setDirLabel] = useState('')
-	const support = getDevicePickerSupport()
+	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+	const [selectionLabel, setSelectionLabel] = useState('')
+	const [sourceOpen, setSourceOpen] = useState(false)
+	const [sourceBusy, setSourceBusy] = useState(false)
+	const support = getDirectorySelectionSupport()
 	const uploadSupported = props.uploadSupported ?? true
 
 	const reset = () => {
 		setBucket(props.bucket)
 		setPrefix('')
-		setLocalFolder('')
-		setMoveAfterUpload(props.defaultMoveAfterUpload)
-		setCleanupEmptyDirs(props.defaultCleanupEmptyDirs)
-		setDirHandle(null)
-		setDirLabel('')
+		setSelectedFiles([])
+		setSelectionLabel('')
+		setSourceOpen(false)
+		setSourceBusy(false)
 	}
 
-	const canSubmit = !!dirHandle && !!bucket.trim() && support.ok && !props.isOffline && uploadSupported
+	const canSubmit = selectedFiles.length > 0 && !!bucket.trim() && !props.isOffline && uploadSupported
 
 	const handleSubmit = () => {
 		if (!uploadSupported) {
@@ -65,18 +61,16 @@ export function CreateJobModal(props: {
 			message.error('Bucket is required')
 			return
 		}
-		if (!dirHandle) {
-			message.info('Select a local folder first')
+		if (selectedFiles.length === 0) {
+			message.info('Choose files or a folder from this device first')
 			return
 		}
 		props.setBucket(trimmedBucket)
 		props.onSubmit({
 			bucket: trimmedBucket,
 			prefix,
-			dirHandle,
-			label: dirLabel || dirHandle.name,
-			moveAfterUpload,
-			cleanupEmptyDirs: moveAfterUpload ? cleanupEmptyDirs : false,
+			files: selectedFiles,
+			label: selectionLabel || undefined,
 		})
 	}
 
@@ -85,11 +79,43 @@ export function CreateJobModal(props: {
 		props.onCancel()
 	}
 
+	const chooseFiles = async () => {
+		setSourceBusy(true)
+		try {
+			setSourceOpen(false)
+			const files = await promptForFiles({ multiple: true, directory: false })
+			if (!files || files.length === 0) return
+			setSelectedFiles(files)
+			setSelectionLabel('')
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setSourceBusy(false)
+		}
+	}
+
+	const chooseFolder = async () => {
+		setSourceBusy(true)
+		try {
+			setSourceOpen(false)
+			const result = await promptForFolderFiles()
+			if (!result || result.files.length === 0) return
+			setSelectedFiles(result.files)
+			setSelectionLabel(result.label ?? '')
+		} catch (err) {
+			message.error(formatErr(err))
+		} finally {
+			setSourceBusy(false)
+		}
+	}
+
+	const selectionSummary = describeUploadSelection(selectedFiles)
+
 	return (
 		<OverlaySheet
 			open={props.open}
 			onClose={handleCancel}
-			title="Upload local folder (device → S3)"
+			title="Upload from device"
 			placement={screens.md ? 'right' : 'bottom'}
 			width={screens.md ? drawerWidth : undefined}
 			height={!screens.md ? '100dvh' : undefined}
@@ -103,14 +129,6 @@ export function CreateJobModal(props: {
 			}
 		>
 			<div className={styles.alertStack}>
-				{!support.ok ? (
-					<Alert
-						type="warning"
-						showIcon
-						title="Local folder access is not available"
-						description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
-					/>
-				) : null}
 				{!uploadSupported ? (
 					<Alert
 						type="info"
@@ -123,7 +141,7 @@ export function CreateJobModal(props: {
 					type="info"
 					showIcon
 					title="Uploads from this device"
-					description="Files are uploaded by the browser and appear in Transfers (not as server jobs)."
+					description="Files and folders are uploaded by the browser and appear in Transfers (not as server jobs). Folder structure is preserved automatically when relative paths are available."
 				/>
 			</div>
 
@@ -149,50 +167,42 @@ export function CreateJobModal(props: {
 					<Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" />
 				</FormField>
 
-				<FormField label="Local folder">
-					<LocalDevicePathInput
-						value={localFolder}
-						onChange={setLocalFolder}
-						placeholder="Select a folder…"
-						disabled={!support.ok || props.isOffline || !uploadSupported}
-						onPick={(handle) => {
-							setDirHandle(handle)
-							setDirLabel(handle.name)
-						}}
-					/>
+				<FormField label="Source selection">
+					<div className={styles.sourceSummary}>
+						<Typography.Text strong>
+							{selectedFiles.length === 0
+								? 'Nothing selected yet'
+								: `${selectedFiles.length.toLocaleString()} item(s) · ${
+										selectionSummary.kind === 'folder'
+											? `Folder ${selectionSummary.rootName ?? ''}`.trim()
+											: selectionSummary.kind === 'collection'
+												? 'Multiple roots'
+												: 'Files'
+									}`}
+						</Typography.Text>
+						<Button
+							onClick={() => setSourceOpen(true)}
+							disabled={props.isOffline || !uploadSupported || sourceBusy}
+						>
+							Choose from device…
+						</Button>
+					</div>
 				</FormField>
-
-				<div className={styles.checkboxFieldTight}>
-					<Checkbox
-						checked={moveAfterUpload}
-						onChange={(e) => {
-							const checked = e.target.checked
-							setMoveAfterUpload(checked)
-							if (!checked) setCleanupEmptyDirs(false)
-							props.onDefaultsChange?.({
-								moveAfterUpload: checked,
-								cleanupEmptyDirs: checked ? cleanupEmptyDirs : false,
-							})
-						}}
-					>
-						Move after upload (delete local files after the job succeeds)
-					</Checkbox>
-				</div>
-
-				<div className={styles.checkboxField}>
-					<Checkbox
-						checked={cleanupEmptyDirs}
-						disabled={!moveAfterUpload}
-						onChange={(e) => {
-							const checked = e.target.checked
-							setCleanupEmptyDirs(checked)
-							props.onDefaultsChange?.({ moveAfterUpload, cleanupEmptyDirs: checked })
-						}}
-					>
-						Auto-clean empty folders
-					</Checkbox>
-				</div>
 			</form>
+			<UploadSourceSheet
+				open={sourceOpen}
+				title="Select upload source"
+				destinationLabel={bucket.trim() ? `s3://${bucket.trim()}${prefix.trim() ? `/${prefix.trim().replace(/^\/+/, '')}` : '/'}` : undefined}
+				folderSelectionSupported={support.ok}
+				folderSelectionReason={support.reason}
+				busy={sourceBusy}
+				onClose={() => {
+					if (sourceBusy) return
+					setSourceOpen(false)
+				}}
+				onSelectFiles={() => void chooseFiles()}
+				onSelectFolder={() => void chooseFolder()}
+			/>
 		</OverlaySheet>
 	)
 }

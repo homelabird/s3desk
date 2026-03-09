@@ -113,7 +113,7 @@ func (s *server) handleGetBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch secrets.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		resp, err := s3policy.GetBucketPolicy(r.Context(), secrets, bucket)
 		if err != nil {
 			s.writeS3PolicyCallError(w, "get", bucket, err)
@@ -214,7 +214,7 @@ func (s *server) handlePutBucketPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch secrets.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		resp, err := s3policy.PutBucketPolicy(r.Context(), secrets, bucket, req.Policy)
 		if err != nil {
 			s.writeS3PolicyCallError(w, "put", bucket, err)
@@ -282,7 +282,7 @@ func (s *server) handleDeleteBucketPolicy(w http.ResponseWriter, r *http.Request
 	}
 
 	switch secrets.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		resp, err := s3policy.DeleteBucketPolicy(r.Context(), secrets, bucket)
 		if err != nil {
 			s.writeS3PolicyCallError(w, "delete", bucket, err)

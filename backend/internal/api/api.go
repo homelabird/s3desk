@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"s3desk/internal/bucketgov"
 	"s3desk/internal/config"
 	"s3desk/internal/jobs"
 	"s3desk/internal/metrics"
@@ -39,6 +40,7 @@ func New(dep Dependencies) http.Handler {
 		serverAddr:  dep.ServerAddr,
 		proxySecret: resolveProxySecret(dep.Config.APIToken),
 		uploadLimit: newRequestLimiter(dep.Config.UploadMaxConcurrentRequests),
+		bucketGov:   bucketgov.NewService(bucketgov.NewDefaultRegistry()),
 	}
 
 	r.Use(api.requestLogger)
@@ -86,6 +88,40 @@ func New(dep Dependencies) http.Handler {
 			r.Put("/", api.handlePutBucketPolicy)
 			r.Delete("/", api.handleDeleteBucketPolicy)
 			r.Post("/validate", api.handleValidateBucketPolicy)
+		})
+
+		r.Route("/buckets/{bucket}/governance", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketGovernance)
+		})
+
+		r.Route("/buckets/{bucket}/governance/access", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketAccess)
+			r.Put("/", api.handlePutBucketAccess)
+		})
+
+		r.Route("/buckets/{bucket}/governance/public-exposure", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketPublicExposure)
+			r.Put("/", api.handlePutBucketPublicExposure)
+		})
+
+		r.Route("/buckets/{bucket}/governance/protection", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketProtection)
+			r.Put("/", api.handlePutBucketProtection)
+		})
+
+		r.Route("/buckets/{bucket}/governance/versioning", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketVersioning)
+			r.Put("/", api.handlePutBucketVersioning)
+		})
+
+		r.Route("/buckets/{bucket}/governance/encryption", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketEncryption)
+			r.Put("/", api.handlePutBucketEncryption)
+		})
+
+		r.Route("/buckets/{bucket}/governance/lifecycle", func(r chi.Router) {
+			r.Get("/", api.handleGetBucketLifecycle)
+			r.Put("/", api.handlePutBucketLifecycle)
 		})
 
 		r.Route("/buckets/{bucket}/objects", func(r chi.Router) {

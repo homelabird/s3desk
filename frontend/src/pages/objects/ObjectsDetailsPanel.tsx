@@ -9,6 +9,7 @@ type ObjectsDetailsPanelProps = {
 	dockDetails: boolean
 	detailsOpen: boolean
 	detailsDrawerOpen: boolean
+	detailsDrawerSuspended?: boolean
 	detailsPanelBody: ReactNode
 	onOpenDetails: () => void
 	onCloseDetails: () => void
@@ -19,6 +20,8 @@ type ObjectsDetailsPanelProps = {
 }
 
 export function ObjectsDetailsPanel(props: ObjectsDetailsPanelProps) {
+	const showDetailsDrawer = !props.dockDetails && props.detailsDrawerOpen && !props.detailsDrawerSuspended
+
 	return (
 		<>
 			{props.dockDetails ? (
@@ -49,10 +52,12 @@ export function ObjectsDetailsPanel(props: ObjectsDetailsPanelProps) {
 			) : null}
 
 			<ObjectsOverlaySheet
-				open={!props.dockDetails && props.detailsDrawerOpen}
+				open={showDetailsDrawer}
 				onClose={props.onCloseDrawer}
 				title="Details"
 				placement="right"
+				sheetId="details"
+				backdropInteractive={!props.detailsDrawerSuspended}
 				width="min(90vw, 520px)"
 				dataTestId="objects-details-sheet"
 			>

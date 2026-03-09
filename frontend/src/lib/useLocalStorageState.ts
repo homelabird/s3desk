@@ -1,15 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 export function useLocalStorageState<T>(key: string, defaultValue: T): [T, (next: T | ((prev: T) => T)) => void] {
-	const [state, setState] = useState<T>(() => {
-		try {
-			const raw = window.localStorage.getItem(key)
-			if (raw === null) return defaultValue
-			return JSON.parse(raw) as T
-		} catch {
-			return defaultValue
-		}
-	})
+	const stableDefaultSerialized = useMemo(() => JSON.stringify(defaultValue), [defaultValue])
+	const stableDefaultValue = useMemo(() => JSON.parse(stableDefaultSerialized) as T, [stableDefaultSerialized])
+
+	const parse = useCallback(
+		(raw: string | null): T => {
+			if (raw === null) return stableDefaultValue
+			try {
+				return JSON.parse(raw) as T
+			} catch {
+				return stableDefaultValue
+			}
+		},
+		[stableDefaultValue],
+	)
+
+	const readValue = useCallback(
+		(storageKey: string): T => {
+			try {
+				return parse(window.localStorage.getItem(storageKey))
+			} catch {
+				return stableDefaultValue
+			}
+		},
+		[parse, stableDefaultValue],
+	)
+
+	const [stateSlot, setStateSlot] = useState<{ key: string; value: T }>(() => ({
+		key,
+		value: readValue(key),
+	}))
+	const state = stateSlot.key === key ? stateSlot.value : readValue(key)
 	const stateRef = useRef(state)
 	useEffect(() => {
 		stateRef.current = state
@@ -26,21 +48,12 @@ export function useLocalStorageState<T>(key: string, defaultValue: T): [T, (next
 	}, [key, state])
 
 	useEffect(() => {
-		const parse = (raw: string | null): T => {
-			if (raw === null) return defaultValue
-			try {
-				return JSON.parse(raw) as T
-			} catch {
-				return defaultValue
-			}
-		}
-
 		const handleStorage = (event: StorageEvent) => {
 			if (event.key !== key) return
 			const nextRaw = event.newValue
 			const currentRaw = JSON.stringify(stateRef.current)
 			if (nextRaw === currentRaw) return
-			setState(parse(nextRaw))
+			setStateSlot({ key, value: parse(nextRaw) })
 		}
 
 		const handleCustom = (event: Event) => {
@@ -49,7 +62,7 @@ export function useLocalStorageState<T>(key: string, defaultValue: T): [T, (next
 			const nextRaw = detail.value ?? null
 			const currentRaw = JSON.stringify(stateRef.current)
 			if (nextRaw === currentRaw) return
-			setState(parse(nextRaw))
+			setStateSlot({ key, value: parse(nextRaw) })
 		}
 
 		window.addEventListener('storage', handleStorage)
@@ -58,18 +71,19 @@ export function useLocalStorageState<T>(key: string, defaultValue: T): [T, (next
 			window.removeEventListener('storage', handleStorage)
 			window.removeEventListener('local-storage', handleCustom)
 		}
-	}, [defaultValue, key])
+	}, [key, parse])
 
 	const set = useCallback(
 		(next: T | ((prev: T) => T)) => {
-			setState((prev) => {
+			setStateSlot((prevSlot) => {
+				const prev = prevSlot.key === key ? prevSlot.value : readValue(key)
 				if (typeof next === 'function') {
-					return (next as (prev: T) => T)(prev)
+					return { key, value: (next as (prev: T) => T)(prev) }
 				}
-				return next
+				return { key, value: next }
 			})
 		},
-		[setState],
+		[key, readValue],
 	)
 
 	return [state, set]

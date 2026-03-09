@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getVisibleCreatedPrefix, insertOptimisticPrefixIntoObjectsData } from '../objectsQueryCache'
+import { getVisibleCreatedPrefix, hasVisiblePrefixInObjectsData, insertOptimisticPrefixIntoObjectsData } from '../objectsQueryCache'
 
 describe('objectsQueryCache', () => {
 	it('derives the visible created prefix relative to the current parent prefix', () => {
@@ -43,5 +43,32 @@ describe('objectsQueryCache', () => {
 		}
 
 		expect(insertOptimisticPrefixIntoObjectsData(data, 'alpha/')).toBe(data)
+	})
+
+	it('detects whether a visible prefix exists in any cached page', () => {
+		const data = {
+			pages: [
+				{
+					bucket: 'bucket-a',
+					prefix: '',
+					delimiter: '/',
+					commonPrefixes: ['alpha/'],
+					items: [],
+					isTruncated: true,
+				},
+				{
+					bucket: 'bucket-a',
+					prefix: '',
+					delimiter: '/',
+					commonPrefixes: ['beta/'],
+					items: [],
+					isTruncated: false,
+				},
+			],
+			pageParams: [undefined, 'next'],
+		}
+
+		expect(hasVisiblePrefixInObjectsData(data, 'beta/')).toBe(true)
+		expect(hasVisiblePrefixInObjectsData(data, 'gamma/')).toBe(false)
 	})
 })

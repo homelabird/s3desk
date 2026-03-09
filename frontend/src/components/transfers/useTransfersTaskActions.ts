@@ -11,7 +11,6 @@ type UseTransfersTaskActionsParams = {
 	uploadAbortByTaskIdRef: MutableRefObject<Record<string, () => void>>
 	uploadEstimatorByTaskIdRef: MutableRefObject<Record<string, unknown>>
 	uploadItemsByTaskIdRef: MutableRefObject<Record<string, unknown>>
-	uploadMoveByTaskIdRef: MutableRefObject<Record<string, unknown>>
 }
 
 export function useTransfersTaskActions({
@@ -22,7 +21,6 @@ export function useTransfersTaskActions({
 	uploadAbortByTaskIdRef,
 	uploadEstimatorByTaskIdRef,
 	uploadItemsByTaskIdRef,
-	uploadMoveByTaskIdRef,
 }: UseTransfersTaskActionsParams) {
 	const updateDownloadTask = useCallback((taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
 		setDownloadTasks((prev) => prev.map((t) => (t.id === taskId ? updater(t) : t)))
@@ -91,16 +89,9 @@ export function useTransfersTaskActions({
 			delete uploadAbortByTaskIdRef.current[taskId]
 			delete uploadEstimatorByTaskIdRef.current[taskId]
 			delete uploadItemsByTaskIdRef.current[taskId]
-			delete uploadMoveByTaskIdRef.current[taskId]
 			setUploadTasks((prev) => prev.filter((t) => t.id !== taskId))
 		},
-		[
-			setUploadTasks,
-			uploadAbortByTaskIdRef,
-			uploadEstimatorByTaskIdRef,
-			uploadItemsByTaskIdRef,
-			uploadMoveByTaskIdRef,
-		],
+		[setUploadTasks, uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef],
 	)
 
 	const clearCompletedUploads = useCallback(() => {
@@ -110,11 +101,10 @@ export function useTransfersTaskActions({
 				delete uploadAbortByTaskIdRef.current[t.id]
 				delete uploadEstimatorByTaskIdRef.current[t.id]
 				delete uploadItemsByTaskIdRef.current[t.id]
-				delete uploadMoveByTaskIdRef.current[t.id]
 			}
 			return prev.filter((t) => t.status !== 'succeeded')
 		})
-	}, [setUploadTasks, uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef, uploadMoveByTaskIdRef])
+	}, [setUploadTasks, uploadAbortByTaskIdRef, uploadEstimatorByTaskIdRef, uploadItemsByTaskIdRef])
 
 	const clearAllTransfers = useCallback(() => {
 		for (const abort of Object.values(downloadAbortByTaskIdRef.current)) abort()
@@ -124,7 +114,6 @@ export function useTransfersTaskActions({
 		uploadAbortByTaskIdRef.current = {}
 		uploadEstimatorByTaskIdRef.current = {}
 		uploadItemsByTaskIdRef.current = {}
-		uploadMoveByTaskIdRef.current = {}
 		setDownloadTasks([])
 		setUploadTasks([])
 	}, [
@@ -135,7 +124,6 @@ export function useTransfersTaskActions({
 		uploadAbortByTaskIdRef,
 		uploadEstimatorByTaskIdRef,
 		uploadItemsByTaskIdRef,
-		uploadMoveByTaskIdRef,
 	])
 
 	return {

@@ -155,7 +155,6 @@ function summarizeUploadTasks(tasks: UploadTask[]): string {
 		staging: 0,
 		commit: 0,
 		waitingJob: 0,
-		cleanup: 0,
 		succeeded: 0,
 		failed: 0,
 		canceled: 0,
@@ -174,9 +173,6 @@ function summarizeUploadTasks(tasks: UploadTask[]): string {
 			case 'waiting_job':
 				counts.waitingJob++
 				break
-			case 'cleanup':
-				counts.cleanup++
-				break
 			case 'succeeded':
 				counts.succeeded++
 				break
@@ -193,7 +189,6 @@ function summarizeUploadTasks(tasks: UploadTask[]): string {
 	if (counts.staging) parts.push(`Uploading ${counts.staging}`)
 	if (counts.commit) parts.push(`Committing ${counts.commit}`)
 	if (counts.waitingJob) parts.push(`Transferring ${counts.waitingJob}`)
-	if (counts.cleanup) parts.push(`Cleaning ${counts.cleanup}`)
 	if (counts.succeeded) parts.push(`Done ${counts.succeeded}`)
 	if (counts.failed) parts.push(`Failed ${counts.failed}`)
 	if (counts.canceled) parts.push(`Canceled ${counts.canceled}`)

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -12,26 +13,44 @@ import (
 )
 
 func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Request) {
+	metric := s.beginStorageMetric("unknown", "list_object_favorites")
+	defer metric.Observe()
+
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
+		metric.SetStatus("missing_profile")
 		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
 		return
 	}
+	metric.SetProvider(string(secrets.Provider))
 	profileID := r.Header.Get("X-Profile-Id")
 	if profileID == "" {
+		metric.SetStatus("missing_profile")
 		writeError(w, http.StatusBadRequest, "missing_profile", "X-Profile-Id header is required", nil)
 		return
 	}
 
 	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
 	if bucket == "" {
+		metric.SetStatus("invalid_request")
 		writeError(w, http.StatusBadRequest, "invalid_request", "bucket is required", nil)
 		return
 	}
 	prefix := strings.TrimSpace(r.URL.Query().Get("prefix"))
+	hydrate := true
+	if raw := strings.TrimSpace(r.URL.Query().Get("hydrate")); raw != "" {
+		parsed, parseErr := strconv.ParseBool(raw)
+		if parseErr != nil {
+			metric.SetStatus("invalid_request")
+			writeError(w, http.StatusBadRequest, "invalid_request", "hydrate must be a boolean", map[string]any{"hydrate": raw})
+			return
+		}
+		hydrate = parsed
+	}
 
 	favorites, err := s.store.ListObjectFavorites(r.Context(), profileID, bucket)
 	if err != nil {
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to list favorites", map[string]any{"error": err.Error()})
 		return
 	}
@@ -43,17 +62,23 @@ func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Reques
 		}
 		keys = append(keys, fav.Key)
 	}
-	if len(keys) == 0 {
-		writeJSON(w, http.StatusOK, models.ObjectFavoritesResponse{
-			Bucket: bucket,
-			Prefix: prefix,
-			Items:  []models.FavoriteObjectItem{},
-		})
+	response := models.ObjectFavoritesResponse{
+		Bucket:   bucket,
+		Prefix:   prefix,
+		Count:    len(keys),
+		Keys:     append([]string(nil), keys...),
+		Hydrated: false,
+		Items:    []models.FavoriteObjectItem{},
+	}
+	if len(keys) == 0 || !hydrate {
+		metric.SetStatus("db_only")
+		writeJSON(w, http.StatusOK, response)
 		return
 	}
 
 	tmpFile, err := os.CreateTemp("", "rclone-favorites-*.txt")
 	if err != nil {
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
 		return
 	}
@@ -64,16 +89,19 @@ func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Reques
 	for _, key := range keys {
 		if _, err := writer.WriteString(key + "\n"); err != nil {
 			_ = tmpFile.Close()
+			metric.SetStatus("internal_error")
 			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
 			return
 		}
 	}
 	if err := writer.Flush(); err != nil {
 		_ = tmpFile.Close()
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
 		return
 	}
 	if err := tmpFile.Close(); err != nil {
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
 		return
 	}
@@ -81,6 +109,7 @@ func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Reques
 	args := []string{"lsjson", "--files-only", "--no-mimetype", "--hash", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
 	proc, err := s.startRclone(r.Context(), secrets, args, "favorites")
 	if err != nil {
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to list favorites (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -104,10 +133,12 @@ func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Reques
 	})
 	waitErr := proc.wait()
 	if listErr != nil {
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusBadRequest, "s3_error", "failed to get object metadata", map[string]any{"error": listErr.Error()})
 		return
 	}
 	if waitErr != nil {
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to list favorites (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -142,11 +173,10 @@ func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
-	writeJSON(w, http.StatusOK, models.ObjectFavoritesResponse{
-		Bucket: bucket,
-		Prefix: prefix,
-		Items:  items,
-	})
+	response.Hydrated = true
+	response.Items = items
+	metric.SetStatus("success")
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *server) handleCreateObjectFavorite(w http.ResponseWriter, r *http.Request) {

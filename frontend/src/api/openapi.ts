@@ -924,6 +924,486 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/buckets/{bucket}/governance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get normalized bucket governance summary
+         * @description Returns the provider-aware bucket governance summary used by the typed controls UI.
+         *
+         *     The initial rollout is AWS-first and returns a normalized capability map plus advanced policy affordances.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketGovernanceView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/governance/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get normalized bucket access controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketAccessView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Update normalized bucket access controls */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketAccessPutRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/governance/public-exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get normalized bucket public exposure controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketPublicExposureView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Update normalized bucket public exposure controls */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketPublicExposurePutRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/governance/protection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get normalized bucket protection controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketProtectionView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Update normalized bucket protection controls */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketProtectionPutRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/governance/versioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get normalized bucket versioning controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketVersioningView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Update normalized bucket versioning controls */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketVersioningPutRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/governance/encryption": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get normalized bucket encryption controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketEncryptionView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Update normalized bucket encryption controls */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketEncryptionPutRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/buckets/{bucket}/governance/lifecycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get normalized bucket lifecycle controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BucketLifecycleView"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        /** Update normalized bucket lifecycle controls */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-Profile-Id": components["parameters"]["XProfileId"];
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    bucket: components["parameters"]["BucketName"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BucketLifecyclePutRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/buckets/{bucket}/objects": {
         parameters: {
             query?: never;
@@ -1410,6 +1890,7 @@ export interface paths {
             parameters: {
                 query?: {
                     prefix?: string;
+                    hydrate?: boolean;
                 };
                 header: {
                     "X-Profile-Id": components["parameters"]["XProfileId"];
@@ -2341,7 +2822,7 @@ export interface components {
          * @description Storage provider backend for a profile.
          * @enum {string}
          */
-        ProfileProvider: "aws_s3" | "s3_compatible" | "oci_s3_compat" | "azure_blob" | "gcp_gcs" | "oci_object_storage";
+        ProfileProvider: "aws_s3" | "s3_compatible" | "azure_blob" | "gcp_gcs" | "oci_object_storage";
         ProfileBase: {
             id: string;
             name: string;
@@ -2390,19 +2871,6 @@ export interface components {
              * @enum {string}
              */
             provider: "s3_compatible";
-        };
-        ProfileOciS3Compat: components["schemas"]["ProfileBase"] & {
-            /** @enum {string} */
-            provider: "oci_s3_compat";
-            endpoint: string;
-            region: string;
-            forcePathStyle: boolean;
-        } & {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            provider: "oci_s3_compat";
         };
         ProfileAzureBlob: components["schemas"]["ProfileBase"] & {
             /** @enum {string} */
@@ -2453,7 +2921,7 @@ export interface components {
              */
             provider: "oci_object_storage";
         };
-        Profile: components["schemas"]["ProfileAwsS3"] | components["schemas"]["ProfileS3Compatible"] | components["schemas"]["ProfileOciS3Compat"] | components["schemas"]["ProfileAzureBlob"] | components["schemas"]["ProfileGcpGcs"] | components["schemas"]["ProfileOciObjectStorage"];
+        Profile: components["schemas"]["ProfileAwsS3"] | components["schemas"]["ProfileS3Compatible"] | components["schemas"]["ProfileAzureBlob"] | components["schemas"]["ProfileGcpGcs"] | components["schemas"]["ProfileOciObjectStorage"];
         ProfileCreateRequestAwsS3: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2480,25 +2948,6 @@ export interface components {
              * @enum {string}
              */
             provider: "s3_compatible";
-            name: string;
-            endpoint: string;
-            region: string;
-            accessKeyId: string;
-            secretAccessKey: string;
-            sessionToken?: string | null;
-            /** @default false */
-            forcePathStyle: boolean;
-            /** @default false */
-            preserveLeadingSlash: boolean;
-            /** @default false */
-            tlsInsecureSkipVerify: boolean;
-        };
-        ProfileCreateRequestOciS3Compat: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            provider: "oci_s3_compat";
             name: string;
             endpoint: string;
             region: string;
@@ -2569,7 +3018,7 @@ export interface components {
             /** @default false */
             tlsInsecureSkipVerify: boolean;
         };
-        ProfileCreateRequest: components["schemas"]["ProfileCreateRequestAwsS3"] | components["schemas"]["ProfileCreateRequestS3Compatible"] | components["schemas"]["ProfileCreateRequestOciS3Compat"] | components["schemas"]["ProfileCreateRequestAzureBlob"] | components["schemas"]["ProfileCreateRequestGcpGcs"] | components["schemas"]["ProfileCreateRequestOciObjectStorage"];
+        ProfileCreateRequest: components["schemas"]["ProfileCreateRequestAwsS3"] | components["schemas"]["ProfileCreateRequestS3Compatible"] | components["schemas"]["ProfileCreateRequestAzureBlob"] | components["schemas"]["ProfileCreateRequestGcpGcs"] | components["schemas"]["ProfileCreateRequestOciObjectStorage"];
         ProfileUpdateRequestAwsS3: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -2593,23 +3042,6 @@ export interface components {
              * @enum {string}
              */
             provider: "s3_compatible";
-            name?: string;
-            endpoint?: string;
-            region?: string;
-            accessKeyId?: string;
-            secretAccessKey?: string;
-            /** @description Set to empty string to clear; omit to keep unchanged. */
-            sessionToken?: string | null;
-            forcePathStyle?: boolean;
-            preserveLeadingSlash?: boolean;
-            tlsInsecureSkipVerify?: boolean;
-        };
-        ProfileUpdateRequestOciS3Compat: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            provider: "oci_s3_compat";
             name?: string;
             endpoint?: string;
             region?: string;
@@ -2671,7 +3103,7 @@ export interface components {
             preserveLeadingSlash?: boolean;
             tlsInsecureSkipVerify?: boolean;
         };
-        ProfileUpdateRequest: components["schemas"]["ProfileUpdateRequestAwsS3"] | components["schemas"]["ProfileUpdateRequestS3Compatible"] | components["schemas"]["ProfileUpdateRequestOciS3Compat"] | components["schemas"]["ProfileUpdateRequestAzureBlob"] | components["schemas"]["ProfileUpdateRequestGcpGcs"] | components["schemas"]["ProfileUpdateRequestOciObjectStorage"];
+        ProfileUpdateRequest: components["schemas"]["ProfileUpdateRequestAwsS3"] | components["schemas"]["ProfileUpdateRequestS3Compatible"] | components["schemas"]["ProfileUpdateRequestAzureBlob"] | components["schemas"]["ProfileUpdateRequestGcpGcs"] | components["schemas"]["ProfileUpdateRequestOciObjectStorage"];
         ProfileConnectivityDetails: {
             provider?: components["schemas"]["ProfileProvider"];
             /** @description Number of buckets returned by the provider list call. */
@@ -2758,6 +3190,13 @@ export interface components {
         BucketCreateRequest: {
             name: string;
             region?: string;
+            defaults?: components["schemas"]["BucketCreateDefaults"];
+        };
+        BucketCreateDefaults: {
+            access?: components["schemas"]["BucketAccessPutRequest"];
+            publicExposure?: components["schemas"]["BucketPublicExposurePutRequest"];
+            versioning?: components["schemas"]["BucketVersioningPutRequest"];
+            encryption?: components["schemas"]["BucketEncryptionPutRequest"];
         };
         BucketPolicyResponse: {
             bucket: string;
@@ -2785,6 +3224,170 @@ export interface components {
             errors?: string[];
             warnings?: string[];
         };
+        BucketGovernanceCapabilityState: {
+            enabled: boolean;
+            reason?: string;
+        };
+        BucketGovernanceCapabilities: {
+            [key: string]: components["schemas"]["BucketGovernanceCapabilityState"];
+        };
+        BucketAdvancedView: {
+            rawPolicySupported?: boolean;
+            rawPolicyEditable?: boolean;
+            rawPolicy?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        BucketBlockPublicAccess: {
+            blockPublicAcls: boolean;
+            ignorePublicAcls: boolean;
+            blockPublicPolicy: boolean;
+            restrictPublicBuckets: boolean;
+        };
+        /** @enum {string} */
+        BucketObjectOwnershipMode: "bucket_owner_enforced" | "bucket_owner_preferred" | "object_writer";
+        BucketObjectOwnershipView: {
+            supported: boolean;
+            mode?: components["schemas"]["BucketObjectOwnershipMode"];
+        };
+        BucketAccessBinding: {
+            role: string;
+            members?: string[];
+            condition?: {
+                [key: string]: unknown;
+            };
+        };
+        BucketStoredAccessPolicy: {
+            id: string;
+            start?: string;
+            expiry?: string;
+            permission?: string;
+        };
+        BucketAccessView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            objectOwnership?: components["schemas"]["BucketObjectOwnershipView"];
+            advanced?: components["schemas"]["BucketAdvancedView"];
+            bindings?: components["schemas"]["BucketAccessBinding"][];
+            etag?: string;
+            storedAccessPolicies?: components["schemas"]["BucketStoredAccessPolicy"][];
+            warnings?: string[];
+        };
+        BucketAccessPutRequest: {
+            objectOwnership?: components["schemas"]["BucketObjectOwnershipMode"];
+            bindings?: components["schemas"]["BucketAccessBinding"][];
+            etag?: string;
+            storedAccessPolicies?: components["schemas"]["BucketStoredAccessPolicy"][];
+        };
+        /** @enum {string} */
+        BucketPublicExposureMode: "private" | "public" | "blob" | "container";
+        BucketPublicExposureView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            mode?: components["schemas"]["BucketPublicExposureMode"];
+            blockPublicAccess?: components["schemas"]["BucketBlockPublicAccess"];
+            publicAccessPrevention?: boolean;
+            visibility?: string;
+            warnings?: string[];
+        };
+        BucketPublicExposurePutRequest: {
+            mode?: components["schemas"]["BucketPublicExposureMode"];
+            blockPublicAccess?: components["schemas"]["BucketBlockPublicAccess"];
+            publicAccessPrevention?: boolean;
+            visibility?: string;
+        };
+        BucketRetentionView: {
+            enabled: boolean;
+            mode?: string;
+            days?: number;
+            retainUntil?: string;
+            locked?: boolean;
+        };
+        BucketObjectLockView: {
+            enabled: boolean;
+            defaultMode?: string;
+            defaultDays?: number;
+            defaultYears?: number;
+            governanceBypass?: boolean;
+        };
+        BucketSoftDeleteView: {
+            enabled: boolean;
+            days?: number;
+        };
+        BucketImmutabilityView: {
+            enabled: boolean;
+            mode?: string;
+            until?: string;
+        };
+        BucketProtectionView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            uniformAccess?: boolean;
+            retention?: components["schemas"]["BucketRetentionView"];
+            objectLock?: components["schemas"]["BucketObjectLockView"];
+            softDelete?: components["schemas"]["BucketSoftDeleteView"];
+            immutability?: components["schemas"]["BucketImmutabilityView"];
+            warnings?: string[];
+        };
+        BucketProtectionPutRequest: {
+            uniformAccess?: boolean;
+            retention?: components["schemas"]["BucketRetentionView"];
+            objectLock?: components["schemas"]["BucketObjectLockView"];
+            softDelete?: components["schemas"]["BucketSoftDeleteView"];
+            immutability?: components["schemas"]["BucketImmutabilityView"];
+        };
+        /** @enum {string} */
+        BucketVersioningStatus: "disabled" | "enabled" | "suspended";
+        BucketVersioningView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            status?: components["schemas"]["BucketVersioningStatus"];
+            warnings?: string[];
+        };
+        BucketVersioningPutRequest: {
+            /** @enum {string} */
+            status: "enabled" | "disabled" | "suspended";
+        };
+        /** @enum {string} */
+        BucketEncryptionMode: "provider_managed" | "sse_s3" | "sse_kms" | "customer_managed";
+        BucketEncryptionView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            mode?: components["schemas"]["BucketEncryptionMode"];
+            kmsKeyId?: string;
+            warnings?: string[];
+        };
+        BucketEncryptionPutRequest: {
+            /** @enum {string} */
+            mode: "sse_s3" | "sse_kms";
+            kmsKeyId?: string;
+        };
+        BucketGovernanceView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            capabilities: components["schemas"]["BucketGovernanceCapabilities"];
+            access?: components["schemas"]["BucketAccessView"];
+            publicExposure?: components["schemas"]["BucketPublicExposureView"];
+            protection?: components["schemas"]["BucketProtectionView"];
+            versioning?: components["schemas"]["BucketVersioningView"];
+            encryption?: components["schemas"]["BucketEncryptionView"];
+            lifecycle?: components["schemas"]["BucketLifecycleView"];
+            advanced?: components["schemas"]["BucketAdvancedView"];
+            warnings?: string[];
+        };
+        BucketLifecycleView: {
+            provider: components["schemas"]["ProfileProvider"];
+            bucket: string;
+            rules?: {
+                [key: string]: unknown;
+            }[];
+            warnings?: string[];
+        };
+        BucketLifecyclePutRequest: {
+            rules: {
+                [key: string]: unknown;
+            }[];
+        };
         ObjectItem: {
             key: string;
             /** Format: int64 */
@@ -2809,6 +3412,9 @@ export interface components {
         ObjectFavoritesResponse: {
             bucket: string;
             prefix?: string;
+            count: number;
+            keys: string[];
+            hydrated: boolean;
             items: components["schemas"]["FavoriteObjectItem"][];
         };
         ListObjectsResponse: {

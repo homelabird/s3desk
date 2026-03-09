@@ -167,6 +167,24 @@ test.describe('Objects bucket picker', () => {
 		await expect(page.getByText('s3://bravo-bucket/')).toBeVisible()
 	})
 
+	test('desktop picker popover is wider than the trigger so bucket metadata stays readable', async ({ page }) => {
+		await stubBucketPickerApi(page)
+		await seedStorage(page)
+		await page.goto('/objects')
+
+		const picker = page.getByTestId('objects-bucket-picker-desktop')
+		await picker.click()
+
+		const triggerBox = await picker.boundingBox()
+		const popover = page.getByTestId('objects-bucket-picker-desktop-popover')
+		await expect(popover).toBeVisible()
+		const popoverBox = await popover.boundingBox()
+
+		expect(triggerBox).not.toBeNull()
+		expect(popoverBox).not.toBeNull()
+		expect((popoverBox?.width ?? 0) - (triggerBox?.width ?? 0)).toBeGreaterThan(80)
+	})
+
 	test('mobile drawer supports tap selection and clear', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await stubBucketPickerApi(page)

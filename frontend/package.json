@@ -2,6 +2,7 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "license": "MPL-2.0",
   "type": "module",
   "engines": {
     "node": ">=22 <23"
@@ -19,9 +20,11 @@
     "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:capture": "node ./scripts/record-e2e-artifacts.mjs",
+    "test:e2e:capture:deps": "npm run ci:deps:full && node ./scripts/record-e2e-artifacts.mjs",
     "test:e2e:record:gif": "node ./scripts/record-e2e-gif.mjs",
     "test:e2e:record:gif:deps": "npm run ci:deps:full && node ./scripts/record-e2e-gif.mjs",
-    "test:e2e:record": "PLAYWRIGHT_RECORD_VIDEOS=1 npx playwright test --project=chromium",
+    "test:e2e:record": "node ./scripts/record-e2e-artifacts.mjs --project=chromium",
     "preview": "vite preview",
     "postinstall": "patch-package",
     "typecheck": "tsc -b"

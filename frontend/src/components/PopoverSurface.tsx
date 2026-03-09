@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 
 import styles from './PopoverSurface.module.css'
 
@@ -10,8 +10,10 @@ type Props = {
 	className?: string
 	contentClassName?: string
 	contentStyle?: CSSProperties
+	contentProps?: HTMLAttributes<HTMLDivElement>
 	open?: boolean
 	onOpenChange?: (open: boolean, info?: { source: PopoverOpenSource }) => void
+	rootProps?: HTMLAttributes<HTMLDivElement>
 	children: (args: {
 		open: boolean
 		toggle: () => void
@@ -89,13 +91,18 @@ export function PopoverSurface(props: Props) {
 	}, [anchorElement, open, props.align])
 
 	return (
-		<div ref={setAnchorElement} className={[styles.root, open ? styles.rootOpen : '', props.className ?? ''].filter(Boolean).join(' ')}>
+		<div
+			ref={setAnchorElement}
+			{...props.rootProps}
+			className={[styles.root, open ? styles.rootOpen : '', props.className ?? '', props.rootProps?.className ?? ''].filter(Boolean).join(' ')}
+		>
 			{props.children({ open, toggle, close: () => close('outside'), setOpen })}
 			{open && typeof document !== 'undefined'
 				? createPortal(
 						<div
 							ref={panelRef}
-							className={[styles.panel, props.contentClassName ?? ''].filter(Boolean).join(' ')}
+							{...props.contentProps}
+							className={[styles.panel, props.contentClassName ?? '', props.contentProps?.className ?? ''].filter(Boolean).join(' ')}
 							style={{ ...props.contentStyle, position: 'fixed', top: 12, left: 12, visibility: 'hidden' }}
 						>
 							{props.content({ close })}

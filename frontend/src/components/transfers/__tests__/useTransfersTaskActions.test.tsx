@@ -47,7 +47,6 @@ describe('useTransfersTaskActions', () => {
 		const uploadAbortByTaskIdRef = { current: {} }
 		const uploadEstimatorByTaskIdRef = { current: {} }
 		const uploadItemsByTaskIdRef = { current: {} }
-		const uploadMoveByTaskIdRef = { current: {} }
 
 		const { result } = renderHook(() => {
 			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([
@@ -63,7 +62,6 @@ describe('useTransfersTaskActions', () => {
 				uploadAbortByTaskIdRef,
 				uploadEstimatorByTaskIdRef,
 				uploadItemsByTaskIdRef,
-				uploadMoveByTaskIdRef,
 			})
 			return { downloadTasks, uploadTasks, ...actions }
 		})
@@ -94,7 +92,6 @@ describe('useTransfersTaskActions', () => {
 		const uploadAbortByTaskIdRef = { current: { u1: uploadAbort } }
 		const uploadEstimatorByTaskIdRef = { current: { u1: {} } }
 		const uploadItemsByTaskIdRef = { current: { u1: {} } }
-		const uploadMoveByTaskIdRef = { current: { u1: {} } }
 
 		const { result } = renderHook(() => {
 			const [, setDownloadTasks] = useState<DownloadTask[]>([])
@@ -110,7 +107,6 @@ describe('useTransfersTaskActions', () => {
 				uploadAbortByTaskIdRef,
 				uploadEstimatorByTaskIdRef,
 				uploadItemsByTaskIdRef,
-				uploadMoveByTaskIdRef,
 			})
 			return { uploadTasks, ...actions }
 		})
@@ -124,6 +120,5 @@ describe('useTransfersTaskActions', () => {
 		expect(uploadAbortByTaskIdRef.current['u1']).toBeUndefined()
 		expect(uploadEstimatorByTaskIdRef.current['u1']).toBeUndefined()
 		expect(uploadItemsByTaskIdRef.current['u1']).toBeUndefined()
-		expect(uploadMoveByTaskIdRef.current['u1']).toBeUndefined()
 	})
 })

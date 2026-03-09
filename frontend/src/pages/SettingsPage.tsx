@@ -14,7 +14,6 @@ import { AppTabs } from '../components/AppTabs'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
-import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../lib/moveCleanupDefaults'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
@@ -99,19 +98,6 @@ const RESETTABLE_UI_STATE_KEYS = [
 
 export function SettingsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
-	const [moveAfterUploadDefault, setMoveAfterUploadDefault] = useLocalStorageState<boolean>('moveAfterUploadDefault', false)
-	const [cleanupEmptyDirsDefault, setCleanupEmptyDirsDefault] = useLocalStorageState<boolean>(
-		'cleanupEmptyDirsDefault',
-		false,
-	)
-	const [moveCleanupFilenameTemplate, setMoveCleanupFilenameTemplate] = useLocalStorageState<string>(
-		'moveCleanupFilenameTemplate',
-		MOVE_CLEANUP_FILENAME_TEMPLATE,
-	)
-	const [moveCleanupFilenameMaxLen, setMoveCleanupFilenameMaxLen] = useLocalStorageState<number>(
-		'moveCleanupFilenameMaxLen',
-		MOVE_CLEANUP_FILENAME_MAX_LEN,
-	)
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
 		'downloadLinkProxyEnabled',
 		false,
@@ -234,10 +220,6 @@ export function SettingsPage(props: Props) {
 						children: (
 							<Suspense fallback={null}>
 								<TransfersSettingsSection
-									moveAfterUploadDefault={moveAfterUploadDefault}
-									setMoveAfterUploadDefault={setMoveAfterUploadDefault}
-									cleanupEmptyDirsDefault={cleanupEmptyDirsDefault}
-									setCleanupEmptyDirsDefault={setCleanupEmptyDirsDefault}
 									downloadLinkProxyEnabled={downloadLinkProxyEnabled}
 									setDownloadLinkProxyEnabled={setDownloadLinkProxyEnabled}
 									uploadAutoTuneEnabled={uploadAutoTuneEnabled}
@@ -256,10 +238,6 @@ export function SettingsPage(props: Props) {
 									setUploadChunkFileConcurrencySetting={setUploadChunkFileConcurrencySetting}
 									uploadResumeConversionEnabled={uploadResumeConversionEnabled}
 									setUploadResumeConversionEnabled={setUploadResumeConversionEnabled}
-									moveCleanupFilenameTemplate={moveCleanupFilenameTemplate}
-									setMoveCleanupFilenameTemplate={setMoveCleanupFilenameTemplate}
-									moveCleanupFilenameMaxLen={moveCleanupFilenameMaxLen}
-									setMoveCleanupFilenameMaxLen={setMoveCleanupFilenameMaxLen}
 								/>
 							</Suspense>
 						),

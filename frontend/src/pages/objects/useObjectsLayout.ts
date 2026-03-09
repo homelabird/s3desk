@@ -24,20 +24,20 @@ export function useObjectsLayout({
 	setDetailsDrawerOpen,
 	setTreeDrawerOpen,
 }: UseObjectsLayoutArgs) {
-	const [treeWidth, setTreeWidth] = useLocalStorageState<number>('objectsTreeWidth', 300)
+	const [treeWidth, setTreeWidth] = useLocalStorageState<number>('objectsTreeWidth', 256)
 	const [detailsWidth, setDetailsWidth] = useLocalStorageState<number>('objectsDetailsWidth', 480)
 
 	const minTreeWidth = 220
 	const maxTreeWidth = 720
 	const minDetailsWidth = 320
 	const maxDetailsWidth = 920
-	const minCenterWidth = 360
+	const preferredDockedListWidth = isAdvanced ? 1060 : 780
 	const treeResizeHandleWidth = 12
 	const detailsResizeHandleWidth = 12
 	const collapsedDetailsWidth = 36
-	const minDockedTreeWidth = minCenterWidth + minTreeWidth + treeResizeHandleWidth
+	const minDockedTreeWidth = preferredDockedListWidth + minTreeWidth + treeResizeHandleWidth
 	const minDockedDetailsWidth = minDockedTreeWidth + minDetailsWidth + detailsResizeHandleWidth
-	const compactListMinWidth = 980
+	const compactListMinWidth = isAdvanced ? 960 : 720
 
 	const dockTree = isDesktop && (layoutWidthPx <= 0 || layoutWidthPx >= minDockedTreeWidth)
 	const dockDetails = isWideDesktop && (layoutWidthPx <= 0 || layoutWidthPx >= minDockedDetailsWidth)
@@ -67,7 +67,7 @@ export function useObjectsLayout({
 		if (!dockDetails) {
 			const handles = treeResizeHandleWidth
 			const available = Math.max(0, layoutWidthPx - handles)
-			const maxTree = clampNumber(available - minCenterWidth, minTreeWidth, maxTreeWidth)
+			const maxTree = clampNumber(available - preferredDockedListWidth, minTreeWidth, maxTreeWidth)
 			tree = clampNumber(tree, minTreeWidth, maxTree)
 			return { treeWidthUsed: tree, detailsWidthUsed: 0 }
 		}
@@ -75,7 +75,7 @@ export function useObjectsLayout({
 		const handles = treeResizeHandleWidth + (detailsOpen ? detailsResizeHandleWidth : 0)
 		const available = Math.max(0, layoutWidthPx - handles)
 
-		let overflow = tree + details + minCenterWidth - available
+		let overflow = tree + details + preferredDockedListWidth - available
 		if (overflow > 0 && detailsOpen) {
 			const reducible = details - minDetailsWidth
 			const reduce = Math.min(reducible, overflow)
@@ -100,9 +100,9 @@ export function useObjectsLayout({
 		layoutWidthPx,
 		maxDetailsWidth,
 		maxTreeWidth,
-		minCenterWidth,
 		minDetailsWidth,
 		minTreeWidth,
+		preferredDockedListWidth,
 		treeResizeHandleWidth,
 		treeWidth,
 	])
@@ -112,7 +112,7 @@ export function useObjectsLayout({
 		const handles = treeResizeHandleWidth + (dockDetails && detailsOpen ? detailsResizeHandleWidth : 0)
 		const available = Math.max(0, layoutWidthPx - handles)
 		const details = dockDetails ? detailsWidthUsed : 0
-		return clampNumber(available - minCenterWidth - details, minTreeWidth, maxTreeWidth)
+		return clampNumber(available - preferredDockedListWidth - details, minTreeWidth, maxTreeWidth)
 	}, [
 		detailsOpen,
 		detailsWidthUsed,
@@ -121,8 +121,8 @@ export function useObjectsLayout({
 		isDesktop,
 		layoutWidthPx,
 		maxTreeWidth,
-		minCenterWidth,
 		minTreeWidth,
+		preferredDockedListWidth,
 		treeResizeHandleWidth,
 	])
 
@@ -130,15 +130,15 @@ export function useObjectsLayout({
 		if (!dockDetails || !isDesktop || !detailsOpen || layoutWidthPx <= 0) return maxDetailsWidth
 		const handles = treeResizeHandleWidth + detailsResizeHandleWidth
 		const available = Math.max(0, layoutWidthPx - handles)
-		return clampNumber(available - minCenterWidth - treeWidthUsed, minDetailsWidth, maxDetailsWidth)
+		return clampNumber(available - preferredDockedListWidth - treeWidthUsed, minDetailsWidth, maxDetailsWidth)
 	}, [
 		detailsOpen,
 		dockDetails,
 		isDesktop,
 		layoutWidthPx,
 		maxDetailsWidth,
-		minCenterWidth,
 		minDetailsWidth,
+		preferredDockedListWidth,
 		treeResizeHandleWidth,
 		treeWidthUsed,
 	])

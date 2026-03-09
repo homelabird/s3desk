@@ -12,6 +12,7 @@ export function useObjectsSelectionBarActions({ selectionActionMap }: UseObjects
 			clearSelectionAction: selectionActionMap.get('clear_selection'),
 			deleteSelectionAction: selectionActionMap.get('delete_selected'),
 			downloadSelectionAction: selectionActionMap.get('download_selected'),
+			moveSelectionAction: selectionActionMap.get('move_selected_to'),
 		}),
 		[selectionActionMap],
 	)

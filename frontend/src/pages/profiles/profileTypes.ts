@@ -3,7 +3,6 @@ import type { MetaResponse } from '../../api/types'
 export type ProfileProvider =
 	| 'aws_s3'
 	| 's3_compatible'
-	| 'oci_s3_compat'
 	| 'azure_blob'
 	| 'gcp_gcs'
 	| 'oci_object_storage'
@@ -15,7 +14,7 @@ export type ProfileFormValues = {
 	provider: ProfileProvider
 	name: string
 
-	// S3-like (AWS/S3-compatible/OCI S3 compat)
+	// S3-like (AWS/S3-compatible)
 	endpoint: string
 	region: string
 	accessKeyId: string

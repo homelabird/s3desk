@@ -21,14 +21,20 @@ import (
 )
 
 func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
+	metric := s.beginStorageMetric("unknown", "list_objects")
+	defer metric.Observe()
+
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
+		metric.SetStatus("missing_profile")
 		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
 		return
 	}
+	metric.SetProvider(string(secrets.Provider))
 
 	bucket := chi.URLParam(r, "bucket")
 	if bucket == "" {
+		metric.SetStatus("invalid_request")
 		writeError(w, http.StatusBadRequest, "invalid_request", "bucket is required", nil)
 		return
 	}
@@ -58,6 +64,7 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 
 	proc, err := s.startRclone(ctx, secrets, args, "list-objects")
 	if err != nil {
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to list objects (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -106,6 +113,13 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		if objKey == "" {
 			return nil
 		}
+		if isOCIFolderMarkerObject(secrets.Provider, objKey) {
+			parentPrefix := ociFolderMarkerParentPrefix(objKey)
+			if delimiter == "/" && parentPrefix != "" && parentPrefix != prefix {
+				return pag.addPrefix(rcloneTokenForPrefix(parentPrefix), parentPrefix, &resp)
+			}
+			return nil
+		}
 		if delimiter == "/" && entry.Size == 0 && strings.HasSuffix(objKey, "/") {
 			if objKey == prefix {
 				return nil
@@ -137,10 +151,22 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 		listErr = nil
 	}
 	if listErr != nil {
+		if waitErr != nil && !pag.stopped {
+			metric.SetStatus("remote_error")
+			writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to list objects (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to list objects",
+			}, nil)
+			return
+		}
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusBadRequest, "s3_error", "failed to list objects", map[string]any{"error": listErr.Error()})
 		return
 	}
 	if waitErr != nil && !pag.stopped {
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to list objects (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -154,6 +180,7 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 	if pag.truncated && pag.nextToken != "" {
 		resp.NextContinuationToken = &pag.nextToken
 	}
+	metric.SetStatus("success")
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -295,15 +322,21 @@ func (s *server) handleGetObjectIndexSummary(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *server) handleGetObjectMeta(w http.ResponseWriter, r *http.Request) {
+	metric := s.beginStorageMetric("unknown", "get_object_meta")
+	defer metric.Observe()
+
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
+		metric.SetStatus("missing_profile")
 		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
 		return
 	}
+	metric.SetProvider(string(secrets.Provider))
 
 	bucket := chi.URLParam(r, "bucket")
 	key := r.URL.Query().Get("key")
 	if bucket == "" || key == "" {
+		metric.SetStatus("invalid_request")
 		writeError(w, http.StatusBadRequest, "invalid_request", "bucket and key are required", nil)
 		return
 	}
@@ -311,9 +344,11 @@ func (s *server) handleGetObjectMeta(w http.ResponseWriter, r *http.Request) {
 	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, true, "object-meta")
 	if err != nil {
 		if rcloneIsNotFound(err, stderr) {
+			metric.SetStatus("not_found")
 			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
 			return
 		}
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to fetch object metadata (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -336,6 +371,7 @@ func (s *server) handleGetObjectMeta(w http.ResponseWriter, r *http.Request) {
 	if lm := rcloneParseTime(entry.ModTime); lm != "" {
 		meta.LastModified = lm
 	}
+	metric.SetStatus("success")
 	writeJSON(w, http.StatusOK, meta)
 }
 
@@ -412,6 +448,41 @@ func (s *server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+	} else if secrets.Provider == models.ProfileProviderOciObjectStorage {
+		markerKey := ociFolderMarkerObjectKey(key)
+		stderr, err := s.runRcloneStdin(
+			r.Context(),
+			secrets,
+			[]string{"rcat", rcloneRemoteObject(bucket, markerKey, secrets.PreserveLeadingSlash)},
+			"create-folder",
+			bytes.NewReader(nil),
+		)
+		if err != nil {
+			writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to create folders (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to create folder",
+			}, map[string]any{"bucket": bucket, "key": key, "markerKey": markerKey})
+			return
+		}
+	} else if usesVisibleFolderMarker(secrets.Provider) {
+		stderr, err := s.runRcloneStdin(
+			r.Context(),
+			secrets,
+			[]string{"rcat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)},
+			"create-folder",
+			bytes.NewReader(nil),
+		)
+		if err != nil {
+			writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to create folders (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to create folder",
+			}, map[string]any{"bucket": bucket, "key": key})
+			return
+		}
 	} else {
 		_, stderr, err := s.runRcloneCapture(
 			r.Context(),
@@ -434,15 +505,21 @@ func (s *server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Request) {
+	metric := s.beginStorageMetric("unknown", "get_download_url")
+	defer metric.Observe()
+
 	secrets, ok := profileFromContext(r.Context())
 	if !ok {
+		metric.SetStatus("missing_profile")
 		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
 		return
 	}
+	metric.SetProvider(string(secrets.Provider))
 
 	bucket := chi.URLParam(r, "bucket")
 	key := r.URL.Query().Get("key")
 	if bucket == "" || key == "" {
+		metric.SetStatus("invalid_request")
 		writeError(w, http.StatusBadRequest, "invalid_request", "bucket and key are required", nil)
 		return
 	}
@@ -458,6 +535,7 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 			profileID = strings.TrimSpace(r.Header.Get("X-Profile-Id"))
 		}
 		if profileID == "" {
+			metric.SetStatus("missing_profile")
 			writeError(w, http.StatusBadRequest, "missing_profile", "X-Profile-Id header is required", nil)
 			return
 		}
@@ -472,6 +550,7 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 			URL:       url,
 			ExpiresAt: expiresAt.Format(time.RFC3339Nano),
 		})
+		metric.SetStatus("proxy_only")
 		return
 	}
 
@@ -480,9 +559,11 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 	out, stderr, err := s.runRcloneCapture(r.Context(), secrets, args, "download-url")
 	if err != nil {
 		if rcloneIsNotFound(err, stderr) {
+			metric.SetStatus("not_found")
 			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
 			return
 		}
+		metric.SetStatus("remote_error")
 		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
 			MissingMessage: "rclone is required to generate download URLs (install it or set RCLONE_PATH)",
 			DefaultStatus:  http.StatusBadRequest,
@@ -502,10 +583,12 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 		break
 	}
 	if url == "" {
+		metric.SetStatus("internal_error")
 		writeError(w, http.StatusBadRequest, "invalid_request", "failed to generate download url", map[string]any{"error": "empty rclone response"})
 		return
 	}
 
+	metric.SetStatus("success")
 	writeJSON(w, http.StatusOK, models.PresignedURLResponse{
 		URL:       url,
 		ExpiresAt: time.Now().UTC().Add(expires).Format(time.RFC3339Nano),

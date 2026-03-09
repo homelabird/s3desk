@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import type { APIClient } from '../../api/client'
 import type { Bucket, ListObjectsResponse, Profile } from '../../api/types'
 import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../../lib/providerCapabilities'
+import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 import { useObjectsFavorites } from './useObjectsFavorites'
 import { OBJECTS_LIST_PAGE_SIZE } from './objectsPageConstants'
 import { logObjectsDebug } from './objectsPageDebug'
@@ -15,6 +16,8 @@ type UseObjectsPageQueriesArgs = {
 	bucket: string
 	prefix: string
 	debugObjectsList: boolean
+	favoritesPaneExpanded: boolean
+	favoritesOnly: boolean
 }
 
 type GetNextObjectsContinuationTokenArgs = {
@@ -74,6 +77,8 @@ export function useObjectsPageQueries({
 	bucket,
 	prefix,
 	debugObjectsList,
+	favoritesPaneExpanded,
+	favoritesOnly,
 }: UseObjectsPageQueriesArgs) {
 	const metaQuery = useQuery({
 		queryKey: ['meta', apiToken],
@@ -103,6 +108,7 @@ export function useObjectsPageQueries({
 		queryKey: ['buckets', profileId, apiToken],
 		queryFn: () => api.listBuckets(profileId!),
 		enabled: !!profileId,
+		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
 
 	const objectsQuery = useInfiniteQuery({
@@ -131,12 +137,13 @@ export function useObjectsPageQueries({
 			}),
 	})
 
-	const { favoritesQuery, favoriteItems, favoriteKeys, favoritePendingKeys, toggleFavorite } = useObjectsFavorites({
+	const { favoritesQuery, favoriteCount, favoriteItems, favoriteKeys, favoritePendingKeys, toggleFavorite } = useObjectsFavorites({
 		api,
 		profileId,
 		bucket,
 		apiToken,
 		objectsPages: objectsQuery.data?.pages ?? [],
+		hydrateItems: favoritesPaneExpanded || favoritesOnly,
 	})
 
 	const bucketOptions = useMemo(
@@ -156,6 +163,7 @@ export function useObjectsPageQueries({
 		bucketOptions,
 		objectsQuery,
 		favoritesQuery,
+		favoriteCount,
 		favoriteItems,
 		favoriteKeys,
 		favoritePendingKeys,

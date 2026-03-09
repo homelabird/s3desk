@@ -73,6 +73,7 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 						onChange={(value) => props.onValuesChange({ ...props.values, localFolder: value })}
 						placeholder="Select a folder…"
 						disabled={!support.ok}
+						pickerMode="readwrite"
 						onPick={props.onPickFolder}
 					/>
 				</FormField>

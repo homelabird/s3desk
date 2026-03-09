@@ -62,7 +62,7 @@ func (s *server) handleValidateBucketPolicy(w http.ResponseWriter, r *http.Reque
 
 func validateBucketPolicyStatic(provider models.ProfileProvider, bucket string, policy any) (errs []string, warns []string) {
 	switch provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible, models.ProfileProviderOciS3Compat:
+	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
 		return validateS3BucketPolicyStatic(bucket, policy)
 	case models.ProfileProviderGcpGcs:
 		return validateGCSIamPolicyStatic(policy)

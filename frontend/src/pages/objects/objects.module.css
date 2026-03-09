@@ -72,22 +72,11 @@
 }
 
 .toolbarMenuPopover {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  z-index: 40;
   min-width: 220px;
   max-width: min(360px, 100vw - 32px);
-  border: 1px solid var(--s3d-color-border);
-  border-radius: 14px;
-  background: var(--s3d-color-bg);
-  box-shadow: var(--s3d-shadow-md);
-  padding: 8px;
 }
 
 .toolbarMenuPopoverEnd {
-  left: auto;
-  right: 0;
 }
 
 .contextMenuPanel {
@@ -256,29 +245,50 @@
 
 .bucketPickerDesktopPopover {
   position: absolute;
-  inset: calc(100% + 8px) 0 auto 0;
+  top: calc(100% + 8px);
+  left: 0;
   z-index: 30;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   border: 1px solid var(--s3d-color-border);
   border-radius: 16px;
-  background: var(--s3d-color-bg);
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 94%, transparent);
   box-shadow: var(--s3d-shadow-md);
   padding: 14px;
 }
 
+.bucketPickerDesktopPopoverAlignRight {
+  right: 0;
+  left: auto;
+}
+
 .bucketPickerDesktopHeader,
-.bucketPickerDesktopBody,
 .bucketPickerDrawerBody {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
+.bucketPickerDesktopHeader {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.bucketPickerDesktopBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
 .bucketPickerSearchField {
   position: relative;
   display: block;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .bucketPickerSearchIcon {
@@ -310,7 +320,8 @@
 }
 
 .bucketPickerInlineAction {
-  align-self: flex-start;
+  align-self: center;
+  flex: 0 0 auto;
   border: 1px solid var(--s3d-color-border-input);
   border-radius: 999px;
   background: var(--s3d-color-bg-elevated);
@@ -454,12 +465,14 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
 }
 
 .bucketPickerSectionLabel {
   font-size: 12px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  color: var(--s3d-color-text-secondary);
 }
 
 .bucketPickerList {
@@ -527,6 +540,14 @@
   background: var(--s3d-color-scrim);
 }
 
+.objectsOverlayBackdropPassthrough {
+  pointer-events: none;
+}
+
+.objectsOverlayBackdropPassthrough .objectsOverlayPanel {
+  pointer-events: auto;
+}
+
 .objectsOverlayBackdropRight {
   align-items: stretch;
   justify-content: flex-end;
@@ -540,6 +561,15 @@
 .objectsOverlayBackdropBottom {
   align-items: flex-end;
   justify-content: center;
+}
+
+:global(body[data-objects-image-viewer-open='true']) .objectsOverlayBackdrop[data-objects-overlay-sheet='details'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+:global(body[data-objects-image-viewer-open='true']) .objectsOverlayBackdrop[data-objects-overlay-sheet='details'] .objectsOverlayPanel {
+  pointer-events: none;
 }
 
 .objectsOverlayPanel {
@@ -685,25 +715,56 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  box-shadow: var(--s3d-shadow-sm);
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 95%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: box-shadow var(--s3d-transition-normal);
 }
 
+.panelCardCollapsible[data-expanded='false'] {
+  box-shadow: none;
+}
+
 .panelHeader {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--s3d-color-border);
-  background: var(--s3d-color-bg-secondary);
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 80%, transparent);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .panelBody {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 8px;
+  padding: 6px 8px 8px;
+}
+
+.panelToggleButton {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.panelToggleButton:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.panelToggleChevron {
+  color: var(--s3d-color-text-secondary);
+  font-size: 12px;
+  line-height: 1;
 }
 
 .previewTriggerButton {
@@ -862,6 +923,22 @@
   outline-offset: 2px;
 }
 
+.listThumbnailDeferredHint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px dashed var(--s3d-color-border-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--s3d-color-surface) 94%, var(--s3d-color-primary) 6%);
+  color: var(--s3d-color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex: 0 0 auto;
+}
+
 .gridContent {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -879,6 +956,10 @@
 
 .gridCardShell {
   min-width: 0;
+}
+
+.gridCardDropTarget {
+  position: relative;
 }
 
 .gridCard {
@@ -913,6 +994,15 @@
   border-color: color-mix(in srgb, var(--s3d-color-primary) 65%, var(--s3d-color-border) 35%);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-light) 55%, var(--s3d-color-bg-elevated) 45%) 0%, var(--s3d-color-bg-elevated) 100%);
+}
+
+.gridCardDropActive {
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 72%, var(--s3d-color-border) 28%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--s3d-color-primary) 18%, transparent),
+    var(--s3d-shadow-md);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-light) 68%, var(--s3d-color-bg-elevated) 32%) 0%, var(--s3d-color-bg-elevated) 100%);
 }
 
 .gridCardTopRow {
@@ -981,6 +1071,16 @@
 .gridCardPreviewButton:focus-visible {
   outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
+}
+
+.gridCardDeferredPreviewButton {
+  border-radius: 12px;
+}
+
+.gridCardDeferredPreviewButton .gridCardMediaPlaceholder {
+  border: 1px dashed var(--s3d-color-border-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--s3d-color-surface) 92%, var(--s3d-color-primary-light) 8%);
 }
 
 .gridCardFolderIcon,
@@ -1179,9 +1279,9 @@
 }
 
 .treeStack {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   width: 100%;
   min-height: 0;
 }
@@ -1189,7 +1289,7 @@
 .favoritesPane {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
 }
 
@@ -1199,6 +1299,18 @@
   gap: 4px;
   min-height: 0;
   overflow: auto;
+}
+
+.favoritesEmptyState {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 2px 4px;
+}
+
+.favoritesEmptyHint {
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .favoritesItem {
@@ -1489,12 +1601,25 @@
   min-width: 0;
 }
 
+.listRowDropTarget {
+  border-radius: 10px;
+  transition:
+    background var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    border-color var(--s3d-transition-fast);
+}
+
 .listRowClickable {
   cursor: pointer;
 }
 
 .listRowDraggable {
   cursor: grab;
+}
+
+.listRowDropActive {
+  background: color-mix(in srgb, var(--s3d-color-primary-light) 74%, var(--s3d-color-bg-card) 26%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--s3d-color-primary) 42%, var(--s3d-color-border) 58%);
 }
 
 .listRowNameCell {
@@ -1583,7 +1708,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -1659,7 +1784,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .listControlsLocationRow {
@@ -1675,8 +1800,8 @@
   align-items: center;
   min-width: 0;
   max-width: 640px;
-  padding: 3px 8px;
-  border-radius: 999px;
+  padding: 2px 8px;
+  border-radius: 10px;
   border: 1px solid var(--s3d-color-border);
   background: var(--s3d-color-bg-code);
   font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
@@ -1687,10 +1812,17 @@
   text-overflow: ellipsis;
 }
 
+.listControlsSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .listControlsTopActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -1698,7 +1830,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .listControlsScopeRow {
@@ -1848,14 +1980,22 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.listControlsCompactActions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .listControlsDesktopRow {
   width: 100%;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;

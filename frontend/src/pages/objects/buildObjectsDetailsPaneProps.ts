@@ -23,6 +23,7 @@ export function buildObjectsDetailsPaneProps(args: BuildObjectsPagePanesPropsArg
 			if (!args.detailsKey) return
 			args.onDownload(args.detailsKey, args.detailsMeta?.size ?? args.singleSelectedSize)
 		},
+		showPresignAction: args.presignedDownloadSupported,
 		onPresign: () => {
 			if (!args.detailsKey) return
 			args.presignMutate(args.detailsKey)
@@ -47,6 +48,7 @@ export function buildObjectsDetailsPaneProps(args: BuildObjectsPagePanesPropsArg
 		dockDetails: args.dockDetails,
 		detailsOpen: args.detailsOpen,
 		detailsDrawerOpen: args.detailsDrawerOpen,
+		detailsDrawerSuspended: args.detailsDrawerSuspended,
 		onOpenDetails: args.openDetails,
 		onCloseDetails: () => args.setDetailsOpen(false),
 		onCloseDrawer: () => args.setDetailsDrawerOpen(false),

@@ -48,6 +48,8 @@ export function useObjectsPageData(props: Props) {
 		bucket: locationState.bucket,
 		prefix: locationState.prefix,
 		debugObjectsList: environment.debugObjectsList,
+		favoritesPaneExpanded: viewState.favoritesPaneExpanded,
+		favoritesOnly: viewState.favoritesOnly,
 	})
 
 	const selectionState = useObjectsSelection()
@@ -124,6 +126,7 @@ export function useObjectsPageData(props: Props) {
 		api: environment.api,
 		apiToken: props.apiToken,
 		profileId: props.profileId,
+		profileProvider: queriesState.selectedProfile?.provider ?? null,
 		queryClient: environment.queryClient,
 		bucket: locationState.bucket,
 		recentBuckets: locationState.recentBuckets,
