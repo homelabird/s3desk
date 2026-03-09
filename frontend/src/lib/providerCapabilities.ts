@@ -34,6 +34,9 @@ const reasonPresignedS3Only = 'Presigned upload is supported only by S3-compatib
 const reasonPresignedMultipartS3Only =
 	'Presigned multipart upload is supported only by S3-compatible providers (aws_s3, s3_compatible, oci_s3_compat).'
 const reasonDirectUploadUnavailable = 'Direct upload is not available for this backend configuration.'
+const reasonGcpProjectNumberRequired = 'GCS bucket operations require Project Number on this profile.'
+const reasonGcpAnonymousPolicyRequiresEndpoint =
+	'GCS IAM policy requires credentials, or anonymous mode with a custom endpoint that allows unauthenticated access.'
 
 export const providerCapabilities: Record<string, ProviderCapabilityMatrix> = {
 	aws_s3: {
@@ -167,6 +170,7 @@ function disabledCapabilities(reason = 'This provider is not supported by this s
 }
 
 type ServerProviderCapability = NonNullable<MetaResponse['capabilities']['providers']>[string]
+type ProfileProviderCapability = NonNullable<Profile['effectiveCapabilities']>
 
 function normalizeServerReasons(reasons?: ServerProviderCapability['reasons']): ProviderCapabilityReasonMap {
 	if (!reasons) return {}
@@ -189,16 +193,77 @@ function normalizeServerReasons(reasons?: ServerProviderCapability['reasons']): 
 	return out
 }
 
+function normalizeProfileReasons(reasons?: ProfileProviderCapability['reasons']): ProviderCapabilityReasonMap {
+	if (!reasons) return {}
+	const out: ProviderCapabilityReasonMap = {}
+	const assign = (key: ProviderCapabilityName, value: unknown) => {
+		if (typeof value !== 'string') return
+		const trimmed = value.trim()
+		if (!trimmed) return
+		out[key] = trimmed
+	}
+	assign('bucketCrud', reasons.bucketCrud)
+	assign('objectCrud', reasons.objectCrud)
+	assign('jobTransfer', reasons.jobTransfer)
+	assign('bucketPolicy', reasons.bucketPolicy)
+	assign('gcsIamPolicy', reasons.gcsIamPolicy)
+	assign('azureContainerAccessPolicy', reasons.azureContainerAccessPolicy)
+	assign('presignedUpload', reasons.presignedUpload)
+	assign('presignedMultipartUpload', reasons.presignedMultipartUpload)
+	assign('directUpload', reasons.directUpload)
+	return out
+}
+
+function applyProfileOverrides(profile: Profile | undefined, capability: ProviderCapabilityMatrix): ProviderCapabilityMatrix {
+	if (!profile || profile.provider !== 'gcp_gcs') {
+		return capability
+	}
+
+	const next: ProviderCapabilityMatrix = {
+		...capability,
+		reasons: { ...capability.reasons },
+	}
+
+	if (!profile.projectNumber?.trim()) {
+		next.bucketCrud = false
+		next.reasons.bucketCrud = reasonGcpProjectNumberRequired
+	}
+
+	const endpoint = profile.endpoint?.trim() ?? ''
+	if (profile.anonymous && !endpoint) {
+		next.gcsIamPolicy = false
+		next.reasons.gcsIamPolicy = reasonGcpAnonymousPolicyRequiresEndpoint
+	}
+
+	return next
+}
+
 export function getProviderCapabilities(
 	provider?: Profile['provider'],
 	metaProviders?: MetaResponse['capabilities']['providers'],
+	profile?: Profile,
 ): ProviderCapabilityMatrix {
 	if (!provider) {
 		return disabledCapabilities('Select a profile first.')
 	}
+	const profileCapability = profile?.effectiveCapabilities
+	if (profileCapability) {
+		return {
+			bucketCrud: profileCapability.bucketCrud,
+			objectCrud: profileCapability.objectCrud,
+			jobTransfer: profileCapability.jobTransfer,
+			bucketPolicy: profileCapability.bucketPolicy,
+			gcsIamPolicy: profileCapability.gcsIamPolicy,
+			azureContainerAccessPolicy: profileCapability.azureContainerAccessPolicy,
+			presignedUpload: profileCapability.presignedUpload,
+			presignedMultipartUpload: profileCapability.presignedMultipartUpload,
+			directUpload: profileCapability.directUpload,
+			reasons: normalizeProfileReasons(profileCapability.reasons),
+		}
+	}
 	const serverCapability = metaProviders?.[provider]
 	if (serverCapability) {
-		return {
+		return applyProfileOverrides(profile, {
 			bucketCrud: serverCapability.bucketCrud,
 			objectCrud: serverCapability.objectCrud,
 			jobTransfer: serverCapability.jobTransfer,
@@ -209,9 +274,9 @@ export function getProviderCapabilities(
 			presignedMultipartUpload: serverCapability.presignedMultipartUpload,
 			directUpload: serverCapability.directUpload,
 			reasons: normalizeServerReasons(serverCapability.reasons),
-		}
+		})
 	}
-	return providerCapabilities[provider] ?? disabledCapabilities()
+	return applyProfileOverrides(profile, providerCapabilities[provider] ?? disabledCapabilities())
 }
 
 export function getProviderCapabilityReason(

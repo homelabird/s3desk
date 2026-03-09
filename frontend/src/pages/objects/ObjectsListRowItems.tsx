@@ -16,8 +16,6 @@ import { ObjectThumbnail } from './ObjectThumbnail'
 import { displayNameForKey, displayNameForPrefix, isThumbnailKey } from './objectsListUtils'
 import type { ContextMenuMatch, ContextMenuPoint } from './useObjectsContextMenu'
 
-type MenuClickInfo = Parameters<NonNullable<MenuProps['onClick']>>[0]
-
 type ObjectsPrefixRowItemProps = {
 	prefixKey: string
 	currentPrefix: string
@@ -31,7 +29,6 @@ type ObjectsPrefixRowItemProps = {
 	getPrefixActions: (prefix: string) => UIActionOrDivider[]
 	withContextMenuClassName: (menu: MenuProps) => MenuProps
 	buttonMenuOpen: boolean
-	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
 	recordContextMenuPoint: (event: MouseEvent) => ContextMenuPoint
 	openPrefixContextMenu: (key: string, source: 'context' | 'button', point?: ContextMenuPoint) => void
 	closeContextMenu: (match: ContextMenuMatch, reason?: string) => void
@@ -54,7 +51,6 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 		getPrefixActions,
 		withContextMenuClassName,
 		buttonMenuOpen,
-		getPopupContainer,
 		recordContextMenuPoint,
 		openPrefixContextMenu,
 		closeContextMenu,
@@ -68,22 +64,14 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 	)
 	const menu = useMemo(
 		() => {
-			const baseMenu = withContextMenuClassName(buildActionMenu(getPrefixActions(prefixKey), isAdvanced))
-			return {
-				...baseMenu,
-				onClick: (info: MenuClickInfo) => {
-					baseMenu.onClick?.(info)
-					closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, 'menu_item')
-				},
-			}
+			return withContextMenuClassName(buildActionMenu(getPrefixActions(prefixKey), isAdvanced))
 		},
-		[closeContextMenu, getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName],
+		[getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName],
 	)
 	const handleButtonMenuOpenChange = useCallback(
-		(open: boolean, info?: { source: 'trigger' | 'menu' }) => {
-			if (!open && info?.source === 'menu') return
+		(open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => {
 			if (open) openPrefixContextMenu(prefixKey, 'button')
-			else closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, 'button_menu')
+			else closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
 		},
 		[closeContextMenu, openPrefixContextMenu, prefixKey],
 	)
@@ -113,7 +101,6 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 			highlightText={highlightText}
 			menu={menu}
 			buttonMenuOpen={buttonMenuOpen}
-			getPopupContainer={getPopupContainer}
 			onButtonMenuOpenChange={handleButtonMenuOpenChange}
 			onContextMenu={handleContextMenu}
 			onOpen={handleOpen}
@@ -143,7 +130,6 @@ type ObjectsObjectRowItemProps = {
 	isFavorite: boolean
 	favoriteDisabled: boolean
 	buttonMenuOpen: boolean
-	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
 	recordContextMenuPoint: (event: MouseEvent) => ContextMenuPoint
 	openObjectContextMenu: (key: string, source: 'context' | 'button', point?: ContextMenuPoint) => void
 	closeContextMenu: (match: ContextMenuMatch, reason?: string) => void
@@ -178,7 +164,6 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		isFavorite,
 		favoriteDisabled,
 		buttonMenuOpen,
-		getPopupContainer,
 		recordContextMenuPoint,
 		openObjectContextMenu,
 		closeContextMenu,
@@ -219,16 +204,8 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 
 	const menu = useMemo(() => {
 		const actions = useSelectionMenu ? selectionContextMenuActions : getObjectActions(object.key, object.size)
-		const baseMenu = withContextMenuClassName(buildActionMenu(actions, isAdvanced))
-		return {
-			...baseMenu,
-			onClick: (info: MenuClickInfo) => {
-				baseMenu.onClick?.(info)
-				closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, 'menu_item')
-			},
-		}
+		return withContextMenuClassName(buildActionMenu(actions, isAdvanced))
 	}, [
-		closeContextMenu,
 		object.key,
 		object.size,
 		getObjectActions,
@@ -238,10 +215,9 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		withContextMenuClassName,
 	])
 	const handleButtonMenuOpenChange = useCallback(
-		(open: boolean, info?: { source: 'trigger' | 'menu' }) => {
-			if (!open && info?.source === 'menu') return
+		(open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => {
 			if (open) openObjectContextMenu(object.key, 'button')
-			else closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, 'button_menu')
+			else closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
 		},
 		[closeContextMenu, object.key, openObjectContextMenu],
 	)
@@ -293,7 +269,6 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 			highlightText={highlightText}
 			menu={menu}
 			buttonMenuOpen={buttonMenuOpen}
-			getPopupContainer={getPopupContainer}
 			onButtonMenuOpenChange={handleButtonMenuOpenChange}
 			onClick={handleClick}
 			onContextMenu={handleContextMenu}

@@ -2,6 +2,11 @@
 	width: 100%;
 }
 
+.desktopShell,
+.mobileShell {
+	width: 100%;
+}
+
 .tableWrap {
 	border: 1px solid var(--s3d-color-border);
 	border-radius: var(--s3d-radius-sm);
@@ -66,7 +71,26 @@
 
 .footerActions {
 	width: 100%;
+	display: flex;
+	align-items: center;
 	justify-content: space-between;
+	gap: 12px;
+}
+
+.footerPrimaryActions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.controlRow {
+	width: 100%;
+}
+
+.editorModeGroup {
+	width: 220px;
+	max-width: 100%;
 }
 
 .presetSelect {
@@ -77,6 +101,46 @@
 .publicAccessSelect {
 	width: 360px;
 	max-width: 100%;
+}
+
+.structuredCardList {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.structuredCard {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 16px;
+	padding: 14px;
+	background: var(--s3d-color-bg-secondary);
+}
+
+.structuredCardHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.structuredFieldGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.structuredField {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.structuredFieldLabel {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.03em;
 }
 
 @media (max-width: 992px) {
@@ -126,5 +190,36 @@
 	.presetSelect {
 		min-width: 240px;
 		width: 100%;
+	}
+
+	.editorModeGroup {
+		width: 100%;
+	}
+
+	.footerActions {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.footerPrimaryActions {
+		width: 100%;
+		justify-content: stretch;
+	}
+
+	.footerPrimaryActions > * {
+		flex: 1 1 0;
+	}
+
+	.structuredFieldGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.structuredCardHeader {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.membersInput {
+		min-width: 0;
 	}
 }

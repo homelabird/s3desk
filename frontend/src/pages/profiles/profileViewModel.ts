@@ -10,8 +10,16 @@ export type ProfileTableRowViewModel = {
 	profile: Profile
 	providerLabel: string
 	connection: ProfileConnectionViewModel
-	flags: string[]
+	flags: ProfileFlagViewModel[]
 	isActive: boolean
+	needsAttention: boolean
+	attentionSummary?: string
+}
+
+export type ProfileFlagViewModel = {
+	label: string
+	tone?: 'default' | 'warning'
+	title?: string
 }
 
 const PROFILE_PROVIDER_LABELS: Record<string, string> = {
@@ -58,18 +66,38 @@ function toProfileConnectionViewModel(row: Profile): ProfileConnectionViewModel 
 	return { primary: endpointLabel, secondary: region || undefined }
 }
 
-function toProfileFlags(row: Profile): string[] {
+function toProfileAttention(row: Profile): { needsAttention: boolean; attentionSummary?: string } {
+	const issues = row.validation?.issues ?? []
+	if (row.validation?.valid === false && issues.length > 0) {
+		return {
+			needsAttention: true,
+			attentionSummary: issues.map((issue) => issue.message).join(' '),
+		}
+	}
+	return { needsAttention: false }
+}
+
+function toProfileFlags(row: Profile): ProfileFlagViewModel[] {
 	const provider = row.provider
 	const isS3 = provider === 'aws_s3' || provider === 's3_compatible' || provider === 'oci_s3_compat'
-	const parts: string[] = []
-	if (isS3 && 'forcePathStyle' in row) parts.push(row.forcePathStyle ? 'path-style' : 'virtual-host')
-	parts.push(row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash')
-	parts.push(row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify')
+	const parts: ProfileFlagViewModel[] = []
+	const attention = toProfileAttention(row)
+	if (attention.needsAttention) {
+		parts.push({
+			label: 'needs-update',
+			tone: 'warning',
+			title: attention.attentionSummary,
+		})
+	}
+	if (isS3 && 'forcePathStyle' in row) parts.push({ label: row.forcePathStyle ? 'path-style' : 'virtual-host' })
+	parts.push({ label: row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash' })
+	parts.push({ label: row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify' })
 	return parts
 }
 
 export function buildProfilesTableRows(profiles: Profile[], activeProfileId: string | null): ProfileTableRowViewModel[] {
 	return profiles.map((profile) => ({
+		...toProfileAttention(profile),
 		profile,
 		providerLabel: profile.provider ? PROFILE_PROVIDER_LABELS[profile.provider] || profile.provider : 'unknown',
 		connection: toProfileConnectionViewModel(profile),

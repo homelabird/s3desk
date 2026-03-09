@@ -13,6 +13,8 @@
     "ci:deps:build": "npm ci --no-audit --no-fund --omit=optional",
     "ci:deps:full": "npm ci --no-audit --no-fund",
     "build:analyze": "ANALYZE=1 npm run build",
+    "bundle:report": "node ../scripts/bundle_report.js",
+    "bundle:budget": "npm run build:analyze && node ../scripts/bundle_report.js --fail",
     "gen:openapi": "openapi-typescript ../openapi.yml -o src/api/openapi.ts",
     "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",

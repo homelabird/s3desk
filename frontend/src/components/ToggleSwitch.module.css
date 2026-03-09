@@ -1,0 +1,59 @@
+.root {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.control {
+	position: relative;
+	width: 44px;
+	height: 26px;
+	border: 1px solid color-mix(in srgb, var(--s3d-color-border) 82%, var(--s3d-color-primary) 18%);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 88%, transparent);
+	cursor: pointer;
+	transition:
+		background var(--s3d-transition-fast),
+		border-color var(--s3d-transition-fast),
+		box-shadow var(--s3d-transition-fast),
+		opacity var(--s3d-transition-fast);
+}
+
+.control::after {
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: var(--s3d-color-bg);
+	box-shadow: var(--s3d-shadow-sm);
+	transition: transform var(--s3d-transition-fast);
+}
+
+.checked {
+	background: color-mix(in srgb, var(--s3d-color-primary) 88%, white 12%);
+	border-color: color-mix(in srgb, var(--s3d-color-primary) 72%, var(--s3d-color-border));
+}
+
+.checked::after {
+	transform: translateX(18px);
+}
+
+.control:hover,
+.control:focus-visible {
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 22%, transparent);
+	outline: none;
+}
+
+.disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
+.label {
+	color: var(--s3d-color-text-secondary);
+	font-size: 0.92rem;
+}

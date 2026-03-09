@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { dialogByName } from './support/ui'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -28,14 +31,12 @@ const metaResponse = {
 }
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
-	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify('advanced'))
-		window.localStorage.setItem('objectsAutoIndexEnabled', JSON.stringify(false))
-	}, storage)
+	await seedLocalStorage(page, {
+		...defaultStorage,
+		...overrides,
+		objectsUIMode: 'advanced',
+		objectsAutoIndexEnabled: false,
+	})
 }
 
 async function setupApiMocks(page: Page) {
@@ -46,92 +47,55 @@ async function setupApiMocks(page: Page) {
 	}
 	let favorites = [] as Array<typeof objectItem & { createdAt: string }>
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metaResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: defaultStorage.profileId,
-						name: 'Playwright',
-						endpoint: 'http://minio:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
-					},
-				]),
-			})
-		}
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: [objectItem],
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					items: favorites,
-				}),
-			})
-		}
-		if (method === 'POST' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			const entry = { ...objectItem, createdAt: now }
-			favorites = [entry]
-			return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(entry) })
-		}
-		if (method === 'DELETE' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			favorites = []
-			return route.fulfill({ status: 204 })
-		}
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/search`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ items: [objectItem], nextCursor: null }),
-			})
-		}
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({ status: 403, contentType: 'text/plain', body: 'forbidden' })
-		}
-
-		return route.fulfill({
-			status: 404,
-			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-		})
-	})
+	await installApiFixtures(page, [
+		jsonFixture('GET', '/api/v1/meta', metaJson(metaResponse)),
+		jsonFixture('GET', '/api/v1/profiles', [
+			{
+				id: defaultStorage.profileId,
+				name: 'Playwright',
+				endpoint: 'http://minio:9000',
+				region: 'us-east-1',
+				forcePathStyle: true,
+				tlsInsecureSkipVerify: true,
+				createdAt: now,
+				updatedAt: now,
+			},
+		]),
+		jsonFixture('GET', '/api/v1/buckets', [{ name: defaultStorage.bucket, createdAt: now }]),
+		jsonFixture('GET', `/api/v1/buckets/${defaultStorage.bucket}/objects`, {
+			bucket: defaultStorage.bucket,
+			prefix: '',
+			delimiter: '/',
+			commonPrefixes: [],
+			items: [objectItem],
+			nextContinuationToken: null,
+			isTruncated: false,
+		}),
+		{
+			method: 'GET',
+			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handler: () => ({ json: { bucket: defaultStorage.bucket, prefix: '', items: favorites } }),
+		},
+		{
+			method: 'POST',
+			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handler: () => {
+				const entry = { ...objectItem, createdAt: now }
+				favorites = [entry]
+				return { status: 201, json: entry }
+			},
+		},
+		{
+			method: 'DELETE',
+			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handler: () => {
+				favorites = []
+				return { status: 204 }
+			},
+		},
+		jsonFixture('GET', `/api/v1/buckets/${defaultStorage.bucket}/objects/search`, { items: [objectItem], nextCursor: null }),
+		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),
+	])
 }
 
 test('global search and favorites update from objects UI', async ({ page }) => {
@@ -146,7 +110,7 @@ test('global search and favorites update from objects UI', async ({ page }) => {
 
 	await objectRow.getByRole('button', { name: 'Add favorite' }).click()
 	await expect(objectRow.getByRole('button', { name: 'Remove favorite' })).toBeVisible()
-	await expect(page.getByRole('button', { name: /alpha\.txt/ })).toBeVisible()
+	await expect(page.getByTestId('objects-favorite-item').filter({ hasText: 'alpha.txt' })).toBeVisible()
 
 	const favoritesOnly = page.getByRole('switch', { name: 'Favorites only' }).first()
 	await favoritesOnly.click()
@@ -156,7 +120,7 @@ test('global search and favorites update from objects UI', async ({ page }) => {
 	await expect(page.getByText('No favorites yet.')).toBeVisible()
 
 	await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
-	const drawer = page.locator('.ant-drawer').filter({ hasText: 'Global Search (Indexed)' })
+	const drawer = dialogByName(page, 'Global Search (Indexed)')
 	await expect(drawer).toBeVisible()
 
 	await drawer.getByPlaceholder('Search query (substring)').fill('alpha')

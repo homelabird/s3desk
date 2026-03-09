@@ -1,7 +1,8 @@
-import { Alert, Button, Input, Modal, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Input, Space, Spin, Typography } from 'antd'
 import { lazy, Suspense } from 'react'
 
 import type { Profile, ProfileTLSStatus } from '../../api/types'
+import { DialogModal } from '../../components/DialogModal'
 import styles from '../ProfilesPage.module.css'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
 
@@ -79,10 +80,11 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 				) : null}
 			</Suspense>
 
-			<Modal
+			<DialogModal
 				open={props.yamlOpen}
 				title="Profile YAML"
-				onCancel={props.closeYamlModal}
+				onClose={props.closeYamlModal}
+				width={720}
 				footer={[
 					<Button key="copy" disabled={!props.yamlContent} onClick={props.onYamlCopy}>
 						Copy
@@ -94,7 +96,6 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 						Close
 					</Button>,
 				]}
-				destroyOnHidden
 			>
 				<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 					<Alert
@@ -116,17 +117,26 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 					)}
 					{props.yamlContent ? <Typography.Text type="secondary">Filename: {props.yamlFilename}</Typography.Text> : null}
 				</Space>
-			</Modal>
+			</DialogModal>
 
-			<Modal
+			<DialogModal
 				open={props.importOpen}
 				title="Import Profile YAML"
-				onCancel={props.closeImportModal}
-				okText="Import"
-				onOk={props.onImportSubmit}
-				okButtonProps={{ disabled: props.importLoading || props.importText.trim() === '' }}
-				confirmLoading={props.importLoading}
-				destroyOnHidden
+				onClose={props.closeImportModal}
+				width={720}
+				footer={
+					<>
+						<Button onClick={props.closeImportModal}>Cancel</Button>
+						<Button
+							type="primary"
+							onClick={props.onImportSubmit}
+							disabled={props.importLoading || props.importText.trim() === ''}
+							loading={props.importLoading}
+						>
+							Import
+						</Button>
+					</>
+				}
 			>
 				<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 					<Typography.Text type="secondary">
@@ -159,7 +169,7 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 					/>
 					{props.importError ? <Alert type="error" showIcon title={props.importError} /> : null}
 				</Space>
-			</Modal>
+			</DialogModal>
 		</>
 	)
 }

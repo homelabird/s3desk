@@ -27,3 +27,12 @@
 	max-height: 160px;
 	overflow: auto;
 }
+
+.codeWrap {
+	word-break: break-all;
+}
+
+.tightList {
+	margin: 4px 0 0;
+	padding-left: 18px;
+}

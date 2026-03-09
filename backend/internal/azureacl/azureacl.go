@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"s3desk/internal/azureutil"
 	"s3desk/internal/models"
 )
 
@@ -195,14 +196,7 @@ func resolveEndpoint(profile models.ProfileSecrets) (*url.URL, string, string, e
 		return nil, "", "", errors.New("missing azure account credentials")
 	}
 
-	ep := strings.TrimSpace(profile.AzureEndpoint)
-	if ep == "" {
-		if profile.AzureUseEmulator {
-			ep = fmt.Sprintf("http://127.0.0.1:10000/%s", accountName)
-		} else {
-			ep = fmt.Sprintf("https://%s.blob.core.windows.net", accountName)
-		}
-	}
+	ep := strings.TrimSpace(azureutil.BlobEndpoint(profile))
 
 	if !strings.Contains(ep, "://") {
 		if looksLikeLocalEndpoint(ep) {

@@ -1,14 +1,6 @@
 import { lazy, Suspense } from 'react'
 
-type BucketOption = {
-	label: string
-	value: string
-}
-
-type DeletePrefill = {
-	prefix: string
-	deleteAll: boolean
-}
+import type { BucketOption, DeleteJobModalPrefill } from './jobsPageTypes'
 
 type Props = {
 	profileId: string
@@ -49,7 +41,7 @@ type Props = {
 	defaultCleanupEmptyDirs: boolean
 	onUploadDefaultsChange: (values: { moveAfterUpload: boolean; cleanupEmptyDirs: boolean }) => void
 	deleteBucket: string
-	deletePrefill: DeletePrefill | null
+	deletePrefill: DeleteJobModalPrefill | null
 }
 
 const CreateJobModal = lazy(async () => {

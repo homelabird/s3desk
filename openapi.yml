@@ -110,6 +110,72 @@ paths:
         "403":
           $ref: "#/components/responses/ErrorResponse"
 
+  /server/backup:
+    get:
+      tags: [System]
+      summary: Download a server migration backup bundle
+      description: |
+        Exports a `.tar.gz` migration bundle containing the sqlite snapshot and selected
+        `DATA_DIR` runtime state such as thumbnails, logs, artifacts, and staging data.
+        This export currently supports sqlite-backed servers only.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      responses:
+        "200":
+          description: OK
+          headers:
+            Content-Disposition:
+              description: Suggested filename for the backup bundle.
+              schema: { type: string }
+          content:
+            application/gzip:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /server/restore:
+    post:
+      tags: [System]
+      summary: Stage a server migration backup bundle for restore
+      description: |
+        Uploads a `.tar.gz` bundle previously created by `/server/backup` and stages it
+        under `DATA_DIR/restores/<id>` without overwriting the live instance. The staged
+        directory can then be used as the destination server's `DATA_DIR`.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [bundle]
+              properties:
+                bundle:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerRestoreResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
   /profiles:
     get:
       tags: [Profiles]
@@ -1437,8 +1503,30 @@ components:
           $ref: "#/components/schemas/ProfileProvider"
         preserveLeadingSlash: { type: boolean }
         tlsInsecureSkipVerify: { type: boolean }
+        validation:
+          $ref: "#/components/schemas/ProfileValidation"
+        effectiveCapabilities:
+          $ref: "#/components/schemas/ProviderCapability"
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+
+    ProfileValidationIssue:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        field: { type: string }
+        message: { type: string }
+
+    ProfileValidation:
+      type: object
+      required: [valid]
+      properties:
+        valid: { type: boolean }
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileValidationIssue"
 
     ProfileAwsS3:
       allOf:
@@ -1611,7 +1699,7 @@ components:
     ProfileCreateRequestGcpGcs:
       type: object
       additionalProperties: false
-      required: [provider, name, preserveLeadingSlash, tlsInsecureSkipVerify]
+      required: [provider, name, projectNumber, preserveLeadingSlash, tlsInsecureSkipVerify]
       properties:
         provider: { type: string, enum: [gcp_gcs] }
         name: { type: string }
@@ -1624,7 +1712,9 @@ components:
         endpoint:
           type: string
           description: Optional. Used for local emulators (fake-gcs-server) or custom endpoints.
-        projectNumber: { type: string }
+        projectNumber:
+          type: string
+          description: Required for bucket listing/create/delete and other bucket-scoped workflows.
         preserveLeadingSlash: { type: boolean, default: false }
         tlsInsecureSkipVerify: { type: boolean, default: false }
 
@@ -1741,7 +1831,7 @@ components:
     ProfileUpdateRequestGcpGcs:
       type: object
       additionalProperties: false
-      required: [provider]
+      required: [provider, projectNumber]
       properties:
         provider: { type: string, enum: [gcp_gcs] }
         name: { type: string }
@@ -1752,7 +1842,9 @@ components:
         endpoint:
           type: string
           description: Optional. Used for local emulators (fake-gcs-server) or custom endpoints.
-        projectNumber: { type: string }
+        projectNumber:
+          type: string
+          description: Required for bucket listing/create/delete and other bucket-scoped workflows.
         preserveLeadingSlash: { type: boolean }
         tlsInsecureSkipVerify: { type: boolean }
 
@@ -1791,6 +1883,32 @@ components:
           gcp_gcs: "#/components/schemas/ProfileUpdateRequestGcpGcs"
           oci_object_storage: "#/components/schemas/ProfileUpdateRequestOciObjectStorage"
 
+    ProfileConnectivityDetails:
+      type: object
+      additionalProperties: true
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProfileProvider"
+        buckets:
+          type: integer
+          description: Number of buckets returned by the provider list call.
+        storageType:
+          type: string
+          description: Detected storage type for S3-like endpoints.
+        storageTypeSource:
+          type: string
+          description: Detection source for the storage type.
+        error:
+          type: string
+          description: Provider or rclone error string when the operation fails.
+        normalizedError:
+          $ref: "#/components/schemas/NormalizedError"
+
+    ProfileBenchmarkDetails:
+      allOf:
+        - $ref: "#/components/schemas/ProfileConnectivityDetails"
+      description: Additional benchmark metadata, including provider context and normalized failures.
+
     ProfileTestResponse:
       type: object
       required: [ok]
@@ -1798,8 +1916,7 @@ components:
         ok: { type: boolean }
         message: { type: string }
         details:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/ProfileConnectivityDetails"
           description: |
             Additional test metadata.
             Known keys:
@@ -1807,6 +1924,7 @@ components:
               - storageType: detected storage type (ceph, aws-s3, s3-compatible, unknown).
               - storageTypeSource: detection source (server-header, endpoint, default, none).
               - error: error string when ok=false.
+              - normalizedError: provider-agnostic error classifier when ok=false.
 
     ProfileBenchmarkResponse:
       type: object
@@ -1814,6 +1932,8 @@ components:
       properties:
         ok: { type: boolean }
         message: { type: string }
+        details:
+          $ref: "#/components/schemas/ProfileBenchmarkDetails"
         uploadBps:
           type: integer
           format: int64
@@ -2662,17 +2782,20 @@ components:
         - version
         - serverAddr
         - dataDir
+        - dbBackend
         - staticDir
         - apiTokenEnabled
         - encryptionEnabled
         - capabilities
         - jobConcurrency
         - uploadSessionTTLSeconds
+        - uploadDirectStream
         - transferEngine
       properties:
         version: { type: string }
         serverAddr: { type: string }
         dataDir: { type: string }
+        dbBackend: { type: string }
         staticDir: { type: string }
         apiTokenEnabled: { type: boolean }
         encryptionEnabled: { type: boolean }
@@ -2697,6 +2820,37 @@ components:
             minVersion: { type: string }
             path: { type: string }
             version: { type: string }
+
+    ServerMigrationManifest:
+      type: object
+      required: [format, createdAt, appVersion, dbBackend, encryptionEnabled]
+      properties:
+        format: { type: string }
+        createdAt: { type: string, format: date-time }
+        appVersion: { type: string }
+        dbBackend: { type: string }
+        encryptionEnabled: { type: boolean }
+        entries:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
+    ServerRestoreResponse:
+      type: object
+      required: [manifest, stagingDir, restartRequired, nextSteps]
+      properties:
+        manifest:
+          $ref: "#/components/schemas/ServerMigrationManifest"
+        stagingDir: { type: string }
+        restartRequired: { type: boolean }
+        nextSteps:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
 
     MetaCapabilities:
       type: object

@@ -130,14 +130,15 @@ test.describe('Live Jobs flow', () => {
 		const moveDestKey = `${moveDestPrefix}move-dest.txt`
 		let profileId: string | null = null
 
-		try {
-			const createProfile = await request.post('/api/v1/profiles', {
-				headers: apiHeaders(),
-				data: {
-					name: profileName,
-					endpoint: s3Endpoint,
-					region: s3Region,
-					accessKeyId: s3AccessKey,
+			try {
+				const createProfile = await request.post('/api/v1/profiles', {
+					headers: apiHeaders(),
+					data: {
+						provider: 's3_compatible',
+						name: profileName,
+						endpoint: s3Endpoint,
+						region: s3Region,
+						accessKeyId: s3AccessKey,
 					secretAccessKey: s3SecretKey,
 					forcePathStyle,
 					tlsInsecureSkipVerify: tlsSkipVerify,
@@ -208,8 +209,7 @@ test.describe('Live Jobs flow', () => {
 			const createResponse = page.waitForResponse(
 				(res) => res.url().includes('/api/v1/jobs') && res.request().method() === 'POST',
 			)
-			const header = page.getByRole('heading', { name: 'Jobs' }).locator('..')
-			await header.getByRole('button', { name: /More/i }).click()
+			await page.getByRole('button', { name: 'More' }).click()
 			await page.getByRole('menuitem', { name: 'New Delete Job' }).click()
 			const deleteDrawer = page.getByRole('dialog', { name: 'Create delete job (S3)' })
 			await expect(deleteDrawer).toBeVisible()

@@ -1,6 +1,7 @@
-import { Button, Dropdown } from 'antd'
 import { useMemo, type DragEvent, type ReactNode } from 'react'
 
+import styles from './objects.module.css'
+import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import { normalizePrefix } from './objectsListUtils'
 
 type UseObjectsBreadcrumbItemsArgs = {
@@ -16,6 +17,8 @@ type UseObjectsBreadcrumbItemsArgs = {
 	navigateToLocation: (nextBucket: string, nextPrefix: string, options?: { recordHistory?: boolean }) => void
 }
 
+type BreadcrumbItem = { title: ReactNode }
+
 export function useObjectsBreadcrumbItems({
 	bucket,
 	prefix,
@@ -27,10 +30,10 @@ export function useObjectsBreadcrumbItems({
 	onDndTargetDragLeave,
 	onDndTargetDrop,
 	navigateToLocation,
-}: UseObjectsBreadcrumbItemsArgs): { breadcrumbItems: { title: ReactNode }[] } {
+}: UseObjectsBreadcrumbItemsArgs): { breadcrumbItems: BreadcrumbItem[] } {
 	const breadcrumbItems = useMemo(() => {
 		const parts = prefix.split('/').filter(Boolean)
-		const items: { title: ReactNode }[] = []
+		const items: BreadcrumbItem[] = []
 		const canNavigate = !!bucket
 
 		const wrap = (targetPrefixRaw: string, node: ReactNode) => {
@@ -38,16 +41,10 @@ export function useObjectsBreadcrumbItems({
 			const active = canDragDrop && dndHoverPrefix === target
 			return (
 				<span
-					onDragOver={(e) => onDndTargetDragOver(e, targetPrefixRaw)}
-					onDragLeave={(e) => onDndTargetDragLeave(e, targetPrefixRaw)}
-					onDrop={(e) => onDndTargetDrop(e, targetPrefixRaw)}
-					style={{
-						display: 'inline-flex',
-						alignItems: 'center',
-						paddingInline: 4,
-						borderRadius: 4,
-						background: active ? 'var(--s3d-color-primary-light)' : undefined,
-					}}
+					onDragOver={(event) => onDndTargetDragOver(event, targetPrefixRaw)}
+					onDragLeave={(event) => onDndTargetDragLeave(event, targetPrefixRaw)}
+					onDrop={(event) => onDndTargetDrop(event, targetPrefixRaw)}
+					className={`${styles.breadcrumbDropTarget} ${active ? styles.breadcrumbDropTargetActive : ''}`.trim()}
 				>
 					{node}
 				</span>
@@ -55,15 +52,14 @@ export function useObjectsBreadcrumbItems({
 		}
 
 		const linkToPrefix = (targetPrefix: string, label: string) => (
-			<Button
-				type="link"
-				size="small"
+			<button
+				type="button"
+				className={styles.breadcrumbLink}
 				onClick={() => (canNavigate ? navigateToLocation(bucket, targetPrefix, { recordHistory: true }) : undefined)}
 				disabled={!canNavigate}
-				style={{ padding: 0, height: 'auto', whiteSpace: 'nowrap' }}
 			>
 				{label}
-			</Button>
+			</button>
 		)
 
 		items.push({
@@ -75,24 +71,39 @@ export function useObjectsBreadcrumbItems({
 		if (!isMd && parts.length > 2) {
 			const collapsedParts = parts.slice(0, -1)
 			const collapsedPrefix = normalizePrefix(collapsedParts.join('/'))
-			const menuItems = collapsedParts.map((part, index) => {
-				const targetPrefix = normalizePrefix(collapsedParts.slice(0, index + 1).join('/'))
-				return {
-					key: targetPrefix || part,
-					label: targetPrefix,
-					disabled: !canNavigate,
-					onClick: () => (canNavigate ? navigateToLocation(bucket, targetPrefix, { recordHistory: true }) : undefined),
-				}
-			})
+			const menu = {
+				items: collapsedParts.map((part, index) => {
+					const targetPrefix = normalizePrefix(collapsedParts.slice(0, index + 1).join('/'))
+					return {
+						key: targetPrefix || part,
+						label: `${part}/`,
+						disabled: !canNavigate,
+						onClick: () =>
+							canNavigate ? navigateToLocation(bucket, targetPrefix, { recordHistory: true }) : undefined,
+					}
+				}),
+			}
 
 			items.push({
 				title: wrap(
 					collapsedPrefix,
-					<Dropdown trigger={['click']} menu={{ items: menuItems }} disabled={!canNavigate}>
-						<Button type="link" size="small" disabled={!canNavigate} style={{ padding: 0, height: 'auto', whiteSpace: 'nowrap' }}>
-							.../
-						</Button>
-					</Dropdown>,
+					<ObjectsMenuPopover menu={menu}>
+						{({ toggle, open }) => (
+							<button
+								type="button"
+								className={styles.breadcrumbLink}
+								aria-haspopup="menu"
+								aria-expanded={open}
+								disabled={!canNavigate}
+								onClick={(event) => {
+									event.stopPropagation()
+									toggle()
+								}}
+							>
+								.../
+							</button>
+						)}
+					</ObjectsMenuPopover>,
 				),
 			})
 
@@ -107,7 +118,7 @@ export function useObjectsBreadcrumbItems({
 
 		let current = ''
 		for (const part of parts) {
-			current += part + '/'
+			current += `${part}/`
 			items.push({
 				title: wrap(current, linkToPrefix(current, `${part}/`)),
 			})

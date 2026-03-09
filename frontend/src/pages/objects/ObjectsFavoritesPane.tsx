@@ -1,6 +1,7 @@
-import { Badge, Input, Space, Switch, Typography } from 'antd'
+import { Badge, Input, Space, Typography } from 'antd'
 import { SearchOutlined, StarFilled } from '@ant-design/icons'
 
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 import type { FavoriteObjectItem } from '../../api/types'
 import styles from './objects.module.css'
 import { ObjectsTreePane } from './ObjectsTreePane'
@@ -72,22 +73,20 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 				/>
 				<Space size="small" wrap>
 					<Space size={6} align="center">
-						<Switch
-							size="small"
+						<ToggleSwitch
 							checked={props.favoritesOnly}
 							onChange={props.onFavoritesOnlyChange}
 							disabled={disabled}
-							aria-label="Favorites only"
+							ariaLabel="Favorites only"
 						/>
 						<Typography.Text type="secondary">Favorites only</Typography.Text>
 					</Space>
 					<Space size={6} align="center">
-						<Switch
-							size="small"
+						<ToggleSwitch
 							checked={props.openDetailsOnClick}
 							onChange={props.onOpenDetailsOnClickChange}
 							disabled={disabled}
-							aria-label="Open details on click"
+							ariaLabel="Open details on click"
 						/>
 						<Typography.Text type="secondary">Open details on click</Typography.Text>
 					</Space>
@@ -100,6 +99,8 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 								key={item.key}
 								type="button"
 								className={styles.favoritesItem}
+								data-testid="objects-favorite-item"
+								data-favorite-key={item.key}
 								onClick={() => props.onSelectFavorite(item.key)}
 								disabled={disabled}
 							>

@@ -1,9 +1,10 @@
-import { Alert, Button, Drawer, Grid, Input, message } from 'antd'
+import { Alert, Button, Grid, Input, message } from 'antd'
 import { useState } from 'react'
 
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { DatalistInput } from '../../components/DatalistInput'
 import { FormField } from '../../components/FormField'
+import { OverlaySheet } from '../../components/OverlaySheet'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
 import styles from './JobsShared.module.css'
 
@@ -62,12 +63,13 @@ export function DownloadJobModal(props: {
 	}
 
 	return (
-		<Drawer
+		<OverlaySheet
 			open={props.open}
 			onClose={handleCancel}
 			title="Download folder (S3 → device)"
-			width={drawerWidth}
-			destroyOnHidden
+			placement={screens.md ? 'right' : 'bottom'}
+			width={screens.md ? drawerWidth : undefined}
+			height={!screens.md ? '100dvh' : undefined}
 			extra={
 				<div className={styles.drawerExtra}>
 					<Button onClick={handleCancel}>Close</Button>
@@ -129,6 +131,6 @@ export function DownloadJobModal(props: {
 					/>
 				</FormField>
 			</form>
-		</Drawer>
+		</OverlaySheet>
 	)
 }

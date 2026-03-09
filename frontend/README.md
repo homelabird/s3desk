@@ -44,3 +44,9 @@ When the frontend runs on a different origin (Vercel), the backend must allow:
 - Cross-origin requests for the frontend origin (configure backend `ALLOWED_HOSTS` to include the frontend hostname).
 - Request headers used by the UI: `X-Api-Token`, `X-Profile-Id`.
 - Browser access to `/api/v1/ws` (WebSocket) and `/api/v1/events` (SSE fallback).
+
+## UI Feedback Rules
+
+When a backend endpoint returns HTTP `2xx` with an application-level `ok` field, follow the shared frontend feedback rules in [../docs/UI_OPERATION_FEEDBACK.md](../docs/UI_OPERATION_FEEDBACK.md).
+
+Use the helpers in [src/lib/providerOperationFeedback.ts](src/lib/providerOperationFeedback.ts) instead of hand-building warning or unavailable-operation messages in page components.

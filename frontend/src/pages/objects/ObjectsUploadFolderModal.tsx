@@ -1,5 +1,6 @@
-import { Alert, Checkbox, Modal, Typography } from 'antd'
+import { Alert, Button, Checkbox, Typography } from 'antd'
 
+import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
@@ -27,14 +28,19 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 	const support = getDevicePickerSupport()
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title="Upload folder from this device"
-			okText="Start upload"
-			okButtonProps={{ loading: props.isSubmitting, disabled: !props.canSubmit }}
-			onOk={() => props.onFinish(props.values)}
-			onCancel={props.onCancel}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={640}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button type="primary" loading={props.isSubmitting} disabled={!props.canSubmit} onClick={() => props.onFinish(props.values)}>
+						Start upload
+					</Button>
+				</>
+			}
 		>
 			<Alert
 				type="info"
@@ -100,6 +106,6 @@ export function ObjectsUploadFolderModal(props: ObjectsUploadFolderModalProps) {
 					Auto-clean empty folders
 				</Checkbox>
 			</form>
-		</Modal>
+		</DialogModal>
 	)
 }

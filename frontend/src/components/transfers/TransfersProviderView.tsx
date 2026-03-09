@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 
-import type { TransfersContextValue } from '../Transfers'
 import { TransfersContext } from '../useTransfers'
 import type { TransfersDrawerProps } from './TransfersDrawer'
+import type { TransfersContextValue } from './transfersTypes'
 import { TransfersDrawerHost } from './TransfersDrawerHost'
 
 export type TransfersProviderViewProps = {
@@ -19,4 +19,3 @@ export function TransfersProviderView({ children, ctx, drawerProps }: TransfersP
 		</TransfersContext.Provider>
 	)
 }
-

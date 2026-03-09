@@ -128,3 +128,55 @@ func TestEnsureProfilesEncryptedFailsOnCorruptedSecretsJSON(t *testing.T) {
 		t.Fatalf("expected profile id in error, got %v", err)
 	}
 }
+
+func TestCreateProfileGcpRequiresProjectNumber(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	serviceAccountJSON := `{"type":"service_account","project_id":"p","client_email":"e","private_key":"k"}`
+
+	_, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderGcpGcs,
+		Name:                  "gcp",
+		ServiceAccountJSON:    &serviceAccountJSON,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
+	})
+	if err == nil {
+		t.Fatal("expected missing projectNumber error")
+	}
+	if !strings.Contains(err.Error(), "projectNumber is required") {
+		t.Fatalf("expected projectNumber error, got %v", err)
+	}
+}
+
+func TestUpdateProfileGcpRejectsEmptyProjectNumber(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	serviceAccountJSON := `{"type":"service_account","project_id":"p","client_email":"e","private_key":"k"}`
+	projectNumber := "123456789012"
+
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderGcpGcs,
+		Name:                  "gcp",
+		ServiceAccountJSON:    &serviceAccountJSON,
+		ProjectNumber:         &projectNumber,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	empty := ""
+	_, ok, err := st.UpdateProfile(context.Background(), profile.ID, models.ProfileUpdateRequest{
+		Provider:      models.ProfileProviderGcpGcs,
+		ProjectNumber: &empty,
+	})
+	if !ok {
+		t.Fatal("expected profile to exist")
+	}
+	if err == nil {
+		t.Fatal("expected missing projectNumber error")
+	}
+	if !strings.Contains(err.Error(), "projectNumber is required") {
+		t.Fatalf("expected projectNumber error, got %v", err)
+	}
+}

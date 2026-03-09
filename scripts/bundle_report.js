@@ -124,7 +124,12 @@ function topPackagesForChunks(stats, chunkNames, limit) {
 }
 
 function parseArgs(argv) {
-	const args = { statsPath: 'frontend/dist/stats.json', outPath: 'frontend/dist/bundle-report.md', fail: false }
+	const distExists = fs.existsSync(path.resolve(process.cwd(), 'dist'))
+	const args = {
+		statsPath: distExists ? 'dist/stats.json' : 'frontend/dist/stats.json',
+		outPath: distExists ? 'dist/bundle-report.md' : 'frontend/dist/bundle-report.md',
+		fail: false,
+	}
 	const positional = []
 	for (const a of argv) {
 		if (a === '--fail') args.fail = true
@@ -142,6 +147,12 @@ function main() {
 
 	const vendorUi = findChunk(stats, 'vendor-ui-')
 	const vendorUiName = vendorUi ? vendorUi.name : null
+	const objectsPage = findChunk(stats, 'ObjectsPage-')
+	const objectsPageName = objectsPage ? objectsPage.name : null
+	const uploadsPage = findChunk(stats, 'UploadsPage-')
+	const uploadsPageName = uploadsPage ? uploadsPage.name : null
+	const transfers = findChunk(stats, 'Transfers-')
+	const transfersName = transfers ? transfers.name : null
 
 	const initialJs = parseIndexInitialJs(distDir)
 	const initialSizes = initialJs.map((rel) => ({ rel, ...readAssetBytes(distDir, rel) }))
@@ -151,10 +162,16 @@ function main() {
 	const initialTotalGzip = initialSizes.reduce((acc, f) => acc + f.gzip, 0)
 
 	const vendorUiSizes = vendorUiName ? readAssetBytes(distDir, vendorUiName) : null
+	const objectsPageSizes = objectsPageName ? readAssetBytes(distDir, objectsPageName) : null
+	const uploadsPageSizes = uploadsPageName ? readAssetBytes(distDir, uploadsPageName) : null
+	const transfersSizes = transfersName ? readAssetBytes(distDir, transfersName) : null
 
 	const budgets = {
-		vendorUiGzip: Number(process.env.BUNDLE_BUDGET_VENDOR_UI_GZIP_KB || 300) * 1024,
-		initialJsGzip: Number(process.env.BUNDLE_BUDGET_INITIAL_JS_GZIP_KB || 160) * 1024,
+		vendorUiGzip: Number(process.env.BUNDLE_BUDGET_VENDOR_UI_GZIP_KB || 170) * 1024,
+		initialJsGzip: Number(process.env.BUNDLE_BUDGET_INITIAL_JS_GZIP_KB || 88) * 1024,
+		objectsPageGzip: Number(process.env.BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB || 54) * 1024,
+		uploadsPageGzip: Number(process.env.BUNDLE_BUDGET_UPLOADS_PAGE_GZIP_KB || 3.5) * 1024,
+		transfersGzip: Number(process.env.BUNDLE_BUDGET_TRANSFERS_GZIP_KB || 14.5) * 1024,
 	}
 
 	const warnings = []
@@ -163,6 +180,15 @@ function main() {
 	}
 	if (initialTotalGzip > budgets.initialJsGzip) {
 		warnings.push(`initial JS gzip ${formatKB(initialTotalGzip)} > budget ${formatKB(budgets.initialJsGzip)}`)
+	}
+	if (objectsPageSizes && objectsPageSizes.gzip > budgets.objectsPageGzip) {
+		warnings.push(`ObjectsPage gzip ${formatKB(objectsPageSizes.gzip)} > budget ${formatKB(budgets.objectsPageGzip)}`)
+	}
+	if (uploadsPageSizes && uploadsPageSizes.gzip > budgets.uploadsPageGzip) {
+		warnings.push(`UploadsPage gzip ${formatKB(uploadsPageSizes.gzip)} > budget ${formatKB(budgets.uploadsPageGzip)}`)
+	}
+	if (transfersSizes && transfersSizes.gzip > budgets.transfersGzip) {
+		warnings.push(`Transfers gzip ${formatKB(transfersSizes.gzip)} > budget ${formatKB(budgets.transfersGzip)}`)
 	}
 
 	const initialChunks = initialJs
@@ -181,6 +207,21 @@ function main() {
 		md += `- vendor-ui: \`${vendorUiName}\` (${formatKB(vendorUiSizes.raw)} raw, ${formatKB(vendorUiSizes.gzip)} gzip)\n`
 	} else {
 		md += `- vendor-ui: (not found)\n`
+	}
+	if (objectsPageName && objectsPageSizes) {
+		md += `- ObjectsPage: \`${objectsPageName}\` (${formatKB(objectsPageSizes.raw)} raw, ${formatKB(objectsPageSizes.gzip)} gzip)\n`
+	} else {
+		md += `- ObjectsPage: (not found)\n`
+	}
+	if (uploadsPageName && uploadsPageSizes) {
+		md += `- UploadsPage: \`${uploadsPageName}\` (${formatKB(uploadsPageSizes.raw)} raw, ${formatKB(uploadsPageSizes.gzip)} gzip)\n`
+	} else {
+		md += `- UploadsPage: (not found)\n`
+	}
+	if (transfersName && transfersSizes) {
+		md += `- Transfers: \`${transfersName}\` (${formatKB(transfersSizes.raw)} raw, ${formatKB(transfersSizes.gzip)} gzip)\n`
+	} else {
+		md += `- Transfers: (not found)\n`
 	}
 	md += `- initial JS (index.html): ${initialJs.length} files (${formatKB(initialTotal)} raw, ${formatKB(initialTotalGzip)} gzip)\n\n`
 
@@ -212,6 +253,9 @@ function main() {
 	md += `## Budgets (Soft)\n\n`
 	md += `- vendor-ui gzip budget: ${formatKB(budgets.vendorUiGzip)}\n`
 	md += `- initial JS gzip budget: ${formatKB(budgets.initialJsGzip)}\n\n`
+	md += `- ObjectsPage gzip budget: ${formatKB(budgets.objectsPageGzip)}\n`
+	md += `- UploadsPage gzip budget: ${formatKB(budgets.uploadsPageGzip)}\n`
+	md += `- Transfers gzip budget: ${formatKB(budgets.transfersGzip)}\n\n`
 	if (warnings.length === 0) {
 		md += `No budget warnings.\n`
 	} else {

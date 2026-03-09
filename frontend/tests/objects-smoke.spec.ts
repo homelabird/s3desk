@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage } from './support/apiFixtures'
+
 type StorageSeed = {
 	objectsUIMode: 'simple' | 'advanced'
 	apiToken: string
@@ -15,13 +17,7 @@ const defaultStorage: StorageSeed = {
 }
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
-	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('objectsUIMode', JSON.stringify(seed.objectsUIMode))
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-	}, storage)
+	await seedLocalStorage(page, { ...defaultStorage, ...overrides })
 }
 
 async function getToolbarMoreButton(page: Page) {
@@ -34,92 +30,48 @@ async function stubObjectsSmokeApi(page: Page, overrides?: Partial<StorageSeed>)
 	const seed = { ...defaultStorage, ...overrides }
 	const now = '2024-01-01T00:00:00Z'
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: seed.profileId,
-						name: 'Playwright',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
-					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: seed.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${seed.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: seed.bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: [],
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${seed.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: seed.bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+	await installApiFixtures(page, [
+		jsonFixture(
+			'GET',
+			'/api/v1/meta',
+			metaJson({
+				dataDir: '/tmp',
+				staticDir: '/tmp',
+				capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
+				jobLogMaxBytes: null,
+				jobRetentionSeconds: null,
+				uploadMaxBytes: null,
+				allowedLocalDirs: [],
+			}),
+		),
+		jsonFixture('GET', '/api/v1/profiles', [
+			{
+				id: seed.profileId,
+				name: 'Playwright',
+				endpoint: 'http://localhost:9000',
+				region: 'us-east-1',
+				forcePathStyle: true,
+				tlsInsecureSkipVerify: true,
+				createdAt: now,
+				updatedAt: now,
+			},
+		]),
+		jsonFixture('GET', '/api/v1/buckets', [{ name: seed.bucket, createdAt: now }]),
+		jsonFixture('GET', `/api/v1/buckets/${seed.bucket}/objects`, {
+			bucket: seed.bucket,
+			prefix: '',
+			delimiter: '/',
+			commonPrefixes: [],
+			items: [],
+			nextContinuationToken: null,
+			isTruncated: false,
+		}),
+		jsonFixture('GET', `/api/v1/buckets/${seed.bucket}/objects/favorites`, {
+			bucket: seed.bucket,
+			prefix: '',
+			items: [],
+		}),
+	])
 }
 
 test.describe('Objects page smoke', () => {

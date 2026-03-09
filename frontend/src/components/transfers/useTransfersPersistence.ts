@@ -21,6 +21,12 @@ const isActiveDownloadStatus = (status: DownloadTask['status']) =>
 const isActiveUploadStatus = (status: UploadTask['status']) =>
 	status === 'queued' || status === 'staging' || status === 'commit' || status === 'waiting_job' || status === 'cleanup'
 
+function withoutPreview<T extends { preview?: unknown }>(task: T): Omit<T, 'preview'> {
+	const { preview, ...rest } = task
+	void preview
+	return rest
+}
+
 const normalizeDownloadTask = (task: PersistedDownloadTask, now: number): DownloadTask => {
 	if (!isActiveDownloadStatus(task.status)) return task
 	return {
@@ -32,7 +38,7 @@ const normalizeDownloadTask = (task: PersistedDownloadTask, now: number): Downlo
 }
 
 const normalizeUploadTask = (task: PersistedUploadTask, now: number): UploadTask => {
-	const { preview: _preview, ...normalized } = task as PersistedUploadTask & { preview?: unknown }
+	const normalized = withoutPreview(task as PersistedUploadTask & { preview?: unknown })
 	if (!isActiveUploadStatus(task.status)) return normalized
 	return {
 		...normalized,
@@ -43,8 +49,7 @@ const normalizeUploadTask = (task: PersistedUploadTask, now: number): UploadTask
 }
 
 const toPersistedUploadTask = (task: UploadTask): PersistedUploadTask => {
-	const { preview: _preview, ...persisted } = task
-	return persisted
+	return withoutPreview(task)
 }
 
 const loadPersistedTransfers = (): PersistedTransfers | null => {

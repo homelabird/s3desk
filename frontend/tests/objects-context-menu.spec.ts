@@ -1,4 +1,15 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
+
+import {
+	buildBucketFixture,
+	buildFavoritesFixture,
+	buildMetaFixture,
+	buildObjectsListFixture,
+	buildProfileFixture,
+	installMockApi,
+	seedLocalStorage,
+} from './support/apiFixtures'
+import { objectsContextMenu } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -21,14 +32,11 @@ const defaultStorage: StorageSeed = {
 }
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
-	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-		window.localStorage.setItem('prefix', JSON.stringify(''))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify(seed.objectsUIMode))
-	}, storage)
+	await seedLocalStorage(page, {
+		...defaultStorage,
+		prefix: '',
+		...overrides,
+	})
 }
 
 function buildObjectItems(count: number): ObjectItem[] {
@@ -44,100 +52,45 @@ async function stubObjectsApi(page: Page, items: ObjectItem[]) {
 	const now = '2024-01-01T00:00:00Z'
 	const { bucket, profileId } = defaultStorage
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
+	await installMockApi(page, [
+		{
+			method: 'GET',
+			path: '/events',
+			handle: ({ text }) => text('', 200, 'text/event-stream'),
+		},
+		{
+			method: 'GET',
+			path: '/meta',
+			handle: ({ json }) => json(buildMetaFixture()),
+		},
+		{
+			method: 'GET',
+			path: '/profiles',
+			handle: ({ json }) =>
+				json([
+					buildProfileFixture({
 						id: profileId,
-						name: 'Playwright',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
 						createdAt: now,
 						updatedAt: now,
-					},
+					}),
 				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items,
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+		},
+		{
+			method: 'GET',
+			path: '/buckets',
+			handle: ({ json }) => json([buildBucketFixture(bucket, { createdAt: now })]),
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${bucket}/objects`,
+			handle: ({ json }) => json(buildObjectsListFixture({ bucket, items })),
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${bucket}/objects/favorites`,
+			handle: ({ json }) => json(buildFavoritesFixture({ bucket })),
+		},
+	])
 }
 
 type MenuMetrics = {
@@ -154,10 +107,9 @@ type MenuMetrics = {
 
 async function getMenuMetrics(
 	page: Page,
-	selector = '.objects-context-menu.ant-dropdown',
+	menu: Locator,
 	viewportSelector?: string,
 ): Promise<MenuMetrics | null> {
-	const menu = page.locator(selector)
 	if (!(await menu.count())) return null
 	const rect = await menu.evaluate((el) => {
 		const box = el.getBoundingClientRect()
@@ -202,14 +154,13 @@ async function getMenuMetrics(
 	return { rect, viewport }
 }
 
-async function expectMenuInViewport(page: Page, options?: { padding?: number; selector?: string; viewportSelector?: string }) {
+async function expectMenuInViewport(page: Page, menu: Locator, options?: { padding?: number; viewportSelector?: string }) {
 	const deadline = Date.now() + 5000
 	let latest: MenuMetrics | null = null
 	const padding = options?.padding ?? 0
-	const selector = options?.selector
 	const viewportSelector = options?.viewportSelector
 	while (Date.now() < deadline) {
-		latest = await getMenuMetrics(page, selector, viewportSelector)
+		latest = await getMenuMetrics(page, menu, viewportSelector)
 		if (latest) {
 			const { rect, viewport } = latest
 			if (
@@ -230,7 +181,7 @@ async function expectMenuInViewport(page: Page, options?: { padding?: number; se
 }
 
 test.describe('Objects context menus', () => {
-	test('list menu clamps to viewport and scrolls', async ({ page }) => {
+	test('list menu caps height and enables scrolling', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(12))
 		await seedStorage(page)
 		await page.setViewportSize({ width: 780, height: 240 })
@@ -265,15 +216,17 @@ test.describe('Objects context menus', () => {
 				)
 			}, { x: box.x + 12, y: box.y + 12 })
 
-			const menu = page.locator('.objects-context-menu.ant-dropdown')
+			const menu = objectsContextMenu(page)
+			const menuList = menu.getByRole('menu')
 			await expect(menu).toBeVisible()
-			await expectMenuInViewport(page)
+			await expect(menuList).toBeVisible()
 
-			const styles = await menu.locator('.ant-dropdown-menu').evaluate((el) => {
+			const styles = await menuList.evaluate((el) => {
 				const computed = window.getComputedStyle(el)
 				return { maxHeight: computed.maxHeight, overflowY: computed.overflowY }
 			})
-			const { viewport } = await expectMenuInViewport(page)
+			const viewport = page.viewportSize()
+			if (!viewport) throw new Error('Viewport size unavailable')
 			const maxHeight = Number.parseFloat(styles.maxHeight)
 			expect(styles.overflowY).toBe('auto')
 			expect(maxHeight).toBeGreaterThan(0)
@@ -302,11 +255,13 @@ test.describe('Objects context menus', () => {
 		await expect(menuTrigger).toBeVisible()
 		await menuTrigger.click()
 
-		const menu = page.locator('.ant-dropdown:not(.ant-dropdown-hidden) .ant-dropdown-menu')
+		const menu = page
+			.getByRole('menu')
+			.filter({ has: page.getByRole('menuitem', { name: 'Download (client)' }) })
+			.last()
 		await expect(menu).toBeVisible()
-		await expectMenuInViewport(page, {
+		await expectMenuInViewport(page, menu, {
 			padding: 8,
-			selector: '.ant-dropdown:not(.ant-dropdown-hidden) .ant-dropdown-menu',
 			viewportSelector: '[data-scroll-container="app-content"]',
 		})
 	})

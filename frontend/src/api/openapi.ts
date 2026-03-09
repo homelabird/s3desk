@@ -150,6 +150,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/server/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a server migration backup bundle
+         * @description Exports a `.tar.gz` migration bundle containing the sqlite snapshot and selected
+         *     `DATA_DIR` runtime state such as thumbnails, logs, artifacts, and staging data.
+         *     This export currently supports sqlite-backed servers only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        /** @description Suggested filename for the backup bundle. */
+                        "Content-Disposition"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/gzip": string;
+                    };
+                };
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+                500: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage a server migration backup bundle for restore
+         * @description Uploads a `.tar.gz` bundle previously created by `/server/backup` and stages it
+         *     under `DATA_DIR/restores/<id>` without overwriting the live instance. The staged
+         *     directory can then be used as the destination server's `DATA_DIR`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        bundle: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerRestoreResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/profiles": {
         parameters: {
             query?: never;
@@ -971,7 +1075,7 @@ export interface paths {
         /**
          * Get object index summary for a prefix
          * @description Returns an estimate of impact (count/bytes/sample) using the local object index.
-         *     If the index has not been created yet, the server returns `409 not_indexed`.
+         *     If the index has not been created yet, the server returns an empty summary with no `indexedAt`.
          */
         get: {
             parameters: {
@@ -1404,7 +1508,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get an image thumbnail */
+        /** Get an object thumbnail */
         get: {
             parameters: {
                 query: {
@@ -2244,10 +2348,21 @@ export interface components {
             provider: components["schemas"]["ProfileProvider"];
             preserveLeadingSlash: boolean;
             tlsInsecureSkipVerify: boolean;
+            validation?: components["schemas"]["ProfileValidation"];
+            effectiveCapabilities?: components["schemas"]["ProviderCapability"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ProfileValidationIssue: {
+            code: string;
+            field?: string;
+            message: string;
+        };
+        ProfileValidation: {
+            valid: boolean;
+            issues?: components["schemas"]["ProfileValidationIssue"][];
         };
         ProfileAwsS3: components["schemas"]["ProfileBase"] & {
             /** @enum {string} */
@@ -2428,7 +2543,8 @@ export interface components {
             anonymous?: boolean;
             /** @description Optional. Used for local emulators (fake-gcs-server) or custom endpoints. */
             endpoint?: string;
-            projectNumber?: string;
+            /** @description Required for bucket listing/create/delete and other bucket-scoped workflows. */
+            projectNumber: string;
             /** @default false */
             preserveLeadingSlash: boolean;
             /** @default false */
@@ -2533,7 +2649,8 @@ export interface components {
             anonymous?: boolean;
             /** @description Optional. Used for local emulators (fake-gcs-server) or custom endpoints. */
             endpoint?: string;
-            projectNumber?: string;
+            /** @description Required for bucket listing/create/delete and other bucket-scoped workflows. */
+            projectNumber: string;
             preserveLeadingSlash?: boolean;
             tlsInsecureSkipVerify?: boolean;
         };
@@ -2555,6 +2672,22 @@ export interface components {
             tlsInsecureSkipVerify?: boolean;
         };
         ProfileUpdateRequest: components["schemas"]["ProfileUpdateRequestAwsS3"] | components["schemas"]["ProfileUpdateRequestS3Compatible"] | components["schemas"]["ProfileUpdateRequestOciS3Compat"] | components["schemas"]["ProfileUpdateRequestAzureBlob"] | components["schemas"]["ProfileUpdateRequestGcpGcs"] | components["schemas"]["ProfileUpdateRequestOciObjectStorage"];
+        ProfileConnectivityDetails: {
+            provider?: components["schemas"]["ProfileProvider"];
+            /** @description Number of buckets returned by the provider list call. */
+            buckets?: number;
+            /** @description Detected storage type for S3-like endpoints. */
+            storageType?: string;
+            /** @description Detection source for the storage type. */
+            storageTypeSource?: string;
+            /** @description Provider or rclone error string when the operation fails. */
+            error?: string;
+            normalizedError?: components["schemas"]["NormalizedError"];
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Additional benchmark metadata, including provider context and normalized failures. */
+        ProfileBenchmarkDetails: components["schemas"]["ProfileConnectivityDetails"];
         ProfileTestResponse: {
             ok: boolean;
             message?: string;
@@ -2565,14 +2698,14 @@ export interface components {
              *       - storageType: detected storage type (ceph, aws-s3, s3-compatible, unknown).
              *       - storageTypeSource: detection source (server-header, endpoint, default, none).
              *       - error: error string when ok=false.
+             *       - normalizedError: provider-agnostic error classifier when ok=false.
              */
-            details?: {
-                [key: string]: unknown;
-            };
+            details?: components["schemas"]["ProfileConnectivityDetails"];
         };
         ProfileBenchmarkResponse: {
             ok: boolean;
             message?: string;
+            details?: components["schemas"]["ProfileBenchmarkDetails"];
             /**
              * Format: int64
              * @description Upload throughput in bits per second.
@@ -3163,6 +3296,7 @@ export interface components {
             version: string;
             serverAddr: string;
             dataDir: string;
+            dbBackend: string;
             staticDir: string;
             apiTokenEnabled: boolean;
             encryptionEnabled: boolean;
@@ -3179,7 +3313,7 @@ export interface components {
             uploadSessionTTLSeconds: number;
             /** Format: int64 */
             uploadMaxBytes?: number | null;
-            uploadDirectStream?: boolean;
+            uploadDirectStream: boolean;
             transferEngine: {
                 name: string;
                 available: boolean;
@@ -3188,6 +3322,23 @@ export interface components {
                 path?: string;
                 version?: string;
             };
+        };
+        ServerMigrationManifest: {
+            format: string;
+            /** Format: date-time */
+            createdAt: string;
+            appVersion: string;
+            dbBackend: string;
+            encryptionEnabled: boolean;
+            entries?: string[];
+            warnings?: string[];
+        };
+        ServerRestoreResponse: {
+            manifest: components["schemas"]["ServerMigrationManifest"];
+            stagingDir: string;
+            restartRequired: boolean;
+            nextSteps: string[];
+            warnings?: string[];
         };
         MetaCapabilities: {
             profileTls: components["schemas"]["FeatureCapability"];

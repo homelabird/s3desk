@@ -1,5 +1,7 @@
-import { Input, Modal, Space, Typography, message } from 'antd'
 import type { ReactNode } from 'react'
+
+import { mountImperativeDialog } from '../components/imperativeDialog'
+import { ConfirmDangerDialog } from './ConfirmDangerDialog'
 
 type ConfirmDangerActionOptions = {
 	title: string
@@ -12,38 +14,5 @@ type ConfirmDangerActionOptions = {
 }
 
 export function confirmDangerAction(options: ConfirmDangerActionOptions) {
-	const confirmToken = options.confirmText ?? 'DELETE'
-	const confirmHint = options.confirmHint ?? `Type "${confirmToken}" to confirm`
-	let currentValue = ''
-	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
-
-	Modal.confirm({
-		title: options.title,
-		okText: options.okText ?? 'Delete',
-		okType: 'danger',
-		content: (
-			<Space orientation="vertical" style={{ width: '100%' }}>
-				{options.description ? <div>{options.description}</div> : null}
-				{options.details ? <Typography.Text type="secondary">{options.details}</Typography.Text> : null}
-				<Space orientation="vertical" size={4} style={{ width: '100%' }}>
-					<Typography.Text type="secondary">{confirmHint}</Typography.Text>
-					<Input
-						placeholder={confirmToken}
-						autoComplete="off"
-						autoFocus={shouldAutoFocus}
-						onChange={(event) => {
-							currentValue = event.target.value
-						}}
-					/>
-				</Space>
-			</Space>
-		),
-		onOk: async () => {
-			if (currentValue.trim() !== confirmToken) {
-				message.error(`Type "${confirmToken}" to confirm`)
-				return Promise.reject(new Error('confirm-text-mismatch'))
-			}
-			await options.onConfirm()
-		},
-	})
+	mountImperativeDialog((close) => <ConfirmDangerDialog {...options} onClose={close} />)
 }

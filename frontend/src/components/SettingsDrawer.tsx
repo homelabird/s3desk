@@ -1,5 +1,4 @@
-import { Drawer } from 'antd'
-
+import { OverlaySheet } from './OverlaySheet'
 import { SettingsPage } from '../pages/SettingsPage'
 
 type Props = {
@@ -13,13 +12,12 @@ type Props = {
 
 export function SettingsDrawer(props: Props) {
 	return (
-		<Drawer
+		<OverlaySheet
 			open={props.open}
 			onClose={props.onClose}
 			title="Settings"
 			placement="right"
-			styles={{ wrapper: { width: 'min(90vw, 960px)' } }}
-			destroyOnHidden
+			width="min(90vw, 960px)"
 		>
 			<SettingsPage
 				apiToken={props.apiToken}
@@ -27,6 +25,6 @@ export function SettingsDrawer(props: Props) {
 				profileId={props.profileId}
 				setProfileId={props.setProfileId}
 			/>
-		</Drawer>
+		</OverlaySheet>
 	)
 }

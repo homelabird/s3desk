@@ -1,6 +1,7 @@
-import { Empty, Input, Modal, Space, Typography } from 'antd'
+import { Button, Empty, Input, Space, Typography } from 'antd'
 import type { KeyboardEvent } from 'react'
 
+import { DialogModal } from '../../components/DialogModal'
 import type { CommandItem } from './objectsActions'
 
 type ObjectsCommandPaletteModalProps = {
@@ -17,7 +18,17 @@ type ObjectsCommandPaletteModalProps = {
 
 export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProps) {
 	return (
-		<Modal open={props.open} title="Commands" footer={null} onCancel={props.onCancel} destroyOnHidden>
+		<DialogModal
+			open={props.open}
+			title="Commands"
+			onClose={props.onCancel}
+			width={640}
+			footer={
+				<Button onClick={props.onCancel}>
+					Close
+				</Button>
+			}
+		>
 			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Input
 					id="objectsCommandPaletteInput"
@@ -64,6 +75,6 @@ export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProp
 
 				<Typography.Text type="secondary">Ctrl+K - up/down - Enter</Typography.Text>
 			</Space>
-		</Modal>
+		</DialogModal>
 	)
 }

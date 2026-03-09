@@ -1,0 +1,19 @@
+.root {
+	position: relative;
+	display: inline-flex;
+}
+
+.rootOpen {
+	z-index: 12;
+}
+
+.panel {
+	z-index: 40;
+	min-width: 220px;
+	max-width: min(360px, calc(100vw - 32px));
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 14px;
+	background: var(--s3d-color-bg);
+	box-shadow: var(--s3d-shadow-md);
+	padding: 8px;
+}

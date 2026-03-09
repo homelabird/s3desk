@@ -25,6 +25,7 @@ profile:
 name: gcp-anon
 provider: gcp_gcs
 anonymous: true
+projectNumber: "123456789012"
 `
 		const { request } = await parseProfileYaml(yamlText)
 		expect(request.provider).toBe('gcp_gcs')
@@ -33,6 +34,16 @@ anonymous: true
 		}
 		expect(request.anonymous).toBe(true)
 		expect(request.serviceAccountJson).toBe('')
+	})
+
+	it('requires projectNumber for gcp profiles', async () => {
+		const yamlText = `
+name: gcp-anon
+provider: gcp_gcs
+anonymous: true
+`
+
+		await expect(parseProfileYaml(yamlText)).rejects.toThrow('gcp_gcs requires projectNumber')
 	})
 
 	it('throws when tls mtls is missing client key', async () => {

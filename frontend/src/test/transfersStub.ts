@@ -1,4 +1,4 @@
-import type { TransfersContextValue } from '../components/Transfers'
+import type { TransfersContextValue } from '../components/transfers/transfersTypes'
 
 export const transfersStub: TransfersContextValue = {
 	isOpen: false,

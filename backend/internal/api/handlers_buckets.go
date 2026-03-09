@@ -53,6 +53,15 @@ func (s *server) handleListBuckets(w http.ResponseWriter, r *http.Request) {
 	})
 	waitErr := proc.wait()
 	if listErr != nil {
+		if waitErr != nil {
+			writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to list buckets (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to list buckets",
+			}, nil)
+			return
+		}
 		writeError(w, http.StatusBadRequest, "s3_error", "failed to list buckets", map[string]any{"error": listErr.Error()})
 		return
 	}

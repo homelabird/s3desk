@@ -1,9 +1,10 @@
-import { Alert, Button, Checkbox, Drawer, Grid, Input, message } from 'antd'
+import { Alert, Button, Checkbox, Grid, Input, message } from 'antd'
 import { useState } from 'react'
 
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { DatalistInput } from '../../components/DatalistInput'
 import { FormField } from '../../components/FormField'
+import { OverlaySheet } from '../../components/OverlaySheet'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
 import styles from './JobsShared.module.css'
 
@@ -85,12 +86,13 @@ export function CreateJobModal(props: {
 	}
 
 	return (
-		<Drawer
+		<OverlaySheet
 			open={props.open}
 			onClose={handleCancel}
 			title="Upload local folder (device → S3)"
-			width={drawerWidth}
-			destroyOnHidden
+			placement={screens.md ? 'right' : 'bottom'}
+			width={screens.md ? drawerWidth : undefined}
+			height={!screens.md ? '100dvh' : undefined}
 			extra={
 				<div className={styles.drawerExtra}>
 					<Button onClick={handleCancel}>Close</Button>
@@ -191,6 +193,6 @@ export function CreateJobModal(props: {
 					</Checkbox>
 				</div>
 			</form>
-		</Drawer>
+		</OverlaySheet>
 	)
 }

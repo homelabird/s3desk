@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Checkbox, Empty, Space, Spin, Typography, message } from 'antd'
-import { useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
-import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequest } from '../api/types'
+import type { Profile } from '../api/types'
 import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
-import { getConnectionTroubleshootingHint } from '../lib/connectionHints'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
+import { formatProviderOperationFailureMessage, formatUnavailableOperationMessage } from '../lib/providerOperationFeedback'
 import { LinkButton } from '../components/LinkButton'
 import { PageHeader } from '../components/PageHeader'
 import type { ProfileFormValues } from './profiles/profileTypes'
-import { ProfilesModals } from './profiles/ProfilesModals'
+import { buildTLSConfigFromValues, downloadTextFile, toCreateRequest, toUpdateRequest } from './profiles/profileMutationUtils'
+import { ProfilesModals } from './profiles/profilesLazy'
 import { ProfilesTable } from './profiles/ProfilesTable'
 import { buildProfileExportFilename, parseProfileYaml } from './profiles/profileYaml'
 import { buildProfilesTableRows, formatBps, toProfileEditInitialValues } from './profiles/profileViewModel'
@@ -30,9 +31,6 @@ function useProfilesPageOrchestration(apiToken: string) {
 	const [searchParams, setSearchParams] = useSearchParams()
 	return { queryClient, api, searchParams, setSearchParams }
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value)
 
 export function ProfilesPage(props: Props) {
 	const { queryClient, api, searchParams, setSearchParams } = useProfilesPageOrchestration(props.apiToken)
@@ -152,33 +150,32 @@ export function ProfilesPage(props: Props) {
 	const testMutation = useMutation({
 		mutationFn: (id: string) => api.testProfile(id),
 		onMutate: (id) => setTestingProfileId(id),
-			onSuccess: (resp) => {
-				const details: Record<string, unknown> = resp.details ?? {}
-				const storageType = typeof details.storageType === 'string' ? details.storageType : ''
-				const storageSource = typeof details.storageTypeSource === 'string' ? details.storageTypeSource : ''
-				const buckets = typeof details.buckets === 'number' ? details.buckets : null
-				const errorDetail = typeof details.error === 'string' ? details.error : ''
-				const normRaw = details.normalizedError
-				const norm = isRecord(normRaw) ? normRaw : null
-				const normCode = norm && typeof norm.code === 'string' ? norm.code : ''
-				const normRetryable = norm && typeof norm.retryable === 'boolean' ? norm.retryable : null
+		onSuccess: (resp) => {
+			const storageType = resp.details?.storageType ?? ''
+			const storageSource = resp.details?.storageTypeSource ?? ''
+			const buckets = typeof resp.details?.buckets === 'number' ? resp.details.buckets : null
 			const suffixParts: string[] = []
 			if (storageType) suffixParts.push(`type: ${storageType}`)
 			if (storageSource) suffixParts.push(`source: ${storageSource}`)
 			if (typeof buckets === 'number') suffixParts.push(`buckets: ${buckets}`)
-			if (errorDetail && !resp.ok) suffixParts.push(`error: ${errorDetail}`)
-			if (normCode && !resp.ok) suffixParts.push(`code: ${normCode}`)
-			if (normRetryable === true && !resp.ok) suffixParts.push('retryable')
 			const suffix = suffixParts.length ? ` (${suffixParts.join(', ')})` : ''
 			if (resp.ok) message.success(`Profile test OK${suffix}`)
 			else {
-				const troubleshootHint = normCode ? getConnectionTroubleshootingHint(normCode) : undefined
-				const base = `${resp.message ?? 'Profile test failed'}${suffix}`
-				message.warning(troubleshootHint ? `${base} · ${troubleshootHint}` : base, troubleshootHint ? 8 : 5)
+				const { content, duration } = formatProviderOperationFailureMessage({
+					defaultMessage: 'Profile test failed',
+					message: resp.message,
+					errorDetail: resp.details?.error,
+					normalizedError: resp.details?.normalizedError,
+					extraDetails: suffixParts,
+				})
+				message.warning(content, duration)
 			}
 		},
 		onSettled: (_, __, id) => setTestingProfileId((prev) => (prev === id ? null : prev)),
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err) => {
+			const { content, duration } = formatUnavailableOperationMessage('Profile test unavailable', err)
+			message.error(content, duration)
+		},
 	})
 
 	const benchmarkMutation = useMutation({
@@ -193,11 +190,20 @@ export function ProfilesPage(props: Props) {
 				if (resp.downloadMs != null) parts.push(`download ${resp.downloadMs}ms`)
 				message.success(`Benchmark OK: ${parts.join(' · ')}`, 8)
 			} else {
-				message.warning(resp.message ?? 'Benchmark failed', 5)
+				const { content, duration } = formatProviderOperationFailureMessage({
+					defaultMessage: 'Benchmark failed',
+					message: resp.message,
+					errorDetail: resp.details?.error,
+					normalizedError: resp.details?.normalizedError,
+				})
+				message.warning(content, duration)
 			}
 		},
 		onSettled: (_, __, id) => setBenchmarkingProfileId((prev) => (prev === id ? null : prev)),
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err) => {
+			const { content, duration } = formatUnavailableOperationMessage('Benchmark unavailable', err)
+			message.error(content, duration)
+		},
 	})
 
 	const exportYamlMutation = useMutation({
@@ -278,11 +284,16 @@ export function ProfilesPage(props: Props) {
 	const transferEngine = metaQuery.data?.transferEngine
 	const onboardingVisible = !onboardingDismissed && (profiles.length === 0 || !props.profileId)
 	const yamlFilename = buildProfileExportFilename(yamlProfile)
+	const hasOpenModal = createOpen || !!editProfile || yamlOpen || importOpen
 	const editInitialValues: Partial<ProfileFormValues> | undefined = useMemo(
 		() => toProfileEditInitialValues(editProfile),
 		[editProfile],
 	)
 	const tableRows = useMemo(() => buildProfilesTableRows(profiles, props.profileId), [profiles, props.profileId])
+	const profilesNeedingAttention = useMemo(
+		() => profiles.filter((profile) => profile.validation?.valid === false && (profile.validation.issues?.length ?? 0) > 0),
+		[profiles],
+	)
 
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
@@ -351,6 +362,36 @@ export function ProfilesPage(props: Props) {
 				<Alert type="error" showIcon title="Failed to load profiles" description={formatErr(profilesQuery.error)} />
 			) : null}
 
+			{profilesNeedingAttention.length > 0 ? (
+				<Alert
+					type="warning"
+					showIcon
+					title={`Profiles need updates (${profilesNeedingAttention.length})`}
+					description={
+						<Space orientation="vertical" size={8} className={styles.fullWidth}>
+							<Typography.Text type="secondary">
+								Some saved profiles no longer meet the current provider requirements. Edit each affected profile and save it again.
+							</Typography.Text>
+							<Button size="small" onClick={() => setEditProfile(profilesNeedingAttention[0] ?? null)}>
+								Open next profile to fix
+							</Button>
+							<Space orientation="vertical" size={4} className={styles.fullWidth}>
+								{profilesNeedingAttention.map((profile) => (
+									<Space key={profile.id} align="start" className={styles.fullWidth}>
+										<Typography.Text className={styles.fullWidth}>
+											<strong>{profile.name}</strong>: {profile.validation?.issues?.[0]?.message ?? 'Update required'}
+										</Typography.Text>
+										<Button size="small" type="link" onClick={() => setEditProfile(profile)} aria-label={`Edit profile ${profile.name}`}>
+											Edit profile
+										</Button>
+									</Space>
+								))}
+							</Space>
+						</Space>
+					}
+				/>
+			) : null}
+
 			{profilesQuery.isFetching && profiles.length === 0 ? (
 				<div className={styles.loadingRow}>
 					<Spin />
@@ -391,232 +432,44 @@ export function ProfilesPage(props: Props) {
 				/>
 			)}
 
-			<ProfilesModals
-				createOpen={createOpen}
-				closeCreateModal={closeCreateModal}
-				onCreateSubmit={(values) => createMutation.mutate(values)}
-				createLoading={createMutation.isPending}
-				editProfile={editProfile}
-				closeEditModal={() => setEditProfile(null)}
-				onEditSubmit={(id, values) => {
-					updateMutation.mutate({ id, values })
-				}}
-				editLoading={updateMutation.isPending}
-				editInitialValues={editInitialValues}
-				tlsCapability={tlsCapability ?? null}
-				tlsStatus={profileTLSQuery.data ?? null}
-				tlsStatusLoading={profileTLSQuery.isFetching}
-				tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
-				yamlOpen={yamlOpen}
-				closeYamlModal={closeYamlModal}
-				yamlProfile={yamlProfile}
-				yamlError={yamlError}
-				yamlContent={yamlContent}
-				yamlFilename={yamlFilename}
-				exportYamlLoading={exportYamlMutation.isPending}
-				onYamlCopy={() => void handleYamlCopy()}
-				onYamlDownload={handleYamlDownload}
-				importOpen={importOpen}
-				closeImportModal={closeImportModal}
-				importText={importText}
-				importError={importError}
-				importLoading={importMutation.isPending}
-				onImportSubmit={() => importMutation.mutate(importText)}
-				onImportTextChange={setImportText}
-				onImportErrorClear={() => setImportError(null)}
-			/>
+			{hasOpenModal ? (
+				<Suspense fallback={null}>
+					<ProfilesModals
+						createOpen={createOpen}
+						closeCreateModal={closeCreateModal}
+						onCreateSubmit={(values) => createMutation.mutate(values)}
+						createLoading={createMutation.isPending}
+						editProfile={editProfile}
+						closeEditModal={() => setEditProfile(null)}
+						onEditSubmit={(id, values) => {
+							updateMutation.mutate({ id, values })
+						}}
+						editLoading={updateMutation.isPending}
+						editInitialValues={editInitialValues}
+						tlsCapability={tlsCapability ?? null}
+						tlsStatus={profileTLSQuery.data ?? null}
+						tlsStatusLoading={profileTLSQuery.isFetching}
+						tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
+						yamlOpen={yamlOpen}
+						closeYamlModal={closeYamlModal}
+						yamlProfile={yamlProfile}
+						yamlError={yamlError}
+						yamlContent={yamlContent}
+						yamlFilename={yamlFilename}
+						exportYamlLoading={exportYamlMutation.isPending}
+						onYamlCopy={() => void handleYamlCopy()}
+						onYamlDownload={handleYamlDownload}
+						importOpen={importOpen}
+						closeImportModal={closeImportModal}
+						importText={importText}
+						importError={importError}
+						importLoading={importMutation.isPending}
+						onImportSubmit={() => importMutation.mutate(importText)}
+						onImportTextChange={setImportText}
+						onImportErrorClear={() => setImportError(null)}
+					/>
+				</Suspense>
+			) : null}
 		</Space>
 	)
-}
-
-function buildTLSConfigFromValues(values: ProfileFormValues): ProfileTLSConfig | null {
-	const clientCertPem = values.tlsClientCertPem?.trim() ?? ''
-	const clientKeyPem = values.tlsClientKeyPem?.trim() ?? ''
-	if (!clientCertPem || !clientKeyPem) return null
-	const caCertPem = values.tlsCaCertPem?.trim() ?? ''
-
-	const cfg: ProfileTLSConfig = {
-		mode: 'mtls',
-		clientCertPem,
-		clientKeyPem,
-	}
-	if (caCertPem) cfg.caCertPem = caCertPem
-	return cfg
-}
-
-function toUpdateRequest(values: ProfileFormValues): ProfileUpdateRequest {
-	const provider = values.provider
-
-	if (provider === 'azure_blob') {
-		const out: ProfileUpdateRequest = {
-			provider,
-			name: values.name,
-			accountName: values.azureAccountName,
-			endpoint: values.azureEndpoint,
-			useEmulator: values.azureUseEmulator,
-			preserveLeadingSlash: values.preserveLeadingSlash,
-			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-			...(values.azureAccountKey ? { accountKey: values.azureAccountKey } : {}),
-		}
-		return out
-	}
-
-	if (provider === 'gcp_gcs') {
-		const out: ProfileUpdateRequest = {
-			provider,
-			name: values.name,
-			anonymous: values.gcpAnonymous,
-			endpoint: values.gcpEndpoint,
-			projectNumber: values.gcpProjectNumber,
-			preserveLeadingSlash: values.preserveLeadingSlash,
-			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-			...(values.gcpAnonymous
-				? { serviceAccountJson: '' }
-				: values.gcpServiceAccountJson
-					? { serviceAccountJson: values.gcpServiceAccountJson }
-					: {}),
-		}
-		return out
-	}
-
-	if (provider === 'oci_object_storage') {
-		const out: ProfileUpdateRequest = {
-			provider,
-			name: values.name,
-			endpoint: values.ociEndpoint,
-			region: values.region,
-			namespace: values.ociNamespace,
-			compartment: values.ociCompartment,
-			authProvider: values.ociAuthProvider,
-			configFile: values.ociConfigFile,
-			configProfile: values.ociConfigProfile,
-			preserveLeadingSlash: values.preserveLeadingSlash,
-			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-		}
-		return out
-	}
-
-	// S3-like providers
-	const base = {
-		name: values.name,
-		region: values.region,
-		forcePathStyle: values.forcePathStyle,
-		preserveLeadingSlash: values.preserveLeadingSlash,
-		tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-		...(values.accessKeyId ? { accessKeyId: values.accessKeyId } : {}),
-		...(values.secretAccessKey ? { secretAccessKey: values.secretAccessKey } : {}),
-		...(values.clearSessionToken ? { sessionToken: '' } : values.sessionToken ? { sessionToken: values.sessionToken } : {}),
-	}
-	if (provider === 'aws_s3') {
-		return {
-			provider,
-			...base,
-			...(values.endpoint ? { endpoint: values.endpoint } : {}),
-		}
-	}
-	if (provider === 's3_compatible') {
-		return {
-			provider,
-			...base,
-			...(values.endpoint ? { endpoint: values.endpoint } : {}),
-		}
-	}
-	return {
-		provider: 'oci_s3_compat',
-		...base,
-		...(values.endpoint ? { endpoint: values.endpoint } : {}),
-	}
-}
-
-function toCreateRequest(values: ProfileFormValues): ProfileCreateRequest {
-	const provider = values.provider
-
-	if (provider === 'azure_blob') {
-		const out: ProfileCreateRequest = {
-			provider,
-			name: values.name,
-			accountName: values.azureAccountName,
-			accountKey: values.azureAccountKey,
-			endpoint: values.azureEndpoint,
-			useEmulator: values.azureUseEmulator,
-			preserveLeadingSlash: values.preserveLeadingSlash,
-			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-		}
-		return out
-	}
-
-	if (provider === 'gcp_gcs') {
-		const out: ProfileCreateRequest = {
-			provider,
-			name: values.name,
-			anonymous: values.gcpAnonymous,
-			endpoint: values.gcpEndpoint,
-			projectNumber: values.gcpProjectNumber,
-			preserveLeadingSlash: values.preserveLeadingSlash,
-			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-			...(values.gcpServiceAccountJson ? { serviceAccountJson: values.gcpServiceAccountJson } : {}),
-		}
-		return out
-	}
-
-	if (provider === 'oci_object_storage') {
-		const out: ProfileCreateRequest = {
-			provider,
-			name: values.name,
-			endpoint: values.ociEndpoint,
-			region: values.region,
-			namespace: values.ociNamespace,
-			compartment: values.ociCompartment,
-			authProvider: values.ociAuthProvider,
-			configFile: values.ociConfigFile,
-			configProfile: values.ociConfigProfile,
-			preserveLeadingSlash: values.preserveLeadingSlash,
-			tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-		}
-		return out
-	}
-
-	// S3-like providers
-	const base = {
-		name: values.name,
-		region: values.region,
-		accessKeyId: values.accessKeyId,
-		secretAccessKey: values.secretAccessKey,
-		sessionToken: values.sessionToken ? values.sessionToken : null,
-		forcePathStyle: values.forcePathStyle,
-		preserveLeadingSlash: values.preserveLeadingSlash,
-		tlsInsecureSkipVerify: values.tlsInsecureSkipVerify,
-	}
-	if (provider === 'aws_s3') {
-		return {
-			provider,
-			...base,
-			...(values.endpoint ? { endpoint: values.endpoint } : {}),
-		}
-	}
-	if (provider === 's3_compatible') {
-		return {
-			provider,
-			...base,
-			endpoint: values.endpoint,
-		}
-	}
-	return {
-		provider: 'oci_s3_compat',
-		...base,
-		endpoint: values.endpoint,
-	}
-}
-
-function downloadTextFile(filename: string, content: string): void {
-	const blob = new Blob([content], { type: 'text/plain' })
-	const url = URL.createObjectURL(blob)
-	const a = document.createElement('a')
-	a.href = url
-	a.download = filename
-	a.style.display = 'none'
-	document.body.appendChild(a)
-	a.click()
-	a.remove()
-	window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

@@ -46,14 +46,33 @@ fi
 if [ "$#" -gt 0 ]; then
 	TEST_FILES=("$@")
 else
-	TEST_FILES=(
+	LIVE_E2E_SUITE="${LIVE_E2E_SUITE:-extended}"
+	CRITICAL_TEST_FILES=(
 		"tests/api-crud.spec.ts"
-		"tests/jobs-live-flow.spec.ts"
 		"tests/objects-live-flow.spec.ts"
+		"tests/jobs-live-flow.spec.ts"
 		"tests/transfers-live-fallback.spec.ts"
 		"tests/bucket-policy-live.spec.ts"
 		"tests/docs-smoke.spec.ts"
+		"tests/server-migration-live.spec.ts"
+		"tests/uploads-folder-live.spec.ts"
+		"tests/objects-image-preview-live.spec.ts"
 	)
+	EXTENDED_TEST_FILES=(
+		"${CRITICAL_TEST_FILES[@]}"
+	)
+	case "${LIVE_E2E_SUITE}" in
+		critical)
+			TEST_FILES=("${CRITICAL_TEST_FILES[@]}")
+			;;
+		extended)
+			TEST_FILES=("${EXTENDED_TEST_FILES[@]}")
+			;;
+		*)
+			echo "unsupported LIVE_E2E_SUITE: ${LIVE_E2E_SUITE}" >&2
+			exit 1
+			;;
+	esac
 fi
 
 echo "[live-e2e] starting MinIO (${MINIO_IMAGE}) on :${MINIO_PORT}"

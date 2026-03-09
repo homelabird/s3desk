@@ -1,9 +1,10 @@
-import { Button, Drawer, Tooltip } from 'antd'
+import { Button } from 'antd'
 import { FolderAddOutlined } from '@ant-design/icons'
 import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 
 import styles from './objects.module.css'
 import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
+import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import { ObjectsTreePane } from './ObjectsTreePane'
 import { ObjectsTreeView } from './ObjectsTreeView'
 import type { FavoriteObjectItem } from '../../api/types'
@@ -93,7 +94,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 				<ObjectsTreePane
 					title="Folders"
 					extra={
-						<Tooltip
+						<span
 							title={
 								props.canCreateFolder
 									? selectedKey === '/'
@@ -102,17 +103,15 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 									: props.createFolderTooltipText
 							}
 						>
-							<span>
-								<Button
-									size="small"
-									type="text"
-									icon={<FolderAddOutlined />}
-									disabled={!props.canCreateFolder}
-									aria-label={newFolderLabel}
-									onClick={() => props.onNewFolderAtPrefix(selectedKey)}
-								/>
-							</span>
-						</Tooltip>
+							<Button
+								size="small"
+								type="text"
+								icon={<FolderAddOutlined />}
+								disabled={!props.canCreateFolder}
+								aria-label={newFolderLabel}
+								onClick={() => props.onNewFolderAtPrefix(selectedKey)}
+							/>
+						</span>
 					}
 				>
 					{renderTreeView(onSelectKey)}
@@ -141,15 +140,16 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 				</>
 			) : null}
 
-			<Drawer
+			<ObjectsOverlaySheet
 				open={!props.dockTree && props.treeDrawerOpen}
 				onClose={props.onCloseDrawer}
 				title="Browse"
 				placement="left"
-				width="90%"
+				width="min(90vw, 420px)"
+				dataTestId="objects-tree-sheet"
 			>
 				{renderPanel(props.onSelectKeyFromDrawer, props.onSelectFavoriteFromDrawer)}
-			</Drawer>
+			</ObjectsOverlaySheet>
 		</>
 	)
 }

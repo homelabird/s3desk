@@ -96,6 +96,7 @@ func TestHandleDownloadObject_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
 		t.Skip("fake rclone uses a shell script")
 	}
 
+	lockTestEnv(t)
 	t.Setenv("RCLONE_PATH", writeFakeDownloadRclone(t, "printf 'simulated cat failure\\n' >&2\nexit 1\n"))
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
@@ -123,6 +124,7 @@ func TestHandleDownloadProxy_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
 		t.Skip("fake rclone uses a shell script")
 	}
 
+	lockTestEnv(t)
 	t.Setenv("RCLONE_PATH", writeFakeDownloadRclone(t, "printf 'simulated cat failure\\n' >&2\nexit 1\n"))
 
 	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)

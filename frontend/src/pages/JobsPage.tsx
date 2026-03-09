@@ -6,7 +6,7 @@ import {
 	theme,
 	type MenuProps,
 } from 'antd'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
 	DeleteOutlined,
 	DownloadOutlined,
@@ -32,28 +32,19 @@ import {
 import { jobSummary } from './jobs/jobPresentation'
 import { useJobsActionMutations } from './jobs/useJobsActionMutations'
 import { useJobsColumnsVisibility } from './jobs/useJobsColumnsVisibility'
-import { JobsCreateModals } from './jobs/JobsCreateModals'
-import { JobsDetailsDrawer } from './jobs/JobsDetailsDrawer'
 import { useJobsFilters } from './jobs/useJobsFilters'
-import { JobsLogsDrawer } from './jobs/JobsLogsDrawer'
+import { JobsOverlaysHost } from './jobs/jobsLazy'
+import type { BucketOption, DeleteJobPrefill } from './jobs/jobsPageTypes'
 import { JobsTableSection } from './jobs/JobsTableSection'
 import { JobsToolbar } from './jobs/JobsToolbar'
 import type { SortState } from './jobs/JobsVirtualTable'
-import { useJobsLogsState } from './jobs/useJobsLogsState'
 import { useJobsRealtimeEvents } from './jobs/useJobsRealtimeEvents'
 import { useJobsTableColumns } from './jobs/useJobsTableColumns'
-import { useJobsUploadDetails } from './jobs/useJobsUploadDetails'
 import styles from './JobsPage.module.css'
 
 type Props = {
 	apiToken: string
 	profileId: string | null
-}
-
-type DeleteJobPrefill = {
-	bucket: string
-	prefix: string
-	deleteAll: boolean
 }
 
 export function JobsPage(props: Props) {
@@ -93,33 +84,8 @@ export function JobsPage(props: Props) {
 	const [deviceDownloadLoading, setDeviceDownloadLoading] = useState(false)
 	const [detailsOpen, setDetailsOpen] = useState(false)
 	const [detailsJobId, setDetailsJobId] = useState<string | null>(null)
+	const [logDrawerRequest, setLogDrawerRequest] = useState<{ jobId: string | null; nonce: number }>({ jobId: null, nonce: 0 })
 	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
-	const {
-		logsOpen,
-		activeLogJobId,
-		logSearchQuery,
-		setLogSearchQuery,
-		followLogs,
-		setFollowLogs,
-		logsContainerRef,
-		logPollFailures,
-		logPollPaused,
-		resumeLogPolling,
-		activeLogLines,
-		normalizedLogSearchQuery,
-		visibleLogEntries,
-		visibleLogText,
-		copyVisibleLogs,
-		openLogsForJob,
-		closeLogs,
-		refreshActiveLogs,
-		isLogsLoading,
-		clearLogsForJobs,
-		clearLogsForJob,
-	} = useJobsLogsState({
-		api,
-		profileId: props.profileId,
-	})
 	const {
 		statusFilter,
 		setStatusFilter,
@@ -134,25 +100,31 @@ export function JobsPage(props: Props) {
 	} = useJobsFilters()
 	const handleJobsDeleted = useCallback(
 		(jobIds: string[]) => {
-			clearLogsForJobs(jobIds)
 			setDetailsJobId((prev) => {
 				if (!prev || !jobIds.includes(prev)) return prev
 				setDetailsOpen(false)
 				return null
 			})
+			setLogDrawerRequest((prev) => {
+				if (!prev.jobId || !jobIds.includes(prev.jobId)) return prev
+				return { jobId: null, nonce: prev.nonce }
+			})
 		},
-		[clearLogsForJobs],
+		[],
 	)
 	const handleJobDeleted = useCallback(
 		(jobId: string) => {
-			clearLogsForJob(jobId)
 			setDetailsJobId((prev) => {
 				if (prev !== jobId) return prev
 				setDetailsOpen(false)
 				return null
 			})
+			setLogDrawerRequest((prev) => {
+				if (prev.jobId !== jobId) return prev
+				return { jobId: null, nonce: prev.nonce }
+			})
 		},
-		[clearLogsForJob],
+		[],
 	)
 	const { eventsConnected, eventsTransport, eventsRetryCount, eventsRetryThreshold, retryRealtime } = useJobsRealtimeEvents({
 		apiToken: props.apiToken,
@@ -238,7 +210,7 @@ export function JobsPage(props: Props) {
 		return profilesQuery.data?.find((profile) => profile.id === props.profileId) ?? null
 	}, [profilesQuery.data, props.profileId])
 	const profileCapabilities = selectedProfile?.provider
-		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers)
+		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers, selectedProfile)
 		: null
 	const uploadSupported = profileCapabilities ? profileCapabilities.objectCrud && profileCapabilities.jobTransfer : true
 	const uploadDisabledReason = getUploadCapabilityDisabledReason(profileCapabilities)
@@ -249,26 +221,9 @@ export function JobsPage(props: Props) {
 		enabled: !!props.profileId,
 	})
 	const bucketOptions = (bucketsQuery.data ?? []).map((b: Bucket) => ({ label: b.name, value: b.name }))
-	const {
-		jobDetailsQuery,
-		uploadDetails,
-		uploadRootLabel,
-		uploadTablePageItems,
-		uploadTableDataLength,
-		uploadTablePageSize,
-		uploadTablePageSafe,
-		uploadTableTotalPages,
-		goToPrevUploadTablePage,
-		goToNextUploadTablePage,
-		uploadHashesLoading,
-		uploadHashFailures,
-	} = useJobsUploadDetails({
-		api,
-		profileId: props.profileId,
-		apiToken: props.apiToken,
-		detailsJobId,
-		detailsOpen,
-	})
+	const logsOpen = logDrawerRequest.jobId !== null
+	const activeLogJobId = logDrawerRequest.jobId
+	const isLogsLoading = false
 
 	const jobsQuery = useInfiniteQuery({
 		queryKey: ['jobs', props.profileId, props.apiToken, statusFilter, typeFilterNormalized, errorCodeFilterNormalized],
@@ -439,6 +394,9 @@ export function JobsPage(props: Props) {
 		setDetailsJobId(jobId)
 		setDetailsOpen(true)
 	}, [])
+	const openLogsForJob = useCallback((jobId: string) => {
+		setLogDrawerRequest((prev) => ({ jobId, nonce: prev.nonce + 1 }))
+	}, [])
 	const requestCancelJob = useCallback((jobId: string) => {
 		cancelMutation.mutate(jobId)
 	}, [cancelMutation])
@@ -448,12 +406,6 @@ export function JobsPage(props: Props) {
 	const requestDeleteJob = useCallback(async (jobId: string) => {
 		await deleteJobMutation.mutateAsync(jobId)
 	}, [deleteJobMutation])
-	const setLogsContainerElement = useCallback(
-		(element: HTMLDivElement | null) => {
-			logsContainerRef.current = element
-		},
-		[logsContainerRef],
-	)
 	const columns = useJobsTableColumns({
 		mergedColumnVisibility,
 		isOffline,
@@ -483,6 +435,7 @@ export function JobsPage(props: Props) {
 		[columns],
 	)
 	const isCompact = !screens.md
+	const hasOpenOverlay = createOpen || createDownloadOpen || createDeleteOpen || detailsOpen || logsOpen
 
 	const [sortState, setSortState] = useState<SortState>(null)
 	useEffect(() => {
@@ -572,100 +525,64 @@ export function JobsPage(props: Props) {
 				onTableContainerRef={setTableContainerElement}
 			/>
 
-			<JobsCreateModals
-				profileId={props.profileId}
-				createOpen={createOpen}
-				createDownloadOpen={createDownloadOpen}
-				createDeleteOpen={createDeleteOpen}
-				onCloseCreate={() => setCreateOpen(false)}
-				onCloseDownload={() => setCreateDownloadOpen(false)}
-				onCloseDelete={() => {
-					setCreateDeleteOpen(false)
-					setDeleteJobPrefill(null)
-				}}
-				onSubmitCreate={(values) => {
-					void handleDeviceUpload(values)
-				}}
-				onSubmitDownload={(values) => {
-					void handleDeviceDownload(values)
-				}}
-				onSubmitDelete={(values) => createDeleteMutation.mutate(values)}
-				uploadLoading={deviceUploadLoading}
-				downloadLoading={deviceDownloadLoading}
-				deleteLoading={createDeleteMutation.isPending}
-				isOffline={isOffline}
-				uploadSupported={uploadSupported}
-				uploadUnsupportedReason={uploadDisabledReason ?? null}
-				bucket={bucket}
-				onBucketChange={setBucket}
-				bucketOptions={bucketOptions}
-				defaultMoveAfterUpload={moveAfterUploadDefault}
-				defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
-				onUploadDefaultsChange={(values) => {
-					setMoveAfterUploadDefault(values.moveAfterUpload)
-					setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
-				}}
-				deleteBucket={deleteJobPrefill?.bucket ?? bucket}
-				deletePrefill={deleteJobPrefill ? { prefix: deleteJobPrefill.prefix, deleteAll: deleteJobPrefill.deleteAll } : null}
-			/>
-
-				<JobsDetailsDrawer
-					open={detailsOpen}
-					onClose={() => setDetailsOpen(false)}
-					drawerWidth={screens.md ? 720 : '100%'}
-					isOffline={isOffline}
-					detailsJobId={detailsJobId}
-					job={jobDetailsQuery.data}
-					isFetching={jobDetailsQuery.isFetching}
-					isError={jobDetailsQuery.isError}
-					error={jobDetailsQuery.error}
-					onRefresh={() => {
-						void jobDetailsQuery.refetch()
-					}}
-					onDeleteJob={(jobId) => deleteJobMutation.mutateAsync(jobId)}
-					deleteLoading={deleteJobMutation.isPending && deletingJobId === detailsJobId}
-					onOpenLogs={(jobId) => {
-						setDetailsOpen(false)
-						openLogsForJob(jobId)
-					}}
-					uploadDetails={uploadDetails}
-					uploadRootLabel={uploadRootLabel}
-					uploadTablePageItems={uploadTablePageItems}
-					uploadTableDataLength={uploadTableDataLength}
-					uploadTablePageSize={uploadTablePageSize}
-					uploadTablePageSafe={uploadTablePageSafe}
-					uploadTableTotalPages={uploadTableTotalPages}
-					onUploadTablePrevPage={goToPrevUploadTablePage}
-					onUploadTableNextPage={goToNextUploadTablePage}
-					uploadHashesLoading={uploadHashesLoading}
-					uploadHashFailures={uploadHashFailures}
-					borderColor={token.colorBorderSecondary}
-					backgroundColor={token.colorBgContainer}
-					borderRadius={token.borderRadiusLG}
-				/>
-
-				<JobsLogsDrawer
-					open={logsOpen}
-					onClose={closeLogs}
-					drawerWidth={screens.md ? 720 : '100%'}
-					activeLogJobId={activeLogJobId}
-					isLogsLoading={isLogsLoading}
-					onRefresh={refreshActiveLogs}
-					followLogs={followLogs}
-					onFollowLogsChange={setFollowLogs}
-					logPollPaused={logPollPaused}
-					logPollFailures={logPollFailures}
-					onResumeLogPolling={resumeLogPolling}
-					logSearchQuery={logSearchQuery}
-					onLogSearchQueryChange={setLogSearchQuery}
-					onCopyVisibleLogs={copyVisibleLogs}
-					normalizedLogSearchQuery={normalizedLogSearchQuery}
-					visibleLogEntries={visibleLogEntries}
-					activeLogLines={activeLogLines}
-					onLogsContainerRef={setLogsContainerElement}
-					visibleLogText={visibleLogText}
-					searchInputWidth={screens.sm ? 320 : '100%'}
-				/>
+			{hasOpenOverlay ? (
+					<Suspense fallback={null}>
+						<JobsOverlaysHost
+							api={api}
+							apiToken={props.apiToken}
+							profileId={props.profileId}
+							createOpen={createOpen}
+							createDownloadOpen={createDownloadOpen}
+							createDeleteOpen={createDeleteOpen}
+							onCloseCreate={() => setCreateOpen(false)}
+							onCloseDownload={() => setCreateDownloadOpen(false)}
+							onCloseDelete={() => {
+								setCreateDeleteOpen(false)
+								setDeleteJobPrefill(null)
+							}}
+							onSubmitCreate={(values) => {
+								void handleDeviceUpload(values)
+							}}
+							onSubmitDownload={(values) => {
+								void handleDeviceDownload(values)
+							}}
+							onSubmitDelete={(values) => createDeleteMutation.mutate(values)}
+							uploadLoading={deviceUploadLoading}
+							downloadLoading={deviceDownloadLoading}
+							deleteLoading={createDeleteMutation.isPending}
+							isOffline={isOffline}
+							uploadSupported={uploadSupported}
+							uploadUnsupportedReason={uploadDisabledReason ?? null}
+							bucket={bucket}
+							onBucketChange={setBucket}
+							bucketOptions={bucketOptions as BucketOption[]}
+							defaultMoveAfterUpload={moveAfterUploadDefault}
+							defaultCleanupEmptyDirs={cleanupEmptyDirsDefault}
+							onUploadDefaultsChange={(values) => {
+								setMoveAfterUploadDefault(values.moveAfterUpload)
+								setCleanupEmptyDirsDefault(values.cleanupEmptyDirs)
+							}}
+							deleteBucket={deleteJobPrefill?.bucket ?? bucket}
+							deletePrefill={deleteJobPrefill ? { prefix: deleteJobPrefill.prefix, deleteAll: deleteJobPrefill.deleteAll } : null}
+							detailsOpen={detailsOpen}
+							detailsJobId={detailsJobId}
+							onCloseDetails={() => setDetailsOpen(false)}
+							onDeleteJob={(jobId) => deleteJobMutation.mutateAsync(jobId)}
+							deleteJobLoading={deleteJobMutation.isPending && deletingJobId === detailsJobId}
+							onOpenLogs={openLogsForJob}
+							logRequestJobId={logDrawerRequest.jobId}
+							logRequestNonce={logDrawerRequest.nonce}
+							onCloseLogs={() => {
+								setLogDrawerRequest((prev) => ({ jobId: null, nonce: prev.nonce }))
+							}}
+							drawerWidth={screens.md ? 720 : '100%'}
+							logSearchInputWidth={screens.sm ? 320 : '100%'}
+							borderColor={token.colorBorderSecondary}
+							backgroundColor={token.colorBgContainer}
+							borderRadius={token.borderRadiusLG}
+						/>
+					</Suspense>
+				) : null}
 			</Space>
 		)
 }

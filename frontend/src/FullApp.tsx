@@ -6,7 +6,7 @@ import { Suspense, lazy, useMemo } from 'react'
 import { AntdToastAnnouncer } from './components/AntdToastAnnouncer'
 import FullAppInner from './FullAppInner'
 import { getAppTheme } from './theme'
-import { useThemeMode } from './themeMode'
+import { useThemeMode } from './useThemeMode'
 
 const Devtools =
 	import.meta.env.DEV

@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 
-import type { TransfersContextValue } from './Transfers'
+import type { TransfersContextValue } from './transfers/transfersTypes'
 
 export const TransfersContext = createContext<TransfersContextValue | null>(null)
 

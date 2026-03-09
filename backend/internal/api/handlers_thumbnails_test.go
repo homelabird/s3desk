@@ -138,6 +138,7 @@ func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMP4(t *testing.T) {
 		t.Skip("fake ffmpeg/rclone use shell scripts")
 	}
 
+	lockTestEnv(t)
 	t.Setenv("RCLONE_PATH", writeFakeThumbnailRclone(t, "video/mp4", 2048))
 	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEG(t))
 
@@ -168,6 +169,7 @@ func TestHandleGetObjectThumbnail_AllowsVideoBeyondImageLimit(t *testing.T) {
 		t.Skip("fake ffmpeg/rclone use shell scripts")
 	}
 
+	lockTestEnv(t)
 	t.Setenv("RCLONE_PATH", writeFakeThumbnailRclone(t, "video/mp4", 52_386_776))
 	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEG(t))
 
@@ -188,6 +190,7 @@ func TestHandleGetObjectThumbnail_StopsVideoStreamAfterFrameExtraction(t *testin
 		t.Skip("fake ffmpeg/rclone use shell scripts")
 	}
 
+	lockTestEnv(t)
 	t.Setenv("RCLONE_PATH", writeFakeThumbnailRcloneStreaming(t, "video/mp4", 52_386_776))
 	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEGAfterBytes(t, 4))
 

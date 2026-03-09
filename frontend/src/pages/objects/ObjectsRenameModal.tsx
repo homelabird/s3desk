@@ -1,5 +1,6 @@
-import { Alert, Input, Modal, Typography } from 'antd'
+import { Alert, Button, Input, Typography } from 'antd'
 
+import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import styles from './ObjectsDialogs.module.css'
 
@@ -26,14 +27,19 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 	const canSubmit = !!props.source && !!props.values.name.trim()
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title={isPrefix ? 'Rename folder…' : 'Rename object…'}
-			okText="Rename"
-			okButtonProps={{ loading: props.isSubmitting, danger: true, disabled: !canSubmit }}
-			onOk={() => props.onFinish(props.values)}
-			onCancel={props.onCancel}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={640}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button type="primary" danger loading={props.isSubmitting} disabled={!canSubmit} onClick={() => props.onFinish(props.values)}>
+						Rename
+					</Button>
+				</>
+			}
 		>
 			<div className={styles.alertStack}>
 				<Alert
@@ -77,6 +83,6 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 					/>
 				</FormField>
 			</form>
-		</Modal>
+		</DialogModal>
 	)
 }

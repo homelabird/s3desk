@@ -13,6 +13,7 @@ type Props = {
 	cache: ThumbnailCache
 	cacheKeySuffix?: string
 	fit?: 'cover' | 'contain'
+	altText?: string
 }
 
 export function ObjectThumbnail(props: Props) {
@@ -81,7 +82,7 @@ export function ObjectThumbnail(props: Props) {
 	}
 
 	const fileName = props.objectKey.split('/').pop() ?? props.objectKey
-	return <img src={url} style={style} loading="lazy" alt={`Thumbnail of ${fileName}`} width={props.size} height={props.size} />
+	return <img src={url} style={style} loading="lazy" alt={props.altText ?? `Thumbnail of ${fileName}`} width={props.size} height={props.size} />
 }
 
 function shouldCacheThumbnailFailure(err: unknown): boolean {

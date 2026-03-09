@@ -24,6 +24,9 @@ func TestGetMetaIncludesProviderCapabilities(t *testing.T) {
 	if !meta.Capabilities.ProfileTLS.Enabled {
 		t.Fatalf("expected profileTls capability enabled when encryption key is configured")
 	}
+	if meta.DBBackend != "sqlite" {
+		t.Fatalf("expected dbBackend=sqlite, got %q", meta.DBBackend)
+	}
 
 	if len(meta.Capabilities.Providers) == 0 {
 		t.Fatalf("expected provider capabilities in /meta response")

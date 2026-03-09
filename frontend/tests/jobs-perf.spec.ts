@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { installMockApi } from './support/apiFixtures'
 
 const perfBaseURL = process.env.PERF_BASE_URL?.trim()
 if (perfBaseURL) {
@@ -107,80 +108,53 @@ async function setupJobsApiMocks(page: Page, jobCount: number, logsText = '[info
 		return buildJob(`job-${idx}`, 'succeeded', { bucket: defaultStorage.bucket, prefix: `job-${idx}/` }, type)
 	})
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metaResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profilesResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bucketResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/jobs') {
-			const typeFilter = url.searchParams.get('type')?.trim() ?? ''
-			const errorCodeFilter = url.searchParams.get('errorCode')?.trim() ?? ''
-			let filteredJobs = jobs
-			if (typeFilter) {
-				filteredJobs = filteredJobs.filter((job) => job.type.includes(typeFilter))
-			}
-			if (errorCodeFilter) {
-				filteredJobs = filteredJobs.filter((job) => job.errorCode === errorCodeFilter)
-			}
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ items: filteredJobs, nextCursor: null }),
-			})
-		}
-		if (method === 'GET' && path.startsWith('/api/v1/jobs/') && path.endsWith('/logs')) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'text/plain',
-				headers: { 'X-Log-Next-Offset': String(logsText.length) },
-				body: logsText,
-			})
-		}
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({ status: 403, contentType: 'text/plain', body: 'forbidden' })
-		}
-
-		return route.fulfill({
-			status: 404,
-			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-		})
-	})
+	await installMockApi(page, [
+		{ method: 'GET', path: '/meta', handle: (ctx) => ctx.json(metaResponse) },
+		{ method: 'GET', path: '/profiles', handle: (ctx) => ctx.json(profilesResponse) },
+		{ method: 'GET', path: '/buckets', handle: (ctx) => ctx.json(bucketResponse) },
+		{
+			method: 'GET',
+			path: '/jobs',
+			handle: (ctx) => {
+				const typeFilter = ctx.url.searchParams.get('type')?.trim() ?? ''
+				const errorCodeFilter = ctx.url.searchParams.get('errorCode')?.trim() ?? ''
+				let filteredJobs = jobs
+				if (typeFilter) {
+					filteredJobs = filteredJobs.filter((job) => job.type.includes(typeFilter))
+				}
+				if (errorCodeFilter) {
+					filteredJobs = filteredJobs.filter((job) => job.errorCode === errorCodeFilter)
+				}
+				return ctx.json({ items: filteredJobs, nextCursor: null })
+			},
+		},
+		{
+			method: 'GET',
+			path: /^\/api\/v1\/jobs\/[^/]+\/logs$/,
+			handle: (ctx) =>
+				ctx.route.fulfill({
+					status: 200,
+					contentType: 'text/plain',
+					headers: { 'X-Log-Next-Offset': String(logsText.length) },
+					body: logsText,
+				}),
+		},
+		{ method: 'GET', path: '/events', handle: (ctx) => ctx.text('forbidden', 403) },
+	])
 }
 
 async function setupObjectsApiMocks(page: Page, objectCount: number) {
 	const items: ObjectItem[] = Array.from({ length: objectCount }, (_, idx) => buildObjectItem(idx))
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metaResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profilesResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bucketResponse) })
-		}
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+	await installMockApi(page, [
+		{ method: 'GET', path: '/meta', handle: (ctx) => ctx.json(metaResponse) },
+		{ method: 'GET', path: '/profiles', handle: (ctx) => ctx.json(profilesResponse) },
+		{ method: 'GET', path: '/buckets', handle: (ctx) => ctx.json(bucketResponse) },
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects`,
+			handle: (ctx) =>
+				ctx.json({
 					bucket: defaultStorage.bucket,
 					prefix: '',
 					delimiter: '/',
@@ -189,25 +163,14 @@ async function setupObjectsApiMocks(page: Page, objectCount: number) {
 					nextContinuationToken: null,
 					isTruncated: false,
 				}),
-			})
-		}
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ bucket: defaultStorage.bucket, items: [] }),
-			})
-		}
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({ status: 403, contentType: 'text/plain', body: 'forbidden' })
-		}
-
-		return route.fulfill({
-			status: 404,
-			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-		})
-	})
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handle: (ctx) => ctx.json({ bucket: defaultStorage.bucket, items: [] }),
+		},
+		{ method: 'GET', path: '/events', handle: (ctx) => ctx.text('forbidden', 403) },
+	])
 }
 
 test.describe('jobs performance', () => {
@@ -221,7 +184,7 @@ test.describe('jobs performance', () => {
 		const started = Date.now()
 		await page.goto('/jobs')
 		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-		await expect(page.getByText('200 jobs', { exact: true })).toBeVisible()
+		await expect(page.getByText('200 jobs loaded', { exact: true })).toBeVisible()
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `jobs_page_render_ms=${elapsed}` })
 		expect(elapsed).toBeLessThan(2000)
@@ -233,18 +196,18 @@ test.describe('jobs performance', () => {
 
 		await page.goto('/jobs')
 		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-		await expect(page.getByText('200 jobs', { exact: true })).toBeVisible()
+		await expect(page.getByText('200 jobs loaded', { exact: true })).toBeVisible()
 
 		const typeFilter = page.getByRole('combobox', { name: 'Job type filter' })
 		await typeFilter.click()
-		await typeFilter.fill('Finalize')
+		await typeFilter.fill('transfer_sync_staging_to_s3')
 		const started = Date.now()
 		const responsePromise = page.waitForResponse(
 			(response) => response.url().includes('/api/v1/jobs') && response.status() === 200,
 		)
 		await page.keyboard.press('Enter')
 		await responsePromise
-		await expect(page.getByText('100 jobs', { exact: true })).toBeVisible()
+		await expect(page.getByText('100 visible', { exact: true })).toBeVisible({ timeout: 10_000 })
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `jobs_filter_ms=${elapsed}` })
 		expect(elapsed).toBeLessThan(300)

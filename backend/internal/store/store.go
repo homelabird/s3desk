@@ -340,6 +340,9 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		if req.ServiceAccountJSON != nil {
 			sa = strings.TrimSpace(*req.ServiceAccountJSON)
 		}
+		if projectNumber == "" {
+			return models.Profile{}, errors.New("projectNumber is required")
+		}
 		if !anonymous && sa == "" {
 			return models.Profile{}, errors.New("serviceAccountJson is required unless anonymous=true")
 		}
@@ -867,6 +870,9 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		}
 		if req.ServiceAccountJSON != nil {
 			sa = strings.TrimSpace(*req.ServiceAccountJSON)
+		}
+		if projectNumber == "" {
+			return models.Profile{}, true, errors.New("projectNumber is required")
 		}
 		if !anonymous && sa == "" {
 			return models.Profile{}, true, errors.New("serviceAccountJson is required unless anonymous=true")

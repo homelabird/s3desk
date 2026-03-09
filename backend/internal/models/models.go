@@ -80,10 +80,23 @@ type Profile struct {
 	ConfigFile    string `json:"configFile,omitempty"`
 	ConfigProfile string `json:"configProfile,omitempty"`
 
-	PreserveLeadingSlash  bool   `json:"preserveLeadingSlash"`
-	TLSInsecureSkipVerify bool   `json:"tlsInsecureSkipVerify"`
-	CreatedAt             string `json:"createdAt"`
-	UpdatedAt             string `json:"updatedAt"`
+	PreserveLeadingSlash  bool                `json:"preserveLeadingSlash"`
+	TLSInsecureSkipVerify bool                `json:"tlsInsecureSkipVerify"`
+	Validation            *ProfileValidation  `json:"validation,omitempty"`
+	EffectiveCapabilities *ProviderCapability `json:"effectiveCapabilities,omitempty"`
+	CreatedAt             string              `json:"createdAt"`
+	UpdatedAt             string              `json:"updatedAt"`
+}
+
+type ProfileValidationIssue struct {
+	Code    string `json:"code"`
+	Field   string `json:"field,omitempty"`
+	Message string `json:"message"`
+}
+
+type ProfileValidation struct {
+	Valid  bool                     `json:"valid"`
+	Issues []ProfileValidationIssue `json:"issues,omitempty"`
 }
 
 type ProfileSecrets struct {
@@ -204,14 +217,15 @@ type ProfileTestResponse struct {
 }
 
 type ProfileBenchmarkResponse struct {
-	OK            bool   `json:"ok"`
-	Message       string `json:"message,omitempty"`
-	UploadBps     *int64 `json:"uploadBps,omitempty"`
-	DownloadBps   *int64 `json:"downloadBps,omitempty"`
-	UploadMs      *int64 `json:"uploadMs,omitempty"`
-	DownloadMs    *int64 `json:"downloadMs,omitempty"`
-	FileSizeBytes *int64 `json:"fileSizeBytes,omitempty"`
-	CleanedUp     bool   `json:"cleanedUp"`
+	OK            bool           `json:"ok"`
+	Message       string         `json:"message,omitempty"`
+	Details       map[string]any `json:"details,omitempty"`
+	UploadBps     *int64         `json:"uploadBps,omitempty"`
+	DownloadBps   *int64         `json:"downloadBps,omitempty"`
+	UploadMs      *int64         `json:"uploadMs,omitempty"`
+	DownloadMs    *int64         `json:"downloadMs,omitempty"`
+	FileSizeBytes *int64         `json:"fileSizeBytes,omitempty"`
+	CleanedUp     bool           `json:"cleanedUp"`
 }
 
 type ProfileTLSMode string
@@ -521,6 +535,7 @@ type MetaResponse struct {
 	Version                 string             `json:"version"`
 	ServerAddr              string             `json:"serverAddr"`
 	DataDir                 string             `json:"dataDir"`
+	DBBackend               string             `json:"dbBackend"`
 	StaticDir               string             `json:"staticDir"`
 	APITokenEnabled         bool               `json:"apiTokenEnabled"`
 	EncryptionEnabled       bool               `json:"encryptionEnabled"`
@@ -534,6 +549,24 @@ type MetaResponse struct {
 	UploadMaxBytes          *int64             `json:"uploadMaxBytes,omitempty"`
 	UploadDirectStream      bool               `json:"uploadDirectStream"`
 	TransferEngine          TransferEngineInfo `json:"transferEngine"`
+}
+
+type ServerMigrationManifest struct {
+	Format            string   `json:"format"`
+	CreatedAt         string   `json:"createdAt"`
+	AppVersion        string   `json:"appVersion"`
+	DBBackend         string   `json:"dbBackend"`
+	EncryptionEnabled bool     `json:"encryptionEnabled"`
+	Entries           []string `json:"entries,omitempty"`
+	Warnings          []string `json:"warnings,omitempty"`
+}
+
+type ServerRestoreResponse struct {
+	Manifest        ServerMigrationManifest `json:"manifest"`
+	StagingDir      string                  `json:"stagingDir"`
+	RestartRequired bool                    `json:"restartRequired"`
+	NextSteps       []string                `json:"nextSteps"`
+	Warnings        []string                `json:"warnings,omitempty"`
 }
 
 type TransferEngineInfo struct {

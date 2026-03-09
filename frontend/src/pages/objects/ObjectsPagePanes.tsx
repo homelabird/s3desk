@@ -1,5 +1,4 @@
 import type { MenuProps } from 'antd'
-import { Alert, Menu, Typography } from 'antd'
 import type {
 	CSSProperties,
 	DragEvent,
@@ -9,15 +8,20 @@ import type {
 	UIEvent,
 	WheelEvent,
 } from 'react'
-import { Suspense } from 'react'
-import { createPortal } from 'react-dom'
+import { Suspense, useEffect, useState } from 'react'
 
 import { ObjectsLayout, type ObjectsLayoutProps } from './ObjectsLayout'
 import { ObjectsListHeader } from './ObjectsListHeader'
 import { ObjectsListSectionContainer } from './ObjectsListSectionContainer'
 import { ObjectsSelectionBarSection } from './ObjectsSelectionBarSection'
 import styles from './objects.module.css'
-import { ObjectsDetailsPanelSection, ObjectsListContent, ObjectsListControls, ObjectsTreeSection } from './objectsPageLazy'
+import {
+	ObjectsContextMenuPortal,
+	ObjectsDetailsPanelSection,
+	ObjectsListContent,
+	ObjectsListControls,
+	ObjectsTreeSection,
+} from './objectsPageLazy'
 
 type ObjectsTreeSectionProps = Parameters<typeof import('./ObjectsTreeSection').ObjectsTreeSection>[0]
 type ObjectsListControlsProps = Parameters<typeof import('./ObjectsListControls').ObjectsListControls>[0]
@@ -68,61 +72,116 @@ export type ObjectsPagePanesProps = {
 	detailsProps: ObjectsDetailsPanelSectionProps
 }
 
+type IdleWindow = typeof window & {
+	requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+	cancelIdleCallback?: (handle: number) => void
+}
+
+function scheduleIdleLoad(callback: () => void) {
+	if (typeof window === 'undefined') return () => undefined
+
+	const idleWindow = window as IdleWindow
+	if (idleWindow.requestIdleCallback) {
+		const handle = idleWindow.requestIdleCallback(callback, { timeout: 1200 })
+		return () => idleWindow.cancelIdleCallback?.(handle)
+	}
+
+	const handle = window.setTimeout(callback, 0)
+	return () => window.clearTimeout(handle)
+}
+
+function ShellText({ children }: { children: string }) {
+	return <span className={styles.shellTextMuted}>{children}</span>
+}
+
+function InlineAlert(props: { tone: 'info' | 'warning' | 'error'; title: string; description?: string | null }) {
+	return (
+		<div
+			className={[
+				styles.inlineAlert,
+				props.tone === 'info' ? styles.inlineAlertInfo : null,
+				props.tone === 'warning' ? styles.inlineAlertWarning : null,
+				props.tone === 'error' ? styles.inlineAlertError : null,
+			]
+				.filter(Boolean)
+				.join(' ')}
+			role={props.tone === 'error' ? 'alert' : undefined}
+		>
+			<strong className={styles.inlineAlertTitle}>{props.title}</strong>
+			{props.description ? <span className={styles.inlineAlertDescription}>{props.description}</span> : null}
+		</div>
+	)
+}
+
 export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMenuPortalProps, listProps, detailsProps }: ObjectsPagePanesProps) {
 	const { contextMenuClassName, contextMenuRef, contextMenuVisible, contextMenuProps, contextMenuStyle } = contextMenuPortalProps
+	const [listControlsReady, setListControlsReady] = useState(false)
+	const shouldLoadTreePane = treeProps.dockTree || treeProps.treeDrawerOpen
+	const shouldLoadDetailsPane = (detailsProps.dockDetails && detailsProps.detailsOpen) || detailsProps.detailsDrawerOpen
+	const shouldShowCollapsedDetails = detailsProps.dockDetails && !detailsProps.detailsOpen
+	const shouldDeferListControls = listProps.hasBucket
+
+	useEffect(() => {
+		if (listControlsReady) return
+		if (!shouldDeferListControls) return
+		return scheduleIdleLoad(() => setListControlsReady(true))
+	}, [listControlsReady, shouldDeferListControls])
 
 	const paneFallback = (
 		<div className={styles.paneSkeleton}>
-			<Typography.Text type="secondary">Loading…</Typography.Text>
+			<ShellText>Loading…</ShellText>
 		</div>
 	)
 	const listFallback = (
 		<div className={styles.listSkeleton}>
-			<Typography.Text type="secondary">Loading list…</Typography.Text>
+			<ShellText>Loading list…</ShellText>
 		</div>
 	)
 	const controlsFallback = (
 		<div className={styles.controlsSkeleton}>
-			<Typography.Text type="secondary">Loading controls…</Typography.Text>
+			<ShellText>Loading controls…</ShellText>
 		</div>
 	)
 
 	const contextMenuPortal =
 		contextMenuVisible &&
 		contextMenuProps &&
-		contextMenuStyle &&
-		typeof document !== 'undefined'
-			? createPortal(
-					<div
-						ref={contextMenuRef}
-						className={`${contextMenuClassName} ant-dropdown`}
-						style={contextMenuStyle}
-						onContextMenu={(event) => event.preventDefault()}
-					>
-						<Menu {...contextMenuProps} selectable={false} />
-					</div>,
-					document.body,
-				)
+		contextMenuStyle ? (
+			<Suspense fallback={null}>
+				<ObjectsContextMenuPortal
+					contextMenuClassName={contextMenuClassName}
+					contextMenuRef={contextMenuRef}
+					contextMenuProps={contextMenuProps}
+					contextMenuStyle={contextMenuStyle}
+				/>
+			</Suspense>
+		)
 			: null
 
 	const listAlerts = (
-		<>
-			{listProps.isOffline ? <Alert type="warning" showIcon title="Offline: object actions are disabled." /> : null}
+		<div className={styles.inlineAlertStack}>
+			{listProps.isOffline ? <InlineAlert tone="warning" title="Offline: object actions are disabled." /> : null}
 			{listProps.favoritesOnly ? (
 				listProps.favoritesErrorMessage ? (
-					<Alert type="error" showIcon title="Failed to load favorites" description={listProps.favoritesErrorMessage} />
+					<InlineAlert tone="error" title="Failed to load favorites" description={listProps.favoritesErrorMessage} />
 				) : null
 			) : listProps.objectsErrorMessage ? (
-				<Alert type="error" showIcon title="Failed to list objects" description={listProps.objectsErrorMessage} />
+				<InlineAlert tone="error" title="Failed to list objects" description={listProps.objectsErrorMessage} />
 			) : null}
-			{listProps.hasBucket ? null : <Alert type="info" showIcon title="Select a bucket to browse objects." />}
-		</>
+			{listProps.hasBucket ? null : <InlineAlert tone="info" title="Select a bucket to browse objects." />}
+		</div>
 	)
 
 	const listControls = (
-		<Suspense fallback={controlsFallback}>
-			<ObjectsListControls {...listProps.controlsProps} />
-		</Suspense>
+		shouldDeferListControls ? (
+			listControlsReady ? (
+				<Suspense fallback={controlsFallback}>
+					<ObjectsListControls {...listProps.controlsProps} />
+				</Suspense>
+			) : (
+				controlsFallback
+			)
+		) : null
 	)
 	const listContent = (
 		<Suspense fallback={listFallback}>
@@ -130,12 +189,30 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 		</Suspense>
 	)
 	const listHeader = listProps.controlsProps.viewMode === 'grid' ? null : <ObjectsListHeader {...listProps.listHeaderProps} />
+	const detailsPane = shouldLoadDetailsPane ? (
+		<Suspense fallback={paneFallback}>
+			<ObjectsDetailsPanelSection {...detailsProps} />
+		</Suspense>
+	) : shouldShowCollapsedDetails ? (
+		<>
+			<div className={styles.layoutDetailsHandle} aria-hidden="true" />
+			<div className={`${styles.layoutPane} ${styles.layoutDetailsPane}`}>
+				<div className={`${styles.panelCard} ${styles.detailsCollapsed} ${styles.pane}`}>
+					<button type="button" className={styles.detailsCollapsedButton} onClick={detailsProps.onOpenDetails} aria-label="Show details">
+						i
+					</button>
+				</div>
+			</div>
+		</>
+	) : null
 
 	return (
 		<ObjectsLayout ref={layoutRef} {...layoutProps}>
-			<Suspense fallback={paneFallback}>
-				<ObjectsTreeSection {...treeProps} />
-			</Suspense>
+			{shouldLoadTreePane ? (
+				<Suspense fallback={paneFallback}>
+					<ObjectsTreeSection {...treeProps} />
+				</Suspense>
+			) : null}
 
 			{contextMenuPortal}
 
@@ -160,9 +237,7 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 				listContent={listContent}
 			/>
 
-			<Suspense fallback={paneFallback}>
-				<ObjectsDetailsPanelSection {...detailsProps} />
-			</Suspense>
+			{detailsPane}
 		</ObjectsLayout>
 	)
 }

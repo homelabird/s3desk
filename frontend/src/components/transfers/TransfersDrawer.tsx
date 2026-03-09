@@ -1,7 +1,8 @@
-import { Badge, Button, Drawer, Empty, Space, Tag, Typography } from 'antd'
+import { Badge, Button, Empty, Space, Tag, Typography } from 'antd'
 import { CloudUploadOutlined, DownloadOutlined } from '@ant-design/icons'
 
 import { AppTabs } from '../AppTabs'
+import { OverlaySheet } from '../OverlaySheet'
 import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
 import { TransferDownloadRow } from './TransferDownloadRow'
 import { TransferUploadRow } from './TransferUploadRow'
@@ -34,7 +35,7 @@ export type TransfersDrawerProps = {
 
 export function TransfersDrawer(props: TransfersDrawerProps) {
 	return (
-		<Drawer
+		<OverlaySheet
 			open={props.open}
 			onClose={props.onClose}
 			title={
@@ -44,7 +45,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 				</Space>
 			}
 			placement="bottom"
-			size={440}
+			height={440}
 			extra={
 				<Space>
 					<Button
@@ -149,6 +150,6 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 					},
 				]}
 			/>
-		</Drawer>
+		</OverlaySheet>
 	)
 }

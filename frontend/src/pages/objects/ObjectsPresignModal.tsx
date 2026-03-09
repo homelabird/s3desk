@@ -1,5 +1,6 @@
-import { Button, Input, Modal, Space, Spin, Typography, message } from 'antd'
+import { Button, Input, Space, Spin, Typography, message } from 'antd'
 
+import { DialogModal } from '../../components/DialogModal'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 
 type PresignPayload = { key: string; url: string; expiresAt: string }
@@ -30,10 +31,11 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 	}
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title="Download link"
-			onCancel={props.onClose}
+			onClose={props.onClose}
+			width={640}
 			footer={[
 				<Button key="copy" disabled={!hasUrl} onClick={handleCopy}>
 					Copy URL
@@ -45,7 +47,6 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 					Close
 				</Button>,
 			]}
-			destroyOnHidden
 		>
 			{props.presign ? (
 				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
@@ -61,6 +62,6 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 			) : (
 				<Spin />
 			)}
-		</Modal>
+		</DialogModal>
 	)
 }

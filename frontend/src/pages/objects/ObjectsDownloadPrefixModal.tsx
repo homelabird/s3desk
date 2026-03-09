@@ -1,5 +1,6 @@
-import { Alert, Modal, Typography } from 'antd'
+import { Alert, Button, Typography } from 'antd'
 
+import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
@@ -24,14 +25,19 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 	const support = getDevicePickerSupport()
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title="Download to this device"
-			okText="Start download"
-			okButtonProps={{ loading: props.isSubmitting, disabled: !props.canSubmit }}
-			onOk={() => props.onFinish(props.values)}
-			onCancel={props.onCancel}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={640}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button type="primary" loading={props.isSubmitting} disabled={!props.canSubmit} onClick={() => props.onFinish(props.values)}>
+						Start download
+					</Button>
+				</>
+			}
 		>
 			<Alert
 				type="info"
@@ -71,6 +77,6 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 					/>
 				</FormField>
 			</form>
-		</Modal>
+		</DialogModal>
 	)
 }

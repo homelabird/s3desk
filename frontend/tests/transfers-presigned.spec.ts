@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installMockApi, type MockApiContext, type MockApiRoute } from './support/apiFixtures'
+import { ensureDialogOpen, transferUploadRow } from './support/ui'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -57,34 +60,25 @@ async function dropSingleFile(page: Page, name: string, contents: string, type: 
 	await dropZone.dispatchEvent('drop', { dataTransfer })
 }
 
-test('falls back to staging when presigned upload is unsupported', async ({ page }) => {
-	const now = '2024-01-01T00:00:00Z'
-	const uploadId = 'upload-fallback'
-	const jobId = 'job-fallback'
-	let presignedAttempted = false
-	let fallbackAttempted = false
-	let commitCalled = false
-	let presignedUrlHit = false
+const now = '2024-01-01T00:00:00Z'
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+function baseObjectRoutes(): MockApiRoute[] {
+	return [
+		{
+			method: 'GET',
+			path: '/events',
+			handle: (ctx: MockApiContext) =>
+				ctx.route.fulfill({
+					status: 200,
+					headers: { 'content-type': 'text/event-stream' },
+					body: '',
+				}),
+		},
+		{
+			method: 'GET',
+			path: '/meta',
+			handle: (ctx: MockApiContext) =>
+				ctx.json({
 					version: 'test',
 					serverAddr: '127.0.0.1:8080',
 					dataDir: '/tmp',
@@ -101,14 +95,12 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 					uploadDirectStream: false,
 					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
+		},
+		{
+			method: 'GET',
+			path: '/profiles',
+			handle: (ctx: MockApiContext) =>
+				ctx.json([
 					{
 						id: defaultStorage.profileId,
 						name: 'Playwright',
@@ -120,22 +112,18 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 						updatedAt: now,
 					},
 				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+		},
+		{
+			method: 'GET',
+			path: '/buckets',
+			handle: (ctx: MockApiContext) =>
+				ctx.json([{ name: defaultStorage.bucket, createdAt: now }]),
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects`,
+			handle: (ctx: MockApiContext) =>
+				ctx.json({
 					bucket: defaultStorage.bucket,
 					prefix: '',
 					delimiter: '/',
@@ -144,67 +132,62 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 					nextContinuationToken: null,
 					isTruncated: false,
 				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handle: (ctx: MockApiContext) =>
+				ctx.json({
 					bucket: defaultStorage.bucket,
 					prefix: '',
 					items: [],
 				}),
-			})
-		}
+		},
+	]
+}
 
-		if (method === 'POST' && path === '/api/v1/uploads') {
-			const body = request.postDataJSON() as { mode?: string }
-			if (body?.mode === 'presigned') {
-				presignedAttempted = true
-				return route.fulfill({
-					status: 400,
-					contentType: 'application/json',
-					body: JSON.stringify({
-						error: {
-							code: 'not_supported',
-							message: 'presigned uploads require an S3-compatible provider',
+test('falls back to staging when presigned upload is unsupported', async ({ page }) => {
+	const uploadId = 'upload-fallback'
+	const jobId = 'job-fallback'
+	let presignedAttempted = false
+	let fallbackAttempted = false
+	let commitCalled = false
+	let presignedUrlHit = false
+
+	await installMockApi(page, [
+		...baseObjectRoutes(),
+		{
+			method: 'POST',
+			path: '/uploads',
+			handle: (ctx) => {
+				const body = ctx.request.postDataJSON() as { mode?: string }
+				if (body?.mode === 'presigned') {
+					presignedAttempted = true
+					return ctx.json(
+						{
+							error: {
+								code: 'not_supported',
+								message: 'presigned uploads require an S3-compatible provider',
+							},
 						},
-					}),
-				})
-			}
-			fallbackAttempted = true
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ uploadId, mode: 'staging', maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/files`) {
-			return route.fulfill({ status: 204 })
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/commit`) {
-			commitCalled = true
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ jobId }),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/jobs/${jobId}`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ status: 'running' }),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+						400,
+					)
+				}
+				fallbackAttempted = true
+				return ctx.json({ uploadId, mode: 'staging', maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }, 201)
+			},
+		},
+		{ method: 'POST', path: `/uploads/${uploadId}/files`, handle: (ctx) => ctx.empty() },
+		{
+			method: 'POST',
+			path: `/uploads/${uploadId}/commit`,
+			handle: (ctx) => {
+				commitCalled = true
+				return ctx.json({ jobId }, 201)
+			},
+		},
+		{ method: 'GET', path: `/jobs/${jobId}`, handle: (ctx) => ctx.json({ status: 'running' }) },
+	])
 
 	await page.route('https://presigned.example/**', async (route) => {
 		presignedUrlHit = true
@@ -223,120 +206,26 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 })
 
 test('shows upload error when presigned request fails (CORS-like failure)', async ({ page }) => {
-	const now = '2024-01-01T00:00:00Z'
 	const uploadId = 'upload-cors'
 	const presignedURL = 'https://presigned.example/upload/test'
 	let presignRequested = false
 	let presignedUploadAttempted = false
 	let commitCalled = false
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					uploadDirectStream: false,
-					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: defaultStorage.profileId,
-						name: 'Playwright',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
-					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: [],
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		if (method === 'POST' && path === '/api/v1/uploads') {
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ uploadId, mode: 'presigned', maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/presign`) {
-			presignRequested = true
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+	await installMockApi(page, [
+		...baseObjectRoutes(),
+		{
+			method: 'POST',
+			path: '/uploads',
+			handle: (ctx) =>
+				ctx.json({ uploadId, mode: 'presigned', maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }, 201),
+		},
+		{
+			method: 'POST',
+			path: `/uploads/${uploadId}/presign`,
+			handle: (ctx) => {
+				presignRequested = true
+				return ctx.json({
 					mode: 'single',
 					bucket: defaultStorage.bucket,
 					key: 'hello.txt',
@@ -344,21 +233,18 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 					url: presignedURL,
 					headers: {},
 					expiresAt: '2025-01-01T00:00:00Z',
-				}),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/commit`) {
-			commitCalled = true
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ jobId: 'job-cors' }),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+				})
+			},
+		},
+		{
+			method: 'POST',
+			path: `/uploads/${uploadId}/commit`,
+			handle: (ctx) => {
+				commitCalled = true
+				return ctx.json({ jobId: 'job-cors' }, 201)
+			},
+		},
+	])
 
 	await page.route(presignedURL, async (route) => {
 		presignedUploadAttempted = true
@@ -371,47 +257,31 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 
 	await expect.poll(() => presignRequested, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => presignedUploadAttempted, { timeout: 5000 }).toBe(true)
-	const drawerMask = page.locator('.ant-drawer-mask').first()
-	const drawerOpen = await drawerMask.isVisible().catch(() => false)
-	if (!drawerOpen) {
+	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
 		await page.getByRole('button', { name: /Transfers/i }).first().click()
-	}
-	await page.getByRole('tab', { name: /Uploads/i }).click()
+	})
+	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
 
-	const labelNode = page.getByText('Upload: hello.txt', { exact: true })
-	await labelNode.waitFor({ timeout: 5000 })
-	const row = labelNode.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]').first()
+	const row = transferUploadRow(transfersDialog, 'Upload: hello.txt')
+	await expect(row).toBeVisible({ timeout: 5000 })
 	await expect(row.getByText(/network error/i)).toBeVisible()
 	expect(commitCalled).toBe(false)
 })
 
 test('uses capability matrix to skip presigned mode for unsupported providers', async ({ page }) => {
-	const now = '2024-01-01T00:00:00Z'
 	const uploadId = 'upload-capability'
 	let profilesLoaded = false
 	let presignedAttempted = false
 	let stagingAttempted = false
 	let commitCalled = false
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+	await installMockApi(page, [
+		...baseObjectRoutes().filter((route) => route.path !== '/meta' && route.path !== '/profiles'),
+		{
+			method: 'GET',
+			path: '/meta',
+			handle: (ctx) =>
+				ctx.json({
 					version: 'test',
 					serverAddr: '127.0.0.1:8080',
 					dataDir: '/tmp',
@@ -443,15 +313,13 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 					uploadDirectStream: false,
 					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			profilesLoaded = true
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
+		},
+		{
+			method: 'GET',
+			path: '/profiles',
+			handle: (ctx) => {
+				profilesLoaded = true
+				return ctx.json([
 					{
 						id: defaultStorage.profileId,
 						provider: 'azure_blob',
@@ -461,93 +329,43 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 						createdAt: now,
 						updatedAt: now,
 					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: [],
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		if (method === 'POST' && path === '/api/v1/uploads') {
-			const body = request.postDataJSON() as { mode?: string }
-			if (body?.mode === 'presigned') {
-				presignedAttempted = true
-				return route.fulfill({
-					status: 400,
-					contentType: 'application/json',
-					body: JSON.stringify({
-						error: {
-							code: 'not_supported',
-							message: 'presigned uploads require an S3-compatible provider',
+				])
+			},
+		},
+		{
+			method: 'POST',
+			path: '/uploads',
+			handle: (ctx) => {
+				const body = ctx.request.postDataJSON() as { mode?: string }
+				if (body?.mode === 'presigned') {
+					presignedAttempted = true
+					return ctx.json(
+						{
+							error: {
+								code: 'not_supported',
+								message: 'presigned uploads require an S3-compatible provider',
+							},
 						},
-					}),
-				})
-			}
-			if (body?.mode === 'staging') {
-				stagingAttempted = true
-			}
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ uploadId, mode: body?.mode ?? 'staging', maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/files`) {
-			return route.fulfill({ status: 204 })
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/commit`) {
-			commitCalled = true
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ jobId: 'job-capability' }),
-			})
-		}
-		if (method === 'GET' && path === '/api/v1/jobs/job-capability') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ status: 'running' }),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+						400,
+					)
+				}
+				if (body?.mode === 'staging') {
+					stagingAttempted = true
+				}
+				return ctx.json({ uploadId, mode: body?.mode ?? 'staging', maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }, 201)
+			},
+		},
+		{ method: 'POST', path: `/uploads/${uploadId}/files`, handle: (ctx) => ctx.empty() },
+		{
+			method: 'POST',
+			path: `/uploads/${uploadId}/commit`,
+			handle: (ctx) => {
+				commitCalled = true
+				return ctx.json({ jobId: 'job-capability' }, 201)
+			},
+		},
+		{ method: 'GET', path: '/jobs/job-capability', handle: (ctx) => ctx.json({ status: 'running' }) },
+	])
 
 	await seedStorage(page)
 	await page.goto('/objects')

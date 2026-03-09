@@ -21,9 +21,16 @@ S3Desk uses `rclone` underneath. A provider is considered supported when S3Desk 
 - `region`: required where the provider expects it
 - credentials: provider-specific access keys, tokens, or connection settings
 
+Provider-specific requirements that matter in practice:
+
+- Azure Blob: when `useEmulator=true` and `endpoint` is empty, S3Desk resolves the default emulator endpoint to `http://azurite:10000/<account>`.
+- GCS: `projectNumber` is required on profiles. Bucket list/create/delete and benchmark flows depend on it.
+- GCS anonymous mode: IAM policy management is supported only when the profile has credentials, or when anonymous mode is paired with a custom endpoint that explicitly allows unauthenticated access.
+- OCI Object Storage: the native backend requires `region`, `namespace`, and `compartment`.
+
 ## Capability Model
 
-The UI reads capability flags from `/meta` and enables or disables features accordingly.
+The UI reads base provider capability flags from `/meta`, then applies profile-specific effective capabilities returned by profile APIs.
 
 Core capability groups:
 
@@ -34,11 +41,12 @@ Core capability groups:
 - Presigned upload flows
 - Direct upload support
 
-If a capability is unavailable, the UI hides or disables the action and shows the reason returned by the backend.
+If a capability is unavailable, the UI hides or disables the action and shows the reason returned by the backend. Profiles can also include validation issues for legacy or incomplete configuration that needs user action.
 
 ## Practical Guidance
 
 - Use `aws_s3` for standard AWS accounts
 - Use `s3_compatible` when you must provide a custom S3 endpoint
 - Use `oci_s3_compat` only when your OCI environment is intentionally exposed through an S3-compatible endpoint
-- Prefer Tier 1 providers when you need the most tested path
+- Use `oci_object_storage` when you need OCI namespace/compartment-aware access instead of the S3 compatibility layer
+- Prefer Tier 1 providers when you need the most tested path, but OCI Object Storage now has smoke coverage for bucket CRUD and connectivity/benchmark flows

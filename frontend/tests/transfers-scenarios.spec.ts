@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { installMockApi } from './support/apiFixtures'
 
 type StorageSeed = {
 	apiToken: string
@@ -126,85 +127,63 @@ async function setupApiMocks(page: Page) {
 		return jobs.find((job) => job.id === jobId) ?? null
 	}
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metaResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profilesResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bucketResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/jobs') {
-			const status = url.searchParams.get('status')
-			const type = url.searchParams.get('type')
-			const errorCode = url.searchParams.get('errorCode')
-			let items = jobs
-			if (status) items = items.filter((job) => job.status === status)
-			if (type) items = items.filter((job) => job.type.includes(type))
-			if (errorCode) items = items.filter((job) => job.errorCode === errorCode)
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ items, nextCursor: null }),
-			})
-		}
-		if (method === 'POST' && path === '/api/v1/jobs') {
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify(buildJob('job-created', 'transfer_sync_staging_to_s3', 'queued', {})),
-			})
-		}
-		const cancelMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)\/cancel$/)
-		if (method === 'POST' && cancelMatch) {
-			const jobId = cancelMatch[1]
-			const job = updateJob(jobId, { status: 'canceled', finishedAt: now })
-			if (!job) {
-				return route.fulfill({
-					status: 404,
-					contentType: 'application/json',
-					body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-				})
-			}
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) })
-		}
-		const retryMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)\/retry$/)
-		if (method === 'POST' && retryMatch) {
-			const sourceId = retryMatch[1]
-			const source = jobs.find((job) => job.id === sourceId)
-			const job = buildJob(`job-retry-${++retryCount}`, source?.type ?? 'transfer_copy_object', 'queued', source?.payload ?? {})
-			addJob(job)
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) })
-		}
-		const getMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)$/)
-		if (method === 'GET' && getMatch) {
-			const job = jobs.find((item) => item.id === getMatch[1])
-			if (!job) {
-				return route.fulfill({
-					status: 404,
-					contentType: 'application/json',
-					body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-				})
-			}
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) })
-		}
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({ status: 403, contentType: 'text/plain', body: 'forbidden' })
-		}
-
-		return route.fulfill({
-			status: 404,
-			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-		})
-	})
+	await installMockApi(page, [
+		{ method: 'GET', path: '/meta', handle: (ctx) => ctx.json(metaResponse) },
+		{ method: 'GET', path: '/profiles', handle: (ctx) => ctx.json(profilesResponse) },
+		{ method: 'GET', path: '/buckets', handle: (ctx) => ctx.json(bucketResponse) },
+		{
+			method: 'GET',
+			path: '/jobs',
+			handle: (ctx) => {
+				const status = ctx.url.searchParams.get('status')
+				const type = ctx.url.searchParams.get('type')
+				const errorCode = ctx.url.searchParams.get('errorCode')
+				let items = jobs
+				if (status) items = items.filter((job) => job.status === status)
+				if (type) items = items.filter((job) => job.type.includes(type))
+				if (errorCode) items = items.filter((job) => job.errorCode === errorCode)
+				return ctx.json({ items, nextCursor: null })
+			},
+		},
+		{
+			method: 'POST',
+			path: '/jobs',
+			handle: (ctx) => ctx.json(buildJob('job-created', 'transfer_sync_staging_to_s3', 'queued', {}), 201),
+		},
+		{
+			method: 'POST',
+			path: /^\/api\/v1\/jobs\/([^/]+)\/cancel$/,
+			handle: (ctx) => {
+				const match = ctx.path.match(/^\/api\/v1\/jobs\/([^/]+)\/cancel$/)
+				const jobId = match?.[1] ?? ''
+				const job = updateJob(jobId, { status: 'canceled', finishedAt: now })
+				return job ? ctx.json(job) : ctx.notFound()
+			},
+		},
+		{
+			method: 'POST',
+			path: /^\/api\/v1\/jobs\/([^/]+)\/retry$/,
+			handle: (ctx) => {
+				const match = ctx.path.match(/^\/api\/v1\/jobs\/([^/]+)\/retry$/)
+				const sourceId = match?.[1] ?? ''
+				const source = jobs.find((job) => job.id === sourceId)
+				const job = buildJob(`job-retry-${++retryCount}`, source?.type ?? 'transfer_copy_object', 'queued', source?.payload ?? {})
+				addJob(job)
+				return ctx.json(job)
+			},
+		},
+		{
+			method: 'GET',
+			path: /^\/api\/v1\/jobs\/([^/]+)$/,
+			handle: (ctx) => {
+				const match = ctx.path.match(/^\/api\/v1\/jobs\/([^/]+)$/)
+				const jobId = match?.[1] ?? ''
+				const job = jobs.find((item) => item.id === jobId)
+				return job ? ctx.json(job) : ctx.notFound()
+			},
+		},
+		{ method: 'GET', path: '/events', handle: (ctx) => ctx.text('forbidden', 403) },
+	])
 }
 
 test('transfer scenarios cover job types, progress, cancel, and retry', async ({ page }) => {
@@ -214,22 +193,26 @@ test('transfer scenarios cover job types, progress, cancel, and retry', async ({
 	await page.goto('/jobs')
 	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 
-	await expect(page.getByText(/Upload folder \(device \u2192 S3\)/)).toBeVisible()
-	await expect(page.getByText(/Finalize upload \(staging \u2192 S3\)/)).toBeVisible()
-	await expect(page.getByText(/Download folder \(S3 \u2192 device\)/)).toBeVisible()
-	await expect(page.getByText('Copy object')).toBeVisible()
-	await expect(page.getByText('Delete folder/prefix')).toBeVisible()
+	const localRow = page.getByRole('row', { name: /job-local/ })
+	const stagingRow = page.getByRole('row', { name: /job-staging/ })
+	const runningRow = page.getByRole('row', { name: /job-download/ })
+	const failedRow = page.getByRole('row', { name: /job-copy/ })
+	const deleteRow = page.getByRole('row', { name: /job-delete/ })
 
-	await expect(page.getByText('3 ops')).toBeVisible()
-	await expect(page.getByText(/cp s3:\/\/test-bucket\/alpha\.txt/)).toBeVisible()
-	await expect(page.getByText(/rm s3:\/\/test-bucket\/tmp\//)).toBeVisible()
+	await expect(localRow).toContainText(/Upload folder \(device \u2192 S3\)/)
+	await expect(stagingRow).toContainText(/Finalize upload \(staging \u2192 S3\)/)
+	await expect(runningRow).toContainText(/Download folder \(S3 \u2192 device\)/)
+	await expect(failedRow).toContainText('Copy object')
+	await expect(deleteRow).toContainText('Delete folder/prefix')
 
-	const runningRow = page.locator('[data-row-key="job-download"]')
+	await expect(runningRow).toContainText('3 ops')
+	await expect(failedRow).toContainText(/cp s3:\/\/test-bucket\/alpha\.txt/)
+	await expect(deleteRow).toContainText(/rm s3:\/\/test-bucket\/tmp\//)
+
 	await runningRow.getByRole('button', { name: 'More actions' }).click()
 	await page.getByRole('menuitem', { name: 'Cancel' }).click()
 	await expect(runningRow.getByText('canceled')).toBeVisible()
 
-	const failedRow = page.locator('[data-row-key="job-copy"]')
 	await failedRow.getByRole('button', { name: 'Retry' }).click()
-	await expect(page.locator('[data-row-key="job-retry-1"]')).toBeVisible()
+	await expect(page.getByRole('row', { name: /job-retry-1/ })).toBeVisible()
 })

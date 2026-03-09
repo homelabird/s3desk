@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { installMockApi, type MockApiContext, type MockApiRoute } from './support/apiFixtures'
 
 type StorageSeed = {
 	apiToken: string
@@ -51,44 +52,36 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 }
 
 async function setupApiMocks(page: Page, isOffline: () => boolean) {
-	await page.route('**/api/v1/**', async (route) => {
-		if (isOffline()) {
-			return route.abort()
-		}
-		const url = new URL(route.request().url())
-		switch (url.pathname) {
-			case '/api/v1/meta':
-				return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metaResponse) })
-			case '/api/v1/buckets':
-				return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bucketResponse) })
-			case '/api/v1/jobs':
-				return route.fulfill({
-					status: 200,
-					contentType: 'application/json',
-					body: JSON.stringify({ items: [jobResponse], nextCursor: null }),
-				})
-			case '/api/v1/jobs/job-test':
-				return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(jobResponse) })
-			case '/api/v1/jobs/job-test/logs': {
-				if (url.searchParams.has('tailBytes')) {
-					return route.fulfill({
-						status: 200,
-						headers: { 'content-type': 'text/plain', 'X-Log-Next-Offset': '12' },
-						body: 'hello\n',
-					})
-				}
-				return route.fulfill({ status: 204, headers: { 'X-Log-Next-Offset': '12' } })
+	const withOffline =
+		(handle: MockApiRoute['handle']) =>
+		async (ctx: MockApiContext) => {
+			if (isOffline()) {
+				await ctx.route.abort()
+				return
 			}
-			case '/api/v1/events':
-				return route.fulfill({ status: 403, contentType: 'text/plain', body: 'forbidden' })
-			default:
-				return route.fulfill({
-					status: 404,
-					contentType: 'application/json',
-					body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-				})
+			return handle(ctx)
 		}
-	})
+
+	await installMockApi(page, [
+		{ method: 'GET', path: '/meta', handle: withOffline((ctx) => ctx.json(metaResponse)) },
+		{ method: 'GET', path: '/buckets', handle: withOffline((ctx) => ctx.json(bucketResponse)) },
+		{
+			method: 'GET',
+			path: '/jobs',
+			handle: withOffline((ctx) => ctx.json({ items: [jobResponse], nextCursor: null })),
+		},
+		{ method: 'GET', path: '/jobs/job-test', handle: withOffline((ctx) => ctx.json(jobResponse)) },
+		{
+			method: 'GET',
+			path: '/jobs/job-test/logs',
+			handle: withOffline((ctx) =>
+				ctx.url.searchParams.has('tailBytes')
+					? ctx.text('hello\n', 200, 'text/plain')
+					: ctx.route.fulfill({ status: 204, headers: { 'X-Log-Next-Offset': '12' } })),
+		},
+		{ method: 'GET', path: '/events', handle: withOffline((ctx) => ctx.text('forbidden', 403)) },
+		{ path: /.*/, handle: withOffline((ctx) => ctx.notFound()) },
+	])
 }
 
 test.describe('Jobs network resilience', () => {
@@ -101,7 +94,7 @@ test.describe('Jobs network resilience', () => {
 	await page.goto('/jobs')
 	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 
-	const jobRow = page.locator('[data-row-key="job-test"]')
+	const jobRow = page.getByRole('row', { name: /job-test/ })
 	await jobRow.getByRole('button', { name: 'More actions' }).click()
 	await page.getByRole('menuitem', { name: 'Logs' }).click()
 

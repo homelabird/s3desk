@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
 
 const OPTIONAL_INITIAL_UI_CHUNK_MARKERS = [
+	'vendor-ui-collapse-',
 	'vendor-ui-picker-',
 	'vendor-ui-tree-',
 	'vendor-ui-form-',
@@ -28,6 +29,34 @@ function chunkGroupForModule(id: string): string | undefined {
 		id.includes('/node_modules/throttle-debounce/')
 	) {
 		return 'vendor-ui'
+	}
+	// Split heavier optional antd feature groups so lazy object panes and dialogs
+	// don't pull the full UI bundle into the first route chunk.
+	if (
+		id.includes('/node_modules/antd/es/collapse/') ||
+		id.includes('/node_modules/rc-collapse/')
+	) {
+		return 'vendor-ui-collapse'
+	}
+	if (
+		id.includes('/node_modules/antd/es/tree/') ||
+		id.includes('/node_modules/antd/es/tree-select/') ||
+		id.includes('/node_modules/rc-tree/') ||
+		id.includes('/node_modules/rc-tree-select/')
+	) {
+		return 'vendor-ui-tree'
+	}
+	if (
+		id.includes('/node_modules/antd/es/upload/') ||
+		id.includes('/node_modules/rc-upload/')
+	) {
+		return 'vendor-ui-upload'
+	}
+	if (
+		id.includes('/node_modules/antd/es/tabs/') ||
+		id.includes('/node_modules/rc-tabs/')
+	) {
+		return 'vendor-ui-tabs'
 	}
 	// Keep antd + rc-* in the same chunk to avoid cross-chunk circular init ordering issues.
 	if (

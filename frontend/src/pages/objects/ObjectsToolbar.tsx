@@ -1,8 +1,21 @@
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EllipsisOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined, UpOutlined } from '@ant-design/icons'
-import { Badge, Button, Dropdown, Space, Tooltip, type MenuProps } from 'antd'
+import {
+	CloudUploadOutlined,
+	DeleteOutlined,
+	DownOutlined,
+	DownloadOutlined,
+	EllipsisOutlined,
+	FolderAddOutlined,
+	FolderOutlined,
+	InfoCircleOutlined,
+	LeftOutlined,
+	RightOutlined,
+	UpOutlined,
+} from '@ant-design/icons'
+import { Badge, Button, Space, type MenuProps } from 'antd'
 import type { ReactNode } from 'react'
 
 import { ObjectsBucketPicker } from './ObjectsBucketPicker'
+import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { UIAction } from './objectsActions'
 import styles from './objects.module.css'
 
@@ -44,6 +57,18 @@ export type ObjectsToolbarProps = {
 	dockDetails: boolean
 	onOpenTree: () => void
 	onOpenDetails: () => void
+}
+
+function renderHinted(content: ReactNode, hint: string) {
+	return (
+		<span className={styles.toolbarHintWrap} title={hint}>
+			{content}
+		</span>
+	)
+}
+
+function buildMenuButtonLabel(label: string, showLabels: boolean) {
+	return showLabels ? label : null
 }
 
 export function ObjectsToolbar(props: ObjectsToolbarProps) {
@@ -92,36 +117,69 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				{label}
 			</Button>
 		)
-		return (
-			<Tooltip title={disabled ? opts.tooltip : action.label ?? opts.fallbackLabel}>
-				<span>{button}</span>
-			</Tooltip>
-		)
+		return renderHinted(button, disabled ? opts.tooltip : action.label ?? opts.fallbackLabel)
 	}
 
-	const uploadButtonDesktop = (
-		<Dropdown.Button
-			type="primary"
-			icon={<CloudUploadOutlined />}
-			disabled={!canUpload}
-			menu={props.uploadMenu}
-			onClick={props.onUploadFiles}
-		>
-			Upload
-		</Dropdown.Button>
+	const uploadButtonDesktop = renderHinted(
+		<ObjectsMenuPopover menu={props.uploadMenu}>
+			{({ toggle }) => (
+				<div className={styles.toolbarSplitButton}>
+					<Button type="primary" icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUploadFiles}>
+						Upload
+					</Button>
+					<Button
+						type="primary"
+						icon={<DownOutlined />}
+						disabled={!canUpload}
+						onClick={toggle}
+						aria-label="Upload actions"
+						className={styles.toolbarSplitToggle}
+					/>
+				</div>
+			)}
+		</ObjectsMenuPopover>,
+		uploadTooltipText,
 	)
-	const uploadButtonMobile = (
-		<Dropdown menu={props.uploadMenu} trigger={['click']}>
-			<Button icon={<CloudUploadOutlined />} disabled={!canUpload} aria-label="Upload">
-				{props.showLabels ? 'Upload' : null}
-			</Button>
-		</Dropdown>
+
+	const uploadButtonMobile = renderHinted(
+		<ObjectsMenuPopover menu={props.uploadMenu}>
+			{({ toggle }) => (
+				<div className={styles.toolbarSplitButton}>
+					<Button icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUploadFiles} aria-label="Upload">
+						{buildMenuButtonLabel('Upload', props.showLabels)}
+					</Button>
+					<Button
+						icon={<DownOutlined />}
+						disabled={!canUpload}
+						onClick={toggle}
+						aria-label="Upload actions"
+						className={styles.toolbarSplitToggle}
+					/>
+				</div>
+			)}
+		</ObjectsMenuPopover>,
+		uploadTooltipText,
 	)
-	const newFolderButton = (
+
+	const newFolderButton = renderHinted(
 		<Button icon={<FolderAddOutlined />} disabled={!props.canCreateFolder} onClick={props.onNewFolder} aria-label="New folder">
 			{props.showLabels ? 'New folder' : null}
-		</Button>
+		</Button>,
+		props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText,
 	)
+
+	const moreButton = (
+		<ObjectsMenuPopover menu={props.topMoreMenu} align="end">
+			{({ toggle }) => (
+				<Badge count={props.activeTransferCount} size="small" showZero={false}>
+					<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} onClick={toggle} data-testid="objects-toolbar-more" aria-label="More actions">
+						{props.isDesktop ? 'More' : buildMenuButtonLabel('Actions', props.showLabels)}
+					</Button>
+				</Badge>
+			)}
+		</ObjectsMenuPopover>
+	)
+
 	const bucketPicker = (
 		<ObjectsBucketPicker
 			isDesktop={props.isDesktop}
@@ -142,43 +200,35 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				<Space wrap className={styles.toolbarGroup}>
 					{props.isAdvanced ? (
 						<>
-							<Tooltip title="Back">
-								<Button
-									icon={<LeftOutlined />}
-									disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
-									onClick={props.onGoBack}
-									aria-label="Go back"
-								/>
-							</Tooltip>
-							<Tooltip title="Forward">
-								<Button
-									icon={<RightOutlined />}
-									disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
-									onClick={props.onGoForward}
-									aria-label="Go forward"
-								/>
-							</Tooltip>
-							<Tooltip title="Up">
-								<Button
-									icon={<UpOutlined />}
-									disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
-									onClick={props.onGoUp}
-									aria-label="Go up"
-								/>
-							</Tooltip>
+							<Button
+								icon={<LeftOutlined />}
+								disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
+								onClick={props.onGoBack}
+								aria-label="Go back"
+								title="Back"
+							/>
+							<Button
+								icon={<RightOutlined />}
+								disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
+								onClick={props.onGoForward}
+								aria-label="Go forward"
+								title="Forward"
+							/>
+							<Button
+								icon={<UpOutlined />}
+								disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
+								onClick={props.onGoUp}
+								aria-label="Go up"
+								title="Up"
+							/>
 						</>
 					) : null}
-
 					{bucketPicker}
 				</Space>
 
 				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
-					<Tooltip title={uploadTooltipText}>
-						<span>{uploadButtonDesktop}</span>
-					</Tooltip>
-					<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
-						<span>{newFolderButton}</span>
-					</Tooltip>
+					{uploadButtonDesktop}
+					{newFolderButton}
 					{showSelectionPrimaryActions ? (
 						<>
 							{renderPrimaryActionButton(props.primaryDownloadAction, {
@@ -194,13 +244,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							})}
 						</>
 					) : null}
-					<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-						<Badge count={props.activeTransferCount} size="small" showZero={false}>
-							<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} data-testid="objects-toolbar-more" aria-label="More actions">
-								More
-							</Button>
-						</Badge>
-					</Dropdown>
+					{moreButton}
 				</Space>
 			</div>
 		)
@@ -212,22 +256,20 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarTopActions}`}>
 					{props.isAdvanced ? (
 						<>
-							<Tooltip title="Back">
-								<Button
-									icon={<LeftOutlined />}
-									disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
-									onClick={props.onGoBack}
-									aria-label="Go back"
-								/>
-							</Tooltip>
-							<Tooltip title="Forward">
-								<Button
-									icon={<RightOutlined />}
-									disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
-									onClick={props.onGoForward}
-									aria-label="Go forward"
-								/>
-							</Tooltip>
+							<Button
+								icon={<LeftOutlined />}
+								disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
+								onClick={props.onGoBack}
+								aria-label="Go back"
+								title="Back"
+							/>
+							<Button
+								icon={<RightOutlined />}
+								disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
+								onClick={props.onGoForward}
+								aria-label="Go forward"
+								title="Forward"
+							/>
 							<Button
 								icon={<UpOutlined />}
 								disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
@@ -238,12 +280,8 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							</Button>
 						</>
 					) : null}
-					<Tooltip title={uploadTooltipText}>
-						<span>{uploadButtonMobile}</span>
-					</Tooltip>
-					<Tooltip title={props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText}>
-						<span>{newFolderButton}</span>
-					</Tooltip>
+					{uploadButtonMobile}
+					{newFolderButton}
 					{showSelectionPrimaryActions ? (
 						<>
 							{renderPrimaryActionButton(props.primaryDownloadAction, {
@@ -271,13 +309,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					) : null}
 				</Space>
 
-				<Dropdown trigger={['click']} menu={props.topMoreMenu}>
-					<Badge count={props.activeTransferCount} size="small" showZero={false}>
-						<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} data-testid="objects-toolbar-more" aria-label="More actions">
-							{props.showLabels ? 'Actions' : null}
-						</Button>
-					</Badge>
-				</Dropdown>
+				{moreButton}
 			</Space>
 
 			{bucketPicker}

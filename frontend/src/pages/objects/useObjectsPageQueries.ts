@@ -93,7 +93,7 @@ export function useObjectsPageQueries({
 	}, [profileId, profilesQuery.data])
 
 	const profileCapabilities = selectedProfile?.provider
-		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers)
+		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers, selectedProfile)
 		: null
 	const objectCrudSupported = profileCapabilities ? profileCapabilities.objectCrud : true
 	const uploadSupported = profileCapabilities ? profileCapabilities.objectCrud && profileCapabilities.jobTransfer : true

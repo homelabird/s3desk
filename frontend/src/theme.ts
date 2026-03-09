@@ -1,6 +1,6 @@
 import { theme as antdTheme, type ThemeConfig } from 'antd'
 
-import type { ThemeMode } from './themeMode'
+import type { ThemeMode } from './themeModeContext'
 
 export function getAppTheme(mode: ThemeMode): ThemeConfig {
 	const isDark = mode === 'dark'

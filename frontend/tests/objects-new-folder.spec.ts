@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installMockApi } from './support/apiFixtures'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -45,25 +47,17 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 	const now = '2024-01-01T00:00:00Z'
 	let createFolderCalls = 0
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+	await installMockApi(page, [
+		{
+			method: 'GET',
+			path: '/events',
+			handle: (ctx) => ctx.text('', 200, 'text/event-stream'),
+		},
+		{
+			method: 'GET',
+			path: '/meta',
+			handle: (ctx) =>
+				ctx.json({
 					version: 'test',
 					serverAddr: '127.0.0.1:8080',
 					dataDir: '/tmp',
@@ -79,14 +73,12 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 					uploadMaxBytes: null,
 					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
+		},
+		{
+			method: 'GET',
+			path: '/profiles',
+			handle: (ctx) =>
+				ctx.json([
 					{
 						id: defaultStorage.profileId,
 						name: 'Playwright',
@@ -98,24 +90,19 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 						updatedAt: now,
 					},
 				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			const prefix = url.searchParams.get('prefix') ?? ''
-			const commonPrefixes = opts.commonPrefixesByPrefix?.[prefix] ?? []
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+		},
+		{
+			method: 'GET',
+			path: '/buckets',
+			handle: (ctx) => ctx.json([{ name: defaultStorage.bucket, createdAt: now }]),
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects`,
+			handle: (ctx) => {
+				const prefix = ctx.url.searchParams.get('prefix') ?? ''
+				const commonPrefixes = opts.commonPrefixesByPrefix?.[prefix] ?? []
+				return ctx.json({
 					bucket: defaultStorage.bucket,
 					prefix,
 					delimiter: '/',
@@ -123,41 +110,38 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 					items: [],
 					nextContinuationToken: null,
 					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+				})
+			},
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handle: (ctx) =>
+				ctx.json({
 					bucket: defaultStorage.bucket,
 					prefix: '',
 					items: [],
 				}),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/folder`) {
-			createFolderCalls += 1
-			const payload = JSON.parse(request.postData() ?? '{}') as { key?: unknown }
-			const key = typeof payload.key === 'string' ? payload.key : ''
-
-			const failure = opts.failCreateFolder?.(key, createFolderCalls)
-			if (failure) {
-				return route.fulfill({
-					status: failure.status,
-					contentType: 'application/json',
-					body: JSON.stringify(failure.body),
-				})
-			}
-
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ key }) })
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+		},
+		{
+			method: 'POST',
+			path: `/buckets/${defaultStorage.bucket}/objects/folder`,
+			handle: (ctx) => {
+				createFolderCalls += 1
+				const payload = JSON.parse(ctx.request.postData() ?? '{}') as { key?: unknown }
+				const key = typeof payload.key === 'string' ? payload.key : ''
+				const failure = opts.failCreateFolder?.(key, createFolderCalls)
+				if (failure) {
+					return ctx.json(failure.body, failure.status)
+				}
+				return ctx.json({ key })
+			},
+		},
+		{
+			path: /.*/,
+			handle: (ctx) => ctx.json({}),
+		},
+	])
 }
 
 async function getStorageString(page: Page, key: string): Promise<string> {
@@ -224,7 +208,9 @@ test.describe('Objects new folder visibility', () => {
 		const prefixRow = page.locator('[data-objects-row="true"]', { hasText: 'a/' }).first()
 		await expect(prefixRow).toBeVisible()
 		await prefixRow.click({ button: 'right' })
-		await page.getByRole('menuitem', { name: /New subfolder/i }).click()
+		await page.getByRole('menuitem', { name: /New subfolder/i }).evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
 
 		const dialog = page.getByRole('dialog', { name: 'New folder' })
 		await dialog.getByLabel('Folder name').fill('b')

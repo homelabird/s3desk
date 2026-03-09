@@ -1,8 +1,10 @@
-import { Alert, Button, Descriptions, Input, Modal, Spin, Switch, Typography } from 'antd'
+import { Alert, Button, Descriptions, Input, Spin, Typography } from 'antd'
 
 import type { ObjectIndexSummaryResponse } from '../../api/types'
+import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import { DatalistInput } from '../../components/DatalistInput'
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 import { formatBytes } from '../../lib/transfer'
 import styles from './ObjectsDialogs.module.css'
 
@@ -42,14 +44,19 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 	const indexDisabled = !props.bucket || !props.srcPrefix
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title={isMove ? 'Move folder…' : 'Copy folder…'}
-			okText={isMove ? 'Start move' : 'Start copy'}
-			okButtonProps={{ loading: props.isSubmitting, danger: isMove }}
-			onOk={() => props.onFinish(props.values)}
-			onCancel={props.onCancel}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={760}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={() => props.onFinish(props.values)}>
+						{isMove ? 'Start move' : 'Start copy'}
+					</Button>
+				</>
+			}
 		>
 			<div className={styles.alertStack}>
 				{isMove ? (
@@ -164,10 +171,10 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				) : null}
 
 				<FormField label="Dry run (no changes)">
-					<Switch
+					<ToggleSwitch
 						checked={props.values.dryRun}
 						onChange={(checked) => props.onValuesChange({ ...props.values, dryRun: checked })}
-						aria-label="Dry run"
+						ariaLabel="Dry run"
 					/>
 				</FormField>
 
@@ -188,6 +195,6 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 					/>
 				</FormField>
 			</form>
-		</Modal>
+		</DialogModal>
 	)
 }

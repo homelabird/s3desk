@@ -1,9 +1,9 @@
 import type { PointerEvent, ReactNode } from 'react'
-import { Drawer } from 'antd'
 import { InfoCircleOutlined } from '@ant-design/icons'
 
 import styles from './objects.module.css'
 import { ObjectsDetailsCollapsed, ObjectsDetailsPane } from './ObjectsDetailsPane'
+import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 
 type ObjectsDetailsPanelProps = {
 	dockDetails: boolean
@@ -48,15 +48,16 @@ export function ObjectsDetailsPanel(props: ObjectsDetailsPanelProps) {
 				)
 			) : null}
 
-			<Drawer
+			<ObjectsOverlaySheet
 				open={!props.dockDetails && props.detailsDrawerOpen}
 				onClose={props.onCloseDrawer}
 				title="Details"
 				placement="right"
-				width="90%"
+				width="min(90vw, 520px)"
+				dataTestId="objects-details-sheet"
 			>
-				<div style={{ paddingBottom: 12 }}>{props.detailsPanelBody}</div>
-			</Drawer>
+				<div className={styles.objectsSheetBody}>{props.detailsPanelBody}</div>
+			</ObjectsOverlaySheet>
 		</>
 	)
 }

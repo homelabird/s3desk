@@ -1,4 +1,4 @@
-import { Button, Collapse, InputNumber, Space, Tag, Typography } from 'antd'
+import { Button, Collapse, Space, Tag, Typography } from 'antd'
 
 import {
 	DEFAULT_RETRY_COUNT,
@@ -9,6 +9,7 @@ import {
 	RETRY_DELAY_MIN_MS,
 } from '../../api/client'
 import { FormField } from '../../components/FormField'
+import { NumberField } from '../../components/NumberField'
 import { formatTime } from '../../lib/format'
 import type { NetworkLogEvent } from '../../lib/networkStatus'
 import styles from '../SettingsPage.module.css'
@@ -30,10 +31,9 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 	return (
 		<div>
 			<FormField label="HTTP retry count" extra="Applies to GET and other idempotent requests.">
-				<InputNumber
+				<NumberField
 					min={RETRY_COUNT_MIN}
 					max={RETRY_COUNT_MAX}
-					precision={0}
 					value={props.apiRetryCount}
 					onChange={(value) =>
 						props.setApiRetryCount(
@@ -44,7 +44,7 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 				/>
 			</FormField>
 			<FormField label="Retry base delay (ms)" extra={`Exponential backoff, capped at ${RETRY_DELAY_MAX_MS}ms.`}>
-				<InputNumber
+				<NumberField
 					min={RETRY_DELAY_MIN_MS}
 					max={RETRY_DELAY_MAX_MS}
 					step={100}

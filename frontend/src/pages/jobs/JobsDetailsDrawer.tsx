@@ -1,7 +1,8 @@
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Descriptions, Drawer, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Collapse, Descriptions, Space, Spin, Tag, Tooltip, Typography } from 'antd'
 
 import type { Job } from '../../api/types'
+import { OverlaySheet } from '../../components/OverlaySheet'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { formatDateTime } from '../../lib/format'
@@ -44,12 +45,12 @@ type Props = {
 
 export function JobsDetailsDrawer(props: Props) {
 	return (
-		<Drawer
+		<OverlaySheet
 			open={props.open}
 			onClose={props.onClose}
 			title="Job Details"
-			destroyOnHidden
-			styles={{ wrapper: { width: typeof props.drawerWidth === 'number' ? `${props.drawerWidth}px` : props.drawerWidth } }}
+			placement="right"
+			width={typeof props.drawerWidth === 'number' ? `${props.drawerWidth}px` : props.drawerWidth}
 			extra={
 				<Space>
 					<Button icon={<ReloadOutlined />} disabled={!props.detailsJobId || props.isOffline} loading={props.isFetching} onClick={props.onRefresh}>
@@ -239,6 +240,6 @@ export function JobsDetailsDrawer(props: Props) {
 			) : (
 				<Typography.Text type="secondary">Select a job</Typography.Text>
 			)}
-		</Drawer>
+		</OverlaySheet>
 	)
 }
