@@ -16,6 +16,7 @@ import { guessPreviewKind } from './objectsListUtils'
 
 export const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
 export const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
+const IMAGE_PREVIEW_THUMBNAIL_SIZE = 360
 const VIDEO_PREVIEW_THUMBNAIL_SIZE = 360
 
 type UseObjectPreviewArgs = {
@@ -217,9 +218,23 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			const effectiveContentType = resp.contentType ?? contentType
 
 			if (kind === 'image') {
+				const thumbnailRequest = {
+					profileId: args.profileId,
+					bucket: args.bucket,
+					objectKey: key,
+					size: IMAGE_PREVIEW_THUMBNAIL_SIZE,
+					cacheKeySuffix: args.detailsMeta.etag || args.detailsMeta.lastModified || undefined,
+				}
+				const thumbnailCacheKey = buildThumbnailCacheKey(thumbnailRequest)
+				await setPersistentThumbnailBlob(thumbnailCacheKey, resp.blob)
 				const url = URL.createObjectURL(resp.blob)
+				if (args.thumbnailCache) {
+					args.thumbnailCache.set(thumbnailCacheKey, url)
+					previewURLOwnedRef.current = false
+				} else {
+					previewURLOwnedRef.current = true
+				}
 				previewURLRef.current = url
-				previewURLOwnedRef.current = true
 				setPreview({ key, status: 'ready', kind: 'image', contentType: effectiveContentType, url })
 				return
 			}

@@ -167,18 +167,16 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 			}, map[string]any{"bucket": bucket, "key": key})
 			return
 		}
-		img, err = decodeThumbnailImage(proc.stdout)
+		source, readErr := io.ReadAll(io.LimitReader(proc.stdout, thumbnailImageMaxBytes+1))
 		waitErr := proc.wait()
-		if err != nil {
-			metric.SetStatus("unsupported")
-			writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode thumbnail source", map[string]any{
-				"key":      key,
-				"kind":     kind,
-				"decoder":  "image.Decode",
-				"mimeType": entry.MimeType,
-				"size":     entry.Size,
-				"error":    err.Error(),
-			})
+		if readErr != nil {
+			metric.SetStatus("remote_error")
+			writeRcloneAPIError(w, readErr, proc.stderr.String(), rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to download object",
+			}, map[string]any{"bucket": bucket, "key": key})
 			return
 		}
 		if waitErr != nil {
@@ -189,6 +187,19 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 				DefaultCode:    "s3_error",
 				DefaultMessage: "failed to download object",
 			}, map[string]any{"bucket": bucket, "key": key})
+			return
+		}
+		img, err = decodeThumbnailImage(bytes.NewReader(source))
+		if err != nil {
+			metric.SetStatus("unsupported")
+			writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode thumbnail source", map[string]any{
+				"key":      key,
+				"kind":     kind,
+				"decoder":  "image.Decode",
+				"mimeType": entry.MimeType,
+				"size":     entry.Size,
+				"error":    err.Error(),
+			})
 			return
 		}
 	case "video":
