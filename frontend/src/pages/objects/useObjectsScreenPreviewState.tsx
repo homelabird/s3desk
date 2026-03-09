@@ -5,7 +5,7 @@ import type { APIClient } from '../../api/client'
 import type { ObjectItem, ObjectMeta } from '../../api/types'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import { ObjectThumbnail } from './ObjectThumbnail'
-import { guessPreviewKind, isImageKey, isThumbnailCandidate } from './objectsListUtils'
+import { isImageKey, isThumbnailCandidate } from './objectsListUtils'
 import type { ObjectPreview } from './objectsTypes'
 import { useObjectPreview } from './useObjectPreview'
 
@@ -53,7 +53,6 @@ export function useObjectsScreenPreviewState({
 	api,
 	apiToken,
 	profileId,
-	profileProvider,
 	bucket,
 	selectedKeys,
 	selectedCount,
@@ -119,6 +118,7 @@ export function useObjectsScreenPreviewState({
 		detailsMeta,
 		downloadLinkProxyEnabled,
 		presignedDownloadSupported,
+		thumbnailCache,
 	})
 
 	const largePreviewMetaQueryRaw = useQuery({
@@ -137,6 +137,7 @@ export function useObjectsScreenPreviewState({
 		detailsMeta: largePreviewMeta,
 		downloadLinkProxyEnabled,
 		presignedDownloadSupported,
+		thumbnailCache,
 	})
 
 	const openLargePreviewForKey = useCallback(
@@ -180,15 +181,13 @@ export function useObjectsScreenPreviewState({
 	const detailsThumbnailSize = 160
 	const detailsThumbnailFileName = detailsKey?.split('/').pop() ?? detailsKey ?? null
 	const detailsThumbnailCacheKeySuffix = detailsMeta?.etag || detailsMeta?.lastModified || undefined
-	const deferVideoThumbnail = profileProvider === 'oci_object_storage'
 	const shouldRenderInlineDetailsThumbnail =
 		showThumbnails &&
 		detailsMeta &&
 		detailsKey &&
 		profileId &&
 		bucket &&
-		isThumbnailCandidate(detailsMeta.contentType, detailsKey) &&
-		!(deferVideoThumbnail && guessPreviewKind(detailsMeta.contentType, detailsKey) === 'video')
+		isThumbnailCandidate(detailsMeta.contentType, detailsKey)
 	const detailsThumbnail =
 		shouldRenderInlineDetailsThumbnail ? (
 			<ObjectThumbnail

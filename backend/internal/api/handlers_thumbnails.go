@@ -28,18 +28,49 @@ import (
 	_ "golang.org/x/image/bmp"
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
+	"s3desk/internal/models"
 )
 
 const (
-	thumbnailDefaultSize   = 96
-	thumbnailMinSize       = 24
-	thumbnailMaxSize       = 512
-	thumbnailImageMaxBytes = 25 * 1024 * 1024
-	thumbnailVideoMaxBytes = 256 * 1024 * 1024
-	thumbnailCacheTTL      = 24 * time.Hour
+	thumbnailDefaultSize           = 96
+	thumbnailMinSize               = 24
+	thumbnailMaxSize               = 512
+	thumbnailImageMaxBytes         = 25 * 1024 * 1024
+	thumbnailVideoFullStreamBytes  = 256 * 1024 * 1024
+	thumbnailVideoPartialTinyBytes = 8 * 1024 * 1024
+	thumbnailVideoPartialMinBytes  = 32 * 1024 * 1024
+	thumbnailVideoPartialMidBytes  = 64 * 1024 * 1024
+	thumbnailVideoPartialMaxBytes  = 128 * 1024 * 1024
+	thumbnailCacheTTL              = 24 * time.Hour
 )
 
 var errFFmpegNotFound = errors.New("ffmpeg not found in PATH (or set FFMPEG_PATH)")
+
+type thumbnailByteRange struct {
+	Offset int64
+	Count  int64
+}
+
+type thumbnailVideoAttempt struct {
+	Stream      string
+	Offset      int64
+	StreamBytes int64
+	Ranges      []thumbnailByteRange
+	Error       string
+}
+
+type thumbnailVideoFetchError struct {
+	err    error
+	stderr string
+}
+
+func (e *thumbnailVideoFetchError) Error() string {
+	return e.err.Error()
+}
+
+func (e *thumbnailVideoFetchError) Unwrap() error {
+	return e.err
+}
 
 func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request) {
 	metric := s.beginStorageMetric("unknown", "get_object_thumbnail")
@@ -90,7 +121,7 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	maxBytes := thumbnailMaxBytesForKind(kind)
-	if entry.Size > maxBytes {
+	if maxBytes > 0 && entry.Size > maxBytes {
 		metric.SetStatus("too_large")
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "object is too large for thumbnail", map[string]any{
 			"kind":     kind,
@@ -122,71 +153,81 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	downloadCtx := r.Context()
-	cancelDownload := func() {}
-	if kind == "video" {
-		var cancel context.CancelFunc
-		downloadCtx, cancel = context.WithCancel(r.Context())
-		cancelDownload = cancel
-		defer cancelDownload()
-	}
-
-	proc, err := s.startRclone(downloadCtx, secrets, []string{"cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)}, "thumbnail")
-	if err != nil {
-		metric.SetStatus("remote_error")
-		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
-			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
-			DefaultStatus:  http.StatusBadRequest,
-			DefaultCode:    "s3_error",
-			DefaultMessage: "failed to download object",
-		}, map[string]any{"bucket": bucket, "key": key})
-		return
-	}
-
 	var img image.Image
-	videoStreamStopped := false
 	switch kind {
 	case "image":
+		proc, startErr := s.startRclone(r.Context(), secrets, []string{"cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)}, "thumbnail")
+		if startErr != nil {
+			metric.SetStatus("remote_error")
+			writeRcloneAPIError(w, startErr, "", rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to download object",
+			}, map[string]any{"bucket": bucket, "key": key})
+			return
+		}
 		img, err = decodeThumbnailImage(proc.stdout)
+		waitErr := proc.wait()
+		if err != nil {
+			metric.SetStatus("unsupported")
+			writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to decode thumbnail source", map[string]any{
+				"key":      key,
+				"kind":     kind,
+				"decoder":  "image.Decode",
+				"mimeType": entry.MimeType,
+				"size":     entry.Size,
+				"error":    err.Error(),
+			})
+			return
+		}
+		if waitErr != nil {
+			metric.SetStatus("remote_error")
+			writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to download object",
+			}, map[string]any{"bucket": bucket, "key": key})
+			return
+		}
 	case "video":
-		img, err = decodeThumbnailVideoFrame(r.Context(), ffmpegPath, proc.stdout)
-		if err == nil {
-			cancelDownload()
-			videoStreamStopped = true
+		var attempts []thumbnailVideoAttempt
+		img, attempts, err = s.decodeThumbnailVideoWithFallbacks(r.Context(), secrets, bucket, key, entry.Size, ffmpegPath)
+		if err != nil {
+			var fetchErr *thumbnailVideoFetchError
+			if errors.As(err, &fetchErr) {
+				metric.SetStatus("remote_error")
+				writeRcloneAPIError(w, fetchErr.err, fetchErr.stderr, rcloneAPIErrorContext{
+					MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
+					DefaultStatus:  http.StatusBadRequest,
+					DefaultCode:    "s3_error",
+					DefaultMessage: "failed to download object",
+				}, map[string]any{"bucket": bucket, "key": key})
+				return
+			}
+			metric.SetStatus("unsupported")
+			details := map[string]any{
+				"key":      key,
+				"kind":     kind,
+				"decoder":  "ffmpeg",
+				"mimeType": entry.MimeType,
+				"size":     entry.Size,
+				"error":    err.Error(),
+			}
+			if len(attempts) > 0 {
+				details["attempts"] = thumbnailVideoAttemptsDetails(attempts)
+				last := attempts[len(attempts)-1]
+				details["stream"] = last.Stream
+				details["streamBytes"] = last.StreamBytes
+			}
+			writeError(w, http.StatusUnsupportedMediaType, "unsupported", "failed to extract video thumbnail frame", details)
+			return
 		}
 	default:
 		err = errors.New("unsupported thumbnail kind")
-	}
-	waitErr := proc.wait()
-	if videoStreamStopped {
-		waitErr = nil
-	}
-	if err != nil {
 		metric.SetStatus("unsupported")
-		decoder := "image.Decode"
-		message := "failed to decode thumbnail source"
-		if kind == "video" {
-			decoder = "ffmpeg"
-			message = "failed to extract video thumbnail frame"
-		}
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported", message, map[string]any{
-			"key":      key,
-			"kind":     kind,
-			"decoder":  decoder,
-			"mimeType": entry.MimeType,
-			"size":     entry.Size,
-			"error":    err.Error(),
-		})
-		return
-	}
-	if waitErr != nil {
-		metric.SetStatus("remote_error")
-		writeRcloneAPIError(w, waitErr, proc.stderr.String(), rcloneAPIErrorContext{
-			MissingMessage: "rclone is required to fetch thumbnails (install it or set RCLONE_PATH)",
-			DefaultStatus:  http.StatusBadRequest,
-			DefaultCode:    "s3_error",
-			DefaultMessage: "failed to download object",
-		}, map[string]any{"bucket": bucket, "key": key})
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported", err.Error(), map[string]any{"key": key})
 		return
 	}
 
@@ -246,10 +287,279 @@ func decodeThumbnailImage(r io.Reader) (image.Image, error) {
 }
 
 func thumbnailMaxBytesForKind(kind string) int64 {
-	if kind == "video" {
-		return thumbnailVideoMaxBytes
+	if kind == "image" {
+		return thumbnailImageMaxBytes
 	}
-	return thumbnailImageMaxBytes
+	return 0
+}
+
+func (s *server) decodeThumbnailVideoWithFallbacks(
+	ctx context.Context,
+	secrets models.ProfileSecrets,
+	bucket string,
+	key string,
+	size int64,
+	ffmpegPath string,
+) (image.Image, []thumbnailVideoAttempt, error) {
+	if size <= 0 || size <= thumbnailVideoFullStreamBytes {
+		img, attempt, err := s.decodeThumbnailVideoStreamAttempt(ctx, secrets, bucket, key, ffmpegPath, "full", 0, 0)
+		return img, []thumbnailVideoAttempt{attempt}, err
+	}
+
+	attempts := make([]thumbnailVideoAttempt, 0, 3)
+	for _, count := range thumbnailVideoPartialPlan(size) {
+		img, attempt, err := s.decodeThumbnailVideoStreamAttempt(ctx, secrets, bucket, key, ffmpegPath, "range_head", 0, count)
+		attempts = append(attempts, attempt)
+		if err == nil {
+			return img, attempts, nil
+		}
+		var fetchErr *thumbnailVideoFetchError
+		if errors.As(err, &fetchErr) {
+			return nil, attempts, err
+		}
+
+		tailOffset := size - count
+		if tailOffset < 0 {
+			tailOffset = 0
+		}
+		img, attempt, err = s.decodeThumbnailVideoStreamAttempt(ctx, secrets, bucket, key, ffmpegPath, "range_tail", tailOffset, count)
+		attempts = append(attempts, attempt)
+		if err == nil {
+			return img, attempts, nil
+		}
+		if errors.As(err, &fetchErr) {
+			return nil, attempts, err
+		}
+
+		img, attempt, err = s.decodeThumbnailVideoSparseAttempt(ctx, secrets, bucket, key, size, ffmpegPath, count)
+		attempts = append(attempts, attempt)
+		if err == nil {
+			return img, attempts, nil
+		}
+		if errors.As(err, &fetchErr) {
+			return nil, attempts, err
+		}
+	}
+	return nil, attempts, errors.New("failed to extract thumbnail from available video ranges")
+}
+
+func (s *server) decodeThumbnailVideoStreamAttempt(
+	ctx context.Context,
+	secrets models.ProfileSecrets,
+	bucket string,
+	key string,
+	ffmpegPath string,
+	stream string,
+	offset int64,
+	count int64,
+) (image.Image, thumbnailVideoAttempt, error) {
+	attempt := thumbnailVideoAttempt{
+		Stream:      stream,
+		Offset:      offset,
+		StreamBytes: count,
+	}
+
+	remote := rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash)
+	args := []string{"cat"}
+	if count > 0 {
+		args = append(args, "--offset", strconv.FormatInt(offset, 10), "--count", strconv.FormatInt(count, 10))
+	}
+	args = append(args, remote)
+
+	downloadCtx, cancelDownload := context.WithCancel(ctx)
+	defer cancelDownload()
+
+	proc, err := s.startRclone(downloadCtx, secrets, args, "thumbnail")
+	if err != nil {
+		return nil, attempt, &thumbnailVideoFetchError{err: err}
+	}
+
+	img, decodeErr := decodeThumbnailVideoFrame(ctx, ffmpegPath, proc.stdout)
+	if decodeErr == nil {
+		cancelDownload()
+		_ = proc.wait()
+		return img, attempt, nil
+	}
+
+	waitErr := proc.wait()
+	if waitErr != nil {
+		attempt.Error = decodeErr.Error()
+		return nil, attempt, decodeErr
+	}
+
+	attempt.Error = decodeErr.Error()
+	return nil, attempt, decodeErr
+}
+
+func (s *server) decodeThumbnailVideoSparseAttempt(
+	ctx context.Context,
+	secrets models.ProfileSecrets,
+	bucket string,
+	key string,
+	size int64,
+	ffmpegPath string,
+	count int64,
+) (image.Image, thumbnailVideoAttempt, error) {
+	ranges := thumbnailVideoSparseRanges(size, count)
+	attempt := thumbnailVideoAttempt{
+		Stream: "sparse_file",
+		Ranges: ranges,
+	}
+	for _, r := range ranges {
+		attempt.StreamBytes += r.Count
+	}
+
+	tmp, err := os.CreateTemp("", "s3desk-video-thumb-*.bin")
+	if err != nil {
+		attempt.Error = err.Error()
+		return nil, attempt, err
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+	}()
+
+	if err := tmp.Truncate(size); err != nil {
+		attempt.Error = err.Error()
+		return nil, attempt, err
+	}
+	for _, r := range ranges {
+		if err := s.copyThumbnailObjectRange(ctx, secrets, bucket, key, r.Offset, r.Count, tmp); err != nil {
+			attempt.Error = err.Error()
+			return nil, attempt, err
+		}
+	}
+	if err := tmp.Close(); err != nil {
+		attempt.Error = err.Error()
+		return nil, attempt, err
+	}
+
+	img, err := decodeThumbnailVideoFrameFile(ctx, ffmpegPath, tmpPath)
+	if err != nil {
+		attempt.Error = err.Error()
+		return nil, attempt, err
+	}
+	return img, attempt, nil
+}
+
+func (s *server) copyThumbnailObjectRange(
+	ctx context.Context,
+	secrets models.ProfileSecrets,
+	bucket string,
+	key string,
+	offset int64,
+	count int64,
+	dst *os.File,
+) error {
+	if count <= 0 {
+		return nil
+	}
+	if _, err := dst.Seek(offset, io.SeekStart); err != nil {
+		return err
+	}
+
+	args := []string{
+		"cat",
+		"--offset", strconv.FormatInt(offset, 10),
+		"--count", strconv.FormatInt(count, 10),
+		rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash),
+	}
+	proc, err := s.startRclone(ctx, secrets, args, "thumbnail")
+	if err != nil {
+		return &thumbnailVideoFetchError{err: err}
+	}
+
+	_, copyErr := io.Copy(dst, proc.stdout)
+	waitErr := proc.wait()
+	if copyErr != nil {
+		return copyErr
+	}
+	if waitErr != nil {
+		return &thumbnailVideoFetchError{err: waitErr, stderr: proc.stderr.String()}
+	}
+	return nil
+}
+
+func thumbnailVideoSparseRanges(size int64, count int64) []thumbnailByteRange {
+	if size <= 0 {
+		return nil
+	}
+	headCount := size
+	if count > 0 && headCount > count {
+		headCount = count
+	}
+	tailOffset := size - headCount
+	if tailOffset < 0 {
+		tailOffset = 0
+	}
+	if tailOffset == 0 {
+		return []thumbnailByteRange{{Offset: 0, Count: headCount}}
+	}
+	return []thumbnailByteRange{
+		{Offset: 0, Count: headCount},
+		{Offset: tailOffset, Count: headCount},
+	}
+}
+
+func thumbnailVideoPartialPlan(size int64) []int64 {
+	if size <= 0 {
+		return []int64{thumbnailVideoPartialMinBytes}
+	}
+	candidates := []int64{
+		thumbnailVideoPartialTinyBytes,
+		thumbnailVideoPartialMinBytes,
+		thumbnailVideoPartialMidBytes,
+		thumbnailVideoPartialMaxBytes,
+	}
+	plan := make([]int64, 0, len(candidates))
+	var last int64 = -1
+	for _, candidate := range candidates {
+		count := candidate
+		if size < count {
+			count = size
+		}
+		if count <= 0 || count == last {
+			continue
+		}
+		plan = append(plan, count)
+		last = count
+	}
+	if len(plan) == 0 {
+		return []int64{size}
+	}
+	return plan
+}
+
+func thumbnailVideoAttemptsDetails(attempts []thumbnailVideoAttempt) []map[string]any {
+	if len(attempts) == 0 {
+		return nil
+	}
+	details := make([]map[string]any, 0, len(attempts))
+	for _, attempt := range attempts {
+		item := map[string]any{
+			"stream":      attempt.Stream,
+			"streamBytes": attempt.StreamBytes,
+		}
+		if attempt.Offset > 0 {
+			item["offset"] = attempt.Offset
+		}
+		if len(attempt.Ranges) > 0 {
+			ranges := make([]map[string]any, 0, len(attempt.Ranges))
+			for _, r := range attempt.Ranges {
+				ranges = append(ranges, map[string]any{
+					"offset": r.Offset,
+					"count":  r.Count,
+				})
+			}
+			item["ranges"] = ranges
+		}
+		if attempt.Error != "" {
+			item["error"] = attempt.Error
+		}
+		details = append(details, item)
+	}
+	return details
 }
 
 func decodeThumbnailVideoFrame(ctx context.Context, ffmpegPath string, r io.Reader) (image.Image, error) {
@@ -266,6 +576,41 @@ func decodeThumbnailVideoFrame(ctx context.Context, ffmpegPath string, r io.Read
 		"pipe:1",
 	)
 	cmd.Stdin = r
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	out, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return nil, errors.New(msg)
+		}
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, errors.New("ffmpeg returned empty frame output")
+	}
+	img, _, err := image.Decode(bytes.NewReader(out))
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
+}
+
+func decodeThumbnailVideoFrameFile(ctx context.Context, ffmpegPath string, filePath string) (image.Image, error) {
+	cmd := exec.CommandContext(
+		ctx,
+		ffmpegPath,
+		"-hide_banner",
+		"-loglevel", "error",
+		"-i", filePath,
+		"-vf", "thumbnail",
+		"-frames:v", "1",
+		"-f", "image2pipe",
+		"-vcodec", "png",
+		"pipe:1",
+	)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

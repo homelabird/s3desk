@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Button, Checkbox, Typography } from 'antd'
-import { EllipsisOutlined, FileOutlined, PlayCircleOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { EllipsisOutlined, FileOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import type { ObjectItem } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
@@ -12,7 +12,7 @@ import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import { buildActionMenu } from './objectsActions'
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
 import { GRID_CARD_THUMBNAIL_PX } from './objectsPageConstants'
-import { displayNameForKey, isThumbnailKey, isVideoKey } from './objectsListUtils'
+import { displayNameForKey, isThumbnailKey } from './objectsListUtils'
 import { extensionLabel, onActivateFromKeyboard } from './objectsGridRendererUtils'
 
 type UseObjectsObjectGridRendererArgs = Pick<
@@ -66,7 +66,6 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 		openObjectContextMenu,
 		prefix,
 		profileId,
-		profileProvider,
 		recordContextMenuPoint,
 		selectObjectFromCheckboxEvent,
 		selectObjectFromPointerEvent,
@@ -89,8 +88,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			const menu = withContextMenuClassName(
 				buildActionMenu(useSelectionMenu ? selectionContextMenuActions : getObjectActions(key, object.size), isAdvanced),
 			)
-			const deferVideoThumbnail = profileProvider === 'oci_object_storage' && isVideoKey(key)
-			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key) && !deferVideoThumbnail
+			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key)
 			const isSelected = selectedKeys.has(key)
 			const isFavorite = favoriteKeys.has(key)
 			const favoriteDisabled = favoritePendingKeys.has(key) || isOffline || !profileId || !bucket
@@ -198,22 +196,6 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 										cacheKeySuffix={object.etag || object.lastModified || undefined}
 									/>
 								</button>
-							) : deferVideoThumbnail ? (
-								<button
-									type="button"
-									className={`${styles.gridCardPreviewButton} ${styles.gridCardDeferredPreviewButton}`}
-									onClick={(event) => {
-										event.preventDefault()
-										event.stopPropagation()
-										onOpenLargePreviewForKey(key)
-									}}
-									aria-label={`Load preview for ${key}`}
-								>
-									<div className={styles.gridCardMediaPlaceholder}>
-										<PlayCircleOutlined className={styles.gridCardFileIcon} />
-										<Typography.Text type="secondary">Load preview</Typography.Text>
-									</div>
-								</button>
 							) : (
 								<div className={styles.gridCardMediaPlaceholder}>
 									<FileOutlined className={styles.gridCardFileIcon} />
@@ -258,7 +240,6 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			openObjectContextMenu,
 			prefix,
 			profileId,
-			profileProvider,
 			recordContextMenuPoint,
 			selectedCount,
 			selectedKeys,

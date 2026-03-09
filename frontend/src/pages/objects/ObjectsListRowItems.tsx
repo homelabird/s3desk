@@ -14,7 +14,7 @@ import { buildActionMenu } from './objectsActions'
 import { COMPACT_LIST_THUMBNAIL_PX, WIDE_LIST_THUMBNAIL_PX } from './objectsPageConstants'
 import { ObjectsObjectRow, ObjectsPrefixRow } from './ObjectsListRow'
 import { ObjectThumbnail } from './ObjectThumbnail'
-import { displayNameForKey, displayNameForPrefix, isThumbnailKey, isVideoKey } from './objectsListUtils'
+import { displayNameForKey, displayNameForPrefix, isThumbnailKey } from './objectsListUtils'
 import type { ContextMenuMatch, ContextMenuPoint } from './useObjectsContextMenu'
 
 type ObjectsPrefixRowItemProps = {
@@ -202,7 +202,6 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		onToggleFavorite,
 		api,
 		profileId,
-		profileProvider,
 		bucket,
 		showThumbnails,
 		thumbnailCache,
@@ -215,8 +214,7 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 	const sizeLabel = useMemo(() => formatBytes(object.size), [object.size])
 	const timeLabel = useMemo(() => formatDateTime(object.lastModified), [object.lastModified])
 	const thumbnailSize = isCompact ? COMPACT_LIST_THUMBNAIL_PX : WIDE_LIST_THUMBNAIL_PX
-	const deferVideoThumbnail = profileProvider === 'oci_object_storage' && isVideoKey(object.key)
-	const canShowThumbnail = showThumbnails && isThumbnailKey(object.key) && !deferVideoThumbnail
+	const canShowThumbnail = showThumbnails && isThumbnailKey(object.key)
 	const thumbnail =
 		canShowThumbnail && profileId && bucket ? (
 			<ObjectThumbnail
@@ -229,10 +227,6 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 				cache={thumbnailCache}
 				cacheKeySuffix={object.etag || object.lastModified || undefined}
 			/>
-		) : deferVideoThumbnail ? (
-			<span className={styles.listThumbnailDeferredHint} aria-hidden>
-				Preview
-			</span>
 		) : null
 
 	const menu = useMemo(() => {

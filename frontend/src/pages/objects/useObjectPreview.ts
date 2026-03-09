@@ -4,7 +4,12 @@ import { message } from 'antd'
 import { APIClient, RequestAbortedError } from '../../api/client'
 import type { ObjectMeta } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import { buildThumbnailCacheKey, getPersistentThumbnailBlob, setPersistentThumbnailBlob } from '../../lib/thumbnailCache'
+import {
+	buildThumbnailCacheKey,
+	getReusablePersistentThumbnailBlob,
+	setPersistentThumbnailBlob,
+	type ThumbnailCache,
+} from '../../lib/thumbnailCache'
 import { formatBytes } from '../../lib/transfer'
 import type { ObjectPreview } from './objectsTypes'
 import { guessPreviewKind } from './objectsListUtils'
@@ -22,6 +27,7 @@ type UseObjectPreviewArgs = {
 	detailsMeta: ObjectMeta | null
 	downloadLinkProxyEnabled: boolean
 	presignedDownloadSupported: boolean
+	thumbnailCache?: ThumbnailCache
 }
 
 export type ObjectPreviewResult = {
@@ -35,14 +41,16 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 	const [preview, setPreview] = useState<ObjectPreview | null>(null)
 	const previewAbortRef = useRef<(() => void) | null>(null)
 	const previewURLRef = useRef<string | null>(null)
+	const previewURLOwnedRef = useRef(false)
 
 	const cleanupPreview = useCallback(() => {
 		previewAbortRef.current?.()
 		previewAbortRef.current = null
-		if (previewURLRef.current) {
+		if (previewURLRef.current && previewURLOwnedRef.current) {
 			URL.revokeObjectURL(previewURLRef.current)
-			previewURLRef.current = null
 		}
+		previewURLRef.current = null
+		previewURLOwnedRef.current = false
 	}, [])
 
 	useEffect(() => {
@@ -76,18 +84,32 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		setPreview({ key, status: 'loading', kind, contentType })
 
 		if (kind === 'video') {
-			const cacheKey = buildThumbnailCacheKey({
+			const thumbnailRequest = {
 				profileId: args.profileId,
 				bucket: args.bucket,
 				objectKey: key,
 				size: VIDEO_PREVIEW_THUMBNAIL_SIZE,
 				cacheKeySuffix: args.detailsMeta.etag || args.detailsMeta.lastModified || undefined,
-			})
-			const cachedBlob = await getPersistentThumbnailBlob(cacheKey)
+			}
+			const cacheKey = buildThumbnailCacheKey(thumbnailRequest)
+			const cachedMatch = args.thumbnailCache?.findBestMatch(thumbnailRequest) ?? null
+			if (cachedMatch) {
+				previewURLRef.current = cachedMatch.url
+				previewURLOwnedRef.current = false
+				setPreview({ key, status: 'ready', kind: 'video', contentType, url: cachedMatch.url })
+				return
+			}
+			const cachedBlob = await getReusablePersistentThumbnailBlob(thumbnailRequest)
 			if (cachedBlob) {
-				const url = URL.createObjectURL(cachedBlob)
+				const url = URL.createObjectURL(cachedBlob.blob)
+				if (args.thumbnailCache) {
+					args.thumbnailCache.set(cachedBlob.cacheKey, url)
+					previewURLOwnedRef.current = false
+				} else {
+					previewURLOwnedRef.current = true
+				}
 				previewURLRef.current = url
-				setPreview({ key, status: 'ready', kind: 'video', contentType: cachedBlob.type || contentType, url })
+				setPreview({ key, status: 'ready', kind: 'video', contentType: cachedBlob.blob.type || contentType, url })
 				return
 			}
 			const handle = args.api.downloadObjectThumbnail({
@@ -102,6 +124,12 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 				previewAbortRef.current = null
 				await setPersistentThumbnailBlob(cacheKey, resp.blob)
 				const url = URL.createObjectURL(resp.blob)
+				if (args.thumbnailCache) {
+					args.thumbnailCache.set(cacheKey, url)
+					previewURLOwnedRef.current = false
+				} else {
+					previewURLOwnedRef.current = true
+				}
 				previewURLRef.current = url
 				setPreview({ key, status: 'ready', kind: 'video', contentType: resp.contentType ?? contentType, url })
 				return
@@ -191,6 +219,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			if (kind === 'image') {
 				const url = URL.createObjectURL(resp.blob)
 				previewURLRef.current = url
+				previewURLOwnedRef.current = true
 				setPreview({ key, status: 'ready', kind: 'image', contentType: effectiveContentType, url })
 				return
 			}
@@ -218,7 +247,17 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			}
 			setPreview({ key, status: 'error', kind, contentType, error: formatErr(err) })
 		}
-	}, [args.api, args.bucket, args.detailsMeta, args.downloadLinkProxyEnabled, args.presignedDownloadSupported, args.profileId, cleanupPreview, preview?.status])
+	}, [
+		args.api,
+		args.bucket,
+		args.detailsMeta,
+		args.downloadLinkProxyEnabled,
+		args.presignedDownloadSupported,
+		args.profileId,
+		args.thumbnailCache,
+		cleanupPreview,
+		preview?.status,
+	])
 
 	const cancelPreview = useCallback(() => {
 		previewAbortRef.current?.()

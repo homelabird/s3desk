@@ -4,7 +4,7 @@ import type { APIClient } from '../../api/client'
 import { APIError, RequestAbortedError } from '../../api/client'
 import {
 	buildThumbnailCacheKey,
-	getPersistentThumbnailBlob,
+	getReusablePersistentThumbnailBlob,
 	setPersistentThumbnailBlob,
 	shouldPersistThumbnailLocally,
 	type ThumbnailCache,
@@ -23,20 +23,20 @@ type Props = {
 }
 
 export function ObjectThumbnail(props: Props) {
-	const cacheKey = useMemo(
-		() =>
-			buildThumbnailCacheKey({
-				profileId: props.profileId,
-				bucket: props.bucket,
-				objectKey: props.objectKey,
-				size: props.size,
-				cacheKeySuffix: props.cacheKeySuffix,
-			}),
+	const thumbnailRequest = useMemo(
+		() => ({
+			profileId: props.profileId,
+			bucket: props.bucket,
+			objectKey: props.objectKey,
+			size: props.size,
+			cacheKeySuffix: props.cacheKeySuffix,
+		}),
 		[props.bucket, props.cacheKeySuffix, props.objectKey, props.profileId, props.size],
 	)
+	const cacheKey = useMemo(() => buildThumbnailCacheKey(thumbnailRequest), [thumbnailRequest])
 	const [, bumpCacheVersion] = useState(0)
-	const url = props.cache.get(cacheKey) ?? null
-	const failed = props.cache.isFailed(cacheKey)
+	const url = props.cache.findBestMatch(thumbnailRequest)?.url ?? null
+	const failed = !url && props.cache.isFailed(cacheKey)
 
 	useEffect(() => {
 		if (url || failed) return
@@ -46,11 +46,11 @@ export function ObjectThumbnail(props: Props) {
 		const load = async () => {
 			const shouldUsePersistentCache = shouldPersistThumbnailLocally(props.objectKey)
 			if (shouldUsePersistentCache) {
-				const cachedBlob = await getPersistentThumbnailBlob(cacheKey)
+				const cachedBlob = await getReusablePersistentThumbnailBlob(thumbnailRequest)
 				if (cachedBlob) {
 					if (!active) return
-					const objectURL = URL.createObjectURL(cachedBlob)
-					props.cache.set(cacheKey, objectURL)
+					const objectURL = URL.createObjectURL(cachedBlob.blob)
+					props.cache.set(cachedBlob.cacheKey, objectURL)
 					bumpCacheVersion((version) => version + 1)
 					return
 				}
@@ -100,6 +100,7 @@ export function ObjectThumbnail(props: Props) {
 		props.objectKey,
 		props.profileId,
 		props.size,
+		thumbnailRequest,
 		url,
 	])
 

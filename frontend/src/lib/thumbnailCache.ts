@@ -1,9 +1,24 @@
 export type ThumbnailCache = {
 	get: (key: string) => string | undefined
 	set: (key: string, url: string) => void
+	findBestMatch: (args: ThumbnailCacheRequest) => ThumbnailCacheMatch | null
 	isFailed: (key: string) => boolean
 	markFailed: (key: string) => void
 	clear: () => void
+}
+
+export type ThumbnailCacheRequest = {
+	profileId: string
+	bucket: string
+	objectKey: string
+	size: number
+	cacheKeySuffix?: string
+}
+
+export type ThumbnailCacheMatch = {
+	cacheKey: string
+	size: number
+	url: string
 }
 
 export const THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES = 400
@@ -15,6 +30,7 @@ const PERSISTENT_THUMBNAIL_CACHE_PREFIX = 'https://thumbnail-cache.s3desk.local/
 export const PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 export const PERSISTENT_THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES = 120
 const VIDEO_THUMBNAIL_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi'])
+const THUMBNAIL_CACHE_KEY_VERSION = 'v2'
 
 type CacheOptions = {
 	maxEntries?: number
@@ -28,15 +44,18 @@ type PersistentThumbnailOptions = {
 
 type PersistentThumbnailIndex = Record<string, number>
 
-export function buildThumbnailCacheKey(args: {
-	profileId: string
-	bucket: string
-	objectKey: string
-	size: number
-	cacheKeySuffix?: string
-}): string {
-	const suffix = args.cacheKeySuffix ? `:${args.cacheKeySuffix}` : ''
-	return `${args.profileId}:${args.bucket}:${args.objectKey}:${args.size}${suffix}`
+export function buildThumbnailCacheBaseKey(args: Omit<ThumbnailCacheRequest, 'size'>): string {
+	return [
+		THUMBNAIL_CACHE_KEY_VERSION,
+		encodeURIComponent(args.profileId),
+		encodeURIComponent(args.bucket),
+		encodeURIComponent(args.objectKey),
+		encodeURIComponent(args.cacheKeySuffix ?? ''),
+	].join('|')
+}
+
+export function buildThumbnailCacheKey(args: ThumbnailCacheRequest): string {
+	return `${buildThumbnailCacheBaseKey(args)}|${normalizeThumbnailSize(args.size)}`
 }
 
 export function shouldPersistThumbnailLocally(objectKey: string): boolean {
@@ -48,30 +67,59 @@ export async function getPersistentThumbnailBlob(
 	cacheKey: string,
 	options: PersistentThumbnailOptions = {},
 ): Promise<Blob | null> {
+	const match = await getReusablePersistentThumbnailBlobByCacheKey(cacheKey, options)
+	return match?.blob ?? null
+}
+
+export async function getReusablePersistentThumbnailBlob(
+	args: ThumbnailCacheRequest,
+	options: PersistentThumbnailOptions = {},
+): Promise<ThumbnailPersistentMatch | null> {
+	return getReusablePersistentThumbnailBlobByCacheKey(buildThumbnailCacheKey(args), options)
+}
+
+async function getReusablePersistentThumbnailBlobByCacheKey(
+	cacheKey: string,
+	options: PersistentThumbnailOptions = {},
+): Promise<ThumbnailPersistentMatch | null> {
 	if (!supportsPersistentThumbnailCache()) return null
 	try {
 		const cache = await window.caches.open(PERSISTENT_THUMBNAIL_CACHE_NAME)
 		const index = loadPersistentThumbnailIndex()
 		const now = Date.now()
 		const ttlMs = options.ttlMs ?? PERSISTENT_THUMBNAIL_CACHE_DEFAULT_TTL_MS
-		const updatedAt = index[cacheKey]
-		if (typeof updatedAt === 'number' && now-updatedAt > ttlMs) {
-			await deletePersistentThumbnailEntry(cache, cacheKey)
-			delete index[cacheKey]
-			savePersistentThumbnailIndex(index)
-			return null
+		let indexChanged = false
+		for (const [indexedKey, updatedAt] of Object.entries(index)) {
+			if (now - updatedAt <= ttlMs) continue
+			await deletePersistentThumbnailEntry(cache, indexedKey)
+			delete index[indexedKey]
+			indexChanged = true
 		}
-		const response = await cache.match(buildPersistentThumbnailRequest(cacheKey))
-		if (!response || !response.ok) {
-			if (cacheKey in index) {
-				delete index[cacheKey]
-				savePersistentThumbnailIndex(index)
+
+		const requested = parseThumbnailCacheKey(cacheKey)
+		const candidateKeys = requested ? findReusableCacheKeys(Object.keys(index), requested) : [cacheKey]
+		for (const candidateKey of candidateKeys) {
+			const response = await cache.match(buildPersistentThumbnailRequest(candidateKey))
+			if (!response || !response.ok) {
+				if (candidateKey in index) {
+					delete index[candidateKey]
+					indexChanged = true
+				}
+				continue
 			}
-			return null
+			index[candidateKey] = now
+			await prunePersistentThumbnailCache(cache, index, options)
+			return {
+				blob: await response.blob(),
+				cacheKey: candidateKey,
+				size: parseThumbnailCacheKey(candidateKey)?.size ?? 0,
+			}
 		}
-		index[cacheKey] = now
-		await prunePersistentThumbnailCache(cache, index, options)
-		return await response.blob()
+
+		if (indexChanged) {
+			savePersistentThumbnailIndex(index)
+		}
+		return null
 	} catch {
 		return null
 	}
@@ -150,6 +198,23 @@ export function createThumbnailCache(options: CacheOptions = {}): ThumbnailCache
 			entries.set(key, url)
 			prune()
 		},
+		findBestMatch(args: ThumbnailCacheRequest) {
+			const requested = parseThumbnailCacheKey(buildThumbnailCacheKey(args))
+			if (!requested) return null
+			const candidateKeys = findReusableCacheKeys(entries.keys(), requested)
+			for (const candidateKey of candidateKeys) {
+				const url = entries.get(candidateKey)
+				if (!url) continue
+				entries.delete(candidateKey)
+				entries.set(candidateKey, url)
+				return {
+					cacheKey: candidateKey,
+					size: parseThumbnailCacheKey(candidateKey)?.size ?? requested.size,
+					url,
+				}
+			}
+			return null
+		},
 		isFailed(key: string) {
 			return isFailureFresh(key)
 		},
@@ -177,6 +242,59 @@ function supportsPersistentThumbnailCache(): boolean {
 
 function buildPersistentThumbnailRequest(cacheKey: string): Request {
 	return new Request(`${PERSISTENT_THUMBNAIL_CACHE_PREFIX}${encodeURIComponent(cacheKey)}`)
+}
+
+type ParsedThumbnailCacheKey = {
+	baseKey: string
+	size: number
+	cacheKey: string
+}
+
+type ThumbnailPersistentMatch = {
+	blob: Blob
+	cacheKey: string
+	size: number
+}
+
+function normalizeThumbnailSize(size: number): number {
+	if (!Number.isFinite(size)) return 0
+	return Math.max(0, Math.round(size))
+}
+
+function parseThumbnailCacheKey(cacheKey: string): ParsedThumbnailCacheKey | null {
+	const parts = cacheKey.split('|')
+	if (parts.length !== 6 || parts[0] !== THUMBNAIL_CACHE_KEY_VERSION) return null
+	const size = Number(parts[5])
+	if (!Number.isFinite(size) || size < 0) return null
+	return {
+		baseKey: parts.slice(0, 5).join('|'),
+		size,
+		cacheKey,
+	}
+}
+
+function findReusableCacheKeys(keys: Iterable<string>, requested: ParsedThumbnailCacheKey): string[] {
+	const exact: ParsedThumbnailCacheKey[] = []
+	const larger: ParsedThumbnailCacheKey[] = []
+	const smaller: ParsedThumbnailCacheKey[] = []
+
+	for (const key of keys) {
+		const parsed = parseThumbnailCacheKey(key)
+		if (!parsed || parsed.baseKey !== requested.baseKey) continue
+		if (parsed.size === requested.size) {
+			exact.push(parsed)
+			continue
+		}
+		if (parsed.size > requested.size) {
+			larger.push(parsed)
+			continue
+		}
+		smaller.push(parsed)
+	}
+
+	larger.sort((a, b) => a.size - b.size)
+	smaller.sort((a, b) => b.size - a.size)
+	return [...exact, ...larger, ...smaller].map((entry) => entry.cacheKey)
 }
 
 function loadPersistentThumbnailIndex(): PersistentThumbnailIndex {
