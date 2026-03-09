@@ -3,6 +3,7 @@
 S3Desk is a self-hosted dashboard for multi-provider object storage.
 
 ![S3Desk dashboard](img/image.png)
+![S3Desk objects view](img/objects.png)
 
 ## Build Requirements
 
