@@ -1,6 +1,8 @@
-import { Collapse, InputNumber, Space, Switch } from 'antd'
+import { Collapse, Space } from 'antd'
 
 import { FormField } from '../../components/FormField'
+import { NumberField } from '../../components/NumberField'
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
@@ -28,7 +30,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 	return (
 		<div>
 			<FormField label="Show image thumbnails" extra="Controls thumbnails in the object list and details panel.">
-				<Switch
+				<ToggleSwitch
 					checked={props.objectsShowThumbnails}
 					onChange={props.setObjectsShowThumbnails}
 					aria-label="Show image thumbnails"
@@ -43,11 +45,10 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 						children: (
 							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 								<FormField label="Thumbnail cache size" extra="Max cached thumbnails kept in memory (LRU).">
-									<InputNumber
+									<NumberField
 										min={THUMBNAIL_CACHE_MIN_ENTRIES}
 										max={THUMBNAIL_CACHE_MAX_ENTRIES}
 										step={50}
-										precision={0}
 										value={props.objectsThumbnailCacheSize}
 										onChange={(value) =>
 											props.setObjectsThumbnailCacheSize(
@@ -63,7 +64,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 									label="Auto index current prefix"
 									extra="When Global Search is used, build/refresh the index for the current prefix automatically."
 								>
-									<Switch
+									<ToggleSwitch
 										checked={props.objectsAutoIndexEnabled}
 										onChange={props.setObjectsAutoIndexEnabled}
 										aria-label="Auto index current prefix"
@@ -73,11 +74,10 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 									label="Auto index TTL (hours)"
 									extra="Rebuild prefix index when it is older than this value."
 								>
-									<InputNumber
+									<NumberField
 										min={OBJECTS_AUTO_INDEX_TTL_MIN_HOURS}
 										max={OBJECTS_AUTO_INDEX_TTL_MAX_HOURS}
 										step={1}
-										precision={0}
 										value={props.objectsAutoIndexTtlHours}
 										onChange={(value) =>
 											props.setObjectsAutoIndexTtlHours(

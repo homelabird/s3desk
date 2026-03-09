@@ -24,6 +24,7 @@ type ObjectsDetailsPanelSectionProps = {
 	onDelete: () => void
 	isDeleteLoading: boolean
 	thumbnail?: ReactNode
+	previewThumbnail?: ReactNode
 	preview: ObjectPreview | null
 	onLoadPreview: () => void
 	onCancelPreview: () => void
@@ -61,6 +62,7 @@ export function ObjectsDetailsPanelSection(props: ObjectsDetailsPanelSectionProp
 			onDelete={props.onDelete}
 			isDeleteLoading={props.isDeleteLoading}
 			thumbnail={props.thumbnail}
+			previewThumbnail={props.previewThumbnail}
 			preview={props.preview}
 			onLoadPreview={props.onLoadPreview}
 			onCancelPreview={props.onCancelPreview}

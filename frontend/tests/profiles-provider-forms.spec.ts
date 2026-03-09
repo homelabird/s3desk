@@ -1,51 +1,20 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const metaResponse = {
-	version: 'test',
-	serverAddr: '127.0.0.1:8080',
-	dataDir: '/data',
-	staticDir: '/app/ui',
-	apiTokenEnabled: true,
-	encryptionEnabled: false,
-	capabilities: { profileTls: { enabled: false, reason: 'test' } },
-	jobConcurrency: 2,
-	uploadSessionTTLSeconds: 3600,
-	transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-}
+import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
 
 async function seedStorage(page: Page) {
-	await page.addInitScript(() => {
-		window.localStorage.setItem('apiToken', JSON.stringify('playwright-token'))
-		window.localStorage.setItem('profileId', JSON.stringify(null))
+	await seedLocalStorage(page, {
+		apiToken: 'playwright-token',
+		profileId: null,
 	})
 }
 
-async function setupApiMocks(
-	page: Page,
-	profiles: Array<Record<string, unknown>> = [],
-) {
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metaResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profiles) })
-		}
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({ status: 403, contentType: 'text/plain', body: 'forbidden' })
-		}
-
-		return route.fulfill({
-			status: 404,
-			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-		})
-	})
+async function setupApiMocks(page: Page, profiles: Array<Record<string, unknown>> = []) {
+	await installApiFixtures(page, [
+		jsonFixture('GET', '/api/v1/meta', metaJson()),
+		jsonFixture('GET', '/api/v1/profiles', profiles),
+		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),
+	])
 }
 
 async function selectProvider(page: Page, optionLabel: string) {

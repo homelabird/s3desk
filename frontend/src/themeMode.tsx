@@ -1,16 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react'
 
 import { useLocalStorageState } from './lib/useLocalStorageState'
-
-export type ThemeMode = 'light' | 'dark'
-
-type ThemeModeContextValue = {
-	mode: ThemeMode
-	setMode: (next: ThemeMode) => void
-	toggleMode: () => void
-}
-
-const ThemeModeContext = createContext<ThemeModeContextValue | null>(null)
+import { ThemeModeContext, type ThemeMode, type ThemeModeContextValue } from './themeModeContext'
 
 function getInitialThemeMode(): ThemeMode {
 	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light'
@@ -44,12 +35,4 @@ export function ThemeModeProvider(props: ThemeModeProviderProps) {
 	)
 
 	return <ThemeModeContext.Provider value={value}>{props.children}</ThemeModeContext.Provider>
-}
-
-export function useThemeMode(): ThemeModeContextValue {
-	const ctx = useContext(ThemeModeContext)
-	if (!ctx) {
-		throw new Error('useThemeMode must be used within ThemeModeProvider')
-	}
-	return ctx
 }

@@ -168,6 +168,7 @@ func TestCommitUploadQueueFullThenRetrySucceeds(t *testing.T) {
 		t.Skip("fake rclone uses a shell script")
 	}
 
+	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
 	t.Setenv("RCLONE_PATH", writeFakeRclone(t, "exit 0\n"))
 	t.Setenv("RCLONE_TUNE", "true")

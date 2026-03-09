@@ -56,6 +56,23 @@ func TestRenderConfigAzureBlob(t *testing.T) {
 	}
 }
 
+func TestRenderConfigAzureBlobUseEmulatorUsesSharedDefaultEndpoint(t *testing.T) {
+	profile := models.ProfileSecrets{
+		Provider:         models.ProfileProviderAzureBlob,
+		AzureAccountName: "acct",
+		AzureAccountKey:  "key",
+		AzureUseEmulator: true,
+	}
+
+	out, err := RenderConfig(profile, RemoteName)
+	if err != nil {
+		t.Fatalf("RenderConfig: %v", err)
+	}
+	if !strings.Contains(out, "endpoint = http://azurite:10000/acct") {
+		t.Fatalf("expected shared emulator endpoint, got:\n%s", out)
+	}
+}
+
 func TestRenderConfigGcpGcsCompactsJson(t *testing.T) {
 	profile := models.ProfileSecrets{
 		Provider: models.ProfileProviderGcpGcs,

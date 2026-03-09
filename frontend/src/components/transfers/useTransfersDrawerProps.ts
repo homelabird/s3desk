@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 
 import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
+import { getActiveDownloadCount, getActiveUploadCount } from './transfersTaskSummary'
 import type { TransfersDrawerProps } from './TransfersDrawer'
 
 type UseTransfersDrawerPropsParams = {
@@ -42,18 +43,9 @@ export function useTransfersDrawerProps(params: UseTransfersDrawerPropsParams): 
 		onOpenJobs,
 	} = params
 
-	const activeDownloadCount = useMemo(
-		() => downloadTasks.filter((t) => t.status === 'queued' || t.status === 'waiting' || t.status === 'running').length,
-		[downloadTasks],
-	)
+	const activeDownloadCount = useMemo(() => getActiveDownloadCount(downloadTasks), [downloadTasks])
 	const hasCompletedDownloads = useMemo(() => downloadTasks.some((t) => t.status === 'succeeded'), [downloadTasks])
-	const activeUploadCount = useMemo(
-		() =>
-			uploadTasks.filter(
-				(t) => t.status === 'queued' || t.status === 'staging' || t.status === 'commit' || t.status === 'waiting_job' || t.status === 'cleanup',
-			).length,
-		[uploadTasks],
-	)
+	const activeUploadCount = useMemo(() => getActiveUploadCount(uploadTasks), [uploadTasks])
 	const hasCompletedUploads = useMemo(() => uploadTasks.some((t) => t.status === 'succeeded'), [uploadTasks])
 	const activeTransferCount = useMemo(() => activeDownloadCount + activeUploadCount, [activeDownloadCount, activeUploadCount])
 

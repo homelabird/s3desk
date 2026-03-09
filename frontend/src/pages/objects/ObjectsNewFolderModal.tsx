@@ -1,5 +1,6 @@
-import { Alert, Button, Checkbox, Input, Modal, Typography } from 'antd'
+import { Alert, Button, Checkbox, Input, Typography } from 'antd'
 
+import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import styles from './ObjectsDialogs.module.css'
 
@@ -30,14 +31,19 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 	}
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title="New folder"
-			okText="Create folder"
-			okButtonProps={{ loading: props.isSubmitting }}
-			onOk={() => props.onFinish(props.values)}
-			onCancel={props.onCancel}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={640}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button type="primary" loading={props.isSubmitting} onClick={() => props.onFinish(props.values)}>
+						Create folder
+					</Button>
+				</>
+			}
 		>
 			{props.errorMessage ? (
 				<Alert
@@ -118,6 +124,6 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 					Allow nested path (a/b/c)
 				</Checkbox>
 			</form>
-		</Modal>
+		</DialogModal>
 	)
 }

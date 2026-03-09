@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -70,16 +72,14 @@ const fixtures: ObjectFixture[] = [
 ]
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
-	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-		window.localStorage.setItem('prefix', JSON.stringify(''))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify(seed.objectsUIMode))
-		window.localStorage.setItem('objectsShowThumbnails', JSON.stringify(seed.showThumbnails))
-		window.localStorage.setItem('objectsDetailsOpen', JSON.stringify(seed.detailsOpen))
-	}, storage)
+	await seedLocalStorage(page, {
+		...defaultStorage,
+		...overrides,
+		prefix: '',
+		objectsUIMode: (overrides?.objectsUIMode ?? defaultStorage.objectsUIMode),
+		objectsShowThumbnails: overrides?.showThumbnails ?? defaultStorage.showThumbnails,
+		objectsDetailsOpen: overrides?.detailsOpen ?? defaultStorage.detailsOpen,
+	})
 }
 
 async function stubObjectsImagePreviewApi(page: Page, items: ObjectFixture[]) {
@@ -94,139 +94,83 @@ async function stubObjectsImagePreviewApi(page: Page, items: ObjectFixture[]) {
 		})
 	})
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-		const now = '2024-01-01T00:00:00Z'
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: profileId,
-						name: 'Playwright',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
+	await installApiFixtures(page, [
+		textFixture('GET', '/api/v1/events', '', { status: 200, contentType: 'text/event-stream' }),
+		jsonFixture(
+			'GET',
+			'/api/v1/meta',
+			metaJson({
+				dataDir: '/tmp',
+				staticDir: '/tmp',
+				capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
+				allowedLocalDirs: [],
+				jobLogMaxBytes: null,
+				jobRetentionSeconds: null,
+				uploadSessionTTLSeconds: 86400,
+				uploadMaxBytes: null,
+			}),
+		),
+		jsonFixture('GET', '/api/v1/profiles', [
+			{
+				id: profileId,
+				name: 'Playwright',
+				endpoint: 'http://localhost:9000',
+				region: 'us-east-1',
+				forcePathStyle: true,
+				tlsInsecureSkipVerify: true,
+				createdAt: '2024-01-01T00:00:00Z',
+				updatedAt: '2024-01-01T00:00:00Z',
+			},
+		]),
+		jsonFixture('GET', '/api/v1/buckets', [{ name: bucket, createdAt: '2024-01-01T00:00:00Z' }]),
+		jsonFixture('GET', `/api/v1/buckets/${bucket}/objects`, {
+			bucket,
+			prefix: '',
+			delimiter: '/',
+			commonPrefixes: [],
+			items: items.map(({ key, size, lastModified, etag }) => ({ key, size, lastModified, etag })),
+			nextContinuationToken: null,
+			isTruncated: false,
+		}),
+		jsonFixture('GET', `/api/v1/buckets/${bucket}/objects/favorites`, { bucket, prefix: '', items: [] }),
+		{
+			method: 'GET',
+			path: `/api/v1/buckets/${bucket}/objects/meta`,
+			handler: ({ url }) => {
+				const key = url.searchParams.get('key') ?? ''
+				const item = metaByKey.get(key)
+				if (!item) return { status: 404, json: { error: 'not found' } }
+				return {
+					json: {
+						key: item.key,
+						size: item.size,
+						etag: item.etag,
+						lastModified: item.lastModified,
+						contentType: item.contentType,
+						metadata: {},
 					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: items.map(({ key, size, lastModified, etag }) => ({ key, size, lastModified, etag })),
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${bucket}/objects/meta`) {
-			const key = url.searchParams.get('key') ?? ''
-			const item = metaByKey.get(key)
-			if (!item) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' })
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					key: item.key,
-					size: item.size,
-					etag: item.etag,
-					lastModified: item.lastModified,
-					contentType: item.contentType,
-					metadata: {},
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${bucket}/objects/download-url`) {
-			const key = url.searchParams.get('key') ?? ''
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					url: `${url.origin}/__test__/preview/${encodeURIComponent(key)}`,
-					expiresAt: '2024-01-01T01:00:00Z',
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${bucket}/objects/thumbnail`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'image/svg+xml',
-				body: svgPreview,
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+				}
+			},
+		},
+		{
+			method: 'GET',
+			path: `/api/v1/buckets/${bucket}/objects/download-url`,
+			handler: ({ url }) => {
+				const key = url.searchParams.get('key') ?? ''
+				return {
+					json: {
+						url: `${url.origin}/__test__/preview/${encodeURIComponent(key)}`,
+						expiresAt: '2024-01-01T01:00:00Z',
+					},
+				}
+			},
+		},
+		{
+			method: 'GET',
+			path: `/api/v1/buckets/${bucket}/objects/thumbnail`,
+			handler: () => ({ contentType: 'image/svg+xml', body: svgPreview }),
+		},
+	], { status: 200, json: {} })
 }
 
 function rowFor(page: Page, key: string) {

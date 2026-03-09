@@ -27,6 +27,7 @@ func TestJobLogsTailAndOffsets(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake rclone uses a shell script")
 	}
+	lockTestEnv(t)
 	t.Setenv("RCLONE_TUNE", "true")
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
@@ -98,6 +99,7 @@ func TestJobCancelLifecycle(t *testing.T) {
 		t.Skip("fake rclone uses a shell script")
 	}
 
+	lockTestEnv(t)
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)
 	localDir := t.TempDir()
@@ -223,6 +225,7 @@ func TestJobRetryLifecycle(t *testing.T) {
 		t.Skip("fake rclone uses a shell script")
 	}
 
+	lockTestEnv(t)
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)
 	localDir := t.TempDir()
@@ -298,6 +301,7 @@ func TestJobRetryInvalidStatus(t *testing.T) {
 }
 
 func TestJobCreateQueueFullRollsBackCreatedJob(t *testing.T) {
+	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)

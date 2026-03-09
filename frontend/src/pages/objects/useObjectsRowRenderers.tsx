@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { DragEvent, MouseEvent, ReactNode, RefObject } from 'react'
+import type { DragEvent, MouseEvent, ReactNode } from 'react'
 import type { MenuProps } from 'antd'
 
 import type { APIClient } from '../../api/client'
@@ -45,7 +45,6 @@ type UseObjectsRowRenderersArgs = {
 	favoriteKeys: Set<string>
 	favoritePendingKeys: Set<string>
 	toggleFavorite: (key: string) => void
-	scrollContainerRef: RefObject<HTMLDivElement | null>
 }
 
 export function useObjectsRowRenderers({
@@ -84,14 +83,7 @@ export function useObjectsRowRenderers({
 	favoriteKeys,
 	favoritePendingKeys,
 	toggleFavorite,
-	scrollContainerRef,
 }: UseObjectsRowRenderersArgs) {
-	const getContextMenuPopupContainer = useCallback((triggerNode: HTMLElement) => {
-		if (scrollContainerRef.current) return scrollContainerRef.current
-		if (typeof document !== 'undefined') return document.body
-		return triggerNode
-	}, [scrollContainerRef])
-
 	const handleListScrollerScroll = useCallback(() => {
 		closeContextMenu(undefined, 'list_scroll')
 	}, [closeContextMenu])
@@ -122,7 +114,6 @@ export function useObjectsRowRenderers({
 					getPrefixActions={getPrefixActions}
 					withContextMenuClassName={withContextMenuClassName}
 					buttonMenuOpen={prefixButtonMenuOpen}
-					getPopupContainer={getContextMenuPopupContainer}
 					recordContextMenuPoint={recordContextMenuPoint}
 					openPrefixContextMenu={openPrefixContextMenu}
 					closeContextMenu={closeContextMenu}
@@ -140,7 +131,6 @@ export function useObjectsRowRenderers({
 			contextMenuState.kind,
 			contextMenuState.open,
 			contextMenuState.source,
-			getContextMenuPopupContainer,
 			getPrefixActions,
 			highlightText,
 			isAdvanced,
@@ -186,7 +176,6 @@ export function useObjectsRowRenderers({
 					isFavorite={favoriteKeys.has(key)}
 					favoriteDisabled={favoritePendingKeys.has(key) || isOffline || !profileId || !bucket}
 					buttonMenuOpen={objectButtonMenuOpen}
-					getPopupContainer={getContextMenuPopupContainer}
 					recordContextMenuPoint={recordContextMenuPoint}
 					openObjectContextMenu={openObjectContextMenu}
 					closeContextMenu={closeContextMenu}
@@ -216,7 +205,6 @@ export function useObjectsRowRenderers({
 			contextMenuState.source,
 			favoriteKeys,
 			favoritePendingKeys,
-			getContextMenuPopupContainer,
 			getObjectActions,
 			highlightText,
 			isAdvanced,

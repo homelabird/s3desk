@@ -1,14 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { Grid, Space, Typography } from 'antd'
+import { Grid, Typography } from 'antd'
 
 import { APIClient } from '../api/client'
 import type { Profile } from '../api/types'
 import { NativeSelect } from './NativeSelect'
+import styles from './TopBarProfileSelect.module.css'
 
 type Props = {
 	apiToken: string
 	profileId: string | null
 	setProfileId: (profileId: string | null) => void
+	showLabel?: boolean
+	fullWidth?: boolean
+	selectWidth?: number | string
+	className?: string
 }
 
 export function TopBarProfileSelect(props: Props) {
@@ -23,13 +28,20 @@ export function TopBarProfileSelect(props: Props) {
 	})
 
 	const options = (profilesQuery.data ?? []).map((p: Profile) => ({ label: p.name, value: p.id }))
-	const showLabel = !!screens.sm
-	const selectWidth = screens.md ? 260 : screens.sm ? 200 : 160
+	const showLabel = props.showLabel ?? !!screens.sm
+	const selectWidth = props.selectWidth ?? (props.fullWidth ? '100%' : screens.md ? 260 : screens.sm ? 200 : 160)
 	const isInitialLoad = profilesQuery.isFetching && !profilesQuery.data
 
 	return (
-		<Space>
-			{showLabel ? <Typography.Text type="secondary">Profile</Typography.Text> : null}
+		<div
+			className={[styles.root, props.fullWidth ? styles.fullWidth : '', props.className ?? ''].filter(Boolean).join(' ')}
+			data-testid="topbar-profile-select"
+		>
+			{showLabel ? (
+				<Typography.Text type="secondary" className={styles.label}>
+					Profile
+				</Typography.Text>
+			) : null}
 			<NativeSelect
 				value={props.profileId ?? ''}
 				onChange={(value) => props.setProfileId(value || null)}
@@ -37,8 +49,9 @@ export function TopBarProfileSelect(props: Props) {
 				disabled={isInitialLoad}
 				options={options}
 				ariaLabel="Profile"
+				className={styles.selectControl}
 				style={{ width: selectWidth, maxWidth: '100%' }}
 			/>
-		</Space>
+		</div>
 	)
 }

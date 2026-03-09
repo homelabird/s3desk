@@ -7,10 +7,11 @@ import {
 	RedoOutlined,
 	StopOutlined,
 } from '@ant-design/icons'
-import { Button, Dropdown, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
+import { Button, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
 import { useCallback, useMemo, type ReactNode } from 'react'
 
 import type { Job, JobStatus } from '../../api/types'
+import { MenuPopover } from '../../components/MenuPopover'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatDateTime, toTimestamp } from '../../lib/format'
 import { getJobTypeInfo } from '../../lib/jobTypes'
@@ -311,9 +312,11 @@ export function useJobsTableColumns({
 									}}
 								/>
 							</Tooltip>
-							<Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
-								<Button type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" />
-							</Dropdown>
+							<MenuPopover menu={{ items: menuItems }} align="end">
+								{({ toggle }) => (
+									<Button type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" onClick={toggle} />
+								)}
+							</MenuPopover>
 						</Space>
 					)
 				},

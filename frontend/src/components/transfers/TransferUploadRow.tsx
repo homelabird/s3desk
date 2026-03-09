@@ -71,7 +71,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 	const subtitle = `s3://${t.bucket}/${normalizePrefix(t.prefix)}`
 
 	return (
-		<div className={styles.rowCard}>
+		<div className={styles.rowCard} data-testid="transfer-upload-row" data-transfer-row-kind="upload">
 			<div className={styles.rowTop}>
 				<div className={`${styles.rowCopy} ${styles.rowCopyWithPreview}`}>
 					{preview ? (

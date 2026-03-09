@@ -1689,6 +1689,47 @@ func (m *Manager) writeRcloneConfig(jobID string, profile models.ProfileSecrets)
 	return path, nil
 }
 
+func connectivityDetailsBase(profile models.ProfileSecrets) map[string]any {
+	details := map[string]any{"provider": profile.Provider}
+	if rcloneconfig.IsS3LikeProvider(profile.Provider) {
+		storageType, storageSource := detectStorageType(profile.Endpoint, nil)
+		if storageType != "" {
+			details["storageType"] = storageType
+		}
+		if storageSource != "" {
+			details["storageTypeSource"] = storageSource
+		}
+	}
+	return details
+}
+
+func addNormalizedErrorDetails(details map[string]any, err error, stderr string) {
+	msg := strings.TrimSpace(stderr)
+	if msg == "" && err != nil {
+		msg = err.Error()
+	}
+	if msg != "" {
+		details["error"] = msg
+	}
+	cls := rcloneerrors.Classify(err, stderr)
+	details["normalizedError"] = map[string]any{
+		"code":      string(cls.Code),
+		"retryable": cls.Retryable,
+	}
+}
+
+func benchmarkFailureResponse(profile models.ProfileSecrets, message string, err error, stderr string) models.ProfileBenchmarkResponse {
+	details := connectivityDetailsBase(profile)
+	if err != nil || strings.TrimSpace(stderr) != "" {
+		addNormalizedErrorDetails(details, err, stderr)
+	}
+	return models.ProfileBenchmarkResponse{
+		OK:      false,
+		Message: message,
+		Details: details,
+	}
+}
+
 func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bool, details map[string]any, err error) {
 	profileSecrets, found, err := m.store.GetProfileSecrets(ctx, profileID)
 	if err != nil {
@@ -1716,37 +1757,18 @@ func (m *Manager) TestConnectivity(ctx context.Context, profileID string) (ok bo
 	})
 	waitErr := proc.wait()
 
-	details = map[string]any{"provider": profileSecrets.Provider}
-	if rcloneconfig.IsS3LikeProvider(profileSecrets.Provider) {
-		storageType, storageSource := detectStorageType(profileSecrets.Endpoint, nil)
-		if storageType != "" {
-			details["storageType"] = storageType
-		}
-		if storageSource != "" {
-			details["storageTypeSource"] = storageSource
-		}
-	}
+	details = connectivityDetailsBase(profileSecrets)
 
 	if listErr != nil {
-		details["error"] = listErr.Error()
-		cls := rcloneerrors.Classify(listErr, proc.stderr.String())
-		details["normalizedError"] = map[string]any{
-			"code":      string(cls.Code),
-			"retryable": cls.Retryable,
+		if waitErr != nil {
+			addNormalizedErrorDetails(details, waitErr, proc.stderr.String())
+			return false, details, nil
 		}
+		addNormalizedErrorDetails(details, listErr, proc.stderr.String())
 		return false, details, nil
 	}
 	if waitErr != nil {
-		msg := strings.TrimSpace(proc.stderr.String())
-		if msg == "" {
-			msg = waitErr.Error()
-		}
-		details["error"] = msg
-		cls := rcloneerrors.Classify(waitErr, proc.stderr.String())
-		details["normalizedError"] = map[string]any{
-			"code":      string(cls.Code),
-			"retryable": cls.Retryable,
-		}
+		addNormalizedErrorDetails(details, waitErr, proc.stderr.String())
 		return false, details, nil
 	}
 	details["buckets"] = bucketCount
@@ -1776,18 +1798,44 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 	configID := fmt.Sprintf("profile-bench-%s-%d", profileID, time.Now().UnixNano())
 	listProc, err := m.startRcloneCommand(listCtx, profileSecrets, configID, []string{"lsjson", "--dirs-only", rcloneRemoteBucket("")})
 	if err != nil {
-		return models.ProfileBenchmarkResponse{OK: false, Message: "failed to list buckets: " + err.Error()}, nil
+		if isTransferEngineError(err) {
+			return models.ProfileBenchmarkResponse{}, err
+		}
+		return benchmarkFailureResponse(profileSecrets, "failed to list buckets: "+err.Error(), err, ""), nil
 	}
 	var firstBucket string
-	_ = decodeRcloneList(listProc.stdout, func(entry rcloneListEntry) error {
+	listErr := decodeRcloneList(listProc.stdout, func(entry rcloneListEntry) error {
 		if firstBucket == "" && (entry.IsDir || entry.IsBucket) {
-			firstBucket = strings.TrimSuffix(entry.Path, "/")
+			name := strings.TrimSpace(entry.Name)
+			if name == "" {
+				name = strings.TrimSpace(strings.TrimSuffix(entry.Path, "/"))
+			}
+			firstBucket = name
 		}
 		return nil
 	})
-	_ = listProc.wait()
+	waitErr := listProc.wait()
+	if listErr != nil {
+		if waitErr != nil {
+			msg := strings.TrimSpace(listProc.stderr.String())
+			if msg == "" {
+				msg = waitErr.Error()
+			}
+			return benchmarkFailureResponse(profileSecrets, "failed to list buckets: "+msg, waitErr, listProc.stderr.String()), nil
+		}
+		return benchmarkFailureResponse(profileSecrets, "failed to list buckets: "+listErr.Error(), listErr, listProc.stderr.String()), nil
+	}
+	if waitErr != nil {
+		msg := strings.TrimSpace(listProc.stderr.String())
+		if msg == "" {
+			msg = waitErr.Error()
+		}
+		return benchmarkFailureResponse(profileSecrets, "failed to list buckets: "+msg, waitErr, listProc.stderr.String()), nil
+	}
 	if firstBucket == "" {
-		return models.ProfileBenchmarkResponse{OK: false, Message: "no buckets found; create a bucket first"}, nil
+		resp := benchmarkFailureResponse(profileSecrets, "no buckets found; create a bucket first", nil, "")
+		resp.Details["buckets"] = 0
+		return resp, nil
 	}
 
 	// Write a temporary 1 MiB file filled with random data.
@@ -1814,11 +1862,18 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 	uploadStart := time.Now()
 	upProc, err := m.startRcloneCommand(uploadCtx, profileSecrets, uploadConfigID, []string{"copyto", tmpPath, remoteObj})
 	if err != nil {
-		return models.ProfileBenchmarkResponse{OK: false, Message: "upload failed: " + err.Error()}, nil
+		if isTransferEngineError(err) {
+			return models.ProfileBenchmarkResponse{}, err
+		}
+		return benchmarkFailureResponse(profileSecrets, "upload failed: "+err.Error(), err, ""), nil
 	}
 	_, _ = io.Copy(io.Discard, upProc.stdout)
 	if err := upProc.wait(); err != nil {
-		return models.ProfileBenchmarkResponse{OK: false, Message: "upload failed: " + strings.TrimSpace(upProc.stderr.String())}, nil
+		msg := strings.TrimSpace(upProc.stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return benchmarkFailureResponse(profileSecrets, "upload failed: "+msg, err, upProc.stderr.String()), nil
 	}
 	uploadMs := time.Since(uploadStart).Milliseconds()
 	var uploadBps int64
@@ -1833,11 +1888,18 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 	dlStart := time.Now()
 	dlProc, err := m.startRcloneCommand(dlCtx, profileSecrets, dlConfigID, []string{"cat", remoteObj})
 	if err != nil {
-		return models.ProfileBenchmarkResponse{OK: false, Message: "download failed: " + err.Error()}, nil
+		if isTransferEngineError(err) {
+			return models.ProfileBenchmarkResponse{}, err
+		}
+		return benchmarkFailureResponse(profileSecrets, "download failed: "+err.Error(), err, ""), nil
 	}
 	dlBytes, _ := io.Copy(io.Discard, dlProc.stdout)
 	if err := dlProc.wait(); err != nil {
-		return models.ProfileBenchmarkResponse{OK: false, Message: "download failed: " + strings.TrimSpace(dlProc.stderr.String())}, nil
+		msg := strings.TrimSpace(dlProc.stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return benchmarkFailureResponse(profileSecrets, "download failed: "+msg, err, dlProc.stderr.String()), nil
 	}
 	downloadMs := time.Since(dlStart).Milliseconds()
 	var downloadBps int64
@@ -1862,6 +1924,7 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 	return models.ProfileBenchmarkResponse{
 		OK:            true,
 		Message:       "ok",
+		Details:       connectivityDetailsBase(profileSecrets),
 		UploadBps:     &uploadBps,
 		DownloadBps:   &downloadBps,
 		UploadMs:      &uploadMs,

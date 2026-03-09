@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installApiFixtures, jsonFixture, seedLocalStorage, textFixture } from './support/apiFixtures'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -71,12 +73,7 @@ function buildJob(id: string, status: JobStatus, payload: Record<string, unknown
 }
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
-	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-	}, storage)
+	await seedLocalStorage(page, { ...defaultStorage, ...overrides })
 }
 
 async function setupApiMocks(page: Page) {
@@ -95,91 +92,70 @@ async function setupApiMocks(page: Page) {
 		return jobs.find((job) => job.id === jobId) ?? null
 	}
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(metaResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(profilesResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bucketResponse) })
-		}
-		if (method === 'GET' && path === '/api/v1/jobs') {
-			const status = url.searchParams.get('status')
-			const type = url.searchParams.get('type')
-			let items = jobs
-			if (status) items = items.filter((job) => job.status === status)
-			if (type) items = items.filter((job) => job.type === type)
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ items, nextCursor: null }),
-			})
-		}
-		if (method === 'POST' && path === '/api/v1/jobs') {
-			let body: { type?: string; payload?: Record<string, unknown> } = {}
-			try {
-				body = request.postDataJSON() as { type?: string; payload?: Record<string, unknown> }
-			} catch {
-				body = {}
-			}
-			const job = buildJob('job-created', 'queued', body.payload ?? {})
-			addJob(job)
-			return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(job) })
-		}
-
-		const cancelMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)\/cancel$/)
-		if (method === 'POST' && cancelMatch) {
-			const jobId = cancelMatch[1]
-			const job = updateJob(jobId, { status: 'canceled', finishedAt: now })
-			if (!job) {
-				return route.fulfill({
-					status: 404,
-					contentType: 'application/json',
-					body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-				})
-			}
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) })
-		}
-
-		const retryMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)\/retry$/)
-		if (method === 'POST' && retryMatch) {
-			const sourceId = retryMatch[1]
-			const source = jobs.find((job) => job.id === sourceId)
-			const job = buildJob(`job-retry-${++retryCount}`, 'queued', source?.payload ?? {})
-			addJob(job)
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) })
-		}
-
-		const getMatch = path.match(/^\/api\/v1\/jobs\/([^/]+)$/)
-		if (method === 'GET' && getMatch) {
-			const job = jobs.find((item) => item.id === getMatch[1])
-			if (!job) {
-				return route.fulfill({
-					status: 404,
-					contentType: 'application/json',
-					body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-				})
-			}
-			return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(job) })
-		}
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({ status: 403, contentType: 'text/plain', body: 'forbidden' })
-		}
-
-		return route.fulfill({
-			status: 404,
-			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
-		})
-	})
+	await installApiFixtures(page, [
+		jsonFixture('GET', '/api/v1/meta', metaResponse),
+		jsonFixture('GET', '/api/v1/profiles', profilesResponse),
+		jsonFixture('GET', '/api/v1/buckets', bucketResponse),
+		{
+			method: 'GET',
+			path: '/api/v1/jobs',
+			handler: ({ url }) => {
+				const status = url.searchParams.get('status')
+				const type = url.searchParams.get('type')
+				let items = jobs
+				if (status) items = items.filter((job) => job.status === status)
+				if (type) items = items.filter((job) => job.type === type)
+				return { json: { items, nextCursor: null } }
+			},
+		},
+		{
+			method: 'POST',
+			path: '/api/v1/jobs',
+			handler: ({ request }) => {
+				let body: { payload?: Record<string, unknown> } = {}
+				try {
+					body = request.postDataJSON() as { payload?: Record<string, unknown> }
+				} catch {
+					body = {}
+				}
+				const job = buildJob('job-created', 'queued', body.payload ?? {})
+				addJob(job)
+				return { status: 201, json: job }
+			},
+		},
+		{
+			method: 'POST',
+			path: /^\/api\/v1\/jobs\/([^/]+)\/cancel$/,
+			handler: ({ path }) => {
+				const jobId = path.match(/^\/api\/v1\/jobs\/([^/]+)\/cancel$/)?.[1]
+				const job = jobId ? updateJob(jobId, { status: 'canceled', finishedAt: now }) : null
+				if (!job) return { status: 404, json: { error: { code: 'not_found', message: 'not found' } } }
+				return { json: job }
+			},
+		},
+		{
+			method: 'POST',
+			path: /^\/api\/v1\/jobs\/([^/]+)\/retry$/,
+			handler: ({ path }) => {
+				const sourceId = path.match(/^\/api\/v1\/jobs\/([^/]+)\/retry$/)?.[1] ?? ''
+				const source = jobs.find((job) => job.id === sourceId)
+				const job = buildJob(`job-retry-${++retryCount}`, 'queued', source?.payload ?? {})
+				addJob(job)
+				return { json: job }
+			},
+		},
+		{
+			method: 'GET',
+			path: /^\/api\/v1\/jobs\/([^/]+)$/,
+			handler: ({ path }) => {
+				const jobId = path.match(/^\/api\/v1\/jobs\/([^/]+)$/)?.[1] ?? ''
+				const job = jobs.find((item) => item.id === jobId)
+				if (!job) return { status: 404, json: { error: { code: 'not_found', message: 'not found' } } }
+				return { json: job }
+			},
+		},
+		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),
+	])
 }
 
 test('jobs create, cancel, retry flow', async ({ page }) => {
@@ -191,8 +167,7 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 	await expect(page.getByText('job-running')).toBeVisible()
 	await expect(page.getByText('job-failed')).toBeVisible()
 
-	const header = page.getByRole('heading', { name: 'Jobs' }).locator('..')
-	await header.getByRole('button', { name: /More/i }).click()
+	await page.getByRole('button', { name: /More$/ }).click()
 	await page.getByRole('menuitem', { name: 'New Delete Job' }).click()
 	const deleteDrawer = page.getByRole('dialog', { name: 'Create delete job (S3)' })
 	await expect(deleteDrawer).toBeVisible()

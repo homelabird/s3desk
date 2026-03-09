@@ -1,8 +1,10 @@
-import { Button, Modal, Space, Typography } from 'antd'
-import type { ReactNode } from 'react'
+import { Space, Typography, type SpaceProps } from 'antd'
+import { type ReactNode } from 'react'
 
+import { mountImperativeDialog } from '../imperativeDialog'
 import type { RemoveEntriesResult } from '../../lib/deviceFs'
 import { MOVE_CLEANUP_FILENAME_MAX_LEN, MOVE_CLEANUP_FILENAME_TEMPLATE } from '../../lib/moveCleanupDefaults'
+import { MoveCleanupReportDialog } from './MoveCleanupReportDialog'
 
 export type MoveCleanupReportArgs = {
 	title: string
@@ -148,9 +150,10 @@ function enforceFilenameLength(filename: string, maxLen: number): string {
 	return `${trimmed}${ext}`
 }
 
+const verticalSpace: SpaceProps['direction'] = 'vertical'
+
 export function showMoveCleanupReport(args: MoveCleanupReportArgs) {
-	const { title, result, label, kind, bucket, prefix, filenameTemplate, filenameMaxLen } = args
-	const modal = kind === 'info' ? Modal.info : Modal.warning
+	const { title, result, label, bucket, prefix, filenameTemplate, filenameMaxLen } = args
 	const sections: ReactNode[] = []
 	const maxItems = 10
 	const reportText = buildMoveCleanupReportText(result, label ?? '', bucket, prefix)
@@ -166,7 +169,7 @@ export function showMoveCleanupReport(args: MoveCleanupReportArgs) {
 		if (items.length === 0) return
 		const sample = items.slice(0, maxItems)
 		sections.push(
-			<Space key={sectionTitle} orientation="vertical" size={4}>
+			<Space key={sectionTitle} direction={verticalSpace} size={4}>
 				<Typography.Text strong>
 					{sectionTitle} ({items.length})
 				</Typography.Text>
@@ -189,18 +192,13 @@ export function showMoveCleanupReport(args: MoveCleanupReportArgs) {
 	pushSection('Skipped', result.skipped)
 	pushSection('Removed empty folders', result.removedDirs)
 
-	modal({
-		title,
-		content: (
-			<Space orientation="vertical" size="middle">
-				<Typography.Text type="secondary">{formatMoveCleanupSummary(result, label ?? '')}</Typography.Text>
-				<Button size="small" onClick={() => downloadTextFile(reportFilename, reportText)}>
-					Download report
-				</Button>
-				{sections}
-			</Space>
-		),
-		width: 720,
-	})
+	mountImperativeDialog((close) => (
+		<MoveCleanupReportDialog
+			title={title}
+			summary={formatMoveCleanupSummary(result, label ?? '')}
+			sections={sections}
+			onClose={close}
+			onDownload={() => downloadTextFile(reportFilename, reportText)}
+		/>
+	))
 }
-

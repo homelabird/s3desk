@@ -23,7 +23,6 @@
 }
 
 .desktopTable {
-	display: block;
 	overflow-x: auto;
 }
 
@@ -87,7 +86,8 @@
 }
 
 .mobileList {
-	display: none;
+	display: flex;
+	flex-direction: column;
 }
 
 .mobileCard {
@@ -133,15 +133,7 @@
 	flex-wrap: wrap;
 }
 
-@media (max-width: 768px) {
-	.desktopTable {
-		display: none;
-	}
-
-	.mobileList {
-		display: block;
-	}
-
+@media (max-width: 640px) {
 	.mobileMetaGrid {
 		grid-template-columns: minmax(0, 1fr);
 	}

@@ -210,6 +210,17 @@ func TransferEngineJobError(err error) error {
 	return err
 }
 
+func isTransferEngineError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrRcloneNotFound) {
+		return true
+	}
+	var ie *RcloneIncompatibleError
+	return errors.As(err, &ie)
+}
+
 func findLocalRclone() (path string, ok bool) {
 	candidates := []string{}
 	if exe, err := os.Executable(); err == nil {

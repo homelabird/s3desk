@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage } from './support/apiFixtures'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string | null
@@ -15,121 +17,68 @@ const defaultStorage: StorageSeed = {
 }
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
-	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify(seed.objectsUIMode))
-	}, storage)
+	await seedLocalStorage(page, { ...defaultStorage, ...overrides })
 }
 
 async function stubCoreApi(page: Page, overrides?: Partial<StorageSeed>) {
 	const seed = { ...defaultStorage, ...overrides }
 	const now = '2024-01-01T00:00:00Z'
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					uploadDirectStream: false,
-					transferEngine: {
-						name: 'rclone',
-						available: true,
-						compatible: true,
-						minVersion: 'v1.66.0',
-						path: '/usr/local/bin/rclone',
-						version: 'v1.66.0',
-					},
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: seed.profileId,
-						name: 'Playwright Mobile',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
-					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: seed.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${seed.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: seed.bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: [],
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${seed.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: seed.bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/jobs') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ items: [], nextCursor: null }),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+	await installApiFixtures(page, [
+		jsonFixture(
+			'GET',
+			'/api/v1/meta',
+			metaJson({
+				dataDir: '/tmp',
+				staticDir: '/tmp',
+				capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
+				allowedLocalDirs: [],
+				jobLogMaxBytes: null,
+				jobRetentionSeconds: null,
+				uploadSessionTTLSeconds: 86400,
+				uploadMaxBytes: null,
+				uploadDirectStream: false,
+				transferEngine: {
+					name: 'rclone',
+					available: true,
+					compatible: true,
+					minVersion: 'v1.66.0',
+					path: '/usr/local/bin/rclone',
+					version: 'v1.66.0',
+				},
+			}),
+		),
+		jsonFixture('GET', '/api/v1/profiles', [
+			{
+				id: seed.profileId,
+				name: 'Playwright Mobile',
+				provider: 's3_compatible',
+				endpoint: 'http://localhost:9000',
+				region: 'us-east-1',
+				forcePathStyle: true,
+				preserveLeadingSlash: false,
+				tlsInsecureSkipVerify: true,
+				createdAt: now,
+				updatedAt: now,
+			},
+		]),
+		jsonFixture('GET', '/api/v1/buckets', [{ name: seed.bucket, createdAt: now }]),
+		jsonFixture('GET', `/api/v1/buckets/${seed.bucket}/objects`, {
+			bucket: seed.bucket,
+			prefix: '',
+			delimiter: '/',
+			commonPrefixes: [],
+			items: [],
+			nextContinuationToken: null,
+			isTruncated: false,
+		}),
+		jsonFixture('GET', `/api/v1/buckets/${seed.bucket}/objects/favorites`, {
+			bucket: seed.bucket,
+			prefix: '',
+			items: [],
+		}),
+		jsonFixture('GET', '/api/v1/jobs', { items: [], nextCursor: null }),
+	], { status: 200, json: {} })
 }
 
 test.describe('mobile smoke', () => {
@@ -148,6 +97,29 @@ test.describe('mobile smoke', () => {
 		await expect(page.getByText('Profiles', { exact: true }).first()).toBeVisible()
 		await expect(page.getByRole('button', { name: /New Profile/i })).toBeVisible()
 		await expect(page.getByRole('button', { name: /^Selected$/ }).first()).toBeVisible()
+	})
+
+	test('dashboard header uses compact mobile actions', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
+		await page.goto('/profiles')
+		await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible()
+		await expect(page.getByRole('combobox', { name: 'Profile' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Transfers' })).toBeVisible()
+		await expect(page.getByRole('button', { name: /Settings/i })).toHaveCount(0)
+
+		await page.getByRole('button', { name: 'More actions' }).click()
+		await expect(page.getByRole('menuitem', { name: /Settings/i })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Logout/i })).toBeVisible()
+	})
+
+	test('buckets page renders', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
+		await page.goto('/buckets')
+		await expect(page.getByRole('heading', { name: 'Buckets' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'New Bucket' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Policy' })).toBeVisible()
 	})
 
 	test('root redirects to objects when an active profile is stored', async ({ page }) => {

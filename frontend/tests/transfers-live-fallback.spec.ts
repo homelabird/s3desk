@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
+import { ensureDialogOpen, transferDownloadRow } from './support/ui'
+
 const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
@@ -232,14 +234,15 @@ test.describe('Live transfer fallback flows', () => {
 		let proxyDownloadURLCalls = 0
 		let directObjectFetchAborted = false
 
-		try {
-			const createProfile = await request.post('/api/v1/profiles', {
-				headers: apiHeaders(),
-				data: {
-					name: profileName,
-					endpoint: s3Endpoint,
-					region: s3Region,
-					accessKeyId: s3AccessKey,
+			try {
+				const createProfile = await request.post('/api/v1/profiles', {
+					headers: apiHeaders(),
+					data: {
+						provider: 's3_compatible',
+						name: profileName,
+						endpoint: s3Endpoint,
+						region: s3Region,
+						accessKeyId: s3AccessKey,
 					secretAccessKey: s3SecretKey,
 					forcePathStyle,
 					tlsInsecureSkipVerify: tlsSkipVerify,
@@ -299,17 +302,11 @@ test.describe('Live transfer fallback flows', () => {
 			await expect(page.getByText('1 selected')).toBeVisible({ timeout: 10_000 })
 			await page.getByRole('button', { name: 'Download (client)' }).first().click()
 
-			const drawerMask = page.locator('.ant-drawer-mask').first()
-			const drawerOpen = await drawerMask.isVisible().catch(() => false)
-			if (!drawerOpen) {
+			const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
 				await page.getByRole('button', { name: /Transfers/i }).first().click()
-			}
-			const transfersDialog = page.getByRole('dialog', { name: /Transfers/i })
-			await expect(transfersDialog).toBeVisible({ timeout: 30_000 })
+			})
 			await transfersDialog.getByRole('tab', { name: /Downloads/i }).click()
-			const downloadRow = transfersDialog
-				.getByText(objectKey, { exact: true })
-				.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]')
+			const downloadRow = transferDownloadRow(transfersDialog, objectKey)
 			await expect(downloadRow).toBeVisible({ timeout: 30_000 })
 			await expect(downloadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 120_000 })
 

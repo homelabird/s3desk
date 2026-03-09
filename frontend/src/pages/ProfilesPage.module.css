@@ -13,7 +13,6 @@
 }
 
 .desktopTable {
-	display: block;
 	overflow-x: auto;
 }
 
@@ -93,6 +92,19 @@
 	font-weight: 700;
 }
 
+.warningBadge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--s3d-color-warning-border);
+	background: var(--s3d-color-warning-bg);
+	color: var(--s3d-color-text);
+	font-size: 12px;
+	font-weight: 700;
+}
+
 .providerBadge {
 	display: inline-flex;
 	align-items: center;
@@ -131,6 +143,12 @@
 	font-weight: 600;
 }
 
+.flagChipWarning {
+	border: 1px solid var(--s3d-color-warning-border);
+	background: var(--s3d-color-warning-bg);
+	color: var(--s3d-color-text);
+}
+
 .actionGroup {
 	display: flex;
 	align-items: center;
@@ -146,7 +164,8 @@
 }
 
 .mobileList {
-	display: none;
+	display: flex;
+	flex-direction: column;
 }
 
 .mobileCard {
@@ -238,17 +257,13 @@
 	}
 }
 
-@media (max-width: 768px) {
-	.desktopTable {
-		display: none;
-	}
-
-	.mobileList {
-		display: block;
-	}
-
+@media (max-width: 640px) {
 	.mobileMetaGrid {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.mobileCardTop {
+		flex-direction: column;
 	}
 }
 

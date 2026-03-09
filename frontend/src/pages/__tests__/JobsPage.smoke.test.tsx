@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 describe('JobsPage', () => {
-	it('navigates to profiles from setup callout', () => {
+	it('navigates to setup from setup callout', () => {
 		const client = new QueryClient({
 			defaultOptions: {
 				queries: { retry: false },
@@ -30,7 +30,7 @@ describe('JobsPage', () => {
 					<MemoryRouter initialEntries={['/jobs']}>
 						<Routes>
 							<Route path="/jobs" element={<JobsPage apiToken="" profileId={null} />} />
-							<Route path="/profiles" element={<div>Profiles Route</div>} />
+							<Route path="/setup" element={<div>Setup Route</div>} />
 						</Routes>
 					</MemoryRouter>
 				</TransfersContext.Provider>
@@ -38,7 +38,7 @@ describe('JobsPage', () => {
 		)
 
 		expect(screen.getByText('Select a profile to view jobs')).toBeInTheDocument()
-		fireEvent.click(screen.getByRole('link', { name: 'Profiles' }))
-		expect(screen.getByText('Profiles Route')).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('link', { name: 'Setup' }))
+		expect(screen.getByText('Setup Route')).toBeInTheDocument()
 	})
 })

@@ -1,7 +1,9 @@
-import { Alert, Input, Modal, Switch, Typography } from 'antd'
+import { Alert, Button, Input, Typography } from 'antd'
 
+import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import { DatalistInput } from '../../components/DatalistInput'
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 
 type CopyMoveValues = {
 	dstBucket: string
@@ -28,14 +30,19 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 	const isMove = props.mode === 'move'
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title={isMove ? 'Move/Rename object…' : 'Copy object…'}
-			okText={isMove ? 'Start move' : 'Start copy'}
-			okButtonProps={{ loading: props.isSubmitting, danger: isMove }}
-			onOk={() => props.onFinish(props.values)}
-			onCancel={props.onCancel}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={640}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={() => props.onFinish(props.values)}>
+						{isMove ? 'Start move' : 'Start copy'}
+					</Button>
+				</>
+			}
 		>
 			{isMove ? (
 				<Alert
@@ -89,10 +96,10 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 				</FormField>
 
 				<FormField label="Dry run (no changes)">
-					<Switch
+					<ToggleSwitch
 						checked={props.values.dryRun}
 						onChange={(checked) => props.onValuesChange({ ...props.values, dryRun: checked })}
-						aria-label="Dry run"
+						ariaLabel="Dry run"
 					/>
 				</FormField>
 
@@ -107,6 +114,6 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 					</FormField>
 				) : null}
 			</form>
-		</Modal>
+		</DialogModal>
 	)
 }

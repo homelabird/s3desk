@@ -1,8 +1,9 @@
 import { DownloadOutlined, LinkOutlined, MinusOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Modal, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Empty, Space, Spin, Typography } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 
 import type { ObjectMeta } from '../../api/types'
+import { DialogModal } from '../../components/DialogModal'
 import { formatBytes } from '../../lib/transfer'
 import styles from './objects.module.css'
 import { clampNumber, guessPreviewKind } from './objectsListUtils'
@@ -50,26 +51,45 @@ function clampPanOffset(scale: number, offset: PanOffset, stageEl: HTMLDivElemen
 }
 
 export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
+	const viewerSessionKey = `${props.open ? 'open' : 'closed'}:${props.objectKey ?? ''}`
+	return <ObjectsImageViewerModalSession key={viewerSessionKey} {...props} />
+}
+
+function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
+	const {
+		open,
+		isMobile,
+		objectKey,
+		objectMeta,
+		isMetaFetching,
+		thumbnail,
+		preview,
+		onLoadPreview,
+		onCancelPreview,
+		canCancelPreview,
+		onClose,
+		onDownload,
+		onPresign,
+		isPresignLoading,
+	} = props
 	const [scale, setScale] = useState(MIN_SCALE)
 	const [offset, setOffset] = useState<PanOffset>({ x: 0, y: 0 })
 	const [dragState, setDragState] = useState<{ pointerId: number; startX: number; startY: number; origin: PanOffset } | null>(null)
-	const [previewAutoRequestedKey, setPreviewAutoRequestedKey] = useState<string | null>(null)
+	const previewAutoRequestedKeyRef = useRef<string | null>(null)
 	const stageRef = useRef<HTMLDivElement | null>(null)
 	const imageRef = useRef<HTMLImageElement | null>(null)
 
 	const objectPreviewKind = useMemo(() => {
-		if (props.objectMeta) return guessPreviewKind(props.objectMeta.contentType, props.objectMeta.key)
-		if (props.objectKey) return guessPreviewKind(null, props.objectKey)
+		if (objectMeta) return guessPreviewKind(objectMeta.contentType, objectMeta.key)
+		if (objectKey) return guessPreviewKind(null, objectKey)
 		return 'unsupported'
-	}, [props.objectKey, props.objectMeta])
+	}, [objectKey, objectMeta])
 	const supportsVisualPreview = objectPreviewKind === 'image' || objectPreviewKind === 'video'
 	const isImageObject = objectPreviewKind === 'image'
 	const isVideoObject = objectPreviewKind === 'video'
-	const detailsSize =
-		typeof props.objectMeta?.size === 'number' && Number.isFinite(props.objectMeta.size) ? props.objectMeta.size : null
+	const detailsSize = typeof objectMeta?.size === 'number' && Number.isFinite(objectMeta.size) ? objectMeta.size : null
 	const imagePreviewTooLarge = isImageObject && detailsSize != null && detailsSize > IMAGE_PREVIEW_MAX_BYTES
-	const visualPreviewReady =
-		props.preview?.status === 'ready' && (props.preview.kind === 'image' || props.preview.kind === 'video') && !!props.preview.url
+	const visualPreviewReady = preview?.status === 'ready' && (preview.kind === 'image' || preview.kind === 'video') && !!preview.url
 
 	const resetView = useCallback(() => {
 		setScale(MIN_SCALE)
@@ -78,17 +98,12 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 	}, [])
 
 	useEffect(() => {
-		resetView()
-		setPreviewAutoRequestedKey(null)
-	}, [props.objectKey, props.open, resetView])
-
-	useEffect(() => {
-		if (!props.open || !props.objectMeta || !supportsVisualPreview || imagePreviewTooLarge) return
-		if (props.preview?.status === 'loading' || visualPreviewReady) return
-		if (previewAutoRequestedKey === props.objectMeta.key) return
-		setPreviewAutoRequestedKey(props.objectMeta.key)
-		void props.onLoadPreview()
-	}, [imagePreviewTooLarge, previewAutoRequestedKey, props.objectMeta, props.onLoadPreview, props.open, props.preview?.status, supportsVisualPreview, visualPreviewReady])
+		if (!open || !objectMeta || !supportsVisualPreview || imagePreviewTooLarge) return
+		if (preview?.status === 'loading' || visualPreviewReady) return
+		if (previewAutoRequestedKeyRef.current === objectMeta.key) return
+		previewAutoRequestedKeyRef.current = objectMeta.key
+		void onLoadPreview()
+	}, [imagePreviewTooLarge, objectMeta, onLoadPreview, open, preview?.status, supportsVisualPreview, visualPreviewReady])
 
 	useEffect(() => {
 		setOffset((current) => clampPanOffset(scale, current, stageRef.current, imageRef.current))
@@ -134,11 +149,11 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 		setDragState(null)
 	}, [dragState])
 
-	const modalTitle = props.objectMeta ? (
+	const modalTitle = objectMeta ? (
 		<Space orientation="vertical" size={0}>
 			<Typography.Text strong>Large preview</Typography.Text>
-			<Typography.Text code ellipsis={{ tooltip: props.objectMeta.key }}>
-				{props.objectMeta.key}
+			<Typography.Text code ellipsis={{ tooltip: objectMeta.key }}>
+				{objectMeta.key}
 			</Typography.Text>
 		</Space>
 	) : (
@@ -163,19 +178,19 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 		<Space wrap size={[8, 8]} style={{ width: '100%', justifyContent: 'space-between' }}>
 			{zoomControls ?? <span />}
 			<Space wrap>
-				<Button icon={<DownloadOutlined />} onClick={props.onDownload}>
+				<Button icon={<DownloadOutlined />} onClick={onDownload}>
 					Download
 				</Button>
-				<Button icon={<LinkOutlined />} onClick={props.onPresign} loading={props.isPresignLoading}>
+				<Button icon={<LinkOutlined />} onClick={onPresign} loading={isPresignLoading}>
 					URL
 				</Button>
 				{!imagePreviewTooLarge ? (
-					props.preview?.status === 'loading' ? (
-						<Button onClick={props.onCancelPreview} disabled={!props.canCancelPreview}>
+					preview?.status === 'loading' ? (
+						<Button onClick={onCancelPreview} disabled={!canCancelPreview}>
 							Cancel preview
 						</Button>
 					) : (
-						<Button icon={<ReloadOutlined />} onClick={props.onLoadPreview} disabled={!props.objectMeta}>
+						<Button icon={<ReloadOutlined />} onClick={onLoadPreview} disabled={!objectMeta}>
 							Reload preview
 						</Button>
 					)
@@ -187,15 +202,15 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 	const metaSummary = (
 		<Space wrap size={[8, 8]}>
 			{detailsSize != null ? <Typography.Text type="secondary">{formatBytes(detailsSize)}</Typography.Text> : null}
-			{props.objectMeta?.contentType ? <Typography.Text type="secondary">{props.objectMeta.contentType}</Typography.Text> : null}
+			{objectMeta?.contentType ? <Typography.Text type="secondary">{objectMeta.contentType}</Typography.Text> : null}
 			{visualPreviewReady ? <Typography.Text type="secondary">{Math.round(scale * 100)}%</Typography.Text> : null}
 		</Space>
 	)
 
 	let bodyContent: ReactNode
-	if (!props.objectKey) {
+	if (!objectKey) {
 		bodyContent = <Empty description="Select an object to open the viewer." />
-	} else if (props.isMetaFetching && !props.objectMeta) {
+	} else if (isMetaFetching && !objectMeta) {
 		bodyContent = (
 			<div className={styles.imageViewerLoadingState}>
 				<Spin size="large" />
@@ -213,20 +228,20 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 					message="Large preview unavailable"
 					description={`Image previews are limited to ${formatBytes(IMAGE_PREVIEW_MAX_BYTES)}. This object is ${formatBytes(detailsSize ?? 0)}.`}
 				/>
-				{props.thumbnail ? (
+				{thumbnail ? (
 					<div className={styles.imageViewerFallbackFrame}>
-						<div className={styles.imageViewerFallbackInner}>{props.thumbnail}</div>
+						<div className={styles.imageViewerFallbackInner}>{thumbnail}</div>
 						<Typography.Text type="secondary">Fallback thumbnail</Typography.Text>
 					</div>
 				) : null}
 				<Typography.Text type="secondary">Use Download or URL to view the original file.</Typography.Text>
 			</div>
 		)
-	} else if (props.preview?.status === 'error') {
+	} else if (preview?.status === 'error') {
 		bodyContent = (
 			<div className={styles.imageViewerStateStack}>
-				<Alert type="error" showIcon message="Preview failed" description={props.preview.error ?? 'unknown error'} />
-				{props.thumbnail ? <div className={styles.imageViewerFallbackInner}>{props.thumbnail}</div> : null}
+				<Alert type="error" showIcon message="Preview failed" description={preview.error ?? 'unknown error'} />
+				{thumbnail ? <div className={styles.imageViewerFallbackInner}>{thumbnail}</div> : null}
 			</div>
 		)
 	} else {
@@ -237,14 +252,14 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 					ref={stageRef}
 					data-testid="objects-image-viewer-stage"
 					className={`${styles.imageViewerStage} ${dragState ? styles.imageViewerStageDragging : ''}`}
-					style={{ minHeight: props.isMobile ? 'calc(100vh - 300px)' : 420 }}
+					style={{ minHeight: isMobile ? 'calc(100vh - 300px)' : 420 }}
 					onPointerDown={handlePointerDown}
 					onPointerMove={handlePointerMove}
 					onPointerUp={handlePointerEnd}
 					onPointerCancel={handlePointerEnd}
 				>
-					{props.thumbnail && !visualPreviewReady ? <div className={styles.imageViewerThumbnailLayer}>{props.thumbnail}</div> : null}
-					{props.preview?.status === 'loading' || (props.open && !visualPreviewReady) ? (
+					{thumbnail && !visualPreviewReady ? <div className={styles.imageViewerThumbnailLayer}>{thumbnail}</div> : null}
+					{preview?.status === 'loading' || (open && !visualPreviewReady) ? (
 						<div className={styles.imageViewerLoadingOverlay}>
 							<Spin size="large" />
 							<Typography.Text type="secondary">
@@ -252,12 +267,12 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 							</Typography.Text>
 						</div>
 					) : null}
-					{visualPreviewReady && props.preview?.url ? (
+					{visualPreviewReady && preview?.url ? (
 						<img
 							ref={imageRef}
 							data-testid="objects-image-viewer-image"
-							src={props.preview.url}
-							alt={props.objectKey}
+							src={preview.url}
+							alt={objectKey}
 							className={styles.imageViewerImage}
 							style={{ transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})` }}
 							draggable={false}
@@ -269,18 +284,17 @@ export function ObjectsImageViewerModal(props: ObjectsImageViewerModalProps) {
 	}
 
 	return (
-		<Modal
-			open={props.open}
-			onCancel={props.onClose}
+		<DialogModal
+			open={open}
+			onClose={onClose}
 			title={modalTitle}
 			footer={footer}
-			width={props.isMobile ? 'calc(100vw - 16px)' : 980}
-			style={{ top: props.isMobile ? 8 : 24 }}
-			destroyOnHidden={false}
+			width={isMobile ? 'calc(100vw - 16px)' : 980}
+			dataTestId="objects-image-viewer-modal"
 		>
-			<div data-testid="objects-image-viewer-modal" className={styles.imageViewerModalBody}>
+			<div className={styles.imageViewerModalBody}>
 				{bodyContent}
 			</div>
-		</Modal>
+		</DialogModal>
 	)
 }

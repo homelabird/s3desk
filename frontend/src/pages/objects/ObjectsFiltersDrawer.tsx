@@ -1,15 +1,15 @@
-import { Button, Drawer, InputNumber, Space, Switch, Typography } from 'antd'
+import { Button } from 'antd'
 
-import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
-import { NativeSelect } from '../../components/NativeSelect'
 import { DatalistInput } from '../../components/DatalistInput'
-import styles from './objects.module.css'
-
+import { NativeSelect } from '../../components/NativeSelect'
 import {
 	formatLocalDateInputValue,
 	localDayEndMsFromDateInput,
 	localDayStartMsFromDateInput,
 } from '../../lib/localDate'
+import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
+import styles from './objects.module.css'
+import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
 
 type ObjectsFiltersDrawerProps = {
 	open: boolean
@@ -47,40 +47,54 @@ const bytesFromMb = (value: number | null) => {
 	return Math.max(0, Math.round(value * 1024 * 1024))
 }
 
+function parseNumberInput(value: string): number | null {
+	const normalized = value.trim()
+	if (!normalized) return null
+	const parsed = Number(normalized)
+	return Number.isFinite(parsed) ? parsed : null
+}
+
 export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 	const fileFiltersDisabled = props.typeFilter === 'folders'
 	const modifiedAfterValue = formatLocalDateInputValue(props.modifiedAfterMs)
 	const modifiedBeforeValue = formatLocalDateInputValue(props.modifiedBeforeMs)
+
 	return (
-		<Drawer
+		<ObjectsOverlaySheet
 			open={props.open}
 			onClose={props.onClose}
 			title={props.isAdvanced ? 'View options' : 'Filters'}
 			placement="right"
 			width="90%"
 		>
-			<Space orientation="vertical" size="middle" className={styles.drawerFullWidth}>
-				<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-					<Typography.Text type="secondary">Favorites only</Typography.Text>
-					<Switch
-						checked={props.favoritesOnly}
-						onChange={props.onFavoritesOnlyChange}
-						aria-label="Favorites only"
-					/>
-				</Space>
+			<div className={styles.globalSearchContent}>
+				<section className={styles.globalSearchSection}>
+					<div className={styles.globalSearchSectionTitle}>Favorites</div>
+					<div className={styles.globalSearchFieldRow}>
+						<label className={styles.globalSearchCheckboxRow}>
+							<input
+								type="checkbox"
+								checked={props.favoritesOnly}
+								onChange={(event) => props.onFavoritesOnlyChange(event.currentTarget.checked)}
+								aria-label="Favorites only"
+							/>
+							<span>Favorites only</span>
+						</label>
+						<label className={styles.globalSearchCheckboxRow}>
+							<input
+								type="checkbox"
+								checked={props.favoritesFirst}
+								onChange={(event) => props.onFavoritesFirstChange(event.currentTarget.checked)}
+								disabled={props.favoritesOnly}
+								aria-label="Favorites first"
+							/>
+							<span>Favorites first</span>
+						</label>
+					</div>
+				</section>
 
-				<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-					<Typography.Text type="secondary">Favorites first</Typography.Text>
-					<Switch
-						checked={props.favoritesFirst}
-						onChange={props.onFavoritesFirstChange}
-						disabled={props.favoritesOnly}
-						aria-label="Favorites first"
-					/>
-				</Space>
-
-				<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-					<Typography.Text type="secondary">Type</Typography.Text>
+				<section className={styles.globalSearchSection}>
+					<div className={styles.globalSearchSectionTitle}>Type</div>
 					<NativeSelect
 						value={props.typeFilter}
 						onChange={(value) => props.onTypeFilterChange(value as ObjectTypeFilter)}
@@ -92,12 +106,12 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 							{ label: 'Files', value: 'files' },
 						]}
 					/>
-				</Space>
+				</section>
 
 				{props.isAdvanced ? (
 					<>
-						<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-							<Typography.Text type="secondary">Extension</Typography.Text>
+						<section className={styles.globalSearchSection}>
+							<div className={styles.globalSearchSectionTitle}>Extension</div>
 							<DatalistInput
 								value={props.extFilter}
 								onChange={props.onExtFilterChange}
@@ -107,41 +121,45 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 								disabled={fileFiltersDisabled}
 								options={props.extOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
 							/>
-						</Space>
+						</section>
 
-						<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-							<Typography.Text type="secondary">Size (MB)</Typography.Text>
-							<Space className={styles.drawerFullWidth}>
-								<InputNumber
+						<section className={styles.globalSearchSection}>
+							<div className={styles.globalSearchSectionTitle}>Size (MB)</div>
+							<div className={styles.globalSearchFieldRow}>
+								<input
+									type="number"
 									min={0}
 									step={0.1}
+									inputMode="decimal"
 									placeholder="Min MB…"
 									aria-label="Minimum size (MB)"
-									className={styles.drawerHalfInput}
-									value={mbFromBytes(props.minSizeBytes)}
-									onChange={(value) => props.onMinSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
+									className={`${styles.drawerHalfInput} ${styles.globalSearchNumberInput}`}
+									value={mbFromBytes(props.minSizeBytes) ?? ''}
+									onChange={(event) => props.onMinSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
 									disabled={fileFiltersDisabled}
 								/>
-								<InputNumber
+								<input
+									type="number"
 									min={0}
 									step={0.1}
+									inputMode="decimal"
 									placeholder="Max MB…"
 									aria-label="Maximum size (MB)"
-									className={styles.drawerHalfInput}
-									value={mbFromBytes(props.maxSizeBytes)}
-									onChange={(value) => props.onMaxSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
+									className={`${styles.drawerHalfInput} ${styles.globalSearchNumberInput}`}
+									value={mbFromBytes(props.maxSizeBytes) ?? ''}
+									onChange={(event) => props.onMaxSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
 									disabled={fileFiltersDisabled}
 								/>
-							</Space>
-						</Space>
+							</div>
+						</section>
 
-						<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-							<Typography.Text type="secondary">Last modified</Typography.Text>
-							<Space className={styles.drawerFullWidth}>
+						<section className={styles.globalSearchSection}>
+							<div className={styles.globalSearchSectionTitle}>Last modified</div>
+							<div className={styles.globalSearchFieldRow}>
 								<input
 									type="date"
 									aria-label="Modified after date"
-									className={styles.drawerHalfInput}
+									className={`${styles.drawerHalfInput} ${styles.globalSearchDateInput}`}
 									value={modifiedAfterValue}
 									onChange={(event) => {
 										props.onModifiedRangeChange(localDayStartMsFromDateInput(event.currentTarget.value), props.modifiedBeforeMs)
@@ -151,47 +169,45 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 								<input
 									type="date"
 									aria-label="Modified before date"
-									className={styles.drawerHalfInput}
+									className={`${styles.drawerHalfInput} ${styles.globalSearchDateInput}`}
 									value={modifiedBeforeValue}
 									onChange={(event) => {
 										props.onModifiedRangeChange(props.modifiedAfterMs, localDayEndMsFromDateInput(event.currentTarget.value))
 									}}
 									disabled={fileFiltersDisabled}
 								/>
-							</Space>
-						</Space>
+							</div>
+						</section>
+
+						<section className={styles.globalSearchSection}>
+							<div className={styles.globalSearchSectionTitle}>Sort</div>
+							<NativeSelect
+								value={props.sort}
+								onChange={(value) => props.onSortChange(value as ObjectSort)}
+								ariaLabel="Sort"
+								className={styles.drawerFullWidth}
+								options={[
+									{ label: 'Name (A -> Z)', value: 'name_asc' },
+									{ label: 'Name (Z -> A)', value: 'name_desc' },
+									{ label: 'Size (smallest)', value: 'size_asc' },
+									{ label: 'Size (largest)', value: 'size_desc' },
+									{ label: 'Last modified (oldest)', value: 'time_asc' },
+									{ label: 'Last modified (newest)', value: 'time_desc' },
+								]}
+							/>
+						</section>
 					</>
 				) : null}
 
-				{props.isAdvanced ? (
-					<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-						<Typography.Text type="secondary">Sort</Typography.Text>
-						<NativeSelect
-							value={props.sort}
-							onChange={(value) => props.onSortChange(value as ObjectSort)}
-							ariaLabel="Sort"
-							className={styles.drawerFullWidth}
-							options={[
-								{ label: 'Name (A -> Z)', value: 'name_asc' },
-								{ label: 'Name (Z -> A)', value: 'name_desc' },
-								{ label: 'Size (smallest)', value: 'size_asc' },
-								{ label: 'Size (largest)', value: 'size_desc' },
-								{ label: 'Last modified (oldest)', value: 'time_asc' },
-								{ label: 'Last modified (newest)', value: 'time_desc' },
-							]}
-						/>
-					</Space>
-				) : null}
-
-				<Space wrap className={styles.drawerActions}>
+				<div className={`${styles.globalSearchButtonRow} ${styles.drawerActions}`}>
 					<Button onClick={props.onResetView} disabled={!props.hasActiveView}>
 						Reset view
 					</Button>
 					<Button type="primary" onClick={props.onClose}>
 						Done
 					</Button>
-				</Space>
-			</Space>
-		</Drawer>
+				</div>
+			</div>
+		</ObjectsOverlaySheet>
 	)
 }

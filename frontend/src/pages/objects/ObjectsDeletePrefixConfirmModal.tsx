@@ -1,5 +1,6 @@
-import { Alert, Button, Descriptions, Divider, Input, Modal, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Descriptions, Divider, Input, Space, Spin, Typography } from 'antd'
 
+import { DialogModal } from '../../components/DialogModal'
 import type { ObjectIndexSummaryResponse } from '../../api/types'
 import { formatBytes } from '../../lib/transfer'
 
@@ -32,19 +33,25 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 	const indexDisabled = !props.hasProfile || !props.hasBucket || !props.prefix
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title={props.dryRun ? 'Preview delete folder' : 'Delete folder'}
-			okText={props.dryRun ? 'Run preview' : 'Delete folder'}
-			okType={props.dryRun ? 'primary' : 'danger'}
-			okButtonProps={{
-				danger: !props.dryRun,
-				loading: props.isConfirming,
-				disabled: confirmDisabled,
-			}}
-			onOk={props.onConfirm}
-			onCancel={props.onCancel}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={680}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button
+						type="primary"
+						danger={!props.dryRun}
+						loading={props.isConfirming}
+						disabled={confirmDisabled}
+						onClick={() => void props.onConfirm()}
+					>
+						{props.dryRun ? 'Run preview' : 'Delete folder'}
+					</Button>
+				</>
+			}
 		>
 			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Typography.Text>
@@ -119,6 +126,6 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 					</>
 				)}
 			</Space>
-		</Modal>
+		</DialogModal>
 	)
 }

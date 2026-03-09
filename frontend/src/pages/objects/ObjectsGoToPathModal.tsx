@@ -1,7 +1,8 @@
 import type { InputRef } from 'antd'
-import { Modal, Space, Typography } from 'antd'
+import { Button, Space, Typography } from 'antd'
 import type { RefObject } from 'react'
 
+import { DialogModal } from '../../components/DialogModal'
 import { DatalistInput } from '../../components/DatalistInput'
 
 type ObjectsGoToPathModalProps = {
@@ -30,14 +31,19 @@ export function ObjectsGoToPathModal({
 	const disabled = !hasProfile || !bucket
 
 	return (
-		<Modal
+		<DialogModal
 			open={open}
 			title="Go to path"
-			onCancel={onClose}
-			onOk={onCommit}
-			okText="Go"
-			okButtonProps={{ disabled }}
-			destroyOnHidden
+			onClose={onClose}
+			width={520}
+			footer={
+				<>
+					<Button onClick={onClose}>Cancel</Button>
+					<Button type="primary" onClick={onCommit} disabled={disabled}>
+						Go
+					</Button>
+				</>
+			}
 		>
 			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Typography.Text type="secondary">
@@ -59,6 +65,6 @@ export function ObjectsGoToPathModal({
 
 				<Typography.Text type="secondary">Ctrl+L · Enter to navigate</Typography.Text>
 			</Space>
-		</Modal>
+		</DialogModal>
 	)
 }

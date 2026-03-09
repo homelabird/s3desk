@@ -1,5 +1,8 @@
 import { CopyOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Drawer, Input, Space, Switch, Typography } from 'antd'
+import { Alert, Button, Input, Space, Typography } from 'antd'
+
+import { OverlaySheet } from '../../components/OverlaySheet'
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 
 type Props = {
 	open: boolean
@@ -49,12 +52,12 @@ export function JobsLogsDrawer(props: Props) {
 	} = props
 
 	return (
-		<Drawer
+		<OverlaySheet
 			open={open}
 			onClose={onClose}
 			title="Job Logs"
-			destroyOnHidden
-			styles={{ wrapper: { width: typeof drawerWidth === 'number' ? `${drawerWidth}px` : drawerWidth } }}
+			placement="right"
+			width={typeof drawerWidth === 'number' ? `${drawerWidth}px` : drawerWidth}
 			extra={
 				<Space>
 					<Button icon={<ReloadOutlined />} disabled={!activeLogJobId} loading={isLogsLoading} onClick={onRefresh}>
@@ -62,7 +65,7 @@ export function JobsLogsDrawer(props: Props) {
 					</Button>
 					<Space>
 						<Typography.Text type="secondary">Follow</Typography.Text>
-						<Switch checked={followLogs} onChange={onFollowLogsChange} aria-label="Follow job logs" />
+						<ToggleSwitch checked={followLogs} onChange={onFollowLogsChange} ariaLabel="Follow job logs" />
 					</Space>
 				</Space>
 			}
@@ -111,6 +114,6 @@ export function JobsLogsDrawer(props: Props) {
 			) : (
 				<Typography.Text type="secondary">Select a job</Typography.Text>
 			)}
-		</Drawer>
+		</OverlaySheet>
 	)
 }

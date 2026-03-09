@@ -1,5 +1,16 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import {
+	buildBucketFixture,
+	buildFavoritesFixture,
+	buildMetaFixture,
+	buildObjectsListFixture,
+	buildProfileFixture,
+	installMockApi,
+	seedLocalStorage,
+} from './support/apiFixtures'
+import { ensureDialogOpen, transferUploadRow } from './support/ui'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -13,13 +24,79 @@ const defaultStorage: StorageSeed = {
 }
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
-	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify('simple'))
-	}, storage)
+	await seedLocalStorage(page, {
+		...defaultStorage,
+		objectsUIMode: 'simple',
+		...overrides,
+	})
+}
+
+function buildUploadRoutes(args: {
+	now: string
+	sseBody: string
+	uploadId: string
+	jobBodies: Record<string, Record<string, unknown>>
+	onCommit: () => { jobId: string }
+}) {
+	return [
+		{
+			method: 'GET',
+			path: '/events',
+			handle: ({ text }) => text(args.sseBody, 200, 'text/event-stream'),
+		},
+		{
+			method: 'GET',
+			path: '/meta',
+			handle: ({ json }) => json(buildMetaFixture()),
+		},
+		{
+			method: 'GET',
+			path: '/profiles',
+			handle: ({ json }) =>
+				json([
+					buildProfileFixture({
+						id: defaultStorage.profileId,
+						createdAt: args.now,
+						updatedAt: args.now,
+					}),
+				]),
+		},
+		{
+			method: 'GET',
+			path: '/buckets',
+			handle: ({ json }) => json([buildBucketFixture(defaultStorage.bucket, { createdAt: args.now })]),
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects`,
+			handle: ({ json }) => json(buildObjectsListFixture({ bucket: defaultStorage.bucket })),
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handle: ({ json }) => json(buildFavoritesFixture({ bucket: defaultStorage.bucket })),
+		},
+		{
+			method: 'POST',
+			path: '/uploads',
+			handle: ({ json }) => json({ uploadId: args.uploadId, maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }, 201),
+		},
+		{
+			method: 'POST',
+			path: `/uploads/${args.uploadId}/files`,
+			handle: ({ empty }) => empty(),
+		},
+		{
+			method: 'POST',
+			path: `/uploads/${args.uploadId}/commit`,
+			handle: ({ json }) => json(args.onCommit(), 201),
+		},
+		...Object.entries(args.jobBodies).map(([jobId, body]) => ({
+			method: 'GET' as const,
+			path: `/jobs/${jobId}`,
+			handle: ({ json }: { json: (body: unknown, status?: number) => Promise<void> }) => json(body),
+		})),
+	]
 }
 
 test('upload transfer shows job progress from events', async ({ page }) => {
@@ -37,129 +114,21 @@ test('upload transfer shows job progress from events', async ({ page }) => {
 		},
 	})}\n\n`
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: sseBody,
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: defaultStorage.profileId,
-						name: 'Playwright',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
-					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: [],
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		if (method === 'POST' && path === '/api/v1/uploads') {
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ uploadId, maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/files`) {
-			return route.fulfill({ status: 204 })
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/commit`) {
-			uploadCommitted = true
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ jobId }),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/jobs/${jobId}`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ status: 'running', progress: { bytesDone: 2048, bytesTotal: 4096, speedBps: 1024, etaSeconds: 2 } }),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+	await installMockApi(
+		page,
+		buildUploadRoutes({
+			now,
+			sseBody,
+			uploadId,
+			jobBodies: {
+				[jobId]: { status: 'running', progress: { bytesDone: 2048, bytesTotal: 4096, speedBps: 1024, etaSeconds: 2 } },
+			},
+			onCommit: () => {
+				uploadCommitted = true
+				return { jobId }
+			},
+		}),
+	)
 
 	await seedStorage(page)
 	await page.goto('/objects')
@@ -197,16 +166,13 @@ test('upload transfer shows job progress from events', async ({ page }) => {
 
 	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
 
-	const drawerMask = page.locator('.ant-drawer-mask').first()
-	const drawerOpen = await drawerMask.isVisible().catch(() => false)
-	if (!drawerOpen) {
+	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
 		await page.getByRole('button', { name: /Transfers/i }).first().click()
-	}
-	await page.getByRole('tab', { name: /Uploads/i }).click()
+	})
+	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
 
-	const labelNode = page.getByText('Upload: hello.txt', { exact: true })
-	await labelNode.waitFor({ timeout: 5000 })
-	const row = labelNode.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]').first()
+	const row = transferUploadRow(transfersDialog, 'Upload: hello.txt')
+	await expect(row).toBeVisible({ timeout: 5000 })
 	await expect(row.getByText(/eta/)).toBeVisible()
 })
 
@@ -231,146 +197,30 @@ test('upload transfer shows failure and allows retry', async ({ page }) => {
 		payload: { status: 'failed', error: 'simulated failure' },
 	})}\n\n`
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: sseBody,
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: defaultStorage.profileId,
-						name: 'Playwright',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
-					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					delimiter: '/',
-					commonPrefixes: [],
-					items: [],
-					nextContinuationToken: null,
-					isTruncated: false,
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					bucket: defaultStorage.bucket,
-					prefix: '',
-					items: [],
-				}),
-			})
-		}
-
-		if (method === 'POST' && path === '/api/v1/uploads') {
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ uploadId, maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/files`) {
-			return route.fulfill({ status: 204 })
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/commit`) {
-			commitCount += 1
-			const commitJobId = commitCount === 1 ? jobId : retryJobId
-			uploadCommitted = true
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ jobId: commitJobId }),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/jobs/${jobId}`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+	await installMockApi(
+		page,
+		buildUploadRoutes({
+			now,
+			sseBody,
+			uploadId,
+			jobBodies: {
+				[jobId]: {
 					status: 'failed',
 					error: 'simulated failure',
 					progress: { bytesDone: 1024, bytesTotal: 4096, speedBps: 512, etaSeconds: 6 },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/jobs/${retryJobId}`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+				},
+				[retryJobId]: {
 					status: 'running',
 					progress: { bytesDone: 2048, bytesTotal: 4096, speedBps: 1024, etaSeconds: 2 },
-				}),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+				},
+			},
+			onCommit: () => {
+				commitCount += 1
+				uploadCommitted = true
+				return { jobId: commitCount === 1 ? jobId : retryJobId }
+			},
+		}),
+	)
 
 	await seedStorage(page)
 	await page.goto('/objects')
@@ -408,16 +258,13 @@ test('upload transfer shows failure and allows retry', async ({ page }) => {
 
 	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
 
-	const drawerMask = page.locator('.ant-drawer-mask').first()
-	const drawerOpen = await drawerMask.isVisible().catch(() => false)
-	if (!drawerOpen) {
+	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
 		await page.getByRole('button', { name: /Transfers/i }).first().click()
-	}
-	await page.getByRole('tab', { name: /Uploads/i }).click()
+	})
+	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
 
-	const labelNode = page.getByText('Upload: broken.txt', { exact: true })
-	await labelNode.waitFor({ timeout: 5000 })
-	const row = labelNode.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]').first()
+	const row = transferUploadRow(transfersDialog, 'Upload: broken.txt')
+	await expect(row).toBeVisible({ timeout: 5000 })
 	await expect(row.getByText('Failed', { exact: true })).toBeVisible()
 	await expect(row.getByText('simulated failure')).toBeVisible()
 

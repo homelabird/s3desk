@@ -28,6 +28,7 @@ export type ObjectsDetailsContentProps = {
 	onDelete: () => void
 	isDeleteLoading: boolean
 	thumbnail?: ReactNode
+	previewThumbnail?: ReactNode
 	preview: ObjectPreview | null
 	onLoadPreview: () => void
 	onCancelPreview: () => void
@@ -40,6 +41,8 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 	const isImageObject = previewKind === 'image'
 	const isVideoObject = previewKind === 'video'
 	const canOpenLargePreview = isImageObject || isVideoObject
+	const previewFallbackThumbnail = props.previewThumbnail ?? props.thumbnail
+	const showThumbnailHeaderOpenLarge = isImageObject
 
 	if (!props.hasProfile) {
 		return <Typography.Text type="secondary">Select a profile first.</Typography.Text>
@@ -157,7 +160,7 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 						<div className={styles.detailsSection}>
 							<div className={styles.detailsSectionHeader}>
 								<Typography.Text strong>Thumbnail</Typography.Text>
-								{canOpenLargePreview ? (
+								{showThumbnailHeaderOpenLarge ? (
 									<Button data-testid="objects-details-thumbnail-open-large" size="small" type="text" onClick={props.onOpenLargePreview}>
 										Open large
 									</Button>
@@ -239,9 +242,9 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 									{props.preview.truncated ? '\n\n…(truncated)…' : ''}
 								</pre>
 							</div>
-						) : isVideoObject && props.thumbnail ? (
+						) : isVideoObject && previewFallbackThumbnail ? (
 							<div className={styles.previewFrame}>
-								<div className={styles.detailsMediaCenter}>{props.thumbnail}</div>
+								<div className={styles.detailsMediaCenter}>{previewFallbackThumbnail}</div>
 								<Typography.Text type="secondary" className={styles.detailsPreviewCaption}>
 									Load to fetch a larger thumbnail frame for this video.
 								</Typography.Text>

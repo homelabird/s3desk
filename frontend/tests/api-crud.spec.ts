@@ -58,14 +58,15 @@ test.describe('Live API CRUD', () => {
 		const objectKey = `hello-${runId}.txt`
 		let profileId: string | null = null
 
-		try {
-			const createProfile = await request.post('/api/v1/profiles', {
-				headers: apiHeaders(),
-				data: {
-					name: profileName,
-					endpoint: s3Endpoint,
-					region: s3Region,
-					accessKeyId: s3AccessKey,
+			try {
+				const createProfile = await request.post('/api/v1/profiles', {
+					headers: apiHeaders(),
+					data: {
+						provider: 's3_compatible',
+						name: profileName,
+						endpoint: s3Endpoint,
+						region: s3Region,
+						accessKeyId: s3AccessKey,
 					secretAccessKey: s3SecretKey,
 					forcePathStyle,
 					tlsInsecureSkipVerify: tlsSkipVerify,
@@ -76,10 +77,13 @@ test.describe('Live API CRUD', () => {
 			profileId = profile.id
 			expect(profile.name).toBe(profileName)
 
-			const updateProfile = await request.patch(`/api/v1/profiles/${profileId}`, {
-				headers: apiHeaders(),
-				data: { name: updatedProfileName },
-			})
+				const updateProfile = await request.patch(`/api/v1/profiles/${profileId}`, {
+					headers: apiHeaders(),
+					data: {
+						provider: 's3_compatible',
+						name: updatedProfileName,
+					},
+				})
 			expect(updateProfile.status()).toBe(200)
 			const updated = (await updateProfile.json()) as { name: string }
 			expect(updated.name).toBe(updatedProfileName)

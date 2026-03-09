@@ -23,7 +23,7 @@ func (s *server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to list profiles", nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, profiles)
+	writeJSON(w, http.StatusOK, decorateProfiles(profiles, s.cfg.UploadDirectStream))
 }
 
 func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create profile", map[string]any{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusCreated, profile)
+	writeJSON(w, http.StatusCreated, decorateProfile(profile, s.cfg.UploadDirectStream))
 }
 
 // trimPtrNilIfEmpty trims whitespace from a string pointer's value and nils
@@ -145,6 +145,9 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 
 	case models.ProfileProviderGcpGcs:
 		anonymous := req.Anonymous != nil && *req.Anonymous
+		if req.ProjectNumber == nil || strings.TrimSpace(*req.ProjectNumber) == "" {
+			return errors.New("projectNumber is required")
+		}
 		if !anonymous {
 			if req.ServiceAccountJSON == nil || *req.ServiceAccountJSON == "" {
 				return errors.New("serviceAccountJson is required unless anonymous=true")
@@ -248,7 +251,7 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, profile)
+	writeJSON(w, http.StatusOK, decorateProfile(profile, s.cfg.UploadDirectStream))
 }
 
 func (s *server) handleDeleteProfile(w http.ResponseWriter, r *http.Request) {

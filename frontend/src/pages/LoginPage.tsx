@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react'
 import { APIClient, APIError } from '../api/client'
 import { BrandLockup } from '../components/BrandLockup'
 import { FormField } from '../components/FormField'
-import { useThemeMode } from '../themeMode'
+import { useThemeMode } from '../useThemeMode'
 
 type Props = {
 	initialToken: string

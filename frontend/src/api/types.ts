@@ -51,6 +51,8 @@ export type JobCreateRequest = components['schemas']['JobCreateRequest']
 export type JobCreatedResponse = components['schemas']['JobCreatedResponse']
 export type JobsListResponse = components['schemas']['JobsListResponse']
 export type MetaResponse = components['schemas']['MetaResponse']
+export type ServerMigrationManifest = components['schemas']['ServerMigrationManifest']
+export type ServerRestoreResponse = components['schemas']['ServerRestoreResponse']
 
 export type LocalEntry = components['schemas']['LocalEntry']
 export type ListLocalEntriesResponse = components['schemas']['ListLocalEntriesResponse']

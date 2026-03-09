@@ -114,6 +114,10 @@ export async function parseProfileYaml(
 		case 'gcp_gcs': {
 			const anonymous = profile.anonymous ?? false
 			const serviceAccountJson = toOptionalString(profile.serviceAccountJson)
+			const projectNumber = toOptionalString(profile.projectNumber)
+			if (!projectNumber) {
+				throw new Error('gcp_gcs requires projectNumber')
+			}
 			if (!anonymous && !serviceAccountJson) {
 				throw new Error('gcp_gcs requires serviceAccountJson unless anonymous=true')
 			}
@@ -123,7 +127,7 @@ export async function parseProfileYaml(
 				anonymous,
 				serviceAccountJson: anonymous ? '' : serviceAccountJson,
 				endpoint: toOptionalString(profile.endpoint),
-				projectNumber: toOptionalString(profile.projectNumber),
+				projectNumber,
 				preserveLeadingSlash,
 				tlsInsecureSkipVerify,
 			}

@@ -1,8 +1,10 @@
-import { Alert, Button, Checkbox, Drawer, Grid, Input, Switch, message } from 'antd'
+import { Alert, Button, Checkbox, Grid, Input, message } from 'antd'
 import { useState } from 'react'
 
 import { DatalistInput } from '../../components/DatalistInput'
 import { FormField } from '../../components/FormField'
+import { OverlaySheet } from '../../components/OverlaySheet'
+import { ToggleSwitch } from '../../components/ToggleSwitch'
 import styles from './JobsShared.module.css'
 
 export function DeletePrefixJobModal(props: {
@@ -80,11 +82,13 @@ export function DeletePrefixJobModal(props: {
 	}
 
 	return (
-		<Drawer
+		<OverlaySheet
 			open={props.open}
 			onClose={props.onCancel}
 			title="Create delete job (S3)"
-			width={drawerWidth}
+			placement={screens.md ? 'right' : 'bottom'}
+			width={screens.md ? drawerWidth : undefined}
+			height={!screens.md ? '100dvh' : undefined}
 			extra={
 				<div className={styles.drawerExtra}>
 					<Button onClick={props.onCancel}>Close</Button>
@@ -132,7 +136,7 @@ export function DeletePrefixJobModal(props: {
 				</FormField>
 
 				<FormField label="Delete ALL objects in bucket">
-					<Switch checked={deleteAll} onChange={(checked) => setDeleteAll(checked)} />
+					<ToggleSwitch checked={deleteAll} onChange={(checked) => setDeleteAll(checked)} ariaLabel="Delete ALL objects in bucket" />
 				</FormField>
 
 				<FormField
@@ -163,7 +167,7 @@ export function DeletePrefixJobModal(props: {
 				) : null}
 
 				<FormField label="Dry run (no changes)">
-					<Switch checked={dryRun} onChange={setDryRun} />
+					<ToggleSwitch checked={dryRun} onChange={setDryRun} ariaLabel="Dry run (no changes)" />
 				</FormField>
 
 				<FormField label="Include patterns (one per line)">
@@ -174,7 +178,7 @@ export function DeletePrefixJobModal(props: {
 					<Input.TextArea value={exclude} onChange={(e) => setExclude(e.target.value)} rows={4} placeholder="tmp_*…" />
 				</FormField>
 			</form>
-		</Drawer>
+		</OverlaySheet>
 	)
 }
 

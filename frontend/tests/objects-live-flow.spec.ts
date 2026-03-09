@@ -3,6 +3,8 @@ import { fileURLToPath } from 'url'
 
 import { expect, test, type Page } from '@playwright/test'
 
+import { dialogByName, transferDownloadRow, transferUploadRow } from './support/ui'
+
 const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
@@ -80,7 +82,7 @@ test.describe('Live UI flow', () => {
 			await page.getByLabel('Secret').fill(s3SecretKey)
 			await setSwitch(page, 'Force Path Style', forcePathStyle)
 			await setSwitch(page, 'TLS Insecure Skip Verify', tlsSkipVerify)
-			const profileModal = page.locator('.ant-modal').filter({ hasText: 'Create Profile' })
+			const profileModal = dialogByName(page, 'Create Profile')
 			await profileModal.getByRole('button', { name: 'Create' }).click()
 
 			const createdProfileRow = page.getByRole('row', { name: new RegExp(profileName) })
@@ -95,7 +97,7 @@ test.describe('Live UI flow', () => {
 			await page.goto('/buckets')
 			await page.getByRole('button', { name: 'New Bucket' }).click()
 			await page.getByLabel('Bucket name').fill(bucketName)
-			const bucketModal = page.locator('.ant-modal').filter({ hasText: 'Create Bucket' })
+			const bucketModal = dialogByName(page, 'Create Bucket')
 			await bucketModal.getByRole('button', { name: 'Create' }).click()
 			await expect(page.getByRole('row', { name: new RegExp(bucketName) })).toBeVisible({ timeout: 30_000 })
 
@@ -109,7 +111,7 @@ test.describe('Live UI flow', () => {
 			await fileInput.setInputFiles(uploadFixture)
 			await page.getByRole('button', { name: /Queue upload/i }).click()
 
-			const uploadRow = page.getByText(`Upload: ${uploadFilename}`, { exact: true }).locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]')
+			const uploadRow = transferUploadRow(page, `Upload: ${uploadFilename}`)
 			await expect(uploadRow).toBeVisible({ timeout: 30_000 })
 			await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 180_000 })
 
@@ -125,11 +127,9 @@ test.describe('Live UI flow', () => {
 			await objectRow.getByRole('button', { name: 'Object actions' }).click()
 			await page.getByRole('menuitem', { name: 'Download (client)' }).click()
 			await page.getByRole('button', { name: /Transfers/ }).first().click()
-			const transfersDialog = page.getByRole('dialog', { name: /Transfers/i })
+			const transfersDialog = dialogByName(page, /Transfers/i)
 			await expect(transfersDialog).toBeVisible({ timeout: 30_000 })
-			const downloadRow = transfersDialog
-				.getByText(uploadFilename)
-				.locator('xpath=ancestor::div[contains(@style, "border: 1px solid")]')
+			const downloadRow = transferDownloadRow(transfersDialog, uploadFilename)
 			await expect(downloadRow).toBeVisible({ timeout: 30_000 })
 			await expect(downloadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 120_000 })
 			await transfersDialog.getByRole('button', { name: 'Close' }).click()
@@ -137,7 +137,7 @@ test.describe('Live UI flow', () => {
 
 			await expect(page.getByText('1 selected')).toBeVisible({ timeout: 10_000 })
 			await page.getByRole('button', { name: /Delete/ }).last().click()
-			const objectConfirm = page.locator('.ant-modal').filter({ hasText: 'Delete object?' })
+			const objectConfirm = dialogByName(page, 'Delete object?')
 			await objectConfirm.getByPlaceholder('DELETE').fill('DELETE')
 			await objectConfirm.getByRole('button', { name: 'Delete' }).click()
 			await expect(page.locator('[data-objects-row="true"]', { hasText: uploadFilename })).toHaveCount(0, { timeout: 60_000 })
@@ -145,7 +145,7 @@ test.describe('Live UI flow', () => {
 			await page.goto('/buckets')
 			const bucketRow = page.getByRole('row', { name: new RegExp(bucketName) })
 			await bucketRow.getByRole('button', { name: 'Delete' }).click()
-			const bucketConfirm = page.locator('.ant-modal').filter({ hasText: bucketName })
+			const bucketConfirm = dialogByName(page, new RegExp(bucketName))
 			await bucketConfirm.getByPlaceholder(bucketName).fill(bucketName)
 			await bucketConfirm.getByRole('button', { name: 'Delete' }).click()
 			await expect(bucketRow).toHaveCount(0, { timeout: 60_000 })

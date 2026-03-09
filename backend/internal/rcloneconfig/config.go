@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"s3desk/internal/azureutil"
 	"s3desk/internal/models"
 )
 
@@ -90,13 +91,7 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 		if _, err := fmt.Fprintf(&b, "key = %s\n", profile.AzureAccountKey); err != nil {
 			return "", err
 		}
-		endpoint := strings.TrimSpace(profile.AzureEndpoint)
-		if endpoint == "" && profile.AzureUseEmulator {
-			acct := strings.TrimSpace(profile.AzureAccountName)
-			if acct != "" {
-				endpoint = fmt.Sprintf("http://azurite:10000/%s", acct)
-			}
-		}
+		endpoint := strings.TrimSpace(azureutil.BlobEndpoint(profile))
 		if endpoint != "" {
 			if _, err := fmt.Fprintf(&b, "endpoint = %s\n", endpoint); err != nil {
 				return "", err

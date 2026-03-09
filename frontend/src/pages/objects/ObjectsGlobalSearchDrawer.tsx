@@ -1,7 +1,16 @@
-import { Alert, Button, Collapse, Divider, Drawer, Empty, Input, InputNumber, Space, Spin, Switch, Typography } from 'antd'
-import { CopyOutlined, DownloadOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { Alert, Button, Empty, Input, Spin } from 'antd'
+import {
+	CopyOutlined,
+	DownloadOutlined,
+	DownOutlined,
+	InfoCircleOutlined,
+	ReloadOutlined,
+	SearchOutlined,
+} from '@ant-design/icons'
+import { useState } from 'react'
 
 import type { ObjectItem } from '../../api/types'
+import { NativeSelect } from '../../components/NativeSelect'
 import { formatDateTime } from '../../lib/format'
 import {
 	formatLocalDateInputValue,
@@ -9,7 +18,7 @@ import {
 	localDayStartMsFromDateInput,
 } from '../../lib/localDate'
 import { formatBytes } from '../../lib/transfer'
-import { NativeSelect } from '../../components/NativeSelect'
+import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import styles from './objects.module.css'
 
 type ObjectsGlobalSearchDrawerProps = {
@@ -70,10 +79,80 @@ const bytesFromMb = (value: number | null) => {
 	return Math.max(0, Math.round(value * 1024 * 1024))
 }
 
+function parseNumberInput(value: string): number | null {
+	const normalized = value.trim()
+	if (!normalized) return null
+	const parsed = Number(normalized)
+	return Number.isFinite(parsed) ? parsed : null
+}
+
+type ObjectsGlobalSearchIndexPanelProps = Pick<
+	ObjectsGlobalSearchDrawerProps,
+	| 'bucket'
+	| 'currentPrefix'
+	| 'indexPrefix'
+	| 'onIndexPrefixChange'
+	| 'onUseCurrentPrefix'
+	| 'indexFullReindex'
+	| 'onIndexFullReindexChange'
+	| 'onCreateIndexJob'
+	| 'isCreatingIndexJob'
+	| 'isNotIndexed'
+	| 'isMd'
+>
+
+function ObjectsGlobalSearchIndexPanel(props: ObjectsGlobalSearchIndexPanelProps) {
+	const [open, setOpen] = useState(props.isNotIndexed)
+	const inputFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchInputMd : ''}`
+
+	return (
+		<section className={styles.globalSearchIndexCard}>
+			<button type="button" className={styles.globalSearchIndexToggle} onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+				<span className={styles.globalSearchSectionTitle}>Index management</span>
+				<DownOutlined className={`${styles.globalSearchIndexIcon} ${open ? styles.globalSearchIndexIconOpen : ''}`} />
+			</button>
+			{open ? (
+				<div className={styles.globalSearchIndexPanel}>
+					<p className={styles.globalSearchIndexHint}>
+						Build/rebuild the index for <code className={styles.globalSearchCode}>{props.bucket}</code>.
+					</p>
+					<div className={styles.globalSearchFieldRow}>
+						<Input
+							allowClear
+							placeholder="Index prefix (optional)…"
+							aria-label="Index prefix"
+							className={inputFieldClass}
+							value={props.indexPrefix}
+							onChange={(event) => props.onIndexPrefixChange(event.target.value)}
+						/>
+						<Button size="small" onClick={props.onUseCurrentPrefix} disabled={!props.currentPrefix.trim()}>
+							Use current prefix
+						</Button>
+						<label className={styles.globalSearchCheckboxRow}>
+							<input
+								type="checkbox"
+								checked={props.indexFullReindex}
+								onChange={(event) => props.onIndexFullReindexChange(event.currentTarget.checked)}
+								aria-label="Full reindex"
+							/>
+							<span>Full reindex</span>
+						</label>
+						<Button type="primary" onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
+							Create index job
+						</Button>
+					</div>
+				</div>
+			) : null}
+		</section>
+	)
+}
+
 export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps) {
 	const drawerWidth = props.isMd ? 920 : '100%'
 	const modifiedAfterValue = formatLocalDateInputValue(props.modifiedAfterMs)
 	const modifiedBeforeValue = formatLocalDateInputValue(props.modifiedBeforeMs)
+	const minSizeValue = mbFromBytes(props.minSizeBytes)
+	const maxSizeValue = mbFromBytes(props.maxSizeBytes)
 	const inputFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchInputMd : ''}`
 	const prefixFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchPrefixMd : ''}`
 	const limitFieldClass = `${styles.drawerResponsiveField} ${props.isMd ? styles.globalSearchLimitMd : ''}`
@@ -85,82 +164,90 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 	const keyTextClass = `${styles.globalSearchKeyText} ${props.isMd ? styles.globalSearchKeyTextMd : styles.globalSearchKeyTextSm}`
 
 	return (
-		<Drawer open={props.open} onClose={props.onClose} width={drawerWidth} title="Global Search (Indexed)" destroyOnHidden>
+		<ObjectsOverlaySheet open={props.open} onClose={props.onClose} width={drawerWidth} placement="right" title="Global Search (Indexed)">
 			{!props.hasProfile ? (
-				<Alert type="warning" showIcon title="Select a profile first" />
+				<Alert type="warning" showIcon message="Select a profile first" />
 			) : !props.hasBucket ? (
-				<Alert type="warning" showIcon title="Select a bucket first" />
+				<Alert type="warning" showIcon message="Select a bucket first" />
 			) : (
-				<Space orientation="vertical" size="middle" className={styles.drawerFullWidth}>
-					<Typography.Text strong>Search</Typography.Text>
-					<Space wrap>
-						<Input
-							allowClear
-							prefix={<SearchOutlined />}
-							placeholder="Search query (substring)…"
-							aria-label="Search query"
-							className={inputFieldClass}
-							value={props.queryDraft}
-							onChange={(e) => props.onQueryDraftChange(e.target.value)}
-						/>
-						<Input
-							allowClear
-							placeholder="Prefix filter (optional)…"
-							aria-label="Prefix filter"
-							className={prefixFieldClass}
-							value={props.prefixFilter}
-							onChange={(e) => props.onPrefixFilterChange(e.target.value)}
-						/>
-						<NativeSelect
-							value={String(props.limit)}
-							onChange={(value) => props.onLimitChange(Number(value))}
-							ariaLabel="Result limit"
-							className={limitFieldClass}
-							options={[
-								{ label: 'Limit 50', value: '50' },
-								{ label: 'Limit 100', value: '100' },
-								{ label: 'Limit 200', value: '200' },
-							]}
-						/>
-						<Button icon={<ReloadOutlined />} onClick={props.onRefresh} loading={props.isRefreshing}>
-							Refresh
-						</Button>
-						<Button onClick={props.onReset}>Reset</Button>
-					</Space>
+				<div className={styles.globalSearchContent}>
+					<section className={styles.globalSearchSection}>
+						<div className={styles.globalSearchSectionTitle}>Search</div>
+						<div className={styles.globalSearchFieldRow}>
+							<Input
+								allowClear
+								prefix={<SearchOutlined />}
+								placeholder="Search query (substring)…"
+								aria-label="Search query"
+								className={inputFieldClass}
+								value={props.queryDraft}
+								onChange={(event) => props.onQueryDraftChange(event.target.value)}
+							/>
+							<Input
+								allowClear
+								placeholder="Prefix filter (optional)…"
+								aria-label="Prefix filter"
+								className={prefixFieldClass}
+								value={props.prefixFilter}
+								onChange={(event) => props.onPrefixFilterChange(event.target.value)}
+							/>
+							<NativeSelect
+								value={String(props.limit)}
+								onChange={(value) => props.onLimitChange(Number(value))}
+								ariaLabel="Result limit"
+								className={limitFieldClass}
+								options={[
+									{ label: 'Limit 50', value: '50' },
+									{ label: 'Limit 100', value: '100' },
+									{ label: 'Limit 200', value: '200' },
+								]}
+							/>
+							<div className={styles.globalSearchButtonRow}>
+								<Button icon={<ReloadOutlined />} onClick={props.onRefresh} loading={props.isRefreshing}>
+									Refresh
+								</Button>
+								<Button onClick={props.onReset}>Reset</Button>
+							</div>
+						</div>
+					</section>
 
-					<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-						<Typography.Text type="secondary">Filters</Typography.Text>
-						<Space wrap>
+					<section className={styles.globalSearchSection}>
+						<div className={styles.globalSearchSectionTitle}>Filters</div>
+						<div className={styles.globalSearchFieldRow}>
 							<Input
 								allowClear
 								placeholder="Ext (e.g. log)…"
 								aria-label="Extension filter"
 								className={extFieldClass}
 								value={props.extFilter}
-								onChange={(e) => props.onExtFilterChange(e.target.value)}
+								onChange={(event) => props.onExtFilterChange(event.target.value)}
 							/>
-							<InputNumber
+							<input
+								type="number"
 								min={0}
 								step={0.1}
+								inputMode="decimal"
 								placeholder="Min MB…"
 								aria-label="Minimum size (MB)"
-								className={sizeFieldClass}
-								value={mbFromBytes(props.minSizeBytes)}
-								onChange={(value) => props.onMinSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
+								className={`${sizeFieldClass} ${styles.globalSearchNumberInput}`}
+								value={minSizeValue == null ? '' : String(minSizeValue)}
+								onChange={(event) => props.onMinSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
 							/>
-							<InputNumber
+							<input
+								type="number"
 								min={0}
 								step={0.1}
+								inputMode="decimal"
 								placeholder="Max MB…"
 								aria-label="Maximum size (MB)"
-								className={sizeFieldClass}
-								value={mbFromBytes(props.maxSizeBytes)}
-								onChange={(value) => props.onMaxSizeBytesChange(bytesFromMb(typeof value === 'number' ? value : null))}
+								className={`${sizeFieldClass} ${styles.globalSearchNumberInput}`}
+								value={maxSizeValue == null ? '' : String(maxSizeValue)}
+								onChange={(event) => props.onMaxSizeBytesChange(bytesFromMb(parseNumberInput(event.currentTarget.value)))}
 							/>
 							<input
 								type="date"
 								aria-label="Modified after date"
-								className={dateFieldClass}
+								className={`${dateFieldClass} ${styles.globalSearchDateInput}`}
 								value={modifiedAfterValue}
 								onChange={(event) => {
 									props.onModifiedRangeChange(localDayStartMsFromDateInput(event.currentTarget.value), props.modifiedBeforeMs)
@@ -169,21 +256,21 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<input
 								type="date"
 								aria-label="Modified before date"
-								className={dateFieldClass}
+								className={`${dateFieldClass} ${styles.globalSearchDateInput}`}
 								value={modifiedBeforeValue}
 								onChange={(event) => {
 									props.onModifiedRangeChange(props.modifiedAfterMs, localDayEndMsFromDateInput(event.currentTarget.value))
 								}}
 							/>
-						</Space>
-					</Space>
+						</div>
+					</section>
 
 					{props.isError ? (
 						props.isNotIndexed ? (
 							<Alert
 								type="info"
 								showIcon
-								title="Index not found"
+								message="Index not found"
 								description="Create an s3_index_objects job first, then search again."
 								action={
 									<Button type="primary" size="small" onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
@@ -192,53 +279,26 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								}
 							/>
 						) : (
-							<Alert type="error" showIcon title="Search failed" description={props.errorMessage} />
+							<Alert type="error" showIcon message="Search failed" description={props.errorMessage} />
 						)
 					) : null}
 
-					<Collapse
-						size="small"
-						defaultActiveKey={props.isNotIndexed ? ['index'] : []}
-						items={[
-							{
-								key: 'index',
-								label: 'Index management',
-								children: (
-									<Space orientation="vertical" size="small" className={styles.drawerFullWidth}>
-										<Typography.Text type="secondary">
-											Build/rebuild the index for <Typography.Text code>{props.bucket}</Typography.Text>:
-										</Typography.Text>
-										<Space wrap>
-												<Input
-													allowClear
-													placeholder="Index prefix (optional)…"
-													aria-label="Index prefix"
-													className={inputFieldClass}
-													value={props.indexPrefix}
-													onChange={(e) => props.onIndexPrefixChange(e.target.value)}
-												/>
-											<Button size="small" onClick={props.onUseCurrentPrefix} disabled={!props.currentPrefix.trim()}>
-												Use current prefix
-											</Button>
-											<Space>
-												<Typography.Text type="secondary">Full reindex</Typography.Text>
-												<Switch
-													checked={props.indexFullReindex}
-													onChange={(value) => props.onIndexFullReindexChange(value)}
-													aria-label="Full reindex"
-												/>
-											</Space>
-											<Button type="primary" onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
-												Create index job
-											</Button>
-										</Space>
-									</Space>
-								),
-							},
-							]}
-						/>
+					<ObjectsGlobalSearchIndexPanel
+						key={props.isNotIndexed ? 'index-missing' : 'index-ready'}
+						bucket={props.bucket}
+						currentPrefix={props.currentPrefix}
+						indexPrefix={props.indexPrefix}
+						onIndexPrefixChange={props.onIndexPrefixChange}
+						onUseCurrentPrefix={props.onUseCurrentPrefix}
+						indexFullReindex={props.indexFullReindex}
+						onIndexFullReindexChange={props.onIndexFullReindexChange}
+						onCreateIndexJob={props.onCreateIndexJob}
+						isCreatingIndexJob={props.isCreatingIndexJob}
+						isNotIndexed={props.isNotIndexed}
+						isMd={props.isMd}
+					/>
 
-					<Divider className={styles.globalSearchDivider} />
+					<div className={styles.globalSearchDivider} />
 
 					{!props.searchQueryText ? (
 						<Empty description="Type a query to search" />
@@ -250,54 +310,42 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 						<Empty description="No results" />
 					) : (
 						<>
-							<Typography.Text type="secondary">
+							<p className={styles.globalSearchResultsMeta}>
 								{props.items.length} result(s)
 								{props.hasNextPage ? ' (more available)' : ''}
-							</Typography.Text>
+							</p>
 							<div className={tableWrapClass}>
 								<table className={tableClass}>
 									<thead>
 										<tr>
-											<th className={styles.globalSearchTh}>
-												Key
-											</th>
-											<th className={`${styles.globalSearchTh} ${styles.globalSearchThSize}`}>
-												Size
-											</th>
-											<th className={`${styles.globalSearchTh} ${styles.globalSearchThModified}`}>
-												Last modified
-											</th>
-											<th className={`${styles.globalSearchTh} ${styles.globalSearchThActions}`}>
-												Actions
-											</th>
+											<th className={styles.globalSearchTh}>Key</th>
+											<th className={`${styles.globalSearchTh} ${styles.globalSearchThSize}`}>Size</th>
+											<th className={`${styles.globalSearchTh} ${styles.globalSearchThModified}`}>Last modified</th>
+											<th className={`${styles.globalSearchTh} ${styles.globalSearchThActions}`}>Actions</th>
 										</tr>
 									</thead>
 									<tbody>
 										{props.items.map((row) => (
 											<tr key={row.key}>
 												<td className={styles.globalSearchTd}>
-													<Typography.Text code title={row.key} className={keyTextClass}>
+													<code title={row.key} className={keyTextClass}>
 														{row.key}
-													</Typography.Text>
+													</code>
 												</td>
 												<td className={styles.globalSearchTd}>
-													{typeof row.size === 'number' && row.size >= 0 ? (
-														<Typography.Text type="secondary">{formatBytes(row.size)}</Typography.Text>
-													) : (
-														<Typography.Text type="secondary">-</Typography.Text>
-													)}
+													<span className={styles.globalSearchMuted}>
+														{typeof row.size === 'number' && row.size >= 0 ? formatBytes(row.size) : '-'}
+													</span>
 												</td>
 												<td className={styles.globalSearchTd}>
 													{row.lastModified ? (
-														<Typography.Text code title={row.lastModified}>
-															{formatDateTime(row.lastModified)}
-														</Typography.Text>
+														<code title={row.lastModified}>{formatDateTime(row.lastModified)}</code>
 													) : (
-														<Typography.Text type="secondary">-</Typography.Text>
+														<span className={styles.globalSearchMuted}>-</span>
 													)}
 												</td>
 												<td className={styles.globalSearchTd}>
-													<Space size="small">
+													<div className={styles.globalSearchActionRow}>
 														<Button size="small" onClick={() => props.onOpenPrefixForKey(row.key)}>
 															Open
 														</Button>
@@ -314,7 +362,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 															aria-label="Open details"
 															onClick={() => props.onOpenDetails(row.key)}
 														/>
-													</Space>
+													</div>
 												</td>
 											</tr>
 										))}
@@ -328,8 +376,8 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							</div>
 						</>
 					)}
-				</Space>
+				</div>
 			)}
-		</Drawer>
+		</ObjectsOverlaySheet>
 	)
 }

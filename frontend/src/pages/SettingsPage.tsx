@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Button, message, Space, Typography } from 'antd'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
 	APIClient,
@@ -23,11 +23,13 @@ import {
 	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
 } from '../lib/thumbnailCache'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
-import { AccessSettingsSection } from './settings/AccessSettingsSection'
-import { NetworkSettingsSection } from './settings/NetworkSettingsSection'
-import { ObjectsSettingsSection } from './settings/ObjectsSettingsSection'
-import { ServerSettingsSection } from './settings/ServerSettingsSection'
-import { TransfersSettingsSection } from './settings/TransfersSettingsSection'
+import {
+	AccessSettingsSection,
+	NetworkSettingsSection,
+	ObjectsSettingsSection,
+	ServerSettingsSection,
+	TransfersSettingsSection,
+} from './settings/settingsLazy'
 import styles from './SettingsPage.module.css'
 
 type Props = {
@@ -214,89 +216,100 @@ export function SettingsPage(props: Props) {
 						key: 'access',
 						label: 'Access',
 						children: (
-							<AccessSettingsSection
-								apiToken={props.apiToken}
-								setApiToken={props.setApiToken}
-								profileId={props.profileId}
-								setProfileId={props.setProfileId}
-								apiDocsUrl={apiDocsUrl}
-								openapiUrl={openapiUrl}
-							/>
+							<Suspense fallback={null}>
+								<AccessSettingsSection
+									apiToken={props.apiToken}
+									setApiToken={props.setApiToken}
+									profileId={props.profileId}
+									setProfileId={props.setProfileId}
+									apiDocsUrl={apiDocsUrl}
+									openapiUrl={openapiUrl}
+								/>
+							</Suspense>
 						),
 					},
 					{
 						key: 'transfers',
 						label: 'Transfers',
 						children: (
-							<TransfersSettingsSection
-								moveAfterUploadDefault={moveAfterUploadDefault}
-								setMoveAfterUploadDefault={setMoveAfterUploadDefault}
-								cleanupEmptyDirsDefault={cleanupEmptyDirsDefault}
-								setCleanupEmptyDirsDefault={setCleanupEmptyDirsDefault}
-								downloadLinkProxyEnabled={downloadLinkProxyEnabled}
-								setDownloadLinkProxyEnabled={setDownloadLinkProxyEnabled}
-								uploadAutoTuneEnabled={uploadAutoTuneEnabled}
-								setUploadAutoTuneEnabled={setUploadAutoTuneEnabled}
-								uploadBatchConcurrencySetting={uploadBatchConcurrencySetting}
-								setUploadBatchConcurrencySetting={setUploadBatchConcurrencySetting}
-								uploadBatchBytesMiBSetting={uploadBatchBytesMiBSetting}
-								setUploadBatchBytesMiBSetting={setUploadBatchBytesMiBSetting}
-								uploadChunkSizeMiBSetting={uploadChunkSizeMiBSetting}
-								setUploadChunkSizeMiBSetting={setUploadChunkSizeMiBSetting}
-								uploadChunkConcurrencySetting={uploadChunkConcurrencySetting}
-								setUploadChunkConcurrencySetting={setUploadChunkConcurrencySetting}
-								uploadChunkThresholdMiBSetting={uploadChunkThresholdMiBSetting}
-								setUploadChunkThresholdMiBSetting={setUploadChunkThresholdMiBSetting}
-								uploadChunkFileConcurrencySetting={uploadChunkFileConcurrencySetting}
-								setUploadChunkFileConcurrencySetting={setUploadChunkFileConcurrencySetting}
-								uploadResumeConversionEnabled={uploadResumeConversionEnabled}
-								setUploadResumeConversionEnabled={setUploadResumeConversionEnabled}
-								moveCleanupFilenameTemplate={moveCleanupFilenameTemplate}
-								setMoveCleanupFilenameTemplate={setMoveCleanupFilenameTemplate}
-								moveCleanupFilenameMaxLen={moveCleanupFilenameMaxLen}
-								setMoveCleanupFilenameMaxLen={setMoveCleanupFilenameMaxLen}
-							/>
+							<Suspense fallback={null}>
+								<TransfersSettingsSection
+									moveAfterUploadDefault={moveAfterUploadDefault}
+									setMoveAfterUploadDefault={setMoveAfterUploadDefault}
+									cleanupEmptyDirsDefault={cleanupEmptyDirsDefault}
+									setCleanupEmptyDirsDefault={setCleanupEmptyDirsDefault}
+									downloadLinkProxyEnabled={downloadLinkProxyEnabled}
+									setDownloadLinkProxyEnabled={setDownloadLinkProxyEnabled}
+									uploadAutoTuneEnabled={uploadAutoTuneEnabled}
+									setUploadAutoTuneEnabled={setUploadAutoTuneEnabled}
+									uploadBatchConcurrencySetting={uploadBatchConcurrencySetting}
+									setUploadBatchConcurrencySetting={setUploadBatchConcurrencySetting}
+									uploadBatchBytesMiBSetting={uploadBatchBytesMiBSetting}
+									setUploadBatchBytesMiBSetting={setUploadBatchBytesMiBSetting}
+									uploadChunkSizeMiBSetting={uploadChunkSizeMiBSetting}
+									setUploadChunkSizeMiBSetting={setUploadChunkSizeMiBSetting}
+									uploadChunkConcurrencySetting={uploadChunkConcurrencySetting}
+									setUploadChunkConcurrencySetting={setUploadChunkConcurrencySetting}
+									uploadChunkThresholdMiBSetting={uploadChunkThresholdMiBSetting}
+									setUploadChunkThresholdMiBSetting={setUploadChunkThresholdMiBSetting}
+									uploadChunkFileConcurrencySetting={uploadChunkFileConcurrencySetting}
+									setUploadChunkFileConcurrencySetting={setUploadChunkFileConcurrencySetting}
+									uploadResumeConversionEnabled={uploadResumeConversionEnabled}
+									setUploadResumeConversionEnabled={setUploadResumeConversionEnabled}
+									moveCleanupFilenameTemplate={moveCleanupFilenameTemplate}
+									setMoveCleanupFilenameTemplate={setMoveCleanupFilenameTemplate}
+									moveCleanupFilenameMaxLen={moveCleanupFilenameMaxLen}
+									setMoveCleanupFilenameMaxLen={setMoveCleanupFilenameMaxLen}
+								/>
+							</Suspense>
 						),
 					},
 					{
 						key: 'objects',
 						label: 'Objects',
 						children: (
-							<ObjectsSettingsSection
-								objectsShowThumbnails={objectsShowThumbnails}
-								setObjectsShowThumbnails={setObjectsShowThumbnails}
-								objectsThumbnailCacheSize={objectsThumbnailCacheSize}
-								setObjectsThumbnailCacheSize={setObjectsThumbnailCacheSize}
-								objectsAutoIndexEnabled={objectsAutoIndexEnabled}
-								setObjectsAutoIndexEnabled={setObjectsAutoIndexEnabled}
-								objectsAutoIndexTtlHours={objectsAutoIndexTtlHours}
-								setObjectsAutoIndexTtlHours={setObjectsAutoIndexTtlHours}
-							/>
+							<Suspense fallback={null}>
+								<ObjectsSettingsSection
+									objectsShowThumbnails={objectsShowThumbnails}
+									setObjectsShowThumbnails={setObjectsShowThumbnails}
+									objectsThumbnailCacheSize={objectsThumbnailCacheSize}
+									setObjectsThumbnailCacheSize={setObjectsThumbnailCacheSize}
+									objectsAutoIndexEnabled={objectsAutoIndexEnabled}
+									setObjectsAutoIndexEnabled={setObjectsAutoIndexEnabled}
+									objectsAutoIndexTtlHours={objectsAutoIndexTtlHours}
+									setObjectsAutoIndexTtlHours={setObjectsAutoIndexTtlHours}
+								/>
+							</Suspense>
 						),
 					},
 					{
 						key: 'network',
 						label: 'Network',
 						children: (
-							<NetworkSettingsSection
-								apiRetryCount={apiRetryCount}
-								setApiRetryCount={setApiRetryCount}
-								apiRetryDelayMs={apiRetryDelayMs}
-								setApiRetryDelayMs={setApiRetryDelayMs}
-								networkLog={networkLog}
-								onClearNetworkLog={() => clearNetworkLog()}
-							/>
+							<Suspense fallback={null}>
+								<NetworkSettingsSection
+									apiRetryCount={apiRetryCount}
+									setApiRetryCount={setApiRetryCount}
+									apiRetryDelayMs={apiRetryDelayMs}
+									setApiRetryDelayMs={setApiRetryDelayMs}
+									networkLog={networkLog}
+									onClearNetworkLog={() => clearNetworkLog()}
+								/>
+							</Suspense>
 						),
 					},
 					{
 						key: 'server',
 						label: 'Server',
 						children: (
-							<ServerSettingsSection
-								meta={metaQuery.data}
-								isFetching={metaQuery.isFetching}
-								errorMessage={metaQuery.isError ? formatErr(metaQuery.error) : null}
-							/>
+							<Suspense fallback={null}>
+								<ServerSettingsSection
+									api={api}
+									meta={metaQuery.data}
+									isFetching={metaQuery.isFetching}
+									errorMessage={metaQuery.isError ? formatErr(metaQuery.error) : null}
+								/>
+							</Suspense>
 						),
 					},
 					{

@@ -1,89 +1,55 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+
+import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
 
 const now = '2024-01-01T00:00:00Z'
 const profileId = 'uploads-more-profile'
 const bucket = 'uploads-more-bucket'
 
-async function seedStorage(page: Page) {
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify('playwright-token'))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-	}, { profileId, bucket })
-}
-
-async function mockUploadsPageApi(page: Page) {
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					version: 'test',
-					serverAddr: '127.0.0.1:8080',
-					dataDir: '/tmp',
-					staticDir: '/tmp',
-					apiTokenEnabled: true,
-					encryptionEnabled: false,
-					capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
-					allowedLocalDirs: [],
-					jobConcurrency: 2,
-					jobLogMaxBytes: null,
-					jobRetentionSeconds: null,
-					uploadSessionTTLSeconds: 86400,
-					uploadMaxBytes: null,
-					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
-				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: profileId,
-						provider: 's3',
-						name: 'Playwright',
-						endpoint: 'http://localhost:9000',
-						region: 'us-east-1',
-						forcePathStyle: true,
-						tlsInsecureSkipVerify: true,
-						createdAt: now,
-						updatedAt: now,
-					},
-				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+async function seedStorage(page: Parameters<typeof seedLocalStorage>[0]) {
+	await seedLocalStorage(page, {
+		apiToken: 'playwright-token',
+		profileId,
+		bucket,
 	})
 }
 
-test.describe('Uploads more menu', () => {
-	test('clears selected files from more menu', async ({ page }) => {
+async function mockUploadsPageApi(page: Parameters<typeof installApiFixtures>[0]) {
+	await installApiFixtures(page, [
+		jsonFixture(
+			'GET',
+			'/api/v1/meta',
+			metaJson({
+				dataDir: '/tmp',
+				staticDir: '/tmp',
+				capabilities: { profileTls: { enabled: false, reason: 'ENCRYPTION_KEY is required to store mTLS material' } },
+				allowedLocalDirs: [],
+				jobLogMaxBytes: null,
+				jobRetentionSeconds: null,
+				uploadSessionTTLSeconds: 86400,
+				uploadMaxBytes: null,
+			}),
+		),
+		jsonFixture('GET', '/api/v1/profiles', [
+			{
+				id: profileId,
+				provider: 's3_compatible',
+				name: 'Playwright',
+				endpoint: 'http://localhost:9000',
+				region: 'us-east-1',
+				forcePathStyle: true,
+				tlsInsecureSkipVerify: true,
+				createdAt: now,
+				updatedAt: now,
+			},
+		]),
+		jsonFixture('GET', '/api/v1/buckets', [{ name: bucket, createdAt: now }]),
+		textFixture('GET', '/api/v1/events', '', { headers: { 'content-type': 'text/event-stream' } }),
+	])
+}
+
+test.describe('Uploads header actions', () => {
+	test('clears selected files from header action', async ({ page }) => {
 		await mockUploadsPageApi(page)
 		await seedStorage(page)
 		await page.goto('/uploads')
@@ -96,20 +62,18 @@ test.describe('Uploads more menu', () => {
 		})
 
 		await expect(page.getByRole('button', { name: /Queue upload \(1\)/i })).toBeEnabled()
-		await page.getByRole('button', { name: 'More' }).click()
-		await page.getByRole('menuitem', { name: 'Clear selected files' }).click()
+		await page.getByRole('button', { name: 'Clear selection' }).click()
 
 		await expect(page.getByRole('button', { name: /Queue upload/i })).toBeDisabled()
 		await expect(page.getByText('No files selected.')).toBeVisible()
 	})
 
-	test('opens transfers drawer from more menu', async ({ page }) => {
+	test('opens transfers drawer from header action', async ({ page }) => {
 		await mockUploadsPageApi(page)
 		await seedStorage(page)
 		await page.goto('/uploads')
 
-		await page.getByRole('button', { name: 'More' }).click()
-		await page.getByRole('menuitem', { name: 'Open Transfers' }).click()
+		await page.getByRole('button', { name: 'Open Transfers' }).click()
 
 		const transfersDialog = page.getByRole('dialog', { name: /Transfers/i })
 		await expect(transfersDialog).toBeVisible()

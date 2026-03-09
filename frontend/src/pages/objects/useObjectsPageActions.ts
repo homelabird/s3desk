@@ -4,20 +4,10 @@ import type { APIClient } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
 import type { TransfersContextValue } from '../../components/Transfers'
 import type { ObjectTypeFilter } from './objectsTypes'
-import { splitLines } from './objectsListUtils'
-import { useObjectsCopyMove } from './useObjectsCopyMove'
-import { useObjectsDelete } from './useObjectsDelete'
-import { useObjectsDeleteConfirm } from './useObjectsDeleteConfirm'
 import { useObjectsDetailsActions } from './useObjectsDetailsActions'
-import { useObjectsDownloadPrefix } from './useObjectsDownloadPrefix'
-import { useObjectsNewFolder } from './useObjectsNewFolder'
-import { useObjectsPrefixSummary } from './useObjectsPrefixSummary'
-import { useObjectsPresign } from './useObjectsPresign'
-import { useObjectsRename } from './useObjectsRename'
+import { useObjectsPageDialogActions } from './useObjectsPageDialogActions'
+import { useObjectsPageUploadActions } from './useObjectsPageUploadActions'
 import { useObjectsSelectionEffects } from './useObjectsSelectionEffects'
-import { useObjectsUploadDrop } from './useObjectsUploadDrop'
-import { useObjectsUploadFolder } from './useObjectsUploadFolder'
-import { useObjectsUploadPickers } from './useObjectsUploadPickers'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
@@ -99,7 +89,7 @@ export function useObjectsPageActions({
 		setLastSelectedObjectKey,
 	})
 
-	const { openDetails, openDetailsForKey, toggleDetails } = useObjectsDetailsActions({
+	const detailsActions = useObjectsDetailsActions({
 		dockDetails,
 		setDetailsOpen,
 		setDetailsDrawerOpen,
@@ -107,311 +97,44 @@ export function useObjectsPageActions({
 		setLastSelectedObjectKey,
 	})
 
-	const {
-		renameOpen,
-		renameKind,
-		renameSource,
-		renameValues,
-		setRenameValues,
-		renameSubmitting,
-		openRenameObject,
-		openRenamePrefix,
-		handleRenameSubmit,
-		handleRenameCancel,
-	} = useObjectsRename({
-		profileId,
-		bucket,
-		createJobWithRetry,
-	})
-
-	const { presignOpen, presign, presignKey, presignMutation, closePresign } = useObjectsPresign({
+	const dialogActions = useObjectsPageDialogActions({
 		api,
+		apiToken,
 		profileId,
 		bucket,
+		prefix,
 		downloadLinkProxyEnabled,
-	})
-
-	const {
-		copyMoveOpen,
-		copyMoveMode,
-		copyMoveSrcKey,
-		copyMoveValues,
-		setCopyMoveValues,
-		copyMoveSubmitting,
-		openCopyMove,
-		handleCopyMoveSubmit,
-		handleCopyMoveCancel,
-		copyPrefixOpen,
-		copyPrefixMode,
-		copyPrefixSrcPrefix,
-		copyPrefixValues,
-		setCopyPrefixValues,
-		copyPrefixSubmitting,
-		openCopyPrefix,
-		handleCopyPrefixSubmit,
-		handleCopyPrefixCancel,
-	} = useObjectsCopyMove({
-		profileId,
-		bucket,
-		prefix,
 		createJobWithRetry,
-		splitLines,
-	})
-
-	const { deletingKey, deleteMutation, deletePrefixJobMutation } = useObjectsDelete({
-		api,
-		profileId,
-		bucket,
-		prefix,
-		createJobWithRetry,
+		typeFilter,
+		favoritesOnly,
+		deferredSearch,
+		clearSearch,
+		setFavoritesOnly,
+		setTypeFilter,
+		refreshTreeNode,
+		onOpenPrefix,
+		transfers,
+		selectedKeys,
 		setSelectedKeys,
 	})
 
-	const {
-		newFolderOpen,
-		newFolderValues,
-		setNewFolderValues,
-		newFolderSubmitting,
-		newFolderError,
-		newFolderPartialKey,
-		newFolderParentPrefix,
-		openNewFolder,
-		handleNewFolderSubmit,
-		handleNewFolderCancel,
-	} = useObjectsNewFolder({
-		api,
-		apiToken,
-		profileId,
-		bucket,
-		prefix,
-		typeFilter,
-		favoritesOnly,
-		searchText: deferredSearch,
-		onClearSearch: clearSearch,
-		onDisableFavoritesOnly: () => setFavoritesOnly(false),
-		onShowFolders: () => setTypeFilter('all'),
-		refreshTreeNode,
-		onOpenPrefix,
-	})
-
-	const {
-		downloadPrefixOpen,
-		downloadPrefixValues,
-		setDownloadPrefixValues,
-		downloadPrefixSubmitting,
-		downloadPrefixCanSubmit,
-		openDownloadPrefix,
-		handleDownloadPrefixSubmit,
-		handleDownloadPrefixCancel,
-		handleDownloadPrefixPick,
-	} = useObjectsDownloadPrefix({
-		api,
-		profileId,
-		bucket,
-		prefix,
-		transfers,
-	})
-
-	const {
-		uploadDropActive,
-		startUploadFromFiles,
-		onUploadDragEnter,
-		onUploadDragLeave,
-		onUploadDragOver,
-		onUploadDrop,
-	} = useObjectsUploadDrop({
+	const uploadActions = useObjectsPageUploadActions({
 		profileId,
 		bucket,
 		prefix,
 		isOffline,
-		uploadsEnabled: uploadSupported,
-		uploadsDisabledReason: uploadDisabledReason,
+		uploadSupported,
+		uploadDisabledReason,
 		transfers,
-	})
-
-	const {
-		deletePrefixConfirmOpen,
-		deletePrefixConfirmDryRun,
-		deletePrefixConfirmPrefix,
-		deletePrefixConfirmText,
-		setDeletePrefixConfirmText,
-		confirmDeleteObjects,
-		confirmDeleteSelected,
-		confirmDeletePrefixAsJob,
-		handleDeletePrefixConfirm,
-		handleDeletePrefixCancel,
-	} = useObjectsDeleteConfirm({
-		profileId,
-		bucket,
-		prefix,
-		selectedKeys,
-		deleteMutation,
-		deletePrefixJobMutation,
-	})
-
-	const {
-		summaryQuery: deletePrefixSummaryQuery,
-		summary: deletePrefixSummary,
-		summaryNotIndexed: deletePrefixSummaryNotIndexed,
-		summaryError: deletePrefixSummaryError,
-	} = useObjectsPrefixSummary({
-		api,
-		profileId,
-		bucket,
-		prefix: deletePrefixConfirmPrefix,
-		apiToken,
-		enabled: deletePrefixConfirmOpen,
-	})
-
-	const {
-		summaryQuery: copyPrefixSummaryQuery,
-		summary: copyPrefixSummary,
-		summaryNotIndexed: copyPrefixSummaryNotIndexed,
-		summaryError: copyPrefixSummaryError,
-	} = useObjectsPrefixSummary({
-		api,
-		profileId,
-		bucket,
-		prefix: copyPrefixSrcPrefix,
-		apiToken,
-		enabled: copyPrefixOpen,
-	})
-
-	const {
-		uploadFolderOpen,
-		uploadFolderValues,
-		setUploadFolderValues,
-		uploadFolderSubmitting,
-		uploadFolderCanSubmit,
-		openUploadFolderModal,
-		handleUploadFolderSubmit,
-		handleUploadFolderCancel,
-		handleUploadFolderPick,
-	} = useObjectsUploadFolder({
-		profileId,
-		bucket,
-		prefix,
-		uploadsEnabled: uploadSupported,
-		uploadsDisabledReason: uploadDisabledReason,
-		transfers,
-		defaultMoveAfterUpload: moveAfterUploadDefault,
-		defaultCleanupEmptyDirs: cleanupEmptyDirsDefault,
-	})
-
-	const {
-		uploadFilesInputRef,
-		uploadFolderInputRef,
-		onUploadFilesInputChange,
-		onUploadFolderInputChange,
-		openUploadFilesPicker,
-		openUploadFolderPicker,
-	} = useObjectsUploadPickers({
-		isOffline,
-		uploadsEnabled: uploadSupported,
-		uploadsDisabledReason: uploadDisabledReason,
-		startUploadFromFiles,
-		openUploadFolderModal,
+		moveAfterUploadDefault,
+		cleanupEmptyDirsDefault,
 	})
 
 	return {
 		handleFavoriteSelect,
-		openDetails,
-		openDetailsForKey,
-		toggleDetails,
-		renameOpen,
-		renameKind,
-		renameSource,
-		renameValues,
-		setRenameValues,
-		renameSubmitting,
-		openRenameObject,
-		openRenamePrefix,
-		handleRenameSubmit,
-		handleRenameCancel,
-		presignOpen,
-		presign,
-		presignKey,
-		presignMutation,
-		closePresign,
-		copyMoveOpen,
-		copyMoveMode,
-		copyMoveSrcKey,
-		copyMoveValues,
-		setCopyMoveValues,
-		copyMoveSubmitting,
-		openCopyMove,
-		handleCopyMoveSubmit,
-		handleCopyMoveCancel,
-		copyPrefixOpen,
-		copyPrefixMode,
-		copyPrefixSrcPrefix,
-		copyPrefixValues,
-		setCopyPrefixValues,
-		copyPrefixSubmitting,
-		openCopyPrefix,
-		handleCopyPrefixSubmit,
-		handleCopyPrefixCancel,
-		deletingKey,
-		deleteMutation,
-		deletePrefixJobMutation,
-		newFolderOpen,
-		newFolderValues,
-		setNewFolderValues,
-		newFolderSubmitting,
-		newFolderError,
-		newFolderPartialKey,
-		newFolderParentPrefix,
-		openNewFolder,
-		handleNewFolderSubmit,
-		handleNewFolderCancel,
-		downloadPrefixOpen,
-		downloadPrefixValues,
-		setDownloadPrefixValues,
-		downloadPrefixSubmitting,
-		downloadPrefixCanSubmit,
-		openDownloadPrefix,
-		handleDownloadPrefixSubmit,
-		handleDownloadPrefixCancel,
-		handleDownloadPrefixPick,
-		uploadDropActive,
-		startUploadFromFiles,
-		onUploadDragEnter,
-		onUploadDragLeave,
-		onUploadDragOver,
-		onUploadDrop,
-		deletePrefixConfirmOpen,
-		deletePrefixConfirmDryRun,
-		deletePrefixConfirmPrefix,
-		deletePrefixConfirmText,
-		setDeletePrefixConfirmText,
-		confirmDeleteObjects,
-		confirmDeleteSelected,
-		confirmDeletePrefixAsJob,
-		handleDeletePrefixConfirm,
-		handleDeletePrefixCancel,
-		deletePrefixSummaryQuery,
-		deletePrefixSummary,
-		deletePrefixSummaryNotIndexed,
-		deletePrefixSummaryError,
-		copyPrefixSummaryQuery,
-		copyPrefixSummary,
-		copyPrefixSummaryNotIndexed,
-		copyPrefixSummaryError,
-		uploadFolderOpen,
-		uploadFolderValues,
-		setUploadFolderValues,
-		uploadFolderSubmitting,
-		uploadFolderCanSubmit,
-		openUploadFolderModal,
-		handleUploadFolderSubmit,
-		handleUploadFolderCancel,
-		handleUploadFolderPick,
-		uploadFilesInputRef,
-		uploadFolderInputRef,
-		onUploadFilesInputChange,
-		onUploadFolderInputChange,
-		openUploadFilesPicker,
-		openUploadFolderPicker,
+		...detailsActions,
+		...dialogActions,
+		...uploadActions,
 	}
 }
 

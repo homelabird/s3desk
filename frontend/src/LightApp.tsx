@@ -6,7 +6,7 @@ import { BrandLockup } from './components/BrandLockup'
 import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { useLocalStorageState } from './lib/useLocalStorageState'
-import { useThemeMode } from './themeMode'
+import { useThemeMode } from './useThemeMode'
 
 type LightProfile = {
 	id: string

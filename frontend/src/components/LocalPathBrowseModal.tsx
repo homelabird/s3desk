@@ -1,4 +1,4 @@
-import { Alert, Button, Modal, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Space, Spin, Typography } from 'antd'
 import { FolderOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -6,6 +6,7 @@ import { APIClient } from '../api/client'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import type { TreeNode } from '../lib/tree'
 import { upsertTreeChildren } from '../lib/tree'
+import { DialogModal } from './DialogModal'
 import { SimpleTree } from './SimpleTree'
 
 type Props = {
@@ -104,17 +105,26 @@ export function LocalPathBrowseModal(props: Props) {
 	)
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title={props.title ?? 'Browse local folders'}
-			onCancel={props.onCancel}
-			okText="Select folder"
-			okButtonProps={{ disabled: !selectedPath }}
-			onOk={() => {
-				if (!selectedPath) return
-				props.onSelect(selectedPath)
-			}}
-			destroyOnHidden
+			onClose={props.onCancel}
+			width={760}
+			footer={
+				<>
+					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button
+						type="primary"
+						disabled={!selectedPath}
+						onClick={() => {
+							if (!selectedPath) return
+							props.onSelect(selectedPath)
+						}}
+					>
+						Select folder
+					</Button>
+				</>
+			}
 		>
 			{!props.profileId ? (
 				<Alert type="warning" showIcon title="Select a profile first" />
@@ -170,6 +180,6 @@ export function LocalPathBrowseModal(props: Props) {
 					</div>
 				</Space>
 			)}
-		</Modal>
+		</DialogModal>
 	)
 }

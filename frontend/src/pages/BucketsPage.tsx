@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Empty, Modal, Space, Spin, Tooltip, Typography, message } from 'antd'
+import { Alert, Button, Empty, Grid, Space, Spin, Tooltip, Typography, message } from 'antd'
 import { DeleteOutlined, FileTextOutlined } from '@ant-design/icons'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { APIClient, APIError } from '../api/client'
 import type { BucketCreateRequest, Profile } from '../api/types'
+import { DialogModal } from '../components/DialogModal'
 import { PageHeader } from '../components/PageHeader'
 import { SetupCallout } from '../components/SetupCallout'
+import { mountImperativeDialog } from '../components/imperativeDialog'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { formatDateTime } from '../lib/format'
@@ -28,10 +30,52 @@ const BucketPolicyModal = lazy(async () => {
 	return { default: m.BucketPolicyModal }
 })
 
+function showBucketNotEmptyDialog(args: { bucketName: string; onOpenObjects: () => void; onCreateDeleteJob: () => void }) {
+	mountImperativeDialog((close) => (
+		<DialogModal
+			open
+			onClose={close}
+			title={`Bucket "${args.bucketName}" isn’t empty`}
+			width={560}
+			footer={
+				<>
+					<Button onClick={close}>Close</Button>
+					<Button
+						type="primary"
+						danger
+						onClick={() => {
+							close()
+							args.onCreateDeleteJob()
+						}}
+					>
+						Delete all objects (job)
+					</Button>
+				</>
+			}
+		>
+			<Space orientation="vertical" className={styles.dialogBody}>
+				<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
+				<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
+				<Button
+					type="link"
+					onClick={() => {
+						close()
+						args.onOpenObjects()
+					}}
+				>
+					Open Objects
+				</Button>
+			</Space>
+		</DialogModal>
+	))
+}
+
 export function BucketsPage(props: Props) {
 	const queryClient = useQueryClient()
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const navigate = useNavigate()
+	const screens = Grid.useBreakpoint()
+	const useCompactList = !screens.lg
 
 	const [createOpen, setCreateOpen] = useState(false)
 	const [deletingBucket, setDeletingBucket] = useState<string | null>(null)
@@ -52,8 +96,15 @@ export function BucketsPage(props: Props) {
 		if (!props.profileId) return null
 		return profilesQuery.data?.find((p) => p.id === props.profileId) ?? null
 	}, [profilesQuery.data, props.profileId])
-	const capabilities = getProviderCapabilities(selectedProfile?.provider, metaQuery.data?.capabilities?.providers)
-	const policySupported = capabilities.bucketPolicy || capabilities.gcsIamPolicy || capabilities.azureContainerAccessPolicy
+	const profileResolved = !props.profileId || profilesQuery.isSuccess
+	const capabilities = selectedProfile
+		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers, selectedProfile)
+		: null
+	const bucketCrudSupported = capabilities?.bucketCrud ?? true
+	const bucketCrudUnsupportedReason =
+		getProviderCapabilityReason(capabilities, 'bucketCrud') ??
+		'Bucket operations are not supported by this profile.'
+	const policySupported = capabilities ? capabilities.bucketPolicy || capabilities.gcsIamPolicy || capabilities.azureContainerAccessPolicy : false
 	const policyUnsupportedReason =
 		getProviderCapabilityReason(capabilities, 'bucketPolicy') ??
 		getProviderCapabilityReason(capabilities, 'gcsIamPolicy') ??
@@ -63,10 +114,10 @@ export function BucketsPage(props: Props) {
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
 		queryFn: () => api.listBuckets(props.profileId!),
-		enabled: !!props.profileId,
+		enabled: !!props.profileId && profileResolved && bucketCrudSupported,
 	})
 	const buckets = bucketsQuery.data ?? []
-	const showBucketsEmpty = !bucketsQuery.isFetching && buckets.length === 0
+	const showBucketsEmpty = bucketCrudSupported && !bucketsQuery.isFetching && buckets.length === 0
 
 	const createMutation = useMutation({
 		mutationFn: (req: BucketCreateRequest) => api.createBucket(props.profileId!, req),
@@ -88,29 +139,14 @@ export function BucketsPage(props: Props) {
 		onSettled: (_, __, bucketName) => setDeletingBucket((prev) => (prev === bucketName ? null : prev)),
 		onError: (err, bucketName) => {
 			if (err instanceof APIError && err.code === 'bucket_not_empty') {
-				Modal.confirm({
-					title: `Bucket "${bucketName}" isn’t empty`,
-					content: (
-						<Space orientation="vertical" className={styles.dialogBody}>
-							<Typography.Text>Only empty buckets can be deleted.</Typography.Text>
-							<Typography.Text type="secondary">Browse the objects first or create a delete job to empty it.</Typography.Text>
-							<Button
-								type="link"
-								onClick={() => {
-									Modal.destroyAll()
-									window.localStorage.setItem('bucket', JSON.stringify(bucketName))
-									window.localStorage.setItem('prefix', JSON.stringify(''))
-									navigate('/objects')
-								}}
-							>
-								Open Objects
-							</Button>
-						</Space>
-					),
-					okText: 'Delete all objects (job)',
-					okType: 'danger',
-					cancelText: 'Close',
-					onOk: async () => {
+				showBucketNotEmptyDialog({
+					bucketName,
+					onOpenObjects: () => {
+						window.localStorage.setItem('bucket', JSON.stringify(bucketName))
+						window.localStorage.setItem('prefix', JSON.stringify(''))
+						navigate('/objects')
+					},
+					onCreateDeleteJob: () => {
 						window.localStorage.setItem('bucket', JSON.stringify(bucketName))
 						navigate('/jobs', { state: { openDeleteJob: true, bucket: bucketName, deleteAll: true } })
 					},
@@ -175,23 +211,31 @@ export function BucketsPage(props: Props) {
 						: 'Review bucket inventory, open policy management, and create new buckets from one place.'
 				}
 				actions={
-					<Button type="primary" onClick={() => setCreateOpen(true)}>
-						New Bucket
-					</Button>
+					<Tooltip title={bucketCrudSupported ? 'Create a new bucket' : bucketCrudUnsupportedReason}>
+						<span>
+							<Button type="primary" disabled={!bucketCrudSupported} onClick={() => setCreateOpen(true)}>
+								New Bucket
+							</Button>
+						</span>
+					</Tooltip>
 				}
 			/>
+
+			{!bucketCrudSupported ? (
+				<Alert type="warning" showIcon title="Bucket operations unavailable" description={bucketCrudUnsupportedReason} />
+			) : null}
 
 			{bucketsQuery.isError ? (
 				<Alert type="error" showIcon title="Failed to load buckets" description={formatErr(bucketsQuery.error)} />
 			) : null}
 
-			{bucketsQuery.isFetching && buckets.length === 0 ? (
+			{!bucketCrudSupported ? null : bucketsQuery.isFetching && buckets.length === 0 ? (
 				<div className={styles.loadingRow}>
 					<Spin />
 				</div>
 			) : showBucketsEmpty ? (
 				<Empty description={
-					<Space direction="vertical" size={4}>
+					<Space orientation="vertical" size={4}>
 						<Typography.Text>No buckets found in this storage.</Typography.Text>
 						<Typography.Text type="secondary">Create a new bucket, or check that your profile has the right permissions to list buckets.</Typography.Text>
 					</Space>
@@ -207,68 +251,70 @@ export function BucketsPage(props: Props) {
 				</Empty>
 			) : (
 				<div className={styles.tableWrap}>
-					<div className={styles.desktopTable}>
-						<table className={styles.table}>
-							<caption className="sr-only">List of buckets</caption>
-							<thead>
-								<tr className={styles.headRow}>
-									<th scope="col" className={styles.th}>
-										Name
-									</th>
-									<th scope="col" className={`${styles.th} ${styles.thCreated}`}>
-										CreatedAt
-									</th>
-									<th scope="col" className={`${styles.th} ${styles.thActions}`}>
-										Actions
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								{buckets.map((row) => (
-									<tr key={row.name} className={styles.tableRow}>
-										<td className={styles.td}>
-											<Typography.Text strong className={styles.bucketName}>
-												{row.name}
-											</Typography.Text>
-										</td>
-										<td className={styles.td}>
-											{row.createdAt ? (
-												<Typography.Text code title={row.createdAt}>
-													{formatDateTime(row.createdAt)}
-												</Typography.Text>
-											) : (
-												<Typography.Text type="secondary">-</Typography.Text>
-											)}
-										</td>
-										<td className={styles.td}>{renderBucketActions(row.name)}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-
-					<div className={styles.mobileList}>
-						{buckets.map((row) => (
-							<article key={row.name} className={styles.mobileCard}>
-								<Typography.Text strong className={styles.mobileCardTitle}>
-									{row.name}
-								</Typography.Text>
-								<div className={styles.mobileMetaGrid}>
-									<div>
-										<div className={styles.metaLabel}>Created</div>
-										<div className={styles.metaValue}>
-											{row.createdAt ? formatDateTime(row.createdAt) : '-'}
+					{useCompactList ? (
+						<div className={styles.mobileList} data-testid="buckets-list-compact">
+							{buckets.map((row) => (
+								<article key={row.name} className={styles.mobileCard}>
+									<Typography.Text strong className={styles.mobileCardTitle}>
+										{row.name}
+									</Typography.Text>
+									<div className={styles.mobileMetaGrid}>
+										<div>
+											<div className={styles.metaLabel}>Created</div>
+											<div className={styles.metaValue}>
+												{row.createdAt ? formatDateTime(row.createdAt) : '-'}
+											</div>
+										</div>
+										<div>
+											<div className={styles.metaLabel}>Policy</div>
+											<div className={styles.metaValue}>{policySupported ? 'Available' : 'Unsupported'}</div>
 										</div>
 									</div>
-									<div>
-										<div className={styles.metaLabel}>Policy</div>
-										<div className={styles.metaValue}>{policySupported ? 'Available' : 'Unsupported'}</div>
-									</div>
-								</div>
-								<div className={styles.mobileActionRow}>{renderBucketActions(row.name)}</div>
-							</article>
-						))}
-					</div>
+									<div className={styles.mobileActionRow}>{renderBucketActions(row.name)}</div>
+								</article>
+							))}
+						</div>
+					) : (
+						<div className={styles.desktopTable} data-testid="buckets-table-desktop">
+							<table className={styles.table}>
+								<caption className="sr-only">List of buckets</caption>
+								<thead>
+									<tr className={styles.headRow}>
+										<th scope="col" className={styles.th}>
+											Name
+										</th>
+										<th scope="col" className={`${styles.th} ${styles.thCreated}`}>
+											CreatedAt
+										</th>
+										<th scope="col" className={`${styles.th} ${styles.thActions}`}>
+											Actions
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{buckets.map((row) => (
+										<tr key={row.name} className={styles.tableRow}>
+											<td className={styles.td}>
+												<Typography.Text strong className={styles.bucketName}>
+													{row.name}
+												</Typography.Text>
+											</td>
+											<td className={styles.td}>
+												{row.createdAt ? (
+													<Typography.Text code title={row.createdAt}>
+														{formatDateTime(row.createdAt)}
+													</Typography.Text>
+												) : (
+													<Typography.Text type="secondary">-</Typography.Text>
+												)}
+											</td>
+											<td className={styles.td}>{renderBucketActions(row.name)}</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
 				</div>
 			)}
 

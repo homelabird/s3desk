@@ -294,6 +294,14 @@ func TestValidateCreateProfileProvider(t *testing.T) {
 			wantErr: "unexpected fields for s3 provider",
 		},
 		{
+			name: "gcp missing projectNumber",
+			req: models.ProfileCreateRequest{
+				Provider:  models.ProfileProviderGcpGcs,
+				Anonymous: ptrBool(true),
+			},
+			wantErr: "projectNumber is required",
+		},
+		{
 			name: "unknown provider",
 			req: models.ProfileCreateRequest{
 				Provider: "unknown_provider",
@@ -323,3 +331,5 @@ func TestValidateCreateProfileProvider(t *testing.T) {
 }
 
 func ptrInt64(v int64) *int64 { return &v }
+
+func ptrBool(v bool) *bool { return &v }

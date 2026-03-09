@@ -1,16 +1,28 @@
-import type { BreadcrumbProps } from 'antd'
-import { Alert, Button, Breadcrumb, Input, Spin, Switch, Tooltip, Typography, message } from 'antd'
-import { AppstoreOutlined, BarsOutlined, CopyOutlined, FilterOutlined, SearchOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Alert, Button, Input, Spin } from 'antd'
+import {
+	AppstoreOutlined,
+	BarsOutlined,
+	CopyOutlined,
+	FilterOutlined,
+	SearchOutlined,
+	StarFilled,
+	StarOutlined,
+} from '@ant-design/icons'
 
 import styles from './objects.module.css'
 import type { ObjectSort, ObjectsViewMode } from './objectsTypes'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 import { NativeSelect } from '../../components/NativeSelect'
 
+type BreadcrumbItem = {
+	title: ReactNode
+}
+
 type ObjectsListControlsProps = {
 	bucket: string
 	prefix: string
-	breadcrumbItems: BreadcrumbProps['items']
+	breadcrumbItems: BreadcrumbItem[]
 	isBookmarked: boolean
 	onToggleBookmark: () => void
 	onOpenPath: () => void
@@ -39,20 +51,44 @@ type ObjectsListControlsProps = {
 	onViewModeChange: (value: ObjectsViewMode) => void
 }
 
+type CopyFeedback = 'copied' | 'failed' | null
+
 function buildS3Location(bucket: string, prefix: string): string {
 	if (!bucket) return ''
-	const p = (prefix ?? '').replace(/^\/+/, '')
-	return p ? `s3://${bucket}/${p}` : `s3://${bucket}/`
+	const normalizedPrefix = (prefix ?? '').replace(/^\/+/, '')
+	return normalizedPrefix ? `s3://${bucket}/${normalizedPrefix}` : `s3://${bucket}/`
+}
+
+function renderBreadcrumb(items: BreadcrumbItem[]) {
+	if (!items.length) return null
+	return (
+		<nav className={styles.breadcrumbNav} aria-label="Location breadcrumb">
+			<ol className={styles.breadcrumbList}>
+				{items.map((item, index) => (
+					<li key={`crumb-${index}`} className={styles.breadcrumbListItem}>
+						{index > 0 ? <span className={styles.breadcrumbSeparator}>/</span> : null}
+						{item.title}
+					</li>
+				))}
+			</ol>
+		</nav>
+	)
 }
 
 export function ObjectsListControls(props: ObjectsListControlsProps) {
+	const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null)
 	const location = buildS3Location(props.bucket, props.prefix)
+
+	useEffect(() => {
+		if (!copyFeedback) return
+		const timeoutId = window.setTimeout(() => setCopyFeedback(null), 1600)
+		return () => window.clearTimeout(timeoutId)
+	}, [copyFeedback])
 
 	const copyLocation = async () => {
 		if (!location) return
-		const res = await copyToClipboard(location)
-		if (res.ok) message.success('Copied')
-		else message.warning(clipboardFailureHint())
+		const result = await copyToClipboard(location)
+		setCopyFeedback(result.ok ? 'copied' : 'failed')
 	}
 
 	const globalSearchButton = props.isAdvanced ? (
@@ -63,7 +99,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 
 	const searchScopeRow = (
 		<div className={styles.listControlsScopeRow}>
-			<Typography.Text type="secondary">Search in this folder</Typography.Text>
+			<span className={styles.listControlsSecondaryText}>Search in this folder</span>
 			{globalSearchButton}
 		</div>
 	)
@@ -85,12 +121,12 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					className={styles.listControlsStatusAlert}
 				/>
 			) : (
-				<Typography.Text type="secondary" className={styles.listControlsStatusText}>
+				<span className={`${styles.listControlsStatusText} ${styles.listControlsSecondaryText}`}>
 					<span className={styles.listControlsStatusInline}>
 						{props.isFetchingNextPage ? <Spin size="small" /> : null}
 						Searching more…
 					</span>
-				</Typography.Text>
+				</span>
 			)
 		) : null
 
@@ -105,17 +141,22 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 				options={props.sortOptions}
 			/>
 			<div className={styles.listControlsToggleRow}>
-				<Switch
-					size="small"
-					checked={props.favoritesFirst}
-					onChange={props.onFavoritesFirstChange}
-					disabled={!props.canInteract || props.favoritesOnly}
+				<button
+					type="button"
+					role="switch"
+					aria-checked={props.favoritesFirst}
 					aria-label="Favorites first"
-				/>
-				<Typography.Text type="secondary">Favorites first</Typography.Text>
+					className={`${styles.listControlsSwitch} ${props.favoritesFirst ? styles.listControlsSwitchChecked : ''}`.trim()}
+					disabled={!props.canInteract || props.favoritesOnly}
+					onClick={() => props.onFavoritesFirstChange(!props.favoritesFirst)}
+				>
+					<span className={styles.listControlsSwitchThumb} />
+				</button>
+				<span className={styles.listControlsSecondaryText}>Favorites first</span>
 			</div>
 		</div>
 	) : null
+
 	const viewModeToggle = (
 		<div className={styles.listControlsViewToggle} role="group" aria-label="View mode">
 			<Button
@@ -139,6 +180,13 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 		</div>
 	)
 
+	const locationFeedback =
+		copyFeedback === 'copied' ? (
+			<span className={styles.listControlsCopyFeedback}>Copied</span>
+		) : copyFeedback === 'failed' ? (
+			<span className={styles.listControlsCopyFeedback}>{clipboardFailureHint()}</span>
+		) : null
+
 	return (
 		<>
 			<div className={styles.breadcrumbRow}>
@@ -146,48 +194,47 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					<div className={styles.listControlsLocationStack}>
 						{location ? (
 							<div className={styles.listControlsLocationRow}>
-								<Typography.Text type="secondary">Location</Typography.Text>
-								<Typography.Text
-									code
-									ellipsis={{ tooltip: location }}
-									className={styles.listControlsLocationCode}
-								>
+								<span className={styles.listControlsSecondaryText}>Location</span>
+								<span className={styles.listControlsLocationCode} title={location}>
 									{location}
-								</Typography.Text>
-								<Tooltip title="Copy location">
-									<Button
-										type="text"
-										size="small"
-										icon={<CopyOutlined />}
-										onClick={copyLocation}
-										disabled={!props.canInteract}
-										aria-label="Copy location"
-									/>
-								</Tooltip>
+								</span>
+								<button
+									type="button"
+									className={styles.listControlsIconButton}
+									onClick={copyLocation}
+									disabled={!props.canInteract}
+									aria-label="Copy location"
+									title="Copy location"
+								>
+									<CopyOutlined />
+								</button>
+								{locationFeedback}
 							</div>
 						) : null}
-						<Breadcrumb items={props.breadcrumbItems} />
+						{renderBreadcrumb(props.breadcrumbItems)}
 					</div>
 				</div>
 				<div className={styles.listControlsTopActions}>
-					<Tooltip title={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}>
-						<Button
-							type="text"
-							icon={props.isBookmarked ? <StarFilled /> : <StarOutlined />}
-							onClick={props.onToggleBookmark}
-							disabled={!props.canInteract}
-							aria-label={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-						/>
-					</Tooltip>
-					<Tooltip title="Go to path (Ctrl+L)">
-						<Button
-							type="text"
-							icon={<SearchOutlined />}
-							onClick={props.onOpenPath}
-							disabled={!props.canInteract}
-							aria-label="Go to path"
-						/>
-					</Tooltip>
+					<button
+						type="button"
+						className={styles.listControlsIconButton}
+						onClick={props.onToggleBookmark}
+						disabled={!props.canInteract}
+						aria-label={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
+						title={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
+					>
+						{props.isBookmarked ? <StarFilled /> : <StarOutlined />}
+					</button>
+					<button
+						type="button"
+						className={styles.listControlsIconButton}
+						onClick={props.onOpenPath}
+						disabled={!props.canInteract}
+						aria-label="Go to path"
+						title="Go to path (Ctrl+L)"
+					>
+						<SearchOutlined />
+					</button>
 				</div>
 			</div>
 
@@ -200,7 +247,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						aria-label="Search current folder"
 						className={styles.listControlsSearchInputFull}
 						value={props.searchDraft}
-						onChange={(e) => props.onSearchDraftChange(e.target.value)}
+						onChange={(event) => props.onSearchDraftChange(event.target.value)}
 					/>
 					<div className={styles.listControlsCompactFooter}>
 						<Button
@@ -213,9 +260,9 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						</Button>
 						{viewModeToggle}
 						{props.isAdvanced ? (
-							<Typography.Text type="secondary" className={styles.listControlsSummaryText}>
+							<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
 								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
-							</Typography.Text>
+							</span>
 						) : null}
 					</div>
 					{sortControls}
@@ -232,7 +279,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 								aria-label="Search current folder"
 								className={styles.listControlsSearchInput}
 								value={props.searchDraft}
-								onChange={(e) => props.onSearchDraftChange(e.target.value)}
+								onChange={(event) => props.onSearchDraftChange(event.target.value)}
 							/>
 							<Button
 								icon={<FilterOutlined />}
@@ -246,9 +293,9 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							{sortControls}
 						</div>
 						{props.isAdvanced ? (
-							<Typography.Text type="secondary" className={styles.listControlsSummaryText}>
+							<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
 								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
-							</Typography.Text>
+							</span>
 						) : null}
 					</div>
 

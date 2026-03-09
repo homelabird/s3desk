@@ -15,6 +15,7 @@ import type {
 	ObjectIndexSummaryResponse,
 	SearchObjectsResponse,
 	MetaResponse,
+	ServerRestoreResponse,
 	ObjectMeta,
 	PresignedURLResponse,
 	CreateFolderRequest,
@@ -251,6 +252,48 @@ export class APIClient {
 
 	getMeta(): Promise<MetaResponse> {
 		return this.request('/meta', { method: 'GET' })
+	}
+
+	downloadServerBackup(): { promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>; abort: () => void } {
+		const xhr = new XMLHttpRequest()
+		xhr.open('GET', this.baseUrl + '/server/backup')
+		xhr.responseType = 'blob'
+
+		if (this.apiToken) xhr.setRequestHeader('X-Api-Token', this.apiToken)
+
+		const promise = new Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>((resolve, reject) => {
+			xhr.onload = async () => {
+				if (xhr.status >= 200 && xhr.status < 300) {
+					clearNetworkStatus()
+					resolve({
+						blob: xhr.response,
+						contentDisposition: xhr.getResponseHeader('content-disposition'),
+						contentType: xhr.getResponseHeader('content-type'),
+					})
+					return
+				}
+
+				const bodyText = await blobToTextSafe(xhr.response)
+				if (xhr.status >= 500 || xhr.status === 0) {
+					publishNetworkStatus({ kind: 'unstable', message: `Server error (HTTP ${xhr.status || '0'}).` })
+				}
+				reject(parseAPIError(xhr.status, bodyText))
+			}
+			xhr.onerror = () => {
+				publishNetworkStatus({ kind: 'unstable', message: 'Network error. Check your connection.' })
+				reject(new Error('network error'))
+			}
+			xhr.onabort = () => reject(new RequestAbortedError())
+		})
+
+		xhr.send()
+		return { promise, abort: () => xhr.abort() }
+	}
+
+	restoreServerBackup(file: File): Promise<ServerRestoreResponse> {
+		const form = new FormData()
+		form.append('bundle', file, file.name)
+		return this.request('/server/restore', { method: 'POST', body: form })
 	}
 
 	listProfiles(): Promise<Profile[]> {

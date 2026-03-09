@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installMockApi } from './support/apiFixtures'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -27,17 +29,12 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 	const uploadId = 'upload-test'
 	let uploadCommitted = false
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+	await installMockApi(page, [
+		{
+			method: 'GET',
+			path: '/meta',
+			handle: (ctx) =>
+				ctx.json({
 					version: 'test',
 					serverAddr: '127.0.0.1:8080',
 					dataDir: '/tmp',
@@ -53,14 +50,12 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 					uploadMaxBytes: null,
 					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
+		},
+		{
+			method: 'GET',
+			path: '/profiles',
+			handle: (ctx) =>
+				ctx.json([
 					{
 						id: defaultStorage.profileId,
 						name: 'Playwright',
@@ -72,22 +67,17 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 						updatedAt: now,
 					},
 				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([{ name: defaultStorage.bucket, createdAt: now }]),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+		},
+		{
+			method: 'GET',
+			path: '/buckets',
+			handle: (ctx) => ctx.json([{ name: defaultStorage.bucket, createdAt: now }]),
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects`,
+			handle: (ctx) =>
+				ctx.json({
 					bucket: defaultStorage.bucket,
 					prefix: '',
 					delimiter: '/',
@@ -96,44 +86,40 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 					nextContinuationToken: null,
 					isTruncated: false,
 				}),
-			})
-		}
-
-		if (method === 'GET' && path === `/api/v1/buckets/${defaultStorage.bucket}/objects/favorites`) {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+		},
+		{
+			method: 'GET',
+			path: `/buckets/${defaultStorage.bucket}/objects/favorites`,
+			handle: (ctx) =>
+				ctx.json({
 					bucket: defaultStorage.bucket,
 					prefix: '',
 					items: [],
 				}),
-			})
-		}
-
-		if (method === 'POST' && path === '/api/v1/uploads') {
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ uploadId, maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }),
-			})
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/files`) {
-			return route.fulfill({ status: 204 })
-		}
-
-		if (method === 'POST' && path === `/api/v1/uploads/${uploadId}/commit`) {
-			uploadCommitted = true
-			return route.fulfill({
-				status: 201,
-				contentType: 'application/json',
-				body: JSON.stringify({ jobId: 'job-test' }),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+		},
+		{
+			method: 'POST',
+			path: '/uploads',
+			handle: (ctx) => ctx.json({ uploadId, maxBytes: null, expiresAt: '2025-01-01T00:00:00Z' }, 201),
+		},
+		{
+			method: 'POST',
+			path: `/uploads/${uploadId}/files`,
+			handle: (ctx) => ctx.empty(),
+		},
+		{
+			method: 'POST',
+			path: `/uploads/${uploadId}/commit`,
+			handle: (ctx) => {
+				uploadCommitted = true
+				return ctx.json({ jobId: 'job-test' }, 201)
+			},
+		},
+		{
+			path: /.*/,
+			handle: (ctx) => ctx.json({}),
+		},
+	])
 
 	const errors: string[] = []
 	page.on('pageerror', (err) => errors.push(err.message))

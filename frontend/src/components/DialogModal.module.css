@@ -1,0 +1,106 @@
+.backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 55;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: clamp(12px, 4vw, 28px);
+	background: color-mix(in srgb, var(--s3d-color-bg-mask, rgba(0, 0, 0, 0.48)) 100%, transparent);
+}
+
+.panel {
+	width: min(100%, var(--dialog-width, 720px));
+	max-height: min(86vh, 960px);
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 20px;
+	background: var(--s3d-color-bg-elevated, var(--s3d-color-bg));
+	box-shadow: var(--s3d-shadow-lg);
+	overflow: hidden;
+}
+
+.header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 18px 20px 14px;
+	border-bottom: 1px solid var(--s3d-color-border);
+}
+
+.titleBlock {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.title {
+	margin: 0;
+	font: inherit;
+	font-size: 1.05rem;
+	font-weight: 700;
+}
+
+.subtitle {
+	margin: 0;
+	color: var(--s3d-color-text-secondary);
+	font-size: 0.93rem;
+	line-height: 1.45;
+}
+
+.close {
+	flex: 0 0 auto;
+	width: 36px;
+	height: 36px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 999px;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	transition:
+		border-color var(--s3d-transition-fast),
+		background var(--s3d-transition-fast),
+		box-shadow var(--s3d-transition-fast);
+}
+
+.close:hover,
+.close:focus-visible {
+	border-color: var(--s3d-color-focus);
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, transparent);
+	box-shadow: var(--s3d-shadow-sm);
+	outline: none;
+}
+
+.body {
+	padding: 20px;
+	overflow: auto;
+}
+
+.footer {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px 18px;
+	border-top: 1px solid var(--s3d-color-border);
+}
+
+@media (max-width: 768px) {
+	.backdrop {
+		padding: 0;
+		align-items: stretch;
+	}
+
+	.panel {
+		width: 100%;
+		max-height: 100dvh;
+		border-radius: 18px 18px 0 0;
+		margin-top: auto;
+	}
+}

@@ -1,11 +1,13 @@
 import { MoreOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
-import { Alert, Button, Checkbox, Dropdown, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
+import { Alert, Button, Checkbox, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
 
 import type { JobStatus } from '../../api/types'
 import { DatalistInput } from '../../components/DatalistInput'
+import { MenuPopover } from '../../components/MenuPopover'
 import { NativeSelect } from '../../components/NativeSelect'
 import { PageHeader } from '../../components/PageHeader'
 import { PageSection } from '../../components/PageSection'
+import { PopoverSurface } from '../../components/PopoverSurface'
 import styles from './JobsToolbar.module.css'
 import type { ColumnKey, ColumnOption, ToggleableColumnKey } from './useJobsColumnsVisibility'
 
@@ -91,9 +93,13 @@ export function JobsToolbar(props: Props) {
 								</Button>
 							</span>
 						</Tooltip>
-						<Dropdown menu={props.topActionsMenu} trigger={['click']} placement="bottomRight">
-							<Button icon={<MoreOutlined />}>More</Button>
-						</Dropdown>
+						<MenuPopover menu={props.topActionsMenu} align="end">
+							{({ toggle }) => (
+								<Button icon={<MoreOutlined />} onClick={toggle}>
+									More
+								</Button>
+							)}
+						</MenuPopover>
 					</div>
 				}
 			/>
@@ -169,29 +175,39 @@ export function JobsToolbar(props: Props) {
 					<Button onClick={props.onResetFilters} disabled={!props.filtersDirty}>
 						Reset filters
 					</Button>
-					<Dropdown
-						trigger={['click']}
-						popupRender={() => (
-							<div className={styles.columnsDropdown}>
-								<Space orientation="vertical" size={4} className={styles.columnsDropdownList}>
-									{props.columnOptions.map((option) => (
-										<Checkbox
-											key={option.key}
-											checked={props.mergedColumnVisibility[option.key]}
-											onChange={(event) => props.onSetColumnVisible(option.key, event.target.checked)}
-										>
-											{option.label}
-										</Checkbox>
-									))}
-									<Button size="small" onClick={props.onResetColumns} disabled={!props.columnsDirty}>
-										Reset columns
-									</Button>
-								</Space>
-							</div>
+					<PopoverSurface
+						align="end"
+						contentClassName={styles.columnsDropdown}
+						content={({ close }) => (
+							<Space orientation="vertical" size={4} className={styles.columnsDropdownList}>
+								{props.columnOptions.map((option) => (
+									<Checkbox
+										key={option.key}
+										checked={props.mergedColumnVisibility[option.key]}
+										onChange={(event) => props.onSetColumnVisible(option.key, event.target.checked)}
+									>
+										{option.label}
+									</Checkbox>
+								))}
+								<Button
+									size="small"
+									onClick={() => {
+										props.onResetColumns()
+										close('content')
+									}}
+									disabled={!props.columnsDirty}
+								>
+									Reset columns
+								</Button>
+							</Space>
 						)}
 					>
-						<Button icon={<SettingOutlined />}>Columns</Button>
-					</Dropdown>
+						{({ toggle }) => (
+							<Button icon={<SettingOutlined />} onClick={toggle}>
+								Columns
+							</Button>
+						)}
+					</PopoverSurface>
 					<Button icon={<ReloadOutlined />} onClick={props.onRefreshJobs} loading={props.jobsRefreshing} disabled={props.isOffline}>
 						Refresh
 					</Button>

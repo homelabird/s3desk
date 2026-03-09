@@ -1,7 +1,8 @@
-import { Input, Modal } from 'antd'
+import { Button, Input } from 'antd'
 import { useState } from 'react'
 
 import type { BucketCreateRequest, Profile } from '../../api/types'
+import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 
 export function BucketModal(props: {
@@ -42,14 +43,18 @@ export function BucketModal(props: {
 	}
 
 	return (
-		<Modal
+		<DialogModal
 			open={props.open}
 			title="Create Bucket"
-			okText="Create"
-			okButtonProps={{ loading: props.loading, disabled: !canSubmit }}
-			onOk={handleSubmit}
-			onCancel={handleCancel}
-			destroyOnHidden
+			onClose={handleCancel}
+			footer={
+				<>
+					<Button onClick={handleCancel}>Cancel</Button>
+					<Button type="primary" loading={props.loading} disabled={!canSubmit} onClick={handleSubmit}>
+						Create
+					</Button>
+				</>
+			}
 		>
 			<form
 				onSubmit={(e) => {
@@ -79,6 +84,6 @@ export function BucketModal(props: {
 					</FormField>
 				) : null}
 			</form>
-		</Modal>
+		</DialogModal>
 	)
 }

@@ -1,0 +1,192 @@
+name: Frontend E2E
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/frontend-e2e.yml"
+      - "docker-compose.e2e.yml"
+      - "frontend/**"
+      - "openapi.yml"
+      - "scripts/bundle_report.js"
+      - "scripts/run_live_e2e_local.sh"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/frontend-e2e.yml"
+      - "docker-compose.e2e.yml"
+      - "frontend/**"
+      - "openapi.yml"
+      - "scripts/bundle_report.js"
+      - "scripts/run_live_e2e_local.sh"
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-e2e-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  bundle-budget:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run bundle budget check
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:analyze 2>&1 | tee dist/build-analyze.log
+          if grep -q 'Circular chunk:' dist/build-analyze.log; then
+            echo "circular chunk warning detected in bundle build" >&2
+            exit 1
+          fi
+          node ../scripts/bundle_report.js --fail
+
+      - name: Upload bundle report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-bundle-report
+          path: |
+            frontend/dist/build-analyze.log
+            frontend/dist/bundle-report.md
+            frontend/dist/stats.json
+            frontend/dist/stats.html
+          if-no-files-found: ignore
+
+  mock-e2e:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run mock Playwright suite
+        run: npm run test:e2e
+
+      - name: Upload mock Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-mock-results
+          path: frontend/test-results
+          if-no-files-found: ignore
+
+  live-e2e-critical:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CRITICAL_LIVE_TESTS: tests/api-crud.spec.ts tests/objects-live-flow.spec.ts tests/jobs-live-flow.spec.ts tests/transfers-live-fallback.spec.ts tests/bucket-policy-live.spec.ts tests/docs-smoke.spec.ts tests/server-migration-live.spec.ts tests/uploads-folder-live.spec.ts tests/objects-image-preview-live.spec.ts
+      E2E_API_TOKEN: change-me
+      E2E_S3_ENDPOINT: http://127.0.0.1:9000
+      E2E_S3_REGION: us-east-1
+      E2E_S3_ACCESS_KEY: minioadmin
+      E2E_S3_SECRET_KEY: minioadmin
+      E2E_S3_FORCE_PATH_STYLE: "true"
+      E2E_S3_TLS_SKIP_VERIFY: "true"
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+      DOCS_BASE_URL: http://127.0.0.1:8080
+      S3DESK_IMAGE: s3desk-e2e:ci
+      MINIO_IMAGE: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+      AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite:3.33.0
+      FAKE_GCS_IMAGE: fsouza/fake-gcs-server:1.47.7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build local S3Desk image
+        run: docker build -t "${S3DESK_IMAGE}" -f Containerfile.local .
+
+      - name: Start live E2E stack
+        run: docker compose -f docker-compose.e2e.yml up -d minio azurite fake-gcs-server s3desk
+
+      - name: Wait for backend health
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS "${PLAYWRIGHT_BASE_URL}/healthz" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "backend health check failed" >&2
+          exit 1
+
+      - name: Run nightly live Playwright suite
+        working-directory: frontend
+        env:
+          E2E_LIVE: "1"
+        run: npx playwright test ${CRITICAL_LIVE_TESTS} --project=chromium
+
+      - name: Capture live E2E stack logs
+        if: always()
+        run: |
+          mkdir -p artifacts
+          docker compose -f docker-compose.e2e.yml logs --no-color > artifacts/live-e2e-compose.log
+
+      - name: Upload live Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-live-results
+          path: |
+            artifacts/live-e2e-compose.log
+            frontend/test-results
+          if-no-files-found: ignore
+
+      - name: Stop live E2E stack
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v

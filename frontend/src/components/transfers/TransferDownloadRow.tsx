@@ -58,7 +58,7 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 				: `job ${t.jobId} artifact`
 
 	return (
-		<div className={styles.rowCard}>
+		<div className={styles.rowCard} data-testid="transfer-download-row" data-transfer-row-kind="download">
 			<div className={styles.rowTop}>
 				<div className={styles.rowCopy}>
 					<div className={styles.rowHeader}>

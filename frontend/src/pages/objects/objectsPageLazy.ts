@@ -68,3 +68,11 @@ export const ObjectsDetailsPanelSection = lazy(async () => {
 	const m = await import('./ObjectsDetailsPanelSection')
 	return { default: m.ObjectsDetailsPanelSection }
 })
+export const ObjectsContextMenuPortal = lazy(async () => {
+	const m = await import('./ObjectsContextMenuPortal')
+	return { default: m.ObjectsContextMenuPortal }
+})
+export const ObjectsImageViewerModal = lazy(async () => {
+	const m = await import('./ObjectsImageViewerModal')
+	return { default: m.ObjectsImageViewerModal }
+})

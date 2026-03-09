@@ -12,6 +12,7 @@ S3Desk is a self-hosted dashboard for multi-provider object storage. It provides
 - Bucket and object browsing
 - Upload, download, copy, move, sync, and delete jobs
 - Job history, logs, and retry actions
+- Server backup bundle download and staged restore for migration
 - Built-in API docs and OpenAPI spec
 
 ## Supported Providers

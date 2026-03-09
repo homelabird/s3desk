@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Drawer, Dropdown, Grid, Layout, Menu, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Grid, Layout, Space, Spin, Typography, type MenuProps } from 'antd'
 import {
 	AppstoreOutlined,
 	CloudUploadOutlined,
@@ -14,20 +14,20 @@ import {
 	ToolOutlined,
 } from '@ant-design/icons'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState, type ReactNode } from 'react'
 
 import { APIClient, APIError } from './api/client'
 import { BrandLockup } from './components/BrandLockup'
 import { JobQueueBanner } from './components/JobQueueBanner'
-import { KeyboardShortcutGuide } from './components/KeyboardShortcutGuide'
+import { MenuPopover } from './components/MenuPopover'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
+import { OverlaySheet } from './components/OverlaySheet'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
-import { TransfersButton, TransfersProvider } from './components/Transfers'
-import { LoginPage } from './pages/LoginPage'
+import { TransfersButton, TransfersProvider } from './components/TransfersShell'
 import { getProviderCapabilities } from './lib/providerCapabilities'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
-import { useThemeMode } from './themeMode'
+import { useThemeMode } from './useThemeMode'
 import styles from './FullAppInner.module.css'
 
 const ProfilesPage = lazy(async () => {
@@ -54,14 +54,31 @@ const SettingsDrawer = lazy(async () => {
 	const m = await import('./components/SettingsDrawer')
 	return { default: m.SettingsDrawer }
 })
+const KeyboardShortcutGuide = lazy(async () => {
+	const m = await import('./components/KeyboardShortcutGuide')
+	return { default: m.KeyboardShortcutGuide }
+})
+const LoginPage = lazy(async () => {
+	const m = await import('./pages/LoginPage')
+	return { default: m.LoginPage }
+})
 
 const { Header, Content, Sider } = Layout
+
+type NavItem = {
+	key: string
+	label: string
+	icon: ReactNode
+	to: string
+}
 
 export default function FullAppInner() {
 	const location = useLocation()
 	const navigate = useNavigate()
 	const screens = Grid.useBreakpoint()
 	const isDesktop = !!screens.lg
+	const isStackedHeader = !screens.md
+	const usesCompactHeader = !isDesktop
 	const { mode, toggleMode } = useThemeMode()
 
 	const [apiToken, setApiToken] = useLocalStorageState('apiToken', '')
@@ -86,7 +103,7 @@ export default function FullAppInner() {
 		const providerMatrix = metaQuery.data?.capabilities?.providers
 		for (const profile of profilesQuery.data ?? []) {
 			if (!profile.provider) continue
-			const capability = getProviderCapabilities(profile.provider, providerMatrix)
+			const capability = getProviderCapabilities(profile.provider, providerMatrix, profile)
 			out[profile.id] = {
 				presignedUpload: capability.presignedUpload,
 				directUpload: capability.directUpload,
@@ -104,53 +121,13 @@ export default function FullAppInner() {
 		return '/profiles'
 	}, [location.pathname])
 
-	const menuItems = useMemo(
+	const navItems = useMemo<NavItem[]>(
 		() => [
-			{
-				key: '/profiles',
-				label: (
-					<Link to="/profiles" className={styles.menuLink}>
-						<ProfileOutlined />
-						<span>Profiles</span>
-					</Link>
-				),
-			},
-			{
-				key: '/buckets',
-				label: (
-					<Link to="/buckets" className={styles.menuLink}>
-						<AppstoreOutlined />
-						<span>Buckets</span>
-					</Link>
-				),
-			},
-			{
-				key: '/objects',
-				label: (
-					<Link to="/objects" className={styles.menuLink}>
-						<FolderOpenOutlined />
-						<span>Objects</span>
-					</Link>
-				),
-			},
-			{
-				key: '/uploads',
-				label: (
-					<Link to="/uploads" className={styles.menuLink}>
-						<CloudUploadOutlined />
-						<span>Uploads</span>
-					</Link>
-				),
-			},
-			{
-				key: '/jobs',
-				label: (
-					<Link to="/jobs" className={styles.menuLink}>
-						<ToolOutlined />
-						<span>Jobs</span>
-					</Link>
-				),
-			},
+			{ key: '/profiles', label: 'Profiles', icon: <ProfileOutlined />, to: '/profiles' },
+			{ key: '/buckets', label: 'Buckets', icon: <AppstoreOutlined />, to: '/buckets' },
+			{ key: '/objects', label: 'Objects', icon: <FolderOpenOutlined />, to: '/objects' },
+			{ key: '/uploads', label: 'Uploads', icon: <CloudUploadOutlined />, to: '/uploads' },
+			{ key: '/jobs', label: 'Jobs', icon: <ToolOutlined />, to: '/jobs' },
 		],
 		[],
 	)
@@ -173,10 +150,40 @@ export default function FullAppInner() {
 		setApiToken('')
 		setProfileId(null)
 	}
-	const mobileHeaderMenuItems = [
+	const compactHeaderMenu: MenuProps = {
+		items: [
 		{ key: 'settings', icon: <SettingOutlined />, label: 'Settings' },
 		...(apiToken ? [{ key: 'logout', icon: <LogoutOutlined />, label: 'Logout', danger: true }] : []),
-	]
+		],
+		onClick: ({ key }) => {
+			if (key === 'settings') {
+				openSettings()
+				return
+			}
+			if (key === 'logout') logout()
+		},
+	}
+
+	const renderNav = (onSelect?: () => void) => (
+		<nav className={styles.navList} aria-label="Primary">
+			{navItems.map((item) => (
+				<Link
+					key={item.key}
+					to={item.to}
+					onClick={onSelect}
+					className={[
+						styles.navLink,
+						selectedKey === item.key ? styles.navLinkActive : '',
+					]
+						.filter(Boolean)
+						.join(' ')}
+				>
+					{item.icon}
+					<span>{item.label}</span>
+				</Link>
+			))}
+		</nav>
+	)
 
 	// Auth gate (token-based):
 	// - If server requires API_TOKEN and we don't have it (or it's wrong), /api/v1/meta returns 401.
@@ -194,12 +201,14 @@ export default function FullAppInner() {
 		const isUnauthorized = err instanceof APIError && err.status === 401
 		if (isUnauthorized) {
 			return (
-				<LoginPage
-					initialToken={apiToken}
-					onLogin={(token) => setApiToken(token)}
-					onClearSavedToken={() => setApiToken('')}
-					error={err}
-				/>
+				<Suspense fallback={<div className={styles.fullscreenCenter}><Spin /></div>}>
+					<LoginPage
+						initialToken={apiToken}
+						onLogin={(token) => setApiToken(token)}
+						onClearSavedToken={() => setApiToken('')}
+						error={err}
+					/>
+				</Suspense>
 			)
 		}
 
@@ -220,12 +229,12 @@ export default function FullAppInner() {
 				</Typography.Text>
 			)
 
-			return (
-				<div className={styles.fullscreenCenter}>
-					<div className={styles.errorPanel}>
-						<BrandLockup titleAs="h1" subtitle="Local Dashboard" variant="hero" />
-						<Alert
-							type="error"
+		return (
+			<div className={styles.fullscreenCenter}>
+				<div className={styles.errorPanel}>
+					<BrandLockup titleAs="h1" subtitle="Local Dashboard" variant="hero" />
+					<Alert
+						type="error"
 						showIcon
 						title="Backend connection failed"
 						description={
@@ -248,19 +257,30 @@ export default function FullAppInner() {
 			uploadCapabilityByProfileId={uploadCapabilityByProfileId}
 		>
 			<Layout className={styles.appLayout}>
-					{isDesktop ? (
-						<Sider width={220} className={styles.desktopSider}>
-							<div className={styles.brandBlock}>
-								<BrandLockup subtitle="Local Dashboard" variant="sidebar" />
-							</div>
-							<Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} />
-						</Sider>
+				{isDesktop ? (
+					<Sider width={220} className={styles.desktopSider}>
+						<div className={styles.brandBlock}>
+							<BrandLockup subtitle="Local Dashboard" variant="sidebar" />
+						</div>
+						{renderNav()}
+					</Sider>
 				) : null}
 
 				<Layout className={styles.appLayout}>
-					<Header className={`${styles.header} ${screens.md ? styles.headerPadMd : styles.headerPadSm}`}>
-						<Space wrap>
-							{isDesktop ? null : (
+					<Header
+						className={[
+							styles.header,
+							screens.md ? styles.headerPadMd : styles.headerPadSm,
+							usesCompactHeader ? styles.headerCompact : '',
+							isStackedHeader ? styles.headerStacked : '',
+						]
+							.filter(Boolean)
+							.join(' ')}
+						data-testid="app-header"
+					>
+						<div className={styles.headerTopRow}>
+							<div className={styles.headerLeading}>
+								{isDesktop ? null : (
 								<Button
 									type="text"
 									icon={<MenuOutlined />}
@@ -269,51 +289,63 @@ export default function FullAppInner() {
 								/>
 								)}
 								{isDesktop ? null : (
-									<BrandLockup variant="compact" />
+									<BrandLockup variant="compact" className={styles.mobileBrandLockup} />
 								)}
-							</Space>
-						<Space wrap className={styles.headerActions}>
-							<Button
-								type={screens.sm ? 'link' : 'text'}
-								icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-								onClick={toggleMode}
-								aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-							>
-								{screens.sm ? (mode === 'dark' ? 'Light mode' : 'Dark mode') : null}
-							</Button>
-							<TopBarProfileSelect profileId={profileId} setProfileId={setProfileId} apiToken={apiToken} />
-							<TransfersButton showLabel={!!screens.sm} />
-							{screens.sm ? (
-								<>
-									<Button type="link" onClick={openSettings}>
-										<SettingOutlined /> Settings
-									</Button>
-									{apiToken ? (
-										<Button type="link" onClick={logout}>
-											<LogoutOutlined /> Logout
-										</Button>
-									) : null}
-								</>
-							) : (
-								<Dropdown
-									trigger={['click']}
-									menu={{
-										items: mobileHeaderMenuItems,
-										onClick: ({ key }) => {
-											if (key === 'settings') {
-												openSettings()
-												return
-											}
-											if (key === 'logout') {
-												logout()
-											}
-										},
-									}}
+							</div>
+							<div className={styles.headerActions}>
+								<Button
+									type={isDesktop ? 'link' : 'text'}
+									icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+									onClick={toggleMode}
+									aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
 								>
-									<Button type="text" icon={<EllipsisOutlined />} aria-label="More actions" />
-								</Dropdown>
+									{isDesktop ? (mode === 'dark' ? 'Light mode' : 'Dark mode') : null}
+								</Button>
+								{isStackedHeader ? null : (
+									<TopBarProfileSelect
+										profileId={profileId}
+										setProfileId={setProfileId}
+										apiToken={apiToken}
+										showLabel={isDesktop}
+										selectWidth={isDesktop ? 260 : 180}
+										className={styles.headerProfileSelect}
+									/>
 								)}
-						</Space>
+								{isStackedHeader ? null : <TransfersButton showLabel={isDesktop} ariaLabel="Transfers" />}
+								{isDesktop ? (
+									<>
+										<Button type="link" onClick={openSettings}>
+											<SettingOutlined /> Settings
+										</Button>
+										{apiToken ? (
+											<Button type="link" onClick={logout}>
+												<LogoutOutlined /> Logout
+											</Button>
+										) : null}
+									</>
+								) : (
+									<MenuPopover menu={compactHeaderMenu} align="end">
+										{({ toggle }) => (
+											<Button type="text" icon={<EllipsisOutlined />} aria-label="More actions" onClick={toggle} />
+										)}
+									</MenuPopover>
+								)}
+							</div>
+						</div>
+						{isStackedHeader ? (
+							<div className={styles.headerProfileRow} data-testid="app-header-profile-row">
+								<TopBarProfileSelect
+									profileId={profileId}
+									setProfileId={setProfileId}
+									apiToken={apiToken}
+									showLabel={false}
+									fullWidth
+									selectWidth="100%"
+									className={styles.headerProfileSelect}
+								/>
+								<TransfersButton showLabel={false} ariaLabel="Transfers" className={styles.headerTransfersButton} />
+							</div>
+						) : null}
 					</Header>
 					<Content className={`${styles.content} ${screens.md ? styles.contentPadMd : styles.contentPadSm}`}>
 						<main id="main" tabIndex={-1} className={styles.mainScroll} data-scroll-container="app-content">
@@ -348,24 +380,19 @@ export default function FullAppInner() {
 					</Content>
 				</Layout>
 
-				<Drawer
+				<OverlaySheet
 					open={!isDesktop && navOpen}
 					onClose={() => setNavOpen(false)}
 					placement="left"
-					styles={{ body: { padding: 0 }, wrapper: { width: 'min(80vw, 360px)' } }}
-					>
-						<div className={styles.brandBlock}>
-							<BrandLockup subtitle="Local Dashboard" />
-						</div>
-						<Menu
-						mode="inline"
-						selectedKeys={[selectedKey]}
-						items={menuItems}
-						onClick={() => {
-							setNavOpen(false)
-						}}
-					/>
-				</Drawer>
+					title="Navigation"
+					width="min(80vw, 360px)"
+					bodyClassName={styles.navSheetBody}
+				>
+					<div className={styles.brandBlock}>
+						<BrandLockup subtitle="Local Dashboard" />
+					</div>
+					{renderNav(() => setNavOpen(false))}
+				</OverlaySheet>
 
 				<Suspense fallback={null}>
 					<SettingsDrawer
@@ -378,7 +405,9 @@ export default function FullAppInner() {
 					/>
 				</Suspense>
 			</Layout>
-			<KeyboardShortcutGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
+			<Suspense fallback={null}>
+				<KeyboardShortcutGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
+			</Suspense>
 		</TransfersProvider>
 	)
 }

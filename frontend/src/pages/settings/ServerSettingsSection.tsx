@@ -1,19 +1,31 @@
 import { InfoCircleOutlined } from '@ant-design/icons'
-import { Alert, Collapse, Descriptions, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Collapse, Descriptions, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { useRef, useState } from 'react'
 
+import type { APIClient } from '../../api/client'
 import type { MetaResponse } from '../../api/types'
+import type { ServerRestoreResponse } from '../../api/types'
+import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import styles from '../SettingsPage.module.css'
 
 type ServerSettingsSectionProps = {
+	api: APIClient
 	meta: MetaResponse | undefined
 	isFetching: boolean
 	errorMessage: string | null
 }
 
 export function ServerSettingsSection(props: ServerSettingsSectionProps) {
+	const restoreInputRef = useRef<HTMLInputElement | null>(null)
+	const [backupLoading, setBackupLoading] = useState(false)
+	const [restoreLoading, setRestoreLoading] = useState(false)
+	const [migrationError, setMigrationError] = useState<string | null>(null)
+	const [restoreResult, setRestoreResult] = useState<ServerRestoreResponse | null>(null)
 	const tlsCapability = props.meta?.capabilities?.profileTls
 	const tlsEnabled = tlsCapability?.enabled ?? false
 	const tlsReason = tlsCapability?.reason ?? ''
+	const dbBackend = props.meta?.dbBackend ?? 'sqlite'
+	const backupSupported = dbBackend === 'sqlite'
 
 	const mtlsLabel = (
 		<Space size={4}>
@@ -23,6 +35,43 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			</Tooltip>
 		</Space>
 	)
+
+	const runBackupDownload = async () => {
+		setBackupLoading(true)
+		setMigrationError(null)
+		try {
+			const { promise } = props.api.downloadServerBackup()
+			const result = await promise
+			const filename = filenameFromContentDisposition(result.contentDisposition) ?? 's3desk-backup.tar.gz'
+			saveBlob(result.blob, filename)
+		} catch (err) {
+			setMigrationError(formatErr(err))
+		} finally {
+			setBackupLoading(false)
+		}
+	}
+
+	const handleRestorePick = () => {
+		restoreInputRef.current?.click()
+	}
+
+	const handleRestoreInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0]
+		event.target.value = ''
+		if (!file) return
+
+		setRestoreLoading(true)
+		setMigrationError(null)
+		setRestoreResult(null)
+		try {
+			const result = await props.api.restoreServerBackup(file)
+			setRestoreResult(result)
+		} catch (err) {
+			setMigrationError(formatErr(err))
+		} finally {
+			setRestoreLoading(false)
+		}
+	}
 
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
@@ -38,6 +87,97 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 
 			{props.meta ? (
 				<>
+					<Alert
+						type={backupSupported ? 'info' : 'warning'}
+						showIcon
+						title="Migration backup & restore"
+						description={
+							<Space orientation="vertical" size={8} className={styles.fullWidth}>
+								<Typography.Text type="secondary">
+									Download a migration bundle for another server, or upload a previous bundle to stage a restorable DATA_DIR on this machine.
+								</Typography.Text>
+								<Space wrap>
+									<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload()}>
+										Download backup
+									</Button>
+									<Button loading={restoreLoading} disabled={backupLoading} onClick={handleRestorePick}>
+										Upload restore bundle
+									</Button>
+								</Space>
+								{!backupSupported ? (
+									<Typography.Text type="secondary">
+										Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>. Backup export currently supports sqlite-backed servers only.
+									</Typography.Text>
+								) : null}
+								<Typography.Text type="secondary">
+									The bundle contains DATA_DIR state such as <Typography.Text code>s3desk.db</Typography.Text>, thumbnails, logs, artifacts, and staging data.
+									Environment config outside DATA_DIR is not included.
+								</Typography.Text>
+								<input
+									ref={restoreInputRef}
+									type="file"
+									accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
+									onChange={(event) => void handleRestoreInputChange(event)}
+									style={{ display: 'none' }}
+								/>
+							</Space>
+						}
+					/>
+
+					{migrationError ? (
+						<Alert type="error" showIcon title="Migration action failed" description={migrationError} className={styles.marginBottom12} />
+					) : null}
+
+					{restoreResult ? (
+						<Alert
+							type="success"
+							showIcon
+							title="Restore bundle staged"
+							description={
+								<Space orientation="vertical" size={8} className={styles.fullWidth}>
+									<div>
+										<Typography.Text type="secondary">Staging directory</Typography.Text>
+										<div>
+											<Typography.Text code className={styles.codeWrap}>
+												{restoreResult.stagingDir}
+											</Typography.Text>
+										</div>
+									</div>
+									<div>
+										<Typography.Text type="secondary">Bundle manifest</Typography.Text>
+										<div>
+											<Typography.Text code>
+												{restoreResult.manifest.dbBackend}
+											</Typography.Text>
+											<Typography.Text type="secondary"> from </Typography.Text>
+											<Typography.Text code>{restoreResult.manifest.createdAt}</Typography.Text>
+										</div>
+									</div>
+									{restoreResult.nextSteps.length ? (
+										<div>
+											<Typography.Text strong>Next steps</Typography.Text>
+											<ul className={styles.tightList}>
+												{restoreResult.nextSteps.map((step) => (
+													<li key={step}>{step}</li>
+												))}
+											</ul>
+										</div>
+									) : null}
+									{restoreResult.warnings?.length ? (
+										<div>
+											<Typography.Text strong>Warnings</Typography.Text>
+											<ul className={styles.tightList}>
+												{restoreResult.warnings.map((warning) => (
+													<li key={warning}>{warning}</li>
+												))}
+											</ul>
+										</div>
+									) : null}
+								</Space>
+							}
+						/>
+					) : null}
+
 					{props.meta.transferEngine.available && !props.meta.transferEngine.compatible ? (
 						<Alert
 							type="warning"
@@ -158,4 +298,33 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			) : null}
 		</Space>
 	)
+}
+
+function filenameFromContentDisposition(header: string | null): string | null {
+	if (!header) return null
+
+	const star = /filename\*=([^']*)''([^;]+)/i.exec(header)
+	if (star) {
+		try {
+			return decodeURIComponent(star[2] ?? '')
+		} catch {
+			return star[2] ?? null
+		}
+	}
+
+	const plain = /filename="?([^";]+)"?/i.exec(header)
+	return plain?.[1] ?? null
+}
+
+function saveBlob(blob: Blob, filename: string) {
+	const url = URL.createObjectURL(blob)
+	const anchor = document.createElement('a')
+	anchor.href = url
+	anchor.download = filename
+	anchor.rel = 'noopener'
+	anchor.style.display = 'none'
+	document.body.appendChild(anchor)
+	anchor.click()
+	anchor.remove()
+	window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }

@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { installMockApi, seedLocalStorage } from './support/apiFixtures'
+
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -20,14 +22,14 @@ const buckets = ['alpha-bucket', 'bravo-bucket', 'charlie-bucket']
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const storage = { ...defaultStorage, ...overrides }
-	await page.addInitScript((seed) => {
-		window.localStorage.setItem('apiToken', JSON.stringify(seed.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(seed.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
-		window.localStorage.setItem('prefix', JSON.stringify(''))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify(seed.objectsUIMode))
-		window.localStorage.setItem('objectsRecentBuckets', JSON.stringify(seed.recentBuckets))
-	}, storage)
+	await seedLocalStorage(page, {
+		apiToken: storage.apiToken,
+		profileId: storage.profileId,
+		bucket: storage.bucket,
+		prefix: '',
+		objectsUIMode: storage.objectsUIMode,
+		objectsRecentBuckets: storage.recentBuckets,
+	})
 }
 
 async function stubBucketPickerApi(page: Page) {
@@ -39,25 +41,17 @@ async function stubBucketPickerApi(page: Page) {
 		'charlie-bucket': [{ key: 'charlie.txt', size: 512, lastModified: now, etag: '"charlie"' }],
 	}
 
-	await page.route('**/api/v1/**', async (route) => {
-		const request = route.request()
-		const url = new URL(request.url())
-		const path = url.pathname
-		const method = request.method()
-
-		if (method === 'GET' && path === '/api/v1/events') {
-			return route.fulfill({
-				status: 200,
-				headers: { 'content-type': 'text/event-stream' },
-				body: '',
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/meta') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+	await installMockApi(page, [
+		{
+			method: 'GET',
+			path: '/events',
+			handle: (ctx) => ctx.text('', 200, 'text/event-stream'),
+		},
+		{
+			method: 'GET',
+			path: '/meta',
+			handle: (ctx) =>
+				ctx.json({
 					version: 'test',
 					serverAddr: '127.0.0.1:8080',
 					dataDir: '/tmp',
@@ -73,14 +67,12 @@ async function stubBucketPickerApi(page: Page) {
 					uploadMaxBytes: null,
 					transferEngine: { name: 'rclone', available: true, path: '/usr/local/bin/rclone', version: 'v1.66.0' },
 				}),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/profiles') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
+		},
+		{
+			method: 'GET',
+			path: '/profiles',
+			handle: (ctx) =>
+				ctx.json([
 					{
 						id: profileId,
 						name: 'Playwright',
@@ -92,24 +84,18 @@ async function stubBucketPickerApi(page: Page) {
 						updatedAt: now,
 					},
 				]),
-			})
-		}
-
-		if (method === 'GET' && path === '/api/v1/buckets') {
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify(buckets.map((name) => ({ name, createdAt: now }))),
-			})
-		}
-
-		const bucketMatch = path.match(/^\/api\/v1\/buckets\/([^/]+)\/objects$/)
-		if (method === 'GET' && bucketMatch) {
-			const bucket = decodeURIComponent(bucketMatch[1] ?? '')
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+		},
+		{
+			method: 'GET',
+			path: '/buckets',
+			handle: (ctx) => ctx.json(buckets.map((name) => ({ name, createdAt: now }))),
+		},
+		{
+			method: 'GET',
+			path: /^\/api\/v1\/buckets\/[^/]+\/objects$/,
+			handle: (ctx) => {
+				const bucket = decodeURIComponent(ctx.path.match(/^\/api\/v1\/buckets\/([^/]+)\/objects$/)?.[1] ?? '')
+				return ctx.json({
 					bucket,
 					prefix: '',
 					delimiter: '/',
@@ -117,26 +103,26 @@ async function stubBucketPickerApi(page: Page) {
 					items: objectsByBucket[bucket] ?? [],
 					nextContinuationToken: null,
 					isTruncated: false,
-				}),
-			})
-		}
-
-		const favoritesMatch = path.match(/^\/api\/v1\/buckets\/([^/]+)\/objects\/favorites$/)
-		if (method === 'GET' && favoritesMatch) {
-			const bucket = decodeURIComponent(favoritesMatch[1] ?? '')
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
+				})
+			},
+		},
+		{
+			method: 'GET',
+			path: /^\/api\/v1\/buckets\/[^/]+\/objects\/favorites$/,
+			handle: (ctx) => {
+				const bucket = decodeURIComponent(ctx.path.match(/^\/api\/v1\/buckets\/([^/]+)\/objects\/favorites$/)?.[1] ?? '')
+				return ctx.json({
 					bucket,
 					prefix: '',
 					items: [],
-				}),
-			})
-		}
-
-		return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
-	})
+				})
+			},
+		},
+		{
+			path: /.*/,
+			handle: (ctx) => ctx.json({}),
+		},
+	])
 }
 
 function rowFor(page: Page, key: string) {

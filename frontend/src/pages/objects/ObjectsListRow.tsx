@@ -1,9 +1,10 @@
 import type { MenuProps } from 'antd'
-import { Button, Checkbox, Dropdown, Tooltip, Typography } from 'antd'
+import { Button, Checkbox, Typography } from 'antd'
 import { EllipsisOutlined, FolderOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 
 import styles from './objects.module.css'
+import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 
 type BaseRowProps = {
 	offset: number
@@ -18,8 +19,7 @@ type ObjectsPrefixRowProps = BaseRowProps & {
 	highlightText: (value: string) => ReactNode
 	menu: MenuProps
 	buttonMenuOpen: boolean
-	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
-	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' }) => void
+	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => void
 	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onOpen: () => void
 	onDragStart: (e: DragEvent) => void
@@ -37,8 +37,7 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	highlightText: (value: string) => ReactNode
 	menu: MenuProps
 	buttonMenuOpen: boolean
-	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
-	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' }) => void
+	onButtonMenuOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => void
 	onClick: (e: MouseEvent) => void
 	onContextMenu: (e: MouseEvent<HTMLDivElement>) => void
 	onCheckboxClick: (e: MouseEvent) => void
@@ -68,28 +67,34 @@ function handleRowKeyDown(event: KeyboardEvent<HTMLDivElement>, onActivate: (eve
 function renderRowMenu(
 	menu: MenuProps,
 	open: boolean,
-	onOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' }) => void,
-	getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement,
+	onOpenChange: (open: boolean, info?: { source: 'trigger' | 'menu' | 'outside' }) => void,
 	label = 'Row actions',
 ) {
 	return (
-		<Dropdown
-			trigger={['click']}
+		<ObjectsMenuPopover
 			menu={menu}
+			align="end"
+			open={open}
 			onOpenChange={onOpenChange}
-			getPopupContainer={getPopupContainer}
-			autoAdjustOverflow
+			className={styles.listRowMenuRoot}
+			menuClassName={styles.listRowMenuPopover}
 		>
-			<Button
-				size="small"
-				type="text"
-				icon={<EllipsisOutlined />}
-				aria-label={label}
-				aria-haspopup="menu"
-				aria-expanded={open}
-				onClick={(e) => e.stopPropagation()}
-			/>
-		</Dropdown>
+			{({ toggle }) => (
+				<Button
+					size="small"
+					type="text"
+					icon={<EllipsisOutlined />}
+					aria-label={label}
+					aria-haspopup="menu"
+					aria-expanded={open}
+					title={label}
+					onClick={(event) => {
+						event.stopPropagation()
+						toggle()
+					}}
+				/>
+			)}
+		</ObjectsMenuPopover>
 	)
 }
 
@@ -119,19 +124,11 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 				<div />
 				<div className={styles.listRowNameCell}>
 					<FolderOutlined className={styles.listRowPrefixIcon} />
-					<Typography.Text className={styles.listRowTextEllipsis}>
-						{props.highlightText(props.displayName)}
-					</Typography.Text>
+					<Typography.Text className={styles.listRowTextEllipsis}>{props.highlightText(props.displayName)}</Typography.Text>
 				</div>
 				{props.isCompact ? (
 					<div className={styles.listRowMenuCell}>
-						{renderRowMenu(
-							props.menu,
-							props.buttonMenuOpen,
-							props.onButtonMenuOpenChange,
-							props.getPopupContainer,
-							'Prefix actions',
-						)}
+						{renderRowMenu(props.menu, props.buttonMenuOpen, props.onButtonMenuOpenChange, 'Prefix actions')}
 					</div>
 				) : (
 					<>
@@ -142,13 +139,7 @@ export function ObjectsPrefixRow(props: ObjectsPrefixRowProps) {
 							<Typography.Text type="secondary">-</Typography.Text>
 						</div>
 						<div className={styles.listRowMenuCell}>
-							{renderRowMenu(
-								props.menu,
-								props.buttonMenuOpen,
-								props.onButtonMenuOpenChange,
-								props.getPopupContainer,
-								'Prefix actions',
-							)}
+							{renderRowMenu(props.menu, props.buttonMenuOpen, props.onButtonMenuOpenChange, 'Prefix actions')}
 						</div>
 					</>
 				)}
@@ -166,6 +157,7 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 		styles.listGridBase,
 		props.listGridClassName,
 	)
+	const favoriteLabel = props.isFavorite ? 'Remove favorite' : 'Add favorite'
 
 	return (
 		<div style={rowStyle(props.offset, props.rowMinHeight)} className={outerClassName} role="listitem">
@@ -182,34 +174,27 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 				tabIndex={0}
 			>
 				<div>
-					<Checkbox
-						checked={props.isSelected}
-						onClick={props.onCheckboxClick}
-						aria-label={`Select ${props.displayName}`}
-					/>
+					<Checkbox checked={props.isSelected} onClick={props.onCheckboxClick} aria-label={`Select ${props.displayName}`} />
 				</div>
 
 				<div className={styles.listRowObjectMain}>
 					<div className={styles.listRowNameCell}>
 						{props.thumbnail ? <div className={styles.listRowThumbnailWrap}>{props.thumbnail}</div> : null}
-						<Tooltip title={props.isFavorite ? 'Remove favorite' : 'Add favorite'}>
-							<Button
-								type="text"
-								size="small"
-								icon={props.isFavorite ? <StarFilled className={styles.listRowFavoriteIcon} /> : <StarOutlined />}
-								onClick={(e) => {
-									e.stopPropagation()
-									props.onToggleFavorite()
-								}}
-								disabled={props.favoriteDisabled}
-								aria-label={props.isFavorite ? 'Remove favorite' : 'Add favorite'}
-							/>
-						</Tooltip>
-						<Tooltip title={props.objectKey}>
-							<Typography.Text className={styles.listRowTextEllipsis}>
-								{props.highlightText(props.displayName)}
-							</Typography.Text>
-						</Tooltip>
+						<Button
+							type="text"
+							size="small"
+							icon={props.isFavorite ? <StarFilled className={styles.listRowFavoriteIcon} /> : <StarOutlined />}
+							onClick={(event) => {
+								event.stopPropagation()
+								props.onToggleFavorite()
+							}}
+							disabled={props.favoriteDisabled}
+							aria-label={favoriteLabel}
+							title={favoriteLabel}
+						/>
+						<Typography.Text className={styles.listRowTextEllipsis} title={props.objectKey}>
+							{props.highlightText(props.displayName)}
+						</Typography.Text>
 					</div>
 					{props.isCompact ? (
 						<Typography.Text type="secondary" className={styles.listRowMetaCompact}>
@@ -231,13 +216,7 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 				)}
 
 				<div className={styles.listRowMenuCell}>
-					{renderRowMenu(
-						props.menu,
-						props.buttonMenuOpen,
-						props.onButtonMenuOpenChange,
-						props.getPopupContainer,
-						'Object actions',
-					)}
+					{renderRowMenu(props.menu, props.buttonMenuOpen, props.onButtonMenuOpenChange, 'Object actions')}
 				</div>
 			</div>
 		</div>

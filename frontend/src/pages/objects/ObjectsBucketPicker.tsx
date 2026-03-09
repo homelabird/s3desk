@@ -1,7 +1,7 @@
 import { CheckCircleFilled, DownOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Drawer, Empty, Input, Select, Space, Tag, Typography } from 'antd'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import styles from './objects.module.css'
 
 type BucketOption = {
@@ -12,10 +12,6 @@ type BucketOption = {
 type BucketPickerEntry = BucketOption & {
 	isCurrent: boolean
 	isRecent: boolean
-}
-
-type BucketPickerSelectOption = BucketPickerEntry & {
-	searchText: string
 }
 
 type ObjectsBucketPickerProps = {
@@ -65,26 +61,91 @@ function buildBucketEntries(value: string, options: BucketOption[], recentBucket
 	return [...(currentEntry ? [currentEntry] : []), ...recentEntries, ...allEntries]
 }
 
+function filterBucketEntries(entries: BucketPickerEntry[], query: string): BucketPickerEntry[] {
+	const normalizedQuery = query.trim().toLowerCase()
+	if (!normalizedQuery) return entries
+	return entries.filter((entry) => `${entry.label} ${entry.value}`.toLowerCase().includes(normalizedQuery))
+}
+
+function renderEntryContent(entry: BucketPickerEntry, variant: 'desktop' | 'mobile') {
+	return (
+		<div className={variant === 'desktop' ? styles.bucketPickerOption : styles.bucketPickerRowContent}>
+			<div className={styles.bucketPickerOptionText}>
+				<span className={`${styles.bucketPickerEntryLabel} ${entry.isCurrent ? styles.bucketPickerEntryLabelCurrent : ''}`}>{entry.label}</span>
+				<div className={styles.bucketPickerBadgeRow}>
+					{entry.isCurrent ? <span className={`${styles.bucketPickerBadge} ${styles.bucketPickerBadgeCurrent}`}>Current</span> : null}
+					{entry.isRecent ? <span className={`${styles.bucketPickerBadge} ${styles.bucketPickerBadgeRecent}`}>Recent</span> : null}
+				</div>
+			</div>
+			{entry.isCurrent && variant === 'mobile' ? <CheckCircleFilled className={styles.bucketPickerCurrentIcon} /> : null}
+		</div>
+	)
+}
+
+function renderEntryList(props: {
+	variant: 'desktop' | 'mobile'
+	currentEntry: BucketPickerEntry | null
+	recentEntries: BucketPickerEntry[]
+	allEntries: BucketPickerEntry[]
+	emptyMessage: string
+	onSelect: (value: string) => void
+}) {
+	const renderButton = (entry: BucketPickerEntry, sectionKey: string, current = false) => (
+		<button
+			key={`${sectionKey}-${entry.value}`}
+			type="button"
+			className={`${styles.bucketPickerRow} ${current ? styles.bucketPickerRowCurrent : ''}`}
+			onClick={() => props.onSelect(entry.value)}
+			data-testid={`objects-bucket-picker-option-${normalizeTestIdPart(entry.value)}`}
+		>
+			{renderEntryContent(entry, props.variant)}
+		</button>
+	)
+
+	if (!props.currentEntry && props.recentEntries.length === 0 && props.allEntries.length === 0) {
+		return <div className={styles.bucketPickerEmpty}>{props.emptyMessage}</div>
+	}
+
+	return (
+		<>
+			{props.currentEntry ? (
+				<div className={styles.bucketPickerSection}>
+					<div className={styles.bucketPickerSectionLabel}>Current</div>
+					{renderButton(props.currentEntry, 'current', true)}
+				</div>
+			) : null}
+
+			{props.recentEntries.length > 0 ? (
+				<div className={styles.bucketPickerSection}>
+					<div className={styles.bucketPickerSectionLabel}>Recent</div>
+					<div className={styles.bucketPickerList}>{props.recentEntries.map((entry) => renderButton(entry, 'recent'))}</div>
+				</div>
+			) : null}
+
+			{props.allEntries.length > 0 ? (
+				<div className={styles.bucketPickerSection}>
+					<div className={styles.bucketPickerSectionLabel}>All buckets</div>
+					<div className={styles.bucketPickerList}>{props.allEntries.map((entry) => renderButton(entry, 'all'))}</div>
+				</div>
+			) : null}
+		</>
+	)
+}
+
 export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
+	const [desktopOpen, setDesktopOpen] = useState(false)
+	const [desktopQuery, setDesktopQuery] = useState('')
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [mobileQuery, setMobileQuery] = useState('')
+	const desktopRootRef = useRef<HTMLDivElement>(null)
+	const desktopInputRef = useRef<HTMLInputElement>(null)
 
 	const orderedEntries = useMemo(
 		() => buildBucketEntries(props.value, props.options, props.recentBuckets),
 		[props.options, props.recentBuckets, props.value],
 	)
-	const selectOptions = useMemo<BucketPickerSelectOption[]>(
-		() => orderedEntries.map((entry) => ({ ...entry, searchText: `${entry.label} ${entry.value}`.toLowerCase() })),
-		[orderedEntries],
-	)
-	const normalizedMobileQuery = mobileQuery.trim().toLowerCase()
-	const filteredEntries = useMemo(() => {
-		if (!normalizedMobileQuery) return orderedEntries
-		return orderedEntries.filter((entry) => `${entry.label} ${entry.value}`.toLowerCase().includes(normalizedMobileQuery))
-	}, [normalizedMobileQuery, orderedEntries])
-	const currentEntry = filteredEntries.find((entry) => entry.isCurrent) ?? null
-	const recentEntries = filteredEntries.filter((entry) => entry.isRecent)
-	const allEntries = filteredEntries.filter((entry) => !entry.isCurrent && !entry.isRecent)
+	const filteredDesktopEntries = useMemo(() => filterBucketEntries(orderedEntries, desktopQuery), [desktopQuery, orderedEntries])
+	const filteredMobileEntries = useMemo(() => filterBucketEntries(orderedEntries, mobileQuery), [mobileQuery, orderedEntries])
 	const currentBucketLabel = props.value || props.placeholder
 
 	const notifyOpenChange = useCallback(
@@ -94,11 +155,11 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 		[props],
 	)
 
-	const openMobileDrawer = useCallback(() => {
-		if (props.disabled) return
-		setMobileOpen(true)
-		notifyOpenChange(true)
-	}, [notifyOpenChange, props.disabled])
+	const closeDesktopPopover = useCallback(() => {
+		setDesktopOpen(false)
+		setDesktopQuery('')
+		notifyOpenChange(false)
+	}, [notifyOpenChange])
 
 	const closeMobileDrawer = useCallback(() => {
 		setMobileOpen(false)
@@ -107,58 +168,124 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 	}, [notifyOpenChange])
 
 	const handleSelect = useCallback(
-		(nextValue: string | null) => {
+		(nextValue: string | null, source: 'desktop' | 'mobile') => {
 			props.onChange(nextValue && nextValue.trim() ? nextValue : null)
+			if (source === 'desktop') {
+				closeDesktopPopover()
+				return
+			}
 			closeMobileDrawer()
 		},
-		[closeMobileDrawer, props],
+		[closeDesktopPopover, closeMobileDrawer, props],
 	)
 
-	const renderEntry = (entry: BucketPickerEntry, variant: 'desktop' | 'mobile') => (
-		<div
-			className={variant === 'desktop' ? styles.bucketPickerOption : styles.bucketPickerRowContent}
-			data-testid={`objects-bucket-picker-option-${normalizeTestIdPart(entry.value)}`}
-		>
-			<Space size={8} wrap className={styles.bucketPickerOptionText}>
-				<Typography.Text strong={entry.isCurrent}>{entry.label}</Typography.Text>
-				{entry.isCurrent ? (
-					<Tag color="blue" bordered={false}>
-						Current
-					</Tag>
-				) : null}
-				{entry.isRecent ? (
-					<Tag bordered={false} className={styles.bucketPickerRecentTag}>
-						Recent
-					</Tag>
-				) : null}
-			</Space>
-			{entry.isCurrent && variant === 'mobile' ? <CheckCircleFilled className={styles.bucketPickerCurrentIcon} /> : null}
-		</div>
-	)
+	useEffect(() => {
+		if (!desktopOpen) return
+		desktopInputRef.current?.focus()
+		const handlePointerDown = (event: PointerEvent) => {
+			if (desktopRootRef.current?.contains(event.target as Node)) return
+			closeDesktopPopover()
+		}
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key !== 'Escape') return
+			event.preventDefault()
+			closeDesktopPopover()
+		}
+		document.addEventListener('pointerdown', handlePointerDown)
+		document.addEventListener('keydown', handleKeyDown)
+		return () => {
+			document.removeEventListener('pointerdown', handlePointerDown)
+			document.removeEventListener('keydown', handleKeyDown)
+		}
+	}, [closeDesktopPopover, desktopOpen])
+
+	const openDesktopPopover = useCallback(() => {
+		if (props.disabled) return
+		setDesktopOpen(true)
+		notifyOpenChange(true)
+	}, [notifyOpenChange, props.disabled])
+
+	const openMobileDrawer = useCallback(() => {
+		if (props.disabled) return
+		setMobileOpen(true)
+		notifyOpenChange(true)
+	}, [notifyOpenChange, props.disabled])
+
+	const currentDesktopEntry = filteredDesktopEntries.find((entry) => entry.isCurrent) ?? null
+	const recentDesktopEntries = filteredDesktopEntries.filter((entry) => entry.isRecent)
+	const allDesktopEntries = filteredDesktopEntries.filter((entry) => !entry.isCurrent && !entry.isRecent)
+	const currentMobileEntry = filteredMobileEntries.find((entry) => entry.isCurrent) ?? null
+	const recentMobileEntries = filteredMobileEntries.filter((entry) => entry.isRecent)
+	const allMobileEntries = filteredMobileEntries.filter((entry) => !entry.isCurrent && !entry.isRecent)
+
+	const commitFirstDesktopMatch = useCallback(() => {
+		const nextEntry = filteredDesktopEntries[0] ?? null
+		if (!nextEntry) return
+		handleSelect(nextEntry.value, 'desktop')
+	}, [filteredDesktopEntries, handleSelect])
 
 	if (props.isDesktop) {
 		return (
-			<Select
-				showSearch
-				allowClear
-				value={props.value || undefined}
-				placeholder={props.placeholder}
-				disabled={props.disabled}
-				className={`${styles.bucketPickerDesktopSelect} ${props.className ?? ''}`.trim()}
-				aria-label="Bucket"
-				data-testid="objects-bucket-picker-desktop"
-				options={selectOptions}
-				optionFilterProp="searchText"
-				filterOption={(input, option) => {
-					const searchText = String((option as { searchText?: string } | undefined)?.searchText ?? '').toLowerCase()
-					return searchText.includes(input.trim().toLowerCase())
-				}}
-				onOpenChange={notifyOpenChange}
-				onChange={(nextValue) => props.onChange(typeof nextValue === 'string' && nextValue.trim() ? nextValue : null)}
-				optionRender={(option) => renderEntry(option.data as BucketPickerEntry, 'desktop')}
-				notFoundContent={props.disabled && props.options.length === 0 ? 'Loading buckets…' : 'No matching buckets'}
-				suffixIcon={<DownOutlined />}
-			/>
+			<div ref={desktopRootRef} className={`${styles.bucketPickerDesktop} ${props.className ?? ''}`.trim()}>
+				<button
+					type="button"
+					className={styles.bucketPickerDesktopTrigger}
+					aria-label="Bucket"
+					aria-expanded={desktopOpen}
+					disabled={props.disabled}
+					onClick={() => {
+						if (desktopOpen) {
+							closeDesktopPopover()
+							return
+						}
+						openDesktopPopover()
+					}}
+					data-testid="objects-bucket-picker-desktop"
+				>
+					<span className={props.value ? styles.bucketPickerDesktopValue : styles.bucketPickerDesktopPlaceholder}>{currentBucketLabel}</span>
+					<DownOutlined className={`${styles.bucketPickerDesktopChevron} ${desktopOpen ? styles.bucketPickerDesktopChevronOpen : ''}`} />
+				</button>
+
+				{desktopOpen ? (
+					<div className={styles.bucketPickerDesktopPopover}>
+						<div className={styles.bucketPickerDesktopHeader}>
+							<label className={styles.bucketPickerSearchField}>
+								<SearchOutlined className={styles.bucketPickerSearchIcon} />
+								<input
+									ref={desktopInputRef}
+									type="text"
+									value={desktopQuery}
+									onChange={(event) => setDesktopQuery(event.currentTarget.value)}
+									onKeyDown={(event) => {
+										if (event.key !== 'Enter') return
+										event.preventDefault()
+										commitFirstDesktopMatch()
+									}}
+									placeholder="Search buckets…"
+									aria-label="Search buckets"
+									className={styles.bucketPickerSearchInput}
+								/>
+							</label>
+							{props.value ? (
+								<button type="button" className={styles.bucketPickerInlineAction} onClick={() => handleSelect(null, 'desktop')}>
+									Clear
+								</button>
+							) : null}
+						</div>
+
+						<div className={styles.bucketPickerDesktopBody}>
+							{renderEntryList({
+								variant: 'desktop',
+								currentEntry: currentDesktopEntry,
+								recentEntries: recentDesktopEntries,
+								allEntries: allDesktopEntries,
+								emptyMessage: props.disabled && props.options.length === 0 ? 'Loading buckets…' : 'No matching buckets',
+								onSelect: (value) => handleSelect(value, 'desktop'),
+							})}
+						</div>
+					</div>
+				) : null}
+			</div>
 		)
 	}
 
@@ -181,96 +308,50 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 				<DownOutlined className={styles.bucketPickerTriggerIcon} />
 			</button>
 
-			<Drawer
+			<ObjectsOverlaySheet
 				open={mobileOpen}
 				onClose={closeMobileDrawer}
 				title="Select bucket"
 				placement="bottom"
 				height="78vh"
-				className={styles.bucketPickerDrawer}
-				data-testid="objects-bucket-picker-mobile-drawer"
+				dataTestId="objects-bucket-picker-mobile-drawer"
 				extra={
 					props.value ? (
-						<Button type="text" onClick={() => handleSelect(null)} data-testid="objects-bucket-picker-mobile-clear">
+						<button
+							type="button"
+							className={styles.bucketPickerInlineAction}
+							onClick={() => handleSelect(null, 'mobile')}
+							data-testid="objects-bucket-picker-mobile-clear"
+						>
 							Clear
-						</Button>
+						</button>
 					) : null
 				}
 			>
 				<div className={styles.bucketPickerDrawerBody}>
-					<Input
-						allowClear
-						value={mobileQuery}
-						onChange={(event) => setMobileQuery(event.target.value)}
-						placeholder="Search buckets…"
-						prefix={<SearchOutlined />}
-						aria-label="Search buckets"
-						data-testid="objects-bucket-picker-mobile-search"
-					/>
+					<label className={styles.bucketPickerSearchField}>
+						<SearchOutlined className={styles.bucketPickerSearchIcon} />
+						<input
+							type="text"
+							value={mobileQuery}
+							onChange={(event) => setMobileQuery(event.currentTarget.value)}
+							placeholder="Search buckets…"
+							aria-label="Search buckets"
+							className={styles.bucketPickerSearchInput}
+							data-testid="objects-bucket-picker-mobile-search"
+						/>
+					</label>
 
-					{currentEntry ? (
-						<div className={styles.bucketPickerSection}>
-							<Typography.Text type="secondary" className={styles.bucketPickerSectionLabel}>
-								Current
-							</Typography.Text>
-							<button
-								type="button"
-								className={`${styles.bucketPickerRow} ${styles.bucketPickerRowCurrent}`}
-								onClick={() => handleSelect(currentEntry.value)}
-							>
-								{renderEntry(currentEntry, 'mobile')}
-							</button>
-						</div>
-					) : null}
-
-					{recentEntries.length > 0 ? (
-						<div className={styles.bucketPickerSection}>
-							<Typography.Text type="secondary" className={styles.bucketPickerSectionLabel}>
-								Recent
-							</Typography.Text>
-							<div className={styles.bucketPickerList}>
-								{recentEntries.map((entry) => (
-									<button
-										key={`recent-${entry.value}`}
-										type="button"
-										className={styles.bucketPickerRow}
-										onClick={() => handleSelect(entry.value)}
-									>
-										{renderEntry(entry, 'mobile')}
-									</button>
-								))}
-							</div>
-						</div>
-					) : null}
-
-					<div className={styles.bucketPickerSection}>
-						<Typography.Text type="secondary" className={styles.bucketPickerSectionLabel}>
-							All buckets
-						</Typography.Text>
-						<div className={styles.bucketPickerList}>
-							{allEntries.length > 0 ? (
-								allEntries.map((entry) => (
-									<button
-										key={entry.value}
-										type="button"
-										className={styles.bucketPickerRow}
-										onClick={() => handleSelect(entry.value)}
-									>
-										{renderEntry(entry, 'mobile')}
-									</button>
-								))
-							) : (
-								<div className={styles.bucketPickerEmpty}>
-									<Empty
-										image={Empty.PRESENTED_IMAGE_SIMPLE}
-										description={normalizedMobileQuery ? 'No buckets match this search.' : 'No buckets available.'}
-									/>
-								</div>
-							)}
-						</div>
-					</div>
+					{renderEntryList({
+						variant: 'mobile',
+						currentEntry: currentMobileEntry,
+						recentEntries: recentMobileEntries,
+						allEntries: allMobileEntries,
+						emptyMessage: mobileQuery.trim() ? 'No buckets match this search.' : 'No buckets available.',
+						onSelect: (value) => handleSelect(value, 'mobile'),
+					})}
 				</div>
-			</Drawer>
+			</ObjectsOverlaySheet>
 		</>
 	)
 }
