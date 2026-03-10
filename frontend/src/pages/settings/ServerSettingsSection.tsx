@@ -1,5 +1,5 @@
 import { InfoCircleOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography, message } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
