@@ -508,6 +508,9 @@ func TestOCIAdapterGetGovernanceIncludesTypedControls(t *testing.T) {
 		listRetentionRules: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
 			return ocicli.Response{Body: []byte(`{"data":[{"id":"rule-1","time-rule-locked":true,"duration":{"time-amount":30,"time-unit":"DAYS"}}]}`)}, nil
 		},
+		listPreauthenticatedRequests: func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error) {
+			return ocicli.Response{Body: []byte(`{"data":[]}`)}, nil
+		},
 	}
 	view, err := adapter.GetGovernance(context.Background(), models.ProfileSecrets{}, "demo")
 	if err != nil {

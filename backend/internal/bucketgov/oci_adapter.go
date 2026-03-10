@@ -12,13 +12,13 @@ import (
 )
 
 type ociAdapter struct {
-	getBucket           func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
-	updateBucket        func(context.Context, models.ProfileSecrets, string, string, string) (ocicli.Response, error)
-	listRetentionRules  func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
-	createRetentionRule func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error)
-	updateRetentionRule func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error)
-	deleteRetentionRule func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error)
-	listPreauthenticatedRequests func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
+	getBucket                     func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
+	updateBucket                  func(context.Context, models.ProfileSecrets, string, string, string) (ocicli.Response, error)
+	listRetentionRules            func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
+	createRetentionRule           func(context.Context, models.ProfileSecrets, string, int, string) (ocicli.Response, error)
+	updateRetentionRule           func(context.Context, models.ProfileSecrets, string, string, int, string) (ocicli.Response, error)
+	deleteRetentionRule           func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error)
+	listPreauthenticatedRequests  func(context.Context, models.ProfileSecrets, string) (ocicli.Response, error)
 	createPreauthenticatedRequest func(context.Context, models.ProfileSecrets, string, string, string, string, string, string) (ocicli.Response, error)
 	deletePreauthenticatedRequest func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error)
 }
@@ -64,13 +64,13 @@ type ociPreauthenticatedRequest struct {
 
 func NewOCIAdapter() Adapter {
 	return &ociAdapter{
-		getBucket:           ocicli.GetBucket,
-		updateBucket:        ocicli.UpdateBucket,
-		listRetentionRules:  ocicli.ListRetentionRules,
-		createRetentionRule: ocicli.CreateRetentionRule,
-		updateRetentionRule: ocicli.UpdateRetentionRule,
-		deleteRetentionRule: ocicli.DeleteRetentionRule,
-		listPreauthenticatedRequests: ocicli.ListPreauthenticatedRequests,
+		getBucket:                     ocicli.GetBucket,
+		updateBucket:                  ocicli.UpdateBucket,
+		listRetentionRules:            ocicli.ListRetentionRules,
+		createRetentionRule:           ocicli.CreateRetentionRule,
+		updateRetentionRule:           ocicli.UpdateRetentionRule,
+		deleteRetentionRule:           ocicli.DeleteRetentionRule,
+		listPreauthenticatedRequests:  ocicli.ListPreauthenticatedRequests,
 		createPreauthenticatedRequest: ocicli.CreatePreauthenticatedRequest,
 		deletePreauthenticatedRequest: ocicli.DeletePreauthenticatedRequest,
 	}
@@ -253,8 +253,8 @@ func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSe
 			}
 			if desiredDays < currentDays {
 				return InvalidFieldError("retention.rules", "locked OCI retention rules can only be extended", map[string]any{
-					"section":    "protection",
-					"id":         current.ID,
+					"section":     "protection",
+					"id":          current.ID,
 					"currentDays": currentDays,
 				})
 			}
@@ -342,9 +342,9 @@ func (a *ociAdapter) GetSharing(ctx context.Context, profile models.ProfileSecre
 	}
 	supported := true
 	view := models.BucketSharingView{
-		Provider:                models.ProfileProviderOciObjectStorage,
-		Bucket:                  strings.TrimSpace(bucket),
-		PreauthenticatedSupport: &supported,
+		Provider:                 models.ProfileProviderOciObjectStorage,
+		Bucket:                   strings.TrimSpace(bucket),
+		PreauthenticatedSupport:  &supported,
 		PreauthenticatedRequests: make([]models.BucketPreauthenticatedRequestView, 0, len(requests)),
 	}
 	for _, item := range requests {

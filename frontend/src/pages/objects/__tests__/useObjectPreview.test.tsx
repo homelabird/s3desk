@@ -1,10 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { buildThumbnailCacheKey } from '../../../lib/thumbnailCache'
+import { buildObjectThumbnailRequest } from '../objectPreviewPolicy'
 import { useObjectPreview } from '../useObjectPreview'
 
 const originalCreateObjectURL = URL.createObjectURL
 const originalRevokeObjectURL = URL.revokeObjectURL
+const PERSISTENT_THUMBNAIL_INDEX_KEY = 's3desk-thumbnail-blobs-v1:index'
 
 describe('useObjectPreview', () => {
 	beforeEach(() => {
@@ -16,6 +19,7 @@ describe('useObjectPreview', () => {
 		URL.createObjectURL = originalCreateObjectURL
 		URL.revokeObjectURL = originalRevokeObjectURL
 		Reflect.deleteProperty(window as typeof window & { caches?: CacheStorage }, 'caches')
+		window.localStorage.removeItem(PERSISTENT_THUMBNAIL_INDEX_KEY)
 		vi.restoreAllMocks()
 	})
 
@@ -73,12 +77,22 @@ describe('useObjectPreview', () => {
 	})
 
 	it('uses persistent local cache for video previews before requesting a new thumbnail', async () => {
+		const cacheKey = buildThumbnailCacheKey(
+			buildObjectThumbnailRequest({
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				objectKey: 'clip.mp4',
+				size: 360,
+				etag: 'etag-1',
+			}),
+		)
 		const match = vi.fn().mockResolvedValue(
 			new Response(new Blob(['thumb'], { type: 'image/jpeg' }), {
 				status: 200,
 				headers: { 'content-type': 'image/jpeg' },
 			}),
 		)
+		window.localStorage.setItem(PERSISTENT_THUMBNAIL_INDEX_KEY, JSON.stringify({ [cacheKey]: Date.now() }))
 		;(window as typeof window & { caches?: CacheStorage }).caches = {
 			open: vi.fn().mockResolvedValue({
 				match,

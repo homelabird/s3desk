@@ -45,26 +45,32 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 	const previewURLRef = useRef<string | null>(null)
 	const previewURLOwnedRef = useRef(false)
 
+	const setPreviewAbort = useCallback((abort: (() => void) | null) => {
+		previewAbortRef.current = abort
+	}, [])
+
 	const cleanupPreview = useCallback(() => {
 		previewAbortRef.current?.()
-		previewAbortRef.current = null
-		if (previewURLRef.current && previewURLOwnedRef.current) {
+		setPreviewAbort(null)
+		if (previewURLRef.current && previewURLOwnedRef.current && typeof URL.revokeObjectURL === 'function') {
 			URL.revokeObjectURL(previewURLRef.current)
 		}
 		previewURLRef.current = null
 		previewURLOwnedRef.current = false
-	}, [])
+	}, [setPreviewAbort])
 
 	useEffect(() => {
 		cleanupPreview()
-		setPreview(null)
 	}, [cleanupPreview, args.detailsKey, args.detailsVisible])
 
 	useEffect(() => () => cleanupPreview(), [cleanupPreview])
 
+	const visiblePreview =
+		args.detailsVisible && args.detailsKey && preview?.key === args.detailsKey ? preview : null
+
 	const loadPreview = useCallback(async () => {
 		if (!args.profileId || !args.bucket || !args.detailsMeta) return
-		if (preview?.status === 'loading') return
+		if (visiblePreview?.status === 'loading') return
 
 		const key = args.detailsMeta.key
 		const kind = guessPreviewKind(args.detailsMeta.contentType, key)
@@ -110,16 +116,16 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 				lastModified: args.detailsMeta.lastModified ?? undefined,
 				contentType: args.detailsMeta.contentType ?? undefined,
 			})
-			previewAbortRef.current = handle.abort
+			setPreviewAbort(handle.abort)
 			try {
 				const resp = await handle.promise
-				previewAbortRef.current = null
+				setPreviewAbort(null)
 				previewURLRef.current = resp.url
 				previewURLOwnedRef.current = resp.owned
 				setPreview({ key, status: 'ready', kind: 'video', contentType: resp.contentType ?? contentType, url: resp.url })
 				return
 			} catch (err) {
-				previewAbortRef.current = null
+				setPreviewAbort(null)
 				if (err instanceof RequestAbortedError) {
 					setPreview({ key, status: 'blocked', kind, contentType, error: 'Preview canceled.' })
 					return
@@ -133,7 +139,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		}
 
 		const controller = new AbortController()
-		previewAbortRef.current = () => controller.abort()
+		setPreviewAbort(() => controller.abort())
 		try {
 			const resp = await loadObjectPreviewAsset({
 				api: args.api,
@@ -148,7 +154,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 				presignedDownloadSupported: args.presignedDownloadSupported,
 				signal: controller.signal,
 			})
-			previewAbortRef.current = null
+			setPreviewAbort(null)
 			const effectiveContentType = resp.contentType ?? contentType
 
 			if (kind === 'image') {
@@ -189,7 +195,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 
 			setPreview({ key, status: 'ready', kind, contentType: effectiveContentType, text, truncated })
 		} catch (err) {
-			previewAbortRef.current = null
+			setPreviewAbort(null)
 			if (err instanceof RequestAbortedError || (err instanceof Error && err.name === 'AbortError')) {
 				setPreview({ key, status: 'blocked', kind, contentType, error: 'Preview canceled.' })
 				return
@@ -205,7 +211,8 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		args.profileId,
 		args.thumbnailCache,
 		cleanupPreview,
-		preview?.status,
+		visiblePreview?.status,
+		setPreviewAbort,
 	])
 
 	const cancelPreview = useCallback(() => {
@@ -213,9 +220,9 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 	}, [])
 
 	return {
-		preview,
+		preview: visiblePreview,
 		loadPreview,
 		cancelPreview,
-		canCancelPreview: !!previewAbortRef.current,
+		canCancelPreview: visiblePreview?.status === 'loading',
 	}
 }

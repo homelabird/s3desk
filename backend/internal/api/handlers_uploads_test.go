@@ -56,6 +56,9 @@ func TestSanitizeUploadPath(t *testing.T) {
 func TestCommitUploadQueueFullRollsBackCreatedJob(t *testing.T) {
 	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.66.0", nil
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)

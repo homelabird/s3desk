@@ -76,7 +76,7 @@ func installThumbnailProcessHooks(
 			}
 			return nil, fmt.Errorf("unexpected rclone args: %v", args)
 		},
-		resolveFFmpegPath: func() (string, error) { return "ffmpeg", nil },
+		resolveFFmpegPath:    func() (string, error) { return "ffmpeg", nil },
 		decodeThumbnailVideo: decode,
 	})
 	t.Cleanup(restore)

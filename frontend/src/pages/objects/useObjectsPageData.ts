@@ -72,7 +72,7 @@ export function useObjectsPageData(props: Props) {
 		const nextBucket = typeof state.bucket === 'string' ? state.bucket.trim() : ''
 		if (!nextBucket) return
 		const nextPrefix = typeof state.prefix === 'string' ? state.prefix : ''
-		locationState.navigateToLocation(nextBucket, nextPrefix, { recordHistory: true })
+		navigateToLocation(nextBucket, nextPrefix, { recordHistory: true })
 		navigate(`${routeLocation.pathname}${routeLocation.search}${routeLocation.hash}`, {
 			replace: true,
 			state: null,

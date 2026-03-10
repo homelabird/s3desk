@@ -25,12 +25,13 @@ paths:
       description: |
         Upgrades to a WebSocket and streams `job.*` events.
 
-        If `API_TOKEN` is configured, browsers should pass it via query `?apiToken=...` (WebSocket cannot set custom headers).
+        Browsers should first request a short-lived realtime ticket via `POST /realtime-ticket`
+        and then connect with `?realtimeTicket=...`.
 
         Optional: `afterSeq` can be used to replay buffered (non-log) events after a given sequence number.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
-        - name: apiToken
+        - name: realtimeTicket
           in: query
           required: false
           schema: { type: string }
@@ -60,12 +61,13 @@ paths:
       description: |
         Streams `job.*` events using `text/event-stream` (one JSON event per `data:` line).
 
-        If `API_TOKEN` is configured, browsers should pass it via query `?apiToken=...` (EventSource cannot set custom headers).
+        Browsers should first request a short-lived realtime ticket via `POST /realtime-ticket`
+        and then connect with `?realtimeTicket=...`.
 
         Each message includes an SSE `id:` equal to the server-side event `seq`. When reconnecting, clients may send `Last-Event-ID` (or `afterSeq`) to receive buffered (non-log) events that were missed.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
-        - name: apiToken
+        - name: realtimeTicket
           in: query
           required: false
           schema: { type: string }
@@ -89,6 +91,49 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /realtime-ticket:
+    post:
+      tags: [Events]
+      summary: Issue a short-lived realtime ticket
+      description: |
+        Issues a single-use realtime ticket for browser WebSocket or SSE connections.
+        Clients should call this authenticated endpoint first, then connect to `/ws`
+        or `/events` with `?realtimeTicket=...`.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - name: transport
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ws, sse]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket, transport, expiresAt, expiresInSeconds]
+                properties:
+                  ticket:
+                    type: string
+                  transport:
+                    type: string
+                    enum: [ws, sse]
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  expiresInSeconds:
+                    type: integer
+                    format: int64
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
         "401":
           $ref: "#/components/responses/ErrorResponse"
         "403":
@@ -139,13 +184,6 @@ paths:
             enum: [clear, encrypted]
             default: clear
           description: Encrypts the bundle payload with the current ENCRYPTION_KEY while leaving the outer tar.gz manifest readable.
-        - name: confidentiality
-          in: query
-          schema:
-            type: string
-            enum: [clear, encrypted]
-            default: clear
-          description: Encrypts the payload with the current ENCRYPTION_KEY while keeping manifest metadata readable.
       responses:
         "200":
           description: OK

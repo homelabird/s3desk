@@ -209,8 +209,8 @@ func TestHandleDownloadObjectOciObjectStorageSmoke(t *testing.T) {
 	if string(body) != "hello" {
 		t.Fatalf("body=%q, want hello", string(body))
 	}
-	if got := res.Header.Get("Content-Type"); got != "application/octet-stream" {
-		t.Fatalf("content-type=%q, want application/octet-stream", got)
+	if got := res.Header.Get("Content-Type"); got != "text/plain" {
+		t.Fatalf("content-type=%q, want text/plain", got)
 	}
 }
 
@@ -365,8 +365,52 @@ type ociNativeSmokeState struct {
 func installOciNativeSmokeHooks(t *testing.T) {
 	t.Helper()
 	state := &ociNativeSmokeState{folders: map[string]struct{}{}}
+	fakeRclonePath := writeFakeRclone(t, `
+cmd=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --config)
+      shift 2
+      continue
+      ;;
+    --*)
+      shift
+      continue
+      ;;
+    *)
+      cmd="$1"
+      shift
+      break
+      ;;
+  esac
+done
+case "$cmd" in
+  lsjson)
+    target=""
+    for last do
+      target="$last"
+    done
+    if [ "$target" = "remote:" ]; then
+      printf '[{"Name":"oci-native-bucket","Path":"oci-native-bucket","IsDir":true}]'
+      exit 0
+    fi
+    ;;
+  copyto)
+    exit 0
+    ;;
+  cat)
+    printf 'benchmark-bytes'
+    exit 0
+    ;;
+  deletefile)
+    exit 0
+    ;;
+esac
+echo "unexpected fake rclone invocation: $cmd $*" >&2
+exit 1
+`)
 	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
-		return "rclone", "rclone v1.66.0", nil
+		return fakeRclonePath, "rclone v1.66.0", nil
 	})
 	installAPIStartRcloneHook(t, func(secrets models.ProfileSecrets, args []string) (string, string, error) {
 		if err := validateOciNativeSmokeSecrets(secrets); err != nil {

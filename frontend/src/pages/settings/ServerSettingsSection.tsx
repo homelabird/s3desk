@@ -1,6 +1,6 @@
 import { InfoCircleOutlined } from '@ant-design/icons'
 import { Alert, Button, Checkbox, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography, message } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
 import type { ServerBackupConfidentialityMode } from '../../api/client'
@@ -34,6 +34,7 @@ type ServerRestoreValidationView = {
 
 export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 	const restoreInputRef = useRef<HTMLInputElement | null>(null)
+	const isMountedRef = useRef(true)
 	const [backupLoading, setBackupLoading] = useState(false)
 	const [restoreLoading, setRestoreLoading] = useState(false)
 	const [migrationError, setMigrationError] = useState<string | null>(null)
@@ -72,23 +73,34 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		</Space>
 	)
 
-	const refreshStagedRestores = async () => {
+	useEffect(() => {
+		return () => {
+			isMountedRef.current = false
+		}
+	}, [])
+
+	const refreshStagedRestores = useCallback(async () => {
+		if (!isMountedRef.current) return
 		setStagedRestoresLoading(true)
 		setStagedRestoresError(null)
 		try {
 			const result = await props.api.listServerRestores()
+			if (!isMountedRef.current) return
 			setStagedRestores(result.items ?? [])
 		} catch (err) {
+			if (!isMountedRef.current) return
 			setStagedRestoresError(formatErr(err))
 		} finally {
-			setStagedRestoresLoading(false)
+			if (isMountedRef.current) {
+				setStagedRestoresLoading(false)
+			}
 		}
-	}
+	}, [props.api])
 
 	useEffect(() => {
 		if (!props.meta) return
 		void refreshStagedRestores()
-	}, [props.meta, props.api])
+	}, [props.meta, refreshStagedRestores])
 
 	useEffect(() => {
 		if (!backupEncryptionAvailable && backupConfidentiality !== 'clear') {
@@ -102,13 +114,17 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		try {
 			const { promise } = props.api.downloadServerBackup(scope, backupConfidentiality)
 			const result = await promise
+			if (!isMountedRef.current) return
 			const filename = filenameFromContentDisposition(result.contentDisposition)
 				?? buildBackupFilenameFallback(scope, backupConfidentiality)
 			saveBlob(result.blob, filename)
 		} catch (err) {
+			if (!isMountedRef.current) return
 			setMigrationError(formatErr(err))
 		} finally {
-			setBackupLoading(false)
+			if (isMountedRef.current) {
+				setBackupLoading(false)
+			}
 		}
 	}
 
@@ -144,12 +160,16 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		setRestoreResult(null)
 		try {
 			const result = await props.api.restoreServerBackup(file)
+			if (!isMountedRef.current) return
 			setRestoreResult(result)
 			void refreshStagedRestores()
 		} catch (err) {
+			if (!isMountedRef.current) return
 			setMigrationError(formatErr(err))
 		} finally {
-			setRestoreLoading(false)
+			if (isMountedRef.current) {
+				setRestoreLoading(false)
+			}
 		}
 	}
 
@@ -158,20 +178,25 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		setStagedRestoresError(null)
 		try {
 			await props.api.deleteServerRestore(restoreId)
+			if (!isMountedRef.current) return
 			if (restoreResult?.stagingDir.endsWith(`/${restoreId}`)) {
 				setRestoreResult(null)
 			}
 			void refreshStagedRestores()
 		} catch (err) {
+			if (!isMountedRef.current) return
 			setStagedRestoresError(formatErr(err))
 		} finally {
-			setDeleteRestoreId(null)
+			if (isMountedRef.current) {
+				setDeleteRestoreId(null)
+			}
 		}
 	}
 
 	const handleDeleteStaleRestores = async () => {
 		const staleIds = stagedRestores.filter((item) => isRestoreStale(item.stagedAt)).map((item) => item.id)
 		if (staleIds.length === 0) {
+			if (!isMountedRef.current) return
 			message.info('No staged restores are older than 7 days.')
 			return
 		}
@@ -179,12 +204,17 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		setStagedRestoresError(null)
 		try {
 			await Promise.all(staleIds.map((restoreId) => props.api.deleteServerRestore(restoreId)))
+			if (!isMountedRef.current) return
 			await refreshStagedRestores()
+			if (!isMountedRef.current) return
 			message.success(`Deleted ${staleIds.length} stale staged restore(s).`)
 		} catch (err) {
+			if (!isMountedRef.current) return
 			setStagedRestoresError(formatErr(err))
 		} finally {
-			setCleanupRestoresLoading(false)
+			if (isMountedRef.current) {
+				setCleanupRestoresLoading(false)
+			}
 		}
 	}
 

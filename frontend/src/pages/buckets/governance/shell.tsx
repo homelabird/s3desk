@@ -55,6 +55,7 @@ export function BucketGovernanceDialogShell(props: {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function extractWarningList(view?: WarningCarrier | null): string[] {
   return Array.isArray(view?.warnings)
     ? view.warnings.filter(
@@ -64,6 +65,7 @@ export function extractWarningList(view?: WarningCarrier | null): string[] {
     : [];
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function renderWarningStack(warnings: string[]) {
   if (warnings.length === 0) return null;
   return (

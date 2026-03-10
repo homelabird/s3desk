@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Alert, Button, Input, Tag, Typography, message } from "antd";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type {
   BucketGovernanceView,
@@ -169,28 +169,25 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
     onError: (err) => message.error(formatErr(err)),
   });
 
-  const headerTags = useMemo(() => {
-    const items: string[] = [];
-    items.push(
-      `Visibility: ${props.governance.publicExposure?.visibility ?? visibility}`,
-    );
-    items.push(
-      `Versioning: ${props.governance.versioning?.status ?? versioningStatus}`,
-    );
-    items.push(
-      retentionRuleCount > 0
-        ? `Retention rules: ${retentionRuleCount}`
-        : "Retention rules: 0",
-    );
-    items.push(
-      `PARs: ${
-        Array.isArray(sharing?.preauthenticatedRequests)
-          ? sharing.preauthenticatedRequests.length
-          : 0
-      }`,
-    );
-    return items;
-  }, [props.governance, retentionRuleCount, sharing?.preauthenticatedRequests, versioningStatus, visibility]);
+  const headerTags: string[] = [];
+  headerTags.push(
+    `Visibility: ${props.governance.publicExposure?.visibility ?? visibility}`,
+  );
+  headerTags.push(
+    `Versioning: ${props.governance.versioning?.status ?? versioningStatus}`,
+  );
+  headerTags.push(
+    retentionRuleCount > 0
+      ? `Retention rules: ${retentionRuleCount}`
+      : "Retention rules: 0",
+  );
+  headerTags.push(
+    `PARs: ${
+      Array.isArray(sharing?.preauthenticatedRequests)
+        ? sharing.preauthenticatedRequests.length
+        : 0
+    }`,
+  );
 
   return (
     <BucketGovernanceDialogShell

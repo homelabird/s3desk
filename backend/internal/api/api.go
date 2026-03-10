@@ -33,17 +33,17 @@ func New(dep Dependencies) http.Handler {
 	r.Use(middleware.RequestID)
 
 	api := &server{
-		cfg:         dep.Config,
-		store:       dep.Store,
-		jobs:        dep.Jobs,
-		hub:         dep.Hub,
-		metrics:     dep.Metrics,
-		serverAddr:  dep.ServerAddr,
-		proxySecret: resolveProxySecret(dep.Config.APIToken),
+		cfg:             dep.Config,
+		store:           dep.Store,
+		jobs:            dep.Jobs,
+		hub:             dep.Hub,
+		metrics:         dep.Metrics,
+		serverAddr:      dep.ServerAddr,
+		proxySecret:     resolveProxySecret(dep.Config.APIToken),
 		realtimeTickets: newRealtimeTicketStore(30 * time.Second),
-		authLimit:   newAuthFailureLimiter(10, time.Minute, time.Minute),
-		uploadLimit: newRequestLimiter(dep.Config.UploadMaxConcurrentRequests),
-		bucketGov:   bucketgov.NewService(bucketgov.NewDefaultRegistry()),
+		authLimit:       newAuthFailureLimiter(10, time.Minute, time.Minute),
+		uploadLimit:     newRequestLimiter(dep.Config.UploadMaxConcurrentRequests),
+		bucketGov:       bucketgov.NewService(bucketgov.NewDefaultRegistry()),
 	}
 
 	r.Use(api.requestLogger)
@@ -56,10 +56,10 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.Use(api.cors)
 	apiRouter.Use(api.requireAPIToken)
 
-		apiRouter.Get("/ws", api.handleWS)
-		apiRouter.Get("/events", api.handleEventsSSE)
-		apiRouter.Post("/realtime-ticket", api.handleCreateRealtimeTicket)
-		apiRouter.Get("/meta", api.handleGetMeta)
+	apiRouter.Get("/ws", api.handleWS)
+	apiRouter.Get("/events", api.handleEventsSSE)
+	apiRouter.Post("/realtime-ticket", api.handleCreateRealtimeTicket)
+	apiRouter.Get("/meta", api.handleGetMeta)
 	apiRouter.Get("/server/backup", api.handleGetServerBackup)
 	apiRouter.Post("/server/restore", api.handleRestoreServerBackup)
 	apiRouter.Get("/server/restores", api.handleListServerRestores)

@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -13,11 +12,37 @@ import (
 
 func TestHandleTestProfileReturnsSuccessDetails(t *testing.T) {
 	lockTestEnv(t)
-	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
-		if len(args) >= 2 && args[0] == "lsjson" && args[len(args)-1] == "remote:" {
-			return `[{"Name":"bucket-a","IsDir":true}]`, "", nil
-		}
-		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	fakeRclonePath := writeFakeRclone(t, `
+cmd=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --config)
+      shift 2
+      continue
+      ;;
+    --*)
+      shift
+      continue
+      ;;
+    *)
+      cmd="$1"
+      shift
+      break
+      ;;
+  esac
+done
+for last do
+  target="$last"
+done
+if [ "$cmd" = "lsjson" ] && [ "$target" = "remote:" ]; then
+  printf '[{"Name":"bucket-a","IsDir":true}]'
+  exit 0
+fi
+echo "unexpected rclone args: $cmd $*" >&2
+exit 1
+`)
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return fakeRclonePath, "rclone v1.66.0", nil
 	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
@@ -50,11 +75,34 @@ func TestHandleTestProfileReturnsSuccessDetails(t *testing.T) {
 
 func TestHandleTestProfileReturnsNormalizedFailureDetails(t *testing.T) {
 	lockTestEnv(t)
-	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
-		if len(args) >= 1 && args[0] == "lsjson" {
-			return "", "AccessDenied", errors.New("exit status 9")
-		}
-		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	fakeRclonePath := writeFakeRclone(t, `
+cmd=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --config)
+      shift 2
+      continue
+      ;;
+    --*)
+      shift
+      continue
+      ;;
+    *)
+      cmd="$1"
+      shift
+      break
+      ;;
+  esac
+done
+if [ "$cmd" = "lsjson" ]; then
+  echo "AccessDenied" >&2
+  exit 9
+fi
+echo "unexpected rclone args: $cmd $*" >&2
+exit 1
+`)
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return fakeRclonePath, "rclone v1.66.0", nil
 	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
@@ -91,21 +139,48 @@ func TestHandleTestProfileReturnsNormalizedFailureDetails(t *testing.T) {
 
 func TestHandleBenchmarkProfileReturnsSuccessDetails(t *testing.T) {
 	lockTestEnv(t)
-	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
-		if len(args) == 0 {
-			return "", "", errors.New("unexpected rclone args")
-		}
-		switch args[0] {
-		case "lsjson":
-			if args[len(args)-1] == "remote:" {
-				return `[{"Name":"bucket-a","IsDir":true}]`, "", nil
-			}
-		case "cat":
-			return "benchmark-bytes", "", nil
-		case "copyto", "deletefile":
-			return "", "", nil
-		}
-		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	fakeRclonePath := writeFakeRclone(t, `
+cmd=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --config)
+      shift 2
+      continue
+      ;;
+    --*)
+      shift
+      continue
+      ;;
+    *)
+      cmd="$1"
+      shift
+      break
+      ;;
+  esac
+done
+for last do
+  target="$last"
+done
+case "$cmd" in
+  lsjson)
+    if [ "$target" = "remote:" ]; then
+      printf '[{"Name":"bucket-a","IsDir":true}]'
+      exit 0
+    fi
+    ;;
+  cat)
+    printf 'benchmark-bytes'
+    exit 0
+    ;;
+  copyto|deletefile)
+    exit 0
+    ;;
+esac
+echo "unexpected rclone args: $cmd $*" >&2
+exit 1
+`)
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return fakeRclonePath, "rclone v1.66.0", nil
 	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
@@ -138,11 +213,34 @@ func TestHandleBenchmarkProfileReturnsSuccessDetails(t *testing.T) {
 
 func TestHandleBenchmarkProfileReturnsNormalizedFailureDetails(t *testing.T) {
 	lockTestEnv(t)
-	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
-		if len(args) >= 1 && args[0] == "lsjson" {
-			return "", "AccessDenied", errors.New("exit status 9")
-		}
-		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	fakeRclonePath := writeFakeRclone(t, `
+cmd=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --config)
+      shift 2
+      continue
+      ;;
+    --*)
+      shift
+      continue
+      ;;
+    *)
+      cmd="$1"
+      shift
+      break
+      ;;
+  esac
+done
+if [ "$cmd" = "lsjson" ]; then
+  echo "AccessDenied" >&2
+  exit 9
+fi
+echo "unexpected rclone args: $cmd $*" >&2
+exit 1
+`)
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return fakeRclonePath, "rclone v1.66.0", nil
 	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)

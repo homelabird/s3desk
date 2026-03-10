@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { APIClient } from '../../../api/client'
 import { useObjectsPrefetch } from '../useObjectsPrefetch'
 
+const originalRequestIdleCallback = window.requestIdleCallback
+
 function buildArgs(overrides: Partial<Parameters<typeof useObjectsPrefetch>[0]> = {}): Parameters<typeof useObjectsPrefetch>[0] {
 	const queryClient = {
 		getQueryState: vi.fn(),
@@ -24,7 +26,7 @@ function buildArgs(overrides: Partial<Parameters<typeof useObjectsPrefetch>[0]> 
 		api,
 		apiToken: 'token',
 		profileId: 'profile-1',
-		profileProvider: 's3_compatible',
+		profileProvider: 'aws_s3',
 		objectsCostMode: 'balanced',
 		queryClient,
 		bucket: 'bucket-a',
@@ -43,10 +45,16 @@ function buildArgs(overrides: Partial<Parameters<typeof useObjectsPrefetch>[0]> 
 describe('useObjectsPrefetch', () => {
 	beforeEach(() => {
 		vi.useFakeTimers()
+		Reflect.deleteProperty(window as typeof window & { requestIdleCallback?: typeof window.requestIdleCallback }, 'requestIdleCallback')
 	})
 
 	afterEach(() => {
 		vi.useRealTimers()
+		if (originalRequestIdleCallback) {
+			window.requestIdleCallback = originalRequestIdleCallback
+			return
+		}
+		Reflect.deleteProperty(window as typeof window & { requestIdleCallback?: typeof window.requestIdleCallback }, 'requestIdleCallback')
 	})
 
 	it('skips initial background bucket prefetch for OCI native profiles', async () => {

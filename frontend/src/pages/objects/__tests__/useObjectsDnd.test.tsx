@@ -77,6 +77,7 @@ function buildDropEvent(payload: unknown) {
 	})()
 	return {
 		preventDefault: vi.fn(),
+		stopPropagation: vi.fn(),
 		currentTarget,
 		relatedTarget: null,
 		dataTransfer,

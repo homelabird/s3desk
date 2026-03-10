@@ -145,7 +145,7 @@ func (s *server) handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isTransferJobType(req.Type) {
-		if _, ok := jobs.DetectRclone(); !ok {
+		if _, _, err := jobs.EnsureRcloneCompatible(r.Context()); err != nil {
 			writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required for this job type (install it or set RCLONE_PATH)", nil)
 			return
 		}
@@ -408,7 +408,7 @@ func (s *server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isTransferJobType(job.Type) {
-		if _, ok := jobs.DetectRclone(); !ok {
+		if _, _, err := jobs.EnsureRcloneCompatible(r.Context()); err != nil {
 			writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required for this job type (install it or set RCLONE_PATH)", nil)
 			return
 		}

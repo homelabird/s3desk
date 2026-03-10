@@ -15,14 +15,15 @@ export interface paths {
          * WebSocket event stream
          * @description Upgrades to a WebSocket and streams `job.*` events.
          *
-         *     If `API_TOKEN` is configured, browsers should pass it via query `?apiToken=...` (WebSocket cannot set custom headers).
+         *     Browsers should first request a short-lived realtime ticket via `POST /realtime-ticket`
+         *     and then connect with `?realtimeTicket=...`.
          *
          *     Optional: `afterSeq` can be used to replay buffered (non-log) events after a given sequence number.
          */
         get: {
             parameters: {
                 query?: {
-                    apiToken?: string;
+                    realtimeTicket?: string;
                     afterSeq?: number;
                     /** @description Whether to include `job.log` events in the stream. */
                     includeLogs?: boolean;
@@ -67,14 +68,15 @@ export interface paths {
          * Server-sent events (SSE) stream
          * @description Streams `job.*` events using `text/event-stream` (one JSON event per `data:` line).
          *
-         *     If `API_TOKEN` is configured, browsers should pass it via query `?apiToken=...` (EventSource cannot set custom headers).
+         *     Browsers should first request a short-lived realtime ticket via `POST /realtime-ticket`
+         *     and then connect with `?realtimeTicket=...`.
          *
          *     Each message includes an SSE `id:` equal to the server-side event `seq`. When reconnecting, clients may send `Last-Event-ID` (or `afterSeq`) to receive buffered (non-log) events that were missed.
          */
         get: {
             parameters: {
                 query?: {
-                    apiToken?: string;
+                    realtimeTicket?: string;
                     afterSeq?: number;
                     /** @description Whether to include `job.log` events in the stream. */
                     includeLogs?: boolean;
@@ -104,6 +106,63 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/realtime-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a short-lived realtime ticket
+         * @description Issues a single-use realtime ticket for browser WebSocket or SSE connections.
+         *     Clients should call this authenticated endpoint first, then connect to `/ws`
+         *     or `/events` with `?realtimeTicket=...`.
+         */
+        post: {
+            parameters: {
+                query: {
+                    transport: "ws" | "sse";
+                };
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticket: string;
+                            /** @enum {string} */
+                            transport: "ws" | "sse";
+                            /** Format: date-time */
+                            expiresAt: string;
+                            /** Format: int64 */
+                            expiresInSeconds: number;
+                        };
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -172,7 +231,7 @@ export interface paths {
                 query?: {
                     /** @description Selects whether the bundle contains the full local server state or only cache and metadata. */
                     scope?: "full" | "cache_metadata";
-                    /** @description Encrypts the payload with the current ENCRYPTION_KEY while keeping manifest metadata readable. */
+                    /** @description Encrypts the bundle payload with the current ENCRYPTION_KEY while leaving the outer tar.gz manifest readable. */
                     confidentiality?: "clear" | "encrypted";
                 };
                 header?: {

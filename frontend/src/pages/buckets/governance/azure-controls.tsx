@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Alert, Button, Input, Typography, message } from "antd";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type {
   BucketAccessPutRequest,
@@ -168,43 +168,33 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
     onError: (err) => message.error(formatErr(err)),
   });
 
-  const headerTags = useMemo(() => {
-    const items: string[] = [];
-    items.push(
-      `Exposure: ${
-        props.governance.publicExposure?.visibility ??
-        props.governance.publicExposure?.mode ??
-        publicMode
-      }`,
+  const headerTags: string[] = [];
+  headerTags.push(
+    `Exposure: ${
+      props.governance.publicExposure?.visibility ??
+      props.governance.publicExposure?.mode ??
+      publicMode
+    }`,
+  );
+  headerTags.push(
+    `Policies: ${props.governance.access?.storedAccessPolicies?.length ?? 0}`,
+  );
+  headerTags.push(
+    `Versioning: ${props.governance.versioning?.status ?? versioningStatus}`,
+  );
+  headerTags.push(
+    `Soft delete: ${
+      props.governance.protection?.softDelete?.enabled ? "on" : "off"
+    }`,
+  );
+  if (immutability?.enabled) {
+    headerTags.push(
+      `Immutability: ${normalizeAzureImmutabilityMode(immutability.mode)}`,
     );
-    items.push(
-      `Policies: ${props.governance.access?.storedAccessPolicies?.length ?? 0}`,
-    );
-    items.push(
-      `Versioning: ${props.governance.versioning?.status ?? versioningStatus}`,
-    );
-    items.push(
-      `Soft delete: ${
-        props.governance.protection?.softDelete?.enabled ? "on" : "off"
-      }`,
-    );
-    if (immutability?.enabled) {
-      items.push(
-        `Immutability: ${normalizeAzureImmutabilityMode(immutability.mode)}`,
-      );
-    }
-    if (immutability?.legalHold) {
-      items.push("Legal hold");
-    }
-    return items;
-  }, [
-    props.governance,
-    publicMode,
-    versioningStatus,
-    immutability?.enabled,
-    immutability?.legalHold,
-    immutability?.mode,
-  ]);
+  }
+  if (immutability?.legalHold) {
+    headerTags.push("Legal hold");
+  }
 
   return (
     <BucketGovernanceDialogShell

@@ -11,16 +11,17 @@ export function useLocalStorageState<T>(
 ): [T, (next: T | ((prev: T) => T)) => void] {
 	const stableDefaultSerialized = useMemo(() => JSON.stringify(defaultValue), [defaultValue])
 	const stableDefaultValue = useMemo(() => JSON.parse(stableDefaultSerialized) as T, [stableDefaultSerialized])
+	const sanitizeValue = options.sanitize
 	const sanitize = useCallback(
 		(value: T): T => {
-			if (!options.sanitize) return value
+			if (!sanitizeValue) return value
 			try {
-				return options.sanitize(value)
+				return sanitizeValue(value)
 			} catch {
 				return stableDefaultValue
 			}
 		},
-		[options.sanitize, stableDefaultValue],
+		[sanitizeValue, stableDefaultValue],
 	)
 
 	const parse = useCallback(

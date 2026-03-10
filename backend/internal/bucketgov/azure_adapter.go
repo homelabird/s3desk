@@ -13,29 +13,29 @@ import (
 )
 
 type azureAdapter struct {
-	getPolicy              func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error)
-	putPolicy              func(context.Context, models.ProfileSecrets, string, []byte) (azureacl.Response, error)
-	getServiceProperties   func(context.Context, models.ProfileSecrets) (azureacl.Response, error)
-	putServiceProperties   func(context.Context, models.ProfileSecrets, []byte) (azureacl.Response, error)
-	getContainerProperties func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error)
-	getImmutabilityPolicy  func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error)
-	putImmutabilityPolicy  func(context.Context, models.ProfileSecrets, string, azurearmimmutability.PutPolicyRequest) (azurearmimmutability.Response, error)
+	getPolicy                func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error)
+	putPolicy                func(context.Context, models.ProfileSecrets, string, []byte) (azureacl.Response, error)
+	getServiceProperties     func(context.Context, models.ProfileSecrets) (azureacl.Response, error)
+	putServiceProperties     func(context.Context, models.ProfileSecrets, []byte) (azureacl.Response, error)
+	getContainerProperties   func(context.Context, models.ProfileSecrets, string) (azureacl.Response, error)
+	getImmutabilityPolicy    func(context.Context, models.ProfileSecrets, string) (azurearmimmutability.Response, error)
+	putImmutabilityPolicy    func(context.Context, models.ProfileSecrets, string, azurearmimmutability.PutPolicyRequest) (azurearmimmutability.Response, error)
 	deleteImmutabilityPolicy func(context.Context, models.ProfileSecrets, string, string) (azurearmimmutability.Response, error)
-	lockImmutabilityPolicy func(context.Context, models.ProfileSecrets, string, string) (azurearmimmutability.Response, error)
+	lockImmutabilityPolicy   func(context.Context, models.ProfileSecrets, string, string) (azurearmimmutability.Response, error)
 	extendImmutabilityPolicy func(context.Context, models.ProfileSecrets, string, azurearmimmutability.ExtendPolicyRequest) (azurearmimmutability.Response, error)
 }
 
 func NewAzureAdapter() Adapter {
 	return &azureAdapter{
-		getPolicy:              azureacl.GetContainerPolicy,
-		putPolicy:              azureacl.PutContainerPolicy,
-		getServiceProperties:   azureacl.GetBlobServiceProperties,
-		putServiceProperties:   azureacl.PutBlobServiceProperties,
-		getContainerProperties: azureacl.GetContainerProperties,
-		getImmutabilityPolicy:  azurearmimmutability.GetPolicy,
-		putImmutabilityPolicy:  azurearmimmutability.PutPolicy,
+		getPolicy:                azureacl.GetContainerPolicy,
+		putPolicy:                azureacl.PutContainerPolicy,
+		getServiceProperties:     azureacl.GetBlobServiceProperties,
+		putServiceProperties:     azureacl.PutBlobServiceProperties,
+		getContainerProperties:   azureacl.GetContainerProperties,
+		getImmutabilityPolicy:    azurearmimmutability.GetPolicy,
+		putImmutabilityPolicy:    azurearmimmutability.PutPolicy,
 		deleteImmutabilityPolicy: azurearmimmutability.DeletePolicy,
-		lockImmutabilityPolicy: azurearmimmutability.LockPolicy,
+		lockImmutabilityPolicy:   azurearmimmutability.LockPolicy,
 		extendImmutabilityPolicy: azurearmimmutability.ExtendPolicy,
 	}
 }
@@ -205,7 +205,7 @@ func (a *azureAdapter) PutProtection(ctx context.Context, profile models.Profile
 	}
 	if !azurearmimmutability.HasConfig(profile) {
 		return InvalidFieldError("immutability", "Azure immutability editing requires Azure ARM credentials on the profile", map[string]any{
-			"section": "protection",
+			"section":  "protection",
 			"provider": models.ProfileProviderAzureBlob,
 		})
 	}
@@ -439,7 +439,7 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 		}
 		if normalizeAzureImmutabilityState(current.Properties.State) == "locked" {
 			return InvalidFieldError("immutability.enabled", "locked Azure immutability policies cannot be disabled", map[string]any{
-				"section": "protection",
+				"section":  "protection",
 				"provider": models.ProfileProviderAzureBlob,
 			})
 		}
@@ -458,7 +458,7 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 
 	if current == nil {
 		policy, err := a.putAzureImmutability(ctx, profile, bucket, azurearmimmutability.PutPolicyRequest{
-			Days:                        *req.Days,
+			Days:                          *req.Days,
 			AllowProtectedAppendWrites:    azureBoolPtrIfTrue(req.AllowProtectedAppendWrites),
 			AllowProtectedAppendWritesAll: azureBoolPtrIfTrue(req.AllowProtectedAppendWritesAll),
 		}, "create Azure immutability policy", "bucket_protection_error")
@@ -480,7 +480,7 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 		}
 		if *req.Days < current.Properties.ImmutabilityPeriodSinceCreationInDays {
 			return InvalidFieldError("immutability.days", "locked Azure immutability policies can only be extended", map[string]any{
-				"section": "protection",
+				"section":     "protection",
 				"currentDays": current.Properties.ImmutabilityPeriodSinceCreationInDays,
 			})
 		}
@@ -508,8 +508,8 @@ func (a *azureAdapter) putAzureProtectionImmutability(ctx context.Context, profi
 		ifMatch = strings.TrimSpace(current.ETag)
 	}
 	policy, err := a.putAzureImmutability(ctx, profile, bucket, azurearmimmutability.PutPolicyRequest{
-		Days:                        *req.Days,
-		IfMatch:                     ifMatch,
+		Days:                          *req.Days,
+		IfMatch:                       ifMatch,
 		AllowProtectedAppendWrites:    azureBoolPtr(req.AllowProtectedAppendWrites),
 		AllowProtectedAppendWritesAll: azureBoolPtr(req.AllowProtectedAppendWritesAll),
 	}, "update Azure immutability policy", "bucket_protection_error")

@@ -83,6 +83,20 @@ Use this order when running a fresh validation pass:
    - [PROVIDERS.md](PROVIDERS.md)
    - [BUCKET_GOVERNANCE_REMAINING_WORK.md](BUCKET_GOVERNANCE_REMAINING_WORK.md)
 
+## Release Candidate Prep
+
+Use this shorter checklist before assigning a final release tag:
+
+1. Record the exact commit SHA under validation.
+2. Confirm the running instance matches that SHA.
+3. Prepare one disposable test resource per affected provider.
+4. Run only the minimum provider pass for each affected provider.
+5. Save one evidence item per provider:
+   - provider-native confirmation on success
+   - API failure body on error
+6. Update [CHANGELOG.md](../CHANGELOG.md) if the pass exposes a still-relevant limitation.
+7. Do not cut the final release tag until the evidence set is attached to the release decision path.
+
 Recommended evidence directory layout:
 
 ```text

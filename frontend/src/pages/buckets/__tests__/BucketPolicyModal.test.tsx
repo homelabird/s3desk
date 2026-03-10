@@ -357,7 +357,7 @@ describe("BucketPolicyModal", () => {
     expect(onOpenControls).toHaveBeenCalledWith("demo-bucket");
 
     fireEvent.click(
-      await screen.findByRole("switch", { name: "Public read access" }),
+      await screen.findByRole("checkbox", { name: "Public read access" }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 

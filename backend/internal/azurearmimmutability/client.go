@@ -43,9 +43,9 @@ type PolicyProperties struct {
 }
 
 type PutPolicyRequest struct {
-	Days                      int
-	IfMatch                   string
-	AllowProtectedAppendWrites *bool
+	Days                          int
+	IfMatch                       string
+	AllowProtectedAppendWrites    *bool
 	AllowProtectedAppendWritesAll *bool
 }
 

@@ -20,7 +20,6 @@ type apiProcessTestHooks struct {
 
 var (
 	apiProcessHooksMu    sync.RWMutex
-	apiProcessInstallMu  sync.Mutex
 	apiProcessHooksState apiProcessTestHooks
 )
 
@@ -31,7 +30,6 @@ func currentAPIProcessTestHooks() apiProcessTestHooks {
 }
 
 func setAPIProcessTestHooks(hooks apiProcessTestHooks) func() {
-	apiProcessInstallMu.Lock()
 	apiProcessHooksMu.Lock()
 	prev := apiProcessHooksState
 	apiProcessHooksState = hooks
@@ -41,6 +39,5 @@ func setAPIProcessTestHooks(hooks apiProcessTestHooks) func() {
 		apiProcessHooksMu.Lock()
 		apiProcessHooksState = prev
 		apiProcessHooksMu.Unlock()
-		apiProcessInstallMu.Unlock()
 	}
 }

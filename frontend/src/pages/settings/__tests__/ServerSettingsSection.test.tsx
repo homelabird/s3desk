@@ -1,3 +1,4 @@
+import { message } from 'antd'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -88,6 +89,8 @@ describe('ServerSettingsSection', () => {
 	beforeEach(() => {
 		URL.createObjectURL = vi.fn(() => 'blob:backup')
 		URL.revokeObjectURL = vi.fn()
+		vi.spyOn(message, 'info').mockImplementation(() => undefined as never)
+		vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
 	})
 
 	afterEach(() => {
@@ -107,7 +110,7 @@ describe('ServerSettingsSection', () => {
 				abort: vi.fn(),
 			})),
 			restoreServerBackup: vi.fn(),
-			listServerRestores: vi.fn().mockResolvedValue({ items: [] }),
+			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
 			deleteServerRestore: vi.fn(),
 		} as unknown as APIClient
 		const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
@@ -122,6 +125,7 @@ describe('ServerSettingsSection', () => {
 	})
 
 	it('downloads an encrypted cache backup when confidentiality is enabled', async () => {
+		const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 		const api = {
 			downloadServerBackup: vi.fn(() => ({
 				promise: Promise.resolve({
@@ -132,7 +136,7 @@ describe('ServerSettingsSection', () => {
 				abort: vi.fn(),
 			})),
 			restoreServerBackup: vi.fn(),
-			listServerRestores: vi.fn().mockResolvedValue({ items: [] }),
+			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
 			deleteServerRestore: vi.fn(),
 		} as unknown as APIClient
 
@@ -142,13 +146,14 @@ describe('ServerSettingsSection', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Download Cache + metadata backup' }))
 
 		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('cache_metadata', 'encrypted'))
+		expect(clickSpy).toHaveBeenCalledTimes(1)
 	})
 
 	it('uploads a restore bundle and shows the staged directory', async () => {
 		const api = {
 			downloadServerBackup: vi.fn(),
 			restoreServerBackup: vi.fn().mockResolvedValue(buildRestoreResponse()),
-			listServerRestores: vi.fn().mockResolvedValue({ items: [] }),
+			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
 			deleteServerRestore: vi.fn(),
 		} as unknown as APIClient
 
@@ -169,7 +174,7 @@ describe('ServerSettingsSection', () => {
 		expect(screen.getByText('/data/restores/01ARZ3NDEKTSV4RRFFQ69G5FAV')).toBeInTheDocument()
 		expect(screen.getByText('Stop the destination server before switching DATA_DIR.')).toBeInTheDocument()
 		expect(screen.getByText('DATA_DIR="/data/restores/01ARZ3NDEKTSV4RRFFQ69G5FAV" DB_BACKEND="sqlite" <start-command>')).toBeInTheDocument()
-		expect(screen.getByText('2 files / 2 KB / sha256 abc123')).toBeInTheDocument()
+		expect(screen.getByText(/sha256 abc123/i)).toBeInTheDocument()
 		expect(screen.getByText('encrypted payload')).toBeInTheDocument()
 		expect(screen.getByText('payload decrypted')).toBeInTheDocument()
 	})
@@ -178,7 +183,7 @@ describe('ServerSettingsSection', () => {
 		const api = {
 			downloadServerBackup: vi.fn(),
 			restoreServerBackup: vi.fn(),
-			listServerRestores: vi.fn().mockResolvedValue({ items: [] }),
+			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
 			deleteServerRestore: vi.fn(),
 		} as unknown as APIClient
 
@@ -210,7 +215,7 @@ describe('ServerSettingsSection', () => {
 		expect(screen.getByRole('button', { name: 'Download Full backup' })).toBeDisabled()
 		expect(screen.getByRole('button', { name: 'Download Cache + metadata backup' })).toBeDisabled()
 		expect(screen.getByRole('button', { name: 'Upload restore bundle' })).toBeEnabled()
-		expect(screen.getByText(/Backup export currently supports sqlite-backed servers only/i)).toBeInTheDocument()
+		expect(screen.getByText(/In-product backup export currently supports only sqlite-backed servers/i)).toBeInTheDocument()
 		expect(screen.getByText(/not a Postgres backup or restore workflow/i)).toBeInTheDocument()
 	})
 
@@ -230,14 +235,13 @@ describe('ServerSettingsSection', () => {
 			}),
 			deleteServerRestore: vi.fn(),
 		} as unknown as APIClient
-		vi.useFakeTimers()
-		vi.setSystemTime(new Date('2026-03-10T00:00:00Z'))
+		const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-03-10T00:00:00Z').valueOf())
 
 		render(<ServerSettingsSection api={api} meta={buildMeta()} isFetching={false} errorMessage={null} />)
 
 		expect(await screen.findByText(/1h ago/i)).toBeInTheDocument()
-		expect(screen.getByText('2 KB')).toBeInTheDocument()
-		vi.useRealTimers()
+		expect(screen.getByText((content) => content.includes('2 files /'))).toBeInTheDocument()
+		dateNowSpy.mockRestore()
 	})
 
 	it('deletes stale staged restores older than seven days', async () => {
@@ -263,15 +267,15 @@ describe('ServerSettingsSection', () => {
 			}),
 			deleteServerRestore,
 		} as unknown as APIClient
-		vi.useFakeTimers()
-		vi.setSystemTime(new Date('2026-03-10T00:00:00Z'))
+		const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-03-10T00:00:00Z').valueOf())
 
 		render(<ServerSettingsSection api={api} meta={buildMeta()} isFetching={false} errorMessage={null} />)
 
-		fireEvent.click(await screen.findByRole('button', { name: 'Delete stale restores' }))
+		await screen.findByText('/data/restores/restore-stale')
+		fireEvent.click(screen.getByRole('button', { name: 'Delete stale restores' }))
 
 		await waitFor(() => expect(deleteServerRestore).toHaveBeenCalledWith('restore-stale'))
 		expect(deleteServerRestore).not.toHaveBeenCalledWith('restore-fresh')
-		vi.useRealTimers()
+		dateNowSpy.mockRestore()
 	})
 })

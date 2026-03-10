@@ -2,11 +2,13 @@ import { render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
-import { createThumbnailCache } from '../../../lib/thumbnailCache'
+import { buildThumbnailCacheKey, createThumbnailCache } from '../../../lib/thumbnailCache'
 import { ObjectThumbnail } from '../ObjectThumbnail'
+import { buildObjectThumbnailRequest } from '../objectPreviewPolicy'
 
 const originalCreateObjectURL = URL.createObjectURL
 const originalRevokeObjectURL = URL.revokeObjectURL
+const PERSISTENT_THUMBNAIL_INDEX_KEY = 's3desk-thumbnail-blobs-v1:index'
 
 beforeEach(() => {
 	URL.createObjectURL = vi.fn(() => 'blob:thumbnail')
@@ -18,18 +20,28 @@ afterEach(() => {
 	URL.revokeObjectURL = originalRevokeObjectURL
 	vi.restoreAllMocks()
 	Reflect.deleteProperty(window as typeof window & { caches?: CacheStorage }, 'caches')
+	window.localStorage.removeItem(PERSISTENT_THUMBNAIL_INDEX_KEY)
 })
 
 describe('ObjectThumbnail', () => {
 	it('uses persistent local cache for video thumbnails before hitting the network', async () => {
 		const cache = createThumbnailCache()
 		const downloadObjectThumbnail = vi.fn()
+		const cacheKey = buildThumbnailCacheKey(
+			buildObjectThumbnailRequest({
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				objectKey: 'clip.mp4',
+				size: 24,
+			}),
+		)
 		const match = vi.fn().mockResolvedValue(
 			new Response(new Blob(['thumb'], { type: 'image/jpeg' }), {
 				status: 200,
 				headers: { 'content-type': 'image/jpeg' },
 			}),
 		)
+		window.localStorage.setItem(PERSISTENT_THUMBNAIL_INDEX_KEY, JSON.stringify({ [cacheKey]: Date.now() }))
 		;(window as typeof window & { caches?: CacheStorage }).caches = {
 			open: vi.fn().mockResolvedValue({
 				match,
@@ -61,7 +73,20 @@ describe('ObjectThumbnail', () => {
 
 		render(<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
 
-		await waitFor(() => expect(cache.isFailed('profile-1:bucket-a:clip.mp4:24')).toBe(true))
+		await waitFor(() =>
+			expect(
+				cache.isFailed(
+					buildThumbnailCacheKey(
+						buildObjectThumbnailRequest({
+							profileId: 'profile-1',
+							bucket: 'bucket-a',
+							objectKey: 'clip.mp4',
+							size: 24,
+						}),
+					),
+				),
+			).toBe(true),
+		)
 		expect(downloadObjectThumbnail).toHaveBeenCalledTimes(1)
 	})
 

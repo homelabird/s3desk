@@ -69,7 +69,7 @@ function getCredentialsSummary(viewState: ProfileModalViewState, editMode?: bool
 	return `${prefix} the provider auth material shown below.`
 }
 
-function AdvancedFieldDisclosure({ title, description, configuredCount = 0, children }: AdvancedFieldDisclosureProps) {
+function renderAdvancedFieldDisclosure({ title, description, configuredCount = 0, children }: AdvancedFieldDisclosureProps) {
 	return (
 		<details
 			style={{
@@ -129,7 +129,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 				</div>
 			) : null}
 
-			<Alert type="info" showIcon message="Connection fields" description={getConnectionSummary(viewState)} />
+			<Alert type="info" showIcon title="Connection fields" description={getConnectionSummary(viewState)} />
 
 			{viewState.isS3Provider ? (
 				<>
@@ -151,27 +151,30 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1" aria-label="Region" />
 						</FormField>
 					</div>
-					<AdvancedFieldDisclosure
-						title="Browser-only endpoint override"
-						description="Only set this when the browser must use a different hostname than the server for presigned uploads."
-						configuredCount={countConfiguredValues([values.publicEndpoint])}
-					>
-						<div className={styles.formGrid}>
-							<FormField label="Public Endpoint URL (optional)" error={errors.publicEndpoint}>
-								<Input
-									value={values.publicEndpoint}
-									onChange={(e) => setField('publicEndpoint', e.target.value)}
-									placeholder="http://127.0.0.1:9000"
-									autoComplete="off"
-									aria-label="Public Endpoint URL (optional)"
-								/>
-							</FormField>
-						</div>
-						<Typography.Text type="secondary" className={styles.sectionNote}>
-							Use Public Endpoint when the server reaches storage through an internal hostname like <Typography.Text code>minio:9000</Typography.Text>,
-							but the browser must use a different host like <Typography.Text code>127.0.0.1:9000</Typography.Text> for presigned uploads.
-						</Typography.Text>
-					</AdvancedFieldDisclosure>
+					{renderAdvancedFieldDisclosure({
+						title: 'Browser-only endpoint override',
+						description: 'Only set this when the browser must use a different hostname than the server for presigned uploads.',
+						configuredCount: countConfiguredValues([values.publicEndpoint]),
+						children: (
+							<>
+								<div className={styles.formGrid}>
+									<FormField label="Public Endpoint URL (optional)" error={errors.publicEndpoint}>
+										<Input
+											value={values.publicEndpoint}
+											onChange={(e) => setField('publicEndpoint', e.target.value)}
+											placeholder="http://127.0.0.1:9000"
+											autoComplete="off"
+											aria-label="Public Endpoint URL (optional)"
+										/>
+									</FormField>
+								</div>
+								<Typography.Text type="secondary" className={styles.sectionNote}>
+									Use Public Endpoint when the server reaches storage through an internal hostname like <Typography.Text code>minio:9000</Typography.Text>,
+									but the browser must use a different host like <Typography.Text code>127.0.0.1:9000</Typography.Text> for presigned uploads.
+								</Typography.Text>
+							</>
+						),
+					})}
 				</>
 			) : null}
 
@@ -193,22 +196,23 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 							/>
 						</FormField>
 					</div>
-					<AdvancedFieldDisclosure
-						title="OCI endpoint override"
-						description="Leave this closed unless you need to override the default regional endpoint."
-						configuredCount={countConfiguredValues([values.ociEndpoint])}
-					>
-						<div className={styles.formGrid}>
-							<FormField label="Endpoint URL (optional)" error={errors.ociEndpoint}>
-								<Input
-									value={values.ociEndpoint}
-									onChange={(e) => setField('ociEndpoint', e.target.value)}
-									placeholder="https://objectstorage.{region}.oraclecloud.com"
-									aria-label="Endpoint URL (optional)"
-								/>
-							</FormField>
-						</div>
-					</AdvancedFieldDisclosure>
+					{renderAdvancedFieldDisclosure({
+						title: 'OCI endpoint override',
+						description: 'Leave this closed unless you need to override the default regional endpoint.',
+						configuredCount: countConfiguredValues([values.ociEndpoint]),
+						children: (
+							<div className={styles.formGrid}>
+								<FormField label="Endpoint URL (optional)" error={errors.ociEndpoint}>
+									<Input
+										value={values.ociEndpoint}
+										onChange={(e) => setField('ociEndpoint', e.target.value)}
+										placeholder="https://objectstorage.{region}.oraclecloud.com"
+										aria-label="Endpoint URL (optional)"
+									/>
+								</FormField>
+							</div>
+						),
+					})}
 				</>
 			) : null}
 
@@ -224,70 +228,73 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 							/>
 						</FormField>
 					</div>
-					<AdvancedFieldDisclosure
-						title="Azure connection overrides"
-						description="Open this only for Azurite, custom endpoints, or management-plane features."
-						configuredCount={countConfiguredValues([
+					{renderAdvancedFieldDisclosure({
+						title: 'Azure connection overrides',
+						description: 'Open this only for Azurite, custom endpoints, or management-plane features.',
+						configuredCount: countConfiguredValues([
 							values.azureEndpoint,
 							values.azureSubscriptionId,
 							values.azureResourceGroup,
 							values.azureTenantId,
 							values.azureClientId,
-						])}
-					>
-						<div className={styles.formGrid}>
-							<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
-								<Input
-									value={values.azureEndpoint}
-									onChange={(e) => setField('azureEndpoint', e.target.value)}
-									placeholder="http://127.0.0.1:10000/devstoreaccount1"
-									aria-label="Endpoint URL (optional)"
+						]),
+						children: (
+							<>
+								<div className={styles.formGrid}>
+									<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
+										<Input
+											value={values.azureEndpoint}
+											onChange={(e) => setField('azureEndpoint', e.target.value)}
+											placeholder="http://127.0.0.1:10000/devstoreaccount1"
+											aria-label="Endpoint URL (optional)"
+										/>
+									</FormField>
+								</div>
+								<div className={styles.formGrid}>
+									<FormField label="Subscription ID (optional)" error={errors.azureSubscriptionId}>
+										<Input
+											value={values.azureSubscriptionId}
+											onChange={(e) => setField('azureSubscriptionId', e.target.value)}
+											placeholder="00000000-0000-0000-0000-000000000000"
+											aria-label="Subscription ID (optional)"
+										/>
+									</FormField>
+									<FormField label="Resource Group (optional)" error={errors.azureResourceGroup}>
+										<Input
+											value={values.azureResourceGroup}
+											onChange={(e) => setField('azureResourceGroup', e.target.value)}
+											placeholder="my-storage-rg"
+											aria-label="Resource Group (optional)"
+										/>
+									</FormField>
+								</div>
+								<div className={styles.formGrid}>
+									<FormField label="Tenant ID (optional)" error={errors.azureTenantId}>
+										<Input
+											value={values.azureTenantId}
+											onChange={(e) => setField('azureTenantId', e.target.value)}
+											placeholder="00000000-0000-0000-0000-000000000000"
+											aria-label="Tenant ID (optional)"
+										/>
+									</FormField>
+									<FormField label="Client ID (optional)" error={errors.azureClientId}>
+										<Input
+											value={values.azureClientId}
+											onChange={(e) => setField('azureClientId', e.target.value)}
+											placeholder="00000000-0000-0000-0000-000000000000"
+											aria-label="Client ID (optional)"
+										/>
+									</FormField>
+								</div>
+								<Alert
+									type="info"
+									showIcon
+									message="Azure ARM fields are optional for basic blob access"
+									description="Fill Subscription ID, Resource Group, Tenant ID, Client ID, and Client Secret together when you want management-plane features such as container immutability editing."
 								/>
-							</FormField>
-						</div>
-						<div className={styles.formGrid}>
-							<FormField label="Subscription ID (optional)" error={errors.azureSubscriptionId}>
-								<Input
-									value={values.azureSubscriptionId}
-									onChange={(e) => setField('azureSubscriptionId', e.target.value)}
-									placeholder="00000000-0000-0000-0000-000000000000"
-									aria-label="Subscription ID (optional)"
-								/>
-							</FormField>
-							<FormField label="Resource Group (optional)" error={errors.azureResourceGroup}>
-								<Input
-									value={values.azureResourceGroup}
-									onChange={(e) => setField('azureResourceGroup', e.target.value)}
-									placeholder="my-storage-rg"
-									aria-label="Resource Group (optional)"
-								/>
-							</FormField>
-						</div>
-						<div className={styles.formGrid}>
-							<FormField label="Tenant ID (optional)" error={errors.azureTenantId}>
-								<Input
-									value={values.azureTenantId}
-									onChange={(e) => setField('azureTenantId', e.target.value)}
-									placeholder="00000000-0000-0000-0000-000000000000"
-									aria-label="Tenant ID (optional)"
-								/>
-							</FormField>
-							<FormField label="Client ID (optional)" error={errors.azureClientId}>
-								<Input
-									value={values.azureClientId}
-									onChange={(e) => setField('azureClientId', e.target.value)}
-									placeholder="00000000-0000-0000-0000-000000000000"
-									aria-label="Client ID (optional)"
-								/>
-							</FormField>
-						</div>
-						<Alert
-							type="info"
-							showIcon
-							message="Azure ARM fields are optional for basic blob access"
-							description="Fill Subscription ID, Resource Group, Tenant ID, Client ID, and Client Secret together when you want management-plane features such as container immutability editing."
-						/>
-					</AdvancedFieldDisclosure>
+							</>
+						),
+					})}
 				</>
 			) : null}
 
@@ -303,22 +310,23 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 							/>
 						</FormField>
 					</div>
-					<AdvancedFieldDisclosure
-						title="GCS endpoint override"
-						description="Only open this when you are targeting a non-default endpoint."
-						configuredCount={countConfiguredValues([values.gcpEndpoint])}
-					>
-						<div className={styles.formGrid}>
-							<FormField label="Endpoint URL (optional)" error={errors.gcpEndpoint}>
-								<Input
-									value={values.gcpEndpoint}
-									onChange={(e) => setField('gcpEndpoint', e.target.value)}
-									placeholder="https://storage.googleapis.com"
-									aria-label="Endpoint URL (optional)"
-								/>
-							</FormField>
-						</div>
-					</AdvancedFieldDisclosure>
+					{renderAdvancedFieldDisclosure({
+						title: 'GCS endpoint override',
+						description: 'Only open this when you are targeting a non-default endpoint.',
+						configuredCount: countConfiguredValues([values.gcpEndpoint]),
+						children: (
+							<div className={styles.formGrid}>
+								<FormField label="Endpoint URL (optional)" error={errors.gcpEndpoint}>
+									<Input
+										value={values.gcpEndpoint}
+										onChange={(e) => setField('gcpEndpoint', e.target.value)}
+										placeholder="https://storage.googleapis.com"
+										aria-label="Endpoint URL (optional)"
+									/>
+								</FormField>
+							</div>
+						),
+					})}
 				</>
 			) : null}
 		</div>
@@ -333,7 +341,7 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 			<Typography.Text type="secondary" className={styles.sectionNote}>
 				{editMode ? 'Leave credential fields blank to keep the existing stored values.' : 'Enter the auth material required by this provider.'}
 			</Typography.Text>
-			<Alert type="info" showIcon message="Credential fields" description={getCredentialsSummary(viewState, editMode)} />
+			<Alert type="info" showIcon title="Credential fields" description={getCredentialsSummary(viewState, editMode)} />
 
 			{viewState.isS3Provider ? (
 				<>
@@ -356,30 +364,33 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 						</FormField>
 					</div>
 
-					<AdvancedFieldDisclosure
-						title="Temporary credential extras"
-						description="Open this only when the provider issued a session token on top of the access key and secret."
-						configuredCount={countConfiguredValues([values.sessionToken])}
-					>
-						<div className={styles.formGrid}>
-							<FormField label="Session Token (optional)">
-								<Input.Password
-									value={values.sessionToken ?? ''}
-									onChange={(e) => setField('sessionToken', e.target.value)}
-									autoComplete="off"
-									aria-label="Session Token (optional)"
-									disabled={!!editMode && !!values.clearSessionToken}
-								/>
-							</FormField>
-						</div>
-						{editMode ? (
-							<div className={styles.checkboxRow}>
-								<Checkbox checked={!!values.clearSessionToken} onChange={(e) => setField('clearSessionToken', e.target.checked)}>
-									Clear existing session token
-								</Checkbox>
-							</div>
-						) : null}
-					</AdvancedFieldDisclosure>
+					{renderAdvancedFieldDisclosure({
+						title: 'Temporary credential extras',
+						description: 'Open this only when the provider issued a session token on top of the access key and secret.',
+						configuredCount: countConfiguredValues([values.sessionToken]),
+						children: (
+							<>
+								<div className={styles.formGrid}>
+									<FormField label="Session Token (optional)">
+										<Input.Password
+											value={values.sessionToken ?? ''}
+											onChange={(e) => setField('sessionToken', e.target.value)}
+											autoComplete="off"
+											aria-label="Session Token (optional)"
+											disabled={!!editMode && !!values.clearSessionToken}
+										/>
+									</FormField>
+								</div>
+								{editMode ? (
+									<div className={styles.checkboxRow}>
+										<Checkbox checked={!!values.clearSessionToken} onChange={(e) => setField('clearSessionToken', e.target.checked)}>
+											Clear existing session token
+										</Checkbox>
+									</div>
+								) : null}
+							</>
+						),
+					})}
 				</>
 			) : null}
 
@@ -395,22 +406,23 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 							/>
 						</FormField>
 					</div>
-					<AdvancedFieldDisclosure
-						title="Azure management-plane secret"
-						description="Only open this when you are also filling the Azure ARM fields for management-plane features."
-						configuredCount={countConfiguredValues([values.azureClientSecret])}
-					>
-						<div className={styles.formGrid}>
-							<FormField label="Client Secret (optional)" error={errors.azureClientSecret}>
-								<Input.Password
-									value={values.azureClientSecret}
-									onChange={(e) => setField('azureClientSecret', e.target.value)}
-									autoComplete="new-password"
-									aria-label="Client Secret (optional)"
-								/>
-							</FormField>
-						</div>
-					</AdvancedFieldDisclosure>
+					{renderAdvancedFieldDisclosure({
+						title: 'Azure management-plane secret',
+						description: 'Only open this when you are also filling the Azure ARM fields for management-plane features.',
+						configuredCount: countConfiguredValues([values.azureClientSecret]),
+						children: (
+							<div className={styles.formGrid}>
+								<FormField label="Client Secret (optional)" error={errors.azureClientSecret}>
+									<Input.Password
+										value={values.azureClientSecret}
+										onChange={(e) => setField('azureClientSecret', e.target.value)}
+										autoComplete="new-password"
+										aria-label="Client Secret (optional)"
+									/>
+								</FormField>
+							</div>
+						),
+					})}
 				</>
 			) : null}
 
@@ -451,38 +463,41 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 			) : null}
 
 			{viewState.isOciObjectStorage ? (
-				<AdvancedFieldDisclosure
-					title="OCI credential overrides"
-					description="Open this only when you need a non-default auth provider or config path."
-					configuredCount={countConfiguredValues([values.ociAuthProvider, values.ociConfigFile, values.ociConfigProfile])}
-				>
-					<div className={styles.formGrid}>
-						<FormField label="Auth Provider (optional)">
-							<Input
-								value={values.ociAuthProvider}
-								onChange={(e) => setField('ociAuthProvider', e.target.value)}
-								placeholder="user_principal_auth / instance_principal / api_key / resource_principal"
-								aria-label="Auth Provider (optional)"
-							/>
-						</FormField>
-						<FormField label="OCI Config File (optional)">
-							<Input
-								value={values.ociConfigFile}
-								onChange={(e) => setField('ociConfigFile', e.target.value)}
-								placeholder="/home/user/.oci/config"
-								aria-label="OCI Config File (optional)"
-							/>
-						</FormField>
-						<FormField label="OCI Config Profile (optional)">
-							<Input
-								value={values.ociConfigProfile}
-								onChange={(e) => setField('ociConfigProfile', e.target.value)}
-								placeholder="DEFAULT"
-								aria-label="OCI Config Profile (optional)"
-							/>
-						</FormField>
-					</div>
-				</AdvancedFieldDisclosure>
+				<>
+					{renderAdvancedFieldDisclosure({
+						title: 'OCI credential overrides',
+						description: 'Open this only when you need a non-default auth provider or config path.',
+						configuredCount: countConfiguredValues([values.ociAuthProvider, values.ociConfigFile, values.ociConfigProfile]),
+						children: (
+							<div className={styles.formGrid}>
+								<FormField label="Auth Provider (optional)">
+									<Input
+										value={values.ociAuthProvider}
+										onChange={(e) => setField('ociAuthProvider', e.target.value)}
+										placeholder="user_principal_auth / instance_principal / api_key / resource_principal"
+										aria-label="Auth Provider (optional)"
+									/>
+								</FormField>
+								<FormField label="OCI Config File (optional)">
+									<Input
+										value={values.ociConfigFile}
+										onChange={(e) => setField('ociConfigFile', e.target.value)}
+										placeholder="/home/user/.oci/config"
+										aria-label="OCI Config File (optional)"
+									/>
+								</FormField>
+								<FormField label="OCI Config Profile (optional)">
+									<Input
+										value={values.ociConfigProfile}
+										onChange={(e) => setField('ociConfigProfile', e.target.value)}
+										placeholder="DEFAULT"
+										aria-label="OCI Config Profile (optional)"
+									/>
+								</FormField>
+							</div>
+						),
+					})}
+				</>
 			) : null}
 		</div>
 	)

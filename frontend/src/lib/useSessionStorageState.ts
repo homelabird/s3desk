@@ -12,16 +12,18 @@ export function useSessionStorageState<T>(
 ): [T, (next: T | ((prev: T) => T)) => void] {
 	const stableDefaultSerialized = useMemo(() => JSON.stringify(defaultValue), [defaultValue])
 	const stableDefaultValue = useMemo(() => JSON.parse(stableDefaultSerialized) as T, [stableDefaultSerialized])
+	const sanitizeValue = options.sanitize
+	const legacyLocalStorageKey = options.legacyLocalStorageKey
 	const sanitize = useCallback(
 		(value: T): T => {
-			if (!options.sanitize) return value
+			if (!sanitizeValue) return value
 			try {
-				return options.sanitize(value)
+				return sanitizeValue(value)
 			} catch {
 				return stableDefaultValue
 			}
 		},
-		[options.sanitize, stableDefaultValue],
+		[sanitizeValue, stableDefaultValue],
 	)
 
 	const parse = useCallback(
@@ -42,15 +44,15 @@ export function useSessionStorageState<T>(
 			try {
 				const sessionRaw = window.sessionStorage.getItem(storageKey)
 				if (sessionRaw !== null) return parse(sessionRaw)
-				if (options.legacyLocalStorageKey) {
-					return parse(window.localStorage.getItem(options.legacyLocalStorageKey))
+				if (legacyLocalStorageKey) {
+					return parse(window.localStorage.getItem(legacyLocalStorageKey))
 				}
 				return stableDefaultValue
 			} catch {
 				return stableDefaultValue
 			}
 		},
-		[options.legacyLocalStorageKey, parse, stableDefaultValue],
+		[legacyLocalStorageKey, parse, stableDefaultValue],
 	)
 
 	const [stateSlot, setStateSlot] = useState<{ key: string; value: T }>(() => ({
@@ -68,14 +70,14 @@ export function useSessionStorageState<T>(
 		try {
 			const serialized = JSON.stringify(sanitize(state))
 			window.sessionStorage.setItem(key, serialized)
-			if (options.legacyLocalStorageKey) {
-				window.localStorage.removeItem(options.legacyLocalStorageKey)
+			if (legacyLocalStorageKey) {
+				window.localStorage.removeItem(legacyLocalStorageKey)
 			}
 			window.dispatchEvent(new CustomEvent('session-storage', { detail: { key, value: serialized } }))
 		} catch {
 			// ignore
 		}
-	}, [key, options.legacyLocalStorageKey, sanitize, state])
+	}, [key, legacyLocalStorageKey, sanitize, state])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return

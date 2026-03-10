@@ -927,7 +927,7 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := jobs.DetectRclone(); !ok {
+	if _, _, err := jobs.EnsureRcloneCompatible(r.Context()); err != nil {
 		writeError(w, http.StatusBadRequest, "transfer_engine_missing", "rclone is required to commit an upload (install it or set RCLONE_PATH)", nil)
 		return
 	}

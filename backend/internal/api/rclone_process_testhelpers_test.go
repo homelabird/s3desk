@@ -16,11 +16,26 @@ func installAPIRcloneCaptureHook(
 	hook func(args []string) (string, string, error),
 ) {
 	t.Helper()
-	restore := setAPIProcessTestHooks(apiProcessTestHooks{
-		runRcloneCapture: func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (string, string, error) {
-			return hook(args)
-		},
-	})
+	current := currentAPIProcessTestHooks()
+	current.runRcloneCapture = func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (string, string, error) {
+		return hook(args)
+	}
+	current.startRclone = func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
+		stdout, stderr, err := hook(args)
+		if err != nil {
+			return &rcloneProcess{
+				stdout: io.NopCloser(strings.NewReader(stdout)),
+				stderr: bytes.NewBufferString(stderr),
+				wait:   func() error { return err },
+			}, nil
+		}
+		return &rcloneProcess{
+			stdout: io.NopCloser(strings.NewReader(stdout)),
+			stderr: bytes.NewBufferString(stderr),
+			wait:   func() error { return nil },
+		}, nil
+	}
+	restore := setAPIProcessTestHooks(current)
 	t.Cleanup(restore)
 }
 
@@ -29,19 +44,19 @@ func installAPIStartRcloneHook(
 	hook func(secrets models.ProfileSecrets, args []string) (string, string, error),
 ) {
 	t.Helper()
-	restore := setAPIProcessTestHooks(apiProcessTestHooks{
-		startRclone: func(_ *server, _ context.Context, secrets models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
-			stdout, stderr, err := hook(secrets, args)
-			if err != nil {
-				return nil, err
-			}
-			return &rcloneProcess{
-				stdout: io.NopCloser(strings.NewReader(stdout)),
-				stderr: bytes.NewBufferString(stderr),
-				wait:   func() error { return nil },
-			}, nil
-		},
-	})
+	current := currentAPIProcessTestHooks()
+	current.startRclone = func(_ *server, _ context.Context, secrets models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
+		stdout, stderr, err := hook(secrets, args)
+		if err != nil {
+			return nil, err
+		}
+		return &rcloneProcess{
+			stdout: io.NopCloser(strings.NewReader(stdout)),
+			stderr: bytes.NewBufferString(stderr),
+			wait:   func() error { return nil },
+		}, nil
+	}
+	restore := setAPIProcessTestHooks(current)
 	t.Cleanup(restore)
 }
 
@@ -50,11 +65,11 @@ func installAPIRcloneStdinHook(
 	hook func(secrets models.ProfileSecrets, args []string, stdin io.Reader) (string, error),
 ) {
 	t.Helper()
-	restore := setAPIProcessTestHooks(apiProcessTestHooks{
-		runRcloneStdin: func(_ *server, _ context.Context, secrets models.ProfileSecrets, args []string, _ string, stdin io.Reader) (string, error) {
-			return hook(secrets, args, stdin)
-		},
-	})
+	current := currentAPIProcessTestHooks()
+	current.runRcloneStdin = func(_ *server, _ context.Context, secrets models.ProfileSecrets, args []string, _ string, stdin io.Reader) (string, error) {
+		return hook(secrets, args, stdin)
+	}
+	restore := setAPIProcessTestHooks(current)
 	t.Cleanup(restore)
 }
 

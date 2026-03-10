@@ -719,7 +719,7 @@ func TestHandlePutBucketAccessRejectsUnsupportedBindingsForAWS(t *testing.T) {
 	if got := errResp.Error.Details["capability"]; got != string(models.BucketGovernanceCapabilityAccessBindings) {
 		t.Fatalf("capability=%v, want %q", got, models.BucketGovernanceCapabilityAccessBindings)
 	}
-	if got := errResp.Error.Details["reason"]; got != "Access bindings are supported only by gcp_gcs." {
+	if got := errResp.Error.Details["reason"]; got != "IAM bindings are editable only for Google Cloud Storage buckets." {
 		t.Fatalf("reason=%v, want gcp bindings reason", got)
 	}
 }

@@ -60,13 +60,33 @@ class MockEventSource {
 	}
 }
 
+async function flushRealtimeSetup() {
+	await act(async () => {
+		await Promise.resolve()
+		await Promise.resolve()
+		await Promise.resolve()
+	})
+}
+
 describe('useJobsRealtimeEvents', () => {
+	const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+
 	beforeEach(() => {
 		MockWebSocket.instances = []
 		MockEventSource.instances = []
 		vi.useFakeTimers()
 		vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
 		vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource)
+		vi.stubGlobal('fetch', fetchMock)
+		vi.spyOn(Math, 'random').mockReturnValue(0)
+		fetchMock.mockImplementation(async (input) => {
+			const url = typeof input === 'string' ? new URL(input) : new URL(input.toString())
+			const transport = url.searchParams.get('transport') ?? 'ws'
+			return {
+				ok: true,
+				json: async () => ({ ticket: `${transport}-ticket` }),
+			} as Response
+		})
 	})
 
 	afterEach(() => {
@@ -75,7 +95,7 @@ describe('useJobsRealtimeEvents', () => {
 		vi.unstubAllGlobals()
 	})
 
-	it('invalidates jobs when it detects an event sequence gap', () => {
+	it('invalidates jobs when it detects an event sequence gap', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const setQueriesData = vi.fn()
 		const queryClient = {
@@ -91,8 +111,10 @@ describe('useJobsRealtimeEvents', () => {
 			}),
 		)
 
+		await flushRealtimeSetup()
 		const ws = MockWebSocket.instances[0]
 		expect(ws?.url).toContain('/ws')
+		expect(ws?.url).toContain('realtimeTicket=ws-ticket')
 
 		act(() => {
 			ws.emitOpen()
@@ -106,7 +128,7 @@ describe('useJobsRealtimeEvents', () => {
 		unmount()
 	})
 
-	it('invalidates jobs when realtime reconnects after a disconnect', () => {
+	it('invalidates jobs when realtime reconnects after a disconnect', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const queryClient = {
 			invalidateQueries,
@@ -121,6 +143,7 @@ describe('useJobsRealtimeEvents', () => {
 			}),
 		)
 
+		await flushRealtimeSetup()
 		const ws = MockWebSocket.instances[0]
 		act(() => {
 			ws.emitOpen()
@@ -131,8 +154,10 @@ describe('useJobsRealtimeEvents', () => {
 			ws.emitClose()
 		})
 
+		await flushRealtimeSetup()
 		const es = MockEventSource.instances[0]
 		expect(es?.url).toContain('/events')
+		expect(es?.url).toContain('realtimeTicket=sse-ticket')
 
 		act(() => {
 			es.emitOpen()
@@ -143,7 +168,7 @@ describe('useJobsRealtimeEvents', () => {
 		unmount()
 	})
 
-	it('invalidates jobs when sse reconnects after an error', () => {
+	it('invalidates jobs when sse reconnects after an error', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const queryClient = {
 			invalidateQueries,
@@ -158,24 +183,30 @@ describe('useJobsRealtimeEvents', () => {
 			}),
 		)
 
+		await flushRealtimeSetup()
 		const ws = MockWebSocket.instances[0]
 		act(() => {
 			ws.emitClose()
 		})
 
+		await flushRealtimeSetup()
 		const es = MockEventSource.instances[0]
 		act(() => {
 			es.emitOpen()
 		})
 		invalidateQueries.mockClear()
 
-		act(() => {
+		await act(async () => {
 			es.emitError()
 			vi.runOnlyPendingTimers()
+			await Promise.resolve()
+			await Promise.resolve()
 		})
 
+		await flushRealtimeSetup()
 		const reconnectWs = MockWebSocket.instances[1]
 		expect(reconnectWs?.url).toContain('/ws')
+		expect(reconnectWs?.url).toContain('realtimeTicket=ws-ticket')
 
 		act(() => {
 			reconnectWs.emitOpen()

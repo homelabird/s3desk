@@ -12,18 +12,18 @@ import (
 )
 
 type server struct {
-	cfg         config.Config
-	store       *store.Store
-	jobs        *jobs.Manager
-	hub         *ws.Hub
-	metrics     *metrics.Metrics
-	serverAddr  string
-	proxySecret []byte
+	cfg             config.Config
+	store           *store.Store
+	jobs            *jobs.Manager
+	hub             *ws.Hub
+	metrics         *metrics.Metrics
+	serverAddr      string
+	proxySecret     []byte
 	realtimeTickets *realtimeTicketStore
-	authLimit   *authFailureLimiter
-	uploadLimit *requestLimiter
-	bucketGov   *bucketgov.Service
-	restoreMu   sync.RWMutex
+	authLimit       *authFailureLimiter
+	uploadLimit     *requestLimiter
+	bucketGov       *bucketgov.Service
+	restoreMu       sync.RWMutex
 }
 
 type contextKey string

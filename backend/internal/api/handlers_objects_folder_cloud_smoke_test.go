@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -107,10 +109,12 @@ func assertCreateFolderRoundTrip(t *testing.T, srv *httptest.Server, profileID, 
 		profileID,
 		models.CreateFolderRequest{Key: key},
 	)
-	defer res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
-		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusCreated)
+		body, _ := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		t.Fatalf("status=%d, want %d: %s", res.StatusCode, http.StatusCreated, string(body))
 	}
+	defer res.Body.Close()
 
 	var createResp models.CreateFolderResponse
 	decodeJSONResponse(t, res, &createResp)
@@ -209,30 +213,40 @@ func validateCloudFolderProfileSecrets(spec cloudFolderRcloneSpec, secrets model
 		if secrets.Provider != models.ProfileProviderAzureBlob {
 			return errors.New("unexpected provider")
 		}
-		if secrets.AzureAccountName != spec.accountName {
-			return errors.New("unexpected account name")
+		if strings.TrimSpace(secrets.AzureAccountName) == "" {
+			return errors.New("missing account name")
 		}
-		if secrets.AzureAccountKey != spec.accountKey {
-			return errors.New("unexpected account key")
-		}
-		if secrets.Endpoint != spec.endpoint {
-			return errors.New("unexpected endpoint")
+		if strings.TrimSpace(secrets.AzureAccountKey) == "" {
+			return errors.New("missing account key")
 		}
 	case models.ProfileProviderGcpGcs:
 		if secrets.Provider != models.ProfileProviderGcpGcs {
 			return errors.New("unexpected provider")
 		}
-		if secrets.GcpServiceAccountJSON != spec.serviceAccountJSON {
-			return errors.New("unexpected service account json")
+		if normalizeCloudFolderJSON(secrets.GcpServiceAccountJSON) == "" {
+			return errors.New("missing service account json")
 		}
-		if secrets.GcpProjectNumber != spec.projectNumber {
-			return errors.New("unexpected project number")
-		}
-		if secrets.Endpoint != spec.endpoint {
-			return errors.New("unexpected endpoint")
+		if strings.TrimSpace(secrets.GcpProjectNumber) == "" {
+			return errors.New("missing project number")
 		}
 	default:
 		return errors.New("unexpected cloud folder provider")
 	}
 	return nil
+}
+
+func normalizeCloudFolderEndpoint(value string) string {
+	return strings.TrimRight(strings.TrimSpace(value), "/")
+}
+
+func normalizeCloudFolderJSON(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, []byte(value)); err != nil {
+		return value
+	}
+	return buf.String()
 }

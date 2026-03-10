@@ -164,35 +164,35 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 		}
 
 		token := r.Header.Get("X-Api-Token")
-			if token == "" {
-				// Prometheus/ServiceMonitor and many HTTP clients support Bearer tokens
-				// out of the box, so accept Authorization: Bearer <token> as an alias.
+		if token == "" {
+			// Prometheus/ServiceMonitor and many HTTP clients support Bearer tokens
+			// out of the box, so accept Authorization: Bearer <token> as an alias.
 			if auth := strings.TrimSpace(r.Header.Get("Authorization")); auth != "" {
 				if parts := strings.SplitN(auth, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
 					token = strings.TrimSpace(parts[1])
-					}
 				}
 			}
-			if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
-				realtimeTicket := strings.TrimSpace(r.URL.Query().Get("realtimeTicket"))
-				if realtimeTicket != "" {
-					transport := "sse"
-					if isWebSocketUpgrade(r) {
-						transport = "ws"
-					}
-					if s.realtimeTickets != nil && s.realtimeTickets.Consume(realtimeTicket, transport, now) {
-						s.authLimit.reset(clientKey)
-						next.ServeHTTP(w, r)
-						return
-					}
-					retryAfter := s.authLimit.recordFailure(clientKey, now)
-					if retryAfter > 0 {
-						w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
-					}
-					writeError(w, http.StatusUnauthorized, "unauthorized", "invalid realtime ticket", nil)
+		}
+		if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
+			realtimeTicket := strings.TrimSpace(r.URL.Query().Get("realtimeTicket"))
+			if realtimeTicket != "" {
+				transport := "sse"
+				if isWebSocketUpgrade(r) {
+					transport = "ws"
+				}
+				if s.realtimeTickets != nil && s.realtimeTickets.Consume(realtimeTicket, transport, now) {
+					s.authLimit.reset(clientKey)
+					next.ServeHTTP(w, r)
 					return
 				}
+				retryAfter := s.authLimit.recordFailure(clientKey, now)
+				if retryAfter > 0 {
+					w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
+				}
+				writeError(w, http.StatusUnauthorized, "unauthorized", "invalid realtime ticket", nil)
+				return
 			}
+		}
 		if len(token) > maxAPITokenBytes {
 			retryAfter := s.authLimit.recordFailure(clientKey, now)
 			if retryAfter > 0 {
