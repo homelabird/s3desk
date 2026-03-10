@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,17 +15,15 @@ import (
 )
 
 func TestBenchmarkConnectivityReportsBucketListFailure(t *testing.T) {
-	t.Setenv("RCLONE_PATH", writeJobsFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "lsjson" ]; then cmd='lsjson'; fi
-done
-if [ "$cmd" = "lsjson" ]; then
-  echo "AccessDenied" >&2
-  exit 9
-fi
-exit 0
-`))
+	installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, _ string, args []string) (*rcloneProcess, error) {
+		if len(args) == 0 {
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+		if args[0] == "lsjson" {
+			return newTestRcloneProcess("", "AccessDenied", errors.New("exit status 9")), nil
+		}
+		return newTestRcloneProcess("", "", nil), nil
+	})
 
 	manager, profileID := newBenchmarkManagerFixture(t)
 
@@ -51,24 +50,21 @@ exit 0
 }
 
 func TestBenchmarkConnectivityUsesBucketNameFallback(t *testing.T) {
-	t.Setenv("RCLONE_PATH", writeJobsFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "lsjson" ]; then cmd='lsjson'; fi
-  if [ "$arg" = "copyto" ]; then cmd='copyto'; fi
-  if [ "$arg" = "cat" ]; then cmd='cat'; fi
-  if [ "$arg" = "deletefile" ]; then cmd='deletefile'; fi
-done
-if [ "$cmd" = "lsjson" ]; then
-  printf '[{"Name":"bucket-from-name","IsDir":true}]'
-  exit 0
-fi
-if [ "$cmd" = "cat" ]; then
-  printf 'benchmark-bytes'
-  exit 0
-fi
-exit 0
-`))
+	installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, _ string, args []string) (*rcloneProcess, error) {
+		if len(args) == 0 {
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+		switch args[0] {
+		case "lsjson":
+			return newTestRcloneProcess(`[{"Name":"bucket-from-name","IsDir":true}]`, "", nil), nil
+		case "cat":
+			return newTestRcloneProcess("benchmark-bytes", "", nil), nil
+		case "copyto", "deletefile":
+			return newTestRcloneProcess("", "", nil), nil
+		default:
+			return nil, unexpectedJobsProcessArgs(args)
+		}
+	})
 
 	manager, profileID := newBenchmarkManagerFixture(t)
 

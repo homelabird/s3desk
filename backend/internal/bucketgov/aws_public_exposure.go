@@ -119,10 +119,6 @@ func (a *awsAdapter) GetPublicExposure(ctx context.Context, profile models.Profi
 }
 
 func (a *awsAdapter) PutPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketPublicExposurePutRequest) error {
-	if err := ValidatePublicExposurePut(models.ProfileProviderAwsS3, req); err != nil {
-		return err
-	}
-
 	block, err := normalizePublicExposurePut(req)
 	if err != nil {
 		return err

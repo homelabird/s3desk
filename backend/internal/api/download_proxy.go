@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
 
@@ -142,6 +144,17 @@ func requestScheme(r *http.Request) string {
 	return "http"
 }
 
+func (s *server) resolveDownloadProxyEntry(ctx context.Context, secrets models.ProfileSecrets, token downloadProxyToken, bucket, key string) (rcloneListEntry, bool, string, error) {
+	if entry, ok := downloadProxyEntryFromToken(token); ok {
+		return entry, true, "", nil
+	}
+	entry, stderr, err := s.rcloneStat(ctx, secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "download-proxy-stat")
+	if err != nil {
+		return rcloneListEntry{}, false, stderr, err
+	}
+	return entry, false, "", nil
+}
+
 func parseForwardedProto(value string) string {
 	for _, part := range strings.Split(value, ",") {
 		part = strings.TrimSpace(part)
@@ -233,7 +246,7 @@ func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, hasEmbeddedMetadata := downloadProxyEntryFromToken(token)
+	entry, hasEmbeddedMetadata, stderr, err := s.resolveDownloadProxyEntry(r.Context(), secrets, token, bucket, key)
 	if hasEmbeddedMetadata {
 		if s.metrics != nil {
 			s.metrics.IncDownloadProxyMode("stat_skipped")
@@ -242,13 +255,12 @@ func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
 		if s.metrics != nil {
 			s.metrics.IncDownloadProxyMode("stat_required")
 		}
-		fetchedEntry, stderr, statErr := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "download-proxy-stat")
-		if statErr != nil {
-			if rcloneIsNotFound(statErr, stderr) {
+		if err != nil {
+			if rcloneIsNotFound(err, stderr) {
 				writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
 				return
 			}
-			writeRcloneAPIError(w, statErr, stderr, rcloneAPIErrorContext{
+			writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
 				MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
 				DefaultStatus:  http.StatusBadRequest,
 				DefaultCode:    "s3_error",
@@ -256,7 +268,6 @@ func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
 			}, map[string]any{"bucket": bucket, "key": key})
 			return
 		}
-		entry = fetchedEntry
 	}
 
 	if r.Method == http.MethodHead {

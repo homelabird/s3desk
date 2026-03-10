@@ -1,186 +1,121 @@
 # Technical Debt
 
-This document tracks the highest-impact engineering debt currently visible in S3Desk.
+This document tracks the highest-impact active engineering debt currently visible in S3Desk.
 
-It is intentionally biased toward issues that can cause security regressions, operational mistakes, data loss, runaway storage cost, or high-change-rate maintenance pain.
+The recent slices closed deployment default hardening, OpenAPI drift discipline, hardened remote deployment templates, staged restore coordination, the main thumbnail/preview/proxy boundary extraction, and the first backup integrity pass with restore preflight and HMAC-backed authenticity checks.
+
+This round tracks what is still meaningfully open.
 
 ## Priority 0
 
-### 1. Deployment defaults are too easy to misuse
+### 1. Real-provider live validation has not been executed yet
 
 - Risk:
-  - A local-only compose file can be reused as if it were production-ready.
-  - Weak defaults such as `ALLOW_REMOTE=true` and `API_TOKEN=change-me` are easy to leave in place.
+  - The bucket governance surface changed across AWS S3, GCS, Azure Blob, and OCI without attached real-cloud evidence.
+  - Release confidence is limited until provider-native behavior is revalidated.
 - Evidence:
-  - [docker-compose.local-build.yml](/home/homelab/Downloads/project/s3desk/docker-compose.local-build.yml)
-  - [README.md](/home/homelab/Downloads/project/s3desk/README.md)
+  - [BUCKET_GOVERNANCE_LIVE_VALIDATION.md](BUCKET_GOVERNANCE_LIVE_VALIDATION.md)
+  - [RELEASE_GATE.md](RELEASE_GATE.md)
+  - [PROVIDERS.md](PROVIDERS.md)
 - Why it matters:
-  - This is the fastest path to an accidental remote exposure.
+  - Typed governance flows are now one of the most provider-sensitive areas of the product.
 - Next action:
-  - Split local/dev and deploy-ready examples more clearly.
-  - Fail startup when `API_TOKEN` is a known placeholder in remote mode.
-  - Make `ALLOW_REMOTE` opt-in in deployment-oriented examples.
+  - Run the documented live validation pass.
+  - Attach evidence per affected provider before release.
 
-### 2. OpenAPI generation discipline is weak
+### 2. Backup bundle confidentiality is still the main remaining gap after integrity, signature, and preflight improvements
 
 - Risk:
-  - Generated frontend API types can drift from the source schema.
-  - Manual edits to generated files can be lost or silently conflict with later regeneration.
+  - Payload corruption is detectable, restore staging performs disk-space preflight, and signed bundles can now be authenticated with the matching ENCRYPTION_KEY.
+  - Bundle contents are still stored in cleartext, so archive confidentiality remains weak when files leave the source host.
 - Evidence:
-  - [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml)
-  - [openapi.ts](/home/homelab/Downloads/project/s3desk/frontend/src/api/openapi.ts)
-  - [package.json](/home/homelab/Downloads/project/s3desk/frontend/package.json)
+  - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
+  - [handlers_server_restores.go](../backend/internal/api/handlers_server_restores.go)
+  - [ServerSettingsSection.tsx](../frontend/src/pages/settings/ServerSettingsSection.tsx)
+  - [RUNBOOK.md](RUNBOOK.md)
 - Why it matters:
-  - API mismatches create high-noise failures across the settings, governance, backup, and objects flows.
+  - Backup archives contain high-value local state such as the database and thumbnails.
 - Next action:
-  - Treat [openapi.ts](/home/homelab/Downloads/project/s3desk/frontend/src/api/openapi.ts) as generated-only.
-  - Add a CI drift check that runs `npm run gen:openapi` and fails on differences.
-  - Keep all API shape changes rooted in [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml).
-
-### 3. Objects preview/thumbnail/download behavior is too concentrated
-
-- Risk:
-  - The same user-visible flow now spans thumbnail generation, server cache manifests, download proxy decisions, partial video range fallback, React Query reuse, and client-side cache reuse.
-  - Small edits can create regressions in unrelated preview paths.
-- Evidence:
-  - [handlers_thumbnails.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_thumbnails.go)
-  - [download_proxy.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/download_proxy.go)
-  - [handlers_objects.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_objects.go)
-  - [ObjectThumbnail.tsx](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/ObjectThumbnail.tsx)
-  - [useObjectPreview.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/useObjectPreview.ts)
-  - [thumbnailCache.ts](/home/homelab/Downloads/project/s3desk/frontend/src/lib/thumbnailCache.ts)
-  - [thumbnailRequestQueue.ts](/home/homelab/Downloads/project/s3desk/frontend/src/lib/thumbnailRequestQueue.ts)
-- Why it matters:
-  - This is a high-traffic surface and also the main cost-control path for object storage access.
-- Next action:
-  - Split policy, transport, and cache responsibilities more clearly.
-  - Add focused regression coverage around image, GIF, MP4, MKV, cache hit, and proxy-skip cases.
-
-### 4. Backup/restore strategy does not match the default compose deployment story
-
-- Risk:
-  - The UI exposes `Full backup` and `Cache + metadata backup`, but backup export currently supports sqlite-backed servers only.
-  - The common local-build compose path uses Postgres.
-- Evidence:
-  - [handlers_server_backup.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_server_backup.go)
-  - [handlers_server_restores.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_server_restores.go)
-  - [ServerSettingsSection.tsx](/home/homelab/Downloads/project/s3desk/frontend/src/pages/settings/ServerSettingsSection.tsx)
-  - [docker-compose.local-build.yml](/home/homelab/Downloads/project/s3desk/docker-compose.local-build.yml)
-- Why it matters:
-  - Operators can assume the visible restore UX covers their actual deployment shape when it may not.
-- Next action:
-  - Clarify sqlite-only scope in UI and docs.
-  - Decide whether Postgres gets an export/import path or whether backup guidance stays external-only for that backend.
-  - Add cleanup policy and visibility for staged restores.
+  - Add optional archive confidentiality or encryption support.
+  - Keep the new signature and restore validation path stable while extending it to stronger provenance guarantees later.
 
 ## Priority 1
 
-### 5. Frontend input and persisted-state hardening is incomplete
+### 3. Postgres backup capability is documented, but not exposed as a first-class product capability
 
 - Risk:
-  - Very large search input, persisted malformed values, or expensive highlight patterns can degrade runtime behavior.
-  - Folder upload currently tends to gather too much material in memory before transfer starts.
+  - The current behavior is explained in docs, but the product surface still relies mostly on warning copy.
+  - Operators can still overestimate what in-product backup covers.
 - Evidence:
-  - [useObjectsSearchState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/useObjectsSearchState.ts)
-  - [useObjectsGlobalSearchState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/useObjectsGlobalSearchState.ts)
-  - [useSearchHighlight.tsx](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/useSearchHighlight.tsx)
-  - [useLocalStorageState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/lib/useLocalStorageState.ts)
-  - [useSessionStorageState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/lib/useSessionStorageState.ts)
-  - [deviceFs.ts](/home/homelab/Downloads/project/s3desk/frontend/src/lib/deviceFs.ts)
-  - [useObjectsUploadFolder.tsx](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/useObjectsUploadFolder.tsx)
+  - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
+  - [ServerSettingsSection.tsx](../frontend/src/pages/settings/ServerSettingsSection.tsx)
+  - [RUNBOOK.md](RUNBOOK.md)
 - Why it matters:
-  - These failures are noisy, user-visible, and can be hard to recover from without clearing browser state.
+  - Backup capability should be explicit and machine-readable, not only explained in text.
 - Next action:
-  - Add search length and complexity guards.
-  - Validate and clamp storage-backed settings on load.
-  - Rework folder collection into bounded or streaming batches.
+  - Expose backup capability by backend type and reflect it directly in the UI.
 
-### 6. Presigned URL and base URL trust boundaries need stricter validation
+### 4. Release gate rules are documented, but not enforced by CI yet
 
 - Risk:
-  - Browser-side preview and presign flows rely on URLs that are not aggressively validated before use.
+  - The current release gate can still be bypassed by omission.
+  - Live validation and known-limitations requirements are not automatically checked.
 - Evidence:
-  - [useObjectPreview.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/useObjectPreview.ts)
-  - [ObjectsPresignModal.tsx](/home/homelab/Downloads/project/s3desk/frontend/src/pages/objects/ObjectsPresignModal.tsx)
-  - [baseUrl.ts](/home/homelab/Downloads/project/s3desk/frontend/src/api/baseUrl.ts)
-  - [client.ts](/home/homelab/Downloads/project/s3desk/frontend/src/api/client.ts)
+  - [RELEASE_GATE.md](RELEASE_GATE.md)
+  - [TESTING.md](TESTING.md)
+  - [check.sh](../scripts/check.sh)
 - Why it matters:
-  - These paths cross trust boundaries between local UI, API host, and storage endpoints.
+  - Release readiness should not depend only on human memory once provider behavior becomes this broad.
 - Next action:
-  - Enforce scheme and host validation before `fetch`, `window.open`, or direct preview usage.
-  - Distinguish local API URLs from third-party storage URLs in client helpers.
-
-### 7. Bucket governance is functionally rich but structurally heavy
-
-- Risk:
-  - Provider-specific behavior is accumulating in large shared code paths.
-  - Future changes will become slower and more failure-prone if capabilities, validation, rendering, and mutation remain tightly coupled.
-- Evidence:
-  - [BucketGovernanceModal.tsx](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/BucketGovernanceModal.tsx)
-  - [service.go](/home/homelab/Downloads/project/s3desk/backend/internal/bucketgov/service.go)
-  - [registry.go](/home/homelab/Downloads/project/s3desk/backend/internal/bucketgov/registry.go)
-  - [validate.go](/home/homelab/Downloads/project/s3desk/backend/internal/bucketgov/validate.go)
-  - [capabilities.go](/home/homelab/Downloads/project/s3desk/backend/internal/bucketgov/capabilities.go)
-- Why it matters:
-  - Governance flows are now one of the most provider-sensitive parts of the product.
-- Next action:
-  - Split frontend provider sections into smaller units.
-  - Keep backend capability, normalization, and mutation logic more isolated by provider.
+  - Add CI or scripted checks for release-note requirements and validation evidence presence.
 
 ## Priority 2
 
-### 8. External process coupling makes tests less portable and less precise
+### 5. Test seams still rely on mutable global hooks in production code
 
 - Risk:
-  - Thumbnail, stream, upload, and job tests still lean heavily on fake external command behavior.
-  - OS-specific skips reduce confidence outside the main Linux path.
+  - Testability improved, but the current seam model uses mutable globals.
+  - This increases parallel-test fragility and keeps test concerns visible in runtime code paths.
 - Evidence:
-  - [handlers_thumbnails_test.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_thumbnails_test.go)
-  - [download_stream_test.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/download_stream_test.go)
-  - [handlers_uploads_test.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_uploads_test.go)
-  - [handlers_jobs_test.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_jobs_test.go)
+  - [process_testhooks.go](../backend/internal/api/process_testhooks.go)
+  - [process_testhooks.go](../backend/internal/jobs/process_testhooks.go)
 - Why it matters:
-  - Regressions in command assembly and fallback logic are expensive to diagnose after release.
+  - The current approach is useful as an intermediate step, but not ideal as a long-term boundary.
 - Next action:
-  - Add narrower unit seams around command construction and policy selection.
-  - Reduce platform-specific skips by mocking execution earlier in the stack.
+  - Replace global hooks with structured runner injection or isolate them behind stricter test-only boundaries.
 
-### 9. Staged restore lifecycle is only partially managed
+### 6. Bucket governance backend interfaces are still broader than necessary
 
 - Risk:
-  - Restores can be staged and deleted, but lifecycle policy, disk usage visibility, and operator guidance are still thin.
+  - Validation and provider capabilities are better split than before, but the adapter model still carries broad section coverage and limited validation context.
 - Evidence:
-  - [handlers_server_restores.go](/home/homelab/Downloads/project/s3desk/backend/internal/api/handlers_server_restores.go)
-  - [ServerSettingsSection.tsx](/home/homelab/Downloads/project/s3desk/frontend/src/pages/settings/ServerSettingsSection.tsx)
-  - [RUNBOOK.md](/home/homelab/Downloads/project/s3desk/docs/RUNBOOK.md)
+  - [registry.go](../backend/internal/bucketgov/registry.go)
+  - [service.go](../backend/internal/bucketgov/service.go)
+  - [service_helpers.go](../backend/internal/bucketgov/service_helpers.go)
+  - [capability_support.go](../backend/internal/bucketgov/capability_support.go)
 - Why it matters:
-  - Restore staging is safety-critical and can silently consume storage over time.
+  - Future provider work will be cleaner if section capabilities and validation inputs are more targeted.
 - Next action:
-  - Show staged restore size and age more clearly.
-  - Document operator cleanup and cutover steps in the runbook.
-  - Consider TTL-based cleanup or an explicit retention policy.
+  - Evolve toward narrower section-oriented interfaces and richer validation context.
 
-### 10. Release readiness still depends too much on human memory
+### 7. Cost and restore observability still lack operator thresholds
 
 - Risk:
-  - Live validation and provider-specific verification exist as documents, but not yet as hard release gates.
+  - Metrics exist, but the runbook does not yet define what counts as abnormal cache miss rate, restore buildup, or object-storage cost pressure.
 - Evidence:
-  - [BUCKET_GOVERNANCE_LIVE_VALIDATION.md](/home/homelab/Downloads/project/s3desk/docs/BUCKET_GOVERNANCE_LIVE_VALIDATION.md)
-  - [BUCKET_GOVERNANCE_REMAINING_WORK.md](/home/homelab/Downloads/project/s3desk/docs/BUCKET_GOVERNANCE_REMAINING_WORK.md)
-  - [TESTING.md](/home/homelab/Downloads/project/s3desk/docs/TESTING.md)
+  - [metrics.go](../backend/internal/metrics/metrics.go)
+  - [RUNBOOK.md](RUNBOOK.md)
 - Why it matters:
-  - The project now has enough provider- and media-specific behavior that informal validation is no longer sufficient.
+  - Observability is less useful if operators do not know when to act.
 - Next action:
-  - Define a minimal release checklist tied to concrete tests, live validation evidence, and known unsupported cases.
+  - Document thresholds, dashboards, and alert conditions for cost and restore lifecycle signals.
 
 ## Candidate Issue Order
 
-1. Deployment default hardening
-2. OpenAPI generation discipline and CI drift checks
-3. Objects preview/thumbnail pipeline refactor
-4. Backup/restore scope clarification and staged restore lifecycle
-5. Frontend input and persisted-state hardening
-6. Presigned URL/base URL validation hardening
-7. Bucket governance modularization
-8. External process abstraction for test portability
-9. Release gate definition and live validation evidence policy
+1. Execute real-provider live validation
+2. Add optional backup bundle confidentiality or encryption
+3. Expose Postgres backup capability explicitly in product surfaces
+4. Enforce release gate rules in CI
+5. Replace mutable global test hooks with stricter runners
+6. Narrow bucket governance backend interfaces further
+7. Define operator thresholds for cost and restore observability

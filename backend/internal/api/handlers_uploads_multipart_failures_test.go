@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -164,14 +163,16 @@ func TestCompleteMultipartUploadFailureKeepsMetadata(t *testing.T) {
 }
 
 func TestCommitUploadQueueFullThenRetrySucceeds(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, "exit 0\n"))
 	t.Setenv("RCLONE_TUNE", "true")
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ jobs.TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
+		writeLog("info", "queue-full retry")
+		if len(args) == 0 {
+			return "", unexpectedRcloneAttemptError(args)
+		}
+		return "", nil
+	})
 
 	st, manager, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)

@@ -27,6 +27,9 @@ func (s *server) handleListServerRestores(w http.ResponseWriter, r *http.Request
 }
 
 func (s *server) handleDeleteServerRestore(w http.ResponseWriter, r *http.Request) {
+	s.restoreMu.Lock()
+	defer s.restoreMu.Unlock()
+
 	restoreID := strings.TrimSpace(chi.URLParam(r, "restoreId"))
 	if restoreID == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "missing restore id", nil)
@@ -65,10 +68,10 @@ func (s *server) handleDeleteServerRestore(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *server) listServerRestores() ([]models.ServerStagedRestore, error) {
+	s.restoreMu.RLock()
+	defer s.restoreMu.RUnlock()
+
 	restoreBase := filepath.Join(s.cfg.DataDir, "restores")
-	if err := s.cleanupExpiredServerRestores(time.Now().UTC()); err != nil {
-		return nil, err
-	}
 	entries, err := os.ReadDir(restoreBase)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

@@ -31,10 +31,6 @@ func (a *awsAdapter) GetVersioning(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *awsAdapter) PutVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
-	if err := ValidateVersioningPut(models.ProfileProviderAwsS3, req); err != nil {
-		return err
-	}
-
 	status, err := toS3VersioningStatus(req.Status)
 	if err != nil {
 		return err

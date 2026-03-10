@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -83,6 +84,41 @@ func (s semver) cmp(other semver) int {
 
 var rcloneVersionRe = regexp.MustCompile(`(?i)\bv?(\d+)\.(\d+)(?:\.(\d+))?`)
 
+type rcloneBinaryFingerprint struct {
+	path        string
+	size        int64
+	modUnixNano int64
+}
+
+type cachedResolvedRclone struct {
+	env         string
+	path        string
+	fingerprint rcloneBinaryFingerprint
+	checkedAt   time.Time
+	errMessage  string
+	notFound    bool
+}
+
+type cachedCompatibleRclone struct {
+	fingerprint rcloneBinaryFingerprint
+	checkedAt   time.Time
+	version     string
+	errReason   string
+}
+
+var (
+	resolvedRcloneCacheMu   sync.Mutex
+	resolvedRcloneCache     cachedResolvedRclone
+	compatibleRcloneCacheMu sync.Mutex
+	compatibleRcloneCache   cachedCompatibleRclone
+)
+
+const (
+	rcloneResolveFailureTTL       = 5 * time.Second
+	rcloneCompatibilitySuccessTTL = 30 * time.Second
+	rcloneCompatibilityFailureTTL = 5 * time.Second
+)
+
 func parseSemver(s string) (v semver, ok bool) {
 	m := rcloneVersionRe.FindStringSubmatch(s)
 	if len(m) < 3 {
@@ -122,20 +158,33 @@ func IsRcloneVersionCompatible(versionLine string) bool {
 
 func ResolveRclonePath() (string, error) {
 	rclonePath := os.Getenv("RCLONE_PATH")
+	if cachedPath, cachedErr, ok := getCachedResolvedRclonePath(rclonePath); ok {
+		return cachedPath, cachedErr
+	}
+	return resolveRclonePathUncached(rclonePath)
+}
+
+func resolveRclonePathUncached(rclonePath string) (string, error) {
 	if rclonePath == "" {
 		if p, ok := findLocalRclone(); ok {
+			setCachedResolvedRclonePath("", p)
 			return p, nil
 		}
 		p, err := exec.LookPath("rclone")
 		if err != nil {
+			setCachedResolvedRcloneError("", ErrRcloneNotFound)
 			return "", ErrRcloneNotFound
 		}
+		setCachedResolvedRclonePath("", p)
 		return p, nil
 	}
 
 	if _, err := os.Stat(rclonePath); err != nil {
-		return "", fmt.Errorf("invalid RCLONE_PATH %q: %w", rclonePath, err)
+		cachedErr := fmt.Errorf("invalid RCLONE_PATH %q: %w", rclonePath, err)
+		setCachedResolvedRcloneError(rclonePath, cachedErr)
+		return "", cachedErr
 	}
+	setCachedResolvedRclonePath(rclonePath, rclonePath)
 	return rclonePath, nil
 }
 
@@ -177,19 +226,182 @@ func DetectRcloneVersionAtPath(ctx context.Context, path string) (version string
 // EnsureRcloneCompatible resolves rclone and verifies that its version is compatible.
 // It returns the resolved path and the detected version line.
 func EnsureRcloneCompatible(ctx context.Context) (path string, version string, err error) {
+	if testEnsureRcloneCompatibleHook != nil {
+		return testEnsureRcloneCompatibleHook(ctx)
+	}
 	path, err = ResolveRclonePath()
 	if err != nil {
 		return "", "", err
 	}
+	if cachedVersion, cachedErr, ok := getCachedCompatibleRcloneVersion(path); ok {
+		return path, cachedVersion, cachedErr
+	}
 
 	ver, ok := DetectRcloneVersionAtPath(ctx, path)
 	if !ok {
-		return path, "", &RcloneIncompatibleError{MinVersion: MinSupportedRcloneVersion, Reason: "unable to determine rclone version"}
+		err = &RcloneIncompatibleError{MinVersion: MinSupportedRcloneVersion, Reason: "unable to determine rclone version"}
+		setCachedCompatibleRcloneFailure(path, "", "unable to determine rclone version")
+		return path, "", err
 	}
 	if !IsRcloneVersionCompatible(ver) {
-		return path, ver, &RcloneIncompatibleError{CurrentVersion: ver, MinVersion: MinSupportedRcloneVersion, Reason: "version too old"}
+		err = &RcloneIncompatibleError{CurrentVersion: ver, MinVersion: MinSupportedRcloneVersion, Reason: "version too old"}
+		setCachedCompatibleRcloneFailure(path, ver, "version too old")
+		return path, ver, err
 	}
+	setCachedCompatibleRcloneVersion(path, ver)
 	return path, ver, nil
+}
+
+func getCachedResolvedRclonePath(env string) (string, error, bool) {
+	resolvedRcloneCacheMu.Lock()
+	cached := resolvedRcloneCache
+	resolvedRcloneCacheMu.Unlock()
+	if cached.env != env {
+		return "", nil, false
+	}
+	if cached.errMessage != "" {
+		if time.Since(cached.checkedAt) <= rcloneResolveFailureTTL {
+			if cached.notFound {
+				return "", ErrRcloneNotFound, true
+			}
+			return "", errors.New(cached.errMessage), true
+		}
+		clearCachedResolvedRclone(env, "")
+		return "", nil, false
+	}
+	if cached.path == "" || cached.fingerprint.path == "" {
+		return "", nil, false
+	}
+	current, err := fingerprintRcloneBinary(cached.fingerprint.path)
+	if err != nil || current != cached.fingerprint {
+		clearCachedResolvedRclonePath(env, cached.fingerprint.path)
+		return "", nil, false
+	}
+	return cached.path, nil, true
+}
+
+func setCachedResolvedRclonePath(env, path string) {
+	fingerprint, err := fingerprintRcloneBinary(path)
+	if err != nil {
+		return
+	}
+	resolvedRcloneCacheMu.Lock()
+	resolvedRcloneCache = cachedResolvedRclone{
+		env:         env,
+		path:        path,
+		fingerprint: fingerprint,
+		checkedAt:   time.Now(),
+	}
+	resolvedRcloneCacheMu.Unlock()
+}
+
+func setCachedResolvedRcloneError(env string, err error) {
+	if err == nil {
+		return
+	}
+	resolvedRcloneCacheMu.Lock()
+	resolvedRcloneCache = cachedResolvedRclone{
+		env:        env,
+		checkedAt:  time.Now(),
+		errMessage: err.Error(),
+		notFound:   errors.Is(err, ErrRcloneNotFound),
+	}
+	resolvedRcloneCacheMu.Unlock()
+}
+
+func clearCachedResolvedRclonePath(env, path string) {
+	resolvedRcloneCacheMu.Lock()
+	if resolvedRcloneCache.env == env && resolvedRcloneCache.fingerprint.path == path {
+		resolvedRcloneCache = cachedResolvedRclone{}
+	}
+	resolvedRcloneCacheMu.Unlock()
+}
+
+func clearCachedResolvedRclone(env, path string) {
+	resolvedRcloneCacheMu.Lock()
+	if resolvedRcloneCache.env == env && (path == "" || resolvedRcloneCache.fingerprint.path == path || resolvedRcloneCache.path == path) {
+		resolvedRcloneCache = cachedResolvedRclone{}
+	}
+	resolvedRcloneCacheMu.Unlock()
+}
+
+func getCachedCompatibleRcloneVersion(path string) (string, error, bool) {
+	compatibleRcloneCacheMu.Lock()
+	cached := compatibleRcloneCache
+	compatibleRcloneCacheMu.Unlock()
+	if cached.fingerprint.path != path {
+		return "", nil, false
+	}
+	current, err := fingerprintRcloneBinary(path)
+	if err != nil || current != cached.fingerprint {
+		clearCachedCompatibleRcloneVersion(path)
+		return "", nil, false
+	}
+	ttl := rcloneCompatibilitySuccessTTL
+	if cached.errReason != "" {
+		ttl = rcloneCompatibilityFailureTTL
+	}
+	if time.Since(cached.checkedAt) > ttl {
+		clearCachedCompatibleRcloneVersion(path)
+		return "", nil, false
+	}
+	if cached.errReason == "" {
+		return cached.version, nil, true
+	}
+	return cached.version, &RcloneIncompatibleError{
+		CurrentVersion: cached.version,
+		MinVersion:     MinSupportedRcloneVersion,
+		Reason:         cached.errReason,
+	}, true
+}
+
+func setCachedCompatibleRcloneVersion(path, version string) {
+	fingerprint, err := fingerprintRcloneBinary(path)
+	if err != nil {
+		return
+	}
+	compatibleRcloneCacheMu.Lock()
+	compatibleRcloneCache = cachedCompatibleRclone{
+		fingerprint: fingerprint,
+		checkedAt:   time.Now(),
+		version:     version,
+	}
+	compatibleRcloneCacheMu.Unlock()
+}
+
+func setCachedCompatibleRcloneFailure(path, version, reason string) {
+	fingerprint, err := fingerprintRcloneBinary(path)
+	if err != nil {
+		return
+	}
+	compatibleRcloneCacheMu.Lock()
+	compatibleRcloneCache = cachedCompatibleRclone{
+		fingerprint: fingerprint,
+		checkedAt:   time.Now(),
+		version:     version,
+		errReason:   reason,
+	}
+	compatibleRcloneCacheMu.Unlock()
+}
+
+func clearCachedCompatibleRcloneVersion(path string) {
+	compatibleRcloneCacheMu.Lock()
+	if compatibleRcloneCache.fingerprint.path == path {
+		compatibleRcloneCache = cachedCompatibleRclone{}
+	}
+	compatibleRcloneCacheMu.Unlock()
+}
+
+func fingerprintRcloneBinary(path string) (rcloneBinaryFingerprint, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return rcloneBinaryFingerprint{}, err
+	}
+	return rcloneBinaryFingerprint{
+		path:        path,
+		size:        info.Size(),
+		modUnixNano: info.ModTime().UnixNano(),
+	}, nil
 }
 
 // TransferEngineJobError wraps transfer-engine failures in a jobError so that the

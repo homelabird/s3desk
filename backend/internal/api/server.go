@@ -1,6 +1,8 @@
 package api
 
 import (
+	"sync"
+
 	"s3desk/internal/bucketgov"
 	"s3desk/internal/config"
 	"s3desk/internal/jobs"
@@ -20,6 +22,7 @@ type server struct {
 	authLimit   *authFailureLimiter
 	uploadLimit *requestLimiter
 	bucketGov   *bucketgov.Service
+	restoreMu   sync.RWMutex
 }
 
 type contextKey string

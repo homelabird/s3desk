@@ -27,10 +27,6 @@ func (a *awsAdapter) GetEncryption(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *awsAdapter) PutEncryption(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketEncryptionPutRequest) error {
-	if err := ValidateEncryptionPut(models.ProfileProviderAwsS3, req); err != nil {
-		return err
-	}
-
 	rule, err := a.toS3EncryptionRule(ctx, profile, bucket, req)
 	if err != nil {
 		return err

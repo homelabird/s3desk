@@ -96,10 +96,6 @@ func (a *awsAdapter) GetLifecycle(ctx context.Context, profile models.ProfileSec
 }
 
 func (a *awsAdapter) PutLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketLifecyclePutRequest) error {
-	if err := ValidateLifecyclePut(models.ProfileProviderAwsS3, req); err != nil {
-		return err
-	}
-
 	rules, err := parseAWSLifecycleRulesJSON(req.Rules)
 	if err != nil {
 		return err

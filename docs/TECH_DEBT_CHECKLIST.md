@@ -1,78 +1,105 @@
 # Technical Debt Checklist
 
-Execution order follows [TECH_DEBT.md](TECH_DEBT.md).
+This checklist is the execution view of [TECH_DEBT.md](TECH_DEBT.md).
 
-The goal of this checklist is to turn the debt register into a concrete work queue.
+It intentionally tracks only the currently open round.
 
 ## Priority 0
 
-### P0-1. Deployment default hardening
+### P0-1. Real-provider live validation
 
-- [x] Reject placeholder `API_TOKEN` values when remote access is enabled on a non-loopback bind
-- [x] Make local/dev examples clearly local-only
-- [x] Split or clarify local-build vs deploy-ready compose guidance
-- [x] Normalize remote access guidance across [README.md](../README.md) and [RUNBOOK.md](RUNBOOK.md)
+- [ ] Run the documented AWS S3 pass
+- [ ] Run the documented GCS pass
+- [ ] Run the documented Azure Blob pass
+- [ ] Run the documented OCI Object Storage pass
+- [ ] Attach evidence to the release decision path
 
-### P0-2. OpenAPI generation discipline
+### P0-2. Hardened remote deployment template
 
-- [x] Treat [openapi.ts](../frontend/src/api/openapi.ts) as generated-only
-- [x] Add a drift check for `npm run gen:openapi`
-- [x] Document the allowed API schema edit path: `openapi.yml -> gen:openapi`
+- [x] Add a remote or production deployment template distinct from local-build
+- [x] Keep local-build explicitly loopback-only and local-only
+- [x] Update the runbook and root README to point operators at the hardened template
 
-### P0-3. Objects preview/thumbnail pipeline refactor
+### P0-3. Staged restore cleanup and coordination
 
-- [x] Centralize frontend thumbnail failure policy and preview transport decisions
-- [x] Separate policy, transport, and cache responsibilities
-- [x] Reduce preview/thumbnail/proxy branching complexity
-- [x] Add regression coverage for image, GIF, MP4, MKV, cache-hit, and proxy-skip cases
+- [x] Add restore-root coordination for stage, list, and delete flows
+- [x] Remove automatic destructive cleanup from request-serving paths
+- [x] Move cleanup to an explicit admin action or background maintenance path
 
-### P0-4. Backup/restore scope alignment
+### P0-4. Thumbnail, preview, and proxy service boundaries
 
-- [x] Clarify sqlite-only backup scope in UI and docs
-- [x] Decide and document the Postgres backup story
-- [x] Improve staged restore lifecycle guidance and cleanup policy
+- [x] Extract preview transport selection out of request handlers
+- [x] Extract thumbnail generation orchestration out of request handlers
+- [x] Extract remote media fetch policy out of request handlers
+- [x] Keep regression coverage focused on image, GIF, MP4, MKV, cache-hit, and proxy-skip paths
+
+### P0-5. Backup bundle security and restore preflight
+
+- [x] Add bundle authenticity or signing support
+- [ ] Add optional bundle confidentiality or encryption support
+- [x] Add disk-space or restore-size preflight before staging
+- [x] Expose structured restore validation results in API and UI
 
 ## Priority 1
 
-### P1-1. Frontend input and persisted-state hardening
+### P1-1. Remove remaining shell-backed fake `rclone` tests
 
-- [x] Add search length and complexity limits
-- [x] Validate/clamp localStorage and sessionStorage state on load
-- [x] Rework folder upload collection to reduce memory spikes
+- [x] Replace shell-backed connectivity API tests with process seams
+- [x] Replace shell-backed buckets API tests with process seams
+- [x] Replace shell-backed objects API tests with process seams
+- [x] Replace shell-backed multipart failure tests with process seams
+- [x] Replace shell-backed cloud smoke helpers where feasible
 
-### P1-2. Presigned URL and base URL validation
+### P1-2. Cache `rclone` resolution and version probing
 
-- [x] Add scheme/host/path validation before browser-side preview and open flows
-- [x] Separate local API URL rules from third-party storage URL rules
+- [x] Add a cached resolver for `ResolveRclonePath`
+- [x] Add a cached or throttled compatibility probe for `EnsureRcloneCompatible`
+- [x] Define invalidation rules for config or binary changes
 
-### P1-3. Bucket governance modularization
+### P1-3. Bucket policy and bucket creation modal modularization
 
-- [ ] Split provider-specific frontend sections into smaller components
-- [ ] Reduce coupling between capability, validation, and mutation logic on the backend
+- [x] Split provider-specific bucket policy sections out of `BucketPolicyModal`
+- [x] Split provider-specific bucket creation sections out of `BucketModal`
+- [x] Extract shared provider form helpers used by both modals
+
+### P1-4. Postgres backup capability surface
+
+- [ ] Expose backup capability by DB backend in the API or runtime metadata
+- [ ] Reflect capability state directly in the settings UI
+- [ ] Make unsupported Postgres restore paths impossible to misread as supported
+
+### P1-5. Release gate enforcement in CI
+
+- [ ] Add a CI or scripted check for release-note known limitations
+- [ ] Add a CI or scripted check for required live validation evidence references
+- [ ] Tie release approval steps to the documented release gate
 
 ## Priority 2
 
-### P2-1. External process abstraction for tests
+### P2-1. Replace mutable global test hooks with stricter runners
 
-- [ ] Add smaller seams around `rclone` and `ffmpeg` execution
-- [ ] Reduce platform-specific test skips
+- [ ] Move API-layer process seams away from mutable package globals
+- [ ] Move jobs-layer process seams away from mutable package globals
+- [ ] Keep test injection possible without widening runtime state further
 
-### P2-2. Staged restore lifecycle management
+### P2-2. Narrow bucket governance backend interfaces further
 
-- [x] Show staged restore age/size more clearly
-- [x] Document cleanup and cutover steps in the runbook
-- [x] Consider retention or TTL cleanup for stale staged restores
+- [ ] Introduce narrower section-oriented capability interfaces
+- [ ] Pass richer profile or bucket context into validation helpers
+- [ ] Reduce adapter-wide churn when adding or changing one provider section
 
-### P2-3. Release gate definition
+### P2-3. Cost and restore observability thresholds
 
-- [ ] Define a minimal release checklist
-- [ ] Tie live validation evidence to release readiness
-- [ ] Track known unsupported cases explicitly in release notes
+- [ ] Define operator thresholds for thumbnail cache miss behavior
+- [ ] Define operator thresholds for staged restore buildup and cleanup
+- [ ] Document dashboard or alert expectations in the runbook
 
 ## Current Sequence
 
-1. P0-1 deployment default hardening
-2. P0-2 OpenAPI generation discipline
-3. P0-3 objects preview/thumbnail pipeline refactor
-4. P0-4 backup/restore scope alignment
-5. P1-1 frontend input and persisted-state hardening
+1. P0-1 real-provider live validation
+2. P0-5 optional bundle confidentiality or encryption support
+3. P1-4 Postgres backup capability surface
+4. P1-5 release gate enforcement in CI
+5. P2-1 replace mutable global test hooks with stricter runners
+6. P2-2 narrow bucket governance backend interfaces further
+7. P2-3 cost and restore observability thresholds

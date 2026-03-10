@@ -19,3 +19,10 @@
 - Fixed frontend/backend contract drift around `/meta`, migration endpoints, and live API payload expectations.
 - Fixed thumbnail preview accessibility and stabilized object action menus in list and grid views.
 - Fixed OCI native folder creation so empty folders are backed by hidden marker objects, remain visible after refresh, and no longer leak marker files into object listings.
+
+### Known Limitations
+- Azure legal hold remains read-only in S3Desk.
+- Azure immutability editing requires ARM credentials in addition to storage credentials.
+- OCI PAR edits are delete-and-recreate rather than in-place mutation, and the full access URI is only guaranteed at creation time.
+- AWS typed bucket governance still does not cover Object Lock.
+- In-product backup and staged restore target sqlite `DATA_DIR` workflows and do not replace Postgres disaster recovery.

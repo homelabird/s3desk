@@ -50,6 +50,32 @@ For remote exposure, use a separate deployment manifest and set:
 - a non-placeholder `API_TOKEN`
 - `ALLOWED_HOSTS` when using non-private hostnames
 
+## Remote Deployment Template
+
+The repository root compose files are now the hardened Postgres-backed remote templates:
+
+- `docker-compose.yml`
+- `docker-compose.postgres.yml`
+
+Before starting them, set all required variables explicitly:
+
+```bash
+export S3DESK_IMAGE='ghcr.io/your-org/s3desk'
+export S3DESK_TAG='latest'
+export S3DESK_BIND_ADDRESS='0.0.0.0'
+export S3DESK_PORT='8080'
+export API_TOKEN='set-a-remote-token'
+export POSTGRES_PASSWORD='set-a-db-password'
+export ALLOWED_HOSTS='s3desk.example.com'
+docker compose up -d
+```
+
+Notes:
+
+- `S3DESK_BIND_ADDRESS` is required so host exposure is always deliberate.
+- `API_TOKEN` and `POSTGRES_PASSWORD` are required; placeholder defaults are not shipped in the remote template.
+- Keep using `docker-compose.local-build.yml` for local development and local verification.
+
 ## Local Development
 
 Run the backend and frontend together:

@@ -2,13 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -35,25 +35,18 @@ func (r *eofOnceReader) Close() error {
 	return nil
 }
 
-func writeFakeDownloadRclone(t *testing.T, catBody string) string {
+func installDownloadStartRcloneHook(
+	t *testing.T,
+	hook func(args []string) (*rcloneProcess, error),
+) {
 	t.Helper()
-	return writeFakeRclone(t, ""+
-		"cmd=''\n"+
-		"want_stat=0\n"+
-		"for arg in \"$@\"; do\n"+
-		"  if [ \"$arg\" = \"lsjson\" ]; then cmd='lsjson'; fi\n"+
-		"  if [ \"$arg\" = \"--stat\" ]; then want_stat=1; fi\n"+
-		"  if [ \"$arg\" = \"cat\" ]; then cmd='cat'; fi\n"+
-		"done\n"+
-		"if [ \"$cmd\" = \"lsjson\" ] && [ \"$want_stat\" = \"1\" ]; then\n"+
-		"  printf '{\"Path\":\"report.txt\",\"Name\":\"report.txt\",\"Size\":5,\"ModTime\":\"2024-01-01T00:00:00Z\",\"Hashes\":{\"MD5\":\"abc\"}}\\n'\n"+
-		"  exit 0\n"+
-		"fi\n"+
-		"if [ \"$cmd\" = \"cat\" ]; then\n"+
-		catBody+
-		"fi\n"+
-		"printf 'unexpected rclone args: %s\\n' \"$*\" >&2\n"+
-		"exit 1\n")
+	prevStart := startRcloneHook
+	startRcloneHook = func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
+		return hook(args)
+	}
+	t.Cleanup(func() {
+		startRcloneHook = prevStart
+	})
 }
 
 func TestStreamRcloneDownload_ConvertsEarlyProcessFailureToJSONError(t *testing.T) {
@@ -92,12 +85,24 @@ func TestStreamRcloneDownload_ConvertsEarlyProcessFailureToJSONError(t *testing.
 }
 
 func TestHandleDownloadObject_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeDownloadRclone(t, "printf 'simulated cat failure\\n' >&2\nexit 1\n"))
+	installDownloadStartRcloneHook(t, func(args []string) (*rcloneProcess, error) {
+		if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
+			return &rcloneProcess{
+				stdout: io.NopCloser(strings.NewReader("{\"Path\":\"report.txt\",\"Name\":\"report.txt\",\"Size\":5,\"ModTime\":\"2024-01-01T00:00:00Z\",\"Hashes\":{\"MD5\":\"abc\"}}\n")),
+				stderr: &bytes.Buffer{},
+				wait:   func() error { return nil },
+			}, nil
+		}
+		if len(args) >= 1 && args[0] == "cat" {
+			return &rcloneProcess{
+				stdout: &eofOnceReader{},
+				stderr: bytes.NewBufferString("simulated cat failure"),
+				wait:   func() error { return errors.New("exit status 1") },
+			}, nil
+		}
+		return nil, errors.New("unexpected rclone args")
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -120,12 +125,24 @@ func TestHandleDownloadObject_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
 }
 
 func TestHandleDownloadProxy_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeDownloadRclone(t, "printf 'simulated cat failure\\n' >&2\nexit 1\n"))
+	installDownloadStartRcloneHook(t, func(args []string) (*rcloneProcess, error) {
+		if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
+			return &rcloneProcess{
+				stdout: io.NopCloser(strings.NewReader("{\"Path\":\"report.txt\",\"Name\":\"report.txt\",\"Size\":5,\"ModTime\":\"2024-01-01T00:00:00Z\",\"Hashes\":{\"MD5\":\"abc\"}}\n")),
+				stderr: &bytes.Buffer{},
+				wait:   func() error { return nil },
+			}, nil
+		}
+		if len(args) >= 1 && args[0] == "cat" {
+			return &rcloneProcess{
+				stdout: &eofOnceReader{},
+				stderr: bytes.NewBufferString("simulated cat failure"),
+				wait:   func() error { return errors.New("exit status 1") },
+			}, nil
+		}
+		return nil, errors.New("unexpected rclone args")
+	})
 
 	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -168,29 +185,20 @@ func TestHandleDownloadProxy_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
 }
 
 func TestHandleDownloadProxy_SkipsStatWhenSignedMetadataIsEmbedded(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, ""+
-		"cmd=''\n"+
-		"want_stat=0\n"+
-		"for arg in \"$@\"; do\n"+
-		"  if [ \"$arg\" = \"lsjson\" ]; then cmd='lsjson'; fi\n"+
-		"  if [ \"$arg\" = \"--stat\" ]; then want_stat=1; fi\n"+
-		"  if [ \"$arg\" = \"cat\" ]; then cmd='cat'; fi\n"+
-		"done\n"+
-		"if [ \"$cmd\" = \"lsjson\" ] && [ \"$want_stat\" = \"1\" ]; then\n"+
-		"  printf 'stat should not be called\\n' >&2\n"+
-		"  exit 1\n"+
-		"fi\n"+
-		"if [ \"$cmd\" = \"cat\" ]; then\n"+
-		"  printf 'hello'\n"+
-		"  exit 0\n"+
-		"fi\n"+
-		"printf 'unexpected rclone args: %s\\n' \"$*\" >&2\n"+
-		"exit 1\n"))
+	installDownloadStartRcloneHook(t, func(args []string) (*rcloneProcess, error) {
+		if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
+			t.Fatalf("stat should not be called")
+		}
+		if len(args) >= 1 && args[0] == "cat" {
+			return &rcloneProcess{
+				stdout: &eofOnceReader{data: []byte("hello")},
+				stderr: &bytes.Buffer{},
+				wait:   func() error { return nil },
+			}, nil
+		}
+		return nil, errors.New("unexpected rclone args")
+	})
 
 	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)

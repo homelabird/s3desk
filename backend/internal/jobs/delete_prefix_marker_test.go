@@ -47,7 +47,12 @@ func TestRunTransferDeletePrefixDeletesMarkerWhenPrefixIsEmpty(t *testing.T) {
 	t.Cleanup(fakeS3.Close)
 
 	profile := createDeletePrefixTestProfile(t, st, fakeS3.URL)
-	t.Setenv("RCLONE_PATH", writeJobsFakeRclone(t, "exit 0\n"))
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ TestRunRcloneAttemptOptions, _ func(level string, message string)) (string, error) {
+		if len(args) == 0 {
+			return "", unexpectedJobsProcessArgs(args)
+		}
+		return "", nil
+	})
 
 	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
 		Type: JobTypeTransferDeletePrefix,

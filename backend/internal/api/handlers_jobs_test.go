@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,11 +24,15 @@ import (
 )
 
 func TestJobLogsTailAndOffsets(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
 	lockTestEnv(t)
 	t.Setenv("RCLONE_TUNE", "true")
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ jobs.TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
+		writeLog("info", "hello from rclone")
+		if len(args) == 0 {
+			return "", unexpectedRcloneAttemptError(args)
+		}
+		return "", nil
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)
@@ -36,9 +40,6 @@ func TestJobLogsTailAndOffsets(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(localDir, "sample.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatalf("write sample file: %v", err)
 	}
-
-	rclonePath := writeFakeRclone(t, "printf 'hello from rclone\\n'\n")
-	t.Setenv("RCLONE_PATH", rclonePath)
 
 	job := createJob(t, srv, profile.ID, jobs.JobTypeTransferSyncLocalToS3, map[string]any{
 		"bucket":    "test-bucket",
@@ -95,20 +96,21 @@ func TestJobLogsTailAndOffsets(t *testing.T) {
 }
 
 func TestJobCancelLifecycle(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
+	installJobsProcessHooks(t, func(ctx context.Context, _ string, args []string, _ string, _ jobs.TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
+		writeLog("info", "starting")
+		if len(args) == 0 {
+			return "", unexpectedRcloneAttemptError(args)
+		}
+		<-ctx.Done()
+		return "canceled", ctx.Err()
+	})
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)
 	localDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(localDir, "sample.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatalf("write sample file: %v", err)
 	}
-
-	rclonePath := writeFakeRclone(t, "printf 'starting\\n'\nsleep 10\n")
-	t.Setenv("RCLONE_PATH", rclonePath)
 
 	job := createJob(t, srv, profile.ID, jobs.JobTypeTransferSyncLocalToS3, map[string]any{
 		"bucket":    "test-bucket",
@@ -221,20 +223,20 @@ func TestJobCancelInvalidStatus(t *testing.T) {
 }
 
 func TestJobRetryLifecycle(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ jobs.TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
+		writeLog("error", "fail")
+		if len(args) == 0 {
+			return "", unexpectedRcloneAttemptError(args)
+		}
+		return "fail", errors.New("exit status 1")
+	})
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)
 	localDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(localDir, "sample.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatalf("write sample file: %v", err)
 	}
-
-	rclonePath := writeFakeRclone(t, "printf 'fail\\n'\nexit 1\n")
-	t.Setenv("RCLONE_PATH", rclonePath)
 
 	job := createJob(t, srv, profile.ID, jobs.JobTypeTransferSyncLocalToS3, map[string]any{
 		"bucket":    "test-bucket",

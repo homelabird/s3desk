@@ -120,9 +120,6 @@ func (a *gcsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecret
 }
 
 func (a *gcsAdapter) PutAccess(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
-	if err := ValidateAccessPut(models.ProfileProviderGcpGcs, req); err != nil {
-		return err
-	}
 
 	current, err := a.getIAMPolicy(ctx, profile, bucket, "read current GCS IAM policy", "bucket_access_error")
 	if err != nil {
@@ -177,9 +174,6 @@ func (a *gcsAdapter) GetPublicExposure(ctx context.Context, profile models.Profi
 }
 
 func (a *gcsAdapter) PutPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketPublicExposurePutRequest) error {
-	if err := ValidatePublicExposurePut(models.ProfileProviderGcpGcs, req); err != nil {
-		return err
-	}
 
 	current, err := a.getIAMPolicy(ctx, profile, bucket, "read current GCS IAM policy", "bucket_public_exposure_error")
 	if err != nil {
@@ -239,9 +233,6 @@ func (a *gcsAdapter) GetProtection(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *gcsAdapter) PutProtection(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketProtectionPutRequest) error {
-	if err := ValidateProtectionPut(models.ProfileProviderGcpGcs, req); err != nil {
-		return err
-	}
 
 	current, err := a.getBucketMetadata(ctx, profile, bucket, "read current GCS bucket protection controls", "bucket_protection_error")
 	if err != nil {
@@ -307,9 +298,6 @@ func (a *gcsAdapter) GetVersioning(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *gcsAdapter) PutVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
-	if err := ValidateVersioningPut(models.ProfileProviderGcpGcs, req); err != nil {
-		return err
-	}
 
 	enabled := req.Status == models.BucketVersioningStatusEnabled
 	return a.patchBucketMetadata(ctx, profile, bucket, map[string]any{

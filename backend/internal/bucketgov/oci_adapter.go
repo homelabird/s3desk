@@ -135,9 +135,6 @@ func (a *ociAdapter) GetPublicExposure(ctx context.Context, profile models.Profi
 }
 
 func (a *ociAdapter) PutPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketPublicExposurePutRequest) error {
-	if err := ValidatePublicExposurePut(models.ProfileProviderOciObjectStorage, req); err != nil {
-		return err
-	}
 	publicAccessType, err := toOCIPublicAccessType(req)
 	if err != nil {
 		return err
@@ -182,9 +179,6 @@ func (a *ociAdapter) GetProtection(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *ociAdapter) PutProtection(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketProtectionPutRequest) error {
-	if err := ValidateProtectionPut(models.ProfileProviderOciObjectStorage, req); err != nil {
-		return err
-	}
 	if req.Retention == nil {
 		return UnsupportedOperationError{Provider: models.ProfileProviderOciObjectStorage, Section: "protection"}
 	}
@@ -317,9 +311,6 @@ func (a *ociAdapter) GetVersioning(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *ociAdapter) PutVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
-	if err := ValidateVersioningPut(models.ProfileProviderOciObjectStorage, req); err != nil {
-		return err
-	}
 	versioning := "Disabled"
 	if req.Status == models.BucketVersioningStatusEnabled {
 		versioning = "Enabled"
@@ -363,9 +354,6 @@ func (a *ociAdapter) GetSharing(ctx context.Context, profile models.ProfileSecre
 }
 
 func (a *ociAdapter) PutSharing(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketSharingPutRequest) (models.BucketSharingView, error) {
-	if err := ValidateSharingPut(models.ProfileProviderOciObjectStorage, req); err != nil {
-		return models.BucketSharingView{}, err
-	}
 	current, err := a.getOCIPreauthenticatedRequests(ctx, profile, bucket, "read current OCI pre-authenticated requests", "bucket_sharing_error")
 	if err != nil {
 		return models.BucketSharingView{}, err

@@ -15,12 +15,17 @@ Containerized defaults:
 
 - SQLite image stores data under `/data`
 - `docker-compose.local-build.yml` is loopback-only and meant for local work
-- Postgres compose deployment uses Docker volumes but should not be treated as a hardened remote deployment template
+- `docker-compose.yml` and `docker-compose.postgres.yml` are the hardened Postgres-backed remote templates
+- remote templates require explicit `S3DESK_BIND_ADDRESS`, `API_TOKEN`, and `POSTGRES_PASSWORD`
 
 ## Start and Stop
 
 ```bash
-export API_TOKEN='set-a-local-token'
+export S3DESK_IMAGE='ghcr.io/your-org/s3desk'
+export S3DESK_TAG='latest'
+export S3DESK_BIND_ADDRESS='0.0.0.0'
+export API_TOKEN='set-a-remote-token'
+export POSTGRES_PASSWORD='set-a-db-password'
 docker compose up -d
 docker compose down
 docker compose logs -f
@@ -34,6 +39,7 @@ For remote exposure, require all of the following:
 - a non-placeholder `API_TOKEN`
 - explicit review of exposed host/port bindings
 - `ALLOWED_HOSTS` for non-private hostnames
+- an explicit `S3DESK_BIND_ADDRESS` choice in the compose environment
 
 ## Health Checks
 

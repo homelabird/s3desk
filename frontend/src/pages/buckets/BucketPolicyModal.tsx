@@ -9,8 +9,7 @@ import {
   Typography,
   message,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { APIClient, APIError } from "../../api/client";
 import type {
@@ -20,9 +19,7 @@ import type {
   Profile,
 } from "../../api/types";
 import { AppTabs } from "../../components/AppTabs";
-import { DialogModal } from "../../components/DialogModal";
 import { NativeSelect } from "../../components/NativeSelect";
-import { OverlaySheet } from "../../components/OverlaySheet";
 import { ToggleSwitch } from "../../components/ToggleSwitch";
 import { confirmDangerAction } from "../../lib/confirmDangerAction";
 import { formatErrorWithHint as formatErr } from "../../lib/errors";
@@ -31,86 +28,22 @@ import {
   formatValidationOperationMessage,
 } from "../../lib/providerOperationFeedback";
 import styles from "./BucketPolicyModal.module.css";
+import { AzurePolicyStructuredEditor } from "./policy/azure-structured";
+import { BucketPolicyDialogShell } from "./policy/DialogShell";
+import { GcsPolicyStructuredEditor } from "./policy/gcs-structured";
 import {
   getPolicyPresets,
   getPolicyTemplate,
   type PolicyKind,
 } from "./policyPresets";
-
-type ParsedPolicy =
-  | { ok: true; error: null; value: Record<string, unknown> }
-  | { ok: false; error: string; value: null };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const parsePolicyText = (rawText: string): ParsedPolicy => {
-  const raw = rawText.trim();
-  if (raw === "") {
-    return { ok: false, error: "Policy is empty", value: null };
-  }
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (!isRecord(value)) {
-      return { ok: false, error: "Policy must be a JSON object", value: null };
-    }
-    return { ok: true, error: null, value };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-      value: null,
-    };
-  }
-};
-
-function BucketPolicyDialogShell(props: {
-  mobile: boolean;
-  title: string;
-  onClose: () => void;
-  footer?: ReactNode;
-  children: ReactNode;
-}) {
-  const shellContent = (
-    <div
-      className={props.mobile ? styles.mobileShell : styles.desktopShell}
-      data-testid={
-        props.mobile
-          ? "bucket-policy-mobile-shell"
-          : "bucket-policy-desktop-shell"
-      }
-    >
-      {props.children}
-    </div>
-  );
-
-  if (props.mobile) {
-    return (
-      <OverlaySheet
-        open
-        onClose={props.onClose}
-        title={props.title}
-        placement="right"
-        footer={props.footer}
-        width="100vw"
-      >
-        {shellContent}
-      </OverlaySheet>
-    );
-  }
-
-  return (
-    <DialogModal
-      open
-      title={props.title}
-      onClose={props.onClose}
-      footer={props.footer ?? null}
-      width="min(96vw, 920px)"
-    >
-      {shellContent}
-    </DialogModal>
-  );
-}
+import {
+  isRecord,
+  parsePolicyText,
+} from "./policy/types";
+import type {
+  AzureStoredPolicyRow,
+  GcsBindingRow,
+} from "./policy/types";
 
 export function BucketPolicyModal(props: {
   api: APIClient;
@@ -239,18 +172,6 @@ function BucketPolicyEditor(props: {
   const [selectedPresetKey, setSelectedPresetKey] = useState<
     string | undefined
   >(undefined);
-
-  // ----- Structured editor state (GCS) -----
-  type GcsBindingRow = { key: string; role: string; members: string[] };
-
-  // ----- Structured editor state (Azure) -----
-  type AzureStoredPolicyRow = {
-    key: string;
-    id: string;
-    start?: string;
-    expiry?: string;
-    permission?: string;
-  };
 
   const keyCounter = useRef(0);
   const nextKey = () => {
@@ -730,550 +651,27 @@ function BucketPolicyEditor(props: {
   const renderStructuredEditor = () => {
     if (policyKind === "gcs") {
       return (
-        <Space
-          orientation="vertical"
-          className={styles.fullWidth}
-          size="middle"
-        >
-          <Space align="center" wrap className={styles.controlRow}>
-            <ToggleSwitch
-              checked={gcsPublicRead}
-              ariaLabel="Public read access"
-              onChange={(checked) => {
-                setGcsBindings((prev) => {
-                  const next = prev.map((b) => ({
-                    ...b,
-                    members: [...b.members],
-                  }));
-                  const role = "roles/storage.objectViewer";
-                  if (checked) {
-                    const idx = next.findIndex((b) => b.role === role);
-                    if (idx === -1) {
-                      next.push({
-                        key: nextKey(),
-                        role,
-                        members: ["allUsers"],
-                      });
-                    } else if (!next[idx].members.includes("allUsers")) {
-                      next[idx].members.push("allUsers");
-                    }
-                  } else {
-                    for (const binding of next) {
-                      binding.members = binding.members.filter(
-                        (member) => member !== "allUsers",
-                      );
-                    }
-                    return next.filter(
-                      (binding) =>
-                        binding.members.length > 0 ||
-                        binding.role.trim() !== "",
-                    );
-                  }
-                  return next;
-                });
-              }}
-            />
-            <Typography.Text>
-              Public read access (adds{" "}
-              <Typography.Text code>allUsers</Typography.Text> to{" "}
-              <Typography.Text code>roles/storage.objectViewer</Typography.Text>
-              )
-            </Typography.Text>
-          </Space>
-
-          {gcsEtag.trim() === "" ? (
-            <Alert
-              type="warning"
-              showIcon
-              title="etag missing"
-              description="GCS IAM policy updates are safest when preserving etag. Reload policy before saving if you hit conflicts."
-            />
-          ) : (
-            <Alert
-              type="info"
-              showIcon
-              title="etag preserved"
-              description={
-                <Space
-                  orientation="vertical"
-                  size={4}
-                  className={styles.fullWidth}
-                >
-                  <Typography.Text type="secondary">
-                    This value will be sent back on save.
-                  </Typography.Text>
-                  <Typography.Text code>{gcsEtag}</Typography.Text>
-                </Space>
-              }
-            />
-          )}
-
-          {gcsBindings.length === 0 ? (
-            <Typography.Text type="secondary">No bindings</Typography.Text>
-          ) : useStructuredCards ? (
-            <div
-              className={styles.structuredCardList}
-              data-testid="bucket-policy-gcs-mobile-bindings"
-            >
-              {gcsBindings.map((row, index) => (
-                <section key={row.key} className={styles.structuredCard}>
-                  <div className={styles.structuredCardHeader}>
-                    <Typography.Text
-                      strong
-                    >{`Binding ${index + 1}`}</Typography.Text>
-                    <Button
-                      danger
-                      size="small"
-                      onClick={() =>
-                        setGcsBindings((prev) =>
-                          prev.filter((binding) => binding.key !== row.key),
-                        )
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div className={styles.structuredField}>
-                    <Typography.Text
-                      type="secondary"
-                      className={styles.structuredFieldLabel}
-                    >
-                      Role
-                    </Typography.Text>
-                    <Input
-                      value={row.role}
-                      aria-label="Role"
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setGcsBindings((prev) =>
-                          prev.map((binding) =>
-                            binding.key === row.key
-                              ? { ...binding, role: value }
-                              : binding,
-                          ),
-                        );
-                      }}
-                      placeholder="roles/storage.objectViewer…"
-                    />
-                  </div>
-                  <div className={styles.structuredField}>
-                    <Typography.Text
-                      type="secondary"
-                      className={styles.structuredFieldLabel}
-                    >
-                      Members
-                    </Typography.Text>
-                    <Input.TextArea
-                      value={row.members.join("\n")}
-                      aria-label="Members"
-                      onChange={(e) => {
-                        const uniq = new Set(
-                          e.target.value
-                            .split(/[\n,]+/)
-                            .map((value) => value.trim())
-                            .filter(Boolean),
-                        );
-                        setGcsBindings((prev) =>
-                          prev.map((binding) =>
-                            binding.key === row.key
-                              ? { ...binding, members: Array.from(uniq) }
-                              : binding,
-                          ),
-                        );
-                      }}
-                      autoSize={{ minRows: 3, maxRows: 8 }}
-                      className={styles.membersInput}
-                      placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
-                    />
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={`${styles.policyTable} ${styles.gcsTable}`}>
-                <thead>
-                  <tr className={styles.headRow}>
-                    <th className={`${styles.th} ${styles.thRole}`}>Role</th>
-                    <th className={styles.th}>Members</th>
-                    <th className={`${styles.th} ${styles.thActions}`}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {gcsBindings.map((row) => (
-                    <tr key={row.key}>
-                      <td className={styles.td}>
-                        <Input
-                          value={row.role}
-                          aria-label="Role"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setGcsBindings((prev) =>
-                              prev.map((binding) =>
-                                binding.key === row.key
-                                  ? { ...binding, role: value }
-                                  : binding,
-                              ),
-                            );
-                          }}
-                          placeholder="roles/storage.objectViewer…"
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <Input.TextArea
-                          value={row.members.join("\n")}
-                          aria-label="Members"
-                          onChange={(e) => {
-                            const uniq = new Set(
-                              e.target.value
-                                .split(/[\n,]+/)
-                                .map((value) => value.trim())
-                                .filter(Boolean),
-                            );
-                            setGcsBindings((prev) =>
-                              prev.map((binding) =>
-                                binding.key === row.key
-                                  ? { ...binding, members: Array.from(uniq) }
-                                  : binding,
-                              ),
-                            );
-                          }}
-                          autoSize={{ minRows: 2, maxRows: 6 }}
-                          className={styles.membersInput}
-                          placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <Button
-                          danger
-                          size="small"
-                          onClick={() =>
-                            setGcsBindings((prev) =>
-                              prev.filter((binding) => binding.key !== row.key),
-                            )
-                          }
-                        >
-                          Remove
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <Button
-            icon={<PlusOutlined />}
-            onClick={() =>
-              setGcsBindings((prev) => [
-                ...prev,
-                { key: nextKey(), role: "", members: [] },
-              ])
-            }
-          >
-            Add binding
-          </Button>
-        </Space>
+        <GcsPolicyStructuredEditor
+          useStructuredCards={useStructuredCards}
+          gcsPublicRead={gcsPublicRead}
+          gcsEtag={gcsEtag}
+          gcsBindings={gcsBindings}
+          nextKey={nextKey}
+          setGcsBindings={setGcsBindings}
+        />
       );
     }
 
     if (policyKind === "azure") {
       return (
-        <Space
-          orientation="vertical"
-          className={styles.fullWidth}
-          size="middle"
-        >
-          <Space align="center" wrap className={styles.controlRow}>
-            <Typography.Text strong>Public access:</Typography.Text>
-            <NativeSelect
-              value={azurePublicAccess}
-              onChange={(value) =>
-                setAzurePublicAccess(value as "private" | "blob" | "container")
-              }
-              ariaLabel="Public access"
-              className={styles.publicAccessSelect}
-              options={[
-                { value: "private", label: "private" },
-                { value: "blob", label: "blob (public read for blobs)" },
-                {
-                  value: "container",
-                  label: "container (public read for container + blobs)",
-                },
-              ]}
-            />
-          </Space>
-
-          {azureStoredPolicies.length > 5 ? (
-            <Alert
-              type="warning"
-              showIcon
-              title="Azure supports at most 5 stored access policies"
-            />
-          ) : null}
-
-          {azureStoredPolicies.length === 0 ? (
-            <Typography.Text type="secondary">
-              No stored access policies
-            </Typography.Text>
-          ) : useStructuredCards ? (
-            <div
-              className={styles.structuredCardList}
-              data-testid="bucket-policy-azure-mobile-policies"
-            >
-              {azureStoredPolicies.map((row, index) => (
-                <section key={row.key} className={styles.structuredCard}>
-                  <div className={styles.structuredCardHeader}>
-                    <Typography.Text
-                      strong
-                    >{`Stored access policy ${index + 1}`}</Typography.Text>
-                    <Button
-                      danger
-                      size="small"
-                      onClick={() =>
-                        setAzureStoredPolicies((prev) =>
-                          prev.filter((policy) => policy.key !== row.key),
-                        )
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  <div className={styles.structuredFieldGrid}>
-                    <div className={styles.structuredField}>
-                      <Typography.Text
-                        type="secondary"
-                        className={styles.structuredFieldLabel}
-                      >
-                        ID
-                      </Typography.Text>
-                      <Input
-                        value={row.id}
-                        aria-label="ID"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setAzureStoredPolicies((prev) =>
-                            prev.map((policy) =>
-                              policy.key === row.key
-                                ? { ...policy, id: value }
-                                : policy,
-                            ),
-                          );
-                        }}
-                        placeholder="policy-id…"
-                      />
-                    </div>
-                    <div className={styles.structuredField}>
-                      <Typography.Text
-                        type="secondary"
-                        className={styles.structuredFieldLabel}
-                      >
-                        Start
-                      </Typography.Text>
-                      <Input
-                        value={row.start}
-                        aria-label="Start"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setAzureStoredPolicies((prev) =>
-                            prev.map((policy) =>
-                              policy.key === row.key
-                                ? { ...policy, start: value }
-                                : policy,
-                            ),
-                          );
-                        }}
-                        placeholder="2024-01-01T00:00:00Z…"
-                      />
-                    </div>
-                    <div className={styles.structuredField}>
-                      <Typography.Text
-                        type="secondary"
-                        className={styles.structuredFieldLabel}
-                      >
-                        Expiry
-                      </Typography.Text>
-                      <Input
-                        value={row.expiry}
-                        aria-label="Expiry"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setAzureStoredPolicies((prev) =>
-                            prev.map((policy) =>
-                              policy.key === row.key
-                                ? { ...policy, expiry: value }
-                                : policy,
-                            ),
-                          );
-                        }}
-                        placeholder="2024-02-01T00:00:00Z…"
-                      />
-                    </div>
-                    <div className={styles.structuredField}>
-                      <Typography.Text
-                        type="secondary"
-                        className={styles.structuredFieldLabel}
-                      >
-                        Permission
-                      </Typography.Text>
-                      <Input
-                        value={row.permission}
-                        aria-label="Permission"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setAzureStoredPolicies((prev) =>
-                            prev.map((policy) =>
-                              policy.key === row.key
-                                ? { ...policy, permission: value }
-                                : policy,
-                            ),
-                          );
-                        }}
-                        placeholder="rl…"
-                      />
-                    </div>
-                  </div>
-                </section>
-              ))}
-            </div>
-          ) : (
-            <div className={styles.tableWrap}>
-              <table className={`${styles.policyTable} ${styles.azureTable}`}>
-                <thead>
-                  <tr className={styles.headRow}>
-                    <th className={`${styles.th} ${styles.thId}`}>ID</th>
-                    <th className={`${styles.th} ${styles.thTime}`}>
-                      Start (optional)
-                    </th>
-                    <th className={`${styles.th} ${styles.thTime}`}>
-                      Expiry (optional)
-                    </th>
-                    <th className={`${styles.th} ${styles.thPermission}`}>
-                      Permission
-                    </th>
-                    <th className={`${styles.th} ${styles.thActions}`}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {azureStoredPolicies.map((row) => (
-                    <tr key={row.key}>
-                      <td className={styles.td}>
-                        <Input
-                          value={row.id}
-                          aria-label="ID"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setAzureStoredPolicies((prev) =>
-                              prev.map((policy) =>
-                                policy.key === row.key
-                                  ? { ...policy, id: value }
-                                  : policy,
-                              ),
-                            );
-                          }}
-                          placeholder="policy-id…"
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <Input
-                          value={row.start}
-                          aria-label="Start"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setAzureStoredPolicies((prev) =>
-                              prev.map((policy) =>
-                                policy.key === row.key
-                                  ? { ...policy, start: value }
-                                  : policy,
-                              ),
-                            );
-                          }}
-                          placeholder="2024-01-01T00:00:00Z…"
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <Input
-                          value={row.expiry}
-                          aria-label="Expiry"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setAzureStoredPolicies((prev) =>
-                              prev.map((policy) =>
-                                policy.key === row.key
-                                  ? { ...policy, expiry: value }
-                                  : policy,
-                              ),
-                            );
-                          }}
-                          placeholder="2024-02-01T00:00:00Z…"
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <Input
-                          value={row.permission}
-                          aria-label="Permission"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setAzureStoredPolicies((prev) =>
-                              prev.map((policy) =>
-                                policy.key === row.key
-                                  ? { ...policy, permission: value }
-                                  : policy,
-                              ),
-                            );
-                          }}
-                          placeholder="rl…"
-                        />
-                      </td>
-                      <td className={styles.td}>
-                        <Button
-                          danger
-                          size="small"
-                          onClick={() =>
-                            setAzureStoredPolicies((prev) =>
-                              prev.filter((policy) => policy.key !== row.key),
-                            )
-                          }
-                        >
-                          Remove
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <Button
-            icon={<PlusOutlined />}
-            disabled={azureStoredPolicies.length >= 5}
-            onClick={() =>
-              setAzureStoredPolicies((prev) => [
-                ...prev,
-                {
-                  key: nextKey(),
-                  id: "",
-                  start: "",
-                  expiry: "",
-                  permission: "",
-                },
-              ])
-            }
-          >
-            Add stored access policy
-          </Button>
-
-          <Typography.Text type="secondary">
-            Permissions letters: r(read), w(write), d(delete), l(list), a(add),
-            c(create), u(update), p(process)
-          </Typography.Text>
-        </Space>
+        <AzurePolicyStructuredEditor
+          useStructuredCards={useStructuredCards}
+          azurePublicAccess={azurePublicAccess}
+          azureStoredPolicies={azureStoredPolicies}
+          nextKey={nextKey}
+          setAzurePublicAccess={setAzurePublicAccess}
+          setAzureStoredPolicies={setAzureStoredPolicies}
+        />
       );
     }
 

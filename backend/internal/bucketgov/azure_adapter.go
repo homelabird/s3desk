@@ -96,9 +96,6 @@ func (a *azureAdapter) GetAccess(ctx context.Context, profile models.ProfileSecr
 }
 
 func (a *azureAdapter) PutAccess(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
-	if err := ValidateAccessPut(models.ProfileProviderAzureBlob, req); err != nil {
-		return err
-	}
 
 	current, err := a.getContainerPolicy(ctx, profile, bucket, "read current Azure container access policy", "bucket_access_error")
 	if err != nil {
@@ -132,9 +129,6 @@ func (a *azureAdapter) GetPublicExposure(ctx context.Context, profile models.Pro
 }
 
 func (a *azureAdapter) PutPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketPublicExposurePutRequest) error {
-	if err := ValidatePublicExposurePut(models.ProfileProviderAzureBlob, req); err != nil {
-		return err
-	}
 
 	current, err := a.getContainerPolicy(ctx, profile, bucket, "read current Azure container access policy", "bucket_public_exposure_error")
 	if err != nil {
@@ -192,9 +186,6 @@ func (a *azureAdapter) GetProtection(ctx context.Context, profile models.Profile
 }
 
 func (a *azureAdapter) PutProtection(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketProtectionPutRequest) error {
-	if err := ValidateProtectionPut(models.ProfileProviderAzureBlob, req); err != nil {
-		return err
-	}
 
 	if req.SoftDelete != nil {
 		props, err := a.getBlobServiceProperties(ctx, profile, bucket, "read current Azure Blob service properties", "bucket_protection_error")
@@ -241,9 +232,6 @@ func (a *azureAdapter) GetVersioning(ctx context.Context, profile models.Profile
 }
 
 func (a *azureAdapter) PutVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
-	if err := ValidateVersioningPut(models.ProfileProviderAzureBlob, req); err != nil {
-		return err
-	}
 	props, err := a.getBlobServiceProperties(ctx, profile, bucket, "read current Azure Blob service properties", "bucket_versioning_error")
 	if err != nil {
 		return err

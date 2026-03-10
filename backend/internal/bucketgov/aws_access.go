@@ -30,10 +30,6 @@ func (a *awsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecret
 }
 
 func (a *awsAdapter) PutAccess(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
-	if err := ValidateAccessPut(models.ProfileProviderAwsS3, req); err != nil {
-		return err
-	}
-
 	client := a.newClient(profile)
 	_, err := client.PutBucketOwnershipControls(ctx, &s3.PutBucketOwnershipControlsInput{
 		Bucket: &bucket,

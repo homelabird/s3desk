@@ -18,6 +18,17 @@ type ServerSettingsSectionProps = {
 	errorMessage: string | null
 }
 
+type ServerRestoreValidationView = {
+	preflightChecked?: boolean
+	diskFreeBytesBefore?: number
+	payloadFileCount?: number
+	payloadBytes?: number
+	payloadChecksumPresent?: boolean
+	payloadChecksumVerified?: boolean
+	payloadSignaturePresent?: boolean
+	payloadSignatureVerified?: boolean
+}
+
 export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 	const restoreInputRef = useRef<HTMLInputElement | null>(null)
 	const [backupLoading, setBackupLoading] = useState(false)
@@ -153,6 +164,8 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		}
 	}
 
+	const restoreValidation = (restoreResult as (ServerRestoreResponse & { validation?: ServerRestoreValidationView }) | null)?.validation
+
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			{props.isFetching && !props.meta ? (
@@ -252,6 +265,37 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 											</div>
 										) : null}
 									</div>
+									{restoreValidation ? (
+										<div>
+											<Typography.Text type="secondary">Restore validation</Typography.Text>
+											<div>
+												<Typography.Text code>
+													{restoreValidation.preflightChecked ? 'preflight checked' : 'preflight skipped'}
+												</Typography.Text>
+												<Typography.Text type="secondary"> / </Typography.Text>
+												<Typography.Text code>
+													{restoreValidation.payloadChecksumPresent
+														? restoreValidation.payloadChecksumVerified
+															? 'checksum verified'
+															: 'checksum not verified'
+														: 'checksum absent'}
+												</Typography.Text>
+												<Typography.Text type="secondary"> / </Typography.Text>
+												<Typography.Text code>
+													{restoreValidation.payloadSignaturePresent
+														? restoreValidation.payloadSignatureVerified
+															? 'signature verified'
+															: 'signature not verified'
+														: 'signature absent'}
+												</Typography.Text>
+											</div>
+											<div>
+												<Typography.Text code className={styles.codeWrap}>
+													{`${restoreValidation.payloadFileCount ?? 0} extracted / ${formatBytes(restoreValidation.payloadBytes ?? 0)} / free before staging ${formatBytes(restoreValidation.diskFreeBytesBefore ?? 0)}`}
+												</Typography.Text>
+											</div>
+										</div>
+									) : null}
 									{restoreResult.nextSteps.length ? (
 										<div>
 											<Typography.Text strong>Next steps</Typography.Text>

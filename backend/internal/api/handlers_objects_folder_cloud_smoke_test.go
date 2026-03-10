@@ -2,10 +2,11 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	"strings"
 	"testing"
 
 	"s3desk/internal/models"
@@ -14,15 +15,12 @@ import (
 
 func TestHandleCreateFolderAzureBlobSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeCloudFolderRclone(t, cloudFolderRcloneSpec{
-		backendType: "azureblob",
-		assertions: []string{
-			"directory_markers = true",
-			"account = devstoreaccount1",
-			"key = Eby8vdM02xNo=",
-			"endpoint = http://127.0.0.1:10000/devstoreaccount1",
-		},
-	}))
+	installCloudFolderSmokeHook(t, cloudFolderRcloneSpec{
+		provider:    models.ProfileProviderAzureBlob,
+		accountName: "devstoreaccount1",
+		accountKey:  "Eby8vdM02xNo=",
+		endpoint:    "http://127.0.0.1:10000/devstoreaccount1",
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createAzureBlobSmokeProfile(t, st)
@@ -32,15 +30,12 @@ func TestHandleCreateFolderAzureBlobSmoke(t *testing.T) {
 
 func TestHandleCreateFolderGcpGcsSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeCloudFolderRclone(t, cloudFolderRcloneSpec{
-		backendType: "google cloud storage",
-		assertions: []string{
-			"directory_markers = true",
-			`service_account_credentials = {"type":"service_account","project_id":"demo-project","client_email":"svc@example.com","private_key":"k"}`,
-			"project_number = 123456789012",
-			"endpoint = https://storage.googleapis.com",
-		},
-	}))
+	installCloudFolderSmokeHook(t, cloudFolderRcloneSpec{
+		provider:           models.ProfileProviderGcpGcs,
+		serviceAccountJSON: `{"type":"service_account","project_id":"demo-project","client_email":"svc@example.com","private_key":"k"}`,
+		projectNumber:      "123456789012",
+		endpoint:           "https://storage.googleapis.com",
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createGcpGcsSmokeProfile(t, st)
@@ -49,8 +44,12 @@ func TestHandleCreateFolderGcpGcsSmoke(t *testing.T) {
 }
 
 type cloudFolderRcloneSpec struct {
-	backendType string
-	assertions  []string
+	provider           models.ProfileProvider
+	accountName        string
+	accountKey         string
+	serviceAccountJSON string
+	projectNumber      string
+	endpoint           string
 }
 
 func createAzureBlobSmokeProfile(t *testing.T, st *store.Store) models.Profile {
@@ -158,68 +157,82 @@ func assertCreateFolderRoundTrip(t *testing.T, srv *httptest.Server, profileID, 
 	}
 }
 
-func writeFakeCloudFolderRclone(t *testing.T, spec cloudFolderRcloneSpec) string {
+func installCloudFolderSmokeHook(t *testing.T, spec cloudFolderRcloneSpec) {
 	t.Helper()
+	folders := map[string]struct{}{}
+	installAPIStartRcloneHook(t, func(secrets models.ProfileSecrets, args []string) (string, string, error) {
+		if err := validateCloudFolderProfileSecrets(spec, secrets); err != nil {
+			return "", "", err
+		}
+		if len(args) == 0 {
+			return "", "", errors.New("unexpected empty rclone args")
+		}
+		target := args[len(args)-1]
+		switch args[0] {
+		case "lsjson":
+			if strings.HasSuffix(target, "/folder/") {
+				return "[]", "", nil
+			}
+			if !strings.HasPrefix(target, "remote:") {
+				return "", "", errors.New("unexpected lsjson target: " + target)
+			}
+			if _, ok := folders["folder/"]; ok {
+				return `[{"Path":"folder/","Name":"folder/","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}]`, "", nil
+			}
+			return "[]", "", nil
+		default:
+			return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+		}
+	})
+	installAPIRcloneStdinHook(t, func(secrets models.ProfileSecrets, args []string, _ io.Reader) (string, error) {
+		if err := validateCloudFolderProfileSecrets(spec, secrets); err != nil {
+			return "", err
+		}
+		if len(args) == 0 {
+			return "", errors.New("unexpected empty rclone args")
+		}
+		target := args[len(args)-1]
+		if args[0] != "rcat" {
+			return "", errors.New("unexpected rclone args: " + joinArgs(args))
+		}
+		if !strings.HasPrefix(target, "remote:") || !strings.HasSuffix(target, "/folder/") {
+			return "", errors.New("unexpected rcat target: " + target)
+		}
+		folders["folder/"] = struct{}{}
+		return "", nil
+	})
+}
 
-	stateFile := filepath.Join(t.TempDir(), "folders.txt")
-	checks := ""
-	for _, assertion := range spec.assertions {
-		checks += fmt.Sprintf("grep -Fqx %q \"$config\" || { echo 'missing config line: %s' >&2; exit 21; }\n", assertion, assertion)
+func validateCloudFolderProfileSecrets(spec cloudFolderRcloneSpec, secrets models.ProfileSecrets) error {
+	switch spec.provider {
+	case models.ProfileProviderAzureBlob:
+		if secrets.Provider != models.ProfileProviderAzureBlob {
+			return errors.New("unexpected provider")
+		}
+		if secrets.AccountName != spec.accountName {
+			return errors.New("unexpected account name")
+		}
+		if secrets.AccountKey != spec.accountKey {
+			return errors.New("unexpected account key")
+		}
+		if secrets.Endpoint != spec.endpoint {
+			return errors.New("unexpected endpoint")
+		}
+	case models.ProfileProviderGcpGcs:
+		if secrets.Provider != models.ProfileProviderGcpGcs {
+			return errors.New("unexpected provider")
+		}
+		if secrets.ServiceAccountJSON != spec.serviceAccountJSON {
+			return errors.New("unexpected service account json")
+		}
+		if secrets.ProjectNumber != spec.projectNumber {
+			return errors.New("unexpected project number")
+		}
+		if secrets.Endpoint != spec.endpoint {
+			return errors.New("unexpected endpoint")
+		}
+	default:
+		return errors.New("unexpected cloud folder provider")
 	}
-
-	body := fmt.Sprintf(`config=''
-cmd=''
-target=''
-prev=''
-for arg in "$@"; do
-  if [ "$prev" = "--config" ]; then config="$arg"; fi
-  case "$arg" in
-    lsjson|mkdir|rcat) cmd="$arg" ;;
-  esac
-  target="$arg"
-  prev="$arg"
-done
-
-[ -n "$config" ] || { echo "missing config path" >&2; exit 20; }
-grep -Fqx %q "$config" || { echo "missing backend type" >&2; exit 21; }
-%s
-state_file=%q
-
-case "$cmd" in
-  rcat)
-    case "$target" in
-      remote:*/folder/)
-        cat >/dev/null
-        printf 'folder/\n' > "$state_file"
-        exit 0
-        ;;
-    esac
-    printf 'unexpected rcat target: %%s\n' "$target" >&2
-    exit 22
-    ;;
-  lsjson)
-    case "$target" in
-      remote:*/folder/)
-        printf '[]'
-        exit 0
-        ;;
-      remote:*)
-        if [ -f "$state_file" ]; then
-          printf '[{"Path":"folder/","Name":"folder/","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}]'
-        else
-          printf '[]'
-        fi
-        exit 0
-        ;;
-    esac
-    printf 'unexpected lsjson target: %%s\n' "$target" >&2
-    exit 22
-    ;;
-esac
-
-printf 'unexpected rclone args: %%s\n' "$*" >&2
-exit 1
-`, "type = "+spec.backendType, checks, stateFile)
-
-	return writeFakeRclone(t, body)
+	return nil
 }

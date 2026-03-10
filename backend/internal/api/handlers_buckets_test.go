@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -95,17 +96,12 @@ func TestHandleBucketCRUDGcpRequiresProjectNumber(t *testing.T) {
 
 func TestHandleListBucketsMapsAccessDenied(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "lsjson" ]; then cmd='lsjson'; fi
-done
-if [ "$cmd" = "lsjson" ]; then
-  echo "AccessDenied: Access Denied" >&2
-  exit 9
-fi
-exit 0
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "lsjson" {
+			return "", "AccessDenied: Access Denied", errors.New("exit status 9")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets", nil)
@@ -140,17 +136,12 @@ exit 0
 
 func TestHandleDeleteBucketMapsBucketNotEmpty(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "rmdir" ]; then cmd='rmdir'; fi
-done
-if [ "$cmd" = "rmdir" ]; then
-  echo "Bucket not empty" >&2
-  exit 9
-fi
-exit 0
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "rmdir" {
+			return "", "Bucket not empty", errors.New("exit status 9")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/buckets/demo", nil)
@@ -186,17 +177,12 @@ exit 0
 
 func TestHandleDeleteBucketMapsNotFound(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "rmdir" ]; then cmd='rmdir'; fi
-done
-if [ "$cmd" = "rmdir" ]; then
-  echo "NoSuchBucket: bucket not found" >&2
-  exit 9
-fi
-exit 0
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "rmdir" {
+			return "", "NoSuchBucket: bucket not found", errors.New("exit status 9")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/buckets/demo", nil)
@@ -232,7 +218,12 @@ exit 0
 
 func TestHandleCreateBucketAppliesSecureDefaults(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `exit 0`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "mkdir" {
+			return "", "", nil
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	adapter := &fakeGovernanceAdapter{}
 	srv := &server{
@@ -332,7 +323,12 @@ func TestHandleCreateBucketRejectsUnsupportedSecureDefaults(t *testing.T) {
 
 func TestHandleCreateBucketReturnsBucketCreatedWhenDefaultsApplyFails(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `exit 0`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "mkdir" {
+			return "", "", nil
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	adapter := &fakeGovernanceAdapter{
 		putEncryptErr: bucketgov.AccessDeniedError("demo", "PutBucketEncryption"),

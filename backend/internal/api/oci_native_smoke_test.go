@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	"os"
 	"strings"
 	"testing"
 
@@ -25,7 +25,7 @@ const (
 
 func TestHandleListBucketsOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets", nil)
@@ -49,7 +49,7 @@ func TestHandleListBucketsOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleCreateBucketOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/buckets", bytes.NewReader([]byte(`{"name":"demo"}`)))
@@ -74,7 +74,7 @@ func TestHandleCreateBucketOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleDeleteBucketOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/buckets/demo", nil)
@@ -93,7 +93,7 @@ func TestHandleDeleteBucketOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleTestProfileOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -119,7 +119,7 @@ func TestHandleTestProfileOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleBenchmarkProfileOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -142,7 +142,7 @@ func TestHandleBenchmarkProfileOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleListObjectsOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -165,7 +165,7 @@ func TestHandleListObjectsOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleGetObjectMetaOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -191,7 +191,7 @@ func TestHandleGetObjectMetaOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleDownloadObjectOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -216,7 +216,7 @@ func TestHandleDownloadObjectOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleGetObjectDownloadURLOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -239,7 +239,7 @@ func TestHandleGetObjectDownloadURLOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleCreateFolderOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -297,7 +297,7 @@ func TestHandleCreateFolderOciObjectStorageSmoke(t *testing.T) {
 
 func TestHandleDeleteObjectsOciObjectStorageSmoke(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeOciNativeRclone(t))
+	installOciNativeSmokeHooks(t)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createOciNativeSmokeProfile(t, st)
@@ -358,126 +358,154 @@ func createOciNativeSmokeProfile(t *testing.T, st *store.Store) models.Profile {
 	return profile
 }
 
-func writeFakeOciNativeRclone(t *testing.T) string {
+type ociNativeSmokeState struct {
+	folders map[string]struct{}
+}
+
+func installOciNativeSmokeHooks(t *testing.T) {
 	t.Helper()
-	stateFile := filepath.Join(t.TempDir(), "oci-folders.txt")
+	state := &ociNativeSmokeState{folders: map[string]struct{}{}}
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.66.0", nil
+	})
+	installAPIStartRcloneHook(t, func(secrets models.ProfileSecrets, args []string) (string, string, error) {
+		if err := validateOciNativeSmokeSecrets(secrets); err != nil {
+			return "", "", err
+		}
+		return runOciNativeSmokeCommand(args, state)
+	})
+	installAPIRcloneStdinHook(t, func(secrets models.ProfileSecrets, args []string, _ io.Reader) (string, error) {
+		if err := validateOciNativeSmokeSecrets(secrets); err != nil {
+			return "", err
+		}
+		_, stderr, err := runOciNativeSmokeCommand(args, state)
+		return stderr, err
+	})
+}
 
-	body := fmt.Sprintf(`config=''
-cmd=''
-target=''
-prev=''
-want_stat=0
-want_hash=0
-want_metadata=0
-files_from_raw=''
-for arg in "$@"; do
-  if [ "$prev" = "--config" ]; then config="$arg"; fi
-  if [ "$prev" = "--files-from-raw" ]; then files_from_raw="$arg"; fi
-  case "$arg" in
-    lsjson|mkdir|rmdir|copyto|cat|deletefile|link|delete|rcat) cmd="$arg" ;;
-    --stat) want_stat=1 ;;
-    --hash) want_hash=1 ;;
-    --metadata) want_metadata=1 ;;
-  esac
-  target="$arg"
-  prev="$arg"
-done
+func validateOciNativeSmokeSecrets(secrets models.ProfileSecrets) error {
+	if secrets.Provider != models.ProfileProviderOciObjectStorage {
+		return fmt.Errorf("unexpected provider: %s", secrets.Provider)
+	}
+	if secrets.Region != ociNativeSmokeRegion {
+		return fmt.Errorf("unexpected region: %s", secrets.Region)
+	}
+	if secrets.OciNamespace != ociNativeSmokeNamespace {
+		return fmt.Errorf("unexpected namespace: %s", secrets.OciNamespace)
+	}
+	if secrets.OciCompartment != ociNativeSmokeCompartment {
+		return fmt.Errorf("unexpected compartment: %s", secrets.OciCompartment)
+	}
+	if secrets.OciEndpoint != ociNativeSmokeEndpoint {
+		return fmt.Errorf("unexpected endpoint: %s", secrets.OciEndpoint)
+	}
+	return nil
+}
 
-[ -n "$config" ] || { echo "missing config path" >&2; exit 20; }
-grep -Fxq 'type = oracleobjectstorage' "$config" || { echo "missing oracleobjectstorage backend" >&2; exit 21; }
-grep -Fxq 'namespace = %s' "$config" || { echo "missing namespace" >&2; exit 21; }
-grep -Fxq 'compartment = %s' "$config" || { echo "missing compartment" >&2; exit 21; }
-grep -Fxq 'region = %s' "$config" || { echo "missing region" >&2; exit 21; }
-grep -Fxq 'endpoint = %s' "$config" || { echo "missing endpoint" >&2; exit 21; }
-state_file='%s'
+func runOciNativeSmokeCommand(args []string, state *ociNativeSmokeState) (string, string, error) {
+	if len(args) == 0 {
+		return "", "", fmt.Errorf("unexpected empty rclone args")
+	}
+	target := args[len(args)-1]
+	var filesFromRaw string
+	wantStat := false
+	wantHash := false
+	wantMetadata := false
+	for i, arg := range args {
+		switch arg {
+		case "--stat":
+			wantStat = true
+		case "--hash":
+			wantHash = true
+		case "--metadata":
+			wantMetadata = true
+		case "--files-from-raw":
+			if i+1 < len(args) {
+				filesFromRaw = args[i+1]
+			}
+		}
+	}
 
-case "$cmd" in
-  lsjson)
-    if [ "$want_stat" = "1" ]; then
-      if [ "$target" = "remote:oci-native-bucket/report.txt" ]; then
-        if [ "$want_metadata" = "1" ]; then
-          printf '{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","MimeType":"text/plain","Hashes":{"MD5":"abc"},"Metadata":{"cache-control":"no-cache"}}'
-          exit 0
-        fi
-        if [ "$want_hash" = "1" ]; then
-          printf '{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","MimeType":"text/plain","Hashes":{"MD5":"abc"}}'
-          exit 0
-        fi
-      fi
-      printf 'unexpected stat target: %%s\n' "$target" >&2
-      exit 22
-    fi
-    if [ "$target" = "remote:oci-native-bucket" ]; then
-      printf '[{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","IsDir":false,"Hashes":{"MD5":"abc"}}'
-      if [ -f "$state_file" ]; then
-        while IFS= read -r marker; do
-          [ -n "$marker" ] || continue
-          printf ',{"Path":"%%s","Name":"%%s","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}' "$marker" "$marker"
-        done < "$state_file"
-      fi
-      printf ']'
-      exit 0
-    fi
-    if [ "$target" = "remote:oci-native-bucket/folder/" ]; then
-      printf '[{"Path":"%s","Name":"%s","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}]'
-      exit 0
-    fi
-    printf '[{"Name":"oci-native-bucket","IsDir":true}]'
-    exit 0
-    ;;
-  rcat)
-    if [ "$target" = "remote:oci-native-bucket/folder/%s" ]; then
-      cat >/dev/null
-      printf 'folder/%s\n' >> "$state_file"
-      exit 0
-    fi
-    printf 'unexpected rcat target: %%s\n' "$target" >&2
-    exit 22
-    ;;
-  mkdir)
-    if [ "$target" = "remote:demo" ] || [ "$target" = "remote:oci-native-bucket/folder/" ]; then
-      exit 0
-    fi
-    printf 'unexpected mkdir target: %%s\n' "$target" >&2
-    exit 22
-    ;;
-  rmdir)
-    [ "$target" = "remote:demo" ] || { printf 'unexpected rmdir target: %%s\n' "$target" >&2; exit 22; }
-    exit 0
-    ;;
-  copyto)
-    exit 0
-    ;;
-  cat)
-    if printf '%%s' "$target" | grep -q '\.s3desk-benchmark-'; then
-      printf 'benchmark-bytes'
-      exit 0
-    fi
-    if [ "$target" = "remote:oci-native-bucket/report.txt" ]; then
-      printf 'hello'
-      exit 0
-    fi
-    printf 'unexpected cat target: %%s\n' "$target" >&2
-    exit 22
-    ;;
-  link)
-    printf 'https://example.invalid/oci-native-bucket/report.txt?signature=fake'
-    exit 0
-    ;;
-  delete)
-    [ "$target" = "remote:oci-native-bucket" ] || { printf 'unexpected delete target: %%s\n' "$target" >&2; exit 22; }
-    [ -n "$files_from_raw" ] || { echo 'missing files-from-raw path' >&2; exit 22; }
-    grep -Fxq 'report.txt' "$files_from_raw" || { echo 'missing report.txt delete key' >&2; exit 22; }
-    exit 0
-    ;;
-  deletefile)
-    exit 0
-    ;;
-esac
-
-printf 'unexpected rclone args: %%s\n' "$*" >&2
-exit 1
-`, ociNativeSmokeNamespace, ociNativeSmokeCompartment, ociNativeSmokeRegion, ociNativeSmokeEndpoint, stateFile, ociFolderMarkerName, ociFolderMarkerName, ociFolderMarkerName, ociFolderMarkerName)
-
-	return writeFakeRclone(t, body)
+	switch args[0] {
+	case "lsjson":
+		if wantStat {
+			if target != "remote:oci-native-bucket/report.txt" {
+				return "", "", fmt.Errorf("unexpected stat target: %s", target)
+			}
+			if wantMetadata {
+				return `{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","MimeType":"text/plain","Hashes":{"MD5":"abc"},"Metadata":{"cache-control":"no-cache"}}`, "", nil
+			}
+			if wantHash {
+				return `{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","MimeType":"text/plain","Hashes":{"MD5":"abc"}}`, "", nil
+			}
+			return `{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","MimeType":"text/plain"}`, "", nil
+		}
+		switch target {
+		case "remote:oci-native-bucket":
+			items := []string{
+				`{"Path":"report.txt","Name":"report.txt","Size":5,"ModTime":"2024-01-01T00:00:00Z","IsDir":false,"Hashes":{"MD5":"abc"}}`,
+			}
+			if _, ok := state.folders["folder/"]; ok {
+				items = append(items, fmt.Sprintf(`{"Path":"folder/%s","Name":"%s","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}`, ociFolderMarkerName, ociFolderMarkerName))
+			}
+			return "[" + strings.Join(items, ",") + "]", "", nil
+		case "remote:oci-native-bucket/folder/":
+			if _, ok := state.folders["folder/"]; ok {
+				return fmt.Sprintf(`[{"Path":"%s","Name":"%s","Size":0,"ModTime":"2024-01-01T00:00:00Z","IsDir":false}]`, ociFolderMarkerName, ociFolderMarkerName), "", nil
+			}
+			return "[]", "", nil
+		case "remote:":
+			return `[{"Name":"oci-native-bucket","IsDir":true}]`, "", nil
+		default:
+			return "", "", fmt.Errorf("unexpected lsjson target: %s", target)
+		}
+	case "rcat":
+		expectedTarget := "remote:oci-native-bucket/folder/" + ociFolderMarkerName
+		if target != expectedTarget {
+			return "", "", fmt.Errorf("unexpected rcat target: %s", target)
+		}
+		state.folders["folder/"] = struct{}{}
+		return "", "", nil
+	case "mkdir":
+		if target == "remote:demo" || target == "remote:oci-native-bucket/folder/" {
+			return "", "", nil
+		}
+		return "", "", fmt.Errorf("unexpected mkdir target: %s", target)
+	case "rmdir":
+		if target != "remote:demo" {
+			return "", "", fmt.Errorf("unexpected rmdir target: %s", target)
+		}
+		return "", "", nil
+	case "copyto":
+		return "", "", nil
+	case "cat":
+		if strings.Contains(target, ".s3desk-benchmark-") {
+			return "benchmark-bytes", "", nil
+		}
+		if target == "remote:oci-native-bucket/report.txt" {
+			return "hello", "", nil
+		}
+		return "", "", fmt.Errorf("unexpected cat target: %s", target)
+	case "link":
+		return "https://example.invalid/oci-native-bucket/report.txt?signature=fake", "", nil
+	case "delete":
+		if target != "remote:oci-native-bucket" {
+			return "", "", fmt.Errorf("unexpected delete target: %s", target)
+		}
+		if filesFromRaw == "" {
+			return "", "", fmt.Errorf("missing files-from-raw path")
+		}
+		data, err := os.ReadFile(filesFromRaw)
+		if err != nil {
+			return "", "", err
+		}
+		if !strings.Contains(string(data), "report.txt") {
+			return "", "", fmt.Errorf("missing report.txt delete key")
+		}
+		return "", "", nil
+	case "deletefile":
+		return "", "", nil
+	default:
+		return "", "", fmt.Errorf("unexpected rclone args: %s", joinArgs(args))
+	}
 }

@@ -26,123 +26,93 @@ func (s *Service) Registry() *Registry {
 }
 
 func (s *Service) GetGovernance(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketGovernanceView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketGovernanceView{}, err
-	}
-	return adapter.GetGovernance(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketGovernanceView, error) {
+		return adapter.GetGovernance(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) GetAccess(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketAccessView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketAccessView{}, err
-	}
-	return adapter.GetAccess(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketAccessView, error) {
+		return adapter.GetAccess(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) PutAccess(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return err
-	}
-	return adapter.PutAccess(ctx, profile, bucket, req)
+	return servicePut(s, ctx, profile, bucket, req, ValidateAccessPut, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
+		return adapter.PutAccess(ctx, profile, bucket, req)
+	})
 }
 
 func (s *Service) GetPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketPublicExposureView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketPublicExposureView{}, err
-	}
-	return adapter.GetPublicExposure(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketPublicExposureView, error) {
+		return adapter.GetPublicExposure(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) PutPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketPublicExposurePutRequest) error {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return err
-	}
-	return adapter.PutPublicExposure(ctx, profile, bucket, req)
+	return servicePut(s, ctx, profile, bucket, req, ValidatePublicExposurePut, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketPublicExposurePutRequest) error {
+		return adapter.PutPublicExposure(ctx, profile, bucket, req)
+	})
 }
 
 func (s *Service) GetProtection(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketProtectionView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketProtectionView{}, err
-	}
-	return adapter.GetProtection(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketProtectionView, error) {
+		return adapter.GetProtection(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) PutProtection(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketProtectionPutRequest) error {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return err
-	}
-	return adapter.PutProtection(ctx, profile, bucket, req)
+	return servicePut(s, ctx, profile, bucket, req, ValidateProtectionPut, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketProtectionPutRequest) error {
+		return adapter.PutProtection(ctx, profile, bucket, req)
+	})
 }
 
 func (s *Service) GetVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketVersioningView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketVersioningView{}, err
-	}
-	return adapter.GetVersioning(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketVersioningView, error) {
+		return adapter.GetVersioning(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) PutVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return err
-	}
-	return adapter.PutVersioning(ctx, profile, bucket, req)
+	return servicePut(s, ctx, profile, bucket, req, ValidateVersioningPut, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketVersioningPutRequest) error {
+		return adapter.PutVersioning(ctx, profile, bucket, req)
+	})
 }
 
 func (s *Service) GetEncryption(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketEncryptionView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketEncryptionView{}, err
-	}
-	return adapter.GetEncryption(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketEncryptionView, error) {
+		return adapter.GetEncryption(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) PutEncryption(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketEncryptionPutRequest) error {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return err
-	}
-	return adapter.PutEncryption(ctx, profile, bucket, req)
+	return servicePut(s, ctx, profile, bucket, req, ValidateEncryptionPut, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketEncryptionPutRequest) error {
+		return adapter.PutEncryption(ctx, profile, bucket, req)
+	})
 }
 
 func (s *Service) GetLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketLifecycleView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketLifecycleView{}, err
-	}
-	return adapter.GetLifecycle(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketLifecycleView, error) {
+		return adapter.GetLifecycle(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) PutLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketLifecyclePutRequest) error {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return err
-	}
-	return adapter.PutLifecycle(ctx, profile, bucket, req)
+	return servicePut(s, ctx, profile, bucket, req, ValidateLifecyclePut, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketLifecyclePutRequest) error {
+		return adapter.PutLifecycle(ctx, profile, bucket, req)
+	})
 }
 
 func (s *Service) GetSharing(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketSharingView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketSharingView{}, err
-	}
-	return adapter.GetSharing(ctx, profile, bucket)
+	return serviceGet(s, ctx, profile, bucket, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketSharingView, error) {
+		return adapter.GetSharing(ctx, profile, bucket)
+	})
 }
 
 func (s *Service) PutSharing(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketSharingPutRequest) (models.BucketSharingView, error) {
-	adapter, bucket, err := s.resolve(profile, bucket)
-	if err != nil {
-		return models.BucketSharingView{}, err
-	}
-	return adapter.PutSharing(ctx, profile, bucket, req)
+	return servicePutAndReturn(s, ctx, profile, bucket, req, ValidateSharingPut, func(adapter Adapter, ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketSharingPutRequest) (models.BucketSharingView, error) {
+		return adapter.PutSharing(ctx, profile, bucket, req)
+	})
 }
 
 func (s *Service) resolve(profile models.ProfileSecrets, bucket string) (Adapter, string, error) {

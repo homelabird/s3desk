@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -57,7 +56,6 @@ func TestSanitizeUploadPath(t *testing.T) {
 func TestCommitUploadQueueFullRollsBackCreatedJob(t *testing.T) {
 	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, "exit 0\n"))
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -156,13 +154,15 @@ func TestTryAssembleChunkFile_DeltaError(t *testing.T) {
 }
 
 func TestUploadMultipartAndCommitLifecycle(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, "printf 'multipart flow\\n'\n"))
 	t.Setenv("RCLONE_TUNE", "true")
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ jobs.TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
+		writeLog("info", "multipart flow")
+		if len(args) == 0 {
+			return "", unexpectedRcloneAttemptError(args)
+		}
+		return "", nil
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)
@@ -269,13 +269,15 @@ func TestUploadMultipartAndCommitLifecycle(t *testing.T) {
 }
 
 func TestUploadChunkAndCommitLifecycle(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake rclone uses a shell script")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, "printf 'chunk flow\\n'\n"))
 	t.Setenv("RCLONE_TUNE", "true")
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ jobs.TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
+		writeLog("info", "chunk flow")
+		if len(args) == 0 {
+			return "", unexpectedRcloneAttemptError(args)
+		}
+		return "", nil
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), true)
 	profile := createTestProfile(t, st)

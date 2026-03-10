@@ -20,6 +20,45 @@ import (
 	"s3desk/internal/store"
 )
 
+var errDownloadProxyProfileRequired = errors.New("download proxy profile id is required")
+
+func shouldUseDownloadProxy(raw string) bool {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	return raw == "1" || raw == "true" || raw == "yes"
+}
+
+func resolveDownloadProxyProfileID(r *http.Request, secrets models.ProfileSecrets) (string, error) {
+	profileID := strings.TrimSpace(secrets.ID)
+	if profileID == "" {
+		profileID = strings.TrimSpace(r.Header.Get("X-Profile-Id"))
+	}
+	if profileID == "" {
+		return "", errDownloadProxyProfileRequired
+	}
+	return profileID, nil
+}
+
+func (s *server) buildProxiedObjectDownloadURL(r *http.Request, secrets models.ProfileSecrets, bucket, key string, expires time.Duration, sizeHint int64, contentType, lastModified string) (models.PresignedURLResponse, error) {
+	profileID, err := resolveDownloadProxyProfileID(r, secrets)
+	if err != nil {
+		return models.PresignedURLResponse{}, err
+	}
+	expiresAt := time.Now().UTC().Add(expires)
+	url := s.buildDownloadProxyURL(r, downloadProxyToken{
+		ProfileID:    profileID,
+		Bucket:       bucket,
+		Key:          key,
+		Expires:      expiresAt.Unix(),
+		Size:         sizeHint,
+		ContentType:  contentType,
+		LastModified: lastModified,
+	})
+	return models.PresignedURLResponse{
+		URL:       url,
+		ExpiresAt: expiresAt.Format(time.RFC3339Nano),
+	}, nil
+}
+
 func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 	metric := s.beginStorageMetric("unknown", "list_objects")
 	defer metric.Observe()
@@ -527,8 +566,7 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 	expiresSeconds, _ := parseIntQueryClamped(r, "expiresSeconds", 900, 60, 3600)
 	expires := time.Duration(expiresSeconds) * time.Second
 
-	proxyRaw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("proxy")))
-	useProxy := proxyRaw == "1" || proxyRaw == "true" || proxyRaw == "yes"
+	useProxy := shouldUseDownloadProxy(r.URL.Query().Get("proxy"))
 	sizeRaw := strings.TrimSpace(r.URL.Query().Get("size"))
 	sizeHint, contentType, lastModified, err := parseDownloadProxyMetadataHints(sizeRaw, r.URL.Query().Get("contentType"), r.URL.Query().Get("lastModified"))
 	if err != nil {
@@ -537,29 +575,13 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if useProxy {
-		profileID := strings.TrimSpace(secrets.ID)
-		if profileID == "" {
-			profileID = strings.TrimSpace(r.Header.Get("X-Profile-Id"))
-		}
-		if profileID == "" {
+		resp, err := s.buildProxiedObjectDownloadURL(r, secrets, bucket, key, expires, sizeHint, contentType, lastModified)
+		if err != nil {
 			metric.SetStatus("missing_profile")
 			writeError(w, http.StatusBadRequest, "missing_profile", "X-Profile-Id header is required", nil)
 			return
 		}
-		expiresAt := time.Now().UTC().Add(expires)
-		url := s.buildDownloadProxyURL(r, downloadProxyToken{
-			ProfileID:    profileID,
-			Bucket:       bucket,
-			Key:          key,
-			Expires:      expiresAt.Unix(),
-			Size:         sizeHint,
-			ContentType:  contentType,
-			LastModified: lastModified,
-		})
-		writeJSON(w, http.StatusOK, models.PresignedURLResponse{
-			URL:       url,
-			ExpiresAt: expiresAt.Format(time.RFC3339Nano),
-		})
+		writeJSON(w, http.StatusOK, resp)
 		metric.SetStatus("proxy_only")
 		return
 	}

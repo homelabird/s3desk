@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,18 +12,12 @@ import (
 
 func TestHandleListObjectsMapsDecodeFailureToUpstreamInvalidCredentials(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "lsjson" ]; then cmd='lsjson'; fi
-done
-if [ "$cmd" = "lsjson" ]; then
-  printf '['
-  echo "NotAuthenticated: The required information to complete authentication was not provided." >&2
-  exit 9
-fi
-exit 0
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "lsjson" {
+			return "[", "NotAuthenticated: The required information to complete authentication was not provided.", errors.New("exit status 9")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects?delimiter=%2F&maxKeys=200", nil)

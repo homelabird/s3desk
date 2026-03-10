@@ -26,6 +26,10 @@ npm run build
 
 Frontend tooling expects Node.js `22.x`.
 
+## Release Gate
+
+Use [RELEASE_GATE.md](RELEASE_GATE.md) when deciding whether a build is releasable. Provider-facing changes are not release-ready without the required live validation evidence.
+
 ## OpenAPI Schema Workflow
 
 Edit [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml), not the generated frontend schema file.

@@ -120,8 +120,8 @@ func CapabilityReason(provider models.ProfileProvider, capability models.BucketG
 	if capability == "" {
 		return ""
 	}
-	state, ok := ProviderGovernanceCapabilities(provider)[capability]
-	if !ok || state.Enabled {
+	state := capabilityState(provider, capability)
+	if state.Enabled {
 		return ""
 	}
 	return strings.TrimSpace(state.Reason)

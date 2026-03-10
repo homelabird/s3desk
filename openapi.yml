@@ -50,6 +50,8 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
         "403":
           $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
 
   /events:
     get:
@@ -3574,10 +3576,12 @@ components:
 
     ServerRestoreResponse:
       type: object
-      required: [manifest, stagingDir, restartRequired, nextSteps, applyPlan]
+      required: [manifest, validation, stagingDir, restartRequired, nextSteps, applyPlan]
       properties:
         manifest:
           $ref: "#/components/schemas/ServerMigrationManifest"
+        validation:
+          $ref: "#/components/schemas/ServerRestoreValidation"
         stagingDir: { type: string }
         restartRequired: { type: boolean }
         nextSteps:
@@ -3590,6 +3594,17 @@ components:
         warnings:
           type: array
           items: { type: string }
+
+    ServerRestoreValidation:
+      type: object
+      required: [preflightChecked, payloadChecksumPresent, payloadChecksumVerified]
+      properties:
+        preflightChecked: { type: boolean }
+        diskFreeBytesBefore: { type: integer, format: int64 }
+        payloadFileCount: { type: integer }
+        payloadBytes: { type: integer, format: int64 }
+        payloadChecksumPresent: { type: boolean }
+        payloadChecksumVerified: { type: boolean }
 
     ServerStagedRestore:
       type: object

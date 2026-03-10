@@ -869,8 +869,20 @@ type ServerMigrationManifest struct {
 	Warnings          []string `json:"warnings,omitempty"`
 }
 
+type ServerRestoreValidation struct {
+	PreflightChecked       bool  `json:"preflightChecked"`
+	DiskFreeBytesBefore    int64 `json:"diskFreeBytesBefore,omitempty"`
+	PayloadFileCount       int   `json:"payloadFileCount,omitempty"`
+	PayloadBytes           int64 `json:"payloadBytes,omitempty"`
+	PayloadChecksumPresent bool  `json:"payloadChecksumPresent"`
+	PayloadChecksumVerified bool `json:"payloadChecksumVerified"`
+	PayloadSignaturePresent bool `json:"payloadSignaturePresent"`
+	PayloadSignatureVerified bool `json:"payloadSignatureVerified"`
+}
+
 type ServerRestoreResponse struct {
 	Manifest        ServerMigrationManifest `json:"manifest"`
+	Validation      ServerRestoreValidation `json:"validation"`
 	StagingDir      string                  `json:"stagingDir"`
 	RestartRequired bool                    `json:"restartRequired"`
 	NextSteps       []string                `json:"nextSteps"`

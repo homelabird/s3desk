@@ -120,8 +120,14 @@ func TestRunJobReturnsErrorWhenFinalizeFailedAfterSuccess(t *testing.T) {
 		t.Fatalf("write local file: %v", err)
 	}
 
-	t.Setenv("RCLONE_PATH", writeJobsFakeRclone(t, "exit 0\n"))
 	t.Setenv("RCLONE_TUNE", "true")
+	installJobsProcessHooks(t, func(_ context.Context, _ string, args []string, _ string, _ TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
+		writeLog("info", "consistency flow")
+		if len(args) == 0 {
+			return "", unexpectedJobsProcessArgs(args)
+		}
+		return "", nil
+	})
 
 	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
 		Type: JobTypeTransferSyncLocalToS3,
@@ -278,21 +284,4 @@ func assertNoHubEventType(t *testing.T, client *ws.Client, eventType string) {
 			return
 		}
 	}
-}
-
-func writeJobsFakeRclone(t *testing.T, body string) string {
-	t.Helper()
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "rclone")
-	content := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"version\" ]; then\n" +
-		"  echo \"rclone v1.66.0\"\n" +
-		"  exit 0\n" +
-		"fi\n" +
-		body
-	if err := os.WriteFile(path, []byte(content), 0o700); err != nil {
-		t.Fatalf("write fake rclone: %v", err)
-	}
-	return path
 }

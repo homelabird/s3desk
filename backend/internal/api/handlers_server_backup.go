@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -48,6 +49,21 @@ type serverBackupPayloadEntry struct {
 	ArchivePath string
 	Size        int64
 	SHA256      string
+}
+
+type serverBackupArchiveManifest struct {
+	models.ServerMigrationManifest
+	PayloadHMACSHA256 string `json:"payloadHmacSha256,omitempty"`
+}
+
+type serverRestorePreflightError struct {
+	Path          string
+	RequiredBytes int64
+	AvailableBytes int64
+}
+
+func (e serverRestorePreflightError) Error() string {
+	return fmt.Sprintf("restore preflight failed for %q: need %d bytes, have %d bytes", e.Path, e.RequiredBytes, e.AvailableBytes)
 }
 
 func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +135,16 @@ func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Reques
 
 	resp, err := s.restoreServerBackupArchive(r.Context(), file)
 	if err != nil {
+		var preflightErr serverRestorePreflightError
+		if errors.As(err, &preflightErr) {
+			writeError(w, http.StatusConflict, "restore_preflight_failed", "failed restore preflight before staging", map[string]any{
+				"error":          preflightErr.Error(),
+				"path":           preflightErr.Path,
+				"requiredBytes":  preflightErr.RequiredBytes,
+				"availableBytes": preflightErr.AvailableBytes,
+			})
+			return
+		}
 		writeError(w, http.StatusBadRequest, "restore_failed", "failed to restore backup bundle", map[string]any{"error": err.Error()})
 		return
 	}
@@ -182,7 +208,11 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 		}
 	}
 	manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
-	if err := writeTarJSONFile(tarWriter, "manifest.json", manifest, now); err != nil {
+	archiveManifest := serverBackupArchiveManifest{
+		ServerMigrationManifest: manifest,
+		PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, s.cfg.EncryptionKey),
+	}
+	if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 		return models.ServerMigrationManifest{}, err
 	}
 
@@ -199,6 +229,9 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 }
 
 func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) (models.ServerRestoreResponse, error) {
+	s.restoreMu.Lock()
+	defer s.restoreMu.Unlock()
+
 	restoreBase := filepath.Join(s.cfg.DataDir, "restores")
 	if err := os.MkdirAll(restoreBase, 0o700); err != nil {
 		return models.ServerRestoreResponse{}, err
@@ -209,6 +242,14 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 	finalRoot := filepath.Join(restoreBase, restoreID)
 	if err := os.MkdirAll(tempRoot, 0o700); err != nil {
 		return models.ServerRestoreResponse{}, err
+	}
+	diskFreeBytesBefore, err := availableDiskBytes(restoreBase)
+	if err != nil {
+		return models.ServerRestoreResponse{}, err
+	}
+	validation := models.ServerRestoreValidation{
+		PreflightChecked:    true,
+		DiskFreeBytesBefore: diskFreeBytesBefore,
 	}
 	success := false
 	defer func() {
@@ -225,6 +266,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 
 	tarReader := tar.NewReader(gzipReader)
 	var manifest models.ServerMigrationManifest
+	var archiveManifest serverBackupArchiveManifest
 	manifestSeen := false
 	sqliteSeen := false
 	payloadEntries := make([]serverBackupPayloadEntry, 0, 32)
@@ -256,9 +298,10 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 			if err != nil {
 				return models.ServerRestoreResponse{}, err
 			}
-			if err := json.Unmarshal(data, &manifest); err != nil {
+			if err := json.Unmarshal(data, &archiveManifest); err != nil {
 				return models.ServerRestoreResponse{}, err
 			}
+			manifest = archiveManifest.ServerMigrationManifest
 			if manifest.Format != serverBackupBundleFormat {
 				return models.ServerRestoreResponse{}, fmt.Errorf("unsupported backup format %q", manifest.Format)
 			}
@@ -284,6 +327,17 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 					return models.ServerRestoreResponse{}, err
 				}
 			case tar.TypeReg, tar.TypeRegA:
+				freeBytes, err := availableDiskBytes(tempRoot)
+				if err != nil {
+					return models.ServerRestoreResponse{}, err
+				}
+				if header.Size > freeBytes {
+					return models.ServerRestoreResponse{}, serverRestorePreflightError{
+						Path:           relPath,
+						RequiredBytes:  header.Size,
+						AvailableBytes: freeBytes,
+					}
+				}
 				if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 					return models.ServerRestoreResponse{}, err
 				}
@@ -304,6 +358,8 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 					Size:        header.Size,
 					SHA256:      hex.EncodeToString(hasher.Sum(nil)),
 				})
+				validation.PayloadFileCount++
+				validation.PayloadBytes += header.Size
 				if relPath == "s3desk.db" {
 					sqliteSeen = true
 				}
@@ -321,6 +377,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 		return models.ServerRestoreResponse{}, errors.New("backup manifest is missing")
 	}
 	if manifest.PayloadSHA256 != "" {
+		validation.PayloadChecksumPresent = true
 		fileCount, payloadBytes, payloadSHA256 := buildServerBackupPayloadSummary(payloadEntries)
 		switch {
 		case manifest.PayloadFileCount != 0 && manifest.PayloadFileCount != fileCount:
@@ -329,6 +386,18 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload bytes mismatch: manifest=%d extracted=%d", manifest.PayloadBytes, payloadBytes)
 		case !strings.EqualFold(manifest.PayloadSHA256, payloadSHA256):
 			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload checksum mismatch: manifest=%s extracted=%s", manifest.PayloadSHA256, payloadSHA256)
+		}
+		validation.PayloadChecksumVerified = true
+	}
+	if archiveManifest.PayloadHMACSHA256 != "" {
+		expectedHMAC := buildServerBackupPayloadHMAC(manifest, s.cfg.EncryptionKey)
+		if expectedHMAC == "" {
+			validation.PayloadSignaturePresent = true
+		} else if !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {
+			return models.ServerRestoreResponse{}, errors.New("backup payload signature mismatch")
+		} else {
+			validation.PayloadSignaturePresent = true
+			validation.PayloadSignatureVerified = true
 		}
 	}
 	if manifest.DBBackend == string(db.BackendSQLite) && !sqliteSeen {
@@ -341,14 +410,14 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 
 	resp := models.ServerRestoreResponse{
 		Manifest:        manifest,
+		Validation:      validation,
 		StagingDir:      finalRoot,
 		RestartRequired: true,
 		NextSteps:       buildServerRestoreNextSteps(finalRoot, manifest),
 		ApplyPlan:       buildServerRestoreApplyPlan(finalRoot, manifest),
 		HelperCommand:   buildServerRestoreHelperCommand(finalRoot, manifest),
-		Warnings:        buildServerRestoreWarnings(manifest, s.cfg.EncryptionKey != ""),
+		Warnings:        buildServerRestoreWarnings(manifest, validation, s.cfg.EncryptionKey != ""),
 	}
-	_ = s.cleanupExpiredServerRestores(time.Now().UTC())
 	return resp, nil
 }
 
@@ -544,6 +613,7 @@ func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string) []s
 	}
 	if encryptionEnabled {
 		warnings = append(warnings, "Encrypted profile data is included, but the destination server must use the same ENCRYPTION_KEY to read it.")
+		warnings = append(warnings, "Backup payload integrity is HMAC-signed with the source ENCRYPTION_KEY when available. Destinations can verify authenticity only with the same key.")
 	}
 	return warnings
 }
@@ -568,6 +638,28 @@ func buildServerBackupPayloadSummary(entries []serverBackupPayloadEntry) (int, i
 		_, _ = io.WriteString(hasher, "\n")
 	}
 	return len(sortedEntries), payloadBytes, hex.EncodeToString(hasher.Sum(nil))
+}
+
+func buildServerBackupPayloadHMAC(manifest models.ServerMigrationManifest, encryptionKey string) string {
+	key := strings.TrimSpace(encryptionKey)
+	if key == "" || manifest.PayloadSHA256 == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(key))
+	_, _ = io.WriteString(mac, manifest.Format)
+	_, _ = io.WriteString(mac, "\n")
+	_, _ = io.WriteString(mac, manifest.BundleKind)
+	_, _ = io.WriteString(mac, "\n")
+	_, _ = io.WriteString(mac, manifest.DBBackend)
+	_, _ = io.WriteString(mac, "\n")
+	_, _ = io.WriteString(mac, fmt.Sprintf("%d", manifest.PayloadFileCount))
+	_, _ = io.WriteString(mac, "\n")
+	_, _ = io.WriteString(mac, fmt.Sprintf("%d", manifest.PayloadBytes))
+	_, _ = io.WriteString(mac, "\n")
+	_, _ = io.WriteString(mac, manifest.PayloadSHA256)
+	_, _ = io.WriteString(mac, "\n")
+	_, _ = io.WriteString(mac, fmt.Sprintf("%t", manifest.EncryptionEnabled))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func buildServerRestoreNextSteps(stagingDir string, _ models.ServerMigrationManifest) []string {
@@ -602,10 +694,13 @@ func buildServerRestoreHelperCommand(stagingDir string, manifest models.ServerMi
 	return strings.Join(parts, " ") + " <start-command>"
 }
 
-func buildServerRestoreWarnings(manifest models.ServerMigrationManifest, destinationHasEncryptionKey bool) []string {
+func buildServerRestoreWarnings(manifest models.ServerMigrationManifest, validation models.ServerRestoreValidation, destinationHasEncryptionKey bool) []string {
 	warnings := append([]string{}, manifest.Warnings...)
 	if manifest.EncryptionEnabled && !destinationHasEncryptionKey {
 		warnings = append(warnings, "This server is currently running without ENCRYPTION_KEY, but the restored data still requires the source ENCRYPTION_KEY when you start from the staged DATA_DIR.")
+	}
+	if validation.PayloadSignaturePresent && !validation.PayloadSignatureVerified {
+		warnings = append(warnings, "Backup payload signature is present but could not be verified on this server. Use the source ENCRYPTION_KEY to verify bundle authenticity.")
 	}
 	return warnings
 }

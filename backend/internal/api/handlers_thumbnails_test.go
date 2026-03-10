@@ -2,145 +2,101 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
+
+	"s3desk/internal/models"
 )
 
-func writeFakeThumbnailRclone(t *testing.T, mimeType string, size int64) string {
-	t.Helper()
-	return writeFakeRclone(t, ""+
-		"cmd=''\n"+
-		"want_stat=0\n"+
-		"want_hash=0\n"+
-		"for arg in \"$@\"; do\n"+
-		"  if [ \"$arg\" = \"lsjson\" ]; then cmd='lsjson'; fi\n"+
-		"  if [ \"$arg\" = \"--stat\" ]; then want_stat=1; fi\n"+
-		"  if [ \"$arg\" = \"--hash\" ]; then want_hash=1; fi\n"+
-		"  if [ \"$arg\" = \"cat\" ]; then cmd='cat'; fi\n"+
-		"done\n"+
-		"if [ \"$cmd\" = \"lsjson\" ] && [ \"$want_stat\" = \"1\" ] && [ \"$want_hash\" = \"1\" ]; then\n"+
-		"  printf '{\"Path\":\"clip.mp4\",\"Name\":\"clip.mp4\",\"Size\":"+fmt.Sprintf("%d", size)+",\"ModTime\":\"2024-01-01T00:00:00Z\",\"MimeType\":\""+mimeType+"\",\"Hashes\":{\"ETag\":\"clip-etag\"}}\\n'\n"+
-		"  exit 0\n"+
-		"fi\n"+
-		"if [ \"$cmd\" = \"cat\" ]; then\n"+
-		"  cat >/dev/null\n"+
-		"  printf 'fake-video-stream'\n"+
-		"  exit 0\n"+
-		"fi\n"+
-		"printf 'unexpected rclone args: %s\\n' \"$*\" >&2\n"+
-		"exit 1\n")
+type blockingAfterPrefixReader struct {
+	prefix []byte
 }
 
-func writeFakeFFmpegJPEG(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	framePath := filepath.Join(dir, "frame.jpg")
+func (r *blockingAfterPrefixReader) Read(p []byte) (int, error) {
+	if len(r.prefix) > 0 {
+		n := copy(p, r.prefix)
+		r.prefix = r.prefix[n:]
+		return n, nil
+	}
+	select {}
+}
 
+func (r *blockingAfterPrefixReader) Close() error {
+	return nil
+}
+
+func makeTestThumbnailImage() image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, 8, 6))
 	for y := 0; y < 6; y++ {
 		for x := 0; x < 8; x++ {
 			img.Set(x, y, color.RGBA{R: uint8(20 * x), G: uint8(30 * y), B: 180, A: 255})
 		}
 	}
-
-	f, err := os.Create(framePath)
-	if err != nil {
-		t.Fatalf("create frame: %v", err)
-	}
-	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 90}); err != nil {
-		_ = f.Close()
-		t.Fatalf("encode frame: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("close frame: %v", err)
-	}
-
-	scriptPath := filepath.Join(dir, "ffmpeg")
-	content := "#!/bin/sh\n" +
-		"cat >/dev/null\n" +
-		"cat " + "'" + framePath + "'" + "\n"
-	if err := os.WriteFile(scriptPath, []byte(content), 0o700); err != nil {
-		t.Fatalf("write fake ffmpeg: %v", err)
-	}
-	return scriptPath
+	return img
 }
 
-func writeFakeFFmpegJPEGAfterBytes(t *testing.T, bytesToRead int) string {
+func installThumbnailProcessHooks(
+	t *testing.T,
+	mimeType string,
+	size int64,
+	streamFactory func() io.ReadCloser,
+	decode func(context.Context, string, io.Reader) (image.Image, error),
+) {
 	t.Helper()
-	dir := t.TempDir()
-	framePath := filepath.Join(dir, "frame.jpg")
+	prevStart := startRcloneHook
+	prevResolve := resolveFFmpegPathHook
+	prevDecode := decodeThumbnailVideoHook
 
-	img := image.NewRGBA(image.Rect(0, 0, 8, 6))
-	for y := 0; y < 6; y++ {
-		for x := 0; x < 8; x++ {
-			img.Set(x, y, color.RGBA{R: uint8(20 * x), G: uint8(30 * y), B: 180, A: 255})
+	startRcloneHook = func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
+		if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
+			entry := fmt.Sprintf(
+				"{\"Path\":\"clip.mp4\",\"Name\":\"clip.mp4\",\"Size\":%d,\"ModTime\":\"2024-01-01T00:00:00Z\",\"MimeType\":\"%s\",\"Hashes\":{\"ETag\":\"clip-etag\"}}",
+				size,
+				mimeType,
+			)
+			return &rcloneProcess{
+				stdout: io.NopCloser(bytes.NewBufferString(entry)),
+				stderr: &bytes.Buffer{},
+				wait:   func() error { return nil },
+			}, nil
 		}
+		if len(args) >= 1 && args[0] == "cat" {
+			return &rcloneProcess{
+				stdout: streamFactory(),
+				stderr: &bytes.Buffer{},
+				wait:   func() error { return nil },
+			}, nil
+		}
+		return nil, fmt.Errorf("unexpected rclone args: %v", args)
 	}
+	resolveFFmpegPathHook = func() (string, error) { return "ffmpeg", nil }
+	decodeThumbnailVideoHook = decode
 
-	f, err := os.Create(framePath)
-	if err != nil {
-		t.Fatalf("create frame: %v", err)
-	}
-	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 90}); err != nil {
-		_ = f.Close()
-		t.Fatalf("encode frame: %v", err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatalf("close frame: %v", err)
-	}
-
-	scriptPath := filepath.Join(dir, "ffmpeg")
-	content := fmt.Sprintf("#!/bin/sh\n"+
-		"dd bs=1 count=%d of=/dev/null 2>/dev/null || true\n"+
-		"cat '%s'\n", bytesToRead, framePath)
-	if err := os.WriteFile(scriptPath, []byte(content), 0o700); err != nil {
-		t.Fatalf("write fake ffmpeg: %v", err)
-	}
-	return scriptPath
-}
-
-func writeFakeThumbnailRcloneStreaming(t *testing.T, mimeType string, size int64) string {
-	t.Helper()
-	return writeFakeRclone(t, ""+
-		"cmd=''\n"+
-		"want_stat=0\n"+
-		"want_hash=0\n"+
-		"for arg in \"$@\"; do\n"+
-		"  if [ \"$arg\" = \"lsjson\" ]; then cmd='lsjson'; fi\n"+
-		"  if [ \"$arg\" = \"--stat\" ]; then want_stat=1; fi\n"+
-		"  if [ \"$arg\" = \"--hash\" ]; then want_hash=1; fi\n"+
-		"  if [ \"$arg\" = \"cat\" ]; then cmd='cat'; fi\n"+
-		"done\n"+
-		"if [ \"$cmd\" = \"lsjson\" ] && [ \"$want_stat\" = \"1\" ] && [ \"$want_hash\" = \"1\" ]; then\n"+
-		"  printf '{\"Path\":\"clip.mp4\",\"Name\":\"clip.mp4\",\"Size\":"+fmt.Sprintf("%d", size)+",\"ModTime\":\"2024-01-01T00:00:00Z\",\"MimeType\":\""+mimeType+"\",\"Hashes\":{\"ETag\":\"clip-etag\"}}\\n'\n"+
-		"  exit 0\n"+
-		"fi\n"+
-		"if [ \"$cmd\" = \"cat\" ]; then\n"+
-		"  trap 'exit 0' TERM INT\n"+
-		"  printf 'fake-video-stream'\n"+
-		"  while :; do sleep 1; done\n"+
-		"fi\n"+
-		"printf 'unexpected rclone args: %s\\n' \"$*\" >&2\n"+
-		"exit 1\n")
+	t.Cleanup(func() {
+		startRcloneHook = prevStart
+		resolveFFmpegPathHook = prevResolve
+		decodeThumbnailVideoHook = prevDecode
+	})
 }
 
 func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMP4(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake ffmpeg/rclone use shell scripts")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeThumbnailRclone(t, "video/mp4", 2048))
-	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEG(t))
+	installThumbnailProcessHooks(
+		t,
+		"video/mp4",
+		2048,
+		func() io.ReadCloser { return io.NopCloser(bytes.NewBufferString("fake-video-stream")) },
+		func(_ context.Context, _ string, _ io.Reader) (image.Image, error) {
+			return makeTestThumbnailImage(), nil
+		},
+	)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -165,13 +121,16 @@ func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMP4(t *testing.T) {
 }
 
 func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMKV(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake ffmpeg/rclone use shell scripts")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeThumbnailRclone(t, "video/x-matroska", 4096))
-	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEG(t))
+	installThumbnailProcessHooks(
+		t,
+		"video/x-matroska",
+		4096,
+		func() io.ReadCloser { return io.NopCloser(bytes.NewBufferString("fake-video-stream")) },
+		func(_ context.Context, _ string, _ io.Reader) (image.Image, error) {
+			return makeTestThumbnailImage(), nil
+		},
+	)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -196,13 +155,16 @@ func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMKV(t *testing.T) {
 }
 
 func TestHandleGetObjectThumbnail_AllowsVideoBeyondImageLimit(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake ffmpeg/rclone use shell scripts")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeThumbnailRclone(t, "video/mp4", 52_386_776))
-	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEG(t))
+	installThumbnailProcessHooks(
+		t,
+		"video/mp4",
+		52_386_776,
+		func() io.ReadCloser { return io.NopCloser(bytes.NewBufferString("fake-video-stream")) },
+		func(_ context.Context, _ string, _ io.Reader) (image.Image, error) {
+			return makeTestThumbnailImage(), nil
+		},
+	)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -217,13 +179,22 @@ func TestHandleGetObjectThumbnail_AllowsVideoBeyondImageLimit(t *testing.T) {
 }
 
 func TestHandleGetObjectThumbnail_StopsVideoStreamAfterFrameExtraction(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake ffmpeg/rclone use shell scripts")
-	}
-
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeThumbnailRcloneStreaming(t, "video/mp4", 52_386_776))
-	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEGAfterBytes(t, 4))
+	installThumbnailProcessHooks(
+		t,
+		"video/mp4",
+		52_386_776,
+		func() io.ReadCloser {
+			return &blockingAfterPrefixReader{prefix: []byte("fake")}
+		},
+		func(_ context.Context, _ string, r io.Reader) (image.Image, error) {
+			buf := make([]byte, 4)
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, err
+			}
+			return makeTestThumbnailImage(), nil
+		},
+	)
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)

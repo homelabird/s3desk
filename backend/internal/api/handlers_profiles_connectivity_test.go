@@ -1,33 +1,24 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"s3desk/internal/jobs"
 	"s3desk/internal/models"
 )
 
 func TestHandleTestProfileReturnsSuccessDetails(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-target=''
-for arg in "$@"; do
-  case "$arg" in
-    lsjson) cmd='lsjson' ;;
-  esac
-  target="$arg"
-done
-if [ "$cmd" = "lsjson" ] && [ "$target" = "remote:" ]; then
-  printf '[{"Name":"bucket-a","IsDir":true}]'
-  exit 0
-fi
-printf 'unexpected rclone args: %s\n' "$*" >&2
-exit 1
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 2 && args[0] == "lsjson" && args[len(args)-1] == "remote:" {
+			return `[{"Name":"bucket-a","IsDir":true}]`, "", nil
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -59,17 +50,12 @@ exit 1
 
 func TestHandleTestProfileReturnsNormalizedFailureDetails(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "lsjson" ]; then cmd='lsjson'; fi
-done
-if [ "$cmd" = "lsjson" ]; then
-  echo "AccessDenied" >&2
-  exit 9
-fi
-exit 0
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "lsjson" {
+			return "", "AccessDenied", errors.New("exit status 9")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -105,29 +91,22 @@ exit 0
 
 func TestHandleBenchmarkProfileReturnsSuccessDetails(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-target=''
-for arg in "$@"; do
-  case "$arg" in
-    lsjson|copyto|cat|deletefile) cmd="$arg" ;;
-  esac
-  target="$arg"
-done
-if [ "$cmd" = "lsjson" ] && [ "$target" = "remote:" ]; then
-  printf '[{"Name":"bucket-a","IsDir":true}]'
-  exit 0
-fi
-if [ "$cmd" = "cat" ]; then
-  printf 'benchmark-bytes'
-  exit 0
-fi
-if [ "$cmd" = "copyto" ] || [ "$cmd" = "deletefile" ]; then
-  exit 0
-fi
-printf 'unexpected rclone args: %s\n' "$*" >&2
-exit 1
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) == 0 {
+			return "", "", errors.New("unexpected rclone args")
+		}
+		switch args[0] {
+		case "lsjson":
+			if args[len(args)-1] == "remote:" {
+				return `[{"Name":"bucket-a","IsDir":true}]`, "", nil
+			}
+		case "cat":
+			return "benchmark-bytes", "", nil
+		case "copyto", "deletefile":
+			return "", "", nil
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -159,17 +138,12 @@ exit 1
 
 func TestHandleBenchmarkProfileReturnsNormalizedFailureDetails(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRclone(t, `
-cmd=''
-for arg in "$@"; do
-  if [ "$arg" = "lsjson" ]; then cmd='lsjson'; fi
-done
-if [ "$cmd" = "lsjson" ]; then
-  echo "AccessDenied" >&2
-  exit 9
-fi
-exit 0
-`))
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "lsjson" {
+			return "", "AccessDenied", errors.New("exit status 9")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -232,8 +206,9 @@ func TestHandleProfileConnectivityRoutesNotFound(t *testing.T) {
 
 func TestHandleProfileConnectivityRoutesTransferEngineMissing(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", "")
-	t.Setenv("PATH", t.TempDir())
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "", "", jobs.ErrRcloneNotFound
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -267,7 +242,13 @@ func TestHandleProfileConnectivityRoutesTransferEngineMissing(t *testing.T) {
 
 func TestHandleProfileConnectivityRoutesTransferEngineIncompatible(t *testing.T) {
 	lockTestEnv(t)
-	t.Setenv("RCLONE_PATH", writeFakeRcloneWithVersion(t, "rclone v1.51.0"))
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.51.0", &jobs.RcloneIncompatibleError{
+			CurrentVersion: "rclone v1.51.0",
+			MinVersion:     jobs.MinSupportedRcloneVersion,
+			Reason:         "version too old",
+		}
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -296,21 +277,4 @@ func TestHandleProfileConnectivityRoutesTransferEngineIncompatible(t *testing.T)
 			}
 		})
 	}
-}
-
-func writeFakeRcloneWithVersion(t *testing.T, versionLine string) string {
-	t.Helper()
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "rclone")
-	content := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"version\" ]; then\n" +
-		"  echo \"" + versionLine + "\"\n" +
-		"  exit 0\n" +
-		"fi\n" +
-		"exit 0\n"
-	if err := os.WriteFile(path, []byte(content), 0o700); err != nil {
-		t.Fatalf("write fake rclone: %v", err)
-	}
-	return path
 }
