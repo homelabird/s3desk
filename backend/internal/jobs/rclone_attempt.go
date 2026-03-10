@@ -10,8 +10,9 @@ import (
 // runRcloneAttempt executes a single rclone invocation and streams logs to the job log.
 // It returns a compact stderr capture (last N lines) and the rclone process wait error.
 func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args []string, jobID string, logWriter *jobLogWriter, opts runRcloneOptions) (stderrCapture string, waitErr error) {
-	if testRunRcloneAttemptHook != nil {
-		return testRunRcloneAttemptHook(
+	hooks := currentProcessTestHooks()
+	if hooks.runRcloneAttempt != nil {
+		return hooks.runRcloneAttempt(
 			ctx,
 			rclonePath,
 			args,

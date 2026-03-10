@@ -53,6 +53,47 @@ Useful endpoints:
 - API docs: `http://192.168.0.200:8080/docs`
 - OpenAPI spec: `http://192.168.0.200:8080/openapi.yml`
 
+## Cost and Restore Thresholds
+
+Watch these metrics together:
+
+- `storage_operations_total{provider,operation,status}`
+- `storage_operation_duration_ms{provider,operation,status}`
+- `thumbnail_cache_hits_total{source}`
+- `download_proxy_mode_total{mode}`
+
+Use these operational thresholds:
+
+### Thumbnail cache behavior
+
+- Reopening the same object-heavy bucket view should produce visible `thumbnail_cache_hits_total` growth.
+- If a second browse of the same object set still causes thumbnail-related storage calls to rise almost 1:1 with rendered cards, treat that as abnormal cache behavior.
+- As a working threshold, investigate when repeated browsing of the same bucket yields less than roughly `80%` cache reuse after the first warm pass.
+- Also investigate if thumbnail-related `storage_operation_duration_ms` p95 stays above `1000ms` for more than a few minutes during normal browsing.
+
+### Download proxy behavior
+
+- `download_proxy_mode_total{mode="stat_required"}` should not dominate normal image or object download traffic once metadata hints are flowing.
+- If `stat_required` remains above roughly `20%` of proxy traffic during steady-state use, inspect recent preview and download callers for missing signed metadata hints.
+
+### Staged restore buildup
+
+- `DATA_DIR/restores` should normally contain at most:
+  - one active validation candidate
+  - one rollback candidate
+- Treat more than `2` staged restore directories or more than `5 GiB` of staged restore payloads as cleanup-required.
+- Any staged restore older than `7 days` should be considered stale unless a cutover is actively in progress.
+
+### Dashboard and alert expectations
+
+- Dashboard panels should break down `storage_operations_total` by provider and operation so thumbnail, list, and download spikes are obvious.
+- Track `thumbnail_cache_hits_total` by source to see whether hits come from request fingerprint, manifest, or post-stat paths.
+- Track `download_proxy_mode_total` split between `stat_skipped` and `stat_required`.
+- Create an alert or scheduled review for either of these conditions:
+  - staged restore count > `2`
+  - staged restore age > `7 days`
+  - thumbnail cache reuse staying below the `80%` warm-cache threshold for a commonly revisited bucket
+
 ## Backup Guidance
 
 - SQLite deployment: back up the `/data` volume

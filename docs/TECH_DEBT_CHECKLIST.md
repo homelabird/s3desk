@@ -36,7 +36,7 @@ It intentionally tracks only the currently open round.
 ### P0-5. Backup bundle security and restore preflight
 
 - [x] Add bundle authenticity or signing support
-- [ ] Add optional bundle confidentiality or encryption support
+- [x] Add optional bundle confidentiality or encryption support
 - [x] Add disk-space or restore-size preflight before staging
 - [x] Expose structured restore validation results in API and UI
 
@@ -70,36 +70,30 @@ It intentionally tracks only the currently open round.
 
 ### P1-5. Release gate enforcement in CI
 
-- [ ] Add a CI or scripted check for release-note known limitations
-- [ ] Add a CI or scripted check for required live validation evidence references
-- [ ] Tie release approval steps to the documented release gate
+- [x] Add a CI or scripted check for release-note known limitations
+- [x] Add a CI or scripted check for required live validation evidence references
+- [x] Tie release approval steps to the documented release gate
 
 ## Priority 2
 
 ### P2-1. Replace mutable global test hooks with stricter runners
 
-- [ ] Move API-layer process seams away from mutable package globals
-- [ ] Move jobs-layer process seams away from mutable package globals
-- [ ] Keep test injection possible without widening runtime state further
+- [x] Move API-layer process seams away from mutable package globals
+- [x] Move jobs-layer process seams away from mutable package globals
+- [x] Keep test injection possible without widening runtime state further
 
 ### P2-2. Narrow bucket governance backend interfaces further
 
-- [ ] Introduce narrower section-oriented capability interfaces
-- [ ] Pass richer profile or bucket context into validation helpers
-- [ ] Reduce adapter-wide churn when adding or changing one provider section
+- [x] Introduce narrower section-oriented capability interfaces
+- [x] Pass richer profile or bucket context into validation helpers
+- [x] Reduce adapter-wide churn when adding or changing one provider section
 
 ### P2-3. Cost and restore observability thresholds
 
-- [ ] Define operator thresholds for thumbnail cache miss behavior
-- [ ] Define operator thresholds for staged restore buildup and cleanup
-- [ ] Document dashboard or alert expectations in the runbook
+- [x] Define operator thresholds for thumbnail cache miss behavior
+- [x] Define operator thresholds for staged restore buildup and cleanup
+- [x] Document dashboard or alert expectations in the runbook
 
 ## Current Sequence
 
 1. P0-1 real-provider live validation
-2. P0-5 optional bundle confidentiality or encryption support
-3. P1-4 Postgres backup capability surface
-4. P1-5 release gate enforcement in CI
-5. P2-1 replace mutable global test hooks with stricter runners
-6. P2-2 narrow bucket governance backend interfaces further
-7. P2-3 cost and restore observability thresholds

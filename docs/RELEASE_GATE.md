@@ -29,6 +29,22 @@ Attach or record these before release approval:
 - changed docs, if operator behavior changed
 - screenshots or API bodies for any live validation failures
 
+## Automated Enforcement
+
+The repository keeps a lightweight automated gate for the documentation side of release readiness:
+
+- local command: `./scripts/check_release_gate.sh`
+- included in the standard local verification pass: `./scripts/check.sh`
+- CI workflow: `Release Gate`
+
+This automated check enforces that:
+
+- `CHANGELOG.md` still carries the current required known limitations
+- the live validation runbook still exposes the required evidence fields
+- the release gate and testing docs still expose the expected sections
+
+It does not replace the actual live-provider validation pass.
+
 ## Provider Change Gate
 
 If a change touches bucket governance, provider capabilities, profile auth, or object-provider behavior, release readiness is blocked until the relevant live pass is recorded in [BUCKET_GOVERNANCE_LIVE_VALIDATION.md](BUCKET_GOVERNANCE_LIVE_VALIDATION.md).

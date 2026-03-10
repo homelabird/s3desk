@@ -155,6 +155,7 @@ export type BucketSharingPutClientRequest = {
 }
 
 export type ServerBackupScope = 'full' | 'cache_metadata'
+export type ServerBackupConfidentialityMode = 'clear' | 'encrypted'
 
 function normalizeListObjectsResponse(
 	resp: ListObjectsResponse,
@@ -308,9 +309,12 @@ export class APIClient {
 		return this.request('/meta', { method: 'GET' })
 	}
 
-	downloadServerBackup(scope: ServerBackupScope = 'full'): { promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>; abort: () => void } {
+	downloadServerBackup(
+		scope: ServerBackupScope = 'full',
+		confidentiality: ServerBackupConfidentialityMode = 'clear',
+	): { promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>; abort: () => void } {
 		const xhr = new XMLHttpRequest()
-		xhr.open('GET', this.baseUrl + `/server/backup?scope=${encodeURIComponent(scope)}`)
+		xhr.open('GET', this.baseUrl + `/server/backup?scope=${encodeURIComponent(scope)}&confidentiality=${encodeURIComponent(confidentiality)}`)
 		xhr.responseType = 'blob'
 
 		try {

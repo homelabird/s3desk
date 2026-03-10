@@ -7,21 +7,21 @@ import (
 	"s3desk/internal/models"
 )
 
-func ValidateProtectionPut(provider models.ProfileProvider, req models.BucketProtectionPutRequest) error {
-	if req.UniformAccess != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilityUniformAccess) {
-		return UnsupportedFieldError(provider, "protection", "uniformAccess", models.BucketGovernanceCapabilityUniformAccess, nil)
+func ValidateProtectionPut(ctx ValidationContext, req models.BucketProtectionPutRequest) error {
+	if req.UniformAccess != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityUniformAccess) {
+		return UnsupportedFieldError(ctx.Provider, "protection", "uniformAccess", models.BucketGovernanceCapabilityUniformAccess, nil)
 	}
-	if req.Retention != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilityRetention) {
-		return UnsupportedFieldError(provider, "protection", "retention", models.BucketGovernanceCapabilityRetention, nil)
+	if req.Retention != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityRetention) {
+		return UnsupportedFieldError(ctx.Provider, "protection", "retention", models.BucketGovernanceCapabilityRetention, nil)
 	}
-	if req.ObjectLock != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilityObjectLock) {
-		return UnsupportedFieldError(provider, "protection", "objectLock", models.BucketGovernanceCapabilityObjectLock, nil)
+	if req.ObjectLock != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityObjectLock) {
+		return UnsupportedFieldError(ctx.Provider, "protection", "objectLock", models.BucketGovernanceCapabilityObjectLock, nil)
 	}
-	if req.SoftDelete != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilitySoftDelete) {
-		return UnsupportedFieldError(provider, "protection", "softDelete", models.BucketGovernanceCapabilitySoftDelete, nil)
+	if req.SoftDelete != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilitySoftDelete) {
+		return UnsupportedFieldError(ctx.Provider, "protection", "softDelete", models.BucketGovernanceCapabilitySoftDelete, nil)
 	}
-	if req.Immutability != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilityImmutability) {
-		return UnsupportedFieldError(provider, "protection", "immutability", models.BucketGovernanceCapabilityImmutability, nil)
+	if req.Immutability != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityImmutability) {
+		return UnsupportedFieldError(ctx.Provider, "protection", "immutability", models.BucketGovernanceCapabilityImmutability, nil)
 	}
 	if req.UniformAccess == nil && req.Retention == nil && req.ObjectLock == nil && req.SoftDelete == nil && req.Immutability == nil {
 		return InvalidFieldError("protection", "protection must include at least one setting", map[string]any{
@@ -30,12 +30,12 @@ func ValidateProtectionPut(provider models.ProfileProvider, req models.BucketPro
 	}
 
 	if req.Retention != nil {
-		if len(req.Retention.Rules) > 0 && provider != models.ProfileProviderOciObjectStorage {
-			return UnsupportedFieldError(provider, "protection", "retention.rules", models.BucketGovernanceCapabilityRetention, nil)
+		if len(req.Retention.Rules) > 0 && ctx.Provider != models.ProfileProviderOciObjectStorage {
+			return UnsupportedFieldError(ctx.Provider, "protection", "retention.rules", models.BucketGovernanceCapabilityRetention, nil)
 		}
 		if req.Retention.Enabled {
 			if len(req.Retention.Rules) > 0 {
-				if provider == models.ProfileProviderOciObjectStorage && len(req.Retention.Rules) > 100 {
+				if ctx.Provider == models.ProfileProviderOciObjectStorage && len(req.Retention.Rules) > 100 {
 					return InvalidFieldError("retention.rules", "OCI allows a maximum of 100 retention rules per bucket", map[string]any{
 						"section": "protection",
 					})
@@ -65,7 +65,7 @@ func ValidateProtectionPut(provider models.ProfileProvider, req models.BucketPro
 			})
 		}
 	}
-	if provider == models.ProfileProviderAzureBlob && req.Immutability != nil {
+	if ctx.Provider == models.ProfileProviderAzureBlob && req.Immutability != nil {
 		mode := strings.ToLower(strings.TrimSpace(req.Immutability.Mode))
 		if mode != "" && mode != "unlocked" && mode != "locked" {
 			return InvalidEnumFieldError("immutability.mode", mode, "unlocked", "locked")

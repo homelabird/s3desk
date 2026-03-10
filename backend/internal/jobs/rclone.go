@@ -226,8 +226,9 @@ func DetectRcloneVersionAtPath(ctx context.Context, path string) (version string
 // EnsureRcloneCompatible resolves rclone and verifies that its version is compatible.
 // It returns the resolved path and the detected version line.
 func EnsureRcloneCompatible(ctx context.Context) (path string, version string, err error) {
-	if testEnsureRcloneCompatibleHook != nil {
-		return testEnsureRcloneCompatibleHook(ctx)
+	hooks := currentProcessTestHooks()
+	if hooks.ensureRcloneCompatible != nil {
+		return hooks.ensureRcloneCompatible(ctx)
 	}
 	path, err = ResolveRclonePath()
 	if err != nil {

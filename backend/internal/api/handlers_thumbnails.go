@@ -639,8 +639,9 @@ func thumbnailVideoAttemptsDetails(attempts []thumbnailVideoAttempt) []map[strin
 }
 
 func decodeThumbnailVideoFrame(ctx context.Context, ffmpegPath string, r io.Reader) (image.Image, error) {
-	if decodeThumbnailVideoHook != nil {
-		return decodeThumbnailVideoHook(ctx, ffmpegPath, r)
+	hooks := currentAPIProcessTestHooks()
+	if hooks.decodeThumbnailVideo != nil {
+		return hooks.decodeThumbnailVideo(ctx, ffmpegPath, r)
 	}
 	cmd := exec.CommandContext(
 		ctx,
@@ -678,8 +679,9 @@ func decodeThumbnailVideoFrame(ctx context.Context, ffmpegPath string, r io.Read
 }
 
 func decodeThumbnailVideoFrameFile(ctx context.Context, ffmpegPath string, filePath string) (image.Image, error) {
-	if decodeThumbnailVideoFileHook != nil {
-		return decodeThumbnailVideoFileHook(ctx, ffmpegPath, filePath)
+	hooks := currentAPIProcessTestHooks()
+	if hooks.decodeThumbnailVideoFile != nil {
+		return hooks.decodeThumbnailVideoFile(ctx, ffmpegPath, filePath)
 	}
 	cmd := exec.CommandContext(
 		ctx,
@@ -716,8 +718,9 @@ func decodeThumbnailVideoFrameFile(ctx context.Context, ffmpegPath string, fileP
 }
 
 func resolveFFmpegPath() (string, error) {
-	if resolveFFmpegPathHook != nil {
-		return resolveFFmpegPathHook()
+	hooks := currentAPIProcessTestHooks()
+	if hooks.resolveFFmpegPath != nil {
+		return hooks.resolveFFmpegPath()
 	}
 	ffmpegPath := strings.TrimSpace(os.Getenv("FFMPEG_PATH"))
 	if ffmpegPath == "" {

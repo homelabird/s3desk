@@ -6,15 +6,15 @@ import (
 	"s3desk/internal/models"
 )
 
-func ValidatePublicExposurePut(provider models.ProfileProvider, req models.BucketPublicExposurePutRequest) error {
-	if req.BlockPublicAccess != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilityPublicAccessBlock) {
-		return UnsupportedFieldError(provider, "public-exposure", "blockPublicAccess", models.BucketGovernanceCapabilityPublicAccessBlock, nil)
+func ValidatePublicExposurePut(ctx ValidationContext, req models.BucketPublicExposurePutRequest) error {
+	if req.BlockPublicAccess != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityPublicAccessBlock) {
+		return UnsupportedFieldError(ctx.Provider, "public-exposure", "blockPublicAccess", models.BucketGovernanceCapabilityPublicAccessBlock, nil)
 	}
-	if req.PublicAccessPrevention != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilityPublicAccessPrevention) {
-		return UnsupportedFieldError(provider, "public-exposure", "publicAccessPrevention", models.BucketGovernanceCapabilityPublicAccessPrevention, nil)
+	if req.PublicAccessPrevention != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityPublicAccessPrevention) {
+		return UnsupportedFieldError(ctx.Provider, "public-exposure", "publicAccessPrevention", models.BucketGovernanceCapabilityPublicAccessPrevention, nil)
 	}
-	if strings.TrimSpace(req.Visibility) != "" && !capabilityEnabled(provider, models.BucketGovernanceCapabilityAccessPublicToggle) {
-		return UnsupportedFieldError(provider, "public-exposure", "visibility", models.BucketGovernanceCapabilityAccessPublicToggle, nil)
+	if strings.TrimSpace(req.Visibility) != "" && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityAccessPublicToggle) {
+		return UnsupportedFieldError(ctx.Provider, "public-exposure", "visibility", models.BucketGovernanceCapabilityAccessPublicToggle, nil)
 	}
 	if req.Mode == "" && req.BlockPublicAccess == nil && req.PublicAccessPrevention == nil && strings.TrimSpace(req.Visibility) == "" {
 		return InvalidFieldError("blockPublicAccess", "blockPublicAccess or mode is required", map[string]any{
@@ -23,12 +23,12 @@ func ValidatePublicExposurePut(provider models.ProfileProvider, req models.Bucke
 		})
 	}
 
-	if provider == models.ProfileProviderAwsS3 && req.Mode != "" {
+	if ctx.Provider == models.ProfileProviderAwsS3 && req.Mode != "" {
 		switch req.Mode {
 		case models.BucketPublicExposureModePrivate, models.BucketPublicExposureModePublic:
 			return nil
 		case models.BucketPublicExposureModeBlob, models.BucketPublicExposureModeContainer:
-			return UnsupportedFieldError(provider, "public-exposure", "mode", models.BucketGovernanceCapabilityAccessPublicToggle, map[string]any{
+			return UnsupportedFieldError(ctx.Provider, "public-exposure", "mode", models.BucketGovernanceCapabilityAccessPublicToggle, map[string]any{
 				"value": req.Mode,
 			})
 		default:
@@ -39,7 +39,7 @@ func ValidatePublicExposurePut(provider models.ProfileProvider, req models.Bucke
 		}
 	}
 
-	if provider == models.ProfileProviderGcpGcs {
+	if ctx.Provider == models.ProfileProviderGcpGcs {
 		mode := strings.TrimSpace(string(req.Mode))
 		if mode == "" {
 			mode = strings.ToLower(strings.TrimSpace(req.Visibility))
@@ -58,7 +58,7 @@ func ValidatePublicExposurePut(provider models.ProfileProvider, req models.Bucke
 		}
 	}
 
-	if provider == models.ProfileProviderAzureBlob {
+	if ctx.Provider == models.ProfileProviderAzureBlob {
 		mode := strings.TrimSpace(string(req.Mode))
 		if mode == "" {
 			mode = strings.ToLower(strings.TrimSpace(req.Visibility))
@@ -77,7 +77,7 @@ func ValidatePublicExposurePut(provider models.ProfileProvider, req models.Bucke
 		}
 	}
 
-	if provider == models.ProfileProviderOciObjectStorage {
+	if ctx.Provider == models.ProfileProviderOciObjectStorage {
 		value := strings.ToLower(strings.TrimSpace(req.Visibility))
 		if value == "" {
 			value = strings.ToLower(strings.TrimSpace(string(req.Mode)))

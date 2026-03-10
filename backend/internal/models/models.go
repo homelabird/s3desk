@@ -402,11 +402,11 @@ type BucketStoredAccessPolicy struct {
 }
 
 type BucketRetentionView struct {
-	Enabled     bool   `json:"enabled"`
-	Mode        string `json:"mode,omitempty"`
-	Days        *int   `json:"days,omitempty"`
-	RetainUntil string `json:"retainUntil,omitempty"`
-	Locked      bool   `json:"locked,omitempty"`
+	Enabled     bool                      `json:"enabled"`
+	Mode        string                    `json:"mode,omitempty"`
+	Days        *int                      `json:"days,omitempty"`
+	RetainUntil string                    `json:"retainUntil,omitempty"`
+	Locked      bool                      `json:"locked,omitempty"`
 	Rules       []BucketRetentionRuleView `json:"rules,omitempty"`
 }
 
@@ -432,15 +432,15 @@ type BucketSoftDeleteView struct {
 }
 
 type BucketImmutabilityView struct {
-	Enabled                    bool `json:"enabled"`
-	Mode                       string `json:"mode,omitempty"`
-	Until                      string `json:"until,omitempty"`
-	Days                       *int   `json:"days,omitempty"`
-	ETag                       string `json:"etag,omitempty"`
-	Editable                   bool   `json:"editable,omitempty"`
-	LegalHold                  bool   `json:"legalHold,omitempty"`
-	AllowProtectedAppendWrites bool   `json:"allowProtectedAppendWrites,omitempty"`
-	AllowProtectedAppendWritesAll bool `json:"allowProtectedAppendWritesAll,omitempty"`
+	Enabled                       bool   `json:"enabled"`
+	Mode                          string `json:"mode,omitempty"`
+	Until                         string `json:"until,omitempty"`
+	Days                          *int   `json:"days,omitempty"`
+	ETag                          string `json:"etag,omitempty"`
+	Editable                      bool   `json:"editable,omitempty"`
+	LegalHold                     bool   `json:"legalHold,omitempty"`
+	AllowProtectedAppendWrites    bool   `json:"allowProtectedAppendWrites,omitempty"`
+	AllowProtectedAppendWritesAll bool   `json:"allowProtectedAppendWritesAll,omitempty"`
 }
 
 type BucketAdvancedView struct {
@@ -505,12 +505,12 @@ type BucketLifecycleView struct {
 }
 
 type BucketSharingView struct {
-	Provider                ProfileProvider            `json:"provider"`
-	Bucket                  string                     `json:"bucket"`
-	StoredAccessPolicies    []BucketStoredAccessPolicy `json:"storedAccessPolicies,omitempty"`
-	PreauthenticatedSupport *bool                      `json:"preauthenticatedSupport,omitempty"`
+	Provider                 ProfileProvider                     `json:"provider"`
+	Bucket                   string                              `json:"bucket"`
+	StoredAccessPolicies     []BucketStoredAccessPolicy          `json:"storedAccessPolicies,omitempty"`
+	PreauthenticatedSupport  *bool                               `json:"preauthenticatedSupport,omitempty"`
 	PreauthenticatedRequests []BucketPreauthenticatedRequestView `json:"preauthenticatedRequests,omitempty"`
-	Warnings                []string                   `json:"warnings,omitempty"`
+	Warnings                 []string                            `json:"warnings,omitempty"`
 }
 
 type BucketPreauthenticatedRequestView struct {
@@ -862,28 +862,31 @@ type MetaResponse struct {
 }
 
 type ServerMigrationManifest struct {
-	Format            string   `json:"format"`
-	BundleKind        string   `json:"bundleKind"`
-	CreatedAt         string   `json:"createdAt"`
-	AppVersion        string   `json:"appVersion"`
-	DBBackend         string   `json:"dbBackend"`
-	EncryptionEnabled bool     `json:"encryptionEnabled"`
-	Entries           []string `json:"entries,omitempty"`
-	PayloadFileCount  int      `json:"payloadFileCount,omitempty"`
-	PayloadBytes      int64    `json:"payloadBytes,omitempty"`
-	PayloadSHA256     string   `json:"payloadSha256,omitempty"`
-	Warnings          []string `json:"warnings,omitempty"`
+	Format              string   `json:"format"`
+	BundleKind          string   `json:"bundleKind"`
+	ConfidentialityMode string   `json:"confidentialityMode,omitempty"`
+	CreatedAt           string   `json:"createdAt"`
+	AppVersion          string   `json:"appVersion"`
+	DBBackend           string   `json:"dbBackend"`
+	EncryptionEnabled   bool     `json:"encryptionEnabled"`
+	Entries             []string `json:"entries,omitempty"`
+	PayloadFileCount    int      `json:"payloadFileCount,omitempty"`
+	PayloadBytes        int64    `json:"payloadBytes,omitempty"`
+	PayloadSHA256       string   `json:"payloadSha256,omitempty"`
+	Warnings            []string `json:"warnings,omitempty"`
 }
 
 type ServerRestoreValidation struct {
-	PreflightChecked       bool  `json:"preflightChecked"`
-	DiskFreeBytesBefore    int64 `json:"diskFreeBytesBefore,omitempty"`
-	PayloadFileCount       int   `json:"payloadFileCount,omitempty"`
-	PayloadBytes           int64 `json:"payloadBytes,omitempty"`
-	PayloadChecksumPresent bool  `json:"payloadChecksumPresent"`
-	PayloadChecksumVerified bool `json:"payloadChecksumVerified"`
-	PayloadSignaturePresent bool `json:"payloadSignaturePresent"`
-	PayloadSignatureVerified bool `json:"payloadSignatureVerified"`
+	PreflightChecked           bool  `json:"preflightChecked"`
+	DiskFreeBytesBefore        int64 `json:"diskFreeBytesBefore,omitempty"`
+	PayloadFileCount           int   `json:"payloadFileCount,omitempty"`
+	PayloadBytes               int64 `json:"payloadBytes,omitempty"`
+	PayloadChecksumPresent     bool  `json:"payloadChecksumPresent"`
+	PayloadChecksumVerified    bool  `json:"payloadChecksumVerified"`
+	PayloadSignaturePresent    bool  `json:"payloadSignaturePresent"`
+	PayloadSignatureVerified   bool  `json:"payloadSignatureVerified"`
+	PayloadEncryptionPresent   bool  `json:"payloadEncryptionPresent,omitempty"`
+	PayloadEncryptionDecrypted bool  `json:"payloadEncryptionDecrypted,omitempty"`
 }
 
 type ServerRestoreResponse struct {

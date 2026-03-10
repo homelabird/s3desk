@@ -8,14 +8,14 @@ import (
 	"s3desk/internal/models"
 )
 
-func ValidateSharingPut(provider models.ProfileProvider, req models.BucketSharingPutRequest) error {
-	if len(req.PreauthenticatedRequests) > 0 && !capabilityEnabled(provider, models.BucketGovernanceCapabilityPAR) {
-		return UnsupportedFieldError(provider, "sharing", "preauthenticatedRequests", models.BucketGovernanceCapabilityPAR, nil)
+func ValidateSharingPut(ctx ValidationContext, req models.BucketSharingPutRequest) error {
+	if len(req.PreauthenticatedRequests) > 0 && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityPAR) {
+		return UnsupportedFieldError(ctx.Provider, "sharing", "preauthenticatedRequests", models.BucketGovernanceCapabilityPAR, nil)
 	}
-	if len(req.StoredAccessPolicies) > 0 && provider != models.ProfileProviderAzureBlob {
-		return UnsupportedFieldError(provider, "sharing", "storedAccessPolicies", models.BucketGovernanceCapabilityStoredAccessPolicy, nil)
+	if len(req.StoredAccessPolicies) > 0 && ctx.Provider != models.ProfileProviderAzureBlob {
+		return UnsupportedFieldError(ctx.Provider, "sharing", "storedAccessPolicies", models.BucketGovernanceCapabilityStoredAccessPolicy, nil)
 	}
-	if provider == models.ProfileProviderOciObjectStorage {
+	if ctx.Provider == models.ProfileProviderOciObjectStorage {
 		if len(req.PreauthenticatedRequests) > 100 {
 			return InvalidFieldError("preauthenticatedRequests", "OCI allows a maximum of 100 pre-authenticated requests per bucket", map[string]any{
 				"section": "sharing",

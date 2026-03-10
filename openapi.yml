@@ -120,8 +120,9 @@ paths:
         Exports a `.tar.gz` server backup bundle containing the sqlite snapshot and a
         selected slice of `DATA_DIR` runtime state. Use `scope=full` for a full local
         backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
-        cache state such as thumbnails. This export currently supports sqlite-backed
-        servers only.
+        cache state such as thumbnails. Use `confidentiality=encrypted` to encrypt the
+        payload with the current `ENCRYPTION_KEY` while keeping the outer bundle
+        metadata clear. This export currently supports sqlite-backed servers only.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
         - name: scope
@@ -131,6 +132,20 @@ paths:
             enum: [full, cache_metadata]
             default: full
           description: Selects whether the bundle contains the full local server state or only cache and metadata.
+        - name: confidentiality
+          in: query
+          schema:
+            type: string
+            enum: [clear, encrypted]
+            default: clear
+          description: Encrypts the bundle payload with the current ENCRYPTION_KEY while leaving the outer tar.gz manifest readable.
+        - name: confidentiality
+          in: query
+          schema:
+            type: string
+            enum: [clear, encrypted]
+            default: clear
+          description: Encrypts the payload with the current ENCRYPTION_KEY while keeping manifest metadata readable.
       responses:
         "200":
           description: OK
@@ -3560,6 +3575,9 @@ components:
         bundleKind:
           type: string
           enum: [full, cache_metadata]
+        confidentialityMode:
+          type: string
+          enum: [clear, encrypted]
         createdAt: { type: string, format: date-time }
         appVersion: { type: string }
         dbBackend: { type: string }
@@ -3597,7 +3615,7 @@ components:
 
     ServerRestoreValidation:
       type: object
-      required: [preflightChecked, payloadChecksumPresent, payloadChecksumVerified]
+      required: [preflightChecked, payloadChecksumPresent, payloadChecksumVerified, payloadSignaturePresent, payloadSignatureVerified]
       properties:
         preflightChecked: { type: boolean }
         diskFreeBytesBefore: { type: integer, format: int64 }
@@ -3605,6 +3623,10 @@ components:
         payloadBytes: { type: integer, format: int64 }
         payloadChecksumPresent: { type: boolean }
         payloadChecksumVerified: { type: boolean }
+        payloadSignaturePresent: { type: boolean }
+        payloadSignatureVerified: { type: boolean }
+        payloadEncryptionPresent: { type: boolean }
+        payloadEncryptionDecrypted: { type: boolean }
 
     ServerStagedRestore:
       type: object

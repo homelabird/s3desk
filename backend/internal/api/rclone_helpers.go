@@ -135,8 +135,9 @@ func (s *server) prepareRcloneConfig(profile models.ProfileSecrets, hint string)
 }
 
 func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (*rcloneProcess, error) {
-	if startRcloneHook != nil {
-		return startRcloneHook(s, ctx, profile, args, hint)
+	hooks := currentAPIProcessTestHooks()
+	if hooks.startRclone != nil {
+		return hooks.startRclone(s, ctx, profile, args, hint)
 	}
 	rclonePath, _, err := jobs.EnsureRcloneCompatible(ctx)
 	if err != nil {
@@ -206,8 +207,9 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 }
 
 func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (string, string, error) {
-	if runRcloneCaptureHook != nil {
-		return runRcloneCaptureHook(s, ctx, profile, args, hint)
+	hooks := currentAPIProcessTestHooks()
+	if hooks.runRcloneCapture != nil {
+		return hooks.runRcloneCapture(s, ctx, profile, args, hint)
 	}
 	proc, err := s.startRclone(ctx, profile, args, hint)
 	if err != nil {
@@ -227,8 +229,9 @@ func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSec
 }
 
 func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecrets, args []string, hint string, stdin io.Reader) (string, error) {
-	if runRcloneStdinHook != nil {
-		return runRcloneStdinHook(s, ctx, profile, args, hint, stdin)
+	hooks := currentAPIProcessTestHooks()
+	if hooks.runRcloneStdin != nil {
+		return hooks.runRcloneStdin(s, ctx, profile, args, hint, stdin)
 	}
 	rclonePath, _, err := jobs.EnsureRcloneCompatible(ctx)
 	if err != nil {

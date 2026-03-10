@@ -8,21 +8,21 @@ import (
 	"s3desk/internal/models"
 )
 
-func ValidateAccessPut(provider models.ProfileProvider, req models.BucketAccessPutRequest) error {
-	if req.ObjectOwnership != nil && !capabilityEnabled(provider, models.BucketGovernanceCapabilityObjectOwnership) {
-		return UnsupportedFieldError(provider, "access", "objectOwnership", models.BucketGovernanceCapabilityObjectOwnership, nil)
+func ValidateAccessPut(ctx ValidationContext, req models.BucketAccessPutRequest) error {
+	if req.ObjectOwnership != nil && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityObjectOwnership) {
+		return UnsupportedFieldError(ctx.Provider, "access", "objectOwnership", models.BucketGovernanceCapabilityObjectOwnership, nil)
 	}
-	if len(req.Bindings) > 0 && !capabilityEnabled(provider, models.BucketGovernanceCapabilityAccessBindings) {
-		return UnsupportedFieldError(provider, "access", "bindings", models.BucketGovernanceCapabilityAccessBindings, nil)
+	if len(req.Bindings) > 0 && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityAccessBindings) {
+		return UnsupportedFieldError(ctx.Provider, "access", "bindings", models.BucketGovernanceCapabilityAccessBindings, nil)
 	}
-	if strings.TrimSpace(req.ETag) != "" && !capabilityEnabled(provider, models.BucketGovernanceCapabilityAccessBindings) {
-		return UnsupportedFieldError(provider, "access", "etag", models.BucketGovernanceCapabilityAccessBindings, nil)
+	if strings.TrimSpace(req.ETag) != "" && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityAccessBindings) {
+		return UnsupportedFieldError(ctx.Provider, "access", "etag", models.BucketGovernanceCapabilityAccessBindings, nil)
 	}
-	if len(req.StoredAccessPolicies) > 0 && !capabilityEnabled(provider, models.BucketGovernanceCapabilityStoredAccessPolicy) {
-		return UnsupportedFieldError(provider, "access", "storedAccessPolicies", models.BucketGovernanceCapabilityStoredAccessPolicy, nil)
+	if len(req.StoredAccessPolicies) > 0 && !ctx.CapabilityEnabled(models.BucketGovernanceCapabilityStoredAccessPolicy) {
+		return UnsupportedFieldError(ctx.Provider, "access", "storedAccessPolicies", models.BucketGovernanceCapabilityStoredAccessPolicy, nil)
 	}
 
-	if provider == models.ProfileProviderAwsS3 {
+	if ctx.Provider == models.ProfileProviderAwsS3 {
 		if req.ObjectOwnership == nil {
 			return RequiredFieldError("objectOwnership", map[string]any{"section": "access"})
 		}
@@ -40,7 +40,7 @@ func ValidateAccessPut(provider models.ProfileProvider, req models.BucketAccessP
 		}
 	}
 
-	if provider == models.ProfileProviderAzureBlob {
+	if ctx.Provider == models.ProfileProviderAzureBlob {
 		if len(req.StoredAccessPolicies) > 5 {
 			return InvalidFieldError("storedAccessPolicies", "Azure allows a maximum of 5 stored access policies", map[string]any{
 				"section": "access",

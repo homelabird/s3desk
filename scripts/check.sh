@@ -30,6 +30,9 @@ fi
 echo "[check] openapi"
 bash "${ROOT}/scripts/validate_openapi.sh"
 
+echo "[check] release gate"
+bash "${ROOT}/scripts/check_release_gate.sh"
+
 echo "[check] gofmt"
 UNFORMATTED=$(find "${ROOT}/backend" -name '*.go' -type f -print0 | xargs -0 "${GOFMT_BIN}" -l)
 if [[ -n "${UNFORMATTED}" ]]; then

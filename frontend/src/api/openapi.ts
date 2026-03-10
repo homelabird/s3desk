@@ -163,14 +163,17 @@ export interface paths {
          * @description Exports a `.tar.gz` server backup bundle containing the sqlite snapshot and a
          *     selected slice of `DATA_DIR` runtime state. Use `scope=full` for a full local
          *     backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
-         *     cache state such as thumbnails. This export currently supports sqlite-backed
-         *     servers only.
+         *     cache state such as thumbnails. Use `confidentiality=encrypted` to encrypt the
+         *     payload with the current `ENCRYPTION_KEY` while keeping the outer bundle
+         *     metadata clear. This export currently supports sqlite-backed servers only.
          */
         get: {
             parameters: {
                 query?: {
                     /** @description Selects whether the bundle contains the full local server state or only cache and metadata. */
                     scope?: "full" | "cache_metadata";
+                    /** @description Encrypts the payload with the current ENCRYPTION_KEY while keeping manifest metadata readable. */
+                    confidentiality?: "clear" | "encrypted";
                 };
                 header?: {
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
@@ -4170,6 +4173,8 @@ export interface components {
             format: string;
             /** @enum {string} */
             bundleKind: "full" | "cache_metadata";
+            /** @enum {string} */
+            confidentialityMode?: "clear" | "encrypted";
             /** Format: date-time */
             createdAt: string;
             appVersion: string;
@@ -4201,6 +4206,10 @@ export interface components {
             payloadBytes?: number;
             payloadChecksumPresent: boolean;
             payloadChecksumVerified: boolean;
+            payloadSignaturePresent: boolean;
+            payloadSignatureVerified: boolean;
+            payloadEncryptionPresent?: boolean;
+            payloadEncryptionDecrypted?: boolean;
         };
         ServerStagedRestore: {
             id: string;

@@ -40,13 +40,12 @@ func installDownloadStartRcloneHook(
 	hook func(args []string) (*rcloneProcess, error),
 ) {
 	t.Helper()
-	prevStart := startRcloneHook
-	startRcloneHook = func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
-		return hook(args)
-	}
-	t.Cleanup(func() {
-		startRcloneHook = prevStart
+	restore := setAPIProcessTestHooks(apiProcessTestHooks{
+		startRclone: func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
+			return hook(args)
+		},
 	})
+	t.Cleanup(restore)
 }
 
 func TestStreamRcloneDownload_ConvertsEarlyProcessFailureToJSONError(t *testing.T) {

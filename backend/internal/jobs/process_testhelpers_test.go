@@ -34,11 +34,10 @@ func installJobsStartRcloneHook(
 	start func(context.Context, models.ProfileSecrets, string, []string) (*rcloneProcess, error),
 ) {
 	t.Helper()
-	prev := testStartRcloneCommandHook
-	testStartRcloneCommandHook = start
-	t.Cleanup(func() {
-		testStartRcloneCommandHook = prev
+	restore := setProcessTestHooks(processTestHooks{
+		startRcloneCommand: start,
 	})
+	t.Cleanup(restore)
 }
 
 func newTestRcloneProcess(stdout, stderr string, waitErr error) *rcloneProcess {

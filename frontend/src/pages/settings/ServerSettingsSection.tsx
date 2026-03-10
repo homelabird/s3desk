@@ -1,8 +1,9 @@
 import { InfoCircleOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography, message } from 'antd'
+import { Alert, Button, Checkbox, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography, message } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
+import type { ServerBackupConfidentialityMode } from '../../api/client'
 import type { ServerBackupScope } from '../../api/client'
 import type { MetaResponse } from '../../api/types'
 import type { ServerRestoreResponse } from '../../api/types'
@@ -27,6 +28,8 @@ type ServerRestoreValidationView = {
 	payloadChecksumVerified?: boolean
 	payloadSignaturePresent?: boolean
 	payloadSignatureVerified?: boolean
+	payloadEncryptionPresent?: boolean
+	payloadEncryptionDecrypted?: boolean
 }
 
 export function ServerSettingsSection(props: ServerSettingsSectionProps) {
@@ -40,6 +43,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 	const [stagedRestoresError, setStagedRestoresError] = useState<string | null>(null)
 	const [deleteRestoreId, setDeleteRestoreId] = useState<string | null>(null)
 	const [cleanupRestoresLoading, setCleanupRestoresLoading] = useState(false)
+	const [backupConfidentiality, setBackupConfidentiality] = useState<ServerBackupConfidentialityMode>('clear')
 	const tlsCapability = props.meta?.capabilities?.profileTls
 	const tlsEnabled = tlsCapability?.enabled ?? false
 	const tlsReason = tlsCapability?.reason ?? ''
@@ -57,6 +61,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 				: 'Stages a sqlite DATA_DIR bundle only; this is not a Postgres backup or restore workflow.',
 	}
 	const backupSupported = backupExportCapability.enabled
+	const backupEncryptionAvailable = props.meta?.encryptionEnabled ?? false
 
 	const mtlsLabel = (
 		<Space size={4}>
@@ -85,13 +90,20 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		void refreshStagedRestores()
 	}, [props.meta, props.api])
 
+	useEffect(() => {
+		if (!backupEncryptionAvailable && backupConfidentiality !== 'clear') {
+			setBackupConfidentiality('clear')
+		}
+	}, [backupConfidentiality, backupEncryptionAvailable])
+
 	const runBackupDownload = async (scope: ServerBackupScope) => {
 		setBackupLoading(true)
 		setMigrationError(null)
 		try {
-			const { promise } = props.api.downloadServerBackup(scope)
+			const { promise } = props.api.downloadServerBackup(scope, backupConfidentiality)
 			const result = await promise
-			const filename = filenameFromContentDisposition(result.contentDisposition) ?? (scope === 'cache_metadata' ? 's3desk-cache-metadata-backup.tar.gz' : 's3desk-full-backup.tar.gz')
+			const filename = filenameFromContentDisposition(result.contentDisposition)
+				?? buildBackupFilenameFallback(scope, backupConfidentiality)
 			saveBlob(result.blob, filename)
 		} catch (err) {
 			setMigrationError(formatErr(err))
@@ -201,19 +213,34 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 								<Typography.Text type="secondary">
 									Download either a full backup bundle or a lighter cache + metadata bundle, then upload a bundle to stage a restorable DATA_DIR on this machine.
 								</Typography.Text>
-								<Space wrap>
-									<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('full')}>
-										Download Full backup
+							<Space wrap>
+								<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('full')}>
+									Download Full backup
 									</Button>
 									<Button loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('cache_metadata')}>
 										Download Cache + metadata backup
 									</Button>
-									<Button loading={restoreLoading} disabled={backupLoading || !restoreStagingCapability.enabled} onClick={handleRestorePick}>
-										Upload restore bundle
-									</Button>
-								</Space>
-								{!backupSupported ? (
-									<Space orientation="vertical" size={4} className={styles.fullWidth}>
+								<Button loading={restoreLoading} disabled={backupLoading || !restoreStagingCapability.enabled} onClick={handleRestorePick}>
+									Upload restore bundle
+								</Button>
+							</Space>
+							<Checkbox
+								checked={backupConfidentiality === 'encrypted'}
+								disabled={!backupSupported || restoreLoading || !backupEncryptionAvailable}
+								onChange={(event) => setBackupConfidentiality(event.target.checked ? 'encrypted' : 'clear')}
+							>
+								Encrypt backup payload with the current ENCRYPTION_KEY
+							</Checkbox>
+							<Typography.Text type="secondary">
+								Encrypted bundles keep the outer manifest readable but require the same <Typography.Text code>ENCRYPTION_KEY</Typography.Text> on restore so S3Desk can decrypt <Typography.Text code>payload.enc</Typography.Text>.
+							</Typography.Text>
+							{!backupEncryptionAvailable ? (
+								<Typography.Text type="secondary">
+									This server is running without <Typography.Text code>ENCRYPTION_KEY</Typography.Text>, so encrypted backup payloads are unavailable.
+								</Typography.Text>
+							) : null}
+							{!backupSupported ? (
+								<Space orientation="vertical" size={4} className={styles.fullWidth}>
 										<Typography.Text type="secondary">
 											Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>.
 										</Typography.Text>
@@ -260,10 +287,16 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 									<div>
 										<Typography.Text type="secondary">Bundle manifest</Typography.Text>
 										<div>
-											<Typography.Text code>{restoreResult.manifest.bundleKind}</Typography.Text>
+									<Typography.Text code>{restoreResult.manifest.bundleKind}</Typography.Text>
+									{restoreResult.manifest.confidentialityMode ? (
+										<>
 											<Typography.Text type="secondary"> / </Typography.Text>
-											<Typography.Text code>
-												{restoreResult.manifest.dbBackend}
+											<Typography.Text code>{restoreResult.manifest.confidentialityMode === 'encrypted' ? 'encrypted payload' : 'clear payload'}</Typography.Text>
+										</>
+									) : null}
+									<Typography.Text type="secondary"> / </Typography.Text>
+									<Typography.Text code>
+										{restoreResult.manifest.dbBackend}
 											</Typography.Text>
 											<Typography.Text type="secondary"> from </Typography.Text>
 											<Typography.Text code>{restoreResult.manifest.createdAt}</Typography.Text>
@@ -298,6 +331,14 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 															? 'signature verified'
 															: 'signature not verified'
 														: 'signature absent'}
+												</Typography.Text>
+												<Typography.Text type="secondary"> / </Typography.Text>
+												<Typography.Text code>
+													{restoreValidation.payloadEncryptionPresent
+														? restoreValidation.payloadEncryptionDecrypted
+															? 'payload decrypted'
+															: 'payload not decrypted'
+														: 'payload clear'}
 												</Typography.Text>
 											</div>
 											<div>
@@ -553,6 +594,11 @@ function filenameFromContentDisposition(header: string | null): string | null {
 
 	const plain = /filename="?([^";]+)"?/i.exec(header)
 	return plain?.[1] ?? null
+}
+
+function buildBackupFilenameFallback(scope: ServerBackupScope, confidentiality: ServerBackupConfidentialityMode): string {
+	const base = scope === 'cache_metadata' ? 's3desk-cache-metadata-backup' : 's3desk-full-backup'
+	return confidentiality === 'encrypted' ? `${base}-encrypted.tar.gz` : `${base}.tar.gz`
 }
 
 function saveBlob(blob: Blob, filename: string) {

@@ -51,6 +51,7 @@ function buildRestoreResponse(overrides: Partial<ServerRestoreResponse> = {}): S
 		manifest: {
 			format: 's3desk-server-backup/v1',
 			bundleKind: 'full',
+			confidentialityMode: 'encrypted',
 			createdAt: '2026-03-08T00:00:00Z',
 			appVersion: 'test',
 			dbBackend: 'sqlite',
@@ -68,6 +69,10 @@ function buildRestoreResponse(overrides: Partial<ServerRestoreResponse> = {}): S
 			payloadBytes: 2048,
 			payloadChecksumPresent: true,
 			payloadChecksumVerified: true,
+			payloadSignaturePresent: true,
+			payloadSignatureVerified: true,
+			payloadEncryptionPresent: true,
+			payloadEncryptionDecrypted: true,
 		},
 		stagingDir: '/data/restores/01ARZ3NDEKTSV4RRFFQ69G5FAV',
 		restartRequired: true,
@@ -111,9 +116,32 @@ describe('ServerSettingsSection', () => {
 
 		fireEvent.click(screen.getByRole('button', { name: 'Download Full backup' }))
 
-		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('full'))
+		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('full', 'clear'))
 		await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1))
 		expect(clickSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it('downloads an encrypted cache backup when confidentiality is enabled', async () => {
+		const api = {
+			downloadServerBackup: vi.fn(() => ({
+				promise: Promise.resolve({
+					blob: new Blob(['backup'], { type: 'application/gzip' }),
+					contentDisposition: 'attachment; filename="migration-encrypted.tar.gz"',
+					contentType: 'application/gzip',
+				}),
+				abort: vi.fn(),
+			})),
+			restoreServerBackup: vi.fn(),
+			listServerRestores: vi.fn().mockResolvedValue({ items: [] }),
+			deleteServerRestore: vi.fn(),
+		} as unknown as APIClient
+
+		render(<ServerSettingsSection api={api} meta={buildMeta()} isFetching={false} errorMessage={null} />)
+
+		fireEvent.click(screen.getByRole('checkbox', { name: /Encrypt backup payload with the current ENCRYPTION_KEY/i }))
+		fireEvent.click(screen.getByRole('button', { name: 'Download Cache + metadata backup' }))
+
+		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('cache_metadata', 'encrypted'))
 	})
 
 	it('uploads a restore bundle and shows the staged directory', async () => {
@@ -142,6 +170,8 @@ describe('ServerSettingsSection', () => {
 		expect(screen.getByText('Stop the destination server before switching DATA_DIR.')).toBeInTheDocument()
 		expect(screen.getByText('DATA_DIR="/data/restores/01ARZ3NDEKTSV4RRFFQ69G5FAV" DB_BACKEND="sqlite" <start-command>')).toBeInTheDocument()
 		expect(screen.getByText('2 files / 2 KB / sha256 abc123')).toBeInTheDocument()
+		expect(screen.getByText('encrypted payload')).toBeInTheDocument()
+		expect(screen.getByText('payload decrypted')).toBeInTheDocument()
 	})
 
 	it('disables backup download for postgres-backed servers', () => {

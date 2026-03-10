@@ -23,21 +23,23 @@ This round tracks what is still meaningfully open.
   - Run the documented live validation pass.
   - Attach evidence per affected provider before release.
 
-### 2. Backup bundle confidentiality is still the main remaining gap after integrity, signature, and preflight improvements
+### 2. Backup bundle confidentiality is now covered by optional encrypted payloads, but key management remains intentionally simple
 
 - Risk:
-  - Payload corruption is detectable, restore staging performs disk-space preflight, and signed bundles can now be authenticated with the matching ENCRYPTION_KEY.
-  - Bundle contents are still stored in cleartext, so archive confidentiality remains weak when files leave the source host.
+  - Payload corruption is detectable, restore staging performs disk-space preflight, and operators can now export encrypted bundles that keep the payload encrypted at rest outside the source host.
+  - The confidentiality model is still intentionally simple: it reuses the current ENCRYPTION_KEY and does not yet cover key rotation, per-bundle passphrases, or detached signatures.
 - Evidence:
   - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
   - [handlers_server_restores.go](../backend/internal/api/handlers_server_restores.go)
   - [ServerSettingsSection.tsx](../frontend/src/pages/settings/ServerSettingsSection.tsx)
   - [RUNBOOK.md](RUNBOOK.md)
+- Current status:
+  - Addressed by adding `confidentiality=encrypted` backup exports, encrypted `payload.enc` bundle entries, restore-time decryption validation, and UI controls for selecting encrypted bundle downloads when ENCRYPTION_KEY is configured.
 - Why it matters:
-  - Backup archives contain high-value local state such as the database and thumbnails.
+  - Backup archives contain high-value local state such as the database and thumbnails, so confidentiality had to become an explicit option before the backup surface could be considered mature.
 - Next action:
-  - Add optional archive confidentiality or encryption support.
-  - Keep the new signature and restore validation path stable while extending it to stronger provenance guarantees later.
+  - Keep the encrypted bundle path stable.
+  - Revisit stronger key-management and provenance models later only if operator requirements move beyond the current ENCRYPTION_KEY-based workflow.
 
 ## Priority 1
 
@@ -66,10 +68,12 @@ This round tracks what is still meaningfully open.
   - [RELEASE_GATE.md](RELEASE_GATE.md)
   - [TESTING.md](TESTING.md)
   - [check.sh](../scripts/check.sh)
+- Current status:
+  - Addressed by `scripts/check_release_gate.sh`, inclusion in [check.sh](../scripts/check.sh), and the GitHub Actions [release-gate.yml](../.github/workflows/release-gate.yml) workflow.
 - Why it matters:
   - Release readiness should not depend only on human memory once provider behavior becomes this broad.
 - Next action:
-  - Add CI or scripted checks for release-note requirements and validation evidence presence.
+  - Keep the required limitation list and evidence fields aligned as release policy evolves.
 
 ## Priority 2
 
@@ -81,10 +85,12 @@ This round tracks what is still meaningfully open.
 - Evidence:
   - [process_testhooks.go](../backend/internal/api/process_testhooks.go)
   - [process_testhooks.go](../backend/internal/jobs/process_testhooks.go)
+- Current status:
+  - Addressed by replacing direct package-level hook variable access with internal test-hook registries and setter helpers in both API and jobs layers.
 - Why it matters:
   - The current approach is useful as an intermediate step, but not ideal as a long-term boundary.
 - Next action:
-  - Replace global hooks with structured runner injection or isolate them behind stricter test-only boundaries.
+  - Keep future test seams behind the same internal registry pattern unless a larger runner-injection refactor is justified.
 
 ### 6. Bucket governance backend interfaces are still broader than necessary
 
@@ -98,7 +104,7 @@ This round tracks what is still meaningfully open.
 - Why it matters:
   - Future provider work will be cleaner if section capabilities and validation inputs are more targeted.
 - Next action:
-  - Evolve toward narrower section-oriented interfaces and richer validation context.
+  - Keep future section work aligned to the section-oriented interfaces and validation context already introduced.
 
 ### 7. Cost and restore observability still lack operator thresholds
 
@@ -110,14 +116,9 @@ This round tracks what is still meaningfully open.
 - Why it matters:
   - Observability is less useful if operators do not know when to act.
 - Next action:
-  - Document thresholds, dashboards, and alert conditions for cost and restore lifecycle signals.
+  - Keep the runbook thresholds aligned with the actual metrics emitted as cache and restore behavior evolves.
 
 ## Candidate Issue Order
 
 1. Execute real-provider live validation
-2. Add optional backup bundle confidentiality or encryption
-3. Expose Postgres backup capability explicitly in product surfaces
-4. Enforce release gate rules in CI
-5. Replace mutable global test hooks with stricter runners
-6. Narrow bucket governance backend interfaces further
-7. Define operator thresholds for cost and restore observability
+2. Execute remaining live validation and then reassess whether backup key-management needs a second pass

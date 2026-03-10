@@ -50,40 +50,33 @@ func installThumbnailProcessHooks(
 	decode func(context.Context, string, io.Reader) (image.Image, error),
 ) {
 	t.Helper()
-	prevStart := startRcloneHook
-	prevResolve := resolveFFmpegPathHook
-	prevDecode := decodeThumbnailVideoHook
-
-	startRcloneHook = func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
-		if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
-			entry := fmt.Sprintf(
-				"{\"Path\":\"clip.mp4\",\"Name\":\"clip.mp4\",\"Size\":%d,\"ModTime\":\"2024-01-01T00:00:00Z\",\"MimeType\":\"%s\",\"Hashes\":{\"ETag\":\"clip-etag\"}}",
-				size,
-				mimeType,
-			)
-			return &rcloneProcess{
-				stdout: io.NopCloser(bytes.NewBufferString(entry)),
-				stderr: &bytes.Buffer{},
-				wait:   func() error { return nil },
-			}, nil
-		}
-		if len(args) >= 1 && args[0] == "cat" {
-			return &rcloneProcess{
-				stdout: streamFactory(),
-				stderr: &bytes.Buffer{},
-				wait:   func() error { return nil },
-			}, nil
-		}
-		return nil, fmt.Errorf("unexpected rclone args: %v", args)
-	}
-	resolveFFmpegPathHook = func() (string, error) { return "ffmpeg", nil }
-	decodeThumbnailVideoHook = decode
-
-	t.Cleanup(func() {
-		startRcloneHook = prevStart
-		resolveFFmpegPathHook = prevResolve
-		decodeThumbnailVideoHook = prevDecode
+	restore := setAPIProcessTestHooks(apiProcessTestHooks{
+		startRclone: func(_ *server, _ context.Context, _ models.ProfileSecrets, args []string, _ string) (*rcloneProcess, error) {
+			if len(args) >= 3 && args[0] == "lsjson" && args[1] == "--stat" {
+				entry := fmt.Sprintf(
+					"{\"Path\":\"clip.mp4\",\"Name\":\"clip.mp4\",\"Size\":%d,\"ModTime\":\"2024-01-01T00:00:00Z\",\"MimeType\":\"%s\",\"Hashes\":{\"ETag\":\"clip-etag\"}}",
+					size,
+					mimeType,
+				)
+				return &rcloneProcess{
+					stdout: io.NopCloser(bytes.NewBufferString(entry)),
+					stderr: &bytes.Buffer{},
+					wait:   func() error { return nil },
+				}, nil
+			}
+			if len(args) >= 1 && args[0] == "cat" {
+				return &rcloneProcess{
+					stdout: streamFactory(),
+					stderr: &bytes.Buffer{},
+					wait:   func() error { return nil },
+				}, nil
+			}
+			return nil, fmt.Errorf("unexpected rclone args: %v", args)
+		},
+		resolveFFmpegPath: func() (string, error) { return "ffmpeg", nil },
+		decodeThumbnailVideo: decode,
 	})
+	t.Cleanup(restore)
 }
 
 func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMP4(t *testing.T) {
