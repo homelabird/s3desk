@@ -2,6 +2,12 @@ import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
+const MAX_OBJECTS_SEARCH_LENGTH = 160
+
+function sanitizeSearchInput(value: string): string {
+	return value.trim().slice(0, MAX_OBJECTS_SEARCH_LENGTH)
+}
+
 type UseObjectsSearchStateArgs = {
 	storageKey?: string
 	debounceMs?: number
@@ -19,23 +25,26 @@ export function useObjectsSearchState({
 	storageKey = 'objectsSearch',
 	debounceMs = 250,
 }: UseObjectsSearchStateArgs = {}): UseObjectsSearchStateResult {
-	const [search, setSearch] = useLocalStorageState<string>(storageKey, '')
-	const [searchDraft, setSearchDraft] = useState(search)
+	const [search, setSearch] = useLocalStorageState<string>(storageKey, '', { sanitize: sanitizeSearchInput })
+	const [searchDraft, setSearchDraftState] = useState(search)
 	const deferredSearch = useDeferredValue(search)
+	const setSearchDraft = useCallback((next: string) => {
+		setSearchDraftState(sanitizeSearchInput(next))
+	}, [])
 
 	const clearSearch = useCallback(() => {
-		setSearchDraft('')
+		setSearchDraftState('')
 		setSearch('')
 	}, [setSearch])
 
 	useEffect(() => {
-		setSearchDraft(search)
+		setSearchDraftState(search)
 	}, [search])
 
 	useEffect(() => {
 		if (searchDraft === search) return
 		const id = window.setTimeout(() => {
-			setSearch(searchDraft)
+			setSearch(sanitizeSearchInput(searchDraft))
 		}, debounceMs)
 		return () => window.clearTimeout(id)
 	}, [debounceMs, search, searchDraft, setSearch])

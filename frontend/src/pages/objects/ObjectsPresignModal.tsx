@@ -1,6 +1,7 @@
 import { Button, Input, Space, Spin, Typography, message } from 'antd'
 
 import { DialogModal } from '../../components/DialogModal'
+import { getSafeBrowserObjectUrl } from '../../api/baseUrl'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 
 type PresignPayload = { key: string; url: string; expiresAt: string }
@@ -27,7 +28,12 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 
 	const handleOpen = () => {
 		if (!url) return
-		window.open(url, '_blank', 'noopener,noreferrer')
+		try {
+			const safeUrl = getSafeBrowserObjectUrl(url)
+			window.open(safeUrl.url.toString(), '_blank', 'noopener,noreferrer')
+		} catch (err) {
+			message.error(err instanceof Error ? err.message : 'Download URL is invalid.')
+		}
 	}
 
 	return (

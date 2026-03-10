@@ -149,9 +149,11 @@ test('GCS governance access uses the structured IAM bindings editor', async ({ p
 	const bindingCard = accessSection.getByTestId('bucket-governance-gcs-binding-card').first()
 	await bindingCard.getByRole('textbox', { name: 'Role' }).fill('roles/storage.objectAdmin')
 	await bindingCard.getByRole('textbox', { name: 'Members' }).fill('user:alice@example.com\nallAuthenticatedUsers')
+	await bindingCard.getByRole('switch', { name: 'GCS binding condition 1' }).click()
+	await bindingCard.getByRole('textbox', { name: 'Condition title' }).fill('Temp access')
 	await bindingCard
-		.getByRole('textbox', { name: 'Condition JSON (optional)' })
-		.fill('{"title":"Temp access","expression":"request.time < timestamp(\\"2026-12-31T00:00:00Z\\")"}')
+		.getByRole('textbox', { name: 'Condition expression' })
+		.fill('request.time < timestamp("2026-12-31T00:00:00Z")')
 	await accessSection.getByRole('button', { name: 'Save' }).click()
 
 	await expect.poll(() => accessBodies.length).toBe(1)

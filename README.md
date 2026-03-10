@@ -29,13 +29,26 @@ Build outputs:
 
 ## Docker Build
 
-Build and run the current checkout with Postgres:
+Build and run the current checkout with Postgres using the local-only compose file:
 
 ```bash
+export API_TOKEN='set-a-local-token'
 docker compose -f docker-compose.local-build.yml up --build -d
 ```
 
+`docker-compose.local-build.yml` is intentionally local-only:
+
+- binds `127.0.0.1:${S3DESK_PORT:-8080}` on the host
+- keeps `ALLOW_REMOTE=false`
+- requires an explicit `API_TOKEN`
+
 The service is exposed on `http://127.0.0.1:8080` by default.
+
+For remote exposure, use a separate deployment manifest and set:
+
+- `ALLOW_REMOTE=true`
+- a non-placeholder `API_TOKEN`
+- `ALLOWED_HOSTS` when using non-private hostnames
 
 ## Local Development
 
@@ -51,6 +64,13 @@ Default local endpoints:
 - UI and API: `http://127.0.0.1:8080`
 - API docs: `http://127.0.0.1:8080/docs`
 - OpenAPI spec: `http://127.0.0.1:8080/openapi.yml`
+
+## Backup Model
+
+- In-product `Full backup` and `Cache + metadata backup` exports are for sqlite-backed `DATA_DIR` state.
+- Restore bundle uploads are `stage only`: the bundle is unpacked under `DATA_DIR/restores/<restore-id>` for review and manual cutover.
+- Postgres deployments still need a separate database backup workflow such as `pg_dump`, physical base backups, or managed snapshots.
+- A staged restore bundle does not replace a Postgres database restore.
 
 ## Documentation
 

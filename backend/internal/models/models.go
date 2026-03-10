@@ -857,11 +857,15 @@ type MetaResponse struct {
 
 type ServerMigrationManifest struct {
 	Format            string   `json:"format"`
+	BundleKind        string   `json:"bundleKind"`
 	CreatedAt         string   `json:"createdAt"`
 	AppVersion        string   `json:"appVersion"`
 	DBBackend         string   `json:"dbBackend"`
 	EncryptionEnabled bool     `json:"encryptionEnabled"`
 	Entries           []string `json:"entries,omitempty"`
+	PayloadFileCount  int      `json:"payloadFileCount,omitempty"`
+	PayloadBytes      int64    `json:"payloadBytes,omitempty"`
+	PayloadSHA256     string   `json:"payloadSha256,omitempty"`
 	Warnings          []string `json:"warnings,omitempty"`
 }
 
@@ -870,7 +874,20 @@ type ServerRestoreResponse struct {
 	StagingDir      string                  `json:"stagingDir"`
 	RestartRequired bool                    `json:"restartRequired"`
 	NextSteps       []string                `json:"nextSteps"`
+	ApplyPlan       []string                `json:"applyPlan,omitempty"`
+	HelperCommand   string                  `json:"helperCommand,omitempty"`
 	Warnings        []string                `json:"warnings,omitempty"`
+}
+
+type ServerStagedRestore struct {
+	ID         string                   `json:"id"`
+	StagingDir string                   `json:"stagingDir"`
+	StagedAt   string                   `json:"stagedAt"`
+	Manifest   *ServerMigrationManifest `json:"manifest,omitempty"`
+}
+
+type ServerStagedRestoreListResponse struct {
+	Items []ServerStagedRestore `json:"items"`
 }
 
 type TransferEngineInfo struct {

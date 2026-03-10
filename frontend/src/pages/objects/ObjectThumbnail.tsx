@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
-import { APIError, RequestAbortedError } from '../../api/client'
+import { RequestAbortedError } from '../../api/client'
 import {
 	buildThumbnailCacheKey,
-	getReusablePersistentThumbnailBlob,
-	setPersistentThumbnailBlob,
-	shouldPersistThumbnailLocally,
 	type ThumbnailCache,
 } from '../../lib/thumbnailCache'
+import { buildObjectThumbnailRequest, getThumbnailFailureTtlMs, shouldCacheThumbnailFailure } from './objectPreviewPolicy'
+import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
 
 type Props = {
 	api: APIClient
@@ -18,20 +17,26 @@ type Props = {
 	size: number
 	cache: ThumbnailCache
 	cacheKeySuffix?: string
+	objectSize?: number
+	etag?: string
+	lastModified?: string
+	contentType?: string
 	fit?: 'cover' | 'contain'
 	altText?: string
 }
 
 export function ObjectThumbnail(props: Props) {
 	const thumbnailRequest = useMemo(
-		() => ({
+		() => buildObjectThumbnailRequest({
 			profileId: props.profileId,
 			bucket: props.bucket,
 			objectKey: props.objectKey,
 			size: props.size,
 			cacheKeySuffix: props.cacheKeySuffix,
+			etag: props.etag,
+			lastModified: props.lastModified,
 		}),
-		[props.bucket, props.cacheKeySuffix, props.objectKey, props.profileId, props.size],
+		[props.bucket, props.cacheKeySuffix, props.etag, props.lastModified, props.objectKey, props.profileId, props.size],
 	)
 	const cacheKey = useMemo(() => buildThumbnailCacheKey(thumbnailRequest), [thumbnailRequest])
 	const [, bumpCacheVersion] = useState(0)
@@ -44,42 +49,27 @@ export function ObjectThumbnail(props: Props) {
 		let abort = () => {}
 
 		const load = async () => {
-			const shouldUsePersistentCache = shouldPersistThumbnailLocally(props.objectKey)
-			if (shouldUsePersistentCache) {
-				const cachedBlob = await getReusablePersistentThumbnailBlob(thumbnailRequest)
-				if (cachedBlob) {
-					if (!active) return
-					const objectURL = URL.createObjectURL(cachedBlob.blob)
-					props.cache.set(cachedBlob.cacheKey, objectURL)
-					bumpCacheVersion((version) => version + 1)
-					return
-				}
-			}
-
-			const handle = props.api.downloadObjectThumbnail({
-				profileId: props.profileId,
-				bucket: props.bucket,
-				key: props.objectKey,
-				size: props.size,
+			const handle = loadObjectThumbnailAsset({
+				api: props.api,
+				request: thumbnailRequest,
+				cache: props.cache,
+				objectSize: props.objectSize,
+				etag: props.etag,
+				lastModified: props.lastModified,
+				contentType: props.contentType,
 			})
 			abort = handle.abort
 
 			handle.promise
-				.then(async ({ blob }) => {
+				.then(() => {
 					if (!active) return
-					if (shouldUsePersistentCache) {
-						await setPersistentThumbnailBlob(cacheKey, blob)
-						if (!active) return
-					}
-					const objectURL = URL.createObjectURL(blob)
-					props.cache.set(cacheKey, objectURL)
 					bumpCacheVersion((version) => version + 1)
 				})
 				.catch((err) => {
 					if (!active) return
 					if (err instanceof RequestAbortedError) return
 					if (shouldCacheThumbnailFailure(err)) {
-						props.cache.markFailed(cacheKey)
+						props.cache.markFailed(cacheKey, getThumbnailFailureTtlMs(err))
 						bumpCacheVersion((version) => version + 1)
 					}
 				})
@@ -97,7 +87,11 @@ export function ObjectThumbnail(props: Props) {
 		props.api,
 		props.bucket,
 		props.cache,
+		props.contentType,
+		props.etag,
+		props.lastModified,
 		props.objectKey,
+		props.objectSize,
 		props.profileId,
 		props.size,
 		thumbnailRequest,
@@ -120,10 +114,4 @@ export function ObjectThumbnail(props: Props) {
 
 	const fileName = props.objectKey.split('/').pop() ?? props.objectKey
 	return <img src={url} style={style} loading="lazy" alt={props.altText ?? `Thumbnail of ${fileName}`} width={props.size} height={props.size} />
-}
-
-function shouldCacheThumbnailFailure(err: unknown): boolean {
-	if (!(err instanceof APIError)) return false
-	if (err.code === 'too_large' || err.code === 'unsupported' || err.code === 'not_found') return true
-	return err.status === 404 || err.status === 413 || err.status === 415
 }

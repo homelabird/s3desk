@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom'
 import type { APIClient } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { ObjectsCostMode } from '../../lib/objectsCostMode'
+import { shouldAutoIndexForCostMode } from '../../lib/objectsCostMode'
 import { normalizePrefix } from './objectsListUtils'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
@@ -18,6 +20,7 @@ type UseObjectsIndexingArgs = {
 	globalSearchOpen: boolean
 	globalSearchQueryText: string
 	globalSearchPrefixNormalized: string
+	objectsCostMode: ObjectsCostMode
 	autoIndexEnabled: boolean
 	autoIndexTtlMs: number
 	autoIndexCooldownMs: number
@@ -33,6 +36,7 @@ export function useObjectsIndexing({
 	globalSearchOpen,
 	globalSearchQueryText,
 	globalSearchPrefixNormalized,
+	objectsCostMode,
 	autoIndexEnabled,
 	autoIndexTtlMs,
 	autoIndexCooldownMs,
@@ -86,6 +90,7 @@ export function useObjectsIndexing({
 		if (!profileId || !bucket) return
 		if (!globalSearchQueryText) return
 		const targetPrefix = globalSearchPrefixNormalized || normalizePrefix(prefix)
+		if (!shouldAutoIndexForCostMode(objectsCostMode, targetPrefix)) return
 		if (!targetPrefix.trim()) return
 		if (indexObjectsJobMutation.isPending || autoIndexPendingRef.current) return
 
@@ -127,6 +132,7 @@ export function useObjectsIndexing({
 		globalSearchPrefixNormalized,
 		globalSearchQueryText,
 		indexObjectsJobMutation,
+		objectsCostMode,
 		prefix,
 		profileId,
 		setIndexPrefix,

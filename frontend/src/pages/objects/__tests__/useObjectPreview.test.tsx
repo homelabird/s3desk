@@ -60,12 +60,12 @@ describe('useObjectPreview', () => {
 			contentType: 'image/jpeg',
 			url: 'blob:video-thumb',
 		})
-		expect(downloadObjectThumbnail).toHaveBeenCalledWith({
+		expect(downloadObjectThumbnail).toHaveBeenCalledWith(expect.objectContaining({
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
 			key: 'clip.mp4',
 			size: 360,
-		})
+		}))
 		expect(getObjectDownloadURL).not.toHaveBeenCalled()
 
 		unmount()
@@ -150,12 +150,116 @@ describe('useObjectPreview', () => {
 		})
 
 		await waitFor(() => expect(result.current.preview?.status).toBe('ready'))
-		expect(getObjectDownloadURL).toHaveBeenCalledWith({
+		expect(getObjectDownloadURL).toHaveBeenCalledWith(expect.objectContaining({
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
 			key: 'report.txt',
 			proxy: true,
+		}))
+		expect(fetchSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it('loads a direct image preview for PNG objects and reuses it as an image preview asset', async () => {
+		const fetchSpy = vi
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(new Blob(['png'], { type: 'image/png' }), { status: 200, headers: { 'content-type': 'image/png' } }))
+		const getObjectDownloadURL = vi.fn().mockResolvedValue({
+			url: 'http://storage.local/direct.png',
+			expiresAt: '2026-03-09T00:00:00Z',
 		})
+		const downloadObjectThumbnail = vi.fn()
+		const api = { downloadObjectThumbnail, getObjectDownloadURL } as never
+
+		const { result } = renderHook(() =>
+			useObjectPreview({
+				api,
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				detailsKey: 'image.png',
+				detailsVisible: true,
+				detailsMeta: {
+					key: 'image.png',
+					contentType: 'image/png',
+					size: 1024,
+				} as never,
+				downloadLinkProxyEnabled: false,
+				presignedDownloadSupported: true,
+			}),
+		)
+
+		await act(async () => {
+			await result.current.loadPreview()
+		})
+
+		await waitFor(() => expect(result.current.preview?.status).toBe('ready'))
+		expect(result.current.preview).toMatchObject({
+			key: 'image.png',
+			status: 'ready',
+			kind: 'image',
+			contentType: 'image/png',
+			url: 'blob:video-thumb',
+		})
+		expect(getObjectDownloadURL).toHaveBeenCalledWith(expect.objectContaining({
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			key: 'image.png',
+			proxy: false,
+			size: 1024,
+			contentType: 'image/png',
+		}))
+		expect(downloadObjectThumbnail).not.toHaveBeenCalled()
+		expect(fetchSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it('treats GIF objects as image previews instead of video thumbnail flows', async () => {
+		const fetchSpy = vi
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(new Response(new Blob(['gif'], { type: 'image/gif' }), { status: 200, headers: { 'content-type': 'image/gif' } }))
+		const getObjectDownloadURL = vi.fn().mockResolvedValue({
+			url: 'http://storage.local/animated.gif',
+			expiresAt: '2026-03-09T00:00:00Z',
+		})
+		const downloadObjectThumbnail = vi.fn()
+		const api = { downloadObjectThumbnail, getObjectDownloadURL } as never
+
+		const { result } = renderHook(() =>
+			useObjectPreview({
+				api,
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				detailsKey: 'clip.gif',
+				detailsVisible: true,
+				detailsMeta: {
+					key: 'clip.gif',
+					contentType: 'image/gif',
+					size: 2048,
+				} as never,
+				downloadLinkProxyEnabled: false,
+				presignedDownloadSupported: true,
+			}),
+		)
+
+		await act(async () => {
+			await result.current.loadPreview()
+		})
+
+		await waitFor(() => expect(result.current.preview?.status).toBe('ready'))
+		expect(result.current.preview).toMatchObject({
+			key: 'clip.gif',
+			status: 'ready',
+			kind: 'image',
+			contentType: 'image/gif',
+			url: 'blob:video-thumb',
+		})
+		expect(downloadObjectThumbnail).not.toHaveBeenCalled()
+		expect(getObjectDownloadURL).toHaveBeenCalledWith(expect.objectContaining({
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			key: 'clip.gif',
+			proxy: false,
+			size: 2048,
+			contentType: 'image/gif',
+		}))
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
 	})
 })

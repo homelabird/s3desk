@@ -122,6 +122,7 @@ export function useTransfersDownloadQueue({
 							bucket: current.bucket,
 							key: current.key,
 							proxy,
+							size: current.totalBytes,
 						})
 						const latest = downloadTasksRef.current.find((t) => t.id === taskId)
 						if (!latest || latest.status !== 'running') {
@@ -412,4 +413,3 @@ export function useTransfersDownloadQueue({
 		queueDownloadJobArtifact,
 	}
 }
-

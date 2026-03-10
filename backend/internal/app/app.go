@@ -40,13 +40,16 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err := validateListenAddr(cfg.Addr, cfg.AllowRemote); err != nil {
 		return err
 	}
-	if cfg.AllowRemote && cfg.APIToken == "" {
-		isLoopback, err := isLoopbackListenAddr(cfg.Addr)
-		if err != nil {
-			return err
-		}
-		if !isLoopback {
+	isLoopback, err := isLoopbackListenAddr(cfg.Addr)
+	if err != nil {
+		return err
+	}
+	if cfg.AllowRemote && !isLoopback {
+		switch {
+		case strings.TrimSpace(cfg.APIToken) == "":
 			return fmt.Errorf("API_TOKEN (or --api-token) is required when --allow-remote is enabled and addr is non-loopback (addr=%q)", cfg.Addr)
+		case isPlaceholderAPIToken(cfg.APIToken):
+			return fmt.Errorf("API_TOKEN must not use a placeholder value when remote access is enabled (addr=%q)", cfg.Addr)
 		}
 	}
 
@@ -412,4 +415,13 @@ func normalizeAllowedDirs(dirs []string) ([]string, error) {
 		out = append(out, real)
 	}
 	return out, nil
+}
+
+func isPlaceholderAPIToken(token string) bool {
+	switch strings.TrimSpace(strings.ToLower(token)) {
+	case "", "change-me", "changeme", "default", "token", "api-token", "s3desk", "s3desk-local":
+		return true
+	default:
+		return false
+	}
 }

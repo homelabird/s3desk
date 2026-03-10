@@ -167,6 +167,70 @@ func TestHandleDownloadProxy_ReturnsErrorWhenCatFailsBeforeBody(t *testing.T) {
 	}
 }
 
+func TestHandleDownloadProxy_SkipsStatWhenSignedMetadataIsEmbedded(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake rclone uses a shell script")
+	}
+
+	lockTestEnv(t)
+	t.Setenv("RCLONE_PATH", writeFakeRclone(t, ""+
+		"cmd=''\n"+
+		"want_stat=0\n"+
+		"for arg in \"$@\"; do\n"+
+		"  if [ \"$arg\" = \"lsjson\" ]; then cmd='lsjson'; fi\n"+
+		"  if [ \"$arg\" = \"--stat\" ]; then want_stat=1; fi\n"+
+		"  if [ \"$arg\" = \"cat\" ]; then cmd='cat'; fi\n"+
+		"done\n"+
+		"if [ \"$cmd\" = \"lsjson\" ] && [ \"$want_stat\" = \"1\" ]; then\n"+
+		"  printf 'stat should not be called\\n' >&2\n"+
+		"  exit 1\n"+
+		"fi\n"+
+		"if [ \"$cmd\" = \"cat\" ]; then\n"+
+		"  printf 'hello'\n"+
+		"  exit 0\n"+
+		"fi\n"+
+		"printf 'unexpected rclone args: %s\\n' \"$*\" >&2\n"+
+		"exit 1\n"))
+
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	s := &server{
+		cfg:         config.Config{DataDir: dataDir},
+		store:       st,
+		proxySecret: resolveProxySecret("proxy-test-token"),
+	}
+
+	token := downloadProxyToken{
+		ProfileID:    profile.ID,
+		Bucket:       "test-bucket",
+		Key:          "report.txt",
+		Expires:      time.Now().UTC().Add(time.Minute).Unix(),
+		Size:         5,
+		ContentType:  "text/plain",
+		LastModified: "2024-01-01T00:00:00Z",
+	}
+	params := url.Values{}
+	params.Set("profileId", token.ProfileID)
+	params.Set("bucket", token.Bucket)
+	params.Set("key", token.Key)
+	params.Set("expires", strconv.FormatInt(token.Expires, 10))
+	params.Set("size", strconv.FormatInt(token.Size, 10))
+	params.Set("contentType", token.ContentType)
+	params.Set("lastModified", token.LastModified)
+	params.Set("sig", s.signDownloadProxy(token))
+
+	req := httptest.NewRequest(http.MethodGet, "/download-proxy?"+params.Encode(), nil)
+	rr := httptest.NewRecorder()
+	s.handleDownloadProxy(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if body := rr.Body.String(); body != "hello" {
+		t.Fatalf("body=%q, want %q", body, "hello")
+	}
+}
+
 func detailString(v any) string {
 	s, _ := v.(string)
 	return s

@@ -99,6 +99,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		setViewMode,
 		showThumbnails,
 		thumbnailCacheSize,
+		objectsCostMode,
 		autoIndexEnabled,
 		autoIndexTtlHours,
 	} = useObjectsFiltersState()
@@ -252,6 +253,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		maxSize,
 		minModifiedMs,
 		minSize,
+		objectsCostMode,
 		onDetailsResizePointerDown,
 		onDetailsResizePointerMove,
 		onDetailsResizePointerUp,

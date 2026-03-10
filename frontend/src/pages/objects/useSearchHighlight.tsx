@@ -7,10 +7,14 @@ export type SearchHighlightResult = {
 	highlightText: (value: string) => ReactNode
 }
 
+const MAX_HIGHLIGHT_TOKENS = 8
+const MAX_HIGHLIGHT_TOKEN_LENGTH = 48
+const MAX_HIGHLIGHT_PATTERN_LENGTH = 512
+
 export function useSearchHighlight(searchTokens: string[]): SearchHighlightResult {
 	const highlightPattern = useMemo(() => {
 		if (searchTokens.length === 0) return null
-		const uniqueTokens = Array.from(new Set(searchTokens.filter(Boolean))).slice(0, 8)
+		const uniqueTokens = Array.from(new Set(searchTokens.filter(Boolean).map((token) => token.slice(0, MAX_HIGHLIGHT_TOKEN_LENGTH)))).slice(0, MAX_HIGHLIGHT_TOKENS)
 		if (uniqueTokens.length === 0) return null
 
 		const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -19,6 +23,7 @@ export function useSearchHighlight(searchTokens: string[]): SearchHighlightResul
 		const loosePatterns = normalizedTokens.map((token) => token.split('').map(escape).join('[^\\p{L}\\p{N}]*'))
 		const patterns = Array.from(new Set([...rawPatterns, ...loosePatterns])).filter(Boolean)
 		if (patterns.length === 0) return null
+		if (patterns.join('|').length > MAX_HIGHLIGHT_PATTERN_LENGTH) return null
 
 		return new RegExp(`(${patterns.join('|')})`, 'giu')
 	}, [searchTokens])

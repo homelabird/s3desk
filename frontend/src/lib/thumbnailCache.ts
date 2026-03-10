@@ -3,7 +3,7 @@ export type ThumbnailCache = {
 	set: (key: string, url: string) => void
 	findBestMatch: (args: ThumbnailCacheRequest) => ThumbnailCacheMatch | null
 	isFailed: (key: string) => boolean
-	markFailed: (key: string) => void
+	markFailed: (key: string, ttlMs?: number) => void
 	clear: () => void
 }
 
@@ -231,13 +231,13 @@ export function createThumbnailCache(options: CacheOptions = {}): ThumbnailCache
 		isFailed(key: string) {
 			return isFailureFresh(key)
 		},
-		markFailed(key: string) {
+		markFailed(key: string, ttlMs = failureTtlMs) {
 			const existing = entries.get(key)
 			if (existing) {
 				entries.delete(key)
 				URL.revokeObjectURL(existing)
 			}
-			failedEntries.set(key, Date.now() + failureTtlMs)
+			failedEntries.set(key, Date.now() + ttlMs)
 		},
 		clear() {
 			for (const url of entries.values()) {

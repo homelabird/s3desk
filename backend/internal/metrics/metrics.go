@@ -29,6 +29,8 @@ type Metrics struct {
 
 	storageOperationsTotal     *prometheus.CounterVec
 	storageOperationDurationMs *prometheus.HistogramVec
+	thumbnailCacheHitsTotal    *prometheus.CounterVec
+	downloadProxyModeTotal     *prometheus.CounterVec
 
 	eventsConnections     prometheus.Gauge
 	eventsReconnectsTotal prometheus.Counter
@@ -95,6 +97,14 @@ func New() *Metrics {
 		Help:    "Storage operation duration in milliseconds.",
 		Buckets: prometheus.ExponentialBuckets(10, 2, 14),
 	}, []string{"provider", "operation", "status"})
+	m.thumbnailCacheHitsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "thumbnail_cache_hits_total",
+		Help: "Total number of backend thumbnail cache hits by source.",
+	}, []string{"source"})
+	m.downloadProxyModeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "download_proxy_mode_total",
+		Help: "Total number of download proxy requests by metadata mode.",
+	}, []string{"mode"})
 
 	m.eventsConnections = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "events_connections",
@@ -119,6 +129,8 @@ func New() *Metrics {
 		m.transferErrorsTotal,
 		m.storageOperationsTotal,
 		m.storageOperationDurationMs,
+		m.thumbnailCacheHitsTotal,
+		m.downloadProxyModeTotal,
 		m.eventsConnections,
 		m.eventsReconnectsTotal,
 	)
@@ -254,6 +266,28 @@ func (m *Metrics) ObserveStorageOperation(provider, operation, status string, du
 		ms = 0
 	}
 	m.storageOperationDurationMs.WithLabelValues(provider, operation, status).Observe(ms)
+}
+
+func (m *Metrics) IncThumbnailCacheHit(source string) {
+	if m == nil {
+		return
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		source = "unknown"
+	}
+	m.thumbnailCacheHitsTotal.WithLabelValues(source).Inc()
+}
+
+func (m *Metrics) IncDownloadProxyMode(mode string) {
+	if m == nil {
+		return
+	}
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		mode = "unknown"
+	}
+	m.downloadProxyModeTotal.WithLabelValues(mode).Inc()
 }
 
 func normalizeErrorCode(status string, errorCode *string) string {

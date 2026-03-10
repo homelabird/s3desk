@@ -16,10 +16,41 @@ import (
 )
 
 type downloadProxyToken struct {
-	ProfileID string
-	Bucket    string
-	Key       string
-	Expires   int64
+	ProfileID    string
+	Bucket       string
+	Key          string
+	Expires      int64
+	Size         int64
+	ContentType  string
+	LastModified string
+}
+
+func parseDownloadProxyMetadataHints(sizeRaw, contentType, lastModified string) (int64, string, string, error) {
+	contentType = strings.TrimSpace(contentType)
+	lastModified = strings.TrimSpace(lastModified)
+	if sizeRaw == "" {
+		return 0, contentType, lastModified, nil
+	}
+	size, err := strconv.ParseInt(strings.TrimSpace(sizeRaw), 10, 64)
+	if err != nil || size < 0 {
+		return 0, "", "", errors.New("size is invalid")
+	}
+	return size, contentType, lastModified, nil
+}
+
+func downloadProxyHasEmbeddedMetadata(token downloadProxyToken) bool {
+	return token.Size > 0 || token.ContentType != "" || token.LastModified != ""
+}
+
+func downloadProxyEntryFromToken(token downloadProxyToken) (rcloneListEntry, bool) {
+	if !downloadProxyHasEmbeddedMetadata(token) {
+		return rcloneListEntry{}, false
+	}
+	return rcloneListEntry{
+		Size:     token.Size,
+		MimeType: token.ContentType,
+		ModTime:  token.LastModified,
+	}, true
 }
 
 func resolveProxySecret(apiToken string) []byte {
@@ -54,6 +85,9 @@ func proxySignatureInput(token downloadProxyToken) string {
 		strings.TrimSpace(token.Bucket),
 		token.Key,
 		strconv.FormatInt(token.Expires, 10),
+		strconv.FormatInt(token.Size, 10),
+		strings.TrimSpace(token.ContentType),
+		strings.TrimSpace(token.LastModified),
 	}, "\n")
 }
 
@@ -64,6 +98,15 @@ func (s *server) buildDownloadProxyURL(r *http.Request, token downloadProxyToken
 	values.Set("bucket", token.Bucket)
 	values.Set("key", token.Key)
 	values.Set("expires", strconv.FormatInt(token.Expires, 10))
+	if token.Size > 0 {
+		values.Set("size", strconv.FormatInt(token.Size, 10))
+	}
+	if strings.TrimSpace(token.ContentType) != "" {
+		values.Set("contentType", strings.TrimSpace(token.ContentType))
+	}
+	if strings.TrimSpace(token.LastModified) != "" {
+		values.Set("lastModified", strings.TrimSpace(token.LastModified))
+	}
 	values.Set("sig", sig)
 
 	scheme := requestScheme(r)
@@ -136,7 +179,13 @@ func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
 	bucket := strings.TrimSpace(r.URL.Query().Get("bucket"))
 	key := strings.TrimSpace(r.URL.Query().Get("key"))
 	expiresRaw := strings.TrimSpace(r.URL.Query().Get("expires"))
+	sizeRaw := strings.TrimSpace(r.URL.Query().Get("size"))
 	sig := strings.TrimSpace(r.URL.Query().Get("sig"))
+	size, contentType, lastModified, err := parseDownloadProxyMetadataHints(sizeRaw, r.URL.Query().Get("contentType"), r.URL.Query().Get("lastModified"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), map[string]any{"size": sizeRaw})
+		return
+	}
 
 	if profileID == "" || bucket == "" || key == "" || expiresRaw == "" || sig == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "profileId, bucket, key, expires, sig are required", nil)
@@ -153,10 +202,13 @@ func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := downloadProxyToken{
-		ProfileID: profileID,
-		Bucket:    bucket,
-		Key:       key,
-		Expires:   expiresAt,
+		ProfileID:    profileID,
+		Bucket:       bucket,
+		Key:          key,
+		Expires:      expiresAt,
+		Size:         size,
+		ContentType:  contentType,
+		LastModified: lastModified,
 	}
 	if !s.verifyDownloadProxy(token, sig) {
 		writeError(w, http.StatusForbidden, "invalid_signature", "download signature is invalid", nil)
@@ -181,19 +233,30 @@ func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "download-proxy-stat")
-	if err != nil {
-		if rcloneIsNotFound(err, stderr) {
-			writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
+	entry, hasEmbeddedMetadata := downloadProxyEntryFromToken(token)
+	if hasEmbeddedMetadata {
+		if s.metrics != nil {
+			s.metrics.IncDownloadProxyMode("stat_skipped")
+		}
+	} else {
+		if s.metrics != nil {
+			s.metrics.IncDownloadProxyMode("stat_required")
+		}
+		fetchedEntry, stderr, statErr := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "download-proxy-stat")
+		if statErr != nil {
+			if rcloneIsNotFound(statErr, stderr) {
+				writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
+				return
+			}
+			writeRcloneAPIError(w, statErr, stderr, rcloneAPIErrorContext{
+				MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
+				DefaultStatus:  http.StatusBadRequest,
+				DefaultCode:    "s3_error",
+				DefaultMessage: "failed to download object",
+			}, map[string]any{"bucket": bucket, "key": key})
 			return
 		}
-		writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
-			MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
-			DefaultStatus:  http.StatusBadRequest,
-			DefaultCode:    "s3_error",
-			DefaultMessage: "failed to download object",
-		}, map[string]any{"bucket": bucket, "key": key})
-		return
+		entry = fetchedEntry
 	}
 
 	if r.Method == http.MethodHead {

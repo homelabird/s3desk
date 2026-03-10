@@ -27,9 +27,6 @@ What remains is a smaller set of validation, UX hardening, and documentation cle
 - [ ] Add typed handling for Azure legal hold release
   Current state: legal hold detection is surfaced in Azure immutability warnings, but release or edit remains outside this controls surface.
 
-- [ ] Replace GCS IAM condition JSON fragments with a typed condition editor
-  Current state: GCS IAM bindings now use a structured editor for role and members, but binding conditions are still entered as JSON.
-
 - [ ] Improve OCI PAR edit UX without hiding the delete-and-recreate model
   Current state: existing OCI PARs are intentionally immutable in place. The UI should make replace flows more explicit once live validation is complete.
 
@@ -51,7 +48,7 @@ What remains is a smaller set of validation, UX hardening, and documentation cle
   Final state: `docs/PROVIDERS.md` now carries the operator-facing governance support matrix and provider-specific limitations.
 
 - [x] Replace the GCS IAM bindings JSON editor with a structured editor
-  Final state: GCS IAM bindings are now edited through a structured list of roles, members, and optional condition JSON fragments.
+  Final state: GCS IAM bindings and IAM conditions are now edited through typed role, members, title, description, and expression fields.
 
 - [x] Replace the Azure stored access policies JSON editor with a structured editor
   Final state: Azure stored access policies are now edited through structured policy cards with typed permission selection.
@@ -69,5 +66,4 @@ Recommended order for the next implementation slice:
 1. Live provider validation
 2. Update the governance design document implementation status in more detail
 3. Azure legal hold typed handling
-4. GCS IAM condition structured editor
-5. OCI PAR replacement UX and S3-compatible capability review
+4. OCI PAR replacement UX and S3-compatible capability review

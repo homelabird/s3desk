@@ -17,6 +17,7 @@
     "bundle:report": "node ../scripts/bundle_report.js",
     "bundle:budget": "npm run build:analyze && node ../scripts/bundle_report.js --fail",
     "gen:openapi": "openapi-typescript ../openapi.yml -o src/api/openapi.ts",
+    "check:openapi": "node ./scripts/check-openapi-drift.mjs",
     "lint": "eslint . --max-warnings 0",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",

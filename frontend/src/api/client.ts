@@ -23,6 +23,7 @@ import type {
 	SearchObjectsResponse,
 	MetaResponse,
 	ServerRestoreResponse,
+	ServerStagedRestoreListResponse,
 	ObjectMeta,
 	PresignedURLResponse,
 	CreateFolderRequest,
@@ -152,6 +153,8 @@ export type BucketSharingClientView = {
 export type BucketSharingPutClientRequest = {
 	preauthenticatedRequests?: BucketPreauthenticatedRequestClientView[]
 }
+
+export type ServerBackupScope = 'full' | 'cache_metadata'
 
 function normalizeListObjectsResponse(
 	resp: ListObjectsResponse,
@@ -305,9 +308,9 @@ export class APIClient {
 		return this.request('/meta', { method: 'GET' })
 	}
 
-	downloadServerBackup(): { promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>; abort: () => void } {
+	downloadServerBackup(scope: ServerBackupScope = 'full'): { promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>; abort: () => void } {
 		const xhr = new XMLHttpRequest()
-		xhr.open('GET', this.baseUrl + '/server/backup')
+		xhr.open('GET', this.baseUrl + `/server/backup?scope=${encodeURIComponent(scope)}`)
 		xhr.responseType = 'blob'
 
 		try {
@@ -349,6 +352,14 @@ export class APIClient {
 		const form = new FormData()
 		form.append('bundle', file, file.name)
 		return this.request('/server/restore', { method: 'POST', body: form })
+	}
+
+	listServerRestores(): Promise<ServerStagedRestoreListResponse> {
+		return this.request('/server/restores', { method: 'GET' })
+	}
+
+	deleteServerRestore(restoreId: string): Promise<void> {
+		return this.request(`/server/restores/${encodeURIComponent(restoreId)}`, { method: 'DELETE' })
 	}
 
 	listProfiles(): Promise<Profile[]> {
@@ -645,11 +656,19 @@ export class APIClient {
 		key: string
 		expiresSeconds?: number
 		proxy?: boolean
+		size?: number
+		contentType?: string
+		lastModified?: string
 	}): Promise<PresignedURLResponse> {
 		const params = new URLSearchParams()
 		params.set('key', args.key)
 		if (args.expiresSeconds) params.set('expiresSeconds', String(args.expiresSeconds))
 		if (args.proxy) params.set('proxy', 'true')
+		if (typeof args.size === 'number' && Number.isFinite(args.size)) {
+			params.set('size', String(Math.max(0, Math.trunc(args.size))))
+		}
+		if (args.contentType) params.set('contentType', args.contentType)
+		if (args.lastModified) params.set('lastModified', args.lastModified)
 		return this.request(
 			`/buckets/${encodeURIComponent(args.bucket)}/objects/download-url?${params.toString()}`,
 			{ method: 'GET' },
@@ -1224,11 +1243,26 @@ export class APIClient {
 	}
 
 	downloadObjectThumbnail(
-		args: { profileId: string; bucket: string; key: string; size?: number },
+		args: {
+			profileId: string
+			bucket: string
+			key: string
+			size?: number
+			objectSize?: number
+			etag?: string
+			lastModified?: string
+			contentType?: string
+		},
 	): { promise: Promise<{ blob: Blob; contentType: string | null }>; abort: () => void } {
 		const params = new URLSearchParams()
 		params.set('key', args.key)
 		if (args.size) params.set('size', String(args.size))
+		if (typeof args.objectSize === 'number' && Number.isFinite(args.objectSize)) {
+			params.set('objectSize', String(Math.max(0, Math.trunc(args.objectSize))))
+		}
+		if (args.etag) params.set('etag', args.etag)
+		if (args.lastModified) params.set('lastModified', args.lastModified)
+		if (args.contentType) params.set('contentType', args.contentType)
 
 		const xhr = new XMLHttpRequest()
 		xhr.open('GET', this.baseUrl + `/buckets/${encodeURIComponent(args.bucket)}/objects/thumbnail?${params.toString()}`)

@@ -25,6 +25,7 @@ function buildArgs(overrides: Partial<Parameters<typeof useObjectsPrefetch>[0]> 
 		apiToken: 'token',
 		profileId: 'profile-1',
 		profileProvider: 's3_compatible',
+		objectsCostMode: 'balanced',
 		queryClient,
 		bucket: 'bucket-a',
 		recentBuckets: [],

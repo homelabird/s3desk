@@ -1,27 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-type Options = {
+type Options<T> = {
 	legacyLocalStorageKey?: string
+	sanitize?: (value: T) => T
 }
 
 export function useSessionStorageState<T>(
 	key: string,
 	defaultValue: T,
-	options: Options = {},
+	options: Options<T> = {},
 ): [T, (next: T | ((prev: T) => T)) => void] {
 	const stableDefaultSerialized = useMemo(() => JSON.stringify(defaultValue), [defaultValue])
 	const stableDefaultValue = useMemo(() => JSON.parse(stableDefaultSerialized) as T, [stableDefaultSerialized])
+	const sanitize = useCallback(
+		(value: T): T => {
+			if (!options.sanitize) return value
+			try {
+				return options.sanitize(value)
+			} catch {
+				return stableDefaultValue
+			}
+		},
+		[options.sanitize, stableDefaultValue],
+	)
 
 	const parse = useCallback(
 		(raw: string | null): T => {
 			if (raw === null) return stableDefaultValue
 			try {
-				return JSON.parse(raw) as T
+				return sanitize(JSON.parse(raw) as T)
 			} catch {
 				return stableDefaultValue
 			}
 		},
-		[stableDefaultValue],
+		[sanitize, stableDefaultValue],
 	)
 
 	const readValue = useCallback(
@@ -54,7 +66,7 @@ export function useSessionStorageState<T>(
 	useEffect(() => {
 		if (typeof window === 'undefined') return
 		try {
-			const serialized = JSON.stringify(state)
+			const serialized = JSON.stringify(sanitize(state))
 			window.sessionStorage.setItem(key, serialized)
 			if (options.legacyLocalStorageKey) {
 				window.localStorage.removeItem(options.legacyLocalStorageKey)
@@ -63,7 +75,7 @@ export function useSessionStorageState<T>(
 		} catch {
 			// ignore
 		}
-	}, [key, options.legacyLocalStorageKey, state])
+	}, [key, options.legacyLocalStorageKey, sanitize, state])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -98,12 +110,12 @@ export function useSessionStorageState<T>(
 			setStateSlot((prevSlot) => {
 				const prev = prevSlot.key === key ? prevSlot.value : readValue(key)
 				if (typeof next === 'function') {
-					return { key, value: (next as (prev: T) => T)(prev) }
+					return { key, value: sanitize((next as (prev: T) => T)(prev)) }
 				}
-				return { key, value: next }
+				return { key, value: sanitize(next) }
 			})
 		},
-		[key, readValue],
+		[key, readValue, sanitize],
 	)
 
 	return [state, set]

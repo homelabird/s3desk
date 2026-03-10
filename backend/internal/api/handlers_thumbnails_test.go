@@ -164,6 +164,37 @@ func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMP4(t *testing.T) {
 	}
 }
 
+func TestHandleGetObjectThumbnail_ReturnsJPEGForVideoMKV(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake ffmpeg/rclone use shell scripts")
+	}
+
+	lockTestEnv(t)
+	t.Setenv("RCLONE_PATH", writeFakeThumbnailRclone(t, "video/x-matroska", 4096))
+	t.Setenv("FFMPEG_PATH", writeFakeFFmpegJPEG(t))
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodGet, "/api/v1/buckets/test-bucket/objects/thumbnail?key=clip.mkv&size=96", profile.ID, nil)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+	if got := res.Header.Get("Content-Type"); got != "image/jpeg" {
+		t.Fatalf("content-type=%q, want image/jpeg", got)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if _, err := jpeg.Decode(bytes.NewReader(body)); err != nil {
+		t.Fatalf("decode jpeg: %v", err)
+	}
+}
+
 func TestHandleGetObjectThumbnail_AllowsVideoBeyondImageLimit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake ffmpeg/rclone use shell scripts")
@@ -220,6 +251,48 @@ func TestHandleGetObjectThumbnail_StopsVideoStreamAfterFrameExtraction(t *testin
 	}
 }
 
+func TestHandleGetObjectThumbnail_ServesRequestFingerprintCacheWithoutStat(t *testing.T) {
+	t.Parallel()
+
+	st, _, srv, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			img.Set(x, y, color.RGBA{R: 120, G: uint8(20 * x), B: uint8(20 * y), A: 255})
+		}
+	}
+	cachePath, ok := thumbnailRequestFingerprintCachePath(dataDir, profile.ID, "test-bucket", "clip.png", 96, httptest.NewRequest(http.MethodGet, "/?key=clip.png&size=96&objectSize=10&etag=etag-a&lastModified=2024-01-01T00:00:00Z&contentType=image/png", nil))
+	if !ok {
+		t.Fatal("expected request fingerprint cache path")
+	}
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o700); err != nil {
+		t.Fatalf("mkdir cache dir: %v", err)
+	}
+	f, err := os.Create(cachePath)
+	if err != nil {
+		t.Fatalf("create cache file: %v", err)
+	}
+	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 85}); err != nil {
+		_ = f.Close()
+		t.Fatalf("encode jpeg: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close cache file: %v", err)
+	}
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodGet, "/api/v1/buckets/test-bucket/objects/thumbnail?key=clip.png&size=96&objectSize=10&etag=etag-a&lastModified=2024-01-01T00:00:00Z&contentType=image/png", profile.ID, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+	if got := res.Header.Get("Content-Type"); got != "image/jpeg" {
+		t.Fatalf("content-type=%q, want image/jpeg", got)
+	}
+}
+
 func TestThumbnailCachePath_ChangesWhenFingerprintChanges(t *testing.T) {
 	t.Parallel()
 
@@ -236,10 +309,10 @@ func TestThumbnailMaxBytesForKind(t *testing.T) {
 	if got, want := thumbnailMaxBytesForKind("image"), int64(thumbnailImageMaxBytes); got != want {
 		t.Fatalf("image max bytes=%d want=%d", got, want)
 	}
-	if got, want := thumbnailMaxBytesForKind("video"), int64(thumbnailVideoMaxBytes); got != want {
+	if got, want := thumbnailMaxBytesForKind("video"), int64(0); got != want {
 		t.Fatalf("video max bytes=%d want=%d", got, want)
 	}
-	if thumbnailMaxBytesForKind("video") <= thumbnailMaxBytesForKind("image") {
-		t.Fatal("expected video thumbnail limit to be larger than image limit")
+	if thumbnailMaxBytesForKind("video") != 0 {
+		t.Fatal("expected video thumbnails to use streaming fallbacks instead of a hard max-bytes cap")
 	}
 }

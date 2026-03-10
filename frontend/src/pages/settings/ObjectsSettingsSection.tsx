@@ -1,8 +1,9 @@
-import { Collapse, Space } from 'antd'
+import { Collapse, Select, Space } from 'antd'
 
 import { FormField } from '../../components/FormField'
 import { NumberField } from '../../components/NumberField'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
+import type { ObjectsCostMode } from '../../lib/objectsCostMode'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 	OBJECTS_AUTO_INDEX_TTL_MAX_HOURS,
@@ -20,6 +21,8 @@ type ObjectsSettingsSectionProps = {
 	setObjectsShowThumbnails: (v: boolean) => void
 	objectsThumbnailCacheSize: number
 	setObjectsThumbnailCacheSize: (v: number) => void
+	objectsCostMode: ObjectsCostMode
+	setObjectsCostMode: (v: ObjectsCostMode) => void
 	objectsAutoIndexEnabled: boolean
 	setObjectsAutoIndexEnabled: (v: boolean) => void
 	objectsAutoIndexTtlHours: number
@@ -34,6 +37,20 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 					checked={props.objectsShowThumbnails}
 					onChange={props.setObjectsShowThumbnails}
 					aria-label="Show image thumbnails"
+				/>
+			</FormField>
+			<FormField
+				label="Object storage cost mode"
+				extra="Conservative reduces background listing, thumbnail concurrency, and automatic indexing. Balanced is the default. Aggressive favors responsiveness over request volume."
+			>
+				<Select
+					value={props.objectsCostMode}
+					onChange={(value) => props.setObjectsCostMode(value as ObjectsCostMode)}
+					options={[
+						{ value: 'conservative', label: 'Conservative' },
+						{ value: 'balanced', label: 'Balanced' },
+						{ value: 'aggressive', label: 'Aggressive' },
+					]}
 				/>
 			</FormField>
 			<Collapse

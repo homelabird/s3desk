@@ -3,6 +3,11 @@ import {
 	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 } from '../../lib/objectIndexing'
+import {
+	OBJECTS_COST_MODE_DEFAULT,
+	OBJECTS_COST_MODE_STORAGE_KEY,
+	type ObjectsCostMode,
+} from '../../lib/objectsCostMode'
 import { THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES } from '../../lib/thumbnailCache'
 
 import type { ObjectSort, ObjectTypeFilter, ObjectsViewMode } from './objectsTypes'
@@ -36,6 +41,7 @@ export type ObjectsFiltersState = {
 	setViewMode: (next: ObjectsViewMode) => void
 	showThumbnails: boolean
 	thumbnailCacheSize: number
+	objectsCostMode: ObjectsCostMode
 	autoIndexEnabled: boolean
 	autoIndexTtlHours: number
 }
@@ -56,6 +62,7 @@ export function useObjectsFiltersState(): ObjectsFiltersState {
 	const [viewMode, setViewMode] = useLocalStorageState<ObjectsViewMode>('objectsViewMode', 'list')
 	const [showThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)
 	const [thumbnailCacheSize] = useLocalStorageState<number>('objectsThumbnailCacheSize', THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES)
+	const [objectsCostMode] = useLocalStorageState<ObjectsCostMode>(OBJECTS_COST_MODE_STORAGE_KEY, OBJECTS_COST_MODE_DEFAULT)
 	const [autoIndexEnabled] = useLocalStorageState<boolean>('objectsAutoIndexEnabled', OBJECTS_AUTO_INDEX_DEFAULT_ENABLED)
 	const [autoIndexTtlHours] = useLocalStorageState<number>('objectsAutoIndexTtlHours', OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS)
 
@@ -88,6 +95,7 @@ export function useObjectsFiltersState(): ObjectsFiltersState {
 		setViewMode,
 		showThumbnails,
 		thumbnailCacheSize,
+		objectsCostMode,
 		autoIndexEnabled,
 		autoIndexTtlHours,
 	}

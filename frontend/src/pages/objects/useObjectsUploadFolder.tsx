@@ -5,6 +5,8 @@ import type { TransfersContextValue } from '../../components/Transfers'
 import { collectFilesFromDirectoryHandle } from '../../lib/deviceFs'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 
+const MAX_UPLOAD_FOLDER_FILES = 5000
+
 type UploadFolderValues = {
 	localFolder: string
 }
@@ -76,7 +78,7 @@ export function useObjectsUploadFolder({
 
 			setUploadFolderSubmitting(true)
 			try {
-				const files = await collectFilesFromDirectoryHandle(uploadFolderHandle)
+				const files = await collectFilesFromDirectoryHandle(uploadFolderHandle, '', { maxFiles: MAX_UPLOAD_FOLDER_FILES })
 				if (files.length === 0) {
 					message.info('No files found in the selected folder')
 					return

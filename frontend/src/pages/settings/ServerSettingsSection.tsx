@@ -1,11 +1,14 @@
 import { InfoCircleOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Descriptions, Space, Spin, Tag, Tooltip, Typography } from 'antd'
-import { useRef, useState } from 'react'
+import { Alert, Button, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { useEffect, useRef, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
+import type { ServerBackupScope } from '../../api/client'
 import type { MetaResponse } from '../../api/types'
 import type { ServerRestoreResponse } from '../../api/types'
+import type { ServerStagedRestore } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { formatBytes } from '../../lib/transfer'
 import styles from '../SettingsPage.module.css'
 
 type ServerSettingsSectionProps = {
@@ -21,6 +24,11 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 	const [restoreLoading, setRestoreLoading] = useState(false)
 	const [migrationError, setMigrationError] = useState<string | null>(null)
 	const [restoreResult, setRestoreResult] = useState<ServerRestoreResponse | null>(null)
+	const [stagedRestores, setStagedRestores] = useState<ServerStagedRestore[]>([])
+	const [stagedRestoresLoading, setStagedRestoresLoading] = useState(false)
+	const [stagedRestoresError, setStagedRestoresError] = useState<string | null>(null)
+	const [deleteRestoreId, setDeleteRestoreId] = useState<string | null>(null)
+	const [cleanupRestoresLoading, setCleanupRestoresLoading] = useState(false)
 	const tlsCapability = props.meta?.capabilities?.profileTls
 	const tlsEnabled = tlsCapability?.enabled ?? false
 	const tlsReason = tlsCapability?.reason ?? ''
@@ -36,13 +44,31 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		</Space>
 	)
 
-	const runBackupDownload = async () => {
+	const refreshStagedRestores = async () => {
+		setStagedRestoresLoading(true)
+		setStagedRestoresError(null)
+		try {
+			const result = await props.api.listServerRestores()
+			setStagedRestores(result.items ?? [])
+		} catch (err) {
+			setStagedRestoresError(formatErr(err))
+		} finally {
+			setStagedRestoresLoading(false)
+		}
+	}
+
+	useEffect(() => {
+		if (!props.meta) return
+		void refreshStagedRestores()
+	}, [props.meta, props.api])
+
+	const runBackupDownload = async (scope: ServerBackupScope) => {
 		setBackupLoading(true)
 		setMigrationError(null)
 		try {
-			const { promise } = props.api.downloadServerBackup()
+			const { promise } = props.api.downloadServerBackup(scope)
 			const result = await promise
-			const filename = filenameFromContentDisposition(result.contentDisposition) ?? 's3desk-backup.tar.gz'
+			const filename = filenameFromContentDisposition(result.contentDisposition) ?? (scope === 'cache_metadata' ? 's3desk-cache-metadata-backup.tar.gz' : 's3desk-full-backup.tar.gz')
 			saveBlob(result.blob, filename)
 		} catch (err) {
 			setMigrationError(formatErr(err))
@@ -53,6 +79,24 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 
 	const handleRestorePick = () => {
 		restoreInputRef.current?.click()
+	}
+
+	const staleRestoreCutoffMs = 7 * 24 * 60 * 60 * 1000
+	const isRestoreStale = (stagedAt: string) => {
+		const time = Date.parse(stagedAt)
+		return Number.isFinite(time) && Date.now()-time >= staleRestoreCutoffMs
+	}
+
+	const formatRestoreAge = (stagedAt: string) => {
+		const time = Date.parse(stagedAt)
+		if (!Number.isFinite(time)) return stagedAt
+		const deltaMs = Date.now() - time
+		if (deltaMs < 60_000) return 'just now'
+		const deltaMinutes = Math.floor(deltaMs / 60_000)
+		if (deltaMinutes < 60) return `${deltaMinutes}m ago`
+		const deltaHours = Math.floor(deltaMinutes / 60)
+		if (deltaHours < 48) return `${deltaHours}h ago`
+		return `${Math.floor(deltaHours / 24)}d ago`
 	}
 
 	const handleRestoreInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,10 +110,46 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		try {
 			const result = await props.api.restoreServerBackup(file)
 			setRestoreResult(result)
+			void refreshStagedRestores()
 		} catch (err) {
 			setMigrationError(formatErr(err))
 		} finally {
 			setRestoreLoading(false)
+		}
+	}
+
+	const handleDeleteRestore = async (restoreId: string) => {
+		setDeleteRestoreId(restoreId)
+		setStagedRestoresError(null)
+		try {
+			await props.api.deleteServerRestore(restoreId)
+			if (restoreResult?.stagingDir.endsWith(`/${restoreId}`)) {
+				setRestoreResult(null)
+			}
+			void refreshStagedRestores()
+		} catch (err) {
+			setStagedRestoresError(formatErr(err))
+		} finally {
+			setDeleteRestoreId(null)
+		}
+	}
+
+	const handleDeleteStaleRestores = async () => {
+		const staleIds = stagedRestores.filter((item) => isRestoreStale(item.stagedAt)).map((item) => item.id)
+		if (staleIds.length === 0) {
+			message.info('No staged restores are older than 7 days.')
+			return
+		}
+		setCleanupRestoresLoading(true)
+		setStagedRestoresError(null)
+		try {
+			await Promise.all(staleIds.map((restoreId) => props.api.deleteServerRestore(restoreId)))
+			await refreshStagedRestores()
+			message.success(`Deleted ${staleIds.length} stale staged restore(s).`)
+		} catch (err) {
+			setStagedRestoresError(formatErr(err))
+		} finally {
+			setCleanupRestoresLoading(false)
 		}
 	}
 
@@ -90,28 +170,38 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 					<Alert
 						type={backupSupported ? 'info' : 'warning'}
 						showIcon
-						title="Migration backup & restore"
+						title="Server full backup & staged restore"
 						description={
 							<Space orientation="vertical" size={8} className={styles.fullWidth}>
 								<Typography.Text type="secondary">
-									Download a migration bundle for another server, or upload a previous bundle to stage a restorable DATA_DIR on this machine.
+									Download either a full backup bundle or a lighter cache + metadata bundle, then upload a bundle to stage a restorable DATA_DIR on this machine.
 								</Typography.Text>
 								<Space wrap>
-									<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload()}>
-										Download backup
+									<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('full')}>
+										Download Full backup
+									</Button>
+									<Button loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('cache_metadata')}>
+										Download Cache + metadata backup
 									</Button>
 									<Button loading={restoreLoading} disabled={backupLoading} onClick={handleRestorePick}>
 										Upload restore bundle
 									</Button>
 								</Space>
 								{!backupSupported ? (
-									<Typography.Text type="secondary">
-										Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>. Backup export currently supports sqlite-backed servers only.
-									</Typography.Text>
+									<Space orientation="vertical" size={4} className={styles.fullWidth}>
+										<Typography.Text type="secondary">
+											Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>. Backup export currently supports sqlite-backed servers only.
+										</Typography.Text>
+										<Typography.Text type="secondary">
+											Uploading a restore bundle only stages a sqlite DATA_DIR for manual cutover. It does not replace a Postgres backup or restore workflow.
+										</Typography.Text>
+									</Space>
 								) : null}
 								<Typography.Text type="secondary">
-									The bundle contains DATA_DIR state such as <Typography.Text code>s3desk.db</Typography.Text>, thumbnails, logs, artifacts, and staging data.
-									Environment config outside DATA_DIR is not included.
+									<Typography.Text code>Full backup</Typography.Text> includes <Typography.Text code>s3desk.db</Typography.Text>, thumbnails, logs, artifacts, and staging data.
+								</Typography.Text>
+								<Typography.Text type="secondary">
+									<Typography.Text code>Cache + metadata backup</Typography.Text> includes <Typography.Text code>s3desk.db</Typography.Text> and thumbnails only. Environment config outside DATA_DIR is never included.
 								</Typography.Text>
 								<input
 									ref={restoreInputRef}
@@ -125,7 +215,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 					/>
 
 					{migrationError ? (
-						<Alert type="error" showIcon title="Migration action failed" description={migrationError} className={styles.marginBottom12} />
+						<Alert type="error" showIcon title="Backup or restore action failed" description={migrationError} className={styles.marginBottom12} />
 					) : null}
 
 					{restoreResult ? (
@@ -146,12 +236,21 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 									<div>
 										<Typography.Text type="secondary">Bundle manifest</Typography.Text>
 										<div>
+											<Typography.Text code>{restoreResult.manifest.bundleKind}</Typography.Text>
+											<Typography.Text type="secondary"> / </Typography.Text>
 											<Typography.Text code>
 												{restoreResult.manifest.dbBackend}
 											</Typography.Text>
 											<Typography.Text type="secondary"> from </Typography.Text>
 											<Typography.Text code>{restoreResult.manifest.createdAt}</Typography.Text>
 										</div>
+										{restoreResult.manifest.payloadSha256 ? (
+											<div>
+												<Typography.Text code className={styles.codeWrap}>
+													{`${restoreResult.manifest.payloadFileCount ?? 0} files / ${formatBytes(restoreResult.manifest.payloadBytes ?? 0)} / sha256 ${restoreResult.manifest.payloadSha256}`}
+												</Typography.Text>
+											</div>
+										) : null}
 									</div>
 									{restoreResult.nextSteps.length ? (
 										<div>
@@ -161,6 +260,26 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 													<li key={step}>{step}</li>
 												))}
 											</ul>
+										</div>
+									) : null}
+									{restoreResult.applyPlan?.length ? (
+										<div>
+											<Typography.Text strong>Apply plan</Typography.Text>
+											<ul className={styles.tightList}>
+												{restoreResult.applyPlan.map((step) => (
+													<li key={step}>{step}</li>
+												))}
+											</ul>
+										</div>
+									) : null}
+									{restoreResult.helperCommand ? (
+										<div>
+											<Typography.Text strong>Helper command</Typography.Text>
+											<div>
+												<Typography.Text code className={styles.codeWrap}>
+													{restoreResult.helperCommand}
+												</Typography.Text>
+											</div>
 										</div>
 									) : null}
 									{restoreResult.warnings?.length ? (
@@ -177,6 +296,71 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 							}
 						/>
 					) : null}
+
+					<Alert
+						type="info"
+						showIcon
+						title="Staged restore bundles"
+						description={
+							<Space orientation="vertical" size={8} className={styles.fullWidth}>
+								<Typography.Text type="secondary">
+									Uploaded restore bundles stay under <Typography.Text code>{`${props.meta.dataDir}/restores`}</Typography.Text> until you delete them.
+								</Typography.Text>
+								<Typography.Text type="secondary">
+									Keep only the staged restore you are validating and, at most, one rollback candidate. Delete stale bundles after cutover or failed drills.
+								</Typography.Text>
+								<Space wrap>
+									<Button size="small" loading={stagedRestoresLoading} onClick={() => void refreshStagedRestores()}>
+										Refresh staged restores
+									</Button>
+									<Button size="small" loading={cleanupRestoresLoading} onClick={() => void handleDeleteStaleRestores()}>
+										Delete stale restores
+									</Button>
+								</Space>
+								{stagedRestoresError ? <Typography.Text type="danger">{stagedRestoresError}</Typography.Text> : null}
+								{stagedRestores.length ? (
+									stagedRestores.map((item) => (
+										<div key={item.id}>
+											<Space wrap>
+												<Tag color="blue">{item.manifest?.bundleKind ?? 'unknown'}</Tag>
+												{isRestoreStale(item.stagedAt) ? <Tag color="orange">stale</Tag> : null}
+												<Typography.Text code>{item.id}</Typography.Text>
+												<Typography.Text type="secondary">{`${formatRestoreAge(item.stagedAt)} (${item.stagedAt})`}</Typography.Text>
+												{typeof item.manifest?.payloadBytes === 'number' ? (
+													<Tag>{formatBytes(item.manifest.payloadBytes)}</Tag>
+												) : null}
+												<Popconfirm
+													title="Delete staged restore?"
+													description="This removes only the staged restore directory under DATA_DIR/restores."
+													okText="Delete"
+													okButtonProps={{ danger: true, loading: deleteRestoreId === item.id }}
+													onConfirm={() => void handleDeleteRestore(item.id)}
+												>
+													<Button size="small" danger disabled={deleteRestoreId !== null && deleteRestoreId !== item.id}>
+														Delete
+													</Button>
+												</Popconfirm>
+											</Space>
+											<div>
+												<Typography.Text code className={styles.codeWrap}>
+													{item.stagingDir}
+												</Typography.Text>
+											</div>
+											{item.manifest?.payloadSha256 ? (
+												<div>
+													<Typography.Text type="secondary">
+														{`${item.manifest.payloadFileCount ?? 0} files / ${formatBytes(item.manifest.payloadBytes ?? 0)}`}
+													</Typography.Text>
+												</div>
+											) : null}
+										</div>
+									))
+								) : (
+									<Typography.Text type="secondary">No staged restore bundles.</Typography.Text>
+								)}
+							</Space>
+						}
+					/>
 
 					{props.meta.transferEngine.available && !props.meta.transferEngine.compatible ? (
 						<Alert

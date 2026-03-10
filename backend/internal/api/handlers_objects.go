@@ -529,6 +529,13 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 
 	proxyRaw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("proxy")))
 	useProxy := proxyRaw == "1" || proxyRaw == "true" || proxyRaw == "yes"
+	sizeRaw := strings.TrimSpace(r.URL.Query().Get("size"))
+	sizeHint, contentType, lastModified, err := parseDownloadProxyMetadataHints(sizeRaw, r.URL.Query().Get("contentType"), r.URL.Query().Get("lastModified"))
+	if err != nil {
+		metric.SetStatus("invalid_request")
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), map[string]any{"size": sizeRaw})
+		return
+	}
 	if useProxy {
 		profileID := strings.TrimSpace(secrets.ID)
 		if profileID == "" {
@@ -541,10 +548,13 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 		}
 		expiresAt := time.Now().UTC().Add(expires)
 		url := s.buildDownloadProxyURL(r, downloadProxyToken{
-			ProfileID: profileID,
-			Bucket:    bucket,
-			Key:       key,
-			Expires:   expiresAt.Unix(),
+			ProfileID:    profileID,
+			Bucket:       bucket,
+			Key:          key,
+			Expires:      expiresAt.Unix(),
+			Size:         sizeHint,
+			ContentType:  contentType,
+			LastModified: lastModified,
 		})
 		writeJSON(w, http.StatusOK, models.PresignedURLResponse{
 			URL:       url,

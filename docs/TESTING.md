@@ -26,6 +26,18 @@ npm run build
 
 Frontend tooling expects Node.js `22.x`.
 
+## OpenAPI Schema Workflow
+
+Edit [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml), not the generated frontend schema file.
+
+```bash
+cd frontend
+npm run gen:openapi
+npm run check:openapi
+```
+
+`npm run check:openapi` fails when [src/api/openapi.ts](/home/homelab/Downloads/project/s3desk/frontend/src/api/openapi.ts) no longer matches [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml).
+
 ## API / Provider E2E
 
 ```bash

@@ -152,20 +152,26 @@ export interface paths {
     };
     "/server/backup": {
         parameters: {
-            query?: never;
+            query?: {
+                scope?: "full" | "cache_metadata";
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         /**
-         * Download a server migration backup bundle
-         * @description Exports a `.tar.gz` migration bundle containing the sqlite snapshot and selected
-         *     `DATA_DIR` runtime state such as thumbnails, logs, artifacts, and staging data.
-         *     This export currently supports sqlite-backed servers only.
+         * Download a server backup bundle
+         * @description Exports a `.tar.gz` server backup bundle containing the sqlite snapshot and a
+         *     selected slice of `DATA_DIR` runtime state. Use `scope=full` for a full local
+         *     backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
+         *     cache state such as thumbnails. This export currently supports sqlite-backed
+         *     servers only.
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    scope?: "full" | "cache_metadata";
+                };
                 header?: {
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
@@ -210,10 +216,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stage a server migration backup bundle for restore
+         * Stage a server backup bundle for restore
          * @description Uploads a `.tar.gz` bundle previously created by `/server/backup` and stages it
          *     under `DATA_DIR/restores/<id>` without overwriting the live instance. The staged
-         *     directory can then be used as the destination server's `DATA_DIR`.
+         *     directory can then be used as the destination server's `DATA_DIR`. The response
+         *     includes a stage-only summary plus an apply plan and helper command for cutover.
          */
         post: {
             parameters: {
@@ -249,6 +256,101 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server/restores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List staged restore bundles
+         * @description Lists staged restore directories under `DATA_DIR/restores`. These are safe-to-delete
+         *     staged bundles created by `/server/restore`; deleting them does not change the live
+         *     `DATA_DIR`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerStagedRestoreListResponse"];
+                    };
+                };
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+                500: components["responses"]["ErrorResponse"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server/restores/{restoreId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: {
+                restoreId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a staged restore bundle
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path: {
+                    restoreId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ErrorResponse"];
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+                404: components["responses"]["ErrorResponse"];
+                500: components["responses"]["ErrorResponse"];
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -4070,12 +4172,17 @@ export interface components {
         };
         ServerMigrationManifest: {
             format: string;
+            bundleKind: "full" | "cache_metadata";
             /** Format: date-time */
             createdAt: string;
             appVersion: string;
             dbBackend: string;
             encryptionEnabled: boolean;
             entries?: string[];
+            payloadFileCount?: number;
+            /** Format: int64 */
+            payloadBytes?: number;
+            payloadSha256?: string;
             warnings?: string[];
         };
         ServerRestoreResponse: {
@@ -4083,7 +4190,19 @@ export interface components {
             stagingDir: string;
             restartRequired: boolean;
             nextSteps: string[];
+            applyPlan: string[];
+            helperCommand?: string;
             warnings?: string[];
+        };
+        ServerStagedRestore: {
+            id: string;
+            stagingDir: string;
+            /** Format: date-time */
+            stagedAt: string;
+            manifest?: components["schemas"]["ServerMigrationManifest"];
+        };
+        ServerStagedRestoreListResponse: {
+            items: components["schemas"]["ServerStagedRestore"][];
         };
         MetaCapabilities: {
             profileTls: components["schemas"]["FeatureCapability"];

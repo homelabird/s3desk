@@ -24,15 +24,15 @@ Section status terms used below:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | AWS S3 | Typed | Typed | Unsupported | Typed | Typed | Typed | Unsupported | Advanced raw bucket policy editing remains available. Object Lock is not part of the typed flow yet. |
 | S3-compatible | Partial | Unsupported | Unsupported | Partial | Partial | Partial | Unsupported | Support is intentionally conservative because capability coverage varies across targets. |
-| Azure Blob Storage | Partial | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | Stored access policies are still edited as raw JSON. Immutability editing requires Azure ARM credentials. Legal hold is surfaced but not released from this client. |
-| Google Cloud Storage | Partial | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | IAM bindings are still edited as JSON. Uniform bucket-level access and retention are typed. |
+| Azure Blob Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | Stored access policies are typed. Immutability editing requires Azure ARM credentials. Legal hold is surfaced but not released from this client. |
+| Google Cloud Storage | Typed | Typed | Partial | Typed | Unsupported | Unsupported | Unsupported | IAM bindings and IAM conditions are typed. Uniform bucket-level access and retention are typed. |
 | OCI Object Storage | Unsupported | Typed | Typed | Typed | Unsupported | Unsupported | Typed | Bucket visibility, multi-rule retention, and PAR create/delete are typed. Existing PARs are immutable in-place and must be deleted/recreated to change. |
 
 ## Provider-Specific Governance Limitations
 
 ### Google Cloud Storage
 
-- IAM bindings are now edited in a structured list, but binding conditions still use raw JSON fragments.
+- IAM bindings and IAM conditions are edited through a typed structured editor.
 - Retention lock behavior is surfaced, but destructive changes on locked buckets remain intentionally blocked in the UI.
 - Live validation should confirm that `etag` preservation behaves correctly across concurrent edits.
 

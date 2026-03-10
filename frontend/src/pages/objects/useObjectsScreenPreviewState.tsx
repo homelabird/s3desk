@@ -122,7 +122,7 @@ export function useObjectsScreenPreviewState({
 	})
 
 	const largePreviewMetaQueryRaw = useQuery({
-		queryKey: ['objectMeta', profileId, bucket, largePreviewKey, apiToken, 'largePreview'],
+		queryKey: ['objectMeta', profileId, bucket, largePreviewKey, apiToken],
 		enabled: !!profileId && !!bucket && !!largePreviewKey && largePreviewOpen,
 		queryFn: () => api.getObjectMeta({ profileId: profileId!, bucket, key: largePreviewKey! }),
 		retry: false,
@@ -198,6 +198,10 @@ export function useObjectsScreenPreviewState({
 				size={detailsThumbnailSize}
 				cache={thumbnailCache}
 				cacheKeySuffix={detailsThumbnailCacheKeySuffix}
+				objectSize={detailsMeta.size}
+				etag={detailsMeta.etag ?? undefined}
+				lastModified={detailsMeta.lastModified ?? undefined}
+				contentType={detailsMeta.contentType ?? undefined}
 				fit="contain"
 			/>
 		) : null
@@ -211,6 +215,10 @@ export function useObjectsScreenPreviewState({
 				size={detailsThumbnailSize}
 				cache={thumbnailCache}
 				cacheKeySuffix={detailsThumbnailCacheKeySuffix}
+				objectSize={detailsMeta.size}
+				etag={detailsMeta.etag ?? undefined}
+				lastModified={detailsMeta.lastModified ?? undefined}
+				contentType={detailsMeta.contentType ?? undefined}
 				fit="contain"
 				altText={`Thumbnail preview of ${detailsThumbnailFileName ?? detailsKey}`}
 			/>
@@ -229,6 +237,10 @@ export function useObjectsScreenPreviewState({
 				size={512}
 				cache={thumbnailCache}
 				cacheKeySuffix={largePreviewMeta?.etag || largePreviewMeta?.lastModified || undefined}
+				objectSize={largePreviewMeta?.size}
+				etag={largePreviewMeta?.etag ?? undefined}
+				lastModified={largePreviewMeta?.lastModified ?? undefined}
+				contentType={largePreviewMeta?.contentType ?? undefined}
 				fit="contain"
 			/>
 		) : null

@@ -19,6 +19,11 @@ import {
 	OBJECTS_AUTO_INDEX_DEFAULT_TTL_HOURS,
 } from '../lib/objectIndexing'
 import {
+	OBJECTS_COST_MODE_DEFAULT,
+	OBJECTS_COST_MODE_STORAGE_KEY,
+	type ObjectsCostMode,
+} from '../lib/objectsCostMode'
+import {
 	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
 } from '../lib/thumbnailCache'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
@@ -88,6 +93,7 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'objectsSort',
 	'objectsShowThumbnails',
 	'objectsThumbnailCacheSize',
+	'objectsCostMode',
 	'objectsAutoIndexEnabled',
 	'objectsAutoIndexTtlHours',
 	'objectsTreeWidth',
@@ -135,6 +141,10 @@ export function SettingsPage(props: Props) {
 	const [objectsThumbnailCacheSize, setObjectsThumbnailCacheSize] = useLocalStorageState<number>(
 		'objectsThumbnailCacheSize',
 		THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
+	)
+	const [objectsCostMode, setObjectsCostMode] = useLocalStorageState<ObjectsCostMode>(
+		OBJECTS_COST_MODE_STORAGE_KEY,
+		OBJECTS_COST_MODE_DEFAULT,
 	)
 	const [objectsAutoIndexEnabled, setObjectsAutoIndexEnabled] = useLocalStorageState<boolean>(
 		'objectsAutoIndexEnabled',
@@ -252,6 +262,8 @@ export function SettingsPage(props: Props) {
 									setObjectsShowThumbnails={setObjectsShowThumbnails}
 									objectsThumbnailCacheSize={objectsThumbnailCacheSize}
 									setObjectsThumbnailCacheSize={setObjectsThumbnailCacheSize}
+									objectsCostMode={objectsCostMode}
+									setObjectsCostMode={setObjectsCostMode}
 									objectsAutoIndexEnabled={objectsAutoIndexEnabled}
 									setObjectsAutoIndexEnabled={setObjectsAutoIndexEnabled}
 									objectsAutoIndexTtlHours={objectsAutoIndexTtlHours}

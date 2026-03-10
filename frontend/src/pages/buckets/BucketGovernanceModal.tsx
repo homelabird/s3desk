@@ -50,7 +50,11 @@ type GovernanceControlsCommonProps = {
 type GCSBindingDraft = {
   role: string;
   membersText: string;
-  conditionText: string;
+  conditionEnabled: boolean;
+  conditionTitle: string;
+  conditionDescription: string;
+  conditionExpression: string;
+  unsupportedConditionJSON: string;
 };
 
 type AzureStoredAccessPolicyDraft = {
@@ -293,7 +297,60 @@ function createEmptyGCSBindingDraft(): GCSBindingDraft {
   return {
     role: "",
     membersText: "",
-    conditionText: "",
+    conditionEnabled: false,
+    conditionTitle: "",
+    conditionDescription: "",
+    conditionExpression: "",
+    unsupportedConditionJSON: "",
+  };
+}
+
+function buildGCSConditionDraft(value: unknown): Pick<
+  GCSBindingDraft,
+  | "conditionEnabled"
+  | "conditionTitle"
+  | "conditionDescription"
+  | "conditionExpression"
+  | "unsupportedConditionJSON"
+> {
+  if (value == null) {
+    return {
+      conditionEnabled: false,
+      conditionTitle: "",
+      conditionDescription: "",
+      conditionExpression: "",
+      unsupportedConditionJSON: "",
+    };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return {
+      conditionEnabled: true,
+      conditionTitle: "",
+      conditionDescription: "",
+      conditionExpression: "",
+      unsupportedConditionJSON: formatOptionalJSON(value),
+    };
+  }
+
+  const raw = value as Record<string, unknown>;
+  const keys = Object.keys(raw);
+  const unsupported =
+    keys.some(
+      (key) =>
+        key !== "title" && key !== "description" && key !== "expression",
+    ) ||
+    ("title" in raw && typeof raw.title !== "string") ||
+    ("description" in raw && typeof raw.description !== "string") ||
+    ("expression" in raw && typeof raw.expression !== "string");
+
+  return {
+    conditionEnabled: keys.length > 0,
+    conditionTitle: typeof raw.title === "string" ? raw.title : "",
+    conditionDescription:
+      typeof raw.description === "string" ? raw.description : "",
+    conditionExpression:
+      typeof raw.expression === "string" ? raw.expression : "",
+    unsupportedConditionJSON: unsupported ? formatOptionalJSON(value) : "",
   };
 }
 
@@ -351,17 +408,28 @@ function serializeGCSBindings(bindings: GCSBindingDraft[]): BucketAccessBinding[
     }
     const members = parseLineSeparatedValues(binding.membersText);
     let condition: BucketAccessBinding["condition"] | undefined;
-    const rawCondition = binding.conditionText.trim();
-    if (rawCondition) {
-      try {
-        condition = JSON.parse(rawCondition) as BucketAccessBinding["condition"];
-      } catch (error) {
+    if (binding.conditionEnabled) {
+      if (binding.unsupportedConditionJSON.trim()) {
         throw new Error(
-          error instanceof Error
-            ? `Binding ${index + 1} condition JSON is invalid: ${error.message}`
-            : `Binding ${index + 1} condition JSON is invalid.`,
+          `Binding ${index + 1} condition contains unsupported keys. Turn the condition off to clear it, then recreate it with title, description, and expression fields only.`,
         );
       }
+      const title = binding.conditionTitle.trim();
+      const description = binding.conditionDescription.trim();
+      const expression = binding.conditionExpression.trim();
+      if (!title) {
+        throw new Error(`Binding ${index + 1} condition title is required.`);
+      }
+      if (!expression) {
+        throw new Error(
+          `Binding ${index + 1} condition expression is required.`,
+        );
+      }
+      condition = {
+        title,
+        expression,
+        ...(description ? { description } : {}),
+      } as BucketAccessBinding["condition"];
     }
 
     return {
@@ -456,7 +524,7 @@ function buildGCSDraft(governance: BucketGovernanceView): GCSGovernanceDraft {
           membersText: Array.isArray(binding.members)
             ? binding.members.join("\n")
             : "",
-          conditionText: formatOptionalJSON(binding.condition),
+          ...buildGCSConditionDraft(binding.condition),
         }))
       : [],
     uniformAccess: governance.protection?.uniformAccess === true,
@@ -1548,28 +1616,118 @@ function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps) {
                         rows={4}
                       />
                     </FormField>
-                    <FormField
-                      label="Condition JSON (optional)"
-                      htmlFor={`bucket-governance-gcs-condition-${index}`}
-                      extra='Example: {"title":"Temp access","expression":"request.time < timestamp(\"2026-12-31T00:00:00Z\")"}'
-                    >
-                      <Input.TextArea
-                        id={`bucket-governance-gcs-condition-${index}`}
-                        className={styles.jsonArea}
-                        value={binding.conditionText}
-                        onChange={(e) =>
-                          setBindings((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? { ...item, conditionText: e.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                        rows={4}
-                      />
-                    </FormField>
                   </div>
+                  <div className={styles.toggleRow}>
+                    <div className={styles.toggleCopy}>
+                      <Typography.Text>IAM condition</Typography.Text>
+                      <Typography.Text type="secondary">
+                        Use a typed CEL condition instead of raw JSON.
+                      </Typography.Text>
+                    </div>
+                    <ToggleSwitch
+                      checked={binding.conditionEnabled}
+                      onChange={(checked) =>
+                        setBindings((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? checked
+                                ? { ...item, conditionEnabled: true }
+                                : {
+                                    ...item,
+                                    conditionEnabled: false,
+                                    conditionTitle: "",
+                                    conditionDescription: "",
+                                    conditionExpression: "",
+                                    unsupportedConditionJSON: "",
+                                  }
+                              : item,
+                          ),
+                        )
+                      }
+                      ariaLabel={`GCS binding condition ${index + 1}`}
+                    />
+                  </div>
+                  {binding.conditionEnabled ? (
+                    <>
+                      {binding.unsupportedConditionJSON ? (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title="Unsupported IAM condition shape"
+                          description="This condition includes keys outside the typed title, description, and expression fields. Turn the condition off to clear it, then recreate it with the structured editor."
+                        />
+                      ) : null}
+                      <div className={styles.editorCardGrid}>
+                        <FormField
+                          label="Condition title"
+                          htmlFor={`bucket-governance-gcs-condition-title-${index}`}
+                        >
+                          <Input
+                            id={`bucket-governance-gcs-condition-title-${index}`}
+                            value={binding.conditionTitle}
+                            onChange={(e) =>
+                              setBindings((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        conditionTitle: e.target.value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            autoComplete="off"
+                          />
+                        </FormField>
+                        <FormField
+                          label="Condition description (optional)"
+                          htmlFor={`bucket-governance-gcs-condition-description-${index}`}
+                        >
+                          <Input
+                            id={`bucket-governance-gcs-condition-description-${index}`}
+                            value={binding.conditionDescription}
+                            onChange={(e) =>
+                              setBindings((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        conditionDescription: e.target.value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            autoComplete="off"
+                          />
+                        </FormField>
+                        <FormField
+                          label="Condition expression"
+                          htmlFor={`bucket-governance-gcs-condition-expression-${index}`}
+                          extra='Example: request.time < timestamp("2026-12-31T00:00:00Z")'
+                        >
+                          <Input.TextArea
+                            id={`bucket-governance-gcs-condition-expression-${index}`}
+                            value={binding.conditionExpression}
+                            onChange={(e) =>
+                              setBindings((current) =>
+                                current.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        conditionExpression: e.target.value,
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            rows={4}
+                          />
+                        </FormField>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               ))}
             </div>

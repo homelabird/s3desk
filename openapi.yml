@@ -113,13 +113,22 @@ paths:
   /server/backup:
     get:
       tags: [System]
-      summary: Download a server migration backup bundle
+      summary: Download a server backup bundle
       description: |
-        Exports a `.tar.gz` migration bundle containing the sqlite snapshot and selected
-        `DATA_DIR` runtime state such as thumbnails, logs, artifacts, and staging data.
-        This export currently supports sqlite-backed servers only.
+        Exports a `.tar.gz` server backup bundle containing the sqlite snapshot and a
+        selected slice of `DATA_DIR` runtime state. Use `scope=full` for a full local
+        backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
+        cache state such as thumbnails. This export currently supports sqlite-backed
+        servers only.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [full, cache_metadata]
+            default: full
+          description: Selects whether the bundle contains the full local server state or only cache and metadata.
       responses:
         "200":
           description: OK
@@ -144,11 +153,12 @@ paths:
   /server/restore:
     post:
       tags: [System]
-      summary: Stage a server migration backup bundle for restore
+      summary: Stage a server backup bundle for restore
       description: |
         Uploads a `.tar.gz` bundle previously created by `/server/backup` and stages it
         under `DATA_DIR/restores/<id>` without overwriting the live instance. The staged
-        directory can then be used as the destination server's `DATA_DIR`.
+        directory can then be used as the destination server's `DATA_DIR`. The response
+        includes a stage-only summary plus an apply plan and helper command for cutover.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
       requestBody:
@@ -174,6 +184,54 @@ paths:
         "401":
           $ref: "#/components/responses/ErrorResponse"
         "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /server/restores:
+    get:
+      tags: [System]
+      summary: List staged restore bundles
+      description: |
+        Lists staged restore directories under `DATA_DIR/restores`. These are safe-to-delete
+        staged bundles created by `/server/restore`; deleting them does not change the live
+        `DATA_DIR`.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerStagedRestoreListResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /server/restores/{restoreId}:
+    delete:
+      tags: [System]
+      summary: Delete a staged restore bundle
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+        - name: restoreId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "500":
           $ref: "#/components/responses/ErrorResponse"
 
   /profiles:
@@ -3494,9 +3552,12 @@ components:
 
     ServerMigrationManifest:
       type: object
-      required: [format, createdAt, appVersion, dbBackend, encryptionEnabled]
+      required: [format, bundleKind, createdAt, appVersion, dbBackend, encryptionEnabled]
       properties:
         format: { type: string }
+        bundleKind:
+          type: string
+          enum: [full, cache_metadata]
         createdAt: { type: string, format: date-time }
         appVersion: { type: string }
         dbBackend: { type: string }
@@ -3504,13 +3565,16 @@ components:
         entries:
           type: array
           items: { type: string }
+        payloadFileCount: { type: integer }
+        payloadBytes: { type: integer, format: int64 }
+        payloadSha256: { type: string }
         warnings:
           type: array
           items: { type: string }
 
     ServerRestoreResponse:
       type: object
-      required: [manifest, stagingDir, restartRequired, nextSteps]
+      required: [manifest, stagingDir, restartRequired, nextSteps, applyPlan]
       properties:
         manifest:
           $ref: "#/components/schemas/ServerMigrationManifest"
@@ -3519,9 +3583,32 @@ components:
         nextSteps:
           type: array
           items: { type: string }
+        applyPlan:
+          type: array
+          items: { type: string }
+        helperCommand: { type: string }
         warnings:
           type: array
           items: { type: string }
+
+    ServerStagedRestore:
+      type: object
+      required: [id, stagingDir, stagedAt]
+      properties:
+        id: { type: string }
+        stagingDir: { type: string }
+        stagedAt: { type: string, format: date-time }
+        manifest:
+          $ref: "#/components/schemas/ServerMigrationManifest"
+
+    ServerStagedRestoreListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerStagedRestore"
 
     MetaCapabilities:
       type: object

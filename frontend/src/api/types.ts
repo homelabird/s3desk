@@ -1,3 +1,4 @@
+// Do not edit src/api/openapi.ts manually. Update ../openapi.yml and regenerate via `npm run gen:openapi`.
 import type { components } from "./openapi";
 
 export type ErrorResponse = components["schemas"]["ErrorResponse"];
@@ -119,6 +120,10 @@ export type ServerMigrationManifest =
   components["schemas"]["ServerMigrationManifest"];
 export type ServerRestoreResponse =
   components["schemas"]["ServerRestoreResponse"];
+export type ServerStagedRestore =
+  components["schemas"]["ServerStagedRestore"];
+export type ServerStagedRestoreListResponse =
+  components["schemas"]["ServerStagedRestoreListResponse"];
 
 export type LocalEntry = components["schemas"]["LocalEntry"];
 export type ListLocalEntriesResponse =

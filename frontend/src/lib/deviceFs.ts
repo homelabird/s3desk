@@ -7,6 +7,10 @@ export type DirectorySelectionSupport = DevicePickerSupport & {
 	mode?: 'picker' | 'input'
 }
 
+type CollectFilesOptions = {
+	maxFiles?: number
+}
+
 type ShowDirectoryPicker = (options?: { mode?: 'read' | 'readwrite'; startIn?: FileSystemHandle | string }) => Promise<FileSystemDirectoryHandle>
 
 export function getDevicePickerSupport(): DevicePickerSupport {
@@ -59,9 +63,23 @@ export async function ensureReadWritePermission(handle: FileSystemDirectoryHandl
 export async function collectFilesFromDirectoryHandle(
 	handle: FileSystemDirectoryHandle,
 	prefix = '',
+	options: CollectFilesOptions = {},
 ): Promise<File[]> {
 	const items: File[] = []
+	await collectFilesFromDirectoryHandleInto(handle, prefix, items, options.maxFiles ?? Number.POSITIVE_INFINITY)
+	return items
+}
+
+async function collectFilesFromDirectoryHandleInto(
+	handle: FileSystemDirectoryHandle,
+	prefix: string,
+	items: File[],
+	maxFiles: number,
+): Promise<void> {
 	for await (const [name, entry] of handle.entries()) {
+		if (items.length >= maxFiles) {
+			throw new Error(`Selected folder exceeds the ${maxFiles} file safety limit.`)
+		}
 		if (entry.kind === 'file') {
 			const fileHandle = entry as FileSystemFileHandle
 			const file = await fileHandle.getFile()
@@ -72,10 +90,8 @@ export async function collectFilesFromDirectoryHandle(
 		}
 		const dir = entry as FileSystemDirectoryHandle
 		const nextPrefix = `${prefix}${name}/`
-		const nested = await collectFilesFromDirectoryHandle(dir, nextPrefix)
-		items.push(...nested)
+		await collectFilesFromDirectoryHandleInto(dir, nextPrefix, items, maxFiles)
 	}
-	return items
 }
 
 export function normalizeRelativePath(value: string): string {

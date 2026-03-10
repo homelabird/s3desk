@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -64,6 +65,11 @@ type thumbnailVideoFetchError struct {
 	stderr string
 }
 
+type thumbnailManifestEntry struct {
+	Fingerprint string `json:"fingerprint"`
+	CachePath   string `json:"cachePath"`
+}
+
 func (e *thumbnailVideoFetchError) Error() string {
 	return e.err.Error()
 }
@@ -93,6 +99,13 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 	}
 
 	size := parseThumbnailSize(r.URL.Query().Get("size"))
+	if cacheHitSource, ok := tryServeThumbnailBeforeStat(s, w, r, secrets.ID, bucket, key, size); ok {
+		if s.metrics != nil {
+			s.metrics.IncThumbnailCacheHit(cacheHitSource)
+		}
+		metric.SetStatus("cache_hit")
+		return
+	}
 	entry, stderr, err := s.rcloneStat(r.Context(), secrets, rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash), true, false, "thumbnail-meta")
 	if err != nil {
 		if rcloneIsNotFound(err, stderr) {
@@ -133,6 +146,13 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 
 	cachePath := thumbnailCachePath(s.cfg.DataDir, secrets.ID, bucket, key, size, thumbnailObjectFingerprint(entry))
 	if serveCachedThumbnail(w, r, cachePath) {
+		_ = writeThumbnailManifest(s.cfg.DataDir, secrets.ID, bucket, key, size, thumbnailManifestEntry{
+			Fingerprint: thumbnailObjectFingerprint(entry),
+			CachePath:   cachePath,
+		})
+		if s.metrics != nil {
+			s.metrics.IncThumbnailCacheHit("post_stat")
+		}
 		metric.SetStatus("cache_hit")
 		return
 	}
@@ -248,9 +268,29 @@ func (s *server) handleGetObjectThumbnail(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to store thumbnail", map[string]any{"error": err.Error()})
 		return
 	}
+	_ = writeThumbnailManifest(s.cfg.DataDir, secrets.ID, bucket, key, size, thumbnailManifestEntry{
+		Fingerprint: thumbnailObjectFingerprint(entry),
+		CachePath:   cachePath,
+	})
 
 	metric.SetStatus("success")
 	_ = serveCachedThumbnail(w, r, cachePath)
+}
+
+func tryServeThumbnailBeforeStat(s *server, w http.ResponseWriter, r *http.Request, profileID, bucket, key string, size int) (string, bool) {
+	requestFingerprintCachePath, hasRequestFingerprint := thumbnailRequestFingerprintCachePath(s.cfg.DataDir, profileID, bucket, key, size, r)
+	if hasRequestFingerprint && serveCachedThumbnail(w, r, requestFingerprintCachePath) {
+		return "request_fingerprint", true
+	}
+	if hasRequestFingerprint {
+		return "", false
+	}
+	if cachePath, ok := loadThumbnailManifestPath(s.cfg.DataDir, profileID, bucket, key, size); ok {
+		if serveCachedThumbnail(w, r, cachePath) {
+			return "manifest", true
+		}
+	}
+	return "", false
 }
 
 func parseThumbnailSize(raw string) int {
@@ -684,14 +724,23 @@ func resizeForThumbnail(src image.Image, size int) image.Image {
 }
 
 func thumbnailObjectFingerprint(entry rcloneListEntry) string {
-	parts := []string{fmt.Sprintf("v2:size=%d", entry.Size)}
-	if etag := rcloneETagFromHashes(entry.Hashes); etag != "" {
+	return thumbnailFingerprintFromValues(
+		entry.Size,
+		rcloneETagFromHashes(entry.Hashes),
+		rcloneParseTime(entry.ModTime),
+		entry.MimeType,
+	)
+}
+
+func thumbnailFingerprintFromValues(size int64, etag, lastModified, mimeType string) string {
+	parts := []string{fmt.Sprintf("v2:size=%d", size)}
+	if etag = strings.TrimSpace(etag); etag != "" {
 		parts = append(parts, "etag="+etag)
 	}
-	if lm := rcloneParseTime(entry.ModTime); lm != "" {
-		parts = append(parts, "lastModified="+lm)
+	if lastModified = rcloneParseTime(lastModified); lastModified != "" {
+		parts = append(parts, "lastModified="+lastModified)
 	}
-	if mimeType := strings.ToLower(strings.TrimSpace(entry.MimeType)); mimeType != "" {
+	if mimeType = strings.ToLower(strings.TrimSpace(mimeType)); mimeType != "" {
 		parts = append(parts, "mimeType="+mimeType)
 	}
 	return strings.Join(parts, "|")
@@ -703,6 +752,78 @@ func thumbnailCachePath(baseDir, profileID, bucket, key string, size int, finger
 	dir := filepath.Join(baseDir, "thumbnails", profileID, hexSum[:2])
 	name := fmt.Sprintf("%s_%d.jpg", hexSum, size)
 	return filepath.Join(dir, name)
+}
+
+func thumbnailManifestPath(baseDir, profileID, bucket, key string, size int) string {
+	sum := sha256.Sum256([]byte(profileID + "\n" + bucket + "\n" + key + "\n" + strconv.Itoa(size)))
+	hexSum := hex.EncodeToString(sum[:])
+	dir := filepath.Join(baseDir, "thumbnails", "manifests", profileID, hexSum[:2])
+	return filepath.Join(dir, fmt.Sprintf("%s.json", hexSum))
+}
+
+func loadThumbnailManifestPath(baseDir, profileID, bucket, key string, size int) (string, bool) {
+	manifestPath := thumbnailManifestPath(baseDir, profileID, bucket, key, size)
+	info, err := os.Stat(manifestPath)
+	if err != nil || info.IsDir() || time.Since(info.ModTime()) > thumbnailCacheTTL {
+		return "", false
+	}
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return "", false
+	}
+	var entry thumbnailManifestEntry
+	if err := json.Unmarshal(raw, &entry); err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(entry.CachePath) == "" {
+		return "", false
+	}
+	return entry.CachePath, true
+}
+
+func writeThumbnailManifest(baseDir, profileID, bucket, key string, size int, entry thumbnailManifestEntry) error {
+	manifestPath := thumbnailManifestPath(baseDir, profileID, bucket, key, size)
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o750); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(manifestPath), "manifest-*.json")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = os.Remove(tmp.Name())
+	}()
+	if _, err := tmp.Write(payload); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), manifestPath)
+}
+
+func thumbnailRequestFingerprintCachePath(baseDir, profileID, bucket, key string, size int, r *http.Request) (string, bool) {
+	sizeRaw := strings.TrimSpace(r.URL.Query().Get("objectSize"))
+	if sizeRaw == "" {
+		return "", false
+	}
+	objectSize, err := strconv.ParseInt(sizeRaw, 10, 64)
+	if err != nil || objectSize < 0 {
+		return "", false
+	}
+	etag := strings.TrimSpace(r.URL.Query().Get("etag"))
+	lastModified := strings.TrimSpace(r.URL.Query().Get("lastModified"))
+	contentType := strings.TrimSpace(r.URL.Query().Get("contentType"))
+	if etag == "" && lastModified == "" && contentType == "" {
+		return "", false
+	}
+	fingerprint := thumbnailFingerprintFromValues(objectSize, etag, lastModified, contentType)
+	return thumbnailCachePath(baseDir, profileID, bucket, key, size, fingerprint), true
 }
 
 func serveCachedThumbnail(w http.ResponseWriter, r *http.Request, cachePath string) bool {

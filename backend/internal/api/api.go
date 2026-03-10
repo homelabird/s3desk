@@ -60,6 +60,8 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.Get("/meta", api.handleGetMeta)
 	apiRouter.Get("/server/backup", api.handleGetServerBackup)
 	apiRouter.Post("/server/restore", api.handleRestoreServerBackup)
+	apiRouter.Get("/server/restores", api.handleListServerRestores)
+	apiRouter.Delete("/server/restores/{restoreId}", api.handleDeleteServerRestore)
 
 	apiRouter.Route("/profiles", func(r chi.Router) {
 		r.Get("/", api.handleListProfiles)

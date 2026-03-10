@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildApiHttpUrlFor, buildApiWsUrlFor, DEFAULT_API_BASE_URL, normalizeApiBaseUrl, stripApiBaseSuffix } from '../baseUrl'
+import { buildApiHttpUrlFor, buildApiWsUrlFor, DEFAULT_API_BASE_URL, getSafeBrowserObjectUrl, normalizeApiBaseUrl, stripApiBaseSuffix } from '../baseUrl'
 
 describe('api/baseUrl', () => {
 	it('normalizeApiBaseUrl trims and strips trailing slashes', () => {
@@ -11,6 +11,11 @@ describe('api/baseUrl', () => {
 	it('normalizeApiBaseUrl falls back to default when empty', () => {
 		expect(normalizeApiBaseUrl('')).toBe(DEFAULT_API_BASE_URL)
 		expect(normalizeApiBaseUrl('   ')).toBe(DEFAULT_API_BASE_URL)
+	})
+
+	it('normalizeApiBaseUrl rejects unsafe absolute schemes', () => {
+		expect(normalizeApiBaseUrl('javascript:alert(1)')).toBe(DEFAULT_API_BASE_URL)
+		expect(normalizeApiBaseUrl('data:text/plain,hello')).toBe(DEFAULT_API_BASE_URL)
 	})
 
 	it('buildApiHttpUrlFor builds URL relative to origin', () => {
@@ -36,5 +41,11 @@ describe('api/baseUrl', () => {
 		expect(stripApiBaseSuffix('/s3desk/api/v1')).toBe('/s3desk')
 		expect(stripApiBaseSuffix('/api/v2')).toBe('/api/v2')
 	})
-})
 
+	it('classifies safe browser object URLs and rejects unsafe schemes', () => {
+		expect(getSafeBrowserObjectUrl('https://storage.example.com/object.txt').kind).toBe('external_storage')
+		expect(getSafeBrowserObjectUrl('/download-proxy?key=report.txt', { origin: 'https://app.example.com' }).kind).toBe('api_proxy')
+		expect(() => getSafeBrowserObjectUrl('javascript:alert(1)')).toThrow(/Only HTTP\(S\)/)
+		expect(() => getSafeBrowserObjectUrl('https://user:pass@example.com/object.txt')).toThrow(/embedded credentials/)
+	})
+})

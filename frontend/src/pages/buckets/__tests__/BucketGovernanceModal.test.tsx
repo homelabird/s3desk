@@ -449,21 +449,26 @@ describe("BucketGovernanceModal", () => {
         target: { value: "allUsers\nuser:ops@example.com" },
       },
     );
+    fireEvent.click(
+      within(gcsBindingCard).getByRole("switch", {
+        name: "GCS binding condition 1",
+      }),
+    );
     fireEvent.change(
       within(gcsBindingCard).getByRole("textbox", {
-        name: "Condition JSON (optional)",
+        name: "Condition title",
+      }),
+      {
+        target: { value: "Temporary access" },
+      },
+    );
+    fireEvent.change(
+      within(gcsBindingCard).getByRole("textbox", {
+        name: "Condition expression",
       }),
       {
         target: {
-          value: JSON.stringify(
-            {
-              title: "Temporary access",
-              expression:
-                "request.time < timestamp('2026-12-31T00:00:00Z')",
-            },
-            null,
-            2,
-          ),
+          value: "request.time < timestamp('2026-12-31T00:00:00Z')",
         },
       },
     );

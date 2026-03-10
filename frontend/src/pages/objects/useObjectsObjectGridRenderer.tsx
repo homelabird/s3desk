@@ -194,6 +194,9 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 										size={GRID_CARD_THUMBNAIL_PX}
 										cache={thumbnailCache}
 										cacheKeySuffix={object.etag || object.lastModified || undefined}
+										objectSize={object.size}
+										etag={object.etag || undefined}
+										lastModified={object.lastModified || undefined}
 									/>
 								</button>
 							) : (

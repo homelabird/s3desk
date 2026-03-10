@@ -45,7 +45,7 @@ func main() {
 	flag.StringVar(&cfg.LogFormat, "log-format", getEnv("LOG_FORMAT", "text"), "log format (text or json)")
 	flag.StringVar(&cfg.LogLevel, "log-level", getEnv("LOG_LEVEL", "info"), "log level (debug, info, warn, error)")
 	flag.StringVar(&cfg.StaticDir, "static-dir", defaultStaticDir(), "static files directory (frontend build output)")
-	flag.StringVar(&cfg.APIToken, "api-token", getEnv("API_TOKEN", ""), "optional local API token (X-Api-Token)")
+	flag.StringVar(&cfg.APIToken, "api-token", getEnv("API_TOKEN", ""), "optional local API token (X-Api-Token); required and must not be a placeholder when remote access is enabled on a non-loopback addr")
 	flag.BoolVar(&cfg.AllowRemote, "allow-remote", getEnvBool("ALLOW_REMOTE", false), "allow non-local bind and accept private remote clients (requires API_TOKEN when using a non-loopback addr)")
 	flag.StringVar(&cfg.EncryptionKey, "encryption-key", getEnv("ENCRYPTION_KEY", ""), "optional base64 key to encrypt profile credentials at rest")
 	flag.IntVar(&cfg.JobConcurrency, "job-concurrency", getEnvInt("JOB_CONCURRENCY", 2), "max concurrent jobs")

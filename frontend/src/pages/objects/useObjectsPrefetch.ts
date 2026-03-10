@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import type { APIClient } from '../../api/client'
 import type { ListObjectsResponse } from '../../api/types'
+import { getBucketPrefetchPlan, type ObjectsCostMode } from '../../lib/objectsCostMode'
 
 type BucketOption = {
 	value: string
@@ -13,6 +14,7 @@ type UseObjectsPrefetchParams = {
 	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
+	objectsCostMode: ObjectsCostMode
 	queryClient: QueryClient
 	bucket: string
 	recentBuckets: string[]
@@ -26,6 +28,7 @@ export function useObjectsPrefetch({
 	apiToken,
 	profileId,
 	profileProvider,
+	objectsCostMode,
 	queryClient,
 	bucket,
 	recentBuckets,
@@ -68,25 +71,25 @@ export function useObjectsPrefetch({
 		(open: boolean) => {
 			if (!open) return
 			if (!profileId || bucketOptions.length === 0) return
+			const plan = getBucketPrefetchPlan(objectsCostMode, profileProvider)
+			if (plan.dropdownPreferred <= 0 && plan.dropdownFallback <= 0) return
 			const recent = new Set<string>()
 			if (bucket) recent.add(bucket)
 			for (const name of recentBuckets) {
 				if (name) recent.add(name)
 			}
-			const isOciNative = profileProvider === 'oci_object_storage'
-			const preferredLimit = isOciNative ? 1 : 3
-			const preferredBuckets = recentBuckets.filter((name) => name && name !== bucket).slice(0, preferredLimit)
-			const fallbackBuckets = isOciNative
-				? []
-				: bucketOptions
-						.map((option) => option.value)
-						.filter((name) => name && !recent.has(name))
-						.slice(0, Math.max(0, 3 - preferredBuckets.length))
+			const preferredBuckets = recentBuckets
+				.filter((name) => name && name !== bucket)
+				.slice(0, plan.dropdownPreferred)
+			const fallbackBuckets = bucketOptions
+				.map((option) => option.value)
+				.filter((name) => name && !recent.has(name))
+				.slice(0, plan.dropdownFallback)
 			for (const name of [...preferredBuckets, ...fallbackBuckets]) {
 				void prefetchObjectsPage(name)
 			}
 		},
-		[bucket, bucketOptions, prefetchObjectsPage, profileId, profileProvider, recentBuckets],
+		[bucket, bucketOptions, objectsCostMode, prefetchObjectsPage, profileId, profileProvider, recentBuckets],
 	)
 
 	const prefetchQueueRef = useRef<string[]>([])
@@ -108,11 +111,12 @@ export function useObjectsPrefetch({
 	useEffect(() => {
 		if (prefetchStartedRef.current) return
 		if (!profileId) return
-		if (profileProvider === 'oci_object_storage') return
+		const plan = getBucketPrefetchPlan(objectsCostMode, profileProvider)
+		if (plan.initial <= 0) return
 		const names = bucketOptions.map((option) => option.value).filter(Boolean)
 		if (names.length === 0) return
 		prefetchStartedRef.current = true
-		const queue = names.filter((name) => name !== bucket).slice(0, 12)
+		const queue = names.filter((name) => name !== bucket).slice(0, plan.initial)
 		if (queue.length === 0) return
 		prefetchQueueRef.current = queue
 		const schedule = (cb: () => void) => {
@@ -126,7 +130,7 @@ export function useObjectsPrefetch({
 			window.setTimeout(cb, 300)
 		}
 		schedule(() => pumpPrefetchQueue())
-	}, [bucket, bucketOptions, profileId, profileProvider, pumpPrefetchQueue])
+	}, [bucket, bucketOptions, objectsCostMode, profileId, profileProvider, pumpPrefetchQueue])
 
 	return { handleBucketDropdownVisibleChange }
 }

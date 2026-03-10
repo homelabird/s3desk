@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,16 +27,38 @@ import (
 	"s3desk/internal/version"
 )
 
-const serverMigrationBundleFormat = "s3desk-server-backup/v1"
+const (
+	serverBackupBundleFormat         = "s3desk-server-backup/v1"
+	serverBackupScopeFull            = "full"
+	serverBackupScopeCacheMetadata   = "cache_metadata"
+)
 
-var serverMigrationDataEntries = []string{
+var serverBackupFullDataEntries = []string{
 	"thumbnails",
 	"logs",
 	"artifacts",
 	"staging",
 }
 
+var serverBackupCacheMetadataEntries = []string{
+	"thumbnails",
+}
+
+type serverBackupPayloadEntry struct {
+	ArchivePath string
+	Size        int64
+	SHA256      string
+}
+
 func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
+	scope, err := parseServerBackupScope(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), map[string]any{
+			"supportedScopes": []string{serverBackupScopeFull, serverBackupScopeCacheMetadata},
+		})
+		return
+	}
+
 	dbBackend, err := db.ParseBackend(s.cfg.DBBackend)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "server_config_invalid", "failed to resolve db backend", map[string]any{"error": err.Error()})
@@ -43,7 +68,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(
 			w,
 			http.StatusConflict,
-			"migration_backup_unsupported",
+			"backup_unsupported",
 			"server backup currently supports only sqlite-backed servers",
 			map[string]any{"dbBackend": string(dbBackend)},
 		)
@@ -59,7 +84,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 	_ = tmp.Close()
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	if _, err := s.writeServerBackupArchive(r.Context(), tmpPath); err != nil {
+	if _, err := s.writeServerBackupArchive(r.Context(), tmpPath, scope); err != nil {
 		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to create backup bundle", map[string]any{"error": err.Error()})
 		return
 	}
@@ -77,7 +102,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := fmt.Sprintf("s3desk-backup-%s.tar.gz", time.Now().UTC().Format("20060102-150405"))
+	filename := fmt.Sprintf("%s-%s.tar.gz", backupFilenamePrefix(scope), time.Now().UTC().Format("20060102-150405"))
 	w.Header().Set("Content-Type", "application/gzip")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
@@ -100,7 +125,7 @@ func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-func (s *server) writeServerBackupArchive(ctx context.Context, archivePath string) (models.ServerMigrationManifest, error) {
+func (s *server) writeServerBackupArchive(ctx context.Context, archivePath string, scope string) (models.ServerMigrationManifest, error) {
 	now := time.Now().UTC()
 	tmpDir, err := os.MkdirTemp("", "s3desk-sqlite-backup-*")
 	if err != nil {
@@ -114,19 +139,20 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 	}
 
 	entries := []string{"s3desk.db"}
-	for _, rel := range serverMigrationDataEntries {
+	for _, rel := range serverBackupEntriesForScope(scope) {
 		if info, statErr := os.Stat(filepath.Join(s.cfg.DataDir, rel)); statErr == nil && info.IsDir() {
 			entries = append(entries, rel)
 		}
 	}
 	manifest := models.ServerMigrationManifest{
-		Format:            serverMigrationBundleFormat,
+		BundleKind:        scope,
+		Format:            serverBackupBundleFormat,
 		CreatedAt:         now.Format(time.RFC3339),
 		AppVersion:        version.Version,
 		DBBackend:         string(db.BackendSQLite),
 		EncryptionEnabled: s.cfg.EncryptionKey != "",
 		Entries:           entries,
-		Warnings:          buildServerMigrationManifestWarnings(s.cfg.EncryptionKey != ""),
+		Warnings:          buildServerBackupManifestWarnings(s.cfg.EncryptionKey != "", scope),
 	}
 
 	archiveFile, err := os.Create(archivePath)
@@ -144,16 +170,20 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 	if err := writeTarDirHeader(tarWriter, "data/", now); err != nil {
 		return models.ServerMigrationManifest{}, err
 	}
-	if err := writeTarJSONFile(tarWriter, "manifest.json", manifest, now); err != nil {
+	payloadEntries := make([]serverBackupPayloadEntry, 0, 32)
+	sqliteEntry, err := writeTarFileFromDisk(tarWriter, sqliteBackupPath, "data/s3desk.db")
+	if err != nil {
 		return models.ServerMigrationManifest{}, err
 	}
-	if err := writeTarFileFromDisk(tarWriter, sqliteBackupPath, "data/s3desk.db"); err != nil {
-		return models.ServerMigrationManifest{}, err
-	}
-	for _, rel := range serverMigrationDataEntries {
-		if err := writeTarPathTree(ctx, tarWriter, s.cfg.DataDir, rel, now); err != nil {
+	payloadEntries = append(payloadEntries, sqliteEntry)
+	for _, rel := range serverBackupEntriesForScope(scope) {
+		if err := writeTarPathTree(ctx, tarWriter, s.cfg.DataDir, rel, now, &payloadEntries); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
+	}
+	manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
+	if err := writeTarJSONFile(tarWriter, "manifest.json", manifest, now); err != nil {
+		return models.ServerMigrationManifest{}, err
 	}
 
 	if err := tarWriter.Close(); err != nil {
@@ -197,6 +227,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 	var manifest models.ServerMigrationManifest
 	manifestSeen := false
 	sqliteSeen := false
+	payloadEntries := make([]serverBackupPayloadEntry, 0, 32)
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -228,8 +259,11 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 			if err := json.Unmarshal(data, &manifest); err != nil {
 				return models.ServerRestoreResponse{}, err
 			}
-			if manifest.Format != serverMigrationBundleFormat {
+			if manifest.Format != serverBackupBundleFormat {
 				return models.ServerRestoreResponse{}, fmt.Errorf("unsupported backup format %q", manifest.Format)
+			}
+			if manifest.BundleKind == "" {
+				manifest.BundleKind = serverBackupScopeFull
 			}
 			if err := os.WriteFile(filepath.Join(tempRoot, "manifest.json"), data, 0o600); err != nil {
 				return models.ServerRestoreResponse{}, err
@@ -257,13 +291,19 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 				if err != nil {
 					return models.ServerRestoreResponse{}, err
 				}
-				if _, err := io.Copy(out, tarReader); err != nil {
+				hasher := sha256.New()
+				if _, err := io.Copy(io.MultiWriter(out, hasher), tarReader); err != nil {
 					_ = out.Close()
 					return models.ServerRestoreResponse{}, err
 				}
 				if err := out.Close(); err != nil {
 					return models.ServerRestoreResponse{}, err
 				}
+				payloadEntries = append(payloadEntries, serverBackupPayloadEntry{
+					ArchivePath: entryName,
+					Size:        header.Size,
+					SHA256:      hex.EncodeToString(hasher.Sum(nil)),
+				})
 				if relPath == "s3desk.db" {
 					sqliteSeen = true
 				}
@@ -280,6 +320,17 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 	if !manifestSeen {
 		return models.ServerRestoreResponse{}, errors.New("backup manifest is missing")
 	}
+	if manifest.PayloadSHA256 != "" {
+		fileCount, payloadBytes, payloadSHA256 := buildServerBackupPayloadSummary(payloadEntries)
+		switch {
+		case manifest.PayloadFileCount != 0 && manifest.PayloadFileCount != fileCount:
+			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload file count mismatch: manifest=%d extracted=%d", manifest.PayloadFileCount, fileCount)
+		case manifest.PayloadBytes != 0 && manifest.PayloadBytes != payloadBytes:
+			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload bytes mismatch: manifest=%d extracted=%d", manifest.PayloadBytes, payloadBytes)
+		case !strings.EqualFold(manifest.PayloadSHA256, payloadSHA256):
+			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload checksum mismatch: manifest=%s extracted=%s", manifest.PayloadSHA256, payloadSHA256)
+		}
+	}
 	if manifest.DBBackend == string(db.BackendSQLite) && !sqliteSeen {
 		return models.ServerRestoreResponse{}, errors.New("sqlite database is missing from backup bundle")
 	}
@@ -293,6 +344,8 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 		StagingDir:      finalRoot,
 		RestartRequired: true,
 		NextSteps:       buildServerRestoreNextSteps(finalRoot, manifest),
+		ApplyPlan:       buildServerRestoreApplyPlan(finalRoot, manifest),
+		HelperCommand:   buildServerRestoreHelperCommand(finalRoot, manifest),
 		Warnings:        buildServerRestoreWarnings(manifest, s.cfg.EncryptionKey != ""),
 	}
 	return resp, nil
@@ -317,7 +370,7 @@ func openServerRestoreBundle(r *http.Request) (multipartFile io.ReadCloser, clea
 	}, nil
 }
 
-func writeTarPathTree(ctx context.Context, tarWriter *tar.Writer, baseDir, rel string, now time.Time) error {
+func writeTarPathTree(ctx context.Context, tarWriter *tar.Writer, baseDir, rel string, now time.Time, payloadEntries *[]serverBackupPayloadEntry) error {
 	root := filepath.Join(baseDir, rel)
 	info, err := os.Stat(root)
 	if err != nil {
@@ -358,7 +411,12 @@ func writeTarPathTree(ctx context.Context, tarWriter *tar.Writer, baseDir, rel s
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		return writeTarFileFromDisk(tarWriter, pathOnDisk, archivePath)
+		payloadEntry, err := writeTarFileFromDisk(tarWriter, pathOnDisk, archivePath)
+		if err != nil {
+			return err
+		}
+		*payloadEntries = append(*payloadEntries, payloadEntry)
+		return nil
 	})
 }
 
@@ -391,28 +449,35 @@ func writeTarDirHeader(tarWriter *tar.Writer, name string, modTime time.Time) er
 	return tarWriter.WriteHeader(header)
 }
 
-func writeTarFileFromDisk(tarWriter *tar.Writer, sourcePath, archivePath string) error {
+func writeTarFileFromDisk(tarWriter *tar.Writer, sourcePath, archivePath string) (serverBackupPayloadEntry, error) {
 	info, err := os.Stat(sourcePath)
 	if err != nil {
-		return err
+		return serverBackupPayloadEntry{}, err
 	}
 	file, err := os.Open(sourcePath)
 	if err != nil {
-		return err
+		return serverBackupPayloadEntry{}, err
 	}
 	defer file.Close()
 
 	header, err := tar.FileInfoHeader(info, "")
 	if err != nil {
-		return err
+		return serverBackupPayloadEntry{}, err
 	}
 	header.Name = archivePath
 	header.Mode = int64(info.Mode().Perm())
 	if err := tarWriter.WriteHeader(header); err != nil {
-		return err
+		return serverBackupPayloadEntry{}, err
 	}
-	_, err = io.Copy(tarWriter, file)
-	return err
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(tarWriter, hasher), file); err != nil {
+		return serverBackupPayloadEntry{}, err
+	}
+	return serverBackupPayloadEntry{
+		ArchivePath: archivePath,
+		Size:        info.Size(),
+		SHA256:      hex.EncodeToString(hasher.Sum(nil)),
+	}, nil
 }
 
 func cleanServerRestoreArchivePath(name string) (string, error) {
@@ -439,9 +504,42 @@ func resolveRestorePath(root, rel string) (string, error) {
 	return cleanTarget, nil
 }
 
-func buildServerMigrationManifestWarnings(encryptionEnabled bool) []string {
+func parseServerBackupScope(r *http.Request) (string, error) {
+	scope := strings.TrimSpace(r.URL.Query().Get("scope"))
+	switch scope {
+	case "", serverBackupScopeFull:
+		return serverBackupScopeFull, nil
+	case serverBackupScopeCacheMetadata:
+		return serverBackupScopeCacheMetadata, nil
+	default:
+		return "", fmt.Errorf("unsupported backup scope %q", scope)
+	}
+}
+
+func serverBackupEntriesForScope(scope string) []string {
+	switch scope {
+	case serverBackupScopeCacheMetadata:
+		return append([]string{}, serverBackupCacheMetadataEntries...)
+	default:
+		return append([]string{}, serverBackupFullDataEntries...)
+	}
+}
+
+func backupFilenamePrefix(scope string) string {
+	switch scope {
+	case serverBackupScopeCacheMetadata:
+		return "s3desk-cache-metadata-backup"
+	default:
+		return "s3desk-full-backup"
+	}
+}
+
+func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string) []string {
 	warnings := []string{
 		"Environment config outside DATA_DIR is not included (API_TOKEN, DB_BACKEND, DATABASE_URL, ALLOWED_HOSTS, ENCRYPTION_KEY).",
+	}
+	if scope == serverBackupScopeCacheMetadata {
+		warnings = append(warnings, "Cache + metadata backups include only the sqlite snapshot and selected cache directories such as thumbnails. Logs, artifacts, and staging data are excluded.")
 	}
 	if encryptionEnabled {
 		warnings = append(warnings, "Encrypted profile data is included, but the destination server must use the same ENCRYPTION_KEY to read it.")
@@ -449,7 +547,38 @@ func buildServerMigrationManifestWarnings(encryptionEnabled bool) []string {
 	return warnings
 }
 
-func buildServerRestoreNextSteps(stagingDir string, manifest models.ServerMigrationManifest) []string {
+func buildServerBackupPayloadSummary(entries []serverBackupPayloadEntry) (int, int64, string) {
+	if len(entries) == 0 {
+		return 0, 0, ""
+	}
+	sortedEntries := append([]serverBackupPayloadEntry(nil), entries...)
+	sort.Slice(sortedEntries, func(i, j int) bool {
+		return sortedEntries[i].ArchivePath < sortedEntries[j].ArchivePath
+	})
+	hasher := sha256.New()
+	var payloadBytes int64
+	for _, entry := range sortedEntries {
+		payloadBytes += entry.Size
+		_, _ = io.WriteString(hasher, entry.ArchivePath)
+		_, _ = io.WriteString(hasher, "\t")
+		_, _ = io.WriteString(hasher, fmt.Sprintf("%d", entry.Size))
+		_, _ = io.WriteString(hasher, "\t")
+		_, _ = io.WriteString(hasher, entry.SHA256)
+		_, _ = io.WriteString(hasher, "\n")
+	}
+	return len(sortedEntries), payloadBytes, hex.EncodeToString(hasher.Sum(nil))
+}
+
+func buildServerRestoreNextSteps(stagingDir string, _ models.ServerMigrationManifest) []string {
+	steps := []string{
+		fmt.Sprintf("Review the staged restore at %s before cutover.", stagingDir),
+		"Use the apply plan below when you are ready to switch the destination server to the staged restore.",
+		"The running server keeps using the current DATA_DIR until you stop it and start against the staged restore.",
+	}
+	return steps
+}
+
+func buildServerRestoreApplyPlan(stagingDir string, manifest models.ServerMigrationManifest) []string {
 	steps := []string{
 		fmt.Sprintf("Stop the destination server before switching DATA_DIR to %s.", stagingDir),
 		fmt.Sprintf("Start the destination server with DATA_DIR=%s and DB_BACKEND=%s.", stagingDir, manifest.DBBackend),
@@ -459,6 +588,17 @@ func buildServerRestoreNextSteps(stagingDir string, manifest models.ServerMigrat
 		steps = append(steps, "Use the same ENCRYPTION_KEY from the source server before starting the restored instance.")
 	}
 	return steps
+}
+
+func buildServerRestoreHelperCommand(stagingDir string, manifest models.ServerMigrationManifest) string {
+	parts := []string{
+		fmt.Sprintf("DATA_DIR=%q", stagingDir),
+		fmt.Sprintf("DB_BACKEND=%q", manifest.DBBackend),
+	}
+	if manifest.EncryptionEnabled {
+		parts = append(parts, `ENCRYPTION_KEY="<same-as-source>"`)
+	}
+	return strings.Join(parts, " ") + " <start-command>"
 }
 
 func buildServerRestoreWarnings(manifest models.ServerMigrationManifest, destinationHasEncryptionKey bool) []string {

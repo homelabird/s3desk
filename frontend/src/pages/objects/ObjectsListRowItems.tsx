@@ -226,6 +226,9 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 				size={thumbnailSize}
 				cache={thumbnailCache}
 				cacheKeySuffix={object.etag || object.lastModified || undefined}
+				objectSize={object.size}
+				etag={object.etag || undefined}
+				lastModified={object.lastModified || undefined}
 			/>
 		) : null
 

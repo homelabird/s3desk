@@ -2,6 +2,29 @@ import { useCallback, useDeferredValue, useState } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
+const MAX_GLOBAL_SEARCH_TEXT_LENGTH = 160
+const MAX_GLOBAL_SEARCH_PREFIX_LENGTH = 512
+const MAX_GLOBAL_SEARCH_EXT_LENGTH = 32
+const MIN_GLOBAL_SEARCH_LIMIT = 1
+const MAX_GLOBAL_SEARCH_LIMIT = 1000
+const MAX_GLOBAL_SEARCH_SIZE_BYTES = 1024 * 1024 * 1024 * 1024
+const MAX_GLOBAL_SEARCH_MODIFIED_MS = 32503680000000
+
+function clampText(value: string, maxLength: number): string {
+	return value.trim().slice(0, maxLength)
+}
+
+function clampLimit(value: number): number {
+	if (!Number.isFinite(value)) return 100
+	return Math.min(MAX_GLOBAL_SEARCH_LIMIT, Math.max(MIN_GLOBAL_SEARCH_LIMIT, Math.trunc(value)))
+}
+
+function clampNullableNumber(value: number | null, max: number): number | null {
+	if (value === null) return null
+	if (!Number.isFinite(value)) return null
+	return Math.min(max, Math.max(0, Math.trunc(value)))
+}
+
 export type ObjectsGlobalSearchState = {
 	globalSearch: string
 	setGlobalSearch: (next: string) => void
@@ -33,22 +56,39 @@ export type ObjectsGlobalSearchState = {
 }
 
 export function useObjectsGlobalSearchState(): ObjectsGlobalSearchState {
-	const [globalSearch, setGlobalSearch] = useLocalStorageState<string>('objectsGlobalSearch', '')
-	const [globalSearchDraft, setGlobalSearchDraft] = useState(globalSearch)
+	const [globalSearch, setGlobalSearch] = useLocalStorageState<string>('objectsGlobalSearch', '', {
+		sanitize: (value) => clampText(value, MAX_GLOBAL_SEARCH_TEXT_LENGTH),
+	})
+	const [globalSearchDraft, setGlobalSearchDraftState] = useState(globalSearch)
 	const deferredGlobalSearch = useDeferredValue(globalSearch)
+	const setGlobalSearchDraft = useCallback((next: string) => {
+		setGlobalSearchDraftState(clampText(next, MAX_GLOBAL_SEARCH_TEXT_LENGTH))
+	}, [])
 
-	const [globalSearchPrefix, setGlobalSearchPrefix] = useLocalStorageState<string>('objectsGlobalSearchPrefix', '')
-	const [globalSearchLimit, setGlobalSearchLimit] = useLocalStorageState<number>('objectsGlobalSearchLimit', 100)
-	const [globalSearchExt, setGlobalSearchExt] = useLocalStorageState<string>('objectsGlobalSearchExt', '')
-	const [globalSearchMinSize, setGlobalSearchMinSize] = useLocalStorageState<number | null>('objectsGlobalSearchMinSize', null)
-	const [globalSearchMaxSize, setGlobalSearchMaxSize] = useLocalStorageState<number | null>('objectsGlobalSearchMaxSize', null)
+	const [globalSearchPrefix, setGlobalSearchPrefix] = useLocalStorageState<string>('objectsGlobalSearchPrefix', '', {
+		sanitize: (value) => clampText(value, MAX_GLOBAL_SEARCH_PREFIX_LENGTH),
+	})
+	const [globalSearchLimit, setGlobalSearchLimit] = useLocalStorageState<number>('objectsGlobalSearchLimit', 100, {
+		sanitize: clampLimit,
+	})
+	const [globalSearchExt, setGlobalSearchExt] = useLocalStorageState<string>('objectsGlobalSearchExt', '', {
+		sanitize: (value) => clampText(value.replace(/^\.+/, '').toLowerCase(), MAX_GLOBAL_SEARCH_EXT_LENGTH),
+	})
+	const [globalSearchMinSize, setGlobalSearchMinSize] = useLocalStorageState<number | null>('objectsGlobalSearchMinSize', null, {
+		sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_SIZE_BYTES),
+	})
+	const [globalSearchMaxSize, setGlobalSearchMaxSize] = useLocalStorageState<number | null>('objectsGlobalSearchMaxSize', null, {
+		sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_SIZE_BYTES),
+	})
 	const [globalSearchMinModifiedMs, setGlobalSearchMinModifiedMs] = useLocalStorageState<number | null>(
 		'objectsGlobalSearchMinModifiedMs',
 		null,
+		{ sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_MODIFIED_MS) },
 	)
 	const [globalSearchMaxModifiedMs, setGlobalSearchMaxModifiedMs] = useLocalStorageState<number | null>(
 		'objectsGlobalSearchMaxModifiedMs',
 		null,
+		{ sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_MODIFIED_MS) },
 	)
 
 	const [indexPrefix, setIndexPrefix] = useState('')
@@ -56,7 +96,7 @@ export function useObjectsGlobalSearchState(): ObjectsGlobalSearchState {
 
 	const resetGlobalSearch = useCallback(() => {
 		setGlobalSearch('')
-		setGlobalSearchDraft('')
+		setGlobalSearchDraftState('')
 		setGlobalSearchPrefix('')
 		setGlobalSearchLimit(100)
 		setGlobalSearchExt('')
@@ -68,7 +108,7 @@ export function useObjectsGlobalSearchState(): ObjectsGlobalSearchState {
 		setIndexFullReindex(true)
 	}, [
 		setGlobalSearch,
-		setGlobalSearchDraft,
+		setGlobalSearchDraftState,
 		setGlobalSearchPrefix,
 		setGlobalSearchLimit,
 		setGlobalSearchExt,
@@ -107,4 +147,3 @@ export function useObjectsGlobalSearchState(): ObjectsGlobalSearchState {
 		resetGlobalSearch,
 	}
 }
-

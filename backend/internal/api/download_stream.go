@@ -16,7 +16,11 @@ import (
 const downloadStreamProbeBytes = 32 * 1024
 
 func applyDownloadHeaders(h http.Header, entry rcloneListEntry, key string) {
-	h.Set("Content-Type", "application/octet-stream")
+	contentType := strings.TrimSpace(entry.MimeType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	h.Set("Content-Type", contentType)
 	h.Set("Cache-Control", "no-store")
 	if entry.Size > 0 {
 		h.Set("Content-Length", strconv.FormatInt(entry.Size, 10))
