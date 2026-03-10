@@ -34,13 +34,14 @@ func ValidateCreateDefaults(provider models.ProfileProvider, defaults *models.Bu
 	if defaults == nil {
 		return nil
 	}
+	validationCtx := newValidationContext(provider, "")
 	if !hasCreateDefaults(defaults) {
 		return InvalidFieldError("defaults", "defaults must include at least one setting", map[string]any{
 			"section": "create-defaults",
 		})
 	}
 	if defaults.PublicExposure != nil {
-		if err := ValidatePublicExposurePut(provider, *defaults.PublicExposure); err != nil {
+		if err := ValidatePublicExposurePut(validationCtx, *defaults.PublicExposure); err != nil {
 			return prefixOperationErrorField(err, "defaults.publicExposure")
 		}
 	}
@@ -50,17 +51,17 @@ func ValidateCreateDefaults(provider models.ProfileProvider, defaults *models.Bu
 				"section": "create-defaults",
 			})
 		}
-		if err := ValidateAccessPut(provider, *defaults.Access); err != nil {
+		if err := ValidateAccessPut(validationCtx, *defaults.Access); err != nil {
 			return prefixOperationErrorField(err, "defaults.access")
 		}
 	}
 	if defaults.Versioning != nil {
-		if err := ValidateVersioningPut(provider, *defaults.Versioning); err != nil {
+		if err := ValidateVersioningPut(validationCtx, *defaults.Versioning); err != nil {
 			return prefixOperationErrorField(err, "defaults.versioning")
 		}
 	}
 	if defaults.Encryption != nil {
-		if err := ValidateEncryptionPut(provider, *defaults.Encryption); err != nil {
+		if err := ValidateEncryptionPut(validationCtx, *defaults.Encryption); err != nil {
 			return prefixOperationErrorField(err, "defaults.encryption")
 		}
 	}

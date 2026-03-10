@@ -28,6 +28,32 @@ This document is for real cloud environments. Mocked UI coverage already exists 
 - Capture API responses for failed saves and any provider-native console screenshots for unexpected results.
 - After each scenario, restore the bucket to its original baseline unless the scenario explicitly tests irreversible locking behavior.
 
+## Preparation Matrix
+
+| Provider | Minimum profile inputs | Extra credentials or control-plane inputs | Minimum fixture |
+| --- | --- | --- | --- |
+| AWS S3 | `region`, access key, secret key | optional test KMS key for SSE-KMS | 1 disposable bucket with policy/versioning/lifecycle permissions |
+| GCS | service account JSON, `projectNumber` | none beyond bucket-admin level GCS permissions | 1 disposable bucket with IAM/PAP/UBLA/retention permissions |
+| Azure Blob | storage account name/key | for immutability editing also `subscriptionId`, `resourceGroup`, `tenantId`, `clientId`, `clientSecret` | 2 disposable containers: one for lock/extend, one for delete/unlocked policy |
+| OCI Object Storage | native OCI profile, `namespace`, `compartment`, region | none beyond Object Storage admin-style permissions for retention and PAR | 1 disposable bucket with versioning/retention/PAR permissions |
+
+## Execution Prep Checklist
+
+- Confirm the S3Desk commit SHA or branch you are validating.
+- Confirm the running instance matches that commit.
+- Prepare one dedicated profile per provider inside S3Desk.
+- Create disposable buckets or containers before opening the governance modal.
+- For irreversible scenarios, prepare a second disposable resource instead of reusing the first one.
+- Pre-create any external dependency needed for the pass:
+  - AWS KMS key for SSE-KMS
+  - Azure ARM app registration for immutability editing
+  - OCI bucket with PAR and retention-rule permissions
+- Decide where evidence will live before starting the pass:
+  - console screenshots
+  - failing API response bodies
+  - provider-native CLI or portal confirmation
+- Record one run log entry per provider using the template below.
+
 ## Shared Evidence To Capture
 
 - Provider name
@@ -56,6 +82,17 @@ Use this order when running a fresh validation pass:
 8. At the end of the pass, update:
    - [PROVIDERS.md](PROVIDERS.md)
    - [BUCKET_GOVERNANCE_REMAINING_WORK.md](BUCKET_GOVERNANCE_REMAINING_WORK.md)
+
+Recommended evidence directory layout:
+
+```text
+validation/
+  2026-03-10/
+    aws/
+    gcs/
+    azure/
+    oci/
+```
 
 Recommended minimum provider pass:
 
