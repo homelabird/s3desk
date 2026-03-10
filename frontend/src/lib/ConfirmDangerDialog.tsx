@@ -1,7 +1,8 @@
-import { Button, Input, Space, Typography, message } from 'antd'
+import { Button, Checkbox, Input, Space, Typography, message } from 'antd'
 import { useState, type ReactNode } from 'react'
 
 import { DialogModal } from '../components/DialogModal'
+import { setDialogDismissed } from './dialogPreferences'
 
 type Props = {
 	title: string
@@ -10,6 +11,7 @@ type Props = {
 	confirmText?: string
 	confirmHint?: string
 	okText?: string
+	dialogPreferenceKey?: string
 	onConfirm: () => Promise<void> | void
 	onClose: () => void
 }
@@ -20,6 +22,7 @@ export function ConfirmDangerDialog(props: Props) {
 	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 	const [currentValue, setCurrentValue] = useState('')
 	const [submitting, setSubmitting] = useState(false)
+	const [dismissNextTime, setDismissNextTime] = useState(false)
 
 	const handleConfirm = async () => {
 		if (currentValue.trim() !== confirmToken) {
@@ -29,6 +32,9 @@ export function ConfirmDangerDialog(props: Props) {
 		setSubmitting(true)
 		try {
 			await props.onConfirm()
+			if (dismissNextTime && props.dialogPreferenceKey) {
+				setDialogDismissed(props.dialogPreferenceKey, true)
+			}
 			props.onClose()
 		} catch {
 			setSubmitting(false)
@@ -65,6 +71,11 @@ export function ConfirmDangerDialog(props: Props) {
 						onChange={(event) => setCurrentValue(event.target.value)}
 					/>
 				</Space>
+				{props.dialogPreferenceKey ? (
+					<Checkbox checked={dismissNextTime} disabled={submitting} onChange={(event) => setDismissNextTime(event.target.checked)}>
+						Do not show this confirmation again. You can re-enable it from Settings.
+					</Checkbox>
+				) : null}
 			</Space>
 		</DialogModal>
 	)

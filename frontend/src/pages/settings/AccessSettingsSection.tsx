@@ -12,6 +12,8 @@ type AccessSettingsSectionProps = {
 	setProfileId: (v: string | null) => void
 	apiDocsUrl: string
 	openapiUrl: string
+	dismissedDialogCount: number
+	onResetDismissedDialogs: () => void
 }
 
 function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => void }) {
@@ -64,6 +66,19 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 							Clear
 						</Button>
 					</Space.Compact>
+				</FormField>
+
+				<FormField label="Dialog confirmations" extra="Controls confirmations or warnings you chose not to see again.">
+					<Space orientation="vertical" size={8} className={styles.fullWidth}>
+						<Typography.Text type="secondary">
+							{props.dismissedDialogCount > 0
+								? `${props.dismissedDialogCount} dialog preference(s) are currently suppressed.`
+								: 'No dialog preferences are currently suppressed.'}
+						</Typography.Text>
+						<Button onClick={props.onResetDismissedDialogs} disabled={props.dismissedDialogCount === 0}>
+							Reset dismissed dialogs
+						</Button>
+					</Space>
 				</FormField>
 			</div>
 
