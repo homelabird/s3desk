@@ -148,6 +148,25 @@
 	gap: 8px;
 }
 
+.advancedDisclosure {
+	border: 1px solid var(--s3d-color-border);
+	border-radius: 16px;
+	padding: 12px 14px;
+	background: color-mix(in srgb, var(--s3d-color-primary) 3%, var(--s3d-color-bg));
+}
+
+.advancedDisclosureSummary {
+	cursor: pointer;
+	font-weight: 700;
+}
+
+.advancedDisclosureBody {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin-top: 12px;
+}
+
 .footerActions {
 	display: flex;
 	justify-content: flex-end;

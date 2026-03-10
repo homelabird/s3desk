@@ -23,6 +23,7 @@ import { NativeSelect } from "../../components/NativeSelect";
 import { ToggleSwitch } from "../../components/ToggleSwitch";
 import { confirmDangerAction } from "../../lib/confirmDangerAction";
 import { formatErrorWithHint as formatErr } from "../../lib/errors";
+import { hasPendingAction, runIfActionIdle } from "../../lib/pendingActionGuard";
 import {
   formatUnavailableOperationMessage,
   formatValidationOperationMessage,
@@ -44,6 +45,28 @@ import type {
   AzureStoredPolicyRow,
   GcsBindingRow,
 } from "./policy/types";
+
+function getPolicyWorkspaceSummary(kind: PolicyKind) {
+  if (kind === "gcs") {
+    return {
+      title: "Advanced GCS IAM policy workspace",
+      description:
+        "Use this view when you need the full IAM policy document, etag-sensitive updates, presets, validation, or a diff before saving.",
+    };
+  }
+  if (kind === "azure") {
+    return {
+      title: "Advanced Azure container access workspace",
+      description:
+        "Use this view for full ACL JSON review, stored access policy composition, provider validation, and final diff review before saving.",
+    };
+  }
+  return {
+    title: "Advanced S3 bucket policy workspace",
+    description:
+      "Use this view for raw bucket policy statements, cross-account access rules, provider validation, and diff review before saving.",
+  };
+}
 
 export function BucketPolicyModal(props: {
   api: APIClient;
@@ -496,6 +519,12 @@ function BucketPolicyEditor(props: {
       message.error(content, duration);
     },
   });
+  const isBusy = hasPendingAction(
+    props.policyIsFetching,
+    putMutation.isPending,
+    deleteMutation.isPending,
+    validateMutation.isPending,
+  );
 
   const titleSuffix = useMemo(() => {
     if (policyKind === "gcs") return " (GCS IAM)";
@@ -695,6 +724,7 @@ function BucketPolicyEditor(props: {
       : [];
 
   const handleSave = () => {
+    if (isBusy) return;
     if (!parsed.ok) {
       message.error(parsed.error ?? "Invalid policy JSON");
       return;
@@ -709,6 +739,10 @@ function BucketPolicyEditor(props: {
     putMutation.mutate({ policy: parsed.value } as BucketPolicyPutRequest);
   };
 
+  const handleClose = () => {
+    runIfActionIdle(isBusy, props.onClose);
+  };
+
   const footerContent = (
     <div className={styles.footerActions}>
       <Tooltip title={deleteDisabledReason || null}>
@@ -716,10 +750,11 @@ function BucketPolicyEditor(props: {
           <Button
             danger
             disabled={
-              !canDelete || deleteMutation.isPending || props.policyIsFetching
+              !canDelete || isBusy
             }
             loading={deleteMutation.isPending}
             onClick={() => {
+              if (isBusy) return;
               confirmDangerAction({
                 title:
                   policyKind === "azure"
@@ -740,11 +775,11 @@ function BucketPolicyEditor(props: {
       </Tooltip>
 
       <div className={styles.footerPrimaryActions}>
-        <Button onClick={props.onClose}>Cancel</Button>
+        <Button onClick={handleClose} disabled={isBusy}>Cancel</Button>
         <Button
           type="primary"
           loading={putMutation.isPending}
-          disabled={!canSave}
+          disabled={isBusy || !canSave}
           onClick={handleSave}
         >
           Save
@@ -757,9 +792,16 @@ function BucketPolicyEditor(props: {
     <BucketPolicyDialogShell
       mobile={props.mobile}
       title={title}
-      onClose={props.onClose}
+      onClose={handleClose}
       footer={footerContent}
     >
+      <Alert
+        className={styles.workspaceSummary}
+        type="info"
+        showIcon
+        title={getPolicyWorkspaceSummary(policyKind).title}
+        description={getPolicyWorkspaceSummary(policyKind).description}
+      />
       {controlsShortcut ? (
         <div
           className={styles.awsShortcutBanner}
@@ -809,60 +851,96 @@ function BucketPolicyEditor(props: {
                 )}
 
                 {policyKind !== "s3" ? (
+                  <details className={styles.disclosure}>
+                    <summary className={styles.disclosureSummary}>
+                      Advanced editor tools
+                    </summary>
+                    <div className={styles.disclosureBody}>
+                      <Space align="center" wrap className={styles.controlRow}>
+                        <Typography.Text type="secondary">Editor:</Typography.Text>
+                        <NativeSelect
+                          value={editorMode}
+                          onChange={(value) => {
+                            const next = value as "form" | "json";
+                            if (next === "form") {
+                              if (!parsed.ok) {
+                                message.error(
+                                  parsed.error ?? "Fix JSON errors first",
+                                );
+                                return;
+                              }
+                              updateStructuredStateFromText(policyText);
+                              setEditorMode("form");
+                            } else {
+                              setPolicyText(formPolicyText);
+                              setEditorMode("json");
+                            }
+                            setServerValidation(null);
+                            setServerValidationError(null);
+                          }}
+                          ariaLabel="Editor mode"
+                          className={styles.editorModeGroup}
+                          options={[
+                            { value: "form", label: "Form editor" },
+                            { value: "json", label: "JSON editor" },
+                          ]}
+                        />
+                      </Space>
+
+                      <Space align="center" wrap className={styles.controlRow}>
+                        <Typography.Text type="secondary">Template:</Typography.Text>
+                        <NativeSelect
+                          value={selectedPresetKey ?? ""}
+                          onChange={(value) => {
+                            if (!value) {
+                              setSelectedPresetKey(undefined);
+                              return;
+                            }
+                            applyPolicyPreset(String(value));
+                          }}
+                          ariaLabel="Template preset"
+                          className={styles.presetSelect}
+                          placeholder="Load provider preset"
+                          options={policyPresets.map((item) => ({
+                            value: item.key,
+                            label: item.label,
+                          }))}
+                        />
+                      </Space>
+
+                      {selectedPresetDescription ? (
+                        <Typography.Text type="secondary">
+                          {selectedPresetDescription}
+                        </Typography.Text>
+                      ) : null}
+                    </div>
+                  </details>
+                ) : null}
+
+                {policyKind === "s3" ? (
                   <Space align="center" wrap className={styles.controlRow}>
-                    <Typography.Text type="secondary">Editor:</Typography.Text>
+                    <Typography.Text type="secondary">Template:</Typography.Text>
                     <NativeSelect
-                      value={editorMode}
+                      value={selectedPresetKey ?? ""}
                       onChange={(value) => {
-                        const next = value as "form" | "json";
-                        if (next === "form") {
-                          if (!parsed.ok) {
-                            message.error(
-                              parsed.error ?? "Fix JSON errors first",
-                            );
-                            return;
-                          }
-                          updateStructuredStateFromText(policyText);
-                          setEditorMode("form");
-                        } else {
-                          setPolicyText(formPolicyText);
-                          setEditorMode("json");
+                        if (!value) {
+                          setSelectedPresetKey(undefined);
+                          return;
                         }
-                        setServerValidation(null);
-                        setServerValidationError(null);
+                        applyPolicyPreset(String(value));
                       }}
-                      ariaLabel="Editor mode"
-                      className={styles.editorModeGroup}
-                      options={[
-                        { value: "form", label: "Form editor" },
-                        { value: "json", label: "JSON editor" },
-                      ]}
+                      ariaLabel="Template preset"
+                      className={styles.presetSelect}
+                      placeholder="Load provider preset"
+                      options={policyPresets.map((item) => ({
+                        value: item.key,
+                        label: item.label,
+                      }))}
                     />
                   </Space>
                 ) : null}
 
-                <Space align="center" wrap className={styles.controlRow}>
-                  <Typography.Text type="secondary">Template:</Typography.Text>
-                  <NativeSelect
-                    value={selectedPresetKey ?? ""}
-                    onChange={(value) => {
-                      if (!value) {
-                        setSelectedPresetKey(undefined);
-                        return;
-                      }
-                      applyPolicyPreset(String(value));
-                    }}
-                    ariaLabel="Template preset"
-                    className={styles.presetSelect}
-                    placeholder="Load provider preset"
-                    options={policyPresets.map((item) => ({
-                      value: item.key,
-                      label: item.label,
-                    }))}
-                  />
-                </Space>
-
-                {selectedPresetDescription ? (
+                {policyKind === "s3" && selectedPresetDescription ? (
                   <Typography.Text type="secondary">
                     {selectedPresetDescription}
                   </Typography.Text>
@@ -873,30 +951,43 @@ function BucketPolicyEditor(props: {
                   : null}
 
                 {editorMode === "json" || policyKind === "s3" ? (
-                  <Space
-                    orientation="vertical"
-                    size="small"
-                    className={styles.fullWidth}
-                  >
-                    <Input.TextArea
-                      value={policyText}
-                      onChange={(e) => {
-                        setPolicyText(e.target.value);
-                        setServerValidation(null);
-                        setServerValidationError(null);
-                      }}
-                      autoSize={{ minRows: 8, maxRows: 24 }}
-                      placeholder={editorPlaceholder}
-                    />
-                    {!parsed.ok ? (
+                  <details className={styles.disclosure} open={policyKind === "s3"}>
+                    <summary className={styles.disclosureSummary}>
+                      Raw JSON editor
+                    </summary>
+                    <div className={styles.disclosureBody}>
                       <Alert
                         type="warning"
                         showIcon
-                        title="Fix JSON errors first"
-                        description={parsed.error ?? "Invalid JSON"}
+                        title="Advanced editing area"
+                        description="Use raw JSON when the structured editor does not cover the policy you need. Review the diff before saving."
                       />
-                    ) : null}
-                  </Space>
+                      <Space
+                        orientation="vertical"
+                        size="small"
+                        className={styles.fullWidth}
+                      >
+                        <Input.TextArea
+                          value={policyText}
+                          onChange={(e) => {
+                            setPolicyText(e.target.value);
+                            setServerValidation(null);
+                            setServerValidationError(null);
+                          }}
+                          autoSize={{ minRows: 8, maxRows: 24 }}
+                          placeholder={editorPlaceholder}
+                        />
+                        {!parsed.ok ? (
+                          <Alert
+                            type="warning"
+                            showIcon
+                            title="Fix JSON errors first"
+                            description={parsed.error ?? "Invalid JSON"}
+                          />
+                        ) : null}
+                      </Space>
+                    </div>
+                  </details>
                 ) : null}
 
                 {providerWarnings.length > 0 ? (
@@ -966,6 +1057,7 @@ function BucketPolicyEditor(props: {
 
                 <Button
                   onClick={() => {
+                    if (isBusy) return;
                     if (!parsed.ok) {
                       message.error(parsed.error ?? "Invalid JSON policy");
                       return;
@@ -981,7 +1073,7 @@ function BucketPolicyEditor(props: {
                   }}
                   loading={validateMutation.isPending}
                   disabled={
-                    props.policyIsFetching ||
+                    isBusy ||
                     !parsed.ok ||
                     hasBlockingValidationIssues
                   }

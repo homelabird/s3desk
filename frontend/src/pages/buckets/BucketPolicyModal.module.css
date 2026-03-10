@@ -2,6 +2,10 @@
   width: 100%;
 }
 
+.workspaceSummary {
+  margin-bottom: 16px;
+}
+
 .desktopShell,
 .mobileShell {
   width: 100%;
@@ -86,6 +90,25 @@
 
 .controlRow {
   width: 100%;
+}
+
+.disclosure {
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: var(--s3d-color-bg-secondary);
+}
+
+.disclosureSummary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.disclosureBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .editorModeGroup {

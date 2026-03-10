@@ -115,35 +115,41 @@ export function AdvancedPolicySection(props: {
       className={`${styles.sectionCard} ${styles.sectionWide}`}
       data-testid="bucket-governance-advanced-policy"
     >
-      <div className={styles.sectionHeader}>
-        <div className={styles.sectionCopy}>
-          <Typography.Text strong>Advanced Policy</Typography.Text>
-          <Typography.Text type="secondary">
-            Use raw policy editing for statements that do not fit the typed
-            controls surface.
-          </Typography.Text>
+      <details className={styles.advancedDisclosure}>
+        <summary className={styles.advancedDisclosureSummary}>
+          Advanced / raw policy
+        </summary>
+        <div className={styles.advancedDisclosureBody}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionCopy}>
+              <Typography.Text type="secondary">
+                Use raw policy editing for statements that do not fit the typed
+                controls surface. Keep routine access and protection changes in
+                typed controls first.
+              </Typography.Text>
+            </div>
+            <Button
+              onClick={() => props.onOpenAdvancedPolicy?.(props.bucket)}
+              disabled={!props.onOpenAdvancedPolicy || !props.advancedPolicy.rawPolicyEditable}
+            >
+              Open Policy
+            </Button>
+          </div>
+          <div className={styles.tagRow}>
+            <Tag color={props.advancedPolicy.rawPolicyEditable ? "blue" : "default"}>
+              {props.advancedPolicy.rawPolicyEditable
+                ? "Editable raw policy"
+                : "Read-only raw policy"}
+            </Tag>
+            <Tag color="gold">Advanced</Tag>
+            <Tag>
+              {props.advancedPolicy.rawPolicy
+                ? "Policy document detected"
+                : "No raw policy document loaded in summary"}
+            </Tag>
+          </div>
         </div>
-        <Button
-          onClick={() => props.onOpenAdvancedPolicy?.(props.bucket)}
-          disabled={!props.onOpenAdvancedPolicy || !props.advancedPolicy.rawPolicyEditable}
-        >
-          Open Policy
-        </Button>
-      </div>
-      <div className={styles.sectionBody}>
-        <div className={styles.tagRow}>
-          <Tag color={props.advancedPolicy.rawPolicyEditable ? "blue" : "default"}>
-            {props.advancedPolicy.rawPolicyEditable
-              ? "Editable raw policy"
-              : "Read-only raw policy"}
-          </Tag>
-          <Tag>
-            {props.advancedPolicy.rawPolicy
-              ? "Policy document detected"
-              : "No raw policy document loaded in summary"}
-          </Tag>
-        </div>
-      </div>
+      </details>
     </section>
   );
 }

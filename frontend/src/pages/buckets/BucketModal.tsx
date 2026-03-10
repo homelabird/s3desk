@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import type { BucketCreateRequest, Profile } from '../../api/types'
 import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
+import { runIfActionIdle } from '../../lib/pendingActionGuard'
 import styles from './BucketModal.module.css'
 import { AwsBucketCreateDefaults } from './create/aws-defaults'
 import { AzureBucketCreateDefaults } from './create/azure-defaults'
@@ -48,6 +49,7 @@ export function BucketModal(props: {
 	})()
 
 	const canSubmit = !!name.trim()
+	const isBusy = props.loading
 	const reset = () => {
 		setName('')
 		setRegion('')
@@ -132,6 +134,7 @@ export function BucketModal(props: {
 	}
 
 	const handleSubmit = () => {
+		if (isBusy) return
 		const trimmedName = name.trim()
 		if (!trimmedName) return
 		const trimmedRegion = region.trim()
@@ -150,8 +153,9 @@ export function BucketModal(props: {
 	}
 
 	const handleCancel = () => {
+		if (isBusy) return
 		reset()
-		props.onCancel()
+		runIfActionIdle(isBusy, props.onCancel)
 	}
 
 	const renderSecureDefaults = () => {
@@ -203,8 +207,8 @@ export function BucketModal(props: {
 			onClose={handleCancel}
 			footer={
 				<>
-					<Button onClick={handleCancel}>Cancel</Button>
-					<Button type="primary" loading={props.loading} disabled={!canSubmit} onClick={handleSubmit}>
+					<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
+					<Button type="primary" loading={props.loading} disabled={isBusy || !canSubmit} onClick={handleSubmit}>
 						Create
 					</Button>
 				</>
