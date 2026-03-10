@@ -12,11 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
+	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
 
@@ -583,6 +585,33 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 		}
 		writeJSON(w, http.StatusOK, resp)
 		metric.SetStatus("proxy_only")
+		return
+	}
+
+	if secrets.Provider == models.ProfileProviderAwsS3 || secrets.Provider == models.ProfileProviderS3Compatible {
+		resp, err := s3client.PresignFromProfile(secrets).PresignGetObject(
+			r.Context(),
+			&s3.GetObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(key),
+			},
+			s3.WithPresignExpires(expires),
+		)
+		if err != nil {
+			metric.SetStatus("remote_error")
+			writeError(w, http.StatusBadRequest, "invalid_request", "failed to generate download url", map[string]any{
+				"bucket": bucket,
+				"key":    key,
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		metric.SetStatus("success")
+		writeJSON(w, http.StatusOK, models.PresignedURLResponse{
+			URL:       resp.URL,
+			ExpiresAt: time.Now().UTC().Add(expires).Format(time.RFC3339Nano),
+		})
 		return
 	}
 
