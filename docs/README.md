@@ -11,6 +11,7 @@ This folder intentionally keeps only the small set of docs needed to run and wor
 - [BUCKET_GOVERNANCE_REMAINING_WORK.md](BUCKET_GOVERNANCE_REMAINING_WORK.md): remaining checklist after the bucket governance rollout
 - [TECH_DEBT.md](TECH_DEBT.md): current engineering debt, risk areas, and recommended issue order
 - [TECH_DEBT_CHECKLIST.md](TECH_DEBT_CHECKLIST.md): execution checklist derived from the debt register
+- [FRONTEND_UX_BACKLOG.md](FRONTEND_UX_BACKLOG.md): prioritized frontend UI/UX improvements and execution order
 - [RELEASE_GATE.md](RELEASE_GATE.md): minimum release checklist, live validation gate, and release note requirements
 - [UI_OPERATION_FEEDBACK.md](UI_OPERATION_FEEDBACK.md): frontend rules for `ok=true` / `ok=false` API outcomes and API error UX
 - [RUNBOOK.md](RUNBOOK.md): operating the service in real environments
