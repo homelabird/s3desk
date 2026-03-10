@@ -348,6 +348,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 		HelperCommand:   buildServerRestoreHelperCommand(finalRoot, manifest),
 		Warnings:        buildServerRestoreWarnings(manifest, s.cfg.EncryptionKey != ""),
 	}
+	_ = s.cleanupExpiredServerRestores(time.Now().UTC())
 	return resp, nil
 }
 

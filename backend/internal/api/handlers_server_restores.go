@@ -15,6 +15,8 @@ import (
 	"s3desk/internal/models"
 )
 
+const stagedRestoreRetention = 7 * 24 * time.Hour
+
 func (s *server) handleListServerRestores(w http.ResponseWriter, r *http.Request) {
 	items, err := s.listServerRestores()
 	if err != nil {
@@ -64,6 +66,9 @@ func (s *server) handleDeleteServerRestore(w http.ResponseWriter, r *http.Reques
 
 func (s *server) listServerRestores() ([]models.ServerStagedRestore, error) {
 	restoreBase := filepath.Join(s.cfg.DataDir, "restores")
+	if err := s.cleanupExpiredServerRestores(time.Now().UTC()); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(restoreBase)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -109,4 +114,32 @@ func (s *server) listServerRestores() ([]models.ServerStagedRestore, error) {
 		return items[i].StagedAt > items[j].StagedAt
 	})
 	return items, nil
+}
+
+func (s *server) cleanupExpiredServerRestores(now time.Time) error {
+	restoreBase := filepath.Join(s.cfg.DataDir, "restores")
+	entries, err := os.ReadDir(restoreBase)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if now.Sub(info.ModTime()) < stagedRestoreRetention {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(restoreBase, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
