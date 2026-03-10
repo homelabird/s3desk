@@ -12,6 +12,7 @@ import {
 import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
 import { AppTabs } from '../components/AppTabs'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
+import { clearDismissedDialogs, countDismissedDialogs, subscribeDialogPreferences } from '../lib/dialogPreferences'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
 import {
@@ -157,6 +158,7 @@ export function SettingsPage(props: Props) {
 	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
 	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
 	const [networkLog, setNetworkLog] = useState<NetworkLogEvent[]>(() => getNetworkLog())
+	const [dismissedDialogCount, setDismissedDialogCount] = useState(() => countDismissedDialogs())
 
 	useEffect(() => {
 		return subscribeNetworkLog(
@@ -165,6 +167,10 @@ export function SettingsPage(props: Props) {
 			},
 			() => setNetworkLog([]),
 		)
+	}, [])
+
+	useEffect(() => {
+		return subscribeDialogPreferences(() => setDismissedDialogCount(countDismissedDialogs()))
 	}, [])
 
 	const metaQuery = useQuery({
@@ -203,14 +209,19 @@ export function SettingsPage(props: Props) {
 		})
 	}, [])
 
+	const onResetDismissedDialogs = useCallback(() => {
+		clearDismissedDialogs()
+		message.success('Dismissed dialog preferences reset.')
+	}, [])
+
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
 			<AppTabs
-				defaultActiveKey="access"
+				defaultActiveKey="workspace"
 				items={[
 					{
-						key: 'access',
-						label: 'Access',
+						key: 'workspace',
+						label: 'Workspace',
 						children: (
 							<Suspense fallback={null}>
 								<AccessSettingsSection
@@ -220,6 +231,28 @@ export function SettingsPage(props: Props) {
 									setProfileId={props.setProfileId}
 									apiDocsUrl={apiDocsUrl}
 									openapiUrl={openapiUrl}
+									dismissedDialogCount={dismissedDialogCount}
+									onResetDismissedDialogs={onResetDismissedDialogs}
+								/>
+							</Suspense>
+						),
+					},
+					{
+						key: 'objects',
+						label: 'Objects',
+						children: (
+							<Suspense fallback={null}>
+								<ObjectsSettingsSection
+									objectsShowThumbnails={objectsShowThumbnails}
+									setObjectsShowThumbnails={setObjectsShowThumbnails}
+									objectsThumbnailCacheSize={objectsThumbnailCacheSize}
+									setObjectsThumbnailCacheSize={setObjectsThumbnailCacheSize}
+									objectsCostMode={objectsCostMode}
+									setObjectsCostMode={setObjectsCostMode}
+									objectsAutoIndexEnabled={objectsAutoIndexEnabled}
+									setObjectsAutoIndexEnabled={setObjectsAutoIndexEnabled}
+									objectsAutoIndexTtlHours={objectsAutoIndexTtlHours}
+									setObjectsAutoIndexTtlHours={setObjectsAutoIndexTtlHours}
 								/>
 							</Suspense>
 						),
@@ -253,44 +286,8 @@ export function SettingsPage(props: Props) {
 						),
 					},
 					{
-						key: 'objects',
-						label: 'Objects',
-						children: (
-							<Suspense fallback={null}>
-								<ObjectsSettingsSection
-									objectsShowThumbnails={objectsShowThumbnails}
-									setObjectsShowThumbnails={setObjectsShowThumbnails}
-									objectsThumbnailCacheSize={objectsThumbnailCacheSize}
-									setObjectsThumbnailCacheSize={setObjectsThumbnailCacheSize}
-									objectsCostMode={objectsCostMode}
-									setObjectsCostMode={setObjectsCostMode}
-									objectsAutoIndexEnabled={objectsAutoIndexEnabled}
-									setObjectsAutoIndexEnabled={setObjectsAutoIndexEnabled}
-									objectsAutoIndexTtlHours={objectsAutoIndexTtlHours}
-									setObjectsAutoIndexTtlHours={setObjectsAutoIndexTtlHours}
-								/>
-							</Suspense>
-						),
-					},
-					{
-						key: 'network',
-						label: 'Network',
-						children: (
-							<Suspense fallback={null}>
-								<NetworkSettingsSection
-									apiRetryCount={apiRetryCount}
-									setApiRetryCount={setApiRetryCount}
-									apiRetryDelayMs={apiRetryDelayMs}
-									setApiRetryDelayMs={setApiRetryDelayMs}
-									networkLog={networkLog}
-									onClearNetworkLog={() => clearNetworkLog()}
-								/>
-							</Suspense>
-						),
-					},
-					{
-						key: 'server',
-						label: 'Server',
+						key: 'operations',
+						label: 'Operations',
 						children: (
 							<Suspense fallback={null}>
 								<ServerSettingsSection
@@ -303,17 +300,28 @@ export function SettingsPage(props: Props) {
 						),
 					},
 					{
-						key: 'troubleshooting',
-						label: 'Troubleshooting',
+						key: 'diagnostics',
+						label: 'Diagnostics',
 						children: (
-							<Space orientation="vertical" size={8} className={styles.fullWidth}>
-								<Typography.Text type="secondary">
-									Clears saved view / filter / layout state from your browser (localStorage). Useful when a screen looks
-									"stuck" because an old filter or panel state was persisted.
-								</Typography.Text>
-								<Button danger onClick={onResetUiState}>
-									Reset saved UI state
-								</Button>
+							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+								<Suspense fallback={null}>
+									<NetworkSettingsSection
+										apiRetryCount={apiRetryCount}
+										setApiRetryCount={setApiRetryCount}
+										apiRetryDelayMs={apiRetryDelayMs}
+										setApiRetryDelayMs={setApiRetryDelayMs}
+										networkLog={networkLog}
+										onClearNetworkLog={() => clearNetworkLog()}
+									/>
+								</Suspense>
+								<Space orientation="vertical" size={8} className={styles.fullWidth}>
+									<Typography.Text type="secondary">
+										Clears saved view, filter, and layout state from this browser. Use it when the UI looks stuck because an old local state was persisted.
+									</Typography.Text>
+									<Button danger onClick={onResetUiState}>
+										Reset saved UI state
+									</Button>
+								</Space>
 							</Space>
 						),
 					},

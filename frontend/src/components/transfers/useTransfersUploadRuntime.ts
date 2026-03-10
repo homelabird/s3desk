@@ -161,6 +161,8 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				etaSeconds: 0,
 				error: undefined,
 				jobId: undefined,
+				uploadFallbackFrom: undefined,
+				uploadFallbackReason: undefined,
 			}))
 
 			let committed = false
@@ -267,6 +269,11 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 							(err.code === 'not_supported' || err.code === 'invalid_request')
 						) {
 							session = await createUploadSession(fallbackMode)
+							args.updateUploadTask(taskId, (t) => ({
+								...t,
+								uploadFallbackFrom: 'presigned',
+								uploadFallbackReason: 'provider_unsupported',
+							}))
 							args.notifications.info(`Presigned uploads are not supported here. Falling back to ${fallbackMode} uploads.`)
 						} else if (
 							preferredMode === 'direct' &&
@@ -274,6 +281,11 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 							(err.code === 'not_supported' || err.code === 'invalid_request')
 						) {
 							session = await createUploadSession('staging')
+							args.updateUploadTask(taskId, (t) => ({
+								...t,
+								uploadFallbackFrom: 'direct',
+								uploadFallbackReason: 'provider_unsupported',
+							}))
 						} else {
 							throw err
 						}
@@ -406,6 +418,8 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 						speedBps: 0,
 						etaSeconds: 0,
 						error: undefined,
+						uploadFallbackFrom: 'presigned',
+						uploadFallbackReason: 'network_path_failed',
 					}))
 					args.notifications.info(`Presigned upload network path failed. Falling back to ${sessionMode} uploads.`)
 					result = await runUploadAttempt(sessionMode, uploadId)

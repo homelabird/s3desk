@@ -205,54 +205,80 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			{props.meta ? (
 				<>
 					<Alert
-						type={backupSupported && restoreStagingCapability.enabled ? 'info' : 'warning'}
+						type={backupSupported ? 'info' : 'warning'}
 						showIcon
-						title="Server full backup & staged restore"
+						title="Backup export"
 						description={
 							<Space orientation="vertical" size={8} className={styles.fullWidth}>
+								<Space wrap>
+									<Tag color="blue">SQLite only</Tag>
+									{backupConfidentiality === 'encrypted' ? <Tag color="purple">Encrypted payload</Tag> : <Tag>Clear payload</Tag>}
+								</Space>
 								<Typography.Text type="secondary">
-									Download either a full backup bundle or a lighter cache + metadata bundle, then upload a bundle to stage a restorable DATA_DIR on this machine.
+									Export either the full local runtime state or a lighter cache + metadata bundle from this server.
 								</Typography.Text>
-							<Space wrap>
-								<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('full')}>
-									Download Full backup
+								<Space wrap>
+									<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('full')}>
+										Download Full backup
 									</Button>
 									<Button loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('cache_metadata')}>
 										Download Cache + metadata backup
 									</Button>
-								<Button loading={restoreLoading} disabled={backupLoading || !restoreStagingCapability.enabled} onClick={handleRestorePick}>
-									Upload restore bundle
-								</Button>
-							</Space>
-							<Checkbox
-								checked={backupConfidentiality === 'encrypted'}
-								disabled={!backupSupported || restoreLoading || !backupEncryptionAvailable}
-								onChange={(event) => setBackupConfidentiality(event.target.checked ? 'encrypted' : 'clear')}
-							>
-								Encrypt backup payload with the current ENCRYPTION_KEY
-							</Checkbox>
-							<Typography.Text type="secondary">
-								Encrypted bundles keep the outer manifest readable but require the same <Typography.Text code>ENCRYPTION_KEY</Typography.Text> on restore so S3Desk can decrypt <Typography.Text code>payload.enc</Typography.Text>.
-							</Typography.Text>
-							{!backupEncryptionAvailable ? (
-								<Typography.Text type="secondary">
-									This server is running without <Typography.Text code>ENCRYPTION_KEY</Typography.Text>, so encrypted backup payloads are unavailable.
-								</Typography.Text>
-							) : null}
-							{!backupSupported ? (
-								<Space orientation="vertical" size={4} className={styles.fullWidth}>
-										<Typography.Text type="secondary">
-											Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>.
-										</Typography.Text>
-										{backupExportCapability.reason ? <Typography.Text type="secondary">{backupExportCapability.reason}</Typography.Text> : null}
-										{restoreStagingCapability.reason ? <Typography.Text type="secondary">{restoreStagingCapability.reason}</Typography.Text> : null}
-									</Space>
-								) : null}
+								</Space>
+								<Checkbox
+									checked={backupConfidentiality === 'encrypted'}
+									disabled={!backupSupported || restoreLoading || !backupEncryptionAvailable}
+									onChange={(event) => setBackupConfidentiality(event.target.checked ? 'encrypted' : 'clear')}
+								>
+									Encrypt backup payload with the current ENCRYPTION_KEY
+								</Checkbox>
 								<Typography.Text type="secondary">
 									<Typography.Text code>Full backup</Typography.Text> includes <Typography.Text code>s3desk.db</Typography.Text>, thumbnails, logs, artifacts, and staging data.
 								</Typography.Text>
 								<Typography.Text type="secondary">
 									<Typography.Text code>Cache + metadata backup</Typography.Text> includes <Typography.Text code>s3desk.db</Typography.Text> and thumbnails only. Environment config outside DATA_DIR is never included.
+								</Typography.Text>
+								<Typography.Text type="secondary">
+									Encrypted bundles keep the outer manifest readable but require the same <Typography.Text code>ENCRYPTION_KEY</Typography.Text> on restore so S3Desk can decrypt <Typography.Text code>payload.enc</Typography.Text>.
+								</Typography.Text>
+								{!backupEncryptionAvailable ? (
+									<Typography.Text type="secondary">
+										This server is running without <Typography.Text code>ENCRYPTION_KEY</Typography.Text>, so encrypted backup payloads are unavailable.
+									</Typography.Text>
+								) : null}
+								{!backupSupported ? (
+									<Space orientation="vertical" size={4} className={styles.fullWidth}>
+										<Typography.Text type="secondary">
+											Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>.
+										</Typography.Text>
+										{backupExportCapability.reason ? <Typography.Text type="secondary">{backupExportCapability.reason}</Typography.Text> : null}
+									</Space>
+								) : null}
+							</Space>
+						}
+					/>
+
+					<Alert
+						type={restoreStagingCapability.enabled ? 'info' : 'warning'}
+						showIcon
+						title="Stage restore bundle"
+						description={
+							<Space orientation="vertical" size={8} className={styles.fullWidth}>
+								<Space wrap>
+									<Tag color="gold">Stage only</Tag>
+									<Tag>Manual apply</Tag>
+								</Space>
+								<Typography.Text type="secondary">
+									Upload a backup bundle to stage a restorable <Typography.Text code>DATA_DIR</Typography.Text> under <Typography.Text code>restores/</Typography.Text>. The live instance is not overwritten.
+								</Typography.Text>
+								<Space wrap>
+									<Button loading={restoreLoading} disabled={backupLoading || !restoreStagingCapability.enabled} onClick={handleRestorePick}>
+										Upload restore bundle
+									</Button>
+								</Space>
+								{restoreStagingCapability.reason ? <Typography.Text type="secondary">{restoreStagingCapability.reason}</Typography.Text> : null}
+								<Typography.Text type="secondary">
+									After staging, review the bundle, then follow the generated apply plan and helper command for cutover.
 								</Typography.Text>
 								<input
 									ref={restoreInputRef}

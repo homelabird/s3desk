@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
 import { OverlaySheet } from '../../components/OverlaySheet'
+import { runIfActionIdle } from '../../lib/pendingActionGuard'
 import styles from './ProfileModal.module.css'
 import { buildProfileModalSectionItems } from './ProfileModalSections'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
@@ -112,6 +113,7 @@ function ProfileModalSession(props: {
 		tlsStatusError: props.tlsStatusError,
 	})
 	const sheetPlacement = screens.md ? 'right' : 'bottom'
+	const isBusy = props.loading
 
 	const setField = useCallback(<K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
 		setValues((prev) => ({ ...prev, [key]: value }))
@@ -128,6 +130,7 @@ function ProfileModalSession(props: {
 	}, [openSections])
 
 	const validateAndSubmit = async () => {
+		if (isBusy) return
 		const next = await validateProfileFormValues({
 			values,
 			editMode: props.editMode,
@@ -144,6 +147,10 @@ function ProfileModalSession(props: {
 		props.onSubmit(values)
 	}
 
+	const handleCancel = useCallback(() => {
+		runIfActionIdle(isBusy, props.onCancel)
+	}, [isBusy, props.onCancel])
+
 	const sectionItems = buildProfileModalSectionItems({
 		values,
 		errors,
@@ -155,15 +162,15 @@ function ProfileModalSession(props: {
 	return (
 		<OverlaySheet
 			open={props.open}
-			onClose={props.onCancel}
+			onClose={handleCancel}
 			title={props.title}
 			placement={sheetPlacement}
 			width={screens.md ? 'min(92vw, 980px)' : undefined}
 			height={!screens.md ? '100dvh' : undefined}
 			footer={
 				<div className={styles.drawerFooter}>
-					<Button onClick={props.onCancel}>Cancel</Button>
-					<Button type="primary" loading={props.loading} onClick={() => void validateAndSubmit()}>
+					<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
+					<Button type="primary" loading={props.loading} disabled={isBusy} onClick={() => void validateAndSubmit()}>
 						{props.okText}
 					</Button>
 				</div>

@@ -65,6 +65,8 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 							: 'Starting upload job…'
 				: null
 	const subtitle = `s3://${t.bucket}/${normalizePrefix(t.prefix)}`
+	const uploadModeDescriptionText = t.uploadMode ? uploadModeDescription(t.uploadMode) : null
+	const fallbackMessage = getUploadFallbackMessage(t)
 
 	return (
 		<div className={styles.rowCard} data-testid="transfer-upload-row" data-transfer-row-kind="upload">
@@ -87,6 +89,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 							</Typography.Text>
 							<Tag color={tagColor}>{tagText}</Tag>
 							{t.uploadMode ? <Tag>{uploadModeLabel(t.uploadMode)}</Tag> : null}
+							{fallbackMessage ? <Tag color="gold">Fallback</Tag> : null}
 							{preview ? <Tag color="blue">Local preview</Tag> : null}
 							{t.jobId ? <Tag>{t.jobId}</Tag> : null}
 						</div>
@@ -95,9 +98,19 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 								{subtitle}
 							</Typography.Text>
 						</div>
+						{uploadModeDescriptionText ? (
+							<div className={styles.rowPreviewLabel}>
+								<Typography.Text type="secondary">Current path: {uploadModeDescriptionText}</Typography.Text>
+							</div>
+						) : null}
 						{preview ? (
 							<div className={styles.rowPreviewLabel}>
 								<Typography.Text type="secondary">Preview frame: {preview.label}</Typography.Text>
+							</div>
+						) : null}
+						{fallbackMessage ? (
+							<div className={styles.rowPreviewLabel}>
+								<Typography.Text type="warning">{fallbackMessage}</Typography.Text>
 							</div>
 						) : null}
 						{t.error ? (
@@ -150,4 +163,21 @@ function uploadModeLabel(mode: UploadTask['uploadMode']): string {
 	if (mode === 'presigned') return 'Presigned'
 	if (mode === 'direct') return 'Direct'
 	return 'Staging'
+}
+
+function uploadModeDescription(mode: UploadTask['uploadMode']): string {
+	if (mode === 'presigned') return 'Browser presigned upload'
+	if (mode === 'direct') return 'Server direct stream upload'
+	return 'Server staging upload'
+}
+
+function getUploadFallbackMessage(task: UploadTask): string | null {
+	if (!task.uploadFallbackFrom || !task.uploadMode || task.uploadFallbackFrom === task.uploadMode) return null
+	if (task.uploadFallbackReason === 'provider_unsupported') {
+		return `${uploadModeLabel(task.uploadFallbackFrom)} uploads are not supported here. Using ${uploadModeLabel(task.uploadMode)} instead.`
+	}
+	if (task.uploadFallbackReason === 'network_path_failed') {
+		return `${uploadModeLabel(task.uploadFallbackFrom)} upload path failed. Switched to ${uploadModeLabel(task.uploadMode)}.`
+	}
+	return null
 }
