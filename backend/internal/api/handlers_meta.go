@@ -46,6 +46,20 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 	if !tlsCapability.Enabled {
 		tlsCapability.Reason = "ENCRYPTION_KEY is required to store mTLS material"
 	}
+	serverBackupExport := models.FeatureCapability{
+		Enabled: dbBackend == db.BackendSQLite,
+	}
+	if !serverBackupExport.Enabled {
+		serverBackupExport.Reason = "In-product backup export currently supports only sqlite-backed servers."
+	}
+	serverBackupRestoreStagingReason := "Stages a sqlite DATA_DIR bundle for manual cutover."
+	serverBackupRestoreStaging := models.FeatureCapability{
+		Enabled: true,
+		Reason:  serverBackupRestoreStagingReason,
+	}
+	if dbBackend != db.BackendSQLite {
+		serverBackupRestoreStaging.Reason = serverBackupRestoreStagingReason + " It does not replace a Postgres backup or restore workflow."
+	}
 	resp := models.MetaResponse{
 		Version:           version.Version,
 		ServerAddr:        s.serverAddr,
@@ -56,7 +70,11 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		EncryptionEnabled: s.cfg.EncryptionKey != "",
 		Capabilities: models.MetaCapabilities{
 			ProfileTLS: tlsCapability,
-			Providers:  providerCapabilityMatrix(s.cfg.UploadDirectStream),
+			ServerBackup: models.ServerBackupCapabilities{
+				Export:         serverBackupExport,
+				RestoreStaging: serverBackupRestoreStaging,
+			},
+			Providers: providerCapabilityMatrix(s.cfg.UploadDirectStream),
 		},
 		AllowedLocalDirs:        s.cfg.AllowedLocalDirs,
 		JobConcurrency:          s.cfg.JobConcurrency,

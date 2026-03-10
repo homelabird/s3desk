@@ -800,9 +800,15 @@ type FeatureCapability struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
+type ServerBackupCapabilities struct {
+	Export         FeatureCapability `json:"export"`
+	RestoreStaging FeatureCapability `json:"restoreStaging"`
+}
+
 type MetaCapabilities struct {
-	ProfileTLS FeatureCapability                      `json:"profileTls"`
-	Providers  map[ProfileProvider]ProviderCapability `json:"providers,omitempty"`
+	ProfileTLS   FeatureCapability                      `json:"profileTls"`
+	ServerBackup ServerBackupCapabilities               `json:"serverBackup"`
+	Providers    map[ProfileProvider]ProviderCapability `json:"providers,omitempty"`
 }
 
 // ProviderCapabilityReasons carries per-capability reason messages when a capability is false.

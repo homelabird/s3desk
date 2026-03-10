@@ -74,6 +74,22 @@ func TestOpenAPIMetaAndMigrationSchemasCoverFrontendContract(t *testing.T) {
 	if !containsString(metaSchema.Required, "uploadDirectStream") {
 		t.Fatal("MetaResponse.uploadDirectStream must be required in OpenAPI")
 	}
+	metaCapabilitiesSchema := requireOpenAPISchema(t, doc, "MetaCapabilities")
+	if _, ok := metaCapabilitiesSchema.Properties["serverBackup"]; !ok {
+		t.Fatal("MetaCapabilities.serverBackup missing from OpenAPI")
+	}
+	if !containsString(metaCapabilitiesSchema.Required, "serverBackup") {
+		t.Fatal("MetaCapabilities.serverBackup must be required in OpenAPI")
+	}
+	serverBackupSchema := requireOpenAPISchema(t, doc, "ServerBackupCapabilities")
+	for _, name := range []string{"export", "restoreStaging"} {
+		if _, ok := serverBackupSchema.Properties[name]; !ok {
+			t.Fatalf("ServerBackupCapabilities.%s missing from OpenAPI", name)
+		}
+		if !containsString(serverBackupSchema.Required, name) {
+			t.Fatalf("ServerBackupCapabilities.%s must be required in OpenAPI", name)
+		}
+	}
 
 	restorePath := doc.Paths.Find("/server/restore")
 	if restorePath == nil || restorePath.Post == nil {

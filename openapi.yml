@@ -3627,13 +3627,21 @@ components:
 
     MetaCapabilities:
       type: object
-      required: [profileTls]
+      required: [profileTls, serverBackup]
       properties:
         profileTls: { $ref: "#/components/schemas/FeatureCapability" }
+        serverBackup: { $ref: "#/components/schemas/ServerBackupCapabilities" }
         providers:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/ProviderCapability"
+
+    ServerBackupCapabilities:
+      type: object
+      required: [export, restoreStaging]
+      properties:
+        export: { $ref: "#/components/schemas/FeatureCapability" }
+        restoreStaging: { $ref: "#/components/schemas/FeatureCapability" }
 
     FeatureCapability:
       type: object

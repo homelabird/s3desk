@@ -24,6 +24,10 @@ function buildMeta(overrides: Partial<MetaResponse> = {}): MetaResponse {
 		encryptionEnabled: true,
 		capabilities: {
 			profileTls: { enabled: true, reason: '' },
+			serverBackup: {
+				export: { enabled: true, reason: '' },
+				restoreStaging: { enabled: true, reason: '' },
+			},
 			providers: {},
 		},
 		allowedLocalDirs: [],
@@ -56,6 +60,14 @@ function buildRestoreResponse(overrides: Partial<ServerRestoreResponse> = {}): S
 			payloadBytes: 2048,
 			payloadSha256: 'abc123',
 			warnings: ['Use the same ENCRYPTION_KEY'],
+		},
+		validation: {
+			preflightChecked: true,
+			diskFreeBytesBefore: 10_000,
+			payloadFileCount: 2,
+			payloadBytes: 2048,
+			payloadChecksumPresent: true,
+			payloadChecksumVerified: true,
 		},
 		stagingDir: '/data/restores/01ARZ3NDEKTSV4RRFFQ69G5FAV',
 		restartRequired: true,
@@ -143,7 +155,23 @@ describe('ServerSettingsSection', () => {
 		render(
 			<ServerSettingsSection
 				api={api}
-				meta={buildMeta({ dbBackend: 'postgres' })}
+				meta={buildMeta({
+					dbBackend: 'postgres',
+					capabilities: {
+						profileTls: { enabled: true, reason: '' },
+						serverBackup: {
+							export: {
+								enabled: false,
+								reason: 'In-product backup export currently supports only sqlite-backed servers.',
+							},
+							restoreStaging: {
+								enabled: true,
+								reason: 'Stages a sqlite DATA_DIR bundle only; this is not a Postgres backup or restore workflow.',
+							},
+						},
+						providers: {},
+					},
+				})}
 				isFetching={false}
 				errorMessage={null}
 			/>,
@@ -151,8 +179,9 @@ describe('ServerSettingsSection', () => {
 
 		expect(screen.getByRole('button', { name: 'Download Full backup' })).toBeDisabled()
 		expect(screen.getByRole('button', { name: 'Download Cache + metadata backup' })).toBeDisabled()
+		expect(screen.getByRole('button', { name: 'Upload restore bundle' })).toBeEnabled()
 		expect(screen.getByText(/Backup export currently supports sqlite-backed servers only/i)).toBeInTheDocument()
-		expect(screen.getByText(/It does not replace a Postgres backup or restore workflow/i)).toBeInTheDocument()
+		expect(screen.getByText(/not a Postgres backup or restore workflow/i)).toBeInTheDocument()
 	})
 
 	it('shows staged restore age and payload size more clearly', async () => {

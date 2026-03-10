@@ -24,7 +24,13 @@ const defaultMetaResponse = {
 	apiTokenEnabled: true,
 	encryptionEnabled: false,
 	dbBackend: 'sqlite',
-	capabilities: { profileTls: { enabled: false, reason: 'test' } },
+	capabilities: {
+		profileTls: { enabled: false, reason: 'test' },
+		serverBackup: {
+			export: { enabled: true, reason: '' },
+			restoreStaging: { enabled: true, reason: '' },
+		},
+	},
 	allowedLocalDirs: [],
 	jobConcurrency: 2,
 	jobLogMaxBytes: null,

@@ -50,6 +50,8 @@ This round tracks what is still meaningfully open.
   - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
   - [ServerSettingsSection.tsx](../frontend/src/pages/settings/ServerSettingsSection.tsx)
   - [RUNBOOK.md](RUNBOOK.md)
+- Current status:
+  - Addressed by exposing `capabilities.serverBackup` in `/api/v1/meta` and driving the settings UI from that capability surface instead of inferring support from `dbBackend` alone.
 - Why it matters:
   - Backup capability should be explicit and machine-readable, not only explained in text.
 - Next action:

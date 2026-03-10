@@ -45,6 +45,7 @@ export interface paths {
                 };
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
             };
         };
         put?: never;
@@ -152,9 +153,7 @@ export interface paths {
     };
     "/server/backup": {
         parameters: {
-            query?: {
-                scope?: "full" | "cache_metadata";
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -170,6 +169,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    /** @description Selects whether the bundle contains the full local server state or only cache and metadata. */
                     scope?: "full" | "cache_metadata";
                 };
                 header?: {
@@ -312,17 +312,13 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path?: {
-                restoreId: string;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Delete a staged restore bundle
-         */
+        /** Delete a staged restore bundle */
         delete: {
             parameters: {
                 query?: never;
@@ -4172,6 +4168,7 @@ export interface components {
         };
         ServerMigrationManifest: {
             format: string;
+            /** @enum {string} */
             bundleKind: "full" | "cache_metadata";
             /** Format: date-time */
             createdAt: string;
@@ -4187,12 +4184,23 @@ export interface components {
         };
         ServerRestoreResponse: {
             manifest: components["schemas"]["ServerMigrationManifest"];
+            validation: components["schemas"]["ServerRestoreValidation"];
             stagingDir: string;
             restartRequired: boolean;
             nextSteps: string[];
             applyPlan: string[];
             helperCommand?: string;
             warnings?: string[];
+        };
+        ServerRestoreValidation: {
+            preflightChecked: boolean;
+            /** Format: int64 */
+            diskFreeBytesBefore?: number;
+            payloadFileCount?: number;
+            /** Format: int64 */
+            payloadBytes?: number;
+            payloadChecksumPresent: boolean;
+            payloadChecksumVerified: boolean;
         };
         ServerStagedRestore: {
             id: string;
@@ -4206,9 +4214,14 @@ export interface components {
         };
         MetaCapabilities: {
             profileTls: components["schemas"]["FeatureCapability"];
+            serverBackup: components["schemas"]["ServerBackupCapabilities"];
             providers?: {
                 [key: string]: components["schemas"]["ProviderCapability"];
             };
+        };
+        ServerBackupCapabilities: {
+            export: components["schemas"]["FeatureCapability"];
+            restoreStaging: components["schemas"]["FeatureCapability"];
         };
         FeatureCapability: {
             enabled: boolean;

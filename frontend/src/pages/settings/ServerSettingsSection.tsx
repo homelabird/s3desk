@@ -44,7 +44,19 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 	const tlsEnabled = tlsCapability?.enabled ?? false
 	const tlsReason = tlsCapability?.reason ?? ''
 	const dbBackend = props.meta?.dbBackend ?? 'sqlite'
-	const backupSupported = dbBackend === 'sqlite'
+	const serverBackupCapability = props.meta?.capabilities?.serverBackup
+	const backupExportCapability = serverBackupCapability?.export ?? {
+		enabled: dbBackend === 'sqlite',
+		reason: dbBackend === 'sqlite' ? '' : 'In-product backup export currently supports only sqlite-backed servers.',
+	}
+	const restoreStagingCapability = serverBackupCapability?.restoreStaging ?? {
+		enabled: true,
+		reason:
+			dbBackend === 'sqlite'
+				? ''
+				: 'Stages a sqlite DATA_DIR bundle only; this is not a Postgres backup or restore workflow.',
+	}
+	const backupSupported = backupExportCapability.enabled
 
 	const mtlsLabel = (
 		<Space size={4}>
@@ -181,7 +193,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			{props.meta ? (
 				<>
 					<Alert
-						type={backupSupported ? 'info' : 'warning'}
+						type={backupSupported && restoreStagingCapability.enabled ? 'info' : 'warning'}
 						showIcon
 						title="Server full backup & staged restore"
 						description={
@@ -196,18 +208,17 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 									<Button loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('cache_metadata')}>
 										Download Cache + metadata backup
 									</Button>
-									<Button loading={restoreLoading} disabled={backupLoading} onClick={handleRestorePick}>
+									<Button loading={restoreLoading} disabled={backupLoading || !restoreStagingCapability.enabled} onClick={handleRestorePick}>
 										Upload restore bundle
 									</Button>
 								</Space>
 								{!backupSupported ? (
 									<Space orientation="vertical" size={4} className={styles.fullWidth}>
 										<Typography.Text type="secondary">
-											Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>. Backup export currently supports sqlite-backed servers only.
+											Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>.
 										</Typography.Text>
-										<Typography.Text type="secondary">
-											Uploading a restore bundle only stages a sqlite DATA_DIR for manual cutover. It does not replace a Postgres backup or restore workflow.
-										</Typography.Text>
+										{backupExportCapability.reason ? <Typography.Text type="secondary">{backupExportCapability.reason}</Typography.Text> : null}
+										{restoreStagingCapability.reason ? <Typography.Text type="secondary">{restoreStagingCapability.reason}</Typography.Text> : null}
 									</Space>
 								) : null}
 								<Typography.Text type="secondary">

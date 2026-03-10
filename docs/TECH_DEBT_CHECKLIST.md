@@ -64,9 +64,9 @@ It intentionally tracks only the currently open round.
 
 ### P1-4. Postgres backup capability surface
 
-- [ ] Expose backup capability by DB backend in the API or runtime metadata
-- [ ] Reflect capability state directly in the settings UI
-- [ ] Make unsupported Postgres restore paths impossible to misread as supported
+- [x] Expose backup capability by DB backend in the API or runtime metadata
+- [x] Reflect capability state directly in the settings UI
+- [x] Make unsupported Postgres restore paths impossible to misread as supported
 
 ### P1-5. Release gate enforcement in CI
 
