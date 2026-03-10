@@ -7,17 +7,10 @@ import type { Job, JobCreateRequest } from '../../api/types'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { displayNameForKey, folderLabelFromPrefix, normalizePrefix } from './objectsListUtils'
-
-const DND_MIME = 'application/x-s3desk-dnd'
-
-const hasDndPayload = (dt: DataTransfer | null): boolean => {
-	if (!dt) return false
-	const types = Array.from(dt.types ?? [])
-	return types.includes(DND_MIME)
-}
+import { hasInternalObjectsDndPayload, OBJECTS_DND_MIME, resolveObjectsDropIntent } from './objectsDropIntent'
 
 const parseDndPayload = (dt: DataTransfer): DndPayload | null => {
-	const raw = dt.getData(DND_MIME)
+	const raw = dt.getData(OBJECTS_DND_MIME)
 	if (!raw) return null
 	try {
 		const parsed: unknown = JSON.parse(raw)
@@ -241,8 +234,17 @@ export function useObjectsDnd({
 	const onDndTargetDragOver = useCallback(
 		(e: React.DragEvent, targetPrefixRaw: string) => {
 			if (!canDragDrop) return
-			if (!hasDndPayload(e.dataTransfer)) return
+			const intent = resolveObjectsDropIntent(e.dataTransfer)
+			if (intent === 'external_upload') {
+				e.preventDefault()
+				e.stopPropagation()
+				e.dataTransfer.dropEffect = 'none'
+				setDndHoverPrefix(null)
+				return
+			}
+			if (intent !== 'internal_object_dnd') return
 			e.preventDefault()
+			e.stopPropagation()
 			setDndHoverPrefix(normalizeDropTargetPrefix(targetPrefixRaw))
 			e.dataTransfer.dropEffect = dropModeFromEvent(e) === 'copy' ? 'copy' : 'move'
 		},
@@ -251,6 +253,8 @@ export function useObjectsDnd({
 
 	const onDndTargetDragLeave = useCallback(
 		(e: React.DragEvent, targetPrefixRaw: string) => {
+			if (!hasInternalObjectsDndPayload(e.dataTransfer)) return
+			e.stopPropagation()
 			const related = e.relatedTarget
 			if (related instanceof Node && e.currentTarget.contains(related)) return
 			const target = normalizeDropTargetPrefix(targetPrefixRaw)
@@ -262,8 +266,17 @@ export function useObjectsDnd({
 	const onDndTargetDrop = useCallback(
 		(e: React.DragEvent, targetPrefixRaw: string) => {
 			if (!canDragDrop) return
-			if (!hasDndPayload(e.dataTransfer)) return
+			const intent = resolveObjectsDropIntent(e.dataTransfer)
+			if (intent === 'external_upload') {
+				e.preventDefault()
+				e.stopPropagation()
+				setDndHoverPrefix(null)
+				message.info('Dropping local files on a folder target is not supported yet. Drop into the current folder area instead.')
+				return
+			}
+			if (intent !== 'internal_object_dnd') return
 			e.preventDefault()
+			e.stopPropagation()
 			setDndHoverPrefix(null)
 
 			const payload = parseDndPayload(e.dataTransfer)
@@ -283,7 +296,7 @@ export function useObjectsDnd({
 				setSelectedKeys(new Set([key]))
 				setLastSelectedObjectKey(key)
 			}
-			e.dataTransfer.setData(DND_MIME, JSON.stringify({ kind: 'objects', bucket, keys: keysToDrag }))
+			e.dataTransfer.setData(OBJECTS_DND_MIME, JSON.stringify({ kind: 'objects', bucket, keys: keysToDrag }))
 			e.dataTransfer.setData('text/plain', keysToDrag.join('\n'))
 			e.dataTransfer.effectAllowed = 'copyMove'
 		},
@@ -295,7 +308,7 @@ export function useObjectsDnd({
 			if (!canDragDrop) return
 			if (!profileId || !bucket) return
 			const srcPrefix = normalizePrefix(p)
-			e.dataTransfer.setData(DND_MIME, JSON.stringify({ kind: 'prefix', bucket, prefix: srcPrefix }))
+			e.dataTransfer.setData(OBJECTS_DND_MIME, JSON.stringify({ kind: 'prefix', bucket, prefix: srcPrefix }))
 			e.dataTransfer.setData('text/plain', srcPrefix)
 			e.dataTransfer.effectAllowed = 'copyMove'
 		},

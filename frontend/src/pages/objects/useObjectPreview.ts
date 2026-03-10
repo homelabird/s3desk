@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { message } from 'antd'
 
 import { APIClient, RequestAbortedError } from '../../api/client'
 import type { ObjectMeta } from '../../api/types'
@@ -79,7 +78,13 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 
 		const maxBytes = kind === 'image' ? IMAGE_PREVIEW_MAX_BYTES : TEXT_PREVIEW_MAX_BYTES
 		if (kind !== 'video' && size > maxBytes) {
-			message.info(`Preview is limited to ${formatBytes(maxBytes)} (object is ${formatBytes(size)})`)
+			setPreview({
+				key,
+				status: 'blocked',
+				kind,
+				contentType,
+				error: `Preview is limited to ${formatBytes(maxBytes)}. This object is ${formatBytes(size)}.`,
+			})
 			return
 		}
 
@@ -116,8 +121,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			} catch (err) {
 				previewAbortRef.current = null
 				if (err instanceof RequestAbortedError) {
-					message.info('Preview canceled')
-					setPreview(null)
+					setPreview({ key, status: 'blocked', kind, contentType, error: 'Preview canceled.' })
 					return
 				}
 				if (args.thumbnailCache && shouldCacheThumbnailFailure(err)) {
@@ -187,8 +191,7 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		} catch (err) {
 			previewAbortRef.current = null
 			if (err instanceof RequestAbortedError || (err instanceof Error && err.name === 'AbortError')) {
-				message.info('Preview canceled')
-				setPreview(null)
+				setPreview({ key, status: 'blocked', kind, contentType, error: 'Preview canceled.' })
 				return
 			}
 			setPreview({ key, status: 'error', kind, contentType, error: formatErr(err) })

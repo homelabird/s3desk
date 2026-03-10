@@ -3,6 +3,7 @@ import { message } from 'antd'
 
 import type { TransfersContextValue } from '../../components/Transfers'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { hasInternalObjectsDndPayload, resolveObjectsDropIntent } from './objectsDropIntent'
 
 type UseObjectsUploadDropArgs = {
 	profileId: string | null
@@ -122,9 +123,12 @@ export function useObjectsUploadDrop({
 
 	const onUploadDragEnter = useCallback(
 		(e: React.DragEvent) => {
-			if (!profileId || !bucket || isOffline || !uploadsEnabled) return
-			if (!e.dataTransfer.types.includes('Files')) return
+			if (resolveObjectsDropIntent(e.dataTransfer) !== 'external_upload') return
 			e.preventDefault()
+			if (!profileId || !bucket || isOffline || !uploadsEnabled) {
+				e.dataTransfer.dropEffect = 'none'
+				return
+			}
 			uploadDragCounterRef.current += 1
 			setUploadDropActive(true)
 		},
@@ -133,9 +137,9 @@ export function useObjectsUploadDrop({
 
 	const onUploadDragLeave = useCallback(
 		(e: React.DragEvent) => {
-			if (!profileId || !bucket || isOffline || !uploadsEnabled) return
-			if (!e.dataTransfer.types.includes('Files')) return
+			if (resolveObjectsDropIntent(e.dataTransfer) !== 'external_upload') return
 			e.preventDefault()
+			if (!profileId || !bucket || isOffline || !uploadsEnabled) return
 			uploadDragCounterRef.current -= 1
 			if (uploadDragCounterRef.current <= 0) {
 				uploadDragCounterRef.current = 0
@@ -147,29 +151,38 @@ export function useObjectsUploadDrop({
 
 	const onUploadDragOver = useCallback(
 		(e: React.DragEvent) => {
-			if (!profileId || !bucket || isOffline || !uploadsEnabled) return
-			if (!e.dataTransfer.types.includes('Files')) return
+			if (resolveObjectsDropIntent(e.dataTransfer) !== 'external_upload') return
 			e.preventDefault()
+			if (!profileId || !bucket || isOffline || !uploadsEnabled) {
+				e.dataTransfer.dropEffect = 'none'
+				return
+			}
 			e.dataTransfer.dropEffect = 'copy'
 		},
 		[bucket, isOffline, profileId, uploadsEnabled],
 	)
 
 	const onUploadDrop = useCallback(
-			(e: React.DragEvent) => {
-				if (!profileId || !bucket) return
-				if (!uploadsEnabled) {
-					message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
-					return
-				}
-				if (isOffline) {
-					message.warning('Offline: uploads are disabled.')
-					return
-				}
-			if (!e.dataTransfer.types.includes('Files')) return
+		(e: React.DragEvent) => {
+			if (hasInternalObjectsDndPayload(e.dataTransfer)) return
+			if (resolveObjectsDropIntent(e.dataTransfer) !== 'external_upload') return
 			e.preventDefault()
+			e.stopPropagation()
 			setUploadDropActive(false)
 			uploadDragCounterRef.current = 0
+			if (!profileId || !bucket) {
+				if (!profileId) message.info('Select a profile first')
+				else message.info('Select a bucket first')
+				return
+			}
+			if (!uploadsEnabled) {
+				message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+				return
+			}
+			if (isOffline) {
+				message.warning('Offline: uploads are disabled.')
+				return
+			}
 
 			const dt = e.dataTransfer
 			const hasEntryAPI = Array.from(dt.items ?? []).some((item) => typeof (item as { webkitGetAsEntry?: unknown }).webkitGetAsEntry === 'function')

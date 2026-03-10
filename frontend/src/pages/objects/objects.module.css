@@ -319,6 +319,84 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 18%, transparent);
 }
 
+.objectThumbnailPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  text-align: center;
+  color: var(--s3d-color-text-secondary);
+  overflow: hidden;
+}
+
+.objectThumbnailPlaceholderLoading {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--s3d-color-bg-secondary) 82%, transparent),
+      color-mix(in srgb, var(--s3d-color-bg-disabled) 88%, transparent)
+    );
+}
+
+.objectThumbnailPlaceholderFailed {
+  border-color: color-mix(in srgb, var(--s3d-color-danger) 42%, var(--s3d-color-border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--s3d-color-danger) 8%, var(--s3d-color-bg-disabled)),
+      color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, transparent)
+    );
+  color: var(--s3d-color-text);
+}
+
+.objectThumbnailPlaceholderBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--s3d-color-border) 82%, transparent);
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 92%, transparent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.objectThumbnailPlaceholderLabel {
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.gridCardPreviewFrame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gridCardBodyActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+
+.listRowAuxActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.listThumbnailFrame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .bucketPickerInlineAction {
   align-self: center;
   flex: 0 0 auto;

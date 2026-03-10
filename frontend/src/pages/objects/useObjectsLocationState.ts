@@ -254,6 +254,55 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 		setPathModalOpen(false)
 	}, [bucket, navigateToLocation, pathDraft])
 
+	const clearInvalidLocation = useCallback((invalidBucketRaw?: string) => {
+		const invalidBucket = (invalidBucketRaw ?? bucket).trim()
+		if (!invalidBucket) return
+
+		setTabs((prev) =>
+			prev.map((tab) => {
+				if (tab.bucket !== invalidBucket && !tab.history.some((entry) => entry.bucket === invalidBucket)) {
+					return tab
+				}
+				const nextHistory = tab.history.map((entry) =>
+					entry.bucket === invalidBucket ? { bucket: '', prefix: '' } : entry,
+				)
+				const nextCurrent = tab.bucket === invalidBucket ? { bucket: '', prefix: '' } : { bucket: tab.bucket, prefix: tab.prefix }
+				return {
+					...tab,
+					bucket: nextCurrent.bucket,
+					prefix: nextCurrent.prefix,
+					history: nextHistory,
+					historyIndex: Math.min(tab.historyIndex, Math.max(0, nextHistory.length - 1)),
+				}
+			}),
+		)
+		setRecentBuckets((prev) => prev.filter((entry) => entry !== invalidBucket))
+		setRecentPrefixesByBucket((prev) => {
+			if (!(invalidBucket in prev)) return prev
+			const next = { ...prev }
+			delete next[invalidBucket]
+			return next
+		})
+		setBookmarksByBucket((prev) => {
+			if (!(invalidBucket in prev)) return prev
+			const next = { ...prev }
+			delete next[invalidBucket]
+			return next
+		})
+		setPrefixByBucket((prev) => {
+			if (!(invalidBucket in prev)) return prev
+			const next = { ...prev }
+			delete next[invalidBucket]
+			return next
+		})
+		if (bucket === invalidBucket) {
+			setBucket('')
+			setPrefix('')
+			setPathDraft('')
+			setPathModalOpen(false)
+		}
+	}, [bucket, setBookmarksByBucket, setBucket, setPathDraft, setPathModalOpen, setPrefix, setPrefixByBucket, setRecentBuckets, setRecentPrefixesByBucket, setTabs])
+
 	return {
 		bucket,
 		prefix,
@@ -282,5 +331,6 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 		onUp,
 		onOpenPrefix,
 		commitPathDraft,
+		clearInvalidLocation,
 	}
 }

@@ -1,3 +1,6 @@
+import { useEffect, useMemo } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+
 import { buildObjectsPageDataState } from './buildObjectsPageDataState'
 import { useObjectsIndexing } from './useObjectsIndexing'
 import { useObjectsLocationState } from './useObjectsLocationState'
@@ -20,8 +23,13 @@ type Props = {
 }
 
 export function useObjectsPageData(props: Props) {
+	const routeLocation = useLocation()
+	const navigate = useNavigate()
 	const environment = useObjectsPageEnvironment(props)
 	const locationState = useObjectsLocationState({ profileId: props.profileId })
+	const currentBucket = locationState.bucket
+	const navigateToLocation = locationState.navigateToLocation
+	const clearInvalidLocation = locationState.clearInvalidLocation
 
 	const treeState = useObjectsTree({
 		api: environment.api,
@@ -51,6 +59,33 @@ export function useObjectsPageData(props: Props) {
 		favoritesPaneExpanded: viewState.favoritesPaneExpanded,
 		favoritesOnly: viewState.favoritesOnly,
 	})
+
+	const availableBucketNames = useMemo(
+		() => new Set((queriesState.bucketsQuery.data ?? []).map((entry) => entry.name.trim()).filter(Boolean)),
+		[queriesState.bucketsQuery.data],
+	)
+
+	useEffect(() => {
+		if (!routeLocation.state || typeof routeLocation.state !== 'object') return
+		const state = routeLocation.state as { openBucket?: unknown; bucket?: unknown; prefix?: unknown }
+		if (state.openBucket !== true) return
+		const nextBucket = typeof state.bucket === 'string' ? state.bucket.trim() : ''
+		if (!nextBucket) return
+		const nextPrefix = typeof state.prefix === 'string' ? state.prefix : ''
+		locationState.navigateToLocation(nextBucket, nextPrefix, { recordHistory: true })
+		navigate(`${routeLocation.pathname}${routeLocation.search}${routeLocation.hash}`, {
+			replace: true,
+			state: null,
+		})
+	}, [navigate, navigateToLocation, routeLocation])
+
+	useEffect(() => {
+		if (!props.profileId || !queriesState.bucketsQuery.isSuccess) return
+		const activeBucket = currentBucket.trim()
+		if (!activeBucket) return
+		if (availableBucketNames.has(activeBucket)) return
+		clearInvalidLocation(activeBucket)
+	}, [availableBucketNames, clearInvalidLocation, currentBucket, props.profileId, queriesState.bucketsQuery.isSuccess])
 
 	const selectionState = useObjectsSelection()
 

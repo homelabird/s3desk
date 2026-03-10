@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Button, Checkbox, Typography } from 'antd'
-import { EllipsisOutlined, FileOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
+import { EllipsisOutlined, ExpandOutlined, FileOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 
 import type { ObjectItem } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
@@ -89,6 +89,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 				buildActionMenu(useSelectionMenu ? selectionContextMenuActions : getObjectActions(key, object.size), isAdvanced),
 			)
 			const canShowThumbnail = showThumbnails && profileId && bucket && isThumbnailKey(key)
+			const canOpenPreview = canShowThumbnail
 			const isSelected = selectedKeys.has(key)
 			const isFavorite = favoriteKeys.has(key)
 			const favoriteDisabled = favoritePendingKeys.has(key) || isOffline || !profileId || !bucket
@@ -176,16 +177,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 
 						<div className={styles.gridCardMedia}>
 							{canShowThumbnail ? (
-								<button
-									type="button"
-									className={styles.gridCardPreviewButton}
-									onClick={(event) => {
-										event.preventDefault()
-										event.stopPropagation()
-										onOpenLargePreviewForKey(key)
-									}}
-									aria-label={`Open large preview for ${key}`}
-								>
+								<div className={styles.gridCardPreviewFrame}>
 									<ObjectThumbnail
 										api={api}
 										profileId={profileId}
@@ -198,7 +190,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 										etag={object.etag || undefined}
 										lastModified={object.lastModified || undefined}
 									/>
-								</button>
+								</div>
 							) : (
 								<div className={styles.gridCardMediaPlaceholder}>
 									<FileOutlined className={styles.gridCardFileIcon} />
@@ -217,6 +209,23 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 							<Typography.Text type="secondary" className={styles.gridCardMetaLine}>
 								{timeLabel}
 							</Typography.Text>
+							{canOpenPreview ? (
+								<div className={styles.gridCardBodyActions}>
+									<Button
+										size="small"
+										type="text"
+										icon={<ExpandOutlined />}
+										onClick={(event) => {
+											event.preventDefault()
+											event.stopPropagation()
+											onOpenLargePreviewForKey(key)
+										}}
+										aria-label={`Open large preview for ${key}`}
+									>
+										Preview
+									</Button>
+								</div>
+							) : null}
 						</div>
 					</div>
 				</div>

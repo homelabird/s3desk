@@ -1,6 +1,6 @@
 export type ObjectPreview = {
 	key: string
-	status: 'loading' | 'ready' | 'error' | 'unsupported'
+	status: 'loading' | 'ready' | 'error' | 'unsupported' | 'blocked'
 	kind: 'image' | 'video' | 'text' | 'json' | 'unsupported'
 	contentType: string | null
 	url?: string

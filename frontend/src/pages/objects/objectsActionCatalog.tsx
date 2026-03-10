@@ -5,6 +5,7 @@ import { isImageKey } from './objectsListUtils'
 
 export type ClipboardObjects = {
 	mode: 'copy' | 'move'
+	srcProfileId: string | null
 	srcBucket: string
 	srcPrefix: string
 	keys: string[]

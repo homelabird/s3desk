@@ -207,10 +207,12 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 							<div className={styles.detailsFeedback}>
 								<Spin />
 							</div>
+						) : props.preview?.status === 'blocked' ? (
+							<Alert type="info" showIcon title="Preview unavailable" description={props.preview.error ?? 'Preview is not currently available.'} />
 						) : props.preview?.status === 'error' ? (
 							<Alert type="error" showIcon title="Preview failed" description={props.preview.error ?? 'unknown error'} />
 						) : props.preview?.status === 'unsupported' ? (
-							<Empty description="Preview not available for this type" />
+							<Empty description={props.preview.error ?? 'Preview not available for this type'} />
 						) : props.preview?.status === 'ready' && props.preview.kind === 'image' && props.preview.url ? (
 							<button type="button" className={styles.previewTriggerButton} onClick={props.onOpenLargePreview} aria-label={`Open large preview for ${props.detailsKey}`}>
 								<div className={styles.previewFrame}>

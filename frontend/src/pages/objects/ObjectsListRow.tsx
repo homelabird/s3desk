@@ -51,6 +51,7 @@ type ObjectsObjectRowProps = BaseRowProps & {
 	onDragEnd: () => void
 	onToggleFavorite: () => void
 	thumbnail?: ReactNode
+	previewAction?: ReactNode
 }
 
 function rowStyle(offset: number, minHeight?: number) {
@@ -226,6 +227,8 @@ export function ObjectsObjectRow(props: ObjectsObjectRowProps) {
 						<Typography.Text type="secondary">{props.timeLabel}</Typography.Text>
 					</div>
 				)}
+
+				{props.previewAction ? <div className={styles.listRowAuxActions}>{props.previewAction}</div> : null}
 
 				<div className={styles.listRowMenuCell}>
 					{renderRowMenu(props.menu, props.buttonMenuOpen, props.onButtonMenuOpenChange, 'Object actions')}

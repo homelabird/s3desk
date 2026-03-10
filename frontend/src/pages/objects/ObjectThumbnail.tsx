@@ -6,6 +6,7 @@ import {
 	buildThumbnailCacheKey,
 	type ThumbnailCache,
 } from '../../lib/thumbnailCache'
+import styles from './objects.module.css'
 import { buildObjectThumbnailRequest, getThumbnailFailureTtlMs, shouldCacheThumbnailFailure } from './objectPreviewPolicy'
 import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
 
@@ -42,6 +43,7 @@ export function ObjectThumbnail(props: Props) {
 	const [, bumpCacheVersion] = useState(0)
 	const url = props.cache.findBestMatch(thumbnailRequest)?.url ?? null
 	const failed = !url && props.cache.isFailed(cacheKey)
+	const fileName = props.objectKey.split('/').pop() ?? props.objectKey
 
 	useEffect(() => {
 		if (url || failed) return
@@ -109,9 +111,21 @@ export function ObjectThumbnail(props: Props) {
 	}
 
 	if (!url) {
-		return <span style={style} aria-hidden />
+		const statusLabel = failed ? 'Preview unavailable' : 'Loading preview'
+		const detailLabel = failed ? 'Open large preview or retry later.' : 'Fetching thumbnail…'
+		return (
+			<span
+				className={`${styles.objectThumbnailPlaceholder} ${failed ? styles.objectThumbnailPlaceholderFailed : styles.objectThumbnailPlaceholderLoading}`}
+				style={style}
+				role="img"
+				aria-label={`${statusLabel} for ${fileName}`}
+				title={`${statusLabel}: ${fileName}`}
+			>
+				<span className={styles.objectThumbnailPlaceholderBadge}>{failed ? 'Unavailable' : 'Loading'}</span>
+				<span className={styles.objectThumbnailPlaceholderLabel}>{detailLabel}</span>
+			</span>
+		)
 	}
 
-	const fileName = props.objectKey.split('/').pop() ?? props.objectKey
 	return <img src={url} style={style} loading="lazy" alt={props.altText ?? `Thumbnail of ${fileName}`} width={props.size} height={props.size} />
 }

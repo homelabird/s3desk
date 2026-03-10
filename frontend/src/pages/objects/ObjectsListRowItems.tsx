@@ -1,5 +1,7 @@
 import { memo, useCallback, useMemo } from 'react'
 import type { DragEvent, MouseEvent, ReactNode } from 'react'
+import { Button } from 'antd'
+import { ExpandOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 
 import type { APIClient } from '../../api/client'
@@ -308,14 +310,20 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 			onToggleFavorite={handleToggleFavorite}
 			thumbnail={
 				thumbnail ? (
-					<button
-						type="button"
-						className={styles.listThumbnailButton}
+					<div className={styles.listThumbnailFrame}>{thumbnail}</div>
+				) : undefined
+			}
+			previewAction={
+				thumbnail ? (
+					<Button
+						size="small"
+						type="text"
+						icon={<ExpandOutlined />}
 						onClick={handleOpenLargePreview}
 						aria-label={`Open large preview for ${object.key}`}
 					>
-						{thumbnail}
-					</button>
+						Preview
+					</Button>
 				) : undefined
 			}
 		/>

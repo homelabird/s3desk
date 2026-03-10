@@ -252,6 +252,13 @@ function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
 				<Typography.Text type="secondary">Use Download or URL to view the original file.</Typography.Text>
 			</div>
 		)
+	} else if (preview?.status === 'blocked') {
+		bodyContent = (
+			<div className={styles.imageViewerStateStack}>
+				<Alert type="info" showIcon message="Preview unavailable" description={preview.error ?? 'Preview is not currently available.'} />
+				{thumbnail ? <div className={styles.imageViewerFallbackInner}>{thumbnail}</div> : null}
+			</div>
+		)
 	} else if (preview?.status === 'error') {
 		bodyContent = (
 			<div className={styles.imageViewerStateStack}>
@@ -274,7 +281,7 @@ function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
 					onPointerCancel={handlePointerEnd}
 				>
 					{thumbnail && !visualPreviewReady ? <div className={styles.imageViewerThumbnailLayer}>{thumbnail}</div> : null}
-					{preview?.status === 'loading' || (open && !visualPreviewReady) ? (
+					{preview?.status === 'loading' || (open && !preview && !visualPreviewReady) ? (
 						<div className={styles.imageViewerLoadingOverlay}>
 							<Spin size="large" />
 							<Typography.Text type="secondary">

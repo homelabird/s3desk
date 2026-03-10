@@ -129,7 +129,7 @@ export function useObjectsClipboard({
 			const keys = Array.from(selectedKeys)
 			if (keys.length === 0) return
 
-			setClipboardObjects({ mode, srcBucket: bucket, srcPrefix: normalizePrefix(prefix), keys })
+			setClipboardObjects({ mode, srcProfileId: profileId, srcBucket: bucket, srcPrefix: normalizePrefix(prefix), keys })
 
 			const res = await copyToClipboard(keys.join('\n'))
 			if (res.ok) {
@@ -138,7 +138,7 @@ export function useObjectsClipboard({
 			}
 			message.warning(`Saved internally, but clipboard failed: ${clipboardFailureHint()}`)
 		},
-		[bucket, prefix, selectedKeys],
+		[bucket, prefix, profileId, selectedKeys],
 	)
 
 	const commonPrefixFromKeys = useCallback((keys: string[]): string => {
@@ -213,7 +213,7 @@ export function useObjectsClipboard({
 
 		const srcBucket = buckets[0]
 		const keys = parsed.map((p) => p.key)
-		return { mode: 'copy', srcBucket, srcPrefix: commonPrefixFromKeys(keys), keys }
+		return { mode: 'copy', srcProfileId: null, srcBucket, srcPrefix: commonPrefixFromKeys(keys), keys }
 	}, [bucket, commonPrefixFromKeys])
 
 	const pasteClipboardObjects = useCallback(async () => {
@@ -223,6 +223,12 @@ export function useObjectsClipboard({
 		}
 		if (!bucket) {
 			message.info('Select a bucket first')
+			return
+		}
+
+		if (clipboardObjects?.srcProfileId && clipboardObjects.srcProfileId !== profileId) {
+			setClipboardObjects(null)
+			message.warning('Clipboard objects came from a different profile. Copy them again after switching profiles.')
 			return
 		}
 

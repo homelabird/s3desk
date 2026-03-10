@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
   Button,
+  Checkbox,
   Empty,
   Grid,
   Space,
@@ -25,6 +26,7 @@ import { PageHeader } from "../components/PageHeader";
 import { SetupCallout } from "../components/SetupCallout";
 import { mountImperativeDialog } from "../components/imperativeDialog";
 import { confirmDangerAction } from "../lib/confirmDangerAction";
+import { buildDialogPreferenceKey, isDialogDismissed, setDialogDismissed } from "../lib/dialogPreferences";
 import { formatErrorWithHint as formatErr } from "../lib/errors";
 import { formatDateTime } from "../lib/format";
 import {
@@ -52,26 +54,37 @@ const BucketGovernanceModal = lazy(async () => {
   return { default: m.BucketGovernanceModal };
 });
 
-function showBucketNotEmptyDialog(args: {
+const BUCKET_NOT_EMPTY_DIALOG_KEY = buildDialogPreferenceKey("warning", "bucket_not_empty");
+
+function BucketNotEmptyDialog(props: {
   bucketName: string;
   onOpenObjects: () => void;
   onCreateDeleteJob: () => void;
+  onClose: () => void;
 }) {
-  mountImperativeDialog((close) => (
+  const [dismissNextTime, setDismissNextTime] = useState(false);
+  const closeAndRemember = () => {
+    if (dismissNextTime) {
+      setDialogDismissed(BUCKET_NOT_EMPTY_DIALOG_KEY, true);
+    }
+    props.onClose();
+  };
+
+  return (
     <DialogModal
       open
-      onClose={close}
-      title={`Bucket "${args.bucketName}" isn’t empty`}
+      onClose={closeAndRemember}
+      title={`Bucket "${props.bucketName}" isn’t empty`}
       width={560}
       footer={
         <>
-          <Button onClick={close}>Close</Button>
+          <Button onClick={closeAndRemember}>Close</Button>
           <Button
             type="primary"
             danger
             onClick={() => {
-              close();
-              args.onCreateDeleteJob();
+              closeAndRemember();
+              props.onCreateDeleteJob();
             }}
           >
             Delete all objects (job)
@@ -87,14 +100,37 @@ function showBucketNotEmptyDialog(args: {
         <Button
           type="link"
           onClick={() => {
-            close();
-            args.onOpenObjects();
+            closeAndRemember();
+            props.onOpenObjects();
           }}
         >
           Open Objects
         </Button>
+        <Checkbox checked={dismissNextTime} onChange={(event) => setDismissNextTime(event.target.checked)}>
+          Do not show this warning modal again. You can re-enable it from Settings.
+        </Checkbox>
       </Space>
     </DialogModal>
+  );
+}
+
+function showBucketNotEmptyDialog(args: {
+  bucketName: string;
+  onOpenObjects: () => void;
+  onCreateDeleteJob: () => void;
+}) {
+  if (isDialogDismissed(BUCKET_NOT_EMPTY_DIALOG_KEY)) {
+    message.warning(`Bucket "${args.bucketName}" isn’t empty. Open Objects or create a delete job from the Buckets page.`)
+    return;
+  }
+
+  mountImperativeDialog((close) => (
+    <BucketNotEmptyDialog
+      bucketName={args.bucketName}
+      onOpenObjects={args.onOpenObjects}
+      onCreateDeleteJob={args.onCreateDeleteJob}
+      onClose={close}
+    />
   ));
 }
 
@@ -224,12 +260,15 @@ export function BucketsPage(props: Props) {
         showBucketNotEmptyDialog({
           bucketName,
           onOpenObjects: () => {
-            window.localStorage.setItem("bucket", JSON.stringify(bucketName));
-            window.localStorage.setItem("prefix", JSON.stringify(""));
-            navigate("/objects");
+            navigate("/objects", {
+              state: {
+                openBucket: true,
+                bucket: bucketName,
+                prefix: "",
+              },
+            });
           },
           onCreateDeleteJob: () => {
-            window.localStorage.setItem("bucket", JSON.stringify(bucketName));
             navigate("/jobs", {
               state: {
                 openDeleteJob: true,
