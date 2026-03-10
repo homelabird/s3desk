@@ -9,13 +9,19 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"s3desk/internal/config"
+	"s3desk/internal/db"
+	"s3desk/internal/jobs"
 	"s3desk/internal/models"
+	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 func TestHandleGetServerBackup_IncludesSQLiteAndDataDirEntries(t *testing.T) {
@@ -89,8 +95,8 @@ func TestHandleGetServerBackup_IncludesSQLiteAndDataDirEntries(t *testing.T) {
 	if err := json.Unmarshal(entries["manifest.json"], &manifest); err != nil {
 		t.Fatalf("decode manifest: %v", err)
 	}
-	if manifest.Format != serverMigrationBundleFormat {
-		t.Fatalf("manifest.format=%q, want %q", manifest.Format, serverMigrationBundleFormat)
+	if manifest.Format != serverBackupBundleFormat {
+		t.Fatalf("manifest.format=%q, want %q", manifest.Format, serverBackupBundleFormat)
 	}
 	if manifest.DBBackend != "sqlite" {
 		t.Fatalf("manifest.dbBackend=%q, want sqlite", manifest.DBBackend)
@@ -112,7 +118,7 @@ func TestHandleRestoreServerBackup_StagesBundleWithoutOverwritingLiveData(t *tes
 	}
 
 	manifest := models.ServerMigrationManifest{
-		Format:            serverMigrationBundleFormat,
+		Format:            serverBackupBundleFormat,
 		CreatedAt:         "2026-03-08T00:00:00Z",
 		AppVersion:        "test",
 		DBBackend:         "sqlite",
@@ -168,8 +174,8 @@ func TestHandleRestoreServerBackup_StagesBundleWithoutOverwritingLiveData(t *tes
 	if !resp.RestartRequired {
 		t.Fatalf("restartRequired=false, want true")
 	}
-	if resp.Manifest.Format != serverMigrationBundleFormat {
-		t.Fatalf("manifest.format=%q, want %q", resp.Manifest.Format, serverMigrationBundleFormat)
+	if resp.Manifest.Format != serverBackupBundleFormat {
+		t.Fatalf("manifest.format=%q, want %q", resp.Manifest.Format, serverBackupBundleFormat)
 	}
 
 	if got, err := os.ReadFile(filepath.Join(resp.StagingDir, "thumbnails", "profile-a", "thumb.jpg")); err != nil || string(got) != "jpeg" {
@@ -192,6 +198,82 @@ func TestHandleRestoreServerBackup_StagesBundleWithoutOverwritingLiveData(t *tes
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "thumbnails", "profile-a", "thumb.jpg")); !errorsIsNotExist(err) {
 		t.Fatalf("live data dir should not be overwritten, stat err=%v", err)
+	}
+}
+
+func TestHandleRestoreServerBackup_RejectsOversizedBundle(t *testing.T) {
+	t.Parallel()
+
+	dataDir := t.TempDir()
+	gormDB, err := db.Open(db.Config{
+		Backend:    db.BackendSQLite,
+		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
+	})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("sql db: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	st, err := store.New(gormDB, store.Options{EncryptionKey: testEncryptionKey()})
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	hub := ws.NewHub()
+	manager := jobs.NewManager(jobs.Config{
+		Store:            st,
+		DataDir:          dataDir,
+		Hub:              hub,
+		Concurrency:      1,
+		UploadSessionTTL: time.Minute,
+	})
+	handler := New(Dependencies{
+		Config: config.Config{
+			Addr:                  "127.0.0.1:0",
+			DataDir:               dataDir,
+			DBBackend:             string(db.BackendSQLite),
+			StaticDir:             dataDir,
+			EncryptionKey:         testEncryptionKey(),
+			ServerRestoreMaxBytes: 128,
+			UploadSessionTTL:      time.Minute,
+		},
+		Store:      st,
+		Jobs:       manager,
+		Hub:        hub,
+		ServerAddr: "127.0.0.1:0",
+	})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("bundle", "oversized.tar.gz")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write(bytes.Repeat([]byte("x"), 1024)); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/server/restore", body)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("restore request: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusRequestEntityTooLarge {
+		respBody, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 413, got %d: %s", res.StatusCode, string(respBody))
 	}
 }
 

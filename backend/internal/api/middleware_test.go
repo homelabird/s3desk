@@ -323,3 +323,16 @@ func TestRequireLocalHost_RejectsPrivateOriginByDefault(t *testing.T) {
 		t.Fatalf("status=%d, want %d", rr.Code, http.StatusForbidden)
 	}
 }
+
+func TestAuthLimiterClientKey_IgnoresForwardingHeaders(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/api/v1/meta", nil)
+	req.RemoteAddr = "127.0.0.1:4321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	req.Header.Set("X-Real-IP", "198.51.100.10")
+
+	if got := authLimiterClientKey(req); got != "127.0.0.1" {
+		t.Fatalf("authLimiterClientKey=%q, want %q", got, "127.0.0.1")
+	}
+}

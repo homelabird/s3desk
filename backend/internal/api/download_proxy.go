@@ -111,6 +111,14 @@ func (s *server) buildDownloadProxyURL(r *http.Request, token downloadProxyToken
 	}
 	values.Set("sig", sig)
 
+	if base := s.externalBaseURL(); base != nil {
+		resolved := *base
+		resolved.Path = strings.TrimRight(resolved.Path, "/") + "/download-proxy"
+		resolved.RawQuery = values.Encode()
+		resolved.Fragment = ""
+		return resolved.String()
+	}
+
 	scheme := requestScheme(r)
 	return (&url.URL{
 		Scheme:   scheme,
@@ -118,6 +126,23 @@ func (s *server) buildDownloadProxyURL(r *http.Request, token downloadProxyToken
 		Path:     "/download-proxy",
 		RawQuery: values.Encode(),
 	}).String()
+}
+
+func (s *server) externalBaseURL() *url.URL {
+	raw := strings.TrimSpace(s.cfg.ExternalBaseURL)
+	if raw == "" {
+		return nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" {
+		return nil
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+	default:
+		return nil
+	}
+	return parsed
 }
 
 func requestScheme(r *http.Request) string {

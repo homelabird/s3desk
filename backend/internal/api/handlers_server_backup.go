@@ -143,8 +143,18 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.ServerRestoreMaxBytes > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.ServerRestoreMaxBytes)
+	}
 	file, cleanup, err := openServerRestoreBundle(r)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "bundle_too_large", "backup bundle exceeds restore upload limit", map[string]any{
+				"maxBytes": s.cfg.ServerRestoreMaxBytes,
+			})
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}

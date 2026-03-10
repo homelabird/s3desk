@@ -209,10 +209,10 @@ func validateCloudFolderProfileSecrets(spec cloudFolderRcloneSpec, secrets model
 		if secrets.Provider != models.ProfileProviderAzureBlob {
 			return errors.New("unexpected provider")
 		}
-		if secrets.AccountName != spec.accountName {
+		if secrets.AzureAccountName != spec.accountName {
 			return errors.New("unexpected account name")
 		}
-		if secrets.AccountKey != spec.accountKey {
+		if secrets.AzureAccountKey != spec.accountKey {
 			return errors.New("unexpected account key")
 		}
 		if secrets.Endpoint != spec.endpoint {
@@ -222,10 +222,10 @@ func validateCloudFolderProfileSecrets(spec cloudFolderRcloneSpec, secrets model
 		if secrets.Provider != models.ProfileProviderGcpGcs {
 			return errors.New("unexpected provider")
 		}
-		if secrets.ServiceAccountJSON != spec.serviceAccountJSON {
+		if secrets.GcpServiceAccountJSON != spec.serviceAccountJSON {
 			return errors.New("unexpected service account json")
 		}
-		if secrets.ProjectNumber != spec.projectNumber {
+		if secrets.GcpProjectNumber != spec.projectNumber {
 			return errors.New("unexpected project number")
 		}
 		if secrets.Endpoint != spec.endpoint {

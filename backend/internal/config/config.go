@@ -4,6 +4,7 @@ import "time"
 
 type Config struct {
 	Addr                               string
+	ExternalBaseURL                    string
 	DataDir                            string
 	DBBackend                          string
 	DatabaseURL                        string
@@ -28,6 +29,7 @@ type Config struct {
 	JobLogRetention                    time.Duration
 	UploadSessionTTL                   time.Duration
 	UploadMaxBytes                     int64
+	ServerRestoreMaxBytes              int64
 	UploadDirectStream                 bool
 	UploadMaxConcurrentRequests        int
 	RcloneDownloadMultiThreadStreams   int

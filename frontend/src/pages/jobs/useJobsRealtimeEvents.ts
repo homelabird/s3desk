@@ -15,6 +15,9 @@ type UseJobsRealtimeEventsArgs = {
 }
 
 type EventsTransport = 'ws' | 'sse' | null
+type RealtimeTicketResponse = {
+	ticket?: string
+}
 
 export type JobsRealtimeEventsState = {
 	eventsConnected: boolean
@@ -52,6 +55,7 @@ export function useJobsRealtimeEvents({
 		let reconnectTimer: number | null = null
 		let wsProbeTimer: number | null = null
 		let reconnectAttempt = 0
+		let connectNonce = 0
 
 		const refreshJobs = () => {
 			queryClient.invalidateQueries({ queryKey: ['jobs'], exact: false }).catch(() => {})
@@ -167,8 +171,28 @@ export function useJobsRealtimeEvents({
 			}
 		}
 
-		const connectSSE = () => {
+		const fetchRealtimeTicket = async (transport: 'ws' | 'sse') => {
+			const url = buildApiHttpUrl('/realtime-ticket')
+			url.searchParams.set('transport', transport)
+			const response = await fetch(url.toString(), {
+				method: 'POST',
+				headers: {
+					'X-Api-Token': apiToken,
+				},
+			})
+			if (!response.ok) {
+				throw new Error(`ticket request failed: ${response.status}`)
+			}
+			const payload = (await response.json()) as RealtimeTicketResponse
+			if (!payload.ticket) {
+				throw new Error('ticket missing')
+			}
+			return payload.ticket
+		}
+
+		const connectSSE = async () => {
 			if (stopped) return
+			const nonce = ++connectNonce
 			if (es) {
 				try {
 					es.close()
@@ -177,7 +201,9 @@ export function useJobsRealtimeEvents({
 				}
 			}
 			try {
-				es = new EventSource(buildSSEURL(apiToken, lastSeqRef.current))
+				const ticket = await fetchRealtimeTicket('sse')
+				if (stopped || nonce !== connectNonce) return
+				es = new EventSource(buildSSEURL(ticket, lastSeqRef.current))
 			} catch {
 				scheduleReconnect()
 				return
@@ -195,8 +221,9 @@ export function useJobsRealtimeEvents({
 			es.onmessage = (ev) => handleEvent(ev.data)
 		}
 
-		const connectWS = () => {
+		const connectWS = async () => {
 			if (stopped) return
+			const nonce = ++connectNonce
 			clearReconnectTimer()
 			clearWsProbeTimer()
 			if (ws) {
@@ -207,7 +234,15 @@ export function useJobsRealtimeEvents({
 				}
 				ws = null
 			}
-			ws = new WebSocket(buildWSURL(apiToken, lastSeqRef.current))
+			let ticket = ''
+			try {
+				ticket = await fetchRealtimeTicket('ws')
+			} catch {
+				connectSSE()
+				return
+			}
+			if (stopped || nonce !== connectNonce) return
+			ws = new WebSocket(buildWSURL(ticket, lastSeqRef.current))
 
 			let opened = false
 			const fallbackTimer = window.setTimeout(() => {
@@ -275,17 +310,17 @@ export function useJobsRealtimeEvents({
 	}
 }
 
-function buildWSURL(apiToken: string, afterSeq?: number): string {
+function buildWSURL(realtimeTicket: string, afterSeq?: number): string {
 	const url = buildApiWsUrl('/ws')
-	if (apiToken) url.searchParams.set('apiToken', apiToken)
+	if (realtimeTicket) url.searchParams.set('realtimeTicket', realtimeTicket)
 	url.searchParams.set('includeLogs', 'false')
 	if (afterSeq && afterSeq > 0) url.searchParams.set('afterSeq', String(afterSeq))
 	return url.toString()
 }
 
-function buildSSEURL(apiToken: string, afterSeq?: number): string {
+function buildSSEURL(realtimeTicket: string, afterSeq?: number): string {
 	const url = buildApiHttpUrl('/events')
-	if (apiToken) url.searchParams.set('apiToken', apiToken)
+	if (realtimeTicket) url.searchParams.set('realtimeTicket', realtimeTicket)
 	url.searchParams.set('includeLogs', 'false')
 	if (afterSeq && afterSeq > 0) url.searchParams.set('afterSeq', String(afterSeq))
 	return url.toString()

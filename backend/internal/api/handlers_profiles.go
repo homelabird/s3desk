@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"gopkg.in/yaml.v3"
@@ -67,6 +68,31 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "name is required", nil)
 		return
 	}
+	if err := validateProfileTextInputs(
+		fieldTextInput{"name", &req.Name},
+		fieldTextInput{"endpoint", req.Endpoint},
+		fieldTextInput{"publicEndpoint", req.PublicEndpoint},
+		fieldTextInput{"region", req.Region},
+		fieldTextInput{"accessKeyId", req.AccessKeyID},
+		fieldTextInput{"secretAccessKey", req.SecretAccessKey},
+		fieldTextInput{"sessionToken", req.SessionToken},
+		fieldTextInput{"accountName", req.AccountName},
+		fieldTextInput{"accountKey", req.AccountKey},
+		fieldTextInput{"subscriptionId", req.SubscriptionID},
+		fieldTextInput{"resourceGroup", req.ResourceGroup},
+		fieldTextInput{"tenantId", req.TenantID},
+		fieldTextInput{"clientId", req.ClientID},
+		fieldTextInput{"clientSecret", req.ClientSecret},
+		fieldTextInput{"projectNumber", req.ProjectNumber},
+		fieldTextInput{"namespace", req.Namespace},
+		fieldTextInput{"compartment", req.Compartment},
+		fieldTextInput{"authProvider", req.AuthProvider},
+		fieldTextInput{"configFile", req.ConfigFile},
+		fieldTextInput{"configProfile", req.ConfigProfile},
+	); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+		return
+	}
 
 	if err := validateCreateProfileProvider(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
@@ -93,6 +119,34 @@ func trimPtrNilIfEmpty(p **string) {
 		return
 	}
 	*p = &v
+}
+
+type fieldTextInput struct {
+	name  string
+	value *string
+}
+
+func validateProfileTextInputs(fields ...fieldTextInput) error {
+	for _, field := range fields {
+		if field.value == nil {
+			continue
+		}
+		if containsUnsafeSingleLineText(*field.value) {
+			return fmt.Errorf("%s contains unsupported control characters", field.name)
+		}
+	}
+	return nil
+}
+
+func containsUnsafeSingleLineText(value string) bool {
+	for len(value) > 0 {
+		r, size := utf8.DecodeRuneInString(value)
+		if r == '\n' || r == '\r' || r == 0 {
+			return true
+		}
+		value = value[size:]
+	}
+	return false
 }
 
 // hasUnexpectedFields returns true when any of the given string/bool pointer
@@ -242,6 +296,31 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SecretAccessKey != nil && *req.SecretAccessKey == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "secretAccessKey must not be empty", nil)
+		return
+	}
+	if err := validateProfileTextInputs(
+		fieldTextInput{"name", req.Name},
+		fieldTextInput{"endpoint", req.Endpoint},
+		fieldTextInput{"publicEndpoint", req.PublicEndpoint},
+		fieldTextInput{"region", req.Region},
+		fieldTextInput{"accessKeyId", req.AccessKeyID},
+		fieldTextInput{"secretAccessKey", req.SecretAccessKey},
+		fieldTextInput{"sessionToken", req.SessionToken},
+		fieldTextInput{"accountName", req.AccountName},
+		fieldTextInput{"accountKey", req.AccountKey},
+		fieldTextInput{"subscriptionId", req.SubscriptionID},
+		fieldTextInput{"resourceGroup", req.ResourceGroup},
+		fieldTextInput{"tenantId", req.TenantID},
+		fieldTextInput{"clientId", req.ClientID},
+		fieldTextInput{"clientSecret", req.ClientSecret},
+		fieldTextInput{"projectNumber", req.ProjectNumber},
+		fieldTextInput{"namespace", req.Namespace},
+		fieldTextInput{"compartment", req.Compartment},
+		fieldTextInput{"authProvider", req.AuthProvider},
+		fieldTextInput{"configFile", req.ConfigFile},
+		fieldTextInput{"configProfile", req.ConfigProfile},
+	); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
 

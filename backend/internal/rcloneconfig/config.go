@@ -29,6 +29,9 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 	if name == "" {
 		name = RemoteName
 	}
+	if err := validateRcloneConfigValue("remote name", name); err != nil {
+		return "", err
+	}
 
 	var b strings.Builder
 	if _, err := fmt.Fprintf(&b, "[%s]\n", name); err != nil {
@@ -50,56 +53,56 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 			}
 		}
 
-		endpoint := strings.TrimSpace(profile.Endpoint)
-		if endpoint != "" {
-			if _, err := fmt.Fprintf(&b, "endpoint = %s\n", endpoint); err != nil {
-				return "", err
-			}
-		}
-		region := strings.TrimSpace(profile.Region)
-		if region != "" {
-			if _, err := fmt.Fprintf(&b, "region = %s\n", region); err != nil {
-				return "", err
-			}
-		}
-
-		if _, err := fmt.Fprintf(&b, "access_key_id = %s\n", profile.AccessKeyID); err != nil {
-			return "", err
-		}
-		if _, err := fmt.Fprintf(&b, "secret_access_key = %s\n", profile.SecretAccessKey); err != nil {
-			return "", err
-		}
-		if profile.SessionToken != nil {
-			token := strings.TrimSpace(*profile.SessionToken)
-			if token != "" {
-				if _, err := fmt.Fprintf(&b, "session_token = %s\n", token); err != nil {
+			endpoint := strings.TrimSpace(profile.Endpoint)
+			if endpoint != "" {
+				if err := writeConfigLine(&b, "endpoint", endpoint); err != nil {
 					return "", err
 				}
 			}
+			region := strings.TrimSpace(profile.Region)
+			if region != "" {
+				if err := writeConfigLine(&b, "region", region); err != nil {
+					return "", err
+				}
+			}
+
+			if err := writeConfigLine(&b, "access_key_id", profile.AccessKeyID); err != nil {
+				return "", err
+			}
+			if err := writeConfigLine(&b, "secret_access_key", profile.SecretAccessKey); err != nil {
+				return "", err
+			}
+			if profile.SessionToken != nil {
+				token := strings.TrimSpace(*profile.SessionToken)
+				if token != "" {
+					if err := writeConfigLine(&b, "session_token", token); err != nil {
+						return "", err
+					}
+				}
 		}
 		if _, err := fmt.Fprintf(&b, "force_path_style = %t\n", profile.ForcePathStyle); err != nil {
 			return "", err
 		}
 
 	case models.ProfileProviderAzureBlob:
-		if _, err := fmt.Fprintln(&b, "type = azureblob"); err != nil {
-			return "", err
-		}
+			if _, err := fmt.Fprintln(&b, "type = azureblob"); err != nil {
+				return "", err
+			}
 		if _, err := fmt.Fprintln(&b, "directory_markers = true"); err != nil {
 			return "", err
 		}
-		if _, err := fmt.Fprintf(&b, "account = %s\n", strings.TrimSpace(profile.AzureAccountName)); err != nil {
-			return "", err
-		}
-		if _, err := fmt.Fprintf(&b, "key = %s\n", profile.AzureAccountKey); err != nil {
-			return "", err
-		}
-		endpoint := strings.TrimSpace(azureutil.BlobEndpoint(profile))
-		if endpoint != "" {
-			if _, err := fmt.Fprintf(&b, "endpoint = %s\n", endpoint); err != nil {
+			if err := writeConfigLine(&b, "account", strings.TrimSpace(profile.AzureAccountName)); err != nil {
 				return "", err
 			}
-		}
+			if err := writeConfigLine(&b, "key", profile.AzureAccountKey); err != nil {
+				return "", err
+			}
+			endpoint := strings.TrimSpace(azureutil.BlobEndpoint(profile))
+			if endpoint != "" {
+				if err := writeConfigLine(&b, "endpoint", endpoint); err != nil {
+					return "", err
+				}
+			}
 
 	case models.ProfileProviderGcpGcs:
 		if _, err := fmt.Fprintln(&b, "type = google cloud storage"); err != nil {
@@ -121,20 +124,20 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 			if err := json.Compact(&compact, []byte(raw)); err != nil {
 				return "", fmt.Errorf("invalid serviceAccountJson: %w", err)
 			}
-			if _, err := fmt.Fprintf(&b, "service_account_credentials = %s\n", compact.String()); err != nil {
-				return "", err
+				if err := writeConfigLine(&b, "service_account_credentials", compact.String()); err != nil {
+					return "", err
+				}
 			}
-		}
-		if endpoint := strings.TrimSpace(profile.GcpEndpoint); endpoint != "" {
-			if _, err := fmt.Fprintf(&b, "endpoint = %s\n", endpoint); err != nil {
-				return "", err
+			if endpoint := strings.TrimSpace(profile.GcpEndpoint); endpoint != "" {
+				if err := writeConfigLine(&b, "endpoint", endpoint); err != nil {
+					return "", err
+				}
 			}
-		}
-		if pn := strings.TrimSpace(profile.GcpProjectNumber); pn != "" {
-			if _, err := fmt.Fprintf(&b, "project_number = %s\n", pn); err != nil {
-				return "", err
+			if pn := strings.TrimSpace(profile.GcpProjectNumber); pn != "" {
+				if err := writeConfigLine(&b, "project_number", pn); err != nil {
+					return "", err
+				}
 			}
-		}
 
 	case models.ProfileProviderOciObjectStorage:
 		if _, err := fmt.Fprintln(&b, "type = oracleobjectstorage"); err != nil {
@@ -144,50 +147,67 @@ func RenderConfig(profile models.ProfileSecrets, remoteName string) (string, err
 		if ns == "" {
 			return "", errors.New("namespace is required")
 		}
-		if _, err := fmt.Fprintf(&b, "namespace = %s\n", ns); err != nil {
-			return "", err
-		}
+			if err := writeConfigLine(&b, "namespace", ns); err != nil {
+				return "", err
+			}
 		comp := strings.TrimSpace(profile.OciCompartment)
 		if comp == "" {
 			return "", errors.New("compartment is required")
 		}
-		if _, err := fmt.Fprintf(&b, "compartment = %s\n", comp); err != nil {
-			return "", err
-		}
+			if err := writeConfigLine(&b, "compartment", comp); err != nil {
+				return "", err
+			}
 		region := strings.TrimSpace(profile.Region)
 		if region == "" {
 			return "", errors.New("region is required")
 		}
-		if _, err := fmt.Fprintf(&b, "region = %s\n", region); err != nil {
-			return "", err
-		}
-		if endpoint := strings.TrimSpace(profile.OciEndpoint); endpoint != "" {
-			if _, err := fmt.Fprintf(&b, "endpoint = %s\n", endpoint); err != nil {
+			if err := writeConfigLine(&b, "region", region); err != nil {
 				return "", err
 			}
-		}
-		if ap := strings.TrimSpace(profile.OciAuthProvider); ap != "" {
-			// rclone's oracleobjectstorage backend uses `provider` for auth selection.
-			if _, err := fmt.Fprintf(&b, "provider = %s\n", ap); err != nil {
-				return "", err
+			if endpoint := strings.TrimSpace(profile.OciEndpoint); endpoint != "" {
+				if err := writeConfigLine(&b, "endpoint", endpoint); err != nil {
+					return "", err
+				}
 			}
-		}
-		if cf := strings.TrimSpace(profile.OciConfigFile); cf != "" {
-			if _, err := fmt.Fprintf(&b, "config_file = %s\n", cf); err != nil {
-				return "", err
+			if ap := strings.TrimSpace(profile.OciAuthProvider); ap != "" {
+				// rclone's oracleobjectstorage backend uses `provider` for auth selection.
+				if err := writeConfigLine(&b, "provider", ap); err != nil {
+					return "", err
+				}
 			}
-		}
-		if cp := strings.TrimSpace(profile.OciConfigProfile); cp != "" {
-			if _, err := fmt.Fprintf(&b, "config_profile = %s\n", cp); err != nil {
-				return "", err
+			if cf := strings.TrimSpace(profile.OciConfigFile); cf != "" {
+				if err := writeConfigLine(&b, "config_file", cf); err != nil {
+					return "", err
+				}
 			}
-		}
+			if cp := strings.TrimSpace(profile.OciConfigProfile); cp != "" {
+				if err := writeConfigLine(&b, "config_profile", cp); err != nil {
+					return "", err
+				}
+			}
 
 	default:
 		return "", fmt.Errorf("%w: %s", ErrUnsupportedProvider, profile.Provider)
 	}
 
 	return b.String(), nil
+}
+
+func writeConfigLine(b *strings.Builder, key string, value string) error {
+	if err := validateRcloneConfigValue(key, value); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(b, "%s = %s\n", key, value)
+	return err
+}
+
+func validateRcloneConfigValue(field string, value string) error {
+	for _, r := range value {
+		if r == '\n' || r == '\r' || r == 0 {
+			return fmt.Errorf("%s contains unsupported control characters", field)
+		}
+	}
+	return nil
 }
 
 func WriteConfigFile(path string, profile models.ProfileSecrets, remoteName string) error {

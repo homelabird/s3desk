@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -36,7 +37,7 @@ func installAPIStartRcloneHook(
 			}
 			return &rcloneProcess{
 				stdout: io.NopCloser(strings.NewReader(stdout)),
-				stderr: strings.NewReader(stderr),
+				stderr: bytes.NewBufferString(stderr),
 				wait:   func() error { return nil },
 			}, nil
 		},

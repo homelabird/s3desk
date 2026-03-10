@@ -33,6 +33,7 @@ func main() {
 	var cfg config.Config
 
 	flag.StringVar(&cfg.Addr, "addr", getEnv("ADDR", "127.0.0.1:8080"), "listen address")
+	flag.StringVar(&cfg.ExternalBaseURL, "external-base-url", getEnv("EXTERNAL_BASE_URL", ""), "external base URL used for browser-facing signed links (optional, e.g. https://s3desk.example.com)")
 	flag.StringVar(&cfg.DataDir, "data-dir", getEnv("DATA_DIR", "./data"), "data directory (sqlite db, staging, logs)")
 	flag.StringVar(&cfg.DBBackend, "db-backend", getEnv("DB_BACKEND", "sqlite"), "database backend (sqlite or postgres)")
 	flag.StringVar(&cfg.DatabaseURL, "database-url", getEnv("DATABASE_URL", ""), "postgres connection string (required when db-backend=postgres)")
@@ -55,6 +56,7 @@ func main() {
 	flag.DurationVar(&cfg.JobLogRetention, "job-log-retention", getEnvDuration("JOB_LOG_RETENTION", 0), "delete job log files older than this duration (0=keep forever)")
 	flag.DurationVar(&cfg.UploadSessionTTL, "upload-ttl", getEnvDuration("UPLOAD_TTL", 24*time.Hour), "upload session TTL")
 	flag.Int64Var(&cfg.UploadMaxBytes, "upload-max-bytes", getEnvInt64("UPLOAD_MAX_BYTES", 0), "max total bytes per upload session (0=unlimited)")
+	flag.Int64Var(&cfg.ServerRestoreMaxBytes, "server-restore-max-bytes", getEnvInt64("SERVER_RESTORE_MAX_BYTES", 4*1024*1024*1024), "max accepted backup restore bundle bytes before staging (0=unlimited)")
 	flag.BoolVar(&cfg.UploadDirectStream, "upload-direct-stream", getEnvBool("UPLOAD_DIRECT_STREAM", false), "stream uploads directly to the provider (disables staging)")
 	flag.IntVar(&cfg.UploadMaxConcurrentRequests, "upload-max-concurrent-requests", getEnvInt("UPLOAD_MAX_CONCURRENT_REQUESTS", 16), "max concurrent upload requests (0=unlimited)")
 	flag.IntVar(&cfg.RcloneDownloadMultiThreadStreams, "rclone-download-multi-thread-streams", getEnvInt("RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS", 16), "rclone --multi-thread-streams for API downloads (0=use rclone default)")

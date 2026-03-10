@@ -2,7 +2,9 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,7 +18,7 @@ func (s *server) handleWSUpgrade(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
-		CheckOrigin:     func(r *http.Request) bool { return true },
+		CheckOrigin:     s.checkWebSocketOrigin,
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -97,4 +99,20 @@ func (s *server) handleWSUpgrade(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+func (s *server) checkWebSocketOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := normalizeHost(parsed.Host)
+	if host == "" {
+		return false
+	}
+	return isAllowedHost(host, s.cfg.AllowRemote, s.cfg.AllowedHosts)
 }

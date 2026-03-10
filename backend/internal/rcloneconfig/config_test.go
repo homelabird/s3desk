@@ -142,3 +142,22 @@ func TestRenderConfigUnsupportedProvider(t *testing.T) {
 		t.Fatalf("expected unsupported provider error, got %v", err)
 	}
 }
+
+func TestRenderConfigRejectsControlCharacterInjection(t *testing.T) {
+	profile := models.ProfileSecrets{
+		Provider:        models.ProfileProviderS3Compatible,
+		Endpoint:        "http://minio:9000\nprovider = AWS",
+		Region:          "us-east-1",
+		ForcePathStyle:  true,
+		AccessKeyID:     "demo",
+		SecretAccessKey: "secret",
+	}
+
+	_, err := RenderConfig(profile, RemoteName)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "unsupported control characters") {
+		t.Fatalf("expected control character error, got %v", err)
+	}
+}
