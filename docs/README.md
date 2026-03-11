@@ -12,6 +12,8 @@ This folder intentionally keeps only the small set of docs needed to run and wor
 - [TECH_DEBT.md](TECH_DEBT.md): current engineering debt, risk areas, and recommended issue order
 - [TECH_DEBT_CHECKLIST.md](TECH_DEBT_CHECKLIST.md): execution checklist derived from the debt register
 - [FRONTEND_UX_BACKLOG.md](FRONTEND_UX_BACKLOG.md): prioritized frontend UI/UX improvements and execution order
+- [PORTABLE_BACKUP_DESIGN.md](PORTABLE_BACKUP_DESIGN.md): design for database-neutral backup/import across sqlite and postgres
+- [PORTABLE_BACKUP_CHECKLIST.md](PORTABLE_BACKUP_CHECKLIST.md): execution checklist for portable backup/import work
 - [RELEASE_GATE.md](RELEASE_GATE.md): minimum release checklist, live validation gate, and release note requirements
 - [UI_OPERATION_FEEDBACK.md](UI_OPERATION_FEEDBACK.md): frontend rules for `ok=true` / `ok=false` API outcomes and API error UX
 - [RUNBOOK.md](RUNBOOK.md): operating the service in real environments
