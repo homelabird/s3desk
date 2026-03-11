@@ -141,6 +141,15 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
+                /** @description OK (blocked by preflight; no data written) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerPortableImportResponse"];
+                    };
+                };
                 /** @description Created */
                 201: {
                     headers: {
@@ -222,15 +231,19 @@ export interface paths {
          * @description Exports a `.tar.gz` server backup bundle containing the sqlite snapshot and a
          *     selected slice of `DATA_DIR` runtime state. Use `scope=full` for a full local
          *     backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
-         *     cache state such as thumbnails. Use `confidentiality=encrypted` to encrypt the
-         *     payload with the current `ENCRYPTION_KEY` while keeping the outer bundle
-         *     metadata clear. This export currently supports sqlite-backed servers only.
+         *     cache state such as thumbnails. Use `scope=portable` to export a logical
+         *     database-neutral migration bundle for portable import flows. Use
+         *     `confidentiality=encrypted` to encrypt the payload with the current
+         *     `ENCRYPTION_KEY` while keeping the outer bundle metadata clear. Snapshot-style
+         *     export currently supports sqlite-backed servers only.
          */
         get: {
             parameters: {
                 query?: {
                     /** @description Selects whether the bundle contains the full local server state or only cache and metadata. */
-                    scope?: "full" | "cache_metadata";
+                    scope?: "full" | "cache_metadata" | "portable";
+                    /** @description When `scope=portable`, includes thumbnail cache assets in the bundle. */
+                    includeThumbnails?: boolean;
                     /** @description Encrypts the bundle payload with the current ENCRYPTION_KEY while leaving the outer tar.gz manifest readable. */
                     confidentiality?: "clear" | "encrypted";
                 };
@@ -310,6 +323,112 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["ServerRestoreResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server/import-portable/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a portable backup import
+         * @description Uploads a portable `.tar.gz` bundle and performs a dry-run compatibility check
+         *     without writing database state.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        bundle: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerPortableImportResponse"];
+                    };
+                };
+                400: components["responses"]["ErrorResponse"];
+                401: components["responses"]["ErrorResponse"];
+                403: components["responses"]["ErrorResponse"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server/import-portable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a portable backup bundle
+         * @description Uploads a portable `.tar.gz` bundle and imports its logical application data into
+         *     the current database backend using replace semantics.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
+                    "X-Api-Token"?: components["parameters"]["XApiToken"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        bundle: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerPortableImportResponse"];
                     };
                 };
                 400: components["responses"]["ErrorResponse"];
@@ -4231,20 +4350,39 @@ export interface components {
         ServerMigrationManifest: {
             format: string;
             /** @enum {string} */
-            bundleKind: "full" | "cache_metadata";
+            bundleKind: "full" | "cache_metadata" | "portable";
+            formatVersion?: number;
             /** @enum {string} */
             confidentialityMode?: "clear" | "encrypted";
             /** Format: date-time */
             createdAt: string;
             appVersion: string;
             dbBackend: string;
+            schemaVersion?: number;
             encryptionEnabled: boolean;
+            encryptionKeyHint?: string;
             entries?: string[];
+            entities?: {
+                [key: string]: components["schemas"]["ServerMigrationEntityManifest"];
+            };
+            assets?: {
+                [key: string]: components["schemas"]["ServerMigrationAssetManifest"];
+            };
             payloadFileCount?: number;
             /** Format: int64 */
             payloadBytes?: number;
             payloadSha256?: string;
             warnings?: string[];
+        };
+        ServerMigrationEntityManifest: {
+            count: number;
+            sha256: string;
+        };
+        ServerMigrationAssetManifest: {
+            fileCount?: number;
+            /** Format: int64 */
+            bytes?: number;
+            sha256?: string;
         };
         ServerRestoreResponse: {
             manifest: components["schemas"]["ServerMigrationManifest"];
@@ -4279,6 +4417,34 @@ export interface components {
         };
         ServerStagedRestoreListResponse: {
             items: components["schemas"]["ServerStagedRestore"][];
+        };
+        ServerPortableImportPreflight: {
+            schemaReady: boolean;
+            encryptionReady: boolean;
+            encryptionKeyHintVerified: boolean;
+            spaceReady: boolean;
+            blockers?: string[];
+            warnings?: string[];
+        };
+        ServerPortableImportEntityResult: {
+            name: string;
+            exportedCount: number;
+            importedCount?: number;
+            checksumVerified: boolean;
+        };
+        ServerPortableImportVerification: {
+            entityChecksumsVerified: boolean;
+            postImportHealthCheckPassed: boolean;
+        };
+        ServerPortableImportResponse: {
+            manifest: components["schemas"]["ServerMigrationManifest"];
+            mode: string;
+            targetDbBackend: string;
+            preflight: components["schemas"]["ServerPortableImportPreflight"];
+            entities: components["schemas"]["ServerPortableImportEntityResult"][];
+            verification: components["schemas"]["ServerPortableImportVerification"];
+            assetStagingDir?: string;
+            warnings?: string[];
         };
         MetaCapabilities: {
             profileTls: components["schemas"]["FeatureCapability"];

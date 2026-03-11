@@ -124,49 +124,18 @@ export type ServerStagedRestore =
   components["schemas"]["ServerStagedRestore"];
 export type ServerStagedRestoreListResponse =
   components["schemas"]["ServerStagedRestoreListResponse"];
-export type ServerMigrationEntityManifest = {
-  count: number;
-  sha256: string;
-};
-export type ServerMigrationAssetManifest = {
-  fileCount?: number;
-  bytes?: number;
-  sha256?: string;
-};
-export type ServerPortableImportPreflight = {
-  schemaReady: boolean;
-  encryptionReady: boolean;
-  encryptionKeyHintVerified: boolean;
-  spaceReady: boolean;
-  blockers?: string[];
-  warnings?: string[];
-};
-export type ServerPortableImportEntityResult = {
-  name: string;
-  exportedCount: number;
-  importedCount?: number;
-  checksumVerified: boolean;
-};
-export type ServerPortableImportVerification = {
-  entityChecksumsVerified: boolean;
-  postImportHealthCheckPassed: boolean;
-};
-export type ServerPortableImportResponse = {
-  manifest: ServerMigrationManifest & {
-    formatVersion?: number;
-    schemaVersion?: number;
-    encryptionKeyHint?: string;
-    entities?: Record<string, ServerMigrationEntityManifest>;
-    assets?: Record<string, ServerMigrationAssetManifest>;
-  };
-  mode: string;
-  targetDbBackend: string;
-  preflight: ServerPortableImportPreflight;
-  entities: ServerPortableImportEntityResult[];
-  verification: ServerPortableImportVerification;
-  assetStagingDir?: string;
-  warnings?: string[];
-};
+export type ServerMigrationEntityManifest =
+  components["schemas"]["ServerMigrationEntityManifest"];
+export type ServerMigrationAssetManifest =
+  components["schemas"]["ServerMigrationAssetManifest"];
+export type ServerPortableImportPreflight =
+  components["schemas"]["ServerPortableImportPreflight"];
+export type ServerPortableImportEntityResult =
+  components["schemas"]["ServerPortableImportEntityResult"];
+export type ServerPortableImportVerification =
+  components["schemas"]["ServerPortableImportVerification"];
+export type ServerPortableImportResponse =
+  components["schemas"]["ServerPortableImportResponse"];
 
 export type LocalEntry = components["schemas"]["LocalEntry"];
 export type ListLocalEntriesResponse =
