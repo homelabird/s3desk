@@ -15,6 +15,18 @@ cd backend
 go test ./...
 ```
 
+### Backend Live Provider Smoke
+
+These env-gated smoke tests are read-only and meant for minimal-cost provider validation.
+
+```bash
+cd backend
+set -a
+source ../docs/ci/provider_live_validation.env.example
+set +a
+go test ./internal/api -run 'TestLiveValidation(AwsS3|GcpGcs|AzureBlob|OciObjectStorage|MinioS3Compatible|CephS3Compatible)$'
+```
+
 ## Frontend
 
 ```bash
@@ -55,6 +67,34 @@ docker compose -f docker-compose.e2e.yml up -d --build
 docker compose -f docker-compose.e2e.yml run --rm runner
 ```
 
+## Reverse Proxy Smoke
+
+Use this minimal pass when auth, realtime transport, `download-proxy`, `EXTERNAL_BASE_URL`, or `ALLOWED_HOSTS` changes.
+
+With the built-in Caddy example:
+
+```bash
+podman run -d --rm \
+  --name s3desk-caddy-smoke \
+  --network host \
+  --security-opt label=disable \
+  -v "$PWD/scripts/Caddyfile:/etc/caddy/Caddyfile:ro" \
+  docker.io/library/caddy:2.8.4
+
+curl -k https://localhost:8443/healthz
+curl -k -H "X-Api-Token: <token>" https://localhost:8443/api/v1/meta
+curl -k -X POST -H "X-Api-Token: <token>" "https://localhost:8443/api/v1/realtime-ticket?transport=ws"
+curl -k -H "X-Api-Token: <token>" -H "X-Profile-Id: <profile-id>" \
+  "https://localhost:8443/api/v1/buckets/<bucket>/objects/download-url?key=<key>&proxy=true"
+```
+
+Expected result:
+
+- `healthz` returns `200`
+- `/api/v1/meta` returns `200`
+- `/api/v1/realtime-ticket` returns `201`
+- proxied download URL returns `200` and is rooted at the expected external base URL
+
 ## UI E2E
 
 ```bash
@@ -63,6 +103,7 @@ E2E_LIVE=1 E2E_API_TOKEN=change-me npm run test:e2e
 ```
 
 Use `docs/ci/e2e_live.env.example` as the starting point for live Playwright environment variables.
+Use `docs/ci/provider_live_validation.env.example` as the starting point for backend live-provider smoke variables.
 
 For a local capture bundle with video, trace, screenshots, and an HTML report:
 

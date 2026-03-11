@@ -56,6 +56,7 @@
 ### Release Candidate Notes
 - `0.21v-rc1` is a release candidate, not the final `0.21v` tag.
 - Final `0.21v` should wait for real-provider live validation evidence across AWS S3, GCS, Azure Blob, and OCI Object Storage.
+- Final `0.21v` should also carry a recorded reverse-proxy smoke pass for realtime auth and browser-facing download flows.
 
 ### Known Limitations
 - Azure legal hold remains read-only in S3Desk.

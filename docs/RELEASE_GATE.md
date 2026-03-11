@@ -18,6 +18,7 @@ All of the following must be true:
 9. Deployment-facing changes keep safe defaults:
    - no placeholder remote token exposure
    - no relaxed remote binding by default
+10. Any auth, browser-download, or reverse-proxy-sensitive change has a recorded reverse-proxy smoke result before release.
 
 ## Required Evidence
 
@@ -60,6 +61,25 @@ Minimum evidence per affected provider:
 - provider-native confirmation on success
 
 If a provider was not revalidated, the release is not ready unless the release notes explicitly say the provider change is unvalidated and the release is intentionally internal-only.
+
+## Deployment Smoke Gate
+
+If a change touches any of the following:
+
+- WebSocket or SSE auth
+- `download-proxy`
+- browser-facing signed download URLs
+- `EXTERNAL_BASE_URL`
+- `ALLOWED_HOSTS` or reverse-proxy deployment docs
+
+then release readiness is blocked until a reverse-proxy smoke pass is recorded.
+
+Minimum reverse-proxy smoke:
+
+1. `GET /healthz` through the reverse proxy
+2. authenticated `GET /api/v1/meta` through the reverse proxy
+3. `POST /api/v1/realtime-ticket` through the reverse proxy
+4. `GET /api/v1/buckets/{bucket}/objects/download-url?proxy=true` returns a browser-facing URL rooted at the expected external base URL
 
 ## Release Notes Requirements
 

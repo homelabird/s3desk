@@ -36,4 +36,5 @@ For remote access, make sure these are configured when relevant:
 - `S3Desk.postman_collection.json`
 - `S3Desk.insomnia_collection.json`
 - `ci/e2e_live.env.example`
+- `ci/provider_live_validation.env.example`
 - `grafana/s3desk-jobs-retry-failure.dashboard.json`

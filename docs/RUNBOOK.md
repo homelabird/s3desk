@@ -21,15 +21,14 @@ Containerized defaults:
 ## Start and Stop
 
 ```bash
-export S3DESK_IMAGE='ghcr.io/your-org/s3desk'
-export S3DESK_TAG='latest'
-export S3DESK_BIND_ADDRESS='0.0.0.0'
-export API_TOKEN='set-a-remote-token'
-export POSTGRES_PASSWORD='set-a-db-password'
+cp .env.example .env
+$EDITOR .env
 docker compose up -d
 docker compose down
 docker compose logs -f
 ```
+
+Use [.env.example](/home/homelab/Downloads/project/s3desk/.env.example) as the starting point for remote/Postgres deployments.
 
 If you are using `docker-compose.local-build.yml`, keep it local-only.
 

@@ -20,6 +20,12 @@ This document is for real cloud environments. Mocked UI coverage already exists 
 - [bucket-governance.spec.ts](../frontend/tests/bucket-governance.spec.ts)
 - [BucketGovernanceModal.test.tsx](../frontend/src/pages/buckets/__tests__/BucketGovernanceModal.test.tsx)
 
+Minimal backend live smoke coverage also exists in:
+
+- [provider_live_validation_test.go](../backend/internal/api/provider_live_validation_test.go)
+
+Use [ci/provider_live_validation.env.example](ci/provider_live_validation.env.example) as the starting point for backend live-provider environment variables.
+
 ## Shared Preconditions
 
 - Start from a clean test bucket or container that is safe to mutate.
@@ -82,6 +88,23 @@ Use this order when running a fresh validation pass:
 8. At the end of the pass, update:
    - [PROVIDERS.md](PROVIDERS.md)
    - [BUCKET_GOVERNANCE_REMAINING_WORK.md](BUCKET_GOVERNANCE_REMAINING_WORK.md)
+
+### Minimal Backend Smoke
+
+For low-cost release verification, run the env-gated backend smoke tests before the manual UI pass:
+
+```bash
+cd backend
+set -a
+source ../docs/ci/provider_live_validation.env.example
+set +a
+go test ./internal/api -run 'TestLiveValidation(AwsS3|GcpGcs|AzureBlob|OciObjectStorage|MinioS3Compatible|CephS3Compatible)$'
+```
+
+These tests are intentionally read-only and limited to:
+
+1. profile connectivity check
+2. existing bucket/container listing with `maxKeys=1`
 
 ## Release Candidate Prep
 
