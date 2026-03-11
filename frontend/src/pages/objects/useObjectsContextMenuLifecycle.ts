@@ -104,6 +104,8 @@ export function useObjectsContextMenuLifecycle(args: UseObjectsContextMenuLifecy
 		const handleKeyDown = (event: Event) => {
 			if (!(event instanceof KeyboardEvent)) return
 			if (event.key !== 'Escape') return
+			event.preventDefault()
+			event.stopPropagation()
 			closeContextMenu(undefined, 'escape')
 		}
 		if (el) {

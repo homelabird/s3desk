@@ -1,11 +1,15 @@
 import type { Page, Request, Route } from '@playwright/test'
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export type MockApiContext = {
 	route: Route
 	request: Request
 	url: URL
 	path: string
 	method: string
+	delay: (ms: number) => Promise<void>
+	abort: (errorCode?: Parameters<Route['abort']>[0]) => Promise<void>
 	json: (body: unknown, status?: number) => Promise<void>
 	text: (body: string, status?: number, contentType?: string) => Promise<void>
 	empty: (status?: number) => Promise<void>
@@ -17,6 +21,8 @@ export type MockApiRoute = {
 	path: string | RegExp
 	handle: (ctx: MockApiContext) => Promise<void> | void
 }
+
+export type MockApiAbortErrorCode = NonNullable<Parameters<Route['abort']>[0]>
 
 function normalizeApiPath(path: string): string {
 	if (path.startsWith('/api/v1/')) return path
@@ -42,6 +48,10 @@ function buildContext(route: Route): MockApiContext {
 		url,
 		path,
 		method,
+		delay: async (ms: number) => {
+			if (ms > 0) await sleep(ms)
+		},
+		abort: (errorCode = 'failed') => route.abort(errorCode),
 		json: (body, status = 200) =>
 			route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }),
 		text: (body, status = 200, contentType = 'text/plain') =>
@@ -53,6 +63,42 @@ function buildContext(route: Route): MockApiContext {
 				contentType: 'application/json',
 				body: JSON.stringify({ error: { code: 'not_found', message: 'not found' } }),
 			}),
+	}
+}
+
+export async function waitForMockApi(delayMs: number): Promise<void> {
+	if (!Number.isFinite(delayMs) || delayMs <= 0) return
+	await new Promise<void>((resolve) => {
+		setTimeout(resolve, delayMs)
+	})
+}
+
+export function withMockApiDelay(delayMs: number, handle: MockApiRoute['handle']): MockApiRoute['handle'] {
+	return async (ctx) => {
+		await waitForMockApi(delayMs)
+		return handle(ctx)
+	}
+}
+
+export function abortMockApi(errorCode: MockApiAbortErrorCode = 'failed'): MockApiRoute['handle'] {
+	return ({ route }) => route.abort(errorCode)
+}
+
+export function sequenceMockApiRoutes(
+	handlers: Array<MockApiRoute['handle']>,
+	options: { repeatLast?: boolean } = {},
+): MockApiRoute['handle'] {
+	const { repeatLast = true } = options
+	let callCount = 0
+
+	return async (ctx) => {
+		if (handlers.length === 0) {
+			throw new Error('sequenceMockApiRoutes requires at least one handler')
+		}
+
+		const index = repeatLast ? Math.min(callCount, handlers.length - 1) : callCount % handlers.length
+		callCount += 1
+		return handlers[index]?.(ctx)
 	}
 }
 

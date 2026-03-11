@@ -253,7 +253,9 @@ test.describe('Objects context menus', () => {
 		await expect(target).toBeVisible()
 		const menuTrigger = target.getByRole('button', { name: 'Object actions' })
 		await expect(menuTrigger).toBeVisible()
-		await menuTrigger.click()
+		await menuTrigger.evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
 
 		const menu = page
 			.getByRole('menu')
@@ -277,7 +279,9 @@ test.describe('Objects context menus', () => {
 		await row.getByRole('checkbox', { name: /Select / }).click()
 		await expect(page.getByText('1 selected')).toBeVisible()
 
-		await row.getByRole('button', { name: 'Object actions' }).click()
+		await row.getByRole('button', { name: 'Object actions' }).evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
 
 		const menu = page
 			.getByRole('menu')
@@ -291,5 +295,48 @@ test.describe('Objects context menus', () => {
 
 		await menu.getByRole('menuitem', { name: 'Details' }).click()
 		await expect(menu).toBeHidden()
+	})
+
+	test('right-clicking a selected object keeps the bulk selection and opens selection actions', async ({ page }) => {
+		await stubObjectsApi(page, buildObjectItems(3))
+		await seedStorage(page)
+		await page.goto('/objects')
+
+		await page.getByRole('checkbox', { name: 'Select video-1.mp4' }).click()
+		await page.getByRole('checkbox', { name: 'Select video-2.mp4' }).click()
+		await expect(page.getByText('2 selected')).toBeVisible()
+
+		const selectedRow = page.locator('[data-objects-row="true"]', { hasText: 'video-1.mp4' }).first()
+		await selectedRow.click({ button: 'right' })
+
+		const menu = objectsContextMenu(page)
+		await expect(menu).toBeVisible()
+		await expect(page.getByText('2 selected')).toBeVisible()
+		await expect(page.getByRole('checkbox', { name: 'Select video-1.mp4' })).toBeChecked()
+		await expect(page.getByRole('checkbox', { name: 'Select video-2.mp4' })).toBeChecked()
+		await expect(menu.getByRole('menuitem', { name: 'Move selection to…' })).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: 'Details' })).toHaveCount(0)
+	})
+
+	test('right-clicking an unselected object retargets selection before opening object actions', async ({ page }) => {
+		await stubObjectsApi(page, buildObjectItems(3))
+		await seedStorage(page)
+		await page.goto('/objects')
+
+		await page.getByRole('checkbox', { name: 'Select video-1.mp4' }).click()
+		await page.getByRole('checkbox', { name: 'Select video-2.mp4' }).click()
+		await expect(page.getByText('2 selected')).toBeVisible()
+
+		const targetRow = page.locator('[data-objects-row="true"]', { hasText: 'video-3.mp4' }).first()
+		await targetRow.click({ button: 'right' })
+
+		const menu = objectsContextMenu(page)
+		await expect(menu).toBeVisible()
+		await expect(page.getByText('1 selected')).toBeVisible()
+		await expect(page.getByRole('checkbox', { name: 'Select video-1.mp4' })).not.toBeChecked()
+		await expect(page.getByRole('checkbox', { name: 'Select video-2.mp4' })).not.toBeChecked()
+		await expect(page.getByRole('checkbox', { name: 'Select video-3.mp4' })).toBeChecked()
+		await expect(menu.getByRole('menuitem', { name: 'Details' })).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: 'Move selection to…' })).toHaveCount(0)
 	})
 })

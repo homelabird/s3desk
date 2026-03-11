@@ -1,0 +1,80 @@
+.toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	width: 100%;
+	margin-bottom: 8px;
+}
+
+.metaLine {
+	display: block;
+	margin-bottom: 8px;
+}
+
+.logViewport {
+	max-height: 75vh;
+	overflow: auto;
+	border: 1px solid var(--s3d-color-border-soft);
+	border-radius: 14px;
+	background: color-mix(in srgb, var(--s3d-color-bg-elevated) 90%, transparent);
+}
+
+.logEmpty {
+	display: block;
+	padding: 16px;
+}
+
+.logList {
+	display: flex;
+	flex-direction: column;
+}
+
+.logRow {
+	display: grid;
+	grid-template-columns: auto auto 1fr;
+	gap: 12px;
+	align-items: flex-start;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--s3d-color-border-soft);
+	scroll-margin-top: 16px;
+}
+
+.logRow:last-child {
+	border-bottom: none;
+}
+
+.logRowError {
+	background: color-mix(in srgb, var(--s3d-color-error-bg) 82%, transparent);
+}
+
+.logRowWarn {
+	background: color-mix(in srgb, var(--s3d-color-warning-bg, #fff7e6) 72%, transparent);
+}
+
+.logIndex,
+.logTimestamp {
+	font-family: var(--s3d-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+	font-size: 12px;
+	color: var(--s3d-color-text-secondary);
+	white-space: nowrap;
+}
+
+.logMessage {
+	min-width: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.55;
+}
+
+.logHighlight {
+	padding: 0 2px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--s3d-color-warning-bg, #fff7e6) 88%, transparent);
+}
+
+@media (max-width: 768px) {
+	.logRow {
+		grid-template-columns: 1fr;
+		gap: 8px;
+	}
+}

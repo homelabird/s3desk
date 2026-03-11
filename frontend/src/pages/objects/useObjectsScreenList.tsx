@@ -107,6 +107,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 	})
 
 	const listKeydownHandler = useObjectsListKeydownHandler({
+		contextMenuOpen: interactions.contextMenuState.open,
 		selectedCount,
 		singleSelectedKey: previewState.singleSelectedKey,
 		lastSelectedObjectKey,
@@ -114,6 +115,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		visibleObjectKeys,
 		rowIndexByObjectKey,
 		canGoUp,
+		closeContextMenu: () => interactions.closeContextMenu(undefined, 'escape_keydown'),
 		clearSelection,
 		openRenameObject: actions.openRenameObject,
 		openNewFolder: actions.openNewFolder,
@@ -203,6 +205,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		cancelPreview,
 		canCancelPreview,
 		closeCommandPalette,
+		closeContextMenu: interactions.closeContextMenu,
 		openDetails: actions.openDetails,
 		openCopyMove: actions.openCopyMove,
 		confirmDeleteObjects: actions.confirmDeleteObjects,

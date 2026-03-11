@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import type { MutableRefObject } from 'react'
 
 import type { JobProgress, JobStatus } from '../../api/types'
+import { invalidateObjectQueriesForPrefix } from '../../pages/objects/objectsQueryCache'
 import { publishObjectsRefresh } from '../../pages/objects/objectsRefreshEvents'
 import type { UploadTask } from './transferTypes'
 
@@ -51,7 +52,11 @@ export function useTransfersUploadJobLifecycle({
 			if (!current || current.status !== 'waiting_job') return
 
 			if (status === 'succeeded') {
-				void queryClient.invalidateQueries({ queryKey: ['objects', current.profileId, current.bucket] })
+				void invalidateObjectQueriesForPrefix(queryClient, {
+					profileId: current.profileId,
+					bucket: current.bucket,
+					changedPrefix: current.prefix,
+				})
 				publishObjectsRefresh({
 					profileId: current.profileId,
 					bucket: current.bucket,

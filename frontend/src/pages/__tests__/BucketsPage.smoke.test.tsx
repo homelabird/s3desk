@@ -7,12 +7,21 @@ import {
   within,
 } from "@testing-library/react";
 import { message } from "antd";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { APIClient, APIError } from "../../api/client";
 import { ensureDomShims } from "../../test/domShims";
 import { BucketsPage } from "../BucketsPage";
+
+const confirmDangerActionMock = vi.fn(
+  (options: { onConfirm: () => Promise<void> | void }) => options.onConfirm(),
+);
+
+vi.mock("../../lib/confirmDangerAction", () => ({
+  confirmDangerAction: (options: { onConfirm: () => Promise<void> | void }) =>
+    confirmDangerActionMock(options),
+}));
 
 beforeAll(() => {
   ensureDomShims();
@@ -43,9 +52,24 @@ function mockViewportWidth(width: number) {
 }
 
 afterEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
   window.matchMedia = originalMatchMedia;
+  confirmDangerActionMock.mockClear();
   vi.restoreAllMocks();
 });
+
+function RouterStateProbe() {
+  const location = useLocation();
+  return (
+    <>
+      <div data-testid="router-pathname">{location.pathname}</div>
+      <div data-testid="router-state">
+        {JSON.stringify(location.state ?? null)}
+      </div>
+    </>
+  );
+}
 
 describe("BucketsPage", () => {
   it("navigates to setup from setup callout", () => {
@@ -628,6 +652,209 @@ describe("BucketsPage", () => {
     );
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("routes to Objects with bucket context when deleting a non-empty bucket", async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    mockViewportWidth(1200);
+    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
+      version: "test",
+      serverAddr: "127.0.0.1:8080",
+      dataDir: "/data",
+      staticDir: "/app/ui",
+      apiTokenEnabled: true,
+      encryptionEnabled: false,
+      capabilities: {
+        profileTls: { enabled: false, reason: "test" },
+        providers: {},
+      },
+      allowedLocalDirs: [],
+      jobConcurrency: 1,
+      uploadSessionTTLSeconds: 3600,
+      uploadDirectStream: false,
+      transferEngine: {
+        name: "rclone",
+        available: true,
+        compatible: true,
+        minVersion: "1.52.0",
+        path: "/usr/bin/rclone",
+        version: "v1.66.0",
+      },
+    } as never);
+    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
+      {
+        id: "profile-1",
+        name: "Primary Profile",
+        provider: "s3_compatible",
+        endpoint: "http://127.0.0.1:9000",
+        region: "us-east-1",
+        forcePathStyle: false,
+        preserveLeadingSlash: false,
+        tlsInsecureSkipVerify: false,
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+      },
+    ] as never);
+    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
+      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
+    ] as never);
+    vi.spyOn(APIClient.prototype, "deleteBucket").mockRejectedValue(
+      new APIError({
+        status: 409,
+        code: "bucket_not_empty",
+        message: "bucket contains objects",
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <RouterStateProbe />
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token" profileId="profile-1" />}
+            />
+            <Route path="/objects" element={<div>Objects Route</div>} />
+            <Route path="/jobs" element={<div>Jobs Route</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const deleteButton = (
+      await within(
+        await screen.findByTestId("buckets-table-desktop"),
+      ).findAllByRole("button", { name: /delete/i })
+    )[0];
+    fireEvent.click(deleteButton);
+
+    expect(confirmDangerActionMock).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText('Bucket "primary-bucket" isn’t empty'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Objects" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("router-pathname")).toHaveTextContent(
+        "/objects",
+      ),
+    );
+    expect(screen.getByText("Objects Route")).toBeInTheDocument();
+    expect(screen.getByTestId("router-state").textContent).toBe(
+      JSON.stringify({
+        openBucket: true,
+        bucket: "primary-bucket",
+        prefix: "",
+      }),
+    );
+  });
+
+  it("routes to Jobs with delete-all state when deleting a non-empty bucket", async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    mockViewportWidth(1200);
+    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
+      version: "test",
+      serverAddr: "127.0.0.1:8080",
+      dataDir: "/data",
+      staticDir: "/app/ui",
+      apiTokenEnabled: true,
+      encryptionEnabled: false,
+      capabilities: {
+        profileTls: { enabled: false, reason: "test" },
+        providers: {},
+      },
+      allowedLocalDirs: [],
+      jobConcurrency: 1,
+      uploadSessionTTLSeconds: 3600,
+      uploadDirectStream: false,
+      transferEngine: {
+        name: "rclone",
+        available: true,
+        compatible: true,
+        minVersion: "1.52.0",
+        path: "/usr/bin/rclone",
+        version: "v1.66.0",
+      },
+    } as never);
+    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
+      {
+        id: "profile-1",
+        name: "Primary Profile",
+        provider: "s3_compatible",
+        endpoint: "http://127.0.0.1:9000",
+        region: "us-east-1",
+        forcePathStyle: false,
+        preserveLeadingSlash: false,
+        tlsInsecureSkipVerify: false,
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+      },
+    ] as never);
+    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
+      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
+    ] as never);
+    vi.spyOn(APIClient.prototype, "deleteBucket").mockRejectedValue(
+      new APIError({
+        status: 409,
+        code: "bucket_not_empty",
+        message: "bucket contains objects",
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <RouterStateProbe />
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token" profileId="profile-1" />}
+            />
+            <Route path="/objects" element={<div>Objects Route</div>} />
+            <Route path="/jobs" element={<div>Jobs Route</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const deleteButton = (
+      await within(
+        await screen.findByTestId("buckets-table-desktop"),
+      ).findAllByRole("button", { name: /delete/i })
+    )[0];
+    fireEvent.click(deleteButton);
+
+    expect(
+      await screen.findByText('Bucket "primary-bucket" isn’t empty'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete all objects (job)" }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("router-pathname")).toHaveTextContent("/jobs"),
+    );
+    expect(screen.getByText("Jobs Route")).toBeInTheDocument();
+    expect(screen.getByTestId("router-state").textContent).toBe(
+      JSON.stringify({
+        openDeleteJob: true,
+        bucket: "primary-bucket",
+        deleteAll: true,
+      }),
     );
   });
 });

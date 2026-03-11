@@ -1,3 +1,10 @@
+.navColumn {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
 .menuLink {
 	display: flex;
 	align-items: center;
@@ -10,7 +17,13 @@
 .navList {
 	display: flex;
 	flex-direction: column;
+	flex: 1 1 auto;
 	gap: 6px;
+	padding: 0 12px 16px;
+}
+
+.navFooter {
+	margin-top: auto;
 	padding: 0 12px 16px;
 }
 
@@ -70,6 +83,12 @@
 
 .desktopSider {
 	background: var(--s3d-gradient-sider);
+}
+
+.desktopSider :global(.ant-layout-sider-children) {
+	display: flex;
+	flex-direction: column;
+	min-height: 100dvh;
 }
 
 .brandBlock {

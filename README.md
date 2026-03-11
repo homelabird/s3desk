@@ -72,6 +72,28 @@ Notes:
 - `API_TOKEN` and `POSTGRES_PASSWORD` are required; placeholder defaults are not shipped in the remote template.
 - Keep using `docker-compose.local-build.yml` for local development and local verification.
 
+## Caddy Reverse Proxy Template
+
+For a public HTTPS deployment fronted by Caddy, use:
+
+- `docker-compose.caddy.yml`
+- `deploy/caddy/Caddyfile`
+
+Set these values to the same public hostname before starting it:
+
+- `S3DESK_DOMAIN`
+- `EXTERNAL_BASE_URL`
+- `ALLOWED_HOSTS`
+
+Then start it with:
+
+```bash
+docker compose -f docker-compose.caddy.yml up -d
+```
+
+The Caddy manifest keeps the backend unexposed and publishes only ports `80` and `443` from the `caddy` service.
+See [docs/CADDY_DEPLOYMENT.md](docs/CADDY_DEPLOYMENT.md) for the full checklist and validation steps.
+
 ## Local Development
 
 Run the backend and frontend together:
@@ -99,6 +121,7 @@ Default local endpoints:
 - [Docs index](docs/README.md)
 - [Usage](docs/USAGE.md)
 - [Providers](docs/PROVIDERS.md)
+- [Caddy deployment](docs/CADDY_DEPLOYMENT.md)
 - [Bucket governance design](docs/BUCKET_GOVERNANCE_DESIGN.md)
 - [Bucket governance remaining work](docs/BUCKET_GOVERNANCE_REMAINING_WORK.md)
 - [Runbook](docs/RUNBOOK.md)

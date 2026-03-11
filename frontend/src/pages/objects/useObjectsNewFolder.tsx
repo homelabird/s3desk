@@ -6,7 +6,7 @@ import type { APIClient } from '../../api/client'
 import type { ListObjectsResponse } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import type { ObjectTypeFilter } from './objectsTypes'
-import { getVisibleCreatedPrefix, insertOptimisticPrefixIntoObjectsData } from './objectsQueryCache'
+import { getVisibleCreatedPrefix, insertOptimisticPrefixIntoObjectsData, invalidateObjectQueriesForPrefix } from './objectsQueryCache'
 import {
 	displayNameForPrefix,
 	matchesSearchTokens,
@@ -178,7 +178,11 @@ export function useObjectsNewFolder({
 			const visiblePrefix = getVisibleCreatedPrefix(parentPrefixNormalized, createdKey)
 			let folderVisibleAfterRefresh = true
 			if (profileId) {
-				await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
+				await invalidateObjectQueriesForPrefix(queryClient, {
+					profileId,
+					bucket,
+					changedPrefix: createdKey,
+				})
 				if (parentIsCurrent && !viewHideReason && !createdOutsideView) {
 					const refreshed = await api.listObjects({
 						profileId,

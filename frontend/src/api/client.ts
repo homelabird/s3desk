@@ -157,6 +157,10 @@ export type BucketSharingPutClientRequest = {
 
 export type ServerBackupScope = 'full' | 'cache_metadata' | 'portable'
 export type ServerBackupConfidentialityMode = 'clear' | 'encrypted'
+export type ServerBackupDownloadOptions = {
+	password?: string
+	includeThumbnails?: boolean
+}
 
 function normalizeListObjectsResponse(
 	resp: ListObjectsResponse,
@@ -313,13 +317,25 @@ export class APIClient {
 	downloadServerBackup(
 		scope: ServerBackupScope = 'full',
 		confidentiality: ServerBackupConfidentialityMode = 'clear',
+		options?: ServerBackupDownloadOptions,
 	): { promise: Promise<{ blob: Blob; contentDisposition: string | null; contentType: string | null }>; abort: () => void } {
 		const xhr = new XMLHttpRequest()
-		xhr.open('GET', this.baseUrl + `/server/backup?scope=${encodeURIComponent(scope)}&confidentiality=${encodeURIComponent(confidentiality)}`)
+		const params = new URLSearchParams()
+		params.set('scope', scope)
+		params.set('confidentiality', confidentiality)
+		if (scope === 'portable' && typeof options?.includeThumbnails === 'boolean') {
+			params.set('includeThumbnails', options.includeThumbnails ? 'true' : 'false')
+		}
+		xhr.open('GET', this.baseUrl + `/server/backup?${params.toString()}`)
 		xhr.responseType = 'blob'
 
 		try {
 			setSafeXHRHeader(xhr, 'X-Api-Token', this.apiToken)
+			if (typeof options?.password === 'string' && options.password.length > 0) {
+				const err = createInvalidHeaderValueError('X-S3Desk-Backup-Password', options.password)
+				if (err) throw err
+				xhr.setRequestHeader('X-S3Desk-Backup-Password', options.password)
+			}
 		} catch (err) {
 			return rejectedTransferHandle(err instanceof Error ? err : new Error('invalid API token header'))
 		}
@@ -353,21 +369,30 @@ export class APIClient {
 		return { promise, abort: () => xhr.abort() }
 	}
 
-	restoreServerBackup(file: File): Promise<ServerRestoreResponse> {
+	restoreServerBackup(file: File, password?: string): Promise<ServerRestoreResponse> {
 		const form = new FormData()
 		form.append('bundle', file, file.name)
+		if (typeof password === 'string' && password.length > 0) {
+			form.append('password', password)
+		}
 		return this.request('/server/restore', { method: 'POST', body: form })
 	}
 
-	previewPortableImport(file: File): Promise<ServerPortableImportResponse> {
+	previewPortableImport(file: File, password?: string): Promise<ServerPortableImportResponse> {
 		const form = new FormData()
 		form.append('bundle', file, file.name)
+		if (typeof password === 'string' && password.length > 0) {
+			form.append('password', password)
+		}
 		return this.request('/server/import-portable/preview', { method: 'POST', body: form })
 	}
 
-	importPortableBackup(file: File): Promise<ServerPortableImportResponse> {
+	importPortableBackup(file: File, password?: string): Promise<ServerPortableImportResponse> {
 		const form = new FormData()
 		form.append('bundle', file, file.name)
+		if (typeof password === 'string' && password.length > 0) {
+			form.append('password', password)
+		}
 		return this.request('/server/import-portable', { method: 'POST', body: form })
 	}
 

@@ -53,6 +53,8 @@ paths:
           $ref: "#/components/responses/ErrorResponse"
         "409":
           $ref: "#/components/responses/ErrorResponse"
+        "413":
+          $ref: "#/components/responses/ErrorResponse"
 
   /events:
     get:
@@ -241,6 +243,9 @@ paths:
                 bundle:
                   type: string
                   format: binary
+                password:
+                  type: string
+                  description: Optional bundle password used when the backup payload was exported with operator-supplied password protection.
       responses:
         "201":
           description: Created
@@ -253,6 +258,10 @@ paths:
         "401":
           $ref: "#/components/responses/ErrorResponse"
         "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "413":
           $ref: "#/components/responses/ErrorResponse"
 
   /server/import-portable/preview:
@@ -275,6 +284,9 @@ paths:
                 bundle:
                   type: string
                   format: binary
+                password:
+                  type: string
+                  description: Optional bundle password used when the portable payload was exported with operator-supplied password protection.
       responses:
         "200":
           description: OK
@@ -287,6 +299,10 @@ paths:
         "401":
           $ref: "#/components/responses/ErrorResponse"
         "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "413":
           $ref: "#/components/responses/ErrorResponse"
 
   /server/import-portable:
@@ -309,7 +325,16 @@ paths:
                 bundle:
                   type: string
                   format: binary
+                password:
+                  type: string
+                  description: Optional bundle password used when the portable payload was exported with operator-supplied password protection.
       responses:
+        "200":
+          description: OK (blocked by preflight; no data written)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerPortableImportResponse"
         "201":
           description: Created
           content:
@@ -321,6 +346,10 @@ paths:
         "401":
           $ref: "#/components/responses/ErrorResponse"
         "403":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/ErrorResponse"
+        "413":
           $ref: "#/components/responses/ErrorResponse"
 
   /server/restores:

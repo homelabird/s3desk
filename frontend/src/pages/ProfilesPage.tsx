@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Checkbox, Empty, Space, Spin, Typography, message } from 'antd'
-import { Suspense, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
@@ -55,6 +55,9 @@ export function ProfilesPage(props: Props) {
 		queryKey: ['profiles', props.apiToken],
 		queryFn: () => api.listProfiles(),
 	})
+	useEffect(() => {
+		if (createRequested) setCreateOpen(true)
+	}, [createRequested])
 	const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data])
 	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
 	const closeCreateModal = () => {

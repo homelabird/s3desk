@@ -111,10 +111,14 @@ export type UploadMultipartAbortRequest =
 
 export type JobStatus = components["schemas"]["JobStatus"];
 export type JobProgress = components["schemas"]["JobProgress"];
-export type Job = components["schemas"]["Job"];
+export type Job = Omit<components["schemas"]["Job"], "type"> & {
+  type: components["schemas"]["Job"]["type"] | "transfer_direct_upload";
+};
 export type JobCreateRequest = components["schemas"]["JobCreateRequest"];
 export type JobCreatedResponse = components["schemas"]["JobCreatedResponse"];
-export type JobsListResponse = components["schemas"]["JobsListResponse"];
+export type JobsListResponse = Omit<components["schemas"]["JobsListResponse"], "items"> & {
+  items: Job[];
+};
 export type MetaResponse = components["schemas"]["MetaResponse"];
 export type ServerMigrationManifest =
   components["schemas"]["ServerMigrationManifest"];

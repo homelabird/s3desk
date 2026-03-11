@@ -277,6 +277,53 @@ func TestHandleRestoreServerBackup_RejectsOversizedBundle(t *testing.T) {
 	}
 }
 
+func TestHandleRestoreServerBackup_StagesPasswordProtectedBundleWithMatchingPassword(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadBackupArchiveBytesWithPassword(t, sourceSrv.URL, "/api/v1/server/backup?confidentiality=encrypted", "operator-secret")
+	entries := readTarGzEntries(t, bytes.NewReader(archiveBytes))
+	if _, ok := entries["payload.enc"]; !ok {
+		t.Fatalf("password-protected backup must include payload.enc")
+	}
+
+	_, _, targetSrv, _ := newTestJobsServer(t, "", false)
+	res := postRestoreArchiveWithPassword(t, targetSrv.URL, "/api/v1/server/restore", archiveBytes, "password-protected-backup.tar.gz", "operator-secret")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 201, got %d: %s", res.StatusCode, string(respBody))
+	}
+
+	var resp models.ServerRestoreResponse
+	decodeJSONResponse(t, res, &resp)
+	if !resp.Validation.PayloadEncryptionPresent || !resp.Validation.PayloadEncryptionDecrypted {
+		t.Fatalf("expected encrypted payload to decrypt successfully, validation=%+v", resp.Validation)
+	}
+	if !resp.Validation.PayloadSignaturePresent || !resp.Validation.PayloadSignatureVerified {
+		t.Fatalf("expected password-protected payload signature to verify, validation=%+v", resp.Validation)
+	}
+}
+
+func TestHandleRestoreServerBackup_RejectsPasswordProtectedBundleWithoutPassword(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadBackupArchiveBytesWithPassword(t, sourceSrv.URL, "/api/v1/server/backup?confidentiality=encrypted", "operator-secret")
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postRestoreArchiveWithPassword(t, targetSrv.URL, "/api/v1/server/restore", archiveBytes, "password-protected-backup.tar.gz", "")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		respBody, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(respBody))
+	}
+}
+
 func readTarGzEntries(t *testing.T, reader io.Reader) map[string][]byte {
 	t.Helper()
 	gzipReader, err := gzip.NewReader(reader)
@@ -358,6 +405,65 @@ func mapKeys(m map[string][]byte) []string {
 
 func errorsIsNotExist(err error) bool {
 	return err != nil && os.IsNotExist(err)
+}
+
+func downloadBackupArchiveBytesWithPassword(t *testing.T, serverURL string, path string, password string) []byte {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, serverURL+path, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	if password != "" {
+		req.Header.Set(serverBackupPasswordHeader, password)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("backup request: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+	archiveBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read archive: %v", err)
+	}
+	return archiveBytes
+}
+
+func postRestoreArchiveWithPassword(t *testing.T, serverURL string, path string, archive []byte, filename string, password string) *http.Response {
+	t.Helper()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("bundle", filename)
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write(archive); err != nil {
+		t.Fatalf("write archive: %v", err)
+	}
+	if password != "" {
+		if err := writer.WriteField("password", password); err != nil {
+			t.Fatalf("write password: %v", err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, serverURL+path, body)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("restore request: %v", err)
+	}
+	return res
 }
 
 func TestStoreCreateSQLiteBackup_ProducesReadableSnapshot(t *testing.T) {

@@ -108,6 +108,25 @@ func TestOpenAPIMetaAndMigrationSchemasCoverFrontendContract(t *testing.T) {
 	if manifestSchemaRef == nil || manifestSchemaRef.Value == nil {
 		t.Fatal("ServerMigrationManifest schema missing from OpenAPI")
 	}
+
+	assertOpenAPIOperationHasResponse(t, doc, "/server/restore", http.MethodPost, http.StatusCreated)
+	assertOpenAPIOperationHasResponse(t, doc, "/server/restore", http.MethodPost, http.StatusConflict)
+	assertOpenAPIOperationHasResponse(t, doc, "/server/restore", http.MethodPost, http.StatusRequestEntityTooLarge)
+	assertOpenAPIMultipartField(t, doc, "/server/restore", http.MethodPost, "bundle", true)
+	assertOpenAPIMultipartField(t, doc, "/server/restore", http.MethodPost, "password", false)
+
+	assertOpenAPIOperationResponseSchemaAtStatus(t, doc, "/server/import-portable/preview", http.MethodPost, http.StatusOK, "#/components/schemas/ServerPortableImportResponse")
+	assertOpenAPIOperationHasResponse(t, doc, "/server/import-portable/preview", http.MethodPost, http.StatusConflict)
+	assertOpenAPIOperationHasResponse(t, doc, "/server/import-portable/preview", http.MethodPost, http.StatusRequestEntityTooLarge)
+	assertOpenAPIMultipartField(t, doc, "/server/import-portable/preview", http.MethodPost, "bundle", true)
+	assertOpenAPIMultipartField(t, doc, "/server/import-portable/preview", http.MethodPost, "password", false)
+
+	assertOpenAPIOperationResponseSchemaAtStatus(t, doc, "/server/import-portable", http.MethodPost, http.StatusOK, "#/components/schemas/ServerPortableImportResponse")
+	assertOpenAPIOperationResponseSchemaAtStatus(t, doc, "/server/import-portable", http.MethodPost, http.StatusCreated, "#/components/schemas/ServerPortableImportResponse")
+	assertOpenAPIOperationHasResponse(t, doc, "/server/import-portable", http.MethodPost, http.StatusConflict)
+	assertOpenAPIOperationHasResponse(t, doc, "/server/import-portable", http.MethodPost, http.StatusRequestEntityTooLarge)
+	assertOpenAPIMultipartField(t, doc, "/server/import-portable", http.MethodPost, "bundle", true)
+	assertOpenAPIMultipartField(t, doc, "/server/import-portable", http.MethodPost, "password", false)
 }
 
 func TestOpenAPIBucketGovernanceSchemasCoverFrontendContract(t *testing.T) {
@@ -300,15 +319,7 @@ func requireOpenAPISchema(t *testing.T, doc *openapi3.T, name string) *openapi3.
 func assertOpenAPIOperationResponseSchema(t *testing.T, doc *openapi3.T, path, method, wantRef string) {
 	t.Helper()
 
-	op := requireOpenAPIOperation(t, doc, path, method)
-	resp := requireOpenAPIResponse(t, op, http.StatusOK)
-	content, ok := resp.Content["application/json"]
-	if !ok || content.Schema == nil {
-		t.Fatalf("%s %s missing application/json response schema", method, path)
-	}
-	if content.Schema.Ref != wantRef {
-		t.Fatalf("%s %s response schema=%q, want %q", method, path, content.Schema.Ref, wantRef)
-	}
+	assertOpenAPIOperationResponseSchemaAtStatus(t, doc, path, method, http.StatusOK, wantRef)
 }
 
 func assertOpenAPIOperationHasResponse(t *testing.T, doc *openapi3.T, path, method string, status int) {
@@ -316,6 +327,39 @@ func assertOpenAPIOperationHasResponse(t *testing.T, doc *openapi3.T, path, meth
 
 	op := requireOpenAPIOperation(t, doc, path, method)
 	_ = requireOpenAPIResponse(t, op, status)
+}
+
+func assertOpenAPIOperationResponseSchemaAtStatus(t *testing.T, doc *openapi3.T, path, method string, status int, wantRef string) {
+	t.Helper()
+
+	op := requireOpenAPIOperation(t, doc, path, method)
+	resp := requireOpenAPIResponse(t, op, status)
+	content, ok := resp.Content["application/json"]
+	if !ok || content.Schema == nil {
+		t.Fatalf("%s %s missing application/json response schema for status %d", method, path, status)
+	}
+	if content.Schema.Ref != wantRef {
+		t.Fatalf("%s %s response schema=%q, want %q for status %d", method, path, content.Schema.Ref, wantRef, status)
+	}
+}
+
+func assertOpenAPIMultipartField(t *testing.T, doc *openapi3.T, path, method, name string, required bool) {
+	t.Helper()
+
+	op := requireOpenAPIOperation(t, doc, path, method)
+	if op.RequestBody == nil || op.RequestBody.Value == nil {
+		t.Fatalf("%s %s missing request body", method, path)
+	}
+	content, ok := op.RequestBody.Value.Content["multipart/form-data"]
+	if !ok || content.Schema == nil || content.Schema.Value == nil {
+		t.Fatalf("%s %s missing multipart/form-data schema", method, path)
+	}
+	if _, ok := content.Schema.Value.Properties[name]; !ok {
+		t.Fatalf("%s %s missing multipart field %q", method, path, name)
+	}
+	if required != containsString(content.Schema.Value.Required, name) {
+		t.Fatalf("%s %s multipart field %q required=%t, want %t", method, path, name, containsString(content.Schema.Value.Required, name), required)
+	}
 }
 
 func requireOpenAPIOperation(t *testing.T, doc *openapi3.T, path, method string) *openapi3.Operation {

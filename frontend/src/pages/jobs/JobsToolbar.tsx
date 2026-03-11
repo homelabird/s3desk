@@ -1,4 +1,4 @@
-import { MoreOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
+import { DownloadOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import { Alert, Button, Checkbox, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
 
 import type { JobStatus } from '../../api/types'
@@ -31,9 +31,12 @@ type Props = {
 	eventsRetryThreshold: number
 	onRetryRealtime: () => void
 	onOpenCreateUpload: () => void
+	onOpenCreateDownload: () => void
 	topActionsMenu: MenuProps
 	statusFilter: JobStatus | 'all'
 	onStatusFilterChange: (next: JobStatus | 'all') => void
+	searchFilterNormalized: string
+	onSearchFilterChange: (next: string) => void
 	typeFilterNormalized: string
 	onTypeFilterChange: (next: string) => void
 	typeFilterSuggestions: TypeSuggestion[]
@@ -42,6 +45,15 @@ type Props = {
 	errorCodeSuggestions: ErrorCodeSuggestion[]
 	filtersDirty: boolean
 	onResetFilters: () => void
+	jobsStatusSummary: {
+		total: number
+		active: number
+		queued: number
+		running: number
+		succeeded: number
+		failed: number
+		canceled: number
+	}
 	columnOptions: ColumnOption[]
 	mergedColumnVisibility: Record<ColumnKey, boolean>
 	onSetColumnVisible: (key: ToggleableColumnKey, next: boolean) => void
@@ -53,6 +65,15 @@ type Props = {
 }
 
 export function JobsToolbar(props: Props) {
+	const healthItems = [
+		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active' },
+		{ key: 'queued', label: 'Queued', value: props.jobsStatusSummary.queued, tone: 'muted' },
+		{ key: 'running', label: 'Running', value: props.jobsStatusSummary.running, tone: 'active' },
+		{ key: 'failed', label: 'Failed', value: props.jobsStatusSummary.failed, tone: 'danger' },
+		{ key: 'succeeded', label: 'Succeeded', value: props.jobsStatusSummary.succeeded, tone: 'success' },
+		{ key: 'canceled', label: 'Canceled', value: props.jobsStatusSummary.canceled, tone: 'muted' },
+	] as const
+
 	return (
 		<>
 			<PageHeader
@@ -60,8 +81,8 @@ export function JobsToolbar(props: Props) {
 				title="Jobs"
 				subtitle={
 					props.activeProfileName
-						? `${props.activeProfileName} profile is active. Monitor queue health, narrow the result set, and launch device transfers from the same workspace.`
-						: 'Monitor queue health, narrow the result set, and launch device transfers from the same workspace.'
+						? `${props.activeProfileName} profile is active. Monitor queue health, narrow the result set, and launch uploads, device downloads, or cleanup work from the same workspace.`
+						: 'Monitor queue health, narrow the result set, and launch uploads, device downloads, or cleanup work from the same workspace.'
 				}
 				actions={
 					<div className={styles.headerActions}>
@@ -90,6 +111,13 @@ export function JobsToolbar(props: Props) {
 									disabled={props.isOffline || !props.uploadSupported}
 								>
 									Upload…
+								</Button>
+							</span>
+						</Tooltip>
+						<Tooltip title="Download a folder or prefix from S3 to this device">
+							<span>
+								<Button icon={<DownloadOutlined />} onClick={props.onOpenCreateDownload} disabled={props.isOffline}>
+									Download…
 								</Button>
 							</span>
 						</Tooltip>
@@ -128,11 +156,38 @@ export function JobsToolbar(props: Props) {
 						}
 					/>
 				) : null}
-			</div>
+				</div>
+
+				<PageSection
+					title="Queue health"
+					description={
+						props.filtersDirty
+							? 'Current loaded jobs after filters. Reset filters to return to the broader queue view.'
+							: 'Current loaded jobs split by status so active and failed work is visible at a glance.'
+					}
+					actions={
+						<Typography.Text type="secondary" className={styles.sectionMeta}>
+							{props.jobsStatusSummary.total
+								? `${props.jobsStatusSummary.total.toLocaleString()} loaded`
+								: 'No jobs loaded yet'}
+						</Typography.Text>
+					}
+				>
+					<div className={styles.healthGrid}>
+						{healthItems.map((item) => (
+							<div key={item.key} className={`${styles.healthCard} ${styles[`healthCard${item.tone[0].toUpperCase()}${item.tone.slice(1)}`]}`}>
+								<Typography.Text type="secondary" className={styles.healthLabel}>
+									{item.label}
+								</Typography.Text>
+								<Typography.Text className={styles.healthValue}>{item.value.toLocaleString()}</Typography.Text>
+							</div>
+						))}
+					</div>
+				</PageSection>
 
 			<PageSection
 				title="Filters & layout"
-				description="Narrow the queue by status, job type, or error code. You can also adjust visible columns and refresh the current result set."
+				description="Search loaded jobs by id, payload, summary, or errors. You can also narrow the queue by status, job type, or error code, then adjust visible columns and refresh the current result set. Use Objects for copy, move, and indexing workflows."
 				actions={
 					<Typography.Text type="secondary" className={styles.sectionMeta}>
 						{props.jobsCount ? `${props.jobsCount.toLocaleString()} jobs loaded` : 'No jobs loaded yet'}
@@ -140,6 +195,16 @@ export function JobsToolbar(props: Props) {
 				}
 			>
 				<div className={styles.filtersRow}>
+					<DatalistInput
+						value={props.searchFilterNormalized}
+						onChange={props.onSearchFilterChange}
+						placeholder="Search jobs…"
+						ariaLabel="Search jobs"
+						allowClear
+						className={styles.searchFilterControl}
+						options={[]}
+						prefix={<SearchOutlined />}
+					/>
 					<NativeSelect
 						value={props.statusFilter}
 						onChange={(next) => props.onStatusFilterChange(next as JobStatus | 'all')}

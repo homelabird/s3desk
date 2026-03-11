@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 
 type UseObjectsListKeydownArgs = {
+	contextMenuOpen?: boolean
 	selectedCount: number
 	singleSelectedKey: string | null
 	lastSelectedObjectKey: string | null
@@ -8,6 +9,7 @@ type UseObjectsListKeydownArgs = {
 	visibleObjectKeys: string[]
 	rowIndexByObjectKey: Map<string, number>
 	canGoUp: boolean
+	onCloseContextMenu?: () => void
 	onClearSelection: () => void
 	onOpenRename: (key: string) => void
 	onNewFolder: () => void
@@ -28,6 +30,11 @@ export function useObjectsListKeydown(args: UseObjectsListKeydownArgs) {
 	return useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>) => {
 			if (e.key === 'Escape') {
+				if (args.contextMenuOpen) {
+					e.preventDefault()
+					args.onCloseContextMenu?.()
+					return
+				}
 				if (args.selectedCount > 0) {
 					e.preventDefault()
 					args.onClearSelection()

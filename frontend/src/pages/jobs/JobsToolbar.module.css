@@ -12,6 +12,51 @@
 	gap: 12px;
 }
 
+.healthGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+	gap: 12px;
+}
+
+.healthCard {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 14px 16px;
+	border: 1px solid var(--s3d-color-border-soft);
+	border-radius: 16px;
+	background: color-mix(in srgb, var(--s3d-color-bg-elevated) 88%, transparent);
+}
+
+.healthCardActive {
+	border-color: color-mix(in srgb, var(--s3d-color-primary) 30%, var(--s3d-color-border-soft));
+}
+
+.healthCardDanger {
+	border-color: color-mix(in srgb, var(--s3d-color-error) 28%, var(--s3d-color-border-soft));
+}
+
+.healthCardSuccess {
+	border-color: color-mix(in srgb, var(--s3d-color-success-text) 28%, var(--s3d-color-border-soft));
+}
+
+.healthCardMuted {
+	border-color: var(--s3d-color-border-soft);
+}
+
+.healthLabel {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.healthValue {
+	font-size: clamp(24px, 3vw, 30px);
+	font-weight: 700;
+	line-height: 1;
+}
+
 .sectionMeta {
 	font-size: 13px;
 }
@@ -23,6 +68,7 @@
 	flex-wrap: wrap;
 }
 
+.searchFilterControl,
 .statusFilterControl,
 .typeFilterControl,
 .errorCodeFilterControl {
@@ -47,9 +93,17 @@
 	.headerActions {
 		justify-content: flex-start;
 	}
+
+	.healthGrid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 @media (min-width: 768px) {
+	.searchFilterControl {
+		width: 320px;
+	}
+
 	.statusFilterControl {
 		width: 200px;
 	}

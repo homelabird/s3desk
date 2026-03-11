@@ -1,3 +1,5 @@
+import { useCallback } from 'react'
+
 import { COMPACT_ROW_HEIGHT_PX, WIDE_ROW_HEIGHT_PX } from './objectsPageConstants'
 import { logContextMenuDebug } from './objectsPageDebug'
 import styles from './objects.module.css'
@@ -93,6 +95,17 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		transfers,
 		onZipObjects: (keys) => zipObjectsJobMutation.mutate({ keys }),
 	})
+	const handlePresign = useCallback(
+		(key: string) => {
+			const item = objectByKey.get(key)
+			presignMutation.mutate({
+				key,
+				size: item?.size,
+				lastModified: item?.lastModified,
+			})
+		},
+		[objectByKey, presignMutation],
+	)
 
 	const { clipboardObjects, onCopy, copySelectionToClipboard, pasteClipboardObjects } = useObjectsClipboard({
 		profileId: props.profileId,
@@ -178,7 +191,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 			onGoUp: onUp,
 			onDownload,
 			onDownloadToDevice,
-			onPresign: (key) => presignMutation.mutate(key),
+			onPresign: handlePresign,
 			onCopy,
 			onOpenLargePreviewForKey: previewState.openLargePreviewForKey,
 			onOpenDetailsForKey: openDetailsForKey,
@@ -312,7 +325,9 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 
 	return {
 		breadcrumbItems,
+		closeContextMenu,
 		commandItems,
+		contextMenuState,
 		copySelectionToClipboard,
 		contextMenuClassName,
 		contextMenuProps,
@@ -333,7 +348,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		normalizeDropTargetPrefix,
 		onCopy,
 		onDownload,
-		onPresign: (key: string) => presignMutation.mutate(key),
+		onPresign: handlePresign,
 		onDndTargetDragLeave,
 		onDndTargetDragOver,
 		onDndTargetDrop,

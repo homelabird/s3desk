@@ -1,0 +1,164 @@
+.root {
+	width: 100%;
+}
+
+.trigger {
+	width: 100%;
+	border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 22%, transparent);
+	border-radius: 16px;
+	background:
+		linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-bg) 92%, transparent), color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, transparent));
+	color: var(--s3d-sidebar-text);
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 12px;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background var(--s3d-transition-fast),
+		border-color var(--s3d-transition-fast),
+		box-shadow var(--s3d-transition-fast),
+		transform var(--s3d-transition-fast);
+}
+
+.trigger:hover,
+.trigger:focus-visible {
+	border-color: var(--s3d-color-focus);
+	box-shadow: var(--s3d-shadow-sm);
+	outline: none;
+	transform: translateY(-1px);
+}
+
+.triggerIcon {
+	width: 38px;
+	height: 38px;
+	border-radius: 12px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, white 18%, transparent);
+	color: var(--s3d-sidebar-text);
+	font-size: 18px;
+	flex: 0 0 auto;
+}
+
+.triggerCopy {
+	min-width: 0;
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.triggerTitle {
+	font-weight: 800;
+	line-height: 1.1;
+}
+
+.triggerSubtitle {
+	font-size: 12px;
+	line-height: 1.35;
+	color: var(--s3d-sidebar-text-secondary);
+}
+
+.panel {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.panelHeader {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 14px;
+	border-radius: 16px;
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 84%, transparent);
+	border: 1px solid var(--s3d-color-border);
+}
+
+.sectionHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.inlineActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.statusRow {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.checkboxLabel {
+	font-size: 13px;
+}
+
+.resultCard {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--s3d-color-bg) 80%, transparent);
+	border: 1px solid var(--s3d-color-border);
+}
+
+.codeWrap {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.tightList {
+	margin: 0;
+	padding-left: 18px;
+}
+
+.loadingRow {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 8px 0;
+}
+
+.inventoryItem {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--s3d-color-bg) 86%, transparent);
+	border: 1px solid var(--s3d-color-border);
+}
+
+.inventoryHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.inventoryTitle {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}

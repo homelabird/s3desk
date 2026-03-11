@@ -47,27 +47,25 @@ def wait_for_meta():
 
 def ensure_profile() -> str:
     profiles_url = f"{S3DESK_API_BASE}/profiles"
+    payload = {
+        "provider": "s3_compatible",
+        "name": DEMO_PROFILE_NAME,
+        "endpoint": MINIO_INTERNAL_ENDPOINT,
+        "publicEndpoint": MINIO_PUBLIC_ENDPOINT,
+        "region": MINIO_REGION,
+        "accessKeyId": MINIO_ROOT_USER,
+        "secretAccessKey": MINIO_ROOT_PASSWORD,
+        "forcePathStyle": True,
+        "preserveLeadingSlash": False,
+        "tlsInsecureSkipVerify": False,
+    }
     profiles = request_json("GET", profiles_url) or []
     for profile in profiles:
         if profile.get("name") == DEMO_PROFILE_NAME:
+            request_json("PATCH", f"{profiles_url}/{profile['id']}", payload)
             return profile["id"]
 
-    created = request_json(
-        "POST",
-        profiles_url,
-        {
-            "provider": "s3_compatible",
-            "name": DEMO_PROFILE_NAME,
-            "endpoint": MINIO_INTERNAL_ENDPOINT,
-            "publicEndpoint": MINIO_PUBLIC_ENDPOINT,
-            "region": MINIO_REGION,
-            "accessKeyId": MINIO_ROOT_USER,
-            "secretAccessKey": MINIO_ROOT_PASSWORD,
-            "forcePathStyle": True,
-            "preserveLeadingSlash": False,
-            "tlsInsecureSkipVerify": False,
-        },
-    )
+    created = request_json("POST", profiles_url, payload)
     return created["id"]
 
 
@@ -87,8 +85,8 @@ def test_profile(profile_id: str):
 def main():
     wait_for_meta()
     profile_id = ensure_profile()
-    ensure_bucket(profile_id)
     test_profile(profile_id)
+    ensure_bucket(profile_id)
     sys.stdout.write(f"seeded profile={profile_id} bucket={DEMO_BUCKET}\n")
 
 

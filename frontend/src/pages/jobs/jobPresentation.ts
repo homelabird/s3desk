@@ -1,4 +1,5 @@
 import type { Job, JobProgress } from '../../api/types'
+import { jobTypeLabel } from '../../lib/jobTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
 import { formatS3Destination, getBool, getNumber, getString, parentPrefixFromKey } from './jobUtils'
 
@@ -13,6 +14,39 @@ export const getProgressSortValue = (job: Job) => {
 	if (bytes) return bytes
 	if (ops) return ops
 	return speed
+}
+
+function formatUploadSummary(args: {
+	bucket: string | null
+	prefix: string | null
+	rootName: string | null
+	rootKind: string | null
+	label: string | null
+	totalFiles: number | null
+	totalBytes: number | null
+	uploadId: string | null
+	tag: string
+}): string {
+	const dest = formatS3Destination(args.bucket, args.prefix)
+	const fileCountLabel = args.totalFiles != null ? `${args.totalFiles} file${args.totalFiles === 1 ? '' : 's'}` : null
+	const totalBytesLabel = args.totalBytes != null ? formatBytes(args.totalBytes) : null
+	const metricLabel = [fileCountLabel, totalBytesLabel].filter(Boolean).join(' · ')
+
+	let subject: string | null = null
+	if (args.rootName) {
+		subject = args.rootKind === 'folder' ? `${args.rootName}/` : args.rootName
+	} else if (args.label) {
+		subject = args.label
+	} else if (fileCountLabel) {
+		subject = fileCountLabel
+	} else if (args.uploadId) {
+		subject = args.uploadId
+	} else {
+		subject = '?'
+	}
+
+	const detail = metricLabel && subject !== metricLabel ? ` (${metricLabel})` : ''
+	return dest ? `upload ${subject}${detail} → ${dest}${args.tag}` : `upload ${subject}${detail}${args.tag}`
 }
 
 export function jobSummary(job: Job): string | null {
@@ -65,25 +99,19 @@ export function jobSummary(job: Job): string | null {
 			const dst = localPath ?? '?'
 			return `${src} → ${dst}${tag}`
 		}
+		case 'transfer_direct_upload':
 		case 'transfer_sync_staging_to_s3': {
-			const dest = formatS3Destination(bucket, prefix)
-			const fileCountLabel = totalFiles != null ? `${totalFiles} file${totalFiles === 1 ? '' : 's'}` : null
-			const totalBytesLabel = totalBytes != null ? formatBytes(totalBytes) : null
-			const metricLabel = [fileCountLabel, totalBytesLabel].filter(Boolean).join(' · ')
-			let subject: string | null = null
-			if (rootName) {
-				subject = rootKind === 'folder' ? `${rootName}/` : rootName
-			} else if (label) {
-				subject = label
-			} else if (fileCountLabel) {
-				subject = fileCountLabel
-			} else if (uploadId) {
-				subject = uploadId
-			} else {
-				subject = '?'
-			}
-			const detail = metricLabel && subject !== metricLabel ? ` (${metricLabel})` : ''
-			return dest ? `upload ${subject}${detail} → ${dest}${tag}` : `upload ${subject}${detail}${tag}`
+			return formatUploadSummary({
+				bucket,
+				prefix,
+				rootName,
+				rootKind,
+				label,
+				totalFiles,
+				totalBytes,
+				uploadId,
+				tag,
+			})
 		}
 		case 'transfer_delete_prefix': {
 			if (!bucket) return `rm ?${tag}`
@@ -135,6 +163,26 @@ export function jobSummary(job: Job): string | null {
 		default:
 			return null
 	}
+}
+
+export function jobMatchesSearch(job: Job, query: string): boolean {
+	const normalizedQuery = query.trim().toLowerCase()
+	if (!normalizedQuery) return true
+
+	const haystack = [
+		job.id,
+		job.type,
+		jobTypeLabel(job.type),
+		job.status,
+		job.errorCode ?? '',
+		job.error ?? '',
+		jobSummary(job) ?? '',
+		JSON.stringify(job.payload ?? {}),
+	]
+		.join('\n')
+		.toLowerCase()
+
+	return haystack.includes(normalizedQuery)
 }
 
 export function formatProgress(p?: JobProgress | null): string {

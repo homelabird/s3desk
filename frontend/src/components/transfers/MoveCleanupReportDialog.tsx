@@ -1,4 +1,4 @@
-import { Button, Space, Typography, type SpaceProps } from 'antd'
+import { Button, Space, Typography } from 'antd'
 import type { ReactNode } from 'react'
 
 import { DialogModal } from '../DialogModal'
@@ -11,7 +11,7 @@ type Props = {
 	onDownload: () => void
 }
 
-const verticalSpace: SpaceProps['direction'] = 'vertical'
+const verticalSpace = 'vertical' as const
 
 export function MoveCleanupReportDialog(props: Props) {
 	return (
@@ -29,7 +29,7 @@ export function MoveCleanupReportDialog(props: Props) {
 				</>
 			}
 		>
-			<Space direction={verticalSpace} size="middle">
+				<Space orientation={verticalSpace} size="middle">
 				<Typography.Text type="secondary">{props.summary}</Typography.Text>
 				{props.sections}
 			</Space>

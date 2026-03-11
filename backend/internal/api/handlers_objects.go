@@ -61,8 +61,28 @@ func (s *server) buildProxiedObjectDownloadURL(r *http.Request, secrets models.P
 	}, nil
 }
 
+func listObjectsMetricOperation(delimiter, continuationToken string) string {
+	token := strings.TrimSpace(continuationToken)
+	if delimiter == "" {
+		if token != "" {
+			return "list_objects_recursive_continuation"
+		}
+		return "list_objects_recursive_first"
+	}
+	if token != "" {
+		return "list_objects_continuation"
+	}
+	return "list_objects_first"
+}
+
 func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
-	metric := s.beginStorageMetric("unknown", "list_objects")
+	delimiter := r.URL.Query().Get("delimiter")
+	if delimiter == "" {
+		delimiter = "/"
+	}
+	token := strings.TrimSpace(r.URL.Query().Get("continuationToken"))
+
+	metric := s.beginStorageMetric("unknown", listObjectsMetricOperation(delimiter, token))
 	defer metric.Observe()
 
 	secrets, ok := profileFromContext(r.Context())
@@ -81,18 +101,8 @@ func (s *server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prefix := r.URL.Query().Get("prefix")
-	delimiter := r.URL.Query().Get("delimiter")
-	if delimiter == "" {
-		delimiter = "/"
-	}
 
 	maxKeys, _ := parseIntQueryClamped(r, "maxKeys", 500, 1, 1000)
-
-	token := r.URL.Query().Get("continuationToken")
-
-	if strings.TrimSpace(token) != "" {
-		token = strings.TrimSpace(token)
-	}
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()

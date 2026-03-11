@@ -88,40 +88,53 @@ export function JobsPage(props: Props) {
 						api={controller.api}
 						apiToken={props.apiToken}
 						profileId={props.profileId}
-						createOpen={controller.createOpen}
-						createDownloadOpen={controller.createDownloadOpen}
-						createDeleteOpen={controller.createDeleteOpen}
-						onCloseCreate={controller.onCloseCreate}
-						onCloseDownload={controller.onCloseDownload}
-						onCloseDelete={controller.onCloseDelete}
-						onSubmitCreate={controller.onCreateUpload}
-						onSubmitDownload={controller.onCreateDownload}
-						onSubmitDelete={controller.onCreateDelete}
-						uploadLoading={controller.deviceUploadLoading}
-						downloadLoading={controller.deviceDownloadLoading}
-						deleteLoading={controller.createDeleteMutation.isPending}
 						isOffline={controller.isOffline}
-						uploadSupported={controller.uploadSupported}
-						uploadUnsupportedReason={controller.uploadDisabledReason ?? null}
-						bucket={controller.bucket}
-						onBucketChange={controller.onSetBucket}
-						bucketOptions={controller.bucketOptions}
-						deleteBucket={controller.deleteJobPrefill?.bucket ?? controller.bucket}
-						deletePrefill={controller.deleteJobPrefill ? { prefix: controller.deleteJobPrefill.prefix, deleteAll: controller.deleteJobPrefill.deleteAll } : null}
-						detailsOpen={controller.detailsOpen}
-						detailsJobId={controller.detailsJobId}
-						onCloseDetails={controller.onCloseDetails}
-						onDeleteJob={(jobId) => controller.deleteJobMutation.mutateAsync(jobId)}
-						deleteJobLoading={controller.deleteJobMutation.isPending && controller.deletingJobId === controller.detailsJobId}
-						onOpenLogs={controller.onOpenLogs}
-						logRequestJobId={controller.logDrawerRequest.jobId}
-						logRequestNonce={controller.logDrawerRequest.nonce}
-						onCloseLogs={controller.onCloseLogs}
-						drawerWidth={controller.drawerWidth}
-						logSearchInputWidth={controller.logSearchInputWidth}
-						borderColor={controller.themeConfig.borderColor}
-						backgroundColor={controller.themeConfig.bg}
-						borderRadius={controller.borderRadius}
+						createFlow={{
+							createOpen: controller.createOpen,
+							createDownloadOpen: controller.createDownloadOpen,
+							createDeleteOpen: controller.createDeleteOpen,
+							onCloseCreate: controller.onCloseCreate,
+							onCloseDownload: controller.onCloseDownload,
+							onCloseDelete: controller.onCloseDelete,
+							onSubmitCreate: controller.onCreateUpload,
+							onSubmitDownload: controller.onCreateDownload,
+							onSubmitDelete: controller.onCreateDelete,
+							uploadLoading: controller.deviceUploadLoading,
+							downloadLoading: controller.deviceDownloadLoading,
+							deleteLoading: controller.createDeleteMutation.isPending,
+							uploadSupported: controller.uploadSupported,
+							uploadUnsupportedReason: controller.uploadDisabledReason ?? null,
+						}}
+						bucketState={{
+							bucket: controller.bucket,
+							onBucketChange: controller.onSetBucket,
+							bucketOptions: controller.bucketOptions,
+							deleteBucket: controller.deleteJobPrefill?.bucket ?? controller.bucket,
+							deletePrefill: controller.deleteJobPrefill
+								? { prefix: controller.deleteJobPrefill.prefix, deleteAll: controller.deleteJobPrefill.deleteAll }
+								: null,
+						}}
+						detailsState={{
+							detailsOpen: controller.detailsOpen,
+							detailsJobId: controller.detailsJobId,
+							onCloseDetails: controller.onCloseDetails,
+							onDeleteJob: (jobId) => controller.deleteJobMutation.mutateAsync(jobId),
+							deleteJobLoading:
+								controller.deleteJobMutation.isPending && controller.deletingJobId === controller.detailsJobId,
+							onOpenLogs: controller.onOpenLogs,
+						}}
+						logsState={{
+							logRequestJobId: controller.logDrawerRequest.jobId,
+							logRequestNonce: controller.logDrawerRequest.nonce,
+							onCloseLogs: controller.onCloseLogs,
+						}}
+						layout={{
+							drawerWidth: controller.drawerWidth,
+							logSearchInputWidth: controller.logSearchInputWidth,
+							borderColor: controller.themeConfig.borderColor,
+							backgroundColor: controller.themeConfig.bg,
+							borderRadius: controller.borderRadius,
+						}}
 					/>
 				</Suspense>
 			) : null}

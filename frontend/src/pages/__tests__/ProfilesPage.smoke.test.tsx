@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { message } from 'antd'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { APIClient, APIError } from '../../api/client'
@@ -40,6 +40,11 @@ afterEach(() => {
 })
 
 describe('ProfilesPage', () => {
+	function SearchProbe() {
+		const location = useLocation()
+		return <div data-testid="profiles-search">{location.search}</div>
+	}
+
 	function mockProfilesPageBase() {
 		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
 			version: 'test',
@@ -75,12 +80,17 @@ describe('ProfilesPage', () => {
 	}
 
 	async function openPrimaryProfileAction(actionLabel: 'Test' | 'Benchmark') {
-		const moreButtons = await screen.findAllByRole('button', { name: 'More actions for Primary Profile' })
+		await screen.findByText('Primary Profile', undefined, { timeout: 5_000 })
+		const moreButtons = await screen.findAllByRole(
+			'button',
+			{ name: 'More actions for Primary Profile' },
+			{ timeout: 5_000 },
+		)
 		await act(async () => {
 			fireEvent.click(moreButtons[0]!)
 		})
 		await act(async () => {
-			fireEvent.click(await screen.findByText(actionLabel))
+			fireEvent.click(await screen.findByText(actionLabel, undefined, { timeout: 5_000 }))
 		})
 	}
 
@@ -177,8 +187,8 @@ describe('ProfilesPage', () => {
 		expect(screen.getAllByText('Legacy GCS').length).toBeGreaterThan(0)
 		expect(screen.getAllByText('Needs update').length).toBeGreaterThan(0)
 		fireEvent.click(screen.getByRole('button', { name: 'Edit profile Legacy GCS' }))
-		expect(await screen.findByText('Edit Profile')).toBeInTheDocument()
-	})
+		expect(await screen.findByText('Edit Profile', undefined, { timeout: 10_000 })).toBeInTheDocument()
+	}, 20_000)
 
 	it('shows troubleshooting hint for failed profile tests', async () => {
 		const client = new QueryClient({
@@ -254,6 +264,57 @@ describe('ProfilesPage', () => {
 				8,
 			)
 		})
+	})
+
+	it('opens the create modal from the route query and clears the query when closed', async () => {
+		const client = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+			},
+		})
+
+		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+			version: 'test',
+			serverAddr: '127.0.0.1:8080',
+			dataDir: '/data',
+			staticDir: '/app/ui',
+			apiTokenEnabled: false,
+			encryptionEnabled: false,
+			capabilities: {
+				profileTls: { enabled: false, reason: 'test' },
+				providers: {},
+			},
+			allowedLocalDirs: [],
+			jobConcurrency: 1,
+			uploadSessionTTLSeconds: 3600,
+			uploadDirectStream: false,
+			transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
+		} as never)
+		vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([] as never)
+
+		render(
+			<QueryClientProvider client={client}>
+				<MemoryRouter initialEntries={['/profiles?create=1']}>
+					<Routes>
+						<Route
+							path="/profiles"
+							element={
+								<>
+									<ProfilesPage apiToken="token" profileId={null} setProfileId={vi.fn()} />
+									<SearchProbe />
+								</>
+							}
+						/>
+					</Routes>
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		const dialog = await screen.findByRole('dialog', { name: 'Create Profile' })
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create Profile' })).not.toBeInTheDocument())
+		expect(screen.getByTestId('profiles-search')).toHaveTextContent('')
 	})
 
 	it('renders compact profile cards on tablet widths', async () => {

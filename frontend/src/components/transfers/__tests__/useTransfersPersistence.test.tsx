@@ -66,6 +66,16 @@ function buildUploadTask(id: string, status: UploadTask['status']): UploadTask {
 	}
 }
 
+function buildWaitingJobUploadTask(id: string): UploadTask {
+	return {
+		...buildUploadTask(id, 'waiting_job'),
+		jobId: `job-${id}`,
+		loadedBytes: 100,
+		speedBps: 0,
+		etaSeconds: 0,
+	}
+}
+
 describe('useTransfersPersistence', () => {
 	beforeEach(() => {
 		window.localStorage.clear()
@@ -102,10 +112,43 @@ describe('useTransfersPersistence', () => {
 		expect(result.current.downloadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
 		expect(result.current.uploadTasks[0]?.status).toBe('canceled')
 		expect(result.current.uploadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
-			expect(result.current.downloadTasks[0]?.finishedAtMs).toBeTypeOf('number')
-			expect(result.current.uploadTasks[0]?.finishedAtMs).toBeTypeOf('number')
-			expect(result.current.uploadTasks[0]?.preview).toBeUndefined()
+		expect(result.current.downloadTasks[0]?.finishedAtMs).toBeTypeOf('number')
+		expect(result.current.uploadTasks[0]?.finishedAtMs).toBeTypeOf('number')
+		expect(result.current.uploadTasks[0]?.preview).toBeUndefined()
+	})
+
+	it('restores waiting upload jobs without canceling them', async () => {
+		window.localStorage.setItem(
+			'transfersHistoryV1',
+			JSON.stringify({
+				version: 1,
+				savedAtMs: 10,
+				downloads: [],
+				uploads: [buildWaitingJobUploadTask('u-wait')],
+			}),
+		)
+
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
+			const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([])
+			useTransfersPersistence({ downloadTasks, uploadTasks, setDownloadTasks, setUploadTasks })
+			return { downloadTasks, uploadTasks }
 		})
+
+		await waitFor(() => {
+			expect(result.current.uploadTasks).toHaveLength(1)
+		})
+
+		expect(result.current.uploadTasks[0]).toMatchObject({
+			id: 'u-wait',
+			status: 'waiting_job',
+			jobId: 'job-u-wait',
+			loadedBytes: 100,
+		})
+		expect(result.current.uploadTasks[0]?.error).toBeUndefined()
+		expect(result.current.uploadTasks[0]?.finishedAtMs).toBeUndefined()
+		expect(result.current.uploadTasks[0]?.preview).toBeUndefined()
+	})
 
 	it('persists only non-device downloads', async () => {
 		const { result } = renderHook(() => {

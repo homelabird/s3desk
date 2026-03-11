@@ -19,6 +19,10 @@ type UploadEtagsQueryData = {
 	failures: number
 }
 
+function supportsUploadDetailsJobType(type: string | undefined): boolean {
+	return type === 'transfer_sync_staging_to_s3' || type === 'transfer_direct_upload'
+}
+
 export function useJobsUploadDetails({
 	api,
 	profileId,
@@ -35,7 +39,7 @@ export function useJobsUploadDetails({
 
 	const uploadDetails = useMemo<JobsUploadDetails | null>(() => {
 		const job = jobDetailsQuery.data
-		if (!job || job.type !== 'transfer_sync_staging_to_s3') return null
+		if (!job || !supportsUploadDetailsJobType(job.type)) return null
 		if (!job.payload || typeof job.payload !== 'object') return null
 
 		const payload = job.payload as Record<string, unknown>

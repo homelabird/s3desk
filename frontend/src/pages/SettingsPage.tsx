@@ -1,9 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
 import { Button, message, Space, Typography } from 'antd'
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
-	APIClient,
 	DEFAULT_RETRY_COUNT,
 	DEFAULT_RETRY_DELAY_MS,
 	RETRY_COUNT_STORAGE_KEY,
@@ -13,7 +11,6 @@ import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
 import { AppTabs } from '../components/AppTabs'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { clearDismissedDialogs, countDismissedDialogs, subscribeDialogPreferences } from '../lib/dialogPreferences'
-import { formatErrorWithHint as formatErr } from '../lib/errors'
 import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
@@ -28,11 +25,11 @@ import {
 	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
 } from '../lib/thumbnailCache'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
+import { reloadPage } from '../lib/reloadPage'
 import {
 	AccessSettingsSection,
 	NetworkSettingsSection,
 	ObjectsSettingsSection,
-	ServerSettingsSection,
 	TransfersSettingsSection,
 } from './settings/settingsLazy'
 import styles from './SettingsPage.module.css'
@@ -61,6 +58,7 @@ const RESETTABLE_UI_STATE_KEYS = [
 	// Jobs
 	'jobsFollowLogs',
 	'jobsStatusFilter',
+	'jobsSearchFilter',
 	'jobsTypeFilter',
 	'jobsErrorCodeFilter',
 	'jobsColumnVisibility',
@@ -104,7 +102,6 @@ const RESETTABLE_UI_STATE_KEYS = [
 ] as const
 
 export function SettingsPage(props: Props) {
-	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
 		'downloadLinkProxyEnabled',
 		false,
@@ -173,11 +170,6 @@ export function SettingsPage(props: Props) {
 		return subscribeDialogPreferences(() => setDismissedDialogCount(countDismissedDialogs()))
 	}, [])
 
-	const metaQuery = useQuery({
-		queryKey: ['meta', props.apiToken],
-		queryFn: () => api.getMeta(),
-		retry: false,
-	})
 	const apiDocsBase = useMemo(() => {
 		const apiBaseUrl = getApiBaseUrl()
 		const api = new URL(apiBaseUrl, window.location.origin)
@@ -204,7 +196,7 @@ export function SettingsPage(props: Props) {
 					}
 				}
 				message.success('Saved UI state reset. Reloading…')
-				window.location.reload()
+				reloadPage()
 			},
 		})
 	}, [])
@@ -281,20 +273,6 @@ export function SettingsPage(props: Props) {
 									setUploadChunkFileConcurrencySetting={setUploadChunkFileConcurrencySetting}
 									uploadResumeConversionEnabled={uploadResumeConversionEnabled}
 									setUploadResumeConversionEnabled={setUploadResumeConversionEnabled}
-								/>
-							</Suspense>
-						),
-					},
-					{
-						key: 'operations',
-						label: 'Operations',
-						children: (
-							<Suspense fallback={null}>
-								<ServerSettingsSection
-									api={api}
-									meta={metaQuery.data}
-									isFetching={metaQuery.isFetching}
-									errorMessage={metaQuery.isError ? formatErr(metaQuery.error) : null}
 								/>
 							</Suspense>
 						),

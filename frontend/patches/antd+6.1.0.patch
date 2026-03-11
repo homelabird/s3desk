@@ -103,14 +103,14 @@ diff --git a/node_modules/antd/es/radio/group.js b/node_modules/antd/es/radio/gr
 index 1198636..85b931a 100644
 --- a/node_modules/antd/es/radio/group.js
 +++ b/node_modules/antd/es/radio/group.js
-@@ -10,10 +10,13 @@ import { ConfigContext } from '../config-provider';
+@@ -10,10 +10,14 @@ import { ConfigContext } from '../config-provider';
  import useCSSVarCls from '../config-provider/hooks/useCSSVarCls';
  import useSize from '../config-provider/hooks/useSize';
  import { FormItemInputContext } from '../form/context';
 -import { toNamePathStr } from '../form/hooks/useForm';
  import { RadioGroupContextProvider } from './context';
  import Radio from './radio';
--import useStyle from './style';
+ import useStyle from './style';
 +const toNamePathStr = name => {
 +  if (!name) return '';
 +  const namePath = Array.isArray(name) ? name : [name];
@@ -388,14 +388,14 @@ diff --git a/node_modules/antd/lib/radio/group.js b/node_modules/antd/lib/radio/
 index 09daf6a..b76e5f3 100644
 --- a/node_modules/antd/lib/radio/group.js
 +++ b/node_modules/antd/lib/radio/group.js
-@@ -17,10 +17,13 @@ var _configProvider = require("../config-provider");
+@@ -17,10 +17,14 @@ var _configProvider = require("../config-provider");
  var _useCSSVarCls = _interopRequireDefault(require("../config-provider/hooks/useCSSVarCls"));
  var _useSize = _interopRequireDefault(require("../config-provider/hooks/useSize"));
  var _context = require("../form/context");
 -var _useForm = require("../form/hooks/useForm");
  var _context2 = require("./context");
  var _radio = _interopRequireDefault(require("./radio"));
--var _style = _interopRequireDefault(require("./style"));
+ var _style = _interopRequireDefault(require("./style"));
 +const toNamePathStr = name => {
 +  if (!name) return '';
 +  const namePath = Array.isArray(name) ? name : [name];

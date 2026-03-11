@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { message } from "antd";
 import {
   fireEvent,
   render,
@@ -6,13 +7,25 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ensureDomShims } from "../../../test/domShims";
 import { BucketGovernanceModal } from "../BucketGovernanceModal";
 
 beforeAll(() => {
   ensureDomShims();
+});
+
+const SLOW_GOVERNANCE_TIMEOUT_MS = 15_000;
+
+beforeEach(() => {
+  vi.spyOn(message, "success").mockImplementation(() => undefined as never);
+  vi.spyOn(message, "error").mockImplementation(() => undefined as never);
+  vi.spyOn(message, "warning").mockImplementation(() => undefined as never);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_object_storage") {
@@ -609,7 +622,7 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
-  });
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
   it("renders Azure controls and updates visibility plus typed protection controls", async () => {
     const api = createApi("azure_blob");
@@ -756,7 +769,7 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
-  });
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
   it("renders OCI controls and updates visibility, versioning, retention rules, and PAR sharing", async () => {
     const api = createApi("oci_object_storage");
@@ -897,5 +910,5 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
-  });
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
 });

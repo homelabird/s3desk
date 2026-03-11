@@ -58,10 +58,10 @@ export function ConfirmDangerDialog(props: Props) {
 				</>
 			}
 		>
-			<Space direction="vertical" style={{ width: '100%' }}>
+			<Space orientation="vertical" style={{ width: '100%' }}>
 				{props.description ? <div>{props.description}</div> : null}
 				{props.details ? <Typography.Text type="secondary">{props.details}</Typography.Text> : null}
-				<Space direction="vertical" size={4} style={{ width: '100%' }}>
+				<Space orientation="vertical" size={4} style={{ width: '100%' }}>
 					<Typography.Text type="secondary">{confirmHint}</Typography.Text>
 					<Input
 						placeholder={confirmToken}

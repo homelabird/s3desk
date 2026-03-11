@@ -6,6 +6,7 @@ import type { APIClient } from '../../api/client'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 
 type Presign = { key: string; url: string; expiresAt: string }
+type PresignRequest = { key: string; size?: number; lastModified?: string }
 
 type UseObjectsPresignArgs = {
 	api: APIClient
@@ -21,19 +22,21 @@ export function useObjectsPresign({ api, profileId, bucket, downloadLinkProxyEna
 	const [presignKey, setPresignKey] = useState<string | null>(null)
 
 	const presignMutation = useMutation({
-		mutationFn: (key: string) =>
+		mutationFn: (req: PresignRequest) =>
 			api.getObjectDownloadURL({
 				profileId: profileId!,
 				bucket,
-				key,
+				key: req.key,
 				proxy: downloadLinkProxyEnabled || !presignedDownloadSupported,
+				size: req.size,
+				lastModified: req.lastModified,
 			}),
-		onMutate: (key) => setPresignKey(key),
-		onSuccess: (resp, key) => {
-			setPresign({ key, url: resp.url, expiresAt: resp.expiresAt })
+		onMutate: (req) => setPresignKey(req.key),
+		onSuccess: (resp, req) => {
+			setPresign({ key: req.key, url: resp.url, expiresAt: resp.expiresAt })
 			setPresignOpen(true)
 		},
-		onSettled: (_, __, key) => setPresignKey((prev) => (prev === key ? null : prev)),
+		onSettled: (_, __, req) => setPresignKey((prev) => (prev === req.key ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),
 	})
 

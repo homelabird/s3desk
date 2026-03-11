@@ -110,7 +110,7 @@ func (s *server) checkWebSocketOrigin(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	host := normalizeHost(parsed.Host)
+	host := normalizeHost(parsed.Hostname())
 	if host == "" {
 		return false
 	}

@@ -146,6 +146,12 @@ describe('FullAppInner header', () => {
 
 		expect(await screen.findByRole('menuitem', { name: /Settings/i })).toBeInTheDocument()
 		expect(screen.getByRole('menuitem', { name: /Logout/i })).toBeInTheDocument()
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }))
+		})
+
+		expect(await screen.findByRole('button', { name: 'Backup' })).toBeInTheDocument()
 	})
 
 	it('keeps a compact single-row header on tablet widths', async () => {
@@ -172,6 +178,7 @@ describe('FullAppInner header', () => {
 		expect(await screen.findByTestId('app-header')).toBeInTheDocument()
 		expect(screen.queryByTestId('app-header-profile-row')).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Backup' })).toBeInTheDocument()
 		expect(screen.getByText('Profile')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Settings/i })).toBeInTheDocument()

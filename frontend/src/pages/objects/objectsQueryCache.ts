@@ -1,4 +1,4 @@
-import type { InfiniteData } from '@tanstack/react-query'
+import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 
 import type { ListObjectsResponse } from '../../api/types'
 import { normalizePrefix } from './objectsListUtils'
@@ -52,4 +52,35 @@ export function hasVisiblePrefixInObjectsData(
 		}
 	}
 	return false
+}
+
+type ObjectsQueryLocation = {
+	profileId: string
+	bucket: string
+	changedPrefix: string
+}
+
+function isPrefixRelated(queryPrefix: string, changedPrefix: string): boolean {
+	const normalizedQueryPrefix = normalizePrefix(queryPrefix)
+	const normalizedChangedPrefix = normalizePrefix(changedPrefix)
+	if (!normalizedChangedPrefix) return true
+	if (!normalizedQueryPrefix) return true
+	return normalizedChangedPrefix.startsWith(normalizedQueryPrefix) || normalizedQueryPrefix.startsWith(normalizedChangedPrefix)
+}
+
+export function isObjectsQueryKeyRelevantToPrefix(
+	queryKey: readonly unknown[],
+	location: ObjectsQueryLocation,
+): boolean {
+	if (queryKey[0] !== 'objects') return false
+	if (queryKey[1] !== location.profileId) return false
+	if (queryKey[2] !== location.bucket) return false
+	const queryPrefix = typeof queryKey[3] === 'string' ? queryKey[3] : ''
+	return isPrefixRelated(queryPrefix, location.changedPrefix)
+}
+
+export async function invalidateObjectQueriesForPrefix(queryClient: QueryClient, location: ObjectsQueryLocation): Promise<void> {
+	await queryClient.invalidateQueries({
+		predicate: (query) => isObjectsQueryKeyRelevantToPrefix(query.queryKey, location),
+	})
 }

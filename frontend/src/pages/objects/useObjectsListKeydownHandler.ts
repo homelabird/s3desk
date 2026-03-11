@@ -4,6 +4,7 @@ import { message } from 'antd'
 import { useObjectsListKeydown } from './useObjectsListKeydown'
 
 type UseObjectsListKeydownHandlerArgs = {
+	contextMenuOpen?: boolean
 	selectedCount: number
 	singleSelectedKey: string | null
 	lastSelectedObjectKey: string | null
@@ -11,6 +12,7 @@ type UseObjectsListKeydownHandlerArgs = {
 	visibleObjectKeys: string[]
 	rowIndexByObjectKey: Map<string, number>
 	canGoUp: boolean
+	closeContextMenu?: () => void
 	clearSelection: () => void
 	openRenameObject: (key: string) => void
 	openNewFolder: () => void
@@ -28,6 +30,7 @@ type UseObjectsListKeydownHandlerArgs = {
 }
 
 export function useObjectsListKeydownHandler({
+	contextMenuOpen,
 	selectedCount,
 	singleSelectedKey,
 	lastSelectedObjectKey,
@@ -35,6 +38,7 @@ export function useObjectsListKeydownHandler({
 	visibleObjectKeys,
 	rowIndexByObjectKey,
 	canGoUp,
+	closeContextMenu,
 	clearSelection,
 	openRenameObject,
 	openNewFolder,
@@ -65,6 +69,7 @@ export function useObjectsListKeydownHandler({
 	}, [warnRenameNoSelection])
 
 	return useObjectsListKeydown({
+		contextMenuOpen,
 		selectedCount,
 		singleSelectedKey,
 		lastSelectedObjectKey,
@@ -72,6 +77,7 @@ export function useObjectsListKeydownHandler({
 		visibleObjectKeys,
 		rowIndexByObjectKey,
 		canGoUp,
+		onCloseContextMenu: closeContextMenu,
 		onClearSelection: clearSelection,
 		onOpenRename: openRenameObject,
 		onNewFolder: openNewFolder,

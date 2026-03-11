@@ -98,9 +98,11 @@ describe('useJobsRealtimeEvents', () => {
 	it('invalidates jobs when it detects an event sequence gap', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const setQueriesData = vi.fn()
+		const setQueryData = vi.fn()
 		const queryClient = {
 			invalidateQueries,
 			setQueriesData,
+			setQueryData,
 		} as unknown as QueryClient
 
 		const { unmount } = renderHook(() =>
@@ -123,7 +125,75 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
-		expect(setQueriesData).toHaveBeenCalledTimes(2)
+		expect(setQueriesData).toHaveBeenCalledTimes(4)
+		expect(setQueryData).toHaveBeenCalledTimes(2)
+
+		unmount()
+	})
+
+	it('updates active job detail queries from realtime progress events', async () => {
+		const setQueriesData = vi.fn()
+		const setQueryData = vi.fn()
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData,
+			setQueryData,
+		} as unknown as QueryClient
+
+		const { unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitOpen()
+			ws.emitMessage(
+				JSON.stringify({
+					type: 'job.completed',
+					seq: 1,
+					jobId: 'job-1',
+					payload: {
+						status: 'succeeded',
+						progress: { bytesDone: 4096, bytesTotal: 4096 },
+						error: null,
+					},
+				}),
+			)
+		})
+
+		const detailCall = setQueryData.mock.calls[0]
+		expect(detailCall).toBeTruthy()
+		const [filters, updater] = detailCall as [
+			unknown[],
+			(old: {
+				id: string
+				status: string
+				progress: { bytesDone: number; bytesTotal: number } | null
+				error: string | null
+				errorCode?: string | null
+			}) => unknown,
+		]
+		expect(filters).toEqual(['job', 'profile-1', 'job-1', 'token'])
+		expect(
+			updater({
+				id: 'job-1',
+				status: 'running',
+				progress: { bytesDone: 1024, bytesTotal: 4096 },
+				error: 'old error',
+				errorCode: 'old_code',
+			}),
+		).toEqual({
+			id: 'job-1',
+			status: 'succeeded',
+			progress: { bytesDone: 4096, bytesTotal: 4096 },
+			error: 'old error',
+			errorCode: 'old_code',
+		})
 
 		unmount()
 	})
@@ -133,6 +203,7 @@ describe('useJobsRealtimeEvents', () => {
 		const queryClient = {
 			invalidateQueries,
 			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
 		} as unknown as QueryClient
 
 		const { unmount } = renderHook(() =>
@@ -173,6 +244,7 @@ describe('useJobsRealtimeEvents', () => {
 		const queryClient = {
 			invalidateQueries,
 			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
 		} as unknown as QueryClient
 
 		const { unmount } = renderHook(() =>
@@ -204,15 +276,51 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		await flushRealtimeSetup()
-		const reconnectWs = MockWebSocket.instances[1]
-		expect(reconnectWs?.url).toContain('/ws')
-		expect(reconnectWs?.url).toContain('realtimeTicket=ws-ticket')
+		const reconnectEs = MockEventSource.instances[1]
+		expect(reconnectEs?.url).toContain('/events')
+		expect(reconnectEs?.url).toContain('realtimeTicket=sse-ticket')
 
 		act(() => {
-			reconnectWs.emitOpen()
+			reconnectEs.emitOpen()
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
+		expect(MockWebSocket.instances).toHaveLength(1)
+
+		unmount()
+	})
+
+	it('retries websocket only after a manual realtime retry', async () => {
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { result, unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitClose()
+		})
+
+		await flushRealtimeSetup()
+		expect(MockEventSource.instances).toHaveLength(1)
+		expect(MockWebSocket.instances).toHaveLength(1)
+
+		act(() => {
+			result.current.retryRealtime()
+		})
+
+		await flushRealtimeSetup()
+		expect(MockWebSocket.instances).toHaveLength(2)
 
 		unmount()
 	})

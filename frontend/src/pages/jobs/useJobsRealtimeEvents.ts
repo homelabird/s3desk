@@ -2,7 +2,7 @@ import { type InfiniteData, type QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { buildApiHttpUrl, buildApiWsUrl } from '../../api/baseUrl'
-import type { JobProgress, JobsListResponse, JobStatus, WSEvent } from '../../api/types'
+import type { Job, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../../api/types'
 import { updateJob } from './jobUtils'
 
 const eventsRetryThreshold = 3
@@ -56,6 +56,7 @@ export function useJobsRealtimeEvents({
 		let wsProbeTimer: number | null = null
 		let reconnectAttempt = 0
 		let connectNonce = 0
+		let wsUnavailable = false
 
 		const refreshJobs = () => {
 			queryClient.invalidateQueries({ queryKey: ['jobs'], exact: false }).catch(() => {})
@@ -95,16 +96,20 @@ export function useJobsRealtimeEvents({
 			reconnectTimer = window.setTimeout(() => {
 				reconnectTimer = null
 				if (stopped) return
-				connectWS()
+				if (wsUnavailable) {
+					void connectSSE()
+					return
+				}
+				void connectWS()
 			}, delay)
 		}
 
 		const scheduleWSProbe = () => {
-			if (stopped || wsProbeTimer) return
+			if (stopped || wsProbeTimer || wsUnavailable) return
 			wsProbeTimer = window.setTimeout(() => {
 				wsProbeTimer = null
 				if (stopped) return
-				if (currentTransport !== 'ws') connectWS()
+				if (currentTransport !== 'ws') void connectWS()
 			}, 15_000)
 		}
 
@@ -154,17 +159,29 @@ export function useJobsRealtimeEvents({
 					msg.payload !== null
 				) {
 					const payload = msg.payload as { status?: JobStatus; progress?: JobProgress; error?: string; errorCode?: string }
+					const applyJobPatch = (job: Job): Job => ({
+						...job,
+						status: payload.status ?? job.status,
+						progress: payload.progress ?? job.progress,
+						error: payload.error ?? job.error,
+						errorCode: payload.errorCode ?? job.errorCode,
+					})
 					queryClient.setQueriesData(
 						{ queryKey: ['jobs'], exact: false },
 						(old: InfiniteData<JobsListResponse, string | undefined> | undefined) =>
-							updateJob(old, msg.jobId!, (job) => ({
-								...job,
-								status: payload.status ?? job.status,
-								progress: payload.progress ?? job.progress,
-								error: payload.error ?? job.error,
-								errorCode: payload.errorCode ?? job.errorCode,
-							})),
+							updateJob(old, msg.jobId!, applyJobPatch),
 					)
+					queryClient.setQueryData(
+						['job', profileId, msg.jobId, apiToken],
+						(old: Job | undefined) => (old ? applyJobPatch(old) : old),
+					)
+					queryClient.setQueriesData(
+						{ queryKey: ['job'], exact: false },
+						(old: Job | undefined) => (old && old.id === msg.jobId ? applyJobPatch(old) : old),
+					)
+					if (msg.type === 'job.completed') {
+						queryClient.invalidateQueries({ queryKey: ['job', profileId, msg.jobId, apiToken], exact: true }).catch(() => {})
+					}
 				}
 			} catch {
 				// ignore malformed events
@@ -210,7 +227,7 @@ export function useJobsRealtimeEvents({
 			}
 			es.onopen = () => {
 				handleTransportOpen('sse')
-				scheduleWSProbe()
+				if (!wsUnavailable) scheduleWSProbe()
 			}
 			es.onerror = () => {
 				markRefreshOnReconnect()
@@ -223,6 +240,10 @@ export function useJobsRealtimeEvents({
 
 		const connectWS = async () => {
 			if (stopped) return
+			if (wsUnavailable) {
+				void connectSSE()
+				return
+			}
 			const nonce = ++connectNonce
 			clearReconnectTimer()
 			clearWsProbeTimer()
@@ -245,15 +266,14 @@ export function useJobsRealtimeEvents({
 			ws = new WebSocket(buildWSURL(ticket, lastSeqRef.current))
 
 			let opened = false
+			let disconnectHandled = false
 			const fallbackTimer = window.setTimeout(() => {
-				if (stopped || opened) return
+				if (stopped || opened || disconnectHandled) return
 				try {
 					ws?.close()
 				} catch {
 					// ignore
 				}
-				connectSSE()
-				scheduleWSProbe()
 			}, 1500)
 
 			ws.onopen = () => {
@@ -273,13 +293,17 @@ export function useJobsRealtimeEvents({
 			}
 
 			const onDisconnect = () => {
+				if (disconnectHandled) return
+				disconnectHandled = true
 				window.clearTimeout(fallbackTimer)
 				if (stopped) return
+				const failedBeforeOpen = !opened
+				if (failedBeforeOpen) wsUnavailable = true
 				markRefreshOnReconnect()
 				setTransport(null)
 				setEventsConnected(false)
-				connectSSE()
-				scheduleReconnect()
+				void connectSSE()
+				if (!failedBeforeOpen) scheduleReconnect()
 			}
 
 			ws.onclose = onDisconnect

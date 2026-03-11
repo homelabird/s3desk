@@ -10,10 +10,12 @@ type ApiFixtureResponse = {
 	json?: unknown
 }
 
+type ApiFixtureResult = ApiFixtureResponse | void
+
 type ApiFixture = {
 	method?: string
 	path: string | RegExp
-	handler: (ctx: MockApiContext) => ApiFixtureResponse | Promise<ApiFixtureResponse>
+	handler: (ctx: MockApiContext) => ApiFixtureResult | Promise<ApiFixtureResult>
 }
 
 const defaultMetaResponse = {
@@ -58,6 +60,7 @@ async function fulfillFixtureResponse(ctx: MockApiContext, response: ApiFixtureR
 	})
 }
 
+export type { ApiFixture, ApiFixtureResponse }
 export type { MockApiContext, MockApiRoute } from './mockApi'
 export { installMockApi } from './mockApi'
 export { seedLocalStorage } from './storage'
@@ -148,12 +151,63 @@ export function errorFixture(method: string, path: string | RegExp, status: numb
 	return jsonFixture(method, path, { error: { code, message } }, { status })
 }
 
-export async function installApiFixtures(page: Page, fixtures: ApiFixture[], fallback?: ApiFixtureResponse) {
+export function retryAfterErrorResponse(status: number, code: string, message: string, retryAfterSeconds: number): ApiFixtureResponse {
+	return {
+		status,
+		headers: { 'Retry-After': String(retryAfterSeconds) },
+		json: { error: { code, message } },
+	}
+}
+
+export function withDelay(fixture: ApiFixture, delayMs: number): ApiFixture {
+	return {
+		...fixture,
+		handler: async (ctx) => {
+			await ctx.delay(delayMs)
+			return fixture.handler(ctx)
+		},
+	}
+}
+
+export function abortFixture(
+	method: string,
+	path: string | RegExp,
+	errorCode?: Parameters<MockApiContext['abort']>[0],
+): ApiFixture {
+	return {
+		method,
+		path,
+		handler: (ctx) => ctx.abort(errorCode),
+	}
+}
+
+export function sequenceFixture(
+	method: string,
+	path: string | RegExp,
+	steps: Array<ApiFixtureResponse | ((ctx: MockApiContext, attempt: number) => ApiFixtureResult | Promise<ApiFixtureResult>)>,
+): ApiFixture {
+	let attempts = 0
+	return {
+		method,
+		path,
+		handler: async (ctx) => {
+			attempts += 1
+			const step = steps[Math.min(attempts - 1, steps.length - 1)]
+			if (typeof step === 'function') {
+				return step(ctx, attempts)
+			}
+			return step
+		},
+	}
+}
+
+export function buildFixtureRoutes(fixtures: ApiFixture[], fallback?: ApiFixtureResponse): MockApiRoute[] {
 	const routes: MockApiRoute[] = fixtures.map((fixture) => ({
 		method: fixture.method,
 		path: fixture.path,
 		handle: async (ctx) => {
 			const response = await fixture.handler(ctx)
+			if (response === undefined) return
 			await fulfillFixtureResponse(ctx, response)
 		},
 	}))
@@ -165,5 +219,10 @@ export async function installApiFixtures(page: Page, fixtures: ApiFixture[], fal
 		})
 	}
 
+	return routes
+}
+
+export async function installApiFixtures(page: Page, fixtures: ApiFixture[], fallback?: ApiFixtureResponse) {
+	const routes = buildFixtureRoutes(fixtures, fallback)
 	await installMockApi(page, routes)
 }

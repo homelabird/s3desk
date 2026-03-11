@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { message } from 'antd'
 
 import type { TransfersContextValue } from '../../components/Transfers'
@@ -94,6 +94,22 @@ export function useObjectsUploadDrop({
 }: UseObjectsUploadDropArgs) {
 	const uploadDragCounterRef = useRef(0)
 	const [uploadDropActive, setUploadDropActive] = useState(false)
+	const resetUploadDropState = useCallback(() => {
+		uploadDragCounterRef.current = 0
+		setUploadDropActive(false)
+	}, [])
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		window.addEventListener('blur', resetUploadDropState)
+		window.addEventListener('dragend', resetUploadDropState)
+		window.addEventListener('drop', resetUploadDropState)
+		return () => {
+			window.removeEventListener('blur', resetUploadDropState)
+			window.removeEventListener('dragend', resetUploadDropState)
+			window.removeEventListener('drop', resetUploadDropState)
+		}
+	}, [resetUploadDropState])
 
 	const startUploadFromFiles = useCallback(
 		(files: File[]) => {
@@ -168,8 +184,7 @@ export function useObjectsUploadDrop({
 			if (resolveObjectsDropIntent(e.dataTransfer) !== 'external_upload') return
 			e.preventDefault()
 			e.stopPropagation()
-			setUploadDropActive(false)
-			uploadDragCounterRef.current = 0
+			resetUploadDropState()
 			if (!profileId || !bucket) {
 				if (!profileId) message.info('Select a profile first')
 				else message.info('Select a bucket first')
@@ -208,7 +223,7 @@ export function useObjectsUploadDrop({
 				}
 			})()
 		},
-		[bucket, isOffline, profileId, startUploadFromFiles, uploadsDisabledReason, uploadsEnabled],
+		[bucket, isOffline, profileId, resetUploadDropState, startUploadFromFiles, uploadsDisabledReason, uploadsEnabled],
 	)
 
 	return {

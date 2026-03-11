@@ -12,53 +12,63 @@ type Props = {
 	api: APIClient
 	apiToken: string
 	profileId: string
-	createOpen: boolean
-	createDownloadOpen: boolean
-	createDeleteOpen: boolean
-	onCloseCreate: () => void
-	onCloseDownload: () => void
-	onCloseDelete: () => void
-	onSubmitCreate: (values: {
-		bucket: string
-		prefix: string
-		files: File[]
-		label?: string
-	}) => void
-	onSubmitDownload: (values: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
-	onSubmitDelete: (values: {
-		bucket: string
-		prefix: string
-		deleteAll: boolean
-		allowUnsafePrefix: boolean
-		include: string[]
-		exclude: string[]
-		dryRun: boolean
-	}) => void
-	uploadLoading: boolean
-	downloadLoading: boolean
-	deleteLoading: boolean
 	isOffline: boolean
-	uploadSupported: boolean
-	uploadUnsupportedReason: string | null
-	bucket: string
-	onBucketChange: (next: string) => void
-	bucketOptions: BucketOption[]
-	deleteBucket: string
-	deletePrefill: DeleteJobModalPrefill | null
-	detailsOpen: boolean
-	detailsJobId: string | null
-	onCloseDetails: () => void
-	onDeleteJob: (jobId: string) => Promise<void>
-	deleteJobLoading: boolean
-	onOpenLogs: (jobId: string) => void
-	logRequestJobId: string | null
-	logRequestNonce: number
-	onCloseLogs: () => void
-	drawerWidth: number | string
-	logSearchInputWidth: number | string
-	borderColor: string
-	backgroundColor: string
-	borderRadius: number
+	createFlow: {
+		createOpen: boolean
+		createDownloadOpen: boolean
+		createDeleteOpen: boolean
+		onCloseCreate: () => void
+		onCloseDownload: () => void
+		onCloseDelete: () => void
+		onSubmitCreate: (values: {
+			bucket: string
+			prefix: string
+			files: File[]
+			label?: string
+		}) => void
+		onSubmitDownload: (values: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
+		onSubmitDelete: (values: {
+			bucket: string
+			prefix: string
+			deleteAll: boolean
+			allowUnsafePrefix: boolean
+			include: string[]
+			exclude: string[]
+			dryRun: boolean
+		}) => void
+		uploadLoading: boolean
+		downloadLoading: boolean
+		deleteLoading: boolean
+		uploadSupported: boolean
+		uploadUnsupportedReason: string | null
+	}
+	bucketState: {
+		bucket: string
+		onBucketChange: (next: string) => void
+		bucketOptions: BucketOption[]
+		deleteBucket: string
+		deletePrefill: DeleteJobModalPrefill | null
+	}
+	detailsState: {
+		detailsOpen: boolean
+		detailsJobId: string | null
+		onCloseDetails: () => void
+		onDeleteJob: (jobId: string) => Promise<void>
+		deleteJobLoading: boolean
+		onOpenLogs: (jobId: string) => void
+	}
+	logsState: {
+		logRequestJobId: string | null
+		logRequestNonce: number
+		onCloseLogs: () => void
+	}
+	layout: {
+		drawerWidth: number | string
+		logSearchInputWidth: number | string
+		borderColor: string
+		backgroundColor: string
+		borderRadius: number
+	}
 }
 
 export function JobsOverlaysHost(props: Props) {
@@ -66,6 +76,14 @@ export function JobsOverlaysHost(props: Props) {
 		api,
 		apiToken,
 		profileId,
+		isOffline,
+		createFlow,
+		bucketState,
+		detailsState,
+		logsState,
+		layout,
+	} = props
+	const {
 		createOpen,
 		createDownloadOpen,
 		createDeleteOpen,
@@ -78,29 +96,13 @@ export function JobsOverlaysHost(props: Props) {
 		uploadLoading,
 		downloadLoading,
 		deleteLoading,
-		isOffline,
 		uploadSupported,
 		uploadUnsupportedReason,
-		bucket,
-		onBucketChange,
-		bucketOptions,
-		deleteBucket,
-		deletePrefill,
-		detailsOpen,
-		detailsJobId,
-		onCloseDetails,
-		onDeleteJob,
-		deleteJobLoading,
-		onOpenLogs,
-		logRequestJobId,
-		logRequestNonce,
-		onCloseLogs,
-		drawerWidth,
-		logSearchInputWidth,
-		borderColor,
-		backgroundColor,
-		borderRadius,
-	} = props
+	} = createFlow
+	const { bucket, onBucketChange, bucketOptions, deleteBucket, deletePrefill } = bucketState
+	const { detailsOpen, detailsJobId, onCloseDetails, onDeleteJob, deleteJobLoading, onOpenLogs } = detailsState
+	const { logRequestJobId, logRequestNonce, onCloseLogs } = logsState
+	const { drawerWidth, logSearchInputWidth, borderColor, backgroundColor, borderRadius } = layout
 
 	const {
 		logsOpen,

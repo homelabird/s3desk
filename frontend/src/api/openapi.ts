@@ -47,6 +47,7 @@ export interface paths {
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
                 409: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
             };
         };
         put?: never;
@@ -312,6 +313,8 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         bundle: string;
+                        /** @description Optional bundle password used when the backup payload was exported with operator-supplied password protection. */
+                        password?: string;
                     };
                 };
             };
@@ -328,6 +331,8 @@ export interface paths {
                 400: components["responses"]["ErrorResponse"];
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
             };
         };
         delete?: never;
@@ -365,6 +370,8 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         bundle: string;
+                        /** @description Optional bundle password used when the portable payload was exported with operator-supplied password protection. */
+                        password?: string;
                     };
                 };
             };
@@ -381,6 +388,8 @@ export interface paths {
                 400: components["responses"]["ErrorResponse"];
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
             };
         };
         delete?: never;
@@ -418,10 +427,21 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         bundle: string;
+                        /** @description Optional bundle password used when the portable payload was exported with operator-supplied password protection. */
+                        password?: string;
                     };
                 };
             };
             responses: {
+                /** @description OK (blocked by preflight; no data written) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ServerPortableImportResponse"];
+                    };
+                };
                 /** @description Created */
                 201: {
                     headers: {
@@ -434,6 +454,8 @@ export interface paths {
                 400: components["responses"]["ErrorResponse"];
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
+                409: components["responses"]["ErrorResponse"];
+                413: components["responses"]["ErrorResponse"];
             };
         };
         delete?: never;

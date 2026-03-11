@@ -37,6 +37,8 @@ const (
 	serverBackupScopeCacheMetadata       = "cache_metadata"
 	serverBackupConfidentialityClear     = "clear"
 	serverBackupConfidentialityEncrypted = "encrypted"
+	serverBackupPasswordHeader           = "X-S3Desk-Backup-Password"
+	serverBackupPasswordMaxBytes         = 4096
 )
 
 var serverBackupFullDataEntries = []string{
@@ -87,9 +89,15 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	backupPassword, err := parseServerBackupPasswordHeader(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+		return
+	}
 	includeThumbnails := parsePortableBackupIncludeThumbnails(r)
-	if confidentiality == serverBackupConfidentialityEncrypted && strings.TrimSpace(s.cfg.EncryptionKey) == "" {
-		writeError(w, http.StatusConflict, "backup_confidentiality_unavailable", "encrypted backup bundles require ENCRYPTION_KEY on the source server", nil)
+	payloadSecret, err := resolveServerBackupExportSecret(confidentiality, backupPassword, s.cfg.EncryptionKey)
+	if err != nil {
+		writeError(w, http.StatusConflict, "backup_confidentiality_unavailable", err.Error(), nil)
 		return
 	}
 
@@ -128,7 +136,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 	_ = tmp.Close()
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	if _, err := s.writeServerBackupArchive(r.Context(), tmpPath, scope, confidentiality, includeThumbnails); err != nil {
+	if _, err := s.writeServerBackupArchive(r.Context(), tmpPath, scope, confidentiality, includeThumbnails, payloadSecret); err != nil {
 		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to create backup bundle", map[string]any{"error": err.Error()})
 		return
 	}
@@ -157,7 +165,7 @@ func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Reques
 	if s.cfg.ServerRestoreMaxBytes > 0 {
 		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.ServerRestoreMaxBytes)
 	}
-	file, cleanup, err := openServerRestoreBundle(r)
+	file, backupPassword, cleanup, err := openServerRestoreBundle(r)
 	if err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
@@ -171,7 +179,7 @@ func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Reques
 	}
 	defer cleanup()
 
-	resp, err := s.restoreServerBackupArchive(r.Context(), file)
+	resp, err := s.restoreServerBackupArchive(r.Context(), file, resolveServerBackupImportSecret(backupPassword, s.cfg.EncryptionKey))
 	if err != nil {
 		var preflightErr serverRestorePreflightError
 		if errors.As(err, &preflightErr) {
@@ -189,9 +197,9 @@ func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-func (s *server) writeServerBackupArchive(ctx context.Context, archivePath string, scope string, confidentiality string, includeThumbnails bool) (models.ServerMigrationManifest, error) {
+func (s *server) writeServerBackupArchive(ctx context.Context, archivePath string, scope string, confidentiality string, includeThumbnails bool, payloadSecret string) (models.ServerMigrationManifest, error) {
 	if scope == serverBackupScopePortable {
-		return s.writePortableServerBackupArchive(ctx, archivePath, confidentiality, includeThumbnails)
+		return s.writePortableServerBackupArchive(ctx, archivePath, confidentiality, includeThumbnails, payloadSecret)
 	}
 	now := time.Now().UTC()
 	tmpDir, err := os.MkdirTemp("", "s3desk-sqlite-backup-*")
@@ -219,7 +227,7 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 		DBBackend:         string(db.BackendSQLite),
 		EncryptionEnabled: s.cfg.EncryptionKey != "",
 		Entries:           entries,
-		Warnings:          buildServerBackupManifestWarnings(s.cfg.EncryptionKey != "", scope, confidentiality),
+		Warnings:          buildServerBackupManifestWarnings(s.cfg.EncryptionKey != "", scope, confidentiality, backupSecretProvidedByPassword(payloadSecret, s.cfg.EncryptionKey)),
 	}
 	if confidentiality == serverBackupConfidentialityEncrypted {
 		manifest.ConfidentialityMode = confidentiality
@@ -247,13 +255,13 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
 		archiveManifest := serverBackupArchiveManifest{
 			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, s.cfg.EncryptionKey, payloadIV),
+			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, payloadSecret, payloadIV),
 			PayloadEncryptionIV:     payloadIV,
 		}
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
-		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, payloadIV, s.cfg.EncryptionKey); err != nil {
+		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, payloadIV, payloadSecret); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
 	} else {
@@ -273,7 +281,7 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
 		archiveManifest := serverBackupArchiveManifest{
 			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, s.cfg.EncryptionKey, ""),
+			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, payloadSecret, ""),
 		}
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
@@ -376,7 +384,7 @@ func writeEncryptedPayloadFile(tarWriter *tar.Writer, payloadPath string, payloa
 	return err
 }
 
-func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) (models.ServerRestoreResponse, error) {
+func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, payloadSecret string) (models.ServerRestoreResponse, error) {
 	s.restoreMu.Lock()
 	defer s.restoreMu.Unlock()
 
@@ -475,7 +483,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 			if strings.TrimSpace(manifest.ConfidentialityMode) != serverBackupConfidentialityEncrypted {
 				return models.ServerRestoreResponse{}, errors.New("unexpected encrypted payload entry in clear backup bundle")
 			}
-			if err := extractEncryptedServerRestorePayload(ctx, tarReader, tempRoot, &validation, &payloadEntries, &sqliteSeen, archiveManifest.PayloadEncryptionIV, s.cfg.EncryptionKey); err != nil {
+			if err := extractEncryptedServerRestorePayload(ctx, tarReader, tempRoot, &validation, &payloadEntries, &sqliteSeen, archiveManifest.PayloadEncryptionIV, payloadSecret); err != nil {
 				return models.ServerRestoreResponse{}, err
 			}
 			validation.PayloadEncryptionDecrypted = true
@@ -504,7 +512,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 		validation.PayloadChecksumVerified = true
 	}
 	if archiveManifest.PayloadHMACSHA256 != "" {
-		expectedHMAC := buildServerBackupPayloadHMAC(manifest, s.cfg.EncryptionKey, archiveManifest.PayloadEncryptionIV)
+		expectedHMAC := buildServerBackupPayloadHMAC(manifest, payloadSecret, archiveManifest.PayloadEncryptionIV)
 		if expectedHMAC == "" {
 			validation.PayloadSignaturePresent = true
 		} else if !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {
@@ -535,18 +543,25 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader) 
 	return resp, nil
 }
 
-func openServerRestoreBundle(r *http.Request) (multipartFile io.ReadCloser, cleanup func(), err error) {
+func openServerRestoreBundle(r *http.Request) (multipartFile io.ReadCloser, bundlePassword string, cleanup func(), err error) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		return nil, nil, fmt.Errorf("invalid multipart form: %w", err)
+		return nil, "", nil, fmt.Errorf("invalid multipart form: %w", err)
+	}
+	password, err := sanitizeServerBackupPassword(r.FormValue("password"))
+	if err != nil {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+		return nil, "", nil, err
 	}
 	file, _, err := r.FormFile("bundle")
 	if err != nil {
 		if r.MultipartForm != nil {
 			_ = r.MultipartForm.RemoveAll()
 		}
-		return nil, nil, errors.New("missing backup bundle file")
+		return nil, "", nil, errors.New("missing backup bundle file")
 	}
-	return file, func() {
+	return file, password, func() {
 		_ = file.Close()
 		if r.MultipartForm != nil {
 			_ = r.MultipartForm.RemoveAll()
@@ -867,7 +882,7 @@ func backupFilenamePrefix(scope string, confidentiality string) string {
 	}
 }
 
-func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, confidentiality string) []string {
+func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, confidentiality string, passwordProtected bool) []string {
 	warnings := []string{
 		"Environment config outside DATA_DIR is not included (API_TOKEN, DB_BACKEND, DATABASE_URL, ALLOWED_HOSTS, ENCRYPTION_KEY).",
 	}
@@ -884,9 +899,54 @@ func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, con
 		warnings = append(warnings, "Backup payload integrity is HMAC-signed with the source ENCRYPTION_KEY when available. Destinations can verify authenticity only with the same key.")
 	}
 	if confidentiality == serverBackupConfidentialityEncrypted {
-		warnings = append(warnings, "Backup payload confidentiality is enabled. Restore staging requires the same ENCRYPTION_KEY so S3Desk can decrypt payload.enc before extraction.")
+		if passwordProtected {
+			warnings = append(warnings, "Backup payload confidentiality is enabled with an operator-supplied password. Restore/import requires the same password to decrypt payload.enc.")
+		} else {
+			warnings = append(warnings, "Backup payload confidentiality is enabled. Restore staging requires the same ENCRYPTION_KEY so S3Desk can decrypt payload.enc before extraction.")
+		}
 	}
 	return warnings
+}
+
+func parseServerBackupPasswordHeader(r *http.Request) (string, error) {
+	return sanitizeServerBackupPassword(r.Header.Get(serverBackupPasswordHeader))
+}
+
+func sanitizeServerBackupPassword(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	if len(raw) > serverBackupPasswordMaxBytes {
+		return "", fmt.Errorf("backup password exceeds %d bytes", serverBackupPasswordMaxBytes)
+	}
+	if strings.ContainsAny(raw, "\x00\r\n") {
+		return "", errors.New("backup password contains invalid control characters")
+	}
+	return raw, nil
+}
+
+func resolveServerBackupExportSecret(confidentiality string, password string, encryptionKey string) (string, error) {
+	if confidentiality != serverBackupConfidentialityEncrypted {
+		return "", nil
+	}
+	if password != "" {
+		return password, nil
+	}
+	if strings.TrimSpace(encryptionKey) == "" {
+		return "", errors.New("encrypted backup bundles require ENCRYPTION_KEY on the source server or an export password")
+	}
+	return encryptionKey, nil
+}
+
+func resolveServerBackupImportSecret(password string, encryptionKey string) string {
+	if password != "" {
+		return password
+	}
+	return encryptionKey
+}
+
+func backupSecretProvidedByPassword(payloadSecret string, encryptionKey string) bool {
+	return payloadSecret != "" && payloadSecret != encryptionKey
 }
 
 func buildServerBackupPayloadSummary(entries []serverBackupPayloadEntry) (int, int64, string) {

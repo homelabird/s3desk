@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIClient } from '../../api/client'
@@ -10,11 +10,13 @@ import { ProfilesPage } from '../ProfilesPage'
 vi.mock('../profiles/profilesLazy', () => ({
 	ProfilesModals: ({
 		createOpen,
+		closeCreateModal,
 		editProfile,
 		yamlOpen,
 		importOpen,
 	}: {
 		createOpen: boolean
+		closeCreateModal: () => void
 		editProfile: unknown
 		yamlOpen: boolean
 		importOpen: boolean
@@ -24,6 +26,9 @@ vi.mock('../profiles/profilesLazy', () => ({
 			{editProfile ? ' edit-open' : ''}
 			{yamlOpen ? ' yaml-open' : ''}
 			{importOpen ? ' import-open' : ''}
+			<button type="button" onClick={closeCreateModal}>
+				Close create modal
+			</button>
 		</div>
 	),
 }))
@@ -38,6 +43,11 @@ function createClient() {
 			queries: { retry: false },
 		},
 	})
+}
+
+function LocationProbe() {
+	const location = useLocation()
+	return <div data-testid="location-search">{location.search || '(empty)'}</div>
 }
 
 function mockProfilesPageBase() {
@@ -92,5 +102,33 @@ describe('ProfilesPage lazy modals', () => {
 		expect(screen.queryByTestId('profiles-modals')).not.toBeInTheDocument()
 		fireEvent.click(await screen.findByRole('button', { name: 'New Profile' }))
 		expect(screen.getByTestId('profiles-modals')).toHaveTextContent('create-open')
+	})
+
+	it('removes the create query parameter when the modal closes', async () => {
+		render(
+			<QueryClientProvider client={createClient()}>
+				<MemoryRouter initialEntries={[{ pathname: '/profiles', search: '?create=1' }]}>
+					<Routes>
+						<Route
+							path="/profiles"
+							element={
+								<>
+									<ProfilesPage apiToken="token" profileId={null} setProfileId={vi.fn()} />
+									<LocationProbe />
+								</>
+							}
+						/>
+					</Routes>
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		expect(screen.getByTestId('location-search')).toHaveTextContent('?create=1')
+		expect(await screen.findByTestId('profiles-modals')).toHaveTextContent('create-open')
+
+		fireEvent.click(screen.getByRole('button', { name: 'Close create modal' }))
+
+		await waitFor(() => expect(screen.queryByTestId('profiles-modals')).not.toBeInTheDocument())
+		expect(screen.getByTestId('location-search')).toHaveTextContent('(empty)')
 	})
 })

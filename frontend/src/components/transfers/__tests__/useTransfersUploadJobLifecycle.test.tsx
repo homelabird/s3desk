@@ -66,7 +66,12 @@ describe('useTransfersUploadJobLifecycle', () => {
 			})
 		})
 
-		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['objects', 'profile-1', 'bucket-a'] })
+		expect(invalidateQueries).toHaveBeenCalledTimes(1)
+		const invalidateArg = invalidateQueries.mock.calls[0]?.[0]
+		expect(invalidateArg).toMatchObject({ predicate: expect.any(Function) })
+		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', '', 'token'] })).toBe(true)
+		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'folder/', 'token'] })).toBe(true)
+		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'other/', 'token'] })).toBe(false)
 		expect(result.current.uploadTasks[0]).toMatchObject({
 			status: 'succeeded',
 			loadedBytes: 100,

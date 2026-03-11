@@ -22,6 +22,7 @@ import { JobQueueBanner } from './components/JobQueueBanner'
 import { MenuPopover } from './components/MenuPopover'
 import { NetworkStatusBanner } from './components/NetworkStatusBanner'
 import { OverlaySheet } from './components/OverlaySheet'
+import { SidebarBackupAction } from './components/SidebarBackupAction'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/TransfersShell'
 import { getProviderCapabilities } from './lib/providerCapabilities'
@@ -167,24 +168,29 @@ export default function FullAppInner() {
 	}
 
 	const renderNav = (onSelect?: () => void) => (
-		<nav className={styles.navList} aria-label="Primary">
-			{navItems.map((item) => (
-				<Link
-					key={item.key}
-					to={item.to}
-					onClick={onSelect}
-					className={[
-						styles.navLink,
-						selectedKey === item.key ? styles.navLinkActive : '',
-					]
-						.filter(Boolean)
-						.join(' ')}
-				>
-					{item.icon}
-					<span>{item.label}</span>
-				</Link>
-			))}
-		</nav>
+		<div className={styles.navColumn}>
+			<nav className={styles.navList} aria-label="Primary">
+				{navItems.map((item) => (
+					<Link
+						key={item.key}
+						to={item.to}
+						onClick={onSelect}
+						className={[
+							styles.navLink,
+							selectedKey === item.key ? styles.navLinkActive : '',
+						]
+							.filter(Boolean)
+							.join(' ')}
+					>
+						{item.icon}
+						<span>{item.label}</span>
+					</Link>
+				))}
+			</nav>
+			<div className={styles.navFooter}>
+				<SidebarBackupAction api={api} meta={metaQuery.data} onActionComplete={onSelect} />
+			</div>
+		</div>
 	)
 
 	// Auth gate (token-based):

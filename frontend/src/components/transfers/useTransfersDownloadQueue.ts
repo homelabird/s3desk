@@ -20,6 +20,9 @@ import {
 import { downloadObjectToDevice } from './downloadObjectToDevice'
 import { planObjectDeviceDownloadTasks } from './deviceDownloadPlan'
 
+const isActiveDownloadStatus = (status: DownloadTask['status']) =>
+	status === 'queued' || status === 'waiting' || status === 'running'
+
 type UseTransfersDownloadQueueParams = {
 	api: APIClient
 	downloadLinkProxyEnabled: boolean
@@ -363,7 +366,34 @@ export function useTransfersDownloadQueue({
 				return
 			}
 
-			setDownloadTasks((prev) => [...tasks, ...prev])
+			const seenBatchKeys = new Set<string>()
+			const queuedTasks = tasks.filter((task) => {
+				const batchKey = `${task.profileId}\u0000${task.bucket}\u0000${task.key}\u0000${task.targetPath}`
+				if (seenBatchKeys.has(batchKey)) return false
+				seenBatchKeys.add(batchKey)
+				return !downloadTasksRef.current.some(
+					(current) =>
+						current.kind === 'object_device' &&
+						current.profileId === task.profileId &&
+						current.bucket === task.bucket &&
+						current.key === task.key &&
+						current.targetPath === task.targetPath &&
+						current.targetDirHandle === task.targetDirHandle &&
+						isActiveDownloadStatus(current.status),
+				)
+			})
+			const duplicateCount = tasks.length - queuedTasks.length
+			if (queuedTasks.length === 0) {
+				openTransfers('downloads')
+				message.info(tasks.length === 1 ? 'Download already queued' : 'All downloads already queued')
+				return
+			}
+
+			if (duplicateCount > 0) {
+				message.info(`Skipped ${duplicateCount} already queued download(s)`)
+			}
+
+			setDownloadTasks((prev) => [...queuedTasks, ...prev])
 			openTransfers('downloads')
 		},
 		[openTransfers, setDownloadTasks],

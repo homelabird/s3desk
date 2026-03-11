@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { APIClient } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { invalidateObjectQueriesForPrefix } from './objectsQueryCache'
 import { publishObjectsRefresh, type ObjectsRefreshEventDetail } from './objectsRefreshEvents'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
@@ -40,7 +41,11 @@ export function useObjectsDelete({
 			try {
 				const job = await api.getJob(profileId, jobId)
 				if (job.status === 'succeeded') {
-					await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
+					await invalidateObjectQueriesForPrefix(queryClient, {
+						profileId,
+						bucket,
+						changedPrefix: refreshPrefix,
+					})
 					publishObjectsRefresh({
 						profileId,
 						bucket,
@@ -96,8 +101,12 @@ export function useObjectsDelete({
 				for (const k of keys) next.delete(k)
 				return next
 			})
-			await queryClient.invalidateQueries({ queryKey: ['objects', profileId, bucket] })
 			if (profileId) {
+				await invalidateObjectQueriesForPrefix(queryClient, {
+					profileId,
+					bucket,
+					changedPrefix: prefix,
+				})
 				publishObjectsRefresh({
 					profileId,
 					bucket,

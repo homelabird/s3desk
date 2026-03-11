@@ -50,14 +50,24 @@ var portableEntityOrder = []string{
 }
 
 func (s *server) handlePreviewPortableImport(w http.ResponseWriter, r *http.Request) {
-	file, cleanup, err := openServerRestoreBundle(r)
+	if s.cfg.ServerRestoreMaxBytes > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.ServerRestoreMaxBytes)
+	}
+	file, backupPassword, cleanup, err := openServerRestoreBundle(r)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "bundle_too_large", "backup bundle exceeds portable import upload limit", map[string]any{
+				"maxBytes": s.cfg.ServerRestoreMaxBytes,
+			})
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
 	defer cleanup()
 
-	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeDryRun)
+	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeDryRun, resolveServerBackupImportSecret(backupPassword, s.cfg.EncryptionKey))
 	if err != nil {
 		writePortableImportError(w, err)
 		return
@@ -66,14 +76,24 @@ func (s *server) handlePreviewPortableImport(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *server) handleImportPortableBackup(w http.ResponseWriter, r *http.Request) {
-	file, cleanup, err := openServerRestoreBundle(r)
+	if s.cfg.ServerRestoreMaxBytes > 0 {
+		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.ServerRestoreMaxBytes)
+	}
+	file, backupPassword, cleanup, err := openServerRestoreBundle(r)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "bundle_too_large", "backup bundle exceeds portable import upload limit", map[string]any{
+				"maxBytes": s.cfg.ServerRestoreMaxBytes,
+			})
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
 	defer cleanup()
 
-	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeReplace)
+	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeReplace, resolveServerBackupImportSecret(backupPassword, s.cfg.EncryptionKey))
 	if err != nil {
 		writePortableImportError(w, err)
 		return
@@ -85,7 +105,7 @@ func (s *server) handleImportPortableBackup(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePath string, confidentiality string, includeThumbnails bool) (models.ServerMigrationManifest, error) {
+func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePath string, confidentiality string, includeThumbnails bool, payloadSecret string) (models.ServerMigrationManifest, error) {
 	dbBackend, err := db.ParseBackend(s.cfg.DBBackend)
 	if err != nil {
 		return models.ServerMigrationManifest{}, err
@@ -109,7 +129,7 @@ func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePa
 		EncryptionKeyHint: portableBackupEncryptionKeyHint(s.cfg.EncryptionKey),
 		Entities:          map[string]models.ServerMigrationEntityManifest{},
 		Assets:            map[string]models.ServerMigrationAssetManifest{},
-		Warnings:          buildServerBackupManifestWarnings(s.cfg.EncryptionKey != "", serverBackupScopePortable, confidentiality),
+		Warnings:          buildServerBackupManifestWarnings(s.cfg.EncryptionKey != "", serverBackupScopePortable, confidentiality, backupSecretProvidedByPassword(payloadSecret, s.cfg.EncryptionKey)),
 	}
 	if confidentiality == serverBackupConfidentialityEncrypted {
 		manifest.ConfidentialityMode = confidentiality
@@ -163,13 +183,13 @@ func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePa
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
 		archiveManifest := serverBackupArchiveManifest{
 			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, s.cfg.EncryptionKey, payloadIV),
+			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, payloadSecret, payloadIV),
 			PayloadEncryptionIV:     payloadIV,
 		}
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
-		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, payloadIV, s.cfg.EncryptionKey); err != nil {
+		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, payloadIV, payloadSecret); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
 	} else {
@@ -196,7 +216,7 @@ func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePa
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
 		archiveManifest := serverBackupArchiveManifest{
 			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, s.cfg.EncryptionKey, ""),
+			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, payloadSecret, ""),
 		}
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
@@ -351,7 +371,7 @@ func writeTarBytesFile(tarWriter *tar.Writer, archivePath string, data []byte, m
 	}, nil
 }
 
-func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader, mode string) (models.ServerPortableImportResponse, error) {
+func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader, mode string, payloadSecret string) (models.ServerPortableImportResponse, error) {
 	if mode != portableImportModeReplace && mode != portableImportModeDryRun {
 		return models.ServerPortableImportResponse{}, fmt.Errorf("unsupported portable import mode %q", mode)
 	}
@@ -361,17 +381,23 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 		return models.ServerPortableImportResponse{}, err
 	}
 
-	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchive(ctx, src, s.cfg.EncryptionKey)
+	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchive(ctx, src, payloadSecret)
 	if err != nil {
 		return models.ServerPortableImportResponse{}, err
 	}
 	defer os.RemoveAll(tempRoot)
 
 	preflight := models.ServerPortableImportPreflight{
-		SchemaReady:               true,
+		SchemaReady:               manifest.FormatVersion == portableBackupFormatVersion && manifest.SchemaVersion == portableBackupSchemaVersion,
 		EncryptionReady:           !manifest.EncryptionEnabled || strings.TrimSpace(s.cfg.EncryptionKey) != "",
 		EncryptionKeyHintVerified: !manifest.EncryptionEnabled || manifest.EncryptionKeyHint == "" || manifest.EncryptionKeyHint == portableBackupEncryptionKeyHint(s.cfg.EncryptionKey),
 		SpaceReady:                true,
+	}
+	if manifest.FormatVersion != portableBackupFormatVersion {
+		preflight.Blockers = append(preflight.Blockers, fmt.Sprintf("Portable bundle formatVersion %d is unsupported; expected %d.", manifest.FormatVersion, portableBackupFormatVersion))
+	}
+	if manifest.SchemaVersion != portableBackupSchemaVersion {
+		preflight.Blockers = append(preflight.Blockers, fmt.Sprintf("Portable bundle schemaVersion %d is unsupported; expected %d.", manifest.SchemaVersion, portableBackupSchemaVersion))
 	}
 	if !preflight.EncryptionReady {
 		preflight.Blockers = append(preflight.Blockers, "Destination server is missing ENCRYPTION_KEY required by the portable bundle.")
@@ -404,8 +430,8 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 			entityChecksumsVerified = false
 			preflight.Blockers = append(preflight.Blockers, fmt.Sprintf("Portable bundle is missing data/%s.jsonl.", name))
 			entityResults = append(entityResults, models.ServerPortableImportEntityResult{
-				Name:            name,
-				ExportedCount:   manifestEntity.Count,
+				Name:             name,
+				ExportedCount:    manifestEntity.Count,
 				ChecksumVerified: false,
 			})
 			continue
@@ -430,7 +456,7 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 		Preflight:       preflight,
 		Entities:        entityResults,
 		Verification: models.ServerPortableImportVerification{
-			EntityChecksumsVerified:   entityChecksumsVerified,
+			EntityChecksumsVerified:     entityChecksumsVerified,
 			PostImportHealthCheckPassed: mode == portableImportModeDryRun,
 		},
 	}
@@ -546,6 +572,10 @@ func extractPortableArchive(ctx context.Context, src io.Reader, encryptionKey st
 				_ = os.RemoveAll(tempRoot)
 				return "", models.ServerMigrationManifest{}, nil, "", nil, errors.New("unexpected encrypted payload entry in clear portable bundle")
 			}
+			if err := ensurePortableDiskSpace(tempRoot, "payload.enc", manifest.PayloadBytes); err != nil {
+				_ = os.RemoveAll(tempRoot)
+				return "", models.ServerMigrationManifest{}, nil, "", nil, err
+			}
 			if err := extractEncryptedPortablePayload(ctx, tarReader, tempRoot, archiveManifest.PayloadEncryptionIV, encryptionKey, &payloadEntries); err != nil {
 				_ = os.RemoveAll(tempRoot)
 				return "", models.ServerMigrationManifest{}, nil, "", nil, err
@@ -613,6 +643,9 @@ func extractPortablePayloadEntry(ctx context.Context, tempRoot string, entryName
 	case tar.TypeDir:
 		return os.MkdirAll(targetPath, 0o700)
 	case tar.TypeReg, tar.TypeRegA:
+		if err := ensurePortableDiskSpace(tempRoot, entryName, header.Size); err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return err
 		}
@@ -735,6 +768,9 @@ func copyPortableAssetTree(srcRoot, dstRoot string) error {
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return err
 		}
+		if err := ensurePortableDiskSpace(filepath.Dir(targetPath), relPath, info.Size()); err != nil {
+			return err
+		}
 		srcFile, err := os.Open(pathOnDisk)
 		if err != nil {
 			return err
@@ -748,6 +784,24 @@ func copyPortableAssetTree(srcRoot, dstRoot string) error {
 		_, err = io.Copy(dstFile, srcFile)
 		return err
 	})
+}
+
+func ensurePortableDiskSpace(root string, path string, requiredBytes int64) error {
+	if requiredBytes <= 0 {
+		return nil
+	}
+	freeBytes, err := availableDiskBytes(root)
+	if err != nil {
+		return err
+	}
+	if requiredBytes > freeBytes {
+		return serverRestorePreflightError{
+			Path:           path,
+			RequiredBytes:  requiredBytes,
+			AvailableBytes: freeBytes,
+		}
+	}
+	return nil
 }
 
 func portableBackupEncryptionKeyHint(encryptionKey string) string {
@@ -781,9 +835,17 @@ func decodePortableBase64Key(s string) ([]byte, error) {
 func writePortableImportError(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
 	code := "portable_import_failed"
-	if strings.Contains(strings.ToLower(err.Error()), "missing encryption_key") || strings.Contains(strings.ToLower(err.Error()), "requires encryption_key") {
+	details := map[string]any{"error": err.Error()}
+	var preflightErr serverRestorePreflightError
+	if errors.As(err, &preflightErr) {
+		status = http.StatusConflict
+		code = "portable_import_blocked"
+		details["path"] = preflightErr.Path
+		details["requiredBytes"] = preflightErr.RequiredBytes
+		details["availableBytes"] = preflightErr.AvailableBytes
+	} else if strings.Contains(strings.ToLower(err.Error()), "missing encryption_key") || strings.Contains(strings.ToLower(err.Error()), "requires encryption_key") {
 		status = http.StatusConflict
 		code = "portable_import_blocked"
 	}
-	writeError(w, status, code, "failed to process portable backup bundle", map[string]any{"error": err.Error()})
+	writeError(w, status, code, "failed to process portable backup bundle", details)
 }
