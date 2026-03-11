@@ -18,6 +18,7 @@ This folder intentionally keeps only the small set of docs needed to run and wor
 - [RELEASE_GATE.md](RELEASE_GATE.md): minimum release checklist, live validation gate, and release note requirements
 - [UI_OPERATION_FEEDBACK.md](UI_OPERATION_FEEDBACK.md): frontend rules for `ok=true` / `ok=false` API outcomes and API error UX
 - [RUNBOOK.md](RUNBOOK.md): operating the service in real environments
+- [RESPONSIVE_DESIGN_AUDIT.md](RESPONSIVE_DESIGN_AUDIT.md): responsive-design gaps, priorities, and validation checklist
 - [TESTING.md](TESTING.md): local and CI-oriented test commands
 
 ## Built-In Endpoints
