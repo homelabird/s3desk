@@ -3,16 +3,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { APIClient } from '../../../api/client'
-import type { MetaResponse, ServerRestoreResponse } from '../../../api/types'
+import type { MetaResponse, ServerPortableImportResponse, ServerRestoreResponse } from '../../../api/types'
 import { ensureDomShims } from '../../../test/domShims'
 import { ServerSettingsSection } from '../ServerSettingsSection'
 
 beforeAll(() => {
 	ensureDomShims()
 })
-
-const originalCreateObjectURL = URL.createObjectURL
-const originalRevokeObjectURL = URL.revokeObjectURL
 
 function buildMeta(overrides: Partial<MetaResponse> = {}): MetaResponse {
 	return {
@@ -85,74 +82,86 @@ function buildRestoreResponse(overrides: Partial<ServerRestoreResponse> = {}): S
 	}
 }
 
+function buildPortableResponse(overrides: Partial<ServerPortableImportResponse> = {}): ServerPortableImportResponse {
+	const base: ServerPortableImportResponse = {
+		manifest: {
+			format: 's3desk-server-backup/v1',
+			bundleKind: 'portable' as unknown as 'full',
+			confidentialityMode: 'clear',
+			formatVersion: 1,
+			schemaVersion: 1,
+			createdAt: '2026-03-08T00:00:00Z',
+			appVersion: 'test',
+			dbBackend: 'sqlite',
+			encryptionEnabled: true,
+			encryptionKeyHint: 'hint',
+			entries: ['data/profiles.jsonl'],
+			entities: {
+				profiles: { count: 1, sha256: 'profiles-sha' },
+			},
+			assets: {},
+			warnings: ['Portable import verified'],
+		},
+		mode: 'dry_run',
+		targetDbBackend: 'sqlite',
+		preflight: {
+			schemaReady: true,
+			encryptionReady: true,
+			encryptionKeyHintVerified: true,
+			spaceReady: true,
+			blockers: [],
+			warnings: [],
+		},
+		entities: [
+			{
+				name: 'profiles',
+				exportedCount: 1,
+				importedCount: 1,
+				checksumVerified: true,
+			},
+		],
+		verification: {
+			entityChecksumsVerified: true,
+			postImportHealthCheckPassed: true,
+		},
+		warnings: ['Portable import verified'],
+		assetStagingDir: '',
+	}
+	return {
+		...base,
+		...overrides,
+		manifest: {
+			...base.manifest,
+			...(overrides.manifest ?? {}),
+		},
+		preflight: {
+			...base.preflight,
+			...(overrides.preflight ?? {}),
+		},
+		entities: overrides.entities ?? base.entities,
+		verification: {
+			...base.verification,
+			...(overrides.verification ?? {}),
+		},
+	}
+}
+
 describe('ServerSettingsSection', () => {
 	beforeEach(() => {
-		URL.createObjectURL = vi.fn(() => 'blob:backup')
-		URL.revokeObjectURL = vi.fn()
 		vi.spyOn(message, 'info').mockImplementation(() => undefined as never)
 		vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
 	})
 
 	afterEach(() => {
-		URL.createObjectURL = originalCreateObjectURL
-		URL.revokeObjectURL = originalRevokeObjectURL
 		vi.restoreAllMocks()
-	})
-
-	it('downloads a server backup bundle', async () => {
-		const api = {
-			downloadServerBackup: vi.fn(() => ({
-				promise: Promise.resolve({
-					blob: new Blob(['backup'], { type: 'application/gzip' }),
-					contentDisposition: 'attachment; filename="migration.tar.gz"',
-					contentType: 'application/gzip',
-				}),
-				abort: vi.fn(),
-			})),
-			restoreServerBackup: vi.fn(),
-			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
-			deleteServerRestore: vi.fn(),
-		} as unknown as APIClient
-		const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-
-		render(<ServerSettingsSection api={api} meta={buildMeta()} isFetching={false} errorMessage={null} />)
-
-		fireEvent.click(screen.getByRole('button', { name: 'Download Full backup' }))
-
-		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('full', 'clear'))
-		await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1))
-		expect(clickSpy).toHaveBeenCalledTimes(1)
-	})
-
-	it('downloads an encrypted cache backup when confidentiality is enabled', async () => {
-		const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-		const api = {
-			downloadServerBackup: vi.fn(() => ({
-				promise: Promise.resolve({
-					blob: new Blob(['backup'], { type: 'application/gzip' }),
-					contentDisposition: 'attachment; filename="migration-encrypted.tar.gz"',
-					contentType: 'application/gzip',
-				}),
-				abort: vi.fn(),
-			})),
-			restoreServerBackup: vi.fn(),
-			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
-			deleteServerRestore: vi.fn(),
-		} as unknown as APIClient
-
-		render(<ServerSettingsSection api={api} meta={buildMeta()} isFetching={false} errorMessage={null} />)
-
-		fireEvent.click(screen.getByRole('checkbox', { name: /Encrypt backup payload with the current ENCRYPTION_KEY/i }))
-		fireEvent.click(screen.getByRole('button', { name: 'Download Cache + metadata backup' }))
-
-		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('cache_metadata', 'encrypted'))
-		expect(clickSpy).toHaveBeenCalledTimes(1)
 	})
 
 	it('uploads a restore bundle and shows the staged directory', async () => {
 		const api = {
 			downloadServerBackup: vi.fn(),
 			restoreServerBackup: vi.fn().mockResolvedValue(buildRestoreResponse()),
+			previewPortableImport: vi.fn(),
+			importPortableBackup: vi.fn(),
 			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
 			deleteServerRestore: vi.fn(),
 		} as unknown as APIClient
@@ -179,10 +188,12 @@ describe('ServerSettingsSection', () => {
 		expect(screen.getByText('payload decrypted')).toBeInTheDocument()
 	})
 
-	it('disables backup download for postgres-backed servers', () => {
+	it('keeps restore staging available for postgres-backed servers', () => {
 		const api = {
 			downloadServerBackup: vi.fn(),
 			restoreServerBackup: vi.fn(),
+			previewPortableImport: vi.fn(),
+			importPortableBackup: vi.fn(),
 			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
 			deleteServerRestore: vi.fn(),
 		} as unknown as APIClient
@@ -212,17 +223,23 @@ describe('ServerSettingsSection', () => {
 			/>,
 		)
 
-		expect(screen.getByRole('button', { name: 'Download Full backup' })).toBeDisabled()
-		expect(screen.getByRole('button', { name: 'Download Cache + metadata backup' })).toBeDisabled()
+		expect(screen.queryByRole('button', { name: 'Download Full backup' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Download Cache + metadata backup' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Download portable backup' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Download portable backup (encrypted)' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Preview portable import' })).toBeEnabled()
+		expect(screen.getByRole('button', { name: 'Run portable import' })).toBeEnabled()
 		expect(screen.getByRole('button', { name: 'Upload restore bundle' })).toBeEnabled()
-		expect(screen.getByText(/In-product backup export currently supports only sqlite-backed servers/i)).toBeInTheDocument()
 		expect(screen.getByText(/not a Postgres backup or restore workflow/i)).toBeInTheDocument()
+		expect(screen.getByText(/Use your normal database backup workflow/i)).toBeInTheDocument()
 	})
 
 	it('shows staged restore age and payload size more clearly', async () => {
 		const api = {
 			downloadServerBackup: vi.fn(),
 			restoreServerBackup: vi.fn(),
+			previewPortableImport: vi.fn(),
+			importPortableBackup: vi.fn(),
 			listServerRestores: vi.fn().mockResolvedValue({
 				items: [
 					{
@@ -249,6 +266,8 @@ describe('ServerSettingsSection', () => {
 		const api = {
 			downloadServerBackup: vi.fn(),
 			restoreServerBackup: vi.fn(),
+			previewPortableImport: vi.fn(),
+			importPortableBackup: vi.fn(),
 			listServerRestores: vi.fn().mockResolvedValue({
 				items: [
 					{
@@ -277,5 +296,76 @@ describe('ServerSettingsSection', () => {
 		await waitFor(() => expect(deleteServerRestore).toHaveBeenCalledWith('restore-stale'))
 		expect(deleteServerRestore).not.toHaveBeenCalledWith('restore-fresh')
 		dateNowSpy.mockRestore()
+	})
+
+	it('downloads portable backups in clear and encrypted modes', async () => {
+		const downloadServerBackup = vi.fn().mockResolvedValue(undefined)
+		const api = {
+			downloadServerBackup,
+			restoreServerBackup: vi.fn(),
+			previewPortableImport: vi.fn(),
+			importPortableBackup: vi.fn(),
+			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
+			deleteServerRestore: vi.fn(),
+		} as unknown as APIClient
+
+		render(<ServerSettingsSection api={api} meta={buildMeta()} isFetching={false} errorMessage={null} />)
+
+		fireEvent.click(screen.getByRole('button', { name: 'Download portable backup' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Download portable backup (encrypted)' }))
+
+		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledWith('portable', 'clear'))
+		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledWith('portable', 'encrypted'))
+	})
+
+	it('previews and imports portable bundles from the dedicated controls', async () => {
+		const previewPortableImport = vi.fn().mockResolvedValue(
+			buildPortableResponse({
+				preflight: {
+					schemaReady: true,
+					encryptionReady: false,
+					encryptionKeyHintVerified: false,
+					spaceReady: true,
+					blockers: ['Destination ENCRYPTION_KEY is required before import.'],
+					warnings: ['Portable preview warning'],
+				},
+				warnings: ['Portable preview warning'],
+			}),
+		)
+		const importPortableBackup = vi.fn().mockResolvedValue(
+			buildPortableResponse({
+				warnings: ['Portable import verified'],
+			}),
+		)
+		const api = {
+			downloadServerBackup: vi.fn(),
+			restoreServerBackup: vi.fn(),
+			previewPortableImport,
+			importPortableBackup,
+			listServerRestores: vi.fn().mockImplementation(() => new Promise(() => {})),
+			deleteServerRestore: vi.fn(),
+		} as unknown as APIClient
+
+		const { container } = render(
+			<ServerSettingsSection api={api} meta={buildMeta()} isFetching={false} errorMessage={null} />,
+		)
+
+		const inputs = container.querySelectorAll('input[type="file"]')
+		if (inputs.length < 3) {
+			throw new Error(`expected at least 3 file inputs, got ${inputs.length}`)
+		}
+
+		const previewFile = new File(['portable-preview'], 'portable-preview.tar.gz', { type: 'application/gzip' })
+		fireEvent.change(inputs[1], { target: { files: [previewFile] } })
+
+		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(previewFile))
+		expect(await screen.findByText('Destination ENCRYPTION_KEY is required before import.')).toBeInTheDocument()
+		expect(screen.getByText('Portable preview warning')).toBeInTheDocument()
+
+		const importFile = new File(['portable-import'], 'portable-import.tar.gz', { type: 'application/gzip' })
+		fireEvent.change(inputs[2], { target: { files: [importFile] } })
+
+		await waitFor(() => expect(importPortableBackup).toHaveBeenCalledWith(importFile))
+		expect(await screen.findAllByText('Portable import verified')).not.toHaveLength(0)
 	})
 })

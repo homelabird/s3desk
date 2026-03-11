@@ -62,6 +62,8 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.Get("/meta", api.handleGetMeta)
 	apiRouter.Get("/server/backup", api.handleGetServerBackup)
 	apiRouter.Post("/server/restore", api.handleRestoreServerBackup)
+	apiRouter.Post("/server/import-portable/preview", api.handlePreviewPortableImport)
+	apiRouter.Post("/server/import-portable", api.handleImportPortableBackup)
 	apiRouter.Get("/server/restores", api.handleListServerRestores)
 	apiRouter.Delete("/server/restores/{restoreId}", api.handleDeleteServerRestore)
 

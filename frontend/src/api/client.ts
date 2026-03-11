@@ -22,6 +22,7 @@ import type {
 	ObjectIndexSummaryResponse,
 	SearchObjectsResponse,
 	MetaResponse,
+	ServerPortableImportResponse,
 	ServerRestoreResponse,
 	ServerStagedRestoreListResponse,
 	ObjectMeta,
@@ -154,7 +155,7 @@ export type BucketSharingPutClientRequest = {
 	preauthenticatedRequests?: BucketPreauthenticatedRequestClientView[]
 }
 
-export type ServerBackupScope = 'full' | 'cache_metadata'
+export type ServerBackupScope = 'full' | 'cache_metadata' | 'portable'
 export type ServerBackupConfidentialityMode = 'clear' | 'encrypted'
 
 function normalizeListObjectsResponse(
@@ -356,6 +357,18 @@ export class APIClient {
 		const form = new FormData()
 		form.append('bundle', file, file.name)
 		return this.request('/server/restore', { method: 'POST', body: form })
+	}
+
+	previewPortableImport(file: File): Promise<ServerPortableImportResponse> {
+		const form = new FormData()
+		form.append('bundle', file, file.name)
+		return this.request('/server/import-portable/preview', { method: 'POST', body: form })
+	}
+
+	importPortableBackup(file: File): Promise<ServerPortableImportResponse> {
+		const form = new FormData()
+		form.append('bundle', file, file.name)
+		return this.request('/server/import-portable', { method: 'POST', body: form })
 	}
 
 	listServerRestores(): Promise<ServerStagedRestoreListResponse> {

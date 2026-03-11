@@ -1,11 +1,10 @@
 import { InfoCircleOutlined } from '@ant-design/icons'
-import { Alert, Button, Checkbox, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography, message } from 'antd'
+import { Alert, Button, Collapse, Descriptions, Popconfirm, Space, Spin, Tag, Tooltip, Typography, message } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
-import type { ServerBackupConfidentialityMode } from '../../api/client'
-import type { ServerBackupScope } from '../../api/client'
 import type { MetaResponse } from '../../api/types'
+import type { ServerPortableImportResponse } from '../../api/types'
 import type { ServerRestoreResponse } from '../../api/types'
 import type { ServerStagedRestore } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
@@ -34,17 +33,21 @@ type ServerRestoreValidationView = {
 
 export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 	const restoreInputRef = useRef<HTMLInputElement | null>(null)
+	const portablePreviewInputRef = useRef<HTMLInputElement | null>(null)
+	const portableImportInputRef = useRef<HTMLInputElement | null>(null)
 	const isMountedRef = useRef(true)
-	const [backupLoading, setBackupLoading] = useState(false)
 	const [restoreLoading, setRestoreLoading] = useState(false)
-	const [migrationError, setMigrationError] = useState<string | null>(null)
+	const [restoreError, setRestoreError] = useState<string | null>(null)
 	const [restoreResult, setRestoreResult] = useState<ServerRestoreResponse | null>(null)
+	const [portableDownloadLoading, setPortableDownloadLoading] = useState<'clear' | 'encrypted' | null>(null)
+	const [portableLoading, setPortableLoading] = useState<'preview' | 'import' | null>(null)
+	const [portableError, setPortableError] = useState<string | null>(null)
+	const [portableResult, setPortableResult] = useState<ServerPortableImportResponse | null>(null)
 	const [stagedRestores, setStagedRestores] = useState<ServerStagedRestore[]>([])
 	const [stagedRestoresLoading, setStagedRestoresLoading] = useState(false)
 	const [stagedRestoresError, setStagedRestoresError] = useState<string | null>(null)
 	const [deleteRestoreId, setDeleteRestoreId] = useState<string | null>(null)
 	const [cleanupRestoresLoading, setCleanupRestoresLoading] = useState(false)
-	const [backupConfidentiality, setBackupConfidentiality] = useState<ServerBackupConfidentialityMode>('clear')
 	const tlsCapability = props.meta?.capabilities?.profileTls
 	const tlsEnabled = tlsCapability?.enabled ?? false
 	const tlsReason = tlsCapability?.reason ?? ''
@@ -61,9 +64,6 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 				? ''
 				: 'Stages a sqlite DATA_DIR bundle only; this is not a Postgres backup or restore workflow.',
 	}
-	const backupSupported = backupExportCapability.enabled
-	const backupEncryptionAvailable = props.meta?.encryptionEnabled ?? false
-
 	const mtlsLabel = (
 		<Space size={4}>
 			<span>mTLS (client cert)</span>
@@ -102,40 +102,47 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		void refreshStagedRestores()
 	}, [props.meta, refreshStagedRestores])
 
-	useEffect(() => {
-		if (!backupEncryptionAvailable && backupConfidentiality !== 'clear') {
-			setBackupConfidentiality('clear')
-		}
-	}, [backupConfidentiality, backupEncryptionAvailable])
+	const handleRestorePick = () => {
+		restoreInputRef.current?.click()
+	}
 
-	const runBackupDownload = async (scope: ServerBackupScope) => {
-		setBackupLoading(true)
-		setMigrationError(null)
+	const handlePortableDownload = async (confidentiality: 'clear' | 'encrypted') => {
+		setPortableDownloadLoading(confidentiality)
+		setPortableError(null)
 		try {
-			const { promise } = props.api.downloadServerBackup(scope, backupConfidentiality)
+			const { promise } = props.api.downloadServerBackup('portable', confidentiality)
 			const result = await promise
 			if (!isMountedRef.current) return
-			const filename = filenameFromContentDisposition(result.contentDisposition)
-				?? buildBackupFilenameFallback(scope, backupConfidentiality)
-			saveBlob(result.blob, filename)
+			const blobUrl = URL.createObjectURL(result.blob)
+			const anchor = document.createElement('a')
+			anchor.href = blobUrl
+			anchor.download = confidentiality === 'encrypted' ? 's3desk-portable-backup-encrypted.tar.gz' : 's3desk-portable-backup.tar.gz'
+			document.body.appendChild(anchor)
+			anchor.click()
+			anchor.remove()
+			setTimeout(() => URL.revokeObjectURL(blobUrl), 0)
 		} catch (err) {
 			if (!isMountedRef.current) return
-			setMigrationError(formatErr(err))
+			setPortableError(formatErr(err))
 		} finally {
 			if (isMountedRef.current) {
-				setBackupLoading(false)
+				setPortableDownloadLoading(null)
 			}
 		}
 	}
 
-	const handleRestorePick = () => {
-		restoreInputRef.current?.click()
+	const handlePortablePreviewPick = () => {
+		portablePreviewInputRef.current?.click()
+	}
+
+	const handlePortableImportPick = () => {
+		portableImportInputRef.current?.click()
 	}
 
 	const staleRestoreCutoffMs = 7 * 24 * 60 * 60 * 1000
 	const isRestoreStale = (stagedAt: string) => {
 		const time = Date.parse(stagedAt)
-		return Number.isFinite(time) && Date.now()-time >= staleRestoreCutoffMs
+		return Number.isFinite(time) && Date.now() - time >= staleRestoreCutoffMs
 	}
 
 	const formatRestoreAge = (stagedAt: string) => {
@@ -156,7 +163,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 		if (!file) return
 
 		setRestoreLoading(true)
-		setMigrationError(null)
+		setRestoreError(null)
 		setRestoreResult(null)
 		try {
 			const result = await props.api.restoreServerBackup(file)
@@ -165,10 +172,35 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			void refreshStagedRestores()
 		} catch (err) {
 			if (!isMountedRef.current) return
-			setMigrationError(formatErr(err))
+			setRestoreError(formatErr(err))
 		} finally {
 			if (isMountedRef.current) {
 				setRestoreLoading(false)
+			}
+		}
+	}
+
+	const handlePortableInputChange = async (mode: 'preview' | 'import', event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0]
+		event.target.value = ''
+		if (!file) return
+
+		setPortableLoading(mode)
+		setPortableError(null)
+		setPortableResult(null)
+		try {
+			const result =
+				mode === 'preview'
+					? await props.api.previewPortableImport(file)
+					: await props.api.importPortableBackup(file)
+			if (!isMountedRef.current) return
+			setPortableResult(result)
+		} catch (err) {
+			if (!isMountedRef.current) return
+			setPortableError(formatErr(err))
+		} finally {
+			if (isMountedRef.current) {
+				setPortableLoading(null)
 			}
 		}
 	}
@@ -235,60 +267,6 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			{props.meta ? (
 				<>
 					<Alert
-						type={backupSupported ? 'info' : 'warning'}
-						showIcon
-						title="Backup export"
-						description={
-							<Space orientation="vertical" size={8} className={styles.fullWidth}>
-								<Space wrap>
-									<Tag color="blue">SQLite only</Tag>
-									{backupConfidentiality === 'encrypted' ? <Tag color="purple">Encrypted payload</Tag> : <Tag>Clear payload</Tag>}
-								</Space>
-								<Typography.Text type="secondary">
-									Export either the full local runtime state or a lighter cache + metadata bundle from this server.
-								</Typography.Text>
-								<Space wrap>
-									<Button type="primary" loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('full')}>
-										Download Full backup
-									</Button>
-									<Button loading={backupLoading} disabled={!backupSupported || restoreLoading} onClick={() => void runBackupDownload('cache_metadata')}>
-										Download Cache + metadata backup
-									</Button>
-								</Space>
-								<Checkbox
-									checked={backupConfidentiality === 'encrypted'}
-									disabled={!backupSupported || restoreLoading || !backupEncryptionAvailable}
-									onChange={(event) => setBackupConfidentiality(event.target.checked ? 'encrypted' : 'clear')}
-								>
-									Encrypt backup payload with the current ENCRYPTION_KEY
-								</Checkbox>
-								<Typography.Text type="secondary">
-									<Typography.Text code>Full backup</Typography.Text> includes <Typography.Text code>s3desk.db</Typography.Text>, thumbnails, logs, artifacts, and staging data.
-								</Typography.Text>
-								<Typography.Text type="secondary">
-									<Typography.Text code>Cache + metadata backup</Typography.Text> includes <Typography.Text code>s3desk.db</Typography.Text> and thumbnails only. Environment config outside DATA_DIR is never included.
-								</Typography.Text>
-								<Typography.Text type="secondary">
-									Encrypted bundles keep the outer manifest readable but require the same <Typography.Text code>ENCRYPTION_KEY</Typography.Text> on restore so S3Desk can decrypt <Typography.Text code>payload.enc</Typography.Text>.
-								</Typography.Text>
-								{!backupEncryptionAvailable ? (
-									<Typography.Text type="secondary">
-										This server is running without <Typography.Text code>ENCRYPTION_KEY</Typography.Text>, so encrypted backup payloads are unavailable.
-									</Typography.Text>
-								) : null}
-								{!backupSupported ? (
-									<Space orientation="vertical" size={4} className={styles.fullWidth}>
-										<Typography.Text type="secondary">
-											Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>.
-										</Typography.Text>
-										{backupExportCapability.reason ? <Typography.Text type="secondary">{backupExportCapability.reason}</Typography.Text> : null}
-									</Space>
-								) : null}
-							</Space>
-						}
-					/>
-
-					<Alert
 						type={restoreStagingCapability.enabled ? 'info' : 'warning'}
 						showIcon
 						title="Stage restore bundle"
@@ -301,8 +279,17 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 								<Typography.Text type="secondary">
 									Upload a backup bundle to stage a restorable <Typography.Text code>DATA_DIR</Typography.Text> under <Typography.Text code>restores/</Typography.Text>. The live instance is not overwritten.
 								</Typography.Text>
+								{backupExportCapability.enabled ? (
+									<Typography.Text type="secondary">
+										Use the sidebar <Typography.Text code>Backup</Typography.Text> action to export a bundle, then upload it here for staging and validation.
+									</Typography.Text>
+								) : (
+									<Typography.Text type="secondary">
+										Current server DB backend: <Typography.Text code>{dbBackend}</Typography.Text>. Use your normal database backup workflow, then upload a compatible sqlite <Typography.Text code>DATA_DIR</Typography.Text> bundle here only when you need restore staging.
+									</Typography.Text>
+								)}
 								<Space wrap>
-									<Button loading={restoreLoading} disabled={backupLoading || !restoreStagingCapability.enabled} onClick={handleRestorePick}>
+									<Button loading={restoreLoading} disabled={!restoreStagingCapability.enabled} onClick={handleRestorePick}>
 										Upload restore bundle
 									</Button>
 								</Space>
@@ -321,8 +308,8 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 						}
 					/>
 
-					{migrationError ? (
-						<Alert type="error" showIcon title="Backup or restore action failed" description={migrationError} className={styles.marginBottom12} />
+					{restoreError ? (
+						<Alert type="error" showIcon title="Restore action failed" description={restoreError} className={styles.marginBottom12} />
 					) : null}
 
 					{restoreResult ? (
@@ -440,6 +427,153 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 											<ul className={styles.tightList}>
 												{restoreResult.warnings.map((warning) => (
 													<li key={warning}>{warning}</li>
+												))}
+											</ul>
+										</div>
+									) : null}
+								</Space>
+							}
+						/>
+					) : null}
+
+					<Alert
+						type="info"
+						showIcon
+						title="Portable backup and import"
+						description={
+							<Space orientation="vertical" size={8} className={styles.fullWidth}>
+								<Space wrap>
+									<Tag color="geekblue">Cross-backend migration</Tag>
+									<Tag>sqlite → postgres</Tag>
+									<Tag>replace / dry run</Tag>
+								</Space>
+								<Typography.Text type="secondary">
+									Portable bundles export logical application data instead of a raw <Typography.Text code>s3desk.db</Typography.Text> snapshot. Use them when you need to move state into a different database backend.
+								</Typography.Text>
+								{backupExportCapability.enabled ? (
+									<Space wrap>
+										<Button loading={portableDownloadLoading === 'clear'} onClick={() => void handlePortableDownload('clear')}>
+											Download portable backup
+										</Button>
+										<Button
+											loading={portableDownloadLoading === 'encrypted'}
+											disabled={!props.meta.encryptionEnabled}
+											onClick={() => void handlePortableDownload('encrypted')}
+										>
+											Download portable backup (encrypted)
+										</Button>
+									</Space>
+								) : (
+									<Typography.Text type="secondary">
+										Portable export is currently intended for sqlite source servers in the first release cut.
+									</Typography.Text>
+								)}
+								<Space wrap>
+									<Button loading={portableLoading === 'preview'} onClick={handlePortablePreviewPick}>
+										Preview portable import
+									</Button>
+									<Button type="primary" loading={portableLoading === 'import'} onClick={handlePortableImportPick}>
+										Run portable import
+									</Button>
+								</Space>
+								<Typography.Text type="secondary">
+									Preview performs a dry run. Import replaces portable-scope data in the destination database and optionally restores thumbnail cache assets.
+								</Typography.Text>
+								<input
+									ref={portablePreviewInputRef}
+									type="file"
+									accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
+									onChange={(event) => void handlePortableInputChange('preview', event)}
+									style={{ display: 'none' }}
+								/>
+								<input
+									ref={portableImportInputRef}
+									type="file"
+									accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
+									onChange={(event) => void handlePortableInputChange('import', event)}
+									style={{ display: 'none' }}
+								/>
+							</Space>
+						}
+					/>
+
+					{portableError ? (
+						<Alert type="error" showIcon title="Portable import failed" description={portableError} className={styles.marginBottom12} />
+					) : null}
+
+					{portableResult ? (
+						<Alert
+							type={portableResult.mode === 'dry_run' ? 'info' : 'success'}
+							showIcon
+							title={portableResult.mode === 'dry_run' ? 'Portable import preview complete' : 'Portable import complete'}
+							description={
+								<Space orientation="vertical" size={8} className={styles.fullWidth}>
+									<div>
+										<Typography.Text type="secondary">Bundle manifest</Typography.Text>
+										<div>
+											<Typography.Text code>{portableResult.manifest.bundleKind}</Typography.Text>
+											<Typography.Text type="secondary"> / </Typography.Text>
+											<Typography.Text code>{portableResult.manifest.dbBackend}</Typography.Text>
+											<Typography.Text type="secondary"> → </Typography.Text>
+											<Typography.Text code>{portableResult.targetDbBackend}</Typography.Text>
+										</div>
+									</div>
+									<div>
+										<Typography.Text strong>Preflight</Typography.Text>
+										<div>
+											<Typography.Text code>{portableResult.preflight.schemaReady ? 'schema ready' : 'schema blocked'}</Typography.Text>
+											<Typography.Text type="secondary"> / </Typography.Text>
+											<Typography.Text code>{portableResult.preflight.encryptionReady ? 'encryption ready' : 'encryption blocked'}</Typography.Text>
+											<Typography.Text type="secondary"> / </Typography.Text>
+											<Typography.Text code>{portableResult.preflight.encryptionKeyHintVerified ? 'key hint verified' : 'key hint not verified'}</Typography.Text>
+											<Typography.Text type="secondary"> / </Typography.Text>
+											<Typography.Text code>{portableResult.preflight.spaceReady ? 'space ready' : 'space blocked'}</Typography.Text>
+										</div>
+										{portableResult.preflight.blockers?.length ? (
+											<ul className={styles.tightList}>
+												{portableResult.preflight.blockers.map((item) => (
+													<li key={item}>{item}</li>
+												))}
+											</ul>
+										) : null}
+									</div>
+									<div>
+										<Typography.Text strong>Entities</Typography.Text>
+										<ul className={styles.tightList}>
+											{portableResult.entities.map((item) => (
+												<li key={item.name}>
+													<Typography.Text code>{item.name}</Typography.Text>
+													<Typography.Text type="secondary">{` exported ${item.exportedCount}`}</Typography.Text>
+													{typeof item.importedCount === 'number' ? (
+														<Typography.Text type="secondary">{` / imported ${item.importedCount}`}</Typography.Text>
+													) : null}
+													<Typography.Text type="secondary">{item.checksumVerified ? ' / checksum verified' : ' / checksum mismatch'}</Typography.Text>
+												</li>
+											))}
+										</ul>
+									</div>
+									<div>
+										<Typography.Text strong>Verification</Typography.Text>
+										<div>
+											<Typography.Text code>{portableResult.verification.entityChecksumsVerified ? 'entity checksums verified' : 'entity checksums failed'}</Typography.Text>
+											<Typography.Text type="secondary"> / </Typography.Text>
+											<Typography.Text code>{portableResult.verification.postImportHealthCheckPassed ? 'post-import health passed' : 'post-import health pending'}</Typography.Text>
+										</div>
+									</div>
+									{portableResult.assetStagingDir ? (
+										<div>
+											<Typography.Text strong>Assets</Typography.Text>
+											<div>
+												<Typography.Text code className={styles.codeWrap}>{portableResult.assetStagingDir}</Typography.Text>
+											</div>
+										</div>
+									) : null}
+									{portableResult.warnings?.length ? (
+										<div>
+											<Typography.Text strong>Warnings</Typography.Text>
+											<ul className={styles.tightList}>
+												{portableResult.warnings.map((item) => (
+													<li key={item}>{item}</li>
 												))}
 											</ul>
 										</div>
@@ -634,38 +768,4 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			) : null}
 		</Space>
 	)
-}
-
-function filenameFromContentDisposition(header: string | null): string | null {
-	if (!header) return null
-
-	const star = /filename\*=([^']*)''([^;]+)/i.exec(header)
-	if (star) {
-		try {
-			return decodeURIComponent(star[2] ?? '')
-		} catch {
-			return star[2] ?? null
-		}
-	}
-
-	const plain = /filename="?([^";]+)"?/i.exec(header)
-	return plain?.[1] ?? null
-}
-
-function buildBackupFilenameFallback(scope: ServerBackupScope, confidentiality: ServerBackupConfidentialityMode): string {
-	const base = scope === 'cache_metadata' ? 's3desk-cache-metadata-backup' : 's3desk-full-backup'
-	return confidentiality === 'encrypted' ? `${base}-encrypted.tar.gz` : `${base}.tar.gz`
-}
-
-function saveBlob(blob: Blob, filename: string) {
-	const url = URL.createObjectURL(blob)
-	const anchor = document.createElement('a')
-	anchor.href = url
-	anchor.download = filename
-	anchor.rel = 'noopener'
-	anchor.style.display = 'none'
-	document.body.appendChild(anchor)
-	anchor.click()
-	anchor.remove()
-	window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }

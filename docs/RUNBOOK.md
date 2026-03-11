@@ -114,6 +114,20 @@ Use these operational thresholds:
   2. Restore or replace the S3Desk data directory if you need thumbnails, artifacts, or staged bundle contents.
   3. Restart S3Desk with the restored database connection and required secrets.
 
+### Portable Backup and Import
+
+- `Portable backup` is the database-neutral migration path.
+- Use it when you need to move S3Desk state from a sqlite source deployment into a Postgres destination deployment.
+- Portable bundles contain logical application data rather than a raw `s3desk.db` snapshot.
+- Portable import currently assumes replace semantics for portable-scope entities.
+- Keep `ENCRYPTION_KEY` aligned between source and destination when encrypted profile data is present.
+- A safe migration flow is:
+  1. Export a portable backup from the sqlite source server.
+  2. Run portable import preview on the Postgres destination.
+  3. Resolve blockers such as encryption-key mismatch or missing disk space for thumbnails.
+  4. Run the actual portable import into the destination database.
+  5. Verify health and imported row counts before switching users to the new instance.
+
 ### Staged Restore Lifecycle
 
 - Uploaded restore bundles land under `DATA_DIR/restores/<restore-id>`.

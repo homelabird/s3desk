@@ -864,16 +864,32 @@ type MetaResponse struct {
 type ServerMigrationManifest struct {
 	Format              string   `json:"format"`
 	BundleKind          string   `json:"bundleKind"`
+	FormatVersion       int      `json:"formatVersion,omitempty"`
 	ConfidentialityMode string   `json:"confidentialityMode,omitempty"`
 	CreatedAt           string   `json:"createdAt"`
 	AppVersion          string   `json:"appVersion"`
 	DBBackend           string   `json:"dbBackend"`
+	SchemaVersion       int      `json:"schemaVersion,omitempty"`
 	EncryptionEnabled   bool     `json:"encryptionEnabled"`
+	EncryptionKeyHint   string   `json:"encryptionKeyHint,omitempty"`
 	Entries             []string `json:"entries,omitempty"`
+	Entities            map[string]ServerMigrationEntityManifest `json:"entities,omitempty"`
+	Assets              map[string]ServerMigrationAssetManifest  `json:"assets,omitempty"`
 	PayloadFileCount    int      `json:"payloadFileCount,omitempty"`
 	PayloadBytes        int64    `json:"payloadBytes,omitempty"`
 	PayloadSHA256       string   `json:"payloadSha256,omitempty"`
 	Warnings            []string `json:"warnings,omitempty"`
+}
+
+type ServerMigrationEntityManifest struct {
+	Count  int    `json:"count"`
+	SHA256 string `json:"sha256"`
+}
+
+type ServerMigrationAssetManifest struct {
+	FileCount int    `json:"fileCount,omitempty"`
+	Bytes     int64  `json:"bytes,omitempty"`
+	SHA256    string `json:"sha256,omitempty"`
 }
 
 type ServerRestoreValidation struct {
@@ -909,6 +925,38 @@ type ServerStagedRestore struct {
 
 type ServerStagedRestoreListResponse struct {
 	Items []ServerStagedRestore `json:"items"`
+}
+
+type ServerPortableImportPreflight struct {
+	SchemaReady               bool     `json:"schemaReady"`
+	EncryptionReady           bool     `json:"encryptionReady"`
+	EncryptionKeyHintVerified bool     `json:"encryptionKeyHintVerified"`
+	SpaceReady                bool     `json:"spaceReady"`
+	Blockers                  []string `json:"blockers,omitempty"`
+	Warnings                  []string `json:"warnings,omitempty"`
+}
+
+type ServerPortableImportEntityResult struct {
+	Name             string `json:"name"`
+	ExportedCount     int    `json:"exportedCount"`
+	ImportedCount     int    `json:"importedCount,omitempty"`
+	ChecksumVerified  bool   `json:"checksumVerified"`
+}
+
+type ServerPortableImportVerification struct {
+	EntityChecksumsVerified bool `json:"entityChecksumsVerified"`
+	PostImportHealthCheckPassed bool `json:"postImportHealthCheckPassed"`
+}
+
+type ServerPortableImportResponse struct {
+	Manifest        ServerMigrationManifest           `json:"manifest"`
+	Mode            string                           `json:"mode"`
+	TargetDBBackend string                           `json:"targetDbBackend"`
+	Preflight       ServerPortableImportPreflight    `json:"preflight"`
+	Entities        []ServerPortableImportEntityResult `json:"entities"`
+	Verification    ServerPortableImportVerification `json:"verification"`
+	AssetStagingDir string                           `json:"assetStagingDir,omitempty"`
+	Warnings        []string                         `json:"warnings,omitempty"`
 }
 
 type TransferEngineInfo struct {

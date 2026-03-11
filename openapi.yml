@@ -113,6 +113,12 @@ paths:
             type: string
             enum: [ws, sse]
       responses:
+        "200":
+          description: OK (blocked by preflight; no data written)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerPortableImportResponse"
         "201":
           description: Created
           content:
@@ -165,18 +171,26 @@ paths:
         Exports a `.tar.gz` server backup bundle containing the sqlite snapshot and a
         selected slice of `DATA_DIR` runtime state. Use `scope=full` for a full local
         backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
-        cache state such as thumbnails. Use `confidentiality=encrypted` to encrypt the
-        payload with the current `ENCRYPTION_KEY` while keeping the outer bundle
-        metadata clear. This export currently supports sqlite-backed servers only.
+        cache state such as thumbnails. Use `scope=portable` to export a logical
+        database-neutral migration bundle for portable import flows. Use
+        `confidentiality=encrypted` to encrypt the payload with the current
+        `ENCRYPTION_KEY` while keeping the outer bundle metadata clear. Snapshot-style
+        export currently supports sqlite-backed servers only.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
         - name: scope
           in: query
           schema:
             type: string
-            enum: [full, cache_metadata]
+            enum: [full, cache_metadata, portable]
             default: full
           description: Selects whether the bundle contains the full local server state or only cache and metadata.
+        - name: includeThumbnails
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: When `scope=portable`, includes thumbnail cache assets in the bundle.
         - name: confidentiality
           in: query
           schema:
@@ -234,6 +248,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServerRestoreResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /server/import-portable/preview:
+    post:
+      tags: [System]
+      summary: Preview a portable backup import
+      description: |
+        Uploads a portable `.tar.gz` bundle and performs a dry-run compatibility check
+        without writing database state.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [bundle]
+              properties:
+                bundle:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerPortableImportResponse"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+        "403":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /server/import-portable:
+    post:
+      tags: [System]
+      summary: Import a portable backup bundle
+      description: |
+        Uploads a portable `.tar.gz` bundle and imports its logical application data into
+        the current database backend using replace semantics.
+      parameters:
+        - $ref: "#/components/parameters/XApiToken"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [bundle]
+              properties:
+                bundle:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerPortableImportResponse"
         "400":
           $ref: "#/components/responses/ErrorResponse"
         "401":
@@ -3612,23 +3694,48 @@ components:
         format: { type: string }
         bundleKind:
           type: string
-          enum: [full, cache_metadata]
+          enum: [full, cache_metadata, portable]
+        formatVersion: { type: integer }
         confidentialityMode:
           type: string
           enum: [clear, encrypted]
         createdAt: { type: string, format: date-time }
         appVersion: { type: string }
         dbBackend: { type: string }
+        schemaVersion: { type: integer }
         encryptionEnabled: { type: boolean }
+        encryptionKeyHint: { type: string }
         entries:
           type: array
           items: { type: string }
+        entities:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ServerMigrationEntityManifest"
+        assets:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ServerMigrationAssetManifest"
         payloadFileCount: { type: integer }
         payloadBytes: { type: integer, format: int64 }
         payloadSha256: { type: string }
         warnings:
           type: array
           items: { type: string }
+
+    ServerMigrationEntityManifest:
+      type: object
+      required: [count, sha256]
+      properties:
+        count: { type: integer }
+        sha256: { type: string }
+
+    ServerMigrationAssetManifest:
+      type: object
+      properties:
+        fileCount: { type: integer }
+        bytes: { type: integer, format: int64 }
+        sha256: { type: string }
 
     ServerRestoreResponse:
       type: object
@@ -3684,6 +3791,58 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServerStagedRestore"
+
+    ServerPortableImportPreflight:
+      type: object
+      required: [schemaReady, encryptionReady, encryptionKeyHintVerified, spaceReady]
+      properties:
+        schemaReady: { type: boolean }
+        encryptionReady: { type: boolean }
+        encryptionKeyHintVerified: { type: boolean }
+        spaceReady: { type: boolean }
+        blockers:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
+    ServerPortableImportEntityResult:
+      type: object
+      required: [name, exportedCount, checksumVerified]
+      properties:
+        name: { type: string }
+        exportedCount: { type: integer }
+        importedCount: { type: integer }
+        checksumVerified: { type: boolean }
+
+    ServerPortableImportVerification:
+      type: object
+      required: [entityChecksumsVerified, postImportHealthCheckPassed]
+      properties:
+        entityChecksumsVerified: { type: boolean }
+        postImportHealthCheckPassed: { type: boolean }
+
+    ServerPortableImportResponse:
+      type: object
+      required: [manifest, mode, targetDbBackend, preflight, entities, verification]
+      properties:
+        manifest:
+          $ref: "#/components/schemas/ServerMigrationManifest"
+        mode: { type: string }
+        targetDbBackend: { type: string }
+        preflight:
+          $ref: "#/components/schemas/ServerPortableImportPreflight"
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerPortableImportEntityResult"
+        verification:
+          $ref: "#/components/schemas/ServerPortableImportVerification"
+        assetStagingDir: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
 
     MetaCapabilities:
       type: object

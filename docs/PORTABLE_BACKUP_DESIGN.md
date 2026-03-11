@@ -263,6 +263,80 @@ Importer must check:
    - `merge`
    - `dry_run`
 
+## Recommended smoke validation path for `sqlite -> postgres`
+
+The first release should prove one concrete migration path:
+
+- source server: `DB_BACKEND=sqlite`
+- target server: `DB_BACKEND=postgres`
+
+This should remain a low-cost smoke, not a load test.
+
+### Source fixture
+
+Prepare a sqlite-backed source server with:
+
+1. one profile
+2. one encrypted `profile_connection_options` row
+3. one `jobs` row
+4. one `object_favorites` row
+5. one `object_index` row
+6. one thumbnail asset under `DATA_DIR/thumbnails`
+
+### Target fixture
+
+Prepare a postgres-backed target server with:
+
+1. schema migrations already applied
+2. the same `ENCRYPTION_KEY` as the source
+3. an empty or disposable database
+
+### Smoke sequence
+
+1. Export a portable bundle from the sqlite source:
+   - `GET /api/v1/server/backup?scope=portable&includeThumbnails=true`
+2. Preview the bundle on the postgres target:
+   - `POST /api/v1/server/import-portable/preview`
+3. Assert preview result:
+   - `manifest.bundleKind == "portable"`
+   - `targetDbBackend == "postgres"`
+   - `preflight.blockers` is empty
+   - `preflight.encryptionReady == true`
+   - `preflight.encryptionKeyHintVerified == true`
+4. Run the actual import on the postgres target:
+   - `POST /api/v1/server/import-portable`
+5. Assert import result:
+   - status `201`
+   - `verification.entityChecksumsVerified == true`
+   - `verification.postImportHealthCheckPassed == true`
+   - per-entity imported counts equal exported counts for the prepared fixture
+6. Verify the target through normal API reads:
+   - `GET /api/v1/profiles`
+   - favorite/index-dependent reads appropriate to the fixture
+7. Verify optional asset handling:
+   - thumbnail asset metadata present in the bundle
+   - thumbnails copied to the target asset directory when requested
+
+### Failure criteria
+
+The smoke fails if any of the following happen:
+
+- preview reports blockers on a correctly prepared postgres target
+- import returns `200` with blockers instead of `201`
+- imported counts differ from exported counts without an explicit warning policy
+- encrypted profile data is unreadable after import
+- target health check does not pass
+
+### Release evidence to keep
+
+Store the following artifacts for the release gate:
+
+1. portable bundle manifest
+2. preview response JSON
+3. import response JSON
+4. target `/api/v1/profiles` response summary
+5. thumbnail asset verification result
+
 ### Import transaction strategy
 
 Recommended:

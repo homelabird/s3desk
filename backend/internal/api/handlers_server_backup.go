@@ -87,6 +87,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	includeThumbnails := parsePortableBackupIncludeThumbnails(r)
 	if confidentiality == serverBackupConfidentialityEncrypted && strings.TrimSpace(s.cfg.EncryptionKey) == "" {
 		writeError(w, http.StatusConflict, "backup_confidentiality_unavailable", "encrypted backup bundles require ENCRYPTION_KEY on the source server", nil)
 		return
@@ -98,6 +99,16 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if dbBackend != db.BackendSQLite {
+		if scope == serverBackupScopePortable {
+			writeError(
+				w,
+				http.StatusConflict,
+				"backup_unsupported",
+				"portable backup currently supports sqlite-backed source servers only",
+				map[string]any{"dbBackend": string(dbBackend)},
+			)
+			return
+		}
 		writeError(
 			w,
 			http.StatusConflict,
@@ -117,7 +128,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 	_ = tmp.Close()
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	if _, err := s.writeServerBackupArchive(r.Context(), tmpPath, scope, confidentiality); err != nil {
+	if _, err := s.writeServerBackupArchive(r.Context(), tmpPath, scope, confidentiality, includeThumbnails); err != nil {
 		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to create backup bundle", map[string]any{"error": err.Error()})
 		return
 	}
@@ -178,7 +189,10 @@ func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-func (s *server) writeServerBackupArchive(ctx context.Context, archivePath string, scope string, confidentiality string) (models.ServerMigrationManifest, error) {
+func (s *server) writeServerBackupArchive(ctx context.Context, archivePath string, scope string, confidentiality string, includeThumbnails bool) (models.ServerMigrationManifest, error) {
+	if scope == serverBackupScopePortable {
+		return s.writePortableServerBackupArchive(ctx, archivePath, confidentiality, includeThumbnails)
+	}
 	now := time.Now().UTC()
 	tmpDir, err := os.MkdirTemp("", "s3desk-sqlite-backup-*")
 	if err != nil {
@@ -798,8 +812,20 @@ func parseServerBackupScope(r *http.Request) (string, error) {
 		return serverBackupScopeFull, nil
 	case serverBackupScopeCacheMetadata:
 		return serverBackupScopeCacheMetadata, nil
+	case serverBackupScopePortable:
+		return serverBackupScopePortable, nil
 	default:
 		return "", fmt.Errorf("unsupported backup scope %q", scope)
+	}
+}
+
+func parsePortableBackupIncludeThumbnails(r *http.Request) bool {
+	raw := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("includeThumbnails")))
+	switch raw {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
 	}
 }
 
@@ -819,6 +845,8 @@ func serverBackupEntriesForScope(scope string) []string {
 	switch scope {
 	case serverBackupScopeCacheMetadata:
 		return append([]string{}, serverBackupCacheMetadataEntries...)
+	case serverBackupScopePortable:
+		return []string{}
 	default:
 		return append([]string{}, serverBackupFullDataEntries...)
 	}
@@ -832,6 +860,8 @@ func backupFilenamePrefix(scope string, confidentiality string) string {
 	switch scope {
 	case serverBackupScopeCacheMetadata:
 		return "s3desk-cache-metadata-backup" + suffix
+	case serverBackupScopePortable:
+		return "s3desk-portable-backup" + suffix
 	default:
 		return "s3desk-full-backup" + suffix
 	}
@@ -843,6 +873,11 @@ func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, con
 	}
 	if scope == serverBackupScopeCacheMetadata {
 		warnings = append(warnings, "Cache + metadata backups include only the sqlite snapshot and selected cache directories such as thumbnails. Logs, artifacts, and staging data are excluded.")
+	}
+	if scope == serverBackupScopePortable {
+		warnings = append(warnings, "Portable backups export logical application data instead of a raw sqlite database file.")
+		warnings = append(warnings, "Use portable import to move data into a different database backend such as Postgres.")
+		warnings = append(warnings, "Portable backups do not include logs, artifacts, or staged restore directories.")
 	}
 	if encryptionEnabled {
 		warnings = append(warnings, "Encrypted profile data is included, but the destination server must use the same ENCRYPTION_KEY to read it.")
