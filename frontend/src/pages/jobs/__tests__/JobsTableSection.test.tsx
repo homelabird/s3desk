@@ -22,9 +22,8 @@ describe('JobsTableSection', () => {
 				isOffline={false}
 				uploadSupported
 				onOpenCreateUpload={vi.fn()}
+				onOpenDownloadJob={vi.fn()}
 				onOpenDeleteJob={vi.fn()}
-				onOpenDetails={vi.fn()}
-				onOpenLogs={vi.fn()}
 				getJobSummary={vi.fn(() => null)}
 				renderJobActions={vi.fn(() => null)}
 				sortState={null}
@@ -39,9 +38,10 @@ describe('JobsTableSection', () => {
 
 		expect(screen.getByText('No jobs yet.')).toBeInTheDocument()
 		const triggers = screen.getAllByTestId('help-tooltip-trigger')
-		expect(triggers).toHaveLength(2)
+		expect(triggers).toHaveLength(3)
 		expect(triggers[0]?.parentElement).not.toBeNull()
 		expect(triggers[1]?.parentElement).not.toBeNull()
+		expect(triggers[2]?.parentElement).not.toBeNull()
 
 		fireEvent.mouseEnter(triggers[0].parentElement!)
 		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
@@ -52,7 +52,13 @@ describe('JobsTableSection', () => {
 		expect(screen.queryByTestId('help-tooltip-content')).not.toBeInTheDocument()
 		fireEvent.mouseEnter(triggers[1].parentElement!)
 		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
-			'Delete or copy objects matching patterns (prefix, wildcards)',
+			'Downloads an S3 bucket or prefix to a folder on your device.',
+		)
+		fireEvent.mouseLeave(triggers[1].parentElement!)
+		expect(screen.queryByTestId('help-tooltip-content')).not.toBeInTheDocument()
+		fireEvent.mouseEnter(triggers[2].parentElement!)
+		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
+			'Queues a background delete job for a bucket or prefix. Use Objects for copy or move jobs.',
 		)
 	})
 })

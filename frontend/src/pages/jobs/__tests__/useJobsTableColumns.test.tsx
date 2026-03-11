@@ -71,4 +71,19 @@ describe('useJobsTableColumns', () => {
 		expect(text).toHaveClass(cellStyles.singleLine)
 		expect(text).not.toHaveClass(cellStyles.multiLine)
 	})
+
+	it('renders the row actions component inside the actions column', () => {
+		const args = buildArgs()
+		const { result } = renderHook(() => useJobsTableColumns(args))
+		const actionsColumn = result.current.find((column) => column.key === 'actions')
+		expect(actionsColumn?.render).toBeTypeOf('function')
+
+		const { getByRole } = render(
+			<table><tbody><tr><td>{actionsColumn!.render!(undefined, baseJob)}</td></tr></tbody></table>,
+		)
+
+		expect(getByRole('button', { name: 'Details' })).toBeInTheDocument()
+		expect(getByRole('button', { name: 'Logs' })).toBeInTheDocument()
+		expect(getByRole('button', { name: 'Open actions menu' })).toBeInTheDocument()
+	})
 })

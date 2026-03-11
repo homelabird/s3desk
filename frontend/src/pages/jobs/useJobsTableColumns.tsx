@@ -1,22 +1,11 @@
-import {
-	DeleteOutlined,
-	DownloadOutlined,
-	FileTextOutlined,
-	InfoCircleOutlined,
-	MoreOutlined,
-	RedoOutlined,
-	StopOutlined,
-} from '@ant-design/icons'
-import { Button, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
+import { Space, Tag, Tooltip, Typography } from 'antd'
 import { useCallback, useMemo, type CSSProperties, type ReactNode } from 'react'
 
 import type { Job, JobStatus } from '../../api/types'
-import { MenuPopover } from '../../components/MenuPopover'
-import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatDateTime, toTimestamp } from '../../lib/format'
 import { getJobTypeInfo } from '../../lib/jobTypes'
-import { formatBytes } from '../../lib/transfer'
-import { compareNumber, compareText, getProgressSortValue } from './jobPresentation'
+import { JobsRowActions } from './JobsRowActions'
+import { compareNumber, compareText, formatProgress, getProgressSortValue } from './jobPresentation'
 import { statusColor } from './jobUtils'
 import type { JobsVirtualTableColumn } from './JobsVirtualTable'
 import cellStyles from './JobsCellText.module.css'
@@ -83,9 +72,7 @@ export function useJobsTableColumns({
 			const lineStyle =
 				lines === 1
 					? undefined
-					: ({
-							'--jobs-cell-lines': String(lines),
-						} as CSSProperties)
+					: ({ '--jobs-cell-lines': String(lines) } as CSSProperties)
 			const content = (
 				<Typography.Text type={tone} className={`${cellStyles.cellText} ${className}`} style={lineStyle} code={options?.code}>
 					{value}
@@ -132,8 +119,7 @@ export function useJobsTableColumns({
 					)
 					return renderClampedText(info.label, undefined, { tooltip, forceTooltip: true })
 				},
-				sorter: (a: Job, b: Job) =>
-					compareText(getJobTypeInfo(a.type)?.label ?? a.type, getJobTypeInfo(b.type)?.label ?? b.type),
+				sorter: (a: Job, b: Job) => compareText(getJobTypeInfo(a.type)?.label ?? a.type, getJobTypeInfo(b.type)?.label ?? b.type),
 			},
 			{
 				key: 'summary',
@@ -157,17 +143,7 @@ export function useJobsTableColumns({
 				key: 'progress',
 				title: 'Progress',
 				width: 180,
-				render: (_: unknown, row: Job) => {
-					const ops = row.progress?.objectsDone ?? 0
-					const bytes = row.progress?.bytesDone ?? 0
-					const speed = row.progress?.speedBps ?? 0
-					if (!ops && !bytes) return <Typography.Text type="secondary">-</Typography.Text>
-					const parts = []
-					if (ops) parts.push(`${ops} ops`)
-					if (bytes) parts.push(formatBytes(bytes))
-					if (speed) parts.push(`${formatBytes(speed)}/s`)
-					return <Typography.Text type="secondary">{parts.join(' · ')}</Typography.Text>
-				},
+				render: (_: unknown, row: Job) => <Typography.Text type="secondary">{formatProgress(row.progress)}</Typography.Text>,
 				sorter: (a: Job, b: Job) => compareNumber(getProgressSortValue(a), getProgressSortValue(b)),
 			},
 			{
@@ -183,10 +159,7 @@ export function useJobsTableColumns({
 				title: 'Error',
 				dataIndex: 'error',
 				width: 240,
-				render: (value: unknown) =>
-					renderClampedText(typeof value === 'string' ? value : null, 'danger', {
-						lines: 1,
-					}),
+				render: (value: unknown) => renderClampedText(typeof value === 'string' ? value : null, 'danger', { lines: 1 }),
 				sorter: (a: Job, b: Job) => compareText(a.error ?? '', b.error ?? ''),
 			},
 			{
@@ -207,124 +180,31 @@ export function useJobsTableColumns({
 			{
 				key: 'actions',
 				title: 'Actions',
-				width: 140,
+				width: 250,
 				fixed: 'right',
 				align: 'center',
-				render: (_: unknown, row: Job) => {
-					const isZipJob = row.type === 's3_zip_prefix' || row.type === 's3_zip_objects'
-					const canDownloadArtifact = isZipJob && row.status !== 'failed' && row.status !== 'canceled'
-					const isCancelDisabled =
-						isOffline ||
-						(row.status !== 'queued' && row.status !== 'running') ||
-						(cancelPending && cancelingJobId === row.id)
-					const isRetryDisabled =
-						isOffline ||
-						(row.status !== 'failed' && row.status !== 'canceled') ||
-						(retryPending && retryingJobId === row.id)
-					const isDeleteDisabled =
-						isOffline ||
-						row.status === 'queued' ||
-						row.status === 'running' ||
-						(deletePending && deletingJobId === row.id)
-
-					const summary = getJobSummary(row)
-					const label = summary ? `Artifact: ${summary}` : `Job artifact: ${row.id}`
-					const menuItems: MenuProps['items'] = [
-						{
-							key: 'details',
-							icon: <InfoCircleOutlined />,
-							label: 'Details',
-							disabled: isOffline,
-							onClick: () => openDetailsForJob(row.id),
-						},
-						{
-							key: 'logs',
-							icon: <FileTextOutlined />,
-							label: 'Logs',
-							disabled: isOffline || (isLogsLoading && activeLogJobId === row.id),
-							onClick: () => openLogsForJob(row.id),
-						},
-					]
-
-					if (isZipJob) {
-						menuItems.push({
-							key: 'download',
-							icon: <DownloadOutlined />,
-							label: 'Download ZIP',
-							disabled: isOffline || !canDownloadArtifact || !profileId,
-							onClick: () => {
-								if (!profileId) return
-								queueDownloadJobArtifact({
-									profileId,
-									jobId: row.id,
-									label,
-									filenameHint: `job-${row.id}.zip`,
-									waitForJob: row.status !== 'succeeded',
-								})
-							},
-						})
-					}
-
-					menuItems.push({ type: 'divider' })
-					menuItems.push({
-						key: 'cancel',
-						icon: <StopOutlined />,
-						label: 'Cancel',
-						danger: true,
-						disabled: isCancelDisabled,
-						onClick: () => requestCancelJob(row.id),
-					})
-
-					return (
-						<Space size={4}>
-							<Tooltip title="Retry">
-								<Button
-									type="text"
-									size="small"
-									icon={<RedoOutlined />}
-									disabled={isRetryDisabled}
-									loading={retryPending && retryingJobId === row.id}
-									aria-label="Retry"
-									onClick={() => requestRetryJob(row.id)}
-								/>
-							</Tooltip>
-							<Tooltip title="Delete">
-								<Button
-									type="text"
-									size="small"
-									danger
-									icon={<DeleteOutlined />}
-									disabled={isDeleteDisabled}
-									loading={deletePending && deletingJobId === row.id}
-									aria-label="Delete"
-									onClick={() => {
-										confirmDangerAction({
-											title: 'Delete job record?',
-											description: (
-												<Space direction="vertical" style={{ width: '100%' }}>
-													<Typography.Text>
-														Job ID: <Typography.Text code>{row.id}</Typography.Text>
-													</Typography.Text>
-													<Typography.Text type="secondary">
-														This removes the job record and deletes its log file.
-													</Typography.Text>
-												</Space>
-											),
-											onConfirm: async () => {
-												await requestDeleteJob(row.id)
-											},
-										})
-									}}
-								/>
-							</Tooltip>
-							<MenuPopover menu={{ items: menuItems }} align="end">
-								{({ toggle }) => (
-									<Button type="text" size="small" icon={<MoreOutlined />} aria-label="More actions" onClick={toggle} />
-								)}
-							</MenuPopover>
-						</Space>
-					)
-				},
+				render: (_: unknown, row: Job) => (
+					<JobsRowActions
+						job={row}
+						isOffline={isOffline}
+						isLogsLoading={isLogsLoading}
+						activeLogJobId={activeLogJobId}
+						cancelingJobId={cancelingJobId}
+						retryingJobId={retryingJobId}
+						deletingJobId={deletingJobId}
+						cancelPending={cancelPending}
+						retryPending={retryPending}
+						deletePending={deletePending}
+						profileId={profileId}
+						jobSummary={getJobSummary(row)}
+						onOpenDetails={openDetailsForJob}
+						onOpenLogs={openLogsForJob}
+						onRequestCancelJob={requestCancelJob}
+						onRequestRetryJob={requestRetryJob}
+						onRequestDeleteJob={requestDeleteJob}
+						onQueueDownloadJobArtifact={queueDownloadJobArtifact}
+					/>
+				),
 			},
 		]
 
