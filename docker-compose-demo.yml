@@ -1,6 +1,7 @@
 services:
   minio:
-    image: docker.io/minio/minio:latest
+    # Keep registry prefixes explicit so Podman does not rely on unqualified search registries.
+    image: "${MINIO_IMAGE:-docker.io/minio/minio:latest}"
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-demo-minio}
@@ -12,7 +13,7 @@ services:
       - minio-demo-data:/data
 
   minio-seed:
-    image: docker.io/minio/mc:latest
+    image: "${MINIO_MC_IMAGE:-docker.io/minio/mc:latest}"
     depends_on:
       - minio
     network_mode: host
@@ -33,7 +34,8 @@ services:
       args:
         DB_BACKEND: sqlite
         RCLONE_VERSION: ${RCLONE_VERSION:-1.72.0}
-    image: s3desk-demo:sqlite
+    # Podman tags locally built images under localhost by default.
+    image: "${S3DESK_DEMO_IMAGE:-localhost/s3desk-demo:sqlite}"
     depends_on:
       - minio
     ports:
@@ -43,7 +45,7 @@ services:
       ALLOW_REMOTE: "true"
       ALLOWED_HOSTS: "127.0.0.1,localhost"
       API_TOKEN: ${API_TOKEN:-demo-token}
-      EXTERNAL_BASE_URL: ${EXTERNAL_BASE_URL:-http://127.0.0.1:${S3DESK_PORT:-8080}}
+      EXTERNAL_BASE_URL: ${EXTERNAL_BASE_URL:-http://127.0.0.1:8080}
       DB_BACKEND: "sqlite"
       DATA_DIR: "/data"
       JOB_QUEUE_CAPACITY: "20"
@@ -55,7 +57,7 @@ services:
       - s3desk-demo-data:/data
 
   s3desk-seed:
-    image: docker.io/python:3.12-alpine
+    image: "${PYTHON_IMAGE:-docker.io/library/python:3.12-alpine}"
     depends_on:
       - s3desk
     network_mode: host
