@@ -197,6 +197,13 @@ For operational details, see:
 - [docs/RUNBOOK.md](docs/RUNBOOK.md)
 - [docs/PORTABLE_BACKUP_DESIGN.md](docs/PORTABLE_BACKUP_DESIGN.md)
 - [docs/PORTABLE_BACKUP_CHECKLIST.md](docs/PORTABLE_BACKUP_CHECKLIST.md)
+- [docs/TESTING.md](docs/TESTING.md)
+
+Compose-based sqlite-to-Postgres smoke:
+
+```bash
+./scripts/run_portable_sqlite_to_postgres_smoke.sh
+```
 
 ## Browser-Facing Deployment Notes
 

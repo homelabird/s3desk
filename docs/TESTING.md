@@ -67,6 +67,22 @@ docker compose -f docker-compose.e2e.yml up -d --build
 docker compose -f docker-compose.e2e.yml run --rm runner
 ```
 
+## Portable Migration Smoke
+
+This is the concrete `sqlite -> postgres` portable backup/import validation path.
+
+```bash
+./scripts/run_portable_sqlite_to_postgres_smoke.sh
+```
+
+The smoke stack uses [docker-compose.portable-smoke.yml](../docker-compose.portable-smoke.yml) and verifies:
+
+- sqlite source fixture creation through the public API
+- portable backup export from the sqlite source
+- preview and import on a postgres target
+- imported `profiles`, `profile_connection_options`, `jobs`, `object_favorites`, and `object_index`
+- thumbnail asset copy into the target `DATA_DIR`
+
 ## Reverse Proxy Smoke
 
 Use this minimal pass when auth, realtime transport, `download-proxy`, `EXTERNAL_BASE_URL`, or `ALLOWED_HOSTS` changes.

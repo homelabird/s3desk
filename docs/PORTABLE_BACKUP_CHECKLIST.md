@@ -124,7 +124,7 @@ It tracks the work required to support database-neutral backup/import, with `sql
 ### P8-2. Backend migration path tests
 
 - [x] sqlite source fixture -> portable export
-- [ ] portable import -> postgres target
+- [x] portable import -> postgres target
 - [x] post-import verification assertions
 
 ### P8-3. UI tests
@@ -146,7 +146,7 @@ The first implementation should not try to solve every backend permutation.
 
 Recommended v1 release bar:
 
-- [ ] `sqlite -> postgres` portable export/import works
+- [x] `sqlite -> postgres` portable export/import works
 - [x] `replace` and `dry_run` are supported
 - [x] thumbnails are the only portable asset class
 - [x] import report is machine-readable and surfaced in UI

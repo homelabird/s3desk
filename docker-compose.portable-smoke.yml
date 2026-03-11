@@ -1,0 +1,122 @@
+services:
+  minio:
+    image: "${MINIO_IMAGE:-docker.io/minio/minio:latest}"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-portable-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-portable-minio-secret}
+    volumes:
+      - portable-smoke-minio-data:/data
+
+  minio-seed:
+    image: "${MINIO_MC_IMAGE:-docker.io/minio/mc:latest}"
+    entrypoint: ["/bin/sh", "/seed-minio.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-portable-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-portable-minio-secret}
+      DEMO_BUCKET: ${PORTABLE_SMOKE_BUCKET:-portable-bucket}
+      MINIO_ENDPOINT: http://minio:9000
+    volumes:
+      - ./scripts/demo/seed-minio.sh:/seed-minio.sh:ro,z
+    restart: "no"
+
+  postgres:
+    image: "${POSTGRES_IMAGE:-docker.io/library/postgres:15-alpine}"
+    environment:
+      POSTGRES_DB: ${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}
+      POSTGRES_USER: ${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}
+      POSTGRES_PASSWORD: ${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - portable-smoke-postgres-data:/var/lib/postgresql/data
+
+  source:
+    build:
+      context: .
+      dockerfile: Containerfile.local
+      args:
+        DB_BACKEND: sqlite
+        RCLONE_VERSION: ${RCLONE_VERSION:-1.72.0}
+    image: "${S3DESK_PORTABLE_SMOKE_IMAGE:-localhost/s3desk-portable-smoke:dev}"
+    depends_on:
+      - minio
+    environment:
+      ADDR: "0.0.0.0:8080"
+      ALLOW_REMOTE: "true"
+      ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      EXTERNAL_BASE_URL: "http://source:8080"
+      DB_BACKEND: "sqlite"
+      DATA_DIR: "/data"
+      ENCRYPTION_KEY: ${PORTABLE_SMOKE_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
+    volumes:
+      - portable-smoke-source-data:/data
+
+  target:
+    image: "${S3DESK_PORTABLE_SMOKE_IMAGE:-localhost/s3desk-portable-smoke:dev}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ADDR: "0.0.0.0:8080"
+      ALLOW_REMOTE: "true"
+      ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      EXTERNAL_BASE_URL: "http://target:8080"
+      DB_BACKEND: "postgres"
+      DATABASE_URL: "postgres://${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}:${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}@postgres:5432/${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}?sslmode=disable"
+      DATA_DIR: "/data"
+      ENCRYPTION_KEY: ${PORTABLE_SMOKE_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
+      DB_STARTUP_TIMEOUT: ${PORTABLE_SMOKE_DB_STARTUP_TIMEOUT:-60s}
+    volumes:
+      - portable-smoke-target-data:/data
+
+  source-seed:
+    image: "${PYTHON_IMAGE:-docker.io/library/python:3.12-alpine}"
+    entrypoint: ["python3", "/seed-source.py"]
+    environment:
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      SOURCE_API_BASE: http://source:8080/api/v1
+      SOURCE_DATA_DIR: /source-data
+      FIXTURE_OUT: /artifacts/portable-fixture.json
+      PROFILE_NAME: ${PORTABLE_SMOKE_PROFILE_NAME:-Portable Smoke}
+      DEMO_BUCKET: ${PORTABLE_SMOKE_BUCKET:-portable-bucket}
+      FAVORITE_KEY: ${PORTABLE_SMOKE_FAVORITE_KEY:-welcome.txt}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-portable-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-portable-minio-secret}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+    volumes:
+      - ./scripts/portable/seed-source.py:/seed-source.py:ro,z
+      - portable-smoke-source-data:/source-data
+      - portable-smoke-artifacts:/artifacts
+    restart: "no"
+
+  portable-smoke:
+    image: "${PYTHON_IMAGE:-docker.io/library/python:3.12-alpine}"
+    entrypoint: ["python3", "/run-smoke.py"]
+    environment:
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      SOURCE_API_BASE: http://source:8080/api/v1
+      TARGET_API_BASE: http://target:8080/api/v1
+      TARGET_DATA_DIR: /target-data
+      FIXTURE_PATH: /artifacts/portable-fixture.json
+      PORTABLE_BUNDLE_CONFIDENTIALITY: ${PORTABLE_BUNDLE_CONFIDENTIALITY:-clear}
+      PORTABLE_BUNDLE_PASSWORD: ${PORTABLE_BUNDLE_PASSWORD:-}
+    volumes:
+      - ./scripts/portable/run-smoke.py:/run-smoke.py:ro,z
+      - portable-smoke-target-data:/target-data:ro
+      - portable-smoke-artifacts:/artifacts:ro
+    restart: "no"
+
+volumes:
+  portable-smoke-artifacts:
+  portable-smoke-minio-data:
+  portable-smoke-postgres-data:
+  portable-smoke-source-data:
+  portable-smoke-target-data:

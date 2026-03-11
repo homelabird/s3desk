@@ -127,6 +127,7 @@ Use these operational thresholds:
   3. Resolve blockers such as encryption-key mismatch or missing disk space for thumbnails.
   4. Run the actual portable import into the destination database.
   5. Verify health and imported row counts before switching users to the new instance.
+- For a disposable local proof of the path, run `./scripts/run_portable_sqlite_to_postgres_smoke.sh`.
 
 ### Staged Restore Lifecycle
 
