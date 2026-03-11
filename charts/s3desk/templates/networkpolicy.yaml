@@ -1,0 +1,48 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "s3desk.fullname" . }}
+  labels:
+    {{- include "s3desk.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "s3desk.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    {{- range .Values.networkPolicy.policyTypes }}
+    - {{ . }}
+    {{- end }}
+  {{- if has "Ingress" .Values.networkPolicy.policyTypes }}
+  ingress:
+    {{- if .Values.networkPolicy.ingress.allowSameNamespace }}
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    {{- end }}
+    {{- range .Values.networkPolicy.ingress.extra }}
+    - {{- toYaml . | nindent 6 | trim }}
+    {{- end }}
+    {{- if and (not .Values.networkPolicy.ingress.allowSameNamespace) (eq (len .Values.networkPolicy.ingress.extra) 0) }}
+    []
+    {{- end }}
+  {{- end }}
+  {{- if has "Egress" .Values.networkPolicy.policyTypes }}
+  egress:
+    {{- if .Values.networkPolicy.egress.allowDns }}
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    {{- range .Values.networkPolicy.egress.extra }}
+    - {{- toYaml . | nindent 6 | trim }}
+    {{- end }}
+    {{- if and (not .Values.networkPolicy.egress.allowDns) (eq (len .Values.networkPolicy.egress.extra) 0) }}
+    []
+    {{- end }}
+  {{- end }}
+{{- end }}

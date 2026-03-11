@@ -15,12 +15,29 @@ This chart is secure-by-default.
 
 An API token is required when `server.allowRemote=true` (default). Configure one of:
   - `server.apiToken` (recommended)
+  - `secrets.autoGenerateApiToken=true` (default; auto-creates a token Secret for this release)
   - `secrets.existingSecret` (must contain the configured token key)
+
+{{- if and .Values.server.allowRemote (not .Values.secrets.existingSecret) (.Values.secrets.autoGenerateApiToken | default false) (eq (trim .Values.server.apiToken) "") }}
+Retrieve the auto-generated API token:
+  kubectl get secret {{ include "s3desk.secretName" . }} -o jsonpath='{.data.{{ .Values.secrets.apiTokenKey }}}' | base64 -d && echo
+{{- end }}
 
 Host allowlist:
   - The chart auto-populates ALLOWED_HOSTS with common Service DNS variants plus any Ingress/Istio hosts.
   - Use `server.allowedHosts` for any additional hostnames.
 
+{{- if not .Values.server.externalBaseURL }}
+External base URL:
+  - `server.externalBaseURL` is strongly recommended for browser-facing ingress, reverse-proxy, and download-proxy deployments.
+{{- end }}
+
 Prometheus scraping:
   - /metrics requires the API token.
   - You can send it as either `Authorization: Bearer <token>` or `X-Api-Token: <token>`.
+
+{{- if or .Values.monitoring.serviceMonitor.enabled .Values.monitoring.podMonitor.enabled }}
+Prometheus Operator:
+  - This release renders {{ if and .Values.monitoring.serviceMonitor.enabled .Values.monitoring.podMonitor.enabled }}`ServiceMonitor` and `PodMonitor`{{ else if .Values.monitoring.serviceMonitor.enabled }}`ServiceMonitor`{{ else }}`PodMonitor`{{ end }} objects.
+  - Token-backed scraping defaults to the same Secret and key used for `API_TOKEN`.
+{{- end }}

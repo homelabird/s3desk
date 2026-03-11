@@ -25,6 +25,7 @@ spec:
       {{- end }}
     spec:
       serviceAccountName: {{ include "s3desk.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -48,10 +49,18 @@ spec:
           env:
             - name: ADDR
               value: {{ .Values.server.addr | quote }}
+            {{- if .Values.server.externalBaseURL }}
+            - name: EXTERNAL_BASE_URL
+              value: {{ .Values.server.externalBaseURL | quote }}
+            {{- end }}
             - name: DATA_DIR
               value: {{ .Values.dataDir | quote }}
             - name: DB_BACKEND
               value: {{ .Values.db.backend | quote }}
+            - name: DB_STARTUP_TIMEOUT
+              value: {{ .Values.db.startupTimeout | quote }}
+            - name: DB_STARTUP_RETRY_INTERVAL
+              value: {{ .Values.db.startupRetryInterval | quote }}
             - name: LOG_FORMAT
               value: {{ .Values.server.logFormat | quote }}
             - name: LOG_LEVEL
@@ -70,14 +79,30 @@ spec:
               value: {{ .Values.jobs.logEmitStdout | quote }}
             - name: JOB_RETENTION
               value: {{ .Values.jobs.retention | quote }}
+            - name: JOB_LOG_RETENTION
+              value: {{ .Values.jobs.logRetention | quote }}
             - name: UPLOAD_TTL
               value: {{ .Values.uploads.ttl | quote }}
             - name: UPLOAD_MAX_BYTES
               value: {{ .Values.uploads.maxBytes | quote }}
+            - name: SERVER_RESTORE_MAX_BYTES
+              value: {{ .Values.backup.restoreMaxBytes | quote }}
             - name: UPLOAD_DIRECT_STREAM
               value: {{ .Values.uploads.directStream | quote }}
+            - name: UPLOAD_MAX_CONCURRENT_REQUESTS
+              value: {{ .Values.uploads.maxConcurrentRequests | quote }}
             - name: RCLONE_TUNE
               value: {{ .Values.rclone.tune | quote }}
+            - name: RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS
+              value: {{ .Values.rclone.downloadMultiThreadStreams | quote }}
+            - name: RCLONE_DOWNLOAD_MULTI_THREAD_CUTOFF_MIB
+              value: {{ .Values.rclone.downloadMultiThreadCutoffMiB | quote }}
+            - name: RCLONE_DOWNLOAD_BUFFER_SIZE_MIB
+              value: {{ .Values.rclone.downloadBufferSizeMiB | quote }}
+            - name: RCLONE_LOW_LEVEL_RETRIES
+              value: {{ .Values.rclone.lowLevelRetries | quote }}
+            - name: RCLONE_CAPTURE_UNKNOWN_ERRORS
+              value: {{ .Values.rclone.captureUnknownErrors | quote }}
             {{- if .Values.server.staticDir }}
             - name: STATIC_DIR
               value: {{ .Values.server.staticDir | quote }}
@@ -161,8 +186,9 @@ spec:
             - name: RCLONE_RETRY_JITTER_RATIO
               value: {{ .Values.rclone.retryJitterRatio | quote }}
             {{- end }}
-            {{- $secretName := default (include "s3desk.fullname" .) .Values.secrets.existingSecret }}
-            {{- $useSecret := or (ne (trim .Values.server.apiToken) "") (ne (trim .Values.server.encryptionKey) "") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
+            {{- $secretName := include "s3desk.secretName" . }}
+            {{- $needsManagedAPIToken := and (eq (trim .Values.server.apiToken) "") (eq (trim .Values.secrets.existingSecret) "") (.Values.secrets.autoGenerateApiToken | default false) (eq (include "s3desk.metricsTokenRequired" .) "true") }}
+            {{- $useSecret := or (ne (trim .Values.server.apiToken) "") $needsManagedAPIToken (ne (trim .Values.server.encryptionKey) "") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
             {{- if $useSecret }}
             - name: API_TOKEN
               valueFrom:
@@ -204,6 +230,14 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}

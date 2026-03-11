@@ -41,6 +41,18 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 {{- end }}
 
+{{- define "s3desk.secretName" -}}
+{{- default (include "s3desk.fullname" .) .Values.secrets.existingSecret -}}
+{{- end }}
+
+{{- define "s3desk.metricsTokenRequired" -}}
+{{- if or (.Values.server.allowRemote | default false) (.Values.monitoring.serviceMonitor.enabled | default false) (.Values.monitoring.podMonitor.enabled | default false) -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end }}
+
 {{/*
 Validate critical chart values at render time.
 
@@ -53,12 +65,19 @@ this template-level validation as a second line of defense.
 {{- define "s3desk.validateValues" -}}
   {{- $apiToken := trim (default "" .Values.server.apiToken) -}}
   {{- $existingSecret := trim (default "" .Values.secrets.existingSecret) -}}
+  {{- $databaseURL := trim (default "" .Values.db.databaseUrl) -}}
+  {{- $autoGenerateAPIToken := .Values.secrets.autoGenerateApiToken | default false -}}
+  {{- $tokenRequired := eq (include "s3desk.metricsTokenRequired" .) "true" -}}
 
   {{- if eq $apiToken "change-me" -}}
     {{- fail "Invalid value: server.apiToken must not be 'change-me'. Set a strong random token or use secrets.existingSecret." -}}
   {{- end -}}
 
-  {{- if and (.Values.server.allowRemote | default false) (eq $apiToken "") (eq $existingSecret "") -}}
-    {{- fail "Missing configuration: server.allowRemote is true, but no API token is configured. Set server.apiToken (recommended) or secrets.existingSecret." -}}
+  {{- if and $tokenRequired (eq $apiToken "") (eq $existingSecret "") (not $autoGenerateAPIToken) -}}
+    {{- fail "Missing configuration: this release needs an API token for remote access or metrics scraping. Set server.apiToken, enable secrets.autoGenerateApiToken, or use secrets.existingSecret." -}}
+  {{- end -}}
+
+  {{- if and (eq .Values.db.backend "postgres") (eq $databaseURL "") (eq $existingSecret "") -}}
+    {{- fail "Missing configuration: db.backend=postgres requires db.databaseUrl or secrets.existingSecret with the configured database URL key." -}}
   {{- end -}}
 {{- end }}

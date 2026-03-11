@@ -1,0 +1,36 @@
+{{- if .Values.monitoring.podMonitor.enabled -}}
+{{- $tokenSecretName := default (include "s3desk.secretName" .) .Values.monitoring.podMonitor.bearerTokenSecret.name -}}
+{{- $tokenSecretKey := default .Values.secrets.apiTokenKey .Values.monitoring.podMonitor.bearerTokenSecret.key -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "s3desk.fullname" . }}
+  labels:
+    {{- include "s3desk.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.monitoring.podMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "s3desk.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: http
+      path: {{ .Values.monitoring.podMonitor.path | quote }}
+      scheme: {{ .Values.monitoring.podMonitor.scheme | quote }}
+      interval: {{ .Values.monitoring.podMonitor.interval | quote }}
+      honorLabels: {{ .Values.monitoring.podMonitor.honorLabels }}
+      bearerTokenSecret:
+        name: {{ $tokenSecretName }}
+        key: {{ $tokenSecretKey }}
+      {{- if .Values.monitoring.podMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ .Values.monitoring.podMonitor.scrapeTimeout | quote }}
+      {{- end }}
+{{- end }}

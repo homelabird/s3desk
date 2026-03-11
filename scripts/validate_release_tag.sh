@@ -8,8 +8,8 @@ if [[ -z "${TAG}" ]]; then
   exit 1
 fi
 
-if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "invalid release tag '${TAG}' (expected format vMAJOR.MINOR.PATCH)" >&2
+if [[ ! "${TAG}" =~ ^[0-9]+\.[0-9]+v(-rc[0-9]+)?$ ]]; then
+  echo "invalid release tag '${TAG}' (expected format MAJOR.MINORv or MAJOR.MINORv-rcN)" >&2
   exit 1
 fi
 

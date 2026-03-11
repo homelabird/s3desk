@@ -14,7 +14,7 @@ fi
 bash "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/validate_release_tag.sh" "${TAG}" >/dev/null
 
 BASE_TAG="${TAG}"
-CHART_VERSION="${BASE_TAG#v}"
+CHART_VERSION="$(bash "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/chart_version_from_tag.sh" "${BASE_TAG}")"
 if [[ -z "${CHART_VERSION}" ]]; then
   echo "invalid tag '${TAG}' (empty chart version)" >&2
   exit 1

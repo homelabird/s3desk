@@ -26,7 +26,7 @@ fi
 
 HARBOR_REGISTRY="${HARBOR_REGISTRY:-harbor.k8s.homelabird.com}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-300s}"
-CHART_VERSION="${TAG#v}"
+CHART_VERSION="$(bash "${ROOT}/scripts/chart_version_from_tag.sh" "${TAG}")"
 DEPLOY_HELM_CHART_REF="${DEPLOY_HELM_CHART_REF:-oci://${HARBOR_REGISTRY}/library/charts/s3desk}"
 
 KUBECONFIG_PATH=""

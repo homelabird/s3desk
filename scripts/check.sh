@@ -33,6 +33,13 @@ bash "${ROOT}/scripts/validate_openapi.sh"
 echo "[check] release gate"
 bash "${ROOT}/scripts/check_release_gate.sh"
 
+if command -v helm >/dev/null 2>&1; then
+  echo "[check] helm chart"
+  bash "${ROOT}/scripts/check_helm_chart.sh"
+else
+  echo "[check] helm not found; skipping helm chart validation" >&2
+fi
+
 echo "[check] gofmt"
 UNFORMATTED=$(find "${ROOT}/backend" -name '*.go' -type f -print0 | xargs -0 "${GOFMT_BIN}" -l)
 if [[ -n "${UNFORMATTED}" ]]; then

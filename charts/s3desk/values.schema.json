@@ -2,9 +2,241 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "imagePullSecrets": {
+      "type": "array"
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "automountServiceAccountToken": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "existingClaim": {
+          "type": "string"
+        },
+        "storageClass": {
+          "type": "string"
+        },
+        "accessModes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "additionalProperties": true
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "host": {
+                "type": "string",
+                "minLength": 1
+              },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "pathType": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["path", "pathType"],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": ["host", "paths"],
+            "additionalProperties": true
+          }
+        },
+        "tls": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "istio": {
+      "type": "object",
+      "properties": {
+        "virtualService": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "gateways": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "hosts": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "policyTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["Ingress", "Egress"]
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "serviceMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scrapeTimeout": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scheme": {
+              "type": "string",
+              "enum": ["http", "https"]
+            },
+            "honorLabels": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        },
+        "podMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scrapeTimeout": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scheme": {
+              "type": "string",
+              "enum": ["http", "https"]
+            },
+            "honorLabels": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
     "server": {
       "type": "object",
       "properties": {
+        "externalBaseURL": {
+          "type": "string",
+          "description": "Browser-facing base URL used for generated external links.",
+          "pattern": "^$|^https?://.+"
+        },
         "allowRemote": {
           "type": "boolean",
           "description": "Whether to allow non-local access. If true, a token is required for safe operation."
@@ -15,6 +247,119 @@
           "not": {
             "const": "change-me"
           }
+        },
+        "allowedHosts": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "allowedLocalDirs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": true
+    },
+    "db": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["sqlite", "postgres"]
+        },
+        "databaseUrl": {
+          "type": "string"
+        },
+        "startupTimeout": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startupRetryInterval": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxOpenConns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxIdleConns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "connMaxLifetime": {
+          "type": "string"
+        },
+        "connMaxIdleTime": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "jobs": {
+      "type": "object",
+      "properties": {
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "queueCapacity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "logMaxBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "logMaxLineBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "logEmitStdout": {
+          "type": "boolean"
+        },
+        "retention": {
+          "type": "string"
+        },
+        "logRetention": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "uploads": {
+      "type": "object",
+      "properties": {
+        "ttl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxConcurrentRequests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "directStream": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "backup": {
+      "type": "object",
+      "properties": {
+        "restoreMaxBytes": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          ]
         }
       },
       "additionalProperties": true
@@ -25,6 +370,10 @@
         "existingSecret": {
           "type": "string",
           "description": "Name of an existing Secret that contains the API token / encryption key / database URL."
+        },
+        "autoGenerateApiToken": {
+          "type": "boolean",
+          "description": "Generate and persist an API token Secret automatically when remote access is enabled and no explicit token is provided."
         }
       },
       "additionalProperties": true
@@ -32,6 +381,25 @@
     "rclone": {
       "type": "object",
       "properties": {
+        "downloadMultiThreadStreams": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "downloadMultiThreadCutoffMiB": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "downloadBufferSizeMiB": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lowLevelRetries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "captureUnknownErrors": {
+          "type": "boolean"
+        },
         "retryAttempts": {
           "type": "integer",
           "minimum": 1,
@@ -54,6 +422,14 @@
           "description": "Random jitter ratio for rclone retry delay. Range: 0..1."
         }
       },
+      "additionalProperties": true
+    },
+    "extraEnvFrom": {
+      "type": "array",
+      "description": "Additional envFrom entries, typically SecretRef or ConfigMapRef objects."
+    },
+    "startupProbe": {
+      "type": "object",
       "additionalProperties": true
     }
   },
@@ -87,6 +463,67 @@
                     "not": {
                       "const": "change-me"
                     }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "secrets": {
+                "type": "object",
+                "required": ["autoGenerateApiToken"],
+                "properties": {
+                  "autoGenerateApiToken": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "secrets": {
+                "type": "object",
+                "required": ["existingSecret"],
+                "properties": {
+                  "existingSecret": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "db": {
+            "type": "object",
+            "properties": {
+              "backend": {
+                "const": "postgres"
+              }
+            },
+            "required": ["backend"]
+          }
+        }
+      },
+      "then": {
+        "description": "When Postgres is enabled, require either db.databaseUrl or secrets.existingSecret.",
+        "anyOf": [
+          {
+            "properties": {
+              "db": {
+                "type": "object",
+                "required": ["databaseUrl"],
+                "properties": {
+                  "databaseUrl": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 }
               }

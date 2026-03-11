@@ -1,0 +1,36 @@
+{{- if .Values.monitoring.serviceMonitor.enabled -}}
+{{- $tokenSecretName := default (include "s3desk.secretName" .) .Values.monitoring.serviceMonitor.bearerTokenSecret.name -}}
+{{- $tokenSecretKey := default .Values.secrets.apiTokenKey .Values.monitoring.serviceMonitor.bearerTokenSecret.key -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "s3desk.fullname" . }}
+  labels:
+    {{- include "s3desk.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.monitoring.serviceMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "s3desk.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: {{ .Values.monitoring.serviceMonitor.path | quote }}
+      scheme: {{ .Values.monitoring.serviceMonitor.scheme | quote }}
+      interval: {{ .Values.monitoring.serviceMonitor.interval | quote }}
+      honorLabels: {{ .Values.monitoring.serviceMonitor.honorLabels }}
+      bearerTokenSecret:
+        name: {{ $tokenSecretName }}
+        key: {{ $tokenSecretKey }}
+      {{- if .Values.monitoring.serviceMonitor.scrapeTimeout }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | quote }}
+      {{- end }}
+{{- end }}

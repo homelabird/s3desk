@@ -14,12 +14,7 @@ server:
     - s3desk.k8s.homelabird.com
 
 rclone:
+  downloadMultiThreadStreams: 8
+  downloadMultiThreadCutoffMiB: 64
+  downloadBufferSizeMiB: 32
   retryJitterRatio: 0.2
-
-extraEnv:
-  - name: RCLONE_DOWNLOAD_MULTI_THREAD_STREAMS
-    value: "8"
-  - name: RCLONE_DOWNLOAD_MULTI_THREAD_CUTOFF_MIB
-    value: "64"
-  - name: RCLONE_DOWNLOAD_BUFFER_SIZE_MIB
-    value: "32"

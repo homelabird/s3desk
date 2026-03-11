@@ -1,6 +1,16 @@
 apiVersion: v2
 name: s3desk
 description: S3Desk (S3-compatible)
+home: https://github.com/homelabird/s3desk
+icon: https://raw.githubusercontent.com/homelabird/s3desk/main/frontend/public/s3desk-icon.png
+sources:
+  - https://github.com/homelabird/s3desk
+keywords:
+  - s3
+  - object-storage
+  - self-hosted
+  - dashboard
+  - kubernetes
 type: application
 version: 0.1.0
 appVersion: "0.0.0"
