@@ -1,17 +1,64 @@
 # S3Desk
 
-S3Desk is a self-hosted dashboard for multi-provider object storage.
-
+S3Desk is a self-hosted dashboard for multi-provider object storage. It combines
+profile management, bucket and object browsing, uploads, transfer tracking,
+jobs, and backup workflows in one UI.
 
 ![S3Desk dashboard](img/image.png)
-![S3Desk objects view](<img/image copy.png>)
+![S3Desk objects view](img/objects.png)
 
+## What It Does
+
+- Connect to multiple object-storage providers from one UI.
+- Browse buckets and prefixes, preview objects, and run common object actions.
+- Queue uploads and downloads, then track them from the Transfers and Jobs
+  surfaces.
+- Export sqlite-backed backups, stage restores, and run portable import flows.
+- Support browser-facing deployments with reverse proxies, `download-proxy`,
+  `publicEndpoint`, and explicit external base URL handling.
+
+## Quick Start
+
+### Seeded Demo Stack
+
+Bring up the demo stack with a pre-seeded MinIO profile and sample bucket:
+
+```bash
+docker compose -f docker-compose-demo.yml up --build -d
+```
+
+Default local demo endpoints:
+
+- UI: `http://127.0.0.1:8080`
+- MinIO API: `http://127.0.0.1:9000`
+- MinIO Console: `http://127.0.0.1:9001`
+- API token: `demo-token`
+- Seeded profile name: `MinIO Demo`
+- Seeded bucket: `demo-bucket`
+
+This path is intended for fast local evaluation, not hardened remote exposure.
+
+### Local Development
+
+Run the backend and frontend together:
+
+```bash
+./scripts/dev.sh
+```
+
+Default local development endpoints:
+
+- Frontend dev server: `http://127.0.0.1:5173`
+- UI and API: `http://127.0.0.1:8080`
+- API docs: `http://127.0.0.1:8080/docs`
+- OpenAPI spec: `http://127.0.0.1:8080/openapi.yml`
 
 ## Build Requirements
 
 - Go `1.24+`
 - Node.js `22.x`
-- Docker and Docker Compose for container-based builds
+- npm `10.9.4` recommended
+- Docker and Docker Compose for container-based workflows
 
 ## Build From Source
 
@@ -27,9 +74,31 @@ Build outputs:
 - `dist/ui`
 - `dist/openapi.yml`
 
-## Docker Build
+## Verification
 
-Build and run the current checkout with Postgres using the local-only compose file:
+Run the standard local verification pass:
+
+```bash
+./scripts/check.sh
+```
+
+This covers:
+
+- OpenAPI validation
+- Release-gate checks
+- Backend formatting, vet, and tests
+- Frontend OpenAPI sync check, lint, unit tests, and build
+- Third-party notice regeneration checks
+
+For focused commands and live/environment-gated workflows, see
+[docs/TESTING.md](docs/TESTING.md).
+
+## Deployment Paths
+
+### Local Container Build
+
+Build and run the current checkout with Postgres using the local-only compose
+file:
 
 ```bash
 export API_TOKEN='set-a-local-token'
@@ -42,22 +111,15 @@ docker compose -f docker-compose.local-build.yml up --build -d
 - keeps `ALLOW_REMOTE=false`
 - requires an explicit `API_TOKEN`
 
-The service is exposed on `http://127.0.0.1:8080` by default.
+### Remote Postgres Deployment
 
-For remote exposure, use a separate deployment manifest and set:
-
-- `ALLOW_REMOTE=true`
-- a non-placeholder `API_TOKEN`
-- `ALLOWED_HOSTS` when using non-private hostnames
-
-## Remote Deployment Template
-
-The repository root compose files are now the hardened Postgres-backed remote templates:
+The hardened remote deployment templates are:
 
 - `docker-compose.yml`
 - `docker-compose.postgres.yml`
+- `.env.example`
 
-Before starting them, set all required variables explicitly:
+Start from:
 
 ```bash
 cp .env.example .env
@@ -65,21 +127,24 @@ $EDITOR .env
 docker compose up -d
 ```
 
-Notes:
+Important remote deployment settings:
 
-- Start from [.env.example](/home/homelab/Downloads/project/s3desk/.env.example) for remote/Postgres deployments.
-- `S3DESK_BIND_ADDRESS` is required so host exposure is always deliberate.
-- `API_TOKEN` and `POSTGRES_PASSWORD` are required; placeholder defaults are not shipped in the remote template.
-- Keep using `docker-compose.local-build.yml` for local development and local verification.
+- `S3DESK_BIND_ADDRESS`
+- `API_TOKEN`
+- `POSTGRES_PASSWORD`
+- `EXTERNAL_BASE_URL` when users access S3Desk through a hostname or proxy
+- `ALLOWED_HOSTS` for non-private hostnames
 
-## Caddy Reverse Proxy Template
+See [.env.example](.env.example) for the full template.
 
-For a public HTTPS deployment fronted by Caddy, use:
+### Public HTTPS with Caddy
+
+For a Caddy-fronted public deployment, use:
 
 - `docker-compose.caddy.yml`
 - `deploy/caddy/Caddyfile`
 
-Set these values to the same public hostname before starting it:
+At minimum, set:
 
 - `S3DESK_DOMAIN`
 - `EXTERNAL_BASE_URL`
@@ -91,30 +156,73 @@ Then start it with:
 docker compose -f docker-compose.caddy.yml up -d
 ```
 
-The Caddy manifest keeps the backend unexposed and publishes only ports `80` and `443` from the `caddy` service.
-See [docs/CADDY_DEPLOYMENT.md](docs/CADDY_DEPLOYMENT.md) for the full checklist and validation steps.
+See [docs/CADDY_DEPLOYMENT.md](docs/CADDY_DEPLOYMENT.md) for the full checklist,
+reverse-proxy smoke commands, and browser-facing download expectations.
 
-## Local Development
+## Backup and Restore
 
-Run the backend and frontend together:
+The in-product backup UI now lives in the main sidebar `Backup` drawer.
 
-```bash
-./scripts/dev.sh
-```
+Available flows:
 
-Default local endpoints:
+- `Full backup`: sqlite-backed `DATA_DIR` snapshot plus local state used for
+  same-backend recovery.
+- `Cache + metadata backup`: lighter sqlite backup that keeps metadata and
+  selected cache state such as thumbnails.
+- `Portable backup`: database-neutral export path for portable preview/import
+  workflows.
+- `Stage restore bundle`: uploads a backup bundle under
+  `DATA_DIR/restores/<restore-id>` for review and manual cutover.
+- `Portable import preview/import`: dry-run and replace-style import flow for
+  portable bundles.
 
-- Frontend dev server: `http://127.0.0.1:5173`
-- UI and API: `http://127.0.0.1:8080`
+Payload protection modes:
+
+- clear archive
+- `ENCRYPTION_KEY`-backed encrypted payload
+- password-protected encrypted payload
+
+Important scope boundaries:
+
+- In-product `Full backup` and `Cache + metadata backup` are for sqlite-backed
+  `DATA_DIR` state.
+- Postgres deployments still need a separate database backup workflow such as
+  `pg_dump`, physical base backups, WAL archiving, or managed snapshots.
+- A staged restore bundle does not replace a Postgres database restore.
+- `Portable backup` / portable import is the database-neutral migration path,
+  not a generic Postgres disaster-recovery feature.
+
+For operational details, see:
+
+- [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- [docs/PORTABLE_BACKUP_DESIGN.md](docs/PORTABLE_BACKUP_DESIGN.md)
+- [docs/PORTABLE_BACKUP_CHECKLIST.md](docs/PORTABLE_BACKUP_CHECKLIST.md)
+
+## Browser-Facing Deployment Notes
+
+For remote and reverse-proxied deployments:
+
+- set `EXTERNAL_BASE_URL` to the browser-facing origin
+- set `ALLOWED_HOSTS` when using non-private hostnames
+- use `publicEndpoint` on S3-compatible profiles when browsers need a different
+  hostname than the server-side storage endpoint
+- keep using `download-proxy` when browsers should not hit the storage endpoint
+  directly
+
+The reverse-proxy and browser-download validation path is documented in
+[docs/CADDY_DEPLOYMENT.md](docs/CADDY_DEPLOYMENT.md) and
+[docs/TESTING.md](docs/TESTING.md).
+
+## API Surface
+
+Built-in endpoints:
+
+- UI: `http://127.0.0.1:8080`
 - API docs: `http://127.0.0.1:8080/docs`
 - OpenAPI spec: `http://127.0.0.1:8080/openapi.yml`
 
-## Backup Model
-
-- In-product `Full backup` and `Cache + metadata backup` exports are for sqlite-backed `DATA_DIR` state.
-- Restore bundle uploads are `stage only`: the bundle is unpacked under `DATA_DIR/restores/<restore-id>` for review and manual cutover.
-- Postgres deployments still need a separate database backup workflow such as `pg_dump`, physical base backups, or managed snapshots.
-- A staged restore bundle does not replace a Postgres database restore.
+If `API_TOKEN` is enabled, send it with `X-Api-Token` or
+`Authorization: Bearer <token>`.
 
 ## Documentation
 
@@ -122,14 +230,17 @@ Default local endpoints:
 - [Usage](docs/USAGE.md)
 - [Providers](docs/PROVIDERS.md)
 - [Caddy deployment](docs/CADDY_DEPLOYMENT.md)
-- [Bucket governance design](docs/BUCKET_GOVERNANCE_DESIGN.md)
-- [Bucket governance remaining work](docs/BUCKET_GOVERNANCE_REMAINING_WORK.md)
+- [Portable backup design](docs/PORTABLE_BACKUP_DESIGN.md)
+- [Portable backup checklist](docs/PORTABLE_BACKUP_CHECKLIST.md)
 - [Runbook](docs/RUNBOOK.md)
 - [Testing](docs/TESTING.md)
+- [Release gate](docs/RELEASE_GATE.md)
+- [Bucket governance live validation](docs/BUCKET_GOVERNANCE_LIVE_VALIDATION.md)
 
-## Demo
+## Demo Flow
 
-Profile selection, bucket creation, file upload, object deletion, and jobs view:
+Profile selection, bucket creation, file upload, object deletion, and jobs
+view:
 
 ![S3Desk demo flow](img/demo-flow-1920x1080.gif)
 
@@ -137,4 +248,4 @@ Profile selection, bucket creation, file upload, object deletion, and jobs view:
 
 This project is licensed under the Mozilla Public License 2.0 (`MPL-2.0`).
 
-See the full [LICENSE](LICENSE).
+See [LICENSE](LICENSE).
