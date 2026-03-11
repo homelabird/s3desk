@@ -14,23 +14,23 @@ This runbook covers the minimum operational checks for a normal S3Desk deploymen
 Containerized defaults:
 
 - SQLite image stores data under `/data`
-- `docker-compose.local-build.yml` is loopback-only and meant for local work
-- `docker-compose.yml` and `docker-compose.postgres.yml` are the hardened Postgres-backed remote templates
-- remote templates require explicit `S3DESK_BIND_ADDRESS`, `API_TOKEN`, and `POSTGRES_PASSWORD`
+- `./scripts/compose.sh dev` is loopback-only and meant for local work
+- `./scripts/compose.sh remote` is the hardened Postgres-backed remote stack
+- remote stack requires explicit `S3DESK_BIND_ADDRESS`, `API_TOKEN`, and `POSTGRES_PASSWORD`
 
 ## Start and Stop
 
 ```bash
 cp .env.example .env
 $EDITOR .env
-docker compose up -d
-docker compose down
-docker compose logs -f
+./scripts/compose.sh remote up -d
+./scripts/compose.sh remote down
+./scripts/compose.sh remote logs -f
 ```
 
 Use [.env.example](/home/homelab/Downloads/project/s3desk/.env.example) as the starting point for remote/Postgres deployments.
 
-If you are using `docker-compose.local-build.yml`, keep it local-only.
+If you are using `./scripts/compose.sh dev`, keep it local-only.
 
 For remote exposure, require all of the following:
 
@@ -121,6 +121,7 @@ Use these operational thresholds:
 - Portable bundles contain logical application data rather than a raw `s3desk.db` snapshot.
 - Portable import currently assumes replace semantics for portable-scope entities.
 - Keep `ENCRYPTION_KEY` aligned between source and destination when encrypted profile data is present.
+- When using `confidentiality=encrypted`, keep the export/import password aligned as well.
 - A safe migration flow is:
   1. Export a portable backup from the source server.
   2. Run portable import preview on the destination server.
@@ -130,6 +131,12 @@ Use these operational thresholds:
 - For a disposable local proof of the supported paths, run:
   - `./scripts/run_portable_sqlite_to_postgres_smoke.sh`
   - `./scripts/run_portable_postgres_to_sqlite_smoke.sh`
+- For encrypted/password-protected bundles, run:
+  - `PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted PORTABLE_BUNDLE_PASSWORD=operator-secret ./scripts/run_portable_sqlite_to_postgres_smoke.sh`
+  - `PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted PORTABLE_BUNDLE_PASSWORD=operator-secret ./scripts/run_portable_postgres_to_sqlite_smoke.sh`
+- For failure-path validation, run:
+  - `./scripts/run_portable_failure_smoke.sh`
+  - `./scripts/run_portable_postgres_to_sqlite_failure_smoke.sh`
 
 ### Staged Restore Lifecycle
 

@@ -14,10 +14,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"s3desk/internal/config"
 	"s3desk/internal/db"
 	"s3desk/internal/models"
+	"s3desk/internal/store"
 )
 
 func TestHandleGetServerBackup_PortableArchiveIncludesEntityFiles(t *testing.T) {
@@ -127,6 +129,51 @@ func TestHandleGetServerBackup_PortableArchiveIncludesThumbnailAssetMetadata(t *
 	}
 }
 
+func TestHandleGetServerBackup_PortableArchiveIncludesUploadState(t *testing.T) {
+	t.Parallel()
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	session, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", "presigned", "", time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+	if err := st.UpsertMultipartUpload(context.Background(), store.MultipartUpload{
+		UploadID:   session.ID,
+		ProfileID:  profile.ID,
+		Path:       "multipart/large.bin",
+		Bucket:     "test-bucket",
+		ObjectKey:  "incoming/multipart/large.bin",
+		S3UploadID: "upload-1",
+		ChunkSize:  5 * 1024 * 1024,
+		FileSize:   11 * 1024 * 1024,
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+		UpdatedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("upsert multipart upload: %v", err)
+	}
+
+	archiveBytes := downloadPortableArchiveBytes(t, srv.URL, "/api/v1/server/backup?scope=portable")
+	entries := readTarGzEntries(t, bytes.NewReader(archiveBytes))
+	if !bytes.Contains(entries["data/upload_sessions.jsonl"], []byte(session.ID)) {
+		t.Fatalf("upload_sessions export missing session %q", session.ID)
+	}
+	if !bytes.Contains(entries["data/upload_multipart_uploads.jsonl"], []byte("multipart/large.bin")) {
+		t.Fatal("upload_multipart_uploads export missing multipart metadata")
+	}
+
+	var manifest models.ServerMigrationManifest
+	if err := json.Unmarshal(entries["manifest.json"], &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	if got := manifest.Entities["upload_sessions"].Count; got < 1 {
+		t.Fatalf("manifest.entities[upload_sessions].count=%d, want >=1", got)
+	}
+	if got := manifest.Entities["upload_multipart_uploads"].Count; got < 1 {
+		t.Fatalf("manifest.entities[upload_multipart_uploads].count=%d, want >=1", got)
+	}
+}
+
 func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyMissing(t *testing.T) {
 	t.Parallel()
 
@@ -145,6 +192,34 @@ func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyMissing(t *testing.T
 	body, _ := io.ReadAll(res.Body)
 	if !strings.Contains(string(body), "ENCRYPTION_KEY") {
 		t.Fatalf("expected preflight blocker mentioning ENCRYPTION_KEY, got: %s", string(body))
+	}
+}
+
+func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyHintMismatches(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := mutatePortableArchiveManifest(t, downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable"), func(manifest *models.ServerMigrationManifest) {
+		manifest.EncryptionKeyHint = "deadbeefdeadbeef"
+	})
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable/preview", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Preflight.EncryptionKeyHintVerified {
+		t.Fatal("expected encryptionKeyHintVerified=false")
+	}
+	if !strings.Contains(strings.Join(resp.Preflight.Blockers, "\n"), "encryption fingerprint") {
+		t.Fatalf("expected encryption fingerprint blocker, got %v", resp.Preflight.Blockers)
 	}
 }
 
@@ -338,6 +413,47 @@ func TestHandleImportPortableBackup_PasswordProtectedBundleImportsWithMatchingPa
 	}
 	if profiles[0].ID != profile.ID {
 		t.Fatalf("imported profile id=%q, want %q", profiles[0].ID, profile.ID)
+	}
+}
+
+func TestHandleImportPortableBackup_WarnsWhenThumbnailCopyFails(t *testing.T) {
+	t.Parallel()
+
+	_, _, sourceSrv, sourceDataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	thumbPath := filepath.Join(sourceDataDir, "thumbnails", "profile-a", "bucket-a", "thumb.jpg")
+	if err := os.MkdirAll(filepath.Dir(thumbPath), 0o700); err != nil {
+		t.Fatalf("mkdir thumbnails: %v", err)
+	}
+	if err := os.WriteFile(thumbPath, []byte("jpeg"), 0o600); err != nil {
+		t.Fatalf("write thumbnail: %v", err)
+	}
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable&includeThumbnails=true")
+
+	_, _, targetSrv, targetDataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	targetThumbDir := filepath.Join(targetDataDir, "thumbnails")
+	if err := os.MkdirAll(targetThumbDir, 0o700); err != nil {
+		t.Fatalf("mkdir target thumbnails: %v", err)
+	}
+	if err := os.Chmod(targetThumbDir, 0o500); err != nil {
+		t.Fatalf("chmod target thumbnails: %v", err)
+	}
+	defer func() { _ = os.Chmod(targetThumbDir, 0o700) }()
+
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 201, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	if !strings.Contains(strings.Join(resp.Warnings, "\n"), "failed to copy thumbnail assets") {
+		t.Fatalf("expected thumbnail copy warning, got %v", resp.Warnings)
+	}
+	if resp.AssetStagingDir != "" {
+		t.Fatalf("assetStagingDir=%q, want empty on copy warning", resp.AssetStagingDir)
 	}
 }
 

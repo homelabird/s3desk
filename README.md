@@ -24,7 +24,7 @@ jobs, and backup workflows in one UI.
 Bring up the demo stack with a pre-seeded MinIO profile and sample bucket:
 
 ```bash
-docker compose -f docker-compose-demo.yml up --build -d
+./scripts/compose.sh demo up --build -d
 ```
 
 Default local demo endpoints:
@@ -102,10 +102,10 @@ file:
 
 ```bash
 export API_TOKEN='set-a-local-token'
-docker compose -f docker-compose.local-build.yml up --build -d
+./scripts/compose.sh dev up --build -d
 ```
 
-`docker-compose.local-build.yml` is intentionally local-only:
+`./scripts/compose.sh dev` is intentionally local-only:
 
 - binds `127.0.0.1:${S3DESK_PORT:-8080}` on the host
 - keeps `ALLOW_REMOTE=false`
@@ -113,18 +113,14 @@ docker compose -f docker-compose.local-build.yml up --build -d
 
 ### Remote Postgres Deployment
 
-The hardened remote deployment templates are:
-
-- `docker-compose.yml`
-- `docker-compose.postgres.yml`
-- `.env.example`
+Use the `remote` compose wrapper with [.env.example](.env.example):
 
 Start from:
 
 ```bash
 cp .env.example .env
 $EDITOR .env
-docker compose up -d
+./scripts/compose.sh remote up -d
 ```
 
 Important remote deployment settings:
@@ -137,11 +133,32 @@ Important remote deployment settings:
 
 See [.env.example](.env.example) for the full template.
 
+### Helm Deployment
+
+Use the bundled chart for Kubernetes deployments:
+
+```bash
+helm upgrade --install s3desk ./charts/s3desk \
+  --namespace s3desk \
+  --create-namespace \
+  --set-string server.apiToken='replace-me-with-a-strong-token'
+```
+
+For browser-facing deployments, also set:
+
+- `server.externalBaseURL`
+- `ingress.*` or `istio.virtualService.*`
+- `db.backend=postgres` plus `db.databaseUrl` or `secrets.existingSecret` when using Postgres
+
+The chart now exposes first-class values for DB startup tuning, restore upload limits,
+upload concurrency, and rclone download tuning. See [charts/s3desk/README.md](charts/s3desk/README.md)
+for install examples and operational notes.
+
 ### Public HTTPS with Caddy
 
 For a Caddy-fronted public deployment, use:
 
-- `docker-compose.caddy.yml`
+- `./scripts/compose.sh caddy`
 - `deploy/caddy/Caddyfile`
 
 At minimum, set:
@@ -153,7 +170,7 @@ At minimum, set:
 Then start it with:
 
 ```bash
-docker compose -f docker-compose.caddy.yml up -d
+./scripts/compose.sh caddy up -d
 ```
 
 See [docs/CADDY_DEPLOYMENT.md](docs/CADDY_DEPLOYMENT.md) for the full checklist,
@@ -206,6 +223,25 @@ Compose-based portable migration smoke:
 ```bash
 ./scripts/run_portable_sqlite_to_postgres_smoke.sh
 ./scripts/run_portable_postgres_to_sqlite_smoke.sh
+```
+
+Encrypted/password-protected portable migration smoke:
+
+```bash
+PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
+PORTABLE_BUNDLE_PASSWORD=operator-secret \
+./scripts/run_portable_sqlite_to_postgres_smoke.sh
+
+PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
+PORTABLE_BUNDLE_PASSWORD=operator-secret \
+./scripts/run_portable_postgres_to_sqlite_smoke.sh
+```
+
+Failure-path portable smoke:
+
+```bash
+./scripts/run_portable_failure_smoke.sh
+./scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
 ```
 
 ## Browser-Facing Deployment Notes

@@ -47,7 +47,7 @@ services:
 
   runner:
     build:
-      context: ./e2e/runner
+      context: ../../e2e/runner
       dockerfile: Dockerfile
     environment:
       BASE_URL: "${E2E_BASE_URL:-http://s3desk:8080}"

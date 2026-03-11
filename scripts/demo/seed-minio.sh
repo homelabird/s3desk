@@ -18,7 +18,7 @@ trap 'rm -rf "${tmp_dir}"' EXIT
 cat >"${tmp_dir}/welcome.txt" <<EOF
 s3desk demo bucket
 
-- This bucket was created automatically by docker-compose-demo.yml
+- This bucket was created automatically by the demo compose stack
 - The MinIO profile is already registered in s3desk
 - Endpoint inside the stack: ${MINIO_ENDPOINT}
 - Public endpoint for the browser: http://127.0.0.1:9000
@@ -28,7 +28,7 @@ cat >"${tmp_dir}/about.json" <<EOF
 {
   "name": "s3desk demo",
   "bucket": "${DEMO_BUCKET}",
-  "seededBy": "docker-compose-demo.yml",
+  "seededBy": "compose-demo-stack",
   "storage": "minio"
 }
 EOF

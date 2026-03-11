@@ -148,6 +148,9 @@ Recommended v1 release bar:
 
 - [x] `sqlite -> postgres` portable export/import works
 - [x] `postgres -> sqlite` portable export/import works
+- [x] encrypted/password-protected portable export/import works in both directions
+- [x] portable smoke covers non-empty `upload_sessions` and `upload_multipart_uploads`
+- [x] failure smoke covers wrong password, destination `ENCRYPTION_KEY` mismatch, missing destination `ENCRYPTION_KEY`, and partial thumbnail copy warnings
 - [x] `replace` and `dry_run` are supported
 - [x] thumbnails are the only portable asset class
 - [x] import report is machine-readable and surfaced in UI

@@ -17,7 +17,7 @@ services:
       DEMO_BUCKET: ${PORTABLE_SMOKE_BUCKET:-portable-bucket}
       MINIO_ENDPOINT: http://minio:9000
     volumes:
-      - ./scripts/demo/seed-minio.sh:/seed-minio.sh:ro,z
+      - ../../scripts/demo/seed-minio.sh:/seed-minio.sh:ro,z
     restart: "no"
 
   postgres:
@@ -36,7 +36,7 @@ services:
 
   source:
     build:
-      context: .
+      context: ../..
       dockerfile: Containerfile.local
       args:
         DB_BACKEND: sqlite
@@ -56,7 +56,7 @@ services:
       DB_BACKEND: "${PORTABLE_SMOKE_SOURCE_DB_BACKEND:-sqlite}"
       DATABASE_URL: "postgres://${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}:${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}@postgres:5432/${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}?sslmode=disable"
       DATA_DIR: "/data"
-      ENCRYPTION_KEY: ${PORTABLE_SMOKE_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
+      ENCRYPTION_KEY: ${PORTABLE_SMOKE_SOURCE_ENCRYPTION_KEY-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
       DB_STARTUP_TIMEOUT: ${PORTABLE_SMOKE_DB_STARTUP_TIMEOUT:-60s}
     volumes:
       - portable-smoke-source-data:/data
@@ -75,7 +75,7 @@ services:
       DB_BACKEND: "${PORTABLE_SMOKE_TARGET_DB_BACKEND:-postgres}"
       DATABASE_URL: "postgres://${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}:${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}@postgres:5432/${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}?sslmode=disable"
       DATA_DIR: "/data"
-      ENCRYPTION_KEY: ${PORTABLE_SMOKE_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
+      ENCRYPTION_KEY: ${PORTABLE_SMOKE_TARGET_ENCRYPTION_KEY-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
       DB_STARTUP_TIMEOUT: ${PORTABLE_SMOKE_DB_STARTUP_TIMEOUT:-60s}
     volumes:
       - portable-smoke-target-data:/data
@@ -97,7 +97,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-portable-minio-secret}
       MINIO_REGION: ${MINIO_REGION:-us-east-1}
     volumes:
-      - ./scripts/portable/seed-source.py:/seed-source.py:ro,z
+      - ../../scripts/portable/seed-source.py:/seed-source.py:ro,z
       - portable-smoke-source-data:/source-data
       - portable-smoke-artifacts:/artifacts
     restart: "no"
@@ -113,11 +113,33 @@ services:
       FIXTURE_PATH: /artifacts/portable-fixture.json
       PORTABLE_BUNDLE_CONFIDENTIALITY: ${PORTABLE_BUNDLE_CONFIDENTIALITY:-clear}
       PORTABLE_BUNDLE_PASSWORD: ${PORTABLE_BUNDLE_PASSWORD:-}
+      PORTABLE_BUNDLE_EXPORT_PASSWORD: ${PORTABLE_BUNDLE_EXPORT_PASSWORD:-}
+      PORTABLE_BUNDLE_IMPORT_PASSWORD: ${PORTABLE_BUNDLE_IMPORT_PASSWORD:-}
       EXPECTED_SOURCE_DB_BACKEND: ${PORTABLE_SMOKE_SOURCE_DB_BACKEND:-sqlite}
       EXPECTED_TARGET_DB_BACKEND: ${PORTABLE_SMOKE_TARGET_DB_BACKEND:-postgres}
     volumes:
-      - ./scripts/portable/run-smoke.py:/run-smoke.py:ro,z
+      - ../../scripts/portable/run-smoke.py:/run-smoke.py:ro,z
       - portable-smoke-target-data:/target-data:ro
+      - portable-smoke-artifacts:/artifacts:ro
+    restart: "no"
+
+  portable-smoke-failure:
+    image: "${PYTHON_IMAGE:-docker.io/library/python:3.12-alpine}"
+    entrypoint: ["python3", "/run-failure-smoke.py"]
+    environment:
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      SOURCE_API_BASE: http://source:8080/api/v1
+      TARGET_API_BASE: http://target:8080/api/v1
+      TARGET_DATA_DIR: /target-data
+      FIXTURE_PATH: /artifacts/portable-fixture.json
+      PORTABLE_BUNDLE_CONFIDENTIALITY: ${PORTABLE_BUNDLE_CONFIDENTIALITY:-clear}
+      PORTABLE_BUNDLE_PASSWORD: ${PORTABLE_BUNDLE_PASSWORD:-}
+      PORTABLE_BUNDLE_EXPORT_PASSWORD: ${PORTABLE_BUNDLE_EXPORT_PASSWORD:-}
+      PORTABLE_BUNDLE_IMPORT_PASSWORD: ${PORTABLE_BUNDLE_IMPORT_PASSWORD:-}
+      PORTABLE_FAILURE_SCENARIO: ${PORTABLE_FAILURE_SCENARIO:-}
+    volumes:
+      - ../../scripts/portable/run-failure-smoke.py:/run-failure-smoke.py:ro,z
+      - portable-smoke-target-data:/target-data
       - portable-smoke-artifacts:/artifacts:ro
     restart: "no"
 

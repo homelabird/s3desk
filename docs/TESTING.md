@@ -48,6 +48,25 @@ Use [RELEASE_GATE.md](RELEASE_GATE.md) when deciding whether a build is releasab
 
 GitHub Actions also runs this as the `Release Gate` workflow so changelog and release-evidence scaffolding stay enforced in CI.
 
+## Helm Chart
+
+Run the local Helm render and lint validation with:
+
+```bash
+./scripts/check_helm_chart.sh
+```
+
+This covers:
+
+- default chart lint/render
+- hardened CI values render
+- Postgres values render
+- Istio/browser-facing render
+- NetworkPolicy render
+- ServiceMonitor and PodMonitor render
+- numeric and string `backup.restoreMaxBytes` overrides
+- release-tag to chart-semver conversion helpers
+
 ## OpenAPI Schema Workflow
 
 Edit [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml), not the generated frontend schema file.
@@ -63,8 +82,8 @@ npm run check:openapi
 ## API / Provider E2E
 
 ```bash
-docker compose -f docker-compose.e2e.yml up -d --build
-docker compose -f docker-compose.e2e.yml run --rm runner
+./scripts/compose.sh e2e up -d --build
+./scripts/compose.sh e2e run --rm runner
 ```
 
 ## Portable Migration Smoke
@@ -76,19 +95,46 @@ These are the concrete portable backup/import validation paths.
 ./scripts/run_portable_postgres_to_sqlite_smoke.sh
 ```
 
-The smoke stack uses [docker-compose.portable-smoke.yml](../docker-compose.portable-smoke.yml) and verifies:
+The portable smoke stack verifies:
 
 - source fixture creation through the public API on either sqlite or postgres
 - portable backup export from the configured source backend
 - preview and import on the configured target backend
-- imported `profiles`, `profile_connection_options`, `jobs`, `object_favorites`, and `object_index`
+- imported `profiles`, `profile_connection_options`, `jobs`, `upload_sessions`, `upload_multipart_uploads`, `object_favorites`, and `object_index`
 - thumbnail asset copy into the target `DATA_DIR`
+- incomplete multipart metadata stays incomplete after import and still rejects `commit`
+
+Run the same smoke against encrypted, password-protected portable bundles:
+
+```bash
+PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
+PORTABLE_BUNDLE_PASSWORD=operator-secret \
+./scripts/run_portable_sqlite_to_postgres_smoke.sh
+
+PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
+PORTABLE_BUNDLE_PASSWORD=operator-secret \
+./scripts/run_portable_postgres_to_sqlite_smoke.sh
+```
+
+Failure-path validation is covered by:
+
+```bash
+./scripts/run_portable_failure_smoke.sh
+./scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
+```
+
+These scripts verify:
+
+- wrong password on encrypted/password-protected portable bundles
+- destination `ENCRYPTION_KEY` mismatch against the bundle fingerprint
+- missing destination `ENCRYPTION_KEY` preflight blockers
+- partial thumbnail asset copy warnings after successful database import
 
 ## Reverse Proxy Smoke
 
 Use this minimal pass when auth, realtime transport, `download-proxy`, `EXTERNAL_BASE_URL`, or `ALLOWED_HOSTS` changes.
 
-With the built-in Caddy example:
+With the built-in Caddy stack:
 
 ```bash
 podman run -d --rm \

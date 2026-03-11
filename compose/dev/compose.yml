@@ -17,7 +17,7 @@ services:
   s3desk:
     # Local-only development compose. Do not reuse as a remote deployment template.
     build:
-      context: .
+      context: ../..
       dockerfile: Containerfile.local
       args:
         DB_BACKEND: postgres
@@ -41,7 +41,7 @@ services:
       RCLONE_RETRY_JITTER_RATIO: "0.2"
     volumes:
       - s3desk-data:/data
-      - "${OCI_CONFIG_MOUNT_DIR:-./data/oci-runtime}:/data/oci:ro,z"
+      - "${OCI_CONFIG_MOUNT_DIR:?set OCI_CONFIG_MOUNT_DIR or run via scripts/compose.sh dev}:/data/oci:ro,z"
 
 volumes:
   s3desk-data:

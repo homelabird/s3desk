@@ -1,0 +1,15 @@
+# Production-oriented reverse proxy example for docker-compose.caddy.yml.
+# S3DESK_DOMAIN must match the host portion of EXTERNAL_BASE_URL and ALLOWED_HOSTS.
+{$S3DESK_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+	}
+
+	reverse_proxy s3desk:8080 {
+		header_up Host {host}
+	}
+}

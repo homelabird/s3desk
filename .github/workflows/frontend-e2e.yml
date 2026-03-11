@@ -4,7 +4,8 @@ on:
   pull_request:
     paths:
       - ".github/workflows/frontend-e2e.yml"
-      - "docker-compose.e2e.yml"
+      - "compose/test/e2e.yml"
+      - "scripts/compose.sh"
       - "frontend/**"
       - "openapi.yml"
       - "scripts/bundle_report.js"
@@ -14,7 +15,8 @@ on:
       - main
     paths:
       - ".github/workflows/frontend-e2e.yml"
-      - "docker-compose.e2e.yml"
+      - "compose/test/e2e.yml"
+      - "scripts/compose.sh"
       - "frontend/**"
       - "openapi.yml"
       - "scripts/bundle_report.js"
@@ -152,7 +154,7 @@ jobs:
         run: docker build -t "${S3DESK_IMAGE}" -f Containerfile.local .
 
       - name: Start live E2E stack
-        run: docker compose -f docker-compose.e2e.yml up -d minio azurite fake-gcs-server s3desk
+        run: ./scripts/compose.sh e2e up -d minio azurite fake-gcs-server s3desk
 
       - name: Wait for backend health
         run: |
@@ -175,7 +177,7 @@ jobs:
         if: always()
         run: |
           mkdir -p artifacts
-          docker compose -f docker-compose.e2e.yml logs --no-color > artifacts/live-e2e-compose.log
+          ./scripts/compose.sh e2e logs --no-color > artifacts/live-e2e-compose.log
 
       - name: Upload live Playwright artifacts
         if: always()
@@ -189,4 +191,4 @@ jobs:
 
       - name: Stop live E2E stack
         if: always()
-        run: docker compose -f docker-compose.e2e.yml down -v
+        run: ./scripts/compose.sh e2e down -v

@@ -14,6 +14,8 @@ TARGET_DATA_DIR = os.environ.get("TARGET_DATA_DIR", "/target-data")
 FIXTURE_PATH = os.environ.get("FIXTURE_PATH", "/artifacts/portable-fixture.json")
 PORTABLE_BUNDLE_CONFIDENTIALITY = os.environ.get("PORTABLE_BUNDLE_CONFIDENTIALITY", "clear").strip().lower()
 PORTABLE_BUNDLE_PASSWORD = os.environ.get("PORTABLE_BUNDLE_PASSWORD", "")
+PORTABLE_BUNDLE_EXPORT_PASSWORD = os.environ.get("PORTABLE_BUNDLE_EXPORT_PASSWORD", PORTABLE_BUNDLE_PASSWORD)
+PORTABLE_BUNDLE_IMPORT_PASSWORD = os.environ.get("PORTABLE_BUNDLE_IMPORT_PASSWORD", PORTABLE_BUNDLE_PASSWORD)
 EXPECTED_SOURCE_DB_BACKEND = os.environ.get("EXPECTED_SOURCE_DB_BACKEND", "sqlite").strip().lower()
 EXPECTED_TARGET_DB_BACKEND = os.environ.get("EXPECTED_TARGET_DB_BACKEND", "postgres").strip().lower()
 
@@ -38,6 +40,16 @@ def request_json(method: str, url: str, payload=None, profile_id: str | None = N
         if not raw:
             return None
         return json.loads(raw.decode("utf-8"))
+
+
+def request_error_json(method: str, url: str, payload=None, profile_id: str | None = None, extra_headers: dict | None = None):
+    try:
+        request_json(method, url, payload=payload, profile_id=profile_id, extra_headers=extra_headers)
+    except urllib.error.HTTPError as err:
+        raw = err.read()
+        payload_obj = json.loads(raw.decode("utf-8")) if raw else None
+        return err.code, payload_obj
+    raise RuntimeError(f"expected {method} {url} to fail")
 
 
 def wait_for_api(base_url: str):
@@ -68,8 +80,8 @@ def download_portable_bundle() -> tuple[bytes, dict, list[str]]:
     if PORTABLE_BUNDLE_CONFIDENTIALITY != "clear":
         query += f"&confidentiality={PORTABLE_BUNDLE_CONFIDENTIALITY}"
     headers = {}
-    if PORTABLE_BUNDLE_PASSWORD:
-        headers["X-S3Desk-Backup-Password"] = PORTABLE_BUNDLE_PASSWORD
+    if PORTABLE_BUNDLE_EXPORT_PASSWORD:
+        headers["X-S3Desk-Backup-Password"] = PORTABLE_BUNDLE_EXPORT_PASSWORD
     with request("GET", f"{SOURCE_API_BASE}/server/backup{query}", extra_headers=headers) as resp:
         archive = resp.read()
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tf:
@@ -108,8 +120,8 @@ def encode_multipart(fields: dict[str, str], file_field: str, filename: str, con
 
 def post_bundle(path: str, archive: bytes):
     fields = {}
-    if PORTABLE_BUNDLE_PASSWORD:
-        fields["password"] = PORTABLE_BUNDLE_PASSWORD
+    if PORTABLE_BUNDLE_IMPORT_PASSWORD:
+        fields["password"] = PORTABLE_BUNDLE_IMPORT_PASSWORD
     body, content_type = encode_multipart(fields, "bundle", "portable-backup.tar.gz", archive)
     headers = {"X-Api-Token": API_TOKEN, "Content-Type": content_type}
     req = urllib.request.Request(f"{TARGET_API_BASE}{path}", data=body, headers=headers, method="POST")
@@ -139,10 +151,15 @@ def main():
     assert_true(manifest.get("bundleKind") == "portable", f"unexpected bundle kind: {manifest.get('bundleKind')}")
     assert_true(manifest.get("dbBackend") == EXPECTED_SOURCE_DB_BACKEND, f"manifest dbBackend={manifest.get('dbBackend')}")
     assert_true("manifest.json" in names, "portable archive is missing manifest.json")
-    assert_true("data/profiles.jsonl" in names, "portable archive is missing data/profiles.jsonl")
     assert_true("data/s3desk.db" not in names, "portable archive must not contain data/s3desk.db")
+    manifest_entries = set(manifest.get("entries") or [])
+    assert_true("data/profiles.jsonl" in manifest_entries, "portable manifest is missing data/profiles.jsonl")
     if PORTABLE_BUNDLE_CONFIDENTIALITY == "encrypted":
+        assert_true(manifest.get("confidentialityMode") == "encrypted", f"manifest.confidentialityMode={manifest.get('confidentialityMode')}")
         assert_true("payload.enc" in names, "encrypted portable archive is missing payload.enc")
+        assert_true("data/profiles.jsonl" not in names, "encrypted portable archive must not expose clear data entries")
+    else:
+        assert_true("data/profiles.jsonl" in names, "portable archive is missing data/profiles.jsonl")
 
     preview_status, preview = post_bundle("/server/import-portable/preview", archive)
     assert_true(preview_status == 200, f"portable preview status={preview_status}")
@@ -160,10 +177,20 @@ def main():
     assert_true(imported.get("verification", {}).get("entityChecksumsVerified") is True, "entityChecksumsVerified must be true")
     assert_true(imported.get("verification", {}).get("postImportHealthCheckPassed") is True, "postImportHealthCheckPassed must be true")
 
-    for entity_name in ["profiles", "profile_connection_options", "jobs", "object_index", "object_favorites"]:
+    minimum_counts = fixture.get("portableMinimumCounts") or {}
+    for entity_name in [
+        "profiles",
+        "profile_connection_options",
+        "jobs",
+        "upload_sessions",
+        "upload_multipart_uploads",
+        "object_index",
+        "object_favorites",
+    ]:
         entity = find_entity(imported.get("entities", []), entity_name)
         assert_true(entity.get("checksumVerified") is True, f"{entity_name} checksumVerified must be true")
-        assert_true(entity.get("exportedCount", 0) >= 1, f"{entity_name} exportedCount must be >= 1")
+        minimum_count = int(minimum_counts.get(entity_name, 1))
+        assert_true(entity.get("exportedCount", 0) >= minimum_count, f"{entity_name} exportedCount must be >= {minimum_count}")
         assert_true(entity.get("importedCount", 0) == entity.get("exportedCount", 0), f"{entity_name} importedCount must match exportedCount")
 
     profile_id = fixture["profileId"]
@@ -191,6 +218,17 @@ def main():
     jobs = request_json("GET", f"{TARGET_API_BASE}/jobs", profile_id=profile_id) or {}
     items = jobs.get("items") or []
     assert_true(any(item.get("type") == "s3_index_objects" for item in items), "imported jobs do not include s3_index_objects")
+
+    multipart_upload = fixture["multipartUpload"]
+    commit_status, commit_error = request_error_json(
+        "POST",
+        f"{TARGET_API_BASE}/uploads/{multipart_upload['uploadId']}/commit",
+        payload={},
+        profile_id=profile_id,
+    )
+    assert_true(commit_status == 400, f"multipart commit status={commit_status}")
+    error_code = ((commit_error or {}).get("error") or {}).get("code")
+    assert_true(error_code == "upload_incomplete", f"multipart commit error.code={error_code}")
 
     thumbnail_path = os.path.join(TARGET_DATA_DIR, fixture["thumbnailRelPath"])
     assert_true(os.path.exists(thumbnail_path), f"imported thumbnail missing: {thumbnail_path}")

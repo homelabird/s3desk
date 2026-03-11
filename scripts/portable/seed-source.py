@@ -4,6 +4,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 
 API_TOKEN = os.environ.get("API_TOKEN", "portable-token")
@@ -86,6 +87,21 @@ def request_json(method: str, url: str, payload=None, profile_id: str | None = N
         if not raw:
             return None
         return json.loads(raw.decode("utf-8"))
+
+
+def encode_multipart(file_field: str, filename: str, content: bytes) -> tuple[bytes, str]:
+    boundary = f"----s3desk-seed-{uuid.uuid4().hex}"
+    body = b"".join(
+        [
+            f"--{boundary}\r\n".encode("utf-8"),
+            f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'.encode("utf-8"),
+            b"Content-Type: application/octet-stream\r\n\r\n",
+            content,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode("utf-8"),
+        ]
+    )
+    return body, f"multipart/form-data; boundary={boundary}"
 
 
 def wait_for_meta():
@@ -193,6 +209,47 @@ def write_thumbnail(profile_id: str) -> str:
     return rel_path
 
 
+def create_upload_session(profile_id: str, mode: str, prefix: str) -> dict:
+    return request_json(
+        "POST",
+        f"{SOURCE_API_BASE}/uploads",
+        {"bucket": DEMO_BUCKET, "prefix": prefix, "mode": mode},
+        profile_id=profile_id,
+    )
+
+
+def upload_staging_file(profile_id: str, upload_id: str, relative_path: str, content: bytes):
+    body, content_type = encode_multipart("files", relative_path, content)
+    req = urllib.request.Request(
+        f"{SOURCE_API_BASE}/uploads/{upload_id}/files",
+        data=body,
+        headers={"X-Api-Token": API_TOKEN, "X-Profile-Id": profile_id, "Content-Type": content_type},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        if resp.status != 204:
+            raise RuntimeError(f"unexpected staging upload status={resp.status}")
+
+
+def create_presigned_multipart_metadata(profile_id: str, upload_id: str) -> dict:
+    file_size = 11 * 1024 * 1024
+    part_size = 5 * 1024 * 1024
+    return request_json(
+        "POST",
+        f"{SOURCE_API_BASE}/uploads/{upload_id}/presign",
+        {
+            "path": "multipart/portable-large.bin",
+            "contentType": "application/octet-stream",
+            "multipart": {
+                "fileSize": file_size,
+                "partSizeBytes": part_size,
+                "partNumbers": [1, 2, 3],
+            },
+        },
+        profile_id=profile_id,
+    )
+
+
 def write_fixture(data: dict):
     os.makedirs(os.path.dirname(FIXTURE_OUT), exist_ok=True)
     with open(FIXTURE_OUT, "w", encoding="utf-8") as fh:
@@ -210,6 +267,10 @@ def main():
     job_id = create_index_job(profile_id)
     completed_job = wait_for_job(profile_id, job_id)
     put_profile_tls(profile_id)
+    staging_upload = create_upload_session(profile_id, "staging", "seed-staging")
+    upload_staging_file(profile_id, staging_upload["uploadId"], "notes/seed.txt", b"portable-seed-upload")
+    presigned_upload = create_upload_session(profile_id, "presigned", "seed-presigned")
+    multipart_presign = create_presigned_multipart_metadata(profile_id, presigned_upload["uploadId"])
     thumbnail_rel_path = write_thumbnail(profile_id)
 
     fixture = {
@@ -218,7 +279,22 @@ def main():
         "bucket": DEMO_BUCKET,
         "favoriteKey": FAVORITE_KEY,
         "indexJobId": completed_job["id"],
+        "uploadSessionIds": [staging_upload["uploadId"], presigned_upload["uploadId"]],
+        "multipartUpload": {
+            "uploadId": presigned_upload["uploadId"],
+            "path": "multipart/portable-large.bin",
+            "partCount": (multipart_presign.get("multipart") or {}).get("partCount"),
+        },
         "thumbnailRelPath": thumbnail_rel_path,
+        "portableMinimumCounts": {
+            "profiles": 1,
+            "profile_connection_options": 1,
+            "jobs": 1,
+            "upload_sessions": 2,
+            "upload_multipart_uploads": 1,
+            "object_index": 1,
+            "object_favorites": 1,
+        },
     }
     write_fixture(fixture)
     sys.stdout.write(json.dumps(fixture, indent=2) + "\n")
