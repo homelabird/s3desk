@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+## 0.21v-rc2 - 2026-03-12
+
+### New Features
+- Added portable backup export, preview, and import flows for sqlite-backed source servers, including encrypted payload support and password-aware import handling.
+- Added a unified sidebar backup workflow that covers backup export, staged restore upload, portable preview/import, and staged restore inventory cleanup.
+- Added richer jobs overlays, including details and logs drawers, and split the jobs page into dedicated controller and table/mobile view modules.
+- Added page-level regression coverage for object interactions, transfers, jobs realtime overlays, and password-protected backup/restore live flow.
+
+### Improvements
+- Improved backup and restore UX with clearer sqlite/Postgres scope guidance, visible restore validation signals, helper commands, and apply-plan copy actions.
+- Improved frontend reliability by expanding regression coverage across login, settings, uploads, profiles, buckets, objects, transfers, and jobs surfaces.
+- Improved dark theme polish and overall UI consistency across the main frontend shell.
+- Improved test fixture helpers and mock API controls for delayed, failing, and retried frontend request paths.
+- Improved deployment and validation documentation with environment templates, release-gate notes, and portable-backup design/checklist updates.
+
+### Security
+- Hardened encrypted backup and portable import handling by validating password-based payload decryption and related contract paths more explicitly.
+- Kept OpenAPI and generated frontend client types aligned with the backup/import API surface.
+
+### Bug Fixes
+- Fixed waiting `job_artifact` download handling across success, failure, cancel, and retry flows.
+- Fixed object context-menu and keyboard interaction edge cases, including `Esc` behavior, selection sync, and prefix/navigation regressions.
+- Fixed transfer persistence and duplicate queue edge cases surfaced by refresh, retry, and device download interactions.
+- Fixed backup-related frontend/runtime regressions, including password-protected export/restore flows and patch-package compatibility for the frontend build.
+- Fixed multiple jobs/object page regressions found by the expanded release-check and Playwright coverage.
+
+### Chores
+- Regenerated frontend API types and OpenAPI-derived contracts.
+- Refactored jobs-page internals into smaller controller and presentation modules.
+- Refreshed release-support docs and demo seed/deployment helper paths.
+
+### Release Candidate Notes
+- `0.21v-rc2` is a release candidate, not the final `0.21v` tag.
+- Final `0.21v` should still wait for real-provider live validation evidence across AWS S3, GCS, Azure Blob, and OCI Object Storage.
+- Final `0.21v` should still carry a recorded reverse-proxy smoke pass for realtime auth and browser-facing download flows.
+
+### Full Changelog
+Full Changelog: `0.21v-rc1...0.21v-rc2`
+
+## 0.21v-rc1 - 2026-03-11
+
 ### New Features
 - Added sqlite-based `Full backup` and `Cache + metadata backup` export flows in the server settings UI.
 - Added staged restore inventory management, including restore listing, deletion, stale-restore cleanup, apply plans, and helper commands.
