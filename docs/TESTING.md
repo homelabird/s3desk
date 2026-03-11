@@ -69,17 +69,18 @@ docker compose -f docker-compose.e2e.yml run --rm runner
 
 ## Portable Migration Smoke
 
-This is the concrete `sqlite -> postgres` portable backup/import validation path.
+These are the concrete portable backup/import validation paths.
 
 ```bash
 ./scripts/run_portable_sqlite_to_postgres_smoke.sh
+./scripts/run_portable_postgres_to_sqlite_smoke.sh
 ```
 
 The smoke stack uses [docker-compose.portable-smoke.yml](../docker-compose.portable-smoke.yml) and verifies:
 
-- sqlite source fixture creation through the public API
-- portable backup export from the sqlite source
-- preview and import on a postgres target
+- source fixture creation through the public API on either sqlite or postgres
+- portable backup export from the configured source backend
+- preview and import on the configured target backend
 - imported `profiles`, `profile_connection_options`, `jobs`, `object_favorites`, and `object_index`
 - thumbnail asset copy into the target `DATA_DIR`
 

@@ -25,8 +25,8 @@ Those cases require a logical export/import path owned by the application rather
 
 ## Goals
 
-- Support `sqlite -> postgres` migration with deterministic application-level import.
-- Support future `postgres -> sqlite` and `postgres -> postgres` logical migrations.
+- Support `sqlite -> postgres` and `postgres -> sqlite` migration with deterministic application-level import.
+- Support future `postgres -> postgres` logical migrations.
 - Keep backup archives database-neutral and versioned.
 - Produce import verification output that makes success auditable.
 
@@ -39,7 +39,7 @@ Those cases require a logical export/import path owned by the application rather
 
 ## Success guarantee model
 
-S3Desk can only reasonably claim a successful `sqlite -> postgres` restore if all of the following happen:
+S3Desk can only reasonably claim a successful portable restore between sqlite and Postgres if all of the following happen:
 
 1. The source data is exported in a logical, versioned format.
 2. The target Postgres schema is migrated before import begins.
@@ -263,18 +263,18 @@ Importer must check:
    - `merge`
    - `dry_run`
 
-## Recommended smoke validation path for `sqlite -> postgres`
+## Recommended smoke validation paths
 
-The first release should prove one concrete migration path:
+The supported release paths should prove both concrete migration directions:
 
-- source server: `DB_BACKEND=sqlite`
-- target server: `DB_BACKEND=postgres`
+- source server: `DB_BACKEND=sqlite`, target server: `DB_BACKEND=postgres`
+- source server: `DB_BACKEND=postgres`, target server: `DB_BACKEND=sqlite`
 
 This should remain a low-cost smoke, not a load test.
 
 ### Source fixture
 
-Prepare a sqlite-backed source server with:
+Prepare a source server with:
 
 1. one profile
 2. one encrypted `profile_connection_options` row
@@ -285,7 +285,7 @@ Prepare a sqlite-backed source server with:
 
 ### Target fixture
 
-Prepare a postgres-backed target server with:
+Prepare a target server with:
 
 1. schema migrations already applied
 2. the same `ENCRYPTION_KEY` as the source
@@ -293,17 +293,17 @@ Prepare a postgres-backed target server with:
 
 ### Smoke sequence
 
-1. Export a portable bundle from the sqlite source:
+1. Export a portable bundle from the source:
    - `GET /api/v1/server/backup?scope=portable&includeThumbnails=true`
-2. Preview the bundle on the postgres target:
+2. Preview the bundle on the destination target:
    - `POST /api/v1/server/import-portable/preview`
 3. Assert preview result:
    - `manifest.bundleKind == "portable"`
-   - `targetDbBackend == "postgres"`
+   - `targetDbBackend` matches the configured target backend
    - `preflight.blockers` is empty
    - `preflight.encryptionReady == true`
    - `preflight.encryptionKeyHintVerified == true`
-4. Run the actual import on the postgres target:
+4. Run the actual import on the destination target:
    - `POST /api/v1/server/import-portable`
 5. Assert import result:
    - status `201`
@@ -321,7 +321,7 @@ Prepare a postgres-backed target server with:
 
 The smoke fails if any of the following happen:
 
-- preview reports blockers on a correctly prepared postgres target
+- preview reports blockers on a correctly prepared target
 - import returns `200` with blockers instead of `201`
 - imported counts differ from exported counts without an explicit warning policy
 - encrypted profile data is unreadable after import
@@ -535,17 +535,17 @@ Without this report, “successful” remains ambiguous.
 - Add `preview` endpoint
 - Support `replace` and `dry_run`
 - Support `sqlite -> postgres`
+- Support `postgres -> sqlite`
 
 ### Phase 2
 
 - Support `postgres -> postgres`
-- Support `postgres -> sqlite`
 - Add merge mode only if operators actually need it
 
 ### Phase 3
 
 - Add UI workflow for portable migration
-- Add live integration tests for sqlite-to-postgres migration
+- Add live integration tests for both supported sqlite/Postgres directions
 
 ## Recommended product wording
 

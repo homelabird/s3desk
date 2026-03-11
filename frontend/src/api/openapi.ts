@@ -236,12 +236,13 @@ export interface paths {
          *     database-neutral migration bundle for portable import flows. Use
          *     `confidentiality=encrypted` to encrypt the payload with the current
          *     `ENCRYPTION_KEY` while keeping the outer bundle metadata clear. Snapshot-style
-         *     export currently supports sqlite-backed servers only.
+         *     export currently supports sqlite-backed servers only, while portable export
+         *     supports sqlite and postgres source deployments.
          */
         get: {
             parameters: {
                 query?: {
-                    /** @description Selects whether the bundle contains the full local server state or only cache and metadata. */
+                    /** @description Selects whether the bundle contains a sqlite snapshot export (`full`, `cache_metadata`) or a logical portable migration bundle (`portable`). */
                     scope?: "full" | "cache_metadata" | "portable";
                     /** @description When `scope=portable`, includes thumbnail cache assets in the bundle. */
                     includeThumbnails?: boolean;

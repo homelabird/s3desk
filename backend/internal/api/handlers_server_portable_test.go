@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"s3desk/internal/config"
+	"s3desk/internal/db"
 	"s3desk/internal/models"
 )
 
@@ -69,6 +70,28 @@ func TestHandleGetServerBackup_PortableArchiveIncludesEntityFiles(t *testing.T) 
 	}
 	if _, ok := manifest.Entities["profile_connection_options"]; !ok {
 		t.Fatalf("manifest.entities[profile_connection_options] missing")
+	}
+}
+
+func TestHandleGetServerBackup_PortableArchiveAllowsPostgresSourceConfig(t *testing.T) {
+	t.Parallel()
+
+	st, _, srv, _ := newTestJobsServerWithAdvertisedBackend(t, testEncryptionKey(), false, nil, db.BackendPostgres)
+	profile := createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, srv.URL, "/api/v1/server/backup?scope=portable")
+	entries := readTarGzEntries(t, bytes.NewReader(archiveBytes))
+
+	if !bytes.Contains(entries["data/profiles.jsonl"], []byte(profile.ID)) {
+		t.Fatalf("profiles export does not contain created profile id %q", profile.ID)
+	}
+
+	var manifest models.ServerMigrationManifest
+	if err := json.Unmarshal(entries["manifest.json"], &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	if manifest.DBBackend != string(db.BackendPostgres) {
+		t.Fatalf("manifest.dbBackend=%q, want %q", manifest.DBBackend, db.BackendPostgres)
 	}
 }
 

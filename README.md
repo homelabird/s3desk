@@ -13,7 +13,7 @@ jobs, and backup workflows in one UI.
 - Browse buckets and prefixes, preview objects, and run common object actions.
 - Queue uploads and downloads, then track them from the Transfers and Jobs
   surfaces.
-- Export sqlite-backed backups, stage restores, and run portable import flows.
+- Export sqlite-backed snapshot backups, stage restores, and run portable migration flows.
 - Support browser-facing deployments with reverse proxies, `download-proxy`,
   `publicEndpoint`, and explicit external base URL handling.
 
@@ -191,6 +191,8 @@ Important scope boundaries:
 - A staged restore bundle does not replace a Postgres database restore.
 - `Portable backup` / portable import is the database-neutral migration path,
   not a generic Postgres disaster-recovery feature.
+- `Portable backup` is supported for `sqlite -> postgres` and `postgres -> sqlite`
+  migration paths.
 
 For operational details, see:
 
@@ -199,10 +201,11 @@ For operational details, see:
 - [docs/PORTABLE_BACKUP_CHECKLIST.md](docs/PORTABLE_BACKUP_CHECKLIST.md)
 - [docs/TESTING.md](docs/TESTING.md)
 
-Compose-based sqlite-to-Postgres smoke:
+Compose-based portable migration smoke:
 
 ```bash
 ./scripts/run_portable_sqlite_to_postgres_smoke.sh
+./scripts/run_portable_postgres_to_sqlite_smoke.sh
 ```
 
 ## Browser-Facing Deployment Notes

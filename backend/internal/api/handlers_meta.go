@@ -47,10 +47,15 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		tlsCapability.Reason = "ENCRYPTION_KEY is required to store mTLS material"
 	}
 	serverBackupExport := models.FeatureCapability{
-		Enabled: dbBackend == db.BackendSQLite,
+		Enabled: dbBackend == db.BackendSQLite || dbBackend == db.BackendPostgres,
 	}
-	if !serverBackupExport.Enabled {
-		serverBackupExport.Reason = "In-product backup export currently supports only sqlite-backed servers."
+	switch dbBackend {
+	case db.BackendPostgres:
+		serverBackupExport.Reason = "Portable backup export is available. Full and Cache + metadata exports remain sqlite-only."
+	case db.BackendSQLite:
+		serverBackupExport.Reason = "Full, Cache + metadata, and Portable export are available on sqlite-backed servers."
+	default:
+		serverBackupExport.Reason = "In-product backup export currently supports sqlite and postgres-backed servers."
 	}
 	serverBackupRestoreStagingReason := "Stages a sqlite DATA_DIR bundle for manual cutover."
 	serverBackupRestoreStaging := models.FeatureCapability{

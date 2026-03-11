@@ -14,6 +14,8 @@ TARGET_DATA_DIR = os.environ.get("TARGET_DATA_DIR", "/target-data")
 FIXTURE_PATH = os.environ.get("FIXTURE_PATH", "/artifacts/portable-fixture.json")
 PORTABLE_BUNDLE_CONFIDENTIALITY = os.environ.get("PORTABLE_BUNDLE_CONFIDENTIALITY", "clear").strip().lower()
 PORTABLE_BUNDLE_PASSWORD = os.environ.get("PORTABLE_BUNDLE_PASSWORD", "")
+EXPECTED_SOURCE_DB_BACKEND = os.environ.get("EXPECTED_SOURCE_DB_BACKEND", "sqlite").strip().lower()
+EXPECTED_TARGET_DB_BACKEND = os.environ.get("EXPECTED_TARGET_DB_BACKEND", "postgres").strip().lower()
 
 
 def request(method: str, url: str, payload=None, profile_id: str | None = None, extra_headers: dict | None = None):
@@ -135,6 +137,7 @@ def main():
 
     archive, manifest, names = download_portable_bundle()
     assert_true(manifest.get("bundleKind") == "portable", f"unexpected bundle kind: {manifest.get('bundleKind')}")
+    assert_true(manifest.get("dbBackend") == EXPECTED_SOURCE_DB_BACKEND, f"manifest dbBackend={manifest.get('dbBackend')}")
     assert_true("manifest.json" in names, "portable archive is missing manifest.json")
     assert_true("data/profiles.jsonl" in names, "portable archive is missing data/profiles.jsonl")
     assert_true("data/s3desk.db" not in names, "portable archive must not contain data/s3desk.db")
@@ -144,7 +147,7 @@ def main():
     preview_status, preview = post_bundle("/server/import-portable/preview", archive)
     assert_true(preview_status == 200, f"portable preview status={preview_status}")
     assert_true(preview.get("manifest", {}).get("bundleKind") == "portable", "preview manifest.bundleKind must be portable")
-    assert_true(preview.get("targetDbBackend") == "postgres", f"preview targetDbBackend={preview.get('targetDbBackend')}")
+    assert_true(preview.get("targetDbBackend") == EXPECTED_TARGET_DB_BACKEND, f"preview targetDbBackend={preview.get('targetDbBackend')}")
     assert_true(not preview.get("preflight", {}).get("blockers"), f"preview blockers={preview.get('preflight', {}).get('blockers')}")
     assert_true(preview.get("preflight", {}).get("schemaReady") is True, "preview schemaReady must be true")
     assert_true(preview.get("preflight", {}).get("encryptionReady") is True, "preview encryptionReady must be true")
@@ -153,7 +156,7 @@ def main():
 
     import_status, imported = post_bundle("/server/import-portable", archive)
     assert_true(import_status == 201, f"portable import status={import_status}")
-    assert_true(imported.get("targetDbBackend") == "postgres", f"import targetDbBackend={imported.get('targetDbBackend')}")
+    assert_true(imported.get("targetDbBackend") == EXPECTED_TARGET_DB_BACKEND, f"import targetDbBackend={imported.get('targetDbBackend')}")
     assert_true(imported.get("verification", {}).get("entityChecksumsVerified") is True, "entityChecksumsVerified must be true")
     assert_true(imported.get("verification", {}).get("postImportHealthCheckPassed") is True, "postImportHealthCheckPassed must be true")
 
@@ -193,8 +196,8 @@ def main():
     assert_true(os.path.exists(thumbnail_path), f"imported thumbnail missing: {thumbnail_path}")
 
     result = {
-        "sourceBackend": "sqlite",
-        "targetBackend": "postgres",
+        "sourceBackend": EXPECTED_SOURCE_DB_BACKEND,
+        "targetBackend": EXPECTED_TARGET_DB_BACKEND,
         "profileId": profile_id,
         "bundleConfidentiality": PORTABLE_BUNDLE_CONFIDENTIALITY,
         "preview": preview,

@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.portable-smoke.yml}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-s3desk-portable-smoke}"
 KEEP_UP="${KEEP_UP:-0}"
+PORTABLE_SMOKE_SOURCE_DB_BACKEND="${PORTABLE_SMOKE_SOURCE_DB_BACKEND:-sqlite}"
+PORTABLE_SMOKE_TARGET_DB_BACKEND="${PORTABLE_SMOKE_TARGET_DB_BACKEND:-postgres}"
 
 if podman compose version >/dev/null 2>&1; then
 	COMPOSE_CMD=(podman compose)
@@ -16,7 +18,10 @@ else
 fi
 
 compose() {
-	COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME}" "${COMPOSE_CMD[@]}" -f "${ROOT_DIR}/${COMPOSE_FILE}" "$@"
+	COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME}" \
+	PORTABLE_SMOKE_SOURCE_DB_BACKEND="${PORTABLE_SMOKE_SOURCE_DB_BACKEND}" \
+	PORTABLE_SMOKE_TARGET_DB_BACKEND="${PORTABLE_SMOKE_TARGET_DB_BACKEND}" \
+	"${COMPOSE_CMD[@]}" -f "${ROOT_DIR}/${COMPOSE_FILE}" "$@"
 }
 
 cleanup() {
@@ -33,10 +38,10 @@ compose up -d --build minio postgres source target
 echo "[portable-smoke] seeding MinIO"
 compose run --rm minio-seed
 
-echo "[portable-smoke] seeding sqlite source fixture"
+echo "[portable-smoke] seeding ${PORTABLE_SMOKE_SOURCE_DB_BACKEND} source fixture"
 compose run --rm source-seed
 
-echo "[portable-smoke] verifying sqlite -> postgres portable import"
+echo "[portable-smoke] verifying ${PORTABLE_SMOKE_SOURCE_DB_BACKEND} -> ${PORTABLE_SMOKE_TARGET_DB_BACKEND} portable import"
 compose run --rm portable-smoke
 
 echo "[portable-smoke] success"

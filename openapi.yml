@@ -177,7 +177,8 @@ paths:
         database-neutral migration bundle for portable import flows. Use
         `confidentiality=encrypted` to encrypt the payload with the current
         `ENCRYPTION_KEY` while keeping the outer bundle metadata clear. Snapshot-style
-        export currently supports sqlite-backed servers only.
+        export currently supports sqlite-backed servers only, while portable export
+        supports sqlite and postgres source deployments.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
         - name: scope
@@ -186,7 +187,7 @@ paths:
             type: string
             enum: [full, cache_metadata, portable]
             default: full
-          description: Selects whether the bundle contains the full local server state or only cache and metadata.
+          description: Selects whether the bundle contains a sqlite snapshot export (`full`, `cache_metadata`) or a logical portable migration bundle (`portable`).
         - name: includeThumbnails
           in: query
           schema:

@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
+	"s3desk/internal/db"
 	"s3desk/internal/models"
 )
 
@@ -152,5 +154,36 @@ func TestGetMetaIncludesProviderCapabilities(t *testing.T) {
 	}
 	if !oci.Governance[models.BucketGovernanceCapabilityPAR].Enabled {
 		t.Fatalf("expected oci PAR governance capability, got %+v", oci.Governance)
+	}
+}
+
+func TestGetMetaPostgresAdvertisesPortableBackupOnly(t *testing.T) {
+	t.Parallel()
+
+	_, _, srv, _ := newTestJobsServerWithAdvertisedBackend(t, testEncryptionKey(), false, nil, db.BackendPostgres)
+
+	res := doJSONRequest(t, srv, http.MethodGet, "/api/v1/meta", nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.StatusCode)
+	}
+
+	var meta models.MetaResponse
+	decodeJSONResponse(t, res, &meta)
+
+	if meta.DBBackend != "postgres" {
+		t.Fatalf("expected dbBackend=postgres, got %q", meta.DBBackend)
+	}
+	if !meta.Capabilities.ServerBackup.Export.Enabled {
+		t.Fatal("expected portable backup export enabled for postgres-backed servers")
+	}
+	if !strings.Contains(meta.Capabilities.ServerBackup.Export.Reason, "Portable backup export is available") {
+		t.Fatalf("expected portable-only export reason, got %q", meta.Capabilities.ServerBackup.Export.Reason)
+	}
+	if !meta.Capabilities.ServerBackup.RestoreStaging.Enabled {
+		t.Fatal("expected restore staging enabled for postgres-backed servers")
+	}
+	if !strings.Contains(meta.Capabilities.ServerBackup.RestoreStaging.Reason, "does not replace a Postgres backup or restore workflow") {
+		t.Fatalf("expected postgres restore staging warning, got %q", meta.Capabilities.ServerBackup.RestoreStaging.Reason)
 	}
 }

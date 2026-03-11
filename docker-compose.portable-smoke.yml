@@ -43,16 +43,21 @@ services:
         RCLONE_VERSION: ${RCLONE_VERSION:-1.72.0}
     image: "${S3DESK_PORTABLE_SMOKE_IMAGE:-localhost/s3desk-portable-smoke:dev}"
     depends_on:
-      - minio
+      minio:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     environment:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"
       ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
       API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
       EXTERNAL_BASE_URL: "http://source:8080"
-      DB_BACKEND: "sqlite"
+      DB_BACKEND: "${PORTABLE_SMOKE_SOURCE_DB_BACKEND:-sqlite}"
+      DATABASE_URL: "postgres://${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}:${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}@postgres:5432/${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}?sslmode=disable"
       DATA_DIR: "/data"
       ENCRYPTION_KEY: ${PORTABLE_SMOKE_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
+      DB_STARTUP_TIMEOUT: ${PORTABLE_SMOKE_DB_STARTUP_TIMEOUT:-60s}
     volumes:
       - portable-smoke-source-data:/data
 
@@ -67,7 +72,7 @@ services:
       ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
       API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
       EXTERNAL_BASE_URL: "http://target:8080"
-      DB_BACKEND: "postgres"
+      DB_BACKEND: "${PORTABLE_SMOKE_TARGET_DB_BACKEND:-postgres}"
       DATABASE_URL: "postgres://${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}:${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}@postgres:5432/${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}?sslmode=disable"
       DATA_DIR: "/data"
       ENCRYPTION_KEY: ${PORTABLE_SMOKE_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}
@@ -108,6 +113,8 @@ services:
       FIXTURE_PATH: /artifacts/portable-fixture.json
       PORTABLE_BUNDLE_CONFIDENTIALITY: ${PORTABLE_BUNDLE_CONFIDENTIALITY:-clear}
       PORTABLE_BUNDLE_PASSWORD: ${PORTABLE_BUNDLE_PASSWORD:-}
+      EXPECTED_SOURCE_DB_BACKEND: ${PORTABLE_SMOKE_SOURCE_DB_BACKEND:-sqlite}
+      EXPECTED_TARGET_DB_BACKEND: ${PORTABLE_SMOKE_TARGET_DB_BACKEND:-postgres}
     volumes:
       - ./scripts/portable/run-smoke.py:/run-smoke.py:ro,z
       - portable-smoke-target-data:/target-data:ro

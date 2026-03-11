@@ -442,6 +442,10 @@ func newTestJobsServer(t *testing.T, encryptionKey string, startManager bool) (*
 }
 
 func newTestJobsServerWithAllowedDirs(t *testing.T, encryptionKey string, startManager bool, allowedLocalDirs []string) (*store.Store, *jobs.Manager, *httptest.Server, string) {
+	return newTestJobsServerWithAdvertisedBackend(t, encryptionKey, startManager, allowedLocalDirs, db.BackendSQLite)
+}
+
+func newTestJobsServerWithAdvertisedBackend(t *testing.T, encryptionKey string, startManager bool, allowedLocalDirs []string, advertisedBackend db.Backend) (*store.Store, *jobs.Manager, *httptest.Server, string) {
 	t.Helper()
 	dataDir := t.TempDir()
 	gormDB, err := db.Open(db.Config{
@@ -480,7 +484,7 @@ func newTestJobsServerWithAllowedDirs(t *testing.T, encryptionKey string, startM
 		Config: config.Config{
 			Addr:             "127.0.0.1:0",
 			DataDir:          dataDir,
-			DBBackend:        string(db.BackendSQLite),
+			DBBackend:        string(advertisedBackend),
 			StaticDir:        dataDir,
 			EncryptionKey:    encryptionKey,
 			JobConcurrency:   1,

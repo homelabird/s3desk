@@ -35,6 +35,8 @@ type ExportSummary = {
 	notes: string[]
 }
 
+type BackupScopeAvailability = Record<ServerBackupScope, { enabled: boolean; reason?: string }>
+
 export function SidebarBackupAction(props: SidebarBackupActionProps) {
 	const [open, setOpen] = useState(false)
 	const [backupScope, setBackupScope] = useState<ServerBackupScope>('full')
@@ -64,11 +66,11 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 	const dbBackend = props.meta?.dbBackend ?? 'sqlite'
 	const serverBackupCapability = props.meta?.capabilities?.serverBackup
 	const backupExportCapability = serverBackupCapability?.export ?? {
-		enabled: props.meta ? dbBackend === 'sqlite' : false,
+		enabled: props.meta ? dbBackend === 'sqlite' || dbBackend === 'postgres' : false,
 		reason: props.meta
 			? dbBackend === 'sqlite'
-				? ''
-				: 'In-product backup export currently supports only sqlite-backed servers.'
+				? 'Full, Cache + metadata, and Portable export are available on sqlite-backed servers.'
+				: 'Portable backup export is available. Full and Cache + metadata exports remain sqlite-only.'
 			: 'Loading server capabilities.',
 	}
 	const restoreStagingCapability = serverBackupCapability?.restoreStaging ?? {
@@ -78,15 +80,58 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 				? ''
 				: 'Stages a sqlite DATA_DIR bundle only; this is not a Postgres backup or restore workflow.',
 	}
-	const backupSupported = !!props.meta && backupExportCapability.enabled
 	const backupEncryptionAvailable = props.meta?.encryptionEnabled ?? false
 	const backupConfidentiality: ServerBackupConfidentialityMode = backupProtection === 'clear' ? 'clear' : 'encrypted'
+	const backupScopeAvailability = useMemo<BackupScopeAvailability>(() => {
+		const exportUnavailableReason = backupExportCapability.reason || 'This server does not currently support in-product backup export.'
+		if (!props.meta || !backupExportCapability.enabled) {
+			return {
+				full: { enabled: false, reason: exportUnavailableReason },
+				cache_metadata: { enabled: false, reason: exportUnavailableReason },
+				portable: { enabled: false, reason: exportUnavailableReason },
+			}
+		}
+		if (dbBackend === 'postgres') {
+			const sqliteSnapshotReason = 'Full and Cache + metadata exports are sqlite-only snapshots. Use Portable backup for postgres-source migration.'
+			return {
+				full: { enabled: false, reason: sqliteSnapshotReason },
+				cache_metadata: { enabled: false, reason: sqliteSnapshotReason },
+				portable: { enabled: true },
+			}
+		}
+		return {
+			full: { enabled: true },
+			cache_metadata: { enabled: true },
+			portable: { enabled: true },
+		}
+	}, [backupExportCapability.enabled, backupExportCapability.reason, dbBackend, props.meta])
+	const backupSupported = Object.values(backupScopeAvailability).some((scope) => scope.enabled)
+	const backupTagLabel = !backupSupported
+		? dbBackend
+		: dbBackend === 'postgres'
+			? 'Portable export'
+			: 'Snapshot + portable export'
+	const backupExportNotice = useMemo(() => {
+		if (!props.meta || !backupSupported) return null
+		if (dbBackend === 'postgres') {
+			return 'This server can export Portable bundles only. Full and Cache + metadata remain sqlite-only snapshot workflows.'
+		}
+		return null
+	}, [backupSupported, dbBackend, props.meta])
 
 	useEffect(() => {
 		if (backupProtection === 'server_key' && !backupEncryptionAvailable) {
 			setBackupProtection('clear')
 		}
 	}, [backupEncryptionAvailable, backupProtection])
+
+	useEffect(() => {
+		if (backupScopeAvailability[backupScope].enabled) return
+		const nextScope = (['portable', 'full', 'cache_metadata'] as const).find((scope) => backupScopeAvailability[scope].enabled)
+		if (nextScope) {
+			setBackupScope(nextScope)
+		}
+	}, [backupScope, backupScopeAvailability])
 
 	const refreshStagedRestores = async () => {
 		setStagedRestoresLoading(true)
@@ -119,19 +164,19 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 				return {
 					title: 'Cache + metadata backup',
 					includes: ['SQLite database snapshot', 'Thumbnail cache under data/thumbnails'],
-					notes: ['Logs, artifacts, and staged restore directories are excluded.', 'Use this when you mainly want to preserve UI state, profiles, favorites, and cached thumbnails.'],
+					notes: ['Logs, artifacts, and staged restore directories are excluded.', 'This snapshot-style bundle is available only on sqlite-backed source servers.'],
 				}
 			case 'portable':
 				return {
 					title: 'Portable backup',
 					includes: ['Logical JSONL export for profiles, jobs, uploads, object index, and favorites', 'Thumbnail assets under assets/thumbnails'],
-					notes: ['Portable bundles are intended for cross-backend migration such as sqlite -> postgres.', 'Logs, artifacts, and staged restore directories are excluded.'],
+					notes: ['Portable bundles are intended for cross-backend migration such as sqlite -> postgres and postgres -> sqlite.', 'Logs, artifacts, and staged restore directories are excluded.'],
 				}
 			default:
 				return {
 					title: 'Full backup',
 					includes: ['SQLite database snapshot', 'Thumbnail cache', 'Logs', 'Artifacts', 'Staging directories'],
-					notes: ['Use this for same-backend host recovery or full sqlite DATA_DIR migration.'],
+					notes: ['Use this for same-backend host recovery or full sqlite DATA_DIR migration.', 'This snapshot-style bundle is available only on sqlite-backed source servers.'],
 				}
 		}
 	}, [backupScope])
@@ -147,7 +192,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 	}, [backupProtection])
 
 	const handleDownload = async () => {
-		if (!backupSupported) return
+		if (!backupSupported || !backupScopeAvailability[backupScope].enabled) return
 		if (backupProtection === 'password') {
 			if (!backupPassword) {
 				setErrorMessage('Enter a backup password before exporting a password-protected bundle.')
@@ -326,7 +371,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 				width="min(92vw, 560px)"
 				extra={
 					<div className={styles.statusRow}>
-						{backupSupported ? <Tag color="blue">SQLite export</Tag> : <Tag color="warning">{dbBackend}</Tag>}
+						{backupSupported ? <Tag color="blue">{backupTagLabel}</Tag> : <Tag color="warning">{backupTagLabel}</Tag>}
 						{staleRestoreCount > 0 ? <Tag color="warning">{staleRestoreCount} stale</Tag> : null}
 					</div>
 				}
@@ -345,11 +390,12 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 						</Typography.Text>
 						<div>
 							<Radio.Group value={backupScope} onChange={(event) => setBackupScope(event.target.value as ServerBackupScope)}>
-								<Radio.Button value="full">Full</Radio.Button>
-								<Radio.Button value="cache_metadata">Cache + metadata</Radio.Button>
-								<Radio.Button value="portable">Portable</Radio.Button>
+								<Radio.Button value="full" disabled={!backupScopeAvailability.full.enabled}>Full</Radio.Button>
+								<Radio.Button value="cache_metadata" disabled={!backupScopeAvailability.cache_metadata.enabled}>Cache + metadata</Radio.Button>
+								<Radio.Button value="portable" disabled={!backupScopeAvailability.portable.enabled}>Portable</Radio.Button>
 							</Radio.Group>
 						</div>
+						{backupExportNotice ? <Typography.Text type="secondary">{backupExportNotice}</Typography.Text> : null}
 						<Alert
 							type="info"
 							showIcon
@@ -382,7 +428,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 						) : null}
 						<Alert type={backupProtection === 'clear' ? 'warning' : 'info'} showIcon title="Payload protection" description={protectionSummary} />
 						<div className={styles.actions}>
-							<Button type="primary" loading={loadingScope === backupScope} disabled={!backupSupported || loadingScope !== null} onClick={() => void handleDownload()}>
+							<Button type="primary" loading={loadingScope === backupScope} disabled={!backupSupported || !backupScopeAvailability[backupScope].enabled || loadingScope !== null} onClick={() => void handleDownload()}>
 								Download backup
 							</Button>
 						</div>

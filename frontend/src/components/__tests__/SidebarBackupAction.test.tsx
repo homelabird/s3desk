@@ -208,6 +208,51 @@ describe('SidebarBackupAction', () => {
 		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('full', 'encrypted', { password: 'operator-secret' }))
 	})
 
+	it('limits postgres-backed servers to portable export', async () => {
+		const api = {
+			downloadServerBackup: vi.fn(() => ({
+				promise: Promise.resolve({
+					blob: new Blob(['backup'], { type: 'application/gzip' }),
+					contentDisposition: 'attachment; filename="migration.tar.gz"',
+					contentType: 'application/gzip',
+				}),
+				abort: vi.fn(),
+			})),
+			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
+		} as unknown as APIClient
+
+		render(
+			<SidebarBackupAction
+				api={api}
+				meta={buildMeta({
+					dbBackend: 'postgres',
+					capabilities: {
+						profileTls: { enabled: true, reason: '' },
+						serverBackup: {
+							export: { enabled: true, reason: 'Portable backup export is available. Full and Cache + metadata exports remain sqlite-only.' },
+							restoreStaging: {
+								enabled: true,
+								reason: 'Stages a sqlite DATA_DIR bundle for manual cutover. It does not replace a Postgres backup or restore workflow.',
+							},
+						},
+						providers: {},
+					},
+				})}
+			/>,
+		)
+
+		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		await screen.findByRole('dialog', { name: 'Backup and restore' })
+
+		expect(screen.getByText('Portable export')).toBeInTheDocument()
+		expect(screen.getByRole('radio', { name: 'Full' })).toBeDisabled()
+		expect(screen.getByRole('radio', { name: 'Cache + metadata' })).toBeDisabled()
+		expect(screen.getByRole('radio', { name: 'Portable' })).toBeEnabled()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Download backup' }))
+		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('portable', 'clear', { password: undefined }))
+	})
+
 	it('passes restore and portable passwords to the API', async () => {
 		const restoreServerBackup = vi.fn(() => Promise.resolve(buildRestoreResponse()))
 		const previewPortableImport = vi.fn(() => Promise.resolve(buildPortablePreview()))

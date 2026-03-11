@@ -117,17 +117,19 @@ Use these operational thresholds:
 ### Portable Backup and Import
 
 - `Portable backup` is the database-neutral migration path.
-- Use it when you need to move S3Desk state from a sqlite source deployment into a Postgres destination deployment.
+- Use it when you need to move S3Desk state between sqlite and Postgres deployments.
 - Portable bundles contain logical application data rather than a raw `s3desk.db` snapshot.
 - Portable import currently assumes replace semantics for portable-scope entities.
 - Keep `ENCRYPTION_KEY` aligned between source and destination when encrypted profile data is present.
 - A safe migration flow is:
-  1. Export a portable backup from the sqlite source server.
-  2. Run portable import preview on the Postgres destination.
+  1. Export a portable backup from the source server.
+  2. Run portable import preview on the destination server.
   3. Resolve blockers such as encryption-key mismatch or missing disk space for thumbnails.
   4. Run the actual portable import into the destination database.
   5. Verify health and imported row counts before switching users to the new instance.
-- For a disposable local proof of the path, run `./scripts/run_portable_sqlite_to_postgres_smoke.sh`.
+- For a disposable local proof of the supported paths, run:
+  - `./scripts/run_portable_sqlite_to_postgres_smoke.sh`
+  - `./scripts/run_portable_postgres_to_sqlite_smoke.sh`
 
 ### Staged Restore Lifecycle
 

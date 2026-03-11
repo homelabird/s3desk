@@ -78,7 +78,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 	scope, err := parseServerBackupScope(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), map[string]any{
-			"supportedScopes": []string{serverBackupScopeFull, serverBackupScopeCacheMetadata},
+			"supportedScopes": []string{serverBackupScopeFull, serverBackupScopeCacheMetadata, serverBackupScopePortable},
 		})
 		return
 	}
@@ -106,17 +106,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "server_config_invalid", "failed to resolve db backend", map[string]any{"error": err.Error()})
 		return
 	}
-	if dbBackend != db.BackendSQLite {
-		if scope == serverBackupScopePortable {
-			writeError(
-				w,
-				http.StatusConflict,
-				"backup_unsupported",
-				"portable backup currently supports sqlite-backed source servers only",
-				map[string]any{"dbBackend": string(dbBackend)},
-			)
-			return
-		}
+	if dbBackend != db.BackendSQLite && scope != serverBackupScopePortable {
 		writeError(
 			w,
 			http.StatusConflict,
@@ -891,7 +881,7 @@ func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, con
 	}
 	if scope == serverBackupScopePortable {
 		warnings = append(warnings, "Portable backups export logical application data instead of a raw sqlite database file.")
-		warnings = append(warnings, "Use portable import to move data into a different database backend such as Postgres.")
+		warnings = append(warnings, "Use portable import to move data between sqlite and Postgres deployments.")
 		warnings = append(warnings, "Portable backups do not include logs, artifacts, or staged restore directories.")
 	}
 	if encryptionEnabled {

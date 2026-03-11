@@ -106,6 +106,28 @@ func TestHandleGetServerBackup_IncludesSQLiteAndDataDirEntries(t *testing.T) {
 	}
 }
 
+func TestHandleGetServerBackup_RejectsSnapshotScopesOnPostgres(t *testing.T) {
+	t.Parallel()
+
+	_, _, srv, _ := newTestJobsServerWithAdvertisedBackend(t, testEncryptionKey(), false, nil, db.BackendPostgres)
+
+	res := doJSONRequest(t, srv, http.MethodGet, "/api/v1/server/backup?scope=full", nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 409, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "backup_unsupported" {
+		t.Fatalf("error.code=%q, want backup_unsupported", resp.Error.Code)
+	}
+	if !strings.Contains(resp.Error.Message, "sqlite-backed servers") {
+		t.Fatalf("error.message=%q, want sqlite-backed servers", resp.Error.Message)
+	}
+}
+
 func TestHandleRestoreServerBackup_StagesBundleWithoutOverwritingLiveData(t *testing.T) {
 	t.Parallel()
 

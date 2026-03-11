@@ -2,11 +2,11 @@
 
 This checklist is the execution view of [PORTABLE_BACKUP_DESIGN.md](PORTABLE_BACKUP_DESIGN.md).
 
-It tracks the work required to support database-neutral backup/import, with `sqlite -> postgres` as the first target path.
+It tracks the work required to support database-neutral backup/import, with `sqlite -> postgres` and `postgres -> sqlite` as the validated release paths.
 
 ## Phase 0. Scope and contract
 
-- [x] Freeze the first supported migration path as `sqlite -> postgres`
+- [x] Freeze the first supported migration paths as `sqlite -> postgres` and `postgres -> sqlite`
 - [x] Keep current `full` and `cache_metadata` bundle kinds unchanged
 - [x] Introduce a new bundle kind `portable`
 - [x] Define whether v1 supports only `replace` and `dry_run`
@@ -136,7 +136,7 @@ It tracks the work required to support database-neutral backup/import, with `sql
 ## Phase 9. Documentation and rollout
 
 - [x] Update runbook with portable migration guidance
-- [ ] Update release gate to require evidence for `sqlite -> postgres` if portable import ships
+- [ ] Update release gate to require evidence for `sqlite -> postgres` and `postgres -> sqlite` if portable import ships
 - [x] Document supported and unsupported portable asset classes
 - [x] Add example migration workflow to docs
 
@@ -147,6 +147,7 @@ The first implementation should not try to solve every backend permutation.
 Recommended v1 release bar:
 
 - [x] `sqlite -> postgres` portable export/import works
+- [x] `postgres -> sqlite` portable export/import works
 - [x] `replace` and `dry_run` are supported
 - [x] thumbnails are the only portable asset class
 - [x] import report is machine-readable and surfaced in UI
