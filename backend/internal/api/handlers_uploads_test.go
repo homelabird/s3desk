@@ -116,6 +116,73 @@ func TestCommitUploadQueueFullRollsBackCreatedJob(t *testing.T) {
 	}
 }
 
+func TestDeleteUploadIgnoresStoredStagingDirOutsideDataDir(t *testing.T) {
+	st, _, srv, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	createRes := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads", profile.ID, models.UploadCreateRequest{
+		Bucket: "test-bucket",
+		Mode:   "staging",
+	})
+	defer createRes.Body.Close()
+	if createRes.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(createRes.Body)
+		t.Fatalf("expected status 201, got %d: %s", createRes.StatusCode, string(body))
+	}
+	var upload models.UploadCreateResponse
+	decodeJSONResponse(t, createRes, &upload)
+
+	us, ok, err := st.GetUploadSession(context.Background(), profile.ID, upload.UploadID)
+	if err != nil {
+		t.Fatalf("get upload session: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected upload session")
+	}
+	if us.StagingDir != filepath.Join(dataDir, "staging", upload.UploadID) {
+		t.Fatalf("stagingDir=%q, want %q", us.StagingDir, filepath.Join(dataDir, "staging", upload.UploadID))
+	}
+
+	canonicalPath := filepath.Join(dataDir, "staging", upload.UploadID, "kept.txt")
+	if err := os.MkdirAll(filepath.Dir(canonicalPath), 0o700); err != nil {
+		t.Fatalf("mkdir canonical path: %v", err)
+	}
+	if err := os.WriteFile(canonicalPath, []byte("canonical"), 0o600); err != nil {
+		t.Fatalf("write canonical file: %v", err)
+	}
+
+	outsideDir := t.TempDir()
+	outsidePath := filepath.Join(outsideDir, "outside.txt")
+	if err := os.WriteFile(outsidePath, []byte("outside"), 0o600); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
+	if err := st.SetUploadSessionStagingDir(context.Background(), profile.ID, upload.UploadID, outsideDir); err != nil {
+		t.Fatalf("set upload session staging dir: %v", err)
+	}
+
+	deleteReq, err := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/uploads/"+upload.UploadID, nil)
+	if err != nil {
+		t.Fatalf("new delete request: %v", err)
+	}
+	deleteReq.Header.Set("X-Profile-Id", profile.ID)
+	deleteRes, err := http.DefaultClient.Do(deleteReq)
+	if err != nil {
+		t.Fatalf("delete upload request: %v", err)
+	}
+	defer deleteRes.Body.Close()
+	if deleteRes.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(deleteRes.Body)
+		t.Fatalf("expected status 204, got %d: %s", deleteRes.StatusCode, string(body))
+	}
+
+	if _, err := os.Stat(outsidePath); err != nil {
+		t.Fatalf("outside file stat err=%v, want file to remain", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "staging", upload.UploadID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected canonical staging dir removed, stat err=%v", err)
+	}
+}
+
 func TestTryAssembleChunkFile_DeltaError(t *testing.T) {
 	t.Parallel()
 

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -82,7 +83,7 @@ func (s *Store) ExportPortableEntityFiles(ctx context.Context) (PortableExportBu
 	return PortableExportBundle{EntityFiles: files}, nil
 }
 
-func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFiles map[string][]byte) (PortableImportCounts, error) {
+func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFiles map[string][]byte, dataDir string) (PortableImportCounts, error) {
 	var counts PortableImportCounts
 
 	profiles, err := parsePortableRows[profileRow](entityFiles["profiles"])
@@ -100,6 +101,10 @@ func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFile
 	uploadSessions, err := parsePortableRows[uploadSessionRow](entityFiles["upload_sessions"])
 	if err != nil {
 		return PortableImportCounts{}, fmt.Errorf("parse upload_sessions: %w", err)
+	}
+	uploadSessions, err = normalizePortableUploadSessions(dataDir, uploadSessions)
+	if err != nil {
+		return PortableImportCounts{}, fmt.Errorf("normalize upload_sessions: %w", err)
 	}
 	uploadMultipartUploads, err := parsePortableRows[uploadMultipartRow](entityFiles["upload_multipart_uploads"])
 	if err != nil {
@@ -179,6 +184,24 @@ func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFile
 	}
 
 	return counts, nil
+}
+
+func normalizePortableUploadSessions(dataDir string, rows []uploadSessionRow) ([]uploadSessionRow, error) {
+	normalized := append([]uploadSessionRow(nil), rows...)
+	for i := range normalized {
+		mode := strings.TrimSpace(strings.ToLower(normalized[i].Mode))
+		switch mode {
+		case "direct", "presigned":
+			normalized[i].StagingDir = ""
+		default:
+			stagingDir, err := ResolveUploadStagingDir(dataDir, normalized[i].ID)
+			if err != nil {
+				return nil, fmt.Errorf("session %q: %w", normalized[i].ID, err)
+			}
+			normalized[i].StagingDir = stagingDir
+		}
+	}
+	return normalized, nil
 }
 
 func orderedRows[T any](tx *gorm.DB, order string) ([]T, error) {

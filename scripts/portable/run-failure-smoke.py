@@ -158,8 +158,8 @@ def prepare_target_asset_failure():
         shutil.rmtree(thumbnails_path)
     elif os.path.exists(thumbnails_path):
         os.remove(thumbnails_path)
-    with open(thumbnails_path, "wb") as fh:
-        fh.write(b"block-portable-assets")
+    os.makedirs(thumbnails_path, exist_ok=True)
+    os.chmod(TARGET_DATA_DIR, 0o500)
 
 
 def verify_imported_profile(profile_id: str):
@@ -197,7 +197,10 @@ def run_asset_copy_warning(profile_id: str):
     import_status, imported = post_bundle("/server/import-portable", archive)
     assert_true(import_status == 201, f"asset_copy_warning import status={import_status}")
     warnings = imported.get("warnings") or []
-    assert_true(any("failed to copy thumbnail assets" in item.lower() for item in warnings), f"asset_copy_warning warnings={warnings}")
+    assert_true(
+        any("failed to reset thumbnail assets" in item.lower() or "failed to copy thumbnail assets" in item.lower() for item in warnings),
+        f"asset_copy_warning warnings={warnings}",
+    )
     assert_true(not imported.get("assetStagingDir"), f"asset_copy_warning assetStagingDir={imported.get('assetStagingDir')}")
     verify_imported_profile(profile_id)
 

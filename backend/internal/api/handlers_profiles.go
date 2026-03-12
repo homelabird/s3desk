@@ -366,7 +366,9 @@ func (s *server) handleDeleteProfile(w http.ResponseWriter, r *http.Request) {
 	if sessions, err := s.store.ListUploadSessionsByProfile(r.Context(), profileID, 10_000); err == nil {
 		for _, us := range sessions {
 			if us.StagingDir != "" {
-				_ = os.RemoveAll(us.StagingDir)
+				if stagingDir, err := store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID); err == nil {
+					_ = os.RemoveAll(stagingDir)
+				}
 			}
 		}
 	}
