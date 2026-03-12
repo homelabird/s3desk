@@ -23,6 +23,7 @@ import (
 
 const corsExposeHeaders = "Retry-After, Content-Disposition, X-Log-Next-Offset, X-Upload-Skipped"
 const corsAllowHeaders = "Authorization, Content-Type, X-Api-Token, X-Profile-Id, X-Upload-Chunk-Index, X-Upload-Chunk-Total, X-Upload-Chunk-Size, X-Upload-File-Size, X-Upload-Relative-Path"
+const defaultContentSecurityPolicy = "base-uri 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
 
 const maxAPITokenBytes = 4096
 
@@ -253,7 +254,7 @@ func securityHeaders(next http.Handler) http.Handler {
 			h.Set("X-Frame-Options", "DENY")
 		}
 		if h.Get("Content-Security-Policy") == "" {
-			h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+			h.Set("Content-Security-Policy", defaultContentSecurityPolicy)
 		}
 		if h.Get("Cross-Origin-Opener-Policy") == "" && isTrustworthyOrigin(r) {
 			h.Set("Cross-Origin-Opener-Policy", "same-origin")

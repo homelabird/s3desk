@@ -24,8 +24,8 @@ func TestSecurityHeaders_Default(t *testing.T) {
 	if got := rr.Header().Get("X-Frame-Options"); got != "DENY" {
 		t.Fatalf("X-Frame-Options=%q, want %q", got, "DENY")
 	}
-	if got := rr.Header().Get("Content-Security-Policy"); got != "frame-ancestors 'none'" {
-		t.Fatalf("Content-Security-Policy=%q, want %q", got, "frame-ancestors 'none'")
+	if got := rr.Header().Get("Content-Security-Policy"); got != defaultContentSecurityPolicy {
+		t.Fatalf("Content-Security-Policy=%q, want %q", got, defaultContentSecurityPolicy)
 	}
 	if got := rr.Header().Get("Cross-Origin-Opener-Policy"); got != "same-origin" {
 		t.Fatalf("Cross-Origin-Opener-Policy=%q, want %q", got, "same-origin")

@@ -22,6 +22,8 @@ type server struct {
 	realtimeTickets *realtimeTicketStore
 	authLimit       *authFailureLimiter
 	uploadLimit     *requestLimiter
+	realtimeLimit   *requestLimiter
+	realtimeMax     int
 	bucketGov       *bucketgov.Service
 	restoreMu       sync.RWMutex
 }

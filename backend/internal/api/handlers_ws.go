@@ -15,6 +15,10 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleWSUpgrade(w http.ResponseWriter, r *http.Request) {
+	releaseSlot, allowed := s.acquireRealtimeSlot(w, "ws")
+	if !allowed {
+		return
+	}
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
@@ -22,9 +26,11 @@ func (s *server) handleWSUpgrade(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		releaseSlot()
 		return
 	}
 	defer func() { _ = conn.Close() }()
+	defer releaseSlot()
 
 	var afterSeq int64
 	if raw := r.URL.Query().Get("afterSeq"); raw != "" {
