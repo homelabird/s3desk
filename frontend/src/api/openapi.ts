@@ -4347,6 +4347,7 @@ export interface components {
             staticDir: string;
             apiTokenEnabled: boolean;
             encryptionEnabled: boolean;
+            warnings?: string[];
             capabilities: components["schemas"]["MetaCapabilities"];
             allowedLocalDirs?: string[];
             jobConcurrency: number;

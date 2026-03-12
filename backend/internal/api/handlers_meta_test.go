@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"s3desk/internal/config"
 	"s3desk/internal/db"
 	"s3desk/internal/models"
 )
@@ -185,5 +186,32 @@ func TestGetMetaPostgresAdvertisesPortableBackupOnly(t *testing.T) {
 	}
 	if !strings.Contains(meta.Capabilities.ServerBackup.RestoreStaging.Reason, "does not replace a Postgres backup or restore workflow") {
 		t.Fatalf("expected postgres restore staging warning, got %q", meta.Capabilities.ServerBackup.RestoreStaging.Reason)
+	}
+}
+
+func TestGetMetaIncludesOperationalWarnings(t *testing.T) {
+	t.Parallel()
+
+	_, srv := newTestServerWithConfig(t, config.Config{
+		AllowRemote: true,
+	})
+
+	res := doJSONRequest(t, srv, http.MethodGet, "/api/v1/meta", nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.StatusCode)
+	}
+
+	var meta models.MetaResponse
+	decodeJSONResponse(t, res, &meta)
+
+	if len(meta.Warnings) != 2 {
+		t.Fatalf("warnings=%v, want 2 warnings", meta.Warnings)
+	}
+	if meta.Warnings[0] != config.WarningRemoteWithoutAllowedLocalDirs {
+		t.Fatalf("warnings[0]=%q, want %q", meta.Warnings[0], config.WarningRemoteWithoutAllowedLocalDirs)
+	}
+	if meta.Warnings[1] != config.WarningEncryptionKeyUnset {
+		t.Fatalf("warnings[1]=%q, want %q", meta.Warnings[1], config.WarningEncryptionKeyUnset)
 	}
 }
