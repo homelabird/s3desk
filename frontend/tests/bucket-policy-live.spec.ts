@@ -288,6 +288,7 @@ test.describe('Live bucket policy flows', () => {
 				name: profileName,
 				anonymous: true,
 				endpoint: 'http://127.0.0.1:4443',
+				projectNumber: gcsProjectNumber.trim() || '123456789012',
 			})
 			const profileHeaders = apiHeaders(profileId)
 
@@ -437,6 +438,7 @@ test.describe('Live bucket policy flows', () => {
 		test.skip(!gcsPolicyLive, 'E2E_GCS_POLICY_LIVE=1 required')
 		test.skip(gcsBucket.trim() === '', 'E2E_GCS_BUCKET is required')
 		test.skip(gcsServiceAccountJSON.trim() === '', 'E2E_GCS_SERVICE_ACCOUNT_JSON is required')
+		test.skip(gcsProjectNumber.trim() === '', 'E2E_GCS_PROJECT_NUMBER is required')
 
 		const runId = uniqueId()
 		const profileName = `e2e-policy-gcs-live-${runId}`
@@ -449,7 +451,7 @@ test.describe('Live bucket policy flows', () => {
 				name: profileName,
 				serviceAccountJson: gcsServiceAccountJSON,
 				...(gcsEndpoint.trim() !== '' ? { endpoint: gcsEndpoint } : {}),
-				...(gcsProjectNumber.trim() !== '' ? { projectNumber: gcsProjectNumber } : {}),
+				projectNumber: gcsProjectNumber,
 				tlsInsecureSkipVerify: gcsTLSInsecureSkipVerify,
 			})
 			const headers = apiHeaders(profileId)

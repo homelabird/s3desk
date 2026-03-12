@@ -27,14 +27,14 @@ test.describe('Live server migration flow', () => {
 
 		const downloadPromise = page.waitForEvent('download')
 		await drawer.getByText('Protect with password').click()
-		await drawer.getByPlaceholder('Backup password').fill(backupPassword)
-		await drawer.getByPlaceholder('Confirm backup password').fill(backupPassword)
+		await drawer.getByPlaceholder('Backup password', { exact: true }).fill(backupPassword)
+		await drawer.getByPlaceholder('Confirm backup password', { exact: true }).fill(backupPassword)
 		await drawer.getByRole('button', { name: 'Download backup' }).click()
 		const download = await downloadPromise
 		const archivePath = testInfo.outputPath(download.suggestedFilename() || 's3desk-full-backup-encrypted.tar.gz')
 		await download.saveAs(archivePath)
 
-		await drawer.getByPlaceholder('Bundle password (optional)').fill(backupPassword)
+		await drawer.getByPlaceholder('Bundle password (optional)', { exact: true }).fill(backupPassword)
 
 		const restoreInput = drawer.getByTestId('sidebar-restore-input')
 		await restoreInput.setInputFiles(archivePath)

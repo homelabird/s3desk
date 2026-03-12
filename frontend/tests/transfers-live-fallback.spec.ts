@@ -195,10 +195,26 @@ test.describe('Live transfer fallback flows', () => {
 					// ignore parse failures
 				}
 			})
+			await page.route('**/api/v1/buckets', async (route) => {
+				if (route.request().method() !== 'GET') {
+					await route.continue()
+					return
+				}
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify([{ name: bucketName, createdAt: new Date().toISOString() }]),
+				})
+			})
 
 			await page.goto('/uploads')
-			const fileInput = page.locator('input[type="file"]').first()
-			await fileInput.setInputFiles({
+			await page.getByRole('button', { name: 'Add from device…' }).click()
+			const sourceDialog = page.getByRole('dialog', { name: 'Add upload source' })
+			await expect(sourceDialog).toBeVisible({ timeout: 10_000 })
+			const chooserPromise = page.waitForEvent('filechooser')
+			await sourceDialog.getByRole('button', { name: 'Choose files' }).click()
+			const chooser = await chooserPromise
+			await chooser.setFiles({
 				name: `capability-${runId}.txt`,
 				mimeType: 'text/plain',
 				buffer: Buffer.from(`capability-${runId}`),
@@ -295,6 +311,8 @@ test.describe('Live transfer fallback flows', () => {
 			})
 
 			await page.goto('/objects')
+			await page.getByTestId('objects-bucket-picker-desktop').click()
+			await page.getByTestId(`objects-bucket-picker-option-${bucketName}`).click()
 			const objectRow = page.locator('[data-objects-row="true"]', { hasText: objectKey }).first()
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
 
