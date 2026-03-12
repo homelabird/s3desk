@@ -372,6 +372,36 @@ func TestHandleImportPortableBackup_ReplaceImportsProfiles(t *testing.T) {
 	}
 }
 
+func TestHandleImportPortableBackup_RejectsTamperedClearBundleWhenHMACPresent(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+	tamperedArchive := mutateServerBackupArchive(t, archiveBytes, func(manifest *serverBackupArchiveManifest, entries map[string][]byte) {
+		profiles := append([]byte(nil), entries["data/profiles.jsonl"]...)
+		if len(profiles) == 0 {
+			t.Fatal("data/profiles.jsonl missing from portable backup")
+		}
+		profiles[0] ^= 0x01
+		entries["data/profiles.jsonl"] = profiles
+		updateServerBackupArchivePayloadSummary(manifest, entries)
+	})
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", tamperedArchive, "portable-backup-tampered.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(body))
+	}
+	body, _ := io.ReadAll(res.Body)
+	if !strings.Contains(string(body), "portable payload signature mismatch") {
+		t.Fatalf("expected signature mismatch error, got %s", string(body))
+	}
+}
+
 func TestHandleImportPortableBackup_ReturnsBlockedPreviewWhenVersionsUnsupported(t *testing.T) {
 	t.Parallel()
 
