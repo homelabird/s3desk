@@ -26,6 +26,7 @@ const defaultMetaResponse = {
 	apiTokenEnabled: true,
 	encryptionEnabled: false,
 	dbBackend: 'sqlite',
+	warnings: [],
 	capabilities: {
 		profileTls: { enabled: false, reason: 'test' },
 		serverBackup: {

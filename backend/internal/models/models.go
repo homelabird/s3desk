@@ -849,6 +849,7 @@ type MetaResponse struct {
 	StaticDir               string             `json:"staticDir"`
 	APITokenEnabled         bool               `json:"apiTokenEnabled"`
 	EncryptionEnabled       bool               `json:"encryptionEnabled"`
+	Warnings                []string           `json:"warnings,omitempty"`
 	Capabilities            MetaCapabilities   `json:"capabilities"`
 	AllowedLocalDirs        []string           `json:"allowedLocalDirs,omitempty"`
 	JobConcurrency          int                `json:"jobConcurrency"`

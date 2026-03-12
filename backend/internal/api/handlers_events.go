@@ -13,6 +13,11 @@ func (s *server) handleEventsSSE(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "streaming not supported", nil)
 		return
 	}
+	releaseSlot, allowed := s.acquireRealtimeSlot(w, "sse")
+	if !allowed {
+		return
+	}
+	defer releaseSlot()
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")

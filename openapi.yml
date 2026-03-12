@@ -3695,6 +3695,9 @@ components:
         staticDir: { type: string }
         apiTokenEnabled: { type: boolean }
         encryptionEnabled: { type: boolean }
+        warnings:
+          type: array
+          items: { type: string }
         capabilities: { $ref: "#/components/schemas/MetaCapabilities" }
         allowedLocalDirs:
           type: array

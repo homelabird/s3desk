@@ -43,6 +43,8 @@ func New(dep Dependencies) http.Handler {
 		realtimeTickets: newRealtimeTicketStore(30 * time.Second),
 		authLimit:       newAuthFailureLimiter(10, time.Minute, time.Minute),
 		uploadLimit:     newRequestLimiter(dep.Config.UploadMaxConcurrentRequests),
+		realtimeLimit:   newRequestLimiter(defaultRealtimeMaxConnections),
+		realtimeMax:     defaultRealtimeMaxConnections,
 		bucketGov:       bucketgov.NewService(bucketgov.NewDefaultRegistry()),
 	}
 

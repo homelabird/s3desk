@@ -60,6 +60,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	cfg.AllowedLocalDirs = allowedDirs
+	for _, warning := range config.OperationalWarnings(cfg) {
+		logging.Warnf("configuration warning: %s", warning)
+	}
 
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return err

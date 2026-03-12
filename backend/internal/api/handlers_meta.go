@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	cfgpkg "s3desk/internal/config"
 	"s3desk/internal/db"
 	"s3desk/internal/jobs"
 	"s3desk/internal/models"
@@ -73,6 +74,7 @@ func (s *server) handleGetMeta(w http.ResponseWriter, r *http.Request) {
 		StaticDir:         s.cfg.StaticDir,
 		APITokenEnabled:   s.cfg.APIToken != "",
 		EncryptionEnabled: s.cfg.EncryptionKey != "",
+		Warnings:          cfgpkg.OperationalWarnings(s.cfg),
 		Capabilities: models.MetaCapabilities{
 			ProfileTLS: tlsCapability,
 			ServerBackup: models.ServerBackupCapabilities{
