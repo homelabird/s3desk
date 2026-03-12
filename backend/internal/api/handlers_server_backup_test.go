@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -103,6 +105,25 @@ func TestHandleGetServerBackup_IncludesSQLiteAndDataDirEntries(t *testing.T) {
 	}
 	if !manifest.EncryptionEnabled {
 		t.Fatalf("manifest.encryptionEnabled=false, want true")
+	}
+}
+
+func TestHandleGetServerBackup_ClearBundleRetainsHMACIntegrity(t *testing.T) {
+	t.Parallel()
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadBackupArchiveBytesWithPassword(t, srv.URL, "/api/v1/server/backup", "")
+	entries := readTarGzEntries(t, bytes.NewReader(archiveBytes))
+	archiveManifest := decodeServerBackupArchiveManifest(t, entries)
+
+	if archiveManifest.PayloadHMACSHA256 == "" {
+		t.Fatal("clear backup payload HMAC is empty")
+	}
+	expected := buildServerBackupPayloadHMAC(archiveManifest.ServerMigrationManifest, testEncryptionKey(), "")
+	if archiveManifest.PayloadHMACSHA256 != expected {
+		t.Fatalf("payload hmac=%q, want %q", archiveManifest.PayloadHMACSHA256, expected)
 	}
 }
 
@@ -299,6 +320,36 @@ func TestHandleRestoreServerBackup_RejectsOversizedBundle(t *testing.T) {
 	}
 }
 
+func TestHandleRestoreServerBackup_RejectsTamperedClearBundleWhenHMACPresent(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadBackupArchiveBytesWithPassword(t, sourceSrv.URL, "/api/v1/server/backup", "")
+	tamperedArchive := mutateServerBackupArchive(t, archiveBytes, func(manifest *serverBackupArchiveManifest, entries map[string][]byte) {
+		sqliteBytes := append([]byte(nil), entries["data/s3desk.db"]...)
+		if len(sqliteBytes) == 0 {
+			t.Fatal("data/s3desk.db missing from backup archive")
+		}
+		sqliteBytes[0] ^= 0xff
+		entries["data/s3desk.db"] = sqliteBytes
+		updateServerBackupArchivePayloadSummary(manifest, entries)
+	})
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postRestoreArchiveWithPassword(t, targetSrv.URL, "/api/v1/server/restore", tamperedArchive, "tampered-clear-backup.tar.gz", "")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		respBody, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(respBody))
+	}
+	respBody, _ := io.ReadAll(res.Body)
+	if !strings.Contains(string(respBody), "backup payload signature mismatch") {
+		t.Fatalf("expected signature mismatch error, got %s", string(respBody))
+	}
+}
+
 func TestHandleRestoreServerBackup_StagesPasswordProtectedBundleWithMatchingPassword(t *testing.T) {
 	t.Parallel()
 
@@ -373,6 +424,45 @@ func readTarGzEntries(t *testing.T, reader io.Reader) map[string][]byte {
 		}
 		entries[header.Name] = data
 	}
+}
+
+func decodeServerBackupArchiveManifest(t *testing.T, entries map[string][]byte) serverBackupArchiveManifest {
+	t.Helper()
+	rawManifest, ok := entries["manifest.json"]
+	if !ok {
+		t.Fatal("manifest.json missing from backup archive")
+	}
+	var manifest serverBackupArchiveManifest
+	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	return manifest
+}
+
+func mutateServerBackupArchive(t *testing.T, archiveBytes []byte, mutate func(*serverBackupArchiveManifest, map[string][]byte)) []byte {
+	t.Helper()
+
+	entries := readTarGzEntries(t, bytes.NewReader(archiveBytes))
+	manifest := decodeServerBackupArchiveManifest(t, entries)
+	mutate(&manifest, entries)
+	entries["manifest.json"] = mustJSON(t, manifest)
+	return buildTarGzForRestore(t, entries)
+}
+
+func updateServerBackupArchivePayloadSummary(manifest *serverBackupArchiveManifest, entries map[string][]byte) {
+	payloadEntries := make([]serverBackupPayloadEntry, 0, len(entries))
+	for name, data := range entries {
+		if !strings.HasPrefix(name, "data/") && !strings.HasPrefix(name, "assets/") {
+			continue
+		}
+		sum := sha256.Sum256(data)
+		payloadEntries = append(payloadEntries, serverBackupPayloadEntry{
+			ArchivePath: name,
+			Size:        int64(len(data)),
+			SHA256:      hex.EncodeToString(sum[:]),
+		})
+	}
+	manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
 }
 
 func buildTarGzForRestore(t *testing.T, files map[string][]byte) []byte {

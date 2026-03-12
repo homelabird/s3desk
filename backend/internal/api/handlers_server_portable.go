@@ -67,7 +67,7 @@ func (s *server) handlePreviewPortableImport(w http.ResponseWriter, r *http.Requ
 	}
 	defer cleanup()
 
-	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeDryRun, resolveServerBackupImportSecret(backupPassword, s.cfg.EncryptionKey))
+	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeDryRun, backupPassword, s.cfg.EncryptionKey)
 	if err != nil {
 		writePortableImportError(w, err)
 		return
@@ -93,7 +93,7 @@ func (s *server) handleImportPortableBackup(w http.ResponseWriter, r *http.Reque
 	}
 	defer cleanup()
 
-	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeReplace, resolveServerBackupImportSecret(backupPassword, s.cfg.EncryptionKey))
+	resp, err := s.processPortableImportArchive(r.Context(), file, portableImportModeReplace, backupPassword, s.cfg.EncryptionKey)
 	if err != nil {
 		writePortableImportError(w, err)
 		return
@@ -105,7 +105,7 @@ func (s *server) handleImportPortableBackup(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePath string, confidentiality string, includeThumbnails bool, payloadSecret string) (models.ServerMigrationManifest, error) {
+func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePath string, confidentiality string, includeThumbnails bool, secrets serverBackupSecrets) (models.ServerMigrationManifest, error) {
 	dbBackend, err := db.ParseBackend(s.cfg.DBBackend)
 	if err != nil {
 		return models.ServerMigrationManifest{}, err
@@ -129,7 +129,7 @@ func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePa
 		EncryptionKeyHint: portableBackupEncryptionKeyHint(s.cfg.EncryptionKey),
 		Entities:          map[string]models.ServerMigrationEntityManifest{},
 		Assets:            map[string]models.ServerMigrationAssetManifest{},
-		Warnings:          buildServerBackupManifestWarnings(s.cfg.EncryptionKey != "", serverBackupScopePortable, confidentiality, backupSecretProvidedByPassword(payloadSecret, s.cfg.EncryptionKey)),
+		Warnings:          buildServerBackupManifestWarnings(s.cfg.EncryptionKey != "", serverBackupScopePortable, confidentiality, backupSecretProvidedByPassword(secrets.PayloadSecret, s.cfg.EncryptionKey)),
 	}
 	if confidentiality == serverBackupConfidentialityEncrypted {
 		manifest.ConfidentialityMode = confidentiality
@@ -183,13 +183,13 @@ func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePa
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
 		archiveManifest := serverBackupArchiveManifest{
 			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, payloadSecret, payloadIV),
+			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, secrets.HMACSecret, payloadIV),
 			PayloadEncryptionIV:     payloadIV,
 		}
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
-		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, payloadIV, payloadSecret); err != nil {
+		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, payloadIV, secrets.PayloadSecret); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
 	} else {
@@ -216,7 +216,7 @@ func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePa
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
 		archiveManifest := serverBackupArchiveManifest{
 			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, payloadSecret, ""),
+			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, secrets.HMACSecret, ""),
 		}
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
@@ -371,7 +371,7 @@ func writeTarBytesFile(tarWriter *tar.Writer, archivePath string, data []byte, m
 	}, nil
 }
 
-func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader, mode string, payloadSecret string) (models.ServerPortableImportResponse, error) {
+func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader, mode string, backupPassword string, encryptionKey string) (models.ServerPortableImportResponse, error) {
 	if mode != portableImportModeReplace && mode != portableImportModeDryRun {
 		return models.ServerPortableImportResponse{}, fmt.Errorf("unsupported portable import mode %q", mode)
 	}
@@ -381,7 +381,7 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 		return models.ServerPortableImportResponse{}, err
 	}
 
-	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchive(ctx, src, payloadSecret)
+	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchive(ctx, src, backupPassword, encryptionKey)
 	if err != nil {
 		return models.ServerPortableImportResponse{}, err
 	}
@@ -492,7 +492,7 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 	return resp, nil
 }
 
-func extractPortableArchive(ctx context.Context, src io.Reader, encryptionKey string) (string, models.ServerMigrationManifest, map[string][]byte, string, []serverBackupPayloadEntry, error) {
+func extractPortableArchive(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string) (string, models.ServerMigrationManifest, map[string][]byte, string, []serverBackupPayloadEntry, error) {
 	tempRoot, err := os.MkdirTemp("", "s3desk-portable-import-*")
 	if err != nil {
 		return "", models.ServerMigrationManifest{}, nil, "", nil, err
@@ -576,7 +576,8 @@ func extractPortableArchive(ctx context.Context, src io.Reader, encryptionKey st
 				_ = os.RemoveAll(tempRoot)
 				return "", models.ServerMigrationManifest{}, nil, "", nil, err
 			}
-			if err := extractEncryptedPortablePayload(ctx, tarReader, tempRoot, archiveManifest.PayloadEncryptionIV, encryptionKey, &payloadEntries); err != nil {
+			secrets := resolveServerBackupArchiveSecrets(manifest, backupPassword, encryptionKey)
+			if err := extractEncryptedPortablePayload(ctx, tarReader, tempRoot, archiveManifest.PayloadEncryptionIV, secrets.PayloadSecret, &payloadEntries); err != nil {
 				_ = os.RemoveAll(tempRoot)
 				return "", models.ServerMigrationManifest{}, nil, "", nil, err
 			}
@@ -605,7 +606,8 @@ func extractPortableArchive(ctx context.Context, src io.Reader, encryptionKey st
 		}
 	}
 	if archiveManifest.PayloadHMACSHA256 != "" {
-		expectedHMAC := buildServerBackupPayloadHMAC(manifest, encryptionKey, archiveManifest.PayloadEncryptionIV)
+		secrets := resolveServerBackupArchiveSecrets(manifest, backupPassword, encryptionKey)
+		expectedHMAC := buildServerBackupPayloadHMAC(manifest, secrets.HMACSecret, archiveManifest.PayloadEncryptionIV)
 		if expectedHMAC != "" && !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {
 			_ = os.RemoveAll(tempRoot)
 			return "", models.ServerMigrationManifest{}, nil, "", nil, errors.New("portable payload signature mismatch")

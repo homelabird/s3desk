@@ -174,6 +174,25 @@ func TestHandleGetServerBackup_PortableArchiveIncludesUploadState(t *testing.T) 
 	}
 }
 
+func TestHandleGetServerBackup_PortableClearArchiveRetainsHMACIntegrity(t *testing.T) {
+	t.Parallel()
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, srv.URL, "/api/v1/server/backup?scope=portable")
+	entries := readTarGzEntries(t, bytes.NewReader(archiveBytes))
+	archiveManifest := decodeServerBackupArchiveManifest(t, entries)
+
+	if archiveManifest.PayloadHMACSHA256 == "" {
+		t.Fatal("clear portable backup payload HMAC is empty")
+	}
+	expected := buildServerBackupPayloadHMAC(archiveManifest.ServerMigrationManifest, testEncryptionKey(), "")
+	if archiveManifest.PayloadHMACSHA256 != expected {
+		t.Fatalf("payload hmac=%q, want %q", archiveManifest.PayloadHMACSHA256, expected)
+	}
+}
+
 func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyMissing(t *testing.T) {
 	t.Parallel()
 
@@ -336,6 +355,36 @@ func TestHandleImportPortableBackup_ReplaceImportsProfiles(t *testing.T) {
 	}
 	if profiles[0].ID != profile.ID {
 		t.Fatalf("imported profile id=%q, want %q", profiles[0].ID, profile.ID)
+	}
+}
+
+func TestHandleImportPortableBackup_RejectsTamperedClearBundleWhenHMACPresent(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+	tamperedArchive := mutateServerBackupArchive(t, archiveBytes, func(manifest *serverBackupArchiveManifest, entries map[string][]byte) {
+		profiles := append([]byte(nil), entries["data/profiles.jsonl"]...)
+		if len(profiles) == 0 {
+			t.Fatal("data/profiles.jsonl missing from portable backup")
+		}
+		profiles[0] ^= 0x01
+		entries["data/profiles.jsonl"] = profiles
+		updateServerBackupArchivePayloadSummary(manifest, entries)
+	})
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", tamperedArchive, "portable-backup-tampered.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(body))
+	}
+	body, _ := io.ReadAll(res.Body)
+	if !strings.Contains(string(body), "portable payload signature mismatch") {
+		t.Fatalf("expected signature mismatch error, got %s", string(body))
 	}
 }
 
