@@ -93,6 +93,14 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
+	if err := validateProfileEndpointURL("endpoint", req.Endpoint, s.cfg.AllowRemote); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+		return
+	}
+	if err := validateProfileEndpointURL("publicEndpoint", req.PublicEndpoint, s.cfg.AllowRemote); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+		return
+	}
 
 	if err := validateCreateProfileProvider(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
@@ -320,6 +328,14 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		fieldTextInput{"configFile", req.ConfigFile},
 		fieldTextInput{"configProfile", req.ConfigProfile},
 	); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+		return
+	}
+	if err := validateProfileEndpointURL("endpoint", req.Endpoint, s.cfg.AllowRemote); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+		return
+	}
+	if err := validateProfileEndpointURL("publicEndpoint", req.PublicEndpoint, s.cfg.AllowRemote); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
