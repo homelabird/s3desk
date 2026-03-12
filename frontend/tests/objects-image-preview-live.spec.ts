@@ -40,7 +40,7 @@ async function waitForJob(request: APIRequestContext, profileId: string, jobId: 
 	throw new Error(`timed out waiting for job ${jobId} (last status: ${lastStatus})`)
 }
 
-async function uploadObject(request: APIRequestContext, profileId: string, bucket: string, key: string, body: string, mimeType: string) {
+async function uploadObject(request: APIRequestContext, profileId: string, bucket: string, key: string, body: string | Buffer, mimeType: string) {
 	const createUpload = await request.post('/api/v1/uploads', {
 		headers: apiHeaders(profileId),
 		data: { bucket },
@@ -54,7 +54,7 @@ async function uploadObject(request: APIRequestContext, profileId: string, bucke
 			files: {
 				name: key,
 				mimeType,
-				buffer: Buffer.from(body),
+				buffer: Buffer.isBuffer(body) ? body : Buffer.from(body),
 			},
 		},
 	})
@@ -90,8 +90,11 @@ test.describe('Live objects image preview', () => {
 		const runId = uniqueId()
 		const profileName = `e2e-preview-${runId}`
 		const bucketName = `e2e-preview-${runId}`
-		const objectKey = `preview-${runId}.svg`
-		const svgBody = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="640" height="480" fill="#0f766e"/><text x="48" y="120" fill="#ffffff" font-size="64">S3Desk</text></svg>`
+		const objectKey = `preview-${runId}.png`
+		const pngBody = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=',
+			'base64',
+		)
 		let profileId: string | null = null
 
 		try {
@@ -117,9 +120,11 @@ test.describe('Live objects image preview', () => {
 			})
 			expect(createBucket.status()).toBe(201)
 
-			await uploadObject(request, profileId, bucketName, objectKey, svgBody, 'image/svg+xml')
+			await uploadObject(request, profileId, bucketName, objectKey, pngBody, 'image/png')
 			await seedStorage(page, { profileId, bucket: bucketName })
 			await page.goto('/objects')
+			await page.getByTestId('objects-bucket-picker-desktop').click()
+			await page.getByTestId(`objects-bucket-picker-option-${bucketName}`).click()
 
 			const objectRow = page.locator('[data-objects-row="true"]').filter({ hasText: objectKey }).first()
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })

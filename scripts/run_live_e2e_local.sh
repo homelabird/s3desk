@@ -27,6 +27,9 @@ E2E_S3_FORCE_PATH_STYLE="${E2E_S3_FORCE_PATH_STYLE:-true}"
 E2E_S3_TLS_SKIP_VERIFY="${E2E_S3_TLS_SKIP_VERIFY:-true}"
 
 BACKEND_LOG="${BACKEND_LOG:-/tmp/s3desk_backend_live.log}"
+RCLONE_CACHE_DIR="${RCLONE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/s3desk/live-e2e}"
+BACKEND_TEMP_DIR=""
+BACKEND_BIN=""
 RCLONE_TEMP_DIR=""
 RCLONE_CONTAINER=""
 
@@ -57,13 +60,60 @@ ensure_rclone() {
 	fi
 
 	echo "[live-e2e] extracting rclone from ${RCLONE_IMAGE}"
+	mkdir -p "${RCLONE_CACHE_DIR}"
 	RCLONE_TEMP_DIR="$(mktemp -d /tmp/s3desk-rclone-e2e.XXXXXX)"
 	RCLONE_CONTAINER="s3desk-rclone-e2e-$$"
+	local cached_path="${RCLONE_CACHE_DIR}/rclone"
+	local extracted_path="${RCLONE_TEMP_DIR}/rclone"
 	podman rm -f "${RCLONE_CONTAINER}" >/dev/null 2>&1 || true
 	podman create --name "${RCLONE_CONTAINER}" "${RCLONE_IMAGE}" >/dev/null
-	podman cp "${RCLONE_CONTAINER}:/usr/local/bin/rclone" "${RCLONE_TEMP_DIR}/rclone" >/dev/null
-	chmod +x "${RCLONE_TEMP_DIR}/rclone"
-	RCLONE_PATH="${RCLONE_TEMP_DIR}/rclone"
+	podman cp "${RCLONE_CONTAINER}:/usr/local/bin/rclone" "${extracted_path}" >/dev/null
+	chmod +x "${extracted_path}"
+	mv "${extracted_path}" "${cached_path}"
+	RCLONE_PATH="${cached_path}"
+}
+
+find_listener_pid() {
+	local addr="${1}"
+	ss -ltnp 2>/dev/null | awk -v addr="${addr}" '
+		$4 == addr {
+			if (match($0, /pid=[0-9]+/)) {
+				print substr($0, RSTART + 4, RLENGTH - 4)
+				exit
+			}
+		}
+	'
+}
+
+stop_stale_backend() {
+	local pid
+	pid="$(find_listener_pid "${BACKEND_ADDR}" || true)"
+	if [ -z "${pid}" ]; then
+		return
+	fi
+
+	local cmd
+	cmd="$(ps -p "${pid}" -o args= 2>/dev/null || true)"
+	case "${cmd}" in
+		*"go-build/"*"/server"*|*"s3desk"*"/server"*|*"go run ./cmd/server"*)
+			echo "[live-e2e] stopping stale backend on ${BACKEND_ADDR} (pid ${pid})"
+			kill "${pid}" >/dev/null 2>&1 || true
+			sleep 1
+			;;
+		*)
+			echo "backend address ${BACKEND_ADDR} already in use by: ${cmd}" >&2
+			exit 1
+			;;
+	esac
+}
+
+build_backend() {
+	BACKEND_TEMP_DIR="$(mktemp -d /tmp/s3desk-backend-live.XXXXXX)"
+	BACKEND_BIN="${BACKEND_TEMP_DIR}/server"
+	(
+		cd "${ROOT_DIR}/backend"
+		go build -o "${BACKEND_BIN}" ./cmd/server
+	)
 }
 
 if [ "$#" -gt 0 ]; then
@@ -114,6 +164,9 @@ cleanup() {
 		wait "${BACK_PID}" >/dev/null 2>&1 || true
 	fi
 	podman rm -f "${MINIO_CONTAINER}" >/dev/null 2>&1 || true
+	if [ -n "${BACKEND_TEMP_DIR}" ]; then
+		rm -rf "${BACKEND_TEMP_DIR}" >/dev/null 2>&1 || true
+	fi
 	if [ -n "${RCLONE_CONTAINER}" ]; then
 		podman rm -f "${RCLONE_CONTAINER}" >/dev/null 2>&1 || true
 	fi
@@ -124,6 +177,8 @@ cleanup() {
 trap cleanup EXIT
 
 ensure_rclone
+stop_stale_backend
+build_backend
 
 for _ in $(seq 1 40); do
 	if curl -fsS "http://127.0.0.1:${MINIO_PORT}/minio/health/live" >/dev/null 2>&1; then
@@ -135,7 +190,7 @@ done
 echo "[live-e2e] starting backend on ${BACKEND_ADDR}"
 (
 	cd "${ROOT_DIR}/backend"
-	API_TOKEN="${API_TOKEN}" ADDR="${BACKEND_ADDR}" RCLONE_PATH="${RCLONE_PATH}" go run ./cmd/server >"${BACKEND_LOG}" 2>&1
+	API_TOKEN="${API_TOKEN}" ADDR="${BACKEND_ADDR}" RCLONE_PATH="${RCLONE_PATH}" exec "${BACKEND_BIN}" >"${BACKEND_LOG}" 2>&1
 ) &
 BACK_PID=$!
 

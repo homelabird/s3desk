@@ -1,9 +1,9 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { dialogByName, transferDownloadRow, transferUploadRow } from './support/ui'
+import { dialogByName, ensureDialogOpen, transferDownloadRow, transferUploadRow } from './support/ui'
 
 const isLive = process.env.E2E_LIVE === '1'
 
@@ -47,8 +47,8 @@ async function seedStorage(page: Page) {
 	}, { apiToken })
 }
 
-async function setSwitch(page: Page, label: string, enabled: boolean) {
-	const control = page.getByRole('switch', { name: label })
+async function setSwitch(scope: Page | Locator, label: string, enabled: boolean) {
+	const control = scope.getByRole('switch', { name: label })
 	const state = await control.getAttribute('aria-checked')
 	if ((state === 'true') !== enabled) {
 		await control.click()
@@ -74,20 +74,34 @@ test.describe('Live UI flow', () => {
 
 		try {
 			await seedStorage(page)
-			await page.goto('/profiles?create=1')
-			await page.getByLabel('Name').fill(profileName)
-			await page.getByLabel('Endpoint URL').fill(s3Endpoint)
-			await page.getByLabel('Region').fill(s3Region)
-			await page.getByLabel('Access Key ID').fill(s3AccessKey)
-			await page.getByLabel('Secret').fill(s3SecretKey)
-			await setSwitch(page, 'Force Path Style', forcePathStyle)
-			await setSwitch(page, 'TLS Insecure Skip Verify', tlsSkipVerify)
-			const profileModal = dialogByName(page, 'Create Profile')
-			await profileModal.getByRole('button', { name: 'Create' }).click()
+			await page.goto('/profiles')
+			const profileModal = await ensureDialogOpen(page, 'Create Profile', async () => {
+				const createButton = page.getByRole('button', { name: 'New Profile' })
+				if (await createButton.isVisible().catch(() => false)) {
+					await createButton.click()
+					return
+				}
+				await page.getByRole('button', { name: 'Create profile' }).click()
+			})
+			await profileModal.getByLabel('Name').fill(profileName)
+			await profileModal.getByRole('textbox', { name: 'Endpoint URL', exact: true }).fill(s3Endpoint)
+			await profileModal.getByLabel('Region').fill(s3Region)
+			await profileModal.getByLabel('Access Key ID').fill(s3AccessKey)
+			await profileModal.getByLabel('Secret').fill(s3SecretKey)
+			const forcePathSwitch = profileModal.getByRole('switch', { name: 'Force Path Style' })
+			if (!(await forcePathSwitch.isVisible().catch(() => false))) {
+				await profileModal.getByRole('button', { name: /Advanced Options/ }).click()
+			}
+			await setSwitch(profileModal, 'Force Path Style', forcePathStyle)
+			await setSwitch(profileModal, 'TLS Insecure Skip Verify', tlsSkipVerify)
+			await profileModal.getByRole('button', { name: 'Create', exact: true }).click()
 
 			const createdProfileRow = page.getByRole('row', { name: new RegExp(profileName) })
 			await expect(createdProfileRow).toBeVisible({ timeout: 30_000 })
-			await createdProfileRow.getByRole('button', { name: 'Use' }).click()
+			const useButton = createdProfileRow.getByRole('button', { name: 'Use' })
+			if (await useButton.isVisible().catch(() => false)) {
+				await useButton.click()
+			}
 			await page.waitForFunction(() => {
 				const value = window.localStorage.getItem('profileId')
 				return value && JSON.parse(value)
@@ -98,7 +112,7 @@ test.describe('Live UI flow', () => {
 			await page.getByRole('button', { name: 'New Bucket' }).click()
 			await page.getByLabel('Bucket name').fill(bucketName)
 			const bucketModal = dialogByName(page, 'Create Bucket')
-			await bucketModal.getByRole('button', { name: 'Create' }).click()
+			await bucketModal.getByRole('button', { name: 'Create', exact: true }).click()
 			await expect(page.getByRole('row', { name: new RegExp(bucketName) })).toBeVisible({ timeout: 30_000 })
 
 			await page.goto('/uploads')
@@ -107,8 +121,13 @@ test.describe('Live UI flow', () => {
 			await uploadsBucketSelect.fill(bucketName)
 			await page.keyboard.press('Enter')
 
-			const fileInput = page.locator('input[type="file"]').first()
-			await fileInput.setInputFiles(uploadFixture)
+			await page.getByRole('button', { name: 'Add from device…' }).click()
+			const sourceDialog = dialogByName(page, 'Add upload source')
+			await expect(sourceDialog).toBeVisible({ timeout: 10_000 })
+			const chooserPromise = page.waitForEvent('filechooser')
+			await sourceDialog.getByRole('button', { name: 'Choose files' }).click()
+			const chooser = await chooserPromise
+			await chooser.setFiles(uploadFixture)
 			await page.getByRole('button', { name: /Queue upload/i }).click()
 
 			const uploadRow = transferUploadRow(page, `Upload: ${uploadFilename}`)
@@ -116,10 +135,8 @@ test.describe('Live UI flow', () => {
 			await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 180_000 })
 
 			await page.goto('/objects')
-			const objectsBucketSelect = page.getByRole('combobox', { name: 'Bucket' })
-			await objectsBucketSelect.click({ force: true })
-			await objectsBucketSelect.fill(bucketName)
-			await page.keyboard.press('Enter')
+			await page.getByTestId('objects-bucket-picker-desktop').click()
+			await page.getByTestId(`objects-bucket-picker-option-${bucketName}`).click()
 
 			const objectRow = page.locator('[data-objects-row="true"]', { hasText: uploadFilename }).first()
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
