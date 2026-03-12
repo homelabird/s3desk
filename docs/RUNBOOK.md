@@ -16,6 +16,7 @@ Containerized defaults:
 - SQLite image stores data under `/data`
 - `./scripts/compose.sh dev` is loopback-only and meant for local work
 - `./scripts/compose.sh remote` is the hardened Postgres-backed remote stack
+- `./scripts/compose.sh caddy` adds public HTTPS in front of the remote stack
 - remote stack requires explicit `S3DESK_BIND_ADDRESS`, `API_TOKEN`, and `POSTGRES_PASSWORD`
 
 ## Start and Stop
@@ -39,6 +40,59 @@ For remote exposure, require all of the following:
 - explicit review of exposed host/port bindings
 - `ALLOWED_HOSTS` for non-private hostnames
 - an explicit `S3DESK_BIND_ADDRESS` choice in the compose environment
+
+## Public HTTPS with Caddy
+
+Use `./scripts/compose.sh caddy` when you want Caddy to terminate TLS in front
+of S3Desk.
+
+Required environment:
+
+- `S3DESK_DOMAIN`
+- `EXTERNAL_BASE_URL`
+- `ALLOWED_HOSTS`
+- `API_TOKEN`
+- `POSTGRES_PASSWORD`
+
+Rules:
+
+- `S3DESK_DOMAIN`, `EXTERNAL_BASE_URL`, and `ALLOWED_HOSTS` must all describe the same browser-facing hostname
+- the backend still binds `127.0.0.1:${S3DESK_PORT:-8080}` on the host unless you explicitly change `S3DESK_BIND_ADDRESS`
+- Caddy is the only public entrypoint in this topology
+
+Start and inspect the stack with:
+
+```bash
+./scripts/compose.sh caddy up -d
+./scripts/compose.sh caddy logs -f caddy s3desk
+```
+
+Minimal reverse-proxy smoke:
+
+```bash
+curl -I https://s3desk.example.com/healthz
+curl -H "X-Api-Token: <token>" https://s3desk.example.com/api/v1/meta
+curl -X POST -H "X-Api-Token: <token>" \
+  "https://s3desk.example.com/api/v1/realtime-ticket?transport=ws"
+curl -H "X-Api-Token: <token>" -H "X-Profile-Id: <profile-id>" \
+  "https://s3desk.example.com/api/v1/buckets/<bucket>/objects/download-url?key=<key>&proxy=true"
+```
+
+Expected result:
+
+- `/healthz` returns `200`
+- `/api/v1/meta` returns `200`
+- `/api/v1/realtime-ticket` returns `201`
+- proxied download URLs stay rooted at the expected external hostname
+
+Common failures:
+
+- wrong hostname in `/download-proxy` output:
+  `EXTERNAL_BASE_URL`, `S3DESK_DOMAIN`, and `ALLOWED_HOSTS` do not match
+- host/origin `403`:
+  `ALLOWED_HOSTS` is missing the browser-facing hostname
+- remote-address `403`:
+  traffic is bypassing the intended reverse-proxy path
 
 ## Health Checks
 

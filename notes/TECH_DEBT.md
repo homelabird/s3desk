@@ -14,9 +14,9 @@ This round tracks what is still meaningfully open.
   - The bucket governance surface changed across AWS S3, GCS, Azure Blob, and OCI without attached real-cloud evidence.
   - Release confidence is limited until provider-native behavior is revalidated.
 - Evidence:
-  - [BUCKET_GOVERNANCE_LIVE_VALIDATION.md](BUCKET_GOVERNANCE_LIVE_VALIDATION.md)
-  - [RELEASE_GATE.md](RELEASE_GATE.md)
-  - [PROVIDERS.md](PROVIDERS.md)
+  - [BUCKET_GOVERNANCE.md](../docs/BUCKET_GOVERNANCE.md)
+  - [RELEASE_GATE.md](../docs/RELEASE_GATE.md)
+  - [PROVIDERS.md](../docs/PROVIDERS.md)
 - Why it matters:
   - Typed governance flows are now one of the most provider-sensitive areas of the product.
 - Next action:
@@ -32,7 +32,7 @@ This round tracks what is still meaningfully open.
   - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
   - [handlers_server_restores.go](../backend/internal/api/handlers_server_restores.go)
   - [ServerSettingsSection.tsx](../frontend/src/pages/settings/ServerSettingsSection.tsx)
-  - [RUNBOOK.md](RUNBOOK.md)
+  - [RUNBOOK.md](../docs/RUNBOOK.md)
 - Current status:
   - Addressed by adding `confidentiality=encrypted` backup exports, encrypted `payload.enc` bundle entries, restore-time decryption validation, and UI controls for selecting encrypted bundle downloads when ENCRYPTION_KEY is configured.
 - Why it matters:
@@ -51,7 +51,7 @@ This round tracks what is still meaningfully open.
 - Evidence:
   - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
   - [ServerSettingsSection.tsx](../frontend/src/pages/settings/ServerSettingsSection.tsx)
-  - [RUNBOOK.md](RUNBOOK.md)
+  - [RUNBOOK.md](../docs/RUNBOOK.md)
 - Current status:
   - Addressed by exposing `capabilities.serverBackup` in `/api/v1/meta` and driving the settings UI from that capability surface instead of inferring support from `dbBackend` alone.
 - Why it matters:
@@ -65,8 +65,8 @@ This round tracks what is still meaningfully open.
   - The current release gate can still be bypassed by omission.
   - Live validation and known-limitations requirements are not automatically checked.
 - Evidence:
-  - [RELEASE_GATE.md](RELEASE_GATE.md)
-  - [TESTING.md](TESTING.md)
+  - [RELEASE_GATE.md](../docs/RELEASE_GATE.md)
+  - [TESTING.md](../docs/TESTING.md)
   - [check.sh](../scripts/check.sh)
 - Current status:
   - Addressed by `scripts/check_release_gate.sh`, inclusion in [check.sh](../scripts/check.sh), and the GitHub Actions [release-gate.yml](../.github/workflows/release-gate.yml) workflow.

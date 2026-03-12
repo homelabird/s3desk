@@ -53,6 +53,14 @@ Default local development endpoints:
 - API docs: `http://127.0.0.1:8080/docs`
 - OpenAPI spec: `http://127.0.0.1:8080/openapi.yml`
 
+## Typical Workflow
+
+1. Create a profile in `Profiles` and run the connection test before saving.
+2. Open `Buckets` to verify listing works and create a bucket or container when the provider supports it.
+3. Open `Objects` to browse prefixes, preview objects, and run copy, move, rename, delete, or download actions.
+4. Open `Uploads` to stage local files and `Transfers` / `Jobs` to watch runtime progress and failures.
+5. Use the sidebar `Backup` drawer when you need sqlite snapshot exports, staged restores, or portable migration preview/import.
+
 ## Build Requirements
 
 - Go `1.24+`
@@ -173,8 +181,8 @@ Then start it with:
 ./scripts/compose.sh caddy up -d
 ```
 
-See [docs/CADDY_DEPLOYMENT.md](docs/CADDY_DEPLOYMENT.md) for the full checklist,
-reverse-proxy smoke commands, and browser-facing download expectations.
+See [docs/RUNBOOK.md](docs/RUNBOOK.md) for the full checklist, reverse-proxy
+smoke commands, and browser-facing download expectations.
 
 ## Backup and Restore
 
@@ -214,8 +222,7 @@ Important scope boundaries:
 For operational details, see:
 
 - [docs/RUNBOOK.md](docs/RUNBOOK.md)
-- [docs/PORTABLE_BACKUP_DESIGN.md](docs/PORTABLE_BACKUP_DESIGN.md)
-- [docs/PORTABLE_BACKUP_CHECKLIST.md](docs/PORTABLE_BACKUP_CHECKLIST.md)
+- [docs/PORTABLE_BACKUP.md](docs/PORTABLE_BACKUP.md)
 - [docs/TESTING.md](docs/TESTING.md)
 
 Compose-based portable migration smoke:
@@ -256,8 +263,7 @@ For remote and reverse-proxied deployments:
   directly
 
 The reverse-proxy and browser-download validation path is documented in
-[docs/CADDY_DEPLOYMENT.md](docs/CADDY_DEPLOYMENT.md) and
-[docs/TESTING.md](docs/TESTING.md).
+[docs/RUNBOOK.md](docs/RUNBOOK.md) and [docs/TESTING.md](docs/TESTING.md).
 
 ## API Surface
 
@@ -273,15 +279,12 @@ If `API_TOKEN` is enabled, send it with `X-Api-Token` or
 ## Documentation
 
 - [Docs index](docs/README.md)
-- [Usage](docs/USAGE.md)
 - [Providers](docs/PROVIDERS.md)
-- [Caddy deployment](docs/CADDY_DEPLOYMENT.md)
-- [Portable backup design](docs/PORTABLE_BACKUP_DESIGN.md)
-- [Portable backup checklist](docs/PORTABLE_BACKUP_CHECKLIST.md)
+- [Portable backup](docs/PORTABLE_BACKUP.md)
+- [Bucket governance](docs/BUCKET_GOVERNANCE.md)
 - [Runbook](docs/RUNBOOK.md)
 - [Testing](docs/TESTING.md)
 - [Release gate](docs/RELEASE_GATE.md)
-- [Bucket governance live validation](docs/BUCKET_GOVERNANCE_LIVE_VALIDATION.md)
 
 ## Demo Flow
 

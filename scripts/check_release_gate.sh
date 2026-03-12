@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CHANGELOG="${ROOT}/CHANGELOG.md"
 RELEASE_GATE="${ROOT}/docs/RELEASE_GATE.md"
-LIVE_VALIDATION="${ROOT}/docs/BUCKET_GOVERNANCE_LIVE_VALIDATION.md"
+LIVE_VALIDATION="${ROOT}/docs/BUCKET_GOVERNANCE.md"
 TESTING_DOC="${ROOT}/docs/TESTING.md"
 
 require_text() {
@@ -26,7 +26,7 @@ if [[ ! -f "${RELEASE_GATE}" ]]; then
   exit 1
 fi
 if [[ ! -f "${LIVE_VALIDATION}" ]]; then
-  echo "[release-gate] docs/BUCKET_GOVERNANCE_LIVE_VALIDATION.md not found" >&2
+  echo "[release-gate] docs/BUCKET_GOVERNANCE.md not found" >&2
   exit 1
 fi
 if [[ ! -f "${TESTING_DOC}" ]]; then

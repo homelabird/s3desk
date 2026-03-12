@@ -48,7 +48,7 @@ It does not replace the actual live-provider validation pass.
 
 ## Provider Change Gate
 
-If a change touches bucket governance, provider capabilities, profile auth, or object-provider behavior, release readiness is blocked until the relevant live pass is recorded in [BUCKET_GOVERNANCE_LIVE_VALIDATION.md](BUCKET_GOVERNANCE_LIVE_VALIDATION.md).
+If a change touches bucket governance, provider capabilities, profile auth, or object-provider behavior, release readiness is blocked until the relevant live pass is recorded in [BUCKET_GOVERNANCE.md](BUCKET_GOVERNANCE.md).
 
 Minimum evidence per affected provider:
 

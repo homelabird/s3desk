@@ -47,6 +47,6 @@ When the frontend runs on a different origin (Vercel), the backend must allow:
 
 ## UI Feedback Rules
 
-When a backend endpoint returns HTTP `2xx` with an application-level `ok` field, follow the shared frontend feedback rules in [../docs/UI_OPERATION_FEEDBACK.md](../docs/UI_OPERATION_FEEDBACK.md).
+When a backend endpoint returns HTTP `2xx` with an application-level `ok` field, follow the shared frontend feedback rules in [docs/UI_OPERATION_FEEDBACK.md](docs/UI_OPERATION_FEEDBACK.md).
 
 Use the helpers in [src/lib/providerOperationFeedback.ts](src/lib/providerOperationFeedback.ts) instead of hand-building warning or unavailable-operation messages in page components.

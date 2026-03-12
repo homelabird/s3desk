@@ -27,6 +27,8 @@ set +a
 go test ./internal/api -run 'TestLiveValidation(AwsS3|GcpGcs|AzureBlob|OciObjectStorage|MinioS3Compatible|CephS3Compatible)$'
 ```
 
+Use [BUCKET_GOVERNANCE.md](BUCKET_GOVERNANCE.md) as the live-provider checklist and evidence template.
+
 ## Frontend
 
 ```bash
