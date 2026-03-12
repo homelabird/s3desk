@@ -35,6 +35,8 @@ export function UploadsPage(props: Props) {
 	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
 	const [prefix, setPrefix] = useLocalStorageState<string>('uploadPrefix', '')
 	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+	const [selectedFolderLabel, setSelectedFolderLabel] = useState('')
+	const [selectedDirectorySelectionMode, setSelectedDirectorySelectionMode] = useState<'picker' | 'input' | undefined>(undefined)
 	const [uploadSourceOpen, setUploadSourceOpen] = useState(false)
 	const [uploadSourceBusy, setUploadSourceBusy] = useState(false)
 
@@ -105,8 +107,17 @@ export function UploadsPage(props: Props) {
 			message.info('Add files or a folder first')
 			return
 		}
-		transfers.queueUploadFiles({ profileId: props.profileId!, bucket, prefix, files: selectedFiles })
+		transfers.queueUploadFiles({
+			profileId: props.profileId!,
+			bucket,
+			prefix,
+			files: selectedFiles,
+			label: selectedFolderLabel || undefined,
+			directorySelectionMode: selectedDirectorySelectionMode,
+		})
 		setSelectedFiles([])
+		setSelectedFolderLabel('')
+		setSelectedDirectorySelectionMode(undefined)
 	}
 
 	const openUploadPicker = () => {
@@ -128,6 +139,8 @@ export function UploadsPage(props: Props) {
 			const files = await promptForFiles({ multiple: true, directory: false })
 			if (!files || files.length === 0) return
 			setSelectedFiles(files)
+			setSelectedFolderLabel('')
+			setSelectedDirectorySelectionMode(undefined)
 		} catch (err) {
 			message.error(formatErr(err))
 		} finally {
@@ -142,6 +155,8 @@ export function UploadsPage(props: Props) {
 			const result = await promptForFolderFiles()
 			if (!result || result.files.length === 0) return
 			setSelectedFiles(result.files)
+			setSelectedFolderLabel(result.label ?? '')
+			setSelectedDirectorySelectionMode(result.mode)
 		} catch (err) {
 			message.error(formatErr(err))
 		} finally {
@@ -171,7 +186,14 @@ export function UploadsPage(props: Props) {
 						<Button onClick={() => transfers.openTransfers('uploads')} disabled={!props.profileId}>
 							Open Transfers
 						</Button>
-						<Button onClick={() => setSelectedFiles([])} disabled={selectedFiles.length === 0}>
+						<Button
+							onClick={() => {
+								setSelectedFiles([])
+								setSelectedFolderLabel('')
+								setSelectedDirectorySelectionMode(undefined)
+							}}
+							disabled={selectedFiles.length === 0}
+						>
 							Clear selection
 						</Button>
 					</Space>

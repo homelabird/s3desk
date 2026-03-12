@@ -77,7 +77,9 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				})
 				if (!selected) return
 
-				const selectedItems = buildUploadItems(selected)
+				const selectedItems = buildUploadItems(selected, {
+					directorySelectionMode: expectDirectory ? 'input' : undefined,
+				})
 				if (expectedPaths.length > 0) {
 					const selectedByPath = new Map(
 						selectedItems.map((item) => [normalizeRelPath(item.relPath ?? item.file.name), item]),

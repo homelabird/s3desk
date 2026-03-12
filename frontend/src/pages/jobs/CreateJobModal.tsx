@@ -20,6 +20,7 @@ export function CreateJobModal(props: {
 		prefix: string
 		files: File[]
 		label?: string
+		directorySelectionMode?: 'picker' | 'input'
 	}) => void
 	loading: boolean
 	isOffline: boolean
@@ -35,6 +36,7 @@ export function CreateJobModal(props: {
 	const [prefix, setPrefix] = useState('')
 	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 	const [selectionLabel, setSelectionLabel] = useState('')
+	const [directorySelectionMode, setDirectorySelectionMode] = useState<'picker' | 'input' | undefined>(undefined)
 	const [sourceOpen, setSourceOpen] = useState(false)
 	const [sourceBusy, setSourceBusy] = useState(false)
 	const support = getDirectorySelectionSupport()
@@ -45,6 +47,7 @@ export function CreateJobModal(props: {
 		setPrefix('')
 		setSelectedFiles([])
 		setSelectionLabel('')
+		setDirectorySelectionMode(undefined)
 		setSourceOpen(false)
 		setSourceBusy(false)
 	}
@@ -71,6 +74,7 @@ export function CreateJobModal(props: {
 			prefix,
 			files: selectedFiles,
 			label: selectionLabel || undefined,
+			directorySelectionMode,
 		})
 	}
 
@@ -87,6 +91,7 @@ export function CreateJobModal(props: {
 			if (!files || files.length === 0) return
 			setSelectedFiles(files)
 			setSelectionLabel('')
+			setDirectorySelectionMode(undefined)
 		} catch (err) {
 			message.error(formatErr(err))
 		} finally {
@@ -102,6 +107,7 @@ export function CreateJobModal(props: {
 			if (!result || result.files.length === 0) return
 			setSelectedFiles(result.files)
 			setSelectionLabel(result.label ?? '')
+			setDirectorySelectionMode(result.mode)
 		} catch (err) {
 			message.error(formatErr(err))
 		} finally {

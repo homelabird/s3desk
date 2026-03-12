@@ -11,7 +11,7 @@ export function buildQueuedUpload(args: { taskId: string; queueArgs: QueueUpload
 	const files = args.queueArgs.files.filter((file) => !!file)
 	if (files.length === 0) return null
 
-	const items = buildUploadItems(files)
+	const items = buildUploadItems(files, { directorySelectionMode: args.queueArgs.directorySelectionMode })
 	const totalBytes = items.reduce((sum, item) => sum + (item.file.size ?? 0), 0)
 	const filePaths = items.map((item) => normalizeRelPath(item.relPath ?? item.file.name)).filter(Boolean)
 

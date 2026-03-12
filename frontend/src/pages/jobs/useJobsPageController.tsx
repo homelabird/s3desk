@@ -198,7 +198,13 @@ export function useJobsPageController(props: Props) {
     refetchInterval: eventsConnected ? false : 5000,
   })
 
-  const handleDeviceUpload = useCallback(async (args: { bucket: string; prefix: string; files: File[]; label?: string }) => {
+  const handleDeviceUpload = useCallback(async (args: {
+    bucket: string
+    prefix: string
+    files: File[]
+    label?: string
+    directorySelectionMode?: 'picker' | 'input'
+  }) => {
     if (!props.profileId) return
     if (!uploadSupported) {
       message.warning(uploadDisabledReason ?? 'Uploads are not supported by this provider.')
@@ -216,6 +222,7 @@ export function useJobsPageController(props: Props) {
         prefix: args.prefix,
         files: args.files,
         label: args.label,
+        directorySelectionMode: args.directorySelectionMode,
       })
       setCreateOpen(false)
     } catch (err) {

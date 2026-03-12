@@ -188,6 +188,15 @@ function resolveUploadFilename(item: UploadFileItem): string {
 	return relPath || item.file.name
 }
 
+function createMultipartUploadFile(item: UploadFileItem): File {
+	const filename = resolveUploadFilename(item)
+	if (item.file.name === filename) return item.file
+	return new File([item.file], filename, {
+		type: item.file.type,
+		lastModified: item.file.lastModified,
+	})
+}
+
 function createInvalidHeaderValueError(name: string, value: string): Error | null {
 	const message = getHttpHeaderValueValidationError(name, value)
 	return message ? new Error(message) : null
@@ -829,7 +838,7 @@ export class APIClient {
 	uploadFiles(profileId: string, uploadId: string, files: UploadFileItem[]): Promise<void> {
 		const form = new FormData()
 		for (const item of files) {
-			form.append('files', item.file, resolveUploadFilename(item))
+			form.append('files', createMultipartUploadFile(item))
 		}
 		return this.request(`/uploads/${encodeURIComponent(uploadId)}/files`, { method: 'POST', body: form }, { profileId })
 	}
@@ -942,7 +951,7 @@ export class APIClient {
 		const runBatch = (batch: UploadFileItem[], batchIndex: number) => {
 			const form = new FormData()
 			for (const item of batch) {
-				form.append('files', item.file, resolveUploadFilename(item))
+				form.append('files', createMultipartUploadFile(item))
 			}
 
 			const xhr = new XMLHttpRequest()

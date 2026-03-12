@@ -99,7 +99,7 @@ test.describe('Live folder uploads', () => {
 			await chooser.setFiles(fixtureRoot)
 			await page.getByRole('button', { name: /Queue upload/i }).click()
 
-			const uploadRow = transferUploadRow(page, /Upload: 2 file\(s\)/)
+			const uploadRow = transferUploadRow(page, /upload-folder/)
 			await expect(uploadRow).toBeVisible({ timeout: 30_000 })
 			await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 180_000 })
 

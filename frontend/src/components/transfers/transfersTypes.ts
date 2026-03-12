@@ -32,6 +32,7 @@ export type QueueUploadFilesArgs = {
 	prefix: string
 	files: File[]
 	label?: string
+	directorySelectionMode?: 'picker' | 'input'
 }
 
 export type TransfersContextValue = {

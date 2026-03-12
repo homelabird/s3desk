@@ -16,7 +16,10 @@ async function seedStorage(page: Parameters<typeof seedLocalStorage>[0]) {
 	})
 }
 
-async function mockUploadsFolderApi(page: Parameters<typeof installMockApi>[0], captureUploadBody: (body: string) => void) {
+async function mockUploadsFolderApi(
+	page: Parameters<typeof installMockApi>[0],
+	args: { captureUploadBody: (body: string) => void; captureCommitBody: (body: Record<string, unknown>) => void },
+) {
 	await installMockApi(page, [
 		{
 			method: 'GET',
@@ -75,7 +78,7 @@ async function mockUploadsFolderApi(page: Parameters<typeof installMockApi>[0], 
 			path: /^\/api\/v1\/uploads\/[^/]+\/files$/,
 			handle: async (ctx) => {
 				const buffer = ctx.request.postDataBuffer()
-				captureUploadBody(buffer ? buffer.toString('utf8') : '')
+				args.captureUploadBody(buffer ? buffer.toString('utf8') : '')
 				await ctx.empty()
 			},
 		},
@@ -83,6 +86,7 @@ async function mockUploadsFolderApi(page: Parameters<typeof installMockApi>[0], 
 			method: 'POST',
 			path: /^\/api\/v1\/uploads\/[^/]+\/commit$/,
 			handle: async (ctx) => {
+				args.captureCommitBody((ctx.request.postDataJSON() as Record<string, unknown> | null) ?? {})
 				await ctx.json({ jobId: 'job-test' }, 201)
 			},
 		},
@@ -91,8 +95,14 @@ async function mockUploadsFolderApi(page: Parameters<typeof installMockApi>[0], 
 
 test('folder upload preserves relative paths', async ({ page }) => {
 	let uploadBody = ''
-	await mockUploadsFolderApi(page, (body) => {
-		uploadBody = body
+	let commitBody: Record<string, unknown> | null = null
+	await mockUploadsFolderApi(page, {
+		captureUploadBody: (body) => {
+			uploadBody = body
+		},
+		captureCommitBody: (body) => {
+			commitBody = body
+		},
 	})
 	await seedStorage(page)
 	await page.addInitScript(() => {
@@ -111,6 +121,17 @@ test('folder upload preserves relative paths', async ({ page }) => {
 	await queueButton.click()
 
 	await expect.poll(() => uploadBody, { timeout: 5000 }).not.toBe('')
-	expect(uploadBody).toMatch(/filename="[^"]*dir-a\/alpha\.txt"/)
-	expect(uploadBody).toMatch(/filename="[^"]*dir-b\/nested\/beta\.txt"/)
+	expect(uploadBody).toContain('filename="dir-a/alpha.txt"')
+	expect(uploadBody).toContain('filename="dir-b/nested/beta.txt"')
+	expect(uploadBody).not.toContain('filename="upload-folder/dir-a/alpha.txt"')
+	expect(uploadBody).not.toContain('filename="upload-folder/dir-b/nested/beta.txt"')
+	await expect.poll(() => commitBody, { timeout: 5000 }).not.toBeNull()
+	expect((commitBody?.items as Array<{ path?: string }> | undefined) ?? []).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ path: 'dir-a/alpha.txt' }),
+			expect.objectContaining({ path: 'dir-b/nested/beta.txt' }),
+		]),
+	)
+	expect(JSON.stringify(commitBody)).not.toContain('upload-folder/dir-a/alpha.txt')
+	expect(JSON.stringify(commitBody)).not.toContain('upload-folder/dir-b/nested/beta.txt')
 })

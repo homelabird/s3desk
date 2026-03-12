@@ -3,6 +3,11 @@ import { collectFilesFromDirectoryHandle, getDirectorySelectionSupport, pickDire
 import type { UploadTask } from './transferTypes'
 import { normalizeUploadPath } from './uploadPaths'
 
+type UploadPathFile = File & {
+	webkitRelativePath?: string
+	relativePath?: string
+}
+
 export const promptForFiles = (args: { multiple: boolean; directory: boolean }): Promise<File[] | null> =>
 	new Promise((resolve) => {
 		const input = document.createElement('input')
@@ -27,6 +32,20 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 export type FolderSelectionResult = {
 	files: File[]
 	label?: string
+	mode: 'picker' | 'input'
+}
+
+function stripSharedBrowserDirectoryRoot(paths: string[]): string[] {
+	if (paths.length === 0) return paths
+	const normalized = paths.map((path) => normalizeUploadPath(path))
+	if (normalized.some((path) => !path.includes('/'))) return normalized
+	const roots = Array.from(new Set(normalized.map((path) => path.split('/').filter(Boolean)[0]).filter(Boolean)))
+	if (roots.length !== 1) return normalized
+	return normalized.map((path) => {
+		const parts = path.split('/').filter(Boolean)
+		if (parts.length <= 1) return path
+		return parts.slice(1).join('/')
+	})
 }
 
 function deriveFolderSelectionLabel(files: File[]): string | undefined {
@@ -44,18 +63,27 @@ export async function promptForFolderFiles(): Promise<FolderSelectionResult | nu
 	if (support.mode === 'picker') {
 		const handle = await pickDirectory('read')
 		const files = await collectFilesFromDirectoryHandle(handle)
-		return files.length > 0 ? { files, label: handle.name } : null
+		return files.length > 0 ? { files, label: handle.name, mode: 'picker' } : null
 	}
 	const files = await promptForFiles({ multiple: true, directory: true })
-	return files && files.length > 0 ? { files, label: deriveFolderSelectionLabel(files) } : null
+	return files && files.length > 0 ? { files, label: deriveFolderSelectionLabel(files), mode: 'input' } : null
 }
 
-export const buildUploadItems = (files: File[]): UploadFileItem[] =>
-	files.map((file) => {
-		const fileWithPath = file as File & { webkitRelativePath?: string; relativePath?: string }
-		const relPathRaw = (fileWithPath.webkitRelativePath ?? fileWithPath.relativePath ?? '').trim()
+export const buildUploadItems = (files: File[], args: { directorySelectionMode?: 'picker' | 'input' } = {}): UploadFileItem[] => {
+	const rawPaths = files.map((file) => {
+		const fileWithPath = file as UploadPathFile
+		return (fileWithPath.relativePath ?? fileWithPath.webkitRelativePath ?? '').trim()
+	})
+	const strippedBrowserPaths = args.directorySelectionMode === 'input' ? stripSharedBrowserDirectoryRoot(rawPaths) : rawPaths
+	return files.map((file, index) => {
+		const fileWithPath = file as UploadPathFile
+		const relPathRaw =
+			args.directorySelectionMode === 'input'
+				? (strippedBrowserPaths[index] ?? '').trim()
+				: (fileWithPath.relativePath ?? fileWithPath.webkitRelativePath ?? '').trim()
 		return { file, relPath: relPathRaw || file.name }
 	})
+}
 
 const maxUploadCommitItems = 200
 
