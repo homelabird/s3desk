@@ -112,7 +112,7 @@ export function useObjectsUploadDrop({
 	}, [resetUploadDropState])
 
 	const startUploadFromFiles = useCallback(
-		(files: File[]) => {
+		(args: { files: File[]; label?: string; directorySelectionMode?: 'picker' | 'input' }) => {
 			if (isOffline) {
 				message.warning('Offline: uploads are disabled.')
 				return
@@ -129,9 +129,16 @@ export function useObjectsUploadDrop({
 				message.info('Select a bucket first')
 				return
 			}
-			const cleanedFiles = files.filter((f) => !!f)
+			const cleanedFiles = args.files.filter((f) => !!f)
 			if (cleanedFiles.length === 0) return
-			transfers.queueUploadFiles({ profileId, bucket, prefix, files: cleanedFiles })
+			transfers.queueUploadFiles({
+				profileId,
+				bucket,
+				prefix,
+				files: cleanedFiles,
+				label: args.label,
+				directorySelectionMode: args.directorySelectionMode,
+			})
 			transfers.openTransfers('uploads')
 		},
 		[bucket, isOffline, prefix, profileId, transfers, uploadsDisabledReason, uploadsEnabled],
@@ -203,7 +210,7 @@ export function useObjectsUploadDrop({
 			const hasEntryAPI = Array.from(dt.items ?? []).some((item) => typeof (item as { webkitGetAsEntry?: unknown }).webkitGetAsEntry === 'function')
 			if (!hasEntryAPI) {
 				const files = Array.from(dt.files ?? [])
-				startUploadFromFiles(files)
+				startUploadFromFiles({ files })
 				return
 			}
 
@@ -217,7 +224,7 @@ export function useObjectsUploadDrop({
 						return
 					}
 					message.open({ type: 'success', content: `Queued ${files.length} file(s)`, key, duration: 2 })
-					startUploadFromFiles(files)
+					startUploadFromFiles({ files })
 				} catch (err) {
 					message.open({ type: 'error', content: formatErr(err), key, duration: 4 })
 				}

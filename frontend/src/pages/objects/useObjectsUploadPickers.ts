@@ -9,7 +9,7 @@ export function useObjectsUploadPickers(args: {
 	isOffline: boolean
 	uploadsEnabled: boolean
 	uploadsDisabledReason?: string | null
-	startUploadFromFiles: (files: File[]) => void
+	startUploadFromFiles: (args: { files: File[]; label?: string; directorySelectionMode?: 'picker' | 'input' }) => void
 }) {
 	const { isOffline, uploadsEnabled, uploadsDisabledReason, startUploadFromFiles } = args
 	const [uploadSourceOpen, setUploadSourceOpen] = useState(false)
@@ -45,7 +45,7 @@ export function useObjectsUploadPickers(args: {
 			setUploadSourceOpen(false)
 			const files = await promptForFiles({ multiple: true, directory: false })
 			if (!files || files.length === 0) return
-			startUploadFromFiles(files)
+			startUploadFromFiles({ files })
 		} catch (err) {
 			message.error(formatErr(err))
 		} finally {
@@ -60,7 +60,7 @@ export function useObjectsUploadPickers(args: {
 			setUploadSourceOpen(false)
 			const result = await promptForFolderFiles()
 			if (!result || result.files.length === 0) return
-			startUploadFromFiles(result.files)
+			startUploadFromFiles({ files: result.files, label: result.label, directorySelectionMode: result.mode })
 		} catch (err) {
 			message.error(formatErr(err))
 		} finally {

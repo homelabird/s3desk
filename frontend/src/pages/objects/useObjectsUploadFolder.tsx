@@ -90,6 +90,7 @@ export function useObjectsUploadFolder({
 					prefix,
 					files,
 					label,
+					directorySelectionMode: 'picker',
 				})
 				transfers.openTransfers('uploads')
 				setUploadFolderOpen(false)
