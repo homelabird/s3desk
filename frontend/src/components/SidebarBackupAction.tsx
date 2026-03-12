@@ -1,7 +1,7 @@
 import { CloudDownloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Input, Popconfirm, Radio, Spin, Tag, Typography, message } from 'antd'
 import type { ChangeEvent } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { APIClient, ServerBackupConfidentialityMode, ServerBackupScope } from '../api/client'
 import type { MetaResponse, ServerPortableImportResponse, ServerRestoreResponse, ServerStagedRestore } from '../api/types'
@@ -133,7 +133,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		}
 	}, [backupScope, backupScopeAvailability])
 
-	const refreshStagedRestores = async () => {
+	const refreshStagedRestores = useCallback(async () => {
 		setStagedRestoresLoading(true)
 		setStagedRestoresError(null)
 		try {
@@ -144,12 +144,12 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		} finally {
 			setStagedRestoresLoading(false)
 		}
-	}
+	}, [props.api])
 
 	useEffect(() => {
 		if (!open || !props.meta) return
 		void refreshStagedRestores()
-	}, [open, props.meta])
+	}, [open, props.meta, refreshStagedRestores])
 
 	const triggerSubtitle = useMemo(() => {
 		if (!props.meta) return 'Loading backup and restore status'

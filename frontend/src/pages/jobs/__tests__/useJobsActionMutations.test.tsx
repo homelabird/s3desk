@@ -38,7 +38,7 @@ describe('useJobsActionMutations', () => {
 		const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
 		const cancelJob = vi.fn().mockResolvedValue({ id: 'job-cancel' })
-		const retryJob = vi.fn().mockResolvedValue({ id: 'job-retry' })
+		const retryJob = vi.fn().mockResolvedValue({ id: 'job-retry-new' })
 		const deleteJob = vi.fn().mockResolvedValue(undefined)
 		const onJobDeleted = vi.fn()
 
@@ -78,5 +78,9 @@ describe('useJobsActionMutations', () => {
 		expect(messageError).not.toHaveBeenCalled()
 		expect(messageSuccess).toHaveBeenCalled()
 		expect(invalidateSpy).toHaveBeenCalled()
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-cancel'], exact: false })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-retry'], exact: false })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-retry-new'], exact: false })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-delete'], exact: false })
 	})
 })

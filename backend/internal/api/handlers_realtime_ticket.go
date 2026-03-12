@@ -19,7 +19,13 @@ func (s *server) handleCreateRealtimeTicket(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	expiresAt := time.Now().UTC().Add(s.realtimeTickets.ttl)
-	ticket := s.realtimeTickets.Issue(transport, expiresAt)
+	ticket, err := s.realtimeTickets.Issue(transport, expiresAt)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create realtime ticket", map[string]any{
+			"reason": err.Error(),
+		})
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"ticket":           ticket,
 		"transport":        transport,

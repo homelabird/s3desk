@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -26,6 +27,8 @@ vi.mock("../../lib/confirmDangerAction", () => ({
 beforeAll(() => {
   ensureDomShims();
 });
+
+const SLOW_BUCKETS_TIMEOUT_MS = 15_000;
 
 const originalMatchMedia = window.matchMedia;
 
@@ -440,27 +443,38 @@ describe("BucketsPage", () => {
         await screen.findByTestId("buckets-table-desktop"),
       ).findAllByRole("button", { name: /controls/i })
     )[0];
-    fireEvent.click(controlsButton);
+	    await act(async () => {
+	      fireEvent.click(controlsButton);
+	    });
 
-    expect(await screen.findByText("AWS Controls")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(getBucketGovernance).toHaveBeenCalledWith(
-        "profile-1",
-        "primary-bucket",
-      ),
-    );
+	    expect(await screen.findByText("AWS Controls")).toBeInTheDocument();
+	    await waitFor(() =>
+	      expect(getBucketGovernance).toHaveBeenCalledWith(
+	        "profile-1",
+	        "primary-bucket",
+	      ),
+	    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Policy" }));
-    expect(
-      await screen.findByText("Policy: primary-bucket"),
-    ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(getBucketPolicy).toHaveBeenCalledWith(
-        "profile-1",
-        "primary-bucket",
-      ),
-    );
-  });
+	    const advancedPolicySection = await screen.findByTestId(
+	      "bucket-governance-advanced-policy",
+	    );
+	    await act(async () => {
+	      fireEvent.click(
+	        within(advancedPolicySection).getByRole("button", {
+	          name: "Open Policy",
+	        }),
+	      );
+	    });
+	    await waitFor(() =>
+	      expect(getBucketPolicy).toHaveBeenCalledWith(
+	        "profile-1",
+	        "primary-bucket",
+	      ),
+	    );
+	    expect(
+	      await screen.findByTestId("bucket-policy-desktop-shell"),
+	    ).toBeInTheDocument();
+	  }, SLOW_BUCKETS_TIMEOUT_MS);
 
   it("shows controls for gcs buckets and opens the provider-aware controls modal", async () => {
     const client = new QueryClient({

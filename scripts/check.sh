@@ -41,7 +41,22 @@ else
 fi
 
 echo "[check] gofmt"
-UNFORMATTED=$(find "${ROOT}/backend" -name '*.go' -type f -print0 | xargs -0 "${GOFMT_BIN}" -l)
+backend_go_files=()
+if command -v git >/dev/null 2>&1; then
+  while IFS= read -r -d '' path; do
+    [[ "${path}" == *.go ]] || continue
+    backend_go_files+=("${ROOT}/${path}")
+  done < <(git -C "${ROOT}" ls-files -z -- backend)
+else
+  while IFS= read -r -d '' path; do
+    backend_go_files+=("${path}")
+  done < <(find "${ROOT}/backend" -name '*.go' -type f -print0)
+fi
+
+UNFORMATTED=""
+if [[ ${#backend_go_files[@]} -gt 0 ]]; then
+  UNFORMATTED=$("${GOFMT_BIN}" -l "${backend_go_files[@]}")
+fi
 if [[ -n "${UNFORMATTED}" ]]; then
   echo "[check] gofmt needed:" >&2
   echo "${UNFORMATTED}" >&2

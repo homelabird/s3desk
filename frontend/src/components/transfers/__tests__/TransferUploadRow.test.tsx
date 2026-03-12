@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TransferUploadRow } from '../TransferUploadRow'
@@ -61,5 +61,31 @@ describe('TransferUploadRow', () => {
 		expect(screen.getByAltText('Local preview of videos/clip.mp4')).toBeInTheDocument()
 		expect(screen.getByText('Local preview')).toBeInTheDocument()
 		expect(screen.getByText('Preview frame: videos/clip.mp4')).toBeInTheDocument()
+	})
+
+	it('keeps cancel available while a handed-off upload job is still waiting', () => {
+		const onCancel = vi.fn()
+		const task = {
+			...buildUploadTask(),
+			status: 'waiting_job' as const,
+			jobId: 'job-123',
+			error: 'Job polling unavailable',
+		}
+
+		render(
+			<TransferUploadRow
+				task={task}
+				onCancel={onCancel}
+				onRetry={vi.fn()}
+				onRemove={vi.fn()}
+				onOpenJobs={vi.fn()}
+			/>,
+		)
+
+		fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+		expect(screen.getByText('Job polling unavailable')).toBeInTheDocument()
+		expect(onCancel).toHaveBeenCalledWith('upload-1')
+		expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
 	})
 })

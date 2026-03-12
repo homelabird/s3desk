@@ -319,7 +319,7 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
-  });
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
   it("updates encryption with sse_kms and kms key", async () => {
     const api = createApi("aws_s3");

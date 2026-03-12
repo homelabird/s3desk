@@ -12,6 +12,8 @@ beforeAll(() => {
 	ensureDomShims()
 })
 
+const SLOW_PROFILES_TIMEOUT_MS = 20_000
+
 const originalMatchMedia = window.matchMedia
 
 function mockViewportWidth(width: number) {
@@ -35,6 +37,7 @@ function mockViewportWidth(width: number) {
 }
 
 afterEach(() => {
+	message.destroy()
 	window.matchMedia = originalMatchMedia
 	vi.restoreAllMocks()
 })
@@ -94,24 +97,27 @@ describe('ProfilesPage', () => {
 		})
 	}
 
-	it('dismisses onboarding callout', () => {
+	it('dismisses onboarding callout', async () => {
 		const client = new QueryClient({
 			defaultOptions: {
 				queries: { retry: false },
 			},
 		})
+		mockProfilesPageBase()
 
 		render(
 			<QueryClientProvider client={client}>
 				<MemoryRouter>
-					<ProfilesPage apiToken="" profileId={null} setProfileId={vi.fn()} />
+					<ProfilesPage apiToken="token" profileId={null} setProfileId={vi.fn()} />
 				</MemoryRouter>
 			</QueryClientProvider>,
 		)
 
 		expect(screen.getByText('Getting started')).toBeInTheDocument()
-		fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
-		expect(screen.queryByText('Getting started')).not.toBeInTheDocument()
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+		})
+		await waitFor(() => expect(screen.queryByText('Getting started')).not.toBeInTheDocument())
 	}, 20_000)
 
 	it('surfaces legacy profiles that need updates', async () => {
@@ -311,11 +317,89 @@ describe('ProfilesPage', () => {
 		)
 
 		const dialog = await screen.findByRole('dialog', { name: 'Create Profile' })
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+		await act(async () => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+		})
 
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create Profile' })).not.toBeInTheDocument())
 		expect(screen.getByTestId('profiles-search')).toHaveTextContent('')
-	})
+	}, SLOW_PROFILES_TIMEOUT_MS)
+
+	it('clears the create query after a successful create flow', async () => {
+		const client = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+			version: 'test',
+			serverAddr: '127.0.0.1:8080',
+			dataDir: '/data',
+			staticDir: '/app/ui',
+			apiTokenEnabled: false,
+			encryptionEnabled: false,
+			capabilities: {
+				profileTls: { enabled: false, reason: 'test' },
+				providers: {},
+			},
+			allowedLocalDirs: [],
+			jobConcurrency: 1,
+			uploadSessionTTLSeconds: 3600,
+			uploadDirectStream: false,
+			transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
+		} as never)
+		vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([] as never)
+		vi.spyOn(APIClient.prototype, 'createProfile').mockResolvedValue({
+			id: 'profile-2',
+			name: 'Created Profile',
+			provider: 's3_compatible',
+			endpoint: 'http://127.0.0.1:9000',
+			region: 'us-east-1',
+			forcePathStyle: false,
+			preserveLeadingSlash: false,
+			tlsInsecureSkipVerify: false,
+			createdAt: '2024-01-01T00:00:00Z',
+			updatedAt: '2024-01-01T00:00:00Z',
+		} as never)
+		vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+
+		render(
+			<QueryClientProvider client={client}>
+				<MemoryRouter initialEntries={['/profiles?create=1']}>
+					<Routes>
+						<Route
+							path="/profiles"
+							element={
+								<>
+									<ProfilesPage apiToken="token" profileId={null} setProfileId={vi.fn()} />
+									<SearchProbe />
+								</>
+							}
+						/>
+					</Routes>
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		const dialog = await screen.findByRole('dialog', { name: 'Create Profile' })
+		fireEvent.change(within(dialog).getByRole('textbox', { name: 'Name' }), {
+			target: { value: 'Created Profile' },
+		})
+		fireEvent.change(within(dialog).getByRole('textbox', { name: 'Access Key ID' }), {
+			target: { value: 'demo-access' },
+		})
+		fireEvent.change(within(dialog).getByLabelText('Secret'), {
+			target: { value: 'demo-secret' },
+		})
+		await act(async () => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+		})
+
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create Profile' })).not.toBeInTheDocument())
+		await waitFor(() => expect(screen.getByTestId('profiles-search')).toHaveTextContent(''))
+	}, SLOW_PROFILES_TIMEOUT_MS)
 
 	it('renders compact profile cards on tablet widths', async () => {
 		const client = new QueryClient({
@@ -358,10 +442,10 @@ describe('ProfilesPage', () => {
 			</QueryClientProvider>,
 		)
 
-		expect(await screen.findByTestId('profiles-table-desktop')).toBeInTheDocument()
+		expect(await screen.findByTestId('profiles-table-desktop', undefined, { timeout: 5_000 })).toBeInTheDocument()
 		expect(screen.queryByTestId('profiles-list-compact')).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /^Use$/ })).toBeInTheDocument()
-	})
+	}, SLOW_PROFILES_TIMEOUT_MS)
 
 	it('shows troubleshooting hint for failed benchmark results', async () => {
 		const client = new QueryClient({

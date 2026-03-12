@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Checkbox, Empty, Space, Spin, Typography, message } from 'antd'
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { APIClient } from '../api/client'
@@ -35,7 +35,7 @@ function useProfilesPageOrchestration(apiToken: string) {
 export function ProfilesPage(props: Props) {
 	const { queryClient, api, searchParams, setSearchParams } = useProfilesPageOrchestration(props.apiToken)
 	const createRequested = searchParams.has('create')
-	const [createOpen, setCreateOpen] = useState(() => createRequested)
+	const createOpen = createRequested
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
 	const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
 	const [benchmarkingProfileId, setBenchmarkingProfileId] = useState<string | null>(null)
@@ -55,13 +55,15 @@ export function ProfilesPage(props: Props) {
 		queryKey: ['profiles', props.apiToken],
 		queryFn: () => api.listProfiles(),
 	})
-	useEffect(() => {
-		if (createRequested) setCreateOpen(true)
-	}, [createRequested])
 	const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data])
 	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
+	const openCreateModal = () => {
+		if (searchParams.has('create')) return
+		const next = new URLSearchParams(searchParams)
+		next.set('create', '1')
+		setSearchParams(next, { replace: true })
+	}
 	const closeCreateModal = () => {
-		setCreateOpen(false)
 		if (!searchParams.has('create')) return
 		const next = new URLSearchParams(searchParams)
 		next.delete('create')
@@ -112,12 +114,12 @@ export function ProfilesPage(props: Props) {
 			message.success('Profile created')
 			props.setProfileId(created.id)
 			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
+			closeCreateModal()
 			try {
 				await applyTLSUpdate(created.id, values, 'create')
 			} catch (err) {
 				message.error(`mTLS update failed: ${formatErr(err)}`)
 			}
-			setCreateOpen(false)
 		},
 		onError: (err) => message.error(formatErr(err)),
 	})
@@ -341,7 +343,7 @@ export function ProfilesPage(props: Props) {
 				actions={
 					<Space wrap>
 						<Button onClick={() => setImportOpen(true)}>Import YAML</Button>
-						<Button type="primary" onClick={() => setCreateOpen(true)}>
+						<Button type="primary" onClick={openCreateModal}>
 							New Profile
 						</Button>
 					</Space>
@@ -377,7 +379,7 @@ export function ProfilesPage(props: Props) {
 								</Checkbox>
 							</Space>
 							<Space wrap>
-								<Button size="small" type="primary" onClick={() => setCreateOpen(true)}>
+								<Button size="small" type="primary" onClick={openCreateModal}>
 									Create profile
 								</Button>
 								<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
@@ -435,7 +437,7 @@ export function ProfilesPage(props: Props) {
 				</div>
 			) : showProfilesEmpty ? (
 				<Empty description="No profiles yet">
-					<Button type="primary" onClick={() => setCreateOpen(true)}>
+					<Button type="primary" onClick={openCreateModal}>
 						Create profile
 					</Button>
 				</Empty>

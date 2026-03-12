@@ -3,6 +3,8 @@ package api
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
+	"io"
 	"sync"
 	"time"
 )
@@ -18,6 +20,8 @@ type realtimeTicket struct {
 	expiresAt time.Time
 }
 
+var realtimeTicketRandReader io.Reader = rand.Reader
+
 func newRealtimeTicketStore(ttl time.Duration) *realtimeTicketStore {
 	return &realtimeTicketStore{
 		entries: make(map[string]realtimeTicket),
@@ -25,12 +29,15 @@ func newRealtimeTicketStore(ttl time.Duration) *realtimeTicketStore {
 	}
 }
 
-func (s *realtimeTicketStore) Issue(transport string, expiresAt time.Time) string {
+func (s *realtimeTicketStore) Issue(transport string, expiresAt time.Time) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pruneLocked(time.Now().UTC())
 	for {
-		token := randomRealtimeTicket()
+		token, err := randomRealtimeTicket()
+		if err != nil {
+			return "", err
+		}
 		if _, exists := s.entries[token]; exists {
 			continue
 		}
@@ -38,7 +45,7 @@ func (s *realtimeTicketStore) Issue(transport string, expiresAt time.Time) strin
 			transport: transport,
 			expiresAt: expiresAt,
 		}
-		return token
+		return token, nil
 	}
 }
 
@@ -68,10 +75,10 @@ func (s *realtimeTicketStore) pruneLocked(now time.Time) {
 	}
 }
 
-func randomRealtimeTicket() string {
+func randomRealtimeTicket() (string, error) {
 	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
-		panic(err)
+	if _, err := io.ReadFull(realtimeTicketRandReader, buf); err != nil {
+		return "", fmt.Errorf("generate realtime ticket: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(buf)
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }

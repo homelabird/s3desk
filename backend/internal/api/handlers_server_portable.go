@@ -457,7 +457,7 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 		Entities:        entityResults,
 		Verification: models.ServerPortableImportVerification{
 			EntityChecksumsVerified:     entityChecksumsVerified,
-			PostImportHealthCheckPassed: mode == portableImportModeDryRun,
+			PostImportHealthCheckPassed: false,
 		},
 	}
 

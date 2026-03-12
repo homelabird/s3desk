@@ -127,11 +127,11 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 							Jobs
 						</Button>
 					) : null}
-					{t.status === 'queued' || t.status === 'staging' ? (
-						<Button size="small" onClick={() => props.onCancel(t.id)}>
-							Cancel
-						</Button>
-					) : null}
+						{t.status === 'queued' || t.status === 'staging' || t.status === 'waiting_job' ? (
+							<Button size="small" onClick={() => props.onCancel(t.id)}>
+								Cancel
+							</Button>
+						) : null}
 					{t.status === 'failed' || t.status === 'canceled' ? (
 						<Button size="small" icon={<ReloadOutlined />} onClick={() => props.onRetry(t.id)}>
 							Retry

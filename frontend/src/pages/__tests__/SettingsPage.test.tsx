@@ -92,6 +92,9 @@ describe('SettingsPage', () => {
 		window.localStorage.setItem('bucket', 'archive-bucket')
 		window.localStorage.setItem('objectsSearch', 'photos')
 		window.localStorage.setItem('uploadBatchConcurrency', '32')
+		window.localStorage.setItem('objects:profile-1:bucket', 'scoped-bucket')
+		window.localStorage.setItem('objects:profile-1:prefix', 'nested/path/')
+		window.localStorage.setItem('objects:profile-1:tabs', '[{"id":"tab-1"}]')
 
 		renderSettingsPage()
 
@@ -103,6 +106,9 @@ describe('SettingsPage', () => {
 			expect(window.localStorage.getItem('bucket')).toBeNull()
 			expect(window.localStorage.getItem('objectsSearch')).toBeNull()
 			expect(window.localStorage.getItem('uploadBatchConcurrency')).toBeNull()
+			expect(window.localStorage.getItem('objects:profile-1:bucket')).toBeNull()
+			expect(window.localStorage.getItem('objects:profile-1:prefix')).toBeNull()
+			expect(window.localStorage.getItem('objects:profile-1:tabs')).toBeNull()
 		})
 		expect(successSpy).toHaveBeenCalledWith('Saved UI state reset. Reloading…')
 	})

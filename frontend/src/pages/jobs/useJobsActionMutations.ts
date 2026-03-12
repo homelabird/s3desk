@@ -28,12 +28,17 @@ export function useJobsActionMutations({
 		return profileId
 	}
 
+	const invalidateJobQueries = async (jobId: string) => {
+		await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+		await queryClient.invalidateQueries({ queryKey: ['job', profileId, jobId], exact: false })
+	}
+
 	const cancelMutation = useMutation({
 		mutationFn: (jobId: string) => api.cancelJob(requireProfileId(), jobId),
 		onMutate: (jobId) => setCancelingJobId(jobId),
-		onSuccess: async () => {
+		onSuccess: async (_, jobId) => {
 			message.success('Cancel requested')
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+			await invalidateJobQueries(jobId)
 		},
 		onSettled: (_, __, jobId) => setCancelingJobId((prev) => (prev === jobId ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),
@@ -42,9 +47,12 @@ export function useJobsActionMutations({
 	const retryMutation = useMutation({
 		mutationFn: (jobId: string) => withJobQueueRetry(() => api.retryJob(requireProfileId(), jobId)),
 		onMutate: (jobId) => setRetryingJobId(jobId),
-		onSuccess: async (job) => {
+		onSuccess: async (job, jobId) => {
 			message.success(`Retry queued: ${job.id}`)
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+			await invalidateJobQueries(jobId)
+			if (job.id !== jobId) {
+				await invalidateJobQueries(job.id)
+			}
 		},
 		onSettled: (_, __, jobId) => setRetryingJobId((prev) => (prev === jobId ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),
@@ -56,7 +64,7 @@ export function useJobsActionMutations({
 		onSuccess: async (_, jobId) => {
 			message.success('Job deleted')
 			onJobDeleted?.(jobId)
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+			await invalidateJobQueries(jobId)
 		},
 		onSettled: (_, __, jobId) => setDeletingJobId((prev) => (prev === jobId ? null : prev)),
 		onError: (err) => message.error(formatErr(err)),

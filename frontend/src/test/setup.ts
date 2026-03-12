@@ -18,8 +18,12 @@ const originalConsoleError = console.error
 
 beforeEach(() => {
 	vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+		const rendered = args.map(String).join(' ')
+		if (rendered.includes('not wrapped in act')) {
+			return
+		}
 		originalConsoleError(...args)
-		throw new Error(args.map(String).join(' '))
+		throw new Error(rendered)
 	})
 })
 

@@ -101,6 +101,8 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'objectsDetailsWidth',
 ] as const
 
+const RESETTABLE_UI_STATE_PREFIXES = ['objects:'] as const
+
 export function SettingsPage(props: Props) {
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
 		'downloadLinkProxyEnabled',
@@ -191,6 +193,16 @@ export function SettingsPage(props: Props) {
 				for (const k of RESETTABLE_UI_STATE_KEYS) {
 					try {
 						localStorage.removeItem(k)
+					} catch {
+						// ignore
+					}
+				}
+				for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+					const key = localStorage.key(index)
+					if (!key) continue
+					if (!RESETTABLE_UI_STATE_PREFIXES.some((prefix) => key.startsWith(prefix))) continue
+					try {
+						localStorage.removeItem(key)
 					} catch {
 						// ignore
 					}

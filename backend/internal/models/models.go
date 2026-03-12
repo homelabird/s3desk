@@ -862,23 +862,23 @@ type MetaResponse struct {
 }
 
 type ServerMigrationManifest struct {
-	Format              string   `json:"format"`
-	BundleKind          string   `json:"bundleKind"`
-	FormatVersion       int      `json:"formatVersion,omitempty"`
-	ConfidentialityMode string   `json:"confidentialityMode,omitempty"`
-	CreatedAt           string   `json:"createdAt"`
-	AppVersion          string   `json:"appVersion"`
-	DBBackend           string   `json:"dbBackend"`
-	SchemaVersion       int      `json:"schemaVersion,omitempty"`
-	EncryptionEnabled   bool     `json:"encryptionEnabled"`
-	EncryptionKeyHint   string   `json:"encryptionKeyHint,omitempty"`
-	Entries             []string `json:"entries,omitempty"`
+	Format              string                                   `json:"format"`
+	BundleKind          string                                   `json:"bundleKind"`
+	FormatVersion       int                                      `json:"formatVersion,omitempty"`
+	ConfidentialityMode string                                   `json:"confidentialityMode,omitempty"`
+	CreatedAt           string                                   `json:"createdAt"`
+	AppVersion          string                                   `json:"appVersion"`
+	DBBackend           string                                   `json:"dbBackend"`
+	SchemaVersion       int                                      `json:"schemaVersion,omitempty"`
+	EncryptionEnabled   bool                                     `json:"encryptionEnabled"`
+	EncryptionKeyHint   string                                   `json:"encryptionKeyHint,omitempty"`
+	Entries             []string                                 `json:"entries,omitempty"`
 	Entities            map[string]ServerMigrationEntityManifest `json:"entities,omitempty"`
 	Assets              map[string]ServerMigrationAssetManifest  `json:"assets,omitempty"`
-	PayloadFileCount    int      `json:"payloadFileCount,omitempty"`
-	PayloadBytes        int64    `json:"payloadBytes,omitempty"`
-	PayloadSHA256       string   `json:"payloadSha256,omitempty"`
-	Warnings            []string `json:"warnings,omitempty"`
+	PayloadFileCount    int                                      `json:"payloadFileCount,omitempty"`
+	PayloadBytes        int64                                    `json:"payloadBytes,omitempty"`
+	PayloadSHA256       string                                   `json:"payloadSha256,omitempty"`
+	Warnings            []string                                 `json:"warnings,omitempty"`
 }
 
 type ServerMigrationEntityManifest struct {
@@ -938,25 +938,25 @@ type ServerPortableImportPreflight struct {
 
 type ServerPortableImportEntityResult struct {
 	Name             string `json:"name"`
-	ExportedCount     int    `json:"exportedCount"`
-	ImportedCount     int    `json:"importedCount,omitempty"`
-	ChecksumVerified  bool   `json:"checksumVerified"`
+	ExportedCount    int    `json:"exportedCount"`
+	ImportedCount    int    `json:"importedCount,omitempty"`
+	ChecksumVerified bool   `json:"checksumVerified"`
 }
 
 type ServerPortableImportVerification struct {
-	EntityChecksumsVerified bool `json:"entityChecksumsVerified"`
+	EntityChecksumsVerified     bool `json:"entityChecksumsVerified"`
 	PostImportHealthCheckPassed bool `json:"postImportHealthCheckPassed"`
 }
 
 type ServerPortableImportResponse struct {
-	Manifest        ServerMigrationManifest           `json:"manifest"`
-	Mode            string                           `json:"mode"`
-	TargetDBBackend string                           `json:"targetDbBackend"`
-	Preflight       ServerPortableImportPreflight    `json:"preflight"`
+	Manifest        ServerMigrationManifest            `json:"manifest"`
+	Mode            string                             `json:"mode"`
+	TargetDBBackend string                             `json:"targetDbBackend"`
+	Preflight       ServerPortableImportPreflight      `json:"preflight"`
 	Entities        []ServerPortableImportEntityResult `json:"entities"`
-	Verification    ServerPortableImportVerification `json:"verification"`
-	AssetStagingDir string                           `json:"assetStagingDir,omitempty"`
-	Warnings        []string                         `json:"warnings,omitempty"`
+	Verification    ServerPortableImportVerification   `json:"verification"`
+	AssetStagingDir string                             `json:"assetStagingDir,omitempty"`
+	Warnings        []string                           `json:"warnings,omitempty"`
 }
 
 type TransferEngineInfo struct {

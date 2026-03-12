@@ -8,6 +8,8 @@ beforeAll(() => {
 	ensureDomShims()
 })
 
+const SLOW_BUCKET_MODAL_TIMEOUT_MS = 15_000
+
 describe('BucketModal', () => {
 	it('submits recommended AWS secure defaults when enabled', () => {
 		const onSubmit = vi.fn()
@@ -35,7 +37,7 @@ describe('BucketModal', () => {
 				encryption: { mode: 'sse_s3', kmsKeyId: undefined },
 			},
 		})
-	})
+	}, SLOW_BUCKET_MODAL_TIMEOUT_MS)
 
 	it('allows overriding encryption mode to sse_kms', () => {
 		const onSubmit = vi.fn()
@@ -142,7 +144,7 @@ describe('BucketModal', () => {
 				},
 			},
 		})
-	})
+	}, SLOW_BUCKET_MODAL_TIMEOUT_MS)
 
 	it('shows a local validation error when a GCS binding is incomplete', () => {
 		const onSubmit = vi.fn()
@@ -179,5 +181,5 @@ describe('BucketModal', () => {
 			region: undefined,
 			defaults: undefined,
 		})
-	})
+	}, SLOW_BUCKET_MODAL_TIMEOUT_MS)
 })

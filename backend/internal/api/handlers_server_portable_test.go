@@ -268,6 +268,29 @@ func TestHandlePreviewPortableImport_BlocksUnsupportedPortableVersions(t *testin
 	}
 }
 
+func TestHandlePreviewPortableImport_DoesNotClaimPostImportHealthCheck(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	_ = createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable/preview", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Verification.PostImportHealthCheckPassed {
+		t.Fatal("expected preview to leave postImportHealthCheckPassed=false")
+	}
+}
+
 func TestHandleImportPortableBackup_RejectsOversizedBundle(t *testing.T) {
 	t.Parallel()
 
