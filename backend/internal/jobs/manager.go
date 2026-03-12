@@ -325,7 +325,9 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 		for _, us := range sessions {
 			_, _ = m.store.DeleteUploadSession(ctx, us.ProfileID, us.ID)
 			if us.StagingDir != "" {
-				_ = os.RemoveAll(us.StagingDir)
+				if stagingDir, err := store.ResolveUploadStagingDir(m.dataDir, us.ID); err == nil {
+					_ = os.RemoveAll(stagingDir)
+				}
 			}
 		}
 	}
@@ -932,9 +934,15 @@ func (m *Manager) runTransferSyncStagingToS3(ctx context.Context, profileID, job
 			return errors.New("upload session expired")
 		}
 	}
+	if us.StagingDir == "" {
+		return errors.New("upload session is missing staging directory")
+	}
 
 	// Sync staging dir -> bucket/prefix
-	src := filepath.Clean(us.StagingDir)
+	src, err := store.ResolveUploadStagingDir(m.dataDir, us.ID)
+	if err != nil {
+		return fmt.Errorf("resolve upload staging dir: %w", err)
+	}
 	dst := rcloneRemoteDir(us.Bucket, us.Prefix, preserveLeadingSlash)
 
 	preflightCtx, cancel := context.WithTimeout(ctx, 3*time.Second)

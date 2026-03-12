@@ -2,7 +2,8 @@
 
 ARG RCLONE_VERSION=1.72.0
 
-FROM node:22-alpine AS frontend
+# Keep registry prefixes explicit so Podman can build local smoke/dev images non-interactively.
+FROM docker.io/library/node:22-alpine AS frontend
 WORKDIR /src
 COPY openapi.yml /src/openapi.yml
 COPY frontend/package.json frontend/package-lock.json /src/frontend/
@@ -12,16 +13,16 @@ RUN npm run ci:deps:full
 COPY frontend/ /src/frontend/
 RUN npm run gen:openapi && npm run build
 
-FROM golang:1.24.11-alpine AS backend
+FROM docker.io/library/golang:1.24.11-alpine AS backend
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum /src/backend/
 RUN go mod download
 COPY backend/ /src/backend/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/s3desk-server ./cmd/server
 
-FROM rclone/rclone:${RCLONE_VERSION} AS rclone
+FROM docker.io/rclone/rclone:${RCLONE_VERSION} AS rclone
 
-FROM alpine:3.21 AS runtime
+FROM docker.io/library/alpine:3.21 AS runtime
 ARG DB_BACKEND=sqlite
 RUN set -e; \
     apk add --no-cache ca-certificates ffmpeg; \

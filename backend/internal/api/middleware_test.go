@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"s3desk/internal/config"
@@ -192,6 +193,17 @@ func TestCORS_PreflightReturnsNoContentAndSetsHeadersForAllowedOrigin(t *testing
 	}
 	if got := rr.Header().Get("Access-Control-Allow-Headers"); got == "" {
 		t.Fatalf("Access-Control-Allow-Headers is empty")
+	}
+	for _, header := range []string{
+		"X-Upload-Chunk-Index",
+		"X-Upload-Chunk-Total",
+		"X-Upload-Chunk-Size",
+		"X-Upload-File-Size",
+		"X-Upload-Relative-Path",
+	} {
+		if !strings.Contains(rr.Header().Get("Access-Control-Allow-Headers"), header) {
+			t.Fatalf("Access-Control-Allow-Headers=%q, want to contain %q", rr.Header().Get("Access-Control-Allow-Headers"), header)
+		}
 	}
 	if got := rr.Header().Get("Access-Control-Expose-Headers"); got != corsExposeHeaders {
 		t.Fatalf("Access-Control-Expose-Headers=%q, want %q", got, corsExposeHeaders)

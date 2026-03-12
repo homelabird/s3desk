@@ -22,6 +22,7 @@ import (
 )
 
 const corsExposeHeaders = "Retry-After, Content-Disposition, X-Log-Next-Offset, X-Upload-Skipped"
+const corsAllowHeaders = "Authorization, Content-Type, X-Api-Token, X-Profile-Id, X-Upload-Chunk-Index, X-Upload-Chunk-Total, X-Upload-Chunk-Size, X-Upload-File-Size, X-Upload-Relative-Path"
 
 const maxAPITokenBytes = 4096
 
@@ -446,7 +447,7 @@ func (s *server) cors(next http.Handler) http.Handler {
 					h.Set("Access-Control-Allow-Origin", origin)
 					h.Add("Vary", "Origin")
 					h.Set("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS,HEAD")
-					h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Api-Token, X-Profile-Id")
+					h.Set("Access-Control-Allow-Headers", corsAllowHeaders)
 					h.Set("Access-Control-Expose-Headers", corsExposeHeaders)
 					h.Set("Access-Control-Max-Age", "600")
 					// securityHeaders() defaults CORP to same-origin, which breaks cross-origin API calls

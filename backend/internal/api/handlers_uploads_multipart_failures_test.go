@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -57,6 +58,97 @@ func TestCommitUploadDirectMultipartListFailure(t *testing.T) {
 	}
 	if !ok {
 		t.Fatalf("expected multipart metadata to remain after list failure")
+	}
+}
+
+func TestUploadFilesDirectMultipartInvalidCreateResponse(t *testing.T) {
+	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
+		createStatus: http.StatusOK,
+		createBody: `<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	<Bucket>test-bucket</Bucket>
+	<Key>incoming/file.bin</Key>
+</InitiateMultipartUploadResult>`,
+	})
+
+	st, _, srv, _ := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, true)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "direct")
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/uploads/"+upload.UploadID+"/files", bytes.NewReader([]byte("hello")))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("X-Profile-Id", profile.ID)
+	req.Header.Set("X-Upload-Chunk-Index", "0")
+	req.Header.Set("X-Upload-Chunk-Total", "2")
+	req.Header.Set("X-Upload-Chunk-Size", "5")
+	req.Header.Set("X-Upload-File-Size", "10")
+	req.Header.Set("X-Upload-Relative-Path", "file.bin")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("upload request: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadGateway {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 502, got %d: %s", res.StatusCode, string(body))
+	}
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "upload_failed" {
+		t.Fatalf("expected upload_failed code, got %q", errResp.Error.Code)
+	}
+
+	_, ok, err := st.GetMultipartUpload(context.Background(), profile.ID, upload.UploadID, "file.bin")
+	if err != nil {
+		t.Fatalf("get multipart upload: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected multipart metadata to remain absent after invalid create response")
+	}
+}
+
+func TestPresignUploadMultipartInvalidCreateResponse(t *testing.T) {
+	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
+		createStatus: http.StatusOK,
+		createBody: `<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	<Bucket>test-bucket</Bucket>
+	<Key>incoming/file.bin</Key>
+</InitiateMultipartUploadResult>`,
+	})
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
+	fileSize := int64(10 * 1024 * 1024)
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/presign", profile.ID, models.UploadPresignRequest{
+		Path: "file.bin",
+		Multipart: &models.UploadMultipartPresignReq{
+			FileSize:      &fileSize,
+			PartSizeBytes: 5 * 1024 * 1024,
+		},
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadGateway {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 502, got %d: %s", res.StatusCode, string(body))
+	}
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "upload_failed" {
+		t.Fatalf("expected upload_failed code, got %q", errResp.Error.Code)
+	}
+
+	_, ok, err := st.GetMultipartUpload(context.Background(), profile.ID, upload.UploadID, "file.bin")
+	if err != nil {
+		t.Fatalf("get multipart upload: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected multipart metadata to remain absent after invalid presign create response")
 	}
 }
 
@@ -289,6 +381,8 @@ func TestTryAssembleChunkFileConcurrentCalls(t *testing.T) {
 }
 
 type multipartS3Behavior struct {
+	createStatus   int
+	createBody     string
 	listStatus     int
 	listBody       string
 	completeStatus int
@@ -299,25 +393,32 @@ func newMultipartS3TestServer(t *testing.T, behavior multipartS3Behavior) *httpt
 	t.Helper()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("uploadId") == "" {
-			http.Error(w, "missing uploadId", http.StatusBadRequest)
-			return
-		}
 		w.Header().Set("Content-Type", "application/xml")
 
 		switch r.Method {
-		case http.MethodGet:
-			status := behavior.listStatus
-			if status == 0 {
-				status = http.StatusOK
-			}
-			body := behavior.listBody
-			if body == "" {
-				body = fakeListPartsXML()
-			}
-			w.WriteHeader(status)
-			_, _ = io.WriteString(w, body)
 		case http.MethodPost:
+			if r.URL.Query().Has("uploads") {
+				status := behavior.createStatus
+				if status == 0 {
+					status = http.StatusOK
+				}
+				body := behavior.createBody
+				if body == "" {
+					body = `<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	<Bucket>test-bucket</Bucket>
+	<Key>incoming/file.bin</Key>
+	<UploadId>upload-1</UploadId>
+</InitiateMultipartUploadResult>`
+				}
+				w.WriteHeader(status)
+				_, _ = io.WriteString(w, body)
+				return
+			}
+			if r.URL.Query().Get("uploadId") == "" {
+				http.Error(w, "missing uploadId", http.StatusBadRequest)
+				return
+			}
 			status := behavior.completeStatus
 			if status == 0 {
 				status = http.StatusOK
@@ -328,6 +429,27 @@ func newMultipartS3TestServer(t *testing.T, behavior multipartS3Behavior) *httpt
 			}
 			w.WriteHeader(status)
 			_, _ = io.WriteString(w, body)
+		case http.MethodGet:
+			if r.URL.Query().Get("uploadId") == "" {
+				http.Error(w, "missing uploadId", http.StatusBadRequest)
+				return
+			}
+			status := behavior.listStatus
+			if status == 0 {
+				status = http.StatusOK
+			}
+			body := behavior.listBody
+			if body == "" {
+				body = fakeListPartsXML()
+			}
+			w.WriteHeader(status)
+			_, _ = io.WriteString(w, body)
+		case http.MethodPut:
+			if r.URL.Query().Get("uploadId") == "" {
+				http.Error(w, "missing uploadId", http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

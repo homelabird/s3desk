@@ -174,6 +174,39 @@ func TestHandleGetServerBackup_PortableArchiveIncludesUploadState(t *testing.T) 
 	}
 }
 
+func TestHandleImportPortableBackup_RewritesUploadSessionStagingDir(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	session, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", "staging", "/tmp/source-escape", time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano))
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+
+	targetStore, _, targetSrv, targetDataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 201, got %d: %s", res.StatusCode, string(body))
+	}
+
+	imported, ok, err := targetStore.GetUploadSession(context.Background(), profile.ID, session.ID)
+	if err != nil {
+		t.Fatalf("get upload session: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected imported upload session")
+	}
+	want := filepath.Join(targetDataDir, "staging", session.ID)
+	if imported.StagingDir != want {
+		t.Fatalf("stagingDir=%q, want %q", imported.StagingDir, want)
+	}
+}
+
 func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyMissing(t *testing.T) {
 	t.Parallel()
 
@@ -458,10 +491,10 @@ func TestHandleImportPortableBackup_WarnsWhenThumbnailCopyFails(t *testing.T) {
 	if err := os.MkdirAll(targetThumbDir, 0o700); err != nil {
 		t.Fatalf("mkdir target thumbnails: %v", err)
 	}
-	if err := os.Chmod(targetThumbDir, 0o500); err != nil {
-		t.Fatalf("chmod target thumbnails: %v", err)
+	if err := os.Chmod(targetDataDir, 0o500); err != nil {
+		t.Fatalf("chmod target data dir: %v", err)
 	}
-	defer func() { _ = os.Chmod(targetThumbDir, 0o700) }()
+	defer func() { _ = os.Chmod(targetDataDir, 0o700) }()
 
 	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
 	defer res.Body.Close()
@@ -472,11 +505,50 @@ func TestHandleImportPortableBackup_WarnsWhenThumbnailCopyFails(t *testing.T) {
 
 	var resp models.ServerPortableImportResponse
 	decodeJSONResponse(t, res, &resp)
-	if !strings.Contains(strings.Join(resp.Warnings, "\n"), "failed to copy thumbnail assets") {
+	warnings := strings.Join(resp.Warnings, "\n")
+	if !strings.Contains(warnings, "failed to copy thumbnail assets") && !strings.Contains(warnings, "failed to reset thumbnail assets") {
 		t.Fatalf("expected thumbnail copy warning, got %v", resp.Warnings)
 	}
 	if resp.AssetStagingDir != "" {
 		t.Fatalf("assetStagingDir=%q, want empty on copy warning", resp.AssetStagingDir)
+	}
+}
+
+func TestHandleImportPortableBackup_ReplacesThumbnailTree(t *testing.T) {
+	t.Parallel()
+
+	_, _, sourceSrv, sourceDataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	sourceThumbPath := filepath.Join(sourceDataDir, "thumbnails", "profile-a", "bucket-a", "fresh.jpg")
+	if err := os.MkdirAll(filepath.Dir(sourceThumbPath), 0o700); err != nil {
+		t.Fatalf("mkdir source thumbnails: %v", err)
+	}
+	if err := os.WriteFile(sourceThumbPath, []byte("fresh"), 0o600); err != nil {
+		t.Fatalf("write source thumbnail: %v", err)
+	}
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable&includeThumbnails=true")
+
+	_, _, targetSrv, targetDataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	staleThumbPath := filepath.Join(targetDataDir, "thumbnails", "stale-profile", "bucket-a", "stale.jpg")
+	if err := os.MkdirAll(filepath.Dir(staleThumbPath), 0o700); err != nil {
+		t.Fatalf("mkdir stale thumbnails: %v", err)
+	}
+	if err := os.WriteFile(staleThumbPath, []byte("stale"), 0o600); err != nil {
+		t.Fatalf("write stale thumbnail: %v", err)
+	}
+
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 201, got %d: %s", res.StatusCode, string(body))
+	}
+
+	if _, err := os.Stat(staleThumbPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected stale thumbnail removed, stat err=%v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(targetDataDir, "thumbnails", "profile-a", "bucket-a", "fresh.jpg")); err != nil || string(got) != "fresh" {
+		t.Fatalf("fresh thumbnail read err=%v body=%q", err, string(got))
 	}
 }
 

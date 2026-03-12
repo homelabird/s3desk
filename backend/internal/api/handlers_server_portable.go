@@ -465,7 +465,7 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 		return resp, nil
 	}
 
-	counts, err := s.store.ImportPortableEntityFilesReplace(ctx, entityFiles)
+	counts, err := s.store.ImportPortableEntityFilesReplace(ctx, entityFiles, s.cfg.DataDir)
 	if err != nil {
 		return models.ServerPortableImportResponse{}, err
 	}
@@ -475,7 +475,9 @@ func (s *server) processPortableImportArchive(ctx context.Context, src io.Reader
 		thumbnailsPath := filepath.Join(assetRoot, portableAssetKeyThumbnails)
 		if info, statErr := os.Stat(thumbnailsPath); statErr == nil && info.IsDir() {
 			assetTargetDir := filepath.Join(s.cfg.DataDir, portableAssetKeyThumbnails)
-			if err := copyPortableAssetTree(thumbnailsPath, assetTargetDir); err != nil {
+			if err := os.RemoveAll(assetTargetDir); err != nil {
+				resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but failed to reset thumbnail assets: %v", err))
+			} else if err := copyPortableAssetTree(thumbnailsPath, assetTargetDir); err != nil {
 				resp.Warnings = append(resp.Warnings, fmt.Sprintf("Imported database state, but failed to copy thumbnail assets: %v", err))
 			} else {
 				resp.AssetStagingDir = assetTargetDir

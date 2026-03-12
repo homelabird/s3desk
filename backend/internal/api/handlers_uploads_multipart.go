@@ -411,10 +411,15 @@ func (s *server) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "upload session is missing staging directory", nil)
 		return
 	}
+	stagingDir, err := store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "upload session has invalid staging directory", map[string]any{"error": err.Error()})
+		return
+	}
 
 	relOS := filepath.FromSlash(query.path)
-	chunkDir := filepath.Join(us.StagingDir, ".chunks", relOS)
-	if !isUnderDir(us.StagingDir, chunkDir) {
+	chunkDir := filepath.Join(stagingDir, ".chunks", relOS)
+	if !isUnderDir(stagingDir, chunkDir) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload path", map[string]any{"path": query.path})
 		return
 	}

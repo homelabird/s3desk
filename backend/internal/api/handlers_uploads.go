@@ -83,8 +83,12 @@ func (s *server) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if mode == uploadModeStaging {
-		stagingBase := filepath.Join(s.cfg.DataDir, "staging")
-		stagingDir := filepath.Join(stagingBase, us.ID)
+		stagingDir, err := store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID)
+		if err != nil {
+			_, _ = s.store.DeleteUploadSession(r.Context(), profileID, us.ID)
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare staging directory", map[string]any{"error": err.Error()})
+			return
+		}
 		if err := os.MkdirAll(stagingDir, 0o700); err != nil {
 			_, _ = s.store.DeleteUploadSession(r.Context(), profileID, us.ID)
 			writeError(w, http.StatusInternalServerError, "internal_error", "failed to create staging directory", nil)
@@ -149,6 +153,14 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 	if mode == uploadModeStaging && us.StagingDir == "" {
 		writeError(w, http.StatusInternalServerError, "internal_error", "upload session is missing staging directory", nil)
 		return
+	}
+	stagingDir := ""
+	if mode == uploadModeStaging {
+		stagingDir, err = store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "upload session has invalid staging directory", map[string]any{"error": err.Error()})
+			return
+		}
 	}
 
 	if expiresAt, err := time.Parse(time.RFC3339Nano, us.ExpiresAt); err == nil {
@@ -254,8 +266,9 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 				Bucket: &us.Bucket,
 				Key:    &key,
 			})
-			if err != nil || resp.UploadId == nil || *resp.UploadId == "" {
-				writeError(w, http.StatusBadGateway, "upload_failed", "failed to create multipart upload", map[string]any{"error": err.Error()})
+			s3UploadID, uploadErr := multipartUploadIDFromCreateResponse(resp, err)
+			if uploadErr != nil {
+				writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 				return
 			}
 			meta = store.MultipartUpload{
@@ -264,7 +277,7 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 				Path:       relPath,
 				Bucket:     us.Bucket,
 				ObjectKey:  key,
-				S3UploadID: *resp.UploadId,
+				S3UploadID: s3UploadID,
 				ChunkSize:  expectedChunkSize,
 				FileSize:   fileSize,
 				CreatedAt:  now,
@@ -415,8 +428,8 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		relOS := filepath.FromSlash(relPath)
-		chunkDir := filepath.Join(us.StagingDir, ".chunks", relOS)
-		if !isUnderDir(us.StagingDir, chunkDir) {
+		chunkDir := filepath.Join(stagingDir, ".chunks", relOS)
+		if !isUnderDir(stagingDir, chunkDir) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload path", map[string]any{"path": relPath})
 			return
 		}
@@ -466,7 +479,7 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 			}
 			bytesTracked += delta
 		}
-		if err := tryAssembleChunkFile(us.StagingDir, relOS, chunkDir, chunkTotal, func(delta int64) error {
+		if err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, chunkTotal, func(delta int64) error {
 			if delta == 0 {
 				return nil
 			}
@@ -524,8 +537,8 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 		}
 
 		relOS := filepath.FromSlash(relPath)
-		dstDir := filepath.Join(us.StagingDir, filepath.Dir(relOS))
-		if !isUnderDir(us.StagingDir, dstDir) {
+		dstDir := filepath.Join(stagingDir, filepath.Dir(relOS))
+		if !isUnderDir(stagingDir, dstDir) {
 			_ = part.Close()
 			writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload path", map[string]any{"path": relPath})
 			return
@@ -718,8 +731,9 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 				input.ContentType = &ct
 			}
 			resp, err := client.CreateMultipartUpload(r.Context(), input)
-			if err != nil || resp.UploadId == nil || *resp.UploadId == "" {
-				writeError(w, http.StatusBadGateway, "upload_failed", "failed to create multipart upload", map[string]any{"error": err.Error()})
+			s3UploadID, uploadErr := multipartUploadIDFromCreateResponse(resp, err)
+			if uploadErr != nil {
+				writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 				return
 			}
 			now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -729,7 +743,7 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 				Path:       relPath,
 				Bucket:     us.Bucket,
 				ObjectKey:  key,
-				S3UploadID: *resp.UploadId,
+				S3UploadID: s3UploadID,
 				ChunkSize:  partSize,
 				FileSize:   fileSize,
 				CreatedAt:  now,
@@ -993,6 +1007,26 @@ func flattenSignedHeaders(headers map[string][]string) map[string]string {
 	return out
 }
 
+func multipartUploadIDFromCreateResponse(resp *s3.CreateMultipartUploadOutput, err error) (string, *uploadHTTPError) {
+	if err != nil {
+		return "", &uploadHTTPError{
+			status:  http.StatusBadGateway,
+			code:    "upload_failed",
+			message: "failed to create multipart upload",
+			details: map[string]any{"error": err.Error()},
+		}
+	}
+	if resp == nil || resp.UploadId == nil || strings.TrimSpace(*resp.UploadId) == "" {
+		return "", &uploadHTTPError{
+			status:  http.StatusBadGateway,
+			code:    "upload_failed",
+			message: "failed to create multipart upload",
+			details: map[string]any{"error": "upstream returned an empty uploadId"},
+		}
+	}
+	return strings.TrimSpace(*resp.UploadId), nil
+}
+
 type uploadCommitRequest struct {
 	Label          string             `json:"label,omitempty"`
 	RootName       string             `json:"rootName,omitempty"`
@@ -1046,7 +1080,9 @@ func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = s.store.DeleteUploadSession(r.Context(), profileID, uploadID)
 	if us.StagingDir != "" {
-		_ = os.RemoveAll(us.StagingDir)
+		if stagingDir, err := store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID); err == nil {
+			_ = os.RemoveAll(stagingDir)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)
