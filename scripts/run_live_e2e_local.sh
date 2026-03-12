@@ -8,11 +8,13 @@ MINIO_IMAGE="${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}"
 MINIO_PORT="${MINIO_PORT:-9000}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
+RCLONE_IMAGE="${RCLONE_IMAGE:-docker.io/rclone/rclone:1.72.0}"
 
 API_TOKEN="${API_TOKEN:-change-me}"
 BACKEND_ADDR="${BACKEND_ADDR:-127.0.0.1:8080}"
 BACKEND_HOST="${BACKEND_ADDR%:*}"
 BACKEND_PORT="${BACKEND_ADDR##*:}"
+RCLONE_PATH="${RCLONE_PATH:-}"
 
 PLAYWRIGHT_PROJECT="${PLAYWRIGHT_PROJECT:-chromium}"
 
@@ -25,6 +27,8 @@ E2E_S3_FORCE_PATH_STYLE="${E2E_S3_FORCE_PATH_STYLE:-true}"
 E2E_S3_TLS_SKIP_VERIFY="${E2E_S3_TLS_SKIP_VERIFY:-true}"
 
 BACKEND_LOG="${BACKEND_LOG:-/tmp/s3desk_backend_live.log}"
+RCLONE_TEMP_DIR=""
+RCLONE_CONTAINER=""
 
 if ! command -v podman >/dev/null 2>&1; then
 	echo "podman is required" >&2
@@ -42,6 +46,25 @@ if ! command -v npx >/dev/null 2>&1; then
 	echo "npx is required" >&2
 	exit 1
 fi
+
+ensure_rclone() {
+	if [ -n "${RCLONE_PATH}" ]; then
+		return
+	fi
+	if command -v rclone >/dev/null 2>&1; then
+		RCLONE_PATH="$(command -v rclone)"
+		return
+	fi
+
+	echo "[live-e2e] extracting rclone from ${RCLONE_IMAGE}"
+	RCLONE_TEMP_DIR="$(mktemp -d /tmp/s3desk-rclone-e2e.XXXXXX)"
+	RCLONE_CONTAINER="s3desk-rclone-e2e-$$"
+	podman rm -f "${RCLONE_CONTAINER}" >/dev/null 2>&1 || true
+	podman create --name "${RCLONE_CONTAINER}" "${RCLONE_IMAGE}" >/dev/null
+	podman cp "${RCLONE_CONTAINER}:/usr/local/bin/rclone" "${RCLONE_TEMP_DIR}/rclone" >/dev/null
+	chmod +x "${RCLONE_TEMP_DIR}/rclone"
+	RCLONE_PATH="${RCLONE_TEMP_DIR}/rclone"
+}
 
 if [ "$#" -gt 0 ]; then
 	TEST_FILES=("$@")
@@ -91,8 +114,16 @@ cleanup() {
 		wait "${BACK_PID}" >/dev/null 2>&1 || true
 	fi
 	podman rm -f "${MINIO_CONTAINER}" >/dev/null 2>&1 || true
+	if [ -n "${RCLONE_CONTAINER}" ]; then
+		podman rm -f "${RCLONE_CONTAINER}" >/dev/null 2>&1 || true
+	fi
+	if [ -n "${RCLONE_TEMP_DIR}" ]; then
+		rm -rf "${RCLONE_TEMP_DIR}" >/dev/null 2>&1 || true
+	fi
 }
 trap cleanup EXIT
+
+ensure_rclone
 
 for _ in $(seq 1 40); do
 	if curl -fsS "http://127.0.0.1:${MINIO_PORT}/minio/health/live" >/dev/null 2>&1; then
@@ -104,7 +135,7 @@ done
 echo "[live-e2e] starting backend on ${BACKEND_ADDR}"
 (
 	cd "${ROOT_DIR}/backend"
-	API_TOKEN="${API_TOKEN}" ADDR="${BACKEND_ADDR}" go run ./cmd/server >"${BACKEND_LOG}" 2>&1
+	API_TOKEN="${API_TOKEN}" ADDR="${BACKEND_ADDR}" RCLONE_PATH="${RCLONE_PATH}" go run ./cmd/server >"${BACKEND_LOG}" 2>&1
 ) &
 BACK_PID=$!
 
