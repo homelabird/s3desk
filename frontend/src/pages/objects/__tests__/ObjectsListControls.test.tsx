@@ -120,4 +120,16 @@ describe('ObjectsListControls', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Global Search (Indexed)' }))
 		expect(props.onOpenGlobalSearch).toHaveBeenCalledTimes(1)
 	})
+
+	it('uses clearer mobile search and filter labels in compact mode', () => {
+		const props = buildProps({ isCompact: true })
+
+		render(<ObjectsListControls {...props} />)
+
+		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: /Bucket search$/ })).toBeInTheDocument()
+		expect(
+			screen.getByText('Search this folder here, or use Bucket search for indexed results across the whole bucket.'),
+		).toBeInTheDocument()
+	})
 })

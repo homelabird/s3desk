@@ -103,6 +103,12 @@
 	gap: 12px;
 }
 
+.mobileFiltersHint {
+	display: block;
+	margin-top: 10px;
+	line-height: 1.5;
+}
+
 @media (max-width: 768px) {
 	.headerActions {
 		justify-content: flex-start;
@@ -130,6 +136,10 @@
 	.searchFilterControl,
 	.mobileFiltersTrigger {
 		width: 100%;
+	}
+
+	.mobileFiltersTrigger {
+		justify-content: center;
 	}
 }
 

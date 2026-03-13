@@ -28,7 +28,7 @@ function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => vo
 		props.setApiToken(trimmed)
 	}
 	return (
-		<Space.Compact className={styles.fullWidth}>
+		<div className={styles.compactFieldRow}>
 			<Input.Password
 				placeholder="Must match API_TOKEN…"
 				value={draft}
@@ -43,7 +43,7 @@ function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => vo
 			<Button type="primary" onClick={apply}>
 				Apply
 			</Button>
-		</Space.Compact>
+		</div>
 	)
 }
 
@@ -60,12 +60,12 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 				</FormField>
 
 				<FormField label="Selected Profile" extra="Used by most pages to scope S3 operations.">
-					<Space.Compact className={styles.fullWidth}>
+					<div className={styles.compactFieldRow}>
 						<Input value={props.profileId ?? ''} placeholder="(none)…" readOnly />
 						<Button danger onClick={() => props.setProfileId(null)}>
 							Clear
 						</Button>
-					</Space.Compact>
+					</div>
 				</FormField>
 
 				<FormField label="Dialog confirmations" extra="Controls confirmations or warnings you chose not to see again.">

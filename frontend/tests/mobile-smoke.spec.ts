@@ -161,6 +161,64 @@ test.describe('mobile smoke', () => {
 		expect(workspaceBox?.height ?? 0).toBeGreaterThanOrEqual(44)
 	})
 
+	test('extra-small mobile layouts keep metadata and search actions readable', async ({ page }) => {
+		await page.setViewportSize({ width: 360, height: 740 })
+		await stubCoreApi(page)
+		await seedStorage(page, { objectsUIMode: 'advanced' })
+
+		await page.goto('/profiles')
+		const profileCard = page.getByTestId('profiles-list-compact').locator('article').first()
+		const profileMeta = profileCard.locator('[class*="mobileMetaGrid"]').first()
+		const profileMetaStyles = await profileMeta.evaluate((node) => {
+			const element = node as HTMLElement
+			const firstValue = element.querySelector('[class*="mobileMetaValue"]') as HTMLElement | null
+			return {
+				gridTemplateColumns: window.getComputedStyle(element).gridTemplateColumns,
+				valueFontSize: firstValue ? window.getComputedStyle(firstValue).fontSize : null,
+			}
+		})
+		expect(profileMetaStyles.gridTemplateColumns.trim().split(/\s+/)).toHaveLength(1)
+		expect(profileMetaStyles.valueFontSize).toBe('13px')
+
+		await page.goto('/buckets')
+		const bucketCard = page.getByTestId('buckets-list-compact').locator('article').first()
+		const bucketMeta = bucketCard.locator('[class*="mobileMetaGrid"]').first()
+		const bucketMetaStyles = await bucketMeta.evaluate((node) => {
+			const element = node as HTMLElement
+			const firstValue = element.querySelector('[class*="metaValue"]') as HTMLElement | null
+			return {
+				gridTemplateColumns: window.getComputedStyle(element).gridTemplateColumns,
+				valueFontSize: firstValue ? window.getComputedStyle(firstValue).fontSize : null,
+			}
+		})
+		expect(bucketMetaStyles.gridTemplateColumns.trim().split(/\s+/)).toHaveLength(1)
+		expect(bucketMetaStyles.valueFontSize).toBe('13px')
+
+		await page.goto('/jobs')
+		await expect(page.getByTestId('jobs-mobile-filters-hint')).toBeVisible()
+
+		await page.goto('/objects')
+		await expect(page.getByRole('button', { name: 'Filters' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Bucket search' })).toBeVisible()
+		await expect(page.getByText('Search this folder here, or use Bucket search for indexed results across the whole bucket.')).toBeVisible()
+		await page.getByRole('button', { name: 'Bucket search' }).click()
+		await expect(page.getByText('Search the whole bucket')).toBeVisible()
+
+		await page.goto('/uploads')
+		const addFromDeviceButton = page.getByRole('button', { name: 'Add from device…' })
+		const uploadsHint = page.getByText('Add files or a folder first.')
+		const addBox = await addFromDeviceButton.boundingBox()
+		const hintBox = await uploadsHint.boundingBox()
+		expect(hintBox?.y ?? 0).toBeGreaterThan((addBox?.y ?? 0) + (addBox?.height ?? 0) - 1)
+
+		await page.goto('/settings')
+		const tokenField = page.getByPlaceholder('Must match API_TOKEN…')
+		const applyButton = page.getByRole('button', { name: 'Apply' })
+		const tokenBox = await tokenField.boundingBox()
+		const applyBox = await applyButton.boundingBox()
+		expect(applyBox?.y ?? 0).toBeGreaterThan((tokenBox?.y ?? 0) + (tokenBox?.height ?? 0) - 1)
+	})
+
 	test('buckets page renders', async ({ page }) => {
 		await stubCoreApi(page)
 		await seedStorage(page)

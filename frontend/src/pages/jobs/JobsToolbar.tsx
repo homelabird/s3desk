@@ -323,6 +323,11 @@ export function JobsToolbar(props: Props) {
 					</Button>
 				</div>
 				{useCompactFilters ? (
+					<Typography.Text type="secondary" className={styles.mobileFiltersHint} data-testid="jobs-mobile-filters-hint">
+						Search current jobs here, or open Filters for status, type, and error code.
+					</Typography.Text>
+				) : null}
+				{useCompactFilters ? (
 					<OverlaySheet
 						open={mobileFiltersOpen}
 						onClose={() => setMobileFiltersOpen(false)}

@@ -172,6 +172,17 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 			) : (
 				<div className={styles.globalSearchContent}>
 					<section className={styles.globalSearchSection}>
+						<Alert
+							type="info"
+							showIcon
+							icon={<InfoCircleOutlined />}
+							message="Search the whole bucket"
+							description="Use Search for bucket-wide indexed matches, then add Filters to narrow by prefix, extension, size, or modified date."
+							className={styles.globalSearchIntro}
+						/>
+					</section>
+
+					<section className={styles.globalSearchSection}>
 						<div className={styles.globalSearchSectionTitle}>Search</div>
 						<div className={styles.globalSearchFieldRow}>
 							<Input

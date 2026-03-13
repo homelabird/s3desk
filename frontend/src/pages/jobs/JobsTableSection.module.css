@@ -69,6 +69,7 @@
 	margin: 10px 0 8px;
 	color: var(--s3d-color-text-secondary);
 	line-height: 1.6;
+	overflow-wrap: anywhere;
 }
 
 .mobileJobId {
@@ -145,5 +146,32 @@
 
 	.footer {
 		padding: 16px 18px 18px;
+	}
+}
+
+@media (max-width: 360px) {
+	.mobileCard {
+		gap: 12px;
+		padding: 14px;
+	}
+
+	.mobileMetaGrid {
+		gap: 10px;
+	}
+
+	.mobileMetaLabel {
+		margin-bottom: 4px;
+		font-size: 10px;
+	}
+
+	.mobileMetaValue,
+	.mobileSummary,
+	.mobileError {
+		font-size: 13px;
+		line-height: 1.45;
+	}
+
+	.mobileError {
+		padding: 10px 12px;
 	}
 }

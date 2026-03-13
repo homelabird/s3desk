@@ -2091,6 +2091,11 @@
   line-height: 1.5;
 }
 
+.listControlsHintText {
+  display: block;
+  line-height: 1.5;
+}
+
 @media (max-width: 768px) {
   .page {
     gap: 12px;
@@ -2155,6 +2160,37 @@
 
   .listHeaderRow {
     padding: 6px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .listControlsCompactActions {
+    width: 100%;
+  }
+
+  .listControlsCompactActions :global(.ant-btn) {
+    flex: 1 1 160px;
+  }
+}
+
+@media (max-width: 360px) {
+  .listControlsCompactFooter {
+    gap: 8px;
+  }
+
+  .listControlsCompactActions,
+  .listControlsViewToggle {
+    width: 100%;
+  }
+
+  .listControlsCompactActions :global(.ant-btn),
+  .listControlsViewToggle :global(.ant-btn) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .listControlsHintText {
+    font-size: 12px;
   }
 }
 
@@ -2229,6 +2265,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.globalSearchIntro {
+  margin-bottom: 0;
 }
 
 .globalSearchSectionTitle {
@@ -2459,4 +2499,29 @@
   display: flex;
   justify-content: center;
   padding-top: 12px;
+}
+
+@media (max-width: 360px) {
+  .globalSearchContent {
+    gap: 14px;
+  }
+
+  .globalSearchFieldRow {
+    gap: 10px;
+  }
+
+  .globalSearchButtonRow,
+  .globalSearchActionRow {
+    width: 100%;
+  }
+
+  .globalSearchButtonRow :global(.ant-btn),
+  .globalSearchActionRow :global(.ant-btn) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .globalSearchKeyTextSm {
+    max-width: 220px;
+  }
 }
