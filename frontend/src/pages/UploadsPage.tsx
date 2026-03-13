@@ -175,7 +175,7 @@ export function UploadsPage(props: Props) {
 						: 'Pick a destination bucket, stage files from this device, and queue a transfer job with the current selection.'
 				}
 				actions={
-					<Space wrap>
+					<Space wrap className={styles.headerActions}>
 						<Tooltip title={queueDisabledReason ?? 'Queue selected files as an upload job'}>
 							<span>
 								<Button type="primary" onClick={queueUpload} disabled={!canQueueUpload}>

@@ -222,6 +222,7 @@
 	font-size: 14px;
 	line-height: 1.55;
 	color: var(--s3d-color-text);
+	overflow-wrap: anywhere;
 }
 
 .mobileMetaSecondary {
@@ -274,5 +275,48 @@
 
 	.mobileCard {
 		padding: 16px;
+	}
+}
+
+@media (max-width: 380px) {
+	.mobileActionRow {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.mobileActionRow > * {
+		width: 100%;
+	}
+
+	.mobileActionRow :global(.ant-btn) {
+		width: 100%;
+		min-height: 44px;
+		justify-content: center;
+	}
+}
+
+@media (max-width: 360px) {
+	.mobileCard {
+		gap: 12px;
+		padding: 14px;
+	}
+
+	.mobileMetaGrid {
+		gap: 10px;
+	}
+
+	.mobileMetaLabel {
+		margin-bottom: 4px;
+		font-size: 10px;
+	}
+
+	.mobileMetaValue {
+		font-size: 13px;
+		line-height: 1.45;
+	}
+
+	.mobileMetaSecondary,
+	.mobileId {
+		overflow-wrap: anywhere;
 	}
 }

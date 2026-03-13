@@ -65,14 +65,18 @@ export function PopoverSurface(props: Props) {
 		if (!open || typeof window === 'undefined' || !anchorElement || !panelRef.current) return
 		const panel = panelRef.current
 		const updatePosition = () => {
+			const viewportPadding = 16
 			const anchorRect = anchorElement.getBoundingClientRect()
 			const panelRect = panel.getBoundingClientRect()
-			const maxLeft = Math.max(12, window.innerWidth - panelRect.width - 12)
+			const maxLeft = Math.max(viewportPadding, window.innerWidth - panelRect.width - viewportPadding)
 			const left =
 				props.align === 'end'
-					? Math.min(maxLeft, Math.max(12, anchorRect.right - panelRect.width))
-					: Math.min(maxLeft, Math.max(12, anchorRect.left))
-			const top = Math.min(Math.max(12, anchorRect.bottom + 8), Math.max(12, window.innerHeight - panelRect.height - 12))
+					? Math.min(maxLeft, Math.max(viewportPadding, anchorRect.right - panelRect.width))
+					: Math.min(maxLeft, Math.max(viewportPadding, anchorRect.left))
+			const top = Math.min(
+				Math.max(viewportPadding, anchorRect.bottom + 8),
+				Math.max(viewportPadding, window.innerHeight - panelRect.height - viewportPadding),
+			)
 			Object.assign(panel.style, {
 				position: 'fixed',
 				top: `${top}px`,
@@ -103,7 +107,7 @@ export function PopoverSurface(props: Props) {
 							ref={panelRef}
 							{...props.contentProps}
 							className={[styles.panel, props.contentClassName ?? '', props.contentProps?.className ?? ''].filter(Boolean).join(' ')}
-							style={{ ...props.contentStyle, position: 'fixed', top: 12, left: 12, visibility: 'hidden' }}
+							style={{ ...props.contentStyle, position: 'fixed', top: 16, left: 16, visibility: 'hidden' }}
 						>
 							{props.content({ close })}
 						</div>,

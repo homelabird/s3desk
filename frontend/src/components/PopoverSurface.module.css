@@ -10,7 +10,7 @@
 .panel {
 	z-index: 1300;
 	min-width: 220px;
-	max-width: min(360px, calc(100vw - 32px));
+	max-width: min(360px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right))));
 	border: 1px solid var(--s3d-color-border);
 	border-radius: 14px;
 	background: var(--s3d-color-bg);

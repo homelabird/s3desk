@@ -36,3 +36,25 @@
 	margin: 4px 0 0;
 	padding-left: 18px;
 }
+
+.compactFieldRow {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	width: 100%;
+}
+
+.compactFieldRow > :first-child {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+@media (max-width: 360px) {
+	.compactFieldRow {
+		flex-direction: column;
+	}
+
+	.compactFieldRow > * {
+		width: 100%;
+	}
+}

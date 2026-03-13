@@ -9,6 +9,7 @@ that need to stay close to the codebase.
 - [PROVIDERS.md](PROVIDERS.md): provider support matrix and operator-facing capability notes
 - [PORTABLE_BACKUP.md](PORTABLE_BACKUP.md): portable backup/import scope, workflow, validation, and limits
 - [BUCKET_GOVERNANCE.md](BUCKET_GOVERNANCE.md): shipped governance scope, live validation workflow, and remaining gaps
+- [MOBILE_UX_AUDIT.md](MOBILE_UX_AUDIT.md): prioritized mobile-friendly UI/UX audit findings and follow-up focus areas
 
 Supporting assets that still live under `docs/`:
 

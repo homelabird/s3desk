@@ -1,10 +1,12 @@
-import { DownloadOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
-import { Alert, Button, Checkbox, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
+import { DownloadOutlined, FilterOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
+import { Alert, Button, Checkbox, Grid, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
+import { useEffect, useState } from 'react'
 
 import type { JobStatus } from '../../api/types'
 import { DatalistInput } from '../../components/DatalistInput'
 import { MenuPopover } from '../../components/MenuPopover'
 import { NativeSelect } from '../../components/NativeSelect'
+import { OverlaySheet } from '../../components/OverlaySheet'
 import { PageHeader } from '../../components/PageHeader'
 import { PageSection } from '../../components/PageSection'
 import { PopoverSurface } from '../../components/PopoverSurface'
@@ -64,7 +66,14 @@ type Props = {
 	jobsCount: number
 }
 
+const MOBILE_FILTERS_MEDIA_QUERY = '(max-width: 480px)'
+
 export function JobsToolbar(props: Props) {
+	const screens = Grid.useBreakpoint()
+	const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+	const [useCompactFilters, setUseCompactFilters] = useState(
+		() => typeof window !== 'undefined' && window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY).matches,
+	)
 	const healthItems = [
 		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active' },
 		{ key: 'queued', label: 'Queued', value: props.jobsStatusSummary.queued, tone: 'muted' },
@@ -73,6 +82,58 @@ export function JobsToolbar(props: Props) {
 		{ key: 'succeeded', label: 'Succeeded', value: props.jobsStatusSummary.succeeded, tone: 'success' },
 		{ key: 'canceled', label: 'Canceled', value: props.jobsStatusSummary.canceled, tone: 'muted' },
 	] as const
+	const advancedFiltersDirty =
+		props.statusFilter !== 'all' || props.typeFilterNormalized.trim().length > 0 || props.errorCodeFilterNormalized.trim().length > 0
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const media = window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY)
+		const update = (matches: boolean) => {
+			setUseCompactFilters(matches)
+			if (!matches) setMobileFiltersOpen(false)
+		}
+		update(media.matches)
+		const listener = (event: MediaQueryListEvent) => update(event.matches)
+		media.addEventListener('change', listener)
+		return () => media.removeEventListener('change', listener)
+	}, [])
+
+	const advancedFilterFields = (
+		<>
+			<NativeSelect
+				value={props.statusFilter}
+				onChange={(next) => props.onStatusFilterChange(next as JobStatus | 'all')}
+				ariaLabel="Job status filter"
+				className={styles.statusFilterControl}
+				options={[
+					{ label: 'All statuses', value: 'all' },
+					{ label: 'queued', value: 'queued' },
+					{ label: 'running', value: 'running' },
+					{ label: 'succeeded', value: 'succeeded' },
+					{ label: 'failed', value: 'failed' },
+					{ label: 'canceled', value: 'canceled' },
+				]}
+			/>
+			<DatalistInput
+				value={props.typeFilterNormalized}
+				onChange={props.onTypeFilterChange}
+				placeholder="Type (exact, optional)…"
+				ariaLabel="Job type filter"
+				allowClear
+				className={styles.typeFilterControl}
+				options={props.typeFilterSuggestions}
+			/>
+			<DatalistInput
+				value={props.errorCodeFilterNormalized}
+				onChange={props.onErrorCodeFilterChange}
+				placeholder="Error code (exact, optional)…"
+				ariaLabel="Job error code filter"
+				allowClear
+				className={styles.errorCodeFilterControl}
+				options={props.errorCodeSuggestions}
+			/>
+		</>
+	)
 
 	return (
 		<>
@@ -175,7 +236,11 @@ export function JobsToolbar(props: Props) {
 				>
 					<div className={styles.healthGrid}>
 						{healthItems.map((item) => (
-							<div key={item.key} className={`${styles.healthCard} ${styles[`healthCard${item.tone[0].toUpperCase()}${item.tone.slice(1)}`]}`}>
+							<div
+								key={item.key}
+								data-testid={`jobs-health-${item.key}`}
+								className={`${styles.healthCard} ${styles[`healthCard${item.tone[0].toUpperCase()}${item.tone.slice(1)}`]}`}
+							>
 								<Typography.Text type="secondary" className={styles.healthLabel}>
 									{item.label}
 								</Typography.Text>
@@ -205,38 +270,18 @@ export function JobsToolbar(props: Props) {
 						options={[]}
 						prefix={<SearchOutlined />}
 					/>
-					<NativeSelect
-						value={props.statusFilter}
-						onChange={(next) => props.onStatusFilterChange(next as JobStatus | 'all')}
-						ariaLabel="Job status filter"
-						className={styles.statusFilterControl}
-						options={[
-							{ label: 'All statuses', value: 'all' },
-							{ label: 'queued', value: 'queued' },
-							{ label: 'running', value: 'running' },
-							{ label: 'succeeded', value: 'succeeded' },
-							{ label: 'failed', value: 'failed' },
-							{ label: 'canceled', value: 'canceled' },
-						]}
-					/>
-					<DatalistInput
-						value={props.typeFilterNormalized}
-						onChange={props.onTypeFilterChange}
-						placeholder="Type (exact, optional)…"
-						ariaLabel="Job type filter"
-						allowClear
-						className={styles.typeFilterControl}
-						options={props.typeFilterSuggestions}
-					/>
-					<DatalistInput
-						value={props.errorCodeFilterNormalized}
-						onChange={props.onErrorCodeFilterChange}
-						placeholder="Error code (exact, optional)…"
-						ariaLabel="Job error code filter"
-						allowClear
-						className={styles.errorCodeFilterControl}
-						options={props.errorCodeSuggestions}
-					/>
+					{useCompactFilters ? (
+						<Button
+							icon={<FilterOutlined />}
+							onClick={() => setMobileFiltersOpen(true)}
+							data-testid="jobs-mobile-filters-trigger"
+							className={styles.mobileFiltersTrigger}
+						>
+							{advancedFiltersDirty ? 'Filters active' : 'Filters'}
+						</Button>
+					) : (
+						advancedFilterFields
+					)}
 					<Button onClick={props.onResetFilters} disabled={!props.filtersDirty}>
 						Reset filters
 					</Button>
@@ -277,6 +322,35 @@ export function JobsToolbar(props: Props) {
 						Refresh
 					</Button>
 				</div>
+				{useCompactFilters ? (
+					<Typography.Text type="secondary" className={styles.mobileFiltersHint} data-testid="jobs-mobile-filters-hint">
+						Search current jobs here, or open Filters for status, type, and error code.
+					</Typography.Text>
+				) : null}
+				{useCompactFilters ? (
+					<OverlaySheet
+						open={mobileFiltersOpen}
+						onClose={() => setMobileFiltersOpen(false)}
+						title="Job filters"
+						placement={screens.md ? 'right' : 'bottom'}
+						height={!screens.md ? 'min(80dvh, 560px)' : undefined}
+						width={screens.md ? 520 : undefined}
+						dataTestId="jobs-mobile-filters-sheet"
+						bodyClassName={styles.mobileFiltersBody}
+						footer={
+							<>
+								<Button onClick={props.onResetFilters} disabled={!props.filtersDirty}>
+									Reset filters
+								</Button>
+								<Button type="primary" onClick={() => setMobileFiltersOpen(false)}>
+									Done
+								</Button>
+							</>
+						}
+					>
+						<div className={styles.mobileFiltersStack}>{advancedFilterFields}</div>
+					</OverlaySheet>
+				) : null}
 			</PageSection>
 		</>
 	)
