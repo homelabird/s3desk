@@ -101,4 +101,29 @@ test.describe('responsive list layouts', () => {
 		await expect(page.getByTestId('buckets-table-desktop')).toBeVisible()
 		await expect(page.getByTestId('buckets-list-compact')).toHaveCount(0)
 	})
+
+	test('compact card actions stack vertically on extra-small mobile widths', async ({ page }) => {
+		await page.setViewportSize({ width: 360, height: 900 })
+		await stubCoreApi(page)
+		await seedStorage(page)
+		await page.goto('/profiles')
+
+		const profileButtons = page.getByTestId('profiles-list-compact').locator('article').first().getByRole('button')
+		const profilePrimaryBox = await profileButtons.nth(0).boundingBox()
+		const profileMoreBox = await profileButtons.nth(1).boundingBox()
+
+		expect(profilePrimaryBox?.width ?? 0).toBeGreaterThanOrEqual(300)
+		expect(profileMoreBox?.y ?? 0).toBeGreaterThan((profilePrimaryBox?.y ?? 0) + (profilePrimaryBox?.height ?? 0) - 1)
+
+		await page.goto('/buckets')
+
+		const bucketButtons = page.getByTestId('buckets-list-compact').locator('article').first().getByRole('button')
+		const controlsBox = await bucketButtons.nth(0).boundingBox()
+		const policyBox = await bucketButtons.nth(1).boundingBox()
+		const deleteBox = await bucketButtons.nth(2).boundingBox()
+
+		expect(controlsBox?.width ?? 0).toBeGreaterThanOrEqual(300)
+		expect(policyBox?.y ?? 0).toBeGreaterThan((controlsBox?.y ?? 0) + (controlsBox?.height ?? 0) - 1)
+		expect(deleteBox?.y ?? 0).toBeGreaterThan((policyBox?.y ?? 0) + (policyBox?.height ?? 0) - 1)
+	})
 })

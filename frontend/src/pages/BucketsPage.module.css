@@ -148,3 +148,26 @@
 		padding: 16px;
 	}
 }
+
+@media (max-width: 380px) {
+	.mobileActionRow {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.mobileActionRow .actionGroup {
+		width: 100%;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.mobileActionRow .actionGroup > * {
+		width: 100%;
+	}
+
+	.mobileActionRow :global(.ant-btn) {
+		width: 100%;
+		min-height: 44px;
+		justify-content: center;
+	}
+}

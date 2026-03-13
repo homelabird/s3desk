@@ -289,16 +289,27 @@
 
 @media (max-width: 992px) {
 	.headerActions {
-		gap: 6px;
+		gap: 8px;
 	}
 }
 
 @media (max-width: 768px) {
+	.mobileBrandButton {
+		min-height: 44px;
+	}
+
 	.headerTopRow {
 		gap: 8px;
 	}
 
 	.headerActions {
 		flex-shrink: 0;
+	}
+
+	.headerLeading :global(.ant-btn),
+	.headerActions :global(.ant-btn),
+	.headerProfileRow :global(.ant-btn) {
+		min-width: 44px;
+		min-height: 44px;
 	}
 }

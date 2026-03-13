@@ -112,14 +112,53 @@ test.describe('mobile smoke', () => {
 		await stubCoreApi(page)
 		await seedStorage(page)
 		await page.goto('/profiles')
-		await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible()
-		await expect(page.getByRole('combobox', { name: 'Profile' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Transfers' })).toBeVisible()
+		const navButton = page.getByRole('button', { name: 'Open navigation' })
+		const profileSelect = page.getByRole('combobox', { name: 'Profile' })
+		const transfersButton = page.getByRole('button', { name: 'Transfers' })
+		const moreActionsButton = page.getByTestId('app-header').getByRole('button', { name: 'More actions' })
+
+		await expect(navButton).toBeVisible()
+		await expect(profileSelect).toBeVisible()
+		await expect(transfersButton).toBeVisible()
 		await expect(page.getByRole('button', { name: /Settings/i })).toHaveCount(0)
 
-		await page.getByTestId('app-header').getByRole('button', { name: 'More actions' }).click()
+		for (const locator of [navButton, profileSelect, transfersButton, moreActionsButton]) {
+			const box = await locator.boundingBox()
+			expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
+		}
+
+		await moreActionsButton.click()
 		await expect(page.getByRole('menuitem', { name: /Settings/i })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Logout/i })).toBeVisible()
+	})
+
+	test('settings tabs keep mobile-sized touch targets and horizontal scrolling', async ({ page }) => {
+		await stubCoreApi(page)
+		await seedStorage(page)
+		await page.goto('/settings')
+
+		const tablist = page.getByRole('tablist').first()
+		const workspaceTab = page.getByRole('tab', { name: 'Workspace' })
+
+		await expect(tablist).toBeVisible()
+		await expect(workspaceTab).toBeVisible()
+
+		const tabMetrics = await tablist.evaluate((node) => {
+			const element = node as HTMLElement
+			const styles = window.getComputedStyle(element)
+			return {
+				clientWidth: element.clientWidth,
+				scrollWidth: element.scrollWidth,
+				scrollSnapType: styles.scrollSnapType,
+				gap: styles.gap,
+			}
+		})
+		expect(tabMetrics.scrollWidth).toBeGreaterThan(tabMetrics.clientWidth)
+		expect(tabMetrics.scrollSnapType).toContain('x')
+		expect(tabMetrics.gap).toBe('8px')
+
+		const workspaceBox = await workspaceTab.boundingBox()
+		expect(workspaceBox?.height ?? 0).toBeGreaterThanOrEqual(44)
 	})
 
 	test('buckets page renders', async ({ page }) => {
