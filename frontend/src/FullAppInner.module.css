@@ -271,9 +271,10 @@
 
 .stickyBanners {
 	position: sticky;
-	top: 0;
+	top: max(0px, env(safe-area-inset-top));
 	z-index: 10;
 	background: var(--s3d-gradient-sticky);
+	padding-top: env(safe-area-inset-top);
 }
 
 .loadingFallback {

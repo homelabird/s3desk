@@ -150,6 +150,7 @@ function ProfileModalSession(props: {
 	const handleCancel = useCallback(() => {
 		runIfActionIdle(isBusy, props.onCancel)
 	}, [isBusy, props.onCancel])
+	const mobileSheetHeight = 'calc(100dvh - env(safe-area-inset-top))'
 
 	const sectionItems = buildProfileModalSectionItems({
 		values,
@@ -166,7 +167,7 @@ function ProfileModalSession(props: {
 			title={props.title}
 			placement={sheetPlacement}
 			width={screens.md ? 'min(92vw, 980px)' : undefined}
-			height={!screens.md ? '100dvh' : undefined}
+			height={!screens.md ? mobileSheetHeight : undefined}
 			footer={
 				<div className={styles.drawerFooter}>
 					<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>

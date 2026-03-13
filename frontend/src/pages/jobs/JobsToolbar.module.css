@@ -68,6 +68,10 @@
 	flex-wrap: wrap;
 }
 
+.mobileFiltersTrigger {
+	flex: 0 0 auto;
+}
+
 .searchFilterControl,
 .statusFilterControl,
 .typeFilterControl,
@@ -89,6 +93,16 @@
 	width: 100%;
 }
 
+.mobileFiltersBody {
+	padding-top: 12px;
+}
+
+.mobileFiltersStack {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
 @media (max-width: 768px) {
 	.headerActions {
 		justify-content: flex-start;
@@ -96,6 +110,26 @@
 
 	.healthGrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 480px) {
+	.healthGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.filtersRow {
+		align-items: stretch;
+		gap: 10px;
+	}
+
+	.searchFilterControl {
+		order: -1;
+	}
+
+	.searchFilterControl,
+	.mobileFiltersTrigger {
+		width: 100%;
 	}
 }
 

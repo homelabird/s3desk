@@ -234,6 +234,69 @@ test.describe('mobile smoke', () => {
 		await expect(page.locator('button').filter({ hasText: 'Upload…' }).first()).toBeVisible()
 	})
 
+	test('narrow mobile dialogs and job filters stay phone-safe', async ({ page }) => {
+		await page.setViewportSize({ width: 350, height: 560 })
+		await stubCoreApi(page)
+		await seedStorage(page)
+
+		await page.goto('/objects')
+		await page.getByRole('button', { name: 'New folder' }).click()
+
+		const newFolderDialog = page.getByRole('dialog')
+		await expect(newFolderDialog).toBeVisible()
+		await expect(page.getByRole('heading', { name: 'New folder' })).toBeVisible()
+
+		const dialogMetrics = await newFolderDialog.evaluate((node) => {
+			const element = node as HTMLElement
+			const header = element.querySelector('div') as HTMLElement | null
+			const body = element.querySelector('[class*="body"]') as HTMLElement | null
+			return {
+				width: element.getBoundingClientRect().width,
+				maxWidth: window.innerWidth,
+				bodyPaddingInline: body ? window.getComputedStyle(body).paddingLeft : null,
+				headerPaddingInline: header ? window.getComputedStyle(header).paddingLeft : null,
+			}
+		})
+		expect(dialogMetrics.width).toBeLessThanOrEqual(dialogMetrics.maxWidth)
+		expect(dialogMetrics.bodyPaddingInline).toBe('12px')
+		expect(dialogMetrics.headerPaddingInline).toBe('12px')
+
+		await page.getByRole('button', { name: 'Close' }).click()
+		await page.goto('/jobs')
+
+		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toBeVisible()
+		await expect(page.getByRole('combobox', { name: 'Job status filter' })).toHaveCount(0)
+		await page.getByTestId('jobs-mobile-filters-trigger').click()
+		await expect(page.getByTestId('jobs-mobile-filters-sheet')).toBeVisible()
+		await expect(page.getByRole('combobox', { name: 'Job status filter' })).toBeVisible()
+		await expect(page.getByRole('combobox', { name: 'Job type filter' })).toBeVisible()
+		await expect(page.getByRole('combobox', { name: 'Job error code filter' })).toBeVisible()
+
+		const activeCard = page.getByTestId('jobs-health-active')
+		const queuedCard = page.getByTestId('jobs-health-queued')
+		const activeBox = await activeCard.boundingBox()
+		const queuedBox = await queuedCard.boundingBox()
+		expect(queuedBox?.y ?? 0).toBeGreaterThan((activeBox?.y ?? 0) + (activeBox?.height ?? 0) - 1)
+
+		await page.getByRole('button', { name: 'Done' }).click()
+		await expect(page.getByTestId('jobs-mobile-filters-sheet')).toHaveCount(0)
+
+		await page.getByRole('button', { name: 'Upload…' }).first().click()
+		const uploadSheet = page.getByRole('dialog')
+		await expect(page.getByRole('heading', { name: 'Upload from device' })).toBeVisible()
+		const sheetMetrics = await uploadSheet.evaluate((node) => {
+			const element = node as HTMLElement
+			const body = element.querySelector('[class*="body"]') as HTMLElement | null
+			return {
+				height: element.getBoundingClientRect().height,
+				maxHeight: window.innerHeight,
+				bodyPaddingBottom: body ? window.getComputedStyle(body).paddingBottom : null,
+			}
+		})
+		expect(sheetMetrics.height).toBeLessThanOrEqual(sheetMetrics.maxHeight)
+		expect(sheetMetrics.bodyPaddingBottom).toBe('20px')
+	})
+
 	test('uploads page renders', async ({ page }) => {
 		await stubCoreApi(page)
 		await seedStorage(page)

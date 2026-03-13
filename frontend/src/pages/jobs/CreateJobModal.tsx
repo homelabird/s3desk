@@ -32,6 +32,7 @@ export function CreateJobModal(props: {
 }) {
 	const screens = Grid.useBreakpoint()
 	const drawerWidth = screens.md ? 520 : '100%'
+	const mobileSheetHeight = 'calc(100dvh - env(safe-area-inset-top))'
 	const [bucket, setBucket] = useState(props.bucket)
 	const [prefix, setPrefix] = useState('')
 	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -124,7 +125,7 @@ export function CreateJobModal(props: {
 			title="Upload from device"
 			placement={screens.md ? 'right' : 'bottom'}
 			width={screens.md ? drawerWidth : undefined}
-			height={!screens.md ? '100dvh' : undefined}
+			height={!screens.md ? mobileSheetHeight : undefined}
 			extra={
 				<div className={styles.drawerExtra}>
 					<Button onClick={handleCancel}>Close</Button>
