@@ -66,11 +66,13 @@ type Props = {
 	jobsCount: number
 }
 
+const MOBILE_FILTERS_MEDIA_QUERY = '(max-width: 480px)'
+
 export function JobsToolbar(props: Props) {
 	const screens = Grid.useBreakpoint()
 	const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 	const [useCompactFilters, setUseCompactFilters] = useState(
-		() => typeof window !== 'undefined' && window.matchMedia('(max-width: 480px)').matches,
+		() => typeof window !== 'undefined' && window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY).matches,
 	)
 	const healthItems = [
 		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active' },
@@ -85,19 +87,15 @@ export function JobsToolbar(props: Props) {
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
-		const media = window.matchMedia('(max-width: 480px)')
+		const media = window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY)
 		const update = (matches: boolean) => {
 			setUseCompactFilters(matches)
 			if (!matches) setMobileFiltersOpen(false)
 		}
 		update(media.matches)
 		const listener = (event: MediaQueryListEvent) => update(event.matches)
-		if (typeof media.addEventListener === 'function') {
-			media.addEventListener('change', listener)
-			return () => media.removeEventListener('change', listener)
-		}
-		media.addListener(listener)
-		return () => media.removeListener(listener)
+		media.addEventListener('change', listener)
+		return () => media.removeEventListener('change', listener)
 	}, [])
 
 	const advancedFilterFields = (
