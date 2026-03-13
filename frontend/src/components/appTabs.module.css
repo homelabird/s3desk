@@ -189,3 +189,23 @@
     padding: 8px 10px;
   }
 }
+
+@media (max-width: 360px) {
+  .tabList {
+    gap: 4px;
+    padding-inline-end: 8px;
+    scroll-padding-inline: 8px;
+  }
+
+  .tabButtonLine,
+  .sizeSmall .tabButtonLine {
+    padding: 10px;
+  }
+
+  .tabButtonCard,
+  .addButton,
+  .sizeSmall .tabButtonCard,
+  .sizeSmall .addButton {
+    padding: 8px 10px;
+  }
+}

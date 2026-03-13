@@ -188,3 +188,16 @@ Recommended follow-up:
 - rerun `frontend/tests/responsive-lists.spec.ts`
 - capture screenshots for iPhone-style and Android-style mobile viewports
 - run Lighthouse accessibility checks against the mobile flows that change
+
+## Remaining Follow-up Notes
+
+Most of the high-priority mobile issues in this audit have now been addressed in
+the frontend. The remaining ideas below are lower-risk polish items that can be
+revisited if mobile user feedback points to them:
+
+- consider a dropdown or segmented fallback if horizontally scrollable tabs
+  still feel hidden on very narrow phones
+- reduce reliance on `More` menus for routine compact-card actions where a clear
+  always-visible secondary action would improve mobile flows
+- revisit a first-use global-search hint only if indexed search remains hard to
+  discover after the current label/callout updates

@@ -161,6 +161,40 @@ test.describe('mobile smoke', () => {
 		expect(workspaceBox?.height ?? 0).toBeGreaterThanOrEqual(44)
 	})
 
+	test('extra-small settings tabs and dialog close controls stay touch-friendly', async ({ page }) => {
+		await page.setViewportSize({ width: 350, height: 740 })
+		await stubCoreApi(page)
+		await seedStorage(page)
+
+		await page.goto('/settings')
+		const tablist = page.getByRole('tablist').first()
+		const workspaceTab = page.getByRole('tab', { name: 'Workspace' })
+
+		await expect(tablist).toBeVisible()
+		const tabMetrics = await tablist.evaluate((node) => {
+			const element = node as HTMLElement
+			const styles = window.getComputedStyle(element)
+			return {
+				gap: styles.gap,
+				scrollWidth: element.scrollWidth,
+				clientWidth: element.clientWidth,
+			}
+		})
+		expect(tabMetrics.gap).toBe('4px')
+		expect(tabMetrics.scrollWidth).toBeGreaterThan(tabMetrics.clientWidth)
+
+		const workspaceBox = await workspaceTab.boundingBox()
+		expect(workspaceBox?.height ?? 0).toBeGreaterThanOrEqual(44)
+
+		await page.goto('/objects')
+		await page.getByRole('button', { name: 'New folder' }).click()
+		const closeButton = page.getByRole('button', { name: 'Close' })
+		await expect(closeButton).toBeVisible()
+		const closeBox = await closeButton.boundingBox()
+		expect(closeBox?.width ?? 0).toBeGreaterThanOrEqual(44)
+		expect(closeBox?.height ?? 0).toBeGreaterThanOrEqual(44)
+	})
+
 	test('extra-small mobile layouts keep metadata and search actions readable', async ({ page }) => {
 		await page.setViewportSize({ width: 360, height: 740 })
 		await stubCoreApi(page)
