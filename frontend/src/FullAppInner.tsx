@@ -282,7 +282,7 @@ export default function FullAppInner() {
 					</Sider>
 				) : null}
 
-				<Layout className={styles.appLayout}>
+				<Layout className={`${styles.appLayout} ${styles.appShell}`}>
 					<Header
 						className={[
 							styles.header,

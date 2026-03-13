@@ -9,6 +9,11 @@ type StorageSeed = {
 	objectsUIMode: 'simple' | 'advanced'
 }
 
+type StubCoreApiOptions = Partial<StorageSeed> & {
+	profiles?: Array<Record<string, unknown>>
+	buckets?: Array<Record<string, unknown>>
+}
+
 const defaultStorage: StorageSeed = {
 	apiToken: 'change-me',
 	profileId: 'playwright-mobile',
@@ -20,9 +25,24 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	await seedLocalStorage(page, { ...defaultStorage, ...overrides })
 }
 
-async function stubCoreApi(page: Page, overrides?: Partial<StorageSeed>) {
+async function stubCoreApi(page: Page, overrides?: StubCoreApiOptions) {
 	const seed = { ...defaultStorage, ...overrides }
 	const now = '2024-01-01T00:00:00Z'
+	const profiles = overrides?.profiles ?? [
+		{
+			id: seed.profileId,
+			name: 'Playwright Mobile',
+			provider: 's3_compatible',
+			endpoint: 'http://localhost:9000',
+			region: 'us-east-1',
+			forcePathStyle: true,
+			preserveLeadingSlash: false,
+			tlsInsecureSkipVerify: true,
+			createdAt: now,
+			updatedAt: now,
+		},
+	]
+	const buckets = overrides?.buckets ?? [{ name: seed.bucket, createdAt: now }]
 
 	await installApiFixtures(page, [
 		jsonFixture(
@@ -48,21 +68,8 @@ async function stubCoreApi(page: Page, overrides?: Partial<StorageSeed>) {
 				},
 			}),
 		),
-		jsonFixture('GET', '/api/v1/profiles', [
-			{
-				id: seed.profileId,
-				name: 'Playwright Mobile',
-				provider: 's3_compatible',
-				endpoint: 'http://localhost:9000',
-				region: 'us-east-1',
-				forcePathStyle: true,
-				preserveLeadingSlash: false,
-				tlsInsecureSkipVerify: true,
-				createdAt: now,
-				updatedAt: now,
-			},
-		]),
-		jsonFixture('GET', '/api/v1/buckets', [{ name: seed.bucket, createdAt: now }]),
+		jsonFixture('GET', '/api/v1/profiles', profiles),
+		jsonFixture('GET', '/api/v1/buckets', buckets),
 		jsonFixture('GET', `/api/v1/buckets/${seed.bucket}/objects`, {
 			bucket: seed.bucket,
 			prefix: '',
@@ -108,7 +115,7 @@ test.describe('mobile smoke', () => {
 		await expect(page.getByRole('button', { name: 'Transfers' })).toBeVisible()
 		await expect(page.getByRole('button', { name: /Settings/i })).toHaveCount(0)
 
-		await page.getByRole('button', { name: 'More actions' }).click()
+		await page.getByTestId('app-header').getByRole('button', { name: 'More actions' }).click()
 		await expect(page.getByRole('menuitem', { name: /Settings/i })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Logout/i })).toBeVisible()
 	})
@@ -120,6 +127,44 @@ test.describe('mobile smoke', () => {
 		await expect(page.getByRole('heading', { name: 'Buckets' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'New Bucket' })).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Policy' })).toBeVisible()
+	})
+
+	test('mobile app shell keeps dashboard content scrollable without horizontal overflow', async ({ page }) => {
+		const bucketNames = Array.from({ length: 24 }, (_, index) => `mobile-bucket-${index.toString().padStart(2, '0')}`)
+		await stubCoreApi(page, {
+			buckets: bucketNames.map((name) => ({ name, createdAt: '2024-01-01T00:00:00Z' })),
+		})
+		await seedStorage(page)
+		await page.goto('/buckets')
+
+		await expect(page.getByTestId('buckets-list-compact')).toBeVisible()
+
+		const scrollContainer = page.locator('main[data-scroll-container="app-content"]')
+		const beforeScroll = await scrollContainer.evaluate((node) => {
+			const element = node as HTMLElement
+			return {
+				clientHeight: element.clientHeight,
+				scrollHeight: element.scrollHeight,
+				scrollTop: element.scrollTop,
+			}
+		})
+
+		expect(beforeScroll.scrollHeight).toBeGreaterThan(beforeScroll.clientHeight)
+		expect(beforeScroll.scrollTop).toBe(0)
+
+		const afterScrollTop = await scrollContainer.evaluate((node) => {
+			const element = node as HTMLElement
+			element.scrollTo({ top: element.scrollHeight })
+			return element.scrollTop
+		})
+
+		expect(afterScrollTop).toBeGreaterThan(0)
+
+		const viewportMetrics = await page.evaluate(() => ({
+			innerWidth: window.innerWidth,
+			scrollWidth: document.documentElement.scrollWidth,
+		}))
+		expect(viewportMetrics.scrollWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth)
 	})
 
 	test('root redirects to objects when an active profile is stored', async ({ page }) => {
