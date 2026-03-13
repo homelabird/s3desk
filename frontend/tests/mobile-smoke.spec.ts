@@ -21,6 +21,8 @@ const defaultStorage: StorageSeed = {
 	objectsUIMode: 'simple',
 }
 
+const MOBILE_SCROLL_TEST_BUCKET_COUNT = 24
+
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	await seedLocalStorage(page, { ...defaultStorage, ...overrides })
 }
@@ -130,7 +132,10 @@ test.describe('mobile smoke', () => {
 	})
 
 	test('mobile app shell keeps dashboard content scrollable without horizontal overflow', async ({ page }) => {
-		const bucketNames = Array.from({ length: 24 }, (_, index) => `mobile-bucket-${index.toString().padStart(2, '0')}`)
+		const bucketNames = Array.from(
+			{ length: MOBILE_SCROLL_TEST_BUCKET_COUNT },
+			(_, index) => `mobile-bucket-${index.toString().padStart(2, '0')}`,
+		)
 		await stubCoreApi(page, {
 			buckets: bucketNames.map((name) => ({ name, createdAt: '2024-01-01T00:00:00Z' })),
 		})

@@ -266,7 +266,8 @@
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior-y: contain;
-	padding-bottom: env(safe-area-inset-bottom, 0px);
+	padding-bottom: 0;
+	padding-bottom: env(safe-area-inset-bottom);
 }
 
 .stickyBanners {
