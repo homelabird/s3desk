@@ -73,7 +73,7 @@
 
 .toolbarMenuPopover {
   min-width: 220px;
-  max-width: min(360px, 100vw - 32px);
+  max-width: min(360px, var(--popover-available-width, calc(100vw - 32px)));
 }
 
 .toolbarMenuPopoverEnd {
@@ -81,7 +81,7 @@
 
 .contextMenuPanel {
   min-width: 220px;
-  max-width: min(360px, 100vw - 32px);
+  max-width: min(360px, var(--popover-available-width, calc(100vw - 32px)));
   border: 1px solid var(--s3d-color-border);
   border-radius: 14px;
   background: var(--s3d-color-bg);
@@ -90,7 +90,7 @@
 }
 
 .contextMenuMenu {
-  max-height: calc(100vh - 16px);
+  max-height: var(--popover-available-height, calc(100vh - 16px));
   overflow: auto;
 }
 

@@ -7,6 +7,7 @@ import type { ContextMenuMatch, ContextMenuPoint, ContextMenuState, UseObjectsCo
 export const CONTEXT_MENU_VIEWPORT_PADDING_PX = 8
 const LIST_CONTEXT_MENU_MAX_HEIGHT_PX = 320
 export const CONTEXT_MENU_CLASS_NAME = 'objects-context-menu'
+const CONTEXT_MENU_AVAILABLE_HEIGHT = `var(--popover-available-height, calc(100vh - ${CONTEXT_MENU_VIEWPORT_PADDING_PX * 2}px))`
 
 type UseObjectsContextMenuMenuArgs = Pick<
 	UseObjectsContextMenuArgs,
@@ -50,7 +51,7 @@ export function useObjectsContextMenuMenu(args: UseObjectsContextMenuMenuArgs) {
 		className: menu.className,
 		style: {
 			...menu.style,
-			maxHeight: menu.style?.maxHeight ?? `calc(100vh - ${CONTEXT_MENU_VIEWPORT_PADDING_PX * 2}px)`,
+			maxHeight: menu.style?.maxHeight ?? CONTEXT_MENU_AVAILABLE_HEIGHT,
 			overflowY: menu.style?.overflowY ?? 'auto',
 		},
 	})
@@ -88,7 +89,7 @@ export function useObjectsContextMenuMenu(args: UseObjectsContextMenuMenuArgs) {
 				...listContextMenuBase,
 				style: {
 					...listContextMenuBase.style,
-					maxHeight: `min(${LIST_CONTEXT_MENU_MAX_HEIGHT_PX}px, calc(100vh - ${CONTEXT_MENU_VIEWPORT_PADDING_PX * 2}px))`,
+					maxHeight: `min(${LIST_CONTEXT_MENU_MAX_HEIGHT_PX}px, ${CONTEXT_MENU_AVAILABLE_HEIGHT})`,
 					overflowY: 'auto',
 					overflowX: 'hidden',
 				},
