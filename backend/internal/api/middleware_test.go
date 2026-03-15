@@ -348,3 +348,33 @@ func TestAuthLimiterClientKey_IgnoresForwardingHeaders(t *testing.T) {
 		t.Fatalf("authLimiterClientKey=%q, want %q", got, "127.0.0.1")
 	}
 }
+
+func TestRequireAPITokenAcceptsQueryApiToken(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{APIToken: "demo-token"}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta?apiToken=demo-token", nil)
+	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAPITokenRejectsWrongQueryApiToken(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{APIToken: "demo-token"}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta?apiToken=wrong-token", nil)
+	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusUnauthorized)
+	}
+}
