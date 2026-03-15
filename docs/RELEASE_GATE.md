@@ -32,13 +32,13 @@ Attach or record these before release approval:
 
 ## Automated Enforcement
 
-The repository keeps a lightweight automated gate for the documentation side of release readiness:
+The repository keeps automated enforcement for release readiness inside the standard verification path:
 
-- local command: `./scripts/check_release_gate.sh`
-- included in the standard local verification pass: `./scripts/check.sh`
-- CI workflow: `Release Gate`
+- focused local release-doc check: `./scripts/check_release_gate.sh`
+- full local verification pass: `./scripts/check.sh`
+- CI workflow: `Release Gate` (runs `./scripts/check.sh` on pull requests and `main`)
 
-This automated check enforces that:
+The focused release-doc check specifically enforces that:
 
 - `CHANGELOG.md` still carries the current required known limitations
 - the live validation runbook still exposes the required evidence fields
