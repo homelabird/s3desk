@@ -9,6 +9,14 @@ import {
 } from '../api/client'
 import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
 import { AppTabs } from '../components/AppTabs'
+import {
+	DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+	DEFAULT_UPLOAD_TASK_CONCURRENCY,
+	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+	sanitizeDownloadTaskConcurrency,
+	sanitizeUploadTaskConcurrency,
+} from '../components/transfers/transferConcurrencyPreferences'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { clearDismissedDialogs, countDismissedDialogs, subscribeDialogPreferences } from '../lib/dialogPreferences'
 import { clearNetworkLog, getNetworkLog, subscribeNetworkLog, type NetworkLogEvent } from '../lib/networkStatus'
@@ -46,6 +54,7 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'bucket',
 	'prefix',
 	'uploadPrefix',
+	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 	'uploadBatchConcurrency',
 	'uploadBatchBytesMiB',
 	'uploadChunkSizeMiB',
@@ -54,6 +63,7 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'uploadChunkFileConcurrency',
 	'uploadAutoTuneEnabled',
 	'uploadResumeConversionEnabled',
+	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 
 	// Jobs
 	'jobsFollowLogs',
@@ -108,7 +118,17 @@ export function SettingsPage(props: Props) {
 		'downloadLinkProxyEnabled',
 		false,
 	)
+	const [downloadTaskConcurrencySetting, setDownloadTaskConcurrencySetting] = useLocalStorageState<number>(
+		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+		DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+		{ sanitize: sanitizeDownloadTaskConcurrency },
+	)
 	const [uploadAutoTuneEnabled, setUploadAutoTuneEnabled] = useLocalStorageState<boolean>('uploadAutoTuneEnabled', true)
+	const [uploadTaskConcurrencySetting, setUploadTaskConcurrencySetting] = useLocalStorageState<number>(
+		UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+		DEFAULT_UPLOAD_TASK_CONCURRENCY,
+		{ sanitize: sanitizeUploadTaskConcurrency },
+	)
 	const [uploadBatchConcurrencySetting, setUploadBatchConcurrencySetting] = useLocalStorageState<number>(
 		'uploadBatchConcurrency',
 		16,
@@ -269,8 +289,12 @@ export function SettingsPage(props: Props) {
 								<TransfersSettingsSection
 									downloadLinkProxyEnabled={downloadLinkProxyEnabled}
 									setDownloadLinkProxyEnabled={setDownloadLinkProxyEnabled}
+									downloadTaskConcurrencySetting={downloadTaskConcurrencySetting}
+									setDownloadTaskConcurrencySetting={setDownloadTaskConcurrencySetting}
 									uploadAutoTuneEnabled={uploadAutoTuneEnabled}
 									setUploadAutoTuneEnabled={setUploadAutoTuneEnabled}
+									uploadTaskConcurrencySetting={uploadTaskConcurrencySetting}
+									setUploadTaskConcurrencySetting={setUploadTaskConcurrencySetting}
 									uploadBatchConcurrencySetting={uploadBatchConcurrencySetting}
 									setUploadBatchConcurrencySetting={setUploadBatchConcurrencySetting}
 									uploadBatchBytesMiBSetting={uploadBatchBytesMiBSetting}

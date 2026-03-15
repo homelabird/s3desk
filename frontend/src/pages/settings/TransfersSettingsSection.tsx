@@ -3,13 +3,25 @@ import { Button, Collapse, Space } from 'antd'
 import { FormField } from '../../components/FormField'
 import { NumberField } from '../../components/NumberField'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
+import {
+	DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+	DEFAULT_UPLOAD_TASK_CONCURRENCY,
+	MAX_DOWNLOAD_TASK_CONCURRENCY,
+	MAX_UPLOAD_TASK_CONCURRENCY,
+	MIN_DOWNLOAD_TASK_CONCURRENCY,
+	MIN_UPLOAD_TASK_CONCURRENCY,
+} from '../../components/transfers/transferConcurrencyPreferences'
 import styles from '../SettingsPage.module.css'
 
 type TransfersSettingsSectionProps = {
 	downloadLinkProxyEnabled: boolean
 	setDownloadLinkProxyEnabled: (v: boolean) => void
+	downloadTaskConcurrencySetting: number
+	setDownloadTaskConcurrencySetting: (v: number) => void
 	uploadAutoTuneEnabled: boolean
 	setUploadAutoTuneEnabled: (v: boolean) => void
+	uploadTaskConcurrencySetting: number
+	setUploadTaskConcurrencySetting: (v: number) => void
 	uploadBatchConcurrencySetting: number
 	setUploadBatchConcurrencySetting: (v: number) => void
 	uploadBatchBytesMiBSetting: number
@@ -37,6 +49,42 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 					checked={props.downloadLinkProxyEnabled}
 					onChange={props.setDownloadLinkProxyEnabled}
 					aria-label="Downloads and previews: Use server proxy"
+				/>
+			</FormField>
+			<FormField
+				label="Download task concurrency"
+				htmlFor="transfers-download-task-concurrency"
+				extra="Number of downloads started in parallel. Higher values can improve throughput on fast networks, but use more browser bandwidth and memory."
+			>
+				<NumberField
+					id="transfers-download-task-concurrency"
+					min={MIN_DOWNLOAD_TASK_CONCURRENCY}
+					max={MAX_DOWNLOAD_TASK_CONCURRENCY}
+					value={props.downloadTaskConcurrencySetting}
+					onChange={(value) =>
+						props.setDownloadTaskConcurrencySetting(
+							typeof value === 'number' ? value : DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+						)
+					}
+					className={styles.fullWidth}
+				/>
+			</FormField>
+			<FormField
+				label="Upload task concurrency"
+				htmlFor="transfers-upload-task-concurrency"
+				extra="Number of upload tasks started in parallel. Keep this modest because each task can already upload multiple files and chunks at once."
+			>
+				<NumberField
+					id="transfers-upload-task-concurrency"
+					min={MIN_UPLOAD_TASK_CONCURRENCY}
+					max={MAX_UPLOAD_TASK_CONCURRENCY}
+					value={props.uploadTaskConcurrencySetting}
+					onChange={(value) =>
+						props.setUploadTaskConcurrencySetting(
+							typeof value === 'number' ? value : DEFAULT_UPLOAD_TASK_CONCURRENCY,
+						)
+					}
+					className={styles.fullWidth}
 				/>
 			</FormField>
 

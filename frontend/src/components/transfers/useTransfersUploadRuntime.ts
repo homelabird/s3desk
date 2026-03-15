@@ -38,6 +38,7 @@ type UseTransfersUploadRuntimeArgs = {
 	uploadCapabilityByProfileId?: UploadCapabilityByProfileId
 	uploadDirectStream?: boolean
 	uploadChunkFileConcurrency: number
+	uploadTaskConcurrency: number
 	uploadResumeConversionEnabled: boolean
 	pickUploadTuning: (totalBytes: number, maxFileBytes: number | null) => UploadTuning
 	uploadTasks: UploadTask[]
@@ -51,8 +52,6 @@ type UseTransfersUploadRuntimeArgs = {
 	uploadPreviewUrlByTaskIdRef: MutableRefObject<Record<string, string>>
 	openTransfers: (tab?: 'downloads' | 'uploads') => void
 }
-
-const uploadConcurrency = 1
 
 function isPresignedNetworkFailure(err: unknown): boolean {
 	return err instanceof PresignedUploadNetworkError
@@ -487,11 +486,11 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 
 	useEffect(() => {
 		const running = args.uploadTasks.filter((t) => t.status === 'staging' || t.status === 'commit').length
-		const capacity = uploadConcurrency - running
+		const capacity = args.uploadTaskConcurrency - running
 		if (capacity <= 0) return
 		const toStart = args.uploadTasks.filter((t) => t.status === 'queued').slice(0, capacity)
 		for (const task of toStart) void startUploadTask(task.id)
-	}, [args.uploadTasks, startUploadTask])
+	}, [args.uploadTaskConcurrency, args.uploadTasks, startUploadTask])
 
 	const hasPendingUploadJobs = args.uploadTasks.some((t) => t.status === 'waiting_job')
 	useTransfersUploadJobEvents({
