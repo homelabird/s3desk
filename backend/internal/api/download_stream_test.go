@@ -22,6 +22,28 @@ type eofOnceReader struct {
 	data []byte
 }
 
+type recordingStreamReader struct {
+	data      []byte
+	readSizes []int
+}
+
+func (r *recordingStreamReader) Read(p []byte) (int, error) {
+	r.readSizes = append(r.readSizes, len(p))
+	if len(r.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data)
+	r.data = r.data[n:]
+	if len(r.data) == 0 {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (r *recordingStreamReader) Close() error {
+	return nil
+}
+
 func (r *eofOnceReader) Read(p []byte) (int, error) {
 	if len(r.data) == 0 {
 		return 0, io.EOF
@@ -80,6 +102,56 @@ func TestStreamRcloneDownload_ConvertsEarlyProcessFailureToJSONError(t *testing.
 	}
 	if resp.Error.Message != "failed to download object" {
 		t.Fatalf("error.message=%q, want %q", resp.Error.Message, "failed to download object")
+	}
+}
+
+func TestStreamRcloneDownload_UsesTransferBufferAfterProbe(t *testing.T) {
+	t.Parallel()
+
+	payload := bytes.Repeat([]byte("z"), downloadStreamProbeBytes+transferCopyBufferBytes+123)
+	reader := &recordingStreamReader{data: append([]byte(nil), payload...)}
+	waitCalls := 0
+	proc := &rcloneProcess{
+		stdout: reader,
+		stderr: &bytes.Buffer{},
+		wait: func() error {
+			waitCalls++
+			return nil
+		},
+	}
+
+	rr := httptest.NewRecorder()
+	(&server{}).streamRcloneDownload(rr, proc, rcloneListEntry{Size: int64(len(payload))}, "report.txt", rcloneAPIErrorContext{
+		MissingMessage: "missing",
+		DefaultStatus:  http.StatusBadRequest,
+		DefaultCode:    "s3_error",
+		DefaultMessage: "failed to download object",
+	}, map[string]any{"bucket": "test-bucket", "key": "report.txt"})
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+	}
+	if body := rr.Body.Bytes(); !bytes.Equal(body, payload) {
+		t.Fatalf("body length=%d, want %d", len(body), len(payload))
+	}
+	if waitCalls != 1 {
+		t.Fatalf("wait called %d times, want 1", waitCalls)
+	}
+	if len(reader.readSizes) < 2 {
+		t.Fatalf("readSizes=%v, want probe read plus buffered copy reads", reader.readSizes)
+	}
+	if reader.readSizes[0] != downloadStreamProbeBytes {
+		t.Fatalf("first read size=%d, want %d", reader.readSizes[0], downloadStreamProbeBytes)
+	}
+	sawTransferBuffer := false
+	for _, size := range reader.readSizes[1:] {
+		if size == transferCopyBufferBytes {
+			sawTransferBuffer = true
+			break
+		}
+	}
+	if !sawTransferBuffer {
+		t.Fatalf("readSizes=%v, want transfer buffer size %d after probe", reader.readSizes, transferCopyBufferBytes)
 	}
 }
 
