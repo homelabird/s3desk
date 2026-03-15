@@ -76,8 +76,11 @@ type Manager struct {
 	jobRetention    time.Duration
 	jobLogRetention time.Duration
 
-	queue chan string
-	sem   chan struct{}
+	queueMu       sync.Mutex
+	queueCond     *sync.Cond
+	queue         []string
+	queueCapacity int
+	sem           chan struct{}
 
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc
@@ -185,7 +188,8 @@ func NewManager(cfg Config) *Manager {
 		logEmitStdout:   cfg.JobLogEmitStdout,
 		jobRetention:    cfg.JobRetention,
 		jobLogRetention: cfg.JobLogRetention,
-		queue:           make(chan string, queueCapacity),
+		queue:           make([]string, 0, queueCapacity),
+		queueCapacity:   queueCapacity,
 		sem:             make(chan struct{}, concurrency),
 		cancels:         make(map[string]context.CancelFunc),
 		pids:            make(map[string]int),
@@ -220,6 +224,7 @@ func NewManager(cfg Config) *Manager {
 		rcloneRetryRandFloat:       rand.Float64,
 		captureUnknownRcloneErrors: captureUnknown,
 	}
+	m.queueCond = sync.NewCond(&m.queueMu)
 
 	if m.metrics != nil {
 		m.metrics.SetJobsQueueCapacity(queueCapacity)
@@ -523,63 +528,87 @@ func (m *Manager) cleanupOrphanStagingDirs(ctx context.Context) {
 }
 
 func (m *Manager) Run(ctx context.Context) {
+	stopWake := context.AfterFunc(ctx, func() {
+		m.queueMu.Lock()
+		m.queueCond.Broadcast()
+		m.queueMu.Unlock()
+	})
+	defer stopWake()
+
 	for {
-		select {
-		case <-ctx.Done():
+		jobID, ok := m.dequeue(ctx)
+		if !ok {
 			return
-		case jobID := <-m.queue:
-			if m.metrics != nil {
-				m.metrics.SetJobsQueueDepth(len(m.queue))
-			}
-			m.sem <- struct{}{}
-			go func() {
-				defer func() { <-m.sem }()
-				if err := m.runJob(ctx, jobID); err != nil {
-					logging.ErrorFields("job execution failed", map[string]any{
-						"event":   "job.run_failed",
-						"job_id":  jobID,
-						"error":   err.Error(),
-						"message": "job terminated before a consistent completion state was published",
-					})
-				}
-			}()
 		}
+		m.sem <- struct{}{}
+		go func() {
+			defer func() { <-m.sem }()
+			if err := m.runJob(ctx, jobID); err != nil {
+				logging.ErrorFields("job execution failed", map[string]any{
+					"event":   "job.run_failed",
+					"job_id":  jobID,
+					"error":   err.Error(),
+					"message": "job terminated before a consistent completion state was published",
+				})
+			}
+		}()
 	}
 }
 
 func (m *Manager) QueueStats() QueueStats {
+	m.queueMu.Lock()
+	defer m.queueMu.Unlock()
+
 	return QueueStats{
 		Depth:    len(m.queue),
-		Capacity: cap(m.queue),
+		Capacity: m.queueCapacity,
 	}
 }
 
 func (m *Manager) Enqueue(jobID string) error {
-	select {
-	case m.queue <- jobID:
-		if m.metrics != nil {
-			m.metrics.SetJobsQueueDepth(len(m.queue))
-		}
-		return nil
-	default:
+	m.queueMu.Lock()
+	if len(m.queue) >= m.queueCapacity {
+		m.queueMu.Unlock()
 		return ErrJobQueueFull
 	}
+	m.queue = append(m.queue, jobID)
+	depth := len(m.queue)
+	m.queueCond.Broadcast()
+	m.queueMu.Unlock()
+	m.setQueueDepth(depth)
+	return nil
 }
 
 func (m *Manager) enqueueBlocking(ctx context.Context, ids []string) {
+	stopWake := context.AfterFunc(ctx, func() {
+		m.queueMu.Lock()
+		m.queueCond.Broadcast()
+		m.queueMu.Unlock()
+	})
+	defer stopWake()
+
 	for _, id := range ids {
-		select {
-		case <-ctx.Done():
-			return
-		case m.queue <- id:
-			if m.metrics != nil {
-				m.metrics.SetJobsQueueDepth(len(m.queue))
+		m.queueMu.Lock()
+		for len(m.queue) >= m.queueCapacity {
+			if ctx.Err() != nil {
+				m.queueMu.Unlock()
+				return
 			}
+			m.queueCond.Wait()
 		}
+		m.queue = append(m.queue, id)
+		depth := len(m.queue)
+		m.queueCond.Broadcast()
+		m.queueMu.Unlock()
+		m.setQueueDepth(depth)
 	}
 }
 
 func (m *Manager) Cancel(jobID string) {
+	if m.removeQueued(jobID) {
+		return
+	}
+
 	m.mu.Lock()
 	cancel, ok := m.cancels[jobID]
 	pid := m.pids[jobID]
@@ -590,6 +619,54 @@ func (m *Manager) Cancel(jobID string) {
 			_ = syscall.Kill(-pid, syscall.SIGKILL)
 		}
 		cancel()
+	}
+}
+
+func (m *Manager) dequeue(ctx context.Context) (string, bool) {
+	m.queueMu.Lock()
+	for len(m.queue) == 0 {
+		if ctx.Err() != nil {
+			m.queueMu.Unlock()
+			return "", false
+		}
+		m.queueCond.Wait()
+	}
+
+	jobID := m.queue[0]
+	copy(m.queue, m.queue[1:])
+	m.queue[len(m.queue)-1] = ""
+	m.queue = m.queue[:len(m.queue)-1]
+	depth := len(m.queue)
+	m.queueCond.Broadcast()
+	m.queueMu.Unlock()
+	m.setQueueDepth(depth)
+	return jobID, true
+}
+
+func (m *Manager) removeQueued(jobID string) bool {
+	m.queueMu.Lock()
+	for i := range m.queue {
+		if m.queue[i] != jobID {
+			continue
+		}
+
+		copy(m.queue[i:], m.queue[i+1:])
+		m.queue[len(m.queue)-1] = ""
+		m.queue = m.queue[:len(m.queue)-1]
+		depth := len(m.queue)
+		m.queueCond.Broadcast()
+		m.queueMu.Unlock()
+		m.setQueueDepth(depth)
+		return true
+	}
+
+	m.queueMu.Unlock()
+	return false
+}
+
+func (m *Manager) setQueueDepth(depth int) {
+	if m.metrics != nil {
+		m.metrics.SetJobsQueueDepth(depth)
 	}
 }
 

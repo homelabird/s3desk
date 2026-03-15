@@ -18,7 +18,6 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
-	"s3desk/internal/s3client"
 	"s3desk/internal/store"
 )
 
@@ -599,7 +598,13 @@ func (s *server) handleGetObjectDownloadURL(w http.ResponseWriter, r *http.Reque
 	}
 
 	if secrets.Provider == models.ProfileProviderAwsS3 || secrets.Provider == models.ProfileProviderS3Compatible {
-		resp, err := s3client.PresignFromProfile(secrets).PresignGetObject(
+		presigner, err := s3PresignClientFromProfile(secrets)
+		if err != nil {
+			metric.SetStatus("internal_error")
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare download presigner", nil)
+			return
+		}
+		resp, err := presigner.PresignGetObject(
 			r.Context(),
 			&s3.GetObjectInput{
 				Bucket: aws.String(bucket),
@@ -743,9 +748,13 @@ func (s *server) handleDeleteObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	keys := make([]string, 0, len(req.Keys))
-	for _, k := range req.Keys {
+	for i, k := range req.Keys {
 		if k == "" {
 			continue
+		}
+		if err := rcloneconfig.ValidateSingleLineValue(fmt.Sprintf("keys[%d]", i), k); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+			return
 		}
 		keys = append(keys, k)
 	}
@@ -877,7 +886,12 @@ func writeLinesToTempFile(pattern string, lines []string) (string, error) {
 	tmpPath := f.Name()
 
 	w := bufio.NewWriter(f)
-	for _, line := range lines {
+	for i, line := range lines {
+		if err := rcloneconfig.ValidateSingleLineValue(fmt.Sprintf("line %d", i+1), line); err != nil {
+			_ = f.Close()
+			_ = os.Remove(tmpPath)
+			return "", err
+		}
 		if _, err := w.WriteString(line + "\n"); err != nil {
 			_ = f.Close()
 			_ = os.Remove(tmpPath)

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profiletls"
 )
 
 // PrepareRcloneTLSFlags returns rclone TLS flags plus a cleanup function for temp files.
@@ -21,7 +22,7 @@ func PrepareRcloneTLSFlags(profile models.ProfileSecrets) (flags []string, clean
 		return flags, cleanup, nil
 	}
 
-	mode := normalizeTLSMode(profile.TLSConfig.Mode)
+	mode := profiletls.NormalizeMode(profile.TLSConfig.Mode)
 	if mode == models.ProfileTLSModeDisabled {
 		return flags, cleanup, nil
 	}
@@ -64,16 +65,4 @@ func PrepareRcloneTLSFlags(profile models.ProfileSecrets) (flags []string, clean
 	}
 
 	return flags, cleanup, nil
-}
-
-func normalizeTLSMode(mode models.ProfileTLSMode) models.ProfileTLSMode {
-	raw := strings.ToLower(strings.TrimSpace(string(mode)))
-	switch raw {
-	case "", "disabled":
-		return models.ProfileTLSModeDisabled
-	case "mtls":
-		return models.ProfileTLSModeMTLS
-	default:
-		return models.ProfileTLSMode(raw)
-	}
 }

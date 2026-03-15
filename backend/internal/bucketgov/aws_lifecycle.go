@@ -77,7 +77,10 @@ type awsNoncurrentVersionTransitionPayload struct {
 }
 
 func (a *awsAdapter) GetLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketLifecycleView, error) {
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return models.BucketLifecycleView{}, err
+	}
 	out, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
 		Bucket: &bucket,
 	})
@@ -101,7 +104,10 @@ func (a *awsAdapter) PutLifecycle(ctx context.Context, profile models.ProfileSec
 		return err
 	}
 
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return err
+	}
 	if len(rules) == 0 {
 		_, deleteErr := client.DeleteBucketLifecycle(ctx, &s3.DeleteBucketLifecycleInput{
 			Bucket: &bucket,

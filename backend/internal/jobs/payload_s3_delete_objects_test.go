@@ -57,6 +57,16 @@ func TestParseS3DeleteObjectsPayloadTypeErrors(t *testing.T) {
 			payload: map[string]any{"keys": []any{"ok", 3}},
 			wantErr: "payload.keys[1] must be a string",
 		},
+		{
+			name:    "keys item newline",
+			payload: map[string]any{"keys": []any{"ok", "bad\nkey"}},
+			wantErr: "payload.keys[1] contains unsupported control characters",
+		},
+		{
+			name:    "keys item carriage return",
+			payload: map[string]any{"keys": []any{"ok", "bad\rkey"}},
+			wantErr: "payload.keys[1] contains unsupported control characters",
+		},
 	}
 
 	for _, tc := range cases {

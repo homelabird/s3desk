@@ -183,6 +183,22 @@ func migrate(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_upload_multipart_uploads_profile_id ON upload_multipart_uploads(profile_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_upload_multipart_uploads_upload_id ON upload_multipart_uploads(upload_id);`,
 
+		`CREATE TABLE IF NOT EXISTS upload_objects (
+			upload_id TEXT NOT NULL,
+			profile_id TEXT NOT NULL,
+			path TEXT NOT NULL,
+			bucket TEXT NOT NULL,
+			object_key TEXT NOT NULL,
+			expected_size BIGINT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(upload_id, path),
+			FOREIGN KEY(upload_id) REFERENCES upload_sessions(id) ON DELETE CASCADE,
+			FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_upload_objects_profile_id ON upload_objects(profile_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_upload_objects_upload_id ON upload_objects(upload_id);`,
+
 		`CREATE TABLE IF NOT EXISTS object_index (
 			profile_id TEXT NOT NULL,
 			bucket TEXT NOT NULL,
@@ -196,6 +212,19 @@ func migrate(db *gorm.DB) error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_object_index_profile_bucket_key ON object_index(profile_id, bucket, object_key);`,
 		`CREATE INDEX IF NOT EXISTS idx_object_index_profile_bucket_indexed_at ON object_index(profile_id, bucket, indexed_at);`,
+		`CREATE TABLE IF NOT EXISTS object_index_replacements (
+			replacement_id TEXT NOT NULL,
+			profile_id TEXT NOT NULL,
+			bucket TEXT NOT NULL,
+			object_key TEXT NOT NULL,
+			size BIGINT NOT NULL,
+			etag TEXT,
+			last_modified TEXT,
+			indexed_at TEXT NOT NULL,
+			PRIMARY KEY(replacement_id, profile_id, bucket, object_key),
+			FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_object_index_replacements_lookup ON object_index_replacements(replacement_id, profile_id, bucket);`,
 
 		`CREATE TABLE IF NOT EXISTS object_favorites (
 			profile_id TEXT NOT NULL,

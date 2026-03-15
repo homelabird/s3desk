@@ -28,7 +28,7 @@ type awsPublicAccessBlockClient interface {
 }
 
 type awsAdapter struct {
-	newClient func(models.ProfileSecrets) awsPublicAccessBlockClient
+	newClient func(models.ProfileSecrets) (awsPublicAccessBlockClient, error)
 }
 
 func NewDefaultRegistry() *Registry {
@@ -42,10 +42,18 @@ func NewDefaultRegistry() *Registry {
 
 func NewAWSAdapter() Adapter {
 	return &awsAdapter{
-		newClient: func(secrets models.ProfileSecrets) awsPublicAccessBlockClient {
+		newClient: func(secrets models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
 			return s3client.FromProfile(secrets)
 		},
 	}
+}
+
+func (a *awsAdapter) clientFor(profile models.ProfileSecrets, bucket string) (awsPublicAccessBlockClient, error) {
+	client, err := a.newClient(profile)
+	if err != nil {
+		return nil, UpstreamOperationError("bucket_governance_client_error", "failed to prepare bucket governance client", bucket, err)
+	}
+	return client, nil
 }
 
 func (a *awsAdapter) GetGovernance(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketGovernanceView, error) {
@@ -93,7 +101,10 @@ func (a *awsAdapter) GetGovernance(ctx context.Context, profile models.ProfileSe
 }
 
 func (a *awsAdapter) GetPublicExposure(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketPublicExposureView, error) {
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return models.BucketPublicExposureView{}, err
+	}
 	out, err := client.GetPublicAccessBlock(ctx, &s3.GetPublicAccessBlockInput{
 		Bucket: &bucket,
 	})
@@ -124,7 +135,10 @@ func (a *awsAdapter) PutPublicExposure(ctx context.Context, profile models.Profi
 		return err
 	}
 
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return err
+	}
 	_, putErr := client.PutPublicAccessBlock(ctx, &s3.PutPublicAccessBlockInput{
 		Bucket: &bucket,
 		PublicAccessBlockConfiguration: &s3types.PublicAccessBlockConfiguration{

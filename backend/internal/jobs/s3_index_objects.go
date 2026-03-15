@@ -44,11 +44,18 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 
 	writeLog("Starting index: bucket=%q prefix=%q", bucket, prefix)
 
+	replacementID := ""
+	cleanupReplacement := func() {}
 	if fullReindex {
-		writeLog("Clearing existing index entries…")
-		if err := m.store.ClearObjectIndex(ctx, profileID, bucket, prefix); err != nil {
+		replacementID = jobID
+		if err := m.store.DiscardObjectIndexReplacement(ctx, replacementID); err != nil {
 			return err
 		}
+		cleanupCtx := context.WithoutCancel(ctx)
+		cleanupReplacement = func() {
+			_ = m.store.DiscardObjectIndexReplacement(cleanupCtx, replacementID)
+		}
+		defer cleanupReplacement()
 	}
 
 	secrets, ok, err := m.store.GetProfileSecrets(ctx, profileID)
@@ -88,8 +95,14 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 		if len(batch) == 0 {
 			return nil
 		}
-		if err := m.store.UpsertObjectIndexBatch(ctx, profileID, bucket, batch, indexedAt); err != nil {
-			return err
+		if fullReindex {
+			if err := m.store.StageObjectIndexReplacementBatch(ctx, replacementID, profileID, bucket, batch, indexedAt); err != nil {
+				return err
+			}
+		} else {
+			if err := m.store.UpsertObjectIndexBatch(ctx, profileID, bucket, batch, indexedAt); err != nil {
+				return err
+			}
 		}
 		batch = batch[:0]
 		return nil
@@ -159,6 +172,13 @@ func (m *Manager) runS3IndexObjects(ctx context.Context, profileID, jobID string
 
 	if err := flushBatch(); err != nil {
 		return err
+	}
+	if fullReindex {
+		writeLog("Finalizing index replacement…")
+		if err := m.store.FinalizeObjectIndexReplacement(ctx, replacementID, profileID, bucket, prefix); err != nil {
+			return err
+		}
+		cleanupReplacement = func() {}
 	}
 	flushProgress(true)
 	writeLog("Index complete: objects=%d bytes=%d indexedAt=%s", objectsDone, bytesDone, indexedAt)

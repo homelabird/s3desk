@@ -5,8 +5,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,6 +17,7 @@ import (
 	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profiletls"
 )
 
 // Response is a minimal HTTP response wrapper for S3 control-plane calls.
@@ -165,7 +164,7 @@ func newHTTPClient(profile models.ProfileSecrets) (*http.Client, error) {
 	tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 
 	// Only configure TLS if scheme is https; the Transport will ignore TLS settings for http.
-	tlsCfg, err := buildTLSConfig(profile)
+	tlsCfg, err := profiletls.BuildConfig(profile)
 	if err != nil {
 		return nil, err
 	}
@@ -177,52 +176,6 @@ func newHTTPClient(profile models.ProfileSecrets) (*http.Client, error) {
 		Transport: tr,
 		Timeout:   30 * time.Second,
 	}, nil
-}
-
-func buildTLSConfig(profile models.ProfileSecrets) (*tls.Config, error) {
-	// Start with a default config only when needed.
-	if !profile.TLSInsecureSkipVerify && profile.TLSConfig == nil {
-		return nil, nil
-	}
-	cfg := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-	}
-	if profile.TLSInsecureSkipVerify {
-		cfg.InsecureSkipVerify = true //nolint:gosec
-	}
-
-	if profile.TLSConfig == nil {
-		return cfg, nil
-	}
-
-	mode := strings.ToLower(strings.TrimSpace(string(profile.TLSConfig.Mode)))
-	if mode == "" || mode == "disabled" {
-		return cfg, nil
-	}
-	if mode != "mtls" {
-		return nil, fmt.Errorf("unsupported tls mode: %s", mode)
-	}
-
-	certPEM := strings.TrimSpace(profile.TLSConfig.ClientCertPEM)
-	keyPEM := strings.TrimSpace(profile.TLSConfig.ClientKeyPEM)
-	if certPEM == "" || keyPEM == "" {
-		return nil, errors.New("mtls requires client certificate and key")
-	}
-	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
-	if err != nil {
-		return nil, err
-	}
-	cfg.Certificates = []tls.Certificate{cert}
-
-	if caPEM := strings.TrimSpace(profile.TLSConfig.CACertPEM); caPEM != "" {
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM([]byte(caPEM)) {
-			return nil, errors.New("failed to parse ca certificate")
-		}
-		cfg.RootCAs = pool
-	}
-
-	return cfg, nil
 }
 
 func joinURLPath(basePath, bucket string) string {

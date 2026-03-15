@@ -36,7 +36,7 @@ func writePartToFile(part *multipart.Part, dstPath string, maxBytes int64) (int6
 	if maxBytes >= 0 {
 		r = io.LimitReader(part, maxBytes+1)
 	}
-	n, copyErr := io.Copy(f, r)
+	n, copyErr := copyWithTransferBuffer(f, r)
 	closeErr := f.Close()
 	if copyErr != nil {
 		_ = os.Remove(tmpPath)
@@ -68,8 +68,7 @@ func writeReaderToFile(r io.Reader, dstPath string, maxBytes int64) (int64, erro
 	if maxBytes >= 0 {
 		reader = io.LimitReader(r, maxBytes+1)
 	}
-	buf := make([]byte, 4*1024*1024)
-	n, copyErr := io.CopyBuffer(f, reader, buf)
+	n, copyErr := copyWithTransferBuffer(f, reader)
 	closeErr := f.Close()
 	if copyErr != nil {
 		_ = os.Remove(tmpPath)
@@ -165,7 +164,7 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, o
 			return err
 		}
 
-		copied, err := io.Copy(f, part)
+		copied, err := copyWithTransferBuffer(f, part)
 		if copied > 0 {
 			if deltaErr := applyDelta(copied); deltaErr != nil {
 				_ = part.Close()

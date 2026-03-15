@@ -76,6 +76,19 @@ type uploadMultipartRow struct {
 
 func (uploadMultipartRow) TableName() string { return "upload_multipart_uploads" }
 
+type uploadObjectRow struct {
+	UploadID     string `gorm:"column:upload_id;primaryKey"`
+	ProfileID    string `gorm:"column:profile_id"`
+	Path         string `gorm:"column:path;primaryKey"`
+	Bucket       string `gorm:"column:bucket"`
+	ObjectKey    string `gorm:"column:object_key"`
+	ExpectedSize *int64 `gorm:"column:expected_size"`
+	CreatedAt    string `gorm:"column:created_at"`
+	UpdatedAt    string `gorm:"column:updated_at"`
+}
+
+func (uploadObjectRow) TableName() string { return "upload_objects" }
+
 type objectIndexRow struct {
 	ProfileID    string  `gorm:"column:profile_id;primaryKey"`
 	Bucket       string  `gorm:"column:bucket;primaryKey"`
@@ -87,6 +100,19 @@ type objectIndexRow struct {
 }
 
 func (objectIndexRow) TableName() string { return "object_index" }
+
+type objectIndexReplacementRow struct {
+	ReplacementID string  `gorm:"column:replacement_id;primaryKey"`
+	ProfileID     string  `gorm:"column:profile_id;primaryKey"`
+	Bucket        string  `gorm:"column:bucket;primaryKey"`
+	ObjectKey     string  `gorm:"column:object_key;primaryKey"`
+	Size          int64   `gorm:"column:size"`
+	ETag          *string `gorm:"column:etag"`
+	LastModified  *string `gorm:"column:last_modified"`
+	IndexedAt     string  `gorm:"column:indexed_at"`
+}
+
+func (objectIndexReplacementRow) TableName() string { return "object_index_replacements" }
 
 type objectFavoriteRow struct {
 	ProfileID string `gorm:"column:profile_id;primaryKey"`

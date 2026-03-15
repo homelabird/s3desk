@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"net/http"
 	"net/url"
@@ -244,10 +243,8 @@ func (s *server) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Re
 	}
 
 	var req models.UploadMultipartCompleteRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{maxBytes: uploadMultipartJSONRequestBodyMaxBytes}); err != nil {
+		writeJSONDecodeError(w, err, uploadMultipartJSONRequestBodyMaxBytes)
 		return
 	}
 	relPath := sanitizeUploadPath(req.Path)
@@ -288,6 +285,18 @@ func (s *server) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadGateway, "upload_failed", "failed to complete multipart upload", map[string]any{"error": err.Error()})
 		return
 	}
+	expectedSize := meta.FileSize
+	if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+		UploadID:     uploadID,
+		ProfileID:    profileID,
+		Path:         meta.Path,
+		Bucket:       meta.Bucket,
+		ObjectKey:    meta.ObjectKey,
+		ExpectedSize: &expectedSize,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist upload object", nil)
+		return
+	}
 	_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, relPath)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -316,10 +325,8 @@ func (s *server) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req models.UploadMultipartAbortRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{maxBytes: uploadMultipartJSONRequestBodyMaxBytes}); err != nil {
+		writeJSONDecodeError(w, err, uploadMultipartJSONRequestBodyMaxBytes)
 		return
 	}
 	relPath := sanitizeUploadPath(req.Path)

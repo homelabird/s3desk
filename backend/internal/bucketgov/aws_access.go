@@ -11,7 +11,10 @@ import (
 )
 
 func (a *awsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketAccessView, error) {
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return models.BucketAccessView{}, err
+	}
 	out, err := client.GetBucketOwnershipControls(ctx, &s3.GetBucketOwnershipControlsInput{
 		Bucket: &bucket,
 	})
@@ -30,8 +33,11 @@ func (a *awsAdapter) GetAccess(ctx context.Context, profile models.ProfileSecret
 }
 
 func (a *awsAdapter) PutAccess(ctx context.Context, profile models.ProfileSecrets, bucket string, req models.BucketAccessPutRequest) error {
-	client := a.newClient(profile)
-	_, err := client.PutBucketOwnershipControls(ctx, &s3.PutBucketOwnershipControlsInput{
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return err
+	}
+	_, err = client.PutBucketOwnershipControls(ctx, &s3.PutBucketOwnershipControlsInput{
 		Bucket: &bucket,
 		OwnershipControls: &s3types.OwnershipControls{
 			Rules: []s3types.OwnershipControlsRule{

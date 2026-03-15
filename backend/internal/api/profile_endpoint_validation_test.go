@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -35,6 +38,82 @@ func TestValidateProfileEndpointURLAllowsPrivateServiceEndpoint(t *testing.T) {
 	}
 }
 
+func TestValidateProfileEndpointURLRejectsBlockedMetadataAlias(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		func(_ context.Context, host string) (string, error) {
+			if host != "alias.internal" {
+				t.Fatalf("LookupCNAME host=%q, want %q", host, "alias.internal")
+			}
+			return "metadata.google.internal.", nil
+		},
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "alias.internal" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "alias.internal")
+			}
+			return []net.IPAddr{{IP: net.ParseIP("169.254.169.254")}}, nil
+		},
+	)
+
+	endpoint := "https://alias.internal"
+	err := validateProfileEndpointURL("endpoint", &endpoint, false)
+	if err == nil || !strings.Contains(err.Error(), "blocked metadata host") {
+		t.Fatalf("validateProfileEndpointURL() error=%v, want blocked metadata host", err)
+	}
+}
+
+func TestValidateProfileEndpointURLRejectsResolvedLoopbackWhenRemoteEnabled(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "loopback.internal" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "loopback.internal")
+			}
+			return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+		},
+	)
+
+	endpoint := "https://loopback.internal"
+	err := validateProfileEndpointURL("endpoint", &endpoint, true)
+	if err == nil || !strings.Contains(err.Error(), "loopback or link-local") {
+		t.Fatalf("validateProfileEndpointURL() error=%v, want loopback rejection", err)
+	}
+}
+
+func TestValidateProfileEndpointURLAllowsResolvedPrivateServiceEndpoint(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "minio.internal" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "minio.internal")
+			}
+			return []net.IPAddr{{IP: net.ParseIP("10.0.0.25")}}, nil
+		},
+	)
+
+	endpoint := "https://minio.internal:9000"
+	if err := validateProfileEndpointURL("endpoint", &endpoint, true); err != nil {
+		t.Fatalf("validateProfileEndpointURL() unexpected error: %v", err)
+	}
+}
+
+func TestValidateProfileEndpointURLRejectsUnresolvedHost(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "missing.internal" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "missing.internal")
+			}
+			return nil, errors.New("lookup failed")
+		},
+	)
+
+	endpoint := "https://missing.internal"
+	err := validateProfileEndpointURL("endpoint", &endpoint, false)
+	if err == nil || !strings.Contains(err.Error(), "could not be resolved") {
+		t.Fatalf("validateProfileEndpointURL() error=%v, want resolution failure", err)
+	}
+}
+
 func TestHandleCreateProfileRejectsBlockedMetadataEndpoint(t *testing.T) {
 	t.Parallel()
 
@@ -47,6 +126,45 @@ func TestHandleCreateProfileRejectsBlockedMetadataEndpoint(t *testing.T) {
 	req := models.ProfileCreateRequest{
 		Provider:        models.ProfileProviderS3Compatible,
 		Name:            "blocked-profile",
+		Endpoint:        &endpoint,
+		Region:          &region,
+		AccessKeyID:     &accessKey,
+		SecretAccessKey: &secretKey,
+	}
+
+	res := doJSONRequest(t, srv, http.MethodPost, "/api/v1/profiles", req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if !strings.Contains(resp.Error.Message, "blocked metadata host") {
+		t.Fatalf("error.message=%q, want blocked metadata host", resp.Error.Message)
+	}
+}
+
+func TestHandleCreateProfileRejectsBlockedMetadataAlias(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "alias.internal" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "alias.internal")
+			}
+			return []net.IPAddr{{IP: net.ParseIP("169.254.169.254")}}, nil
+		},
+	)
+
+	_, srv := newTestServer(t, testEncryptionKey())
+
+	endpoint := "https://alias.internal"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	req := models.ProfileCreateRequest{
+		Provider:        models.ProfileProviderS3Compatible,
+		Name:            "blocked-alias-profile",
 		Endpoint:        &endpoint,
 		Region:          &region,
 		AccessKeyID:     &accessKey,
@@ -217,4 +335,25 @@ func TestHandleCreateProfileAllowsLocalhostEndpointWhenRemoteAccessDisabled(t *t
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusCreated)
 	}
+}
+
+func stubProfileEndpointLookup(
+	t *testing.T,
+	lookupCNAME func(context.Context, string) (string, error),
+	lookupIP func(context.Context, string) ([]net.IPAddr, error),
+) {
+	t.Helper()
+
+	originalCNAME := profileEndpointLookupCNAME
+	originalIP := profileEndpointLookupIPAddr
+	if lookupCNAME != nil {
+		profileEndpointLookupCNAME = lookupCNAME
+	}
+	if lookupIP != nil {
+		profileEndpointLookupIPAddr = lookupIP
+	}
+	t.Cleanup(func() {
+		profileEndpointLookupCNAME = originalCNAME
+		profileEndpointLookupIPAddr = originalIP
+	})
 }

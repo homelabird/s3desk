@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 
 	"s3desk/internal/jobs"
 	"s3desk/internal/models"
@@ -31,13 +32,28 @@ type uploadHTTPError struct {
 	details map[string]any
 }
 
+type uploadVerificationTarget struct {
+	Path         string
+	Bucket       string
+	Key          string
+	ExpectedSize *int64
+}
+
+type verifiedUploadObject struct {
+	Path         string
+	Key          string
+	Size         int64
+	ETag         string
+	LastModified string
+}
+
 func (e *uploadHTTPError) Error() string {
 	return e.message
 }
 
 var errUploadIncomplete = errors.New("upload incomplete")
 
-func buildUploadCommitArtifacts(uploadID string, us store.UploadSession, req uploadCommitRequest) uploadCommitArtifacts {
+func buildUploadCommitBasePayload(uploadID string, us store.UploadSession, req uploadCommitRequest) map[string]any {
 	payload := map[string]any{
 		"uploadId": uploadID,
 		"bucket":   us.Bucket,
@@ -56,6 +72,11 @@ func buildUploadCommitArtifacts(uploadID string, us store.UploadSession, req upl
 	case "file", "folder", "collection":
 		payload["rootKind"] = req.RootKind
 	}
+	return payload
+}
+
+func buildUploadCommitArtifacts(uploadID string, us store.UploadSession, req uploadCommitRequest) uploadCommitArtifacts {
+	payload := buildUploadCommitBasePayload(uploadID, us, req)
 	if req.TotalFiles != nil {
 		payload["totalFiles"] = *req.TotalFiles
 	}
@@ -127,6 +148,269 @@ func buildUploadCommitProgress(req uploadCommitRequest) *models.JobProgress {
 	return &p
 }
 
+func buildVerifiedUploadCommitArtifacts(uploadID string, us store.UploadSession, req uploadCommitRequest, verified []verifiedUploadObject, includeTotals bool, itemsTruncated bool) uploadCommitArtifacts {
+	payload := buildUploadCommitBasePayload(uploadID, us, req)
+	if len(verified) > maxCommitItems {
+		itemsTruncated = true
+	}
+
+	var totalBytes int64
+	indexEntries := make([]store.ObjectIndexEntry, 0, len(verified))
+	for _, obj := range verified {
+		totalBytes += obj.Size
+		indexEntries = append(indexEntries, store.ObjectIndexEntry{
+			Key:          obj.Key,
+			Size:         obj.Size,
+			ETag:         obj.ETag,
+			LastModified: obj.LastModified,
+		})
+	}
+
+	items := verified
+	if len(items) > maxCommitItems {
+		items = items[:maxCommitItems]
+	}
+	if len(items) > 0 {
+		cleaned := make([]map[string]any, 0, len(items))
+		for _, obj := range items {
+			cleaned = append(cleaned, map[string]any{
+				"path": obj.Path,
+				"key":  obj.Key,
+				"size": obj.Size,
+			})
+		}
+		payload["items"] = cleaned
+	}
+	if itemsTruncated {
+		payload["itemsTruncated"] = true
+	}
+	if includeTotals {
+		payload["totalFiles"] = len(verified)
+		payload["totalBytes"] = totalBytes
+	}
+
+	return uploadCommitArtifacts{
+		payload:      payload,
+		indexEntries: indexEntries,
+		progress:     buildVerifiedUploadCommitProgress(len(verified), totalBytes, includeTotals),
+	}
+}
+
+func buildVerifiedUploadCommitProgress(totalFiles int, totalBytes int64, includeTotals bool) *models.JobProgress {
+	if !includeTotals {
+		return nil
+	}
+
+	files := int64(totalFiles)
+	bytes := totalBytes
+	return &models.JobProgress{
+		ObjectsDone:  &files,
+		ObjectsTotal: &files,
+		BytesDone:    &bytes,
+		BytesTotal:   &bytes,
+	}
+}
+
+func buildUploadVerificationTargetsFromTracked(objects []store.UploadObject) []uploadVerificationTarget {
+	targets := make([]uploadVerificationTarget, 0, len(objects))
+	for _, obj := range objects {
+		if obj.Path == "" || obj.Bucket == "" || obj.ObjectKey == "" {
+			continue
+		}
+		targets = append(targets, uploadVerificationTarget{
+			Path:         obj.Path,
+			Bucket:       obj.Bucket,
+			Key:          obj.ObjectKey,
+			ExpectedSize: obj.ExpectedSize,
+		})
+	}
+	return targets
+}
+
+func buildUploadVerificationTargetsFromMultipart(multipartUploads []store.MultipartUpload) []uploadVerificationTarget {
+	targets := make([]uploadVerificationTarget, 0, len(multipartUploads))
+	for _, meta := range multipartUploads {
+		if meta.Path == "" || meta.Bucket == "" || meta.ObjectKey == "" {
+			continue
+		}
+		expectedSize := meta.FileSize
+		targets = append(targets, uploadVerificationTarget{
+			Path:         meta.Path,
+			Bucket:       meta.Bucket,
+			Key:          meta.ObjectKey,
+			ExpectedSize: &expectedSize,
+		})
+	}
+	return targets
+}
+
+func buildUploadVerificationTargetsFromRequest(us store.UploadSession, req uploadCommitRequest) []uploadVerificationTarget {
+	targets := make([]uploadVerificationTarget, 0, len(req.Items))
+	for _, item := range req.Items {
+		cleanedPath := sanitizeUploadPath(item.Path)
+		if cleanedPath == "" {
+			continue
+		}
+
+		key := cleanedPath
+		if us.Prefix != "" {
+			key = path.Join(us.Prefix, cleanedPath)
+		}
+
+		var expectedSize *int64
+		if item.Size != nil && *item.Size >= 0 {
+			size := *item.Size
+			expectedSize = &size
+		}
+		targets = append(targets, uploadVerificationTarget{
+			Path:         cleanedPath,
+			Bucket:       us.Bucket,
+			Key:          key,
+			ExpectedSize: expectedSize,
+		})
+	}
+	return targets
+}
+
+func mergeUploadVerificationTargets(groups ...[]uploadVerificationTarget) []uploadVerificationTarget {
+	merged := make([]uploadVerificationTarget, 0)
+	seen := make(map[string]struct{})
+	for _, group := range groups {
+		for _, target := range group {
+			identity := target.Path
+			if identity == "" {
+				identity = target.Key
+			}
+			if identity == "" {
+				continue
+			}
+			if _, exists := seen[identity]; exists {
+				continue
+			}
+			seen[identity] = struct{}{}
+			merged = append(merged, target)
+		}
+	}
+	return merged
+}
+
+func (s *server) prepareImmediateUploadCommit(
+	ctx context.Context,
+	profileID, uploadID string,
+	us store.UploadSession,
+	req uploadCommitRequest,
+	client *s3.Client,
+	multipartUploads []store.MultipartUpload,
+) (uploadCommitArtifacts, *uploadHTTPError) {
+	trackedObjects, err := s.store.ListUploadObjects(ctx, profileID, uploadID)
+	if err != nil {
+		return uploadCommitArtifacts{}, &uploadHTTPError{
+			status:  http.StatusInternalServerError,
+			code:    "internal_error",
+			message: "failed to load upload objects",
+		}
+	}
+
+	trustedTargets := mergeUploadVerificationTargets(
+		buildUploadVerificationTargetsFromTracked(trackedObjects),
+		buildUploadVerificationTargetsFromMultipart(multipartUploads),
+	)
+	includeTotals := true
+	itemsTruncated := false
+	targets := trustedTargets
+	if len(targets) == 0 {
+		targets = buildUploadVerificationTargetsFromRequest(us, req)
+		includeTotals = !req.ItemsTruncated
+		itemsTruncated = req.ItemsTruncated
+	}
+	if len(targets) == 0 {
+		return uploadCommitArtifacts{}, &uploadHTTPError{
+			status:  http.StatusBadRequest,
+			code:    "upload_incomplete",
+			message: "no uploaded objects to commit",
+		}
+	}
+
+	verified, uploadErr := s.verifyImmediateUploadTargets(ctx, client, targets)
+	if uploadErr != nil {
+		return uploadCommitArtifacts{}, uploadErr
+	}
+	return buildVerifiedUploadCommitArtifacts(uploadID, us, req, verified, includeTotals, itemsTruncated), nil
+}
+
+func (s *server) verifyImmediateUploadTargets(ctx context.Context, client *s3.Client, targets []uploadVerificationTarget) ([]verifiedUploadObject, *uploadHTTPError) {
+	verified := make([]verifiedUploadObject, 0, len(targets))
+	for _, target := range targets {
+		head, err := client.HeadObject(ctx, &s3.HeadObjectInput{
+			Bucket: &target.Bucket,
+			Key:    &target.Key,
+		})
+		if err != nil {
+			if uploadVerifyObjectNotFound(err) {
+				return nil, &uploadHTTPError{
+					status:  http.StatusBadRequest,
+					code:    "upload_incomplete",
+					message: "uploaded object not found",
+					details: map[string]any{"path": target.Path},
+				}
+			}
+			return nil, &uploadHTTPError{
+				status:  http.StatusBadGateway,
+				code:    "upload_failed",
+				message: "failed to verify uploaded object",
+				details: map[string]any{"path": target.Path},
+			}
+		}
+
+		var actualSize int64
+		if head.ContentLength != nil {
+			actualSize = *head.ContentLength
+		}
+		if target.ExpectedSize != nil && *target.ExpectedSize >= 0 && actualSize != *target.ExpectedSize {
+			return nil, &uploadHTTPError{
+				status:  http.StatusBadRequest,
+				code:    "upload_incomplete",
+				message: "uploaded object size mismatch",
+				details: map[string]any{
+					"path":         target.Path,
+					"expectedSize": *target.ExpectedSize,
+					"actualSize":   actualSize,
+				},
+			}
+		}
+
+		etag := ""
+		if head.ETag != nil {
+			etag = strings.TrimSpace(*head.ETag)
+		}
+		lastModified := ""
+		if head.LastModified != nil {
+			lastModified = head.LastModified.UTC().Format(time.RFC3339Nano)
+		}
+		verified = append(verified, verifiedUploadObject{
+			Path:         target.Path,
+			Key:          target.Key,
+			Size:         actualSize,
+			ETag:         etag,
+			LastModified: lastModified,
+		})
+	}
+	return verified, nil
+}
+
+func uploadVerifyObjectNotFound(err error) bool {
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	switch strings.TrimSpace(apiErr.ErrorCode()) {
+	case "404", "NoSuchKey", "NoSuchObject", "NotFound":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *server) finalizeImmediateUploadCommit(ctx context.Context, profileID, uploadID string, us store.UploadSession, payload map[string]any, progress *models.JobProgress, indexEntries []store.ObjectIndexEntry) (models.Job, *uploadHTTPError) {
 	job, err := s.store.CreateJob(ctx, profileID, store.CreateJobInput{
 		Type:    jobs.JobTypeTransferDirectUpload,
@@ -153,6 +437,7 @@ func (s *server) finalizeImmediateUploadCommit(ctx context.Context, profileID, u
 	}
 
 	_ = s.store.DeleteMultipartUploadsBySession(ctx, profileID, uploadID)
+	_ = s.store.DeleteUploadObjectsBySession(ctx, profileID, uploadID)
 	_, _ = s.store.DeleteUploadSession(ctx, profileID, uploadID)
 
 	eventPayload := map[string]any{"status": models.JobStatusSucceeded}

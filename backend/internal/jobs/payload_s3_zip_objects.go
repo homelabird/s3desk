@@ -15,6 +15,9 @@ func parseS3ZipObjectsPayload(payload map[string]any) (s3ZipObjectsPayload, erro
 	if err != nil {
 		return s3ZipObjectsPayload{}, err
 	}
+	if err := validatePayloadRawKeys("payload.keys", keys); err != nil {
+		return s3ZipObjectsPayload{}, err
+	}
 	stripPrefix, err := payloadOptionalString(payload, "stripPrefix")
 	if err != nil {
 		return s3ZipObjectsPayload{}, err

@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -72,30 +71,9 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 		}
 		batch := keys[i:end]
 
-		tmpFile, err := os.CreateTemp("", "rclone-delete-*.txt")
+		tmpPath, err := writeFilesFromRawTempFile("rclone-delete-*.txt", batch)
 		if err != nil {
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to create delete list: %v", err))
-			return err
-		}
-		tmpPath := tmpFile.Name()
-		writer := bufio.NewWriter(tmpFile)
-		for _, k := range batch {
-			if _, err := writer.WriteString(k + "\n"); err != nil {
-				_ = tmpFile.Close()
-				_ = os.Remove(tmpPath)
-				m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to write delete list: %v", err))
-				return err
-			}
-		}
-		if err := writer.Flush(); err != nil {
-			_ = tmpFile.Close()
-			_ = os.Remove(tmpPath)
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to write delete list: %v", err))
-			return err
-		}
-		if err := tmpFile.Close(); err != nil {
-			_ = os.Remove(tmpPath)
-			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to write delete list: %v", err))
+			m.writeJobLog(logFile, jobID, "error", fmt.Sprintf("failed to prepare delete list: %v", err))
 			return err
 		}
 

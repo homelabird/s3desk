@@ -11,7 +11,10 @@ import (
 )
 
 func (a *awsAdapter) GetVersioning(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketVersioningView, error) {
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return models.BucketVersioningView{}, err
+	}
 	out, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{
 		Bucket: &bucket,
 	})
@@ -36,7 +39,10 @@ func (a *awsAdapter) PutVersioning(ctx context.Context, profile models.ProfileSe
 		return err
 	}
 
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return err
+	}
 	_, putErr := client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: &bucket,
 		VersioningConfiguration: &s3types.VersioningConfiguration{

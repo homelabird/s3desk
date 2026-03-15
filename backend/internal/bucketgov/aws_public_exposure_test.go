@@ -105,6 +105,12 @@ func (f *fakePublicAccessBlockClient) DeleteBucketLifecycle(_ context.Context, i
 	return &s3.DeleteBucketLifecycleOutput{}, nil
 }
 
+func stubAWSClient(client awsPublicAccessBlockClient) func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+	return func(models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
+		return client, nil
+	}
+}
+
 func TestAWSAdapterGetPublicExposure(t *testing.T) {
 	t.Parallel()
 
@@ -119,7 +125,7 @@ func TestAWSAdapterGetPublicExposure(t *testing.T) {
 		},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetPublicExposure(context.Background(), models.ProfileSecrets{}, "demo")
@@ -144,7 +150,7 @@ func TestAWSAdapterGetPublicExposureWithoutConfig(t *testing.T) {
 		getErr: &smithy.GenericAPIError{Code: "NoSuchPublicAccessBlockConfiguration", Message: "missing"},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetPublicExposure(context.Background(), models.ProfileSecrets{}, "demo")
@@ -167,7 +173,7 @@ func TestAWSAdapterPutPublicExposure(t *testing.T) {
 
 	client := &fakePublicAccessBlockClient{}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	err := adapter.PutPublicExposure(context.Background(), models.ProfileSecrets{}, "demo", models.BucketPublicExposurePutRequest{
@@ -218,7 +224,7 @@ func TestAWSAdapterGetAccess(t *testing.T) {
 		},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetAccess(context.Background(), models.ProfileSecrets{}, "demo")
@@ -240,7 +246,7 @@ func TestAWSAdapterGetAccessDefaultsToBucketOwnerEnforced(t *testing.T) {
 		ownershipErr: &smithy.GenericAPIError{Code: "OwnershipControlsNotFoundError", Message: "missing"},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetAccess(context.Background(), models.ProfileSecrets{}, "demo")
@@ -257,7 +263,7 @@ func TestAWSAdapterPutAccess(t *testing.T) {
 
 	client := &fakePublicAccessBlockClient{}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	mode := models.BucketObjectOwnershipObjectWriter
@@ -285,7 +291,7 @@ func TestAWSAdapterGetVersioning(t *testing.T) {
 		},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetVersioning(context.Background(), models.ProfileSecrets{}, "demo")
@@ -307,7 +313,7 @@ func TestAWSAdapterGetVersioningDefaultsToDisabled(t *testing.T) {
 		versioningOutput: &s3.GetBucketVersioningOutput{},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetVersioning(context.Background(), models.ProfileSecrets{}, "demo")
@@ -324,7 +330,7 @@ func TestAWSAdapterPutVersioning(t *testing.T) {
 
 	client := &fakePublicAccessBlockClient{}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	err := adapter.PutVersioning(context.Background(), models.ProfileSecrets{}, "demo", models.BucketVersioningPutRequest{
@@ -360,7 +366,7 @@ func TestAWSAdapterGetEncryption(t *testing.T) {
 		},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetEncryption(context.Background(), models.ProfileSecrets{}, "demo")
@@ -385,7 +391,7 @@ func TestAWSAdapterGetEncryptionImplicitSSES3(t *testing.T) {
 		encryptionErr: &smithy.GenericAPIError{Code: "ServerSideEncryptionConfigurationNotFoundError", Message: "missing"},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetEncryption(context.Background(), models.ProfileSecrets{}, "demo")
@@ -418,7 +424,7 @@ func TestAWSAdapterPutEncryption(t *testing.T) {
 		},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	err := adapter.PutEncryption(context.Background(), models.ProfileSecrets{}, "demo", models.BucketEncryptionPutRequest{
@@ -461,7 +467,7 @@ func TestAWSAdapterGetLifecycle(t *testing.T) {
 		},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetLifecycle(context.Background(), models.ProfileSecrets{}, "demo")
@@ -480,7 +486,7 @@ func TestAWSAdapterGetLifecycleWithoutConfig(t *testing.T) {
 		lifecycleErr: &smithy.GenericAPIError{Code: "NoSuchLifecycleConfiguration", Message: "missing"},
 	}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	view, err := adapter.GetLifecycle(context.Background(), models.ProfileSecrets{}, "demo")
@@ -497,7 +503,7 @@ func TestAWSAdapterPutLifecycle(t *testing.T) {
 
 	client := &fakePublicAccessBlockClient{}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	err := adapter.PutLifecycle(context.Background(), models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{
@@ -526,7 +532,7 @@ func TestAWSAdapterPutLifecycleDeletesWhenRulesEmpty(t *testing.T) {
 
 	client := &fakePublicAccessBlockClient{}
 	adapter := &awsAdapter{
-		newClient: func(models.ProfileSecrets) awsPublicAccessBlockClient { return client },
+		newClient: stubAWSClient(client),
 	}
 
 	err := adapter.PutLifecycle(context.Background(), models.ProfileSecrets{}, "demo", models.BucketLifecyclePutRequest{

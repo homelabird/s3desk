@@ -30,7 +30,7 @@ func (s *server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 	var req models.ProfileCreateRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+		writeJSONDecodeError(w, err, 0)
 		return
 	}
 
@@ -254,7 +254,7 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	var req models.ProfileUpdateRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+		writeJSONDecodeError(w, err, 0)
 		return
 	}
 
