@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 
 import styles from './PopoverSurface.module.css'
+import { useOverlayLayer } from './useOverlayLayer'
 
 export type PopoverOpenSource = 'trigger' | 'content' | 'menu' | 'outside'
 type PopoverViewportRect = Pick<DOMRectReadOnly, 'top' | 'left' | 'right' | 'bottom' | 'width' | 'height'>
@@ -118,6 +119,12 @@ export function PopoverSurface(props: Props) {
 	const close = useCallback((source: PopoverOpenSource = 'outside') => setOpen(false, source), [setOpen])
 	const toggle = useCallback(() => setOpen(!open, 'trigger'), [open, setOpen])
 
+	useOverlayLayer({
+		open,
+		onEscape: () => close('outside'),
+		containerRef: panelRef,
+	})
+
 	useEffect(() => {
 		if (!open) return
 		const handlePointerDown = (event: PointerEvent) => {
@@ -126,16 +133,9 @@ export function PopoverSurface(props: Props) {
 			if (panelRef.current?.contains(target)) return
 			setOpen(false, 'outside')
 		}
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape') return
-			event.preventDefault()
-			setOpen(false, 'outside')
-		}
-		document.addEventListener('pointerdown', handlePointerDown)
-		document.addEventListener('keydown', handleKeyDown)
+		document.addEventListener('pointerdown', handlePointerDown, true)
 		return () => {
-			document.removeEventListener('pointerdown', handlePointerDown)
-			document.removeEventListener('keydown', handleKeyDown)
+			document.removeEventListener('pointerdown', handlePointerDown, true)
 		}
 	}, [anchorElement, open, setOpen])
 
@@ -192,6 +192,7 @@ export function PopoverSurface(props: Props) {
 						<div
 							ref={panelRef}
 							{...contentProps}
+							tabIndex={contentProps?.tabIndex ?? -1}
 							className={[styles.panel, contentClassName ?? '', contentProps?.className ?? ''].filter(Boolean).join(' ')}
 							style={{ ...contentStyle, position: 'fixed', top: 16, left: 16, visibility: 'hidden' }}
 						>

@@ -274,7 +274,7 @@ function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
 					ref={stageRef}
 					data-testid="objects-image-viewer-stage"
 					className={`${styles.imageViewerStage} ${dragState ? styles.imageViewerStageDragging : ''}`}
-					style={{ minHeight: isMobile ? 'calc(100vh - 300px)' : 420 }}
+					style={{ minHeight: isMobile ? 'calc(100dvh - 300px)' : 420 }}
 					onPointerDown={handlePointerDown}
 					onPointerMove={handlePointerMove}
 					onPointerUp={handlePointerEnd}

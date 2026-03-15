@@ -47,4 +47,9 @@ describe('KeyboardShortcutGuide', () => {
 		render(<KeyboardShortcutGuide open={true} onClose={vi.fn()} />)
 		expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Keyboard shortcuts')
 	})
+
+	it('caps the dialog with a dvh-based max height', () => {
+		render(<KeyboardShortcutGuide open={true} onClose={vi.fn()} />)
+		expect(screen.getByRole('dialog')).toHaveStyle({ maxHeight: '80dvh' })
+	})
 })

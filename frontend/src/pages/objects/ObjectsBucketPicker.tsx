@@ -401,7 +401,7 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 				onClose={closeMobileDrawer}
 				title="Select bucket"
 				placement="bottom"
-				height="78vh"
+				height="78dvh"
 				dataTestId="objects-bucket-picker-mobile-drawer"
 				extra={
 					props.value ? (

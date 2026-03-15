@@ -1,7 +1,8 @@
 import { CloseOutlined } from '@ant-design/icons'
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useId, useRef, type CSSProperties, type ReactNode } from 'react'
 
+import { useOverlayLayer } from '../../components/useOverlayLayer'
 import styles from './objects.module.css'
 
 type ObjectsOverlaySheetProps = {
@@ -38,27 +39,16 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 	} = props
 	const titleId = useId()
 	const closeButtonRef = useRef<HTMLButtonElement>(null)
+	const panelRef = useRef<HTMLDivElement>(null)
 
-	useEffect(() => {
-		if (!open || typeof document === 'undefined') return
-		const previousOverflow = document.body.style.overflow
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape') return
-			event.preventDefault()
-			onClose()
-		}
-		document.body.style.overflow = 'hidden'
-		document.addEventListener('keydown', handleKeyDown)
-		return () => {
-			document.body.style.overflow = previousOverflow
-			document.removeEventListener('keydown', handleKeyDown)
-		}
-	}, [open, onClose])
-
-	useEffect(() => {
-		if (!open) return
-		closeButtonRef.current?.focus()
-	}, [open])
+	useOverlayLayer({
+		open,
+		onEscape: onClose,
+		containerRef: panelRef,
+		initialFocusRef: closeButtonRef,
+		lockBodyScroll: true,
+		trapFocus: true,
+	})
 
 	if (!open || typeof document === 'undefined') return null
 
@@ -96,9 +86,11 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 			onMouseDown={backdropInteractive ? onClose : undefined}
 		>
 			<div
+				ref={panelRef}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={titleId}
+				tabIndex={-1}
 				data-testid={dataTestId}
 				className={resolvedPanelClassName}
 				style={panelStyle}

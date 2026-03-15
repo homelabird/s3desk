@@ -12,7 +12,7 @@
 }
 
 .logViewport {
-	max-height: 75vh;
+	max-height: 75dvh;
 	overflow: auto;
 	border: 1px solid var(--s3d-color-border-soft);
 	border-radius: 14px;
