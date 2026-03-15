@@ -2,6 +2,7 @@
 set -eu
 
 MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://minio:9000}"
+MINIO_PUBLIC_ENDPOINT="${MINIO_PUBLIC_ENDPOINT:-http://127.0.0.1:9000}"
 DEMO_BUCKET="${DEMO_BUCKET:-demo-bucket}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
@@ -21,7 +22,7 @@ s3desk demo bucket
 - This bucket was created automatically by the demo compose stack
 - The MinIO profile is already registered in s3desk
 - Endpoint inside the stack: ${MINIO_ENDPOINT}
-- Public endpoint for the browser: http://127.0.0.1:9000
+- Public endpoint for the browser: ${MINIO_PUBLIC_ENDPOINT}
 EOF
 
 cat >"${tmp_dir}/about.json" <<EOF
