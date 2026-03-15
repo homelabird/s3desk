@@ -4,7 +4,8 @@ This audit started as the follow-up backlog after the app-shell scrolling fix.
 It now doubles as a status document that shows which mobile-friendly UI/UX
 improvements have already landed and which lower-risk follow-ups still remain.
 It is based on code inspection of the frontend layouts, shared components,
-responsive breakpoints, and existing mobile smoke coverage.
+responsive breakpoints, existing mobile smoke coverage, and browser/platform
+constraints that are already handled in the frontend.
 
 ## Scope
 
@@ -12,14 +13,35 @@ responsive breakpoints, and existing mobile smoke coverage.
 - `Profiles`, `Buckets`, `Objects`, `Uploads`, `Jobs`, and `Settings`
 - mobile viewport behavior, touch targets, action density, modal sizing, and
   visual scanning
+- evidence-backed support expectations for the tested responsive/browser
+  scenarios already covered in the repo, not a blanket certification for every
+  browser shell or device posture
 
 ## Existing Coverage
 
-- `frontend/tests/mobile-smoke.spec.ts` verifies core mobile rendering and the
-  app-shell scroll container
+- `frontend/playwright.config.ts` runs `frontend/tests/mobile-smoke.spec.ts` on
+  `mobile-iphone-13` and `mobile-pixel-7`; the iPhone project keeps iPhone
+  viewport/UA emulation but runs on Chromium for Linux portability
+- `frontend/tests/mobile-smoke.spec.ts` verifies core mobile rendering, touch
+  target sizing, responsive search/filter affordances, phone-safe dialogs, and
+  the app-shell scroll container without horizontal overflow
 - `frontend/tests/responsive-lists.spec.ts` verifies compact list/table
-  switching for key pages
+  switching for key pages at desktop, tablet, and extra-small widths
+- the audit notes below come from code inspection of shared layouts, tabs,
+  compact cards, dialogs, sheets, and page-level mobile states
+- `frontend/src/lib/deviceFs.ts`,
+  `frontend/src/pages/uploads/uploadsFileSelection.ts`, and
+  `frontend/tests/uploads-folder.spec.ts` already encode browser/platform
+  constraints such as `showDirectoryPicker`, `webkitdirectory`, and secure
+  context requirements
 - `lighthouserc.js` already enforces accessibility and best-practices scoring
+
+Taken together, this is strong evidence for responsive behavior and routine UI
+flows in mainstream desktop and handset browser contexts that resemble the
+current Playwright projects and the audited layouts below. It is not a blanket
+guarantee for every embedded webview, every landscape or foldable posture,
+every zoom or text-scaling combination, or browser APIs that are not
+universally available across browsers and platforms.
 
 ## Status Snapshot
 

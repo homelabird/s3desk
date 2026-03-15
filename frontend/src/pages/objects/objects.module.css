@@ -1265,7 +1265,7 @@
 .imageViewerImage {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 280px);
+  max-height: calc(100dvh - 280px);
   object-fit: contain;
   transform-origin: center center;
   transition: transform var(--s3d-transition-normal);
@@ -1343,11 +1343,11 @@
   }
 
   .imageViewerModalBody {
-    min-height: calc(100vh - 220px);
+    min-height: calc(100dvh - 220px);
   }
 
   .imageViewerImage {
-    max-height: calc(100vh - 360px);
+    max-height: calc(100dvh - 360px);
   }
 
   .imageViewerFallbackInner {
