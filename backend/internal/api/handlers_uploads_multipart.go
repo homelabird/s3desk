@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -50,7 +49,15 @@ func buildMultipartCompletionParts(parts []models.UploadMultipartCompletePart) (
 		}
 		etag = strings.Trim(etag, "\"")
 		etag = `"` + etag + `"`
-		num := int32(part.Number)
+		num, err := multipartPartNumber(part.Number)
+		if err != nil {
+			return nil, &uploadHTTPError{
+				status:  http.StatusBadRequest,
+				code:    "invalid_request",
+				message: "invalid part number",
+				details: map[string]any{"partNumber": part.Number},
+			}
+		}
 		completed = append(completed, types.CompletedPart{
 			ETag:       &etag,
 			PartNumber: &num,
@@ -125,7 +132,7 @@ func parseUploadChunkQuery(values url.Values, requireTotal bool) (uploadChunkQue
 	if requireTotal {
 		totalRaw := values.Get("total")
 		total, err := strconv.Atoi(totalRaw)
-		if err != nil || total <= 0 {
+		if err != nil || total <= 0 || total > maxMultipartUploadParts {
 			return uploadChunkQuery{}, &uploadHTTPError{
 				status:  http.StatusBadRequest,
 				code:    "invalid_request",
@@ -164,7 +171,10 @@ func parseUploadChunkQuery(values url.Values, requireTotal bool) (uploadChunkQue
 }
 
 func buildRemoteMultipartChunkState(parts []types.Part, meta store.MultipartUpload) models.UploadChunkState {
-	expectedTotal := int(math.Ceil(float64(meta.FileSize) / float64(meta.ChunkSize)))
+	expectedTotal, err := expectedMultipartPartCount(meta.FileSize, meta.ChunkSize)
+	if err != nil {
+		return models.UploadChunkState{}
+	}
 	present := make([]int, 0, len(parts))
 	for _, part := range parts {
 		if part.PartNumber == nil {

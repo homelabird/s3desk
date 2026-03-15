@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"math"
 	"net/http"
 	"path"
 	"strings"
@@ -469,7 +468,15 @@ func (s *server) completeDirectMultipartUploads(ctx context.Context, profileID s
 			}
 		}
 
-		expectedTotal := int(math.Ceil(float64(meta.FileSize) / float64(meta.ChunkSize)))
+		expectedTotal, err := expectedMultipartPartCount(meta.FileSize, meta.ChunkSize)
+		if err != nil {
+			return &uploadHTTPError{
+				status:  http.StatusBadRequest,
+				code:    "invalid_request",
+				message: "multipart upload has invalid part metadata",
+				details: map[string]any{"path": meta.Path, "error": err.Error()},
+			}
+		}
 		completed, err := buildCompletedMultipartParts(parts, expectedTotal)
 		if err != nil {
 			return &uploadHTTPError{
@@ -517,7 +524,11 @@ func buildCompletedMultipartParts(parts []types.Part, expectedTotal int) ([]type
 
 	completed := make([]types.CompletedPart, 0, expectedTotal)
 	for i := 1; i <= expectedTotal; i++ {
-		part, ok := partByNumber[int32(i)]
+		partNumber, err := multipartPartNumber(i)
+		if err != nil {
+			return nil, err
+		}
+		part, ok := partByNumber[partNumber]
 		if !ok || part.ETag == nil {
 			return nil, errUploadIncomplete
 		}

@@ -99,6 +99,7 @@ func (s *server) listServerRestores() ([]models.ServerStagedRestore, error) {
 		}
 
 		manifestPath := filepath.Join(restoreDir, "manifest.json")
+		// #nosec G304 -- manifestPath is derived from a directory returned by os.ReadDir under the restore root.
 		data, err := os.ReadFile(manifestPath)
 		if err == nil {
 			var manifest models.ServerMigrationManifest

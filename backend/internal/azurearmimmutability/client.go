@@ -18,7 +18,7 @@ const (
 	apiVersion          = "2024-01-01"
 	baseURL             = "https://management.azure.com"
 	armScope            = "https://management.azure.com/.default"
-	tokenEndpointFormat = "https://login.microsoftonline.com/%s/oauth2/v2.0/token"
+	tokenEndpointFormat = "https://login.microsoftonline.com/%s/oauth2/v2.0/token" // #nosec G101 -- Public OAuth endpoint format, not a secret.
 )
 
 type Response struct {

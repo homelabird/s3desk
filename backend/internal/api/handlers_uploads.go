@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -201,6 +200,10 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-Chunk-Total", map[string]any{"error": err.Error()})
 			return
 		}
+		if chunkTotal > maxMultipartUploadParts {
+			writeError(w, http.StatusBadRequest, "invalid_request", fmt.Sprintf("multipart upload exceeds %d parts", maxMultipartUploadParts), nil)
+			return
+		}
 		if chunkIndex < 0 || chunkIndex >= chunkTotal {
 			writeError(w, http.StatusBadRequest, "invalid_request", "chunk index out of range", map[string]any{"index": chunkIndex})
 			return
@@ -291,7 +294,11 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		partNumber := int32(chunkIndex + 1)
+		partNumber, err := multipartPartNumber(chunkIndex + 1)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid part number", map[string]any{"partNumber": chunkIndex + 1})
+			return
+		}
 		contentLength := chunkSize
 		if chunkIndex == chunkTotal-1 {
 			remaining := fileSize - (int64(chunkTotal-1) * meta.ChunkSize)
@@ -697,13 +704,13 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileSize := *req.Multipart.FileSize
-		partCount := int(math.Ceil(float64(fileSize) / float64(partSize)))
-		if partCount <= 1 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "multipart upload requires at least 2 parts", nil)
+		partCount, err := expectedMultipartPartCount(fileSize, partSize)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-		if partCount > 10_000 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "multipart upload exceeds 10,000 parts", nil)
+		if partCount <= 1 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "multipart upload requires at least 2 parts", nil)
 			return
 		}
 
@@ -796,7 +803,11 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 		sort.Ints(partNumbers)
 		parts := make([]models.UploadPresignPart, 0, len(partNumbers))
 		for _, num := range partNumbers {
-			partNumber := int32(num)
+			partNumber, err := multipartPartNumber(num)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_request", "invalid part number", map[string]any{"partNumber": num})
+				return
+			}
 			resp, err := presigner.PresignUploadPart(r.Context(), &s3.UploadPartInput{
 				Bucket:     &us.Bucket,
 				Key:        &key,

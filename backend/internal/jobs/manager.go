@@ -1932,10 +1932,14 @@ func (m *Manager) BenchmarkConnectivity(ctx context.Context, profileID string) (
 	defer os.Remove(tmpPath)
 
 	if _, err := io.CopyN(tmpFile, cryptorand.Reader, benchFileSize); err != nil {
-		tmpFile.Close()
+		if closeErr := tmpFile.Close(); closeErr != nil {
+			return models.ProfileBenchmarkResponse{}, fmt.Errorf("write temp file: %w (close temp file: %v)", err, closeErr)
+		}
 		return models.ProfileBenchmarkResponse{}, fmt.Errorf("write temp file: %w", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return models.ProfileBenchmarkResponse{}, fmt.Errorf("close temp file: %w", err)
+	}
 
 	benchKey := fmt.Sprintf(".s3desk-benchmark-%d.bin", time.Now().UnixNano())
 	remoteObj := rcloneRemoteObject(firstBucket, benchKey, false)

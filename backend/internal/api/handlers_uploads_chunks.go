@@ -104,6 +104,7 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, o
 	}
 
 	lockPath := filepath.Join(chunkDir, ".assemble.lock")
+	// #nosec G304 -- lockPath is derived from the server-managed chunk directory.
 	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil
@@ -156,6 +157,7 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, o
 		}
 		partSize := info.Size()
 
+		// #nosec G304 -- partPath is derived from the server-managed chunk directory and chunk index.
 		part, err := os.Open(partPath)
 		if err != nil {
 			_ = f.Close()

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"s3desk/internal/models"
@@ -126,12 +127,13 @@ func run(ctx context.Context, profile models.ProfileSecrets, args ...string) (Re
 		return Response{}, errors.New("missing oci namespace")
 	}
 	cmdArgs := append(buildGlobalArgs(profile), args...)
-	path := os.Getenv("OCI_CLI_PATH")
-	if strings.TrimSpace(path) == "" {
-		path = "oci"
+	cliPath, err := resolveCLIPath()
+	if err != nil {
+		return Response{}, err
 	}
 
-	cmd := exec.CommandContext(ctx, path, cmdArgs...)
+	// #nosec G204 -- cliPath is resolved from PATH or a validated configured executable path.
+	cmd := exec.CommandContext(ctx, cliPath, cmdArgs...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -144,6 +146,27 @@ func run(ctx context.Context, profile models.ProfileSecrets, args ...string) (Re
 		return Response{}, errors.New(message)
 	}
 	return Response{Body: stdout.Bytes()}, nil
+}
+
+func resolveCLIPath() (string, error) {
+	raw := strings.TrimSpace(os.Getenv("OCI_CLI_PATH"))
+	if raw == "" {
+		return exec.LookPath("oci")
+	}
+	if filepath.IsAbs(raw) {
+		if _, err := os.Stat(raw); err != nil {
+			return "", fmt.Errorf("invalid OCI_CLI_PATH %q: %w", raw, err)
+		}
+		return raw, nil
+	}
+	if strings.ContainsRune(raw, os.PathSeparator) {
+		return "", fmt.Errorf("invalid OCI_CLI_PATH %q: must be an absolute path or executable name", raw)
+	}
+	resolved, err := exec.LookPath(raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid OCI_CLI_PATH %q: %w", raw, err)
+	}
+	return resolved, nil
 }
 
 func buildGlobalArgs(profile models.ProfileSecrets) []string {

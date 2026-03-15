@@ -174,7 +174,7 @@ func resolveBearerToken(ctx context.Context, profile models.ProfileSecrets) (str
 	}
 	tokenURI := strings.TrimSpace(sa.TokenURI)
 	if tokenURI == "" {
-		tokenURI = "https://oauth2.googleapis.com/token"
+		tokenURI = "https://oauth2.googleapis.com/token" // #nosec G101 -- Public OAuth token endpoint, not a credential.
 	}
 
 	jwt, err := buildSignedJWT(sa.ClientEmail, sa.PrivateKey, tokenURI)
