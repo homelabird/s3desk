@@ -14,7 +14,7 @@ import {
 	ToolOutlined,
 } from '@ant-design/icons'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Suspense, lazy, useMemo, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { APIClient, APIError } from './api/client'
 import { BrandLockup } from './components/BrandLockup'
@@ -101,6 +101,24 @@ export default function FullAppInner() {
 		queryKey: ['profiles', apiToken],
 		queryFn: () => api.listProfiles(),
 	})
+	useEffect(() => {
+		const profiles = profilesQuery.data ?? []
+		if (!profiles.length) {
+			return
+		}
+		const activeProfile = profiles.find((profile) => profile.id === profileId)
+		if (!activeProfile) {
+			setProfileId(profiles[0]?.id ?? null)
+		}
+	}, [profileId, profilesQuery.data, setProfileId])
+	const safeProfileId = useMemo(() => {
+		const profiles = profilesQuery.data ?? []
+		if (!profileId || profiles.length === 0) {
+			return null
+		}
+		const activeProfile = profiles.some((profile) => profile.id === profileId)
+		return activeProfile ? profileId : profiles[0]?.id ?? null
+	}, [profileId, profilesQuery.data])
 	const uploadCapabilityByProfileId = useMemo(() => {
 		const out: Record<string, { presignedUpload: boolean; directUpload: boolean }> = {}
 		const providerMatrix = metaQuery.data?.capabilities?.providers
@@ -327,7 +345,7 @@ export default function FullAppInner() {
 								</Button>
 								{isStackedHeader ? null : (
 									<TopBarProfileSelect
-										profileId={profileId}
+										profileId={safeProfileId}
 										setProfileId={setProfileId}
 										apiToken={apiToken}
 										showLabel={isDesktop}
@@ -359,7 +377,7 @@ export default function FullAppInner() {
 						{isStackedHeader ? (
 							<div className={styles.headerProfileRow} data-testid="app-header-profile-row">
 								<TopBarProfileSelect
-									profileId={profileId}
+									profileId={safeProfileId}
 									setProfileId={setProfileId}
 									apiToken={apiToken}
 									showLabel={false}
@@ -387,16 +405,16 @@ export default function FullAppInner() {
 								<Routes>
 									<Route
 										path="/"
-										element={<ProfilesPage apiToken={apiToken} profileId={profileId} setProfileId={setProfileId} />}
+										element={<ProfilesPage apiToken={apiToken} profileId={safeProfileId} setProfileId={setProfileId} />}
 									/>
 									<Route
 										path="/profiles"
-										element={<ProfilesPage apiToken={apiToken} profileId={profileId} setProfileId={setProfileId} />}
+										element={<ProfilesPage apiToken={apiToken} profileId={safeProfileId} setProfileId={setProfileId} />}
 									/>
-									<Route path="/buckets" element={<BucketsPage apiToken={apiToken} profileId={profileId} />} />
-									<Route path="/objects" element={<ObjectsPage apiToken={apiToken} profileId={profileId} />} />
-									<Route path="/uploads" element={<UploadsPage apiToken={apiToken} profileId={profileId} />} />
-									<Route path="/jobs" element={<JobsPage apiToken={apiToken} profileId={profileId} />} />
+									<Route path="/buckets" element={<BucketsPage apiToken={apiToken} profileId={safeProfileId} />} />
+									<Route path="/objects" element={<ObjectsPage apiToken={apiToken} profileId={safeProfileId} />} />
+									<Route path="/uploads" element={<UploadsPage apiToken={apiToken} profileId={safeProfileId} />} />
+									<Route path="/jobs" element={<JobsPage apiToken={apiToken} profileId={safeProfileId} />} />
 									<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
 								</Routes>
 							</Suspense>
@@ -432,7 +450,7 @@ export default function FullAppInner() {
 						onClose={closeSettings}
 						apiToken={apiToken}
 						setApiToken={setApiToken}
-						profileId={profileId}
+						profileId={safeProfileId}
 						setProfileId={setProfileId}
 					/>
 				</Suspense>
