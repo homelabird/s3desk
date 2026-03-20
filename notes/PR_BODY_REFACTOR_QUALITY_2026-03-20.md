@@ -1,62 +1,30 @@
 ## Summary
 
-This PR bundles the recent codebase cleanup work into a single reviewable stack.
-
-### Included changes
-
-- Update demo stack host defaults and remote-access environment wiring
-- Split backend `jobs` internals into focused files for runtime, dispatch, wiring, state transitions, connectivity, transfer execution, and rclone helpers
-- Split backend `store` internals into focused files for upload sessions, profiles, profile secrets, and shared helpers
-- Modularize the frontend API client into domain modules, transport layers, contracts, and sub-facades
-- Refactor the `Objects` screen by extracting page CSS ownership and object-flow helpers into smaller modules
-- Refactor `BucketPolicyModal`, `BucketModal`, and profile modal section builders into smaller coordinator/helper modules
-- Add mobile responsive E2E coverage, local smoke gates, issue/PR templates, and planning notes
-
-## Commit breakdown
-
-- `8765a0d` `chore: update demo stack host defaults`
-- `59c498a` `refactor(backend): split jobs and store internals`
-- `1b6d7b7` `refactor(frontend): modularize api client and test facades`
-- `04c28cc` `refactor(objects): split page styles and object flows`
-- `a3a79dd` `refactor(frontend): split bucket and profile modal flows`
-- `80eeeaa` `test: add mobile responsive suite and local smoke gates`
-- `305ce52` `docs: add refactor and quality planning notes`
+- 데모 스택 호스트/원격 접근 기본값 정리
+- 백엔드 `jobs`/`store` 내부 책임 분리
+- 프런트 API client를 domain/sub-facade 구조로 분리
+- `Objects` 페이지 스타일/플로우 분리
+- `BucketPolicyModal`, `BucketModal`, profile modal section 분리
+- 모바일 반응형 E2E와 로컬 smoke/full gate 추가
+- 리팩터링/품질 계획 문서와 후속 이슈 초안 추가
 
 ## Validation
 
-### Passed earlier during the refactor sequence
-
-- `go test ./internal/jobs`
-- `go test ./internal/store`
-- `go test ./...`
-- `npm run lint && npm run typecheck`
-- `npx vitest run`
-- `npm run test:e2e:mobile-responsive`
-- `npm run test:e2e:smoke`
-
-### Current status
-
 - `./scripts/check.sh full`
-  - currently fails on `gofmt`
-  - affected files:
-    - `backend/internal/jobs/manager.go`
-    - `backend/internal/jobs/manager_wiring.go`
 
-## Review guidance
-
-### Suggested review order
+## Review order
 
 1. Demo/environment defaults
-2. Backend `jobs` and `store` splits
-3. Frontend API client split
-4. `Objects` refactor
-5. `Buckets` and `Profiles` refactors
-6. Mobile responsive test and quality-gate changes
-7. Notes and planning docs
+2. Backend `jobs` / `store`
+3. Frontend API client
+4. `Objects`
+5. `Buckets` / `Profiles`
+6. Test and quality-gate changes
+7. Notes/docs
 
-### Main risk areas
+## Main risk areas
 
-- API client facade wiring regression across existing call sites
-- `Objects` CSS ownership changes affecting layout edge cases
-- Bucket/profile modal coordinator extraction changing save/reset flows
-- Local `check.sh full` now enforcing stricter backend security and static-analysis gates
+- API facade wiring regression
+- `Objects` CSS ownership 변경에 따른 레이아웃 edge case
+- bucket/profile modal save/reset flow 회귀
+- 새 `full` gate 기준의 backend static analysis 영향
