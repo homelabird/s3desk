@@ -7,8 +7,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-demo-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-demo-minio-secret}
     ports:
-      - "${MINIO_BIND_HOST:-127.0.0.1}:${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_BIND_HOST:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${MINIO_BIND_HOST:-0.0.0.0}:${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_BIND_HOST:-0.0.0.0}:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio-demo-data:/data
 
@@ -21,19 +21,51 @@ services:
       - /bin/sh
       - -ec
       - |
-          minio_seed_host="$${MINIO_BIND_HOST:-127.0.0.1}"
-          case "$$minio_seed_host" in
-            0.0.0.0) minio_seed_host="127.0.0.1" ;;
-            ::|"[::]") minio_seed_host="[::1]" ;;
-          esac
-          export MINIO_ENDPOINT="$${MINIO_ENDPOINT:-http://$$minio_seed_host:$${MINIO_API_PORT:-9000}}"
-          export MINIO_PUBLIC_ENDPOINT="$${MINIO_PUBLIC_ENDPOINT:-http://$$minio_seed_host:$${MINIO_API_PORT:-9000}}"
-          export MINIO_INTERNAL_ENDPOINT="$${MINIO_INTERNAL_ENDPOINT:-http://$$minio_seed_host:$${MINIO_API_PORT:-9000}}"
+          detect_host() {
+            host="$${1-}"
+            if [ -n "$$host" ] && [ "$$host" != "0.0.0.0" ] && [ "$$host" != "::" ] && [ "$$host" != "[::]" ]; then
+              printf "%s" "$$host"
+              return 0
+            fi
+
+            public_host="$${DEMO_PUBLIC_HOST:-}"
+            if [ -n "$$public_host" ]; then
+              printf "%s" "$$public_host"
+              return 0
+            fi
+
+            detected_host="$(hostname -I | awk '{print $$1}')"
+            if [ -z "$$detected_host" ] && command -v ip >/dev/null 2>&1; then
+              detected_host="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {print $$7; exit}')"
+            fi
+            if [ -z "$$detected_host" ]; then
+              printf "%s" "127.0.0.1"
+              return 0
+            fi
+            printf "%s" "$$detected_host"
+          }
+
+          minio_seed_host="$${MINIO_BIND_HOST:-0.0.0.0}"
+          minio_public_host="$(detect_host "$$minio_seed_host")"
+          minio_internal_host="$${minio_seed_host}"
+          if [ "$$DEMO_ALLOW_REMOTE" = "true" ]; then
+            minio_internal_host="$$minio_public_host"
+          elif [ "$$minio_internal_host" = "0.0.0.0" ] || [ "$$minio_internal_host" = "::" ] || [ "$$minio_internal_host" = "[::]" ]; then
+            minio_internal_host="127.0.0.1"
+          fi
+          if [ "$$minio_internal_host" = "[::1]" ]; then
+            minio_internal_host="127.0.0.1"
+          fi
+          export MINIO_ENDPOINT="$${MINIO_ENDPOINT:-http://$$minio_internal_host:$${MINIO_API_PORT:-9000}}"
+          export MINIO_PUBLIC_ENDPOINT="$${MINIO_PUBLIC_ENDPOINT:-http://$$minio_public_host:$${MINIO_API_PORT:-9000}}"
+          export MINIO_INTERNAL_ENDPOINT="$${MINIO_INTERNAL_ENDPOINT:-http://$$minio_internal_host:$${MINIO_API_PORT:-9000}}"
           exec "$@"
       - --
     command: ["/bin/sh", "/seed-minio.sh"]
     environment:
-      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-127.0.0.1}
+      DEMO_PUBLIC_HOST: ${DEMO_PUBLIC_HOST:-127.0.0.1}
+      DEMO_ALLOW_REMOTE: "${DEMO_ALLOW_REMOTE:-false}"
+      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-0.0.0.0}
       MINIO_API_PORT: ${MINIO_API_PORT:-9000}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-demo-minio}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-demo-minio-secret}
@@ -57,9 +89,10 @@ services:
       - minio
     network_mode: host
     environment:
-      ADDR: "127.0.0.1:8080"
-      ALLOW_REMOTE: "false"
-      ALLOWED_HOSTS: "${DEMO_ALLOWED_HOSTS:-127.0.0.1,localhost}"
+      DEMO_PUBLIC_HOST: ${DEMO_PUBLIC_HOST:-127.0.0.1}
+      ADDR: "${S3DESK_BIND_HOST:-0.0.0.0}:${S3DESK_PORT:-8080}"
+      ALLOW_REMOTE: "${DEMO_ALLOW_REMOTE:-true}"
+      ALLOWED_HOSTS: "${DEMO_ALLOWED_HOSTS:-0.0.0.0,127.0.0.1,localhost,::1}"
       API_TOKEN: ${API_TOKEN:-demo-token}
       EXTERNAL_BASE_URL: ${EXTERNAL_BASE_URL:-http://127.0.0.1:8080}
       DB_BACKEND: "sqlite"
@@ -81,27 +114,60 @@ services:
       - /bin/sh
       - -ec
       - |
-          s3desk_seed_host="$${S3DESK_BIND_HOST:-127.0.0.1}"
-          case "$$s3desk_seed_host" in
-            0.0.0.0) s3desk_seed_host="127.0.0.1" ;;
-            ::|"[::]") s3desk_seed_host="[::1]" ;;
-          esac
-          minio_seed_host="$${MINIO_BIND_HOST:-127.0.0.1}"
-          case "$$minio_seed_host" in
-            0.0.0.0) minio_seed_host="127.0.0.1" ;;
-            ::|"[::]") minio_seed_host="[::1]" ;;
-          esac
-          export S3DESK_API_BASE="$${S3DESK_API_BASE:-http://$$s3desk_seed_host:$${S3DESK_PORT:-8080}}"
-          export MINIO_PUBLIC_ENDPOINT="$${MINIO_PUBLIC_ENDPOINT:-http://$$minio_seed_host:$${MINIO_API_PORT:-9000}}"
+          detect_host() {
+            host="$${1-}"
+            if [ -n "$$host" ] && [ "$$host" != "0.0.0.0" ] && [ "$$host" != "::" ] && [ "$$host" != "[::]" ]; then
+              printf "%s" "$$host"
+              return 0
+            fi
+
+            public_host="$${DEMO_PUBLIC_HOST:-}"
+            if [ -n "$$public_host" ]; then
+              printf "%s" "$$public_host"
+              return 0
+            fi
+
+            detected_host="$(hostname -I | awk '{print $$1}')"
+            if [ -z "$$detected_host" ] && command -v ip >/dev/null 2>&1; then
+              detected_host="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {print $$7; exit}')"
+            fi
+            if [ -z "$$detected_host" ]; then
+              printf "%s" "127.0.0.1"
+              return 0
+            fi
+            printf "%s" "$$detected_host"
+          }
+
+          s3desk_seed_host="$${S3DESK_BIND_HOST:-0.0.0.0}"
+          minio_seed_host="$${MINIO_BIND_HOST:-0.0.0.0}"
+          if [ "$$DEMO_ALLOW_REMOTE" = "true" ]; then
+            s3desk_seed_host="$(detect_host "$$s3desk_seed_host")"
+            minio_seed_host="$(detect_host "$$minio_seed_host")"
+          else
+            if [ "$$s3desk_seed_host" = "0.0.0.0" ] || [ "$$s3desk_seed_host" = "::" ] || [ "$$s3desk_seed_host" = "[::]" ]; then
+              s3desk_seed_host="127.0.0.1"
+            fi
+            if [ "$$minio_seed_host" = "0.0.0.0" ] || [ "$$minio_seed_host" = "::" ] || [ "$$minio_seed_host" = "[::]" ]; then
+              minio_seed_host="127.0.0.1"
+            fi
+          fi
+          export S3DESK_API_BASE="$${S3DESK_API_BASE:-http://127.0.0.1:$${S3DESK_PORT:-8080}}"
+          minio_public_host="$$minio_seed_host"
+          if [ "$$DEMO_ALLOW_REMOTE" = "true" ]; then
+            minio_public_host="$(detect_host "$$minio_seed_host")"
+          fi
+          export MINIO_PUBLIC_ENDPOINT="$${MINIO_PUBLIC_ENDPOINT:-http://$$minio_public_host:$${MINIO_API_PORT:-9000}}"
           export MINIO_INTERNAL_ENDPOINT="$${MINIO_INTERNAL_ENDPOINT:-http://$$minio_seed_host:$${MINIO_API_PORT:-9000}}"
           exec "$@"
       - --
     command: ["python3", "/seed-s3desk.py"]
     environment:
-      S3DESK_BIND_HOST: ${S3DESK_BIND_HOST:-127.0.0.1}
+      DEMO_ALLOW_REMOTE: "${DEMO_ALLOW_REMOTE:-false}"
+      S3DESK_BIND_HOST: ${S3DESK_BIND_HOST:-0.0.0.0}
       S3DESK_PORT: ${S3DESK_PORT:-8080}
-      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-127.0.0.1}
+      MINIO_BIND_HOST: ${MINIO_BIND_HOST:-0.0.0.0}
       MINIO_API_PORT: ${MINIO_API_PORT:-9000}
+      DEMO_PUBLIC_HOST: ${DEMO_PUBLIC_HOST:-}
       API_TOKEN: ${API_TOKEN:-demo-token}
       S3DESK_API_BASE: "${S3DESK_API_BASE:-}"
       DEMO_PROFILE_NAME: ${DEMO_PROFILE_NAME:-MinIO Demo}
