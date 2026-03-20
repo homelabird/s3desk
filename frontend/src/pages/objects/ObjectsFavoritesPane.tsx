@@ -3,7 +3,7 @@ import { SearchOutlined, StarFilled } from '@ant-design/icons'
 
 import { ToggleSwitch } from '../../components/ToggleSwitch'
 import type { FavoriteObjectItem } from '../../api/types'
-import styles from './objects.module.css'
+import styles from './ObjectsFavorites.module.css'
 import { ObjectsTreePane } from './ObjectsTreePane'
 
 type ObjectsFavoritesPaneProps = {

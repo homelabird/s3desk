@@ -41,7 +41,7 @@ export async function listAllObjects(args: {
 			})
 			break
 		}
-		const resp = await args.api.listObjects({
+		const resp = await args.api.objects.listObjects({
 			profileId: args.profileId,
 			bucket: args.bucket,
 			prefix: args.prefix,

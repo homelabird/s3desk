@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
 import { buildThumbnailCacheKey, createThumbnailCache } from '../../../lib/thumbnailCache'
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { ObjectThumbnail } from '../ObjectThumbnail'
 import { buildObjectThumbnailRequest } from '../objectPreviewPolicy'
 
@@ -48,7 +49,7 @@ describe('ObjectThumbnail', () => {
 				put: vi.fn(),
 			}),
 		} as unknown as CacheStorage
-		const api = { downloadObjectThumbnail } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
 
 		render(<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
 
@@ -62,7 +63,7 @@ describe('ObjectThumbnail', () => {
 			promise: Promise.reject(new APIError({ status: 413, code: 'too_large', message: 'object is too large for thumbnail' })),
 			abort: vi.fn(),
 		}))
-		const api = { downloadObjectThumbnail } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
 
 		const first = render(
 			<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,
@@ -96,7 +97,7 @@ describe('ObjectThumbnail', () => {
 			promise: Promise.reject(new Error('network error')),
 			abort: vi.fn(),
 		}))
-		const api = { downloadObjectThumbnail } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
 
 		const first = render(
 			<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,

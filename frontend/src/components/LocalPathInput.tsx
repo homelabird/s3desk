@@ -37,7 +37,7 @@ export function LocalPathInput(props: LocalPathInputProps) {
 			const requestId = ++fetchIdRef.current
 			setLoading(true)
 			try {
-				const resp = await props.api.listLocalEntries({ profileId: props.profileId, path: basePath, limit: 300 })
+				const resp = await props.api.objects.listLocalEntries({ profileId: props.profileId, path: basePath, limit: 300 })
 				if (fetchIdRef.current !== requestId) return
 
 				const needle = filter.trim().toLowerCase()

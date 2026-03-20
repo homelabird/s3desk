@@ -1,0 +1,142 @@
+.previewTriggerButton {
+  width: 100%;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 10px;
+}
+
+.previewTriggerButton:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 3px;
+}
+
+.previewFrame {
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--s3d-color-bg-code);
+}
+
+.detailsContent {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detailsMessageStack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailsActionRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detailsSection {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detailsSectionHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detailsSectionActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.detailsFeedback {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.detailsMediaCenter {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detailsDivider {
+  margin-block: 8px !important;
+}
+
+.detailsPreviewImage {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  margin-inline: auto;
+  object-fit: contain;
+}
+
+.detailsPreviewCaption {
+  display: block;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.detailsCodePreview {
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--s3d-color-bg-code);
+  max-height: 360px;
+  overflow: auto;
+}
+
+.detailsCodePre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+}
+
+.detailsBody {
+  padding: 12px;
+}
+
+@media (max-width: 767px) {
+  .detailsContent {
+    gap: 14px;
+  }
+
+  .detailsSection {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .detailsBody {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .detailsBody {
+    padding: 8px;
+  }
+}

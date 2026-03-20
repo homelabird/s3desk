@@ -19,7 +19,7 @@ import {
 } from '../../lib/localDate'
 import { formatBytes } from '../../lib/transfer'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
-import styles from './objects.module.css'
+import styles from './ObjectsSearch.module.css'
 
 type ObjectsGlobalSearchDrawerProps = {
 	open: boolean
@@ -148,7 +148,7 @@ function ObjectsGlobalSearchIndexPanel(props: ObjectsGlobalSearchIndexPanelProps
 }
 
 export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps) {
-	const drawerWidth = props.isMd ? 920 : '100%'
+	const drawerWidth = props.isMd ? 'min(92vw, 920px)' : '100%'
 	const modifiedAfterValue = formatLocalDateInputValue(props.modifiedAfterMs)
 	const modifiedBeforeValue = formatLocalDateInputValue(props.modifiedBeforeMs)
 	const minSizeValue = mbFromBytes(props.minSizeBytes)

@@ -1,7 +1,7 @@
 import { Button, Checkbox, Space, Typography } from 'antd'
 import { CaretDownOutlined, CaretUpOutlined, EllipsisOutlined } from '@ant-design/icons'
 
-import styles from './objects.module.css'
+import styles from './ObjectsListView.module.css'
 import { ObjectsListHeaderRow } from './ObjectsListPane'
 
 type SortColumn = 'name' | 'size' | 'time'

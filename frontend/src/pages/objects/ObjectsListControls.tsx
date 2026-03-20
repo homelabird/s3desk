@@ -10,7 +10,7 @@ import {
 	StarOutlined,
 } from '@ant-design/icons'
 
-import styles from './objects.module.css'
+import styles from './ObjectsListView.module.css'
 import type { ObjectSort, ObjectsViewMode } from './objectsTypes'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 import { NativeSelect } from '../../components/NativeSelect'

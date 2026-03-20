@@ -23,7 +23,7 @@ export function useObjectsPrefixSummary({
 	const summaryQuery = useQuery({
 		queryKey: ['objectIndexSummary', profileId, bucket, prefix, apiToken],
 		enabled: enabled && !!profileId && !!bucket && !!prefix,
-		queryFn: () => api.getObjectIndexSummary({ profileId: profileId!, bucket, prefix, sampleLimit: 5 }),
+		queryFn: () => api.objects.getObjectIndexSummary({ profileId: profileId!, bucket, prefix, sampleLimit: 5 }),
 		retry: false,
 	})
 

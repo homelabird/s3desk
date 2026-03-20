@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { APIClient } from '../../../api/client'
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsPresign } from '../useObjectsPresign'
 
 function buildWrapper() {
@@ -21,12 +21,15 @@ function buildWrapper() {
 
 describe('useObjectsPresign', () => {
 	it('passes known object metadata hints to download-url generation', async () => {
-		const api = {
-			getObjectDownloadURL: vi.fn().mockResolvedValue({
-				url: 'https://example.com/download',
-				expiresAt: '2026-03-11T00:00:00Z',
-			}),
-		} as unknown as APIClient
+		const getObjectDownloadURL = vi.fn().mockResolvedValue({
+			url: 'https://example.com/download',
+			expiresAt: '2026-03-11T00:00:00Z',
+		})
+		const api = createMockApiClient({
+			objects: {
+				getObjectDownloadURL,
+			},
+		})
 
 		const { result } = renderHook(
 			() =>
@@ -48,7 +51,7 @@ describe('useObjectsPresign', () => {
 			})
 		})
 
-		expect(api.getObjectDownloadURL).toHaveBeenCalledWith({
+		expect(getObjectDownloadURL).toHaveBeenCalledWith({
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
 			key: 'photos/cat.jpg',

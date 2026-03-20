@@ -1,7 +1,7 @@
 import { forwardRef } from 'react'
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, UIEvent, WheelEvent } from 'react'
 
-import styles from './objects.module.css'
+import styles from './ObjectsListView.module.css'
 
 export function ObjectsListPane(props: { children: ReactNode }) {
 	return <div className={styles.listPane}>{props.children}</div>

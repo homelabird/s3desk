@@ -16,7 +16,7 @@ export async function downloadObjectToDevice(args: {
 
 	let res: Response
 	if (downloadLinkProxyEnabled) {
-		const proxy = await api.getObjectDownloadURL({
+		const proxy = await api.objects.getObjectDownloadURL({
 			profileId: task.profileId,
 			bucket: task.bucket,
 			key: task.key,
@@ -26,7 +26,7 @@ export async function downloadObjectToDevice(args: {
 		res = await fetch(proxy.url, { signal })
 	} else {
 		try {
-			const direct = await api.getObjectDownloadURL({
+			const direct = await api.objects.getObjectDownloadURL({
 				profileId: task.profileId,
 				bucket: task.bucket,
 				key: task.key,
@@ -37,7 +37,7 @@ export async function downloadObjectToDevice(args: {
 			if (!shouldFallbackToProxy(err) || signal.aborted) {
 				throw err
 			}
-			const proxy = await api.getObjectDownloadURL({
+			const proxy = await api.objects.getObjectDownloadURL({
 				profileId: task.profileId,
 				bucket: task.bucket,
 				key: task.key,

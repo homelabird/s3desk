@@ -82,13 +82,13 @@ export function useObjectsPageQueries({
 }: UseObjectsPageQueriesArgs) {
 	const metaQuery = useQuery({
 		queryKey: ['meta', apiToken],
-		queryFn: () => api.getMeta(),
+		queryFn: () => api.server.getMeta(),
 		enabled: !!apiToken,
 	})
 
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', apiToken],
-		queryFn: () => api.listProfiles(),
+		queryFn: () => api.profiles.listProfiles(),
 		enabled: !!apiToken,
 	})
 
@@ -106,7 +106,7 @@ export function useObjectsPageQueries({
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', profileId, apiToken],
-		queryFn: () => api.listBuckets(profileId!),
+		queryFn: () => api.buckets.listBuckets(profileId!),
 		enabled: !!profileId,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
@@ -117,7 +117,7 @@ export function useObjectsPageQueries({
 		initialPageParam: undefined as string | undefined,
 		staleTime: 15_000,
 		queryFn: async ({ pageParam }) => {
-			return api.listObjects({
+			return api.objects.listObjects({
 				profileId: profileId!,
 				bucket,
 				prefix,

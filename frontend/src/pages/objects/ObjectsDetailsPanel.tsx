@@ -1,7 +1,7 @@
 import type { PointerEvent, ReactNode } from 'react'
 import { InfoCircleOutlined } from '@ant-design/icons'
 
-import styles from './objects.module.css'
+import styles from './ObjectsShell.module.css'
 import { ObjectsDetailsCollapsed, ObjectsDetailsPane } from './ObjectsDetailsPane'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 
@@ -58,7 +58,7 @@ export function ObjectsDetailsPanel(props: ObjectsDetailsPanelProps) {
 				placement="right"
 				sheetId="details"
 				backdropInteractive={!props.detailsDrawerSuspended}
-				width="min(90vw, 520px)"
+				width="min(100vw, 520px)"
 				dataTestId="objects-details-sheet"
 			>
 				<div className={styles.objectsSheetBody}>{props.detailsPanelBody}</div>

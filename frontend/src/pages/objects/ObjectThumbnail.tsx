@@ -6,7 +6,7 @@ import {
 	buildThumbnailCacheKey,
 	type ThumbnailCache,
 } from '../../lib/thumbnailCache'
-import styles from './objects.module.css'
+import styles from './ObjectsThumbnailPrimitives.module.css'
 import { buildObjectThumbnailRequest, getThumbnailFailureTtlMs, shouldCacheThumbnailFailure } from './objectPreviewPolicy'
 import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
 

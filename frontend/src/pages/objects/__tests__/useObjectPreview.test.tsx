@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { buildThumbnailCacheKey } from '../../../lib/thumbnailCache'
 import { buildObjectThumbnailRequest } from '../objectPreviewPolicy'
 import { useObjectPreview } from '../useObjectPreview'
@@ -33,7 +34,7 @@ describe('useObjectPreview', () => {
 			abort,
 		}))
 		const getObjectDownloadURL = vi.fn()
-		const api = { downloadObjectThumbnail, getObjectDownloadURL } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail, getObjectDownloadURL } })
 
 		const { result, unmount } = renderHook(() =>
 			useObjectPreview({
@@ -101,7 +102,7 @@ describe('useObjectPreview', () => {
 		} as unknown as CacheStorage
 		const downloadObjectThumbnail = vi.fn()
 		const getObjectDownloadURL = vi.fn()
-		const api = { downloadObjectThumbnail, getObjectDownloadURL } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail, getObjectDownloadURL } })
 
 		const { result, unmount } = renderHook(() =>
 			useObjectPreview({
@@ -140,7 +141,7 @@ describe('useObjectPreview', () => {
 			expiresAt: '2026-03-09T00:00:00Z',
 		})
 		const downloadObjectThumbnail = vi.fn()
-		const api = { downloadObjectThumbnail, getObjectDownloadURL } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail, getObjectDownloadURL } })
 
 		const { result } = renderHook(() =>
 			useObjectPreview({
@@ -182,7 +183,7 @@ describe('useObjectPreview', () => {
 			expiresAt: '2026-03-09T00:00:00Z',
 		})
 		const downloadObjectThumbnail = vi.fn()
-		const api = { downloadObjectThumbnail, getObjectDownloadURL } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail, getObjectDownloadURL } })
 
 		const { result } = renderHook(() =>
 			useObjectPreview({
@@ -234,7 +235,7 @@ describe('useObjectPreview', () => {
 			expiresAt: '2026-03-09T00:00:00Z',
 		})
 		const downloadObjectThumbnail = vi.fn()
-		const api = { downloadObjectThumbnail, getObjectDownloadURL } as never
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail, getObjectDownloadURL } })
 
 		const { result } = renderHook(() =>
 			useObjectPreview({

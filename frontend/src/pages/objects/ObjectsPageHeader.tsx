@@ -2,7 +2,7 @@ import { Alert, Typography } from 'antd'
 import { Suspense } from 'react'
 
 import { UploadSourceSheet } from '../../components/UploadSourceSheet'
-import styles from './objects.module.css'
+import styles from './ObjectsShell.module.css'
 import { ObjectsToolbarSection } from './objectsPageLazy'
 
 type ObjectsToolbarSectionProps = Parameters<typeof import('./ObjectsToolbarSection').ObjectsToolbarSection>[0]

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import styles from '../objects.module.css'
+import styles from '../ObjectsGridCards.module.css'
 import { useObjectsPrefixGridRenderer } from '../useObjectsPrefixGridRenderer'
 
 function Harness(props: {

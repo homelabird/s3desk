@@ -28,7 +28,7 @@ export function useObjectsPageEnvironment(args: UseObjectsPageEnvironmentArgs) {
 	const createJobWithRetry = useCallback(
 		(req: JobCreateRequest) => {
 			if (!args.profileId) throw new Error('profile is required')
-			return withJobQueueRetry(() => api.createJob(args.profileId!, req))
+			return withJobQueueRetry(() => api.jobs.createJob(args.profileId!, req))
 		},
 		[api, args.profileId],
 	)

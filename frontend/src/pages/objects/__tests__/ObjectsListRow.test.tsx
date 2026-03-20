@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import styles from '../objects.module.css'
+import styles from '../ObjectsListView.module.css'
 import { ObjectsObjectRow, ObjectsPrefixRow } from '../ObjectsListRow'
 
 const originalResizeObserver = globalThis.ResizeObserver

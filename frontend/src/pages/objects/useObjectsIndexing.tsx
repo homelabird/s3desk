@@ -102,7 +102,7 @@ export function useObjectsIndexing({
 		autoIndexPendingRef.current = true
 		;(async () => {
 			let indexedAtMs = 0
-			const summary = await api.getObjectIndexSummary({
+			const summary = await api.objects.getObjectIndexSummary({
 				profileId,
 				bucket,
 				prefix: targetPrefix,

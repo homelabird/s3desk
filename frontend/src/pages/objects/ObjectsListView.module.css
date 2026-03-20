@@ -1,0 +1,608 @@
+.listPane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.listTop {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dropZoneCard {
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-sm);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  box-shadow: var(--s3d-shadow-sm);
+  transition: box-shadow var(--s3d-transition-normal);
+}
+
+.selectionBar {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--s3d-color-border);
+  background: var(--s3d-color-primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.listHeaderRow {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--s3d-color-border);
+  background: var(--s3d-color-bg-secondary);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.listScroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.listScroller:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
+}
+
+.listGridBase {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+}
+
+.listGridCompact {
+  grid-template-columns: 28px minmax(0, 1fr) 44px;
+  gap: 8px;
+}
+
+.listGridWide {
+  grid-template-columns: 28px minmax(180px, 1fr) minmax(90px, 140px) minmax(140px, 200px) auto;
+  gap: 12px;
+}
+
+.listHeaderGrid {
+  font-size: 12px;
+}
+
+.listRowShell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: var(--objects-row-min-height, auto);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--s3d-color-border);
+  transform: translateY(var(--objects-row-offset, 0px));
+  transition: background var(--s3d-transition-fast);
+}
+
+.listRowSelected {
+  background: var(--s3d-color-primary-light);
+}
+
+.listRowInteractive {
+  min-width: 0;
+}
+
+.listRowDropTarget {
+  border-radius: 10px;
+  transition:
+    background var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    border-color var(--s3d-transition-fast);
+}
+
+.listRowClickable {
+  cursor: pointer;
+}
+
+.listRowDraggable {
+  cursor: grab;
+}
+
+.listRowDropActive {
+  background: color-mix(in srgb, var(--s3d-color-primary-light) 74%, var(--s3d-color-bg-card) 26%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--s3d-color-primary) 42%, var(--s3d-color-border) 58%);
+}
+
+.listRowNameCell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.listRowObjectMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.listRowThumbnailWrap {
+  display: flex;
+  align-items: center;
+}
+
+.listRowTextEllipsis {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.listRowMetricCellRight {
+  text-align: right;
+}
+
+.listRowMenuCell {
+  justify-self: end;
+}
+
+.listRowMenuRoot {
+  display: inline-flex;
+}
+
+.listRowMenuPopover {
+  right: 0;
+  left: auto;
+}
+
+.listRowPrefixIcon {
+  color: var(--s3d-color-primary);
+}
+
+.listRowFavoriteIcon {
+  color: var(--s3d-color-star);
+}
+
+.listRowMetaCompact {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.listRowAuxActions {
+  justify-self: end;
+}
+
+.virtualListContent {
+  position: relative;
+  width: 100%;
+}
+
+.virtualListFooter,
+.listFooterAction {
+  display: flex;
+  justify-content: center;
+}
+
+.virtualListFooter {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+}
+
+.listFooterAction {
+  margin-top: 12px;
+}
+
+.listEmptyState {
+  padding: 24px;
+}
+
+.listEmptyLoading {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.breadcrumbRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.breadcrumbLeft {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.breadcrumbNav {
+  min-width: 0;
+}
+
+.breadcrumbList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.breadcrumbListItem {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.breadcrumbSeparator {
+  color: var(--s3d-color-text-secondary);
+}
+
+.breadcrumbDropTarget {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 4px;
+  border-radius: 4px;
+}
+
+.breadcrumbDropTargetActive {
+  background: var(--s3d-color-primary-light);
+}
+
+.breadcrumbLink {
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: var(--s3d-color-primary);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.breadcrumbLink:hover,
+.breadcrumbLink:focus-visible {
+  color: color-mix(in srgb, var(--s3d-color-primary) 82%, black 18%);
+  outline: none;
+  text-decoration: underline;
+}
+
+.breadcrumbLink:disabled {
+  color: var(--s3d-color-text-secondary);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.listControlsLocationStack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.listControlsLocationRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.listControlsLocationCode {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 640px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--s3d-color-border);
+  background: var(--s3d-color-bg-code);
+  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.listControlsSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.listControlsTopActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.listControlsStack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listControlsScopeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.listControlsSortGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.listControlsViewToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.listControlsSortSelect {
+  min-width: 180px;
+  max-width: 100%;
+}
+
+.listControlsToggleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.listControlsSecondaryText {
+  color: var(--s3d-color-text-secondary);
+}
+
+.listControlsIconButton {
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 999px;
+  background: var(--s3d-color-bg-elevated);
+  color: inherit;
+  min-width: 34px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition:
+    transform var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    border-color var(--s3d-transition-fast);
+}
+
+.listControlsIconButton:hover,
+.listControlsIconButton:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: var(--s3d-shadow-sm);
+  border-color: var(--s3d-color-focus);
+  outline: none;
+}
+
+.listControlsIconButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.listControlsCopyFeedback {
+  color: var(--s3d-color-text-secondary);
+  font-size: 12px;
+}
+
+.listControlsSwitch {
+  width: 38px;
+  min-width: 38px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid var(--s3d-color-border-input);
+  border-radius: 999px;
+  background: var(--s3d-color-bg-tertiary);
+  display: inline-flex;
+  align-items: center;
+  transition:
+    background var(--s3d-transition-fast),
+    border-color var(--s3d-transition-fast);
+  cursor: pointer;
+}
+
+.listControlsSwitchChecked {
+  background: color-mix(in srgb, var(--s3d-color-primary) 20%, var(--s3d-color-bg-tertiary));
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 55%, var(--s3d-color-border-input));
+}
+
+.listControlsSwitchThumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: var(--s3d-shadow-sm);
+  transition: transform var(--s3d-transition-fast);
+}
+
+.listControlsSwitchChecked .listControlsSwitchThumb {
+  transform: translateX(16px);
+}
+
+.listControlsSwitch:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
+}
+
+.listControlsSwitch:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.listControlsStatusAlert {
+  width: 100%;
+}
+
+.listControlsStatusText {
+  display: block;
+}
+
+.listControlsStatusInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.listControlsSearchInput {
+  width: 320px;
+  max-width: 100%;
+}
+
+.listControlsSearchInputFull {
+  width: 100%;
+  max-width: 100%;
+}
+
+.listControlsCompactFooter {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.listControlsCompactActions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.listControlsDesktopRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.listControlsDesktopLeft {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.listControlsSummaryText {
+  line-height: 1.5;
+}
+
+.listControlsHintText {
+  display: block;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .breadcrumbRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .listControlsLocationRow,
+  .listControlsDesktopLeft,
+  .listControlsTopActions {
+    width: 100%;
+  }
+
+  .listControlsCompactFooter {
+    justify-content: flex-start;
+  }
+
+  .selectionBar {
+    padding: 8px 10px;
+  }
+
+  .listHeaderRow {
+    padding: 6px 10px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .listGridWide {
+    grid-template-columns: 28px minmax(140px, 1fr) minmax(80px, 120px) minmax(120px, 160px) auto;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .selectionBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .listControlsCompactActions {
+    width: 100%;
+  }
+
+  .listControlsCompactActions :global(.ant-btn) {
+    flex: 1 1 160px;
+  }
+
+  .selectionBar {
+    padding: 8px;
+  }
+
+  .listHeaderRow {
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .listControlsCompactFooter {
+    gap: 8px;
+  }
+
+  .listControlsCompactActions,
+  .listControlsViewToggle {
+    width: 100%;
+  }
+
+  .listControlsCompactActions :global(.ant-btn),
+  .listControlsViewToggle :global(.ant-btn) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .listControlsHintText {
+    font-size: 12px;
+  }
+}

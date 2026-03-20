@@ -14,6 +14,7 @@ import { ObjectsLayout, type ObjectsLayoutProps } from './ObjectsLayout'
 import { ObjectsListHeader } from './ObjectsListHeader'
 import { ObjectsListSectionContainer } from './ObjectsListSectionContainer'
 import { ObjectsSelectionBarSection } from './ObjectsSelectionBarSection'
+import shellStyles from './ObjectsShell.module.css'
 import styles from './objects.module.css'
 import {
 	ObjectsContextMenuPortal,
@@ -91,24 +92,24 @@ function scheduleIdleLoad(callback: () => void) {
 }
 
 function ShellText({ children }: { children: string }) {
-	return <span className={styles.shellTextMuted}>{children}</span>
+	return <span className={shellStyles.shellTextMuted}>{children}</span>
 }
 
 function InlineAlert(props: { tone: 'info' | 'warning' | 'error'; title: string; description?: string | null }) {
 	return (
 		<div
 			className={[
-				styles.inlineAlert,
-				props.tone === 'info' ? styles.inlineAlertInfo : null,
-				props.tone === 'warning' ? styles.inlineAlertWarning : null,
-				props.tone === 'error' ? styles.inlineAlertError : null,
+				shellStyles.inlineAlert,
+				props.tone === 'info' ? shellStyles.inlineAlertInfo : null,
+				props.tone === 'warning' ? shellStyles.inlineAlertWarning : null,
+				props.tone === 'error' ? shellStyles.inlineAlertError : null,
 			]
 				.filter(Boolean)
 				.join(' ')}
 			role={props.tone === 'error' ? 'alert' : undefined}
 		>
-			<strong className={styles.inlineAlertTitle}>{props.title}</strong>
-			{props.description ? <span className={styles.inlineAlertDescription}>{props.description}</span> : null}
+			<strong className={shellStyles.inlineAlertTitle}>{props.title}</strong>
+			{props.description ? <span className={shellStyles.inlineAlertDescription}>{props.description}</span> : null}
 		</div>
 	)
 }
@@ -130,17 +131,17 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 	}, [listControlsReady, shouldDeferListControls])
 
 	const paneFallback = (
-		<div className={styles.paneSkeleton}>
+		<div className={shellStyles.paneSkeleton}>
 			<ShellText>Loading…</ShellText>
 		</div>
 	)
 	const listFallback = (
-		<div className={styles.listSkeleton}>
+		<div className={shellStyles.listSkeleton}>
 			<ShellText>Loading list…</ShellText>
 		</div>
 	)
 	const controlsFallback = (
-		<div className={styles.controlsSkeleton}>
+		<div className={shellStyles.controlsSkeleton}>
 			<ShellText>Loading controls…</ShellText>
 		</div>
 	)
@@ -161,7 +162,7 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 			: null
 
 	const listAlerts = (
-		<div className={styles.inlineAlertStack}>
+		<div className={shellStyles.inlineAlertStack}>
 			{listProps.isOffline ? <InlineAlert tone="warning" title="Offline: object actions are disabled." /> : null}
 			{listProps.favoritesOnly ? (
 				listProps.favoritesErrorMessage ? (
@@ -197,10 +198,15 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 		</Suspense>
 	) : shouldShowCollapsedDetails ? (
 		<>
-			<div className={styles.layoutDetailsHandle} aria-hidden="true" />
-			<div className={`${styles.layoutPane} ${styles.layoutDetailsPane}`}>
-				<div className={`${styles.panelCard} ${styles.detailsCollapsed} ${styles.pane}`}>
-					<button type="button" className={styles.detailsCollapsedButton} onClick={detailsProps.onOpenDetails} aria-label="Show details">
+			<div className={shellStyles.layoutDetailsHandle} aria-hidden="true" />
+			<div className={`${shellStyles.layoutPane} ${shellStyles.layoutDetailsPane}`}>
+				<div className={`${styles.panelCard} ${shellStyles.detailsCollapsed} ${styles.pane}`}>
+					<button
+						type="button"
+						className={shellStyles.detailsCollapsedButton}
+						onClick={detailsProps.onOpenDetails}
+						aria-label="Show details"
+					>
 						i
 					</button>
 				</div>

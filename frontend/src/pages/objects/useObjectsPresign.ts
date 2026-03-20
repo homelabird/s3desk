@@ -23,7 +23,7 @@ export function useObjectsPresign({ api, profileId, bucket, downloadLinkProxyEna
 
 	const presignMutation = useMutation({
 		mutationFn: (req: PresignRequest) =>
-			api.getObjectDownloadURL({
+			api.objects.getObjectDownloadURL({
 				profileId: profileId!,
 				bucket,
 				key: req.key,

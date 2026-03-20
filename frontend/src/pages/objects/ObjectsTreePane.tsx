@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import { Typography } from 'antd'
 
+import shellStyles from './ObjectsShell.module.css'
 import styles from './objects.module.css'
 
 type ObjectsTreePaneProps = {
@@ -23,7 +24,7 @@ export function ObjectsTreePane(props: ObjectsTreePaneProps) {
 			data-testid={props.testId}
 			data-expanded={isExpanded ? 'true' : 'false'}
 		>
-			<div className={styles.panelHeader}>
+			<div className={shellStyles.panelHeader}>
 				{props.collapsible ? (
 					<button
 						type="button"
@@ -43,7 +44,7 @@ export function ObjectsTreePane(props: ObjectsTreePaneProps) {
 				{props.extra ?? null}
 			</div>
 			{isExpanded ? (
-				<div id={bodyId} className={styles.panelBody}>
+				<div id={bodyId} className={shellStyles.panelBody}>
 					{props.children}
 				</div>
 			) : null}

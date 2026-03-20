@@ -39,7 +39,7 @@ export function useObjectsDelete({
 
 		for (let attempt = 0; attempt < 60; attempt += 1) {
 			try {
-				const job = await api.getJob(profileId, jobId)
+				const job = await api.jobs.getJob(profileId, jobId)
 				if (job.status === 'succeeded') {
 					await invalidateObjectQueriesForPrefix(queryClient, {
 						profileId,
@@ -81,7 +81,7 @@ export function useObjectsDelete({
 			let deleted = 0
 			for (let i = 0; i < keys.length; i += 1000) {
 				const batch = keys.slice(i, i + 1000)
-				const resp = await api.deleteObjects({ profileId: profileId!, bucket, keys: batch })
+				const resp = await api.objects.deleteObjects({ profileId: profileId!, bucket, keys: batch })
 				deleted += resp.deleted
 			}
 			return { kind: 'direct' as const, deleted }

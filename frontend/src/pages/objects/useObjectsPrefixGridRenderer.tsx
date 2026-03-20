@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { Button, Typography } from 'antd'
 import { EllipsisOutlined, FolderOutlined } from '@ant-design/icons'
 
-import styles from './objects.module.css'
+import styles from './ObjectsGridCards.module.css'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
 import { buildActionMenu } from './objectsActions'

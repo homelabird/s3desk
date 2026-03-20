@@ -1,6 +1,6 @@
 import { useMemo, type DragEvent, type ReactNode } from 'react'
 
-import styles from './objects.module.css'
+import styles from './ObjectsListView.module.css'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import { normalizePrefix } from './objectsListUtils'
 

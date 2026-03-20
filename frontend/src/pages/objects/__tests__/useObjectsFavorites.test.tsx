@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsFavorites } from '../useObjectsFavorites'
 
 function createWrapper() {
@@ -55,11 +56,13 @@ describe('useObjectsFavorites', () => {
 					},
 				],
 			})
-		const api = {
-			listObjectFavorites,
-			createObjectFavorite: vi.fn(),
-			deleteObjectFavorite: vi.fn(),
-		} as never
+		const api = createMockApiClient({
+			objects: {
+				listObjectFavorites,
+				createObjectFavorite: vi.fn(),
+				deleteObjectFavorite: vi.fn(),
+			},
+		})
 		const { Wrapper } = createWrapper()
 
 		const { result, rerender } = renderHook(

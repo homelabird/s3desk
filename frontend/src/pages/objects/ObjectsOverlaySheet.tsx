@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useId, useRef, type CSSProperties, type ReactNode } from 'react'
 
 import { useOverlayLayer } from '../../components/useOverlayLayer'
-import styles from './objects.module.css'
+import styles from './ObjectsShell.module.css'
 
 type ObjectsOverlaySheetProps = {
 	open: boolean

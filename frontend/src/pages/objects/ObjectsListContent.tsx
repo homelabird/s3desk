@@ -5,7 +5,8 @@ import type { ObjectItem } from '../../api/types'
 import { logReactRender, measurePerf } from '../../lib/perf'
 import type { ObjectRow } from './objectsListUtils'
 import type { ObjectsViewMode } from './objectsTypes'
-import styles from './objects.module.css'
+import gridStyles from './ObjectsGridCards.module.css'
+import listStyles from './ObjectsListView.module.css'
 
 type ObjectsListContentProps = {
 	rows: ObjectRow[]
@@ -65,13 +66,13 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 
 	if (props.rows.length === 0) {
 		const empty = (
-			<div className={styles.listEmptyState}>
+			<div className={listStyles.listEmptyState}>
 				{!props.hasProfile ? (
 					<Empty description="Select a profile to browse objects." />
 				) : !props.hasBucket ? (
 					<Empty description="Select a bucket to start browsing objects (use the dropdown above)." />
 				) : props.isFetching ? (
-					<div className={styles.listEmptyLoading}>
+					<div className={listStyles.listEmptyLoading}>
 						<Spin />
 					</div>
 				) : (
@@ -85,7 +86,7 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 				)}
 
 				{loadMoreButton ? (
-					<div className={styles.listFooterAction}>{loadMoreButton}</div>
+					<div className={listStyles.listFooterAction}>{loadMoreButton}</div>
 				) : null}
 			</div>
 		)
@@ -98,14 +99,14 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 
 	if (props.viewMode === 'grid') {
 		const content = (
-			<div className={styles.gridContent} data-testid="objects-grid-content">
+			<div className={gridStyles.gridContent} data-testid="objects-grid-content">
 				{renderedGridItems}
 				{props.isFetchingNextPage ? (
-					<div className={styles.gridFooter}>
+					<div className={gridStyles.gridFooter}>
 						<Spin />
 					</div>
 				) : loadMoreButton ? (
-					<div className={styles.gridFooter}>{loadMoreButton}</div>
+					<div className={gridStyles.gridFooter}>{loadMoreButton}</div>
 				) : null}
 			</div>
 		)
@@ -117,15 +118,15 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 	}
 
 	const content = (
-		<div className={styles.virtualListContent} style={{ height: props.totalSize }}>
+		<div className={listStyles.virtualListContent} style={{ height: props.totalSize }}>
 			{renderedRows}
 
 			{props.isFetchingNextPage ? (
-				<div className={styles.virtualListFooter}>
+				<div className={listStyles.virtualListFooter}>
 					<Spin />
 				</div>
 			) : loadMoreButton ? (
-				<div className={styles.virtualListFooter}>{loadMoreButton}</div>
+				<div className={listStyles.virtualListFooter}>{loadMoreButton}</div>
 			) : null}
 		</div>
 	)

@@ -38,7 +38,7 @@ export function LocalPathBrowseModal(props: Props) {
 		setLoadingKeys([])
 		loadedKeysRef.current.clear()
 		try {
-			const resp = await props.api.listLocalEntries({ profileId: props.profileId })
+			const resp = await props.api.objects.listLocalEntries({ profileId: props.profileId })
 			if (epochRef.current !== epoch) return
 
 			const roots = (resp.entries ?? []).map((e): TreeNode => ({
@@ -81,7 +81,7 @@ export function LocalPathBrowseModal(props: Props) {
 
 			const epoch = epochRef.current
 			try {
-				const resp = await props.api.listLocalEntries({ profileId: props.profileId, path: key })
+				const resp = await props.api.objects.listLocalEntries({ profileId: props.profileId, path: key })
 				if (epochRef.current !== epoch) return
 				const children = (resp.entries ?? []).map((e): TreeNode => ({
 					key: e.path,

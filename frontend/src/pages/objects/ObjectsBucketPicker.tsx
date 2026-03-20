@@ -2,7 +2,7 @@ import { CheckCircleFilled, DownOutlined, SearchOutlined } from '@ant-design/ico
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
-import styles from './objects.module.css'
+import styles from './ObjectsBucketPicker.module.css'
 
 type BucketOption = {
 	label: string
