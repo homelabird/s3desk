@@ -710,7 +710,12 @@ func extractServerRestorePayloadEntry(
 	switch header.Typeflag {
 	case tar.TypeDir:
 		return os.MkdirAll(targetPath, 0o700)
-	case tar.TypeReg, tar.TypeRegA:
+	case tar.TypeSymlink, tar.TypeLink:
+		return fmt.Errorf("archive entry %q uses an unsupported link type", header.Name)
+	default:
+		if !header.FileInfo().Mode().IsRegular() {
+			return fmt.Errorf("archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
+		}
 		freeBytes, err := availableDiskBytes(tempRoot)
 		if err != nil {
 			return err
@@ -750,10 +755,6 @@ func extractServerRestorePayloadEntry(
 			*sqliteSeen = true
 		}
 		return nil
-	case tar.TypeSymlink, tar.TypeLink:
-		return fmt.Errorf("archive entry %q uses an unsupported link type", header.Name)
-	default:
-		return fmt.Errorf("archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
 	}
 }
 

@@ -649,7 +649,12 @@ func extractPortablePayloadEntry(ctx context.Context, tempRoot string, entryName
 	switch header.Typeflag {
 	case tar.TypeDir:
 		return os.MkdirAll(targetPath, 0o700)
-	case tar.TypeReg, tar.TypeRegA:
+	case tar.TypeSymlink, tar.TypeLink:
+		return fmt.Errorf("portable archive entry %q uses an unsupported link type", header.Name)
+	default:
+		if !header.FileInfo().Mode().IsRegular() {
+			return fmt.Errorf("portable archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
+		}
 		if err := ensurePortableDiskSpace(tempRoot, entryName, header.Size); err != nil {
 			return err
 		}
@@ -676,10 +681,6 @@ func extractPortablePayloadEntry(ctx context.Context, tempRoot string, entryName
 			SHA256:      hex.EncodeToString(hasher.Sum(nil)),
 		})
 		return nil
-	case tar.TypeSymlink, tar.TypeLink:
-		return fmt.Errorf("portable archive entry %q uses an unsupported link type", header.Name)
-	default:
-		return fmt.Errorf("portable archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
 	}
 }
 

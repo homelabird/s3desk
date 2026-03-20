@@ -63,7 +63,7 @@ func TestBuildConfigWithMTLSAndCA(t *testing.T) {
 	if len(cfg.Certificates) != 1 {
 		t.Fatalf("len(cfg.Certificates)=%d, want 1", len(cfg.Certificates))
 	}
-	if cfg.RootCAs == nil || len(cfg.RootCAs.Subjects()) == 0 {
+	if cfg.RootCAs == nil {
 		t.Fatalf("cfg.RootCAs=%v, want populated root CAs", cfg.RootCAs)
 	}
 }

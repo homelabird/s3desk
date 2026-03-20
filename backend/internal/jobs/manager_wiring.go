@@ -8,23 +8,23 @@ import (
 )
 
 type managerWiringConfig struct {
-	concurrency                 int
-	queueCapacity               int
-	logLineMaxBytes             int
-	allowedLocalDirs            []string
-	rcloneTuneEnabled           bool
-	rcloneMaxTransfers          int
-	rcloneMaxCheckers           int
-	rcloneS3ChunkSizeMiB        int
-	rcloneS3UploadConcurrency   int
-	rcloneLowLevelRetries       int
-	rcloneStatsInterval         time.Duration
-	rcloneRetryAttempts         int
-	rcloneRetryBaseDelay        time.Duration
-	rcloneRetryMaxDelay         time.Duration
-	rcloneRetryJitterRatio      float64
-	rcloneRetryRandFloat        func() float64
-	captureUnknownRcloneErrors  bool
+	concurrency                int
+	queueCapacity              int
+	logLineMaxBytes            int
+	allowedLocalDirs           []string
+	rcloneTuneEnabled          bool
+	rcloneMaxTransfers         int
+	rcloneMaxCheckers          int
+	rcloneS3ChunkSizeMiB       int
+	rcloneS3UploadConcurrency  int
+	rcloneLowLevelRetries      int
+	rcloneStatsInterval        time.Duration
+	rcloneRetryAttempts        int
+	rcloneRetryBaseDelay       time.Duration
+	rcloneRetryMaxDelay        time.Duration
+	rcloneRetryJitterRatio     float64
+	rcloneRetryRandFloat       func() float64
+	captureUnknownRcloneErrors bool
 }
 
 func resolveManagerWiring(cfg Config) managerWiringConfig {

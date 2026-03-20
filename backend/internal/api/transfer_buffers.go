@@ -9,7 +9,8 @@ const transferCopyBufferBytes = 4 * 1024 * 1024
 
 var transferCopyBufferPool = sync.Pool{
 	New: func() any {
-		return make([]byte, transferCopyBufferBytes)
+		buf := make([]byte, transferCopyBufferBytes)
+		return &buf
 	},
 }
 
@@ -22,13 +23,15 @@ type readerOnly struct {
 }
 
 func copyWithTransferBuffer(dst io.Writer, src io.Reader) (int64, error) {
-	buf := transferCopyBufferPool.Get().([]byte)
+	bufPtr := transferCopyBufferPool.Get().(*[]byte)
+	buf := *bufPtr
 	if cap(buf) < transferCopyBufferBytes {
 		buf = make([]byte, transferCopyBufferBytes)
 	} else {
 		buf = buf[:transferCopyBufferBytes]
 	}
-	defer transferCopyBufferPool.Put(buf)
+	*bufPtr = buf
+	defer transferCopyBufferPool.Put(bufPtr)
 
 	return io.CopyBuffer(writerOnly{Writer: dst}, readerOnly{Reader: src}, buf)
 }

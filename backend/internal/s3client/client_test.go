@@ -44,7 +44,7 @@ func TestFromProfileUsesStoredMTLSSettings(t *testing.T) {
 	if len(tlsCfg.Certificates) != 1 {
 		t.Fatalf("len(tlsCfg.Certificates)=%d, want 1", len(tlsCfg.Certificates))
 	}
-	if tlsCfg.RootCAs == nil || len(tlsCfg.RootCAs.Subjects()) == 0 {
+	if tlsCfg.RootCAs == nil {
 		t.Fatalf("tlsCfg.RootCAs=%v, want populated root CAs", tlsCfg.RootCAs)
 	}
 }

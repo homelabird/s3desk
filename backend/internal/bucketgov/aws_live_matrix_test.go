@@ -395,16 +395,19 @@ func (s *fakeAWSGovernanceServer) handleLifecycle(w http.ResponseWriter, r *http
 		}
 		body := `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">`
 		for _, rule := range rules {
-			body += fmt.Sprintf(`<Rule><ID>%s</ID><Status>%s</Status><Prefix>%s</Prefix><Expiration><Days>%d</Days></Expiration></Rule>`, rule.ID, rule.Status, rule.Prefix, rule.ExpirationDays)
+			body += fmt.Sprintf(`<Rule><ID>%s</ID><Status>%s</Status><Filter><Prefix>%s</Prefix></Filter><Expiration><Days>%d</Days></Expiration></Rule>`, rule.ID, rule.Status, rule.Prefix, rule.ExpirationDays)
 		}
 		body += `</LifecycleConfiguration>`
 		writeXMLResponse(w, http.StatusOK, body)
 	case http.MethodPut:
 		var payload struct {
 			Rules []struct {
-				ID         string `xml:"ID"`
-				Status     string `xml:"Status"`
-				Prefix     string `xml:"Prefix"`
+				ID     string `xml:"ID"`
+				Status string `xml:"Status"`
+				Prefix string `xml:"Prefix"`
+				Filter struct {
+					Prefix string `xml:"Prefix"`
+				} `xml:"Filter"`
 				Expiration struct {
 					Days int32 `xml:"Days"`
 				} `xml:"Expiration"`
@@ -416,10 +419,14 @@ func (s *fakeAWSGovernanceServer) handleLifecycle(w http.ResponseWriter, r *http
 		s.mu.Lock()
 		s.lifecycleRules = s.lifecycleRules[:0]
 		for _, item := range payload.Rules {
+			prefix := item.Prefix
+			if prefix == "" {
+				prefix = item.Filter.Prefix
+			}
 			s.lifecycleRules = append(s.lifecycleRules, fakeLifecycleRule{
 				ID:             item.ID,
 				Status:         item.Status,
-				Prefix:         item.Prefix,
+				Prefix:         prefix,
 				ExpirationDays: item.Expiration.Days,
 			})
 		}
