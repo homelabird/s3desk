@@ -2,7 +2,9 @@ import { act, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import shellStyles from '../ObjectsShell.module.css'
 import { ObjectsPagePanes } from '../ObjectsPagePanes'
+import styles from '../objects.module.css'
 
 vi.mock('../objectsPageLazy', () => ({
 	ObjectsContextMenuPortal: () => <div data-testid="objects-context-menu-portal">context-menu</div>,
@@ -225,6 +227,15 @@ describe('ObjectsPagePanes', () => {
 		expect(screen.queryByTestId('objects-tree-section')).not.toBeInTheDocument()
 		expect(screen.queryByTestId('objects-details-section')).not.toBeInTheDocument()
 		expect(screen.getByTestId('objects-list-content')).toBeInTheDocument()
+	})
+
+	it('renders the list wrapper with the shared layout pane class', () => {
+		render(<ObjectsPagePanes {...buildProps()} />)
+
+		const listPaneWrapper = screen.getByTestId('objects-upload-dropzone').closest(`.${styles.layoutListPane}`)
+		expect(listPaneWrapper).not.toBeNull()
+		expect(listPaneWrapper).toHaveClass(shellStyles.layoutPane)
+		expect(listPaneWrapper?.className).not.toMatch(/\bundefined\b/)
 	})
 
 	it('renders a collapsed details affordance without loading the details section', () => {

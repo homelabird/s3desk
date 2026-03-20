@@ -1,4 +1,5 @@
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode, Ref, UIEvent, WheelEvent } from 'react'
+import shellStyles from './ObjectsShell.module.css'
 import styles from './objects.module.css'
 import { ObjectsListSection } from './ObjectsListSection'
 
@@ -25,7 +26,7 @@ type ObjectsListSectionContainerProps = {
 
 export function ObjectsListSectionContainer(props: ObjectsListSectionContainerProps) {
 	return (
-		<div className={`${styles.layoutPane} ${styles.layoutListPane}`}>
+		<div className={`${shellStyles.layoutPane} ${styles.layoutListPane}`}>
 			<ObjectsListSection
 				controls={props.controls}
 				alerts={props.alerts}
