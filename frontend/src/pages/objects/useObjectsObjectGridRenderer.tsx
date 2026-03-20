@@ -6,7 +6,8 @@ import { EllipsisOutlined, ExpandOutlined, FileOutlined, StarFilled, StarOutline
 import type { ObjectItem } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
-import styles from './objects.module.css'
+import gridStyles from './ObjectsGridCards.module.css'
+import listStyles from './ObjectsListView.module.css'
 import { ObjectThumbnail } from './ObjectThumbnail'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import { buildActionMenu } from './objectsActions'
@@ -101,9 +102,9 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 				contextMenuState.source === 'button'
 
 			return (
-				<div key={key} className={styles.gridCardShell} role="listitem">
+				<div key={key} className={gridStyles.gridCardShell} role="listitem">
 					<div
-						className={`${styles.gridCard} ${isSelected ? styles.gridCardSelected : ''}`}
+						className={`${gridStyles.gridCard} ${isSelected ? gridStyles.gridCardSelected : ''}`}
 						onClick={(event) => selectObjectFromPointerEvent(event, key)}
 						onContextMenu={(event) => {
 							event.preventDefault()
@@ -123,8 +124,8 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 						role="button"
 						tabIndex={0}
 					>
-						<div className={styles.gridCardTopRow}>
-							<div className={styles.gridCardCheckboxWrap}>
+						<div className={gridStyles.gridCardTopRow}>
+							<div className={gridStyles.gridCardCheckboxWrap}>
 								<Checkbox
 									checked={isSelected}
 									onClick={(event) => {
@@ -134,11 +135,11 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 									aria-label={`Select ${displayName}`}
 								/>
 							</div>
-							<div className={styles.gridCardTopActions}>
+							<div className={gridStyles.gridCardTopActions}>
 								<Button
 									size="small"
 									type="text"
-									icon={isFavorite ? <StarFilled className={styles.listRowFavoriteIcon} /> : <StarOutlined />}
+									icon={isFavorite ? <StarFilled className={listStyles.listRowFavoriteIcon} /> : <StarOutlined />}
 									disabled={favoriteDisabled}
 									aria-label={favoriteLabel}
 									title={favoriteLabel}
@@ -175,9 +176,9 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 							</div>
 						</div>
 
-						<div className={styles.gridCardMedia}>
+						<div className={gridStyles.gridCardMedia}>
 							{canShowThumbnail ? (
-								<div className={styles.gridCardPreviewFrame}>
+								<div className={gridStyles.gridCardPreviewFrame}>
 									<ObjectThumbnail
 										api={api}
 										profileId={profileId}
@@ -192,25 +193,25 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 									/>
 								</div>
 							) : (
-								<div className={styles.gridCardMediaPlaceholder}>
-									<FileOutlined className={styles.gridCardFileIcon} />
+								<div className={gridStyles.gridCardMediaPlaceholder}>
+									<FileOutlined className={gridStyles.gridCardFileIcon} />
 									<Typography.Text type="secondary">{extensionLabel(key)}</Typography.Text>
 								</div>
 							)}
 						</div>
 
-						<div className={styles.gridCardBody}>
-							<Typography.Text className={styles.gridCardTitle} title={key}>
+						<div className={gridStyles.gridCardBody}>
+							<Typography.Text className={gridStyles.gridCardTitle} title={key}>
 								{highlightText(displayName)}
 							</Typography.Text>
-							<Typography.Text type="secondary" className={styles.gridCardMetaLine}>
+							<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine}>
 								{sizeLabel}
 							</Typography.Text>
-							<Typography.Text type="secondary" className={styles.gridCardMetaLine}>
+							<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine}>
 								{timeLabel}
 							</Typography.Text>
 							{canOpenPreview ? (
-								<div className={styles.gridCardBodyActions}>
+								<div className={gridStyles.gridCardBodyActions}>
 									<Button
 										size="small"
 										type="text"

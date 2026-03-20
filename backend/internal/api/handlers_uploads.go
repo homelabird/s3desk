@@ -1,11 +1,9 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -35,7 +33,7 @@ func (s *server) handleCreateUpload(w http.ResponseWriter, r *http.Request) {
 
 	var req models.UploadCreateRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+		writeJSONDecodeError(w, err, 0)
 		return
 	}
 	req.Bucket = strings.TrimSpace(req.Bucket)
@@ -202,6 +200,10 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_request", "invalid X-Upload-Chunk-Total", map[string]any{"error": err.Error()})
 			return
 		}
+		if chunkTotal > maxMultipartUploadParts {
+			writeError(w, http.StatusBadRequest, "invalid_request", fmt.Sprintf("multipart upload exceeds %d parts", maxMultipartUploadParts), nil)
+			return
+		}
 		if chunkIndex < 0 || chunkIndex >= chunkTotal {
 			writeError(w, http.StatusBadRequest, "invalid_request", "chunk index out of range", map[string]any{"index": chunkIndex})
 			return
@@ -292,7 +294,11 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		partNumber := int32(chunkIndex + 1)
+		partNumber, err := multipartPartNumber(chunkIndex + 1)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", "invalid part number", map[string]any{"partNumber": chunkIndex + 1})
+			return
+		}
 		contentLength := chunkSize
 		if chunkIndex == chunkTotal-1 {
 			remaining := fileSize - (int64(chunkTotal-1) * meta.ChunkSize)
@@ -311,6 +317,17 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			writeError(w, http.StatusBadGateway, "upload_failed", "failed to upload multipart part", map[string]any{"error": err.Error()})
+			return
+		}
+		if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+			UploadID:     uploadID,
+			ProfileID:    profileID,
+			Path:         relPath,
+			Bucket:       us.Bucket,
+			ObjectKey:    key,
+			ExpectedSize: &fileSize,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist upload object", nil)
 			return
 		}
 
@@ -389,6 +406,18 @@ func (s *server) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				remainingBytes -= counter.n
+			}
+			size := counter.n
+			if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+				UploadID:     uploadID,
+				ProfileID:    profileID,
+				Path:         relPath,
+				Bucket:       us.Bucket,
+				ObjectKey:    key,
+				ExpectedSize: &size,
+			}); err != nil {
+				writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist upload object", nil)
+				return
 			}
 			written++
 		}
@@ -634,7 +663,7 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 
 	var req models.UploadPresignRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+		writeJSONDecodeError(w, err, 0)
 		return
 	}
 	relPath := sanitizeUploadPath(req.Path)
@@ -675,13 +704,13 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileSize := *req.Multipart.FileSize
-		partCount := int(math.Ceil(float64(fileSize) / float64(partSize)))
-		if partCount <= 1 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "multipart upload requires at least 2 parts", nil)
+		partCount, err := expectedMultipartPartCount(fileSize, partSize)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 			return
 		}
-		if partCount > 10_000 {
-			writeError(w, http.StatusBadRequest, "invalid_request", "multipart upload exceeds 10,000 parts", nil)
+		if partCount <= 1 {
+			writeError(w, http.StatusBadRequest, "invalid_request", "multipart upload requires at least 2 parts", nil)
 			return
 		}
 
@@ -754,6 +783,17 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+			UploadID:     uploadID,
+			ProfileID:    profileID,
+			Path:         relPath,
+			Bucket:       us.Bucket,
+			ObjectKey:    key,
+			ExpectedSize: &fileSize,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist upload object", nil)
+			return
+		}
 
 		presigner, err := s3PresignClientFromProfile(secrets)
 		if err != nil {
@@ -763,7 +803,11 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 		sort.Ints(partNumbers)
 		parts := make([]models.UploadPresignPart, 0, len(partNumbers))
 		for _, num := range partNumbers {
-			partNumber := int32(num)
+			partNumber, err := multipartPartNumber(num)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid_request", "invalid part number", map[string]any{"partNumber": num})
+				return
+			}
 			resp, err := presigner.PresignUploadPart(r.Context(), &s3.UploadPartInput{
 				Bucket:     &us.Bucket,
 				Key:        &key,
@@ -827,6 +871,22 @@ func (s *server) handlePresignUpload(w http.ResponseWriter, r *http.Request) {
 	if len(headers) == 0 {
 		headers = nil
 	}
+	var expectedSize *int64
+	if req.Size != nil && *req.Size >= 0 {
+		size := *req.Size
+		expectedSize = &size
+	}
+	if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+		UploadID:     uploadID,
+		ProfileID:    profileID,
+		Path:         relPath,
+		Bucket:       us.Bucket,
+		ObjectKey:    key,
+		ExpectedSize: expectedSize,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist upload object", nil)
+		return
+	}
 	writeJSON(w, http.StatusOK, models.UploadPresignResponse{
 		Mode:      "single",
 		Bucket:    us.Bucket,
@@ -865,17 +925,14 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req uploadCommitRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{
+		maxBytes:   uploadCommitJSONRequestBodyMaxBytes,
+		allowEmpty: true,
+	}); err != nil {
+		writeJSONDecodeError(w, err, uploadCommitJSONRequestBodyMaxBytes)
 		return
 	}
-
-	artifacts := buildUploadCommitArtifacts(uploadID, us, req)
-	payload := artifacts.payload
-	indexEntries := artifacts.indexEntries
-	progress := artifacts.progress
+	stagingArtifacts := buildUploadCommitArtifacts(uploadID, us, req)
 
 	if mode == uploadModePresigned {
 		multipartUploads, err := s.store.ListMultipartUploads(r.Context(), profileID, uploadID)
@@ -888,7 +945,26 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		job, uploadErr := s.finalizeImmediateUploadCommit(r.Context(), profileID, uploadID, us, payload, progress, indexEntries)
+		client, uploadErr := s.multipartClientFromContext(r.Context(), "presigned uploads require an S3-compatible provider")
+		if uploadErr != nil {
+			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
+			return
+		}
+		artifacts, uploadErr := s.prepareImmediateUploadCommit(r.Context(), profileID, uploadID, us, req, client, multipartUploads)
+		if uploadErr != nil {
+			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
+			return
+		}
+
+		job, uploadErr := s.finalizeImmediateUploadCommit(
+			r.Context(),
+			profileID,
+			uploadID,
+			us,
+			artifacts.payload,
+			artifacts.progress,
+			artifacts.indexEntries,
+		)
 		if uploadErr != nil {
 			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 			return
@@ -908,6 +984,11 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "not_supported", "direct streaming multipart uploads require an S3-compatible provider", nil)
 			return
 		}
+		client, err := s3ClientFromProfile(secrets)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare multipart client", nil)
+			return
+		}
 
 		multipartUploads, err := s.store.ListMultipartUploads(r.Context(), profileID, uploadID)
 		if err != nil {
@@ -916,11 +997,6 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(multipartUploads) > 0 {
-			client, err := s3ClientFromProfile(secrets)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare multipart client", nil)
-				return
-			}
 			if err := s.completeDirectMultipartUploads(r.Context(), profileID, client, multipartUploads); err != nil {
 				var uploadErr *uploadHTTPError
 				if errors.As(err, &uploadErr) {
@@ -932,7 +1008,20 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		job, uploadErr := s.finalizeImmediateUploadCommit(r.Context(), profileID, uploadID, us, payload, progress, indexEntries)
+		artifacts, uploadErr := s.prepareImmediateUploadCommit(r.Context(), profileID, uploadID, us, req, client, multipartUploads)
+		if uploadErr != nil {
+			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
+			return
+		}
+		job, uploadErr := s.finalizeImmediateUploadCommit(
+			r.Context(),
+			profileID,
+			uploadID,
+			us,
+			artifacts.payload,
+			artifacts.progress,
+			artifacts.indexEntries,
+		)
 		if uploadErr != nil {
 			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 			return
@@ -948,7 +1037,7 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 
 	job, err := s.store.CreateJob(r.Context(), profileID, store.CreateJobInput{
 		Type:    jobs.JobTypeTransferSyncStagingToS3,
-		Payload: payload,
+		Payload: stagingArtifacts.payload,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to create job", nil)
@@ -1078,6 +1167,7 @@ func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 		_ = s.store.DeleteMultipartUploadsBySession(r.Context(), profileID, uploadID)
 	}
 
+	_ = s.store.DeleteUploadObjectsBySession(r.Context(), profileID, uploadID)
 	_, _ = s.store.DeleteUploadSession(r.Context(), profileID, uploadID)
 	if us.StagingDir != "" {
 		if stagingDir, err := store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID); err == nil {

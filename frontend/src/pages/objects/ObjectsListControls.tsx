@@ -10,7 +10,7 @@ import {
 	StarOutlined,
 } from '@ant-design/icons'
 
-import styles from './objects.module.css'
+import styles from './ObjectsListView.module.css'
 import type { ObjectSort, ObjectsViewMode } from './objectsTypes'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 import { NativeSelect } from '../../components/NativeSelect'
@@ -93,7 +93,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 
 	const globalSearchButton = props.isAdvanced ? (
 		<Button size="small" icon={<SearchOutlined />} disabled={!props.canInteract} onClick={props.onOpenGlobalSearch}>
-			Global Search (Indexed)
+			{props.isCompact ? 'Bucket search' : 'Global Search (Indexed)'}
 		</Button>
 	) : null
 
@@ -187,7 +187,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			onClick={props.onOpenFilters}
 			disabled={!props.canInteract}
 		>
-			{props.isAdvanced ? 'View' : 'Filter'}
+			{props.isCompact ? 'Filters' : props.isAdvanced ? 'View' : 'Filter'}
 		</Button>
 	)
 
@@ -261,6 +261,11 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					{props.isAdvanced ? (
 						<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
 							{props.visiblePrefixCount} folders, {props.visibleFileCount} files
+						</span>
+					) : null}
+					{props.isAdvanced ? (
+						<span className={`${styles.listControlsHintText} ${styles.listControlsSecondaryText}`}>
+							Search this folder here, or use Bucket search for indexed results across the whole bucket.
 						</span>
 					) : null}
 					{searchStatus}

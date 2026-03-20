@@ -160,6 +160,7 @@ func (s *server) writePortableServerBackupArchive(ctx context.Context, archivePa
 	}
 	defer os.RemoveAll(tmpDir)
 
+	// #nosec G304 -- archivePath is a server-created temporary backup path.
 	archiveFile, err := os.Create(archivePath)
 	if err != nil {
 		return models.ServerMigrationManifest{}, err
@@ -244,6 +245,7 @@ func writeEncryptedPortableBackupPayload(
 	now time.Time,
 	payloadEntries *[]serverBackupPayloadEntry,
 ) (string, error) {
+	// #nosec G304 -- payloadPath lives under an os.MkdirTemp-managed workspace.
 	payloadFile, err := os.Create(payloadPath)
 	if err != nil {
 		return "", err
@@ -619,6 +621,7 @@ func extractPortableArchive(ctx context.Context, src io.Reader, backupPassword s
 	entityFiles := make(map[string][]byte, len(portableEntityOrder))
 	for _, name := range portableEntityOrder {
 		pathOnDisk := filepath.Join(tempRoot, "data", name+".jsonl")
+		// #nosec G304 -- pathOnDisk is built from the temp restore root and a fixed entity allowlist.
 		data, err := os.ReadFile(pathOnDisk)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -646,14 +649,24 @@ func extractPortablePayloadEntry(ctx context.Context, tempRoot string, entryName
 	switch header.Typeflag {
 	case tar.TypeDir:
 		return os.MkdirAll(targetPath, 0o700)
-	case tar.TypeReg, tar.TypeRegA:
+	case tar.TypeSymlink, tar.TypeLink:
+		return fmt.Errorf("portable archive entry %q uses an unsupported link type", header.Name)
+	default:
+		if !header.FileInfo().Mode().IsRegular() {
+			return fmt.Errorf("portable archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
+		}
 		if err := ensurePortableDiskSpace(tempRoot, entryName, header.Size); err != nil {
 			return err
 		}
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return err
 		}
-		out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fs.FileMode(header.Mode)&0o777)
+		fileMode, err := archiveEntryFileMode(header.Mode)
+		if err != nil {
+			return err
+		}
+		// #nosec G304 -- targetPath is confined to tempRoot by resolveRestorePath.
+		out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fileMode)
 		if err != nil {
 			return err
 		}
@@ -668,10 +681,6 @@ func extractPortablePayloadEntry(ctx context.Context, tempRoot string, entryName
 			SHA256:      hex.EncodeToString(hasher.Sum(nil)),
 		})
 		return nil
-	case tar.TypeSymlink, tar.TypeLink:
-		return fmt.Errorf("portable archive entry %q uses an unsupported link type", header.Name)
-	default:
-		return fmt.Errorf("portable archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
 	}
 }
 
@@ -775,11 +784,13 @@ func copyPortableAssetTree(srcRoot, dstRoot string) error {
 		if err := ensurePortableDiskSpace(filepath.Dir(targetPath), relPath, info.Size()); err != nil {
 			return err
 		}
+		// #nosec G304 -- pathOnDisk is emitted by filepath.WalkDir under srcRoot.
 		srcFile, err := os.Open(pathOnDisk)
 		if err != nil {
 			return err
 		}
 		defer srcFile.Close()
+		// #nosec G304 -- targetPath is derived from dstRoot plus a filepath.Rel result under srcRoot.
 		dstFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 		if err != nil {
 			return err

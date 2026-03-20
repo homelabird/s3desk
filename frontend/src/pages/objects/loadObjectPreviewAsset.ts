@@ -24,7 +24,7 @@ export type LoadedObjectPreviewAsset = {
 
 export async function loadObjectPreviewAsset(args: LoadObjectPreviewAssetArgs): Promise<LoadedObjectPreviewAsset> {
 	const fetchPreview = async (useProxy: boolean, signal: AbortSignal): Promise<LoadedObjectPreviewAsset> => {
-		const presigned = await args.api.getObjectDownloadURL({
+		const presigned = await args.api.objects.getObjectDownloadURL({
 			profileId: args.profileId,
 			bucket: args.bucket,
 			key: args.key,

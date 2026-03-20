@@ -43,7 +43,7 @@ export function useJobsPageController(props: Props) {
   const createJobWithRetry = useCallback(
     (req: JobCreateRequest) => {
       if (!props.profileId) throw new Error('profile is required')
-      return withJobQueueRetry(() => api.createJob(props.profileId!, req))
+      return withJobQueueRetry(() => api.jobs.createJob(props.profileId!, req))
     },
     [api, props.profileId],
   )
@@ -154,12 +154,12 @@ export function useJobsPageController(props: Props) {
 
   const metaQuery = useQuery({
     queryKey: ['meta', props.apiToken],
-    queryFn: () => api.getMeta(),
+    queryFn: () => api.server.getMeta(),
     enabled: !!props.apiToken,
   })
   const profilesQuery = useQuery({
     queryKey: ['profiles', props.apiToken],
-    queryFn: () => api.listProfiles(),
+    queryFn: () => api.profiles.listProfiles(),
     enabled: !!props.apiToken,
   })
 
@@ -176,7 +176,7 @@ export function useJobsPageController(props: Props) {
 
   const bucketsQuery = useQuery({
     queryKey: ['buckets', props.profileId, props.apiToken],
-    queryFn: () => api.listBuckets(props.profileId!),
+    queryFn: () => api.buckets.listBuckets(props.profileId!),
     enabled: !!props.profileId,
     staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
   })
@@ -187,7 +187,7 @@ export function useJobsPageController(props: Props) {
     enabled: !!props.profileId,
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
-      api.listJobs(props.profileId!, {
+      api.jobs.listJobs(props.profileId!, {
         limit: 50,
         status: filters.statusFilter === 'all' ? undefined : filters.statusFilter,
         type: filters.typeFilter.trim() ? filters.typeFilter.trim() : undefined,

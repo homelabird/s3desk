@@ -1,0 +1,223 @@
+.gridCardPreviewFrame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 148px;
+}
+
+.gridCardBodyActions {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.listThumbnailDeferredHint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px dashed var(--s3d-color-border-strong);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--s3d-color-surface) 94%, var(--s3d-color-primary) 6%);
+  color: var(--s3d-color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex: 0 0 auto;
+}
+
+.gridContent {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+  align-content: start;
+  padding: 12px;
+}
+
+.gridFooter {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 2px;
+}
+
+.gridCardShell {
+  min-width: 0;
+}
+
+.gridCardDropTarget {
+  position: relative;
+}
+
+.gridCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+  padding: 12px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-bg-elevated) 92%, white 8%) 0%, var(--s3d-color-bg-elevated) 100%);
+  box-shadow: var(--s3d-shadow-sm);
+  transition:
+    border-color var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    transform var(--s3d-transition-fast);
+}
+
+.gridCard:hover {
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 45%, var(--s3d-color-border) 55%);
+  box-shadow: var(--s3d-shadow-md);
+  transform: translateY(-1px);
+}
+
+.gridCard:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
+}
+
+.gridCardSelected {
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 65%, var(--s3d-color-border) 35%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-light) 55%, var(--s3d-color-bg-elevated) 45%) 0%, var(--s3d-color-bg-elevated) 100%);
+}
+
+.gridCardDropActive {
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 72%, var(--s3d-color-border) 28%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--s3d-color-primary) 18%, transparent),
+    var(--s3d-shadow-md);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-light) 68%, var(--s3d-color-bg-elevated) 32%) 0%, var(--s3d-color-bg-elevated) 100%);
+}
+
+.gridCardTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gridCardTopActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gridCardCheckboxWrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.gridCardMedia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 164px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--s3d-color-border);
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--s3d-color-primary-light) 38%, transparent 62%) 0%, transparent 62%),
+    var(--s3d-color-bg-secondary);
+  overflow: hidden;
+}
+
+.gridCardMediaFolder {
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--s3d-color-primary-light) 46%, transparent 54%) 0%, transparent 62%),
+    color-mix(in srgb, var(--s3d-color-bg-secondary) 86%, var(--s3d-color-primary-light) 14%);
+}
+
+.gridCardMediaPlaceholder {
+  width: 100%;
+  min-height: 148px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--s3d-color-text-secondary);
+}
+
+.gridCardPreviewButton {
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: zoom-in;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.gridCardPreviewButton:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
+}
+
+.gridCardDeferredPreviewButton {
+  border-radius: 12px;
+}
+
+.gridCardDeferredPreviewButton .gridCardMediaPlaceholder {
+  border: 1px dashed var(--s3d-color-border-strong);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--s3d-color-surface) 92%, var(--s3d-color-primary-light) 8%);
+}
+
+.gridCardFolderIcon,
+.gridCardFileIcon {
+  font-size: 34px;
+}
+
+.gridCardFolderIcon {
+  color: var(--s3d-color-primary);
+}
+
+.gridCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gridCardTitle {
+  display: block;
+  min-width: 0;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.gridCardMetaLine {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+@media (max-width: 768px) {
+  .gridContent {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    padding: 10px;
+  }
+
+  .gridCard {
+    padding: 10px;
+  }
+
+  .gridCardMedia {
+    min-height: 140px;
+  }
+}

@@ -7,6 +7,13 @@
 	gap: 24px;
 }
 
+.headerActions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
 .controlsGrid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -185,5 +192,57 @@
 
 	.previewMeta {
 		font-size: 12px;
+	}
+}
+
+@media (max-width: 360px) {
+	.pageStack {
+		gap: 16px;
+	}
+
+	.headerActions {
+		width: 100%;
+	}
+
+	.headerActions :global(.ant-btn) {
+		width: 100%;
+		justify-content: center;
+	}
+
+	.fieldBlock {
+		gap: 8px;
+	}
+
+	.selectionStack {
+		gap: 16px;
+	}
+
+	.selectionActions {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 10px;
+	}
+
+	.selectionActions :global(.ant-btn) {
+		width: 100%;
+		justify-content: center;
+	}
+
+	.selectionHint {
+		max-width: none;
+		line-height: 1.5;
+	}
+
+	.summaryGrid {
+		gap: 12px;
+	}
+
+	.summaryCard {
+		gap: 8px;
+		padding: 14px 16px;
+	}
+
+	.previewItem {
+		padding: 12px 14px;
 	}
 }

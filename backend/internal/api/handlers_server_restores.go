@@ -15,8 +15,6 @@ import (
 	"s3desk/internal/models"
 )
 
-const stagedRestoreRetention = 7 * 24 * time.Hour
-
 func (s *server) handleListServerRestores(w http.ResponseWriter, r *http.Request) {
 	items, err := s.listServerRestores()
 	if err != nil {
@@ -99,6 +97,7 @@ func (s *server) listServerRestores() ([]models.ServerStagedRestore, error) {
 		}
 
 		manifestPath := filepath.Join(restoreDir, "manifest.json")
+		// #nosec G304 -- manifestPath is derived from a directory returned by os.ReadDir under the restore root.
 		data, err := os.ReadFile(manifestPath)
 		if err == nil {
 			var manifest models.ServerMigrationManifest
@@ -117,32 +116,4 @@ func (s *server) listServerRestores() ([]models.ServerStagedRestore, error) {
 		return items[i].StagedAt > items[j].StagedAt
 	})
 	return items, nil
-}
-
-func (s *server) cleanupExpiredServerRestores(now time.Time) error {
-	restoreBase := filepath.Join(s.cfg.DataDir, "restores")
-	entries, err := os.ReadDir(restoreBase)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if now.Sub(info.ModTime()) < stagedRestoreRetention {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(restoreBase, entry.Name())); err != nil {
-			return err
-		}
-	}
-	return nil
 }

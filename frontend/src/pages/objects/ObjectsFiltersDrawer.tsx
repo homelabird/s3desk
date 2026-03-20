@@ -8,7 +8,7 @@ import {
 	localDayStartMsFromDateInput,
 } from '../../lib/localDate'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
-import styles from './objects.module.css'
+import styles from './ObjectsSearch.module.css'
 import type { ObjectSort, ObjectTypeFilter } from './objectsTypes'
 
 type ObjectsFiltersDrawerProps = {

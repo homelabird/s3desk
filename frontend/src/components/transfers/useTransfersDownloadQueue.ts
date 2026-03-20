@@ -120,7 +120,7 @@ export function useTransfersDownloadQueue({
 			if (current.kind === 'object') {
 				try {
 					const runDownload = async (proxy: boolean) => {
-						const presigned = await api.getObjectDownloadURL({
+						const presigned = await api.objects.getObjectDownloadURL({
 							profileId: current.profileId,
 							bucket: current.bucket,
 							key: current.key,
@@ -189,7 +189,7 @@ export function useTransfersDownloadQueue({
 				return
 			}
 
-			const handle = api.downloadJobArtifact(
+			const handle = api.jobs.downloadJobArtifact(
 				{ profileId: current.profileId, jobId: current.jobId },
 				{
 					onProgress: (p) => {
@@ -259,7 +259,7 @@ export function useTransfersDownloadQueue({
 			for (const t of waiting) {
 				if (stopped) return
 				try {
-					const job = await api.getJob(t.profileId, t.jobId)
+					const job = await api.jobs.getJob(t.profileId, t.jobId)
 					if (stopped) return
 
 					if (job.status === 'succeeded') {

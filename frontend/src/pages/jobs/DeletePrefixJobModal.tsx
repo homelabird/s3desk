@@ -29,6 +29,7 @@ export function DeletePrefixJobModal(props: {
 
 	const screens = Grid.useBreakpoint()
 	const drawerWidth = screens.md ? 520 : '100%'
+	const mobileSheetHeight = 'calc(100dvh - env(safe-area-inset-top))'
 	const [bucket, setBucket] = useState(props.bucket)
 	const [prefix, setPrefix] = useState(props.prefill?.prefix ?? '')
 	const [deleteAll, setDeleteAll] = useState(props.prefill?.deleteAll ?? false)
@@ -88,7 +89,7 @@ export function DeletePrefixJobModal(props: {
 			title="Create delete job (S3)"
 			placement={screens.md ? 'right' : 'bottom'}
 			width={screens.md ? drawerWidth : undefined}
-			height={!screens.md ? '100dvh' : undefined}
+			height={!screens.md ? mobileSheetHeight : undefined}
 			extra={
 				<div className={styles.drawerExtra}>
 					<Button onClick={props.onCancel}>Close</Button>

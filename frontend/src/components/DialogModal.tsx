@@ -1,8 +1,9 @@
 import { CloseOutlined } from '@ant-design/icons'
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useId, useRef, type CSSProperties, type ReactNode } from 'react'
 
 import styles from './DialogModal.module.css'
+import { useOverlayLayer } from './useOverlayLayer'
 
 const dialogWidthVar = '--dialog-width' as const
 
@@ -21,27 +22,16 @@ export function DialogModal(props: Props) {
 	const { open, onClose, title, subtitle, width, footer, dataTestId, children } = props
 	const titleId = useId()
 	const closeButtonRef = useRef<HTMLButtonElement>(null)
+	const panelRef = useRef<HTMLDivElement>(null)
 
-	useEffect(() => {
-		if (!open || typeof document === 'undefined') return
-		const previousOverflow = document.body.style.overflow
-		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape') return
-			event.preventDefault()
-			onClose()
-		}
-		document.body.style.overflow = 'hidden'
-		document.addEventListener('keydown', handleKeyDown)
-		return () => {
-			document.body.style.overflow = previousOverflow
-			document.removeEventListener('keydown', handleKeyDown)
-		}
-	}, [onClose, open])
-
-	useEffect(() => {
-		if (!open) return
-		closeButtonRef.current?.focus()
-	}, [open])
+	useOverlayLayer({
+		open,
+		onEscape: onClose,
+		containerRef: panelRef,
+		initialFocusRef: closeButtonRef,
+		lockBodyScroll: true,
+		trapFocus: true,
+	})
 
 	if (!open || typeof document === 'undefined') return null
 
@@ -52,9 +42,11 @@ export function DialogModal(props: Props) {
 	return createPortal(
 		<div className={styles.backdrop} onMouseDown={onClose}>
 			<div
+				ref={panelRef}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={titleId}
+				tabIndex={-1}
 				className={styles.panel}
 				style={panelStyle}
 				data-testid={dataTestId}

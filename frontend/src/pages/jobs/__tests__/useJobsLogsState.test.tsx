@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { type PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { APIClient } from '../../../api/client'
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { useJobsLogsState } from '../useJobsLogsState'
 
 function createWrapper() {
@@ -28,10 +28,12 @@ describe('useJobsLogsState', () => {
 			nextOffset: 12,
 		})
 		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 12 })
-		const api = {
-			getJobLogsTail,
-			getJobLogsAfterOffset,
-		} as unknown as APIClient
+		const api = createMockApiClient({
+			jobs: {
+				getJobLogsTail,
+				getJobLogsAfterOffset,
+			},
+		})
 
 		const { result } = renderHook(() => useJobsLogsState({ api, profileId: 'profile-1' }), {
 			wrapper: createWrapper(),
@@ -62,10 +64,12 @@ describe('useJobsLogsState', () => {
 			nextOffset: 8,
 		})
 		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 8 })
-		const api = {
-			getJobLogsTail,
-			getJobLogsAfterOffset,
-		} as unknown as APIClient
+		const api = createMockApiClient({
+			jobs: {
+				getJobLogsTail,
+				getJobLogsAfterOffset,
+			},
+		})
 
 		const { result } = renderHook(() => useJobsLogsState({ api, profileId: 'profile-1' }), {
 			wrapper: createWrapper(),

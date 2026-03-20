@@ -1,6 +1,10 @@
 package jobs
 
-import "fmt"
+import (
+	"fmt"
+
+	"s3desk/internal/rcloneconfig"
+)
 
 func payloadOptionalString(payload map[string]any, key string) (string, error) {
 	v, ok := payload[key]
@@ -74,4 +78,13 @@ func payloadOptionalStringSlice(payload map[string]any, key string) ([]string, e
 	default:
 		return nil, fmt.Errorf("payload.%s must be an array of strings", key)
 	}
+}
+
+func validatePayloadRawKeys(field string, keys []string) error {
+	for idx, key := range keys {
+		if err := rcloneconfig.ValidateSingleLineValue(fmt.Sprintf("%s[%d]", field, idx), key); err != nil {
+			return err
+		}
+	}
+	return nil
 }

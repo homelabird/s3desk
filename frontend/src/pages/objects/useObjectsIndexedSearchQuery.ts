@@ -79,7 +79,7 @@ export function useObjectsIndexedSearchQuery({
 		enabled: globalSearchOpen && !!profileId && !!bucket && !!globalSearchQueryText,
 		initialPageParam: undefined as string | undefined,
 		queryFn: async ({ pageParam }) =>
-			api.searchObjectsIndex({
+			api.objects.searchObjectsIndex({
 				profileId: profileId!,
 				bucket,
 				q: globalSearchQueryText,

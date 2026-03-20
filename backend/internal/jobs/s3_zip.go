@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"archive/zip"
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -348,27 +347,11 @@ func fetchRcloneEntriesForKeys(ctx context.Context, m *Manager, profile models.P
 		return entries, nil
 	}
 
-	tmpFile, err := os.CreateTemp("", "rclone-zip-keys-*.txt")
+	tmpPath, err := writeFilesFromRawTempFile("rclone-zip-keys-*.txt", keys)
 	if err != nil {
 		return nil, err
 	}
-	tmpPath := tmpFile.Name()
 	defer func() { _ = os.Remove(tmpPath) }()
-
-	writer := bufio.NewWriter(tmpFile)
-	for _, key := range keys {
-		if _, err := writer.WriteString(key + "\n"); err != nil {
-			_ = tmpFile.Close()
-			return nil, err
-		}
-	}
-	if err := writer.Flush(); err != nil {
-		_ = tmpFile.Close()
-		return nil, err
-	}
-	if err := tmpFile.Close(); err != nil {
-		return nil, err
-	}
 
 	args := []string{"lsjson", "--files-only", "--no-mimetype", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
 	proc, err := m.startRcloneCommand(ctx, profile, jobID, args)

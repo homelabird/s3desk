@@ -11,10 +11,14 @@ import (
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	dataDir := t.TempDir()
+	return newTestStoreAt(t, filepath.Join(t.TempDir(), "s3desk.db"))
+}
+
+func newTestStoreAt(t *testing.T, sqlitePath string) *Store {
+	t.Helper()
 	gormDB, err := db.Open(db.Config{
 		Backend:    db.BackendSQLite,
-		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
+		SQLitePath: sqlitePath,
 	})
 	if err != nil {
 		t.Fatalf("open db: %v", err)

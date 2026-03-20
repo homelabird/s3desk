@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -22,6 +21,7 @@ import (
 	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profiletls"
 )
 
 type Response struct {
@@ -108,7 +108,7 @@ func newHTTPClient(profile models.ProfileSecrets) (*http.Client, error) {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 
-	tlsCfg, err := buildTLSConfig(profile)
+	tlsCfg, err := profiletls.BuildConfig(profile)
 	if err != nil {
 		return nil, err
 	}
@@ -117,48 +117,6 @@ func newHTTPClient(profile models.ProfileSecrets) (*http.Client, error) {
 	}
 
 	return &http.Client{Transport: tr, Timeout: 30 * time.Second}, nil
-}
-
-func buildTLSConfig(profile models.ProfileSecrets) (*tls.Config, error) {
-	if !profile.TLSInsecureSkipVerify && profile.TLSConfig == nil {
-		return nil, nil
-	}
-	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
-	if profile.TLSInsecureSkipVerify {
-		cfg.InsecureSkipVerify = true //nolint:gosec
-	}
-	if profile.TLSConfig == nil {
-		return cfg, nil
-	}
-
-	mode := strings.ToLower(strings.TrimSpace(string(profile.TLSConfig.Mode)))
-	if mode == "" || mode == "disabled" {
-		return cfg, nil
-	}
-	if mode != "mtls" {
-		return nil, fmt.Errorf("unsupported tls mode: %s", mode)
-	}
-
-	certPEM := strings.TrimSpace(profile.TLSConfig.ClientCertPEM)
-	keyPEM := strings.TrimSpace(profile.TLSConfig.ClientKeyPEM)
-	if certPEM == "" || keyPEM == "" {
-		return nil, errors.New("mtls requires client certificate and key")
-	}
-	cert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
-	if err != nil {
-		return nil, err
-	}
-	cfg.Certificates = []tls.Certificate{cert}
-
-	if caPEM := strings.TrimSpace(profile.TLSConfig.CACertPEM); caPEM != "" {
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM([]byte(caPEM)) {
-			return nil, errors.New("failed to parse ca certificate")
-		}
-		cfg.RootCAs = pool
-	}
-
-	return cfg, nil
 }
 
 func looksLikeLocalEndpoint(endpoint string) bool {
@@ -216,7 +174,7 @@ func resolveBearerToken(ctx context.Context, profile models.ProfileSecrets) (str
 	}
 	tokenURI := strings.TrimSpace(sa.TokenURI)
 	if tokenURI == "" {
-		tokenURI = "https://oauth2.googleapis.com/token"
+		tokenURI = "https://oauth2.googleapis.com/token" // #nosec G101 -- Public OAuth token endpoint, not a credential.
 	}
 
 	jwt, err := buildSignedJWT(sa.ClientEmail, sa.PrivateKey, tokenURI)

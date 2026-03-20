@@ -1,0 +1,104 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+import { APIError, type APIClient } from "../../api/client";
+import type {
+  BucketPolicyPutRequest,
+  BucketPolicyValidateResponse,
+  Profile,
+} from "../../api/types";
+import { formatErrorWithHint as formatErr } from "../../lib/errors";
+import {
+  formatUnavailableOperationMessage,
+  formatValidationOperationMessage,
+} from "../../lib/providerOperationFeedback";
+import { message } from "antd";
+
+export function useBucketPolicyMutations(props: {
+  api: APIClient;
+  profileId: string;
+  bucket: string;
+  provider?: Profile["provider"];
+  onClose: () => void;
+  setActiveTab: (tab: "validate" | "preview" | "diff") => void;
+  setLastProviderError: (error: APIError | null) => void;
+  setServerValidation: (value: BucketPolicyValidateResponse | null) => void;
+  setServerValidationError: (value: string | null) => void;
+  buildValidationRequest: () => BucketPolicyPutRequest;
+}) {
+  const queryClient = useQueryClient();
+
+  const putMutation = useMutation({
+    mutationFn: (req: BucketPolicyPutRequest) =>
+      props.api.buckets.putBucketPolicy(props.profileId, props.bucket, req),
+    onSuccess: async () => {
+      message.success("Policy saved");
+      props.setLastProviderError(null);
+      await queryClient.invalidateQueries({ queryKey: ["bucketPolicy"] });
+      if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
+        await queryClient.invalidateQueries({
+          queryKey: ["bucketGovernance", props.profileId, props.bucket],
+        });
+      }
+      props.onClose();
+    },
+    onError: (err) => {
+      props.setActiveTab("validate");
+      props.setLastProviderError(err instanceof APIError ? err : null);
+      message.error(formatErr(err));
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      props.api.buckets.deleteBucketPolicy(props.profileId, props.bucket),
+    onSuccess: async () => {
+      message.success("Policy deleted");
+      props.setLastProviderError(null);
+      await queryClient.invalidateQueries({ queryKey: ["bucketPolicy"] });
+      if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
+        await queryClient.invalidateQueries({
+          queryKey: ["bucketGovernance", props.profileId, props.bucket],
+        });
+      }
+      props.onClose();
+    },
+    onError: (err) => {
+      props.setActiveTab("validate");
+      props.setLastProviderError(err instanceof APIError ? err : null);
+      message.error(formatErr(err));
+    },
+  });
+
+  const validateMutation = useMutation({
+    mutationFn: () =>
+      props.api.buckets.validateBucketPolicy(
+        props.profileId,
+        props.bucket,
+        props.buildValidationRequest(),
+      ),
+    onSuccess: (resp) => {
+      props.setServerValidation(resp);
+      props.setServerValidationError(null);
+      const { content, duration } = formatValidationOperationMessage({
+        successMessage: "Validation OK",
+        failureMessage: "Validation found issues",
+        ok: resp.ok,
+        errors: resp.errors,
+        warnings: resp.warnings,
+      });
+      if (resp.ok) message.success(content, duration);
+      else message.warning(content, duration);
+    },
+    onError: (err) => {
+      props.setServerValidation(null);
+      const { content, duration } = formatUnavailableOperationMessage(
+        "Policy validation unavailable",
+        err,
+      );
+      props.setServerValidationError(content);
+      message.error(content, duration);
+    },
+  });
+
+  return { putMutation, deleteMutation, validateMutation };
+}

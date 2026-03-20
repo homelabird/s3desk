@@ -45,6 +45,19 @@ func TestBuildMultipartCompletionPartsRejectsInvalidParts(t *testing.T) {
 	if uploadErr == nil || uploadErr.message != "etag is required" {
 		t.Fatalf("expected missing etag error, got %+v", uploadErr)
 	}
+
+	_, uploadErr = buildMultipartCompletionParts([]models.UploadMultipartCompletePart{
+		{Number: maxMultipartUploadParts + 1, ETag: "etag-1"},
+	})
+	if uploadErr == nil || uploadErr.message != "invalid part number" {
+		t.Fatalf("expected oversized part number error, got %+v", uploadErr)
+	}
+}
+
+func TestExpectedMultipartPartCountRejectsTooManyParts(t *testing.T) {
+	if _, err := expectedMultipartPartCount(int64(maxMultipartUploadParts)+1, 1); err == nil {
+		t.Fatal("expected too many parts error")
+	}
 }
 
 func TestBuildRemoteMultipartChunkStateFiltersUnexpectedParts(t *testing.T) {

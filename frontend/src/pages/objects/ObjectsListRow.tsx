@@ -3,7 +3,7 @@ import { Button, Checkbox, Typography } from 'antd'
 import { EllipsisOutlined, FolderOutlined, StarFilled, StarOutlined } from '@ant-design/icons'
 import type { CSSProperties, DragEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 
-import styles from './objects.module.css'
+import styles from './ObjectsListView.module.css'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { PopoverOpenSource } from '../../components/PopoverSurface'
 

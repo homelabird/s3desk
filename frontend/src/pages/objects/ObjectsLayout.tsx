@@ -1,7 +1,7 @@
 import { forwardRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 
-import styles from './objects.module.css'
+import styles from './ObjectsShell.module.css'
 
 export type ObjectsLayoutProps = {
 	treeWidthPx: number

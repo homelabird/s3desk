@@ -80,7 +80,7 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 		setError(null)
 		try {
 			const api = new APIClient({ apiToken: trimmed })
-			await api.getMeta()
+			await api.server.getMeta()
 			props.onLogin(trimmed)
 		} catch (err) {
 			if (err instanceof APIError && err.status === 401) setError('Login failed: invalid API token.')
@@ -172,7 +172,7 @@ function ProfilesList(props: {
 	useEffect(() => {
 		let cancelled = false
 		api
-			.listProfiles()
+			.profiles.listProfiles()
 			.then((data) => {
 				if (cancelled) return
 				setProfilesState({ status: 'success', data: data as LightProfile[] })
@@ -322,7 +322,7 @@ export default function LightApp() {
 	useEffect(() => {
 		let cancelled = false
 		api
-			.getMeta()
+			.server.getMeta()
 			.then(() => {
 				if (cancelled) return
 				setMetaState({ status: 'success' })

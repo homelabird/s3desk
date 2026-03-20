@@ -1,5 +1,6 @@
 .root {
   width: 100%;
+  position: relative;
 }
 
 .tabList {
@@ -8,6 +9,7 @@
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tabListLine {
@@ -24,6 +26,7 @@
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
+  scroll-snap-align: start;
 }
 
 .tabButton {
@@ -138,4 +141,71 @@
 
 .sizeLarge .addButton {
   padding: 8px 12px;
+}
+
+@media (max-width: 640px) {
+  .root::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 24px;
+    height: 48px;
+    pointer-events: none;
+    background: linear-gradient(to left, var(--s3d-color-bg-page), transparent);
+  }
+
+  .tabList {
+    gap: 8px;
+    padding-inline-end: 12px;
+    scroll-padding-inline: 12px;
+    scroll-snap-type: x proximity;
+  }
+
+  .tabButtonLine,
+  .tabButtonCard,
+  .addButton,
+  .sizeSmall .tabButtonLine,
+  .sizeSmall .tabButtonCard,
+  .sizeSmall .addButton {
+    min-height: 44px;
+  }
+
+  .tabButtonLine {
+    padding: 12px 14px;
+  }
+
+  .tabButtonCard,
+  .addButton {
+    padding: 8px 12px;
+  }
+
+  .sizeSmall .tabButtonLine {
+    padding: 10px 12px;
+  }
+
+  .sizeSmall .tabButtonCard,
+  .sizeSmall .addButton {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .tabList {
+    gap: 4px;
+    padding-inline-end: 8px;
+    scroll-padding-inline: 8px;
+  }
+
+  .tabButtonLine,
+  .sizeSmall .tabButtonLine {
+    padding: 10px;
+  }
+
+  .tabButtonCard,
+  .addButton,
+  .sizeSmall .tabButtonCard,
+  .sizeSmall .addButton {
+    padding: 8px 10px;
+  }
 }

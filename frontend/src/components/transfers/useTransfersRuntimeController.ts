@@ -78,7 +78,9 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 
 	const {
 		downloadLinkProxyEnabled,
+		downloadTaskConcurrency,
 		uploadChunkFileConcurrency,
+		uploadTaskConcurrency,
 		uploadResumeConversionEnabled,
 		pickUploadTuning,
 	} = useTransfersUploadPreferences()
@@ -154,7 +156,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 	const { queueDownloadObject, queueDownloadObjectsToDevice, queueDownloadJobArtifact } = useTransfersDownloadQueue({
 		api,
 		downloadLinkProxyEnabled,
-		downloadConcurrency: 2,
+		downloadConcurrency: downloadTaskConcurrency,
 		downloadTasks,
 		setDownloadTasks,
 		downloadAbortByTaskIdRef,
@@ -171,6 +173,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		uploadCapabilityByProfileId: args.uploadCapabilityByProfileId,
 		uploadDirectStream: args.uploadDirectStream,
 		uploadChunkFileConcurrency,
+		uploadTaskConcurrency,
 		uploadResumeConversionEnabled,
 		pickUploadTuning,
 		uploadTasks,

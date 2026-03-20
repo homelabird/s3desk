@@ -40,6 +40,7 @@ For remote exposure, require all of the following:
 - explicit review of exposed host/port bindings
 - `ALLOWED_HOSTS` for non-private hostnames
 - an explicit `S3DESK_BIND_ADDRESS` choice in the compose environment
+- `EXTERNAL_BASE_URL` whenever generated browser-facing download links should stay rooted at a public hostname or reverse proxy URL
 
 ## Public HTTPS with Caddy
 

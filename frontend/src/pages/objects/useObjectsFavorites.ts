@@ -69,12 +69,12 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	const favoriteSummaryQuery = useQuery({
 		queryKey: favoriteSummaryQueryKey,
 		enabled: !!profileId && !!bucket,
-		queryFn: () => api.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false }),
+		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false }),
 	})
 	const favoriteItemsQuery = useQuery({
 		queryKey: favoriteItemsQueryKey,
 		enabled: !!profileId && !!bucket && hydrateItems,
-		queryFn: () => api.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true }),
+		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true }),
 	})
 	const favoritesQuery = hydrateItems ? favoriteItemsQuery : favoriteSummaryQuery
 	const favoriteItems = useMemo(() => favoriteItemsQuery.data?.items ?? [], [favoriteItemsQuery.data?.items])
@@ -115,7 +115,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	)
 
 	const addFavoriteMutation = useMutation({
-		mutationFn: (key: string) => api.createObjectFavorite({ profileId: profileId!, bucket, key }),
+		mutationFn: (key: string) => api.objects.createObjectFavorite({ profileId: profileId!, bucket, key }),
 		onMutate: (key) => {
 			setFavoritePendingKeys((prev) => new Set(prev).add(key))
 		},
@@ -139,7 +139,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	})
 
 	const removeFavoriteMutation = useMutation({
-		mutationFn: (key: string) => api.deleteObjectFavorite({ profileId: profileId!, bucket, key }),
+		mutationFn: (key: string) => api.objects.deleteObjectFavorite({ profileId: profileId!, bucket, key }),
 		onMutate: (key) => {
 			setFavoritePendingKeys((prev) => new Set(prev).add(key))
 		},

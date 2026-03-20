@@ -35,7 +35,3 @@ func capabilityState(provider models.ProfileProvider, capability models.BucketGo
 	}
 	return state
 }
-
-func capabilityEnabled(provider models.ProfileProvider, capability models.BucketGovernanceCapability) bool {
-	return capabilityState(provider, capability).Enabled
-}

@@ -103,7 +103,7 @@ export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps)
 				onClose={props.onCancel}
 				title={`Move ${props.selectedCount} item(s)…`}
 				placement="bottom"
-				height="min(82vh, 640px)"
+				height="min(82dvh, 640px)"
 				dataTestId="objects-move-selection-sheet"
 				bodyClassName={styles.sheetBody}
 			>

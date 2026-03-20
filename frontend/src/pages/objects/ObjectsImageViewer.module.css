@@ -1,0 +1,121 @@
+.imageViewerModalBody {
+  min-height: 320px;
+}
+
+.imageViewerShell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.imageViewerMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.imageViewerStage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at top, rgba(255,255,255,0.08), transparent 45%),
+    linear-gradient(135deg, var(--s3d-color-bg-code), var(--s3d-color-bg-secondary));
+  touch-action: none;
+}
+
+.imageViewerStageDragging {
+  cursor: grabbing;
+}
+
+.imageViewerImage {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100dvh - 280px);
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform var(--s3d-transition-normal);
+  user-select: none;
+}
+
+.imageViewerThumbnailLayer {
+  position: absolute;
+  inset: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.imageViewerLoadingOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 78%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.imageViewerLoadingState {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.imageViewerStateStack {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.imageViewerFallbackFrame {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.imageViewerFallbackInner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  min-height: 220px;
+  max-width: 100%;
+  padding: 16px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 12px;
+  background: var(--s3d-color-bg-code);
+}
+
+@media (max-width: 767px) {
+  .imageViewerModalBody {
+    min-height: calc(100dvh - 220px);
+  }
+
+  .imageViewerImage {
+    max-height: calc(100dvh - 360px);
+  }
+
+  .imageViewerFallbackInner {
+    min-width: 0;
+    width: 100%;
+  }
+}

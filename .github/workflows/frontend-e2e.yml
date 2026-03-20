@@ -78,6 +78,7 @@ jobs:
           if-no-files-found: ignore
 
   mock-e2e:
+    name: Core Mock E2E
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -98,19 +99,83 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright Chromium for desktop and mobile projects
         run: npx playwright install --with-deps chromium
 
-      - name: Run mock Playwright suite
-        run: npm run test:e2e
+      - name: Run mock Playwright suite excluding dedicated mobile responsive specs
+        run: npm run test:e2e:core
 
-      - name: Upload mock Playwright artifacts
+      - name: Upload core mock Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-mock-results
+          name: playwright-core-mock-results
           path: frontend/test-results
           if-no-files-found: ignore
+
+  mobile-responsive-e2e:
+    name: Mobile Responsive E2E (Required)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_HTML_REPORT: "1"
+      PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-mobile-responsive
+      PLAYWRIGHT_OUTPUT_DIR: test-results-mobile-responsive
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium for mobile responsive projects
+        run: npx playwright install --with-deps chromium
+
+      - name: Run dedicated mobile responsive Playwright suite
+        run: npm run test:e2e:mobile-responsive
+
+      - name: Upload mobile responsive HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-responsive-e2e-html-report
+          path: frontend/playwright-report-mobile-responsive
+          if-no-files-found: ignore
+
+      - name: Upload mobile responsive Playwright results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-responsive-e2e-test-results
+          path: frontend/test-results-mobile-responsive
+          if-no-files-found: ignore
+
+      - name: Write mobile responsive summary
+        if: always()
+        run: |
+          {
+            echo "## Mobile Responsive E2E"
+            echo ""
+            echo "- Required check: \`Mobile Responsive E2E (Required)\`"
+            echo "- Local/CI command: \`npm run test:e2e:mobile-responsive\`"
+            echo "- HTML report artifact: \`mobile-responsive-e2e-html-report\`"
+            echo "- HTML report directory: \`frontend/playwright-report-mobile-responsive/\`"
+            echo "- Report entry file: \`frontend/playwright-report-mobile-responsive/index.html\`"
+            echo "- Raw test results artifact: \`mobile-responsive-e2e-test-results\`"
+            echo "- Raw test results directory: \`frontend/test-results-mobile-responsive/\`"
+            echo "- Targeted Settings/Login command: \`npm run test:e2e:mobile-responsive:settings-login\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   live-e2e-critical:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

@@ -73,7 +73,7 @@ export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobs
 	const logsMutation = useMutation({
 		mutationFn: (jobId: string) => {
 			if (!profileId) throw new Error('profile is required')
-			return api.getJobLogsTail(profileId, jobId, 256 * 1024)
+			return api.jobs.getJobLogsTail(profileId, jobId, 256 * 1024)
 		},
 		onSuccess: ({ text, nextOffset }, jobId) => {
 			const lines = text
@@ -186,7 +186,7 @@ export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobs
 		const tick = async () => {
 			const offset = logOffsetsRef.current[jobId] ?? 0
 			try {
-				const { text, nextOffset } = await api.getJobLogsAfterOffset(profileId, jobId, offset, 128 * 1024)
+				const { text, nextOffset } = await api.jobs.getJobLogsAfterOffset(profileId, jobId, offset, 128 * 1024)
 				if (nextOffset < offset) {
 					logOffsetsRef.current[jobId] = nextOffset
 					logRemaindersRef.current[jobId] = ''

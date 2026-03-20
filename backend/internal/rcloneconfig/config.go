@@ -201,13 +201,17 @@ func writeConfigLine(b *strings.Builder, key string, value string) error {
 	return err
 }
 
-func validateRcloneConfigValue(field string, value string) error {
+func ValidateSingleLineValue(field string, value string) error {
 	for _, r := range value {
 		if r == '\n' || r == '\r' || r == 0 {
 			return fmt.Errorf("%s contains unsupported control characters", field)
 		}
 	}
 	return nil
+}
+
+func validateRcloneConfigValue(field string, value string) error {
+	return ValidateSingleLineValue(field, value)
 }
 
 func WriteConfigFile(path string, profile models.ProfileSecrets, remoteName string) error {

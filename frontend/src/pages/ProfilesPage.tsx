@@ -53,7 +53,7 @@ export function ProfilesPage(props: Props) {
 
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', props.apiToken],
-		queryFn: () => api.listProfiles(),
+		queryFn: () => api.profiles.listProfiles(),
 	})
 	const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data])
 	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
@@ -72,7 +72,7 @@ export function ProfilesPage(props: Props) {
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
-		queryFn: () => api.getMeta(),
+		queryFn: () => api.server.getMeta(),
 	})
 
 	const tlsCapability = metaQuery.data?.capabilities?.profileTls
@@ -80,7 +80,7 @@ export function ProfilesPage(props: Props) {
 	const profileTLSQuery = useQuery({
 		queryKey: ['profileTls', editProfile?.id, props.apiToken],
 		enabled: !!editProfile && tlsCapabilityEnabled,
-		queryFn: () => api.getProfileTLS(editProfile!.id),
+		queryFn: () => api.profiles.getProfileTLS(editProfile!.id),
 	})
 
 	const applyTLSUpdate = async (profileId: string, values: ProfileFormValues, mode: 'create' | 'edit') => {
@@ -88,7 +88,7 @@ export function ProfilesPage(props: Props) {
 			if (!values.tlsEnabled) return
 			const tlsConfig = buildTLSConfigFromValues(values)
 			if (!tlsConfig) throw new Error('mTLS requires client certificate and key')
-			await api.updateProfileTLS(profileId, tlsConfig)
+			await api.profiles.updateProfileTLS(profileId, tlsConfig)
 			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
 			return
 		}
@@ -96,20 +96,20 @@ export function ProfilesPage(props: Props) {
 		const action = values.tlsAction ?? 'keep'
 		if (action === 'keep') return
 		if (action === 'disable') {
-			await api.deleteProfileTLS(profileId)
+			await api.profiles.deleteProfileTLS(profileId)
 			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
 			return
 		}
 		if (action === 'enable') {
 			const tlsConfig = buildTLSConfigFromValues(values)
 			if (!tlsConfig) throw new Error('mTLS requires client certificate and key')
-			await api.updateProfileTLS(profileId, tlsConfig)
+			await api.profiles.updateProfileTLS(profileId, tlsConfig)
 			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
 		}
 	}
 
 	const createMutation = useMutation({
-		mutationFn: (values: ProfileFormValues) => api.createProfile(toCreateRequest(values)),
+		mutationFn: (values: ProfileFormValues) => api.profiles.createProfile(toCreateRequest(values)),
 		onSuccess: async (created, values) => {
 			message.success('Profile created')
 			props.setProfileId(created.id)
@@ -125,7 +125,7 @@ export function ProfilesPage(props: Props) {
 	})
 
 	const updateMutation = useMutation({
-		mutationFn: (args: { id: string; values: ProfileFormValues }) => api.updateProfile(args.id, toUpdateRequest(args.values)),
+		mutationFn: (args: { id: string; values: ProfileFormValues }) => api.profiles.updateProfile(args.id, toUpdateRequest(args.values)),
 		onSuccess: async (_, args) => {
 			message.success('Profile updated')
 			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
@@ -140,7 +140,7 @@ export function ProfilesPage(props: Props) {
 	})
 
 	const deleteMutation = useMutation({
-		mutationFn: (id: string) => api.deleteProfile(id),
+		mutationFn: (id: string) => api.profiles.deleteProfile(id),
 		onMutate: (id) => setDeletingProfileId(id),
 		onSuccess: async (_, id) => {
 			message.success('Profile deleted')
@@ -154,7 +154,7 @@ export function ProfilesPage(props: Props) {
 	})
 
 	const testMutation = useMutation({
-		mutationFn: (id: string) => api.testProfile(id),
+		mutationFn: (id: string) => api.profiles.testProfile(id),
 		onMutate: (id) => setTestingProfileId(id),
 		onSuccess: (resp) => {
 			const storageType = resp.details?.storageType ?? ''
@@ -185,7 +185,7 @@ export function ProfilesPage(props: Props) {
 	})
 
 	const benchmarkMutation = useMutation({
-		mutationFn: (id: string) => api.benchmarkProfile(id),
+		mutationFn: (id: string) => api.profiles.benchmarkProfile(id),
 		onMutate: (id) => setBenchmarkingProfileId(id),
 		onSuccess: (resp) => {
 			if (resp.ok) {
@@ -213,7 +213,7 @@ export function ProfilesPage(props: Props) {
 	})
 
 	const exportYamlMutation = useMutation({
-		mutationFn: (id: string) => api.exportProfileYaml(id),
+		mutationFn: (id: string) => api.profiles.exportProfileYaml(id),
 		onMutate: (id) => {
 			setExportingProfileId(id)
 			setYamlContent('')
@@ -249,15 +249,15 @@ export function ProfilesPage(props: Props) {
 	const saveYamlMutation = useMutation({
 		mutationFn: async ({ profileId, yamlText }: { profileId: string; yamlText: string }) => {
 			const { updateRequest, tlsConfig, hasTLSBlock } = await parseProfileYaml(yamlText)
-			const updated = await api.updateProfile(profileId, updateRequest)
+			const updated = await api.profiles.updateProfile(profileId, updateRequest)
 			if (hasTLSBlock) {
 				if (tlsConfig) {
-					await api.updateProfileTLS(profileId, tlsConfig)
+					await api.profiles.updateProfileTLS(profileId, tlsConfig)
 				} else {
-					await api.deleteProfileTLS(profileId)
+					await api.profiles.deleteProfileTLS(profileId)
 				}
 			}
-			const canonicalYaml = await api.exportProfileYaml(profileId)
+			const canonicalYaml = await api.profiles.exportProfileYaml(profileId)
 			return { updated, canonicalYaml }
 		},
 		onSuccess: async ({ updated, canonicalYaml }) => {
@@ -285,9 +285,9 @@ export function ProfilesPage(props: Props) {
 	const importMutation = useMutation({
 		mutationFn: async (yamlText: string) => {
 			const { request, tlsConfig } = await parseProfileYaml(yamlText)
-			const created = await api.createProfile(request)
+			const created = await api.profiles.createProfile(request)
 			if (tlsConfig) {
-				await api.updateProfileTLS(created.id, tlsConfig)
+				await api.profiles.updateProfileTLS(created.id, tlsConfig)
 			}
 			return created
 		},
@@ -350,51 +350,49 @@ export function ProfilesPage(props: Props) {
 				}
 			/>
 			{onboardingVisible ? (
-				<Alert
-					type="info"
-					showIcon
-					title="Getting started"
-					description={
-						<Space orientation="vertical" size={12} className={styles.fullWidth}>
-							<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
-							<Space orientation="vertical" size={6}>
-								<Checkbox checked={metaQuery.isSuccess} disabled>
-									Backend connected
-								</Checkbox>
-								<Checkbox checked={transferEngine?.available ?? false} disabled>
-									Transfer engine detected (rclone)
-								</Checkbox>
-								<Checkbox checked={transferEngine?.compatible ?? false} disabled>
-									Transfer engine compatible
-									{transferEngine?.minVersion ? ` (>= ${transferEngine.minVersion})` : ''}
-								</Checkbox>
-								<Checkbox checked={apiTokenEnabled ? !!props.apiToken.trim() : true} disabled>
-									API token configured{apiTokenEnabled ? '' : ' (not required)'}
-								</Checkbox>
-								<Checkbox checked={profiles.length > 0} disabled>
-									At least one profile created
-								</Checkbox>
-								<Checkbox checked={!!props.profileId} disabled>
-									Active profile selected
-								</Checkbox>
-							</Space>
-							<Space wrap>
-								<Button size="small" type="primary" onClick={openCreateModal}>
-									Create profile
-								</Button>
-								<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
-									Buckets
-								</LinkButton>
-								<LinkButton to="/objects" size="small" disabled={!props.profileId}>
-									Objects
-								</LinkButton>
-								<Button size="small" type="link" onClick={() => setOnboardingDismissed(true)}>
-									Dismiss
-								</Button>
-							</Space>
-						</Space>
-					}
-				/>
+				<section className={styles.onboardingCard} aria-label="Getting started">
+					<div className={styles.onboardingHeader}>
+						<Typography.Title level={5} className={styles.onboardingTitle}>
+							Getting started
+						</Typography.Title>
+						<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
+					</div>
+					<div className={styles.onboardingChecklist}>
+						<Checkbox checked={metaQuery.isSuccess} disabled>
+							Backend connected
+						</Checkbox>
+						<Checkbox checked={transferEngine?.available ?? false} disabled>
+							Transfer engine detected (rclone)
+						</Checkbox>
+						<Checkbox checked={transferEngine?.compatible ?? false} disabled>
+							Transfer engine compatible
+							{transferEngine?.minVersion ? ` (>= ${transferEngine.minVersion})` : ''}
+						</Checkbox>
+						<Checkbox checked={apiTokenEnabled ? !!props.apiToken.trim() : true} disabled>
+							API token configured{apiTokenEnabled ? '' : ' (not required)'}
+						</Checkbox>
+						<Checkbox checked={profiles.length > 0} disabled>
+							At least one profile created
+						</Checkbox>
+						<Checkbox checked={!!props.profileId} disabled>
+							Active profile selected
+						</Checkbox>
+					</div>
+					<div className={styles.onboardingActions}>
+						<Button size="small" type="primary" onClick={openCreateModal}>
+							Create profile
+						</Button>
+						<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
+							Buckets
+						</LinkButton>
+						<LinkButton to="/objects" size="small" disabled={!props.profileId}>
+							Objects
+						</LinkButton>
+						<button type="button" className={styles.onboardingDismissButton} onClick={() => setOnboardingDismissed(true)}>
+							Dismiss
+						</button>
+					</div>
+				</section>
 			) : null}
 
 			{profilesQuery.isError ? (

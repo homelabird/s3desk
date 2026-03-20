@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import type { ObjectMeta } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
-import styles from './objects.module.css'
+import styles from './ObjectsDetails.module.css'
 import { guessPreviewKind } from './objectsListUtils'
 import type { ObjectPreview } from './objectsTypes'
 

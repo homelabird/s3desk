@@ -10,7 +10,7 @@ import type { PopoverOpenSource } from '../../components/PopoverSurface'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
-import styles from './objects.module.css'
+import thumbnailStyles from './ObjectsThumbnailPrimitives.module.css'
 import type { UIActionOrDivider } from './objectsActions'
 import { buildActionMenu } from './objectsActions'
 import { COMPACT_LIST_THUMBNAIL_PX, WIDE_LIST_THUMBNAIL_PX } from './objectsPageConstants'
@@ -310,7 +310,7 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 			onToggleFavorite={handleToggleFavorite}
 			thumbnail={
 				thumbnail ? (
-					<div className={styles.listThumbnailFrame}>{thumbnail}</div>
+					<div className={thumbnailStyles.listThumbnailFrame}>{thumbnail}</div>
 				) : undefined
 			}
 			previewAction={

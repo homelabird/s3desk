@@ -2,8 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
-	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -51,7 +49,15 @@ func buildMultipartCompletionParts(parts []models.UploadMultipartCompletePart) (
 		}
 		etag = strings.Trim(etag, "\"")
 		etag = `"` + etag + `"`
-		num := int32(part.Number)
+		num, err := multipartPartNumber(part.Number)
+		if err != nil {
+			return nil, &uploadHTTPError{
+				status:  http.StatusBadRequest,
+				code:    "invalid_request",
+				message: "invalid part number",
+				details: map[string]any{"partNumber": part.Number},
+			}
+		}
 		completed = append(completed, types.CompletedPart{
 			ETag:       &etag,
 			PartNumber: &num,
@@ -126,7 +132,7 @@ func parseUploadChunkQuery(values url.Values, requireTotal bool) (uploadChunkQue
 	if requireTotal {
 		totalRaw := values.Get("total")
 		total, err := strconv.Atoi(totalRaw)
-		if err != nil || total <= 0 {
+		if err != nil || total <= 0 || total > maxMultipartUploadParts {
 			return uploadChunkQuery{}, &uploadHTTPError{
 				status:  http.StatusBadRequest,
 				code:    "invalid_request",
@@ -165,7 +171,10 @@ func parseUploadChunkQuery(values url.Values, requireTotal bool) (uploadChunkQue
 }
 
 func buildRemoteMultipartChunkState(parts []types.Part, meta store.MultipartUpload) models.UploadChunkState {
-	expectedTotal := int(math.Ceil(float64(meta.FileSize) / float64(meta.ChunkSize)))
+	expectedTotal, err := expectedMultipartPartCount(meta.FileSize, meta.ChunkSize)
+	if err != nil {
+		return models.UploadChunkState{}
+	}
 	present := make([]int, 0, len(parts))
 	for _, part := range parts {
 		if part.PartNumber == nil {
@@ -244,10 +253,8 @@ func (s *server) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Re
 	}
 
 	var req models.UploadMultipartCompleteRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{maxBytes: uploadMultipartJSONRequestBodyMaxBytes}); err != nil {
+		writeJSONDecodeError(w, err, uploadMultipartJSONRequestBodyMaxBytes)
 		return
 	}
 	relPath := sanitizeUploadPath(req.Path)
@@ -288,6 +295,18 @@ func (s *server) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadGateway, "upload_failed", "failed to complete multipart upload", map[string]any{"error": err.Error()})
 		return
 	}
+	expectedSize := meta.FileSize
+	if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+		UploadID:     uploadID,
+		ProfileID:    profileID,
+		Path:         meta.Path,
+		Bucket:       meta.Bucket,
+		ObjectKey:    meta.ObjectKey,
+		ExpectedSize: &expectedSize,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist upload object", nil)
+		return
+	}
 	_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, relPath)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -316,10 +335,8 @@ func (s *server) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req models.UploadMultipartAbortRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
+	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{maxBytes: uploadMultipartJSONRequestBodyMaxBytes}); err != nil {
+		writeJSONDecodeError(w, err, uploadMultipartJSONRequestBodyMaxBytes)
 		return
 	}
 	relPath := sanitizeUploadPath(req.Path)

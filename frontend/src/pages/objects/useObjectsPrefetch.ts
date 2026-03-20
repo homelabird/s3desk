@@ -49,7 +49,7 @@ export function useObjectsPrefetch({
 					initialPageParam: undefined as string | undefined,
 					staleTime: 15_000,
 					queryFn: ({ pageParam }) =>
-						api.listObjects({
+						api.objects.listObjects({
 							profileId,
 							bucket: bucketName,
 							prefix: savedPrefix || undefined,

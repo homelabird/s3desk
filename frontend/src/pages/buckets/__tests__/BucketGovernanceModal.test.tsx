@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ensureDomShims } from "../../../test/domShims";
+import { createMockApiClient } from "../../../test/mockApiClient";
 import { BucketGovernanceModal } from "../BucketGovernanceModal";
 
 beforeAll(() => {
@@ -234,24 +235,26 @@ function createApi(
   provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_object_storage" = "aws_s3",
   overrides: Record<string, unknown> = {},
 ) {
-  return {
-    getBucketGovernance: vi
-      .fn()
-      .mockResolvedValue(createGovernance(provider)),
-    putBucketPublicExposure: vi.fn().mockResolvedValue(undefined),
-    putBucketAccess: vi.fn().mockResolvedValue(undefined),
-    putBucketProtection: vi.fn().mockResolvedValue(undefined),
-    putBucketSharing: vi.fn().mockResolvedValue({
-      provider,
-      bucket: "demo-bucket",
-      preauthenticatedSupport: true,
-      preauthenticatedRequests: [],
-    }),
-    putBucketVersioning: vi.fn().mockResolvedValue(undefined),
-    putBucketEncryption: vi.fn().mockResolvedValue(undefined),
-    putBucketLifecycle: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  };
+  return createMockApiClient({
+    buckets: {
+      getBucketGovernance: vi
+        .fn()
+        .mockResolvedValue(createGovernance(provider)),
+      putBucketPublicExposure: vi.fn().mockResolvedValue(undefined),
+      putBucketAccess: vi.fn().mockResolvedValue(undefined),
+      putBucketProtection: vi.fn().mockResolvedValue(undefined),
+      putBucketSharing: vi.fn().mockResolvedValue({
+        provider,
+        bucket: "demo-bucket",
+        preauthenticatedSupport: true,
+        preauthenticatedRequests: [],
+      }),
+      putBucketVersioning: vi.fn().mockResolvedValue(undefined),
+      putBucketEncryption: vi.fn().mockResolvedValue(undefined),
+      putBucketLifecycle: vi.fn().mockResolvedValue(undefined),
+      ...overrides,
+    },
+  });
 }
 
 function renderModal(
@@ -306,7 +309,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -353,7 +356,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketEncryption).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketEncryption).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -398,7 +401,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketLifecycle).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketLifecycle).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -490,7 +493,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketAccess).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketAccess).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -536,7 +539,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -559,7 +562,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketProtection).toHaveBeenNthCalledWith(
+      expect(api.buckets.putBucketProtection).toHaveBeenNthCalledWith(
         1,
         "profile-1",
         "demo-bucket",
@@ -585,7 +588,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketVersioning).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketVersioning).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -610,7 +613,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketProtection).toHaveBeenNthCalledWith(
+      expect(api.buckets.putBucketProtection).toHaveBeenNthCalledWith(
         2,
         "profile-1",
         "demo-bucket",
@@ -647,7 +650,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -690,7 +693,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketAccess).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketAccess).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -722,7 +725,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketVersioning).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketVersioning).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -750,7 +753,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketProtection).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketProtection).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -794,7 +797,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketPublicExposure).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -819,7 +822,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketVersioning).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketVersioning).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -844,7 +847,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketProtection).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketProtection).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {
@@ -888,7 +891,7 @@ describe("BucketGovernanceModal", () => {
     );
 
     await waitFor(() =>
-      expect(api.putBucketSharing).toHaveBeenCalledWith(
+      expect(api.buckets.putBucketSharing).toHaveBeenCalledWith(
         "profile-1",
         "demo-bucket",
         {

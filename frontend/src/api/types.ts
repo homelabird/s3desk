@@ -141,6 +141,36 @@ export type ServerPortableImportVerification =
 export type ServerPortableImportResponse =
   components["schemas"]["ServerPortableImportResponse"];
 
+export type BucketPreauthenticatedRequestClientView = {
+  id?: string;
+  name?: string;
+  accessType?: string;
+  bucketListingAction?: string;
+  objectName?: string;
+  timeCreated?: string;
+  timeExpires?: string;
+  accessUri?: string;
+};
+
+export type BucketSharingClientView = {
+  provider: string;
+  bucket: string;
+  preauthenticatedSupport?: boolean;
+  preauthenticatedRequests?: BucketPreauthenticatedRequestClientView[];
+  warnings?: string[];
+};
+
+export type BucketSharingPutClientRequest = {
+  preauthenticatedRequests?: BucketPreauthenticatedRequestClientView[];
+};
+
+export type ServerBackupScope = "full" | "cache_metadata" | "portable";
+export type ServerBackupConfidentialityMode = "clear" | "encrypted";
+export type ServerBackupDownloadOptions = {
+  password?: string;
+  includeThumbnails?: boolean;
+};
+
 export type LocalEntry = components["schemas"]["LocalEntry"];
 export type ListLocalEntriesResponse =
   components["schemas"]["ListLocalEntriesResponse"];

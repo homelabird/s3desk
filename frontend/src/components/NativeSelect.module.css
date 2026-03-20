@@ -12,3 +12,10 @@
 .disabled {
 	background: var(--s3d-color-bg-disabled);
 }
+
+@media (max-width: 768px) {
+	.select {
+		height: 44px;
+		padding: 8px 12px;
+	}
+}

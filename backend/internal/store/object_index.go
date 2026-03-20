@@ -42,43 +42,11 @@ type SummarizeObjectIndexInput struct {
 }
 
 func (s *Store) ClearObjectIndex(ctx context.Context, profileID, bucket, prefix string) error {
-	bucket = strings.TrimSpace(bucket)
-	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
-
-	query := s.db.WithContext(ctx).
-		Where("profile_id = ? AND bucket = ?", profileID, bucket)
-
-	if prefix != "" {
-		pat := escapeLike(prefix) + "%"
-		query = query.Where(`object_key LIKE ? ESCAPE '\'`, pat)
-	}
-
-	return query.Delete(&objectIndexRow{}).Error
+	return objectIndexScopeQuery(s.db.WithContext(ctx), profileID, bucket, prefix).Delete(&objectIndexRow{}).Error
 }
 
 func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket string, entries []ObjectIndexEntry, indexedAt string) error {
-	if len(entries) == 0 {
-		return nil
-	}
-	if indexedAt == "" {
-		indexedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-
-	rows := make([]objectIndexRow, 0, len(entries))
-	for _, e := range entries {
-		if e.Key == "" {
-			continue
-		}
-		rows = append(rows, objectIndexRow{
-			ProfileID:    profileID,
-			Bucket:       bucket,
-			ObjectKey:    e.Key,
-			Size:         e.Size,
-			ETag:         nonEmptyPtr(e.ETag),
-			LastModified: nonEmptyPtr(e.LastModified),
-			IndexedAt:    indexedAt,
-		})
-	}
+	rows := buildObjectIndexRows(profileID, bucket, entries, indexedAt)
 	if len(rows) == 0 {
 		return nil
 	}
@@ -89,18 +57,93 @@ func (s *Store) UpsertObjectIndexBatch(ctx context.Context, profileID, bucket st
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if err := tx.Clauses(clause.OnConflict{
+	if err := upsertObjectIndexRows(tx, rows); err != nil {
+		return err
+	}
+
+	return tx.Commit().Error
+}
+
+func (s *Store) StageObjectIndexReplacementBatch(ctx context.Context, replacementID, profileID, bucket string, entries []ObjectIndexEntry, indexedAt string) error {
+	replacementID = strings.TrimSpace(replacementID)
+	if replacementID == "" {
+		return errors.New("replacementID is required")
+	}
+
+	rows := buildObjectIndexRows(profileID, bucket, entries, indexedAt)
+	if len(rows) == 0 {
+		return nil
+	}
+
+	replacements := make([]objectIndexReplacementRow, 0, len(rows))
+	for _, row := range rows {
+		replacements = append(replacements, objectIndexReplacementRow{
+			ReplacementID: replacementID,
+			ProfileID:     row.ProfileID,
+			Bucket:        row.Bucket,
+			ObjectKey:     row.ObjectKey,
+			Size:          row.Size,
+			ETag:          row.ETag,
+			LastModified:  row.LastModified,
+			IndexedAt:     row.IndexedAt,
+		})
+	}
+
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{
+			{Name: "replacement_id"},
 			{Name: "profile_id"},
 			{Name: "bucket"},
 			{Name: "object_key"},
 		},
 		DoUpdates: clause.AssignmentColumns([]string{"size", "etag", "last_modified", "indexed_at"}),
-	}).CreateInBatches(rows, 500).Error; err != nil {
+	}).CreateInBatches(replacements, 500).Error
+}
+
+func (s *Store) FinalizeObjectIndexReplacement(ctx context.Context, replacementID, profileID, bucket, prefix string) error {
+	replacementID = strings.TrimSpace(replacementID)
+	if replacementID == "" {
+		return errors.New("replacementID is required")
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return s.finalizeObjectIndexReplacementTx(tx, replacementID, profileID, bucket, prefix)
+	})
+}
+
+func (s *Store) DiscardObjectIndexReplacement(ctx context.Context, replacementID string) error {
+	replacementID = strings.TrimSpace(replacementID)
+	if replacementID == "" {
+		return nil
+	}
+	return s.db.WithContext(ctx).Where("replacement_id = ?", replacementID).Delete(&objectIndexReplacementRow{}).Error
+}
+
+func (s *Store) finalizeObjectIndexReplacementTx(tx *gorm.DB, replacementID, profileID, bucket, prefix string) error {
+	bucket, prefix = normalizeObjectIndexScope(bucket, prefix)
+	if err := objectIndexScopeQuery(tx, profileID, bucket, prefix).Delete(&objectIndexRow{}).Error; err != nil {
 		return err
 	}
 
-	return tx.Commit().Error
+	insertSQL := `
+		INSERT INTO object_index (profile_id, bucket, object_key, size, etag, last_modified, indexed_at)
+		SELECT profile_id, bucket, object_key, size, etag, last_modified, indexed_at
+		FROM object_index_replacements
+		WHERE replacement_id = ? AND profile_id = ? AND bucket = ?
+	`
+	insertArgs := []any{replacementID, profileID, bucket}
+	if prefix != "" {
+		insertSQL += ` AND object_key LIKE ? ESCAPE '\'`
+		insertArgs = append(insertArgs, escapeLike(prefix)+"%")
+	}
+
+	if err := tx.Exec(insertSQL, insertArgs...).Error; err != nil {
+		return err
+	}
+
+	return tx.
+		Where("replacement_id = ? AND profile_id = ? AND bucket = ?", replacementID, profileID, bucket).
+		Delete(&objectIndexReplacementRow{}).Error
 }
 
 func (s *Store) SearchObjectIndex(ctx context.Context, profileID string, in SearchObjectIndexInput) (models.SearchObjectsResponse, error) {
@@ -388,4 +431,56 @@ func nonEmptyPtr(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+func normalizeObjectIndexScope(bucket, prefix string) (string, string) {
+	return strings.TrimSpace(bucket), strings.TrimPrefix(strings.TrimSpace(prefix), "/")
+}
+
+func objectIndexScopeQuery(db *gorm.DB, profileID, bucket, prefix string) *gorm.DB {
+	bucket, prefix = normalizeObjectIndexScope(bucket, prefix)
+
+	query := db.Where("profile_id = ? AND bucket = ?", profileID, bucket)
+	if prefix != "" {
+		query = query.Where(`object_key LIKE ? ESCAPE '\'`, escapeLike(prefix)+"%")
+	}
+	return query
+}
+
+func buildObjectIndexRows(profileID, bucket string, entries []ObjectIndexEntry, indexedAt string) []objectIndexRow {
+	if len(entries) == 0 {
+		return nil
+	}
+	if indexedAt == "" {
+		indexedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+
+	bucket, _ = normalizeObjectIndexScope(bucket, "")
+	rows := make([]objectIndexRow, 0, len(entries))
+	for _, e := range entries {
+		if e.Key == "" {
+			continue
+		}
+		rows = append(rows, objectIndexRow{
+			ProfileID:    profileID,
+			Bucket:       bucket,
+			ObjectKey:    e.Key,
+			Size:         e.Size,
+			ETag:         nonEmptyPtr(e.ETag),
+			LastModified: nonEmptyPtr(e.LastModified),
+			IndexedAt:    indexedAt,
+		})
+	}
+	return rows
+}
+
+func upsertObjectIndexRows(tx *gorm.DB, rows []objectIndexRow) error {
+	return tx.Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "profile_id"},
+			{Name: "bucket"},
+			{Name: "object_key"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{"size", "etag", "last_modified", "indexed_at"}),
+	}).CreateInBatches(rows, 500).Error
 }

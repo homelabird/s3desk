@@ -1,6 +1,14 @@
 import { useCallback } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
+import {
+	DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+	DEFAULT_UPLOAD_TASK_CONCURRENCY,
+	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+	sanitizeDownloadTaskConcurrency,
+	sanitizeUploadTaskConcurrency,
+} from './transferConcurrencyPreferences'
 
 export type UploadTuning = {
 	batchConcurrency: number
@@ -12,7 +20,17 @@ export type UploadTuning = {
 
 export function useTransfersUploadPreferences() {
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
+	const [downloadTaskConcurrency] = useLocalStorageState<number>(
+		DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+		DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+		{ sanitize: sanitizeDownloadTaskConcurrency },
+	)
 	const [uploadAutoTuneEnabled] = useLocalStorageState<boolean>('uploadAutoTuneEnabled', true)
+	const [uploadTaskConcurrency] = useLocalStorageState<number>(
+		UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+		DEFAULT_UPLOAD_TASK_CONCURRENCY,
+		{ sanitize: sanitizeUploadTaskConcurrency },
+	)
 	const [uploadBatchConcurrencySetting] = useLocalStorageState<number>('uploadBatchConcurrency', 16)
 	const [uploadBatchBytesMiBSetting] = useLocalStorageState<number>('uploadBatchBytesMiB', 64)
 	const [uploadChunkSizeMiBSetting] = useLocalStorageState<number>('uploadChunkSizeMiB', 128)
@@ -101,7 +119,9 @@ export function useTransfersUploadPreferences() {
 
 	return {
 		downloadLinkProxyEnabled,
+		downloadTaskConcurrency,
 		uploadChunkFileConcurrency,
+		uploadTaskConcurrency,
 		uploadResumeConversionEnabled,
 		pickUploadTuning,
 	}

@@ -48,7 +48,7 @@ function mockUploadsPageBase(args?: {
 		forcePathStyle: false,
 	}
 
-	vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+	const getMeta = vi.fn().mockResolvedValue({
 		version: 'test',
 		serverAddr: '127.0.0.1:8080',
 		dataDir: '/data',
@@ -72,7 +72,7 @@ function mockUploadsPageBase(args?: {
 			version: 'v1.66.0',
 		},
 	} as never)
-	vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([
+	const listProfiles = vi.fn().mockResolvedValue([
 		{
 			...profile,
 			preserveLeadingSlash: false,
@@ -81,9 +81,15 @@ function mockUploadsPageBase(args?: {
 			updatedAt: '2024-01-01T00:00:00Z',
 		},
 	] as never)
-	vi.spyOn(APIClient.prototype, 'listBuckets').mockResolvedValue(
+	const listBuckets = vi.fn().mockResolvedValue(
 		(args?.buckets ?? [{ name: 'primary-bucket', createdAt: '2024-01-01T00:00:00Z' }]) as never,
 	)
+
+	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({ getMeta } as never)
+	vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue({ listProfiles } as never)
+	vi.spyOn(APIClient.prototype, 'buckets', 'get').mockReturnValue({ listBuckets } as never)
+
+	return { getMeta, listProfiles, listBuckets }
 }
 
 function renderUploadsPage(
@@ -172,8 +178,8 @@ describe('UploadsPage', () => {
 	})
 
 	it('shows the provider-disabled state and disables upload actions', async () => {
-		mockUploadsPageBase()
-		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+		const { listProfiles, listBuckets } = mockUploadsPageBase()
+		const getMeta = vi.fn().mockResolvedValue({
 			version: 'test',
 			serverAddr: '127.0.0.1:8080',
 			dataDir: '/data',
@@ -213,6 +219,9 @@ describe('UploadsPage', () => {
 				version: 'v1.66.0',
 			},
 		} as never)
+		vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({ getMeta } as never)
+		vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue({ listProfiles } as never)
+		vi.spyOn(APIClient.prototype, 'buckets', 'get').mockReturnValue({ listBuckets } as never)
 
 		renderUploadsPage()
 

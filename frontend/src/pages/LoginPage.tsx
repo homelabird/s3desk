@@ -43,7 +43,7 @@ export function LoginPage(props: Props) {
 		try {
 			const api = new APIClient({ apiToken: trimmed })
 			// Validate token by calling /meta
-			await api.getMeta()
+			await api.server.getMeta()
 			props.onLogin(trimmed)
 		} catch (err) {
 			if (err instanceof APIError && err.status === 401) {

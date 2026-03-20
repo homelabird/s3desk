@@ -106,7 +106,7 @@ export function useObjectsNewFolder({
 			try {
 				for (const part of plan.parts) {
 					current = `${current}${part}/`
-					await api.createFolder({ profileId, bucket, key: current })
+					await api.objects.createFolder({ profileId, bucket, key: current })
 					last = current
 				}
 			} catch (err) {
@@ -184,7 +184,7 @@ export function useObjectsNewFolder({
 					changedPrefix: createdKey,
 				})
 				if (parentIsCurrent && !viewHideReason && !createdOutsideView) {
-					const refreshed = await api.listObjects({
+					const refreshed = await api.objects.listObjects({
 						profileId,
 						bucket,
 						prefix: parentPrefixNormalized,

@@ -198,6 +198,56 @@ describe('useJobsRealtimeEvents', () => {
 		unmount()
 	})
 
+	it('resets the realtime sequence when switching profiles', async () => {
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { result, rerender, unmount } = renderHook(
+			(props: { profileId: string | null }) =>
+				useJobsRealtimeEvents({
+					apiToken: 'token',
+					profileId: props.profileId,
+					queryClient,
+				}),
+			{
+				initialProps: { profileId: 'profile-1' },
+			},
+		)
+
+		await flushRealtimeSetup()
+		const firstWs = MockWebSocket.instances[0]
+		act(() => {
+			firstWs.emitOpen()
+			firstWs.emitMessage(
+				JSON.stringify({
+					type: 'job.progress',
+					seq: 5,
+					jobId: 'job-1',
+					payload: { status: 'running' },
+				}),
+			)
+		})
+
+		act(() => {
+			result.current.retryRealtime()
+		})
+
+		await flushRealtimeSetup()
+		const retryWs = MockWebSocket.instances[1]
+		expect(retryWs?.url).toContain('afterSeq=5')
+
+		rerender({ profileId: 'profile-2' })
+
+		await flushRealtimeSetup()
+		const switchedWs = MockWebSocket.instances[2]
+		expect(switchedWs?.url).not.toContain('afterSeq=')
+
+		unmount()
+	})
+
 	it('invalidates jobs when realtime reconnects after a disconnect', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const queryClient = {

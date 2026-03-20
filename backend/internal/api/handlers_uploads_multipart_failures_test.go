@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -210,6 +211,183 @@ func TestCommitUploadPresignedMultipartIncomplete(t *testing.T) {
 	}
 }
 
+func TestCommitUploadPresignedRejectsMissingRemoteObject(t *testing.T) {
+	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{})
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
+	size := int64(5)
+
+	presignRes := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/presign", profile.ID, models.UploadPresignRequest{
+		Path: "file.bin",
+		Size: &size,
+	})
+	defer presignRes.Body.Close()
+	if presignRes.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(presignRes.Body)
+		t.Fatalf("expected status 200, got %d: %s", presignRes.StatusCode, string(body))
+	}
+
+	commitRes := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/commit", profile.ID, nil)
+	defer commitRes.Body.Close()
+	if commitRes.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(commitRes.Body)
+		t.Fatalf("expected status 400, got %d: %s", commitRes.StatusCode, string(body))
+	}
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, commitRes, &errResp)
+	if errResp.Error.Code != "upload_incomplete" {
+		t.Fatalf("expected upload_incomplete code, got %q", errResp.Error.Code)
+	}
+	if !strings.Contains(errResp.Error.Message, "object not found") {
+		t.Fatalf("expected missing object message, got %q", errResp.Error.Message)
+	}
+
+	jobIDs, err := st.ListJobIDsByProfile(context.Background(), profile.ID)
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobIDs) != 0 {
+		t.Fatalf("expected no jobs after failed commit, got %d", len(jobIDs))
+	}
+
+	_, ok, err := st.GetUploadSession(context.Background(), profile.ID, upload.UploadID)
+	if err != nil {
+		t.Fatalf("get upload session: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected upload session to remain after failed verification")
+	}
+}
+
+func TestCommitUploadPresignedUsesVerifiedObjectMetadata(t *testing.T) {
+	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
+		headByObject: map[string]objectHeadBehavior{
+			"test-bucket/incoming/file.bin": {
+				Size:         5,
+				ETag:         `"etag-verified"`,
+				LastModified: "2026-03-05T00:00:02Z",
+			},
+		},
+	})
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
+	size := int64(5)
+
+	presignRes := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/presign", profile.ID, models.UploadPresignRequest{
+		Path: "file.bin",
+		Size: &size,
+	})
+	defer presignRes.Body.Close()
+	if presignRes.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(presignRes.Body)
+		t.Fatalf("expected status 200, got %d: %s", presignRes.StatusCode, string(body))
+	}
+
+	claimedSize := int64(999)
+	commitRes := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/commit", profile.ID, map[string]any{
+		"totalFiles": 1,
+		"totalBytes": claimedSize,
+		"items": []map[string]any{
+			{"path": "ghost.bin", "size": claimedSize},
+		},
+	})
+	defer commitRes.Body.Close()
+	if commitRes.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(commitRes.Body)
+		t.Fatalf("expected status 201, got %d: %s", commitRes.StatusCode, string(body))
+	}
+
+	var created models.JobCreatedResponse
+	decodeJSONResponse(t, commitRes, &created)
+	job := requireStoredJob(t, st, profile.ID, created.JobID)
+	if job.Type != jobs.JobTypeTransferDirectUpload {
+		t.Fatalf("expected job type %q, got %q", jobs.JobTypeTransferDirectUpload, job.Type)
+	}
+	requireImmediateUploadPayload(t, job, "file.bin", "incoming/file.bin", 5, 1)
+
+	indexed, err := st.SearchObjectIndex(context.Background(), profile.ID, store.SearchObjectIndexInput{
+		Bucket: "test-bucket",
+		Query:  "file.bin",
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("search object index: %v", err)
+	}
+	if len(indexed.Items) != 1 {
+		t.Fatalf("expected 1 indexed object, got %d", len(indexed.Items))
+	}
+	if indexed.Items[0].Key != "incoming/file.bin" || indexed.Items[0].Size != 5 {
+		t.Fatalf("unexpected indexed object: %+v", indexed.Items[0])
+	}
+
+	_, ok, err := st.GetUploadSession(context.Background(), profile.ID, upload.UploadID)
+	if err != nil {
+		t.Fatalf("get upload session: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected upload session to be deleted after verified commit")
+	}
+}
+
+func TestCommitUploadDirectUsesVerifiedObjectMetadata(t *testing.T) {
+	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
+		headByObject: map[string]objectHeadBehavior{
+			"test-bucket/incoming/file.bin": {
+				Size:         7,
+				ETag:         `"etag-direct"`,
+				LastModified: "2026-03-05T00:00:03Z",
+			},
+		},
+	})
+
+	st, _, srv, _ := newTestJobsServerWithUploadDirect(t, testEncryptionKey(), false, true)
+	profile := createTestProfileWithEndpoint(t, st, fakeS3.URL)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "direct")
+	expectedSize := int64(7)
+	seedUploadObjectMetadata(t, st, profile.ID, upload.UploadID, "test-bucket", "incoming", "file.bin", &expectedSize)
+
+	claimedSize := int64(999)
+	commitRes := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/commit", profile.ID, map[string]any{
+		"totalFiles": 1,
+		"totalBytes": claimedSize,
+		"items": []map[string]any{
+			{"path": "ghost.bin", "size": claimedSize},
+		},
+	})
+	defer commitRes.Body.Close()
+	if commitRes.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(commitRes.Body)
+		t.Fatalf("expected status 201, got %d: %s", commitRes.StatusCode, string(body))
+	}
+
+	var created models.JobCreatedResponse
+	decodeJSONResponse(t, commitRes, &created)
+	job := requireStoredJob(t, st, profile.ID, created.JobID)
+	if job.Type != jobs.JobTypeTransferDirectUpload {
+		t.Fatalf("expected job type %q, got %q", jobs.JobTypeTransferDirectUpload, job.Type)
+	}
+	requireImmediateUploadPayload(t, job, "file.bin", "incoming/file.bin", 7, 1)
+
+	indexed, err := st.SearchObjectIndex(context.Background(), profile.ID, store.SearchObjectIndexInput{
+		Bucket: "test-bucket",
+		Query:  "file.bin",
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("search object index: %v", err)
+	}
+	if len(indexed.Items) != 1 {
+		t.Fatalf("expected 1 indexed object, got %d", len(indexed.Items))
+	}
+	if indexed.Items[0].Key != "incoming/file.bin" || indexed.Items[0].Size != 7 {
+		t.Fatalf("unexpected indexed object: %+v", indexed.Items[0])
+	}
+}
+
 func TestCompleteMultipartUploadFailureKeepsMetadata(t *testing.T) {
 	fakeS3 := newMultipartS3TestServer(t, multipartS3Behavior{
 		listStatus:     http.StatusOK,
@@ -251,6 +429,52 @@ func TestCompleteMultipartUploadFailureKeepsMetadata(t *testing.T) {
 	}
 	if !ok {
 		t.Fatalf("expected multipart metadata to remain after complete failure")
+	}
+}
+
+func TestCompleteMultipartUploadRejectsTrailingJSON(t *testing.T) {
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
+	seedMultipartUploadMetadata(t, st, profile.ID, upload.UploadID, "test-bucket", "incoming", "file.bin", "upload-1", 5, 10)
+
+	body := `{"path":"file.bin","parts":[{"number":1,"etag":"etag-1"},{"number":2,"etag":"etag-2"}]}{"extra":true}`
+	res := doRawJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/multipart/complete", profile.ID, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(raw))
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "invalid_json" {
+		t.Fatalf("error.code=%q, want %q", errResp.Error.Code, "invalid_json")
+	}
+}
+
+func TestAbortMultipartUploadRejectsOversizedJSONBody(t *testing.T) {
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
+
+	body := `{"path":"` + strings.Repeat("a", int(uploadMultipartJSONRequestBodyMaxBytes)) + `"}`
+	res := doRawJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/multipart/abort", profile.ID, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusRequestEntityTooLarge {
+		raw, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 413, got %d: %s", res.StatusCode, string(raw))
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "too_large" {
+		t.Fatalf("error.code=%q, want %q", errResp.Error.Code, "too_large")
+	}
+	if got := errResp.Error.Details["maxBytes"]; got != float64(uploadMultipartJSONRequestBodyMaxBytes) {
+		t.Fatalf("details.maxBytes=%v, want %d", got, uploadMultipartJSONRequestBodyMaxBytes)
 	}
 }
 
@@ -387,6 +611,14 @@ type multipartS3Behavior struct {
 	listBody       string
 	completeStatus int
 	completeBody   string
+	headByObject   map[string]objectHeadBehavior
+}
+
+type objectHeadBehavior struct {
+	Status       int
+	Size         int64
+	ETag         string
+	LastModified string
 }
 
 func newMultipartS3TestServer(t *testing.T, behavior multipartS3Behavior) *httptest.Server {
@@ -444,6 +676,29 @@ func newMultipartS3TestServer(t *testing.T, behavior multipartS3Behavior) *httpt
 			}
 			w.WriteHeader(status)
 			_, _ = io.WriteString(w, body)
+		case http.MethodHead:
+			head, ok := lookupMultipartObjectHead(r, behavior.headByObject)
+			status := http.StatusNotFound
+			if ok {
+				status = head.Status
+				if status == 0 {
+					status = http.StatusOK
+				}
+			}
+			if head.Size > 0 {
+				w.Header().Set("Content-Length", strconv.FormatInt(head.Size, 10))
+			}
+			if head.ETag != "" {
+				w.Header().Set("ETag", head.ETag)
+			}
+			if head.LastModified != "" {
+				lastModified := head.LastModified
+				if parsed, err := time.Parse(time.RFC3339Nano, head.LastModified); err == nil {
+					lastModified = parsed.UTC().Format(http.TimeFormat)
+				}
+				w.Header().Set("Last-Modified", lastModified)
+			}
+			w.WriteHeader(status)
 		case http.MethodPut:
 			if r.URL.Query().Get("uploadId") == "" {
 				http.Error(w, "missing uploadId", http.StatusBadRequest)
@@ -457,6 +712,30 @@ func newMultipartS3TestServer(t *testing.T, behavior multipartS3Behavior) *httpt
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+func lookupMultipartObjectHead(r *http.Request, heads map[string]objectHeadBehavior) (objectHeadBehavior, bool) {
+	for _, candidate := range multipartObjectIDs(r) {
+		head, ok := heads[candidate]
+		if ok {
+			return head, true
+		}
+	}
+	return objectHeadBehavior{}, false
+}
+
+func multipartObjectIDs(r *http.Request) []string {
+	trimmed := strings.TrimPrefix(r.URL.Path, "/")
+	if trimmed == "" {
+		return nil
+	}
+	candidates := []string{trimmed}
+	parts := strings.SplitN(trimmed, "/", 2)
+	if len(parts) != 2 {
+		return candidates
+	}
+	candidates = append(candidates, parts[1], parts[0]+"/"+parts[1])
+	return candidates
 }
 
 func fakeListPartsXML() string {
@@ -534,6 +813,30 @@ func seedMultipartUploadMetadata(
 	}
 }
 
+func seedUploadObjectMetadata(
+	t *testing.T,
+	st *store.Store,
+	profileID, uploadID, bucket, prefix, relPath string,
+	expectedSize *int64,
+) {
+	t.Helper()
+
+	objectKey := relPath
+	if prefix != "" {
+		objectKey = path.Join(prefix, relPath)
+	}
+	if err := st.UpsertUploadObject(context.Background(), store.UploadObject{
+		UploadID:     uploadID,
+		ProfileID:    profileID,
+		Path:         relPath,
+		Bucket:       bucket,
+		ObjectKey:    objectKey,
+		ExpectedSize: expectedSize,
+	}); err != nil {
+		t.Fatalf("upsert upload object: %v", err)
+	}
+}
+
 func createTestProfileWithEndpoint(t *testing.T, st *store.Store, endpoint string) models.Profile {
 	t.Helper()
 
@@ -557,6 +860,56 @@ func createTestProfileWithEndpoint(t *testing.T, st *store.Store, endpoint strin
 		t.Fatalf("create profile: %v", err)
 	}
 	return profile
+}
+
+func requireStoredJob(t *testing.T, st *store.Store, profileID, jobID string) models.Job {
+	t.Helper()
+
+	job, ok, err := st.GetJob(context.Background(), profileID, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected job %q", jobID)
+	}
+	if job.Status != models.JobStatusSucceeded {
+		t.Fatalf("expected succeeded job, got %s", job.Status)
+	}
+	return job
+}
+
+func requireImmediateUploadPayload(t *testing.T, job models.Job, wantPath, wantKey string, wantSize int64, wantFiles int) {
+	t.Helper()
+
+	if got := job.Payload["totalFiles"]; got != float64(wantFiles) {
+		t.Fatalf("payload.totalFiles=%v, want %d", got, wantFiles)
+	}
+	if got := job.Payload["totalBytes"]; got != float64(wantSize) {
+		t.Fatalf("payload.totalBytes=%v, want %d", got, wantSize)
+	}
+	items, ok := job.Payload["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("payload.items=%T %+v, want one item", job.Payload["items"], job.Payload["items"])
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("payload.items[0]=%T, want map", items[0])
+	}
+	if item["path"] != wantPath {
+		t.Fatalf("payload.items[0].path=%v, want %q", item["path"], wantPath)
+	}
+	if item["key"] != wantKey {
+		t.Fatalf("payload.items[0].key=%v, want %q", item["key"], wantKey)
+	}
+	if item["size"] != float64(wantSize) {
+		t.Fatalf("payload.items[0].size=%v, want %d", item["size"], wantSize)
+	}
+	if job.Progress == nil || job.Progress.BytesTotal == nil || *job.Progress.BytesTotal != wantSize {
+		t.Fatalf("job progress bytesTotal=%+v, want %d", job.Progress, wantSize)
+	}
+	if job.Progress.ObjectsTotal == nil || *job.Progress.ObjectsTotal != int64(wantFiles) {
+		t.Fatalf("job progress objectsTotal=%+v, want %d", job.Progress, wantFiles)
+	}
 }
 
 func newTestJobsServerWithUploadDirect(t *testing.T, encryptionKey string, startManager bool, uploadDirectStream bool) (*store.Store, *jobs.Manager, *httptest.Server, string) {

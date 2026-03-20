@@ -35,7 +35,7 @@ const cardStyle: CSSProperties = {
 	padding: 24,
 	width: 480,
 	maxWidth: '100%',
-	maxHeight: '80vh',
+	maxHeight: '80dvh',
 	overflow: 'auto',
 	boxShadow: 'var(--s3d-shadow-md)',
 }

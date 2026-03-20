@@ -118,7 +118,7 @@ func (s *server) streamRcloneDownload(
 		return
 	}
 
-	_, copyErr := io.Copy(w, proc.stdout)
+	_, copyErr := copyWithTransferBuffer(w, proc.stdout)
 	waitErr := proc.wait()
 	stderr := strings.TrimSpace(proc.stderr.String())
 	if copyErr == nil && waitErr == nil {

@@ -42,12 +42,12 @@ export function UploadsPage(props: Props) {
 
 	const metaQuery = useQuery({
 		queryKey: ['meta', props.apiToken],
-		queryFn: () => api.getMeta(),
+		queryFn: () => api.server.getMeta(),
 		enabled: !!props.apiToken,
 	})
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', props.apiToken],
-		queryFn: () => api.listProfiles(),
+		queryFn: () => api.profiles.listProfiles(),
 		enabled: !!props.apiToken,
 	})
 
@@ -64,7 +64,7 @@ export function UploadsPage(props: Props) {
 
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', props.profileId, props.apiToken],
-		queryFn: () => api.listBuckets(props.profileId!),
+		queryFn: () => api.buckets.listBuckets(props.profileId!),
 		enabled: !!props.profileId,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
@@ -175,7 +175,7 @@ export function UploadsPage(props: Props) {
 						: 'Pick a destination bucket, stage files from this device, and queue a transfer job with the current selection.'
 				}
 				actions={
-					<Space wrap>
+					<Space wrap className={styles.headerActions}>
 						<Tooltip title={queueDisabledReason ?? 'Queue selected files as an upload job'}>
 							<span>
 								<Button type="primary" onClick={queueUpload} disabled={!canQueueUpload}>

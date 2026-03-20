@@ -17,6 +17,7 @@ import (
 	"s3desk/internal/jobs"
 	"s3desk/internal/logging"
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -613,6 +614,7 @@ func (s *server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "internal_error", "failed to update job", nil)
 			return
 		}
+		s.jobs.Cancel(jobID)
 		payload := map[string]any{"status": models.JobStatusCanceled, "errorCode": code}
 		s.hub.Publish(ws.Event{Type: "job.completed", JobID: jobID, Payload: payload})
 		responseJob.Status = models.JobStatusCanceled
@@ -699,6 +701,9 @@ func validateS3ZipObjectsPayload(payload map[string]any) error {
 		k, ok := v.(string)
 		if !ok {
 			return fmt.Errorf("payload.keys[%d] must be a string", i)
+		}
+		if err := rcloneconfig.ValidateSingleLineValue(fmt.Sprintf("payload.keys[%d]", i), k); err != nil {
+			return err
 		}
 		k = strings.TrimPrefix(strings.TrimSpace(k), "/")
 		if k == "" {
@@ -985,10 +990,13 @@ func validateS3DeleteObjectsPayload(payload map[string]any) error {
 		return errors.New("payload.keys must be an array of strings")
 	}
 	keys := make([]string, 0, len(rawKeys))
-	for _, item := range rawKeys {
+	for i, item := range rawKeys {
 		s, ok := item.(string)
 		if !ok {
 			return errors.New("payload.keys must be an array of strings")
+		}
+		if err := rcloneconfig.ValidateSingleLineValue(fmt.Sprintf("payload.keys[%d]", i), s); err != nil {
+			return err
 		}
 		if s == "" {
 			continue

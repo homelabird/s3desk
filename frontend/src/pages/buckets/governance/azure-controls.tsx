@@ -84,7 +84,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
 
   const publicExposureMutation = useMutation({
     mutationFn: () =>
-      props.api.putBucketPublicExposure(props.profileId, props.bucket, {
+      props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, {
         mode: publicMode,
         visibility: publicMode,
       }),
@@ -101,7 +101,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
         storedAccessPolicies:
           serializeAzureStoredAccessPolicies(storedAccessPolicies),
       };
-      return props.api.putBucketAccess(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketAccess(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Stored access policies updated");
@@ -143,7 +143,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
               etag: immutability?.etag,
             };
       }
-      return props.api.putBucketProtection(
+      return props.api.buckets.putBucketProtection(
         props.profileId,
         props.bucket,
         req as BucketProtectionPutRequest,
@@ -159,7 +159,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
   const versioningMutation = useMutation({
     mutationFn: () => {
       const req: BucketVersioningPutRequest = { status: versioningStatus };
-      return props.api.putBucketVersioning(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketVersioning(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Versioning updated");

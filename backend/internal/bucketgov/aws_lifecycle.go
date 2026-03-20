@@ -77,7 +77,10 @@ type awsNoncurrentVersionTransitionPayload struct {
 }
 
 func (a *awsAdapter) GetLifecycle(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketLifecycleView, error) {
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return models.BucketLifecycleView{}, err
+	}
 	out, err := client.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{
 		Bucket: &bucket,
 	})
@@ -101,7 +104,10 @@ func (a *awsAdapter) PutLifecycle(ctx context.Context, profile models.ProfileSec
 		return err
 	}
 
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return err
+	}
 	if len(rules) == 0 {
 		_, deleteErr := client.DeleteBucketLifecycle(ctx, &s3.DeleteBucketLifecycleInput{
 			Bucket: &bucket,
@@ -215,17 +221,15 @@ func (p awsLifecycleRulePayload) toS3(ruleIndex int) (s3types.LifecycleRule, err
 			return s3types.LifecycleRule{}, err
 		}
 		if allObjects {
-			empty := ""
-			rule.Prefix = &empty
+			rule.Filter = &s3types.LifecycleRuleFilterMemberPrefix{Value: ""}
 		} else {
 			rule.Filter = filter
 		}
 	case strings.TrimSpace(p.Prefix) != "":
 		prefix := strings.TrimSpace(p.Prefix)
-		rule.Prefix = &prefix
+		rule.Filter = &s3types.LifecycleRuleFilterMemberPrefix{Value: prefix}
 	default:
-		empty := ""
-		rule.Prefix = &empty
+		rule.Filter = &s3types.LifecycleRuleFilterMemberPrefix{Value: ""}
 	}
 
 	if p.Expiration != nil {
@@ -287,15 +291,18 @@ func awsLifecycleRuleFromS3(rule s3types.LifecycleRule, ruleIndex int) (awsLifec
 	if rule.ID != nil {
 		payload.ID = strings.TrimSpace(*rule.ID)
 	}
-	if rule.Prefix != nil && strings.TrimSpace(*rule.Prefix) != "" {
-		payload.Prefix = strings.TrimSpace(*rule.Prefix)
-	}
-	if rule.Filter != nil {
-		filter, err := awsLifecycleFilterFromS3(rule.Filter, ruleIndex)
+	switch filter := rule.Filter.(type) {
+	case nil:
+	case *s3types.LifecycleRuleFilterMemberPrefix:
+		if strings.TrimSpace(filter.Value) != "" {
+			payload.Prefix = strings.TrimSpace(filter.Value)
+		}
+	default:
+		filterPayload, err := awsLifecycleFilterFromS3(rule.Filter, ruleIndex)
 		if err != nil {
 			return awsLifecycleRulePayload{}, err
 		}
-		payload.Filter = filter
+		payload.Filter = filterPayload
 	}
 	if rule.Expiration != nil {
 		payload.Expiration = awsLifecycleExpirationFromS3(*rule.Expiration)

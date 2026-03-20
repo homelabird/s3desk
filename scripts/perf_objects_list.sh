@@ -105,12 +105,15 @@ read -r -a CONTAINER_NETWORKS <<<"$NETWORKS_RAW"
 BUCKET="perf-objects-$(date +%s)"
 SIZES_CSV="$PREFIX_SIZES"
 
-podman exec -e BUCKET="$BUCKET" -e SIZES="$SIZES_CSV" \
-  -e RCLONE_ENDPOINT="$RCLONE_ENDPOINT" -e RCLONE_ACCESS_KEY="$RCLONE_ACCESS_KEY" \
-  -e RCLONE_SECRET_KEY="$RCLONE_SECRET_KEY" -e RCLONE_REGION="$RCLONE_REGION" \
-  "$S3DESK_CONTAINER" sh -c '
-set -e
-cat > /tmp/rclone.conf <<CONF
+populate_bucket() {
+  podman exec -e BUCKET="$BUCKET" -e SIZES="$SIZES_CSV" \
+    -e RCLONE_ENDPOINT="$RCLONE_ENDPOINT" -e RCLONE_ACCESS_KEY="$RCLONE_ACCESS_KEY" \
+    -e RCLONE_SECRET_KEY="$RCLONE_SECRET_KEY" -e RCLONE_REGION="$RCLONE_REGION" \
+    "$S3DESK_CONTAINER" sh -eu -c '
+tmp_root=$(mktemp -d /tmp/s3desk-perf-objects.XXXXXX)
+cleanup() { rm -rf "$tmp_root"; }
+trap cleanup EXIT
+cat > "$tmp_root/rclone.conf" <<CONF
 [remote]
 type = s3
 provider = Other
@@ -120,12 +123,11 @@ access_key_id = $RCLONE_ACCESS_KEY
 secret_access_key = $RCLONE_SECRET_KEY
 force_path_style = true
 CONF
-rclone mkdir remote:${BUCKET} --config /tmp/rclone.conf
+rclone mkdir remote:${BUCKET} --config "$tmp_root/rclone.conf"
 
-rm -rf /tmp/perfdata
-mkdir -p /tmp/perfdata
+mkdir -p "$tmp_root/perfdata"
 for size in $(echo "$SIZES" | sed "s/,/ /g"); do
-  dir="/tmp/perfdata/n${size}"
+  dir="$tmp_root/perfdata/n${size}"
   mkdir -p "$dir"
   width=${#size}
   i=1
@@ -135,10 +137,60 @@ for size in $(echo "$SIZES" | sed "s/,/ /g"); do
     i=$((i + 1))
   done
   echo "generated $size objects in $dir" >&2
-  rclone copy "$dir" remote:${BUCKET}/n${size} --config /tmp/rclone.conf --transfers 16 --checkers 16
+  rclone copy "$dir" remote:${BUCKET}/n${size} --config "$tmp_root/rclone.conf" --transfers 16 --checkers 16
   rm -rf "$dir"
 done
 ' 1>&2
+}
+
+purge_bucket() {
+  podman exec -e BUCKET="$BUCKET" \
+    -e RCLONE_ENDPOINT="$RCLONE_ENDPOINT" -e RCLONE_ACCESS_KEY="$RCLONE_ACCESS_KEY" \
+    -e RCLONE_SECRET_KEY="$RCLONE_SECRET_KEY" -e RCLONE_REGION="$RCLONE_REGION" \
+    "$S3DESK_CONTAINER" sh -eu -c '
+tmp_root=$(mktemp -d /tmp/s3desk-perf-objects.XXXXXX)
+cleanup() { rm -rf "$tmp_root"; }
+trap cleanup EXIT
+cat > "$tmp_root/rclone.conf" <<CONF
+[remote]
+type = s3
+provider = Other
+endpoint = $RCLONE_ENDPOINT
+region = $RCLONE_REGION
+access_key_id = $RCLONE_ACCESS_KEY
+secret_access_key = $RCLONE_SECRET_KEY
+force_path_style = true
+CONF
+if rclone lsf remote:${BUCKET} --config "$tmp_root/rclone.conf" >/dev/null 2>&1; then
+  rclone purge remote:${BUCKET} --config "$tmp_root/rclone.conf"
+fi
+' 1>&2
+}
+
+cleanup() {
+  local exit_code="$1"
+  local cleanup_exit_code="$exit_code"
+  if [ "${cleanup_bucket_on_exit:-0}" != "1" ]; then
+    return "$cleanup_exit_code"
+  fi
+  if [ "$cleanup_exit_code" -eq 0 ] && [ "${keep_bucket_on_success:-0}" = "1" ]; then
+    echo "keeping bucket: $BUCKET" >&2
+    return "$cleanup_exit_code"
+  fi
+  if ! purge_bucket; then
+    echo "failed to clean benchmark bucket: $BUCKET" >&2
+    if [ "$cleanup_exit_code" -eq 0 ]; then
+      cleanup_exit_code=1
+    fi
+  fi
+  return "$cleanup_exit_code"
+}
+
+cleanup_bucket_on_exit=1
+keep_bucket_on_success=0
+trap 'cleanup "$?"' EXIT
+
+populate_bucket
 
 measure_prefix() {
   local prefix="$1"
@@ -268,22 +320,5 @@ if [ "$APPEND_PERF_NOTES" = "1" ]; then
 fi
 
 if [ "$KEEP_BUCKET" = "1" ]; then
-  echo "keeping bucket: $BUCKET" >&2
-  exit 0
+  keep_bucket_on_success=1
 fi
-
-podman exec -e BUCKET="$BUCKET" -e RCLONE_ENDPOINT="$RCLONE_ENDPOINT" \
-  -e RCLONE_ACCESS_KEY="$RCLONE_ACCESS_KEY" -e RCLONE_SECRET_KEY="$RCLONE_SECRET_KEY" \
-  -e RCLONE_REGION="$RCLONE_REGION" "$S3DESK_CONTAINER" sh -c '
-cat > /tmp/rclone.conf <<CONF
-[remote]
-type = s3
-provider = Other
-endpoint = $RCLONE_ENDPOINT
-region = $RCLONE_REGION
-access_key_id = $RCLONE_ACCESS_KEY
-secret_access_key = $RCLONE_SECRET_KEY
-force_path_style = true
-CONF
-rclone purge remote:${BUCKET} --config /tmp/rclone.conf
-' 1>&2

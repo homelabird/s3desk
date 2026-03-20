@@ -31,6 +31,92 @@ beforeAll(() => {
 const SLOW_BUCKETS_TIMEOUT_MS = 15_000;
 
 const originalMatchMedia = window.matchMedia;
+const defaultMeta = {
+  version: "test",
+  serverAddr: "127.0.0.1:8080",
+  dataDir: "/data",
+  staticDir: "/app/ui",
+  apiTokenEnabled: true,
+  encryptionEnabled: false,
+  capabilities: {
+    profileTls: { enabled: false, reason: "test" },
+    providers: {},
+  },
+  allowedLocalDirs: [],
+  jobConcurrency: 1,
+  uploadSessionTTLSeconds: 3600,
+  uploadDirectStream: false,
+  transferEngine: {
+    name: "rclone",
+    available: true,
+    compatible: true,
+    minVersion: "1.52.0",
+    path: "/usr/bin/rclone",
+    version: "v1.66.0",
+  },
+};
+const defaultProfiles = [
+  {
+    id: "profile-1",
+    name: "Primary Profile",
+    provider: "s3_compatible",
+    endpoint: "http://127.0.0.1:9000",
+    region: "us-east-1",
+    forcePathStyle: false,
+    preserveLeadingSlash: false,
+    tlsInsecureSkipVerify: false,
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+  },
+];
+const defaultBuckets = [
+  { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
+];
+
+function mockServerApi(meta = defaultMeta) {
+  const serverApi = {
+    getMeta: vi.fn().mockResolvedValue(meta as never),
+  };
+  vi.spyOn(APIClient.prototype, "server", "get").mockReturnValue(
+    serverApi as never,
+  );
+  return serverApi;
+}
+
+function mockProfilesApi(
+  profiles = defaultProfiles as never,
+) {
+  const profilesApi = {
+    listProfiles: vi.fn().mockResolvedValue(profiles),
+  };
+  vi.spyOn(APIClient.prototype, "profiles", "get").mockReturnValue(
+    profilesApi as never,
+  );
+  return profilesApi;
+}
+
+function mockBucketsApi(
+  overrides: Partial<{
+    listBuckets: ReturnType<typeof vi.fn>;
+    getBucketGovernance: ReturnType<typeof vi.fn>;
+    getBucketPolicy: ReturnType<typeof vi.fn>;
+    createBucket: ReturnType<typeof vi.fn>;
+    deleteBucket: ReturnType<typeof vi.fn>;
+  }> = {},
+) {
+  const bucketsApi = {
+    listBuckets: vi.fn().mockResolvedValue(defaultBuckets as never),
+    getBucketGovernance: vi.fn(),
+    getBucketPolicy: vi.fn(),
+    createBucket: vi.fn(),
+    deleteBucket: vi.fn(),
+    ...overrides,
+  };
+  vi.spyOn(APIClient.prototype, "buckets", "get").mockReturnValue(
+    bucketsApi as never,
+  );
+  return bucketsApi;
+}
 
 function mockViewportWidth(width: number) {
   window.matchMedia = vi
@@ -110,15 +196,10 @@ describe("BucketsPage", () => {
       },
     });
 
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
+    mockServerApi({
+      ...defaultMeta,
       capabilities: {
-        profileTls: { enabled: false, reason: "test" },
+        ...defaultMeta.capabilities,
         providers: {
           gcp_gcs: {
             bucketCrud: true,
@@ -134,20 +215,8 @@ describe("BucketsPage", () => {
           },
         },
       },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
+    });
+    mockProfilesApi([
       {
         id: "profile-1",
         name: "GCS Profile",
@@ -159,9 +228,10 @@ describe("BucketsPage", () => {
         updatedAt: "2024-01-01T00:00:00Z",
       },
     ] as never);
-    const listBuckets = vi
-      .spyOn(APIClient.prototype, "listBuckets")
-      .mockResolvedValue([] as never);
+    const bucketsApi = mockBucketsApi({
+      listBuckets: vi.fn().mockResolvedValue([] as never),
+    });
+    const { listBuckets } = bucketsApi;
 
     render(
       <QueryClientProvider client={client}>
@@ -191,47 +261,9 @@ describe("BucketsPage", () => {
     });
 
     mockViewportWidth(820);
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
-      capabilities: {
-        profileTls: { enabled: false, reason: "test" },
-        providers: {},
-      },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
-      {
-        id: "profile-1",
-        name: "Primary Profile",
-        provider: "s3_compatible",
-        endpoint: "http://127.0.0.1:9000",
-        region: "us-east-1",
-        forcePathStyle: false,
-        preserveLeadingSlash: false,
-        tlsInsecureSkipVerify: false,
-        createdAt: "2024-01-01T00:00:00Z",
-        updatedAt: "2024-01-01T00:00:00Z",
-      },
-    ] as never);
-    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
-      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
-    ] as never);
+    mockServerApi();
+    mockProfilesApi();
+    mockBucketsApi();
 
     render(
       <QueryClientProvider client={client}>
@@ -264,47 +296,9 @@ describe("BucketsPage", () => {
     });
 
     mockViewportWidth(1200);
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
-      capabilities: {
-        profileTls: { enabled: false, reason: "test" },
-        providers: {},
-      },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
-      {
-        id: "profile-1",
-        name: "Primary Profile",
-        provider: "s3_compatible",
-        endpoint: "http://127.0.0.1:9000",
-        region: "us-east-1",
-        forcePathStyle: false,
-        preserveLeadingSlash: false,
-        tlsInsecureSkipVerify: false,
-        createdAt: "2024-01-01T00:00:00Z",
-        updatedAt: "2024-01-01T00:00:00Z",
-      },
-    ] as never);
-    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
-      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
-    ] as never);
+    mockServerApi();
+    mockProfilesApi();
+    mockBucketsApi();
 
     render(
       <QueryClientProvider client={client}>
@@ -336,31 +330,8 @@ describe("BucketsPage", () => {
     });
 
     mockViewportWidth(1200);
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
-      capabilities: {
-        profileTls: { enabled: false, reason: "test" },
-        providers: {},
-      },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
+    mockServerApi();
+    mockProfilesApi([
       {
         id: "profile-1",
         name: "AWS Profile",
@@ -372,12 +343,8 @@ describe("BucketsPage", () => {
         updatedAt: "2024-01-01T00:00:00Z",
       },
     ] as never);
-    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
-      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
-    ] as never);
-    const getBucketGovernance = vi
-      .spyOn(APIClient.prototype, "getBucketGovernance")
-      .mockResolvedValue({
+    const bucketsApi = mockBucketsApi({
+      getBucketGovernance: vi.fn().mockResolvedValue({
         provider: "aws_s3",
         bucket: "primary-bucket",
         capabilities: {},
@@ -416,14 +383,14 @@ describe("BucketsPage", () => {
           rawPolicySupported: true,
           rawPolicyEditable: true,
         },
-      } as never);
-    const getBucketPolicy = vi
-      .spyOn(APIClient.prototype, "getBucketPolicy")
-      .mockResolvedValue({
+      } as never),
+      getBucketPolicy: vi.fn().mockResolvedValue({
         bucket: "primary-bucket",
         exists: false,
         policy: null,
-      } as never);
+      } as never),
+    });
+    const { getBucketGovernance, getBucketPolicy } = bucketsApi;
 
     render(
       <QueryClientProvider client={client}>
@@ -484,31 +451,8 @@ describe("BucketsPage", () => {
     });
 
     mockViewportWidth(1200);
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
-      capabilities: {
-        profileTls: { enabled: false, reason: "test" },
-        providers: {},
-      },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
+    mockServerApi();
+    mockProfilesApi([
       {
         id: "profile-1",
         name: "GCS Profile",
@@ -520,12 +464,8 @@ describe("BucketsPage", () => {
         updatedAt: "2024-01-01T00:00:00Z",
       },
     ] as never);
-    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
-      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
-    ] as never);
-    const getBucketGovernance = vi
-      .spyOn(APIClient.prototype, "getBucketGovernance")
-      .mockResolvedValue({
+    const bucketsApi = mockBucketsApi({
+      getBucketGovernance: vi.fn().mockResolvedValue({
         provider: "gcp_gcs",
         bucket: "primary-bucket",
         capabilities: {
@@ -543,7 +483,9 @@ describe("BucketsPage", () => {
           etag: "BwWWja0YfJA=",
           bindings: [],
         },
-      } as never);
+      } as never),
+    });
+    const { getBucketGovernance } = bucketsApi;
 
     render(
       <QueryClientProvider client={client}>
@@ -582,31 +524,8 @@ describe("BucketsPage", () => {
     });
 
     mockViewportWidth(1200);
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
-      capabilities: {
-        profileTls: { enabled: false, reason: "test" },
-        providers: {},
-      },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
+    mockServerApi();
+    mockProfilesApi([
       {
         id: "profile-1",
         name: "AWS Profile",
@@ -618,10 +537,9 @@ describe("BucketsPage", () => {
         updatedAt: "2024-01-01T00:00:00Z",
       },
     ] as never);
-    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([] as never);
-    const createBucket = vi
-      .spyOn(APIClient.prototype, "createBucket")
-      .mockRejectedValue(
+    const bucketsApi = mockBucketsApi({
+      listBuckets: vi.fn().mockResolvedValue([] as never),
+      createBucket: vi.fn().mockRejectedValue(
         new APIError({
           status: 403,
           code: "bucket_defaults_apply_failed",
@@ -633,7 +551,9 @@ describe("BucketsPage", () => {
             applySection: "encryption",
           },
         }),
-      );
+      ),
+    });
+    const { createBucket } = bucketsApi;
     const warningSpy = vi
       .spyOn(message, "warning")
       .mockImplementation(() => undefined as never);
@@ -677,54 +597,17 @@ describe("BucketsPage", () => {
     });
 
     mockViewportWidth(1200);
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
-      capabilities: {
-        profileTls: { enabled: false, reason: "test" },
-        providers: {},
-      },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
-      {
-        id: "profile-1",
-        name: "Primary Profile",
-        provider: "s3_compatible",
-        endpoint: "http://127.0.0.1:9000",
-        region: "us-east-1",
-        forcePathStyle: false,
-        preserveLeadingSlash: false,
-        tlsInsecureSkipVerify: false,
-        createdAt: "2024-01-01T00:00:00Z",
-        updatedAt: "2024-01-01T00:00:00Z",
-      },
-    ] as never);
-    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
-      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
-    ] as never);
-    vi.spyOn(APIClient.prototype, "deleteBucket").mockRejectedValue(
-      new APIError({
-        status: 409,
-        code: "bucket_not_empty",
-        message: "bucket contains objects",
-      }),
-    );
+    mockServerApi();
+    mockProfilesApi();
+    mockBucketsApi({
+      deleteBucket: vi.fn().mockRejectedValue(
+        new APIError({
+          status: 409,
+          code: "bucket_not_empty",
+          message: "bucket contains objects",
+        }),
+      ),
+    });
 
     render(
       <QueryClientProvider client={client}>
@@ -779,54 +662,17 @@ describe("BucketsPage", () => {
     });
 
     mockViewportWidth(1200);
-    vi.spyOn(APIClient.prototype, "getMeta").mockResolvedValue({
-      version: "test",
-      serverAddr: "127.0.0.1:8080",
-      dataDir: "/data",
-      staticDir: "/app/ui",
-      apiTokenEnabled: true,
-      encryptionEnabled: false,
-      capabilities: {
-        profileTls: { enabled: false, reason: "test" },
-        providers: {},
-      },
-      allowedLocalDirs: [],
-      jobConcurrency: 1,
-      uploadSessionTTLSeconds: 3600,
-      uploadDirectStream: false,
-      transferEngine: {
-        name: "rclone",
-        available: true,
-        compatible: true,
-        minVersion: "1.52.0",
-        path: "/usr/bin/rclone",
-        version: "v1.66.0",
-      },
-    } as never);
-    vi.spyOn(APIClient.prototype, "listProfiles").mockResolvedValue([
-      {
-        id: "profile-1",
-        name: "Primary Profile",
-        provider: "s3_compatible",
-        endpoint: "http://127.0.0.1:9000",
-        region: "us-east-1",
-        forcePathStyle: false,
-        preserveLeadingSlash: false,
-        tlsInsecureSkipVerify: false,
-        createdAt: "2024-01-01T00:00:00Z",
-        updatedAt: "2024-01-01T00:00:00Z",
-      },
-    ] as never);
-    vi.spyOn(APIClient.prototype, "listBuckets").mockResolvedValue([
-      { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
-    ] as never);
-    vi.spyOn(APIClient.prototype, "deleteBucket").mockRejectedValue(
-      new APIError({
-        status: 409,
-        code: "bucket_not_empty",
-        message: "bucket contains objects",
-      }),
-    );
+    mockServerApi();
+    mockProfilesApi();
+    mockBucketsApi({
+      deleteBucket: vi.fn().mockRejectedValue(
+        new APIError({
+          status: 409,
+          code: "bucket_not_empty",
+          message: "bucket contains objects",
+        }),
+      ),
+    });
 
     render(
       <QueryClientProvider client={client}>

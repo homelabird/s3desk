@@ -30,6 +30,7 @@ type PortableImportCounts struct {
 	Jobs                     int
 	UploadSessions           int
 	UploadMultipartUploads   int
+	UploadObjects            int
 	ObjectIndex              int
 	ObjectFavorites          int
 }
@@ -67,6 +68,12 @@ func (s *Store) ExportPortableEntityFiles(ctx context.Context) (PortableExportBu
 		return PortableExportBundle{}, err
 	}
 	files["upload_multipart_uploads"] = marshalPortableEntityFile("upload_multipart_uploads", uploadMultipartUploads)
+
+	uploadObjects, err := orderedRows[uploadObjectRow](tx, "upload_id, path")
+	if err != nil {
+		return PortableExportBundle{}, err
+	}
+	files["upload_objects"] = marshalPortableEntityFile("upload_objects", uploadObjects)
 
 	objectIndex, err := orderedRows[objectIndexRow](tx, "profile_id, bucket, object_key")
 	if err != nil {
@@ -110,6 +117,10 @@ func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFile
 	if err != nil {
 		return PortableImportCounts{}, fmt.Errorf("parse upload_multipart_uploads: %w", err)
 	}
+	uploadObjects, err := parsePortableRows[uploadObjectRow](entityFiles["upload_objects"])
+	if err != nil {
+		return PortableImportCounts{}, fmt.Errorf("parse upload_objects: %w", err)
+	}
 	objectIndex, err := parsePortableRows[objectIndexRow](entityFiles["object_index"])
 	if err != nil {
 		return PortableImportCounts{}, fmt.Errorf("parse object_index: %w", err)
@@ -123,6 +134,7 @@ func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFile
 		deleteTables := []any{
 			&objectFavoriteRow{},
 			&objectIndexRow{},
+			&uploadObjectRow{},
 			&uploadMultipartRow{},
 			&uploadSessionRow{},
 			&jobRow{},
@@ -164,6 +176,12 @@ func (s *Store) ImportPortableEntityFilesReplace(ctx context.Context, entityFile
 				return err
 			}
 			counts.UploadMultipartUploads = len(uploadMultipartUploads)
+		}
+		if len(uploadObjects) > 0 {
+			if err := tx.CreateInBatches(uploadObjects, 100).Error; err != nil {
+				return err
+			}
+			counts.UploadObjects = len(uploadObjects)
 		}
 		if len(objectIndex) > 0 {
 			if err := tx.CreateInBatches(objectIndex, 250).Error; err != nil {

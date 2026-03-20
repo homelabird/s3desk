@@ -14,6 +14,9 @@ func parseS3DeleteObjectsPayload(payload map[string]any) (s3DeleteObjectsPayload
 	if err != nil {
 		return s3DeleteObjectsPayload{}, err
 	}
+	if err := validatePayloadRawKeys("payload.keys", keys); err != nil {
+		return s3DeleteObjectsPayload{}, err
+	}
 
 	return s3DeleteObjectsPayload{
 		Bucket: bucket,

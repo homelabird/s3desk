@@ -2,10 +2,26 @@
 
 This document keeps only the commands most contributors need.
 
-## Full Local Check
+## Local Check Modes
 
 ```bash
 ./scripts/check.sh
+```
+
+`./scripts/check.sh` now defaults to the `full` mode.
+
+- `./scripts/check.sh full`
+  - full local gate
+  - includes frontend browser smoke through `npm run test:e2e:smoke`
+- `./scripts/check.sh fast`
+  - skips the browser smoke layer
+  - keeps the existing non-browser local verification path
+
+If Playwright Chromium is not installed locally yet, run:
+
+```bash
+cd frontend
+npx playwright install --with-deps chromium
 ```
 
 ## Backend
@@ -40,15 +56,29 @@ npm run build
 
 Frontend tooling expects Node.js `22.x`.
 
+Minimal browser smoke:
+
+```bash
+cd frontend
+npm run test:e2e:smoke
+```
+
+This smoke subset currently covers:
+
+- login / settings bootstrap
+- objects route boot and basic toolbar behavior
+
 ## Release Gate
 
 Use [RELEASE_GATE.md](RELEASE_GATE.md) when deciding whether a build is releasable. Provider-facing changes are not release-ready without the required live validation evidence.
+
+Use this focused check when you only need the release-doc/changelog subset locally.
 
 ```bash
 ./scripts/check_release_gate.sh
 ```
 
-GitHub Actions also runs this as the `Release Gate` workflow so changelog and release-evidence scaffolding stay enforced in CI.
+GitHub Actions runs the `Release Gate` workflow as the full `./scripts/check.sh` pass so pull requests exercise the same repository gate used for local verification. The standalone `./scripts/check_release_gate.sh` command remains available for the release-doc/changelog subset.
 
 ## Helm Chart
 

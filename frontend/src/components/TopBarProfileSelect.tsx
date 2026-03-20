@@ -22,7 +22,7 @@ export function TopBarProfileSelect(props: Props) {
 		queryKey: ['profiles', props.apiToken],
 		queryFn: async () => {
 			const api = new APIClient({ apiToken: props.apiToken })
-			return api.listProfiles()
+			return api.profiles.listProfiles()
 		},
 		retry: false,
 	})

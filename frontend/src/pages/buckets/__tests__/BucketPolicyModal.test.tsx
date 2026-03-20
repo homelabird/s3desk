@@ -19,6 +19,7 @@ import {
 
 import { APIError } from "../../../api/client";
 import { ensureDomShims } from "../../../test/domShims";
+import { createMockApiClient } from "../../../test/mockApiClient";
 import { BucketPolicyModal } from "../BucketPolicyModal";
 
 const originalGetComputedStyle = window.getComputedStyle;
@@ -99,15 +100,17 @@ afterAll(() => {
 });
 
 function createApi(overrides: Record<string, unknown> = {}) {
-  return {
-    getBucketPolicy: vi
-      .fn()
-      .mockResolvedValue({ bucket: "demo-bucket", exists: true, policy: {} }),
-    validateBucketPolicy: vi.fn(),
-    putBucketPolicy: vi.fn(),
-    deleteBucketPolicy: vi.fn(),
-    ...overrides,
-  };
+  return createMockApiClient({
+    buckets: {
+      getBucketPolicy: vi
+        .fn()
+        .mockResolvedValue({ bucket: "demo-bucket", exists: true, policy: {} }),
+      validateBucketPolicy: vi.fn(),
+      putBucketPolicy: vi.fn(),
+      deleteBucketPolicy: vi.fn(),
+      ...overrides,
+    },
+  });
 }
 
 function mockViewportWidth(width: number) {
@@ -261,7 +264,7 @@ describe("BucketPolicyModal", () => {
       fireEvent.click(validateButton);
     });
 
-    await waitFor(() => expect(api.validateBucketPolicy).toHaveBeenCalled());
+    await waitFor(() => expect(api.buckets.validateBucketPolicy).toHaveBeenCalled());
     await waitFor(() => {
       expect(warningSpy).toHaveBeenCalledWith(
         "Validation found issues (1 error(s) · 1 warning(s) · Missing Principal)",
@@ -295,7 +298,7 @@ describe("BucketPolicyModal", () => {
       fireEvent.click(validateButton);
     });
 
-    await waitFor(() => expect(api.validateBucketPolicy).toHaveBeenCalled());
+    await waitFor(() => expect(api.buckets.validateBucketPolicy).toHaveBeenCalled());
     await waitFor(() => {
       expect(errorSpy).toHaveBeenCalledWith(
         "Policy validation unavailable: transfer_engine_missing: rclone is required to validate bucket policies (install it or set RCLONE_PATH) · Recommended action: Transfer engine (rclone) not found. Install rclone or set RCLONE_PATH on the server.",
@@ -361,7 +364,7 @@ describe("BucketPolicyModal", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(api.putBucketPolicy).toHaveBeenCalled());
+    await waitFor(() => expect(api.buckets.putBucketPolicy).toHaveBeenCalled());
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["bucketGovernance", "profile-1", "demo-bucket"],

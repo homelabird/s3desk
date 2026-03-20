@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bufio"
 	"net/http"
 	"os"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
+	"s3desk/internal/rcloneconfig"
 )
 
 func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Request) {
@@ -76,35 +76,21 @@ func (s *server) handleListObjectFavorites(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	tmpFile, err := os.CreateTemp("", "rclone-favorites-*.txt")
+	for _, key := range keys {
+		if err := rcloneconfig.ValidateSingleLineValue("favorite key", key); err != nil {
+			metric.SetStatus("invalid_request")
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+			return
+		}
+	}
+
+	tmpPath, err := writeLinesToTempFile("rclone-favorites-*.txt", keys)
 	if err != nil {
 		metric.SetStatus("internal_error")
 		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
 		return
 	}
-	tmpPath := tmpFile.Name()
 	defer func() { _ = os.Remove(tmpPath) }()
-
-	writer := bufio.NewWriter(tmpFile)
-	for _, key := range keys {
-		if _, err := writer.WriteString(key + "\n"); err != nil {
-			_ = tmpFile.Close()
-			metric.SetStatus("internal_error")
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
-			return
-		}
-	}
-	if err := writer.Flush(); err != nil {
-		_ = tmpFile.Close()
-		metric.SetStatus("internal_error")
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
-		return
-	}
-	if err := tmpFile.Close(); err != nil {
-		metric.SetStatus("internal_error")
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare favorites list", map[string]any{"error": err.Error()})
-		return
-	}
 
 	args := []string{"lsjson", "--files-only", "--no-mimetype", "--hash", "--files-from-raw", tmpPath, rcloneRemoteBucket(bucket)}
 	proc, err := s.startRclone(r.Context(), secrets, args, "favorites")
@@ -198,13 +184,14 @@ func (s *server) handleCreateObjectFavorite(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if err := rcloneconfig.ValidateSingleLineValue("key", req.Key); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+		return
+	}
+
 	key := strings.TrimPrefix(strings.TrimSpace(req.Key), "/")
 	if key == "" {
 		writeError(w, http.StatusBadRequest, "invalid_request", "key is required", nil)
-		return
-	}
-	if strings.ContainsRune(key, 0) {
-		writeError(w, http.StatusBadRequest, "invalid_request", "key contains invalid characters", nil)
 		return
 	}
 

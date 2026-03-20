@@ -62,7 +62,7 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 						})
 						break
 					}
-					const resp = await api.listObjects({
+					const resp = await api.objects.listObjects({
 						profileId,
 						bucket,
 						prefix: nodeKey === '/' ? undefined : nodeKey,

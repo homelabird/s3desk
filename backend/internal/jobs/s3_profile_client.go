@@ -7,6 +7,6 @@ import (
 	"s3desk/internal/s3client"
 )
 
-func s3ClientFromProfile(secrets models.ProfileSecrets) *s3.Client {
+func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
 	return s3client.FromProfile(secrets)
 }

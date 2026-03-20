@@ -38,12 +38,18 @@ export function useJobsRealtimeEvents({
 	const [eventsRetryCount, setEventsRetryCount] = useState(0)
 	const [eventsManualRetryToken, setEventsManualRetryToken] = useState(0)
 	const lastSeqRef = useRef<number>(0)
+	const lastSeqProfileIdRef = useRef<string | null>(null)
 
 	const retryRealtime = useCallback(() => {
 		setEventsManualRetryToken((prev) => prev + 1)
 	}, [])
 
 	useEffect(() => {
+		if (lastSeqProfileIdRef.current !== profileId) {
+			lastSeqRef.current = 0
+			lastSeqProfileIdRef.current = profileId
+		}
+
 		if (!profileId) return
 
 		let ws: WebSocket | null = null

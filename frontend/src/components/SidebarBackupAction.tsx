@@ -137,7 +137,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		setStagedRestoresLoading(true)
 		setStagedRestoresError(null)
 		try {
-			const result = await props.api.listServerRestores()
+			const result = await props.api.server.listServerRestores()
 			setStagedRestores(result.items ?? [])
 		} catch (err) {
 			setStagedRestoresError(formatErr(err))
@@ -206,7 +206,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		setLoadingScope(backupScope)
 		setErrorMessage(null)
 		try {
-			const { promise } = props.api.downloadServerBackup(backupScope, backupConfidentiality, {
+			const { promise } = props.api.server.downloadServerBackup(backupScope, backupConfidentiality, {
 				password: backupProtection === 'password' ? backupPassword : undefined,
 			})
 			const result = await promise
@@ -228,7 +228,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		setRestoreError(null)
 		setRestoreResult(null)
 		try {
-			const result = await props.api.restoreServerBackup(file, restorePassword || undefined)
+			const result = await props.api.server.restoreServerBackup(file, restorePassword || undefined)
 			setRestoreResult(result)
 			await refreshStagedRestores()
 		} catch (err) {
@@ -253,7 +253,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		setPortablePreview(null)
 		setPortableImportResult(null)
 		try {
-			const result = await props.api.previewPortableImport(file, portablePassword || undefined)
+			const result = await props.api.server.previewPortableImport(file, portablePassword || undefined)
 			setPortableDraftFile(file)
 			setPortablePreview(result)
 		} catch (err) {
@@ -269,7 +269,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		setPortableLoading('import')
 		setPortableError(null)
 		try {
-			const result = await props.api.importPortableBackup(portableDraftFile, portablePassword || undefined)
+			const result = await props.api.server.importPortableBackup(portableDraftFile, portablePassword || undefined)
 			setPortableImportResult(result)
 		} catch (err) {
 			setPortableError(formatErr(err))
@@ -282,7 +282,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		setDeleteRestoreId(restoreId)
 		setStagedRestoresError(null)
 		try {
-			await props.api.deleteServerRestore(restoreId)
+			await props.api.server.deleteServerRestore(restoreId)
 			setRestoreResult((current) => (current?.stagingDir.endsWith(`/${restoreId}`) ? null : current))
 			await refreshStagedRestores()
 		} catch (err) {
@@ -304,7 +304,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		setCleanupRestoresLoading(true)
 		setStagedRestoresError(null)
 		try {
-			await Promise.all(staleIds.map((restoreId) => props.api.deleteServerRestore(restoreId)))
+			await Promise.all(staleIds.map((restoreId) => props.api.server.deleteServerRestore(restoreId)))
 			await refreshStagedRestores()
 		} catch (err) {
 			setStagedRestoresError(formatErr(err))

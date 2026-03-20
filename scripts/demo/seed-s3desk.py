@@ -7,14 +7,33 @@ import urllib.request
 
 
 API_TOKEN = os.environ.get("API_TOKEN", "demo-token")
-S3DESK_API_BASE = os.environ.get("S3DESK_API_BASE", "http://s3desk:8080/api/v1").rstrip("/")
+
+
+def _normalize_url(raw: str) -> str:
+    return raw.rstrip("/")
+
+
+def _normalize_api_base(raw: str) -> str:
+    normalized = _normalize_url(raw)
+    if normalized.endswith("/api/v1"):
+        normalized = normalized[: -len("/api/v1")]
+    return normalized
+
+
+S3DESK_API_BASE = _normalize_api_base(
+    os.environ.get("S3DESK_API_BASE", "http://s3desk:8080")
+)
 DEMO_PROFILE_NAME = os.environ.get("DEMO_PROFILE_NAME", "MinIO Demo")
 DEMO_BUCKET = os.environ.get("DEMO_BUCKET", "demo-bucket")
 MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "minioadmin")
 MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin")
 MINIO_REGION = os.environ.get("MINIO_REGION", "us-east-1")
-MINIO_INTERNAL_ENDPOINT = os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
-MINIO_PUBLIC_ENDPOINT = os.environ.get("MINIO_PUBLIC_ENDPOINT", "http://127.0.0.1:9000")
+MINIO_INTERNAL_ENDPOINT = _normalize_url(
+    os.environ.get("MINIO_INTERNAL_ENDPOINT", "http://minio:9000")
+)
+MINIO_PUBLIC_ENDPOINT = _normalize_url(
+    os.environ.get("MINIO_PUBLIC_ENDPOINT", "http://127.0.0.1:9000")
+)
 
 
 def request_json(method: str, url: str, payload=None, profile_id: str | None = None):
@@ -34,7 +53,7 @@ def request_json(method: str, url: str, payload=None, profile_id: str | None = N
 
 
 def wait_for_meta():
-    meta_url = f"{S3DESK_API_BASE}/meta"
+    meta_url = f"{S3DESK_API_BASE}/api/v1/meta"
     deadline = time.time() + 120
     while time.time() < deadline:
         try:
@@ -46,7 +65,7 @@ def wait_for_meta():
 
 
 def ensure_profile() -> str:
-    profiles_url = f"{S3DESK_API_BASE}/profiles"
+    profiles_url = f"{S3DESK_API_BASE}/api/v1/profiles"
     payload = {
         "provider": "s3_compatible",
         "name": DEMO_PROFILE_NAME,
@@ -70,7 +89,7 @@ def ensure_profile() -> str:
 
 
 def ensure_bucket(profile_id: str):
-    buckets_url = f"{S3DESK_API_BASE}/buckets"
+    buckets_url = f"{S3DESK_API_BASE}/api/v1/buckets"
     buckets = request_json("GET", buckets_url, profile_id=profile_id) or []
     for bucket in buckets:
         if bucket.get("name") == DEMO_BUCKET:
@@ -79,7 +98,7 @@ def ensure_bucket(profile_id: str):
 
 
 def test_profile(profile_id: str):
-    request_json("POST", f"{S3DESK_API_BASE}/profiles/{profile_id}/test")
+    request_json("POST", f"{S3DESK_API_BASE}/api/v1/profiles/{profile_id}/test")
 
 
 def main():

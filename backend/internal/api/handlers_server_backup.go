@@ -37,7 +37,7 @@ const (
 	serverBackupScopeCacheMetadata       = "cache_metadata"
 	serverBackupConfidentialityClear     = "clear"
 	serverBackupConfidentialityEncrypted = "encrypted"
-	serverBackupPasswordHeader           = "X-S3Desk-Backup-Password"
+	serverBackupPasswordHeader           = "X-S3Desk-Backup-Password" // #nosec G101 -- HTTP header name, not a credential value.
 	serverBackupPasswordMaxBytes         = 4096
 )
 
@@ -136,6 +136,7 @@ func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #nosec G304 -- tmpPath is the server-created backup bundle from os.CreateTemp.
 	file, err := os.Open(tmpPath)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to open backup bundle", map[string]any{"error": err.Error()})
@@ -228,6 +229,7 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 		manifest.ConfidentialityMode = confidentiality
 	}
 
+	// #nosec G304 -- archivePath is a server-created temporary backup path.
 	archiveFile, err := os.Create(archivePath)
 	if err != nil {
 		return models.ServerMigrationManifest{}, err
@@ -304,6 +306,7 @@ func writeEncryptedServerBackupPayload(
 	now time.Time,
 	payloadEntries *[]serverBackupPayloadEntry,
 ) (string, error) {
+	// #nosec G304 -- payloadPath lives under an os.MkdirTemp-managed workspace.
 	payloadFile, err := os.Create(payloadPath)
 	if err != nil {
 		return "", err
@@ -351,6 +354,7 @@ func writeEncryptedPayloadFile(tarWriter *tar.Writer, payloadPath string, payloa
 	if len(ivBytes) != aes.BlockSize {
 		return fmt.Errorf("invalid payload encryption IV length %d", len(ivBytes))
 	}
+	// #nosec G304 -- payloadPath lives under an os.MkdirTemp-managed workspace.
 	payloadFile, err := os.Open(payloadPath)
 	if err != nil {
 		return err
@@ -650,6 +654,7 @@ func writeTarFileFromDisk(tarWriter *tar.Writer, sourcePath, archivePath string)
 	if err != nil {
 		return serverBackupPayloadEntry{}, err
 	}
+	// #nosec G304 -- sourcePath is supplied by internal backup walkers or validated restore helpers.
 	file, err := os.Open(sourcePath)
 	if err != nil {
 		return serverBackupPayloadEntry{}, err
@@ -676,6 +681,14 @@ func writeTarFileFromDisk(tarWriter *tar.Writer, sourcePath, archivePath string)
 	}, nil
 }
 
+func archiveEntryFileMode(mode int64) (fs.FileMode, error) {
+	const maxArchiveEntryMode = int64(^uint32(0))
+	if mode < 0 || mode > maxArchiveEntryMode {
+		return 0, fmt.Errorf("archive entry has invalid mode %d", mode)
+	}
+	return fs.FileMode(uint32(mode)) & 0o777, nil
+}
+
 func extractServerRestorePayloadEntry(
 	ctx context.Context,
 	tempRoot string,
@@ -697,7 +710,12 @@ func extractServerRestorePayloadEntry(
 	switch header.Typeflag {
 	case tar.TypeDir:
 		return os.MkdirAll(targetPath, 0o700)
-	case tar.TypeReg, tar.TypeRegA:
+	case tar.TypeSymlink, tar.TypeLink:
+		return fmt.Errorf("archive entry %q uses an unsupported link type", header.Name)
+	default:
+		if !header.FileInfo().Mode().IsRegular() {
+			return fmt.Errorf("archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
+		}
 		freeBytes, err := availableDiskBytes(tempRoot)
 		if err != nil {
 			return err
@@ -712,7 +730,12 @@ func extractServerRestorePayloadEntry(
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
 			return err
 		}
-		out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fs.FileMode(header.Mode)&0o777)
+		fileMode, err := archiveEntryFileMode(header.Mode)
+		if err != nil {
+			return err
+		}
+		// #nosec G304 -- targetPath is confined to tempRoot by resolveRestorePath.
+		out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fileMode)
 		if err != nil {
 			return err
 		}
@@ -732,10 +755,6 @@ func extractServerRestorePayloadEntry(
 			*sqliteSeen = true
 		}
 		return nil
-	case tar.TypeSymlink, tar.TypeLink:
-		return fmt.Errorf("archive entry %q uses an unsupported link type", header.Name)
-	default:
-		return fmt.Errorf("archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
 	}
 }
 

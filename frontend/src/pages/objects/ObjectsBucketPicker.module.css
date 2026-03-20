@@ -1,0 +1,353 @@
+.bucketPickerDesktop {
+  position: relative;
+  width: 100%;
+}
+
+.bucketPickerDesktopTrigger {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--s3d-color-border-input);
+  border-radius: 10px;
+  background: var(--s3d-color-bg-input);
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    background var(--s3d-transition-fast);
+}
+
+.bucketPickerDesktopTrigger:hover:not(:disabled),
+.bucketPickerDesktopTrigger:focus-visible {
+  border-color: var(--s3d-color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 18%, transparent);
+  outline: none;
+}
+
+.bucketPickerDesktopTrigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+  background: var(--s3d-color-bg-disabled);
+}
+
+.bucketPickerDesktopValue,
+.bucketPickerDesktopPlaceholder {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.bucketPickerDesktopValue {
+  font-weight: 600;
+}
+
+.bucketPickerDesktopPlaceholder {
+  color: var(--s3d-color-text-secondary);
+}
+
+.bucketPickerDesktopChevron {
+  color: var(--s3d-color-text-secondary);
+  flex: 0 0 auto;
+  transition: transform var(--s3d-transition-fast);
+}
+
+.bucketPickerDesktopChevronOpen {
+  transform: rotate(180deg);
+}
+
+.bucketPickerDesktopPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 94%, transparent);
+  box-shadow: var(--s3d-shadow-md);
+  padding: 14px;
+}
+
+.bucketPickerDesktopPopoverAlignRight {
+  right: 0;
+  left: auto;
+}
+
+.bucketPickerDesktopHeader,
+.bucketPickerDrawerBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bucketPickerDesktopHeader {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.bucketPickerDesktopBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.bucketPickerSearchField {
+  position: relative;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bucketPickerSearchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--s3d-color-text-secondary);
+  pointer-events: none;
+}
+
+.bucketPickerSearchInput {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--s3d-color-border-input);
+  border-radius: 12px;
+  background: var(--s3d-color-bg-input);
+  color: inherit;
+  padding: 10px 12px 10px 36px;
+  transition:
+    border-color var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast);
+}
+
+.bucketPickerSearchInput:focus-visible {
+  outline: none;
+  border-color: var(--s3d-color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 18%, transparent);
+}
+
+.bucketPickerInlineAction {
+  align-self: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--s3d-color-border-input);
+  border-radius: 999px;
+  background: var(--s3d-color-bg-elevated);
+  color: inherit;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    border-color var(--s3d-transition-fast);
+}
+
+.bucketPickerInlineAction:hover,
+.bucketPickerInlineAction:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: var(--s3d-shadow-sm);
+  border-color: var(--s3d-color-focus);
+  outline: none;
+}
+
+.bucketPickerOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bucketPickerOptionText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bucketPickerEntryLabel {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bucketPickerEntryLabelCurrent {
+  font-weight: 700;
+}
+
+.bucketPickerBadgeRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bucketPickerBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.bucketPickerBadgeCurrent {
+  background: color-mix(in srgb, var(--s3d-color-focus) 18%, transparent);
+  color: var(--s3d-color-focus);
+}
+
+.bucketPickerBadgeRecent {
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 70%, transparent);
+  color: var(--s3d-color-text-secondary);
+}
+
+.bucketPickerTrigger {
+  min-height: 48px;
+  border: 1px solid var(--s3d-color-border-input);
+  border-radius: 10px;
+  background: var(--s3d-color-bg-input);
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast),
+    background var(--s3d-transition-fast);
+}
+
+.bucketPickerTrigger:hover:not(:disabled),
+.bucketPickerTrigger:focus-visible {
+  border-color: var(--s3d-color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 18%, transparent);
+  outline: none;
+}
+
+.bucketPickerTrigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+  background: var(--s3d-color-bg-disabled);
+}
+
+.bucketPickerTriggerText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bucketPickerTriggerValue,
+.bucketPickerTriggerPlaceholder {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.bucketPickerTriggerValue {
+  font-weight: 600;
+}
+
+.bucketPickerTriggerPlaceholder {
+  color: var(--s3d-color-text-secondary);
+}
+
+.bucketPickerTriggerHint {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--s3d-color-text-secondary);
+}
+
+.bucketPickerTriggerIcon {
+  color: var(--s3d-color-text-secondary);
+  flex: 0 0 auto;
+}
+
+.bucketPickerSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bucketPickerSectionLabel {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--s3d-color-text-secondary);
+}
+
+.bucketPickerList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bucketPickerRow {
+  width: 100%;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 12px;
+  background: var(--s3d-color-bg-card);
+  color: inherit;
+  text-align: left;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition:
+    border-color var(--s3d-transition-fast),
+    transform var(--s3d-transition-fast),
+    box-shadow var(--s3d-transition-fast);
+}
+
+.bucketPickerRow:hover,
+.bucketPickerRow:focus-visible {
+  border-color: var(--s3d-color-focus);
+  box-shadow: var(--s3d-shadow-sm);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.bucketPickerRowCurrent {
+  border-color: color-mix(in srgb, var(--s3d-color-focus) 55%, var(--s3d-color-border));
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 55%, var(--s3d-color-bg-card));
+}
+
+.bucketPickerRowContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bucketPickerCurrentIcon {
+  color: var(--s3d-color-focus);
+  font-size: 16px;
+}
+
+.bucketPickerEmpty {
+  border: 1px dashed var(--s3d-color-border);
+  border-radius: 12px;
+  background: var(--s3d-color-bg-secondary);
+  padding: 12px;
+  color: var(--s3d-color-text-secondary);
+  text-align: center;
+}

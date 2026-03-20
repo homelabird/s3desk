@@ -70,7 +70,16 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 	}()
 
 	wait := func() error {
+		stdoutDone := make(chan struct{})
+		go func() {
+			// Some callers stop reading stdout early once they have enough
+			// metadata. Drain the remainder here so rclone cannot wedge on a
+			// full stdout pipe while cmd.Wait is waiting for process exit.
+			_, _ = io.Copy(io.Discard, stdout)
+			close(stdoutDone)
+		}()
 		err := cmd.Wait()
+		<-stdoutDone
 		<-stderrDone
 		_ = os.Remove(configPath)
 		tlsCleanup()

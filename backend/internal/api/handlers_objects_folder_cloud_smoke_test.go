@@ -235,10 +235,6 @@ func validateCloudFolderProfileSecrets(spec cloudFolderRcloneSpec, secrets model
 	return nil
 }
 
-func normalizeCloudFolderEndpoint(value string) string {
-	return strings.TrimRight(strings.TrimSpace(value), "/")
-}
-
 func normalizeCloudFolderJSON(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {

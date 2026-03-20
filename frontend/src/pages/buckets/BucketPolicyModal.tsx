@@ -1,14 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Alert,
-  Button,
-  Grid,
-  Input,
-  Space,
-  Tooltip,
-  Typography,
-  message,
-} from "antd";
+import { Grid, message } from "antd";
 import { useMemo, useRef, useState } from "react";
 
 import { APIClient, APIError } from "../../api/client";
@@ -18,55 +8,44 @@ import type {
   BucketPolicyValidateResponse,
   Profile,
 } from "../../api/types";
-import { AppTabs } from "../../components/AppTabs";
-import { NativeSelect } from "../../components/NativeSelect";
-import { ToggleSwitch } from "../../components/ToggleSwitch";
-import { confirmDangerAction } from "../../lib/confirmDangerAction";
-import { formatErrorWithHint as formatErr } from "../../lib/errors";
 import { hasPendingAction, runIfActionIdle } from "../../lib/pendingActionGuard";
+import { BucketPolicyContentTabs } from "./BucketPolicyContentTabs";
+import { BucketPolicyFooterActions } from "./BucketPolicyFooterActions";
 import {
-  formatUnavailableOperationMessage,
-  formatValidationOperationMessage,
-} from "../../lib/providerOperationFeedback";
-import styles from "./BucketPolicyModal.module.css";
+  getVisibleUnifiedDiff,
+  getUnifiedDiffStats,
+  hasUnifiedDiffChanges,
+  unifiedDiff,
+} from "./bucketPolicyDiff";
+import {
+  buildStructuredPolicyText,
+  computeGcsPublicRead,
+  getInitialStructuredState,
+  parseStructuredStateFromText,
+} from "./bucketPolicyStructuredState";
+import {
+  getLocalValidationErrors,
+  getProviderErrorDetails,
+  getProviderWarnings,
+  getServerValidationMessages,
+} from "./bucketPolicyValidation";
 import { AzurePolicyStructuredEditor } from "./policy/azure-structured";
 import { BucketPolicyDialogShell } from "./policy/DialogShell";
+import { BucketPolicyModalShell } from "./BucketPolicyModalShell";
+import { BucketPolicyWorkspaceHeader } from "./BucketPolicyWorkspaceHeader";
 import { GcsPolicyStructuredEditor } from "./policy/gcs-structured";
 import {
   getPolicyPresets,
   getPolicyTemplate,
   type PolicyKind,
 } from "./policyPresets";
-import {
-  isRecord,
-  parsePolicyText,
-} from "./policy/types";
+import { parsePolicyText } from "./policy/types";
 import type {
   AzureStoredPolicyRow,
   GcsBindingRow,
 } from "./policy/types";
-
-function getPolicyWorkspaceSummary(kind: PolicyKind) {
-  if (kind === "gcs") {
-    return {
-      title: "Advanced GCS IAM policy workspace",
-      description:
-        "Use this view when you need the full IAM policy document, etag-sensitive updates, presets, validation, or a diff before saving.",
-    };
-  }
-  if (kind === "azure") {
-    return {
-      title: "Advanced Azure container access workspace",
-      description:
-        "Use this view for full ACL JSON review, stored access policy composition, provider validation, and final diff review before saving.",
-    };
-  }
-  return {
-    title: "Advanced S3 bucket policy workspace",
-    description:
-      "Use this view for raw bucket policy statements, cross-account access rules, provider validation, and diff review before saving.",
-  };
-}
+import { useBucketPolicyQuery } from "./useBucketPolicyQuery";
+import { useBucketPolicyMutations } from "./useBucketPolicyMutations";
 
 export function BucketPolicyModal(props: {
   api: APIClient;
@@ -82,11 +61,13 @@ export function BucketPolicyModal(props: {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
 
-  const policyQuery = useQuery({
-    queryKey: ["bucketPolicy", props.profileId, bucket, props.apiToken],
-    queryFn: () => props.api.getBucketPolicy(props.profileId, bucket),
-    enabled: open && !!props.profileId && !!bucket,
-  });
+  const policyQuery = useBucketPolicyQuery(
+    props.api,
+    props.profileId,
+    bucket,
+    props.apiToken,
+    open && !!props.profileId && !!bucket,
+  );
 
   const policyKind: PolicyKind = useMemo(() => {
     switch (props.provider) {
@@ -101,49 +82,31 @@ export function BucketPolicyModal(props: {
 
   if (!open) return null;
 
-  if (policyQuery.isError) {
-    return (
-      <BucketPolicyDialogShell
-        mobile={isMobile}
-        title={`Policy: ${bucket}`}
-        onClose={props.onClose}
-      >
-        <Alert
-          type="error"
-          showIcon
-          title="Failed to load policy"
-          description={formatErr(policyQuery.error)}
-        />
-      </BucketPolicyDialogShell>
-    );
-  }
-
-  if (!policyQuery.data) {
-    return (
-      <BucketPolicyDialogShell
-        mobile={isMobile}
-        title={`Policy: ${bucket}`}
-        onClose={props.onClose}
-      >
-        <Typography.Text type="secondary">Loading…</Typography.Text>
-      </BucketPolicyDialogShell>
-    );
-  }
-
   return (
-    <BucketPolicyEditor
-      api={props.api}
-      apiToken={props.apiToken}
-      profileId={props.profileId}
+    <BucketPolicyModalShell
       bucket={bucket}
-      policyKind={policyKind}
-      provider={props.provider}
-      policyData={policyQuery.data}
-      policyIsFetching={policyQuery.isFetching}
       mobile={isMobile}
       onClose={props.onClose}
-      onOpenControls={props.onOpenControls}
-    />
+      isError={policyQuery.isError}
+      error={policyQuery.error}
+      policyData={policyQuery.data}
+    >
+      {(policyData) => (
+        <BucketPolicyEditor
+          api={props.api}
+          apiToken={props.apiToken}
+          profileId={props.profileId}
+          bucket={bucket}
+          policyKind={policyKind}
+          provider={props.provider}
+          policyData={policyData}
+          policyIsFetching={policyQuery.isFetching}
+          mobile={isMobile}
+          onClose={props.onClose}
+          onOpenControls={props.onOpenControls}
+        />
+      )}
+    </BucketPolicyModalShell>
   );
 }
 
@@ -160,7 +123,6 @@ function BucketPolicyEditor(props: {
   onClose: () => void;
   onOpenControls?: (bucket: string) => void;
 }) {
-  const queryClient = useQueryClient();
   const { bucket, policyKind, policyData } = props;
   const useStructuredCards = props.mobile;
 
@@ -201,74 +163,10 @@ function BucketPolicyEditor(props: {
     keyCounter.current += 1;
     return `k-${keyCounter.current}`;
   };
-  const initialParsed = parsePolicyText(initialPolicyText);
-  const initialPolicyValue = initialParsed.ok ? initialParsed.value : null;
-
-  const initialGcsState = (() => {
-    if (policyKind !== "gcs" || !initialPolicyValue) {
-      return { version: 1, etag: "", bindings: [] as GcsBindingRow[] };
-    }
-    const version =
-      typeof initialPolicyValue.version === "number"
-        ? initialPolicyValue.version
-        : 1;
-    const etag =
-      typeof initialPolicyValue.etag === "string"
-        ? initialPolicyValue.etag
-        : "";
-    const bindingsRaw = Array.isArray(initialPolicyValue.bindings)
-      ? initialPolicyValue.bindings
-      : [];
-    const bindings: GcsBindingRow[] = bindingsRaw
-      .filter(isRecord)
-      .map((binding, index) => ({
-        key: `gcs-${index}`,
-        role: typeof binding.role === "string" ? binding.role : "",
-        members: Array.isArray(binding.members)
-          ? binding.members.filter(
-              (member): member is string => typeof member === "string",
-            )
-          : [],
-      }));
-    return { version, etag, bindings };
-  })();
-
-  const initialAzureState: {
-    publicAccess: "private" | "blob" | "container";
-    policies: AzureStoredPolicyRow[];
-  } = (() => {
-    if (policyKind !== "azure" || !initialPolicyValue) {
-      return {
-        publicAccess: "private" as const,
-        policies: [] as AzureStoredPolicyRow[],
-      };
-    }
-    const paRaw =
-      typeof initialPolicyValue.publicAccess === "string"
-        ? initialPolicyValue.publicAccess
-        : "private";
-    const pa = (String(paRaw).toLowerCase().trim() || "private") as
-      | "private"
-      | "blob"
-      | "container";
-    const listRaw = Array.isArray(initialPolicyValue.storedAccessPolicies)
-      ? initialPolicyValue.storedAccessPolicies
-      : [];
-    const items: AzureStoredPolicyRow[] = listRaw
-      .filter(isRecord)
-      .map((policy, index) => ({
-        key: `azure-${index}`,
-        id: typeof policy.id === "string" ? policy.id : "",
-        start: typeof policy.start === "string" ? policy.start : undefined,
-        expiry: typeof policy.expiry === "string" ? policy.expiry : undefined,
-        permission:
-          typeof policy.permission === "string" ? policy.permission : undefined,
-      }));
-    return {
-      publicAccess: pa === "blob" || pa === "container" ? pa : "private",
-      policies: items,
-    };
-  })();
+  const { initialGcsState, initialAzureState } = useMemo(
+    () => getInitialStructuredState(policyKind, initialPolicyText),
+    [policyKind, initialPolicyText],
+  );
 
   const [gcsVersion, setGcsVersion] = useState<number>(initialGcsState.version);
   const [gcsEtag, setGcsEtag] = useState<string>(initialGcsState.etag);
@@ -283,40 +181,27 @@ function BucketPolicyEditor(props: {
     AzureStoredPolicyRow[]
   >(initialAzureState.policies);
 
-  const formPolicyText = useMemo(() => {
-    if (policyKind === "gcs") {
-      const obj: Record<string, unknown> = {
-        version: gcsVersion || 1,
-        bindings: gcsBindings.map((b) => ({
-          role: b.role,
-          members: b.members,
-        })),
-      };
-      if (gcsEtag.trim() !== "") obj.etag = gcsEtag.trim();
-      return JSON.stringify(obj, null, 2);
-    }
-    if (policyKind === "azure") {
-      const obj: Record<string, unknown> = {
-        publicAccess: azurePublicAccess,
-        storedAccessPolicies: azureStoredPolicies.map((p) => ({
-          id: p.id,
-          start: p.start || undefined,
-          expiry: p.expiry || undefined,
-          permission: p.permission || undefined,
-        })),
-      };
-      return JSON.stringify(obj, null, 2);
-    }
-    return policyText;
-  }, [
-    policyKind,
-    gcsVersion,
-    gcsEtag,
-    gcsBindings,
-    azurePublicAccess,
-    azureStoredPolicies,
-    policyText,
-  ]);
+  const formPolicyText = useMemo(
+    () =>
+      buildStructuredPolicyText({
+        policyKind,
+        policyText,
+        gcsVersion,
+        gcsEtag,
+        gcsBindings,
+        azurePublicAccess,
+        azureStoredPolicies,
+      }),
+    [
+      policyKind,
+      policyText,
+      gcsVersion,
+      gcsEtag,
+      gcsBindings,
+      azurePublicAccess,
+      azureStoredPolicies,
+    ],
+  );
 
   const effectivePolicyText =
     editorMode === "form" && policyKind !== "s3" ? formPolicyText : policyText;
@@ -336,189 +221,66 @@ function BucketPolicyEditor(props: {
 
   const normalizedPolicyText = previewText || effectivePolicyText;
 
-  const providerWarnings = useMemo(() => {
-    if (!parsed.ok) return [] as string[];
-    const v = parsed.value;
-    const out: string[] = [];
-    if (policyKind === "gcs") {
-      // GCS IAM policy updates are safest when preserving the current policy's etag.
-      if (typeof v.etag !== "string" || v.etag.trim() === "") {
-        out.push(
-          "GCS IAM policies usually include an 'etag'. Keep it (reload the policy if needed) to avoid update conflicts.",
-        );
-      }
-    }
-    return out;
-  }, [parsed, policyKind]);
+  const providerWarnings = useMemo(
+    () => getProviderWarnings(parsed, policyKind),
+    [parsed, policyKind],
+  );
 
-  const localValidationErrors = useMemo(() => {
-    if (!parsed.ok) return [] as string[];
-    const out: string[] = [];
-    const v = parsed.value;
-    if (policyKind === "gcs") {
-      const bindings = Array.isArray(v.bindings)
-        ? v.bindings.filter(isRecord)
-        : [];
-      bindings.forEach((binding, index) => {
-        const role =
-          typeof binding.role === "string" ? binding.role.trim() : "";
-        const members = Array.isArray(binding.members)
-          ? binding.members.filter(
-              (member): member is string =>
-                typeof member === "string" && member.trim() !== "",
-            )
-          : [];
-        if (!role) out.push(`GCS binding #${index + 1}: role is required.`);
-        if (members.length === 0)
-          out.push(
-            `GCS binding #${index + 1}: at least one member is required.`,
-          );
-      });
-    }
-    if (policyKind === "azure") {
-      const policies = Array.isArray(v.storedAccessPolicies)
-        ? v.storedAccessPolicies.filter(isRecord)
-        : [];
-      if (policies.length > 5)
-        out.push(
-          "Azure allows a maximum of 5 stored access policies on a container.",
-        );
-      const seenIds = new Set<string>();
-      policies.forEach((policy, index) => {
-        const id = typeof policy.id === "string" ? policy.id.trim() : "";
-        const label = id || `#${index + 1}`;
-        if (!id)
-          out.push(`Azure stored access policy #${index + 1}: id is required.`);
-        if (id) {
-          const idKey = id.toLowerCase();
-          if (seenIds.has(idKey))
-            out.push(`Azure stored access policy id "${id}" is duplicated.`);
-          seenIds.add(idKey);
-        }
-        const permission =
-          typeof policy.permission === "string" ? policy.permission.trim() : "";
-        if (permission !== "" && !/^[rwdlacup]+$/i.test(permission)) {
-          out.push(
-            `Azure stored access policy ${label}: permission must use only r/w/d/l/a/c/u/p.`,
-          );
-        }
-      });
-    }
-    return out;
-  }, [parsed, policyKind]);
+  const localValidationErrors = useMemo(
+    () => getLocalValidationErrors(parsed, policyKind),
+    [parsed, policyKind],
+  );
   const hasBlockingValidationIssues = localValidationErrors.length > 0;
 
-  const diffText = useMemo(() => {
-    const from = (originalText ?? "").trimEnd();
-    const to = normalizedPolicyText.trimEnd();
-    return unifiedDiff(from, to);
-  }, [originalText, normalizedPolicyText]);
+  const diffText = useMemo(
+    () =>
+      unifiedDiff(
+        (originalText ?? "").trimEnd(),
+        normalizedPolicyText.trimEnd(),
+      ),
+    [originalText, normalizedPolicyText],
+  );
 
-  const hasPolicyChanges = useMemo(() => {
-    const from = (originalText ?? "").trimEnd();
-    const to = normalizedPolicyText.trimEnd();
-    return from !== to;
-  }, [originalText, normalizedPolicyText]);
+  const hasPolicyChanges = useMemo(
+    () =>
+      hasUnifiedDiffChanges(
+        (originalText ?? "").trimEnd(),
+        normalizedPolicyText.trimEnd(),
+      ),
+    [originalText, normalizedPolicyText],
+  );
 
-  const diffStats = useMemo(() => {
-    if (diffText === " (no changes)") return { added: 0, removed: 0 };
-    let added = 0;
-    let removed = 0;
-    for (const line of diffText.split("\n")) {
-      if (line.startsWith("+")) added += 1;
-      else if (line.startsWith("-")) removed += 1;
-    }
-    return { added, removed };
-  }, [diffText]);
-  const visibleDiffText = useMemo(() => {
-    if (diffText === " (no changes)" || showDiffContext) return diffText;
-    const changedOnly = diffText
-      .split("\n")
-      .filter((line) => line.startsWith("+") || line.startsWith("-"))
-      .join("\n");
-    return changedOnly || " (no changes)";
-  }, [diffText, showDiffContext]);
+  const diffStats = useMemo(() => getUnifiedDiffStats(diffText), [diffText]);
+  const visibleDiffText = useMemo(
+    () => getVisibleUnifiedDiff(diffText, showDiffContext),
+    [diffText, showDiffContext],
+  );
   const canSave =
     parsed.ok &&
     !props.policyIsFetching &&
     hasPolicyChanges &&
     !hasBlockingValidationIssues;
 
-  const putMutation = useMutation({
-    mutationFn: (req: BucketPolicyPutRequest) =>
-      props.api.putBucketPolicy(props.profileId, bucket, req),
-    onSuccess: async () => {
-      message.success("Policy saved");
-      setLastProviderError(null);
-      await queryClient.invalidateQueries({ queryKey: ["bucketPolicy"] });
-      if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
-        await queryClient.invalidateQueries({
-          queryKey: ["bucketGovernance", props.profileId, bucket],
-        });
-      }
-      props.onClose();
-    },
-    onError: (err) => {
-      setActiveTab("validate");
-      setLastProviderError(err instanceof APIError ? err : null);
-      message.error(formatErr(err));
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => props.api.deleteBucketPolicy(props.profileId, bucket),
-    onSuccess: async () => {
-      message.success("Policy deleted");
-      setLastProviderError(null);
-      await queryClient.invalidateQueries({ queryKey: ["bucketPolicy"] });
-      if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
-        await queryClient.invalidateQueries({
-          queryKey: ["bucketGovernance", props.profileId, bucket],
-        });
-      }
-      props.onClose();
-    },
-    onError: (err) => {
-      setActiveTab("validate");
-      setLastProviderError(err instanceof APIError ? err : null);
-      message.error(formatErr(err));
-    },
-  });
-
-  const validateMutation = useMutation({
-    mutationFn: () => {
-      if (!parsed.ok) throw new Error(parsed.error ?? "Invalid policy JSON");
-      if (hasBlockingValidationIssues)
-        throw new Error(
-          localValidationErrors[0] ?? "Fix local validation issues first",
-        );
-      return props.api.validateBucketPolicy(props.profileId, bucket, {
-        policy: parsed.value,
-      } as BucketPolicyPutRequest);
-    },
-    onSuccess: (resp) => {
-      setServerValidation(resp);
-      setServerValidationError(null);
-      const { content, duration } = formatValidationOperationMessage({
-        successMessage: "Validation OK",
-        failureMessage: "Validation found issues",
-        ok: resp.ok,
-        errors: resp.errors,
-        warnings: resp.warnings,
-      });
-      if (resp.ok) message.success(content, duration);
-      else message.warning(content, duration);
-    },
-    onError: (err) => {
-      setServerValidation(null);
-      const { content, duration } = formatUnavailableOperationMessage(
-        "Policy validation unavailable",
-        err,
-      );
-      setServerValidationError(content);
-      message.error(content, duration);
-    },
-  });
+  const { putMutation, deleteMutation, validateMutation } =
+    useBucketPolicyMutations({
+      api: props.api,
+      profileId: props.profileId,
+      bucket,
+      provider: props.provider,
+      onClose: props.onClose,
+      setActiveTab,
+      setLastProviderError,
+      setServerValidation,
+      setServerValidationError,
+      buildValidationRequest: () => {
+        if (!parsed.ok) throw new Error(parsed.error ?? "Invalid policy JSON");
+        if (hasBlockingValidationIssues)
+          throw new Error(
+            localValidationErrors[0] ?? "Fix local validation issues first",
+          );
+        return { policy: parsed.value } as BucketPolicyPutRequest;
+      },
+    });
   const isBusy = hasPendingAction(
     props.policyIsFetching,
     putMutation.isPending,
@@ -601,64 +363,22 @@ function BucketPolicyEditor(props: {
     [policyPresets, selectedPresetKey],
   );
 
-  const gcsPublicRead = useMemo(() => {
-    return gcsBindings.some(
-      (b) =>
-        b.role === "roles/storage.objectViewer" &&
-        b.members.includes("allUsers"),
-    );
-  }, [gcsBindings]);
+  const gcsPublicRead = useMemo(
+    () => computeGcsPublicRead(gcsBindings),
+    [gcsBindings],
+  );
 
   const updateStructuredStateFromText = (text: string) => {
-    const nextParsed = parsePolicyText(text);
-    if (!nextParsed.ok) return;
-    const v = nextParsed.value;
-    if (policyKind === "gcs") {
-      const version = typeof v.version === "number" ? v.version : 1;
-      const etag = typeof v.etag === "string" ? v.etag : "";
-      const bindingsRaw = Array.isArray(v.bindings) ? v.bindings : [];
-      const bindings: GcsBindingRow[] = bindingsRaw
-        .filter(isRecord)
-        .map((binding) => ({
-          key: nextKey(),
-          role: typeof binding.role === "string" ? binding.role : "",
-          members: Array.isArray(binding.members)
-            ? binding.members.filter(
-                (member): member is string => typeof member === "string",
-              )
-            : [],
-        }));
-      setGcsVersion(version);
-      setGcsEtag(etag);
-      setGcsBindings(bindings);
+    const nextState = parseStructuredStateFromText(policyKind, text, nextKey);
+    if (!nextState) return;
+    if (nextState.gcsState) {
+      setGcsVersion(nextState.gcsState.version);
+      setGcsEtag(nextState.gcsState.etag);
+      setGcsBindings(nextState.gcsState.bindings);
     }
-
-    if (policyKind === "azure") {
-      const paRaw =
-        typeof v.publicAccess === "string" ? v.publicAccess : "private";
-      const pa = (String(paRaw).toLowerCase().trim() || "private") as
-        | "private"
-        | "blob"
-        | "container";
-      const listRaw = Array.isArray(v.storedAccessPolicies)
-        ? v.storedAccessPolicies
-        : [];
-      const items: AzureStoredPolicyRow[] = listRaw
-        .filter(isRecord)
-        .map((policy) => ({
-          key: nextKey(),
-          id: typeof policy.id === "string" ? policy.id : "",
-          start: typeof policy.start === "string" ? policy.start : undefined,
-          expiry: typeof policy.expiry === "string" ? policy.expiry : undefined,
-          permission:
-            typeof policy.permission === "string"
-              ? policy.permission
-              : undefined,
-        }));
-      setAzurePublicAccess(
-        pa === "blob" || pa === "container" ? pa : "private",
-      );
-      setAzureStoredPolicies(items);
+    if (nextState.azureState) {
+      setAzurePublicAccess(nextState.azureState.publicAccess);
+      setAzureStoredPolicies(nextState.azureState.policies);
     }
   };
 
@@ -708,20 +428,9 @@ function BucketPolicyEditor(props: {
   };
 
   const title = `Policy: ${bucket}${titleSuffix}`;
-  const details = lastProviderError?.details;
-  const providerCause =
-    typeof details?.cause === "string" ? details.cause : null;
-  const providerError =
-    typeof details?.providerError === "string" ? details.providerError : null;
-
-  const serverValidationMessages =
-    serverValidation &&
-    (serverValidation.errors?.length || serverValidation.warnings?.length)
-      ? [
-          ...(serverValidation.errors ?? []).map((row) => `Error: ${row}`),
-          ...(serverValidation.warnings ?? []).map((row) => `Warning: ${row}`),
-        ]
-      : [];
+  const { cause: providerCause, providerError } =
+    getProviderErrorDetails(lastProviderError);
+  const serverValidationMessages = getServerValidationMessages(serverValidation);
 
   const handleSave = () => {
     if (isBusy) return;
@@ -744,48 +453,20 @@ function BucketPolicyEditor(props: {
   };
 
   const footerContent = (
-    <div className={styles.footerActions}>
-      <Tooltip title={deleteDisabledReason || null}>
-        <span>
-          <Button
-            danger
-            disabled={
-              !canDelete || isBusy
-            }
-            loading={deleteMutation.isPending}
-            onClick={() => {
-              if (isBusy) return;
-              confirmDangerAction({
-                title:
-                  policyKind === "azure"
-                    ? "Reset container access policy?"
-                    : "Delete bucket policy?",
-                description: deleteHelp,
-                confirmText: "delete",
-                confirmHint: 'Type "delete" to confirm',
-                onConfirm: async () => {
-                  await deleteMutation.mutateAsync();
-                },
-              });
-            }}
-          >
-            {deleteLabel}
-          </Button>
-        </span>
-      </Tooltip>
-
-      <div className={styles.footerPrimaryActions}>
-        <Button onClick={handleClose} disabled={isBusy}>Cancel</Button>
-        <Button
-          type="primary"
-          loading={putMutation.isPending}
-          disabled={isBusy || !canSave}
-          onClick={handleSave}
-        >
-          Save
-        </Button>
-      </div>
-    </div>
+    <BucketPolicyFooterActions
+      policyKind={policyKind}
+      deleteDisabledReason={deleteDisabledReason}
+      canDelete={canDelete}
+      isBusy={isBusy}
+      deleteLoading={deleteMutation.isPending}
+      saveLoading={putMutation.isPending}
+      deleteLabel={deleteLabel}
+      deleteHelp={deleteHelp}
+      canSave={canSave}
+      onCancel={handleClose}
+      onSave={handleSave}
+      onDelete={() => deleteMutation.mutateAsync()}
+    />
   );
 
   return (
@@ -795,474 +476,66 @@ function BucketPolicyEditor(props: {
       onClose={handleClose}
       footer={footerContent}
     >
-      <Alert
-        className={styles.workspaceSummary}
-        type="info"
-        showIcon
-        title={getPolicyWorkspaceSummary(policyKind).title}
-        description={getPolicyWorkspaceSummary(policyKind).description}
+      <BucketPolicyWorkspaceHeader
+        policyKind={policyKind}
+        controlsShortcut={controlsShortcut}
+        bucket={bucket}
+        onOpenControls={props.onOpenControls}
       />
-      {controlsShortcut ? (
-        <div
-          className={styles.awsShortcutBanner}
-          data-testid="bucket-policy-controls-shortcut"
-        >
-          <div className={styles.awsShortcutCopy}>
-            <Typography.Text strong>{controlsShortcut.title}</Typography.Text>
-            <Typography.Text type="secondary">
-              {controlsShortcut.description}
-            </Typography.Text>
-          </div>
-          <Button onClick={() => props.onOpenControls?.(bucket)}>
-            Open Controls
-          </Button>
-        </div>
-      ) : null}
-      <AppTabs
-        activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as "validate" | "preview" | "diff")}
-        items={[
-          {
-            key: "validate",
-            label: "Validate",
-            children: (
-              <Space
-                orientation="vertical"
-                className={styles.fullWidth}
-                size="middle"
-              >
-                {parsed.ok ? (
-                  <Alert
-                    type="success"
-                    showIcon
-                    title={
-                      editorMode === "form"
-                        ? "Valid policy (structured editor)"
-                        : "Valid JSON policy"
-                    }
-                  />
-                ) : (
-                  <Alert
-                    type="error"
-                    showIcon
-                    title="Invalid JSON policy"
-                    description={parsed.error ?? "Invalid JSON"}
-                  />
-                )}
-
-                {policyKind !== "s3" ? (
-                  <details className={styles.disclosure}>
-                    <summary className={styles.disclosureSummary}>
-                      Advanced editor tools
-                    </summary>
-                    <div className={styles.disclosureBody}>
-                      <Space align="center" wrap className={styles.controlRow}>
-                        <Typography.Text type="secondary">Editor:</Typography.Text>
-                        <NativeSelect
-                          value={editorMode}
-                          onChange={(value) => {
-                            const next = value as "form" | "json";
-                            if (next === "form") {
-                              if (!parsed.ok) {
-                                message.error(
-                                  parsed.error ?? "Fix JSON errors first",
-                                );
-                                return;
-                              }
-                              updateStructuredStateFromText(policyText);
-                              setEditorMode("form");
-                            } else {
-                              setPolicyText(formPolicyText);
-                              setEditorMode("json");
-                            }
-                            setServerValidation(null);
-                            setServerValidationError(null);
-                          }}
-                          ariaLabel="Editor mode"
-                          className={styles.editorModeGroup}
-                          options={[
-                            { value: "form", label: "Form editor" },
-                            { value: "json", label: "JSON editor" },
-                          ]}
-                        />
-                      </Space>
-
-                      <Space align="center" wrap className={styles.controlRow}>
-                        <Typography.Text type="secondary">Template:</Typography.Text>
-                        <NativeSelect
-                          value={selectedPresetKey ?? ""}
-                          onChange={(value) => {
-                            if (!value) {
-                              setSelectedPresetKey(undefined);
-                              return;
-                            }
-                            applyPolicyPreset(String(value));
-                          }}
-                          ariaLabel="Template preset"
-                          className={styles.presetSelect}
-                          placeholder="Load provider preset"
-                          options={policyPresets.map((item) => ({
-                            value: item.key,
-                            label: item.label,
-                          }))}
-                        />
-                      </Space>
-
-                      {selectedPresetDescription ? (
-                        <Typography.Text type="secondary">
-                          {selectedPresetDescription}
-                        </Typography.Text>
-                      ) : null}
-                    </div>
-                  </details>
-                ) : null}
-
-                {policyKind === "s3" ? (
-                  <Space align="center" wrap className={styles.controlRow}>
-                    <Typography.Text type="secondary">Template:</Typography.Text>
-                    <NativeSelect
-                      value={selectedPresetKey ?? ""}
-                      onChange={(value) => {
-                        if (!value) {
-                          setSelectedPresetKey(undefined);
-                          return;
-                        }
-                        applyPolicyPreset(String(value));
-                      }}
-                      ariaLabel="Template preset"
-                      className={styles.presetSelect}
-                      placeholder="Load provider preset"
-                      options={policyPresets.map((item) => ({
-                        value: item.key,
-                        label: item.label,
-                      }))}
-                    />
-                  </Space>
-                ) : null}
-
-                {policyKind === "s3" && selectedPresetDescription ? (
-                  <Typography.Text type="secondary">
-                    {selectedPresetDescription}
-                  </Typography.Text>
-                ) : null}
-
-                {editorMode === "form" && policyKind !== "s3"
-                  ? renderStructuredEditor()
-                  : null}
-
-                {editorMode === "json" || policyKind === "s3" ? (
-                  <details className={styles.disclosure} open={policyKind === "s3"}>
-                    <summary className={styles.disclosureSummary}>
-                      Raw JSON editor
-                    </summary>
-                    <div className={styles.disclosureBody}>
-                      <Alert
-                        type="warning"
-                        showIcon
-                        title="Advanced editing area"
-                        description="Use raw JSON when the structured editor does not cover the policy you need. Review the diff before saving."
-                      />
-                      <Space
-                        orientation="vertical"
-                        size="small"
-                        className={styles.fullWidth}
-                      >
-                        <Input.TextArea
-                          value={policyText}
-                          onChange={(e) => {
-                            setPolicyText(e.target.value);
-                            setServerValidation(null);
-                            setServerValidationError(null);
-                          }}
-                          autoSize={{ minRows: 8, maxRows: 24 }}
-                          placeholder={editorPlaceholder}
-                        />
-                        {!parsed.ok ? (
-                          <Alert
-                            type="warning"
-                            showIcon
-                            title="Fix JSON errors first"
-                            description={parsed.error ?? "Invalid JSON"}
-                          />
-                        ) : null}
-                      </Space>
-                    </div>
-                  </details>
-                ) : null}
-
-                {providerWarnings.length > 0 ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    title="Provider-specific notes"
-                    description={providerWarnings.join("\n")}
-                  />
-                ) : null}
-
-                <Alert
-                  type={
-                    hasBlockingValidationIssues
-                      ? "warning"
-                      : parsed.ok
-                        ? "info"
-                        : "warning"
-                  }
-                  showIcon
-                  title={
-                    hasBlockingValidationIssues
-                      ? "Local validation found issues"
-                      : parsed.ok
-                        ? "Local validation OK"
-                        : "Local validation failed"
-                  }
-                  description={
-                    hasBlockingValidationIssues ? (
-                      <Space
-                        orientation="vertical"
-                        size={2}
-                        className={styles.fullWidth}
-                      >
-                        {localValidationErrors.map((row, idx) => (
-                          <Typography.Text
-                            key={`${idx}-${row}`}
-                            type="secondary"
-                          >
-                            {row}
-                          </Typography.Text>
-                        ))}
-                        <Typography.Text type="secondary">
-                          {providerValidationHint}
-                        </Typography.Text>
-                      </Space>
-                    ) : (
-                      providerValidationHint
-                    )
-                  }
-                />
-
-                <Alert
-                  type={hasPolicyChanges ? "info" : "success"}
-                  showIcon
-                  title={
-                    hasPolicyChanges
-                      ? "Unsaved changes detected"
-                      : "No changes to save"
-                  }
-                  description={
-                    hasPolicyChanges
-                      ? `Diff preview shows +${diffStats.added} / -${diffStats.removed} changed lines.`
-                      : "Current editor value matches the loaded policy."
-                  }
-                />
-
-                <Button
-                  onClick={() => {
-                    if (isBusy) return;
-                    if (!parsed.ok) {
-                      message.error(parsed.error ?? "Invalid JSON policy");
-                      return;
-                    }
-                    if (hasBlockingValidationIssues) {
-                      message.error(
-                        localValidationErrors[0] ??
-                          "Fix local validation issues first",
-                      );
-                      return;
-                    }
-                    validateMutation.mutate();
-                  }}
-                  loading={validateMutation.isPending}
-                  disabled={
-                    isBusy ||
-                    !parsed.ok ||
-                    hasBlockingValidationIssues
-                  }
-                >
-                  Validate with provider
-                </Button>
-
-                {serverValidation ? (
-                  <Alert
-                    type={serverValidation.ok ? "success" : "warning"}
-                    showIcon
-                    title={
-                      serverValidation.ok
-                        ? "Server validation OK"
-                        : "Server validation found issues"
-                    }
-                    description={
-                      <Space
-                        orientation="vertical"
-                        size={4}
-                        className={styles.fullWidth}
-                      >
-                        {serverValidationMessages.map((row, idx) => (
-                          <Typography.Text
-                            key={`${idx}-${row}`}
-                            type="secondary"
-                          >
-                            {row}
-                          </Typography.Text>
-                        ))}
-                      </Space>
-                    }
-                  />
-                ) : null}
-
-                {serverValidationError ? (
-                  <Alert
-                    type="error"
-                    showIcon
-                    title="Server validation failed"
-                    description={serverValidationError}
-                  />
-                ) : null}
-
-                {lastProviderError ? (
-                  <Alert
-                    type="error"
-                    showIcon
-                    title="Provider rejected the policy"
-                    description={
-                      <Space
-                        orientation="vertical"
-                        size={4}
-                        className={styles.fullWidth}
-                      >
-                        <Typography.Text type="secondary">
-                          {lastProviderError.message}
-                        </Typography.Text>
-                        {providerCause ? (
-                          <Typography.Text type="secondary">
-                            Cause: {providerCause}
-                          </Typography.Text>
-                        ) : null}
-                        {providerError ? (
-                          <Typography.Text type="secondary">
-                            Provider: {providerError}
-                          </Typography.Text>
-                        ) : null}
-                      </Space>
-                    }
-                  />
-                ) : null}
-              </Space>
-            ),
-          },
-          {
-            key: "preview",
-            label: "Preview",
-            children: (
-              <Space
-                orientation="vertical"
-                size="small"
-                className={styles.fullWidth}
-              >
-                {!parsed.ok ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    title="Fix JSON errors first"
-                    description={parsed.error ?? "Invalid JSON"}
-                  />
-                ) : null}
-                <Input.TextArea
-                  value={previewText || effectivePolicyText}
-                  readOnly
-                  autoSize={{ minRows: 10, maxRows: 24 }}
-                />
-              </Space>
-            ),
-          },
-          {
-            key: "diff",
-            label: hasPolicyChanges
-              ? `Diff (+${diffStats.added}/-${diffStats.removed})`
-              : "Diff",
-            children: (
-              <Space
-                orientation="vertical"
-                size="small"
-                className={styles.fullWidth}
-              >
-                <Alert
-                  type={hasPolicyChanges ? "info" : "success"}
-                  showIcon
-                  title={
-                    hasPolicyChanges
-                      ? "Changes ready to save"
-                      : "No policy changes"
-                  }
-                  description={
-                    hasPolicyChanges
-                      ? `+${diffStats.added} / -${diffStats.removed}`
-                      : undefined
-                  }
-                />
-                <Space align="center" wrap>
-                  <ToggleSwitch
-                    checked={showDiffContext}
-                    onChange={setShowDiffContext}
-                    disabled={!hasPolicyChanges}
-                    ariaLabel="Show unchanged lines"
-                  />
-                  <Typography.Text type="secondary">
-                    Show unchanged lines
-                  </Typography.Text>
-                </Space>
-                <Input.TextArea
-                  value={visibleDiffText}
-                  readOnly
-                  autoSize={{ minRows: 10, maxRows: 24 }}
-                />
-              </Space>
-            ),
-          },
-        ]}
+      <BucketPolicyContentTabs
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        parsed={parsed}
+        editorMode={editorMode}
+        setEditorMode={setEditorMode}
+        policyKind={policyKind}
+        selectedPresetKey={selectedPresetKey}
+        setSelectedPresetKey={setSelectedPresetKey}
+        selectedPresetDescription={selectedPresetDescription}
+        policyPresets={policyPresets.map((item) => ({ key: item.key, label: item.label }))}
+        applyPolicyPreset={applyPolicyPreset}
+        updateStructuredStateFromText={updateStructuredStateFromText}
+        resetServerValidationState={() => {
+          setServerValidation(null);
+          setServerValidationError(null);
+        }}
+        policyText={policyText}
+        setPolicyText={setPolicyText}
+        formPolicyText={formPolicyText}
+        editorPlaceholder={editorPlaceholder}
+        structuredEditor={renderStructuredEditor()}
+        providerWarnings={providerWarnings}
+        hasBlockingValidationIssues={hasBlockingValidationIssues}
+        localValidationErrors={localValidationErrors}
+        providerValidationHint={providerValidationHint}
+        hasPolicyChanges={hasPolicyChanges}
+        diffStats={diffStats}
+        isBusy={isBusy}
+        onValidate={() => {
+          if (isBusy) return;
+          if (!parsed.ok) {
+            message.error(parsed.error ?? "Invalid JSON policy");
+            return;
+          }
+          if (hasBlockingValidationIssues) {
+            message.error(localValidationErrors[0] ?? "Fix local validation issues first");
+            return;
+          }
+          validateMutation.mutate();
+        }}
+        validateLoading={validateMutation.isPending}
+        serverValidation={serverValidation}
+        serverValidationMessages={serverValidationMessages}
+        serverValidationError={serverValidationError}
+        lastProviderError={lastProviderError}
+        providerCause={providerCause}
+        providerError={providerError}
+        previewText={previewText}
+        effectivePolicyText={effectivePolicyText}
+        showDiffContext={showDiffContext}
+        setShowDiffContext={setShowDiffContext}
+        visibleDiffText={visibleDiffText}
       />
     </BucketPolicyDialogShell>
   );
-}
-
-function unifiedDiff(fromText: string, toText: string): string {
-  const a = fromText.split("\n");
-  const b = toText.split("\n");
-
-  const n = a.length;
-  const m = b.length;
-
-  // LCS DP
-  const dp: number[][] = Array.from({ length: n + 1 }, () =>
-    Array(m + 1).fill(0),
-  );
-  for (let i = 1; i <= n; i++) {
-    for (let j = 1; j <= m; j++) {
-      if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
-      else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-    }
-  }
-
-  const out: string[] = [];
-  let i = n;
-  let j = m;
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-      out.push(` ${a[i - 1]}`);
-      i--;
-      j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      out.push(`+${b[j - 1]}`);
-      j--;
-    } else if (i > 0) {
-      out.push(`-${a[i - 1]}`);
-      i--;
-    }
-  }
-
-  out.reverse();
-
-  // Remove empty leading context noise when both are empty.
-  if (fromText.trim() === "" && toText.trim() === "") return " (no changes)";
-
-  return out.join("\n");
 }

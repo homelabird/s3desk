@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"s3desk/internal/models"
@@ -62,5 +64,49 @@ func TestWriteErrorLeavesUnknownCodeUnnormalized(t *testing.T) {
 	}
 	if resp.Error.NormalizedError != nil {
 		t.Fatalf("expected normalizedError to be nil for unknown mapping, got %+v", resp.Error.NormalizedError)
+	}
+}
+
+func TestDecodeJSONRejectsTrailingValues(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "/api/v1/uploads", strings.NewReader(`{"bucket":"demo"}{"bucket":"extra"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	var payload struct {
+		Bucket string `json:"bucket"`
+	}
+	err = decodeJSON(req, &payload)
+	if !errors.Is(err, errJSONTrailingData) {
+		t.Fatalf("decodeJSON() error=%v, want trailing-data rejection", err)
+	}
+}
+
+func TestDecodeJSONWithOptionsRejectsOversizedBody(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "/api/v1/uploads", strings.NewReader(`{"bucket":"oversized"}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	var payload struct {
+		Bucket string `json:"bucket"`
+	}
+	err = decodeJSONWithOptions(req, &payload, jsonDecodeOptions{maxBytes: 8})
+	if !errors.Is(err, errJSONBodyTooLarge) {
+		t.Fatalf("decodeJSONWithOptions() error=%v, want body-too-large rejection", err)
+	}
+}
+
+func TestDecodeJSONWithOptionsAllowsEmptyBody(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/commit", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	var payload struct {
+		Label string `json:"label"`
+	}
+	if err := decodeJSONWithOptions(req, &payload, jsonDecodeOptions{allowEmpty: true}); err != nil {
+		t.Fatalf("decodeJSONWithOptions() unexpected error: %v", err)
 	}
 }

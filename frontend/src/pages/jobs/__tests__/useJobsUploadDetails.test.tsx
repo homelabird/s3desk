@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { type PropsWithChildren } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { APIClient } from '../../../api/client'
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { useJobsUploadDetails } from '../useJobsUploadDetails'
 
 function createWrapper() {
@@ -35,10 +35,14 @@ describe('useJobsUploadDetails', () => {
 			createdAt: '2024-01-01T00:00:00Z',
 		})
 		const getObjectMeta = vi.fn().mockResolvedValue({ etag: 'etag-alpha' })
-		const api = {
-			getJob,
-			getObjectMeta,
-		} as unknown as APIClient
+		const api = createMockApiClient({
+			jobs: {
+				getJob,
+			},
+			objects: {
+				getObjectMeta,
+			},
+		})
 
 		const { result } = renderHook(
 			() =>

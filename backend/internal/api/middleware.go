@@ -175,6 +175,12 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 				}
 			}
 		}
+		if token == "" {
+			queryApiToken := strings.TrimSpace(r.URL.Query().Get("apiToken"))
+			if queryApiToken != "" {
+				token = queryApiToken
+			}
+		}
 		if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
 			realtimeTicket := strings.TrimSpace(r.URL.Query().Get("realtimeTicket"))
 			if realtimeTicket != "" {

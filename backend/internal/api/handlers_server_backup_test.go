@@ -108,6 +108,24 @@ func TestHandleGetServerBackup_IncludesSQLiteAndDataDirEntries(t *testing.T) {
 	}
 }
 
+func TestArchiveEntryFileModeRejectsOutOfRangeValues(t *testing.T) {
+	t.Parallel()
+
+	if _, err := archiveEntryFileMode(-1); err == nil {
+		t.Fatal("expected negative mode to fail")
+	}
+	if _, err := archiveEntryFileMode(int64(^uint32(0)) + 1); err == nil {
+		t.Fatal("expected oversized mode to fail")
+	}
+	mode, err := archiveEntryFileMode(0o764)
+	if err != nil {
+		t.Fatalf("archiveEntryFileMode: %v", err)
+	}
+	if mode != 0o764 {
+		t.Fatalf("archiveEntryFileMode=%#o, want %#o", mode, 0o764)
+	}
+}
+
 func TestHandleGetServerBackup_ClearBundleRetainsHMACIntegrity(t *testing.T) {
 	t.Parallel()
 

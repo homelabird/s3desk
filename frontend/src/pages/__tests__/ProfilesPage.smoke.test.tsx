@@ -7,6 +7,88 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { APIClient, APIError } from '../../api/client'
 import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
+import type { ProfileFormValues } from '../profiles/profileTypes'
+
+vi.mock('../profiles/profilesLazy', async () => {
+	const React = await import('react')
+
+	function MockProfileDialog(props: {
+		title: string
+		submitLabel?: string
+		onClose: () => void
+		onSubmit?: (values: ProfileFormValues) => void
+	}) {
+		const [name, setName] = React.useState('')
+		const [accessKeyId, setAccessKeyId] = React.useState('')
+		const [secretAccessKey, setSecretAccessKey] = React.useState('')
+
+		return (
+			<div role="dialog" aria-label={props.title}>
+				<h2>{props.title}</h2>
+				<label>
+					Name
+					<input aria-label="Name" value={name} onChange={(event) => setName(event.target.value)} />
+				</label>
+				<label>
+					Access Key ID
+					<input aria-label="Access Key ID" value={accessKeyId} onChange={(event) => setAccessKeyId(event.target.value)} />
+				</label>
+				<label>
+					Secret
+					<input aria-label="Secret" value={secretAccessKey} onChange={(event) => setSecretAccessKey(event.target.value)} />
+				</label>
+				<button type="button" aria-label="Close" onClick={props.onClose}>
+					Close
+				</button>
+				{props.onSubmit ? (
+					<button
+						type="button"
+						onClick={() =>
+							props.onSubmit?.(
+								{
+									provider: 's3_compatible',
+									name,
+									endpoint: 'http://127.0.0.1:9000',
+									publicEndpoint: '',
+									region: 'us-east-1',
+									accessKeyId,
+									secretAccessKey,
+									sessionToken: '',
+									forcePathStyle: false,
+									preserveLeadingSlash: false,
+									tlsInsecureSkipVerify: false,
+									tlsEnabled: false,
+									tlsAction: 'keep',
+								} as ProfileFormValues,
+							)
+						}
+					>
+						{props.submitLabel}
+					</button>
+				) : null}
+			</div>
+		)
+	}
+
+	type MockProfilesModalsProps = {
+		createOpen: boolean
+		closeCreateModal: () => void
+		onCreateSubmit: (values: ProfileFormValues) => void
+		editProfile: { id: string } | null
+		closeEditModal: () => void
+	}
+
+	return {
+		ProfilesModals: (props: MockProfilesModalsProps) => (
+			<>
+				{props.createOpen ? (
+					<MockProfileDialog title="Create Profile" submitLabel="Create" onClose={props.closeCreateModal} onSubmit={props.onCreateSubmit} />
+				) : null}
+				{props.editProfile ? <MockProfileDialog title="Edit Profile" onClose={props.closeEditModal} /> : null}
+			</>
+		),
+	}
+})
 
 beforeAll(() => {
 	ensureDomShims()
@@ -15,6 +97,64 @@ beforeAll(() => {
 const SLOW_PROFILES_TIMEOUT_MS = 20_000
 
 const originalMatchMedia = window.matchMedia
+const defaultMeta = {
+	version: 'test',
+	serverAddr: '127.0.0.1:8080',
+	dataDir: '/data',
+	staticDir: '/app/ui',
+	apiTokenEnabled: false,
+	encryptionEnabled: false,
+	capabilities: {
+		profileTls: { enabled: false, reason: 'test' },
+		providers: {},
+	},
+	allowedLocalDirs: [],
+	jobConcurrency: 1,
+	uploadSessionTTLSeconds: 3600,
+	uploadDirectStream: false,
+	transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
+}
+const defaultProfiles = [
+	{
+		id: 'profile-1',
+		name: 'Primary Profile',
+		provider: 's3_compatible',
+		endpoint: 'http://127.0.0.1:9000',
+		region: 'us-east-1',
+		forcePathStyle: false,
+		preserveLeadingSlash: false,
+		tlsInsecureSkipVerify: false,
+		createdAt: '2024-01-01T00:00:00Z',
+		updatedAt: '2024-01-01T00:00:00Z',
+	},
+]
+
+function mockServerApi(meta = defaultMeta) {
+	const serverApi = {
+		getMeta: vi.fn().mockResolvedValue(meta as never),
+	}
+	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue(serverApi as never)
+	return serverApi
+}
+
+function mockProfilesApi(
+	overrides: Partial<{
+		listProfiles: ReturnType<typeof vi.fn>
+		testProfile: ReturnType<typeof vi.fn>
+		createProfile: ReturnType<typeof vi.fn>
+		benchmarkProfile: ReturnType<typeof vi.fn>
+	}> = {},
+) {
+	const profilesApi = {
+		listProfiles: vi.fn().mockResolvedValue(defaultProfiles as never),
+		testProfile: vi.fn(),
+		createProfile: vi.fn(),
+		benchmarkProfile: vi.fn(),
+		...overrides,
+	}
+	vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue(profilesApi as never)
+	return profilesApi
+}
 
 function mockViewportWidth(width: number) {
 	window.matchMedia = vi.fn().mockImplementation((query: string): MediaQueryList => {
@@ -36,8 +176,10 @@ function mockViewportWidth(width: number) {
 	})
 }
 
-afterEach(() => {
-	message.destroy()
+afterEach(async () => {
+	await act(async () => {
+		message.destroy()
+	})
 	window.matchMedia = originalMatchMedia
 	vi.restoreAllMocks()
 })
@@ -49,37 +191,8 @@ describe('ProfilesPage', () => {
 	}
 
 	function mockProfilesPageBase() {
-		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
-			version: 'test',
-			serverAddr: '127.0.0.1:8080',
-			dataDir: '/data',
-			staticDir: '/app/ui',
-			apiTokenEnabled: false,
-			encryptionEnabled: false,
-			capabilities: {
-				profileTls: { enabled: false, reason: 'test' },
-				providers: {},
-			},
-			allowedLocalDirs: [],
-			jobConcurrency: 1,
-			uploadSessionTTLSeconds: 3600,
-			uploadDirectStream: false,
-			transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
-		} as never)
-		vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([
-			{
-				id: 'profile-1',
-				name: 'Primary Profile',
-				provider: 's3_compatible',
-				endpoint: 'http://127.0.0.1:9000',
-				region: 'us-east-1',
-				forcePathStyle: false,
-				preserveLeadingSlash: false,
-				tlsInsecureSkipVerify: false,
-				createdAt: '2024-01-01T00:00:00Z',
-				updatedAt: '2024-01-01T00:00:00Z',
-			},
-		] as never)
+		mockServerApi()
+		return mockProfilesApi()
 	}
 
 	async function openPrimaryProfileAction(actionLabel: 'Test' | 'Benchmark') {
@@ -104,7 +217,6 @@ describe('ProfilesPage', () => {
 			},
 		})
 		mockProfilesPageBase()
-
 		render(
 			<QueryClientProvider client={client}>
 				<MemoryRouter>
@@ -114,6 +226,7 @@ describe('ProfilesPage', () => {
 		)
 
 		expect(screen.getByText('Getting started')).toBeInTheDocument()
+		await screen.findByText('Primary Profile', undefined, { timeout: 5_000 })
 		await act(async () => {
 			fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
 		})
@@ -127,25 +240,10 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
-			version: 'test',
-			serverAddr: '127.0.0.1:8080',
-			dataDir: '/data',
-			staticDir: '/app/ui',
-			apiTokenEnabled: false,
-			encryptionEnabled: false,
-			capabilities: {
-				profileTls: { enabled: false, reason: 'test' },
-				providers: {},
-			},
-			allowedLocalDirs: [],
-			jobConcurrency: 1,
-			uploadSessionTTLSeconds: 3600,
-			uploadDirectStream: false,
-			transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
-		} as never)
-		vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([
-			{
+		mockServerApi()
+		mockProfilesApi({
+			listProfiles: vi.fn().mockResolvedValue([
+				{
 				id: 'legacy-gcs',
 				name: 'Legacy GCS',
 				provider: 'gcp_gcs',
@@ -178,8 +276,9 @@ describe('ProfilesPage', () => {
 						bucketCrud: 'GCS bucket operations require Project Number on this profile.',
 					},
 				},
-			},
-		] as never)
+				},
+			] as never),
+		})
 
 		render(
 			<QueryClientProvider client={client}>
@@ -203,8 +302,8 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		mockProfilesPageBase()
-		const testProfileSpy = vi.spyOn(APIClient.prototype, 'testProfile').mockResolvedValue({
+		const profilesApi = mockProfilesPageBase()
+		const testProfileSpy = profilesApi.testProfile.mockResolvedValue({
 			ok: false,
 			message: 'failed',
 			details: {
@@ -242,8 +341,8 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		mockProfilesPageBase()
-		const testProfileSpy = vi.spyOn(APIClient.prototype, 'testProfile').mockRejectedValue(
+		const profilesApi = mockProfilesPageBase()
+		const testProfileSpy = profilesApi.testProfile.mockRejectedValue(
 			new APIError({
 				status: 400,
 				code: 'transfer_engine_incompatible',
@@ -279,24 +378,10 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
-			version: 'test',
-			serverAddr: '127.0.0.1:8080',
-			dataDir: '/data',
-			staticDir: '/app/ui',
-			apiTokenEnabled: false,
-			encryptionEnabled: false,
-			capabilities: {
-				profileTls: { enabled: false, reason: 'test' },
-				providers: {},
-			},
-			allowedLocalDirs: [],
-			jobConcurrency: 1,
-			uploadSessionTTLSeconds: 3600,
-			uploadDirectStream: false,
-			transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
-		} as never)
-		vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([] as never)
+		mockServerApi()
+		mockProfilesApi({
+			listProfiles: vi.fn().mockResolvedValue([] as never),
+		})
 
 		render(
 			<QueryClientProvider client={client}>
@@ -333,25 +418,11 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
-			version: 'test',
-			serverAddr: '127.0.0.1:8080',
-			dataDir: '/data',
-			staticDir: '/app/ui',
-			apiTokenEnabled: false,
-			encryptionEnabled: false,
-			capabilities: {
-				profileTls: { enabled: false, reason: 'test' },
-				providers: {},
-			},
-			allowedLocalDirs: [],
-			jobConcurrency: 1,
-			uploadSessionTTLSeconds: 3600,
-			uploadDirectStream: false,
-			transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
-		} as never)
-		vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([] as never)
-		vi.spyOn(APIClient.prototype, 'createProfile').mockResolvedValue({
+		mockServerApi()
+		const profilesApi = mockProfilesApi({
+			listProfiles: vi.fn().mockResolvedValue([] as never),
+		})
+		profilesApi.createProfile.mockResolvedValue({
 			id: 'profile-2',
 			name: 'Created Profile',
 			provider: 's3_compatible',
@@ -454,8 +525,8 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		mockProfilesPageBase()
-		const benchmarkProfileSpy = vi.spyOn(APIClient.prototype, 'benchmarkProfile').mockResolvedValue({
+		const profilesApi = mockProfilesPageBase()
+		const benchmarkProfileSpy = profilesApi.benchmarkProfile.mockResolvedValue({
 			ok: false,
 			message: 'failed to list buckets: AccessDenied',
 			cleanedUp: false,
@@ -494,8 +565,8 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		mockProfilesPageBase()
-		const benchmarkProfileSpy = vi.spyOn(APIClient.prototype, 'benchmarkProfile').mockRejectedValue(
+		const profilesApi = mockProfilesPageBase()
+		const benchmarkProfileSpy = profilesApi.benchmarkProfile.mockRejectedValue(
 			new APIError({
 				status: 400,
 				code: 'transfer_engine_missing',
@@ -530,8 +601,8 @@ describe('ProfilesPage', () => {
 			},
 		})
 
-		mockProfilesPageBase()
-		const benchmarkProfileSpy = vi.spyOn(APIClient.prototype, 'benchmarkProfile').mockResolvedValue({
+		const profilesApi = mockProfilesPageBase()
+		const benchmarkProfileSpy = profilesApi.benchmarkProfile.mockResolvedValue({
 			ok: true,
 			message: 'ok',
 			cleanedUp: true,

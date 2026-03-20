@@ -8,9 +8,9 @@ import (
 )
 
 func s3ClientFromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
-	return s3client.FromProfile(secrets), nil
+	return s3client.FromProfile(secrets)
 }
 
 func s3PresignClientFromProfile(secrets models.ProfileSecrets) (*s3.PresignClient, error) {
-	return s3client.PresignFromProfile(secrets), nil
+	return s3client.PresignFromProfile(secrets)
 }

@@ -30,6 +30,7 @@ services:
       ALLOW_REMOTE: "true"
       API_TOKEN: "${API_TOKEN:?set API_TOKEN for remote deployment}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
+      EXTERNAL_BASE_URL: "${EXTERNAL_BASE_URL:-}"
       DB_BACKEND: "postgres"
       DATABASE_URL: "postgres://${POSTGRES_USER:-s3desk}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD for remote deployment}@postgres:5432/${POSTGRES_DB:-s3desk}?sslmode=disable"
       JOB_QUEUE_CAPACITY: "20"

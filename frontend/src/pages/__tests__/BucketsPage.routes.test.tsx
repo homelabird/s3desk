@@ -44,7 +44,7 @@ function LocationProbe() {
 }
 
 function mockBucketsPageBase() {
-	vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+	const getMeta = vi.fn().mockResolvedValue({
 		version: 'test',
 		serverAddr: '127.0.0.1:8080',
 		dataDir: '/data',
@@ -68,7 +68,7 @@ function mockBucketsPageBase() {
 			version: 'v1.66.0',
 		},
 	} as never)
-	vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([
+	const listProfiles = vi.fn().mockResolvedValue([
 		{
 			id: 'profile-1',
 			name: 'Primary Profile',
@@ -82,9 +82,18 @@ function mockBucketsPageBase() {
 			updatedAt: '2024-01-01T00:00:00Z',
 		},
 	] as never)
-	vi.spyOn(APIClient.prototype, 'listBuckets').mockResolvedValue([
+	const bucketsApi = {
+		listBuckets: vi.fn().mockResolvedValue([
 		{ name: 'primary-bucket', createdAt: '2024-01-01T00:00:00Z' },
-	] as never)
+	] as never),
+		deleteBucket: vi.fn(),
+	}
+
+	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({ getMeta } as never)
+	vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue({ listProfiles } as never)
+	vi.spyOn(APIClient.prototype, 'buckets', 'get').mockReturnValue(bucketsApi as never)
+
+	return bucketsApi
 }
 
 function renderBucketsPage() {
@@ -103,8 +112,8 @@ function renderBucketsPage() {
 
 describe('BucketsPage route side effects', () => {
 	it('navigates to Objects with the expected route state for bucket_not_empty errors', async () => {
-		mockBucketsPageBase()
-		const deleteBucket = vi.spyOn(APIClient.prototype, 'deleteBucket').mockRejectedValue(
+		const bucketsApi = mockBucketsPageBase()
+		const deleteBucket = bucketsApi.deleteBucket.mockRejectedValue(
 			new APIError({
 				status: 409,
 				code: 'bucket_not_empty',
@@ -127,8 +136,8 @@ describe('BucketsPage route side effects', () => {
 	})
 
 	it('navigates to Jobs with the expected route state for bucket_not_empty errors', async () => {
-		mockBucketsPageBase()
-		const deleteBucket = vi.spyOn(APIClient.prototype, 'deleteBucket').mockRejectedValue(
+		const bucketsApi = mockBucketsPageBase()
+		const deleteBucket = bucketsApi.deleteBucket.mockRejectedValue(
 			new APIError({
 				status: 409,
 				code: 'bucket_not_empty',

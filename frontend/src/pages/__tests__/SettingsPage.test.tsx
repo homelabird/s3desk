@@ -5,6 +5,10 @@ import type { ComponentProps } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import {
+	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+} from '../../components/transfers/transferConcurrencyPreferences'
 import { ensureDomShims } from '../../test/domShims'
 import { SettingsPage } from '../SettingsPage'
 
@@ -75,14 +79,18 @@ describe('SettingsPage', () => {
 		expect(setProfileId).toHaveBeenCalledWith(null)
 	}, 20_000)
 
-	it('stores transfer proxy preferences in localStorage', async () => {
+	it('stores transfer preferences in localStorage', async () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
 		fireEvent.click(await screen.findByRole('switch'))
+		fireEvent.change(await screen.findByLabelText('Download task concurrency'), { target: { value: '5' } })
+		fireEvent.change(screen.getByLabelText('Upload task concurrency'), { target: { value: '3' } })
 
 		await waitFor(() => {
 			expect(window.localStorage.getItem('downloadLinkProxyEnabled')).toBe('true')
+			expect(window.localStorage.getItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBe('5')
+			expect(window.localStorage.getItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBe('3')
 		})
 	})
 
@@ -91,6 +99,8 @@ describe('SettingsPage', () => {
 		vi.spyOn(console, 'error').mockImplementation(() => undefined)
 		window.localStorage.setItem('bucket', 'archive-bucket')
 		window.localStorage.setItem('objectsSearch', 'photos')
+		window.localStorage.setItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY, '6')
+		window.localStorage.setItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY, '4')
 		window.localStorage.setItem('uploadBatchConcurrency', '32')
 		window.localStorage.setItem('objects:profile-1:bucket', 'scoped-bucket')
 		window.localStorage.setItem('objects:profile-1:prefix', 'nested/path/')
@@ -105,6 +115,8 @@ describe('SettingsPage', () => {
 		await waitFor(() => {
 			expect(window.localStorage.getItem('bucket')).toBeNull()
 			expect(window.localStorage.getItem('objectsSearch')).toBeNull()
+			expect(window.localStorage.getItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBeNull()
+			expect(window.localStorage.getItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBeNull()
 			expect(window.localStorage.getItem('uploadBatchConcurrency')).toBeNull()
 			expect(window.localStorage.getItem('objects:profile-1:bucket')).toBeNull()
 			expect(window.localStorage.getItem('objects:profile-1:prefix')).toBeNull()

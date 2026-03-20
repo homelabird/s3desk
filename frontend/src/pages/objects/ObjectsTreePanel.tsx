@@ -2,7 +2,7 @@ import { Button } from 'antd'
 import { FolderAddOutlined } from '@ant-design/icons'
 import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 
-import styles from './objects.module.css'
+import styles from './ObjectsShell.module.css'
 import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import { ObjectsTreePane } from './ObjectsTreePane'
@@ -155,7 +155,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 				onClose={props.onCloseDrawer}
 				title="Browse"
 				placement="left"
-				width="min(90vw, 420px)"
+				width="min(100vw, 420px)"
 				dataTestId="objects-tree-sheet"
 			>
 				{renderPanel(props.onSelectKeyFromDrawer, props.onSelectFavoriteFromDrawer)}

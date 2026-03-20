@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import type { ObjectMeta } from '../../api/types'
 import { DialogModal } from '../../components/DialogModal'
 import { formatBytes } from '../../lib/transfer'
-import styles from './objects.module.css'
+import styles from './ObjectsImageViewer.module.css'
 import { clampNumber, guessPreviewKind } from './objectsListUtils'
 import type { ObjectPreview } from './objectsTypes'
 import { IMAGE_PREVIEW_MAX_BYTES } from './useObjectPreview'
@@ -274,7 +274,7 @@ function ObjectsImageViewerModalSession(props: ObjectsImageViewerModalProps) {
 					ref={stageRef}
 					data-testid="objects-image-viewer-stage"
 					className={`${styles.imageViewerStage} ${dragState ? styles.imageViewerStageDragging : ''}`}
-					style={{ minHeight: isMobile ? 'calc(100vh - 300px)' : 420 }}
+					style={{ minHeight: isMobile ? 'calc(100dvh - 300px)' : 420 }}
 					onPointerDown={handlePointerDown}
 					onPointerMove={handlePointerMove}
 					onPointerUp={handlePointerEnd}

@@ -51,7 +51,7 @@ function LocationProbe() {
 }
 
 function mockProfilesPageBase() {
-	vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+	const getMeta = vi.fn().mockResolvedValue({
 		version: 'test',
 		serverAddr: '127.0.0.1:8080',
 		dataDir: '/data',
@@ -68,7 +68,8 @@ function mockProfilesPageBase() {
 		uploadDirectStream: false,
 		transferEngine: { name: 'rclone', available: true, compatible: true, minVersion: '1.52.0', path: '/usr/bin/rclone', version: 'v1.66.0' },
 	} as never)
-	vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([
+	const profilesApi = {
+		listProfiles: vi.fn().mockResolvedValue([
 		{
 			id: 'profile-1',
 			name: 'Primary Profile',
@@ -81,7 +82,11 @@ function mockProfilesPageBase() {
 			createdAt: '2024-01-01T00:00:00Z',
 			updatedAt: '2024-01-01T00:00:00Z',
 		},
-	] as never)
+	] as never),
+	}
+
+	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({ getMeta } as never)
+	vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue(profilesApi as never)
 }
 
 describe('ProfilesPage lazy modals', () => {

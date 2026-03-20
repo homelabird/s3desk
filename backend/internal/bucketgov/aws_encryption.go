@@ -12,7 +12,10 @@ import (
 )
 
 func (a *awsAdapter) GetEncryption(ctx context.Context, profile models.ProfileSecrets, bucket string) (models.BucketEncryptionView, error) {
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return models.BucketEncryptionView{}, err
+	}
 	out, err := client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
 		Bucket: &bucket,
 	})
@@ -32,7 +35,10 @@ func (a *awsAdapter) PutEncryption(ctx context.Context, profile models.ProfileSe
 		return err
 	}
 
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return err
+	}
 	_, putErr := client.PutBucketEncryption(ctx, &s3.PutBucketEncryptionInput{
 		Bucket: &bucket,
 		ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{
@@ -81,7 +87,10 @@ func (a *awsAdapter) toS3EncryptionRule(ctx context.Context, profile models.Prof
 }
 
 func (a *awsAdapter) currentBucketKeyEnabled(ctx context.Context, profile models.ProfileSecrets, bucket string) (bool, error) {
-	client := a.newClient(profile)
+	client, err := a.clientFor(profile, bucket)
+	if err != nil {
+		return false, err
+	}
 	out, err := client.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{
 		Bucket: &bucket,
 	})

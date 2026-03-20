@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect } from 'react'
 
-import styles from './objects/objects.module.css'
+import styles from './objects/ObjectsShell.module.css'
 import { ObjectsPageHeader } from './objects/ObjectsPageHeader'
 import { ObjectsPageOverlays } from './objects/ObjectsPageOverlays'
 import { ObjectsPagePanes } from './objects/ObjectsPagePanes'

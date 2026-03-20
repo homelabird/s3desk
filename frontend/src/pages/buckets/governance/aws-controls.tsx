@@ -45,7 +45,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
 
   const publicExposureMutation = useMutation({
     mutationFn: () =>
-      props.api.putBucketPublicExposure(props.profileId, props.bucket, {
+      props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, {
         blockPublicAccess: publicAccessBlock,
       }),
     onSuccess: async () => {
@@ -58,7 +58,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
   const accessMutation = useMutation({
     mutationFn: () => {
       const req: BucketAccessPutRequest = { objectOwnership };
-      return props.api.putBucketAccess(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketAccess(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Object ownership updated");
@@ -70,7 +70,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
   const versioningMutation = useMutation({
     mutationFn: () => {
       const req: BucketVersioningPutRequest = { status: versioningStatus };
-      return props.api.putBucketVersioning(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketVersioning(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Versioning updated");
@@ -88,7 +88,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
             ? kmsKeyId.trim()
             : undefined,
       };
-      return props.api.putBucketEncryption(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketEncryption(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Default encryption updated");
@@ -103,7 +103,7 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
         lifecycleText,
         "Lifecycle rules",
       );
-      return props.api.putBucketLifecycle(props.profileId, props.bucket, {
+      return props.api.buckets.putBucketLifecycle(props.profileId, props.bucket, {
         rules,
       });
     },

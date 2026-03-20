@@ -74,7 +74,7 @@ async function stubObjectsSmokeApi(page: Page, overrides?: Partial<StorageSeed>)
 	])
 }
 
-test.describe('Objects page smoke', () => {
+test.describe('@check-smoke Objects page smoke', () => {
 	test('simple mode hides advanced controls', async ({ page }) => {
 		await stubObjectsSmokeApi(page, { objectsUIMode: 'simple' })
 		await seedStorage(page, { objectsUIMode: 'simple' })

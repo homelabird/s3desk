@@ -16,7 +16,7 @@ import type { ReactNode } from 'react'
 import { ObjectsBucketPicker } from './ObjectsBucketPicker'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { UIAction } from './objectsActions'
-import styles from './objects.module.css'
+import styles from './ObjectsShell.module.css'
 
 export type ObjectsToolbarProps = {
 	isDesktop: boolean

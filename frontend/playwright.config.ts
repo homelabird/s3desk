@@ -61,7 +61,8 @@ export default defineConfig({
 			use: {
 				...devices['Desktop Chrome'],
 			},
-			testIgnore: /mobile-smoke\.spec\.ts/,
+			testIgnore:
+				/(?:mobile-smoke|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
 		},
 		{
 			name: 'mobile-iphone-13',
@@ -71,14 +72,16 @@ export default defineConfig({
 				// WebKit binaries frequently require distro-specific deps on non-Ubuntu runners.
 				browserName: 'chromium',
 			},
-			testMatch: /mobile-smoke\.spec\.ts/,
+			testMatch:
+				/(?:mobile-smoke|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
 		},
 		{
 			name: 'mobile-pixel-7',
 			use: {
 				...devices['Pixel 7'],
 			},
-			testMatch: /mobile-smoke\.spec\.ts/,
+			testMatch:
+				/(?:mobile-smoke|objects-mobile-responsive|jobs-mobile-responsive|uploads-mobile-responsive|profiles-mobile-responsive|buckets-mobile-responsive|settings-mobile-responsive|login-mobile-responsive)\.spec\.ts/,
 		},
 	],
 })

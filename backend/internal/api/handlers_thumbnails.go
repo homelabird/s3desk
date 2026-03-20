@@ -804,6 +804,7 @@ func loadThumbnailManifestPath(baseDir, profileID, bucket, key string, size int)
 	if err != nil || info.IsDir() || time.Since(info.ModTime()) > thumbnailCacheTTL {
 		return "", false
 	}
+	// #nosec G304 -- manifestPath is a deterministic cache path under the thumbnails manifest root.
 	raw, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return "", false

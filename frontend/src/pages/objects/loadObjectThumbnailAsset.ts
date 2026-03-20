@@ -76,7 +76,7 @@ export function loadObjectThumbnailAsset(args: LoadObjectThumbnailAssetArgs): Tr
 		}
 
 		const handle = scheduleThumbnailRequest(() =>
-			args.api.downloadObjectThumbnail({
+			args.api.objects.downloadObjectThumbnail({
 				profileId: args.request.profileId,
 				bucket: args.request.bucket,
 				key: args.request.objectKey,

@@ -134,13 +134,19 @@ func TestJobCancelLifecycle(t *testing.T) {
 }
 
 func TestJobCancelQueued(t *testing.T) {
-	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	lockTestEnv(t)
+	t.Setenv("JOB_QUEUE_CAPACITY", "1")
+
+	st, manager, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
 
 	job := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
 		"bucket": "test-bucket",
 		"keys":   []any{"a.txt"},
 	})
+	if stats := manager.QueueStats(); stats.Depth != 1 || stats.Capacity != 1 {
+		t.Fatalf("expected queue depth/capacity 1/1 after enqueue, got %d/%d", stats.Depth, stats.Capacity)
+	}
 
 	cancelRes := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs/"+job.ID+"/cancel", profile.ID, nil)
 	defer cancelRes.Body.Close()
@@ -158,6 +164,9 @@ func TestJobCancelQueued(t *testing.T) {
 	if canceled.FinishedAt == nil || *canceled.FinishedAt == "" {
 		t.Fatalf("expected finishedAt in cancel response")
 	}
+	if stats := manager.QueueStats(); stats.Depth != 0 || stats.Capacity != 1 {
+		t.Fatalf("expected queue depth/capacity 0/1 after cancel, got %d/%d", stats.Depth, stats.Capacity)
+	}
 
 	updated := getJob(t, srv, profile.ID, job.ID)
 	if updated.Status != models.JobStatusCanceled {
@@ -165,6 +174,17 @@ func TestJobCancelQueued(t *testing.T) {
 	}
 	if updated.ErrorCode == nil || *updated.ErrorCode != jobs.ErrorCodeCanceled {
 		t.Fatalf("expected error code %q, got %v", jobs.ErrorCodeCanceled, updated.ErrorCode)
+	}
+
+	next := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+		"bucket": "test-bucket",
+		"keys":   []any{"b.txt"},
+	})
+	if next.Status != models.JobStatusQueued {
+		t.Fatalf("expected replacement job to be queued, got %s", next.Status)
+	}
+	if stats := manager.QueueStats(); stats.Depth != 1 || stats.Capacity != 1 {
+		t.Fatalf("expected queue depth/capacity 1/1 after replacement enqueue, got %d/%d", stats.Depth, stats.Capacity)
 	}
 }
 
@@ -434,6 +454,58 @@ func TestJobCreateRejectsLocalPathOutsideAllowedRoots(t *testing.T) {
 	}
 	if !strings.Contains(errResp.Error.Message, "not under an allowed local directory") {
 		t.Fatalf("expected local directory guard message, got %q", errResp.Error.Message)
+	}
+}
+
+func TestJobCreateRejectsUnsupportedControlCharactersInFilesFromRawKeys(t *testing.T) {
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	cases := []struct {
+		name    string
+		jobType string
+		payload map[string]any
+	}{
+		{
+			name:    "delete objects",
+			jobType: jobs.JobTypeS3DeleteObjects,
+			payload: map[string]any{
+				"bucket": "test-bucket",
+				"keys":   []any{"good.txt", "bad\nkey"},
+			},
+		},
+		{
+			name:    "zip objects",
+			jobType: jobs.JobTypeS3ZipObjects,
+			payload: map[string]any{
+				"bucket": "test-bucket",
+				"keys":   []any{"good.txt", "bad\rkey"},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := models.JobCreateRequest{
+				Type:    tc.jobType,
+				Payload: tc.payload,
+			}
+			res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs", profile.ID, req)
+			defer res.Body.Close()
+			if res.StatusCode != http.StatusBadRequest {
+				body, _ := io.ReadAll(res.Body)
+				t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(body))
+			}
+
+			var errResp models.ErrorResponse
+			decodeJSONResponse(t, res, &errResp)
+			if errResp.Error.Code != "invalid_request" {
+				t.Fatalf("expected invalid_request, got %q", errResp.Error.Code)
+			}
+			if !strings.Contains(errResp.Error.Message, "unsupported control characters") {
+				t.Fatalf("expected control character error, got %q", errResp.Error.Message)
+			}
+		})
 	}
 }
 

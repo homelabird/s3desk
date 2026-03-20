@@ -2,6 +2,18 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+MODE="${1:-full}"
+
+case "${MODE}" in
+  fast|full) ;;
+  *)
+    echo "[check] unknown mode: ${MODE}" >&2
+    echo "[check] usage: ./scripts/check.sh [fast|full]" >&2
+    exit 1
+    ;;
+esac
+
+echo "[check] mode: ${MODE}"
 
 GO_BIN="${GO_BIN:-}"
 if [[ -z "${GO_BIN}" ]]; then
@@ -26,6 +38,24 @@ if [[ -z "${GOFMT_BIN}" ]]; then
     exit 1
   fi
 fi
+
+resolve_go_helper_tool() {
+  local var_name="$1"
+  local tool_name="$2"
+  local current_value="${!var_name:-}"
+  if [[ -n "${current_value}" ]]; then
+    return 0
+  fi
+  if command -v "${tool_name}" >/dev/null 2>&1; then
+    printf -v "${var_name}" '%s' "${tool_name}"
+    return 0
+  fi
+  if [[ -x "${ROOT}/.tools/go/bin/${tool_name}" ]]; then
+    printf -v "${var_name}" '%s' "${ROOT}/.tools/go/bin/${tool_name}"
+    return 0
+  fi
+  return 1
+}
 
 echo "[check] openapi"
 bash "${ROOT}/scripts/validate_openapi.sh"
@@ -68,6 +98,33 @@ echo "[check] backend"
   cd "${ROOT}/backend"
   "${GO_BIN}" vet ./...
   "${GO_BIN}" test ./...
+  if [[ "${MODE}" == "full" ]]; then
+    echo "[check] backend security analysis"
+
+    STATICCHECK_BIN="${STATICCHECK_BIN:-}"
+    GOSEC_BIN="${GOSEC_BIN:-}"
+    GOVULNCHECK_BIN="${GOVULNCHECK_BIN:-}"
+
+    if ! resolve_go_helper_tool STATICCHECK_BIN staticcheck; then
+      echo "[check] staticcheck not found" >&2
+      echo "[check] install with: go install honnef.co/go/tools/cmd/staticcheck@latest" >&2
+      exit 1
+    fi
+    if ! resolve_go_helper_tool GOSEC_BIN gosec; then
+      echo "[check] gosec not found" >&2
+      echo "[check] install with: go install github.com/securego/gosec/v2/cmd/gosec@latest" >&2
+      exit 1
+    fi
+    if ! resolve_go_helper_tool GOVULNCHECK_BIN govulncheck; then
+      echo "[check] govulncheck not found" >&2
+      echo "[check] install with: go install golang.org/x/vuln/cmd/govulncheck@latest" >&2
+      exit 1
+    fi
+
+    "${STATICCHECK_BIN}" ./...
+    "${GOSEC_BIN}" -quiet ./...
+    "${GOVULNCHECK_BIN}" ./...
+  fi
 )
 
 REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR:-22}"
@@ -115,6 +172,14 @@ echo "[check] frontend"
   npm run lint
   npm run test:unit
   npm run build
+  if [[ "${MODE}" == "full" ]]; then
+    echo "[check] frontend browser smoke"
+    if ! npm run test:e2e:smoke; then
+      echo "[check] browser smoke failed" >&2
+      echo "[check] if Playwright Chromium is missing, run: cd frontend && npx playwright install --with-deps chromium" >&2
+      exit 1
+    fi
+  fi
 )
 
 echo "[check] third-party notices"

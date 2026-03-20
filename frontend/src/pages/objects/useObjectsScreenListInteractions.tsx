@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 
 import { COMPACT_ROW_HEIGHT_PX, WIDE_ROW_HEIGHT_PX } from './objectsPageConstants'
 import { logContextMenuDebug } from './objectsPageDebug'
-import styles from './objects.module.css'
+import styles from './ObjectsListView.module.css'
 import { useObjectDownloads } from './useObjectDownloads'
 import { useObjectsBreadcrumbItems } from './useObjectsBreadcrumbItems'
 import { useObjectsClipboard } from './useObjectsClipboard'

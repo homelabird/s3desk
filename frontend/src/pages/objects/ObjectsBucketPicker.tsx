@@ -2,7 +2,7 @@ import { CheckCircleFilled, DownOutlined, SearchOutlined } from '@ant-design/ico
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
-import styles from './objects.module.css'
+import styles from './ObjectsBucketPicker.module.css'
 
 type BucketOption = {
 	label: string
@@ -401,7 +401,7 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 				onClose={closeMobileDrawer}
 				title="Select bucket"
 				placement="bottom"
-				height="78vh"
+				height="78dvh"
 				dataTestId="objects-bucket-picker-mobile-drawer"
 				extra={
 					props.value ? (

@@ -1,6 +1,6 @@
 import { DownOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
-import { useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 
 import { PopoverSurface, type PopoverOpenSource } from '../../components/PopoverSurface'
 import styles from './objects.module.css'
@@ -34,7 +34,13 @@ type ObjectsMenuPopoverProps = {
 }
 
 export const OBJECTS_MENU_ROOT_SELECTOR = '[data-objects-menu-root="true"]'
-const menuRootDataAttrs = { 'data-objects-menu-root': 'true' } as HTMLAttributes<HTMLDivElement>
+const menuRootDataAttrs = { 'data-objects-menu-root': 'true' }
+const APP_CONTENT_VIEWPORT_SELECTOR = '[data-scroll-container="app-content"]'
+
+function getAppContentViewportRect(anchorElement: HTMLDivElement) {
+	const viewportElement = anchorElement.closest(APP_CONTENT_VIEWPORT_SELECTOR)
+	return viewportElement instanceof HTMLElement ? viewportElement.getBoundingClientRect() : null
+}
 
 function isDivider(item: MenuEntry): item is MenuDivider {
 	return !!item && typeof item === 'object' && 'type' in item && item.type === 'divider'
@@ -181,6 +187,7 @@ export function ObjectsMenuPopover(props: ObjectsMenuPopoverProps) {
 			contentClassName={`${styles.toolbarMenuPopover} ${align === 'end' ? styles.toolbarMenuPopoverEnd : ''} ${menuClassName ?? ''}`.trim()}
 			rootProps={menuRootDataAttrs}
 			contentProps={menuRootDataAttrs}
+			getViewportRect={getAppContentViewportRect}
 			open={open}
 			onOpenChange={onOpenChange}
 			content={({ close }) => <ObjectsMenuContent menu={menu} close={close} />}

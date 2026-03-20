@@ -92,4 +92,36 @@ describe('ObjectsImageViewerModal', () => {
 		expect(await screen.findByTestId('objects-image-viewer-modal')).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'URL' })).not.toBeInTheDocument()
 	})
+
+	it('uses a dvh-based stage height on mobile', async () => {
+		render(
+			<ObjectsImageViewerModal
+				open
+				isMobile
+				objectKey="clip.mp4"
+				isMetaFetching={false}
+				objectMeta={{
+					key: 'clip.mp4',
+					contentType: 'video/mp4',
+					size: 52_386_776,
+				} as never}
+				preview={{
+					key: 'clip.mp4',
+					status: 'ready',
+					kind: 'video',
+					contentType: 'image/jpeg',
+					url: 'blob:video-thumb',
+				}}
+				onLoadPreview={vi.fn()}
+				onCancelPreview={vi.fn()}
+				canCancelPreview={false}
+				onClose={vi.fn()}
+				onDownload={vi.fn()}
+				onPresign={vi.fn()}
+				isPresignLoading={false}
+			/>,
+		)
+
+		expect(await screen.findByTestId('objects-image-viewer-stage')).toHaveStyle({ minHeight: 'calc(100dvh - 300px)' })
+	})
 })

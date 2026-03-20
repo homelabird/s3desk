@@ -1,11 +1,30 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"s3desk/internal/models"
 )
+
+const (
+	defaultJSONRequestBodyMaxBytes         int64 = 4 << 20
+	uploadCommitJSONRequestBodyMaxBytes          = 8 << 20
+	uploadMultipartJSONRequestBodyMaxBytes       = 4 << 20
+)
+
+var (
+	errJSONBodyTooLarge = errors.New("json request body too large")
+	errJSONTrailingData = errors.New("json request body must contain a single JSON value")
+)
+
+type jsonDecodeOptions struct {
+	maxBytes   int64
+	allowEmpty bool
+}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -80,7 +99,57 @@ func normalizedErrorFromCode(code string) (*models.NormalizedError, bool) {
 }
 
 func decodeJSON(r *http.Request, dst any) error {
-	dec := json.NewDecoder(r.Body)
+	return decodeJSONWithOptions(r, dst, jsonDecodeOptions{maxBytes: defaultJSONRequestBodyMaxBytes})
+}
+
+func decodeJSONWithOptions(r *http.Request, dst any, opts jsonDecodeOptions) error {
+	maxBytes := opts.maxBytes
+	if maxBytes <= 0 {
+		maxBytes = defaultJSONRequestBodyMaxBytes
+	}
+	if r == nil || r.Body == nil {
+		if opts.allowEmpty {
+			return nil
+		}
+		return io.EOF
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxBytes+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(body)) > maxBytes {
+		return errJSONBodyTooLarge
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		if opts.allowEmpty {
+			return nil
+		}
+		return io.EOF
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
-	return dec.Decode(dst)
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	var extra json.RawMessage
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errJSONTrailingData
+		}
+		return err
+	}
+	return nil
+}
+
+func writeJSONDecodeError(w http.ResponseWriter, err error, maxBytes int64) {
+	if errors.Is(err, errJSONBodyTooLarge) {
+		if maxBytes <= 0 {
+			maxBytes = defaultJSONRequestBodyMaxBytes
+		}
+		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "request body too large", map[string]any{"maxBytes": maxBytes})
+		return
+	}
+	writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
 }
