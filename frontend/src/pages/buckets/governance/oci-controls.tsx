@@ -69,7 +69,7 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
 
   const publicExposureMutation = useMutation({
     mutationFn: () =>
-      props.api.putBucketPublicExposure(props.profileId, props.bucket, {
+      props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, {
         visibility,
       }),
     onSuccess: async () => {
@@ -82,7 +82,7 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
   const versioningMutation = useMutation({
     mutationFn: () => {
       const req: BucketVersioningPutRequest = { status: versioningStatus };
-      return props.api.putBucketVersioning(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketVersioning(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Versioning updated");
@@ -109,7 +109,7 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
           })),
         },
       };
-      return props.api.putBucketProtection(
+      return props.api.buckets.putBucketProtection(
         props.profileId,
         props.bucket,
         req as BucketProtectionPutRequest,
@@ -134,7 +134,7 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
           timeExpires: item.timeExpires.trim() || undefined,
         })),
       };
-      return props.api.putBucketSharing(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketSharing(props.profileId, props.bucket, req);
     },
     onSuccess: async (view) => {
       const nextSharing = view as OCISharingView | undefined;

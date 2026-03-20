@@ -151,13 +151,13 @@ export function BucketsPage(props: Props) {
 
   const metaQuery = useQuery({
     queryKey: ["meta", props.apiToken],
-    queryFn: () => api.getMeta(),
+    queryFn: () => api.server.getMeta(),
     enabled: !!props.apiToken,
   });
 
   const profilesQuery = useQuery({
     queryKey: ["profiles", props.apiToken],
-    queryFn: () => api.listProfiles(),
+    queryFn: () => api.profiles.listProfiles(),
     enabled: !!props.apiToken,
   });
   const selectedProfile: Profile | null = useMemo(() => {
@@ -206,7 +206,7 @@ export function BucketsPage(props: Props) {
 
   const bucketsQuery = useQuery({
     queryKey: ["buckets", props.profileId, props.apiToken],
-    queryFn: () => api.listBuckets(props.profileId!),
+    queryFn: () => api.buckets.listBuckets(props.profileId!),
     enabled: !!props.profileId && profileResolved && bucketCrudSupported,
     staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
   });
@@ -216,7 +216,7 @@ export function BucketsPage(props: Props) {
 
   const createMutation = useMutation({
     mutationFn: (req: BucketCreateRequest) =>
-      api.createBucket(props.profileId!, req),
+      api.buckets.createBucket(props.profileId!, req),
     onSuccess: async () => {
       message.success("Bucket created");
       await queryClient.invalidateQueries({ queryKey: ["buckets"] });
@@ -247,7 +247,7 @@ export function BucketsPage(props: Props) {
 
   const deleteMutation = useMutation({
     mutationFn: (bucketName: string) =>
-      api.deleteBucket(props.profileId!, bucketName),
+      api.buckets.deleteBucket(props.profileId!, bucketName),
     onMutate: (bucketName) => setDeletingBucket(bucketName),
     onSuccess: async () => {
       message.success("Bucket deleted");

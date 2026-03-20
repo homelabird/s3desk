@@ -4,6 +4,53 @@
 	margin: 0 auto;
 }
 
+.onboardingCard {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 18px 20px;
+	border: 1px solid var(--s3d-color-info-border);
+	border-radius: 18px;
+	background: var(--s3d-color-primary-bg);
+	box-shadow: var(--s3d-shadow-sm);
+}
+
+.onboardingHeader {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.onboardingTitle {
+	margin: 0;
+}
+
+.onboardingChecklist {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.onboardingActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.onboardingDismissButton {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--s3d-color-primary);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.onboardingDismissButton:hover {
+	text-decoration: underline;
+}
+
 .tableWrap {
 	border: 1px solid var(--s3d-color-border);
 	border-radius: 22px;
@@ -216,6 +263,16 @@
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--s3d-color-text-secondary);
+}
+
+@media (max-width: 767px) {
+	.onboardingCard {
+		padding: 16px;
+	}
+
+	.onboardingActions {
+		align-items: stretch;
+	}
 }
 
 .mobileMetaValue {

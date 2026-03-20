@@ -5,17 +5,14 @@ import type { BucketCreateRequest, Profile } from '../../api/types'
 import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import { runIfActionIdle } from '../../lib/pendingActionGuard'
+import { BucketCreateDefaultsSection } from './BucketCreateDefaultsSection'
 import styles from './BucketModal.module.css'
-import { AwsBucketCreateDefaults } from './create/aws-defaults'
-import { AzureBucketCreateDefaults } from './create/azure-defaults'
-import { GcsBucketCreateDefaults } from './create/gcs-defaults'
+import { buildBucketCreateDefaults } from './bucketCreateDefaultsBuild'
+import { getBucketCreateRegionMeta, resetBucketCreateModalState } from './bucketCreateDefaultsState'
 import {
-	awsBlockPublicAccess,
 	createInitialAWSDefaults,
 	createInitialAzureDefaults,
 	createInitialGCSDefaults,
-	normalizeAzureStoredPolicies,
-	normalizeGCSBindings,
 } from './create/types'
 
 export function BucketModal(props: {
@@ -37,100 +34,26 @@ export function BucketModal(props: {
 		return `create-default-${keyCounter.current}`
 	}
 
-	const regionMeta = (() => {
-		switch (props.provider) {
-			case 'azure_blob':
-				return { show: false, label: '', placeholder: '' }
-			case 'gcp_gcs':
-				return { show: true, label: 'Location (optional)', placeholder: 'us-central1' }
-			default:
-				return { show: true, label: 'Region (optional)', placeholder: 'us-east-1' }
-		}
-	})()
+	const regionMeta = getBucketCreateRegionMeta(props.provider)
 
 	const canSubmit = !!name.trim()
 	const isBusy = props.loading
-	const reset = () => {
-		setName('')
-		setRegion('')
-		setSubmitError(null)
-		setAwsDefaults(createInitialAWSDefaults())
-		setGcsDefaults(createInitialGCSDefaults())
-		setAzureDefaults(createInitialAzureDefaults())
+
+	const clearSubmitError = () => setSubmitError(null)
+
+	const handleNameChange = (value: string) => {
+		clearSubmitError()
+		setName(value)
 	}
 
-	const buildAWSDefaults = (): BucketCreateRequest['defaults'] | undefined => {
-		if (props.provider !== 'aws_s3' || !awsDefaults.enabled) return undefined
-		const defaults: NonNullable<BucketCreateRequest['defaults']> = {}
-
-		if (awsDefaults.blockPublicAccess) {
-			defaults.publicExposure = { blockPublicAccess: awsBlockPublicAccess }
-		}
-		if (awsDefaults.objectOwnershipEnabled) {
-			defaults.access = { objectOwnership: awsDefaults.objectOwnership }
-		}
-		if (awsDefaults.versioningEnabled) {
-			defaults.versioning = { status: 'enabled' }
-		}
-		if (awsDefaults.encryptionEnabled) {
-			const kmsKeyId = awsDefaults.kmsKeyId.trim()
-			defaults.encryption = {
-				mode: awsDefaults.encryptionMode,
-				kmsKeyId: awsDefaults.encryptionMode === 'sse_kms' && kmsKeyId ? kmsKeyId : undefined,
-			}
-		}
-
-		return Object.keys(defaults).length > 0 ? defaults : undefined
+	const handleRegionChange = (value: string) => {
+		clearSubmitError()
+		setRegion(value)
 	}
 
-	const buildGCSDefaults = (): BucketCreateRequest['defaults'] | undefined => {
-		if (props.provider !== 'gcp_gcs' || !gcsDefaults.enabled) return undefined
-		const defaults: NonNullable<BucketCreateRequest['defaults']> = {
-			publicExposure: {
-				mode: gcsDefaults.publicMode,
-			},
-		}
-
-		if (gcsDefaults.bindingsEnabled) {
-			const bindings = normalizeGCSBindings(gcsDefaults.bindings)
-			if (bindings.length > 0) {
-				defaults.access = { bindings }
-			}
-		}
-
-		return defaults
-	}
-
-	const buildAzureDefaults = (): BucketCreateRequest['defaults'] | undefined => {
-		if (props.provider !== 'azure_blob' || !azureDefaults.enabled) return undefined
-		const defaults: NonNullable<BucketCreateRequest['defaults']> = {
-			publicExposure: {
-				mode: azureDefaults.visibility,
-				visibility: azureDefaults.visibility,
-			},
-		}
-
-		if (azureDefaults.storedPoliciesEnabled) {
-			const storedAccessPolicies = normalizeAzureStoredPolicies(azureDefaults.storedPolicies)
-			if (storedAccessPolicies.length > 0) {
-				defaults.access = { storedAccessPolicies }
-			}
-		}
-
-		return defaults
-	}
-
-	const buildDefaults = (): BucketCreateRequest['defaults'] | undefined => {
-		switch (props.provider) {
-			case 'aws_s3':
-				return buildAWSDefaults()
-			case 'gcp_gcs':
-				return buildGCSDefaults()
-			case 'azure_blob':
-				return buildAzureDefaults()
-			default:
-				return undefined
-		}
+	const submitRequest = (req: BucketCreateRequest) => {
+		clearSubmitError()
+		props.onSubmit(req)
 	}
 
 	const handleSubmit = () => {
@@ -140,9 +63,13 @@ export function BucketModal(props: {
 		const trimmedRegion = region.trim()
 
 		try {
-			const defaults = buildDefaults()
-			setSubmitError(null)
-			props.onSubmit({
+			const defaults = buildBucketCreateDefaults({
+				provider: props.provider,
+				awsDefaults,
+				gcsDefaults,
+				azureDefaults,
+			})
+			submitRequest({
 				name: trimmedName,
 				region: trimmedRegion ? trimmedRegion : undefined,
 				defaults,
@@ -154,50 +81,29 @@ export function BucketModal(props: {
 
 	const handleCancel = () => {
 		if (isBusy) return
-		reset()
+		resetBucketCreateModalState({
+			setName,
+			setRegion,
+			setSubmitError,
+			setAwsDefaults,
+			setGcsDefaults,
+			setAzureDefaults,
+		})
 		runIfActionIdle(isBusy, props.onCancel)
 	}
 
-	const renderSecureDefaults = () => {
-		switch (props.provider) {
-			case 'aws_s3':
-				return (
-					<AwsBucketCreateDefaults
-						state={awsDefaults}
-						onChange={setAwsDefaults}
-						clearSubmitError={() => setSubmitError(null)}
-					/>
-				)
-			case 'gcp_gcs':
-				return (
-					<GcsBucketCreateDefaults
-						state={gcsDefaults}
-						onChange={setGcsDefaults}
-						clearSubmitError={() => setSubmitError(null)}
-						nextKey={nextKey}
-					/>
-				)
-			case 'azure_blob':
-				return (
-					<AzureBucketCreateDefaults
-						state={azureDefaults}
-						onChange={setAzureDefaults}
-						clearSubmitError={() => setSubmitError(null)}
-						nextKey={nextKey}
-					/>
-				)
-			default:
-				if (!props.provider) return null
-				return (
-					<Alert
-						type="info"
-						showIcon
-						className={styles.providerHint}
-						title="Create-time secure defaults are not available for this provider yet."
-						description="Create the bucket first, then use provider-specific controls or policy management afterward."
-					/>
-				)
-		}
+	const footer = (
+		<>
+			<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
+			<Button type="primary" loading={props.loading} disabled={isBusy || !canSubmit} onClick={handleSubmit}>
+				Create
+			</Button>
+		</>
+	)
+
+	const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault()
+		handleSubmit()
 	}
 
 	return (
@@ -205,30 +111,14 @@ export function BucketModal(props: {
 			open={props.open}
 			title="Create Bucket"
 			onClose={handleCancel}
-			footer={
-				<>
-					<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
-					<Button type="primary" loading={props.loading} disabled={isBusy || !canSubmit} onClick={handleSubmit}>
-						Create
-					</Button>
-				</>
-			}
+			footer={footer}
 		>
-			<form
-				className={styles.form}
-				onSubmit={(e) => {
-					e.preventDefault()
-					handleSubmit()
-				}}
-			>
+			<form className={styles.form} onSubmit={handleFormSubmit}>
 				<FormField label="Bucket name" required htmlFor="bucket-create-name">
 					<Input
 						id="bucket-create-name"
 						value={name}
-						onChange={(e) => {
-							setSubmitError(null)
-							setName(e.target.value)
-						}}
+						onChange={(e) => handleNameChange(e.target.value)}
 						placeholder="my-bucket…"
 						autoComplete="off"
 					/>
@@ -239,10 +129,7 @@ export function BucketModal(props: {
 						<Input
 							id="bucket-create-region"
 							value={region}
-							onChange={(e) => {
-								setSubmitError(null)
-								setRegion(e.target.value)
-							}}
+							onChange={(e) => handleRegionChange(e.target.value)}
 							placeholder={regionMeta.placeholder}
 							autoComplete="off"
 						/>
@@ -251,7 +138,17 @@ export function BucketModal(props: {
 
 				{submitError ? <Alert type="error" showIcon title="Secure defaults are invalid" description={submitError} /> : null}
 
-				{renderSecureDefaults()}
+				<BucketCreateDefaultsSection
+					provider={props.provider}
+					awsDefaults={awsDefaults}
+					onAwsDefaultsChange={setAwsDefaults}
+					gcsDefaults={gcsDefaults}
+					onGcsDefaultsChange={setGcsDefaults}
+					azureDefaults={azureDefaults}
+					onAzureDefaultsChange={setAzureDefaults}
+					clearSubmitError={clearSubmitError}
+					nextKey={nextKey}
+				/>
 			</form>
 		</DialogModal>
 	)

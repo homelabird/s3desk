@@ -60,7 +60,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
 
   const publicExposureMutation = useMutation({
     mutationFn: () =>
-      props.api.putBucketPublicExposure(props.profileId, props.bucket, {
+      props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, {
         mode: publicMode,
         publicAccessPrevention,
       }),
@@ -77,7 +77,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
         bindings: serializeGCSBindings(bindings),
         etag: etag.trim() || undefined,
       };
-      return props.api.putBucketAccess(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketAccess(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("IAM bindings updated");
@@ -91,7 +91,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
       const req: BucketProtectionPutRequest = {
         uniformAccess,
       };
-      return props.api.putBucketProtection(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketProtection(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Uniform access updated");
@@ -112,7 +112,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
               enabled: false,
             },
       };
-      return props.api.putBucketProtection(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketProtection(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Retention updated");
@@ -124,7 +124,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
   const versioningMutation = useMutation({
     mutationFn: () => {
       const req: BucketVersioningPutRequest = { status: versioningStatus };
-      return props.api.putBucketVersioning(props.profileId, props.bucket, req);
+      return props.api.buckets.putBucketVersioning(props.profileId, props.bucket, req);
     },
     onSuccess: async () => {
       message.success("Versioning updated");
