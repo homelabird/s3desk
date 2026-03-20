@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { type PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { APIClient } from '../../../api/client'
+import { createMockApiClient } from '../../../test/mockApiClient'
 import { useJobsActionMutations } from '../useJobsActionMutations'
 
 const { messageSuccess, messageError } = vi.hoisted(() => ({
@@ -42,11 +42,13 @@ describe('useJobsActionMutations', () => {
 		const deleteJob = vi.fn().mockResolvedValue(undefined)
 		const onJobDeleted = vi.fn()
 
-		const api = {
-			cancelJob,
-			retryJob,
-			deleteJob,
-		} as unknown as APIClient
+		const api = createMockApiClient({
+			jobs: {
+				cancelJob,
+				retryJob,
+				deleteJob,
+			},
+		})
 
 		const { result } = renderHook(
 			() =>

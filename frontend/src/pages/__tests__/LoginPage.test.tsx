@@ -37,7 +37,10 @@ describe('LoginPage', () => {
 	})
 
 	it('validates the token locally before making the API request', async () => {
-		const getMetaSpy = vi.spyOn(APIClient.prototype, 'getMeta')
+		const getMetaSpy = vi.fn()
+		vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
+			getMeta: getMetaSpy,
+		} as never)
 		renderLoginPage()
 		const tokenInput = screen.getByPlaceholderText('API_TOKEN…')
 
@@ -51,8 +54,11 @@ describe('LoginPage', () => {
 	})
 
 	it('trims the token and calls onLogin after the backend token check succeeds', async () => {
-		const getMetaSpy = vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+		const getMetaSpy = vi.fn().mockResolvedValue({
 			version: 'test',
+		} as never)
+		vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
+			getMeta: getMetaSpy,
 		} as never)
 		const { onLogin } = renderLoginPage()
 		const tokenInput = screen.getByPlaceholderText('API_TOKEN…')

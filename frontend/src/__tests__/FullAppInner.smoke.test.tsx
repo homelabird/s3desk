@@ -57,8 +57,7 @@ function mockViewportWidth(width: number) {
 
 function mockShellApi() {
 	const now = '2024-01-01T00:00:00Z'
-
-	vi.spyOn(APIClient.prototype, 'getMeta').mockResolvedValue({
+	const getMeta = vi.fn().mockResolvedValue({
 		version: 'test',
 		serverAddr: '127.0.0.1:8080',
 		dataDir: '/data',
@@ -82,8 +81,7 @@ function mockShellApi() {
 			version: 'v1.66.0',
 		},
 	} as never)
-
-	vi.spyOn(APIClient.prototype, 'listProfiles').mockResolvedValue([
+	const listProfiles = vi.fn().mockResolvedValue([
 		{
 			id: 'profile-1',
 			name: 'Primary Profile With A Very Long Name',
@@ -97,6 +95,13 @@ function mockShellApi() {
 			updatedAt: now,
 		},
 	] as never)
+
+	vi.spyOn(APIClient.prototype, 'server', 'get').mockReturnValue({
+		getMeta,
+	} as never)
+	vi.spyOn(APIClient.prototype, 'profiles', 'get').mockReturnValue({
+		listProfiles,
+	} as never)
 }
 
 function renderShell(initialPath = '/profiles') {

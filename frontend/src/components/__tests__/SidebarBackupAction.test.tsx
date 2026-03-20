@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { APIClient } from '../../api/client'
 import type { MetaResponse, ServerPortableImportResponse } from '../../api/types'
 import { ensureDomShims } from '../../test/domShims'
+import { createMockApiClient } from '../../test/mockApiClient'
 import { SidebarBackupAction } from '../SidebarBackupAction'
 
 vi.mock('../../lib/confirmDangerAction', () => ({
@@ -102,6 +102,20 @@ function buildRestoreResponse() {
 	}
 }
 
+function createApi(serverOverrides: Record<string, unknown> = {}) {
+	return createMockApiClient({
+		server: {
+			downloadServerBackup: vi.fn(),
+			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
+			restoreServerBackup: vi.fn(),
+			previewPortableImport: vi.fn(),
+			importPortableBackup: vi.fn(),
+			deleteServerRestore: vi.fn(),
+			...serverOverrides,
+		},
+	})
+}
+
 describe('SidebarBackupAction', () => {
 	let clickSpy: ReturnType<typeof vi.spyOn>
 
@@ -118,17 +132,17 @@ describe('SidebarBackupAction', () => {
 	})
 
 	it('opens a drawer with export, restore, portable import, and staged restore sections', async () => {
-		const api = {
-			downloadServerBackup: vi.fn(() => ({
-				promise: Promise.resolve({
-					blob: new Blob(['backup'], { type: 'application/gzip' }),
-					contentDisposition: 'attachment; filename="migration.tar.gz"',
-					contentType: 'application/gzip',
-				}),
-				abort: vi.fn(),
-			})),
-			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
-		} as unknown as APIClient
+		const downloadServerBackup = vi.fn(() => ({
+			promise: Promise.resolve({
+				blob: new Blob(['backup'], { type: 'application/gzip' }),
+				contentDisposition: 'attachment; filename="migration.tar.gz"',
+				contentType: 'application/gzip',
+			}),
+			abort: vi.fn(),
+		}))
+		const api = createApi({
+			downloadServerBackup,
+		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
 		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
@@ -142,12 +156,13 @@ describe('SidebarBackupAction', () => {
 
 	it('keeps portable import disabled until a clean preview exists', async () => {
 		const previewPortableImport = vi.fn(() => Promise.resolve(buildPortablePreview()))
-		const api = {
-			downloadServerBackup: vi.fn(),
-			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
+		const downloadServerBackup = vi.fn()
+		const importPortableBackup = vi.fn(() => Promise.resolve(buildPortablePreview({ mode: 'replace' })))
+		const api = createApi({
+			downloadServerBackup,
 			previewPortableImport,
-			importPortableBackup: vi.fn(() => Promise.resolve(buildPortablePreview({ mode: 'replace' }))),
-		} as unknown as APIClient
+			importPortableBackup,
+		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
 		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
@@ -164,39 +179,39 @@ describe('SidebarBackupAction', () => {
 	})
 
 	it('downloads the selected backup bundle from the unified export workflow', async () => {
-		const api = {
-			downloadServerBackup: vi.fn(() => ({
-				promise: Promise.resolve({
-					blob: new Blob(['backup'], { type: 'application/gzip' }),
-					contentDisposition: 'attachment; filename="migration.tar.gz"',
-					contentType: 'application/gzip',
-				}),
-				abort: vi.fn(),
-			})),
-			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
-		} as unknown as APIClient
+		const downloadServerBackup = vi.fn(() => ({
+			promise: Promise.resolve({
+				blob: new Blob(['backup'], { type: 'application/gzip' }),
+				contentDisposition: 'attachment; filename="migration.tar.gz"',
+				contentType: 'application/gzip',
+			}),
+			abort: vi.fn(),
+		}))
+		const api = createApi({
+			downloadServerBackup,
+		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
 		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Download backup' }))
 
-		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('full', 'clear', { password: undefined }))
+		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledWith('full', 'clear', { password: undefined }))
 		await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1))
 		expect(clickSpy).toHaveBeenCalledTimes(1)
 	})
 
 	it('passes password-protected export options to the API', async () => {
-		const api = {
-			downloadServerBackup: vi.fn(() => ({
-				promise: Promise.resolve({
-					blob: new Blob(['backup'], { type: 'application/gzip' }),
-					contentDisposition: 'attachment; filename="migration.tar.gz"',
-					contentType: 'application/gzip',
-				}),
-				abort: vi.fn(),
-			})),
-			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
-		} as unknown as APIClient
+		const downloadServerBackup = vi.fn(() => ({
+			promise: Promise.resolve({
+				blob: new Blob(['backup'], { type: 'application/gzip' }),
+				contentDisposition: 'attachment; filename="migration.tar.gz"',
+				contentType: 'application/gzip',
+			}),
+			abort: vi.fn(),
+		}))
+		const api = createApi({
+			downloadServerBackup,
+		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
 		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
@@ -205,21 +220,21 @@ describe('SidebarBackupAction', () => {
 		fireEvent.change(screen.getByPlaceholderText('Confirm backup password'), { target: { value: 'operator-secret' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Download backup' }))
 
-		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('full', 'encrypted', { password: 'operator-secret' }))
+		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledWith('full', 'encrypted', { password: 'operator-secret' }))
 	})
 
 	it('limits postgres-backed servers to portable export', async () => {
-		const api = {
-			downloadServerBackup: vi.fn(() => ({
-				promise: Promise.resolve({
-					blob: new Blob(['backup'], { type: 'application/gzip' }),
-					contentDisposition: 'attachment; filename="migration.tar.gz"',
-					contentType: 'application/gzip',
-				}),
-				abort: vi.fn(),
-			})),
-			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
-		} as unknown as APIClient
+		const downloadServerBackup = vi.fn(() => ({
+			promise: Promise.resolve({
+				blob: new Blob(['backup'], { type: 'application/gzip' }),
+				contentDisposition: 'attachment; filename="migration.tar.gz"',
+				contentType: 'application/gzip',
+			}),
+			abort: vi.fn(),
+		}))
+		const api = createApi({
+			downloadServerBackup,
+		})
 
 		render(
 			<SidebarBackupAction
@@ -250,20 +265,20 @@ describe('SidebarBackupAction', () => {
 		expect(screen.getByRole('radio', { name: 'Portable' })).toBeEnabled()
 
 		fireEvent.click(screen.getByRole('button', { name: 'Download backup' }))
-		await waitFor(() => expect((api.downloadServerBackup as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('portable', 'clear', { password: undefined }))
+		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledWith('portable', 'clear', { password: undefined }))
 	})
 
 	it('passes restore and portable passwords to the API', async () => {
 		const restoreServerBackup = vi.fn(() => Promise.resolve(buildRestoreResponse()))
 		const previewPortableImport = vi.fn(() => Promise.resolve(buildPortablePreview()))
 		const importPortableBackup = vi.fn(() => Promise.resolve(buildPortablePreview({ mode: 'replace' })))
-		const api = {
-			downloadServerBackup: vi.fn(),
-			listServerRestores: vi.fn(() => Promise.resolve({ items: [] })),
+		const downloadServerBackup = vi.fn()
+		const api = createApi({
+			downloadServerBackup,
 			restoreServerBackup,
 			previewPortableImport,
 			importPortableBackup,
-		} as unknown as APIClient
+		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
 		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))

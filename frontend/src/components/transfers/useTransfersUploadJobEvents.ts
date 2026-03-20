@@ -217,7 +217,7 @@ export function useTransfersUploadJobEvents({
 			for (const task of waiting) {
 				if (stopped) return
 				try {
-					const job = await api.getJob(task.profileId, task.jobId as string)
+					const job = await api.jobs.getJob(task.profileId, task.jobId as string)
 					if (stopped) return
 					await handleUploadJobUpdate(task.id, job)
 				} catch (err) {

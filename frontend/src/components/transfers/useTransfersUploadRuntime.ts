@@ -227,7 +227,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 							return
 						}
 						try {
-							const chunkState = await args.api.getUploadChunks(current.profileId, current.uploadId, {
+							const chunkState = await args.api.uploads.getUploadChunks(current.profileId, current.uploadId, {
 								path: pathRaw,
 								total: Math.max(1, Math.ceil(resumeInfo.size / resumeInfo.chunkSizeBytes)),
 								chunkSize: resumeInfo.chunkSizeBytes,
@@ -251,7 +251,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				const createUploadSession = async (
 					mode: 'presigned' | 'direct' | 'staging',
 				): Promise<{ uploadId: string; mode: 'staging' | 'direct' | 'presigned'; maxBytes?: number | null }> => {
-					return args.api.createUpload(current.profileId, {
+					return args.api.uploads.createUpload(current.profileId, {
 						bucket: current.bucket,
 						prefix: current.prefix ?? '',
 						mode,
@@ -361,7 +361,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 									chunkThresholdBytes,
 									chunkSizeBytes,
 								})
-							: args.api.uploadFilesWithProgress(current.profileId, attemptUploadId, items, {
+							: args.api.uploads.uploadFilesWithProgress(current.profileId, attemptUploadId, items, {
 									onProgress: (p) => {
 										const estimator = args.uploadEstimatorByTaskIdRef.current[taskId]
 										if (!estimator) return
@@ -400,7 +400,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 					if (sessionMode !== 'presigned' || !isPresignedNetworkFailure(err)) {
 						throw err
 					}
-					await args.api.deleteUpload(current.profileId, uploadId).catch(() => {})
+					await args.api.uploads.deleteUpload(current.profileId, uploadId).catch(() => {})
 					const fallbackSession = await createUploadSession(fallbackMode)
 					uploadId = fallbackSession.uploadId
 					sessionMode = fallbackSession.mode
@@ -438,7 +438,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				}))
 
 				const commitReq = buildUploadCommitRequest(current, items)
-				const resp = await withJobQueueRetry(() => args.api.commitUpload(current.profileId, uploadId, commitReq))
+				const resp = await withJobQueueRetry(() => args.api.uploads.commitUpload(current.profileId, uploadId, commitReq))
 				committed = true
 				delete args.uploadItemsByTaskIdRef.current[taskId]
 				args.updateUploadTask(taskId, (t) => ({
@@ -453,7 +453,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 
 				if (resp.jobId) {
 					void args.api
-						.getJob(current.profileId, resp.jobId)
+						.jobs.getJob(current.profileId, resp.jobId)
 						.then((job) => args.handleUploadJobUpdate(taskId, job))
 						.catch((err) => {
 							maybeReportNetworkError(err)
@@ -477,7 +477,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				delete args.uploadAbortByTaskIdRef.current[taskId]
 				delete args.uploadEstimatorByTaskIdRef.current[taskId]
 				if (!committed && uploadId) {
-					await args.api.deleteUpload(current.profileId, uploadId).catch(() => {})
+					await args.api.uploads.deleteUpload(current.profileId, uploadId).catch(() => {})
 				}
 			}
 		},

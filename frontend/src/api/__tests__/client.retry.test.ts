@@ -46,7 +46,7 @@ describe('APIClient retry semantics', () => {
 		vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
 
 		const api = new APIClient()
-		const promise = api.getMeta()
+		const promise = api.server.getMeta()
 		await vi.runAllTimersAsync()
 		const result = await promise
 
@@ -70,7 +70,7 @@ describe('APIClient retry semantics', () => {
 		vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
 
 		const api = new APIClient()
-		await expect(api.getMeta()).rejects.toMatchObject({
+		await expect(api.server.getMeta()).rejects.toMatchObject({
 			status: 400,
 			code: 'invalid_request',
 		})
@@ -98,7 +98,7 @@ describe('APIClient retry semantics', () => {
 		vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
 
 		const api = new APIClient()
-		const promise = api.getMeta()
+		const promise = api.server.getMeta()
 
 		await vi.advanceTimersByTimeAsync(1900)
 		expect(fetchMock).toHaveBeenCalledTimes(1)

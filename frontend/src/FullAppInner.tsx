@@ -94,12 +94,12 @@ export default function FullAppInner() {
 	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
 	const metaQuery = useQuery({
 		queryKey: ['meta', apiToken],
-		queryFn: () => api.getMeta(),
+		queryFn: () => api.server.getMeta(),
 		retry: false,
 	})
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', apiToken],
-		queryFn: () => api.listProfiles(),
+		queryFn: () => api.profiles.listProfiles(),
 	})
 	useEffect(() => {
 		const profiles = profilesQuery.data ?? []

@@ -185,7 +185,7 @@ export const uploadPresignedFilesWithProgress = (args: {
 	let aborted = false
 
 	const uploadSingleItem = async (info: PresignedUploadItem) => {
-		const presigned = await args.api.presignUpload(args.profileId, args.uploadId, {
+		const presigned = await args.api.uploads.presignUpload(args.profileId, args.uploadId, {
 			path: info.path,
 			contentType: info.contentType,
 			size: info.size,
@@ -207,7 +207,7 @@ export const uploadPresignedFilesWithProgress = (args: {
 	}
 
 	const uploadMultipartItem = async (info: PresignedUploadItem, plan: PresignedMultipartPlan) => {
-		const presigned = await args.api.presignUpload(args.profileId, args.uploadId, {
+		const presigned = await args.api.uploads.presignUpload(args.profileId, args.uploadId, {
 			path: info.path,
 			contentType: info.contentType,
 			size: info.size,
@@ -272,12 +272,12 @@ export const uploadPresignedFilesWithProgress = (args: {
 
 			const workers = Array.from({ length: Math.min(partConcurrency, partCount) }, () => partWorker())
 			await Promise.all(workers)
-			await args.api.completeMultipartUpload(args.profileId, args.uploadId, {
+			await args.api.uploads.completeMultipartUpload(args.profileId, args.uploadId, {
 				path: info.path,
 				parts: completed,
 			})
 		} catch (err) {
-			await args.api.abortMultipartUpload(args.profileId, args.uploadId, { path: info.path }).catch(() => {})
+			await args.api.uploads.abortMultipartUpload(args.profileId, args.uploadId, { path: info.path }).catch(() => {})
 			throw err
 		}
 	}

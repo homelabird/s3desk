@@ -33,7 +33,7 @@ export function useJobsUploadDetails({
 }: UseJobsUploadDetailsArgs) {
 	const jobDetailsQuery = useQuery({
 		queryKey: ['job', profileId, detailsJobId, apiToken],
-		queryFn: () => api.getJob(profileId!, detailsJobId!),
+		queryFn: () => api.jobs.getJob(profileId!, detailsJobId!),
 		enabled: !!profileId && !!detailsJobId && detailsOpen,
 	})
 
@@ -105,7 +105,7 @@ export function useJobsUploadDetails({
 			const entries = uploadDetails.items
 			const results = await Promise.allSettled(
 				entries.map((item) =>
-					api.getObjectMeta({
+					api.objects.getObjectMeta({
 						profileId,
 						bucket: uploadDetails.bucket!,
 						key: item.key,

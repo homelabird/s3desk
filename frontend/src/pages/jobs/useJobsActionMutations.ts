@@ -34,7 +34,7 @@ export function useJobsActionMutations({
 	}
 
 	const cancelMutation = useMutation({
-		mutationFn: (jobId: string) => api.cancelJob(requireProfileId(), jobId),
+		mutationFn: (jobId: string) => api.jobs.cancelJob(requireProfileId(), jobId),
 		onMutate: (jobId) => setCancelingJobId(jobId),
 		onSuccess: async (_, jobId) => {
 			message.success('Cancel requested')
@@ -45,7 +45,7 @@ export function useJobsActionMutations({
 	})
 
 	const retryMutation = useMutation({
-		mutationFn: (jobId: string) => withJobQueueRetry(() => api.retryJob(requireProfileId(), jobId)),
+		mutationFn: (jobId: string) => withJobQueueRetry(() => api.jobs.retryJob(requireProfileId(), jobId)),
 		onMutate: (jobId) => setRetryingJobId(jobId),
 		onSuccess: async (job, jobId) => {
 			message.success(`Retry queued: ${job.id}`)
@@ -59,7 +59,7 @@ export function useJobsActionMutations({
 	})
 
 	const deleteJobMutation = useMutation({
-		mutationFn: (jobId: string) => api.deleteJob(requireProfileId(), jobId),
+		mutationFn: (jobId: string) => api.jobs.deleteJob(requireProfileId(), jobId),
 		onMutate: (jobId) => setDeletingJobId(jobId),
 		onSuccess: async (_, jobId) => {
 			message.success('Job deleted')
