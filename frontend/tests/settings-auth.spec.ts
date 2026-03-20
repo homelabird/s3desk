@@ -36,7 +36,26 @@ async function setSwitch(page: Page, label: string, enabled: boolean) {
 	}
 }
 
-test('login gate and settings persist local state', async ({ page }) => {
+test('@check-smoke login gate opens settings after successful auth', async ({ page }) => {
+	const validToken = 'valid-token'
+
+	await seedStorage(page)
+	await setupApiMocks(page, [validToken])
+
+	await page.goto('/setup')
+	await expect(page.getByRole('heading', { name: 'S3Desk' })).toBeVisible()
+
+	await page.getByPlaceholder('API_TOKEN').fill(validToken)
+	await page.getByRole('button', { name: 'Login' }).click()
+	await expect(page.getByText('Choose a profile')).toBeVisible({ timeout: 10_000 })
+
+	await page.getByRole('link', { name: 'Settings' }).click()
+	const drawer = dialogByName(page, 'Settings')
+	await expect(drawer).toBeVisible()
+	await expect(drawer.getByPlaceholder('Must match API_TOKEN')).toBeVisible()
+})
+
+test('settings persist local state', async ({ page }) => {
 	const validToken = 'valid-token'
 	const updatedToken = 'updated-token'
 
@@ -58,8 +77,9 @@ test('login gate and settings persist local state', async ({ page }) => {
 	await expect(tokenInput).toBeVisible()
 	await tokenInput.fill(updatedToken)
 	await drawer.getByRole('button', { name: 'Apply' }).click()
-	const storedToken = await page.evaluate(() => JSON.parse(window.localStorage.getItem('apiToken') ?? '""'))
-	expect(storedToken).toBe(updatedToken)
+	await expect
+		.poll(async () => page.evaluate(() => JSON.parse(window.localStorage.getItem('apiToken') ?? '""')))
+		.toBe(updatedToken)
 
 	await drawer.getByRole('tab', { name: 'Transfers' }).click()
 	await setSwitch(page, 'Downloads and previews: Use server proxy', true)

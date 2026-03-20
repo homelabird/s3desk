@@ -1,0 +1,191 @@
+name: Objects mobile responsive issue
+description: Report a mobile or tablet responsive problem in the Objects page
+title: "[Objects][Mobile] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this dedicated form for mobile and tablet layout or interaction issues in `Objects`.
+
+        This repository keeps a separate `Objects` mobile form because `Objects` has page-specific triage needs:
+
+        - tree drawer behavior
+        - details drawer behavior
+        - global search drawer and results
+        - page-specific labels and ownership routing
+
+        Use this form when the issue is specific to `Objects` and needs those page-specific fields.
+        For other frontend pages, use the shared `Shared mobile responsive issue` form instead.
+
+        Reference checklist: `frontend/docs/OBJECTS_MOBILE_RESPONSIVE_CHECKLIST.md`
+        Suite-level mobile responsive doc: `frontend/docs/MOBILE_RESPONSIVE_E2E.md`
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Short description of the responsive issue.
+      placeholder: Describe the problem in one or two sentences.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device_type
+    attributes:
+      label: Device type
+      options:
+        - Phone
+        - Tablet
+        - Foldable
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: viewport
+    attributes:
+      label: Viewport size
+      description: Use a concrete size such as `390x844`.
+      placeholder: 390x844
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include app version or branch, OS, browser, and device when available.
+      placeholder: main, Android 14, Chrome 131, Pixel 7
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected_area
+    attributes:
+      label: Affected area
+      options:
+        - label: Main `Objects` page layout
+        - label: Tree drawer
+        - label: Details drawer
+        - label: Global Search drawer
+        - label: Search and filter controls
+        - label: List view rows
+        - label: Grid view cards
+        - label: Action buttons
+        - label: Safe-area padding
+        - label: Horizontal overflow
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Go to ...
+        2. Tap/click ...
+        3. Resize to ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      placeholder: Describe the expected mobile or tablet behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual behavior
+      placeholder: Describe what actually happens.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: suggested_priority
+    attributes:
+      label: Suggested priority
+      description: Choose the impact level that best matches the issue.
+      options:
+        - P0 - Blocks core object browsing or selection on mobile with no workaround
+        - P1 - Major functional degradation on mobile or tablet, but a workaround exists
+        - P2 - Noticeable responsive defect with limited workflow impact
+        - P3 - Polish issue or minor layout inconsistency
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: suggested_labels
+    attributes:
+      label: Suggested labels
+      description: Select the labels triage should apply after issue creation.
+      options:
+        - label: frontend
+        - label: mobile
+        - label: responsive
+        - label: overflow
+        - label: drawer
+        - label: sheet
+        - label: objects
+        - label: global-search
+        - label: safe-area
+        - label: interaction
+
+  - type: dropdown
+    id: ownership_route
+    attributes:
+      label: Ownership route
+      description: Pick the team or owner path that should review this first.
+      options:
+        - Shared frontend/layout owner
+        - Shared list infrastructure owner
+        - Objects UI owner
+        - Uploads owner
+        - Settings or shell owner
+        - Unsure
+    validations:
+      required: true
+
+  - type: input
+    id: suggested_assignee
+    attributes:
+      label: Suggested assignee
+      description: Optional. Add a specific owner if known.
+      placeholder: @username
+
+  - type: checkboxes
+    id: responsive_checklist
+    attributes:
+      label: Responsive QA checklist
+      options:
+        - label: The page creates page-level horizontal scrolling
+        - label: Drawer content renders outside the viewport
+        - label: Buttons become hidden or hard to tap
+        - label: Long object keys or paths become unreadable
+        - label: Search and filter controls fail to wrap cleanly
+        - label: Content is hidden behind the mobile safe area
+        - label: The issue reproduces consistently
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Add screenshots, recordings, console errors, or network notes.
+      placeholder: Paste links, screenshots, or relevant logs.
+
+  - type: textarea
+    id: suggested_fix_direction
+    attributes:
+      label: Suggested fix direction
+      description: Optional. Point to likely components, CSS, or files if known.
+      placeholder: |
+        Possible files:
+        - frontend/src/pages/objects/objects.module.css
+        - frontend/src/pages/objects/ObjectsGlobalSearchDrawer.tsx
+        - frontend/src/pages/objects/ObjectsTreePanel.tsx
+        - frontend/src/pages/objects/ObjectsDetailsPanel.tsx
+        - frontend/src/pages/objects/useObjectsPageViewState.ts

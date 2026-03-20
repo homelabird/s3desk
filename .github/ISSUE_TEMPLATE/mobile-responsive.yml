@@ -1,0 +1,221 @@
+name: Shared mobile responsive issue
+description: Report a mobile or tablet responsive problem for pages that use the shared frontend mobile form
+title: "[Mobile][Responsive] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this shared form for mobile and tablet layout or interaction issues on:
+
+        - `Jobs`
+        - `Uploads`
+        - `Profiles`
+        - `Buckets`
+        - `Settings`
+        - `Login`
+        - shared layout or app shell behavior
+
+        This repository keeps a dedicated mobile issue form only for `Objects`.
+        Reason: `Objects` has separate tree, details, and global-search states that need page-specific triage fields, labels, and ownership routing.
+
+        Use this form when the issue does not need `Objects`-specific metadata and the shared mobile questions are enough for triage.
+
+        Reference suite guide: `frontend/docs/MOBILE_RESPONSIVE_E2E.md`
+
+        Page checklists:
+        - `frontend/docs/JOBS_MOBILE_RESPONSIVE_CHECKLIST.md`
+        - `frontend/docs/UPLOADS_MOBILE_RESPONSIVE_CHECKLIST.md`
+        - `frontend/docs/PROFILES_MOBILE_RESPONSIVE_CHECKLIST.md`
+        - `frontend/docs/BUCKETS_MOBILE_RESPONSIVE_CHECKLIST.md`
+        - `frontend/docs/SETTINGS_MOBILE_RESPONSIVE_CHECKLIST.md`
+        - `frontend/docs/LOGIN_MOBILE_RESPONSIVE_CHECKLIST.md`
+
+        If the issue is specific to `Objects`, use the `Objects mobile responsive issue` form instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Short description of the responsive issue.
+      placeholder: Describe the problem in one or two sentences.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected_page
+    attributes:
+      label: Affected page
+      options:
+        - Jobs
+        - Uploads
+        - Profiles
+        - Buckets
+        - Settings
+        - Login
+        - Multiple pages
+        - Shared layout or shell
+        - Unsure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: device_type
+    attributes:
+      label: Device type
+      options:
+        - Phone
+        - Tablet
+        - Foldable
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: viewport
+    attributes:
+      label: Viewport size
+      description: Use a concrete size such as `390x844`.
+      placeholder: 390x844
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include app version or branch, OS, browser, and device when available.
+      placeholder: main, Android 14, Chrome 131, Pixel 7
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected_area
+    attributes:
+      label: Affected area
+      options:
+        - label: Page-level horizontal overflow
+        - label: Drawer or sheet viewport containment
+        - label: Card stacking or wrapping
+        - label: Header actions
+        - label: Filters or search controls
+        - label: Tab strip or navigation
+        - label: Form visibility
+        - label: Theme toggle or utility controls
+        - label: Safe-area padding
+        - label: Touch target size
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Go to ...
+        2. Tap/click ...
+        3. Resize to ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      placeholder: Describe the expected mobile or tablet behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual behavior
+      placeholder: Describe what actually happens.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: suggested_priority
+    attributes:
+      label: Suggested priority
+      description: Choose the impact level that best matches the issue.
+      options:
+        - P0 - Blocks a core mobile workflow with no workaround
+        - P1 - Major functional degradation on mobile or tablet, but a workaround exists
+        - P2 - Noticeable responsive defect with limited workflow impact
+        - P3 - Polish issue or minor layout inconsistency
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: suggested_labels
+    attributes:
+      label: Suggested labels
+      description: Select the labels triage should apply after issue creation.
+      options:
+        - label: frontend
+        - label: mobile
+        - label: responsive
+        - label: overflow
+        - label: drawer
+        - label: sheet
+        - label: safe-area
+        - label: interaction
+        - label: tabs
+        - label: form
+
+  - type: dropdown
+    id: ownership_route
+    attributes:
+      label: Ownership route
+      description: Pick the team or owner path that should review this first.
+      options:
+        - Shared frontend/layout owner
+        - Shared list infrastructure owner
+        - Jobs owner
+        - Uploads owner
+        - Profiles owner
+        - Buckets owner
+        - Settings or shell owner
+        - Login or auth owner
+        - Unsure
+    validations:
+      required: true
+
+  - type: input
+    id: suggested_assignee
+    attributes:
+      label: Suggested assignee
+      description: Optional. Add a specific owner if known.
+      placeholder: @username
+
+  - type: checkboxes
+    id: responsive_checklist
+    attributes:
+      label: Responsive QA checklist
+      options:
+        - label: The page creates page-level horizontal scrolling
+        - label: Drawer or sheet content renders outside the viewport
+        - label: Buttons become hidden or hard to tap
+        - label: Text, labels, or metadata become unreadable
+        - label: Tabs, filters, or actions fail to wrap cleanly
+        - label: Content is hidden behind the mobile safe area
+        - label: The issue reproduces consistently
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Add screenshots, recordings, console errors, or network notes.
+      placeholder: Paste links, screenshots, or relevant logs.
+
+  - type: textarea
+    id: suggested_fix_direction
+    attributes:
+      label: Suggested fix direction
+      description: Optional. Point to likely components, CSS, or files if known.
+      placeholder: |
+        Possible files:
+        - frontend/src/pages/...
+        - frontend/src/components/...
+        - frontend/src/styles/...

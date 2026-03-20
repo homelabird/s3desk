@@ -12,6 +12,7 @@ All of the following must be true:
 4. Frontend typecheck passes.
 5. The standard local verification pass is green:
    - `./scripts/check.sh`
+   - default behavior is `./scripts/check.sh full`
 6. Any changed feature area has matching automated coverage updated in the same change.
 7. Any provider-facing governance change has live validation evidence attached before release.
 8. Any backup/restore change includes a staged restore smoke note in the release summary or runbook update.
@@ -35,8 +36,26 @@ Attach or record these before release approval:
 The repository keeps automated enforcement for release readiness inside the standard verification path:
 
 - focused local release-doc check: `./scripts/check_release_gate.sh`
-- full local verification pass: `./scripts/check.sh`
+- full local verification pass: `./scripts/check.sh` or `./scripts/check.sh full`
+- faster non-browser local pass: `./scripts/check.sh fast`
 - CI workflow: `Release Gate` (runs `./scripts/check.sh` on pull requests and `main`)
+- frontend CI required checks for browser-facing work:
+  - `Core Mock E2E`
+  - `Mobile Responsive E2E (Required)`
+- local browser smoke used by the full gate:
+  - `cd frontend && npm run test:e2e:smoke`
+- mobile responsive suite scope and local commands:
+  - [frontend/docs/MOBILE_RESPONSIVE_E2E.md](../frontend/docs/MOBILE_RESPONSIVE_E2E.md)
+
+## Branch Protection / Required Checks
+
+When branch protection is configured for `main`, keep the following check names in the required set for frontend-affecting pull requests:
+
+- `Release Gate / release-gate`
+- `Frontend E2E / Core Mock E2E`
+- `Frontend E2E / Mobile Responsive E2E (Required)`
+
+For the mobile suite scope, local commands, and operator-facing test entry points, use [frontend/docs/MOBILE_RESPONSIVE_E2E.md](../frontend/docs/MOBILE_RESPONSIVE_E2E.md).
 
 The focused release-doc check specifically enforces that:
 
@@ -117,3 +136,5 @@ A change can use the fast path only if all of the following are true:
 - no provider behavior, auth flow, backup flow, or deployment default changed
 
 Fast path still requires a clean OpenAPI state and passing local checks if touched files affect compiled code.
+
+For contributor-facing command details, use [TESTING.md](TESTING.md).

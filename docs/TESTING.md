@@ -2,10 +2,26 @@
 
 This document keeps only the commands most contributors need.
 
-## Full Local Check
+## Local Check Modes
 
 ```bash
 ./scripts/check.sh
+```
+
+`./scripts/check.sh` now defaults to the `full` mode.
+
+- `./scripts/check.sh full`
+  - full local gate
+  - includes frontend browser smoke through `npm run test:e2e:smoke`
+- `./scripts/check.sh fast`
+  - skips the browser smoke layer
+  - keeps the existing non-browser local verification path
+
+If Playwright Chromium is not installed locally yet, run:
+
+```bash
+cd frontend
+npx playwright install --with-deps chromium
 ```
 
 ## Backend
@@ -39,6 +55,18 @@ npm run build
 ```
 
 Frontend tooling expects Node.js `22.x`.
+
+Minimal browser smoke:
+
+```bash
+cd frontend
+npm run test:e2e:smoke
+```
+
+This smoke subset currently covers:
+
+- login / settings bootstrap
+- objects route boot and basic toolbar behavior
 
 ## Release Gate
 
