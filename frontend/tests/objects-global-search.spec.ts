@@ -35,6 +35,7 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 		...defaultStorage,
 		...overrides,
 		objectsUIMode: 'advanced',
+		objectsFavoritesPaneExpanded: true,
 		objectsAutoIndexEnabled: false,
 	})
 }
@@ -99,6 +100,7 @@ async function setupApiMocks(page: Page) {
 }
 
 test('global search and favorites update from objects UI', async ({ page }) => {
+	await page.setViewportSize({ width: 1800, height: 1000 })
 	await seedStorage(page)
 	await setupApiMocks(page)
 

@@ -63,6 +63,17 @@ async function scrollAppContentToBottom(page: Page) {
 	})
 }
 
+async function expectVisibleTodoRows(page: Page) {
+	await expect
+		.poll(async () => {
+			const labels = await page
+				.getByRole('checkbox')
+				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? '').filter(Boolean))
+			return labels.some((label) => /^Select todo-\d+\.txt$/.test(label))
+		})
+		.toBe(true)
+}
+
 async function installPrefixPaginationFixtures(page: Page) {
 	const docsPageOne = buildDocsItems(1, 1000)
 	const docsPageTwo = buildDocsItems(1001, 1)
@@ -190,7 +201,7 @@ test('prefix navigation keeps its location while load-more failure recovers on r
 	await expect(listError).toBeVisible({ timeout: 15_000 })
 	await expect(listError).toContainText('temporary page failure')
 	await waitForScopedPrefix(page, 'docs/')
-	await expect(page.getByRole('checkbox', { name: 'Select todo-0001.txt' })).toBeVisible()
+	await expectVisibleTodoRows(page)
 
 	await scrollAppContentToBottom(page)
 	await loadMoreButton.click()

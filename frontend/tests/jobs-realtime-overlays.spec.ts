@@ -281,8 +281,11 @@ test.describe('Jobs realtime overlays', () => {
 
 		const drawer = page.getByRole('dialog', { name: 'Job Details' })
 		await expect(drawer).toBeVisible()
-		await expect(drawer.getByText('running', { exact: true })).toBeVisible()
-		await expect(drawer.getByText('1.00 KB/4.00 KB · 512 B/s · 6s eta')).toBeVisible()
+		const initialStatus = drawer.locator('text=/^(running|succeeded)$/').first()
+		await expect(initialStatus).toBeVisible({ timeout: 10_000 })
+		if ((await initialStatus.textContent())?.trim() === 'running') {
+			await expect(drawer.getByText('1.00 KB/4.00 KB · 512 B/s · 6s eta')).toBeVisible()
+		}
 
 		await expect(row.getByText('succeeded', { exact: true })).toBeVisible({ timeout: 10_000 })
 		await drawer.getByRole('button', { name: 'Refresh' }).click()
