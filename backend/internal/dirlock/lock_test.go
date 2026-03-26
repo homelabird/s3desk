@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+func TestFileDescriptorIntNil(t *testing.T) {
+	if _, err := fileDescriptorInt(nil); err == nil {
+		t.Fatal("expected nil file to fail")
+	}
+}
+
 func TestAcquireRelease(t *testing.T) {
 	dir := t.TempDir()
 	l1, err := Acquire(dir)
