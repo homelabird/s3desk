@@ -48,7 +48,6 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		cancel()
 		m.mu.Lock()
 		delete(m.cancels, jobID)
-		delete(m.pids, jobID)
 		m.mu.Unlock()
 	}()
 

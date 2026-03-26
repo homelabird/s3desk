@@ -158,12 +158,18 @@ func readLogLine(r *bufio.Reader, maxBytes int) (string, bool, error) {
 
 func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID, level string, capture *logCapture, progressCh chan<- rcloneStatsUpdate, mode rcloneProgressMode, maxLineBytes int) {
 	reader := bufio.NewReaderSize(r, logReadBufferSize)
+	drainingAfterCancel := false
 
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+		if !drainingAfterCancel {
+			select {
+			case <-ctx.Done():
+				// Keep draining until EOF so a TERM'd process can flush and exit
+				// without blocking on full stdout/stderr pipes.
+				drainingAfterCancel = true
+				progressCh = nil
+			default:
+			}
 		}
 
 		line, truncated, err := readLogLine(reader, maxLineBytes)

@@ -60,6 +60,12 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	cfg.AllowedLocalDirs = allowedDirs
+	if err := jobs.ValidateEnvironment(jobs.Config{
+		Concurrency:      cfg.JobConcurrency,
+		AllowedLocalDirs: allowedDirs,
+	}); err != nil {
+		return fmt.Errorf("invalid jobs environment configuration: %w", err)
+	}
 	for _, warning := range config.OperationalWarnings(cfg) {
 		logging.Warnf("configuration warning: %s", warning)
 	}

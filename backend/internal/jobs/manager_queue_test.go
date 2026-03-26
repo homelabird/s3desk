@@ -3,6 +3,7 @@ package jobs
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestCancelQueuedJobFreesCapacityImmediately(t *testing.T) {
@@ -29,5 +30,27 @@ func TestCancelQueuedJobFreesCapacityImmediately(t *testing.T) {
 
 	if err := manager.Enqueue("job-2"); err != nil {
 		t.Fatalf("enqueue second job after cancel: %v", err)
+	}
+}
+
+func TestCancelRunningJobInvokesCancelFunc(t *testing.T) {
+	manager := NewManager(Config{Concurrency: 1})
+	called := make(chan struct{}, 1)
+
+	manager.mu.Lock()
+	manager.cancels["job-1"] = func() {
+		select {
+		case called <- struct{}{}:
+		default:
+		}
+	}
+	manager.mu.Unlock()
+
+	manager.Cancel("job-1")
+
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("Cancel did not invoke running job cancel func")
 	}
 }

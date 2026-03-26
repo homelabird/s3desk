@@ -1,61 +1,62 @@
 package jobs
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func envInt(key string, defaultValue int) int {
+func lookupEnvInt(key string, defaultValue int) (int, error) {
 	val := strings.TrimSpace(os.Getenv(key))
 	if val == "" {
-		return defaultValue
+		return defaultValue, nil
 	}
 	parsed, err := strconv.Atoi(val)
 	if err != nil {
-		return defaultValue
+		return defaultValue, fmt.Errorf("%s must be an integer: %w", key, err)
 	}
-	return parsed
+	return parsed, nil
 }
 
-func envFloat(key string, defaultValue float64) float64 {
+func lookupEnvFloat(key string, defaultValue float64) (float64, error) {
 	val := strings.TrimSpace(os.Getenv(key))
 	if val == "" {
-		return defaultValue
+		return defaultValue, nil
 	}
 	parsed, err := strconv.ParseFloat(val, 64)
 	if err != nil {
-		return defaultValue
+		return defaultValue, fmt.Errorf("%s must be a number: %w", key, err)
 	}
-	return parsed
+	return parsed, nil
 }
 
-func envBool(key string, defaultValue bool) bool {
+func lookupEnvBool(key string, defaultValue bool) (bool, error) {
 	val := strings.TrimSpace(os.Getenv(key))
 	if val == "" {
-		return defaultValue
+		return defaultValue, nil
 	}
 	switch strings.ToLower(val) {
 	case "1", "true", "t", "yes", "y", "on":
-		return true
+		return true, nil
 	case "0", "false", "f", "no", "n", "off":
-		return false
+		return false, nil
 	default:
-		return defaultValue
+		return defaultValue, fmt.Errorf("%s must be a boolean", key)
 	}
 }
 
-func envDuration(key string, defaultValue time.Duration) time.Duration {
+func lookupEnvDuration(key string, defaultValue time.Duration) (time.Duration, error) {
 	val := strings.TrimSpace(os.Getenv(key))
 	if val == "" {
-		return defaultValue
+		return defaultValue, nil
 	}
 	parsed, err := time.ParseDuration(val)
 	if err != nil {
-		return defaultValue
+		return defaultValue, fmt.Errorf("%s must be a duration: %w", key, err)
 	}
-	return parsed
+	return parsed, nil
 }
 
 type rcloneTune struct {

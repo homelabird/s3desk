@@ -205,3 +205,22 @@ func TestIsRetriablePostgresStartupError(t *testing.T) {
 		})
 	}
 }
+
+func TestRunRejectsInvalidJobsEnvironment(t *testing.T) {
+	t.Setenv("RCLONE_STATS_INTERVAL", "fast")
+
+	err := Run(context.Background(), config.Config{
+		Addr:      "127.0.0.1:0",
+		DataDir:   t.TempDir(),
+		DBBackend: "sqlite",
+	})
+	if err == nil {
+		t.Fatal("Run() error=nil, want invalid jobs environment error")
+	}
+	if !strings.Contains(err.Error(), "invalid jobs environment configuration") {
+		t.Fatalf("Run() error=%q, want invalid jobs environment configuration", err.Error())
+	}
+	if !strings.Contains(err.Error(), "RCLONE_STATS_INTERVAL") {
+		t.Fatalf("Run() error=%q, want RCLONE_STATS_INTERVAL detail", err.Error())
+	}
+}

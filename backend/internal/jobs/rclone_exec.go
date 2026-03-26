@@ -6,7 +6,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"syscall"
 
+	"s3desk/internal/logging"
 	"s3desk/internal/models"
 )
 
@@ -41,8 +43,15 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 	fullArgs = append(fullArgs, tlsArgs...)
 	fullArgs = append(fullArgs, args...)
 
+	if err := ctx.Err(); err != nil {
+		_ = os.Remove(configPath)
+		tlsCleanup()
+		return nil, err
+	}
+
 	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
-	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
+	cmd := exec.Command(rclonePath, fullArgs...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = os.Remove(configPath)
@@ -61,6 +70,11 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 		tlsCleanup()
 		return nil, err
 	}
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+	cancelWatcher := startProcessCancelWatcher(ctx, jobID, pid)
 
 	var stderrBuf bytes.Buffer
 	stderrDone := make(chan struct{})
@@ -79,6 +93,19 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 			close(stdoutDone)
 		}()
 		err := cmd.Wait()
+		if cancelErr := cancelWatcher.finish(); cancelErr != nil {
+			if pid > 0 {
+				logging.WarnFields("job process termination helper failed", map[string]any{
+					"event":  "job.process_cancel_failed",
+					"job_id": jobID,
+					"pid":    pid,
+					"error":  cancelErr.Error(),
+				})
+			}
+			if err == nil && ctx.Err() != nil {
+				err = cancelErr
+			}
+		}
 		<-stdoutDone
 		<-stderrDone
 		_ = os.Remove(configPath)

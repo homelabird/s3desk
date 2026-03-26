@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"context"
-	"syscall"
 )
 
 func (m *Manager) QueueStats() QueueStats {
@@ -61,13 +60,9 @@ func (m *Manager) Cancel(jobID string) {
 
 	m.mu.Lock()
 	cancel, ok := m.cancels[jobID]
-	pid := m.pids[jobID]
 	m.mu.Unlock()
 
 	if ok {
-		if pid > 0 {
-			_ = syscall.Kill(-pid, syscall.SIGKILL)
-		}
 		cancel()
 	}
 }

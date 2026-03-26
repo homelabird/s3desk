@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -70,7 +71,6 @@ type Manager struct {
 
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc
-	pids    map[string]int
 
 	uploadTTL time.Duration
 
@@ -107,7 +107,10 @@ type s3KeyPair struct {
 }
 
 func NewManager(cfg Config) *Manager {
-	wiring := resolveManagerWiring(cfg)
+	wiring, err := resolveManagerWiring(cfg)
+	if err != nil {
+		panic(fmt.Sprintf("jobs: invalid environment configuration: %v", err))
+	}
 
 	m := &Manager{
 		store:                      cfg.Store,
@@ -122,7 +125,6 @@ func NewManager(cfg Config) *Manager {
 		queueCapacity:              wiring.queueCapacity,
 		sem:                        make(chan struct{}, wiring.concurrency),
 		cancels:                    make(map[string]context.CancelFunc),
-		pids:                       make(map[string]int),
 		uploadTTL:                  cfg.UploadSessionTTL,
 		allowedLocalDirs:           wiring.allowedLocalDirs,
 		logLineMaxBytes:            wiring.logLineMaxBytes,

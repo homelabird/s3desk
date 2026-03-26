@@ -27,38 +27,89 @@ type managerWiringConfig struct {
 	captureUnknownRcloneErrors bool
 }
 
-func resolveManagerWiring(cfg Config) managerWiringConfig {
+func resolveManagerWiring(cfg Config) (managerWiringConfig, error) {
 	concurrency := cfg.Concurrency
 	if concurrency <= 0 {
 		concurrency = 1
 	}
 
-	queueCapacity := envInt("JOB_QUEUE_CAPACITY", defaultJobQueueCapacity)
+	queueCapacity, err := lookupEnvInt("JOB_QUEUE_CAPACITY", defaultJobQueueCapacity)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
 	if queueCapacity < 1 {
 		queueCapacity = defaultJobQueueCapacity
 	}
 
-	logLineMaxBytes := envInt("JOB_LOG_MAX_LINE_BYTES", defaultMaxLogLineBytes)
+	logLineMaxBytes, err := lookupEnvInt("JOB_LOG_MAX_LINE_BYTES", defaultMaxLogLineBytes)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
 	if logLineMaxBytes < 1 {
 		logLineMaxBytes = defaultMaxLogLineBytes
 	}
 
-	statsInterval := envDuration("RCLONE_STATS_INTERVAL", jobProgressTick)
+	statsInterval, err := lookupEnvDuration("RCLONE_STATS_INTERVAL", jobProgressTick)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
 	if statsInterval < 500*time.Millisecond {
 		statsInterval = 500 * time.Millisecond
 	}
 
-	retryAttempts := envInt("RCLONE_RETRY_ATTEMPTS", 3)
+	retryAttempts, err := lookupEnvInt("RCLONE_RETRY_ATTEMPTS", 3)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
 	if retryAttempts < 1 {
 		retryAttempts = 1
 	}
-	retryBaseDelay := envDuration("RCLONE_RETRY_BASE_DELAY", 800*time.Millisecond)
+	retryBaseDelay, err := lookupEnvDuration("RCLONE_RETRY_BASE_DELAY", 800*time.Millisecond)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
 	if retryBaseDelay < 0 {
 		retryBaseDelay = 0
 	}
-	retryMaxDelay := envDuration("RCLONE_RETRY_MAX_DELAY", 8*time.Second)
+	retryMaxDelay, err := lookupEnvDuration("RCLONE_RETRY_MAX_DELAY", 8*time.Second)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
 	if retryMaxDelay < retryBaseDelay {
 		retryMaxDelay = retryBaseDelay
+	}
+
+	rcloneTuneEnabled, err := lookupEnvBool("RCLONE_TUNE", true)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	rcloneMaxTransfers, err := defaultRcloneMaxTransfers()
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	rcloneMaxCheckers, err := defaultRcloneMaxCheckers()
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	rcloneS3ChunkSizeMiB, err := lookupEnvInt("RCLONE_S3_CHUNK_SIZE_MIB", 0)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	rcloneS3UploadConcurrency, err := lookupEnvInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	rcloneLowLevelRetries, err := lookupEnvInt("RCLONE_LOW_LEVEL_RETRIES", 10)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	rcloneRetryJitterRatio, err := lookupEnvFloat("RCLONE_RETRY_JITTER_RATIO", 0.2)
+	if err != nil {
+		return managerWiringConfig{}, err
+	}
+	captureUnknownRcloneErrors, err := lookupEnvBool("RCLONE_CAPTURE_UNKNOWN_ERRORS", false)
+	if err != nil {
+		return managerWiringConfig{}, err
 	}
 
 	return managerWiringConfig{
@@ -66,20 +117,20 @@ func resolveManagerWiring(cfg Config) managerWiringConfig {
 		queueCapacity:              queueCapacity,
 		logLineMaxBytes:            logLineMaxBytes,
 		allowedLocalDirs:           sanitizeAllowedLocalDirs(cfg.AllowedLocalDirs),
-		rcloneTuneEnabled:          envBool("RCLONE_TUNE", true),
-		rcloneMaxTransfers:         defaultRcloneMaxTransfers(),
-		rcloneMaxCheckers:          defaultRcloneMaxCheckers(),
-		rcloneS3ChunkSizeMiB:       envInt("RCLONE_S3_CHUNK_SIZE_MIB", 0),
-		rcloneS3UploadConcurrency:  envInt("RCLONE_S3_UPLOAD_CONCURRENCY", 0),
-		rcloneLowLevelRetries:      envInt("RCLONE_LOW_LEVEL_RETRIES", 10),
+		rcloneTuneEnabled:          rcloneTuneEnabled,
+		rcloneMaxTransfers:         rcloneMaxTransfers,
+		rcloneMaxCheckers:          rcloneMaxCheckers,
+		rcloneS3ChunkSizeMiB:       rcloneS3ChunkSizeMiB,
+		rcloneS3UploadConcurrency:  rcloneS3UploadConcurrency,
+		rcloneLowLevelRetries:      rcloneLowLevelRetries,
 		rcloneStatsInterval:        statsInterval,
 		rcloneRetryAttempts:        retryAttempts,
 		rcloneRetryBaseDelay:       retryBaseDelay,
 		rcloneRetryMaxDelay:        retryMaxDelay,
-		rcloneRetryJitterRatio:     clampRetryJitterRatio(envFloat("RCLONE_RETRY_JITTER_RATIO", 0.2)),
+		rcloneRetryJitterRatio:     clampRetryJitterRatio(rcloneRetryJitterRatio),
 		rcloneRetryRandFloat:       rand.Float64,
-		captureUnknownRcloneErrors: envBool("RCLONE_CAPTURE_UNKNOWN_ERRORS", false),
-	}
+		captureUnknownRcloneErrors: captureUnknownRcloneErrors,
+	}, nil
 }
 
 func sanitizeAllowedLocalDirs(dirs []string) []string {
@@ -97,7 +148,7 @@ func sanitizeAllowedLocalDirs(dirs []string) []string {
 	return out
 }
 
-func defaultRcloneMaxTransfers() int {
+func defaultRcloneMaxTransfers() (int, error) {
 	cpu := runtime.NumCPU()
 	maxTransfers := cpu * 4
 	if maxTransfers < 4 {
@@ -106,10 +157,10 @@ func defaultRcloneMaxTransfers() int {
 	if maxTransfers > 128 {
 		maxTransfers = 128
 	}
-	return envInt("RCLONE_MAX_TRANSFERS", maxTransfers)
+	return lookupEnvInt("RCLONE_MAX_TRANSFERS", maxTransfers)
 }
 
-func defaultRcloneMaxCheckers() int {
+func defaultRcloneMaxCheckers() (int, error) {
 	cpu := runtime.NumCPU()
 	maxCheckers := cpu * 8
 	if maxCheckers < 8 {
@@ -118,7 +169,7 @@ func defaultRcloneMaxCheckers() int {
 	if maxCheckers > 256 {
 		maxCheckers = 256
 	}
-	return envInt("RCLONE_MAX_CHECKERS", maxCheckers)
+	return lookupEnvInt("RCLONE_MAX_CHECKERS", maxCheckers)
 }
 
 func clampRetryJitterRatio(value float64) float64 {
@@ -129,4 +180,9 @@ func clampRetryJitterRatio(value float64) float64 {
 		return 1
 	}
 	return value
+}
+
+func ValidateEnvironment(cfg Config) error {
+	_, err := resolveManagerWiring(cfg)
+	return err
 }

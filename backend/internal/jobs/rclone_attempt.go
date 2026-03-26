@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+
+	"s3desk/internal/logging"
 )
 
 // runRcloneAttempt executes a single rclone invocation and streams logs to the job log.
@@ -26,7 +28,12 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 			},
 		)
 	}
-	cmd := exec.CommandContext(ctx, rclonePath, args...)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
+	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
+	cmd := exec.Command(rclonePath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
@@ -43,12 +50,10 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 	}
 
 	pid := 0
-	m.mu.Lock()
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
-		m.pids[jobID] = pid
 	}
-	m.mu.Unlock()
+	cancelWatcher := startProcessCancelWatcher(ctx, jobID, pid)
 
 	var (
 		progressCh   chan rcloneStatsUpdate
@@ -61,17 +66,6 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 			defer close(progressDone)
 			m.trackRcloneProgress(ctx, jobID, progressCh)
 		}()
-	}
-
-	done := make(chan struct{})
-	if pid > 0 {
-		go func(pid int) {
-			select {
-			case <-ctx.Done():
-				_ = syscall.Kill(-pid, syscall.SIGKILL)
-			case <-done:
-			}
-		}(pid)
 	}
 
 	errCapture := newLogCapture(50)
@@ -88,15 +82,19 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 	}()
 
 	waitErr = cmd.Wait()
-	close(done)
 
-	// Ensure Cancel(jobID) cannot accidentally kill an unrelated PID after the rclone process exits.
-	if pid > 0 {
-		m.mu.Lock()
-		if m.pids[jobID] == pid {
-			m.pids[jobID] = 0
+	if cancelErr := cancelWatcher.finish(); cancelErr != nil {
+		if pid > 0 {
+			logging.WarnFields("job process termination helper failed", map[string]any{
+				"event":  "job.process_cancel_failed",
+				"job_id": jobID,
+				"pid":    pid,
+				"error":  cancelErr.Error(),
+			})
 		}
-		m.mu.Unlock()
+		if waitErr == nil && ctx.Err() != nil {
+			waitErr = cancelErr
+		}
 	}
 
 	wg.Wait()
