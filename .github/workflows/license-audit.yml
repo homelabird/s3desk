@@ -30,7 +30,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.x"
           cache-dependency-path: backend/go.sum
 
       - name: Run license audit (runtime-only)
