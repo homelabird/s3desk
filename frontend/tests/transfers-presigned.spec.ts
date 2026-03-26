@@ -208,7 +208,11 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 
 	await expect.poll(() => presignedAttempted, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => fallbackAttempted, { timeout: 5000 }).toBe(true)
-	await expect(page.getByText('Presigned uploads are not supported here. Falling back to staging uploads.')).toBeVisible()
+	await expect(
+		page.locator('.ant-message-notice-content').filter({
+			hasText: 'Presigned uploads are not supported here. Falling back to staging uploads.',
+		}).first(),
+	).toBeVisible()
 	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
 	expect(presignedUrlHit).toBe(false)
 })
