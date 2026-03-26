@@ -38,6 +38,22 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v4
 
+      - name: Install backend security helper tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.23.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      - name: Install frontend dependencies for Playwright browser setup
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium for release-gate browser smoke
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
       - name: Run full repository check gate
         shell: bash
         run: ./scripts/check.sh

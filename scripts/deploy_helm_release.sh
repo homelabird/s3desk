@@ -5,6 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TAG="${1:-${CI_COMMIT_TAG:-}}"
 
 bash "${ROOT}/scripts/validate_release_tag.sh" "${TAG}" >/dev/null
+bash "${ROOT}/scripts/verify_release_readiness.sh" "${TAG}" >/dev/null
 
 DOCKERHUB_REPO="$(printf '%s' "${DOCKERHUB_REPO:-}" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 DOCKERHUB_REPO="${DOCKERHUB_REPO#https://}"
@@ -91,3 +92,5 @@ for deployment in "${deployments[@]}"; do
 done
 
 kubectl -n "${DEPLOY_K8S_NAMESPACE}" get pods -l "app.kubernetes.io/instance=${DEPLOY_HELM_RELEASE}" -o wide
+
+bash "${ROOT}/scripts/deploy_smoke.sh"

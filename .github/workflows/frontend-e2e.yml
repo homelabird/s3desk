@@ -2,39 +2,63 @@ name: Frontend E2E
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/frontend-e2e.yml"
-      - "compose/test/e2e.yml"
-      - "scripts/compose.sh"
-      - "frontend/**"
-      - "openapi.yml"
-      - "scripts/bundle_report.js"
-      - "scripts/run_live_e2e_local.sh"
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/frontend-e2e.yml"
-      - "compose/test/e2e.yml"
-      - "scripts/compose.sh"
-      - "frontend/**"
-      - "openapi.yml"
-      - "scripts/bundle_report.js"
-      - "scripts/run_live_e2e_local.sh"
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: frontend-e2e-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
-  bundle-budget:
+  changes:
     if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      browser_facing: ${{ steps.filter.outputs.browser_facing }}
+      frontend_bundle: ${{ steps.filter.outputs.frontend_bundle }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect frontend and browser-facing change scope
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            browser_facing:
+              - ".github/workflows/frontend-e2e.yml"
+              - "compose/test/e2e.yml"
+              - "compose/remote/**"
+              - "deploy/caddy/**"
+              - "charts/s3desk/**"
+              - "scripts/compose.sh"
+              - "scripts/run_live_e2e_local.sh"
+              - "scripts/bundle_report.js"
+              - "openapi.yml"
+              - "frontend/**"
+              - "backend/cmd/server/**"
+              - "backend/internal/app/**"
+              - "backend/internal/api/**"
+            frontend_bundle:
+              - ".github/workflows/frontend-e2e.yml"
+              - "scripts/bundle_report.js"
+              - "openapi.yml"
+              - "frontend/**"
+
+  bundle-budget:
+    if: github.event_name != 'schedule' && needs.changes.outputs.frontend_bundle == 'true'
+    needs:
+      - changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -80,6 +104,8 @@ jobs:
   mock-e2e:
     name: Core Mock E2E
     if: github.event_name != 'schedule'
+    needs:
+      - changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -96,13 +122,22 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Skip core mock suite when no browser-facing changes were detected
+        if: needs.changes.outputs.browser_facing != 'true'
+        run: |
+          echo "No browser-facing changes detected."
+          echo "Required check passes without running the mock Playwright suite."
+
       - name: Install frontend dependencies
+        if: needs.changes.outputs.browser_facing == 'true'
         run: npm ci --no-audit --no-fund
 
       - name: Install Playwright Chromium for desktop and mobile projects
+        if: needs.changes.outputs.browser_facing == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run mock Playwright suite excluding dedicated mobile responsive specs
+        if: needs.changes.outputs.browser_facing == 'true'
         run: npm run test:e2e:core
 
       - name: Upload core mock Playwright artifacts
@@ -116,6 +151,8 @@ jobs:
   mobile-responsive-e2e:
     name: Mobile Responsive E2E (Required)
     if: github.event_name != 'schedule'
+    needs:
+      - changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -136,13 +173,22 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Skip mobile responsive suite when no browser-facing changes were detected
+        if: needs.changes.outputs.browser_facing != 'true'
+        run: |
+          echo "No browser-facing changes detected."
+          echo "Required check passes without running the dedicated mobile responsive suite."
+
       - name: Install frontend dependencies
+        if: needs.changes.outputs.browser_facing == 'true'
         run: npm ci --no-audit --no-fund
 
       - name: Install Playwright Chromium for mobile responsive projects
+        if: needs.changes.outputs.browser_facing == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run dedicated mobile responsive Playwright suite
+        if: needs.changes.outputs.browser_facing == 'true'
         run: npm run test:e2e:mobile-responsive
 
       - name: Upload mobile responsive HTML report

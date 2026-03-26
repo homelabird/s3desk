@@ -49,11 +49,13 @@ The repository keeps automated enforcement for release readiness inside the stan
 
 ## Branch Protection / Required Checks
 
-When branch protection is configured for `main`, keep the following check names in the required set for frontend-affecting pull requests:
+When branch protection is configured for `main`, keep the following check names in the required set:
 
-- `Release Gate / release-gate`
-- `Frontend E2E / Core Mock E2E`
-- `Frontend E2E / Mobile Responsive E2E (Required)`
+- `release-gate`
+- `Core Mock E2E`
+- `Mobile Responsive E2E (Required)`
+
+The `Frontend E2E` workflow should still trigger on every pull request and `main` push so these required checks always materialize. When no browser-facing files changed, the two Playwright required checks should self-skip inside the job and report success without running the suites.
 
 For the mobile suite scope, local commands, and operator-facing test entry points, use [frontend/docs/MOBILE_RESPONSIVE_E2E.md](../frontend/docs/MOBILE_RESPONSIVE_E2E.md).
 

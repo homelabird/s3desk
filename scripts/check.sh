@@ -107,17 +107,17 @@ echo "[check] backend"
 
     if ! resolve_go_helper_tool STATICCHECK_BIN staticcheck; then
       echo "[check] staticcheck not found" >&2
-      echo "[check] install with: go install honnef.co/go/tools/cmd/staticcheck@latest" >&2
+      echo "[check] install with: go install honnef.co/go/tools/cmd/staticcheck@v0.6.1" >&2
       exit 1
     fi
     if ! resolve_go_helper_tool GOSEC_BIN gosec; then
       echo "[check] gosec not found" >&2
-      echo "[check] install with: go install github.com/securego/gosec/v2/cmd/gosec@latest" >&2
+      echo "[check] install with: go install github.com/securego/gosec/v2/cmd/gosec@v2.23.0" >&2
       exit 1
     fi
     if ! resolve_go_helper_tool GOVULNCHECK_BIN govulncheck; then
       echo "[check] govulncheck not found" >&2
-      echo "[check] install with: go install golang.org/x/vuln/cmd/govulncheck@latest" >&2
+      echo "[check] install with: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4" >&2
       exit 1
     fi
 
