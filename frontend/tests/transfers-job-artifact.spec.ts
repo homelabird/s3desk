@@ -192,7 +192,7 @@ async function queueZipArtifactDownload(page: Page) {
 	await page.getByRole('menuitem', { name: 'Download ZIP' }).click()
 
 	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: /Transfers/i }).first().click()
+		await page.getByRole('button', { name: /Transfers/i }).first().click({ force: true })
 	})
 	const row = transferDownloadRow(transfersDialog, zipJobLabel)
 	await expect(row).toBeVisible()

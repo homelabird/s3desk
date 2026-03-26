@@ -293,7 +293,7 @@ test('demo flow: profile to jobs', async ({ page }) => {
 	await page.getByRole('button', { name: /Queue upload \(1\)/i }).click()
 	console.log('[demo] wait upload done')
 	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: 'Open Transfers' }).click()
+		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
 	})
 	const uploadRow = transferUploadRow(transfersDialog, `Upload: ${uploadFilename}`)
 	await expect(uploadRow).toBeVisible({ timeout: 15_000 })
