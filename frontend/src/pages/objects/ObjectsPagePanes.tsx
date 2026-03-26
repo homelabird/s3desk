@@ -11,7 +11,6 @@ import type {
 import { Suspense, useEffect, useState } from 'react'
 
 import { ObjectsLayout, type ObjectsLayoutProps } from './ObjectsLayout'
-import { ObjectsListHeader } from './ObjectsListHeader'
 import { ObjectsListSectionContainer } from './ObjectsListSectionContainer'
 import { ObjectsSelectionBarSection } from './ObjectsSelectionBarSection'
 import shellStyles from './ObjectsShell.module.css'
@@ -19,6 +18,7 @@ import styles from './objects.module.css'
 import {
 	ObjectsContextMenuPortal,
 	ObjectsDetailsPanelSection,
+	ObjectsListHeader,
 	ObjectsListContent,
 	ObjectsListControls,
 	ObjectsTreeSection,
@@ -191,7 +191,12 @@ export function ObjectsPagePanes({ layoutRef, layoutProps, treeProps, contextMen
 			<ObjectsListContent {...listProps.contentProps} />
 		</Suspense>
 	)
-	const listHeader = listProps.controlsProps.viewMode === 'grid' ? null : <ObjectsListHeader {...listProps.listHeaderProps} />
+	const listHeader =
+		listProps.controlsProps.viewMode === 'grid' ? null : (
+			<Suspense fallback={null}>
+				<ObjectsListHeader {...listProps.listHeaderProps} />
+			</Suspense>
+		)
 	const detailsPane = shouldLoadDetailsPane ? (
 		<Suspense fallback={paneFallback}>
 			<ObjectsDetailsPanelSection {...detailsProps} />

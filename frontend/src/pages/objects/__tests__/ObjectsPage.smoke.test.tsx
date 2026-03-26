@@ -13,7 +13,7 @@ beforeAll(() => {
 })
 
 describe('ObjectsPage', () => {
-	it('toggles sort direction from list header', () => {
+	it('toggles sort direction from list header', async () => {
 		const client = new QueryClient({
 			defaultOptions: {
 				queries: { retry: false },
@@ -31,7 +31,7 @@ describe('ObjectsPage', () => {
 		)
 
 		expect(screen.getByText('Objects')).toBeInTheDocument()
-		fireEvent.click(screen.getByRole('button', { name: /Name caret-up/i }))
-		expect(screen.getByRole('button', { name: /Name caret-down/i })).toBeInTheDocument()
+		fireEvent.click(await screen.findByRole('button', { name: /Name/i }))
+		expect(await screen.findByRole('button', { name: /Name/i })).toHaveAccessibleName(/Name caret-down/i)
 	}, 15_000)
 })

@@ -1,10 +1,8 @@
 import { Suspense, useCallback, useEffect } from 'react'
 
 import styles from './objects/ObjectsShell.module.css'
-import { ObjectsPageHeader } from './objects/ObjectsPageHeader'
-import { ObjectsPageOverlays } from './objects/ObjectsPageOverlays'
 import { ObjectsPagePanes } from './objects/ObjectsPagePanes'
-import { ObjectsImageViewerModal } from './objects/objectsPageLazy'
+import { ObjectsImageViewerModal, ObjectsPageHeader, ObjectsPageOverlays } from './objects/objectsPageLazy'
 import { useObjectsPageActions } from './objects/useObjectsPageActions'
 import { useObjectsPageData } from './objects/useObjectsPageData'
 import { isObjectsRefreshRelevant, objectsRefreshEventName, type ObjectsRefreshEventDetail } from './objects/objectsRefreshEvents'
@@ -169,18 +167,20 @@ export function ObjectsPageScreen(props: Props) {
 
 	return (
 		<div className={styles.page}>
-			<ObjectsPageHeader
-				uploadSupported={uploadSupported}
-				uploadDisabledReason={uploadDisabledReason}
-				uploadSourceOpen={actions.uploadSourceOpen}
-				uploadSourceBusy={actions.uploadSourceBusy}
-				folderSelectionSupported={actions.folderSelectionSupported}
-				folderSelectionReason={actions.folderSelectionReason}
-				onCloseUploadSource={actions.closeUploadSource}
-				onSelectUploadFiles={actions.chooseUploadFiles}
-				onSelectUploadFolder={actions.chooseUploadFolder}
-				toolbarSectionProps={toolbarSectionProps}
-			/>
+			<Suspense fallback={<h2 style={{ margin: 0 }}>Objects</h2>}>
+				<ObjectsPageHeader
+					uploadSupported={uploadSupported}
+					uploadDisabledReason={uploadDisabledReason}
+					uploadSourceOpen={actions.uploadSourceOpen}
+					uploadSourceBusy={actions.uploadSourceBusy}
+					folderSelectionSupported={actions.folderSelectionSupported}
+					folderSelectionReason={actions.folderSelectionReason}
+					onCloseUploadSource={actions.closeUploadSource}
+					onSelectUploadFiles={actions.chooseUploadFiles}
+					onSelectUploadFolder={actions.chooseUploadFolder}
+					toolbarSectionProps={toolbarSectionProps}
+				/>
+			</Suspense>
 
 			<ObjectsPagePanes layoutRef={data.layoutRef} {...panesProps} />
 			<Suspense fallback={null}>
@@ -212,7 +212,9 @@ export function ObjectsPageScreen(props: Props) {
 					}
 				/>
 			</Suspense>
-			<ObjectsPageOverlays {...overlaysProps} />
+			<Suspense fallback={null}>
+				<ObjectsPageOverlays {...overlaysProps} />
+			</Suspense>
 		</div>
 	)
 }

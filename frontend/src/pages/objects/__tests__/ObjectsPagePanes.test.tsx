@@ -9,6 +9,7 @@ import styles from '../objects.module.css'
 vi.mock('../objectsPageLazy', () => ({
 	ObjectsContextMenuPortal: () => <div data-testid="objects-context-menu-portal">context-menu</div>,
 	ObjectsTreeSection: () => <div data-testid="objects-tree-section">tree</div>,
+	ObjectsListHeader: () => <div data-testid="objects-list-header">header</div>,
 	ObjectsListControls: () => <div data-testid="objects-list-controls">controls</div>,
 	ObjectsListContent: () => <div data-testid="objects-list-content">content</div>,
 	ObjectsDetailsPanelSection: () => <div data-testid="objects-details-section">details</div>,

@@ -1,5 +1,9 @@
 import { lazy } from 'react'
 
+export const ObjectsPageHeader = lazy(async () => {
+	const m = await import('./ObjectsPageHeader')
+	return { default: m.ObjectsPageHeader }
+})
 export const ObjectsCommandPaletteModal = lazy(async () => {
 	const m = await import('./ObjectsCommandPaletteModal')
 	return { default: m.ObjectsCommandPaletteModal }
@@ -75,4 +79,12 @@ export const ObjectsContextMenuPortal = lazy(async () => {
 export const ObjectsImageViewerModal = lazy(async () => {
 	const m = await import('./ObjectsImageViewerModal')
 	return { default: m.ObjectsImageViewerModal }
+})
+export const ObjectsListHeader = lazy(async () => {
+	const m = await import('./ObjectsListHeader')
+	return { default: m.ObjectsListHeader }
+})
+export const ObjectsPageOverlays = lazy(async () => {
+	const m = await import('./ObjectsPageOverlays')
+	return { default: m.ObjectsPageOverlays }
 })

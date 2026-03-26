@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { APIClient, APIError } from './api/client'
+import { APIError } from './api/client'
+import { createLightAPIClient } from './api/lightClient'
 import { BrandLockup } from './components/BrandLockup'
 import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
@@ -79,7 +80,7 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 		setSubmitting(true)
 		setError(null)
 		try {
-			const api = new APIClient({ apiToken: trimmed })
+			const api = createLightAPIClient({ apiToken: trimmed })
 			await api.server.getMeta()
 			props.onLogin(trimmed)
 		} catch (err) {
@@ -160,7 +161,7 @@ function ProfilesList(props: {
 	setProfileId: (v: string | null) => void
 }) {
 	const navigate = useNavigate()
-	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
+	const api = useMemo(() => createLightAPIClient({ apiToken: props.apiToken }), [props.apiToken])
 
 	const [reloadNonce, setReloadNonce] = useState(0)
 	const [profilesState, setProfilesState] = useState<
@@ -311,7 +312,7 @@ export default function LightApp() {
 	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
 	const { mode, toggleMode } = useThemeMode()
 
-	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
+	const api = useMemo(() => createLightAPIClient({ apiToken }), [apiToken])
 	const [metaReloadNonce, setMetaReloadNonce] = useState(0)
 	const [metaState, setMetaState] = useState<
 		| { status: 'loading' }
