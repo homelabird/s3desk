@@ -106,6 +106,12 @@ func (s *server) handleCreateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
+	if req.TLSInsecureSkipVerify {
+		if err := validateProfileTLSSkipVerifyEndpoint("endpoint", req.Endpoint, s.cfg.AllowRemote); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+			return
+		}
+	}
 
 	profile, err := s.store.CreateProfile(r.Context(), req)
 	if err != nil {
@@ -331,6 +337,17 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
+
+	currentProfile, ok, err := s.store.GetProfile(r.Context(), profileID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load profile", nil)
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "profile not found", map[string]any{"profileId": profileID})
+		return
+	}
+
 	if err := validateProfileEndpointURL("endpoint", req.Endpoint, s.cfg.AllowRemote); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
@@ -338,6 +355,20 @@ func (s *server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if err := validateProfileEndpointURL("publicEndpoint", req.PublicEndpoint, s.cfg.AllowRemote); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
+	}
+	effectiveEndpoint := currentProfile.Endpoint
+	if req.Endpoint != nil {
+		effectiveEndpoint = strings.TrimSpace(*req.Endpoint)
+	}
+	effectiveTLSSkipVerify := currentProfile.TLSInsecureSkipVerify
+	if req.TLSInsecureSkipVerify != nil {
+		effectiveTLSSkipVerify = *req.TLSInsecureSkipVerify
+	}
+	if effectiveTLSSkipVerify {
+		if err := validateProfileTLSSkipVerifyEndpoint("endpoint", &effectiveEndpoint, s.cfg.AllowRemote); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
+			return
+		}
 	}
 
 	profile, ok, err := s.store.UpdateProfile(r.Context(), profileID, req)

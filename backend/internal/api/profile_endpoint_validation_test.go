@@ -38,6 +38,50 @@ func TestValidateProfileEndpointURLAllowsPrivateServiceEndpoint(t *testing.T) {
 	}
 }
 
+func TestValidateProfileTLSSkipVerifyEndpointRejectsBlankEndpoint(t *testing.T) {
+	t.Parallel()
+
+	err := validateProfileTLSSkipVerifyEndpoint("endpoint", nil, false)
+	if err == nil || !strings.Contains(err.Error(), "custom https:// endpoint") {
+		t.Fatalf("validateProfileTLSSkipVerifyEndpoint() error=%v, want custom endpoint rejection", err)
+	}
+}
+
+func TestValidateProfileTLSSkipVerifyEndpointRejectsPublicResolvedHost(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "public.example.com" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "public.example.com")
+			}
+			return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+		},
+	)
+
+	endpoint := "https://public.example.com"
+	err := validateProfileTLSSkipVerifyEndpoint("endpoint", &endpoint, false)
+	if err == nil || !strings.Contains(err.Error(), "allowed only for private") {
+		t.Fatalf("validateProfileTLSSkipVerifyEndpoint() error=%v, want private-endpoint rejection", err)
+	}
+}
+
+func TestValidateProfileTLSSkipVerifyEndpointAllowsResolvedPrivateHost(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "minio.internal" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "minio.internal")
+			}
+			return []net.IPAddr{{IP: net.ParseIP("10.0.0.25")}}, nil
+		},
+	)
+
+	endpoint := "https://minio.internal:9000"
+	if err := validateProfileTLSSkipVerifyEndpoint("endpoint", &endpoint, false); err != nil {
+		t.Fatalf("validateProfileTLSSkipVerifyEndpoint() unexpected error: %v", err)
+	}
+}
+
 func TestValidateProfileEndpointURLRejectsBlockedMetadataAlias(t *testing.T) {
 	stubProfileEndpointLookup(t,
 		func(_ context.Context, host string) (string, error) {
@@ -145,6 +189,70 @@ func TestHandleCreateProfileRejectsBlockedMetadataEndpoint(t *testing.T) {
 	}
 }
 
+func TestHandleCreateProfileRejectsTLSSkipVerifyWithoutCustomEndpoint(t *testing.T) {
+	t.Parallel()
+
+	_, srv := newTestServer(t, testEncryptionKey())
+
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	req := models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderAwsS3,
+		Name:                  "aws-default-endpoint",
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		TLSInsecureSkipVerify: true,
+	}
+
+	res := doJSONRequest(t, srv, http.MethodPost, "/api/v1/profiles", req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if !strings.Contains(resp.Error.Message, "custom https:// endpoint") {
+		t.Fatalf("error.message=%q, want custom endpoint rejection", resp.Error.Message)
+	}
+}
+
+func TestHandleCreateProfileAllowsPrivateTLSSkipVerifyEndpoint(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "minio.internal" {
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "minio.internal")
+			}
+			return []net.IPAddr{{IP: net.ParseIP("10.0.0.25")}}, nil
+		},
+	)
+
+	_, srv := newTestServer(t, testEncryptionKey())
+
+	endpoint := "https://minio.internal:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	req := models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "private-minio",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		TLSInsecureSkipVerify: true,
+	}
+
+	res := doJSONRequest(t, srv, http.MethodPost, "/api/v1/profiles", req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusCreated)
+	}
+}
+
 func TestHandleCreateProfileRejectsBlockedMetadataAlias(t *testing.T) {
 	stubProfileEndpointLookup(t,
 		nil,
@@ -242,6 +350,130 @@ func TestHandleUpdateProfileRejectsBlockedPublicEndpointWhenRemoteEnabled(t *tes
 	decodeJSONResponse(t, res, &resp)
 	if !strings.Contains(resp.Error.Message, "loopback or link-local") {
 		t.Fatalf("error.message=%q, want loopback rejection", resp.Error.Message)
+	}
+}
+
+func TestHandleUpdateProfileRejectsTLSSkipVerifyOnAWSDefaultEndpoint(t *testing.T) {
+	t.Parallel()
+
+	st, srv := newTestServer(t, testEncryptionKey())
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderAwsS3,
+		Name:                  "aws-default-endpoint",
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	enabled := true
+	req := models.ProfileUpdateRequest{TLSInsecureSkipVerify: &enabled}
+	res := doJSONRequest(t, srv, http.MethodPatch, "/api/v1/profiles/"+profile.ID, req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if !strings.Contains(resp.Error.Message, "custom https:// endpoint") {
+		t.Fatalf("error.message=%q, want custom endpoint rejection", resp.Error.Message)
+	}
+}
+
+func TestHandleUpdateProfileAllowsPrivateTLSSkipVerifyEndpoint(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			switch host {
+			case "minio.internal":
+				return []net.IPAddr{{IP: net.ParseIP("10.0.0.25")}}, nil
+			default:
+				t.Fatalf("LookupIPAddr host=%q, want %q", host, "minio.internal")
+				return nil, nil
+			}
+		},
+	)
+
+	st, srv := newTestServer(t, testEncryptionKey())
+	endpoint := "https://minio.internal:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "private-minio",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	enabled := true
+	req := models.ProfileUpdateRequest{TLSInsecureSkipVerify: &enabled}
+	res := doJSONRequest(t, srv, http.MethodPatch, "/api/v1/profiles/"+profile.ID, req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusOK)
+	}
+}
+
+func TestHandleUpdateProfileRejectsPublicEndpointWhileTLSSkipVerifyEnabled(t *testing.T) {
+	stubProfileEndpointLookup(t,
+		nil,
+		func(_ context.Context, host string) ([]net.IPAddr, error) {
+			switch host {
+			case "minio.internal":
+				return []net.IPAddr{{IP: net.ParseIP("10.0.0.25")}}, nil
+			case "public.example.com":
+				return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
+			default:
+				t.Fatalf("LookupIPAddr host=%q", host)
+				return nil, nil
+			}
+		},
+	)
+
+	st, srv := newTestServer(t, testEncryptionKey())
+	endpoint := "https://minio.internal:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "private-minio",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		TLSInsecureSkipVerify: true,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	publicEndpoint := "https://public.example.com"
+	req := models.ProfileUpdateRequest{Endpoint: &publicEndpoint}
+	res := doJSONRequest(t, srv, http.MethodPatch, "/api/v1/profiles/"+profile.ID, req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if !strings.Contains(resp.Error.Message, "allowed only for private") {
+		t.Fatalf("error.message=%q, want private-endpoint rejection", resp.Error.Message)
 	}
 }
 

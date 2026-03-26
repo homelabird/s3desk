@@ -89,4 +89,47 @@ describe('profileModalValidation', () => {
 		expect(errors.ociCompartment).toBeUndefined()
 		expect(errors.ociEndpoint).toBeUndefined()
 	})
+
+	it('requires a custom endpoint before enabling TLS insecure skip verify on AWS', async () => {
+		const values = buildValues({
+			provider: 'aws_s3',
+			endpoint: '',
+			tlsInsecureSkipVerify: true,
+		})
+		const viewState = buildProfileModalViewState({ values })
+
+		const errors = await validateProfileFormValues({ values, viewState })
+
+		expect(errors.endpoint).toContain('custom https:// endpoint')
+	})
+
+	it('requires https endpoints when TLS insecure skip verify is enabled', async () => {
+		const values = buildValues({
+			endpoint: 'http://minio.internal:9000',
+			tlsInsecureSkipVerify: true,
+		})
+		const viewState = buildProfileModalViewState({ values })
+
+		const errors = await validateProfileFormValues({ values, viewState })
+
+		expect(errors.endpoint).toContain('requires an https:// endpoint')
+	})
+
+	it('maps TLS insecure skip verify validation to the Azure endpoint field', async () => {
+		const values = buildValues({
+			provider: 'azure_blob',
+			endpoint: '',
+			accessKeyId: '',
+			secretAccessKey: '',
+			azureAccountName: 'storageacct',
+			azureAccountKey: 'secret',
+			azureEndpoint: '',
+			tlsInsecureSkipVerify: true,
+		})
+		const viewState = buildProfileModalViewState({ values })
+
+		const errors = await validateProfileFormValues({ values, viewState })
+
+		expect(errors.azureEndpoint).toContain('custom https:// endpoint')
+	})
 })

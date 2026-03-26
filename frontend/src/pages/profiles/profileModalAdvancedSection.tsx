@@ -1,4 +1,4 @@
-import { Typography } from 'antd'
+import { Alert, Typography } from 'antd'
 
 import styles from './ProfileModal.module.css'
 import type { ProfileModalSectionContentArgs } from './profileModalSectionShared'
@@ -39,12 +39,21 @@ export function buildAdvancedSection(args: ProfileModalSectionContentArgs) {
 				})}
 				{args.renderSwitchCard({
 					title: 'TLS Insecure Skip Verify',
-					description: 'Skip certificate validation for self-signed or development endpoints.',
+					description: 'Only for private self-signed HTTPS endpoints. Public or default endpoints are blocked on save.',
 					checked: values.tlsInsecureSkipVerify,
 					onChange: (checked) => setField('tlsInsecureSkipVerify', checked),
 					ariaLabel: 'TLS Insecure Skip Verify',
 				})}
 			</div>
+			{values.tlsInsecureSkipVerify ? (
+				<Alert
+					showIcon
+					type="warning"
+					style={{ marginTop: 12 }}
+					message="Certificate verification disabled"
+					description="Use this only for custom private HTTPS endpoints you control. Default provider endpoints and public hosts are rejected."
+				/>
+			) : null}
 		</div>
 	)
 }

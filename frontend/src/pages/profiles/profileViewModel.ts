@@ -106,7 +106,15 @@ function toProfileFlags(row: Profile): ProfileFlagViewModel[] {
 	}
 	if (isS3 && 'forcePathStyle' in row) parts.push({ label: row.forcePathStyle ? 'path-style' : 'virtual-host' })
 	parts.push({ label: row.preserveLeadingSlash ? 'leading-slash' : 'trim-leading-slash' })
-	parts.push({ label: row.tlsInsecureSkipVerify ? 'tls-skip' : 'tls-verify' })
+	parts.push(
+		row.tlsInsecureSkipVerify
+			? {
+					label: 'tls-skip',
+					tone: 'warning',
+					title: 'Certificate verification is disabled for this profile.',
+				}
+			: { label: 'tls-verify' },
+	)
 	return parts
 }
 

@@ -31,6 +31,46 @@ var blockedProfileEndpointIPs = []net.IP{
 	net.ParseIP("169.254.170.2"),
 }
 
+func validateProfileTLSSkipVerifyEndpoint(field string, raw *string, allowRemote bool) error {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return fmt.Errorf("tlsInsecureSkipVerify requires %s to be set to a custom https:// endpoint", field)
+	}
+	if err := validateProfileEndpointURL(field, raw, allowRemote); err != nil {
+		return err
+	}
+
+	value := strings.TrimSpace(*raw)
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" {
+		return fmt.Errorf("tlsInsecureSkipVerify requires %s to be an absolute https:// URL", field)
+	}
+	if strings.ToLower(parsed.Scheme) != "https" {
+		return fmt.Errorf("tlsInsecureSkipVerify requires %s to use https://", field)
+	}
+
+	host := normalizeHost(parsed.Hostname())
+	if host == "" {
+		return fmt.Errorf("tlsInsecureSkipVerify requires %s to be an absolute https:// URL", field)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if !isTLSSkipVerifyPrivateIP(ip) {
+			return fmt.Errorf("tlsInsecureSkipVerify is allowed only for private, loopback, or link-local https endpoints")
+		}
+		return nil
+	}
+
+	addrs, err := lookupProfileEndpointIPAddr(host)
+	if err != nil || len(addrs) == 0 {
+		return fmt.Errorf("%s host could not be resolved", field)
+	}
+	for _, addr := range addrs {
+		if !isTLSSkipVerifyPrivateIP(addr.IP) {
+			return fmt.Errorf("tlsInsecureSkipVerify is allowed only for private, loopback, or link-local https endpoints")
+		}
+	}
+	return nil
+}
+
 func validateProfileEndpointURL(field string, raw *string, allowRemote bool) error {
 	if raw == nil {
 		return nil
@@ -124,6 +164,10 @@ func isBlockedProfileEndpointIP(ip net.IP) bool {
 		}
 	}
 	return false
+}
+
+func isTLSSkipVerifyPrivateIP(ip net.IP) bool {
+	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()
 }
 
 func lookupProfileEndpointCNAME(host string) (string, error) {

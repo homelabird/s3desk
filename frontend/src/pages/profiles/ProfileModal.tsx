@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
 import { OverlaySheet } from '../../components/OverlaySheet'
+import { ConfirmDangerDialog } from '../../lib/ConfirmDangerDialog'
 import { runIfActionIdle } from '../../lib/pendingActionGuard'
 import styles from './ProfileModal.module.css'
 import { buildProfileModalSectionItems } from './ProfileModalSections'
@@ -103,6 +104,7 @@ function ProfileModalSession(props: {
 	const [values, setValues] = useState<ProfileFormValues>(() => ({ ...defaults, ...(props.initialValues ?? {}) }))
 	const [errors, setErrors] = useState<FieldErrors>({})
 	const [openSections, setOpenSections] = useState<SectionKey[]>(props.editMode ? DEFAULT_EDIT_SECTIONS : DEFAULT_CREATE_SECTIONS)
+	const [showTLSInsecureConfirm, setShowTLSInsecureConfirm] = useState(false)
 
 	const viewState = buildProfileModalViewState({
 		values,
@@ -115,10 +117,21 @@ function ProfileModalSession(props: {
 	const sheetPlacement = screens.md ? 'right' : 'bottom'
 	const isBusy = props.loading
 
-	const setField = useCallback(<K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
+	const applyField = useCallback(<K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
 		setValues((prev) => ({ ...prev, [key]: value }))
 		setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev))
 	}, [])
+
+	const setField = useCallback(<K extends keyof ProfileFormValues>(key: K, value: ProfileFormValues[K]) => {
+		if (key === 'tlsInsecureSkipVerify') {
+			const enabled = Boolean(value)
+			if (enabled && !values.tlsInsecureSkipVerify) {
+				setShowTLSInsecureConfirm(true)
+				return
+			}
+		}
+		applyField(key, value)
+	}, [applyField, values.tlsInsecureSkipVerify])
 
 	const ensureSectionsOpenForErrors = useCallback((nextErrors: FieldErrors) => {
 		const nextSections = new Set(openSections)
@@ -210,6 +223,18 @@ function ProfileModalSession(props: {
 					/>
 				</div>
 			</form>
+			{showTLSInsecureConfirm ? (
+				<ConfirmDangerDialog
+					title="Disable certificate verification?"
+					description="This turns off HTTPS certificate checks for the profile."
+					details="Use it only for custom private endpoints with self-signed certificates. Public endpoints and default cloud endpoints are rejected."
+					confirmText="INSECURE"
+					confirmHint='Type "INSECURE" to enable this setting'
+					okText="Enable anyway"
+					onConfirm={() => applyField('tlsInsecureSkipVerify', true)}
+					onClose={() => setShowTLSInsecureConfirm(false)}
+				/>
+			) : null}
 		</OverlaySheet>
 	)
 }

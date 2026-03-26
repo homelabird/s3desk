@@ -61,6 +61,17 @@ function isBlank(value: unknown): boolean {
 	return typeof value !== 'string' ? !value : !value.trim()
 }
 
+function getTLSSkipVerifyEndpointTarget(args: {
+	values: ProfileFormValues
+	viewState: Pick<ProfileModalViewState, 'isAzure' | 'isGcp' | 'isOciObjectStorage'>
+}): { field: keyof ProfileFormValues; value: string } {
+	const { values, viewState } = args
+	if (viewState.isAzure) return { field: 'azureEndpoint', value: values.azureEndpoint }
+	if (viewState.isGcp) return { field: 'gcpEndpoint', value: values.gcpEndpoint }
+	if (viewState.isOciObjectStorage) return { field: 'ociEndpoint', value: values.ociEndpoint }
+	return { field: 'endpoint', value: values.endpoint }
+}
+
 export type FieldErrors = Partial<Record<keyof ProfileFormValues, string>>
 export type SectionKey = 'basic' | 'credentials' | 'advanced' | 'security'
 
@@ -345,6 +356,29 @@ export async function validateProfileFormValues(args: {
 	if (viewState.showTLSFields) {
 		if (isBlank(values.tlsClientCertPem)) addError('tlsClientCertPem', 'Client certificate is required')
 		if (isBlank(values.tlsClientKeyPem)) addError('tlsClientKeyPem', 'Client key is required')
+	}
+
+	if (values.tlsInsecureSkipVerify) {
+		const endpointTarget = getTLSSkipVerifyEndpointTarget({
+			values,
+			viewState: {
+				isAzure: viewState.isAzure,
+				isGcp: viewState.isGcp,
+				isOciObjectStorage: viewState.isOciObjectStorage,
+			},
+		})
+		if (isBlank(endpointTarget.value)) {
+			addError(endpointTarget.field, 'TLS Insecure Skip Verify requires a custom https:// endpoint')
+		} else {
+			try {
+				const parsed = new URL(endpointTarget.value.trim())
+				if (parsed.protocol !== 'https:') {
+					addError(endpointTarget.field, 'TLS Insecure Skip Verify requires an https:// endpoint')
+				}
+			} catch {
+				addError(endpointTarget.field, 'TLS Insecure Skip Verify requires a valid https:// endpoint')
+			}
+		}
 	}
 
 	return next
