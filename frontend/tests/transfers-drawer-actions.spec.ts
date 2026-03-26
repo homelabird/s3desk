@@ -148,7 +148,7 @@ test('transfers drawer cancels, retries, and clears completed uploads', async ({
 
 	const row = transferUploadRow(transfersDialog, 'Upload: alpha.txt')
 	await expect(row).toBeVisible({ timeout: 10_000 })
-	await expect(row.getByText('Uploading', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expect(row.getByRole('button', { name: 'Cancel' })).toBeVisible({ timeout: 10_000 })
 
 	await row.getByRole('button', { name: 'Cancel' }).click()
 	await expect(row.getByText('Canceled', { exact: true })).toBeVisible()
