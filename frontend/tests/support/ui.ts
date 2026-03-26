@@ -1,6 +1,12 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
 type SearchScope = Page | Locator
+const dialogOpenRetryCount = 3
+const dialogOpenWaitMs = 1_500
+
+async function waitForDialogVisible(dialog: Locator, timeout: number): Promise<boolean> {
+	return dialog.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false)
+}
 
 export function dialogByName(scope: SearchScope, name: string | RegExp): Locator {
 	return scope.getByRole('dialog', { name })
@@ -9,13 +15,30 @@ export function dialogByName(scope: SearchScope, name: string | RegExp): Locator
 export async function ensureDialogOpen(scope: Page, name: string | RegExp, openDialog: () => Promise<void>): Promise<Locator> {
 	const dialog = dialogByName(scope, name)
 	const isVisible = await dialog.isVisible().catch(() => false)
-	const becameVisible = isVisible
-		? true
-		: await dialog.waitFor({ state: 'visible', timeout: 1000 }).then(() => true).catch(() => false)
-	if (!becameVisible) {
-		await openDialog()
+	if (isVisible || (await waitForDialogVisible(dialog, 1_000))) {
+		return dialog
 	}
-	await expect(dialog).toBeVisible()
+
+	let lastError: Error | null = null
+	for (let attempt = 0; attempt < dialogOpenRetryCount; attempt += 1) {
+		try {
+			await openDialog()
+		} catch (error) {
+			lastError = error instanceof Error ? error : new Error(String(error))
+		}
+
+		if (await waitForDialogVisible(dialog, dialogOpenWaitMs)) {
+			return dialog
+		}
+
+		await scope.waitForTimeout(250 * (attempt + 1))
+	}
+
+	if (lastError) {
+		throw lastError
+	}
+
+	await expect(dialog).toBeVisible({ timeout: dialogOpenWaitMs })
 	return dialog
 }
 

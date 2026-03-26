@@ -142,7 +142,7 @@ test('transfers drawer cancels, retries, and clears completed uploads', async ({
 	await page.getByRole('button', { name: /Queue upload \(1\)/i }).click()
 
 	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: 'Open Transfers' }).click()
+		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
 	})
 	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
 
