@@ -19,6 +19,7 @@
       "data": {
         "baseUrl": "http://127.0.0.1:8080",
         "apiToken": "change-me",
+        "realtimeTicket": "paste-short-lived-ticket-here",
         "profileId": "01PROFILE",
         "bucket": "my-bucket",
         "prefix": "path/",
@@ -59,12 +60,23 @@
       "name": "Events"
     },
     {
+      "_id": "req_events_ticket_sse",
+      "_type": "request",
+      "parentId": "fld_events",
+      "name": "Create Realtime Ticket (SSE)",
+      "method": "POST",
+      "url": "{{ baseUrl }}/api/v1/realtime-ticket?transport=sse",
+      "headers": [
+        { "name": "X-Api-Token", "value": "{{ apiToken }}" }
+      ]
+    },
+    {
       "_id": "req_events_sse",
       "_type": "request",
       "parentId": "fld_events",
       "name": "SSE Stream",
       "method": "GET",
-      "url": "{{ baseUrl }}/api/v1/events?apiToken={{ apiToken }}&afterSeq=0",
+      "url": "{{ baseUrl }}/api/v1/events?realtimeTicket={{ realtimeTicket }}&afterSeq=0",
       "headers": [
         { "name": "Accept", "value": "text/event-stream" }
       ]

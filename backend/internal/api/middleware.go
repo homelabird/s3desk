@@ -165,7 +165,13 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 			return
 		}
 
-		token := r.Header.Get("X-Api-Token")
+		query := r.URL.Query()
+		if queryAPIToken := strings.TrimSpace(query.Get("apiToken")); queryAPIToken != "" {
+			writeError(w, http.StatusBadRequest, "invalid_request", "apiToken query parameter is not supported; use X-Api-Token or Authorization: Bearer", nil)
+			return
+		}
+
+		token := strings.TrimSpace(r.Header.Get("X-Api-Token"))
 		if token == "" {
 			// Prometheus/ServiceMonitor and many HTTP clients support Bearer tokens
 			// out of the box, so accept Authorization: Bearer <token> as an alias.
@@ -175,14 +181,8 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 				}
 			}
 		}
-		if token == "" {
-			queryApiToken := strings.TrimSpace(r.URL.Query().Get("apiToken"))
-			if queryApiToken != "" {
-				token = queryApiToken
-			}
-		}
 		if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
-			realtimeTicket := strings.TrimSpace(r.URL.Query().Get("realtimeTicket"))
+			realtimeTicket := strings.TrimSpace(query.Get("realtimeTicket"))
 			if realtimeTicket != "" {
 				transport := "sse"
 				if isWebSocketUpgrade(r) {

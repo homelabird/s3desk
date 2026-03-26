@@ -349,12 +349,13 @@ func TestAuthLimiterClientKey_IgnoresForwardingHeaders(t *testing.T) {
 	}
 }
 
-func TestRequireAPITokenAcceptsQueryApiToken(t *testing.T) {
+func TestRequireAPITokenAcceptsHeaderToken(t *testing.T) {
 	t.Parallel()
 
 	s := &server{cfg: config.Config{APIToken: "demo-token"}}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta?apiToken=demo-token", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
+	req.Header.Set("X-Api-Token", "demo-token")
 	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
@@ -364,17 +365,57 @@ func TestRequireAPITokenAcceptsQueryApiToken(t *testing.T) {
 	}
 }
 
-func TestRequireAPITokenRejectsWrongQueryApiToken(t *testing.T) {
+func TestRequireAPITokenAcceptsBearerToken(t *testing.T) {
 	t.Parallel()
 
 	s := &server{cfg: config.Config{APIToken: "demo-token"}}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta?apiToken=wrong-token", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
+	req.Header.Set("Authorization", "Bearer demo-token")
 	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("status=%d, want %d", rr.Code, http.StatusUnauthorized)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+func TestRequireAPITokenRejectsQueryApiToken(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{APIToken: "demo-token"}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta?apiToken=demo-token", nil)
+	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("error code=%q, want %q", resp.Error.Code, "invalid_request")
+	}
+}
+
+func TestRequireAPITokenRejectsQueryApiTokenEvenWithHeaderToken(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{APIToken: "demo-token"}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta?apiToken=demo-token", nil)
+	req.Header.Set("X-Api-Token", "demo-token")
+	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
 	}
 }

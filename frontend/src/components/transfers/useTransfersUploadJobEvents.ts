@@ -20,16 +20,20 @@ type UseTransfersUploadJobEventsArgs = {
 	updateUploadTask: (taskId: string, updater: (task: UploadTask) => UploadTask) => void
 }
 
-function buildWSURL(apiToken: string): string {
+type RealtimeTicketResponse = {
+	ticket?: string
+}
+
+function buildWSURL(realtimeTicket: string): string {
 	const url = buildApiWsUrl('/ws')
-	if (apiToken) url.searchParams.set('apiToken', apiToken)
+	if (realtimeTicket) url.searchParams.set('realtimeTicket', realtimeTicket)
 	url.searchParams.set('includeLogs', 'false')
 	return url.toString()
 }
 
-function buildSSEURL(apiToken: string): string {
+function buildSSEURL(realtimeTicket: string): string {
 	const url = buildApiHttpUrl('/events')
-	if (apiToken) url.searchParams.set('apiToken', apiToken)
+	if (realtimeTicket) url.searchParams.set('realtimeTicket', realtimeTicket)
 	url.searchParams.set('includeLogs', 'false')
 	return url.toString()
 }
@@ -61,6 +65,7 @@ export function useTransfersUploadJobEvents({
 		let reconnectAttempt = 0
 		let wsFallbackTimer: number | null = null
 		let wsOpened = false
+		let connectNonce = 0
 
 		const clearReconnect = () => {
 			if (reconnectTimer) {
@@ -84,7 +89,7 @@ export function useTransfersUploadJobEvents({
 			reconnectTimer = window.setTimeout(() => {
 				reconnectTimer = null
 				if (stopped) return
-				connect()
+				void connect()
 			}, delay)
 		}
 
@@ -104,6 +109,10 @@ export function useTransfersUploadJobEvents({
 
 		const closeTransport = () => {
 			if (ws) {
+				ws.onopen = null
+				ws.onerror = null
+				ws.onclose = null
+				ws.onmessage = null
 				try {
 					ws.close()
 				} catch {
@@ -112,6 +121,9 @@ export function useTransfersUploadJobEvents({
 				ws = null
 			}
 			if (es) {
+				es.onopen = null
+				es.onerror = null
+				es.onmessage = null
 				try {
 					es.close()
 				} catch {
@@ -121,17 +133,50 @@ export function useTransfersUploadJobEvents({
 			}
 		}
 
-		const connectSSE = () => {
+		const fetchRealtimeTicket = async (transport: 'ws' | 'sse') => {
+			const url = buildApiHttpUrl('/realtime-ticket')
+			url.searchParams.set('transport', transport)
+
+			const headers: Record<string, string> = {}
+			if (apiToken) {
+				headers['X-Api-Token'] = apiToken
+			}
+
+			const response = await fetch(url.toString(), {
+				method: 'POST',
+				headers,
+			})
+			if (!response.ok) {
+				throw new Error(`ticket request failed: ${response.status}`)
+			}
+			const payload = (await response.json()) as RealtimeTicketResponse
+			if (!payload.ticket) {
+				throw new Error('ticket missing')
+			}
+			return payload.ticket
+		}
+
+		const connectSSE = async () => {
 			if (stopped || typeof window.EventSource === 'undefined') {
 				setConnected(false)
 				scheduleReconnect()
 				return
 			}
+			const nonce = ++connectNonce
 			clearReconnect()
 			clearWSFallbackTimer()
 			closeTransport()
+			let ticket = ''
 			try {
-				es = new EventSource(buildSSEURL(apiToken))
+				ticket = await fetchRealtimeTicket('sse')
+			} catch {
+				setConnected(false)
+				scheduleReconnect()
+				return
+			}
+			if (stopped || nonce !== connectNonce) return
+			try {
+				es = new EventSource(buildSSEURL(ticket))
 			} catch {
 				setConnected(false)
 				scheduleReconnect()
@@ -148,24 +193,33 @@ export function useTransfersUploadJobEvents({
 			es.onmessage = (ev) => handleEvent(ev.data)
 		}
 
-		const connectWS = () => {
+		const connectWS = async () => {
 			if (stopped || typeof window.WebSocket === 'undefined') {
-				connectSSE()
+				await connectSSE()
 				return
 			}
+			const nonce = ++connectNonce
 			clearReconnect()
 			clearWSFallbackTimer()
 			closeTransport()
 			wsOpened = false
+			let ticket = ''
 			try {
-				ws = new WebSocket(buildWSURL(apiToken))
+				ticket = await fetchRealtimeTicket('ws')
 			} catch {
-				connectSSE()
+				await connectSSE()
+				return
+			}
+			if (stopped || nonce !== connectNonce) return
+			try {
+				ws = new WebSocket(buildWSURL(ticket))
+			} catch {
+				await connectSSE()
 				return
 			}
 			wsFallbackTimer = window.setTimeout(() => {
 				if (!wsOpened && !stopped) {
-					connectSSE()
+					void connectSSE()
 				}
 			}, 1500)
 			ws.onopen = () => {
@@ -178,7 +232,7 @@ export function useTransfersUploadJobEvents({
 				setConnected(false)
 				if (!wsOpened) {
 					clearWSFallbackTimer()
-					connectSSE()
+					void connectSSE()
 					return
 				}
 				scheduleReconnect()
@@ -187,7 +241,7 @@ export function useTransfersUploadJobEvents({
 				setConnected(false)
 				if (!wsOpened) {
 					clearWSFallbackTimer()
-					connectSSE()
+					void connectSSE()
 					return
 				}
 				scheduleReconnect()
@@ -195,11 +249,11 @@ export function useTransfersUploadJobEvents({
 			ws.onmessage = (ev) => handleEvent(typeof ev.data === 'string' ? ev.data : '')
 		}
 
-		const connect = () => {
-			connectWS()
+		const connect = async () => {
+			await connectWS()
 		}
 
-		connect()
+		void connect()
 		return () => {
 			stopped = true
 			clearReconnect()
@@ -235,4 +289,3 @@ export function useTransfersUploadJobEvents({
 		}
 	}, [api, connected, handleUploadJobUpdate, hasPendingUploadJobs, updateUploadTask, uploadTasksRef])
 }
-
