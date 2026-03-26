@@ -27,6 +27,20 @@ const metaResponse = {
 }
 
 const bucketResponse = [{ name: 'test-bucket', createdAt: '2024-01-01T00:00:00Z' }]
+const profilesResponse = [
+	{
+		id: defaultStorage.profileId,
+		provider: 's3_compatible',
+		name: 'Playwright Jobs',
+		endpoint: 'http://localhost:9000',
+		region: 'us-east-1',
+		forcePathStyle: true,
+		preserveLeadingSlash: false,
+		tlsInsecureSkipVerify: true,
+		createdAt: '2024-01-01T00:00:00Z',
+		updatedAt: '2024-01-01T00:00:00Z',
+	},
+]
 
 const jobResponse = {
 	id: 'job-test',
@@ -64,6 +78,7 @@ async function setupApiMocks(page: Page, isOffline: () => boolean) {
 
 	await installMockApi(page, [
 		{ method: 'GET', path: '/meta', handle: withOffline((ctx) => ctx.json(metaResponse)) },
+		{ method: 'GET', path: '/profiles', handle: withOffline((ctx) => ctx.json(profilesResponse)) },
 		{ method: 'GET', path: '/buckets', handle: withOffline((ctx) => ctx.json(bucketResponse)) },
 		{
 			method: 'GET',
@@ -95,8 +110,7 @@ test.describe('Jobs network resilience', () => {
 	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 
 	const jobRow = page.getByRole('row', { name: /job-test/ })
-	await jobRow.getByRole('button', { name: 'More actions' }).click()
-	await page.getByRole('menuitem', { name: 'Logs' }).click()
+	await jobRow.getByRole('button', { name: 'Logs' }).click()
 
 		const logsDrawer = page.getByRole('dialog', { name: 'Job Logs' })
 		await expect(logsDrawer).toBeVisible()

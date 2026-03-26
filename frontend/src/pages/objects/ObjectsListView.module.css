@@ -159,6 +159,8 @@
 
 .listRowMenuCell {
   justify-self: end;
+  position: relative;
+  z-index: 1;
 }
 
 .listRowMenuRoot {
@@ -185,6 +187,8 @@
 
 .listRowAuxActions {
   justify-self: end;
+  position: relative;
+  z-index: 1;
 }
 
 .virtualListContent {

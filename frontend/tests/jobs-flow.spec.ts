@@ -177,11 +177,12 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 	await expect(page.getByRole('cell', { name: 'job-created' })).toBeVisible()
 
 	const runningRow = page.getByRole('row', { name: /job-running/i })
-	await runningRow.getByRole('button', { name: 'More actions' }).click()
+	await runningRow.getByRole('button', { name: 'Open actions menu' }).click()
 	await page.getByRole('menuitem', { name: 'Cancel' }).click()
 	await expect(runningRow.getByText('canceled')).toBeVisible()
 
 	const failedRow = page.getByRole('row', { name: /job-failed/i })
-	await failedRow.getByRole('button', { name: 'Retry' }).click()
+	await failedRow.getByRole('button', { name: 'Open actions menu' }).click()
+	await page.getByRole('menuitem', { name: 'Retry' }).click()
 	await expect(page.getByRole('cell', { name: 'job-retry-1' })).toBeVisible()
 })

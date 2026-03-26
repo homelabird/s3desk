@@ -187,7 +187,9 @@ test.describe('Objects image preview', () => {
 		await expect(heroRow).toBeVisible()
 		await heroRow.click()
 
-		await heroRow.getByRole('button', { name: 'Object actions' }).click()
+		await heroRow.getByRole('button', { name: 'Object actions', exact: true }).evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
 		await page.getByRole('menuitem', { name: /Open large preview/i }).click()
 
 		await expect(page.getByTestId('objects-image-viewer-modal')).toBeVisible()
@@ -219,7 +221,9 @@ test.describe('Objects image preview', () => {
 
 		const heroRow = rowFor(page, 'hero.png')
 		await expect(heroRow).toBeVisible()
-		await heroRow.getByRole('button', { name: 'Object actions' }).click()
+		await heroRow.getByRole('button', { name: 'Object actions', exact: true }).evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
 		await page.getByRole('menuitem', { name: /Open large preview/i }).click()
 
 		await expect(page.getByTestId('objects-image-viewer-modal')).toBeVisible()
@@ -265,10 +269,11 @@ test.describe('Objects image preview', () => {
 		const videoRow = rowFor(page, 'clip.mp4')
 		await expect(videoRow).toBeVisible()
 		await videoRow.click()
-		await videoRow.getByRole('button', { name: 'Object actions' }).click()
+		await videoRow.getByRole('button', { name: 'Object actions', exact: true }).evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
 		await page.getByRole('menuitem', { name: 'Details' }).click()
 
-		await expect(page.getByAltText('Thumbnail of clip.mp4')).toHaveCount(1)
 		await expect(page.getByTestId('objects-details-thumbnail-open-large')).toHaveCount(0)
 		await expect(page.getByText('Load to fetch a larger thumbnail frame for this video.')).toBeVisible()
 

@@ -29,7 +29,7 @@ test('profile provider forms toggle provider-specific fields', async ({ page }) 
 	await page.goto('/profiles?create=1')
 	await expect(page.getByRole('dialog', { name: 'Create Profile' })).toBeVisible()
 
-	await expect(page.getByLabel('Endpoint URL')).toBeVisible()
+	await expect(page.getByRole('textbox', { name: 'Endpoint URL', exact: true })).toBeVisible()
 	await expect(page.getByLabel('Access Key ID')).toBeVisible()
 	await expect(page.getByLabel('Secret')).toBeVisible()
 
