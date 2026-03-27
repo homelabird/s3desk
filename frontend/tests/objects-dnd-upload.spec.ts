@@ -24,6 +24,11 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	}, storage)
 }
 
+async function selectBucket(page: Page, name: string) {
+	await page.getByTestId('objects-bucket-picker-desktop').click()
+	await page.getByTestId(`objects-bucket-picker-option-${name}`).click()
+}
+
 test('objects drag and drop does not throw Illegal invocation', async ({ page }) => {
 	const now = '2024-01-01T00:00:00Z'
 	const uploadId = 'upload-test'
@@ -58,10 +63,12 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 				ctx.json([
 					{
 						id: defaultStorage.profileId,
+						provider: 's3_compatible',
 						name: 'Playwright',
 						endpoint: 'http://localhost:9000',
 						region: 'us-east-1',
 						forcePathStyle: true,
+						preserveLeadingSlash: false,
 						tlsInsecureSkipVerify: true,
 						createdAt: now,
 						updatedAt: now,
@@ -126,6 +133,7 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 
 	await seedStorage(page)
 	await page.goto('/objects')
+	await selectBucket(page, defaultStorage.bucket)
 
 	await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
 	const dropZone = page.getByTestId('objects-upload-dropzone')

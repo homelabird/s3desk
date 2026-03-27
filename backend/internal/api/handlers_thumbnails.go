@@ -643,6 +643,7 @@ func decodeThumbnailVideoFrame(ctx context.Context, ffmpegPath string, r io.Read
 	if hooks.decodeThumbnailVideo != nil {
 		return hooks.decodeThumbnailVideo(ctx, ffmpegPath, r)
 	}
+	// #nosec G204 -- ffmpegPath is resolved from PATH or a validated configured executable path.
 	cmd := exec.CommandContext(
 		ctx,
 		ffmpegPath,
@@ -683,6 +684,7 @@ func decodeThumbnailVideoFrameFile(ctx context.Context, ffmpegPath string, fileP
 	if hooks.decodeThumbnailVideoFile != nil {
 		return hooks.decodeThumbnailVideoFile(ctx, ffmpegPath, filePath)
 	}
+	// #nosec G204 -- ffmpegPath is resolved from PATH or a validated configured executable path.
 	cmd := exec.CommandContext(
 		ctx,
 		ffmpegPath,

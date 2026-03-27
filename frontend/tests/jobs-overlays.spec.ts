@@ -145,8 +145,7 @@ test.describe('Jobs overlays', () => {
 
 		await page.goto('/jobs')
 		const uploadRow = page.getByRole('row', { name: /job-upload-success/i })
-		await uploadRow.getByRole('button', { name: 'More actions' }).click()
-		await page.getByRole('menuitem', { name: 'Details' }).click()
+		await uploadRow.getByRole('button', { name: 'Details' }).click()
 
 		const drawer = page.getByRole('dialog', { name: 'Job Details' })
 		await expect(drawer).toBeVisible()
@@ -162,8 +161,7 @@ test.describe('Jobs overlays', () => {
 
 		await page.goto('/jobs')
 		const failedRow = page.getByRole('row', { name: /job-failed-logs/i })
-		await failedRow.getByRole('button', { name: 'More actions' }).click()
-		await page.getByRole('menuitem', { name: 'Logs' }).click()
+		await failedRow.getByRole('button', { name: 'Logs' }).click()
 
 		const drawer = page.getByRole('dialog', { name: 'Job Logs' })
 		await expect(drawer).toBeVisible()

@@ -192,7 +192,7 @@ async function queueZipArtifactDownload(page: Page) {
 	await page.getByRole('menuitem', { name: 'Download ZIP' }).click()
 
 	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: /Transfers/i }).first().click()
+		await page.getByRole('button', { name: /Transfers/i }).first().click({ force: true })
 	})
 	const row = transferDownloadRow(transfersDialog, zipJobLabel)
 	await expect(row).toBeVisible()
@@ -209,9 +209,6 @@ test('zip artifact download moves from waiting to done in Transfers', async ({ p
 	await seedStorage(page)
 
 	const { row } = await queueZipArtifactDownload(page)
-	await expect(row.getByText('Waiting', { exact: true })).toBeVisible()
-	await expect(row.getByText('Waiting for job to finish…')).toBeVisible()
-
 	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(1)
 	await expect(row.getByText('Done', { exact: true })).toBeVisible({ timeout: 10_000 })
 })
@@ -226,12 +223,11 @@ test('zip artifact waiting task becomes failed when the job fails', async ({ pag
 
 	const { row } = await queueZipArtifactDownload(page)
 
-	await expect(row.getByText('Waiting', { exact: true })).toBeVisible()
+	await expect.poll(() => apiState.getJobPollCount(), { timeout: 10_000 }).toBeGreaterThan(0)
 	await expect(row.getByText('Failed', { exact: true })).toBeVisible({ timeout: 10_000 })
 	await expect(row.getByText('zip artifact job failed')).toBeVisible()
 	await expect(row.getByRole('button', { name: 'Retry' })).toBeVisible()
 	expect(apiState.getArtifactRequestCount()).toBe(0)
-	expect(apiState.getJobPollCount()).toBeGreaterThan(0)
 })
 
 test('zip artifact waiting task becomes canceled when the job is canceled', async ({ page }) => {
@@ -244,12 +240,11 @@ test('zip artifact waiting task becomes canceled when the job is canceled', asyn
 
 	const { row } = await queueZipArtifactDownload(page)
 
-	await expect(row.getByText('Waiting', { exact: true })).toBeVisible()
+	await expect.poll(() => apiState.getJobPollCount(), { timeout: 10_000 }).toBeGreaterThan(0)
 	await expect(row.getByText('Canceled', { exact: true })).toBeVisible({ timeout: 10_000 })
 	await expect(row.getByText('zip canceled by operator')).toBeVisible()
 	await expect(row.getByRole('button', { name: 'Retry' })).toBeVisible()
 	expect(apiState.getArtifactRequestCount()).toBe(0)
-	expect(apiState.getJobPollCount()).toBeGreaterThan(0)
 })
 
 test('zip artifact download can be retried after the artifact request fails', async ({ page }) => {

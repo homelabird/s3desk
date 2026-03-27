@@ -209,10 +209,11 @@ test('transfer scenarios cover job types, progress, cancel, and retry', async ({
 	await expect(failedRow).toContainText(/cp s3:\/\/test-bucket\/alpha\.txt/)
 	await expect(deleteRow).toContainText(/rm s3:\/\/test-bucket\/tmp\//)
 
-	await runningRow.getByRole('button', { name: 'More actions' }).click()
+	await runningRow.getByRole('button', { name: 'Open actions menu' }).click()
 	await page.getByRole('menuitem', { name: 'Cancel' }).click()
 	await expect(runningRow.getByText('canceled')).toBeVisible()
 
-	await failedRow.getByRole('button', { name: 'Retry' }).click()
+	await failedRow.getByRole('button', { name: 'Open actions menu' }).click()
+	await page.getByRole('menuitem', { name: 'Retry' }).click()
 	await expect(page.getByRole('row', { name: /job-retry-1/ })).toBeVisible()
 })

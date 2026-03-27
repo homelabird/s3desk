@@ -28,8 +28,8 @@ async function setupApiMocks(page: Page, validTokens: string[]) {
 	])
 }
 
-async function setSwitch(page: Page, label: string, enabled: boolean) {
-	const control = page.getByRole('switch', { name: label })
+async function setSwitch(scope: Page, enabled: boolean) {
+	const control = scope.getByRole('switch').first()
 	const state = await control.getAttribute('aria-checked')
 	if ((state === 'true') !== enabled) {
 		await control.click()
@@ -78,11 +78,11 @@ test('settings persist local state', async ({ page }) => {
 	await tokenInput.fill(updatedToken)
 	await drawer.getByRole('button', { name: 'Apply' }).click()
 	await expect
-		.poll(async () => page.evaluate(() => JSON.parse(window.localStorage.getItem('apiToken') ?? '""')))
+		.poll(async () => page.evaluate(() => JSON.parse(window.sessionStorage.getItem('apiToken') ?? '""')))
 		.toBe(updatedToken)
 
 	await drawer.getByRole('tab', { name: 'Transfers' }).click()
-	await setSwitch(page, 'Downloads and previews: Use server proxy', true)
+	await setSwitch(drawer, true)
 	const downloadProxy = await page.evaluate(() => JSON.parse(window.localStorage.getItem('downloadLinkProxyEnabled') ?? 'false'))
 	expect(downloadProxy).toBe(true)
 })

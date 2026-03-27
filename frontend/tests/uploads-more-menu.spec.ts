@@ -54,8 +54,11 @@ test.describe('Uploads header actions', () => {
 		await seedStorage(page)
 		await page.goto('/uploads')
 
-		const input = page.locator('input[type="file"]').first()
-		await input.setInputFiles({
+		const fileChooserPromise = page.waitForEvent('filechooser')
+		await page.getByRole('button', { name: /Add from device/i }).click()
+		await page.getByRole('button', { name: 'Choose files' }).click()
+		const fileChooser = await fileChooserPromise
+		await fileChooser.setFiles({
 			name: 'alpha.txt',
 			mimeType: 'text/plain',
 			buffer: Buffer.from('alpha'),
@@ -65,7 +68,7 @@ test.describe('Uploads header actions', () => {
 		await page.getByRole('button', { name: 'Clear selection' }).click()
 
 		await expect(page.getByRole('button', { name: /Queue upload/i })).toBeDisabled()
-		await expect(page.getByText('No files selected.')).toBeVisible()
+		await expect(page.getByText('No files or folders selected.')).toBeVisible()
 	})
 
 	test('opens transfers drawer from header action', async ({ page }) => {

@@ -22,6 +22,7 @@ NPM_SCOPE_ARGS=()
 if [[ "$MODE" == "full" ]]; then
   NPM_SCOPE_ARGS=("--development")
 else
+  NPM_INSTALL_DEFAULT_ARGS+=("--omit=optional")
   NPM_SCOPE_ARGS=("--production")
 fi
 NPM_CHECK_ARGS+=("${NPM_SCOPE_ARGS[@]}")
@@ -33,8 +34,19 @@ npm_unknown="$REPORT_DIR/npm-${MODE}-unknown.txt"
 npm_disallowed="$REPORT_DIR/npm-${MODE}-disallowed.txt"
 go_bad="$REPORT_DIR/go-${MODE}-blocked.txt"
 artifact_check_report="$REPORT_DIR/artifact-check.txt"
+run_info_report="$REPORT_DIR/run-info.txt"
 
-rm -f "$npm_bad" "$npm_unknown" "$npm_disallowed" "$go_bad" "$artifact_check_report"
+rm -f "$npm_bad" "$npm_unknown" "$npm_disallowed" "$go_bad" "$artifact_check_report" "$run_info_report"
+
+{
+  echo "mode=$MODE"
+  printf 'npm_install_args='
+  printf '%s ' "${NPM_INSTALL_DEFAULT_ARGS[@]}"
+  printf '\n'
+  printf 'npm_scope_args='
+  printf '%s ' "${NPM_SCOPE_ARGS[@]}"
+  printf '\n'
+} > "$run_info_report"
 
 echo "[1/3] npm license audit ($MODE)"
 (

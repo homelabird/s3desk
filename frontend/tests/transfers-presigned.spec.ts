@@ -25,6 +25,11 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	}, storage)
 }
 
+async function selectBucket(page: Page, name: string) {
+	await page.getByTestId('objects-bucket-picker-desktop').click()
+	await page.getByTestId(`objects-bucket-picker-option-${name}`).click()
+}
+
 async function dropSingleFile(page: Page, name: string, contents: string, type: string) {
 	const dataTransfer = await page.evaluateHandle(
 		({ name, contents, type }) => {
@@ -103,10 +108,12 @@ function baseObjectRoutes(): MockApiRoute[] {
 				ctx.json([
 					{
 						id: defaultStorage.profileId,
+						provider: 's3_compatible',
 						name: 'Playwright',
 						endpoint: 'http://localhost:9000',
 						region: 'us-east-1',
 						forcePathStyle: true,
+						preserveLeadingSlash: false,
 						tlsInsecureSkipVerify: true,
 						createdAt: now,
 						updatedAt: now,
@@ -196,11 +203,16 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 
 	await seedStorage(page)
 	await page.goto('/objects')
+	await selectBucket(page, defaultStorage.bucket)
 	await dropSingleFile(page, 'hello.txt', 'hello', 'text/plain')
 
 	await expect.poll(() => presignedAttempted, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => fallbackAttempted, { timeout: 5000 }).toBe(true)
-	await expect(page.getByText('Presigned uploads are not supported here. Falling back to staging uploads.')).toBeVisible()
+	await expect(
+		page.locator('.ant-message-notice-content').filter({
+			hasText: 'Presigned uploads are not supported here. Falling back to staging uploads.',
+		}).first(),
+	).toBeVisible()
 	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)
 	expect(presignedUrlHit).toBe(false)
 })
@@ -253,6 +265,7 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 
 	await seedStorage(page)
 	await page.goto('/objects')
+	await selectBucket(page, defaultStorage.bucket)
 	await dropSingleFile(page, 'hello.txt', 'hello', 'text/plain')
 
 	await expect.poll(() => presignRequested, { timeout: 5000 }).toBe(true)
@@ -370,6 +383,7 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 	await seedStorage(page)
 	await page.goto('/objects')
 	await expect.poll(() => profilesLoaded, { timeout: 5000 }).toBe(true)
+	await selectBucket(page, defaultStorage.bucket)
 	await dropSingleFile(page, 'hello.txt', 'hello', 'text/plain')
 
 	await expect.poll(() => stagingAttempted, { timeout: 5000 }).toBe(true)

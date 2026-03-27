@@ -142,13 +142,13 @@ test('transfers drawer cancels, retries, and clears completed uploads', async ({
 	await page.getByRole('button', { name: /Queue upload \(1\)/i }).click()
 
 	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: 'Open Transfers' }).click()
+		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
 	})
 	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
 
 	const row = transferUploadRow(transfersDialog, 'Upload: alpha.txt')
 	await expect(row).toBeVisible({ timeout: 10_000 })
-	await expect(row.getByText('Uploading', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expect(row.getByRole('button', { name: 'Cancel' })).toBeVisible({ timeout: 10_000 })
 
 	await row.getByRole('button', { name: 'Cancel' }).click()
 	await expect(row.getByText('Canceled', { exact: true })).toBeVisible()

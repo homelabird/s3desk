@@ -82,6 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p dist
           npm run build:analyze 2>&1 | tee dist/build-analyze.log
           if grep -q 'Circular chunk:' dist/build-analyze.log; then
             echo "circular chunk warning detected in bundle build" >&2

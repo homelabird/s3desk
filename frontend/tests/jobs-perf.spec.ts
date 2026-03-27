@@ -221,7 +221,7 @@ test.describe('jobs performance', () => {
 		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 		await expect(page.locator('code', { hasText: 'job-0' })).toBeVisible()
 
-		await page.getByRole('button', { name: 'More actions' }).first().click()
+		await page.getByRole('button', { name: 'Open actions menu' }).first().click()
 		await expect(page.getByRole('menuitem', { name: 'Logs' })).toBeVisible()
 
 		const started = Date.now()

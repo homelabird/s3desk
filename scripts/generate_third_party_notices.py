@@ -111,13 +111,23 @@ def find_license_file(module_dir: Path) -> Path | None:
     if not files:
         return None
 
-    def rank(p: Path) -> int:
+    def rank(p: Path) -> tuple[int, str]:
         lower = p.name.lower()
+        if lower in {"license", "license.txt", "license.md", "license.rst"}:
+            return (0, lower)
+        if lower.startswith("license."):
+            return (1, lower)
         if lower.startswith("licen"):
-            return 0
+            return (2, lower)
+        if lower in {"copying", "copying.txt", "copying.md", "copying.rst"}:
+            return (3, lower)
         if lower.startswith("copying"):
-            return 1
-        return 2
+            return (4, lower)
+        if lower in {"notice", "notice.txt", "notice.md", "notice.rst"}:
+            return (5, lower)
+        if lower.startswith("notice"):
+            return (6, lower)
+        return (7, lower)
 
     files.sort(key=rank)
     return files[0]
@@ -317,7 +327,10 @@ def copy_license_files(
         seen.add(dest_name)
 
     rclone_license = EXTERNAL_LICENSES_DIR / "rclone-LICENSE"
-    if not rclone_license.exists():
+    manual_rclone_license = MANUAL_EXTERNAL_LICENSES_DIR / "rclone-LICENSE"
+    if manual_rclone_license.is_file():
+        shutil.copy2(manual_rclone_license, rclone_license)
+    elif not rclone_license.exists():
         try:
             content = run(["curl", "-fsSL", RCLONE_LICENSE_URL])
             rclone_license.write_text(content, encoding="utf-8")
