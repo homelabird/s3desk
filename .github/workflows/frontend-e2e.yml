@@ -230,7 +230,7 @@ jobs:
     timeout-minutes: 60
     env:
       CRITICAL_LIVE_TESTS: tests/api-crud.spec.ts tests/objects-live-flow.spec.ts tests/jobs-live-flow.spec.ts tests/transfers-live-fallback.spec.ts tests/bucket-policy-live.spec.ts tests/docs-smoke.spec.ts tests/server-migration-live.spec.ts tests/uploads-folder-live.spec.ts tests/objects-image-preview-live.spec.ts
-      E2E_API_TOKEN: change-me
+      E2E_API_TOKEN: live-e2e-token
       E2E_S3_ENDPOINT: http://127.0.0.1:9000
       E2E_S3_REGION: us-east-1
       E2E_S3_ACCESS_KEY: minioadmin

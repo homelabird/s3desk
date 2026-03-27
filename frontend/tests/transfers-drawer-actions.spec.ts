@@ -91,7 +91,7 @@ async function installTransfersActionApi(page: Page) {
 			handle: async (ctx) => {
 				filesAttemptCount += 1
 				if (filesAttemptCount === 1) {
-					await ctx.delay(2500)
+					await ctx.delay(15_000)
 				}
 				return ctx.empty()
 			},
