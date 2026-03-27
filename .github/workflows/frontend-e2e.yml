@@ -243,6 +243,7 @@ jobs:
       MINIO_IMAGE: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
       AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite:3.33.0
       FAKE_GCS_IMAGE: fsouza/fake-gcs-server:1.47.7
+      S3DESK_COMPOSE_PROVIDER: docker
     steps:
       - name: Checkout
         uses: actions/checkout@v4

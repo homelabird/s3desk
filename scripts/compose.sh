@@ -59,14 +59,49 @@ case "${STACK}" in
     ;;
 esac
 
-if podman compose version >/dev/null 2>&1; then
-  COMPOSE_CMD=(podman compose)
-elif docker compose version >/dev/null 2>&1; then
-  COMPOSE_CMD=(docker compose)
-else
+preferred_provider="${S3DESK_COMPOSE_PROVIDER:-auto}"
+
+select_compose_cmd() {
+  case "${preferred_provider}" in
+    auto)
+      if podman compose version >/dev/null 2>&1; then
+        COMPOSE_CMD=(podman compose)
+        return 0
+      fi
+      if docker compose version >/dev/null 2>&1; then
+        COMPOSE_CMD=(docker compose)
+        return 0
+      fi
+      ;;
+    podman)
+      if podman compose version >/dev/null 2>&1; then
+        COMPOSE_CMD=(podman compose)
+        return 0
+      fi
+      echo "S3DESK_COMPOSE_PROVIDER=podman requested, but 'podman compose' is unavailable" >&2
+      return 1
+      ;;
+    docker)
+      if docker compose version >/dev/null 2>&1; then
+        COMPOSE_CMD=(docker compose)
+        return 0
+      fi
+      echo "S3DESK_COMPOSE_PROVIDER=docker requested, but 'docker compose' is unavailable" >&2
+      return 1
+      ;;
+    *)
+      echo "unsupported S3DESK_COMPOSE_PROVIDER: ${preferred_provider}" >&2
+      echo "expected one of: auto, podman, docker" >&2
+      return 1
+      ;;
+  esac
+
   echo "podman compose or docker compose is required" >&2
-  exit 1
-fi
+  return 1
+}
+
+declare -a COMPOSE_CMD=()
+select_compose_cmd || exit 1
 
 if [[ "${STACK}" == "dev" || "${STACK}" == "local" ]]; then
   export OCI_CONFIG_MOUNT_DIR="${OCI_CONFIG_MOUNT_DIR:-${ROOT_DIR}/data/oci-runtime}"
