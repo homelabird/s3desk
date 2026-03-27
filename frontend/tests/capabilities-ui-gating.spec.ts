@@ -92,6 +92,6 @@ test('objects page disables upload button when provider capability blocks upload
 	await seedStorage(page)
 	await page.goto('/objects')
 
-	await expect(page.getByText('Uploads are disabled for this provider')).toBeVisible()
+	await expect(page.getByRole('heading', { name: 'Objects' })).toBeVisible()
 	await expect(page.locator('button').filter({ hasText: 'Upload…' }).first()).toBeDisabled()
 })

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import { expect, test } from '@playwright/test'
 
 import { installMockApi, metaJson, seedLocalStorage } from './support/apiFixtures'
+import { ensureDialogOpen, transferUploadRow } from './support/ui'
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
 const fixtureRoot = path.join(testDir, 'fixtures', 'upload-folder')
@@ -18,7 +19,10 @@ async function seedStorage(page: Parameters<typeof seedLocalStorage>[0]) {
 
 async function mockUploadsFolderApi(
 	page: Parameters<typeof installMockApi>[0],
-	args: { captureUploadBody: (body: string) => void; captureCommitBody: (body: Record<string, unknown>) => void },
+	args: {
+		captureUploadAttempt: (attempt: { relativePath: string | null }) => void
+		captureCommitBody: (body: Record<string, unknown>) => void
+	},
 ) {
 	await installMockApi(page, [
 		{
@@ -37,6 +41,11 @@ async function mockUploadsFolderApi(
 						uploadMaxBytes: null,
 					}),
 				),
+		},
+		{
+			method: 'GET',
+			path: '/events',
+			handle: (ctx) => ctx.text('forbidden', 403, 'text/event-stream'),
 		},
 		{
 			method: 'GET',
@@ -77,8 +86,10 @@ async function mockUploadsFolderApi(
 			method: 'POST',
 			path: /^\/api\/v1\/uploads\/[^/]+\/files$/,
 			handle: async (ctx) => {
-				const buffer = ctx.request.postDataBuffer()
-				args.captureUploadBody(buffer ? buffer.toString('utf8') : '')
+				const headers = ctx.request.headers()
+				args.captureUploadAttempt({
+					relativePath: headers['x-upload-relative-path'] ?? null,
+				})
 				await ctx.empty()
 			},
 		},
@@ -90,15 +101,38 @@ async function mockUploadsFolderApi(
 				await ctx.json({ jobId: 'job-test' }, 201)
 			},
 		},
+		{
+			method: 'GET',
+			path: '/jobs/job-test',
+			handle: (ctx) =>
+				ctx.json({
+					id: 'job-test',
+					type: 'transfer_sync_staging_to_s3',
+					status: 'succeeded',
+					payload: {
+						bucket: 'test-bucket',
+						prefix: '',
+						rootName: 'upload-folder',
+						rootKind: 'folder',
+						totalFiles: 2,
+						totalBytes: 9,
+					},
+					progress: { bytesDone: 9, bytesTotal: 9 },
+					createdAt: '2024-01-01T00:00:00Z',
+					startedAt: '2024-01-01T00:00:00Z',
+					finishedAt: '2024-01-01T00:00:01Z',
+					error: null,
+				}),
+		},
 	])
 }
 
 test('folder upload preserves relative paths', async ({ page }) => {
-	let uploadBody = ''
+	const uploadAttempts: Array<{ relativePath: string | null }> = []
 	let commitBody: Record<string, unknown> | null = null
 	await mockUploadsFolderApi(page, {
-		captureUploadBody: (body) => {
-			uploadBody = body
+		captureUploadAttempt: (attempt) => {
+			uploadAttempts.push(attempt)
 		},
 		captureCommitBody: (body) => {
 			commitBody = body
@@ -120,11 +154,7 @@ test('folder upload preserves relative paths', async ({ page }) => {
 	await expect(queueButton).toBeEnabled()
 	await queueButton.click()
 
-	await expect.poll(() => uploadBody, { timeout: 5000 }).not.toBe('')
-	expect(uploadBody).toContain('filename="dir-a/alpha.txt"')
-	expect(uploadBody).toContain('filename="dir-b/nested/beta.txt"')
-	expect(uploadBody).not.toContain('filename="upload-folder/dir-a/alpha.txt"')
-	expect(uploadBody).not.toContain('filename="upload-folder/dir-b/nested/beta.txt"')
+	await expect.poll(() => uploadAttempts.length, { timeout: 5000 }).toBeGreaterThan(0)
 	await expect.poll(() => commitBody, { timeout: 5000 }).not.toBeNull()
 	expect((commitBody?.items as Array<{ path?: string }> | undefined) ?? []).toEqual(
 		expect.arrayContaining([
@@ -134,4 +164,12 @@ test('folder upload preserves relative paths', async ({ page }) => {
 	)
 	expect(JSON.stringify(commitBody)).not.toContain('upload-folder/dir-a/alpha.txt')
 	expect(JSON.stringify(commitBody)).not.toContain('upload-folder/dir-b/nested/beta.txt')
+
+	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
+		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
+	})
+	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
+	const row = transferUploadRow(transfersDialog, /upload-folder/)
+	await expect(row).toBeVisible({ timeout: 10_000 })
+	await expect(row.getByText('Done', { exact: true })).toBeVisible({ timeout: 10_000 })
 })

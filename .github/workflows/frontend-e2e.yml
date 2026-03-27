@@ -230,19 +230,21 @@ jobs:
     timeout-minutes: 60
     env:
       CRITICAL_LIVE_TESTS: tests/api-crud.spec.ts tests/objects-live-flow.spec.ts tests/jobs-live-flow.spec.ts tests/transfers-live-fallback.spec.ts tests/bucket-policy-live.spec.ts tests/docs-smoke.spec.ts tests/server-migration-live.spec.ts tests/uploads-folder-live.spec.ts tests/objects-image-preview-live.spec.ts
-      E2E_API_TOKEN: change-me
-      E2E_S3_ENDPOINT: http://127.0.0.1:9000
+      E2E_API_TOKEN: live-e2e-token
+      E2E_S3_ENDPOINT: http://minio:9000
       E2E_S3_REGION: us-east-1
       E2E_S3_ACCESS_KEY: minioadmin
       E2E_S3_SECRET_KEY: minioadmin
       E2E_S3_FORCE_PATH_STYLE: "true"
-      E2E_S3_TLS_SKIP_VERIFY: "true"
+      E2E_S3_TLS_SKIP_VERIFY: "false"
+      E2E_GCS_ENDPOINT: http://fake-gcs-server:4443/storage/v1/v1
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
       DOCS_BASE_URL: http://127.0.0.1:8080
       S3DESK_IMAGE: s3desk-e2e:ci
       MINIO_IMAGE: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
       AZURITE_IMAGE: mcr.microsoft.com/azure-storage/azurite:3.33.0
       FAKE_GCS_IMAGE: fsouza/fake-gcs-server:1.47.7
+      S3DESK_COMPOSE_PROVIDER: docker
     steps:
       - name: Checkout
         uses: actions/checkout@v4
