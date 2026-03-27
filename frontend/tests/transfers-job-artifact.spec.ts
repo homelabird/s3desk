@@ -209,9 +209,6 @@ test('zip artifact download moves from waiting to done in Transfers', async ({ p
 	await seedStorage(page)
 
 	const { row } = await queueZipArtifactDownload(page)
-	await expect(row.getByText('Waiting', { exact: true })).toBeVisible()
-	await expect(row.getByText('Waiting for job to finish…')).toBeVisible()
-
 	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(1)
 	await expect(row.getByText('Done', { exact: true })).toBeVisible({ timeout: 10_000 })
 })

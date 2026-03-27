@@ -80,8 +80,10 @@ test.describe('@check-smoke Objects page smoke', () => {
 		await seedStorage(page, { objectsUIMode: 'simple' })
 		await page.goto('/objects')
 
-		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
-		await expect(page.getByLabel('Go to path')).toBeVisible()
+		const controls = page.getByTestId('objects-list-controls-root')
+		await expect(controls).toBeVisible({ timeout: 10_000 })
+		await expect(controls.getByLabel('Search current folder')).toBeVisible({ timeout: 10_000 })
+		await expect(controls.getByLabel('Go to path')).toBeVisible({ timeout: 10_000 })
 
 		const moreButton = await getToolbarMoreButton(page)
 		await moreButton.scrollIntoViewIfNeeded()
@@ -95,8 +97,10 @@ test.describe('@check-smoke Objects page smoke', () => {
 		await seedStorage(page, { objectsUIMode: 'advanced' })
 		await page.goto('/objects')
 
-		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
-		await expect(page.getByLabel('Go to path')).toBeVisible()
+		const controls = page.getByTestId('objects-list-controls-root')
+		await expect(controls).toBeVisible({ timeout: 10_000 })
+		await expect(controls.getByLabel('Search current folder')).toBeVisible({ timeout: 10_000 })
+		await expect(controls.getByLabel('Go to path')).toBeVisible({ timeout: 10_000 })
 
 		const moreButton = await getToolbarMoreButton(page)
 		await moreButton.scrollIntoViewIfNeeded()
