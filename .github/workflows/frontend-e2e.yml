@@ -236,7 +236,7 @@ jobs:
       E2E_S3_ACCESS_KEY: minioadmin
       E2E_S3_SECRET_KEY: minioadmin
       E2E_S3_FORCE_PATH_STYLE: "true"
-      E2E_S3_TLS_SKIP_VERIFY: "true"
+      E2E_S3_TLS_SKIP_VERIFY: "false"
       PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
       DOCS_BASE_URL: http://127.0.0.1:8080
       S3DESK_IMAGE: s3desk-e2e:ci

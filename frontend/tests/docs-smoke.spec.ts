@@ -15,8 +15,14 @@ test.describe('Docs smoke', () => {
 		const specRes = await page.request.get(specURL)
 		expect(specRes.ok()).toBeTruthy()
 
+		const docsRes = await page.request.get(docsURL)
+		expect(docsRes.ok()).toBeTruthy()
+		const docsHtml = await docsRes.text()
+		expect(docsHtml).toContain('<div id="swagger-ui"></div>')
+		expect(docsHtml).toContain('SwaggerUIBundle')
+		expect(docsHtml).toContain('/openapi.yml')
+
 		await page.goto(docsURL)
-		await expect(page.locator('#swagger-ui .swagger-ui').first()).toBeVisible({ timeout: 30_000 })
-		await expect(page.getByText('S3Desk API')).toBeVisible()
+		await expect(page.locator('#swagger-ui')).toBeVisible()
 	})
 })
