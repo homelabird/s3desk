@@ -125,6 +125,10 @@ export function uploadFilesWithProgress(
 
 	const isChunkedItem = (item: UploadFileItem) => {
 		const key = resolveUploadFilename(item)
+		// Browsers do not reliably preserve directory segments in multipart filenames.
+		// Route folder selections through the chunked path so X-Upload-Relative-Path
+		// remains the source of truth for nested uploads.
+		if (key.includes('/')) return true
 		if (args.chunkSizeBytesByPath?.[key]) return true
 		return (item.file?.size ?? 0) >= chunkThresholdBytes
 	}

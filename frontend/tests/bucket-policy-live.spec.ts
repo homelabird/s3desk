@@ -16,6 +16,7 @@ const gcsPolicyLive = process.env.E2E_GCS_POLICY_LIVE === '1'
 const gcsBucket = process.env.E2E_GCS_BUCKET ?? ''
 const gcsServiceAccountJSON = process.env.E2E_GCS_SERVICE_ACCOUNT_JSON ?? ''
 const gcsEndpoint = process.env.E2E_GCS_ENDPOINT ?? ''
+const gcsEmulatorEndpoint = 'http://fake-gcs-server:4443/storage/v1/v1'
 const gcsProjectNumber = process.env.E2E_GCS_PROJECT_NUMBER ?? ''
 const gcsTLSInsecureSkipVerify = process.env.E2E_GCS_TLS_SKIP_VERIFY === '1'
 const azurePolicyLive = process.env.E2E_AZURE_POLICY_LIVE === '1'
@@ -287,7 +288,7 @@ test.describe('Live bucket policy flows', () => {
 				provider: 'gcp_gcs',
 				name: profileName,
 				anonymous: true,
-				endpoint: 'http://127.0.0.1:4443',
+				endpoint: gcsEndpoint.trim() || gcsEmulatorEndpoint,
 				projectNumber: gcsProjectNumber.trim() || '123456789012',
 			})
 			const profileHeaders = apiHeaders(profileId)
