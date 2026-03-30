@@ -1,5 +1,5 @@
 import { Button, message, Space, Typography } from 'antd'
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import {
 	DEFAULT_RETRY_COUNT,
@@ -51,6 +51,7 @@ type Props = {
 
 const RESETTABLE_UI_STATE_KEYS = [
 	// Global navigation-ish state
+	'profileId',
 	'bucket',
 	'prefix',
 	'uploadPrefix',
@@ -64,6 +65,7 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'uploadAutoTuneEnabled',
 	'uploadResumeConversionEnabled',
 	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
+	'transfersTab',
 
 	// Jobs
 	'jobsFollowLogs',
@@ -111,7 +113,7 @@ const RESETTABLE_UI_STATE_KEYS = [
 	'objectsDetailsWidth',
 ] as const
 
-const RESETTABLE_UI_STATE_PREFIXES = ['objects:'] as const
+const RESETTABLE_UI_STATE_PREFIXES = ['app:', 'objects:', 'uploads:', 'jobs:', 'transfers:'] as const
 
 export function SettingsPage(props: Props) {
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
@@ -177,7 +179,11 @@ export function SettingsPage(props: Props) {
 	const [apiRetryCount, setApiRetryCount] = useLocalStorageState<number>(RETRY_COUNT_STORAGE_KEY, DEFAULT_RETRY_COUNT)
 	const [apiRetryDelayMs, setApiRetryDelayMs] = useLocalStorageState<number>(RETRY_DELAY_STORAGE_KEY, DEFAULT_RETRY_DELAY_MS)
 	const [networkLog, setNetworkLog] = useState<NetworkLogEvent[]>(() => getNetworkLog())
-	const [dismissedDialogCount, setDismissedDialogCount] = useState(() => countDismissedDialogs())
+	const dismissedDialogCount = useSyncExternalStore(
+		subscribeDialogPreferences,
+		() => countDismissedDialogs(props.apiToken),
+		() => 0,
+	)
 
 	useEffect(() => {
 		return subscribeNetworkLog(
@@ -186,10 +192,6 @@ export function SettingsPage(props: Props) {
 			},
 			() => setNetworkLog([]),
 		)
-	}, [])
-
-	useEffect(() => {
-		return subscribeDialogPreferences(() => setDismissedDialogCount(countDismissedDialogs()))
 	}, [])
 
 	const apiDocsBase = useMemo(() => {
@@ -205,7 +207,7 @@ export function SettingsPage(props: Props) {
 		confirmDangerAction({
 			title: 'Reset saved UI state?',
 			description:
-				'Clears stored view / filter / layout state from your browser (localStorage). Useful when screens look wrong after a lot of navigation. Your API token will be kept.\n\nThe app will reload after reset.',
+				'Clears stored view / filter / layout / selection state from your browser (localStorage). Useful when screens look wrong after a lot of navigation. Your API token will be kept.\n\nThe app will reload after reset.',
 			confirmText: 'RESET',
 			confirmHint: 'RESET',
 			okText: 'Reset and reload',
@@ -234,9 +236,9 @@ export function SettingsPage(props: Props) {
 	}, [])
 
 	const onResetDismissedDialogs = useCallback(() => {
-		clearDismissedDialogs()
+		clearDismissedDialogs(props.apiToken)
 		message.success('Dismissed dialog preferences reset.')
-	}, [])
+	}, [props.apiToken])
 
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>

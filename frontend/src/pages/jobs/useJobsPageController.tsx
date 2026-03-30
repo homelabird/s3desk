@@ -16,6 +16,7 @@ import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../.
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { useIsOffline } from '../../lib/useIsOffline'
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { jobMatchesSearch, jobSummary } from './jobPresentation'
 import type { BucketOption, DeleteJobPrefill } from './jobsPageTypes'
 import { normalizePrefix as normalizeJobPrefix } from './jobUtils'
@@ -67,14 +68,24 @@ export function useJobsPageController(props: Props) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [detailsJobId, setDetailsJobId] = useState<string | null>(null)
   const [logDrawerRequest, setLogDrawerRequest] = useState<{ jobId: string | null; nonce: number }>({ jobId: null, nonce: 0 })
-  const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
+  const bucketStorageKey = useMemo(
+    () => profileScopedStorageKey('jobs', props.apiToken, props.profileId, 'bucket'),
+    [props.apiToken, props.profileId],
+  )
+  const [bucket, setBucket] = useLocalStorageState<string>(bucketStorageKey, '', {
+    legacyLocalStorageKey: 'bucket',
+    legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', props.profileId, 'bucket')],
+  })
   const [deleteJobPrefill, setDeleteJobPrefill] = useState<DeleteJobPrefill | null>(() => deleteJobInitialPrefill)
   const [sortState, setSortState] = useState<SortState>(null)
   const tableContainerRef = useRef<HTMLDivElement | null>(null)
   const [tableScrollY, setTableScrollY] = useState(480)
+  const previousScopeKeyRef = useRef<string | null | undefined>(undefined)
+  const downloadRequestTokenRef = useRef(0)
+  const createDeleteRequestTokenRef = useRef(0)
 
-  const filters = useJobsFilters()
-  const columnsVisibility = useJobsColumnsVisibility()
+  const filters = useJobsFilters(props.apiToken, props.profileId)
+  const columnsVisibility = useJobsColumnsVisibility(props.apiToken, props.profileId)
 
   const handleJobsDeleted = useCallback((jobIds: string[]) => {
     setDetailsJobId((prev) => {
@@ -108,7 +119,13 @@ export function useJobsPageController(props: Props) {
   })
 
   const { cancelingJobId, retryingJobId, deletingJobId, cancelMutation, retryMutation, deleteJobMutation } =
-    useJobsActionMutations({ api, profileId: props.profileId, queryClient, onJobDeleted: handleJobDeleted })
+    useJobsActionMutations({
+      api,
+      apiToken: props.apiToken,
+      profileId: props.profileId,
+      queryClient,
+      onJobDeleted: handleJobDeleted,
+    })
 
   const openDeleteJobModal = useCallback(() => {
     setDeleteJobPrefill(null)
@@ -234,14 +251,18 @@ export function useJobsPageController(props: Props) {
 
   const handleDeviceDownload = useCallback(async (args: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => {
     if (!props.profileId) return
+    const requestToken = downloadRequestTokenRef.current + 1
+    downloadRequestTokenRef.current = requestToken
     setDeviceDownloadLoading(true)
     try {
       const normPrefix = normalizeJobPrefix(args.prefix)
       const items = await listAllObjects({ api, profileId: props.profileId, bucket: args.bucket, prefix: normPrefix })
+      if (downloadRequestTokenRef.current !== requestToken) return
       if (items.length === 0) {
         message.info('No objects found under this prefix')
         return
       }
+      if (downloadRequestTokenRef.current !== requestToken) return
       transfers.queueDownloadObjectsToDevice({
         profileId: props.profileId,
         bucket: args.bucket,
@@ -250,11 +271,15 @@ export function useJobsPageController(props: Props) {
         targetLabel: args.label ?? args.dirHandle.name,
         prefix: normPrefix,
       })
+      if (downloadRequestTokenRef.current !== requestToken) return
       setCreateDownloadOpen(false)
     } catch (err) {
+      if (downloadRequestTokenRef.current !== requestToken) return
       message.error(formatErr(err))
     } finally {
-      setDeviceDownloadLoading(false)
+      if (downloadRequestTokenRef.current === requestToken) {
+        setDeviceDownloadLoading(false)
+      }
     }
   }, [api, props.profileId, transfers])
 
@@ -268,13 +293,31 @@ export function useJobsPageController(props: Props) {
       exclude: string[]
       dryRun: boolean
     }) => createJobWithRetry({ type: 'transfer_delete_prefix', payload }),
-    onSuccess: async (job) => {
-      message.success(`Delete job created: ${job.id}`)
-      setCreateDeleteOpen(false)
-      setDeleteJobPrefill(null)
-      await queryClient.invalidateQueries({ queryKey: ['jobs'] })
+    onMutate: () => {
+      const requestToken = createDeleteRequestTokenRef.current + 1
+      createDeleteRequestTokenRef.current = requestToken
+      return {
+        requestToken,
+        scopeProfileId: props.profileId,
+        scopeApiToken: props.apiToken,
+      }
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (job, _vars, context) => {
+      const isCurrent = !context?.requestToken || createDeleteRequestTokenRef.current === context.requestToken
+      if (isCurrent) {
+        message.success(`Delete job created: ${job.id}`)
+        setCreateDeleteOpen(false)
+        setDeleteJobPrefill(null)
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ['jobs', context?.scopeProfileId ?? props.profileId, context?.scopeApiToken ?? props.apiToken],
+        exact: false,
+      })
+    },
+    onError: (err, _vars, context) => {
+      if (context?.requestToken && createDeleteRequestTokenRef.current !== context.requestToken) return
+      message.error(formatErr(err))
+    },
   })
 
   const jobs = useMemo(
@@ -304,6 +347,29 @@ export function useJobsPageController(props: Props) {
   }, [jobs])
 
   const isLoading = jobsQuery.isFetching && !jobsQuery.isFetchingNextPage
+  const currentScopeKey = `${props.apiToken || '__no_server__'}:${props.profileId ?? '__no_profile__'}`
+
+  useEffect(() => {
+    if (previousScopeKeyRef.current === undefined) {
+      previousScopeKeyRef.current = currentScopeKey
+      return
+    }
+    if (previousScopeKeyRef.current === currentScopeKey) return
+
+    previousScopeKeyRef.current = currentScopeKey
+    downloadRequestTokenRef.current += 1
+    createDeleteRequestTokenRef.current += 1
+    setCreateOpen(false)
+    setCreateDeleteOpen(false)
+    setCreateDownloadOpen(false)
+    setDeviceUploadLoading(false)
+    setDeviceDownloadLoading(false)
+    setDeleteJobPrefill(null)
+    setDetailsOpen(false)
+    setDetailsJobId(null)
+    setLogDrawerRequest((prev) => ({ jobId: null, nonce: prev.nonce }))
+  }, [currentScopeKey])
+
   useEffect(() => {
     updateTableScroll()
   }, [updateTableScroll, bucketsQuery.isError, eventsConnected, eventsRetryCount, jobs.length, jobsQuery.isError])
@@ -340,6 +406,7 @@ export function useJobsPageController(props: Props) {
 
   const columns = useJobsTableColumns({
     mergedColumnVisibility: columnsVisibility.mergedColumnVisibility,
+    apiToken: props.apiToken,
     isOffline,
     isLogsLoading: false,
     activeLogJobId: logDrawerRequest.jobId,
@@ -441,11 +508,16 @@ export function useJobsPageController(props: Props) {
     mergedColumnVisibility: columnsVisibility.mergedColumnVisibility,
     onCloseCreate: () => setCreateOpen(false),
     onCloseDelete: () => {
+      createDeleteRequestTokenRef.current += 1
       setCreateDeleteOpen(false)
       setDeleteJobPrefill(null)
     },
     onCloseDetails: () => setDetailsOpen(false),
-    onCloseDownload: () => setCreateDownloadOpen(false),
+    onCloseDownload: () => {
+      downloadRequestTokenRef.current += 1
+      setCreateDownloadOpen(false)
+      setDeviceDownloadLoading(false)
+    },
     onCloseLogs: () => setLogDrawerRequest((prev) => ({ jobId: null, nonce: prev.nonce })),
     onCreateDelete: (values: { bucket: string; prefix: string; deleteAll: boolean; allowUnsafePrefix: boolean; include: string[]; exclude: string[]; dryRun: boolean }) => createDeleteMutation.mutate(values),
     onCreateDownload: (values: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => { void handleDeviceDownload(values) },

@@ -82,6 +82,7 @@ export function BucketGovernanceModal(props: {
 
   const commonProps: GovernanceControlsCommonProps = {
     api: props.api,
+    apiToken: props.apiToken,
     profileId: props.profileId,
     provider: props.provider,
     bucket,
@@ -92,33 +93,34 @@ export function BucketGovernanceModal(props: {
     onClose: props.onClose,
     onOpenAdvancedPolicy: props.onOpenAdvancedPolicy,
   };
+  const controlsKey = `${props.profileId}:${props.apiToken}:${buildGovernanceDraftKey(bucket, governance)}`;
 
   switch (props.provider) {
     case "aws_s3":
       return (
         <BucketGovernanceAWSControls
-          key={buildGovernanceDraftKey(bucket, governance)}
+          key={controlsKey}
           {...commonProps}
         />
       );
     case "gcp_gcs":
       return (
         <BucketGovernanceGCSControls
-          key={buildGovernanceDraftKey(bucket, governance)}
+          key={controlsKey}
           {...commonProps}
         />
       );
     case "azure_blob":
       return (
         <BucketGovernanceAzureControls
-          key={buildGovernanceDraftKey(bucket, governance)}
+          key={controlsKey}
           {...commonProps}
         />
       );
     case "oci_object_storage":
       return (
         <BucketGovernanceOCIControls
-          key={buildGovernanceDraftKey(bucket, governance)}
+          key={controlsKey}
           {...commonProps}
         />
       );

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildUploadItems } from '../transfersUploadUtils'
+import { buildUploadItems, promptForFiles } from '../transfersUploadUtils'
 
 function withUploadPath(
 	file: File,
@@ -15,6 +15,10 @@ function withUploadPath(
 }
 
 describe('buildUploadItems', () => {
+	afterEach(() => {
+		vi.restoreAllMocks()
+	})
+
 	it('strips the shared browser folder root from webkitRelativePath selections', () => {
 		const files = [
 			withUploadPath(new File(['alpha'], 'alpha.txt', { type: 'text/plain' }), 'webkitRelativePath', 'upload-folder/dir-a/alpha.txt'),
@@ -49,5 +53,28 @@ describe('buildUploadItems', () => {
 			{ relPath: 'dir-a/alpha.txt' },
 			{ relPath: 'dir-b/nested/beta.txt' },
 		])
+	})
+
+	it('resolves null when the file picker is canceled', async () => {
+		vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function () {
+			window.dispatchEvent(new Event('focus'))
+		})
+
+		await expect(promptForFiles({ multiple: true, directory: false })).resolves.toBeNull()
+		expect(document.querySelector('input[type="file"]')).toBeNull()
+	})
+
+	it('returns selected files when the file picker changes', async () => {
+		const file = new File(['hello'], 'demo.txt', { type: 'text/plain' })
+		vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (this: HTMLInputElement) {
+			Object.defineProperty(this, 'files', {
+				value: [file],
+				configurable: true,
+			})
+			this.dispatchEvent(new Event('change'))
+		})
+
+		await expect(promptForFiles({ multiple: true, directory: false })).resolves.toEqual([file])
+		expect(document.querySelector('input[type="file"]')).toBeNull()
 	})
 })

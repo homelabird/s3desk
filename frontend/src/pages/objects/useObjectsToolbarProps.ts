@@ -6,6 +6,7 @@ import type { ObjectsToolbarProps } from './ObjectsToolbar'
 import type { UIAction } from './objectsActions'
 
 export function useObjectsToolbarProps(args: {
+	apiToken: string
 	isDesktop: boolean
 	showLabels: boolean
 	isAdvanced: boolean
@@ -45,6 +46,7 @@ export function useObjectsToolbarProps(args: {
 	navigateToLocation: (bucket: string, prefix: string, opts: { recordHistory: boolean }) => void
 }): { toolbarProps: ObjectsToolbarProps; canCreateFolder: boolean; createFolderTooltipText: string } {
 	const {
+		apiToken,
 		isDesktop,
 		showLabels,
 		isAdvanced,
@@ -116,6 +118,7 @@ export function useObjectsToolbarProps(args: {
 			isAdvanced,
 			isOffline,
 			hasProfile: !!profileId,
+			bucketPickerScopeKey: `${apiToken || '__no_server__'}:${profileId?.trim() || '__no_profile__'}`,
 			bucket,
 			recentBuckets,
 			selectedCount,
@@ -150,6 +153,7 @@ export function useObjectsToolbarProps(args: {
 		}),
 		[
 			activeTransferCount,
+			apiToken,
 			bucket,
 			bucketOptions,
 			bucketsLoading,

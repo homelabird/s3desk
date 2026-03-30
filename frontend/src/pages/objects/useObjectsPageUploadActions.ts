@@ -3,6 +3,7 @@ import { useObjectsUploadDrop } from './useObjectsUploadDrop'
 import { useObjectsUploadPickers } from './useObjectsUploadPickers'
 
 type Args = {
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -13,6 +14,7 @@ type Args = {
 }
 
 export function useObjectsPageUploadActions({
+	apiToken,
 	profileId,
 	bucket,
 	prefix,
@@ -22,6 +24,7 @@ export function useObjectsPageUploadActions({
 	transfers,
 }: Args) {
 	const uploadDropActions = useObjectsUploadDrop({
+		apiToken,
 		profileId,
 		bucket,
 		prefix,
@@ -32,6 +35,10 @@ export function useObjectsPageUploadActions({
 	})
 
 	const uploadPickerActions = useObjectsUploadPickers({
+		apiToken,
+		profileId,
+		bucket,
+		prefix,
 		isOffline,
 		uploadsEnabled: uploadSupported,
 		uploadsDisabledReason: uploadDisabledReason,

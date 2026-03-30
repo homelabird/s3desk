@@ -252,41 +252,48 @@ export function useTransfersDownloadQueue({
 		if (!hasWaitingJobArtifactDownloads) return
 
 		let stopped = false
+		let pollInFlight = false
 		const tick = async () => {
+			if (pollInFlight) return
+			pollInFlight = true
 			const waiting = downloadTasksRef.current.filter(
 				(t): t is JobArtifactDownloadTask => t.kind === 'job_artifact' && t.status === 'waiting',
 			)
-			for (const t of waiting) {
-				if (stopped) return
-				try {
-					const job = await api.jobs.getJob(t.profileId, t.jobId)
+			try {
+				for (const t of waiting) {
 					if (stopped) return
+					try {
+						const job = await api.jobs.getJob(t.profileId, t.jobId)
+						if (stopped) return
 
-					if (job.status === 'succeeded') {
-						updateDownloadTask(t.id, (prev) => ({ ...prev, status: 'queued', error: undefined }))
-						continue
+						if (job.status === 'succeeded') {
+							updateDownloadTask(t.id, (prev) => ({ ...prev, status: 'queued', error: undefined }))
+							continue
+						}
+						if (job.status === 'failed') {
+							updateDownloadTask(t.id, (prev) => ({
+								...prev,
+								status: 'failed',
+								finishedAtMs: Date.now(),
+								error: job.error ?? 'job failed',
+							}))
+							continue
+						}
+						if (job.status === 'canceled') {
+							updateDownloadTask(t.id, (prev) => ({
+								...prev,
+								status: 'canceled',
+								finishedAtMs: Date.now(),
+								error: job.error ?? prev.error,
+							}))
+						}
+					} catch (err) {
+						maybeReportNetworkError(err)
+						updateDownloadTask(t.id, (prev) => ({ ...prev, error: formatErr(err) }))
 					}
-					if (job.status === 'failed') {
-						updateDownloadTask(t.id, (prev) => ({
-							...prev,
-							status: 'failed',
-							finishedAtMs: Date.now(),
-							error: job.error ?? 'job failed',
-						}))
-						continue
-					}
-					if (job.status === 'canceled') {
-						updateDownloadTask(t.id, (prev) => ({
-							...prev,
-							status: 'canceled',
-							finishedAtMs: Date.now(),
-							error: job.error ?? prev.error,
-						}))
-					}
-				} catch (err) {
-					maybeReportNetworkError(err)
-					updateDownloadTask(t.id, (prev) => ({ ...prev, error: formatErr(err) }))
 				}
+			} finally {
+				pollInFlight = false
 			}
 		}
 

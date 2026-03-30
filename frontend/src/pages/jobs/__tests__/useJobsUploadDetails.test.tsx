@@ -78,4 +78,57 @@ describe('useJobsUploadDetails', () => {
 			key: 'exports/alpha.txt',
 		})
 	})
+
+	it('refetches upload etags when the api token changes', async () => {
+		const getJob = vi.fn().mockResolvedValue({
+			id: 'job-direct-upload',
+			type: 'transfer_direct_upload',
+			status: 'succeeded',
+			payload: {
+				bucket: 'demo-bucket',
+				prefix: 'exports/',
+				items: [{ path: 'alpha.txt', key: 'exports/alpha.txt', size: 110676 }],
+			},
+			createdAt: '2024-01-01T00:00:00Z',
+		})
+		const getObjectMeta = vi
+			.fn()
+			.mockResolvedValueOnce({ etag: 'etag-alpha' })
+			.mockResolvedValueOnce({ etag: 'etag-beta' })
+		const api = createMockApiClient({
+			jobs: {
+				getJob,
+			},
+			objects: {
+				getObjectMeta,
+			},
+		})
+
+		const { result, rerender } = renderHook(
+			(props: { apiToken: string }) =>
+				useJobsUploadDetails({
+					api,
+					profileId: 'profile-1',
+					apiToken: props.apiToken,
+					detailsJobId: 'job-direct-upload',
+					detailsOpen: true,
+				}),
+			{
+				initialProps: { apiToken: 'token-a' },
+				wrapper: createWrapper(),
+			},
+		)
+
+		await waitFor(() => {
+			expect(result.current.uploadTablePageItems[0]?.etag).toBe('etag-alpha')
+		})
+
+		rerender({ apiToken: 'token-b' })
+
+		await waitFor(() => {
+			expect(result.current.uploadTablePageItems[0]?.etag).toBe('etag-beta')
+		})
+
+		expect(getObjectMeta).toHaveBeenCalledTimes(2)
+	})
 })

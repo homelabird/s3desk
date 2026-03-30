@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type Options<T> = {
+	legacyLocalStorageKey?: string
+	legacyLocalStorageKeys?: string[]
 	sanitize?: (value: T) => T
 }
 
@@ -12,6 +14,16 @@ export function useLocalStorageState<T>(
 	const stableDefaultSerialized = useMemo(() => JSON.stringify(defaultValue), [defaultValue])
 	const stableDefaultValue = useMemo(() => JSON.parse(stableDefaultSerialized) as T, [stableDefaultSerialized])
 	const sanitizeValue = options.sanitize
+	const legacyLocalStorageKey = options.legacyLocalStorageKey
+	const legacyLocalStorageKeysSignature = JSON.stringify(options.legacyLocalStorageKeys ?? [])
+	const allLegacyLocalStorageKeys = useMemo(
+		() =>
+			[
+				legacyLocalStorageKey,
+				...(JSON.parse(legacyLocalStorageKeysSignature) as string[]),
+			].filter((value): value is string => !!value),
+		[legacyLocalStorageKey, legacyLocalStorageKeysSignature],
+	)
 	const sanitize = useCallback(
 		(value: T): T => {
 			if (!sanitizeValue) return value
@@ -38,13 +50,20 @@ export function useLocalStorageState<T>(
 
 	const readValue = useCallback(
 		(storageKey: string): T => {
+			if (typeof window === 'undefined') return stableDefaultValue
 			try {
-				return parse(window.localStorage.getItem(storageKey))
+				const currentRaw = window.localStorage.getItem(storageKey)
+				if (currentRaw !== null) return parse(currentRaw)
+				for (const legacyKey of allLegacyLocalStorageKeys) {
+					const legacyRaw = window.localStorage.getItem(legacyKey)
+					if (legacyRaw !== null) return parse(legacyRaw)
+				}
+				return stableDefaultValue
 			} catch {
 				return stableDefaultValue
 			}
 		},
-		[parse, stableDefaultValue],
+		[allLegacyLocalStorageKeys, parse, stableDefaultValue],
 	)
 
 	const [stateSlot, setStateSlot] = useState<{ key: string; value: T }>(() => ({
@@ -58,16 +77,22 @@ export function useLocalStorageState<T>(
 	}, [state])
 
 	useEffect(() => {
+		if (typeof window === 'undefined') return
 		try {
 			const serialized = JSON.stringify(sanitize(state))
 			window.localStorage.setItem(key, serialized)
+			for (const legacyKey of allLegacyLocalStorageKeys) {
+				window.localStorage.removeItem(legacyKey)
+			}
 			window.dispatchEvent(new CustomEvent('local-storage', { detail: { key, value: serialized } }))
 		} catch {
 			// ignore
 		}
-	}, [key, sanitize, state])
+	}, [allLegacyLocalStorageKeys, key, sanitize, state])
 
 	useEffect(() => {
+		if (typeof window === 'undefined') return
+
 		const handleStorage = (event: StorageEvent) => {
 			if (event.key !== key) return
 			const nextRaw = event.newValue

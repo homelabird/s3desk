@@ -109,6 +109,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 
 	const { clipboardObjects, onCopy, copySelectionToClipboard, pasteClipboardObjects } = useObjectsClipboard({
 		profileId: props.profileId,
+		apiToken: props.apiToken,
 		bucket,
 		prefix,
 		selectedKeys,
@@ -127,6 +128,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		clearDndHover,
 	} = useObjectsDnd({
 		profileId: props.profileId,
+		apiToken: props.apiToken,
 		bucket,
 		prefix,
 		canDragDrop,
@@ -224,6 +226,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 			onToggleUiMode: data.handleToggleUiMode,
 		},
 		contextMenu: {
+			scopeKey: `${props.apiToken || '__no_server__'}:${props.profileId?.trim() || '__no_profile__'}:${bucket}:${prefix}`,
 			debugEnabled: debugContextMenu,
 			log: logContextMenuDebug,
 			listScrollerEl,
@@ -236,6 +239,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		},
 		rowRenderers: {
 			api,
+			apiToken: props.apiToken,
 			profileId: props.profileId,
 			profileProvider: selectedProfileProvider,
 			bucket,
@@ -272,6 +276,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 
 	const { renderPrefixGridItem, renderObjectGridItem } = useObjectsGridRenderers({
 		api,
+		apiToken: props.apiToken,
 		profileId: props.profileId,
 		profileProvider: selectedProfileProvider,
 		bucket,
@@ -311,6 +316,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 	})
 
 	const { breadcrumbItems } = useObjectsBreadcrumbItems({
+		scopeKey: `${props.apiToken || '__no_server__'}:${props.profileId?.trim() || '__no_profile__'}:${bucket}:${prefix}`,
 		bucket,
 		prefix,
 		isMd: !!screens.md,

@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react'
 import type { BucketOption, DeleteJobModalPrefill } from './jobsPageTypes'
 
 type Props = {
+	apiToken: string
 	profileId: string
 	createOpen: boolean
 	createDownloadOpen: boolean
@@ -59,6 +60,7 @@ export function JobsCreateModals(props: Props) {
 		<Suspense fallback={null}>
 			{props.createOpen ? (
 				<CreateJobModal
+					key={`upload:${props.apiToken}:${props.profileId}:${props.bucket}`}
 					profileId={props.profileId}
 					open={props.createOpen}
 					onCancel={props.onCloseCreate}
@@ -75,6 +77,7 @@ export function JobsCreateModals(props: Props) {
 
 			{props.createDownloadOpen ? (
 				<DownloadJobModal
+					key={`download:${props.apiToken}:${props.profileId}:${props.bucket}`}
 					profileId={props.profileId}
 					open={props.createDownloadOpen}
 					onCancel={props.onCloseDownload}
@@ -89,6 +92,7 @@ export function JobsCreateModals(props: Props) {
 
 			{props.createDeleteOpen ? (
 				<DeletePrefixJobModal
+					key={`delete:${props.apiToken}:${props.profileId}:${props.deleteBucket}:${props.deletePrefill?.prefix ?? ''}:${props.deletePrefill?.deleteAll ? 'all' : 'prefix'}`}
 					open={props.createDeleteOpen}
 					onCancel={props.onCloseDelete}
 					onSubmit={props.onSubmitDelete}

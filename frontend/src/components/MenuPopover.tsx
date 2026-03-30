@@ -22,6 +22,7 @@ type MenuPopoverProps = {
 	align?: 'start' | 'end'
 	className?: string
 	menuClassName?: string
+	scopeKey?: string
 	open?: boolean
 	onOpenChange?: (open: boolean, info?: { source: PopoverOpenSource }) => void
 	children: Parameters<typeof PopoverSurface>[0]['children']
@@ -132,16 +133,35 @@ export function MenuContent(props: MenuContentProps) {
 }
 
 export function MenuPopover(props: MenuPopoverProps) {
+	const [internalOpen, setInternalOpen] = useState(false)
+	const [internalScopeKey, setInternalScopeKey] = useState('')
+	const isControlled = typeof props.open === 'boolean'
+	const internalScopeMatches = !props.scopeKey || internalScopeKey === props.scopeKey
+	const visibleOpen = isControlled ? !!props.open : internalOpen && internalScopeMatches
+	const applyOpen = (nextOpen: boolean, source: PopoverOpenSource = 'outside') => {
+		if (!isControlled) {
+			setInternalOpen(nextOpen)
+			setInternalScopeKey(nextOpen && props.scopeKey ? props.scopeKey : '')
+		}
+		props.onOpenChange?.(nextOpen, { source })
+	}
 	return (
 		<PopoverSurface
 			align={props.align}
 			className={props.className}
 			contentClassName={props.menuClassName}
-			open={props.open}
-			onOpenChange={props.onOpenChange}
+			open={visibleOpen}
+			onOpenChange={(nextOpen, info) => applyOpen(nextOpen, info?.source)}
 			content={({ close }) => <MenuContent menu={props.menu} close={close} />}
 		>
-			{props.children}
+			{({ close, setOpen }) =>
+				props.children({
+					open: visibleOpen,
+					close,
+					setOpen,
+					toggle: () => setOpen(!visibleOpen, 'trigger'),
+				})
+			}
 		</PopoverSurface>
 	)
 }

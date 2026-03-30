@@ -8,12 +8,14 @@ import { publishObjectsRefresh } from '../../pages/objects/objectsRefreshEvents'
 import type { UploadTask } from './transferTypes'
 
 type UseTransfersUploadJobLifecycleArgs = {
+	apiToken: string
 	queryClient: QueryClient
 	uploadTasksRef: MutableRefObject<UploadTask[]>
 	updateUploadTask: (taskId: string, updater: (task: UploadTask) => UploadTask) => void
 }
 
 export function useTransfersUploadJobLifecycle({
+	apiToken,
 	queryClient,
 	uploadTasksRef,
 	updateUploadTask,
@@ -56,8 +58,10 @@ export function useTransfersUploadJobLifecycle({
 					profileId: current.profileId,
 					bucket: current.bucket,
 					changedPrefix: current.prefix,
+					apiToken,
 				})
 				publishObjectsRefresh({
+					apiToken,
 					profileId: current.profileId,
 					bucket: current.bucket,
 					prefix: current.prefix,
@@ -96,7 +100,7 @@ export function useTransfersUploadJobLifecycle({
 				etaSeconds: 0,
 			}))
 		},
-		[queryClient, updateUploadTask, uploadTasksRef],
+		[apiToken, queryClient, updateUploadTask, uploadTasksRef],
 	)
 
 	const handleUploadJobUpdate = useCallback(

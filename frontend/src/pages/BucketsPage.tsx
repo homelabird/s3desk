@@ -16,7 +16,7 @@ import {
   FileTextOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { APIClient, APIError } from "../api/client";
@@ -24,7 +24,6 @@ import type { BucketCreateRequest, Profile } from "../api/types";
 import { DialogModal } from "../components/DialogModal";
 import { PageHeader } from "../components/PageHeader";
 import { SetupCallout } from "../components/SetupCallout";
-import { mountImperativeDialog } from "../components/imperativeDialog";
 import { confirmDangerAction } from "../lib/confirmDangerAction";
 import { buildDialogPreferenceKey, isDialogDismissed, setDialogDismissed } from "../lib/dialogPreferences";
 import { formatErrorWithHint as formatErr } from "../lib/errors";
@@ -57,6 +56,7 @@ const BucketGovernanceModal = lazy(async () => {
 const BUCKET_NOT_EMPTY_DIALOG_KEY = buildDialogPreferenceKey("warning", "bucket_not_empty");
 
 function BucketNotEmptyDialog(props: {
+  apiToken: string;
   bucketName: string;
   onOpenObjects: () => void;
   onCreateDeleteJob: () => void;
@@ -65,7 +65,7 @@ function BucketNotEmptyDialog(props: {
   const [dismissNextTime, setDismissNextTime] = useState(false);
   const closeAndRemember = () => {
     if (dismissNextTime) {
-      setDialogDismissed(BUCKET_NOT_EMPTY_DIALOG_KEY, true);
+      setDialogDismissed(BUCKET_NOT_EMPTY_DIALOG_KEY, true, props.apiToken);
     }
     props.onClose();
   };
@@ -114,26 +114,6 @@ function BucketNotEmptyDialog(props: {
   );
 }
 
-function showBucketNotEmptyDialog(args: {
-  bucketName: string;
-  onOpenObjects: () => void;
-  onCreateDeleteJob: () => void;
-}) {
-  if (isDialogDismissed(BUCKET_NOT_EMPTY_DIALOG_KEY)) {
-    message.warning(`Bucket "${args.bucketName}" isn’t empty. Open Objects or create a delete job from the Buckets page.`)
-    return;
-  }
-
-  mountImperativeDialog((close) => (
-    <BucketNotEmptyDialog
-      bucketName={args.bucketName}
-      onOpenObjects={args.onOpenObjects}
-      onCreateDeleteJob={args.onCreateDeleteJob}
-      onClose={close}
-    />
-  ));
-}
-
 export function BucketsPage(props: Props) {
   const queryClient = useQueryClient();
   const api = useMemo(
@@ -144,10 +124,47 @@ export function BucketsPage(props: Props) {
   const screens = Grid.useBreakpoint();
   const useCompactList = !screens.lg;
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [deletingBucket, setDeletingBucket] = useState<string | null>(null);
-  const [policyBucket, setPolicyBucket] = useState<string | null>(null);
-  const [controlsBucket, setControlsBucket] = useState<string | null>(null);
+  const currentScopeKey = `${props.apiToken}:${props.profileId ?? "none"}`;
+  const [createOpenScope, setCreateOpenScope] = useState<string | null>(null);
+  const [deletingBucketState, setDeletingBucketState] = useState<{
+    bucketName: string;
+    scopeKey: string;
+  } | null>(null);
+  const [policyBucketState, setPolicyBucketState] = useState<{
+    bucketName: string;
+    scopeKey: string;
+  } | null>(null);
+  const [controlsBucketState, setControlsBucketState] = useState<{
+    bucketName: string;
+    scopeKey: string;
+  } | null>(null);
+  const [bucketNotEmptyDialogState, setBucketNotEmptyDialogState] = useState<{
+    bucketName: string;
+    scopeKey: string;
+  } | null>(null);
+  const bucketsPageContextVersionRef = useRef(0);
+
+  useLayoutEffect(() => {
+    bucketsPageContextVersionRef.current += 1;
+  }, [currentScopeKey]);
+
+  const createOpen = createOpenScope === currentScopeKey;
+  const deletingBucket =
+    deletingBucketState?.scopeKey === currentScopeKey
+      ? deletingBucketState.bucketName
+      : null;
+  const policyBucket =
+    policyBucketState?.scopeKey === currentScopeKey
+      ? policyBucketState.bucketName
+      : null;
+  const controlsBucket =
+    controlsBucketState?.scopeKey === currentScopeKey
+      ? controlsBucketState.bucketName
+      : null;
+  const bucketNotEmptyDialogBucket =
+    bucketNotEmptyDialogState?.scopeKey === currentScopeKey
+      ? bucketNotEmptyDialogState.bucketName
+      : null;
 
   const metaQuery = useQuery({
     queryKey: ["meta", props.apiToken],
@@ -195,13 +212,13 @@ export function BucketsPage(props: Props) {
     "Typed controls are available for AWS S3, GCS, Azure Blob, and OCI summary views.";
 
   const openPolicyModal = (bucketName: string) => {
-    setControlsBucket(null);
-    setPolicyBucket(bucketName);
+    setControlsBucketState(null);
+    setPolicyBucketState({ bucketName, scopeKey: currentScopeKey });
   };
 
   const openControlsModal = (bucketName: string) => {
-    setPolicyBucket(null);
-    setControlsBucket(bucketName);
+    setPolicyBucketState(null);
+    setControlsBucketState({ bucketName, scopeKey: currentScopeKey });
   };
 
   const bucketsQuery = useQuery({
@@ -215,14 +232,37 @@ export function BucketsPage(props: Props) {
     bucketCrudSupported && !bucketsQuery.isFetching && buckets.length === 0;
 
   const createMutation = useMutation({
-    mutationFn: (req: BucketCreateRequest) =>
-      api.buckets.createBucket(props.profileId!, req),
-    onSuccess: async () => {
-      message.success("Bucket created");
-      await queryClient.invalidateQueries({ queryKey: ["buckets"] });
-      setCreateOpen(false);
+    mutationFn: ({
+      req,
+    }: {
+      req: BucketCreateRequest;
+      contextVersion: number;
+    }) => api.buckets.createBucket(props.profileId!, req),
+    onMutate: ({ contextVersion }) => ({
+      contextVersion,
+      scopeProfileId: props.profileId,
+      scopeApiToken: props.apiToken,
+    }),
+    onSuccess: async (_, __, context) => {
+      const isCurrent =
+        !context?.contextVersion ||
+        context.contextVersion === bucketsPageContextVersionRef.current;
+      if (isCurrent) {
+        message.success("Bucket created");
+        setCreateOpenScope(null);
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["buckets", context?.scopeProfileId ?? props.profileId, context?.scopeApiToken ?? props.apiToken],
+        exact: true,
+      });
     },
-    onError: async (err) => {
+    onError: async (err, __, context) => {
+      if (
+        context?.contextVersion &&
+        context.contextVersion !== bucketsPageContextVersionRef.current
+      ) {
+        return;
+      }
       if (
         err instanceof APIError &&
         err.code === "bucket_defaults_apply_failed" &&
@@ -237,8 +277,11 @@ export function BucketsPage(props: Props) {
             ? `Bucket created, but secure defaults failed while applying ${applySection}.`
             : "Bucket created, but secure defaults were not fully applied.",
         );
-        await queryClient.invalidateQueries({ queryKey: ["buckets"] });
-        setCreateOpen(false);
+        await queryClient.invalidateQueries({
+          queryKey: ["buckets", context?.scopeProfileId ?? props.profileId, context?.scopeApiToken ?? props.apiToken],
+          exact: true,
+        });
+        setCreateOpenScope(null);
         return;
       }
       message.error(formatErr(err));
@@ -246,37 +289,59 @@ export function BucketsPage(props: Props) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (bucketName: string) =>
-      api.buckets.deleteBucket(props.profileId!, bucketName),
-    onMutate: (bucketName) => setDeletingBucket(bucketName),
-    onSuccess: async () => {
-      message.success("Bucket deleted");
-      await queryClient.invalidateQueries({ queryKey: ["buckets"] });
+    mutationFn: ({
+      bucketName,
+    }: {
+      bucketName: string;
+      contextVersion: number;
+    }) => api.buckets.deleteBucket(props.profileId!, bucketName),
+    onMutate: ({ bucketName, contextVersion }) => {
+      const mutationState = { bucketName, contextVersion, scopeKey: currentScopeKey };
+      setDeletingBucketState({
+        bucketName,
+        scopeKey: currentScopeKey,
+      });
+      return {
+        ...mutationState,
+        scopeProfileId: props.profileId,
+        scopeApiToken: props.apiToken,
+      };
     },
-    onSettled: (_, __, bucketName) =>
-      setDeletingBucket((prev) => (prev === bucketName ? null : prev)),
-    onError: (err, bucketName) => {
+    onSuccess: async (_, __, context) => {
+      const isCurrent =
+        !context?.contextVersion ||
+        context.contextVersion === bucketsPageContextVersionRef.current;
+      if (isCurrent) {
+        message.success("Bucket deleted");
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["buckets", context?.scopeProfileId ?? props.profileId, context?.scopeApiToken ?? props.apiToken],
+        exact: true,
+      });
+    },
+    onSettled: (_, __, _vars, context) =>
+      setDeletingBucketState((prev) =>
+        prev?.bucketName === context?.bucketName &&
+        prev?.scopeKey === context?.scopeKey
+          ? null
+          : prev,
+      ),
+    onError: (err, _vars, context) => {
+      if (
+        context?.contextVersion &&
+        context.contextVersion !== bucketsPageContextVersionRef.current
+      ) {
+        return;
+      }
+      const bucketName = context?.bucketName;
       if (err instanceof APIError && err.code === "bucket_not_empty") {
-        showBucketNotEmptyDialog({
-          bucketName,
-          onOpenObjects: () => {
-            navigate("/objects", {
-              state: {
-                openBucket: true,
-                bucket: bucketName,
-                prefix: "",
-              },
-            });
-          },
-          onCreateDeleteJob: () => {
-            navigate("/jobs", {
-              state: {
-                openDeleteJob: true,
-                bucket: bucketName,
-                deleteAll: true,
-              },
-            });
-          },
+        if (isDialogDismissed(BUCKET_NOT_EMPTY_DIALOG_KEY, props.apiToken)) {
+          message.warning(`Bucket "${bucketName ?? ""}" isn’t empty. Open Objects or create a delete job from the Buckets page.`)
+          return;
+        }
+        setBucketNotEmptyDialogState({
+          bucketName: bucketName ?? "",
+          scopeKey: currentScopeKey,
         });
         return;
       }
@@ -345,6 +410,7 @@ export function BucketsPage(props: Props) {
         icon={<DeleteOutlined />}
         loading={deleteMutation.isPending && deletingBucket === bucketName}
         onClick={() => {
+          const confirmContextVersion = bucketsPageContextVersionRef.current;
           confirmDangerAction({
             title: `Delete bucket "${bucketName}"?`,
             description:
@@ -352,7 +418,15 @@ export function BucketsPage(props: Props) {
             confirmText: bucketName,
             confirmHint: `Type "${bucketName}" to confirm`,
             onConfirm: async () => {
-              await deleteMutation.mutateAsync(bucketName);
+                if (
+                  confirmContextVersion !== bucketsPageContextVersionRef.current
+                ) {
+                  return;
+                }
+                await deleteMutation.mutateAsync({
+                  bucketName,
+                  contextVersion: confirmContextVersion,
+                });
             },
           });
         }}
@@ -384,7 +458,7 @@ export function BucketsPage(props: Props) {
               <Button
                 type="primary"
                 disabled={!bucketCrudSupported}
-                onClick={() => setCreateOpen(true)}
+                onClick={() => setCreateOpenScope(currentScopeKey)}
               >
                 New Bucket
               </Button>
@@ -431,7 +505,10 @@ export function BucketsPage(props: Props) {
           }
         >
           <Space>
-            <Button type="primary" onClick={() => setCreateOpen(true)}>
+            <Button
+              type="primary"
+              onClick={() => setCreateOpenScope(currentScopeKey)}
+            >
               Create bucket
             </Button>
             <Button
@@ -532,10 +609,16 @@ export function BucketsPage(props: Props) {
       <Suspense fallback={null}>
         {createOpen ? (
           <BucketModal
+            key={`${props.profileId ?? "none"}:${props.apiToken}:${selectedProfile?.provider ?? "unknown"}`}
             open
             provider={selectedProfile?.provider}
-            onCancel={() => setCreateOpen(false)}
-            onSubmit={(req) => createMutation.mutate(req)}
+            onCancel={() => setCreateOpenScope(null)}
+            onSubmit={(req) =>
+              createMutation.mutate({
+                req,
+                contextVersion: bucketsPageContextVersionRef.current,
+              })
+            }
             loading={createMutation.isPending}
           />
         ) : null}
@@ -548,7 +631,7 @@ export function BucketsPage(props: Props) {
             profileId={props.profileId}
             provider={selectedProfile?.provider}
             bucket={policyBucket}
-            onClose={() => setPolicyBucket(null)}
+            onClose={() => setPolicyBucketState(null)}
             onOpenControls={openControlsModal}
           />
         ) : null}
@@ -561,8 +644,36 @@ export function BucketsPage(props: Props) {
             profileId={props.profileId}
             provider={selectedProfile?.provider}
             bucket={controlsBucket}
-            onClose={() => setControlsBucket(null)}
+            onClose={() => setControlsBucketState(null)}
             onOpenAdvancedPolicy={openPolicyModal}
+          />
+        ) : null}
+
+        {bucketNotEmptyDialogBucket ? (
+          <BucketNotEmptyDialog
+            apiToken={props.apiToken}
+            bucketName={bucketNotEmptyDialogBucket}
+            onClose={() => setBucketNotEmptyDialogState(null)}
+            onOpenObjects={() => {
+              setBucketNotEmptyDialogState(null);
+              navigate("/objects", {
+                state: {
+                  openBucket: true,
+                  bucket: bucketNotEmptyDialogBucket,
+                  prefix: "",
+                },
+              });
+            }}
+            onCreateDeleteJob={() => {
+              setBucketNotEmptyDialogState(null);
+              navigate("/jobs", {
+                state: {
+                  openDeleteJob: true,
+                  bucket: bucketNotEmptyDialogBucket,
+                  deleteAll: true,
+                },
+              });
+            }}
           />
         ) : null}
       </Suspense>

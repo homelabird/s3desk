@@ -14,6 +14,7 @@ import type {
 
 export type GovernanceControlsCommonProps = {
   api: APIClient;
+  apiToken: string;
   profileId: string;
   provider: Profile["provider"];
   bucket: string;

@@ -125,8 +125,14 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
-		expect(setQueriesData).toHaveBeenCalledTimes(4)
+		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
+		expect(setQueriesData).toHaveBeenCalledTimes(2)
 		expect(setQueryData).toHaveBeenCalledTimes(2)
+		expect(setQueriesData).toHaveBeenNthCalledWith(
+			1,
+			{ queryKey: ['jobs', 'profile-1', 'token'], exact: false },
+			expect.any(Function),
+		)
 
 		unmount()
 	})
@@ -248,6 +254,63 @@ describe('useJobsRealtimeEvents', () => {
 		unmount()
 	})
 
+	it('resets the realtime sequence and connection state when switching api tokens', async () => {
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { result, rerender, unmount } = renderHook(
+			(props: { apiToken: string }) =>
+				useJobsRealtimeEvents({
+					apiToken: props.apiToken,
+					profileId: 'profile-1',
+					queryClient,
+				}),
+			{
+				initialProps: { apiToken: 'token-a' },
+			},
+		)
+
+		await flushRealtimeSetup()
+		const firstWs = MockWebSocket.instances[0]
+		act(() => {
+			firstWs.emitOpen()
+			firstWs.emitMessage(
+				JSON.stringify({
+					type: 'job.progress',
+					seq: 5,
+					jobId: 'job-1',
+					payload: { status: 'running' },
+				}),
+			)
+		})
+
+		expect(result.current.eventsConnected).toBe(true)
+		expect(result.current.eventsTransport).toBe('ws')
+
+		act(() => {
+			result.current.retryRealtime()
+		})
+
+		await flushRealtimeSetup()
+		const retryWs = MockWebSocket.instances[1]
+		expect(retryWs?.url).toContain('afterSeq=5')
+
+		rerender({ apiToken: 'token-b' })
+		await flushRealtimeSetup()
+
+		expect(result.current.eventsConnected).toBe(false)
+		expect(result.current.eventsTransport).toBeNull()
+		expect(result.current.eventsRetryCount).toBe(0)
+
+		const switchedWs = MockWebSocket.instances[2]
+		expect(switchedWs?.url).not.toContain('afterSeq=')
+
+		unmount()
+	})
+
 	it('invalidates jobs when realtime reconnects after a disconnect', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const queryClient = {
@@ -285,6 +348,7 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
+		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
 
 		unmount()
 	})
@@ -335,7 +399,87 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
+		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
 		expect(MockWebSocket.instances).toHaveLength(1)
+
+		unmount()
+	})
+
+	it('does not start a duplicate sse reconnect after the stream reopens', async () => {
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitClose()
+		})
+
+		await flushRealtimeSetup()
+		const es = MockEventSource.instances[0]
+		act(() => {
+			es.emitOpen()
+		})
+
+		await act(async () => {
+			es.emitError()
+			es.emitOpen()
+			vi.advanceTimersByTime(1000)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		expect(MockEventSource.instances).toHaveLength(1)
+
+		unmount()
+	})
+
+	it('automatically reprobes websocket after falling back to sse', async () => {
+		const queryClient = {
+			invalidateQueries: vi.fn().mockResolvedValue(undefined),
+			setQueriesData: vi.fn(),
+			setQueryData: vi.fn(),
+		} as unknown as QueryClient
+
+		const { unmount } = renderHook(() =>
+			useJobsRealtimeEvents({
+				apiToken: 'token',
+				profileId: 'profile-1',
+				queryClient,
+			}),
+		)
+
+		await flushRealtimeSetup()
+		const ws = MockWebSocket.instances[0]
+		act(() => {
+			ws.emitClose()
+		})
+
+		await flushRealtimeSetup()
+		const es = MockEventSource.instances[0]
+		act(() => {
+			es.emitOpen()
+		})
+
+		await act(async () => {
+			vi.advanceTimersByTime(15_000)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		await flushRealtimeSetup()
+		expect(MockWebSocket.instances).toHaveLength(2)
 
 		unmount()
 	})

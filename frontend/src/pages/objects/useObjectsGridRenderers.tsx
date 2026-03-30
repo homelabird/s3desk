@@ -4,6 +4,7 @@ import { useObjectsPrefixGridRenderer } from './useObjectsPrefixGridRenderer'
 
 export function useObjectsGridRenderers({
 	api,
+	apiToken,
 	profileId,
 	profileProvider,
 	bucket,
@@ -64,6 +65,7 @@ export function useObjectsGridRenderers({
 
 	const renderObjectGridItem = useObjectsObjectGridRenderer({
 		api,
+		apiToken,
 		profileId,
 		profileProvider,
 		bucket,

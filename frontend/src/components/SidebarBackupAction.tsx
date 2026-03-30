@@ -16,6 +16,7 @@ type SidebarBackupActionProps = {
 	api: APIClient
 	meta?: MetaResponse
 	onActionComplete?: () => void
+	scopeKey?: string
 }
 
 type ServerRestoreValidationView = {
@@ -38,6 +39,11 @@ type ExportSummary = {
 type BackupScopeAvailability = Record<ServerBackupScope, { enabled: boolean; reason?: string }>
 
 export function SidebarBackupAction(props: SidebarBackupActionProps) {
+	const sessionKey = props.scopeKey ?? '__default__'
+	return <SidebarBackupActionSession key={sessionKey} {...props} />
+}
+
+function SidebarBackupActionSession(props: SidebarBackupActionProps) {
 	const [open, setOpen] = useState(false)
 	const [backupScope, setBackupScope] = useState<ServerBackupScope>('full')
 	const [backupProtection, setBackupProtection] = useState<BackupProtectionMode>('clear')
@@ -62,6 +68,11 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 	const [cleanupRestoresLoading, setCleanupRestoresLoading] = useState(false)
 	const restoreInputRef = useRef<HTMLInputElement | null>(null)
 	const portablePreviewInputRef = useRef<HTMLInputElement | null>(null)
+	const portableRequestTokenRef = useRef(0)
+	const restoreRequestTokenRef = useRef(0)
+	const stagedRestoresRequestTokenRef = useRef(0)
+	const deleteRestoreRequestTokenRef = useRef(0)
+	const cleanupRestoresRequestTokenRef = useRef(0)
 
 	const dbBackend = props.meta?.dbBackend ?? 'sqlite'
 	const serverBackupCapability = props.meta?.capabilities?.serverBackup
@@ -134,15 +145,21 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 	}, [backupScope, backupScopeAvailability])
 
 	const refreshStagedRestores = useCallback(async () => {
+		const requestToken = stagedRestoresRequestTokenRef.current + 1
+		stagedRestoresRequestTokenRef.current = requestToken
 		setStagedRestoresLoading(true)
 		setStagedRestoresError(null)
 		try {
 			const result = await props.api.server.listServerRestores()
+			if (stagedRestoresRequestTokenRef.current !== requestToken) return
 			setStagedRestores(result.items ?? [])
 		} catch (err) {
+			if (stagedRestoresRequestTokenRef.current !== requestToken) return
 			setStagedRestoresError(formatErr(err))
 		} finally {
-			setStagedRestoresLoading(false)
+			if (stagedRestoresRequestTokenRef.current === requestToken) {
+				setStagedRestoresLoading(false)
+			}
 		}
 	}, [props.api])
 
@@ -224,71 +241,117 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 		const file = event.target.files?.[0]
 		event.target.value = ''
 		if (!file) return
+		const requestToken = restoreRequestTokenRef.current + 1
+		restoreRequestTokenRef.current = requestToken
 		setRestoreLoading(true)
 		setRestoreError(null)
 		setRestoreResult(null)
 		try {
 			const result = await props.api.server.restoreServerBackup(file, restorePassword || undefined)
+			if (restoreRequestTokenRef.current !== requestToken) return
 			setRestoreResult(result)
 			await refreshStagedRestores()
 		} catch (err) {
+			if (restoreRequestTokenRef.current !== requestToken) return
 			setRestoreError(formatErr(err))
 		} finally {
-			setRestoreLoading(false)
+			if (restoreRequestTokenRef.current === requestToken) {
+				setRestoreLoading(false)
+			}
 		}
 	}
 
 	const handlePortablePasswordChange = (value: string) => {
+		portableRequestTokenRef.current += 1
+		setPortableLoading(null)
 		setPortablePassword(value)
+		setPortableError(null)
+		setPortableDraftFile(null)
 		setPortablePreview(null)
 		setPortableImportResult(null)
+	}
+
+	const handleCloseDrawer = () => {
+		portableRequestTokenRef.current += 1
+		restoreRequestTokenRef.current += 1
+		stagedRestoresRequestTokenRef.current += 1
+		deleteRestoreRequestTokenRef.current += 1
+		cleanupRestoresRequestTokenRef.current += 1
+		setPortableLoading(null)
+		setRestoreLoading(false)
+		setStagedRestoresLoading(false)
+		setDeleteRestoreId(null)
+		setCleanupRestoresLoading(false)
+		setOpen(false)
 	}
 
 	const handlePortablePreviewInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0]
 		event.target.value = ''
 		if (!file) return
+		const requestToken = portableRequestTokenRef.current + 1
+		portableRequestTokenRef.current = requestToken
 		setPortableLoading('preview')
 		setPortableError(null)
+		setPortableDraftFile(null)
 		setPortablePreview(null)
 		setPortableImportResult(null)
 		try {
 			const result = await props.api.server.previewPortableImport(file, portablePassword || undefined)
+			if (portableRequestTokenRef.current !== requestToken) return
 			setPortableDraftFile(file)
 			setPortablePreview(result)
 		} catch (err) {
+			if (portableRequestTokenRef.current !== requestToken) return
 			setPortableError(formatErr(err))
 			setPortableDraftFile(null)
 		} finally {
-			setPortableLoading(null)
+			if (portableRequestTokenRef.current === requestToken) {
+				setPortableLoading(null)
+			}
 		}
 	}
 
 	const handlePortableImport = async () => {
 		if (!portableDraftFile) return
+		const requestToken = portableRequestTokenRef.current + 1
+		portableRequestTokenRef.current = requestToken
+		const currentFile = portableDraftFile
+		const currentPassword = portablePassword || undefined
 		setPortableLoading('import')
 		setPortableError(null)
+		setPortableImportResult(null)
 		try {
-			const result = await props.api.server.importPortableBackup(portableDraftFile, portablePassword || undefined)
+			const result = await props.api.server.importPortableBackup(currentFile, currentPassword)
+			if (portableRequestTokenRef.current !== requestToken) return
 			setPortableImportResult(result)
 		} catch (err) {
+			if (portableRequestTokenRef.current !== requestToken) return
 			setPortableError(formatErr(err))
 		} finally {
-			setPortableLoading(null)
+			if (portableRequestTokenRef.current === requestToken) {
+				setPortableLoading(null)
+			}
 		}
 	}
 
 	const handleDeleteRestore = async (restoreId: string) => {
+		const requestToken = deleteRestoreRequestTokenRef.current + 1
+		deleteRestoreRequestTokenRef.current = requestToken
 		setDeleteRestoreId(restoreId)
 		setStagedRestoresError(null)
 		try {
 			await props.api.server.deleteServerRestore(restoreId)
+			if (deleteRestoreRequestTokenRef.current !== requestToken) return
 			setRestoreResult((current) => (current?.stagingDir.endsWith(`/${restoreId}`) ? null : current))
 			await refreshStagedRestores()
 		} catch (err) {
+			if (deleteRestoreRequestTokenRef.current !== requestToken) return
 			setStagedRestoresError(formatErr(err))
 		} finally {
-			setDeleteRestoreId(null)
+			if (deleteRestoreRequestTokenRef.current === requestToken) {
+				setDeleteRestoreId((current) => (current === restoreId ? null : current))
+			}
 		}
 	}
 
@@ -301,15 +364,21 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 	const handleDeleteStaleRestores = async () => {
 		const staleIds = stagedRestores.filter((item) => isRestoreStale(item.stagedAt)).map((item) => item.id)
 		if (staleIds.length === 0) return
+		const requestToken = cleanupRestoresRequestTokenRef.current + 1
+		cleanupRestoresRequestTokenRef.current = requestToken
 		setCleanupRestoresLoading(true)
 		setStagedRestoresError(null)
 		try {
 			await Promise.all(staleIds.map((restoreId) => props.api.server.deleteServerRestore(restoreId)))
+			if (cleanupRestoresRequestTokenRef.current !== requestToken) return
 			await refreshStagedRestores()
 		} catch (err) {
+			if (cleanupRestoresRequestTokenRef.current !== requestToken) return
 			setStagedRestoresError(formatErr(err))
 		} finally {
-			setCleanupRestoresLoading(false)
+			if (cleanupRestoresRequestTokenRef.current === requestToken) {
+				setCleanupRestoresLoading(false)
+			}
 		}
 	}
 
@@ -365,7 +434,7 @@ export function SidebarBackupAction(props: SidebarBackupActionProps) {
 			</button>
 			<OverlaySheet
 				open={open}
-				onClose={() => setOpen(false)}
+				onClose={handleCloseDrawer}
 				title="Backup and restore"
 				placement="right"
 				width="min(92vw, 560px)"

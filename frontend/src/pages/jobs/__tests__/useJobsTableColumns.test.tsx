@@ -33,6 +33,7 @@ function buildArgs() {
 			createdAt: true,
 			actions: true,
 		},
+		apiToken: 'token-a',
 		isOffline: false,
 		isLogsLoading: false,
 		activeLogJobId: null,

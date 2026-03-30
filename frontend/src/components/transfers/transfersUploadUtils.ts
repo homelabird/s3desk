@@ -10,6 +10,10 @@ type UploadPathFile = File & {
 
 export const promptForFiles = (args: { multiple: boolean; directory: boolean }): Promise<File[] | null> =>
 	new Promise((resolve) => {
+		if (typeof document === 'undefined' || typeof window === 'undefined') {
+			resolve(null)
+			return
+		}
 		const input = document.createElement('input')
 		input.type = 'file'
 		input.multiple = args.multiple
@@ -17,14 +21,34 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 			;(input as HTMLInputElement & { webkitdirectory?: boolean }).webkitdirectory = true
 		}
 		input.style.display = 'none'
+		let settled = false
+		const finish = (files: File[] | null) => {
+			if (settled) return
+			settled = true
+			cleanup()
+			resolve(files && files.length > 0 ? files : null)
+		}
 		const cleanup = () => {
+			window.removeEventListener('focus', handleWindowFocus, true)
+			input.removeEventListener('change', handleChange)
+			input.removeEventListener('cancel', handleCancel)
 			input.remove()
 		}
-		input.addEventListener('change', () => {
-			const files = input.files ? Array.from(input.files) : []
-			cleanup()
-			resolve(files.length ? files : null)
-		})
+		const handleChange = () => {
+			finish(input.files ? Array.from(input.files) : null)
+		}
+		const handleCancel = () => {
+			finish(null)
+		}
+		const handleWindowFocus = () => {
+			window.setTimeout(() => {
+				if (settled) return
+				finish(input.files ? Array.from(input.files) : null)
+			}, 0)
+		}
+		input.addEventListener('change', handleChange)
+		input.addEventListener('cancel', handleCancel)
+		window.addEventListener('focus', handleWindowFocus, true)
 		document.body.appendChild(input)
 		input.click()
 	})

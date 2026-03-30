@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Alert, Button, Input, Tag, Typography, message } from "antd";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type {
   BucketGovernanceView,
@@ -12,6 +12,7 @@ import { NativeSelect } from "../../../components/NativeSelect";
 import { formatErrorWithHint as formatErr } from "../../../lib/errors";
 import styles from "../BucketGovernanceModal.module.css";
 import { invalidateGovernance } from "./invalidation";
+import { useGovernanceMutationScope } from "./mutationScope";
 import {
   BucketGovernanceDialogShell,
   GovernanceSummaryCard,
@@ -63,20 +64,38 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
       : retention?.enabled
         ? 1
         : 0;
+  const publicExposureRequestTokenRef = useRef(0);
+  const versioningRequestTokenRef = useRef(0);
+  const protectionRequestTokenRef = useRef(0);
+  const sharingRequestTokenRef = useRef(0);
+  const mutationScope = useGovernanceMutationScope({
+    apiToken: props.apiToken,
+    profileId: props.profileId,
+    provider: props.provider,
+    bucket: props.bucket,
+  });
 
-  const refreshState = async () =>
-    invalidateGovernance(props.queryClient, props.profileId, props.bucket);
+  const refreshState = async (apiToken: string) =>
+    invalidateGovernance(props.queryClient, props.profileId, props.bucket, apiToken);
 
   const publicExposureMutation = useMutation({
     mutationFn: () =>
       props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, {
         visibility,
       }),
-    onSuccess: async () => {
-      message.success("Public exposure updated");
-      await refreshState();
+    onMutate: () => {
+      publicExposureRequestTokenRef.current += 1;
+      return mutationScope.createContext(publicExposureRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, publicExposureRequestTokenRef.current)) return;
+      message.success("Public exposure updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, publicExposureRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const versioningMutation = useMutation({
@@ -84,11 +103,19 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
       const req: BucketVersioningPutRequest = { status: versioningStatus };
       return props.api.buckets.putBucketVersioning(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("Versioning updated");
-      await refreshState();
+    onMutate: () => {
+      versioningRequestTokenRef.current += 1;
+      return mutationScope.createContext(versioningRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, versioningRequestTokenRef.current)) return;
+      message.success("Versioning updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, versioningRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const protectionMutation = useMutation({
@@ -115,11 +142,19 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
         req as BucketProtectionPutRequest,
       );
     },
-    onSuccess: async () => {
-      message.success("Retention rules updated");
-      await refreshState();
+    onMutate: () => {
+      protectionRequestTokenRef.current += 1;
+      return mutationScope.createContext(protectionRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, protectionRequestTokenRef.current)) return;
+      message.success("Retention rules updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, protectionRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const sharingMutation = useMutation({
@@ -136,7 +171,12 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
       };
       return props.api.buckets.putBucketSharing(props.profileId, props.bucket, req);
     },
-    onSuccess: async (view) => {
+    onMutate: () => {
+      sharingRequestTokenRef.current += 1;
+      return mutationScope.createContext(sharingRequestTokenRef.current);
+    },
+    onSuccess: async (view, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, sharingRequestTokenRef.current)) return;
       const nextSharing = view as OCISharingView | undefined;
       const nextRequests = Array.isArray(nextSharing?.preauthenticatedRequests)
         ? nextSharing.preauthenticatedRequests
@@ -164,9 +204,12 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
           })),
       );
       message.success("Sharing updated");
-      await refreshState();
+      await refreshState(context.apiToken);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, sharingRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const headerTags: string[] = [];
@@ -188,15 +231,24 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
         : 0
     }`,
   );
+  const anyMutationPending =
+    publicExposureMutation.isPending ||
+    versioningMutation.isPending ||
+    protectionMutation.isPending ||
+    sharingMutation.isPending;
+  const handleClose = () => {
+    if (anyMutationPending) return;
+    props.onClose();
+  };
 
   return (
     <BucketGovernanceDialogShell
       mobile={props.isMobile}
       title={`Controls: ${props.bucket}`}
-      onClose={props.onClose}
+      onClose={handleClose}
       footer={
         <div className={styles.footerActions}>
-          <Button onClick={props.onClose}>Close</Button>
+          <Button onClick={handleClose} disabled={anyMutationPending}>Close</Button>
         </div>
       }
     >
@@ -204,13 +256,7 @@ export function BucketGovernanceOCIControls(props: GovernanceControlsCommonProps
         title="OCI Controls"
         description="Manage OCI bucket visibility, versioning, and retention rules from the typed controls surface."
         tags={headerTags}
-        isRefreshing={
-          props.isFetching ||
-          publicExposureMutation.isPending ||
-          versioningMutation.isPending ||
-          protectionMutation.isPending ||
-          sharingMutation.isPending
-        }
+        isRefreshing={props.isFetching || anyMutationPending}
       />
 
       {renderWarningStack(extractWarningList(props.governance))}

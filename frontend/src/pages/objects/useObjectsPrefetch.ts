@@ -36,6 +36,7 @@ export function useObjectsPrefetch({
 	prefixByBucketRef,
 	pageSize,
 }: UseObjectsPrefetchParams): { handleBucketDropdownVisibleChange: (open: boolean) => void } {
+	const prefetchScopeKey = `${apiToken}:${profileId ?? ''}:${profileProvider ?? ''}:${objectsCostMode}`
 	const prefetchObjectsPage = useCallback(
 		async (bucketName: string) => {
 			if (!profileId || !bucketName) return
@@ -95,18 +96,31 @@ export function useObjectsPrefetch({
 	const prefetchQueueRef = useRef<string[]>([])
 	const prefetchInFlightRef = useRef(0)
 	const prefetchStartedRef = useRef(false)
+	const prefetchGenerationRef = useRef(0)
+	const lastPrefetchScopeKeyRef = useRef<string | null>(null)
 
-	const pumpPrefetchQueue = useCallback(function pumpPrefetchQueueInternal() {
+	const pumpPrefetchQueue = useCallback(function pumpPrefetchQueueInternal(generation: number) {
+		if (generation !== prefetchGenerationRef.current) return
 		const maxConcurrent = 2
 		if (prefetchInFlightRef.current >= maxConcurrent) return
 		const next = prefetchQueueRef.current.shift()
 		if (!next) return
 		prefetchInFlightRef.current += 1
 		void prefetchObjectsPage(next).finally(() => {
-			prefetchInFlightRef.current -= 1
-			pumpPrefetchQueueInternal()
+			if (generation !== prefetchGenerationRef.current) return
+			prefetchInFlightRef.current = Math.max(0, prefetchInFlightRef.current - 1)
+			pumpPrefetchQueueInternal(generation)
 		})
 	}, [prefetchObjectsPage])
+
+	useEffect(() => {
+		if (lastPrefetchScopeKeyRef.current === prefetchScopeKey) return
+		lastPrefetchScopeKeyRef.current = prefetchScopeKey
+		prefetchGenerationRef.current += 1
+		prefetchQueueRef.current = []
+		prefetchInFlightRef.current = 0
+		prefetchStartedRef.current = false
+	}, [prefetchScopeKey])
 
 	useEffect(() => {
 		if (prefetchStartedRef.current) return
@@ -119,17 +133,30 @@ export function useObjectsPrefetch({
 		const queue = names.filter((name) => name !== bucket).slice(0, plan.initial)
 		if (queue.length === 0) return
 		prefetchQueueRef.current = queue
-		const schedule = (cb: () => void) => {
+		const generation = prefetchGenerationRef.current
+		const schedule = (cb: () => void): (() => void) => {
 			const idleCallback = (window as typeof window & {
 				requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+				cancelIdleCallback?: (handle: number) => void
 			}).requestIdleCallback
 			if (idleCallback) {
-				idleCallback(cb, { timeout: 1500 })
-				return
+				const idleHandle = idleCallback(cb, { timeout: 1500 })
+				return () => {
+					;(window as typeof window & {
+						cancelIdleCallback?: (handle: number) => void
+					}).cancelIdleCallback?.(idleHandle)
+				}
 			}
-			window.setTimeout(cb, 300)
+			const timeoutId = window.setTimeout(cb, 300)
+			return () => {
+				window.clearTimeout(timeoutId)
+			}
 		}
-		schedule(() => pumpPrefetchQueue())
+		const cancelScheduledPrefetch = schedule(() => {
+			if (generation !== prefetchGenerationRef.current) return
+			pumpPrefetchQueue(generation)
+		})
+		return cancelScheduledPrefetch
 	}, [bucket, bucketOptions, objectsCostMode, profileId, profileProvider, pumpPrefetchQueue])
 
 	return { handleBucketDropdownVisibleChange }

@@ -68,7 +68,7 @@ export function useObjectsScreenPreviewState({
 	setLastSelectedObjectKey,
 	setDetailsDrawerOpen,
 }: Args) {
-	const previewScopeKey = `${profileId ?? ''}:${bucket}`
+	const previewScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}`
 	const [largePreviewSession, setLargePreviewSession] = useState<{ scopeKey: string; key: string | null; open: boolean }>({
 		scopeKey: previewScopeKey,
 		key: null,
@@ -111,6 +111,7 @@ export function useObjectsScreenPreviewState({
 
 	const detailsPreview: PreviewState = useObjectPreview({
 		api,
+		apiToken,
 		profileId,
 		bucket,
 		detailsKey,
@@ -130,6 +131,7 @@ export function useObjectsScreenPreviewState({
 	const largePreviewMeta = largePreviewMetaQueryRaw.data ?? null
 	const largePreviewPreviewState: PreviewState = useObjectPreview({
 		api,
+		apiToken,
 		profileId,
 		bucket,
 		detailsKey: largePreviewKey,
@@ -170,7 +172,7 @@ export function useObjectsScreenPreviewState({
 		return () => {
 			thumbnailCache.clear()
 		}
-	}, [bucket, profileId, thumbnailCache])
+	}, [apiToken, bucket, profileId, thumbnailCache])
 
 	useEffect(() => {
 		if (!showThumbnails) {
@@ -192,6 +194,7 @@ export function useObjectsScreenPreviewState({
 		shouldRenderInlineDetailsThumbnail ? (
 			<ObjectThumbnail
 				api={api}
+				apiToken={apiToken}
 				profileId={profileId}
 				bucket={bucket}
 				objectKey={detailsKey}
@@ -209,6 +212,7 @@ export function useObjectsScreenPreviewState({
 		shouldRenderInlineDetailsThumbnail ? (
 			<ObjectThumbnail
 				api={api}
+				apiToken={apiToken}
 				profileId={profileId}
 				bucket={bucket}
 				objectKey={detailsKey}
@@ -231,6 +235,7 @@ export function useObjectsScreenPreviewState({
 		isImageKey(largePreviewKey) ? (
 			<ObjectThumbnail
 				api={api}
+				apiToken={apiToken}
 				profileId={profileId}
 				bucket={bucket}
 				objectKey={largePreviewKey}

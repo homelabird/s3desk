@@ -5,6 +5,7 @@ import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import { normalizePrefix } from './objectsListUtils'
 
 type UseObjectsBreadcrumbItemsArgs = {
+	scopeKey: string
 	bucket: string
 	prefix: string
 	isMd: boolean
@@ -20,6 +21,7 @@ type UseObjectsBreadcrumbItemsArgs = {
 type BreadcrumbItem = { title: ReactNode }
 
 export function useObjectsBreadcrumbItems({
+	scopeKey,
 	bucket,
 	prefix,
 	isMd,
@@ -87,7 +89,7 @@ export function useObjectsBreadcrumbItems({
 			items.push({
 				title: wrap(
 					collapsedPrefix,
-					<ObjectsMenuPopover menu={menu}>
+					<ObjectsMenuPopover menu={menu} scopeKey={scopeKey}>
 						{({ toggle, open }) => (
 							<button
 								type="button"
@@ -136,6 +138,7 @@ export function useObjectsBreadcrumbItems({
 		onDndTargetDragOver,
 		onDndTargetDrop,
 		prefix,
+		scopeKey,
 	])
 
 	return { breadcrumbItems }

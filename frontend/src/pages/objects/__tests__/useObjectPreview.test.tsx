@@ -39,6 +39,7 @@ describe('useObjectPreview', () => {
 		const { result, unmount } = renderHook(() =>
 			useObjectPreview({
 				api,
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				detailsKey: 'clip.mp4',
@@ -80,6 +81,7 @@ describe('useObjectPreview', () => {
 	it('uses persistent local cache for video previews before requesting a new thumbnail', async () => {
 		const cacheKey = buildThumbnailCacheKey(
 			buildObjectThumbnailRequest({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				objectKey: 'clip.mp4',
@@ -107,6 +109,7 @@ describe('useObjectPreview', () => {
 		const { result, unmount } = renderHook(() =>
 			useObjectPreview({
 				api,
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				detailsKey: 'clip.mp4',
@@ -146,6 +149,7 @@ describe('useObjectPreview', () => {
 		const { result } = renderHook(() =>
 			useObjectPreview({
 				api,
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				detailsKey: 'report.txt',
@@ -188,6 +192,7 @@ describe('useObjectPreview', () => {
 		const { result } = renderHook(() =>
 			useObjectPreview({
 				api,
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				detailsKey: 'image.png',
@@ -240,6 +245,7 @@ describe('useObjectPreview', () => {
 		const { result } = renderHook(() =>
 			useObjectPreview({
 				api,
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				detailsKey: 'clip.gif',
@@ -276,5 +282,126 @@ describe('useObjectPreview', () => {
 			contentType: 'image/gif',
 		}))
 		expect(fetchSpy).toHaveBeenCalledTimes(1)
+	})
+
+	it('ignores stale preview responses after the profile changes with the same object key', async () => {
+		let resolveFetch: ((response: Response) => void) | null = null
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+			() =>
+				new Promise<Response>((resolve) => {
+					resolveFetch = resolve
+				}),
+		)
+		const getObjectDownloadURL = vi.fn().mockResolvedValue({
+			url: 'http://storage.local/direct.png',
+			expiresAt: '2026-03-09T00:00:00Z',
+		})
+		const api = createMockApiClient({ objects: { getObjectDownloadURL } })
+
+		const { result, rerender } = renderHook(
+			({ apiToken, profileId }: { apiToken: string; profileId: string | null }) =>
+				useObjectPreview({
+					api,
+					apiToken,
+					profileId,
+					bucket: 'bucket-a',
+					detailsKey: 'image.png',
+					detailsVisible: true,
+					detailsMeta: {
+						key: 'image.png',
+						contentType: 'image/png',
+						size: 1024,
+					} as never,
+					downloadLinkProxyEnabled: false,
+					presignedDownloadSupported: true,
+				}),
+			{ initialProps: { apiToken: 'token-a', profileId: 'profile-1' } },
+		)
+
+		await act(async () => {
+			void result.current.loadPreview()
+			await Promise.resolve()
+		})
+
+		expect(result.current.preview?.status).toBe('loading')
+		expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+		rerender({ apiToken: 'token-a', profileId: 'profile-2' })
+
+		expect(result.current.preview).toBeNull()
+
+		await act(async () => {
+			resolveFetch?.(
+				new Response(new Blob(['png'], { type: 'image/png' }), {
+					status: 200,
+					headers: { 'content-type': 'image/png' },
+				}),
+			)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		expect(result.current.preview).toBeNull()
+		expect(getObjectDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'profile-1' }))
+	})
+
+	it('ignores stale preview responses after the api token changes with the same object key', async () => {
+		let resolveFetch: ((response: Response) => void) | null = null
+		vi.spyOn(globalThis, 'fetch').mockImplementation(
+			() =>
+				new Promise<Response>((resolve) => {
+					resolveFetch = resolve
+				}),
+		)
+		const getObjectDownloadURL = vi.fn().mockResolvedValue({
+			url: 'http://storage.local/direct.png',
+			expiresAt: '2026-03-09T00:00:00Z',
+		})
+		const api = createMockApiClient({ objects: { getObjectDownloadURL } })
+
+		const { result, rerender } = renderHook(
+			({ apiToken }: { apiToken: string }) =>
+				useObjectPreview({
+					api,
+					apiToken,
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					detailsKey: 'image.png',
+					detailsVisible: true,
+					detailsMeta: {
+						key: 'image.png',
+						contentType: 'image/png',
+						size: 1024,
+					} as never,
+					downloadLinkProxyEnabled: false,
+					presignedDownloadSupported: true,
+				}),
+			{ initialProps: { apiToken: 'token-a' } },
+		)
+
+		await act(async () => {
+			void result.current.loadPreview()
+			await Promise.resolve()
+		})
+
+		expect(result.current.preview?.status).toBe('loading')
+
+		rerender({ apiToken: 'token-b' })
+
+		expect(result.current.preview).toBeNull()
+
+		await act(async () => {
+			resolveFetch?.(
+				new Response(new Blob(['png'], { type: 'image/png' }), {
+					status: 200,
+					headers: { 'content-type': 'image/png' },
+				}),
+			)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		expect(result.current.preview).toBeNull()
+		expect(getObjectDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'profile-1' }))
 	})
 })

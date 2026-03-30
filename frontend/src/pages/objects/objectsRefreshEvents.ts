@@ -3,6 +3,7 @@ import { normalizePrefix } from './objectsListUtils'
 export const objectsRefreshEventName = 's3desk:objects-refresh'
 
 export type ObjectsRefreshEventDetail = {
+	apiToken: string
 	profileId: string
 	bucket: string
 	prefix: string
@@ -10,6 +11,7 @@ export type ObjectsRefreshEventDetail = {
 }
 
 type ActiveObjectsLocation = {
+	apiToken: string
 	profileId: string
 	bucket: string
 	prefix: string
@@ -28,6 +30,7 @@ export function publishObjectsRefresh(detail: ObjectsRefreshEventDetail) {
 }
 
 export function isObjectsRefreshRelevant(active: ActiveObjectsLocation, detail: ObjectsRefreshEventDetail): boolean {
+	if (active.apiToken !== detail.apiToken) return false
 	if (active.profileId !== detail.profileId) return false
 	if (active.bucket !== detail.bucket) return false
 

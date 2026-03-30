@@ -58,6 +58,7 @@ type ObjectsQueryLocation = {
 	profileId: string
 	bucket: string
 	changedPrefix: string
+	apiToken: string
 }
 
 function isPrefixRelated(queryPrefix: string, changedPrefix: string): boolean {
@@ -75,6 +76,7 @@ export function isObjectsQueryKeyRelevantToPrefix(
 	if (queryKey[0] !== 'objects') return false
 	if (queryKey[1] !== location.profileId) return false
 	if (queryKey[2] !== location.bucket) return false
+	if (queryKey[4] !== location.apiToken) return false
 	const queryPrefix = typeof queryKey[3] === 'string' ? queryKey[3] : ''
 	return isPrefixRelated(queryPrefix, location.changedPrefix)
 }

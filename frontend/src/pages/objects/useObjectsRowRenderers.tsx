@@ -11,6 +11,7 @@ import type { ContextMenuMatch, ContextMenuPoint, ContextMenuState } from './use
 
 type UseObjectsRowRenderersArgs = {
 	api: APIClient
+	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
 	bucket: string
@@ -55,6 +56,7 @@ type UseObjectsRowRenderersArgs = {
 
 export function useObjectsRowRenderers({
 	api,
+	apiToken,
 	profileId,
 	profileProvider,
 	bucket,
@@ -208,6 +210,7 @@ export function useObjectsRowRenderers({
 					onRowDragEnd={clearDndHover}
 					onToggleFavorite={toggleFavorite}
 					api={api}
+					apiToken={apiToken}
 					profileId={profileId}
 					profileProvider={profileProvider}
 					bucket={bucket}
@@ -218,6 +221,7 @@ export function useObjectsRowRenderers({
 		},
 		[
 			api,
+			apiToken,
 			bucket,
 			canDragDrop,
 			clearDndHover,

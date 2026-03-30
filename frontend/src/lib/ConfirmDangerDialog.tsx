@@ -12,6 +12,7 @@ type Props = {
 	confirmHint?: string
 	okText?: string
 	dialogPreferenceKey?: string
+	scopeApiToken?: string | null
 	onConfirm: () => Promise<void> | void
 	onClose: () => void
 }
@@ -33,7 +34,7 @@ export function ConfirmDangerDialog(props: Props) {
 		try {
 			await props.onConfirm()
 			if (dismissNextTime && props.dialogPreferenceKey) {
-				setDialogDismissed(props.dialogPreferenceKey, true)
+				setDialogDismissed(props.dialogPreferenceKey, true, props.scopeApiToken)
 			}
 			props.onClose()
 		} catch {

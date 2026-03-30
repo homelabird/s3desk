@@ -2,7 +2,7 @@ import type { UploadFileItem } from '../../api/client'
 import type { UploadTask } from './transferTypes'
 import type { QueueUploadFilesArgs } from './transfersTypes'
 import { buildUploadItems } from './transfersUploadUtils'
-import { normalizeRelPath } from './uploadPaths'
+import { normalizeRelPath, normalizeUploadPath } from './uploadPaths'
 
 export function buildQueuedUpload(args: { taskId: string; queueArgs: QueueUploadFilesArgs }): {
 	items: UploadFileItem[]
@@ -14,14 +14,16 @@ export function buildQueuedUpload(args: { taskId: string; queueArgs: QueueUpload
 	const items = buildUploadItems(files, { directorySelectionMode: args.queueArgs.directorySelectionMode })
 	const totalBytes = items.reduce((sum, item) => sum + (item.file.size ?? 0), 0)
 	const filePaths = items.map((item) => normalizeRelPath(item.relPath ?? item.file.name)).filter(Boolean)
+	const bucket = args.queueArgs.bucket.trim()
+	const prefix = normalizeUploadPath(args.queueArgs.prefix)
 
 	return {
 		items,
 		task: {
 			id: args.taskId,
 			profileId: args.queueArgs.profileId,
-			bucket: args.queueArgs.bucket,
-			prefix: args.queueArgs.prefix,
+			bucket,
+			prefix,
 			fileCount: items.length,
 			status: 'queued',
 			createdAtMs: Date.now(),

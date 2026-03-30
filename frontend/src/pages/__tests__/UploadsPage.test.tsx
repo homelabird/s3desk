@@ -177,6 +177,55 @@ describe('UploadsPage', () => {
 		expect(screen.getByText('No files or folders selected.')).toBeInTheDocument()
 	})
 
+	it('reads bucket and prefix from the active profile scope', async () => {
+		mockUploadsPageBase({
+			profile: {
+				id: 'profile-1',
+				name: 'Primary Profile',
+				provider: 's3_compatible',
+				endpoint: 'http://127.0.0.1:9000',
+				region: 'us-east-1',
+				forcePathStyle: false,
+			},
+		})
+		window.localStorage.setItem('uploads:profile-1:bucket', JSON.stringify('alpha-bucket'))
+		window.localStorage.setItem('uploads:profile-1:prefix', JSON.stringify('alpha/'))
+		window.localStorage.setItem('uploads:profile-2:bucket', JSON.stringify('beta-bucket'))
+		window.localStorage.setItem('uploads:profile-2:prefix', JSON.stringify('beta/'))
+
+		const transfersValue = { ...transfersStub }
+		const client = createClient()
+		const view = render(
+			<QueryClientProvider client={client}>
+				<TransfersContext.Provider value={transfersValue}>
+					<MemoryRouter initialEntries={['/uploads']}>
+						<Routes>
+							<Route path="/uploads" element={<UploadsPage apiToken="token" profileId="profile-1" />} />
+						</Routes>
+					</MemoryRouter>
+				</TransfersContext.Provider>
+			</QueryClientProvider>,
+		)
+
+		await waitFor(() => expect(screen.getByLabelText('Bucket')).toHaveValue('alpha-bucket'))
+		expect(screen.getByLabelText('Upload prefix (optional)')).toHaveValue('alpha/')
+
+		view.rerender(
+			<QueryClientProvider client={client}>
+				<TransfersContext.Provider value={transfersValue}>
+					<MemoryRouter initialEntries={['/uploads']}>
+						<Routes>
+							<Route path="/uploads" element={<UploadsPage apiToken="token" profileId="profile-2" />} />
+						</Routes>
+					</MemoryRouter>
+				</TransfersContext.Provider>
+			</QueryClientProvider>,
+		)
+
+		await waitFor(() => expect(screen.getByLabelText('Bucket')).toHaveValue('beta-bucket'))
+		expect(screen.getByLabelText('Upload prefix (optional)')).toHaveValue('beta/')
+	})
+
 	it('shows the provider-disabled state and disables upload actions', async () => {
 		const { listProfiles, listBuckets } = mockUploadsPageBase()
 		const getMeta = vi.fn().mockResolvedValue({

@@ -15,6 +15,33 @@ type PersistedTransfers = {
 const TRANSFERS_STORAGE_KEY = 'transfersHistoryV1'
 const MAX_PERSISTED_TRANSFERS = 200
 
+function parsePersistedTransfers(raw: string | null): PersistedTransfers | null {
+	if (!raw) return null
+	try {
+		const parsed = JSON.parse(raw) as PersistedTransfers
+		if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.downloads) || !Array.isArray(parsed.uploads)) {
+			return null
+		}
+		return parsed
+	} catch {
+		return null
+	}
+}
+
+export function clearPersistedTransfersStorage() {
+	if (typeof window === 'undefined') return
+	try {
+		window.sessionStorage.removeItem(TRANSFERS_STORAGE_KEY)
+	} catch {
+		// ignore
+	}
+	try {
+		window.localStorage.removeItem(TRANSFERS_STORAGE_KEY)
+	} catch {
+		// ignore
+	}
+}
+
 const isActiveDownloadStatus = (status: DownloadTask['status']) =>
 	status === 'queued' || status === 'waiting' || status === 'running'
 
@@ -56,13 +83,26 @@ const toPersistedUploadTask = (task: UploadTask): PersistedUploadTask => {
 const loadPersistedTransfers = (): PersistedTransfers | null => {
 	if (typeof window === 'undefined') return null
 	try {
-		const raw = window.localStorage.getItem(TRANSFERS_STORAGE_KEY)
-		if (!raw) return null
-		const parsed = JSON.parse(raw) as PersistedTransfers
-		if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.downloads) || !Array.isArray(parsed.uploads)) {
-			return null
+		const sessionParsed = parsePersistedTransfers(window.sessionStorage.getItem(TRANSFERS_STORAGE_KEY))
+		if (sessionParsed) return sessionParsed
+	} catch {
+		// ignore
+	}
+	try {
+		const legacyRaw = window.localStorage.getItem(TRANSFERS_STORAGE_KEY)
+		const legacyParsed = parsePersistedTransfers(legacyRaw)
+		if (!legacyParsed) return null
+		try {
+			window.sessionStorage.setItem(TRANSFERS_STORAGE_KEY, legacyRaw as string)
+		} catch {
+			// ignore
 		}
-		return parsed
+		try {
+			window.localStorage.removeItem(TRANSFERS_STORAGE_KEY)
+		} catch {
+			// ignore
+		}
+		return legacyParsed
 	} catch {
 		return null
 	}
@@ -106,7 +146,7 @@ export function useTransfersPersistence({
 			uploads,
 		}
 		try {
-			window.localStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
+			window.sessionStorage.setItem(TRANSFERS_STORAGE_KEY, JSON.stringify(payload))
 		} catch {
 			// ignore
 		}

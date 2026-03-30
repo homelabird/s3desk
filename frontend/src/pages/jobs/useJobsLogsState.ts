@@ -6,10 +6,12 @@ import type { MutableRefObject } from 'react'
 import { type APIClient } from '../../api/client'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 type UseJobsLogsStateArgs = {
 	api: APIClient
+	apiToken: string
 	profileId: string | null
 	maxLogLines?: number
 }
@@ -39,24 +41,37 @@ export type JobsLogsState = {
 	clearLogsForJob: (jobId: string) => void
 }
 
-export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobsLogsStateArgs): JobsLogsState {
+export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 }: UseJobsLogsStateArgs): JobsLogsState {
+	const currentScopeKey = `${apiToken || 'none'}:${profileId ?? 'none'}`
 	const [logsOpen, setLogsOpen] = useState(false)
 	const [activeLogJobId, setActiveLogJobId] = useState<string | null>(null)
 	const [logByJobId, setLogByJobId] = useState<Record<string, string[]>>({})
 	const [logSearchQuery, setLogSearchQuery] = useState('')
-	const [followLogs, setFollowLogs] = useLocalStorageState('jobsFollowLogs', true)
+	const [followLogs, setFollowLogs] = useLocalStorageState(
+		profileScopedStorageKey('jobs', apiToken, profileId, 'followLogs'),
+		true,
+		{
+			legacyLocalStorageKey: 'jobsFollowLogs',
+			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'followLogs')],
+		},
+	)
 	const logsContainerRef = useRef<HTMLDivElement | null>(null)
 	const logOffsetsRef = useRef<Record<string, number>>({})
 	const logRemaindersRef = useRef<Record<string, string>>({})
 	const logPollDelayRef = useRef<number>(1500)
 	const logPollFailuresRef = useRef<number>(0)
+	const logRequestTokenRef = useRef(0)
 	const [logPollFailures, setLogPollFailures] = useState(0)
 	const [logPollPaused, setLogPollPaused] = useState(false)
 	const [logPollRetryToken, setLogPollRetryToken] = useState(0)
+	const lastScopeKeyRef = useRef(currentScopeKey)
 
 	const logPollBaseMs = 1500
 	const logPollMaxMs = 20_000
 	const logPollPauseAfter = 3
+	const invalidateLogRequests = useCallback(() => {
+		logRequestTokenRef.current += 1
+	}, [])
 
 	const resetLogPolling = useCallback(() => {
 		logPollFailuresRef.current = 0
@@ -71,11 +86,12 @@ export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobs
 	}, [resetLogPolling])
 
 	const logsMutation = useMutation({
-		mutationFn: (jobId: string) => {
+		mutationFn: ({ jobId }: { jobId: string; requestToken: number }) => {
 			if (!profileId) throw new Error('profile is required')
 			return api.jobs.getJobLogsTail(profileId, jobId, 256 * 1024)
 		},
-		onSuccess: ({ text, nextOffset }, jobId) => {
+		onSuccess: ({ text, nextOffset }, { jobId, requestToken }) => {
+			if (requestToken !== logRequestTokenRef.current) return
 			const lines = text
 				.split('\n')
 				.map((line) => line.trimEnd())
@@ -85,34 +101,44 @@ export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobs
 			logOffsetsRef.current[jobId] = nextOffset
 			logRemaindersRef.current[jobId] = ''
 		},
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err, { requestToken }) => {
+			if (requestToken !== logRequestTokenRef.current) return
+			message.error(formatErr(err))
+		},
 	})
 
 	const refreshLogsForJob = useCallback(
 		(jobId: string) => {
-			logsMutation.mutate(jobId)
+			const requestToken = logRequestTokenRef.current + 1
+			logRequestTokenRef.current = requestToken
+			logsMutation.mutate({ jobId, requestToken })
 		},
 		[logsMutation],
 	)
 
 	const refreshActiveLogs = useCallback(() => {
 		if (!activeLogJobId) return
-		logsMutation.mutate(activeLogJobId)
+		const requestToken = logRequestTokenRef.current + 1
+		logRequestTokenRef.current = requestToken
+		logsMutation.mutate({ jobId: activeLogJobId, requestToken })
 	}, [activeLogJobId, logsMutation])
 
 	const openLogsForJob = useCallback(
 		(jobId: string) => {
 			setActiveLogJobId(jobId)
 			setLogsOpen(true)
-			logsMutation.mutate(jobId)
+			const requestToken = logRequestTokenRef.current + 1
+			logRequestTokenRef.current = requestToken
+			logsMutation.mutate({ jobId, requestToken })
 		},
 		[logsMutation],
 	)
 
 	const closeLogs = useCallback(() => {
+		invalidateLogRequests()
 		setLogsOpen(false)
 		setLogSearchQuery('')
-	}, [])
+	}, [invalidateLogRequests])
 
 	const clearLogsForJobs = useCallback((jobIds: string[]) => {
 		if (jobIds.length === 0) return
@@ -130,10 +156,11 @@ export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobs
 
 		setActiveLogJobId((prev) => {
 			if (!prev || !jobIds.includes(prev)) return prev
+			invalidateLogRequests()
 			setLogsOpen(false)
 			return null
 		})
-	}, [])
+	}, [invalidateLogRequests])
 
 	const clearLogsForJob = useCallback(
 		(jobId: string) => {
@@ -141,6 +168,19 @@ export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobs
 		},
 		[clearLogsForJobs],
 	)
+
+	useEffect(() => {
+		if (lastScopeKeyRef.current === currentScopeKey) return
+		lastScopeKeyRef.current = currentScopeKey
+		invalidateLogRequests()
+		setLogsOpen(false)
+		setActiveLogJobId(null)
+		setLogByJobId({})
+		setLogSearchQuery('')
+		logOffsetsRef.current = {}
+		logRemaindersRef.current = {}
+		resetLogPolling()
+	}, [currentScopeKey, invalidateLogRequests, resetLogPolling])
 
 	useEffect(() => {
 		if (!logsOpen || !followLogs || !activeLogJobId) {
@@ -187,6 +227,7 @@ export function useJobsLogsState({ api, profileId, maxLogLines = 2000 }: UseJobs
 			const offset = logOffsetsRef.current[jobId] ?? 0
 			try {
 				const { text, nextOffset } = await api.jobs.getJobLogsAfterOffset(profileId, jobId, offset, 128 * 1024)
+				if (stopped) return
 				if (nextOffset < offset) {
 					logOffsetsRef.current[jobId] = nextOffset
 					logRemaindersRef.current[jobId] = ''

@@ -9,7 +9,7 @@ describe('useObjectsLocationState', () => {
 	})
 
 	it('tracks location history and supports back/forward navigation', async () => {
-		const { result } = renderHook(() => useObjectsLocationState({ profileId: 'profile-1' }))
+		const { result } = renderHook(() => useObjectsLocationState({ apiToken: 'token-a', profileId: 'profile-1' }))
 
 		await waitFor(() => expect(result.current.tabs.length).toBe(1))
 		expect(result.current.prefix).toBe('')
@@ -42,7 +42,7 @@ describe('useObjectsLocationState', () => {
 	})
 
 	it('updates bookmarks and commits path draft', async () => {
-		const { result } = renderHook(() => useObjectsLocationState({ profileId: 'profile-1' }))
+		const { result } = renderHook(() => useObjectsLocationState({ apiToken: 'token-a', profileId: 'profile-1' }))
 
 		await waitFor(() => expect(result.current.tabs.length).toBe(1))
 
@@ -57,6 +57,9 @@ describe('useObjectsLocationState', () => {
 		expect(result.current.isBookmarked).toBe(true)
 
 		act(() => {
+			result.current.openPathModal()
+		})
+		act(() => {
 			result.current.setPathDraft('docs/reports')
 		})
 		act(() => {
@@ -66,8 +69,8 @@ describe('useObjectsLocationState', () => {
 	})
 
 	it('scopes stored location state by profile id', async () => {
-		const { result, rerender } = renderHook(({ profileId }) => useObjectsLocationState({ profileId }), {
-			initialProps: { profileId: 'profile-a' },
+		const { result, rerender } = renderHook(({ apiToken, profileId }) => useObjectsLocationState({ apiToken, profileId }), {
+			initialProps: { apiToken: 'token-a', profileId: 'profile-a' },
 		})
 
 		await waitFor(() => expect(result.current.tabs.length).toBe(1))
@@ -78,7 +81,7 @@ describe('useObjectsLocationState', () => {
 		expect(result.current.bucket).toBe('bucket-a')
 		expect(result.current.prefix).toBe('folder-a/')
 
-		rerender({ profileId: 'profile-b' })
+		rerender({ apiToken: 'token-a', profileId: 'profile-b' })
 		await waitFor(() => expect(result.current.tabs.length).toBe(1))
 		expect(result.current.bucket).toBe('')
 		expect(result.current.prefix).toBe('')
@@ -89,8 +92,69 @@ describe('useObjectsLocationState', () => {
 		expect(result.current.bucket).toBe('bucket-b')
 		expect(result.current.prefix).toBe('folder-b/')
 
-		rerender({ profileId: 'profile-a' })
+		rerender({ apiToken: 'token-a', profileId: 'profile-a' })
 		await waitFor(() => expect(result.current.bucket).toBe('bucket-a'))
 		expect(result.current.prefix).toBe('folder-a/')
+	})
+
+	it('scopes stored location state by api token for the same profile id', async () => {
+		const { result, rerender } = renderHook(
+			({ apiToken }: { apiToken: string }) => useObjectsLocationState({ apiToken, profileId: 'profile-a' }),
+			{ initialProps: { apiToken: 'token-a' } },
+		)
+
+		await waitFor(() => expect(result.current.tabs.length).toBe(1))
+
+		act(() => {
+			result.current.navigateToLocation('bucket-a', 'folder-a', { recordHistory: true })
+		})
+
+		rerender({ apiToken: 'token-b' })
+		await waitFor(() => expect(result.current.tabs.length).toBe(1))
+		expect(result.current.bucket).toBe('')
+		expect(result.current.prefix).toBe('')
+
+		act(() => {
+			result.current.navigateToLocation('bucket-b', 'folder-b', { recordHistory: true })
+		})
+
+		rerender({ apiToken: 'token-a' })
+		await waitFor(() => expect(result.current.bucket).toBe('bucket-a'))
+		expect(result.current.prefix).toBe('folder-a/')
+	})
+
+	it('hides the path modal when the api token changes even if the location matches', async () => {
+		const { result, rerender } = renderHook(
+			({ apiToken }: { apiToken: string }) => useObjectsLocationState({ apiToken, profileId: 'profile-a' }),
+			{ initialProps: { apiToken: 'token-a' } },
+		)
+
+		await waitFor(() => expect(result.current.tabs.length).toBe(1))
+
+		act(() => {
+			result.current.navigateToLocation('bucket-a', 'docs', { recordHistory: true })
+		})
+
+		rerender({ apiToken: 'token-b' })
+		await waitFor(() => expect(result.current.tabs.length).toBe(1))
+
+		act(() => {
+			result.current.navigateToLocation('bucket-a', 'docs', { recordHistory: true })
+		})
+		await waitFor(() => expect(result.current.bucket).toBe('bucket-a'))
+		act(() => {
+			result.current.openPathModal()
+		})
+		act(() => {
+			result.current.setPathDraft('docs/custom')
+		})
+
+		expect(result.current.pathModalOpen).toBe(true)
+		expect(result.current.pathDraft).toBe('docs/custom')
+
+		rerender({ apiToken: 'token-a' })
+
+		expect(result.current.pathModalOpen).toBe(false)
+		expect(result.current.pathDraft).toBe('docs/')
 	})
 })

@@ -462,7 +462,10 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				}
 
 				args.notifications.uploadCommitted(resp.jobId)
-				await args.queryClient.invalidateQueries({ queryKey: ['jobs'] })
+				await args.queryClient.invalidateQueries({
+					queryKey: ['jobs', current.profileId, args.apiToken],
+					exact: false,
+				})
 			} catch (err) {
 				if (err instanceof RequestAbortedError) {
 					args.updateUploadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))

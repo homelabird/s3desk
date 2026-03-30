@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, message, Typography } from 'antd'
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -32,6 +32,7 @@ type UseObjectsNewFolderArgs = {
 }
 
 type NewFolderFormValues = { name: string; allowPath: boolean }
+type NewFolderMutationArgs = NewFolderFormValues & { sessionId: number }
 type CreateFolderPlan = { parentPrefix: string; parts: string[]; key: string; visiblePrefix: string }
 
 function buildCreateFolderPlan(values: NewFolderFormValues, parentPrefix: string): CreateFolderPlan {
@@ -77,15 +78,29 @@ export function useObjectsNewFolder({
 	onOpenPrefix,
 }: UseObjectsNewFolderArgs) {
 	const queryClient = useQueryClient()
+	const currentScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
 	const [newFolderOpen, setNewFolderOpen] = useState(false)
 	const [newFolderValues, setNewFolderValues] = useState<NewFolderFormValues>({ name: '', allowPath: false })
 	const [newFolderError, setNewFolderError] = useState<string | null>(null)
 	const [newFolderPartialKey, setNewFolderPartialKey] = useState<string | null>(null)
 	const [newFolderParentPrefix, setNewFolderParentPrefix] = useState('')
+	const [newFolderStateScopeKey, setNewFolderStateScopeKey] = useState(currentScopeKey)
+	const newFolderSessionRef = useRef(0)
+	const newFolderScopeMatches = newFolderStateScopeKey === currentScopeKey
+
+	const invalidateNewFolderSession = useCallback(() => {
+		newFolderSessionRef.current += 1
+	}, [])
+
+	useEffect(() => {
+		invalidateNewFolderSession()
+	}, [apiToken, bucket, invalidateNewFolderSession, prefix, profileId])
 
 	const openNewFolder = useCallback(
 		(parentPrefixOverride?: string) => {
 			if (!profileId || !bucket) return
+			setNewFolderStateScopeKey(currentScopeKey)
+			invalidateNewFolderSession()
 			setNewFolderError(null)
 			setNewFolderPartialKey(null)
 			setNewFolderOpen(true)
@@ -93,11 +108,11 @@ export function useObjectsNewFolder({
 			setNewFolderParentPrefix(p === '/' ? '' : p)
 			setNewFolderValues({ name: '', allowPath: false })
 		},
-		[bucket, prefix, profileId],
+		[bucket, currentScopeKey, invalidateNewFolderSession, prefix, profileId],
 	)
 
 	const createFolderMutation = useMutation({
-		mutationFn: async (args: NewFolderFormValues) => {
+		mutationFn: async (args: NewFolderMutationArgs) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
 			const plan = buildCreateFolderPlan(args, newFolderParentPrefix)
@@ -116,7 +131,7 @@ export function useObjectsNewFolder({
 			}
 			return { key: last }
 		},
-		onMutate: async (values: NewFolderFormValues) => {
+		onMutate: async (values: NewFolderMutationArgs) => {
 			if (!profileId || !bucket) return null
 
 			const parentPrefixNormalized = normalizePrefix(newFolderParentPrefix)
@@ -132,11 +147,21 @@ export function useObjectsNewFolder({
 			)
 
 			return {
+				sessionId: values.sessionId,
 				objectsQueryKey,
 				previousObjectsData: previous,
 			}
 		},
-		onSuccess: async (resp: { key: string }) => {
+		onSuccess: async (resp: { key: string }, _values, context) => {
+			if (context?.sessionId !== newFolderSessionRef.current) {
+				if (context?.objectsQueryKey) {
+					await queryClient.invalidateQueries({
+						queryKey: context.objectsQueryKey,
+						exact: true,
+					})
+				}
+				return
+			}
 			const createdKey = resp.key
 			const parentPrefixNormalized = normalizePrefix(newFolderParentPrefix)
 			const currentPrefixNormalized = normalizePrefix(prefix)
@@ -182,6 +207,7 @@ export function useObjectsNewFolder({
 					profileId,
 					bucket,
 					changedPrefix: createdKey,
+					apiToken,
 				})
 				if (parentIsCurrent && !viewHideReason && !createdOutsideView) {
 					const refreshed = await api.objects.listObjects({
@@ -195,6 +221,7 @@ export function useObjectsNewFolder({
 				}
 			}
 
+			setNewFolderStateScopeKey(currentScopeKey)
 			setNewFolderOpen(false)
 			setNewFolderValues({ name: '', allowPath: false })
 			setNewFolderPartialKey(null)
@@ -270,6 +297,7 @@ export function useObjectsNewFolder({
 			if (context?.objectsQueryKey) {
 				queryClient.setQueryData(context.objectsQueryKey, context.previousObjectsData)
 			}
+			if (context?.sessionId !== newFolderSessionRef.current) return
 			const partialKey =
 				typeof (err as { partialKey?: unknown })?.partialKey === 'string' && (err as { partialKey?: string }).partialKey
 					? (err as { partialKey?: string }).partialKey!
@@ -281,28 +309,34 @@ export function useObjectsNewFolder({
 
 	const handleNewFolderSubmit = useCallback(
 		(values: NewFolderFormValues) => {
+			if (!newFolderScopeMatches) return
 			setNewFolderError(null)
 			setNewFolderPartialKey(null)
-			createFolderMutation.mutate(values)
+			createFolderMutation.mutate({
+				...values,
+				sessionId: newFolderSessionRef.current,
+			})
 		},
-		[createFolderMutation],
+		[createFolderMutation, newFolderScopeMatches],
 	)
 
 	const handleNewFolderCancel = useCallback(() => {
+		setNewFolderStateScopeKey(currentScopeKey)
+		invalidateNewFolderSession()
 		setNewFolderOpen(false)
 		setNewFolderError(null)
 		setNewFolderPartialKey(null)
 		setNewFolderValues({ name: '', allowPath: false })
-	}, [])
+	}, [currentScopeKey, invalidateNewFolderSession])
 
 	return {
-		newFolderOpen,
-		newFolderValues,
+		newFolderOpen: newFolderScopeMatches ? newFolderOpen : false,
+		newFolderValues: newFolderScopeMatches ? newFolderValues : { name: '', allowPath: false },
 		setNewFolderValues,
 		newFolderSubmitting: createFolderMutation.isPending,
-		newFolderError,
-		newFolderPartialKey,
-		newFolderParentPrefix,
+		newFolderError: newFolderScopeMatches ? newFolderError : null,
+		newFolderPartialKey: newFolderScopeMatches ? newFolderPartialKey : null,
+		newFolderParentPrefix: newFolderScopeMatches ? newFolderParentPrefix : '',
 		openNewFolder,
 		handleNewFolderSubmit,
 		handleNewFolderCancel,

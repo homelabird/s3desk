@@ -76,12 +76,19 @@ export function LocalPathInput(props: LocalPathInputProps) {
 	)
 
 	useEffect(() => {
-		if (!props.profileId) setOptions([])
-	}, [props.profileId])
+		fetchIdRef.current += 1
+		if (debounceRef.current) {
+			window.clearTimeout(debounceRef.current)
+			debounceRef.current = null
+		}
+		setOptions([])
+		setLoading(false)
+	}, [props.api, props.profileId])
 
 	useEffect(() => {
 		return () => {
 			if (debounceRef.current) window.clearTimeout(debounceRef.current)
+			fetchIdRef.current += 1
 		}
 	}, [])
 
@@ -93,10 +100,10 @@ export function LocalPathInput(props: LocalPathInputProps) {
 				list={`local-path-${listId}`}
 				value={props.value}
 				onChange={(e) => {
-				const next = e.target.value
-				props.onChange?.(next)
-				scheduleFetch(next)
-			}}
+					const next = e.target.value
+					props.onChange?.(next)
+					scheduleFetch(next)
+				}}
 				placeholder={props.placeholder}
 				disabled={props.disabled}
 				onFocus={() => scheduleFetch(props.value ?? '')}

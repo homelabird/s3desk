@@ -1,6 +1,6 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
 import { Button, Space, Typography, message } from 'antd'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
@@ -12,6 +12,7 @@ import type { ClipboardObjects } from './objectsActionCatalog'
 
 type UseObjectsClipboardArgs = {
 	profileId: string | null
+	apiToken: string
 	bucket: string
 	prefix: string
 	selectedKeys: Set<string>
@@ -21,6 +22,7 @@ type UseObjectsClipboardArgs = {
 
 export function useObjectsClipboard({
 	profileId,
+	apiToken,
 	bucket,
 	prefix,
 	selectedKeys,
@@ -29,6 +31,15 @@ export function useObjectsClipboard({
 }: UseObjectsClipboardArgs) {
 	const [clipboardObjects, setClipboardObjects] = useState<ClipboardObjects | null>(null)
 	const navigate = useNavigate()
+	const clipboardContextVersionRef = useRef(0)
+
+	const invalidateClipboardContext = useCallback(() => {
+		clipboardContextVersionRef.current += 1
+	}, [])
+
+	useEffect(() => {
+		invalidateClipboardContext()
+	}, [apiToken, bucket, invalidateClipboardContext, prefix, profileId])
 
 	const pasteObjectsMutation = useMutation({
 		mutationFn: async (args: {
@@ -38,6 +49,7 @@ export function useObjectsClipboard({
 			keys: string[]
 			dstBucket: string
 			dstPrefix: string
+			contextVersion: number
 		}) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
@@ -93,7 +105,17 @@ export function useObjectsClipboard({
 				},
 			})
 		},
-		onSuccess: async (job, args) => {
+		onMutate: (args) => ({
+			contextVersion: args.contextVersion,
+			scopeProfileId: profileId,
+			scopeApiToken: apiToken,
+		}),
+		onSuccess: async (job, args, context) => {
+			await queryClient.invalidateQueries({
+				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				exact: false,
+			})
+			if ((context?.contextVersion ?? args.contextVersion) !== clipboardContextVersionRef.current) return
 			message.open({
 				type: 'success',
 				content: (
@@ -109,9 +131,11 @@ export function useObjectsClipboard({
 			if (args.mode === 'move') {
 				setClipboardObjects(null)
 			}
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 		},
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err, args, context) => {
+			if ((context?.contextVersion ?? args.contextVersion) !== clipboardContextVersionRef.current) return
+			message.error(formatErr(err))
+		},
 	})
 
 	const onCopy = useCallback(async (value: string) => {
@@ -217,6 +241,7 @@ export function useObjectsClipboard({
 	}, [bucket, commonPrefixFromKeys])
 
 	const pasteClipboardObjects = useCallback(async () => {
+		const pasteContextVersion = clipboardContextVersionRef.current
 		if (!profileId) {
 			message.info('Select a profile first')
 			return
@@ -234,11 +259,13 @@ export function useObjectsClipboard({
 
 		const src = clipboardObjects ?? (await readClipboardObjectsFromSystemClipboard())
 		if (!src) return
+		if (pasteContextVersion !== clipboardContextVersionRef.current) return
 
 		setClipboardObjects(src)
 
 		const mode = src.mode
 		const doPaste = async () => {
+			if (pasteContextVersion !== clipboardContextVersionRef.current) return
 			await pasteObjectsMutation.mutateAsync({
 				mode,
 				srcBucket: src.srcBucket,
@@ -246,6 +273,7 @@ export function useObjectsClipboard({
 				keys: src.keys,
 				dstBucket: bucket,
 				dstPrefix: prefix,
+				contextVersion: pasteContextVersion,
 			})
 		}
 

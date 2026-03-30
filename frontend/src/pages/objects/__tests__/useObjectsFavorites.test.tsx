@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -23,6 +23,16 @@ function createWrapper() {
 	}
 
 	return { queryClient, Wrapper }
+}
+
+function deferred<T>() {
+	let resolve!: (value: T) => void
+	let reject!: (reason?: unknown) => void
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res
+		reject = rej
+	})
+	return { promise, resolve, reject }
 }
 
 describe('useObjectsFavorites', () => {
@@ -97,5 +107,137 @@ describe('useObjectsFavorites', () => {
 			bucket: 'bucket-a',
 			hydrate: true,
 		})
+	})
+
+	it('ignores stale favorite-add responses after the objects context changes', async () => {
+		const createFavoriteRequest = deferred<{ key: string; createdAt: string }>()
+		const api = createMockApiClient({
+			objects: {
+				listObjectFavorites: vi.fn(({ bucket, hydrate }: { bucket: string; hydrate?: boolean }) =>
+					Promise.resolve({
+						bucket,
+						prefix: '',
+						count: bucket === 'bucket-a' ? 1 : 1,
+						keys: bucket === 'bucket-a' ? ['docs/readme.txt'] : ['archive/keep.txt'],
+						hydrated: hydrate,
+						items: hydrate
+							? [
+									{
+										key: bucket === 'bucket-a' ? 'docs/readme.txt' : 'archive/keep.txt',
+										size: 12,
+										lastModified: '2026-03-09T00:00:00Z',
+										createdAt: '2026-03-09T00:00:00Z',
+									},
+								]
+							: [],
+					} as never),
+				),
+				createObjectFavorite: vi.fn().mockReturnValue(createFavoriteRequest.promise),
+				deleteObjectFavorite: vi.fn(),
+			},
+		})
+		const { Wrapper } = createWrapper()
+
+		const { result, rerender } = renderHook(
+			(props: { profileId: string | null; bucket: string }) =>
+				useObjectsFavorites({
+					api,
+					profileId: props.profileId,
+					bucket: props.bucket,
+					apiToken: 'token',
+					objectsPages: [],
+					hydrateItems: true,
+				}),
+			{
+				initialProps: { profileId: 'profile-1', bucket: 'bucket-a' },
+				wrapper: Wrapper,
+			},
+		)
+
+		await waitFor(() => expect(result.current.favoriteKeys.has('docs/readme.txt')).toBe(true))
+
+		act(() => {
+			result.current.toggleFavorite('logs/new.txt')
+		})
+
+		await waitFor(() => expect(result.current.favoritePendingKeys.has('logs/new.txt')).toBe(true))
+
+		rerender({ profileId: 'profile-2', bucket: 'bucket-b' })
+		await waitFor(() => expect(result.current.favoriteKeys.has('archive/keep.txt')).toBe(true))
+
+		await act(async () => {
+			createFavoriteRequest.resolve({ key: 'logs/new.txt', createdAt: '2026-03-10T00:00:00Z' })
+			await Promise.resolve()
+		})
+
+		expect(result.current.favoriteKeys.has('logs/new.txt')).toBe(false)
+		expect(result.current.favoriteKeys.has('archive/keep.txt')).toBe(true)
+		expect(result.current.favoritePendingKeys.size).toBe(0)
+	})
+
+	it('ignores stale favorite-remove responses after the objects context changes', async () => {
+		const deleteFavoriteRequest = deferred<void>()
+		const api = createMockApiClient({
+			objects: {
+				listObjectFavorites: vi.fn(({ bucket, hydrate }: { bucket: string; hydrate?: boolean }) =>
+					Promise.resolve({
+						bucket,
+						prefix: '',
+						count: 1,
+						keys: [bucket === 'bucket-a' ? 'docs/readme.txt' : 'archive/keep.txt'],
+						hydrated: hydrate,
+						items: hydrate
+							? [
+									{
+										key: bucket === 'bucket-a' ? 'docs/readme.txt' : 'archive/keep.txt',
+										size: 12,
+										lastModified: '2026-03-09T00:00:00Z',
+										createdAt: '2026-03-09T00:00:00Z',
+									},
+								]
+							: [],
+					} as never),
+				),
+				createObjectFavorite: vi.fn(),
+				deleteObjectFavorite: vi.fn().mockReturnValue(deleteFavoriteRequest.promise),
+			},
+		})
+		const { Wrapper } = createWrapper()
+
+		const { result, rerender } = renderHook(
+			(props: { profileId: string | null; bucket: string }) =>
+				useObjectsFavorites({
+					api,
+					profileId: props.profileId,
+					bucket: props.bucket,
+					apiToken: 'token',
+					objectsPages: [],
+					hydrateItems: true,
+				}),
+			{
+				initialProps: { profileId: 'profile-1', bucket: 'bucket-a' },
+				wrapper: Wrapper,
+			},
+		)
+
+		await waitFor(() => expect(result.current.favoriteKeys.has('docs/readme.txt')).toBe(true))
+
+		act(() => {
+			result.current.toggleFavorite('docs/readme.txt')
+		})
+
+		await waitFor(() => expect(result.current.favoritePendingKeys.has('docs/readme.txt')).toBe(true))
+
+		rerender({ profileId: 'profile-2', bucket: 'bucket-b' })
+		await waitFor(() => expect(result.current.favoriteKeys.has('archive/keep.txt')).toBe(true))
+
+		await act(async () => {
+			deleteFavoriteRequest.resolve()
+			await Promise.resolve()
+		})
+
+		expect(result.current.favoriteKeys.has('docs/readme.txt')).toBe(false)
+		expect(result.current.favoriteKeys.has('archive/keep.txt')).toBe(true)
+		expect(result.current.favoritePendingKeys.size).toBe(0)
 	})
 })

@@ -8,6 +8,7 @@ import type { ContextMenuMatch, ContextMenuPoint, ContextMenuState } from './obj
 
 export type UseObjectsGridRenderersArgs = {
 	api: APIClient
+	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
 	bucket: string

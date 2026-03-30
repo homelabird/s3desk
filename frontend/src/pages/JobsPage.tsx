@@ -15,6 +15,7 @@ type Props = {
 
 export function JobsPage(props: Props) {
 	const controller = useJobsPageController(props)
+	const jobsScopeKey = `${props.apiToken || '__no_server__'}:${props.profileId?.trim() || '__no_profile__'}`
 
 	if (!props.profileId) {
 		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view jobs" />
@@ -23,6 +24,7 @@ export function JobsPage(props: Props) {
 	return (
 		<Space orientation="vertical" size="large" className={styles.pageStack}>
 			<JobsToolbar
+				scopeKey={jobsScopeKey}
 				activeProfileName={controller.selectedProfile?.name ?? null}
 				isOffline={controller.isOffline}
 				uploadSupported={controller.uploadSupported}

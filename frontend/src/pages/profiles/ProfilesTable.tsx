@@ -7,6 +7,7 @@ import styles from '../ProfilesPage.module.css'
 import type { ProfileTableRowViewModel } from './profileViewModel'
 
 type ProfilesTableProps = {
+	scopeKey: string
 	rows: ProfileTableRowViewModel[]
 	onUseProfile: (id: string) => void
 	onEdit: (profile: Profile) => void
@@ -129,7 +130,7 @@ export function ProfilesTable(props: ProfilesTableProps) {
 								<Button type={row.isActive ? 'primary' : 'default'} onClick={() => props.onUseProfile(row.profile.id)}>
 									{row.isActive ? 'Selected' : 'Use profile'}
 								</Button>
-								<MenuPopover menu={buildRowMenu(row)} align="end">
+								<MenuPopover menu={buildRowMenu(row)} align="end" scopeKey={props.scopeKey}>
 									{({ toggle }) => (
 										<Button icon={<MoreOutlined />} aria-label={`More actions for ${row.profile.name}`} onClick={toggle}>
 											More
@@ -193,7 +194,7 @@ export function ProfilesTable(props: ProfilesTableProps) {
 											<Button size="small" type={row.isActive ? 'primary' : 'default'} onClick={() => props.onUseProfile(row.profile.id)}>
 												{row.isActive ? 'Selected' : 'Use'}
 											</Button>
-											<MenuPopover menu={buildRowMenu(row)} align="end">
+											<MenuPopover menu={buildRowMenu(row)} align="end" scopeKey={props.scopeKey}>
 												{({ toggle }) => (
 													<Button
 														size="small"

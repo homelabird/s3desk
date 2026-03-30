@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { message } from "antd";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -28,6 +29,16 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function createGovernance(provider: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_object_storage") {
   switch (provider) {
@@ -262,6 +273,10 @@ function renderModal(
   options: {
     provider?: "aws_s3" | "gcp_gcs" | "azure_blob" | "oci_object_storage";
     onOpenAdvancedPolicy?: (bucket: string) => void;
+    onClose?: () => void;
+    profileId?: string;
+    apiToken?: string;
+    bucket?: string;
   } = {},
 ) {
   const client = new QueryClient({
@@ -270,21 +285,21 @@ function renderModal(
     },
   });
 
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <BucketGovernanceModal
         api={api as never}
-        apiToken="token"
-        profileId="profile-1"
+        apiToken={options.apiToken ?? "token"}
+        profileId={options.profileId ?? "profile-1"}
         provider={options.provider ?? "aws_s3"}
-        bucket="demo-bucket"
-        onClose={vi.fn()}
+        bucket={options.bucket ?? "demo-bucket"}
+        onClose={options.onClose ?? vi.fn()}
         onOpenAdvancedPolicy={options.onOpenAdvancedPolicy}
       />
     </QueryClientProvider>,
   );
 
-  return { client };
+  return { client, ...view };
 }
 
 describe("BucketGovernanceModal", () => {
@@ -322,6 +337,82 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
+
+  it("resets unsaved controls state when the profile context changes", async () => {
+    const firstGovernance = createGovernance("aws_s3");
+    const secondGovernance = {
+      ...createGovernance("aws_s3"),
+      access: {
+        provider: "aws_s3" as const,
+        bucket: "demo-bucket",
+        objectOwnership: {
+          supported: true,
+          mode: "bucket_owner_enforced" as const,
+        },
+      },
+      publicExposure: {
+        provider: "aws_s3" as const,
+        bucket: "demo-bucket",
+        mode: "private" as const,
+        blockPublicAccess: {
+          blockPublicAcls: true,
+          ignorePublicAcls: true,
+          blockPublicPolicy: true,
+          restrictPublicBuckets: true,
+        },
+      },
+    };
+    const api = createApi("aws_s3", {
+      getBucketGovernance: vi
+        .fn()
+        .mockResolvedValueOnce(firstGovernance)
+        .mockResolvedValueOnce(secondGovernance),
+    });
+
+    const view = renderModal(api, { provider: "aws_s3" });
+
+    const publicExposureSection = await screen.findByTestId(
+      "bucket-governance-public-exposure",
+    );
+    const blockPublicPolicySwitch = within(publicExposureSection).getByRole(
+      "switch",
+      {
+        name: "Block public bucket policies",
+      },
+    );
+    expect(blockPublicPolicySwitch).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(blockPublicPolicySwitch);
+    expect(blockPublicPolicySwitch).toHaveAttribute("aria-checked", "false");
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketGovernanceModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-2"
+          provider="aws_s3"
+          bucket="demo-bucket"
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(api.buckets.getBucketGovernance).toHaveBeenCalledWith(
+        "profile-2",
+        "demo-bucket",
+      ),
+    );
+
+    await waitFor(() => {
+      expect(
+        within(
+          screen.getByTestId("bucket-governance-public-exposure"),
+        ).getByRole("switch", { name: "Block public bucket policies" }),
+      ).toHaveAttribute("aria-checked", "true");
+    });
   }, SLOW_GOVERNANCE_TIMEOUT_MS);
 
   it("updates encryption with sse_kms and kms key", async () => {
@@ -417,6 +508,110 @@ describe("BucketGovernanceModal", () => {
       ),
     );
   });
+
+  it.each([
+    "aws_s3",
+    "gcp_gcs",
+    "azure_blob",
+    "oci_object_storage",
+  ] as const)(
+    "blocks closing the %s controls modal while a save is pending",
+    async (provider) => {
+      const pendingSave = new Promise<void>(() => {});
+      const api = createApi(provider, {
+        putBucketPublicExposure: vi.fn().mockReturnValue(pendingSave),
+      });
+      const onClose = vi.fn();
+
+      renderModal(api, { provider, onClose });
+
+      const publicExposureSection = await screen.findByTestId(
+        "bucket-governance-public-exposure",
+      );
+      fireEvent.click(
+        within(publicExposureSection).getByRole("button", { name: "Save" }),
+      );
+
+      await waitFor(() =>
+        expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledTimes(1),
+      );
+
+      const closeButtons = screen.getAllByRole("button", {
+        name: "Close",
+      }) as HTMLButtonElement[];
+      const footerCloseButton = closeButtons.find((button) => button.disabled);
+
+      expect(footerCloseButton).toBeDefined();
+      expect(footerCloseButton).toBeDisabled();
+      closeButtons.forEach((button) => {
+        fireEvent.click(button);
+      });
+      expect(onClose).not.toHaveBeenCalled();
+    },
+    SLOW_GOVERNANCE_TIMEOUT_MS,
+  );
+
+  it.each([
+    "aws_s3",
+    "gcp_gcs",
+    "azure_blob",
+    "oci_object_storage",
+  ] as const)(
+    "ignores stale %s public exposure responses after the modal context changes",
+    async (provider) => {
+      const pendingSave = deferred<void>();
+      const api = createApi(provider, {
+        putBucketPublicExposure: vi.fn().mockReturnValue(pendingSave.promise),
+      });
+      const { client, rerender } = renderModal(api, {
+        provider,
+        profileId: "profile-1",
+        apiToken: "token-a",
+      });
+      const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+
+      const publicExposureSection = await screen.findByTestId(
+        "bucket-governance-public-exposure",
+      );
+      fireEvent.click(
+        within(publicExposureSection).getByRole("button", { name: "Save" }),
+      );
+
+      await waitFor(() =>
+        expect(api.buckets.putBucketPublicExposure).toHaveBeenCalledTimes(1),
+      );
+
+      rerender(
+        <QueryClientProvider client={client}>
+          <BucketGovernanceModal
+            api={api as never}
+            apiToken="token-b"
+            profileId="profile-2"
+            provider={provider}
+            bucket="demo-bucket"
+            onClose={vi.fn()}
+          />
+        </QueryClientProvider>,
+      );
+
+      await waitFor(() =>
+        expect(api.buckets.getBucketGovernance).toHaveBeenCalledWith(
+          "profile-2",
+          "demo-bucket",
+        ),
+      );
+
+      await act(async () => {
+        pendingSave.resolve(undefined);
+        await Promise.resolve();
+      });
+
+      expect(message.success).not.toHaveBeenCalled();
+      expect(message.error).not.toHaveBeenCalled();
+      expect(invalidateSpy).not.toHaveBeenCalled();
+    },
+    SLOW_GOVERNANCE_TIMEOUT_MS,
+  );
 
   it("opens advanced policy from the AWS controls surface", async () => {
     const api = createApi("aws_s3");
@@ -514,7 +709,8 @@ describe("BucketGovernanceModal", () => {
     );
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["bucketPolicy", "profile-1", "demo-bucket"],
+        queryKey: ["bucketPolicy", "profile-1", "demo-bucket", "token"],
+        exact: true,
       }),
     );
 
@@ -913,5 +1109,87 @@ describe("BucketGovernanceModal", () => {
         },
       ),
     );
+  }, SLOW_GOVERNANCE_TIMEOUT_MS);
+
+  it("ignores stale OCI sharing responses after the modal context changes", async () => {
+    const pendingSharing = deferred<{
+      provider: "oci_object_storage";
+      bucket: string;
+      preauthenticatedSupport: true;
+      preauthenticatedRequests: Array<{
+        id: string;
+        name: string;
+        accessType: string;
+        bucketListingAction: string;
+        objectName: string;
+        timeCreated: string;
+        timeExpires: string;
+        accessUri: string;
+      }>;
+    }>();
+    const api = createApi("oci_object_storage", {
+      putBucketSharing: vi.fn().mockReturnValue(pendingSharing.promise),
+    });
+    const { client, rerender } = renderModal(api, {
+      provider: "oci_object_storage",
+      profileId: "profile-1",
+      apiToken: "token-a",
+    });
+
+    const sharingSection = await screen.findByTestId(
+      "bucket-governance-sharing",
+    );
+    fireEvent.click(
+      within(sharingSection).getByRole("button", { name: "Save" }),
+    );
+
+    await waitFor(() =>
+      expect(api.buckets.putBucketSharing).toHaveBeenCalledTimes(1),
+    );
+
+    rerender(
+      <QueryClientProvider client={client}>
+        <BucketGovernanceModal
+          api={api as never}
+          apiToken="token-b"
+          profileId="profile-2"
+          provider="oci_object_storage"
+          bucket="demo-bucket"
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(api.buckets.getBucketGovernance).toHaveBeenCalledWith(
+        "profile-2",
+        "demo-bucket",
+      ),
+    );
+
+    await act(async () => {
+      pendingSharing.resolve({
+        provider: "oci_object_storage",
+        bucket: "demo-bucket",
+        preauthenticatedSupport: true,
+        preauthenticatedRequests: [
+          {
+            id: "par-new",
+            name: "New PAR",
+            accessType: "AnyObjectRead",
+            bucketListingAction: "Deny",
+            objectName: "",
+            timeCreated: "2026-03-10T00:00:00Z",
+            timeExpires: "2026-05-01T00:00:00Z",
+            accessUri: "https://example.com/par-new",
+          },
+        ],
+      });
+      await Promise.resolve();
+    });
+
+    expect(message.success).not.toHaveBeenCalled();
+    expect(screen.queryByText("Created PAR: New PAR")).not.toBeInTheDocument();
+    expect(screen.queryByText("https://example.com/par-new")).not.toBeInTheDocument();
   }, SLOW_GOVERNANCE_TIMEOUT_MS);
 });
