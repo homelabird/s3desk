@@ -7,6 +7,13 @@ import { APIClient } from '../../api/client'
 import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
 
+vi.mock('../../api/useAPIClient', async () => {
+	const { APIClient } = await import('../../api/client')
+	return {
+		useAPIClient: () => new APIClient({ apiToken: 'test-token' }),
+	}
+})
+
 vi.mock('../profiles/profileYaml', async () => {
 	const actual = await vi.importActual<typeof import('../profiles/profileYaml')>('../profiles/profileYaml')
 	return {
@@ -402,9 +409,9 @@ describe('ProfilesPage YAML flow', () => {
 			expect(updateProfile).toHaveBeenCalledTimes(1)
 		})
 		await waitFor(() => {
-			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'token'], exact: true })
+			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'list', 'token'], exact: true })
 		})
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profileTls', 'profile-1', 'token'], exact: true })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'tls', 'profile-1', 'token'], exact: true })
 	})
 
 	it('ignores stale YAML save responses after the api token changes', async () => {

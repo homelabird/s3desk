@@ -48,6 +48,7 @@ func New(dep Dependencies) http.Handler {
 		bucketGov:       bucketgov.NewService(bucketgov.NewDefaultRegistry()),
 	}
 
+	r.Use(api.allowOnlySafeMethods)
 	r.Use(api.requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))

@@ -9,6 +9,13 @@ import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
 import type { ProfileFormValues } from '../profiles/profileTypes'
 
+vi.mock('../../api/useAPIClient', async () => {
+	const { APIClient } = await import('../../api/client')
+	return {
+		useAPIClient: () => new APIClient({ apiToken: 'test-token' }),
+	}
+})
+
 vi.mock('../profiles/profilesLazy', async () => {
 	const React = await import('react')
 

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-full}"
+REPRO_FOCUS_SCRIPT="${ROOT}/scripts/repro_backend_focus.sh"
 
 case "${MODE}" in
   fast|full) ;;
@@ -75,7 +76,9 @@ backend_go_files=()
 if command -v git >/dev/null 2>&1; then
   while IFS= read -r -d '' path; do
     [[ "${path}" == *.go ]] || continue
-    backend_go_files+=("${ROOT}/${path}")
+    abs_path="${ROOT}/${path}"
+    [[ -f "${abs_path}" ]] || continue
+    backend_go_files+=("${abs_path}")
   done < <(git -C "${ROOT}" ls-files -z -- backend)
 else
   while IFS= read -r -d '' path; do
@@ -97,7 +100,17 @@ echo "[check] backend"
 (
   cd "${ROOT}/backend"
   "${GO_BIN}" vet ./...
-  "${GO_BIN}" test ./...
+  if [[ "${MODE}" == "fast" ]]; then
+    if ! "${GO_BIN}" test ./...; then
+      if [[ -x "${REPRO_FOCUS_SCRIPT}" ]]; then
+        echo "[check] backend tests failed; running focused backend repro" >&2
+        bash "${REPRO_FOCUS_SCRIPT}" all || true
+      fi
+      exit 1
+    fi
+  else
+    "${GO_BIN}" test ./...
+  fi
   if [[ "${MODE}" == "full" ]]; then
     echo "[check] backend security analysis"
 

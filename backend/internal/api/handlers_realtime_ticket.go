@@ -7,6 +7,9 @@ import (
 )
 
 func (s *server) handleCreateRealtimeTicket(w http.ResponseWriter, r *http.Request) {
+	if s.rejectInvalidRealtimeOrigin(w, r, "realtime ticket requests require a trusted Origin") {
+		return
+	}
 	transport := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("transport")))
 	switch transport {
 	case "ws", "sse":

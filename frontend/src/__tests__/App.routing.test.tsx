@@ -15,6 +15,7 @@ vi.mock('../FullApp', () => ({
 }))
 
 import App from '../App'
+import { AuthProvider } from '../auth/AuthProvider'
 import { serverScopedStorageKey } from '../lib/profileScopedStorage'
 
 afterEach(() => {
@@ -25,9 +26,11 @@ afterEach(() => {
 
 function renderAppAtRoot() {
 	render(
-		<MemoryRouter initialEntries={['/']}>
-			<App />
-		</MemoryRouter>,
+		<AuthProvider>
+			<MemoryRouter initialEntries={['/']}>
+				<App />
+			</MemoryRouter>
+		</AuthProvider>,
 	)
 }
 

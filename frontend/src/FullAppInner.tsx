@@ -16,7 +16,12 @@ import {
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { APIClient, APIError } from './api/client'
+import { useAPIClient } from './api/useAPIClient'
+import { APIError } from './api/client'
+import { queryKeys } from './api/queryKeys'
+import { renderProfileGate } from './app/ProfileGate'
+import { renderUnauthorizedAuthGate } from './app/RequireAuth'
+import { useAuth } from './auth/useAuth'
 import { BrandLockup } from './components/BrandLockup'
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { MenuPopover } from './components/MenuPopover'
@@ -34,7 +39,6 @@ import {
 import { reloadPage } from './lib/reloadPage'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
-import { useSessionStorageState } from './lib/useSessionStorageState'
 import { useThemeMode } from './useThemeMode'
 import { clearPersistedTransfersStorage } from './components/transfers/useTransfersPersistence'
 import styles from './FullAppInner.module.css'
@@ -66,10 +70,6 @@ const SettingsDrawer = lazy(async () => {
 const KeyboardShortcutGuide = lazy(async () => {
 	const m = await import('./components/KeyboardShortcutGuide')
 	return { default: m.KeyboardShortcutGuide }
-})
-const LoginPage = lazy(async () => {
-	const m = await import('./pages/LoginPage')
-	return { default: m.LoginPage }
 })
 
 const { Header, Content, Sider } = Layout
@@ -107,7 +107,7 @@ export default function FullAppInner() {
 	const usesCompactHeader = !isDesktop
 	const { mode, toggleMode } = useThemeMode()
 
-	const [apiToken, setApiToken] = useSessionStorageState('apiToken', '', { legacyLocalStorageKey: 'apiToken' })
+	const { apiToken, setApiToken } = useAuth()
 	const profileStorageKey = useMemo(() => serverScopedStorageKey('app', apiToken, 'profileId'), [apiToken])
 	const legacyActiveProfileStorageKey = useMemo(
 		() => (shouldUseLegacyActiveProfileStorageMigration(apiToken) ? 'profileId' : undefined),
@@ -123,14 +123,14 @@ export default function FullAppInner() {
 	const previousApiTokenRef = useRef<string | null | undefined>(undefined)
 	const [searchParams, setSearchParams] = useSearchParams()
 
-	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
+	const api = useAPIClient()
 	const metaQuery = useQuery({
-		queryKey: ['meta', apiToken],
+		queryKey: queryKeys.server.meta(apiToken),
 		queryFn: () => api.server.getMeta(),
 		retry: false,
 	})
 	const profilesQuery = useQuery({
-		queryKey: ['profiles', apiToken],
+		queryKey: queryKeys.profiles.list(apiToken),
 		queryFn: () => api.profiles.listProfiles(),
 	})
 	useEffect(() => {
@@ -183,6 +183,7 @@ export default function FullAppInner() {
 		}
 		return profiles[0]?.id ?? null
 	}, [initialStoredProfileId, profileId, profilesQuery.data])
+	const profileGate = renderProfileGate({ pathname: location.pathname, profileId: safeProfileId })
 	const uploadCapabilityByProfileId = useMemo(() => {
 		const out: Record<string, { presignedUpload: boolean; directUpload: boolean }> = {}
 		const providerMatrix = metaQuery.data?.capabilities?.providers
@@ -297,19 +298,14 @@ export default function FullAppInner() {
 
 	if (metaQuery.isError) {
 		const err = metaQuery.error
-		const isUnauthorized = err instanceof APIError && err.status === 401
-		if (isUnauthorized) {
-				return (
-					<Suspense fallback={<div className={styles.fullscreenCenter}><Spin /></div>}>
-						<LoginPage
-							key={apiToken || 'empty'}
-							initialToken={apiToken}
-							onLogin={(token) => setApiToken(token)}
-							onClearSavedToken={() => setApiToken('')}
-						error={err}
-					/>
-				</Suspense>
-			)
+		const unauthorizedGate = renderUnauthorizedAuthGate({
+			error: err,
+			apiToken,
+			setApiToken,
+			fallback: <div className={styles.fullscreenCenter}><Spin /></div>,
+		})
+		if (unauthorizedGate) {
+			return unauthorizedGate
 		}
 
 		const title = err instanceof APIError ? `${err.code}: ${err.message}` : err instanceof Error ? err.message : 'Unknown error'
@@ -348,6 +344,10 @@ export default function FullAppInner() {
 				</div>
 			</div>
 		)
+	}
+
+	if (profileGate && !profilesQuery.isPending) {
+		return profileGate
 	}
 
 	return (

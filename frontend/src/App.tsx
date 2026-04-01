@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 
+import { useAuth } from './auth/useAuth'
 import { readLegacyActiveProfileIdForMigration, serverScopedStorageKey } from './lib/profileScopedStorage'
 import styles from './App.module.css'
 import LightApp from './LightApp'
@@ -32,11 +33,6 @@ function readStoredString(storage: Storage, key: string): string | null {
 	}
 }
 
-function readStoredApiToken(): string {
-	if (typeof window === 'undefined') return ''
-	return readStoredString(window.sessionStorage, 'apiToken') ?? readStoredString(window.localStorage, 'apiToken') ?? ''
-}
-
 function readStoredProfileId(apiToken: string): string | null {
 	if (typeof window === 'undefined') return null
 	return (
@@ -47,9 +43,9 @@ function readStoredProfileId(apiToken: string): string | null {
 
 export default function App() {
 	const location = useLocation()
+	const { apiToken } = useAuth()
 
 	if (location.pathname === '/') {
-		const apiToken = readStoredApiToken()
 		return <Navigate to={readStoredProfileId(apiToken) ? '/objects' : '/setup'} replace />
 	}
 

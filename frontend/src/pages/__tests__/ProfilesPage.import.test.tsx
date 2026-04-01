@@ -8,6 +8,13 @@ import { APIClient } from '../../api/client'
 import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
 
+vi.mock('../../api/useAPIClient', async () => {
+	const { APIClient } = await import('../../api/client')
+	return {
+		useAPIClient: () => new APIClient({ apiToken: 'test-token' }),
+	}
+})
+
 vi.mock('antd', async () => {
 	const actual = await vi.importActual<typeof import('antd')>('antd')
 	return {
@@ -351,7 +358,7 @@ describe('ProfilesPage import flow', () => {
 			expect(createProfile).toHaveBeenCalledTimes(1)
 		})
 		await waitFor(() => {
-			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'token'], exact: true })
+			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'list', 'token'], exact: true })
 		})
 	})
 })

@@ -18,6 +18,9 @@ func (s *server) handleEventsSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer releaseSlot()
+	if s.rejectInvalidRealtimeOrigin(w, r, "realtime requests require a trusted Origin") {
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")

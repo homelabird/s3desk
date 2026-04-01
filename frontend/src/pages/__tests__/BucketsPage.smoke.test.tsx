@@ -15,6 +15,13 @@ import { APIClient, APIError } from "../../api/client";
 import { ensureDomShims } from "../../test/domShims";
 import { BucketsPage } from "../BucketsPage";
 
+vi.mock("../../api/useAPIClient", async () => {
+  const { APIClient } = await import("../../api/client");
+  return {
+    useAPIClient: () => new APIClient({ apiToken: "test-token" }),
+  };
+});
+
 const confirmDangerActionMock = vi.fn(
   (options: { onConfirm: () => Promise<void> | void }) => options.onConfirm(),
 );

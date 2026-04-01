@@ -11,6 +11,7 @@ vi.mock('../api/lightClient', () => ({
 }))
 
 import { APIError } from '../api/client'
+import { AuthProvider } from '../auth/AuthProvider'
 import LightApp from '../LightApp'
 import { serverScopedStorageKey } from '../lib/profileScopedStorage'
 import { ensureDomShims } from '../test/domShims'
@@ -80,6 +81,18 @@ function mockViewportWidth(width: number) {
 	})
 }
 
+function renderLightApp() {
+	render(
+		<AuthProvider>
+			<ThemeModeProvider>
+				<MemoryRouter>
+					<LightApp />
+				</MemoryRouter>
+			</ThemeModeProvider>
+		</AuthProvider>,
+	)
+}
+
 describe('LightApp auth gate', () => {
 	it('remounts the login form after clearing a saved token', async () => {
 		mockViewportWidth(1280)
@@ -87,13 +100,7 @@ describe('LightApp auth gate', () => {
 		window.sessionStorage.setItem('transfersHistoryV1', JSON.stringify({ version: 1, savedAtMs: 1, downloads: [], uploads: [] }))
 		window.localStorage.setItem('transfersHistoryV1', JSON.stringify({ version: 1, savedAtMs: 1, downloads: [], uploads: [] }))
 
-		render(
-			<ThemeModeProvider>
-				<MemoryRouter>
-					<LightApp />
-				</MemoryRouter>
-			</ThemeModeProvider>,
-		)
+		renderLightApp()
 
 		expect(await screen.findByDisplayValue('saved-token')).toBeInTheDocument()
 
@@ -125,13 +132,7 @@ describe('LightApp auth gate', () => {
 		window.localStorage.setItem(serverScopedStorageKey('app', 'token-a', 'profileId'), JSON.stringify('profile-1'))
 		window.localStorage.setItem(serverScopedStorageKey('app', 'token-b', 'profileId'), JSON.stringify('profile-2'))
 
-		render(
-			<ThemeModeProvider>
-				<MemoryRouter>
-					<LightApp />
-				</MemoryRouter>
-			</ThemeModeProvider>,
-		)
+		renderLightApp()
 
 		await waitFor(() => {
 			expect(screen.getByRole('button', { name: /Primary Profile.*profile-1/i })).toHaveAttribute('aria-pressed', 'true')
@@ -168,13 +169,7 @@ describe('LightApp auth gate', () => {
 		window.localStorage.setItem('profileId', JSON.stringify('profile-1'))
 		window.localStorage.setItem(serverScopedStorageKey('app', 'token-b', 'profileId'), JSON.stringify('profile-other-server'))
 
-		render(
-			<ThemeModeProvider>
-				<MemoryRouter>
-					<LightApp />
-				</MemoryRouter>
-			</ThemeModeProvider>,
-		)
+		renderLightApp()
 
 		await waitFor(() => {
 			expect(screen.getByRole('button', { name: /Primary Profile.*profile-1/i })).toHaveAttribute('aria-pressed', 'true')
@@ -198,13 +193,7 @@ describe('LightApp auth gate', () => {
 		window.sessionStorage.setItem('apiToken', JSON.stringify('token-a'))
 		window.localStorage.setItem('profileId', JSON.stringify('profile-1'))
 
-		render(
-			<ThemeModeProvider>
-				<MemoryRouter>
-					<LightApp />
-				</MemoryRouter>
-			</ThemeModeProvider>,
-		)
+		renderLightApp()
 
 		await waitFor(() => {
 			expect(screen.getByRole('button', { name: /Primary Profile.*profile-1/i })).toHaveAttribute('aria-pressed', 'true')
@@ -229,13 +218,7 @@ describe('LightApp auth gate', () => {
 		window.localStorage.setItem('apiToken', JSON.stringify('token-a'))
 		window.localStorage.setItem('profileId', JSON.stringify('profile-1'))
 
-		render(
-			<ThemeModeProvider>
-				<MemoryRouter>
-					<LightApp />
-				</MemoryRouter>
-			</ThemeModeProvider>,
-		)
+		renderLightApp()
 
 		await waitFor(() => {
 			expect(screen.getByText('No profile selected')).toBeInTheDocument()
@@ -257,13 +240,7 @@ describe('LightApp auth gate', () => {
 		window.sessionStorage.setItem('apiToken', JSON.stringify('token-a'))
 		window.localStorage.setItem(serverScopedStorageKey('app', 'token-a', 'profileId'), JSON.stringify('profile-missing'))
 
-		render(
-			<ThemeModeProvider>
-				<MemoryRouter>
-					<LightApp />
-				</MemoryRouter>
-			</ThemeModeProvider>,
-		)
+		renderLightApp()
 
 		await waitFor(() => {
 			expect(screen.getByText('No profile selected')).toBeInTheDocument()

@@ -2,7 +2,48 @@
 
 ## Unreleased
 
-## 0.21v-rc2 - 2026-03-12
+## `0.21v-rc3` - 2026-03-24
+
+### New Features
+- Added transfer concurrency preferences and backend transfer buffer helpers for more predictable transfer behavior under load.
+- Added operational configuration warnings to surface risky runtime settings before execution.
+- Added release and deployment checks that harden pre-release validation in CI.
+
+### Improvements
+- Stabilized object-page layout behavior and mobile dashboard scrolling for better cross-device consistency.
+- Refactored frontend bucket/profile modal flows and API client/test facades into smaller modules for simpler maintenance.
+- Refactored jobs and object page internals to separate object styles, page state, and backend job/store pathways.
+- Improved demo compose and podman defaults for host/network behavior, making local validation more reliable.
+
+### Security
+- Tightened default `CSP` settings and capped realtime connections to reduce exposure risk.
+- Remediated backend `gosec` findings and hardened portable import flow paths.
+- Restored HMAC integrity for clear backups and added stricter profile endpoint validation.
+- Hardened frontend/runtime regression paths for more predictable and safer failure modes.
+
+### Bug Fixes
+- Fixed invalid active profile selection recovery and endpoint fallback behavior to prevent unstable state.
+- Fixed profile endpoint handling and folder-upload relative path regressions.
+- Fixed mobile viewport and popover clamping regressions in object interactions.
+- Fixed mobile dashboard scroll behavior and added local smoke coverage for responsive regressions.
+- Fixed portable-import smoke paths and restore consistency in end-to-end coverage.
+- Fixed demo seeding and object layout stability by hardening demo setup and startup checks.
+
+### Chores
+- Added quality gates, provider-live validation smoke coverage, and updated mobile UX audit documentation.
+- Added comprehensive mobile UX audit materials and responsive suite coverage for local smoke gates.
+- Added release metadata and GitHub release workflow rules to agent guidance.
+- Added release/deployment checklist updates and Helm deployment hardening for broader release readiness.
+
+### Release Candidate Notes
+- `0.21v-rc3` is a continuation release candidate; this is not a final `0.21v` release.
+- Keep this release candidate as final blocker until real-provider validation evidence is completed for AWS S3, GCS, Azure Blob, and OCI Object Storage.
+- Keep reverse-proxy and browser-facing download/realtime smoke evidence updated before promoting to final `0.21v`.
+
+### Full Changelog
+**Full Changelog**: https://github.com/homelabird/s3desk/compare/0.21v-rc2...0.21v-rc3
+
+## `0.21v-rc2` - 2026-03-12
 
 ### New Features
 - Added portable backup export, preview, and import flows for sqlite-backed source servers, including encrypted payload support and password-aware import handling.
@@ -39,9 +80,9 @@
 - Final `0.21v` should still carry a recorded reverse-proxy smoke pass for realtime auth and browser-facing download flows.
 
 ### Full Changelog
-Full Changelog: `0.21v-rc1...0.21v-rc2`
+**Full Changelog**: https://github.com/homelabird/s3desk/compare/0.21v-rc1...0.21v-rc2
 
-## 0.21v-rc1 - 2026-03-11
+## `0.21v-rc1` - 2026-03-11
 
 ### New Features
 - Added sqlite-based `Full backup` and `Cache + metadata backup` export flows in the server settings UI.
@@ -107,4 +148,4 @@ Full Changelog: `0.21v-rc1...0.21v-rc2`
 - In-product backup and staged restore target sqlite `DATA_DIR` workflows and do not replace Postgres disaster recovery.
 
 ### Full Changelog
-Full Changelog: `0.20v...0.21v-rc1`
+**Full Changelog**: https://github.com/homelabird/s3desk/compare/0.20v...0.21v-rc1

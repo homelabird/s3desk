@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { APIError } from './api/client'
 import { createLightAPIClient } from './api/lightClient'
+import { useAuth } from './auth/useAuth'
 import { BrandLockup } from './components/BrandLockup'
 import { clearPersistedTransfersStorage } from './components/transfers/useTransfersPersistence'
 import styles from './LightApp.module.css'
@@ -13,7 +14,6 @@ import {
 	shouldUseLegacyActiveProfileStorageMigration,
 } from './lib/profileScopedStorage'
 import { useLocalStorageState } from './lib/useLocalStorageState'
-import { useSessionStorageState } from './lib/useSessionStorageState'
 import { useThemeMode } from './useThemeMode'
 
 type LightProfile = {
@@ -324,7 +324,7 @@ function ProfilesList(props: {
 }
 
 export default function LightApp() {
-	const [apiToken, setApiToken] = useSessionStorageState('apiToken', '', { legacyLocalStorageKey: 'apiToken' })
+	const { apiToken, setApiToken } = useAuth()
 	const profileStorageKey = useMemo(() => serverScopedStorageKey('app', apiToken, 'profileId'), [apiToken])
 	const initialStoredProfileId = useMemo(() => readLegacyActiveProfileIdForMigration(apiToken), [apiToken])
 	const legacyActiveProfileStorageKey = useMemo(

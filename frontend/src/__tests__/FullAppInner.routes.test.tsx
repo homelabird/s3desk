@@ -145,6 +145,8 @@ vi.mock('../components/SettingsDrawer', async () => {
 })
 
 import { APIClient, APIError } from '../api/client'
+import { APIClientProvider } from '../api/APIClientProvider'
+import { AuthProvider } from '../auth/AuthProvider'
 import FullAppInner from '../FullAppInner'
 import { serverScopedStorageKey } from '../lib/profileScopedStorage'
 import { ensureDomShims } from '../test/domShims'
@@ -270,11 +272,15 @@ function renderShell(initialEntries: Array<string | { pathname: string; state?: 
 	render(
 		<QueryClientProvider client={client}>
 			<ConfigProvider getPopupContainer={() => document.body}>
-				<ThemeModeProvider>
-					<MemoryRouter initialEntries={initialEntries}>
-						<FullAppInner />
-					</MemoryRouter>
-				</ThemeModeProvider>
+				<AuthProvider>
+					<APIClientProvider>
+						<ThemeModeProvider>
+							<MemoryRouter initialEntries={initialEntries}>
+								<FullAppInner />
+							</MemoryRouter>
+						</ThemeModeProvider>
+					</APIClientProvider>
+				</AuthProvider>
 			</ConfigProvider>
 		</QueryClientProvider>,
 	)
@@ -296,11 +302,15 @@ describe('FullAppInner route remounts', () => {
 		render(
 			<QueryClientProvider client={client}>
 				<ConfigProvider getPopupContainer={() => document.body}>
-					<ThemeModeProvider>
-						<MemoryRouter initialEntries={['/objects']}>
-							<FullAppInner />
-						</MemoryRouter>
-					</ThemeModeProvider>
+					<AuthProvider>
+						<APIClientProvider>
+							<ThemeModeProvider>
+								<MemoryRouter initialEntries={['/objects']}>
+									<FullAppInner />
+								</MemoryRouter>
+							</ThemeModeProvider>
+						</APIClientProvider>
+					</AuthProvider>
 				</ConfigProvider>
 			</QueryClientProvider>,
 		)
@@ -326,11 +336,15 @@ describe('FullAppInner route remounts', () => {
 		render(
 			<QueryClientProvider client={client}>
 				<ConfigProvider getPopupContainer={() => document.body}>
-					<ThemeModeProvider>
-						<MemoryRouter initialEntries={['/objects']}>
-							<FullAppInner />
-						</MemoryRouter>
-					</ThemeModeProvider>
+					<AuthProvider>
+						<APIClientProvider>
+							<ThemeModeProvider>
+								<MemoryRouter initialEntries={['/objects']}>
+									<FullAppInner />
+								</MemoryRouter>
+							</ThemeModeProvider>
+						</APIClientProvider>
+					</AuthProvider>
 				</ConfigProvider>
 			</QueryClientProvider>,
 		)
@@ -357,11 +371,15 @@ describe('FullAppInner route remounts', () => {
 		render(
 			<QueryClientProvider client={client}>
 				<ConfigProvider getPopupContainer={() => document.body}>
-					<ThemeModeProvider>
-						<MemoryRouter initialEntries={['/objects']}>
-							<FullAppInner />
-						</MemoryRouter>
-					</ThemeModeProvider>
+					<AuthProvider>
+						<APIClientProvider>
+							<ThemeModeProvider>
+								<MemoryRouter initialEntries={['/objects']}>
+									<FullAppInner />
+								</MemoryRouter>
+							</ThemeModeProvider>
+						</APIClientProvider>
+					</AuthProvider>
 				</ConfigProvider>
 			</QueryClientProvider>,
 		)
@@ -386,11 +404,15 @@ describe('FullAppInner route remounts', () => {
 		render(
 			<QueryClientProvider client={client}>
 				<ConfigProvider getPopupContainer={() => document.body}>
-					<ThemeModeProvider>
-						<MemoryRouter initialEntries={['/objects']}>
-							<FullAppInner />
-						</MemoryRouter>
-					</ThemeModeProvider>
+					<AuthProvider>
+						<APIClientProvider>
+							<ThemeModeProvider>
+								<MemoryRouter initialEntries={['/objects']}>
+									<FullAppInner />
+								</MemoryRouter>
+							</ThemeModeProvider>
+						</APIClientProvider>
+					</AuthProvider>
 				</ConfigProvider>
 			</QueryClientProvider>,
 		)
@@ -415,11 +437,15 @@ describe('FullAppInner route remounts', () => {
 		render(
 			<QueryClientProvider client={client}>
 				<ConfigProvider getPopupContainer={() => document.body}>
-					<ThemeModeProvider>
-						<MemoryRouter initialEntries={['/profiles']}>
-							<FullAppInner />
-						</MemoryRouter>
-					</ThemeModeProvider>
+					<AuthProvider>
+						<APIClientProvider>
+							<ThemeModeProvider>
+								<MemoryRouter initialEntries={['/profiles']}>
+									<FullAppInner />
+								</MemoryRouter>
+							</ThemeModeProvider>
+						</APIClientProvider>
+					</AuthProvider>
 				</ConfigProvider>
 			</QueryClientProvider>,
 		)
