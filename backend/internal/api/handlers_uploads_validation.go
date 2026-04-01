@@ -149,9 +149,9 @@ func parseUploadChunkHeadersWithSizes(headers http.Header, chunkIndexRaw string,
 	}
 
 	values := uploadChunkHeaderValues{
-		relPath:   relPath,
-		total:     chunkTotal,
-		index:     chunkIndex,
+		relPath: relPath,
+		total:   chunkTotal,
+		index:   chunkIndex,
 	}
 	if !requireSizes {
 		return values, nil

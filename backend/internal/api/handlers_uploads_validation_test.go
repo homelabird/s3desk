@@ -33,35 +33,35 @@ func TestParseUploadChunkHeaders(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name            string
-		headers         http.Header
-		chunkIndexRaw   string
-		withoutSizes    bool
-		wantErrMessage  string
-		wantRelPath     string
-		wantTotal       int
-		wantIndex       int
-		wantChunkSize   int64
-		wantFileSize    int64
+		name           string
+		headers        http.Header
+		chunkIndexRaw  string
+		withoutSizes   bool
+		wantErrMessage string
+		wantRelPath    string
+		wantTotal      int
+		wantIndex      int
+		wantChunkSize  int64
+		wantFileSize   int64
 	}{
 		{
-			name:           "valid with sizes",
-			headers:        http.Header{"X-Upload-Chunk-Total": {"2"}, "X-Upload-Relative-Path": {"nested/file.txt"}, "X-Upload-Chunk-Size": {"5"}, "X-Upload-File-Size": {"10"}},
-			chunkIndexRaw:  "1",
-			wantRelPath:    "nested/file.txt",
-			wantTotal:      2,
-			wantIndex:      1,
-			wantChunkSize:  5,
-			wantFileSize:   10,
+			name:          "valid with sizes",
+			headers:       http.Header{"X-Upload-Chunk-Total": {"2"}, "X-Upload-Relative-Path": {"nested/file.txt"}, "X-Upload-Chunk-Size": {"5"}, "X-Upload-File-Size": {"10"}},
+			chunkIndexRaw: "1",
+			wantRelPath:   "nested/file.txt",
+			wantTotal:     2,
+			wantIndex:     1,
+			wantChunkSize: 5,
+			wantFileSize:  10,
 		},
 		{
-			name:           "valid without sizes",
-			headers:        http.Header{"X-Upload-Chunk-Total": {"3"}, "X-Upload-Relative-Path": {"chunked/file.txt"}},
-			chunkIndexRaw:  "2",
-			withoutSizes:   true,
-			wantRelPath:    "chunked/file.txt",
-			wantTotal:      3,
-			wantIndex:      2,
+			name:          "valid without sizes",
+			headers:       http.Header{"X-Upload-Chunk-Total": {"3"}, "X-Upload-Relative-Path": {"chunked/file.txt"}},
+			chunkIndexRaw: "2",
+			withoutSizes:  true,
+			wantRelPath:   "chunked/file.txt",
+			wantTotal:     3,
+			wantIndex:     2,
 		},
 		{
 			name:           "missing required headers",

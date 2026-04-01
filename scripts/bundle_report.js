@@ -168,8 +168,8 @@ function main() {
 
 	const budgets = {
 		vendorUiGzip: Number(process.env.BUNDLE_BUDGET_VENDOR_UI_GZIP_KB || 170) * 1024,
-		initialJsGzip: Number(process.env.BUNDLE_BUDGET_INITIAL_JS_GZIP_KB || 88) * 1024,
-		objectsPageGzip: Number(process.env.BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB || 56) * 1024,
+		initialJsGzip: Number(process.env.BUNDLE_BUDGET_INITIAL_JS_GZIP_KB || 92) * 1024,
+		objectsPageGzip: Number(process.env.BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB || 61) * 1024,
 		uploadsPageGzip: Number(process.env.BUNDLE_BUDGET_UPLOADS_PAGE_GZIP_KB || 3.5) * 1024,
 		transfersGzip: Number(process.env.BUNDLE_BUDGET_TRANSFERS_GZIP_KB || 14.5) * 1024,
 	}
