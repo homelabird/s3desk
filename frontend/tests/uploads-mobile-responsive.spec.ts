@@ -42,11 +42,14 @@ test.describe('@mobile-responsive Uploads mobile responsive draft', () => {
 			buffer: Buffer.from('alpha'),
 		})
 
-		const queueButton = page.getByRole('button', { name: /Queue upload \(1\)/i })
+		await expect(page.getByText('alpha.txt')).toBeVisible()
+
+		const queueButton = page.getByRole('button', { name: /Queue upload/i })
 		const transfersButton = page.getByRole('button', { name: 'Open Transfers' })
 		const clearButton = page.getByRole('button', { name: 'Clear selection' })
 
 		await expect(queueButton).toBeVisible()
+		await expect(queueButton).toBeEnabled()
 		await expect(transfersButton).toBeVisible()
 		await expect(clearButton).toBeVisible()
 

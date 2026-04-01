@@ -8,6 +8,8 @@ type UploadPathFile = File & {
 	relativePath?: string
 }
 
+const fileChooserFocusSettleMs = 300
+
 export const promptForFiles = (args: { multiple: boolean; directory: boolean }): Promise<File[] | null> =>
 	new Promise((resolve) => {
 		if (typeof document === 'undefined' || typeof window === 'undefined') {
@@ -44,7 +46,7 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 			window.setTimeout(() => {
 				if (settled) return
 				finish(input.files ? Array.from(input.files) : null)
-			}, 0)
+			}, fileChooserFocusSettleMs)
 		}
 		input.addEventListener('change', handleChange)
 		input.addEventListener('cancel', handleCancel)
