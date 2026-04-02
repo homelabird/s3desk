@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+	buildThumbnailCacheKey,
 	createThumbnailCache,
 	getPersistentThumbnailBlob,
 	setPersistentThumbnailBlob,
@@ -52,6 +53,27 @@ describe('thumbnailCache', () => {
 
 		expect(cache.isFailed('profile:bucket:key:24')).toBe(false)
 		expect(cache.get('profile:bucket:key:24')).toBe('blob:thumb-1')
+	})
+
+	it('separates thumbnail cache keys by api token', () => {
+		const tokenAKey = buildThumbnailCacheKey({
+			apiToken: 'token-a',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			objectKey: 'clip.mp4',
+			size: 96,
+			cacheKeySuffix: 'etag-1',
+		})
+		const tokenBKey = buildThumbnailCacheKey({
+			apiToken: 'token-b',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			objectKey: 'clip.mp4',
+			size: 96,
+			cacheKeySuffix: 'etag-1',
+		})
+
+		expect(tokenAKey).not.toBe(tokenBKey)
 	})
 
 	it('expires persistent thumbnail blobs after the configured TTL', async () => {

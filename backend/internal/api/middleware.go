@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,8 +23,19 @@ import (
 const corsExposeHeaders = "Retry-After, Content-Disposition, X-Log-Next-Offset, X-Upload-Skipped"
 const corsAllowHeaders = "Authorization, Content-Type, X-Api-Token, X-Profile-Id, X-Upload-Chunk-Index, X-Upload-Chunk-Total, X-Upload-Chunk-Size, X-Upload-File-Size, X-Upload-Relative-Path"
 const defaultContentSecurityPolicy = "base-uri 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+const defaultPermissionsPolicy = "accelerometer=(), autoplay=(), camera=(), geolocation=(), magnetometer=(), microphone=(), payment=(), usb=(), gyroscope=(), clipboard-read=(), clipboard-write=()"
 
 const maxAPITokenBytes = 4096
+
+var allowedHTTPMethods = []string{
+	http.MethodGet,
+	http.MethodHead,
+	http.MethodPost,
+	http.MethodPut,
+	http.MethodPatch,
+	http.MethodDelete,
+	http.MethodOptions,
+}
 
 type authFailureLimiter struct {
 	mu          sync.Mutex
@@ -184,6 +194,9 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 		if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
 			realtimeTicket := strings.TrimSpace(query.Get("realtimeTicket"))
 			if realtimeTicket != "" {
+				if s.rejectInvalidRealtimeOrigin(w, r, "realtime requests require a trusted Origin") {
+					return
+				}
 				transport := "sse"
 				if isWebSocketUpgrade(r) {
 					transport = "ws"
@@ -200,6 +213,10 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 				writeError(w, http.StatusUnauthorized, "unauthorized", "invalid realtime ticket", nil)
 				return
 			}
+		}
+		if token != "" && hasUnsafeTokenValue(token) {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid api token", nil)
+			return
 		}
 		if len(token) > maxAPITokenBytes {
 			retryAfter := s.authLimit.recordFailure(clientKey, now)
@@ -263,16 +280,29 @@ func securityHeaders(next http.Handler) http.Handler {
 			h.Set("Content-Security-Policy", defaultContentSecurityPolicy)
 		}
 		if h.Get("Cross-Origin-Opener-Policy") == "" && isTrustworthyOrigin(r) {
+			// Keep popup/Window targeting isolated for trusted local/UI requests.
 			h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		}
 		if h.Get("Cross-Origin-Resource-Policy") == "" {
 			h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		}
+		if h.Get("Origin-Agent-Cluster") == "" {
+			h.Set("Origin-Agent-Cluster", "?1")
+		}
+		if h.Get("Permissions-Policy") == "" {
+			h.Set("Permissions-Policy", defaultPermissionsPolicy)
+		}
+		if h.Get("X-Permitted-Cross-Domain-Policies") == "" {
+			h.Set("X-Permitted-Cross-Domain-Policies", "none")
 		}
 		if h.Get("X-Content-Type-Options") == "" {
 			h.Set("X-Content-Type-Options", "nosniff")
 		}
 		if h.Get("Referrer-Policy") == "" {
 			h.Set("Referrer-Policy", "no-referrer")
+		}
+		if h.Get("Strict-Transport-Security") == "" && r.TLS != nil {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -353,6 +383,56 @@ func (s *server) requestLogger(next http.Handler) http.Handler {
 	})
 }
 
+func (s *server) allowOnlySafeMethods(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch strings.ToUpper(r.Method) {
+		case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions:
+			break
+		default:
+			w.Header().Set("Allow", strings.Join(allowedHTTPMethods, ", "))
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not supported", map[string]any{
+				"method": r.Method,
+			})
+			return
+		}
+		if hasUnexpectedBody(r) {
+			w.Header().Set("Allow", strings.Join(allowedHTTPMethods, ", "))
+			writeError(w, http.StatusBadRequest, "invalid_request", "request body is not supported for this method", map[string]any{
+				"method": r.Method,
+			})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func hasUnexpectedBody(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		// GET/HEAD/OPTIONS do not define request bodies in normal API clients.
+	default:
+		return false
+	}
+
+	if r.ContentLength > 0 {
+		return true
+	}
+	if te := strings.TrimSpace(r.Header.Get("Transfer-Encoding")); te != "" {
+		return true
+	}
+	return false
+}
+
+func hasUnsafeTokenValue(value string) bool {
+	for i := 0; i < len(value); i++ {
+		ch := value[i]
+		if ch == '\r' || ch == '\n' || ch == '\x00' {
+			return true
+		}
+	}
+	return false
+}
+
 func shouldSkipAccessLog(r *http.Request) bool {
 	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics"
 }
@@ -385,6 +465,9 @@ func requestRemoteAddr(r *http.Request) string {
 
 func (s *server) requireLocalHost(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hostFailureMsg := remoteHostFailureMessage(s.cfg.AllowRemote, len(s.cfg.AllowedHosts) > 0)
+		originFailureMsg := originFailureMessage(s.cfg.AllowRemote, len(s.cfg.AllowedHosts) > 0)
+
 		remoteHost := r.RemoteAddr
 		if h, _, err := net.SplitHostPort(remoteHost); err == nil {
 			remoteHost = h
@@ -404,27 +487,18 @@ func (s *server) requireLocalHost(next http.Handler) http.Handler {
 			host = h
 		}
 		if !isAllowedHost(host, s.cfg.AllowRemote, s.cfg.AllowedHosts) {
-			msg := "host must be localhost"
-			if s.cfg.AllowRemote {
-				msg = "host must be localhost or private"
-			}
-			writeError(w, http.StatusForbidden, "forbidden", msg, map[string]any{"host": r.Host})
+			writeError(w, http.StatusForbidden, "forbidden", hostFailureMsg, map[string]any{"host": r.Host})
 			return
 		}
 
 		if origin := r.Header.Get("Origin"); origin != "" {
-			u, err := url.Parse(origin)
+			parsedOrigin, err := parseTrustedOrigin(strings.TrimSpace(origin))
 			if err != nil {
 				writeError(w, http.StatusForbidden, "forbidden", "invalid origin", nil)
 				return
 			}
-			oh := strings.ToLower(u.Hostname())
-			if !isAllowedHost(oh, s.cfg.AllowRemote, s.cfg.AllowedHosts) {
-				msg := "origin must be localhost"
-				if s.cfg.AllowRemote {
-					msg = "origin must be localhost or private"
-				}
-				writeError(w, http.StatusForbidden, "forbidden", msg, map[string]any{"origin": origin})
+			if !isAllowedHost(parsedOrigin.Hostname(), s.cfg.AllowRemote, s.cfg.AllowedHosts) {
+				writeError(w, http.StatusForbidden, "forbidden", originFailureMsg, map[string]any{"origin": origin})
 				return
 			}
 		}
@@ -446,10 +520,8 @@ func (s *server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
 		if origin != "" {
-			u, err := url.Parse(origin)
-			if err == nil {
-				oh := strings.ToLower(u.Hostname())
-				if isAllowedHost(oh, s.cfg.AllowRemote, s.cfg.AllowedHosts) {
+			if parsedOrigin, err := parseTrustedOrigin(origin); err == nil {
+				if isAllowedHost(parsedOrigin.Hostname(), s.cfg.AllowRemote, s.cfg.AllowedHosts) {
 					h := w.Header()
 					h.Set("Access-Control-Allow-Origin", origin)
 					h.Add("Vary", "Origin")
@@ -480,25 +552,75 @@ func isAllowedHost(host string, allowRemote bool, allowedHosts []string) bool {
 	if host == "" {
 		return false
 	}
-	for _, allowed := range allowedHosts {
-		if host == allowed {
-			return true
-		}
+	if hasExplicitAllowedHost(host, allowedHosts) {
+		return true
 	}
-	if host == "127.0.0.1" || host == "localhost" || host == "::1" {
+	if isLoopbackHost(host) {
 		return true
 	}
 	if !allowRemote {
 		return false
 	}
-	ip := net.ParseIP(host)
+	if len(allowedHosts) > 0 {
+		return false
+	}
+	return isPrivateIPHost(host)
+}
+
+func hasExplicitAllowedHost(host string, allowedHosts []string) bool {
+	host = normalizeHost(host)
+	for _, allowed := range allowedHosts {
+		if host == normalizeHost(allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLoopbackHost(host string) bool {
+	switch normalizeHost(host) {
+	case "127.0.0.1", "::1", "localhost":
+		return true
+	}
+	ip := net.ParseIP(normalizeHost(host))
+	return ip != nil && ip.IsLoopback()
+}
+
+func isPrivateIPHost(host string) bool {
+	ip := net.ParseIP(normalizeHost(host))
 	return ip != nil && ip.IsPrivate()
+}
+
+func remoteHostFailureMessage(allowRemote bool, hasAllowedHosts bool) string {
+	if !allowRemote {
+		return "host must be localhost"
+	}
+	if hasAllowedHosts {
+		return "host must be localhost or in ALLOWED_HOSTS"
+	}
+	return "host must be localhost or private"
+}
+
+func originFailureMessage(allowRemote bool, hasAllowedHosts bool) string {
+	if !allowRemote {
+		return "origin must be localhost"
+	}
+	if hasAllowedHosts {
+		return "origin must be localhost or in ALLOWED_HOSTS"
+	}
+	return "origin must be localhost or private"
 }
 
 func normalizeHost(host string) string {
 	host = strings.TrimSpace(strings.ToLower(host))
 	if host == "" {
 		return ""
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
 	}
 	host = strings.Trim(host, "[]")
 	return strings.TrimSuffix(host, ".")

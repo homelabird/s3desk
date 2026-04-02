@@ -40,10 +40,12 @@ type ProfilesModalsProps = {
 	onYamlSave: () => void
 	importOpen: boolean
 	closeImportModal: () => void
+	importSessionToken: number
 	importText: string
 	importError: string | null
 	importLoading: boolean
 	onImportSubmit: () => void
+	onImportFileTextLoad: (sessionToken: number, value: string) => void
 	onImportTextChange: (value: string) => void
 	onImportErrorClear: () => void
 }
@@ -166,11 +168,11 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 						onChange={(e) => {
 							const file = e.target.files?.[0]
 							if (!file) return
+							const sessionToken = props.importSessionToken
 							const reader = new FileReader()
 							reader.onload = () => {
 								const text = typeof reader.result === 'string' ? reader.result : ''
-								props.onImportTextChange(text)
-								props.onImportErrorClear()
+								props.onImportFileTextLoad(sessionToken, text)
 							}
 							reader.readAsText(file)
 						}}

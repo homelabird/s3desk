@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ColumnKey } from '../useJobsColumnsVisibility'
@@ -42,6 +42,7 @@ describe('JobsToolbar', () => {
 		setMatchMedia(false)
 		render(
 			<JobsToolbar
+				scopeKey="token-a:profile-1"
 				activeProfileName="MinIO Demo"
 				isOffline={false}
 				uploadSupported
@@ -99,6 +100,7 @@ describe('JobsToolbar', () => {
 		setMatchMedia(true)
 		render(
 			<JobsToolbar
+				scopeKey="token-a:profile-1"
 				activeProfileName="MinIO Demo"
 				isOffline={false}
 				uploadSupported
@@ -151,5 +153,209 @@ describe('JobsToolbar', () => {
 		expect(screen.queryByRole('combobox', { name: 'Job status filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job type filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job error code filter' })).not.toBeInTheDocument()
+	})
+
+	it('closes the mobile filters sheet when the scope changes', () => {
+		setMatchMedia(true)
+		const { rerender } = render(
+			<JobsToolbar
+				scopeKey="token-a:profile-1"
+				activeProfileName="MinIO Demo"
+				isOffline={false}
+				uploadSupported
+				uploadDisabledReason={null}
+				eventsConnected
+				eventsTransport="sse"
+				eventsRetryCount={0}
+				eventsRetryThreshold={3}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenCreateDownload={vi.fn()}
+				topActionsMenu={{ items: [] }}
+				statusFilter="all"
+				onStatusFilterChange={vi.fn()}
+				searchFilterNormalized=""
+				onSearchFilterChange={vi.fn()}
+				typeFilterNormalized=""
+				onTypeFilterChange={vi.fn()}
+				typeFilterSuggestions={[]}
+				errorCodeFilterNormalized=""
+				onErrorCodeFilterChange={vi.fn()}
+				errorCodeSuggestions={[]}
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				jobsStatusSummary={{
+					total: 15,
+					active: 3,
+					queued: 1,
+					running: 2,
+					succeeded: 10,
+					failed: 1,
+					canceled: 1,
+				}}
+				columnOptions={[]}
+				mergedColumnVisibility={mergedColumnVisibility}
+				onSetColumnVisible={vi.fn()}
+				columnsDirty={false}
+				onResetColumns={vi.fn()}
+				onRefreshJobs={vi.fn()}
+				jobsRefreshing={false}
+				jobsCount={15}
+			/>,
+		)
+
+		fireEvent.click(screen.getByTestId('jobs-mobile-filters-trigger'))
+		expect(screen.getByText('Job filters')).toBeInTheDocument()
+
+		rerender(
+			<JobsToolbar
+				scopeKey="token-b:profile-1"
+				activeProfileName="MinIO Demo"
+				isOffline={false}
+				uploadSupported
+				uploadDisabledReason={null}
+				eventsConnected
+				eventsTransport="sse"
+				eventsRetryCount={0}
+				eventsRetryThreshold={3}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenCreateDownload={vi.fn()}
+				topActionsMenu={{ items: [] }}
+				statusFilter="all"
+				onStatusFilterChange={vi.fn()}
+				searchFilterNormalized=""
+				onSearchFilterChange={vi.fn()}
+				typeFilterNormalized=""
+				onTypeFilterChange={vi.fn()}
+				typeFilterSuggestions={[]}
+				errorCodeFilterNormalized=""
+				onErrorCodeFilterChange={vi.fn()}
+				errorCodeSuggestions={[]}
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				jobsStatusSummary={{
+					total: 15,
+					active: 3,
+					queued: 1,
+					running: 2,
+					succeeded: 10,
+					failed: 1,
+					canceled: 1,
+				}}
+				columnOptions={[]}
+				mergedColumnVisibility={mergedColumnVisibility}
+				onSetColumnVisible={vi.fn()}
+				columnsDirty={false}
+				onResetColumns={vi.fn()}
+				onRefreshJobs={vi.fn()}
+				jobsRefreshing={false}
+				jobsCount={15}
+			/>,
+		)
+
+		expect(screen.queryByText('Job filters')).not.toBeInTheDocument()
+	})
+
+	it('hides the top actions menu when the scope changes', () => {
+		setMatchMedia(false)
+		const { rerender } = render(
+			<JobsToolbar
+				scopeKey="token-a:profile-1"
+				activeProfileName="MinIO Demo"
+				isOffline={false}
+				uploadSupported
+				uploadDisabledReason={null}
+				eventsConnected
+				eventsTransport="sse"
+				eventsRetryCount={0}
+				eventsRetryThreshold={3}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenCreateDownload={vi.fn()}
+				topActionsMenu={{ items: [{ key: 'delete', label: 'Delete jobs' }] }}
+				statusFilter="all"
+				onStatusFilterChange={vi.fn()}
+				searchFilterNormalized=""
+				onSearchFilterChange={vi.fn()}
+				typeFilterNormalized=""
+				onTypeFilterChange={vi.fn()}
+				typeFilterSuggestions={[]}
+				errorCodeFilterNormalized=""
+				onErrorCodeFilterChange={vi.fn()}
+				errorCodeSuggestions={[]}
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				jobsStatusSummary={{
+					total: 15,
+					active: 3,
+					queued: 1,
+					running: 2,
+					succeeded: 10,
+					failed: 1,
+					canceled: 1,
+				}}
+				columnOptions={[]}
+				mergedColumnVisibility={mergedColumnVisibility}
+				onSetColumnVisible={vi.fn()}
+				columnsDirty={false}
+				onResetColumns={vi.fn()}
+				onRefreshJobs={vi.fn()}
+				jobsRefreshing={false}
+				jobsCount={15}
+			/>,
+		)
+
+		fireEvent.click(screen.getByRole('button', { name: /More/i }))
+		expect(screen.getByRole('menuitem', { name: 'Delete jobs' })).toBeInTheDocument()
+
+		rerender(
+			<JobsToolbar
+				scopeKey="token-b:profile-1"
+				activeProfileName="MinIO Demo"
+				isOffline={false}
+				uploadSupported
+				uploadDisabledReason={null}
+				eventsConnected
+				eventsTransport="sse"
+				eventsRetryCount={0}
+				eventsRetryThreshold={3}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenCreateDownload={vi.fn()}
+				topActionsMenu={{ items: [{ key: 'delete', label: 'Delete jobs' }] }}
+				statusFilter="all"
+				onStatusFilterChange={vi.fn()}
+				searchFilterNormalized=""
+				onSearchFilterChange={vi.fn()}
+				typeFilterNormalized=""
+				onTypeFilterChange={vi.fn()}
+				typeFilterSuggestions={[]}
+				errorCodeFilterNormalized=""
+				onErrorCodeFilterChange={vi.fn()}
+				errorCodeSuggestions={[]}
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				jobsStatusSummary={{
+					total: 15,
+					active: 3,
+					queued: 1,
+					running: 2,
+					succeeded: 10,
+					failed: 1,
+					canceled: 1,
+				}}
+				columnOptions={[]}
+				mergedColumnVisibility={mergedColumnVisibility}
+				onSetColumnVisible={vi.fn()}
+				columnsDirty={false}
+				onResetColumns={vi.fn()}
+				onRefreshJobs={vi.fn()}
+				jobsRefreshing={false}
+				jobsCount={15}
+			/>,
+		)
+
+		expect(screen.queryByRole('menuitem', { name: /Delete jobs/i })).not.toBeInTheDocument()
 	})
 })

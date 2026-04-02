@@ -30,6 +30,7 @@ describe('ObjectThumbnail', () => {
 		const downloadObjectThumbnail = vi.fn()
 		const cacheKey = buildThumbnailCacheKey(
 			buildObjectThumbnailRequest({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				objectKey: 'clip.mp4',
@@ -51,10 +52,49 @@ describe('ObjectThumbnail', () => {
 		} as unknown as CacheStorage
 		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
 
-		render(<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
+		render(<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
 
 		await waitFor(() => expect(match).toHaveBeenCalled())
 		expect(downloadObjectThumbnail).not.toHaveBeenCalled()
+	})
+
+	it('does not reuse persistent thumbnails from a different api token scope', async () => {
+		const cache = createThumbnailCache()
+		const downloadObjectThumbnail = vi.fn(() => ({
+			promise: Promise.resolve({
+				blob: new Blob(['thumb-network'], { type: 'image/jpeg' }),
+				contentType: 'image/jpeg',
+			}),
+			abort: vi.fn(),
+		}))
+		const tokenACacheKey = buildThumbnailCacheKey(
+			buildObjectThumbnailRequest({
+				apiToken: 'token-a',
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				objectKey: 'clip.mp4',
+				size: 24,
+			}),
+		)
+		const match = vi.fn().mockResolvedValue(
+			new Response(new Blob(['thumb'], { type: 'image/jpeg' }), {
+				status: 200,
+				headers: { 'content-type': 'image/jpeg' },
+			}),
+		)
+		window.localStorage.setItem(PERSISTENT_THUMBNAIL_INDEX_KEY, JSON.stringify({ [tokenACacheKey]: Date.now() }))
+		;(window as typeof window & { caches?: CacheStorage }).caches = {
+			open: vi.fn().mockResolvedValue({
+				match,
+				put: vi.fn(),
+			}),
+		} as unknown as CacheStorage
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
+
+		render(<ObjectThumbnail api={api} apiToken="token-b" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
+
+		await waitFor(() => expect(downloadObjectThumbnail).toHaveBeenCalledTimes(1))
+		expect(match).not.toHaveBeenCalled()
 	})
 
 	it('does not refetch thumbnails after a deterministic 413 failure', async () => {
@@ -66,19 +106,20 @@ describe('ObjectThumbnail', () => {
 		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
 
 		const first = render(
-			<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,
+			<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,
 		)
 
 		await waitFor(() => expect(downloadObjectThumbnail).toHaveBeenCalledTimes(1))
 		first.unmount()
 
-		render(<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
+		render(<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
 
 		await waitFor(() =>
 			expect(
 				cache.isFailed(
 					buildThumbnailCacheKey(
 						buildObjectThumbnailRequest({
+							apiToken: 'token-a',
 							profileId: 'profile-1',
 							bucket: 'bucket-a',
 							objectKey: 'clip.mp4',
@@ -100,13 +141,13 @@ describe('ObjectThumbnail', () => {
 		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
 
 		const first = render(
-			<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,
+			<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />,
 		)
 
 		await waitFor(() => expect(downloadObjectThumbnail).toHaveBeenCalledTimes(1))
 		first.unmount()
 
-		render(<ObjectThumbnail api={api} profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
+		render(<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={24} cache={cache} />)
 
 		await waitFor(() => expect(downloadObjectThumbnail).toHaveBeenCalledTimes(2))
 	})

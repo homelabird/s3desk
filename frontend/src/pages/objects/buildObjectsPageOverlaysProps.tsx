@@ -26,6 +26,7 @@ type IndexedSearchQueryLike = {
 
 export type BuildObjectsPageOverlaysPropsArgs = {
 	actions: ObjectsPageActionsState
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string

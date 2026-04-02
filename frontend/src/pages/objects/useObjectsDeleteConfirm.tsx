@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Space, Typography } from 'antd'
 
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
@@ -12,6 +12,7 @@ type DeletePrefixMutation = {
 }
 
 type UseObjectsDeleteConfirmArgs = {
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -21,6 +22,7 @@ type UseObjectsDeleteConfirmArgs = {
 }
 
 export function useObjectsDeleteConfirm({
+	apiToken,
 	profileId,
 	bucket,
 	prefix,
@@ -28,20 +30,45 @@ export function useObjectsDeleteConfirm({
 	deleteMutation,
 	deletePrefixJobMutation,
 }: UseObjectsDeleteConfirmArgs) {
-	const [deletePrefixConfirmOpen, setDeletePrefixConfirmOpen] = useState(false)
-	const [deletePrefixConfirmDryRun, setDeletePrefixConfirmDryRun] = useState(false)
-	const [deletePrefixConfirmPrefix, setDeletePrefixConfirmPrefix] = useState('')
-	const [deletePrefixConfirmText, setDeletePrefixConfirmText] = useState('')
+	const currentContextKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
+	const [deletePrefixConfirmState, setDeletePrefixConfirmState] = useState<{
+		open: boolean
+		dryRun: boolean
+		prefix: string
+		text: string
+		contextKey: string
+	}>({
+		open: false,
+		dryRun: false,
+		prefix: '',
+		text: '',
+		contextKey: currentContextKey,
+	})
+	const deletePrefixConfirmSessionRef = useRef(0)
+	const deletePrefixDialogSessionRef = useRef<number | null>(null)
+
+	const invalidateDeletePrefixConfirmSession = useCallback(() => {
+		deletePrefixConfirmSessionRef.current += 1
+	}, [])
 
 	const resetDeletePrefixConfirm = useCallback(() => {
-		setDeletePrefixConfirmText('')
-		setDeletePrefixConfirmPrefix('')
-		setDeletePrefixConfirmDryRun(false)
+		setDeletePrefixConfirmState((prev) => ({
+			...prev,
+			dryRun: false,
+			prefix: '',
+			text: '',
+		}))
 	}, [])
+
+	useEffect(() => {
+		invalidateDeletePrefixConfirmSession()
+		deletePrefixDialogSessionRef.current = null
+	}, [apiToken, bucket, invalidateDeletePrefixConfirmSession, prefix, profileId])
 
 	const confirmDeleteObjects = useCallback(
 		(keys: string[]) => {
 			if (keys.length === 0) return
+			const confirmSessionId = deletePrefixConfirmSessionRef.current
 
 			if (keys.length === 1) {
 				const key = keys[0]
@@ -56,6 +83,7 @@ export function useObjectsDeleteConfirm({
 						</Space>
 					),
 					onConfirm: async () => {
+						if (confirmSessionId !== deletePrefixConfirmSessionRef.current) return
 						await deleteMutation.mutateAsync(keys)
 					},
 				})
@@ -66,6 +94,7 @@ export function useObjectsDeleteConfirm({
 				title: `Delete ${keys.length} objects?`,
 				description: 'This cannot be undone.',
 				onConfirm: async () => {
+					if (confirmSessionId !== deletePrefixConfirmSessionRef.current) return
 					await deleteMutation.mutateAsync(keys)
 				},
 			})
@@ -84,25 +113,72 @@ export function useObjectsDeleteConfirm({
 			const rawPrefix = (prefixOverride ?? prefix).trim()
 			if (!rawPrefix) return
 			const effectivePrefix = rawPrefix && !rawPrefix.endsWith('/') ? `${rawPrefix}/` : rawPrefix
-			setDeletePrefixConfirmDryRun(dryRun)
-			setDeletePrefixConfirmPrefix(effectivePrefix)
-			setDeletePrefixConfirmText('')
-			setDeletePrefixConfirmOpen(true)
+			invalidateDeletePrefixConfirmSession()
+			deletePrefixDialogSessionRef.current = deletePrefixConfirmSessionRef.current
+			setDeletePrefixConfirmState({
+				open: true,
+				dryRun,
+				prefix: effectivePrefix,
+				text: '',
+				contextKey: currentContextKey,
+			})
 		},
-		[bucket, prefix, profileId],
+		[bucket, currentContextKey, invalidateDeletePrefixConfirmSession, prefix, profileId],
 	)
 
 	const handleDeletePrefixConfirm = useCallback(async () => {
-		if (!deletePrefixConfirmPrefix) return
-		await deletePrefixJobMutation.mutateAsync({ prefix: deletePrefixConfirmPrefix, dryRun: deletePrefixConfirmDryRun })
-		setDeletePrefixConfirmOpen(false)
+		if (!deletePrefixConfirmState.prefix) return
+		const sessionId = deletePrefixDialogSessionRef.current
+		if (
+			sessionId == null
+			|| sessionId !== deletePrefixConfirmSessionRef.current
+			|| deletePrefixConfirmState.contextKey !== currentContextKey
+		)
+			return
+		await deletePrefixJobMutation.mutateAsync({
+			prefix: deletePrefixConfirmState.prefix,
+			dryRun: deletePrefixConfirmState.dryRun,
+		})
+		if (sessionId !== deletePrefixConfirmSessionRef.current) return
+		deletePrefixDialogSessionRef.current = null
+		invalidateDeletePrefixConfirmSession()
 		resetDeletePrefixConfirm()
-	}, [deletePrefixConfirmDryRun, deletePrefixConfirmPrefix, deletePrefixJobMutation, resetDeletePrefixConfirm])
+		setDeletePrefixConfirmState((prev) => ({
+			...prev,
+			open: false,
+		}))
+	}, [
+		currentContextKey,
+		deletePrefixConfirmState,
+		deletePrefixJobMutation,
+		invalidateDeletePrefixConfirmSession,
+		resetDeletePrefixConfirm,
+	])
 
 	const handleDeletePrefixCancel = useCallback(() => {
-		setDeletePrefixConfirmOpen(false)
+		deletePrefixDialogSessionRef.current = null
+		invalidateDeletePrefixConfirmSession()
+		setDeletePrefixConfirmState((prev) => ({
+			...prev,
+			open: false,
+		}))
 		resetDeletePrefixConfirm()
-	}, [resetDeletePrefixConfirm])
+	}, [invalidateDeletePrefixConfirmSession, resetDeletePrefixConfirm])
+
+	const deletePrefixConfirmOpen =
+		deletePrefixConfirmState.open
+		&& deletePrefixConfirmState.contextKey === currentContextKey
+
+	const deletePrefixConfirmDryRun = deletePrefixConfirmOpen ? deletePrefixConfirmState.dryRun : false
+	const deletePrefixConfirmPrefix = deletePrefixConfirmOpen ? deletePrefixConfirmState.prefix : ''
+	const deletePrefixConfirmText = deletePrefixConfirmOpen ? deletePrefixConfirmState.text : ''
+
+	const setDeletePrefixConfirmText = useCallback((text: string) => {
+		setDeletePrefixConfirmState((prev) => ({
+			...prev,
+			text,
+		}))
+	}, [])
 
 	return {
 		deletePrefixConfirmOpen,

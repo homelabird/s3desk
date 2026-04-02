@@ -15,6 +15,7 @@ type BucketPickerEntry = BucketOption & {
 }
 
 type ObjectsBucketPickerProps = {
+	scopeKey: string
 	isDesktop: boolean
 	value: string
 	recentBuckets: string[]
@@ -148,8 +149,10 @@ function renderEntryList(props: {
 
 export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 	const [desktopOpen, setDesktopOpen] = useState(false)
+	const [desktopScopeKey, setDesktopScopeKey] = useState('')
 	const [desktopQuery, setDesktopQuery] = useState('')
 	const [mobileOpen, setMobileOpen] = useState(false)
+	const [mobileScopeKey, setMobileScopeKey] = useState('')
 	const [mobileQuery, setMobileQuery] = useState('')
 	const desktopRootRef = useRef<HTMLDivElement>(null)
 	const desktopTriggerRef = useRef<HTMLButtonElement>(null)
@@ -160,12 +163,25 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 		align: 'left',
 	})
 
+	const desktopScopeMatches = desktopScopeKey === props.scopeKey
+	const mobileScopeMatches = mobileScopeKey === props.scopeKey
+	const desktopOpenVisible = desktopOpen && desktopScopeMatches
+	const mobileOpenVisible = mobileOpen && mobileScopeMatches
+	const desktopQueryValue = desktopScopeMatches ? desktopQuery : ''
+	const mobileQueryValue = mobileScopeMatches ? mobileQuery : ''
+
 	const orderedEntries = useMemo(
 		() => buildBucketEntries(props.value, props.options, props.recentBuckets),
 		[props.options, props.recentBuckets, props.value],
 	)
-	const filteredDesktopEntries = useMemo(() => filterBucketEntries(orderedEntries, desktopQuery), [desktopQuery, orderedEntries])
-	const filteredMobileEntries = useMemo(() => filterBucketEntries(orderedEntries, mobileQuery), [mobileQuery, orderedEntries])
+	const filteredDesktopEntries = useMemo(
+		() => filterBucketEntries(orderedEntries, desktopQueryValue),
+		[desktopQueryValue, orderedEntries],
+	)
+	const filteredMobileEntries = useMemo(
+		() => filterBucketEntries(orderedEntries, mobileQueryValue),
+		[mobileQueryValue, orderedEntries],
+	)
 	const currentBucketLabel = props.value || props.placeholder
 
 	const notifyOpenChange = useCallback(
@@ -177,12 +193,14 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 
 	const closeDesktopPopover = useCallback(() => {
 		setDesktopOpen(false)
+		setDesktopScopeKey('')
 		setDesktopQuery('')
 		notifyOpenChange(false)
 	}, [notifyOpenChange])
 
 	const closeMobileDrawer = useCallback(() => {
 		setMobileOpen(false)
+		setMobileScopeKey('')
 		setMobileQuery('')
 		notifyOpenChange(false)
 	}, [notifyOpenChange])
@@ -201,15 +219,19 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 
 	const openDesktopPopover = useCallback(() => {
 		if (props.disabled) return
+		setDesktopScopeKey(props.scopeKey)
+		setDesktopQuery('')
 		setDesktopOpen(true)
 		notifyOpenChange(true)
-	}, [notifyOpenChange, props.disabled])
+	}, [notifyOpenChange, props.disabled, props.scopeKey])
 
 	const openMobileDrawer = useCallback(() => {
 		if (props.disabled) return
+		setMobileScopeKey(props.scopeKey)
+		setMobileQuery('')
 		setMobileOpen(true)
 		notifyOpenChange(true)
-	}, [notifyOpenChange, props.disabled])
+	}, [notifyOpenChange, props.disabled, props.scopeKey])
 
 	const currentDesktopEntry = filteredDesktopEntries.find((entry) => entry.isCurrent) ?? null
 	const recentDesktopEntries = filteredDesktopEntries.filter((entry) => entry.isRecent)
@@ -258,7 +280,7 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 	}, [])
 
 	useEffect(() => {
-		if (!desktopOpen) return
+		if (!desktopOpenVisible) return
 		updateDesktopPopoverLayout()
 		desktopInputRef.current?.focus()
 
@@ -287,14 +309,14 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 		document.addEventListener('keydown', handleKeyDown)
 		window.addEventListener('resize', handleWindowResize)
 		window.addEventListener('scroll', handleWindowResize, true)
-		return () => {
+	return () => {
 			document.removeEventListener('pointerdown', handlePointerDown)
 			document.removeEventListener('keydown', handleKeyDown)
 			window.removeEventListener('resize', handleWindowResize)
 			window.removeEventListener('scroll', handleWindowResize, true)
 			resizeObserver?.disconnect()
 		}
-	}, [closeDesktopPopover, desktopOpen, updateDesktopPopoverLayout])
+	}, [closeDesktopPopover, desktopOpenVisible, updateDesktopPopoverLayout])
 
 	if (props.isDesktop) {
 		const desktopPopoverStyle: CSSProperties = {
@@ -313,10 +335,10 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 					type="button"
 					className={styles.bucketPickerDesktopTrigger}
 					aria-label="Bucket"
-					aria-expanded={desktopOpen}
+					aria-expanded={desktopOpenVisible}
 					disabled={props.disabled}
 					onClick={() => {
-						if (desktopOpen) {
+						if (desktopOpenVisible) {
 							closeDesktopPopover()
 							return
 						}
@@ -325,10 +347,12 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 					data-testid="objects-bucket-picker-desktop"
 				>
 					<span className={props.value ? styles.bucketPickerDesktopValue : styles.bucketPickerDesktopPlaceholder}>{currentBucketLabel}</span>
-					<DownOutlined className={`${styles.bucketPickerDesktopChevron} ${desktopOpen ? styles.bucketPickerDesktopChevronOpen : ''}`} />
+					<DownOutlined
+						className={`${styles.bucketPickerDesktopChevron} ${desktopOpenVisible ? styles.bucketPickerDesktopChevronOpen : ''}`}
+					/>
 				</button>
 
-				{desktopOpen ? (
+				{desktopOpenVisible ? (
 					<div
 						className={`${styles.bucketPickerDesktopPopover} ${
 							desktopPopoverLayout.align === 'right' ? styles.bucketPickerDesktopPopoverAlignRight : ''
@@ -342,8 +366,11 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 								<input
 									ref={desktopInputRef}
 									type="text"
-									value={desktopQuery}
-									onChange={(event) => setDesktopQuery(event.currentTarget.value)}
+									value={desktopQueryValue}
+									onChange={(event) => {
+										setDesktopScopeKey(props.scopeKey)
+										setDesktopQuery(event.currentTarget.value)
+									}}
 									onKeyDown={(event) => {
 										if (event.key !== 'Enter') return
 										event.preventDefault()
@@ -397,7 +424,7 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 			</button>
 
 			<ObjectsOverlaySheet
-				open={mobileOpen}
+				open={mobileOpenVisible}
 				onClose={closeMobileDrawer}
 				title="Select bucket"
 				placement="bottom"
@@ -421,8 +448,11 @@ export function ObjectsBucketPicker(props: ObjectsBucketPickerProps) {
 						<SearchOutlined className={styles.bucketPickerSearchIcon} />
 						<input
 							type="text"
-							value={mobileQuery}
-							onChange={(event) => setMobileQuery(event.currentTarget.value)}
+							value={mobileQueryValue}
+							onChange={(event) => {
+								setMobileScopeKey(props.scopeKey)
+								setMobileQuery(event.currentTarget.value)
+							}}
 							placeholder="Search buckets…"
 							aria-label="Search buckets"
 							className={styles.bucketPickerSearchInput}

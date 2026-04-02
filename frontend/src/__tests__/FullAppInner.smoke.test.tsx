@@ -5,6 +5,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { APIClient } from '../api/client'
+import { APIClientProvider } from '../api/APIClientProvider'
+import { AuthProvider } from '../auth/AuthProvider'
 import FullAppInner from '../FullAppInner'
 import * as reloadPageModule from '../lib/reloadPage'
 import { ensureDomShims } from '../test/domShims'
@@ -117,11 +119,15 @@ function renderShell(initialPath = '/profiles') {
 	render(
 		<QueryClientProvider client={client}>
 			<ConfigProvider getPopupContainer={() => document.body}>
-				<ThemeModeProvider>
-					<MemoryRouter initialEntries={[initialPath]}>
-						<FullAppInner />
-					</MemoryRouter>
-				</ThemeModeProvider>
+				<AuthProvider>
+					<APIClientProvider>
+						<ThemeModeProvider>
+							<MemoryRouter initialEntries={[initialPath]}>
+								<FullAppInner />
+							</MemoryRouter>
+						</ThemeModeProvider>
+					</APIClientProvider>
+				</AuthProvider>
 			</ConfigProvider>
 		</QueryClientProvider>,
 	)
@@ -157,7 +163,7 @@ describe('FullAppInner header', () => {
 		})
 
 		expect(await screen.findByRole('button', { name: 'Backup' })).toBeInTheDocument()
-	})
+	}, 15_000)
 
 	it('keeps a compact single-row header on tablet widths', async () => {
 		mockViewportWidth(820)

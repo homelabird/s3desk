@@ -5,6 +5,7 @@ import {
 	APIClient,
 	type UploadFileItem,
 } from '../../api/client'
+import { serverScopedStorageKey } from '../../lib/profileScopedStorage'
 import { TransferEstimator } from '../../lib/transfer'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import type { DownloadTask, TransfersTab, UploadTask } from './transferTypes'
@@ -61,9 +62,12 @@ export type TransfersRuntimeController = {
 export function useTransfersRuntimeController(args: UseTransfersRuntimeControllerArgs): TransfersRuntimeController {
 	const queryClient = useQueryClient()
 	const api = useMemo(() => new APIClient({ apiToken: args.apiToken }), [args.apiToken])
+	const transfersTabStorageKey = useMemo(() => serverScopedStorageKey('transfers', args.apiToken, 'tab'), [args.apiToken])
 
 	const [isOpen, setIsOpen] = useState(false)
-	const [tab, setTab] = useLocalStorageState<TransfersTab>('transfersTab', 'downloads')
+	const [tab, setTab] = useLocalStorageState<TransfersTab>(transfersTabStorageKey, 'downloads', {
+		legacyLocalStorageKey: 'transfersTab',
+	})
 
 	const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
 	const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
@@ -136,6 +140,7 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		cancelUploadTask,
 		removeUploadTask,
 		clearCompletedUploads,
+		abortAllTransfers,
 		clearAllTransfers,
 	} = useTransfersTaskActions({
 		setDownloadTasks,
@@ -147,7 +152,15 @@ export function useTransfersRuntimeController(args: UseTransfersRuntimeControlle
 		uploadItemsByTaskIdRef,
 	})
 
+	useEffect(
+		() => () => {
+			abortAllTransfers()
+		},
+		[abortAllTransfers],
+	)
+
 	const { handleUploadJobUpdate } = useTransfersUploadJobLifecycle({
+		apiToken: args.apiToken,
 		queryClient,
 		uploadTasksRef,
 		updateUploadTask,

@@ -19,6 +19,7 @@ import { extensionLabel, onActivateFromKeyboard } from './objectsGridRendererUti
 type UseObjectsObjectGridRendererArgs = Pick<
 	UseObjectsGridRenderersArgs,
 	| 'api'
+	| 'apiToken'
 	| 'bucket'
 	| 'canDragDrop'
 	| 'clearDndHover'
@@ -51,6 +52,7 @@ type UseObjectsObjectGridRendererArgs = Pick<
 export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererArgs) {
 	const {
 		api,
+		apiToken,
 		bucket,
 		canDragDrop,
 		clearDndHover,
@@ -181,6 +183,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 								<div className={gridStyles.gridCardPreviewFrame}>
 									<ObjectThumbnail
 										api={api}
+										apiToken={apiToken}
 										profileId={profileId}
 										bucket={bucket}
 										objectKey={key}
@@ -234,6 +237,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 		},
 		[
 			api,
+			apiToken,
 			bucket,
 			canDragDrop,
 			clearDndHover,

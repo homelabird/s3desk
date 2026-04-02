@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { DownloadTask, UploadTask } from '../transferTypes'
-import { useTransfersPersistence } from '../useTransfersPersistence'
+import { clearPersistedTransfersStorage, useTransfersPersistence } from '../useTransfersPersistence'
 
 const INTERRUPTED_MESSAGE = 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.'
 
@@ -79,13 +79,15 @@ function buildWaitingJobUploadTask(id: string): UploadTask {
 describe('useTransfersPersistence', () => {
 	beforeEach(() => {
 		window.localStorage.clear()
+		window.sessionStorage.clear()
 	})
 
 	afterEach(() => {
 		window.localStorage.clear()
+		window.sessionStorage.clear()
 	})
 
-	it('restores persisted active tasks as canceled', async () => {
+	it('migrates legacy persisted transfers from localStorage into sessionStorage', async () => {
 		window.localStorage.setItem(
 			'transfersHistoryV1',
 			JSON.stringify({
@@ -115,10 +117,12 @@ describe('useTransfersPersistence', () => {
 		expect(result.current.downloadTasks[0]?.finishedAtMs).toBeTypeOf('number')
 		expect(result.current.uploadTasks[0]?.finishedAtMs).toBeTypeOf('number')
 		expect(result.current.uploadTasks[0]?.preview).toBeUndefined()
+		expect(window.localStorage.getItem('transfersHistoryV1')).toBeNull()
+		expect(window.sessionStorage.getItem('transfersHistoryV1')).not.toBeNull()
 	})
 
 	it('restores waiting upload jobs without canceling them', async () => {
-		window.localStorage.setItem(
+		window.sessionStorage.setItem(
 			'transfersHistoryV1',
 			JSON.stringify({
 				version: 1,
@@ -163,11 +167,11 @@ describe('useTransfersPersistence', () => {
 
 		await waitFor(() => {
 			expect(result.current.downloadTasks).toHaveLength(2)
-			const raw = window.localStorage.getItem('transfersHistoryV1')
+			const raw = window.sessionStorage.getItem('transfersHistoryV1')
 			expect(raw).not.toBeNull()
 		})
 
-		const saved = JSON.parse(window.localStorage.getItem('transfersHistoryV1') ?? '{}') as {
+		const saved = JSON.parse(window.sessionStorage.getItem('transfersHistoryV1') ?? '{}') as {
 			downloads?: Array<{ id: string; kind: string }>
 			uploads?: Array<{ id: string; preview?: unknown }>
 		}
@@ -175,5 +179,15 @@ describe('useTransfersPersistence', () => {
 		expect(saved.downloads?.every((item) => item.kind !== 'object_device')).toBe(true)
 		expect(saved.uploads?.map((item) => item.id)).toEqual(['u1'])
 		expect(saved.uploads?.[0]?.preview).toBeUndefined()
+	})
+
+	it('clears persisted transfers from both sessionStorage and legacy localStorage', () => {
+		window.sessionStorage.setItem('transfersHistoryV1', JSON.stringify({ version: 1, savedAtMs: 1, downloads: [], uploads: [] }))
+		window.localStorage.setItem('transfersHistoryV1', JSON.stringify({ version: 1, savedAtMs: 1, downloads: [], uploads: [] }))
+
+		clearPersistedTransfersStorage()
+
+		expect(window.sessionStorage.getItem('transfersHistoryV1')).toBeNull()
+		expect(window.localStorage.getItem('transfersHistoryV1')).toBeNull()
 	})
 })

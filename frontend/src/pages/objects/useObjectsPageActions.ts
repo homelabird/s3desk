@@ -75,6 +75,7 @@ export function useObjectsPageActions({
 	setTreeDrawerOpen,
 }: UseObjectsPageActionsArgs) {
 	const { handleFavoriteSelect } = useObjectsSelectionEffects({
+		apiToken,
 		bucket,
 		prefix,
 		profileId,
@@ -118,6 +119,7 @@ export function useObjectsPageActions({
 	})
 
 	const uploadActions = useObjectsPageUploadActions({
+		apiToken,
 		profileId,
 		bucket,
 		prefix,

@@ -6,6 +6,7 @@ import type { TransfersContextValue } from '../../../components/Transfers'
 import { useObjectsUploadDrop } from '../useObjectsUploadDrop'
 
 const messageErrorMock = vi.fn()
+const messageDestroyMock = vi.fn()
 const messageInfoMock = vi.fn()
 const messageOpenMock = vi.fn()
 const messageWarningMock = vi.fn()
@@ -15,6 +16,7 @@ vi.mock('antd', async () => {
 	return {
 		...actual,
 		message: {
+			destroy: (...args: unknown[]) => messageDestroyMock(...args),
 			error: (...args: unknown[]) => messageErrorMock(...args),
 			info: (...args: unknown[]) => messageInfoMock(...args),
 			open: (...args: unknown[]) => messageOpenMock(...args),
@@ -46,7 +48,10 @@ function createTransfersStub(): TransfersContextValue {
 	} as unknown as TransfersContextValue
 }
 
-function createExternalUploadEvent(files: File[] = []): ReactDragEvent {
+function createExternalUploadEvent(
+	files: File[] = [],
+	items: DataTransferItemList | null = null,
+): ReactDragEvent {
 	return {
 		preventDefault: vi.fn(),
 		stopPropagation: vi.fn(),
@@ -54,7 +59,7 @@ function createExternalUploadEvent(files: File[] = []): ReactDragEvent {
 			dropEffect: 'copy',
 			effectAllowed: 'copy',
 			files: files as unknown as FileList,
-			items: [] as unknown as DataTransferItemList,
+			items: items ?? ([] as unknown as DataTransferItemList),
 			types: ['Files'],
 			getData: () => '',
 			setData: vi.fn(),
@@ -68,6 +73,7 @@ describe('useObjectsUploadDrop', () => {
 	afterEach(() => {
 		vi.restoreAllMocks()
 		messageErrorMock.mockClear()
+		messageDestroyMock.mockClear()
 		messageInfoMock.mockClear()
 		messageOpenMock.mockClear()
 		messageWarningMock.mockClear()
@@ -77,6 +83,7 @@ describe('useObjectsUploadDrop', () => {
 		const transfers = createTransfersStub()
 		const { result } = renderHook(() =>
 			useObjectsUploadDrop({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				prefix: 'folder/',
@@ -107,6 +114,7 @@ describe('useObjectsUploadDrop', () => {
 		const file = new File(['alpha'], 'alpha.txt', { type: 'text/plain' })
 		const { result } = renderHook(() =>
 			useObjectsUploadDrop({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				prefix: 'folder/',
@@ -139,5 +147,62 @@ describe('useObjectsUploadDrop', () => {
 		})
 		expect((transfers.openTransfers as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('uploads')
 		expect(result.current.uploadDropActive).toBe(false)
+	})
+
+	it('ignores a stale folder-drop completion after the api token changes', async () => {
+		const transfers = createTransfersStub()
+		const file = new File(['alpha'], 'alpha.txt', { type: 'text/plain' })
+		let resolveFile: ((file: File) => void) | null = null
+		const event = createExternalUploadEvent(
+			[],
+			[
+				{
+					webkitGetAsEntry: () => ({
+						isFile: true,
+						isDirectory: false,
+						fullPath: '/folder/alpha.txt',
+						name: 'alpha.txt',
+						file: (success: (next: File) => void) => {
+							resolveFile = success
+						},
+					}),
+				},
+			] as unknown as DataTransferItemList,
+		)
+
+		const { result, rerender } = renderHook(
+			({ apiToken }) =>
+				useObjectsUploadDrop({
+					apiToken,
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					prefix: 'folder/',
+					isOffline: false,
+					uploadsEnabled: true,
+					uploadsDisabledReason: null,
+					transfers,
+				}),
+			{
+				initialProps: { apiToken: 'token-a' },
+			},
+		)
+
+		act(() => {
+			result.current.onUploadDrop(event)
+		})
+
+		rerender({ apiToken: 'token-b' })
+
+		await act(async () => {
+			resolveFile?.(file)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		await waitFor(() => {
+			expect(messageDestroyMock).toHaveBeenCalledWith('upload_prepare')
+		})
+		expect((transfers.queueUploadFiles as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+		expect((transfers.openTransfers as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
 	})
 })

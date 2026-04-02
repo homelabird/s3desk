@@ -1,24 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type SetStateAction } from 'react'
+
+import { shouldIgnoreGlobalKeyboardShortcut } from './keyboardShortcuts'
 
 /**
  * Hook that manages keyboard shortcut guide visibility and G-then-X navigation.
  */
-export function useKeyboardShortcuts(navigate: (path: string) => void) {
-	const [guideOpen, setGuideOpen] = useState(false)
+type GuideOverlayState = {
+	open: boolean
+	scopeKey: string | null
+}
+
+export function useKeyboardShortcuts(navigate: (path: string) => void, scopeKey = '__global__') {
+	const [guideState, setGuideState] = useState<GuideOverlayState>({ open: false, scopeKey: null })
 	const [pendingG, setPendingG] = useState(false)
+	const guideOpen = guideState.open && guideState.scopeKey === scopeKey
+	const setGuideOpen = useCallback((next: SetStateAction<boolean>) => {
+		setGuideState((prev) => {
+			const prevOpen = prev.open && prev.scopeKey === scopeKey
+			const resolved = typeof next === 'function' ? next(prevOpen) : next
+			return resolved ? { open: true, scopeKey } : { open: false, scopeKey: null }
+		})
+	}, [scopeKey])
 
 	useEffect(() => {
 		let gTimer: ReturnType<typeof setTimeout> | null = null
 
 		const handler = (e: KeyboardEvent) => {
-			const target = e.target as HTMLElement | null
-			const tag = target?.tagName?.toLowerCase()
-			const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable === true
-			if (isInput) return
+			if (shouldIgnoreGlobalKeyboardShortcut(e)) return
 
 			if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
 				e.preventDefault()
-				setGuideOpen((v) => !v)
+				setGuideState((prev) => {
+					const prevOpen = prev.open && prev.scopeKey === scopeKey
+					return prevOpen ? { open: false, scopeKey: null } : { open: true, scopeKey }
+				})
 				return
 			}
 
@@ -44,7 +59,7 @@ export function useKeyboardShortcuts(navigate: (path: string) => void) {
 			document.removeEventListener('keydown', handler)
 			if (gTimer) clearTimeout(gTimer)
 		}
-	}, [pendingG, navigate])
+	}, [pendingG, navigate, scopeKey])
 
 	return { guideOpen, setGuideOpen }
 }

@@ -14,9 +14,14 @@ import {
 	ToolOutlined,
 } from '@ant-design/icons'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { APIClient, APIError } from './api/client'
+import { useAPIClient } from './api/useAPIClient'
+import { APIError } from './api/client'
+import { queryKeys } from './api/queryKeys'
+import { renderProfileGate } from './app/ProfileGate'
+import { renderUnauthorizedAuthGate } from './app/RequireAuth'
+import { useAuth } from './auth/useAuth'
 import { BrandLockup } from './components/BrandLockup'
 import { JobQueueBanner } from './components/JobQueueBanner'
 import { MenuPopover } from './components/MenuPopover'
@@ -26,11 +31,16 @@ import { SidebarBackupAction } from './components/SidebarBackupAction'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton, TransfersProvider } from './components/TransfersShell'
 import { getProviderCapabilities } from './lib/providerCapabilities'
+import {
+	readLegacyActiveProfileIdForMigration,
+	serverScopedStorageKey,
+	shouldUseLegacyActiveProfileStorageMigration,
+} from './lib/profileScopedStorage'
 import { reloadPage } from './lib/reloadPage'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
 import { useLocalStorageState } from './lib/useLocalStorageState'
-import { useSessionStorageState } from './lib/useSessionStorageState'
 import { useThemeMode } from './useThemeMode'
+import { clearPersistedTransfersStorage } from './components/transfers/useTransfersPersistence'
 import styles from './FullAppInner.module.css'
 
 const ProfilesPage = lazy(async () => {
@@ -61,10 +71,6 @@ const KeyboardShortcutGuide = lazy(async () => {
 	const m = await import('./components/KeyboardShortcutGuide')
 	return { default: m.KeyboardShortcutGuide }
 })
-const LoginPage = lazy(async () => {
-	const m = await import('./pages/LoginPage')
-	return { default: m.LoginPage }
-})
 
 const { Header, Content, Sider } = Layout
 
@@ -73,6 +79,23 @@ type NavItem = {
 	label: string
 	icon: ReactNode
 	to: string
+}
+
+type ScopedOverlayState = {
+	open: boolean
+	scopeKey: string | null
+}
+
+function readStoredProfileId(storageKey: string): string | null {
+	if (typeof window === 'undefined') return null
+	try {
+		const raw = window.localStorage.getItem(storageKey)
+		if (raw === null) return null
+		const parsed = JSON.parse(raw)
+		return typeof parsed === 'string' && parsed.trim() ? parsed : null
+	} catch {
+		return null
+	}
 }
 
 export default function FullAppInner() {
@@ -84,41 +107,83 @@ export default function FullAppInner() {
 	const usesCompactHeader = !isDesktop
 	const { mode, toggleMode } = useThemeMode()
 
-	const [apiToken, setApiToken] = useSessionStorageState('apiToken', '', { legacyLocalStorageKey: 'apiToken' })
-	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
-	const [navOpen, setNavOpen] = useState(false)
+	const { apiToken, setApiToken } = useAuth()
+	const profileStorageKey = useMemo(() => serverScopedStorageKey('app', apiToken, 'profileId'), [apiToken])
+	const legacyActiveProfileStorageKey = useMemo(
+		() => (shouldUseLegacyActiveProfileStorageMigration(apiToken) ? 'profileId' : undefined),
+		[apiToken],
+	)
+	const initialStoredProfileId = useMemo(
+		() => readStoredProfileId(profileStorageKey) ?? readLegacyActiveProfileIdForMigration(apiToken),
+		[apiToken, profileStorageKey],
+	)
+	const [profileId, setProfileId] = useLocalStorageState<string | null>(profileStorageKey, initialStoredProfileId, {
+		legacyLocalStorageKey: legacyActiveProfileStorageKey,
+	})
+	const previousApiTokenRef = useRef<string | null | undefined>(undefined)
 	const [searchParams, setSearchParams] = useSearchParams()
-	const settingsOpen = searchParams.has('settings')
-	const { guideOpen, setGuideOpen } = useKeyboardShortcuts((path) => navigate(path))
 
-	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
+	const api = useAPIClient()
 	const metaQuery = useQuery({
-		queryKey: ['meta', apiToken],
+		queryKey: queryKeys.server.meta(apiToken),
 		queryFn: () => api.server.getMeta(),
 		retry: false,
 	})
 	const profilesQuery = useQuery({
-		queryKey: ['profiles', apiToken],
+		queryKey: queryKeys.profiles.list(apiToken),
 		queryFn: () => api.profiles.listProfiles(),
 	})
 	useEffect(() => {
+		if (previousApiTokenRef.current === undefined) {
+			previousApiTokenRef.current = apiToken
+			return
+		}
+		if (previousApiTokenRef.current === apiToken) return
+		previousApiTokenRef.current = apiToken
+		clearPersistedTransfersStorage()
+	}, [apiToken])
+	useEffect(() => {
 		const profiles = profilesQuery.data ?? []
 		if (!profiles.length) {
+			if (profileId !== null) {
+				setProfileId(null)
+			}
 			return
 		}
 		const activeProfile = profiles.find((profile) => profile.id === profileId)
-		if (!activeProfile) {
-			setProfileId(profiles[0]?.id ?? null)
+		if (activeProfile) {
+			return
 		}
-	}, [profileId, profilesQuery.data, setProfileId])
+		const storedProfileId = initialStoredProfileId
+		if (storedProfileId && profiles.some((profile) => profile.id === storedProfileId)) {
+			setProfileId(storedProfileId)
+			return
+		}
+		setProfileId(profiles[0]?.id ?? null)
+	}, [initialStoredProfileId, profileId, profilesQuery.data, setProfileId])
 	const safeProfileId = useMemo(() => {
 		const profiles = profilesQuery.data ?? []
-		if (!profileId || profiles.length === 0) {
+		if (profiles.length === 0) {
 			return null
 		}
+		if (!profileId) {
+			const storedProfileId = initialStoredProfileId
+			if (storedProfileId && profiles.some((profile) => profile.id === storedProfileId)) {
+				return storedProfileId
+			}
+			return profiles[0]?.id ?? null
+		}
 		const activeProfile = profiles.some((profile) => profile.id === profileId)
-		return activeProfile ? profileId : profiles[0]?.id ?? null
-	}, [profileId, profilesQuery.data])
+		if (activeProfile) {
+			return profileId
+		}
+		const storedProfileId = initialStoredProfileId
+		if (storedProfileId && profiles.some((profile) => profile.id === storedProfileId)) {
+			return storedProfileId
+		}
+		return profiles[0]?.id ?? null
+	}, [initialStoredProfileId, profileId, profilesQuery.data])
+	const profileGate = renderProfileGate({ pathname: location.pathname, profileId: safeProfileId })
 	const uploadCapabilityByProfileId = useMemo(() => {
 		const out: Record<string, { presignedUpload: boolean; directUpload: boolean }> = {}
 		const providerMatrix = metaQuery.data?.capabilities?.providers
@@ -154,13 +219,22 @@ export default function FullAppInner() {
 	)
 
 	const uploadDirectStream = metaQuery.data?.uploadDirectStream ?? false
+	const shellScopeKey = `${apiToken || '__no_server__'}:${safeProfileId?.trim() || '__no_profile__'}`
+	const [navState, setNavState] = useState<ScopedOverlayState>({ open: false, scopeKey: null })
+	const [settingsState, setSettingsState] = useState<ScopedOverlayState>({ open: false, scopeKey: null })
+	const navOpen = navState.open && navState.scopeKey === shellScopeKey
+	const settingsOpen =
+		searchParams.has('settings') && (settingsState.scopeKey === null || (settingsState.open && settingsState.scopeKey === shellScopeKey))
+	const { guideOpen, setGuideOpen } = useKeyboardShortcuts((path) => navigate(path), shellScopeKey)
 
 	const openSettings = () => {
+		setSettingsState({ open: true, scopeKey: shellScopeKey })
 		const next = new URLSearchParams(searchParams)
 		next.set('settings', '1')
 		setSearchParams(next, { replace: false })
 	}
 	const closeSettings = () => {
+		setSettingsState({ open: false, scopeKey: null })
 		if (!searchParams.has('settings')) return
 		const next = new URLSearchParams(searchParams)
 		next.delete('settings')
@@ -206,7 +280,7 @@ export default function FullAppInner() {
 				))}
 			</nav>
 			<div className={styles.navFooter}>
-				<SidebarBackupAction api={api} meta={metaQuery.data} onActionComplete={onSelect} />
+				<SidebarBackupAction api={api} meta={metaQuery.data} onActionComplete={onSelect} scopeKey={shellScopeKey} />
 			</div>
 		</div>
 	)
@@ -224,18 +298,14 @@ export default function FullAppInner() {
 
 	if (metaQuery.isError) {
 		const err = metaQuery.error
-		const isUnauthorized = err instanceof APIError && err.status === 401
-		if (isUnauthorized) {
-			return (
-				<Suspense fallback={<div className={styles.fullscreenCenter}><Spin /></div>}>
-					<LoginPage
-						initialToken={apiToken}
-						onLogin={(token) => setApiToken(token)}
-						onClearSavedToken={() => setApiToken('')}
-						error={err}
-					/>
-				</Suspense>
-			)
+		const unauthorizedGate = renderUnauthorizedAuthGate({
+			error: err,
+			apiToken,
+			setApiToken,
+			fallback: <div className={styles.fullscreenCenter}><Spin /></div>,
+		})
+		if (unauthorizedGate) {
+			return unauthorizedGate
 		}
 
 		const title = err instanceof APIError ? `${err.code}: ${err.message}` : err instanceof Error ? err.message : 'Unknown error'
@@ -276,11 +346,17 @@ export default function FullAppInner() {
 		)
 	}
 
+	if (profileGate && !profilesQuery.isPending) {
+		return profileGate
+	}
+
 	return (
 		<TransfersProvider
+			key={`transfers:${apiToken || 'none'}`}
 			apiToken={apiToken}
 			uploadDirectStream={uploadDirectStream}
 			uploadCapabilityByProfileId={uploadCapabilityByProfileId}
+			eager
 		>
 			<Layout className={styles.appLayout}>
 				{isDesktop ? (
@@ -318,7 +394,7 @@ export default function FullAppInner() {
 									<Button
 										type="text"
 										icon={<MenuOutlined />}
-										onClick={() => setNavOpen(true)}
+										onClick={() => setNavState({ open: true, scopeKey: shellScopeKey })}
 										aria-label="Open navigation"
 									/>
 								)}
@@ -366,7 +442,7 @@ export default function FullAppInner() {
 										) : null}
 									</>
 								) : (
-									<MenuPopover menu={compactHeaderMenu} align="end">
+									<MenuPopover menu={compactHeaderMenu} align="end" scopeKey={shellScopeKey}>
 										{({ toggle }) => (
 											<Button type="text" icon={<EllipsisOutlined />} aria-label="More actions" onClick={toggle} />
 										)}
@@ -405,16 +481,66 @@ export default function FullAppInner() {
 								<Routes>
 									<Route
 										path="/"
-										element={<ProfilesPage apiToken={apiToken} profileId={safeProfileId} setProfileId={setProfileId} />}
+										element={
+											<ProfilesPage
+												key={`profiles:${apiToken || 'none'}`}
+												apiToken={apiToken}
+												profileId={safeProfileId}
+												setProfileId={setProfileId}
+											/>
+										}
 									/>
 									<Route
 										path="/profiles"
-										element={<ProfilesPage apiToken={apiToken} profileId={safeProfileId} setProfileId={setProfileId} />}
+										element={
+											<ProfilesPage
+												key={`profiles:${apiToken || 'none'}`}
+												apiToken={apiToken}
+												profileId={safeProfileId}
+												setProfileId={setProfileId}
+											/>
+										}
 									/>
-									<Route path="/buckets" element={<BucketsPage apiToken={apiToken} profileId={safeProfileId} />} />
-									<Route path="/objects" element={<ObjectsPage apiToken={apiToken} profileId={safeProfileId} />} />
-									<Route path="/uploads" element={<UploadsPage apiToken={apiToken} profileId={safeProfileId} />} />
-									<Route path="/jobs" element={<JobsPage apiToken={apiToken} profileId={safeProfileId} />} />
+									<Route
+										path="/buckets"
+										element={
+											<BucketsPage
+												key={`buckets:${shellScopeKey}`}
+												apiToken={apiToken}
+												profileId={safeProfileId}
+											/>
+										}
+									/>
+									<Route
+										path="/objects"
+										element={
+											<ObjectsPage
+												key={`objects:${shellScopeKey}`}
+												apiToken={apiToken}
+												profileId={safeProfileId}
+											/>
+										}
+									/>
+									<Route
+										path="/uploads"
+										element={
+											<UploadsPage
+												key={`uploads:${shellScopeKey}`}
+												apiToken={apiToken}
+												profileId={safeProfileId}
+											/>
+										}
+									/>
+									<Route
+										path="/jobs"
+										element={
+											<JobsPage
+												key={`jobs:${apiToken || 'none'}:${safeProfileId ?? 'none'}:${location.key}`}
+												apiToken={apiToken}
+												profileId={safeProfileId}
+											/>
+										}
+									/>
 									<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
 								</Routes>
 							</Suspense>
@@ -424,7 +550,7 @@ export default function FullAppInner() {
 
 				<OverlaySheet
 					open={!isDesktop && navOpen}
-					onClose={() => setNavOpen(false)}
+					onClose={() => setNavState({ open: false, scopeKey: null })}
 					placement="left"
 					title="Navigation"
 					width="min(80vw, 360px)"
@@ -441,11 +567,12 @@ export default function FullAppInner() {
 							<BrandLockup subtitle="Local Dashboard" />
 						</button>
 					</div>
-					{renderNav(() => setNavOpen(false))}
+					{renderNav(() => setNavState({ open: false, scopeKey: null }))}
 				</OverlaySheet>
 
 				<Suspense fallback={null}>
 					<SettingsDrawer
+						key={`settings:${shellScopeKey}`}
 						open={settingsOpen}
 						onClose={closeSettings}
 						apiToken={apiToken}

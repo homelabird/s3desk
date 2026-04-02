@@ -6,9 +6,11 @@ export async function invalidateGovernance(
   queryClient: QueryClient,
   profileId: string,
   bucket: string,
+  apiToken: string,
 ) {
   await queryClient.invalidateQueries({
-    queryKey: ["bucketGovernance", profileId, bucket],
+    queryKey: ["bucketGovernance", profileId, bucket, apiToken],
+    exact: true,
   });
 }
 
@@ -17,11 +19,13 @@ export async function invalidateLinkedBucketState(
   profileId: string,
   bucket: string,
   provider: Profile["provider"],
+  apiToken: string,
 ) {
-  await invalidateGovernance(queryClient, profileId, bucket);
+  await invalidateGovernance(queryClient, profileId, bucket, apiToken);
   if (provider === "gcp_gcs" || provider === "azure_blob") {
     await queryClient.invalidateQueries({
-      queryKey: ["bucketPolicy", profileId, bucket],
+      queryKey: ["bucketPolicy", profileId, bucket, apiToken],
+      exact: true,
     });
   }
 }

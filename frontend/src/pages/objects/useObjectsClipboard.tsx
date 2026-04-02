@@ -1,6 +1,6 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
 import { Button, Space, Typography, message } from 'antd'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
@@ -10,8 +10,28 @@ import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { fileNameFromKey, normalizePrefix } from './objectsListUtils'
 import type { ClipboardObjects } from './objectsActionCatalog'
 
+const INTERNAL_CLIPBOARD_BY_SERVER_SCOPE = new Map<string, ClipboardObjects>()
+
+function getClipboardServerScope(apiToken: string): string {
+	return apiToken.trim() || '__no_server__'
+}
+
+function readInternalClipboard(apiToken: string): ClipboardObjects | null {
+	return INTERNAL_CLIPBOARD_BY_SERVER_SCOPE.get(getClipboardServerScope(apiToken)) ?? null
+}
+
+function writeInternalClipboard(apiToken: string, value: ClipboardObjects | null) {
+	const scope = getClipboardServerScope(apiToken)
+	if (!value) {
+		INTERNAL_CLIPBOARD_BY_SERVER_SCOPE.delete(scope)
+		return
+	}
+	INTERNAL_CLIPBOARD_BY_SERVER_SCOPE.set(scope, value)
+}
+
 type UseObjectsClipboardArgs = {
 	profileId: string | null
+	apiToken: string
 	bucket: string
 	prefix: string
 	selectedKeys: Set<string>
@@ -21,14 +41,32 @@ type UseObjectsClipboardArgs = {
 
 export function useObjectsClipboard({
 	profileId,
+	apiToken,
 	bucket,
 	prefix,
 	selectedKeys,
 	createJobWithRetry,
 	queryClient,
 }: UseObjectsClipboardArgs) {
-	const [clipboardObjects, setClipboardObjects] = useState<ClipboardObjects | null>(null)
+	const [clipboardObjectsState, setClipboardObjectsState] = useState<ClipboardObjects | null>(() => readInternalClipboard(apiToken))
 	const navigate = useNavigate()
+	const clipboardContextVersionRef = useRef(0)
+	const setClipboardObjects = useCallback((value: ClipboardObjects | null) => {
+		writeInternalClipboard(apiToken, value)
+		setClipboardObjectsState(value)
+	}, [apiToken])
+
+	useEffect(() => {
+		setClipboardObjectsState(readInternalClipboard(apiToken))
+	}, [apiToken])
+
+	const invalidateClipboardContext = useCallback(() => {
+		clipboardContextVersionRef.current += 1
+	}, [])
+
+	useEffect(() => {
+		invalidateClipboardContext()
+	}, [apiToken, bucket, invalidateClipboardContext, prefix, profileId])
 
 	const pasteObjectsMutation = useMutation({
 		mutationFn: async (args: {
@@ -38,6 +76,7 @@ export function useObjectsClipboard({
 			keys: string[]
 			dstBucket: string
 			dstPrefix: string
+			contextVersion: number
 		}) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
@@ -93,7 +132,17 @@ export function useObjectsClipboard({
 				},
 			})
 		},
-		onSuccess: async (job, args) => {
+		onMutate: (args) => ({
+			contextVersion: args.contextVersion,
+			scopeProfileId: profileId,
+			scopeApiToken: apiToken,
+		}),
+		onSuccess: async (job, args, context) => {
+			await queryClient.invalidateQueries({
+				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				exact: false,
+			})
+			if ((context?.contextVersion ?? args.contextVersion) !== clipboardContextVersionRef.current) return
 			message.open({
 				type: 'success',
 				content: (
@@ -109,9 +158,11 @@ export function useObjectsClipboard({
 			if (args.mode === 'move') {
 				setClipboardObjects(null)
 			}
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 		},
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err, args, context) => {
+			if ((context?.contextVersion ?? args.contextVersion) !== clipboardContextVersionRef.current) return
+			message.error(formatErr(err))
+		},
 	})
 
 	const onCopy = useCallback(async (value: string) => {
@@ -138,7 +189,7 @@ export function useObjectsClipboard({
 			}
 			message.warning(`Saved internally, but clipboard failed: ${clipboardFailureHint()}`)
 		},
-		[bucket, prefix, profileId, selectedKeys],
+		[bucket, prefix, profileId, selectedKeys, setClipboardObjects],
 	)
 
 	const commonPrefixFromKeys = useCallback((keys: string[]): string => {
@@ -217,6 +268,7 @@ export function useObjectsClipboard({
 	}, [bucket, commonPrefixFromKeys])
 
 	const pasteClipboardObjects = useCallback(async () => {
+		const pasteContextVersion = clipboardContextVersionRef.current
 		if (!profileId) {
 			message.info('Select a profile first')
 			return
@@ -226,19 +278,21 @@ export function useObjectsClipboard({
 			return
 		}
 
-		if (clipboardObjects?.srcProfileId && clipboardObjects.srcProfileId !== profileId) {
+		if (clipboardObjectsState?.srcProfileId && clipboardObjectsState.srcProfileId !== profileId) {
 			setClipboardObjects(null)
 			message.warning('Clipboard objects came from a different profile. Copy them again after switching profiles.')
 			return
 		}
 
-		const src = clipboardObjects ?? (await readClipboardObjectsFromSystemClipboard())
+		const src = clipboardObjectsState ?? (await readClipboardObjectsFromSystemClipboard())
 		if (!src) return
+		if (pasteContextVersion !== clipboardContextVersionRef.current) return
 
 		setClipboardObjects(src)
 
 		const mode = src.mode
 		const doPaste = async () => {
+			if (pasteContextVersion !== clipboardContextVersionRef.current) return
 			await pasteObjectsMutation.mutateAsync({
 				mode,
 				srcBucket: src.srcBucket,
@@ -246,6 +300,7 @@ export function useObjectsClipboard({
 				keys: src.keys,
 				dstBucket: bucket,
 				dstPrefix: prefix,
+				contextVersion: pasteContextVersion,
 			})
 		}
 
@@ -262,10 +317,10 @@ export function useObjectsClipboard({
 		}
 
 		await doPaste()
-	}, [bucket, clipboardObjects, pasteObjectsMutation, prefix, profileId, readClipboardObjectsFromSystemClipboard])
+	}, [bucket, clipboardObjectsState, pasteObjectsMutation, prefix, profileId, readClipboardObjectsFromSystemClipboard, setClipboardObjects])
 
 	return {
-		clipboardObjects,
+		clipboardObjects: clipboardObjectsState,
 		onCopy,
 		copySelectionToClipboard,
 		pasteClipboardObjects,

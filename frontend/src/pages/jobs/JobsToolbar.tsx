@@ -23,6 +23,7 @@ type ErrorCodeSuggestion = {
 }
 
 type Props = {
+	scopeKey: string
 	activeProfileName?: string | null
 	isOffline: boolean
 	uploadSupported: boolean
@@ -71,6 +72,7 @@ const MOBILE_FILTERS_MEDIA_QUERY = '(max-width: 480px)'
 export function JobsToolbar(props: Props) {
 	const screens = Grid.useBreakpoint()
 	const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+	const [mobileFiltersScopeKey, setMobileFiltersScopeKey] = useState('')
 	const [useCompactFilters, setUseCompactFilters] = useState(
 		() => typeof window !== 'undefined' && window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY).matches,
 	)
@@ -90,13 +92,21 @@ export function JobsToolbar(props: Props) {
 		const media = window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY)
 		const update = (matches: boolean) => {
 			setUseCompactFilters(matches)
-			if (!matches) setMobileFiltersOpen(false)
+			if (!matches) {
+				setMobileFiltersOpen(false)
+				setMobileFiltersScopeKey('')
+			}
 		}
 		update(media.matches)
 		const listener = (event: MediaQueryListEvent) => update(event.matches)
 		media.addEventListener('change', listener)
 		return () => media.removeEventListener('change', listener)
 	}, [])
+	const mobileFiltersOpenVisible = mobileFiltersOpen && mobileFiltersScopeKey === props.scopeKey
+	const setScopedMobileFiltersOpen = (nextOpen: boolean) => {
+		setMobileFiltersOpen(nextOpen)
+		setMobileFiltersScopeKey(nextOpen ? props.scopeKey : '')
+	}
 
 	const advancedFilterFields = (
 		<>
@@ -182,7 +192,7 @@ export function JobsToolbar(props: Props) {
 								</Button>
 							</span>
 						</Tooltip>
-						<MenuPopover menu={props.topActionsMenu} align="end">
+						<MenuPopover menu={props.topActionsMenu} align="end" scopeKey={props.scopeKey}>
 							{({ toggle }) => (
 								<Button icon={<MoreOutlined />} onClick={toggle}>
 									More
@@ -273,7 +283,7 @@ export function JobsToolbar(props: Props) {
 					{useCompactFilters ? (
 						<Button
 							icon={<FilterOutlined />}
-							onClick={() => setMobileFiltersOpen(true)}
+							onClick={() => setScopedMobileFiltersOpen(true)}
 							data-testid="jobs-mobile-filters-trigger"
 							className={styles.mobileFiltersTrigger}
 						>
@@ -286,6 +296,7 @@ export function JobsToolbar(props: Props) {
 						Reset filters
 					</Button>
 					<PopoverSurface
+						key={`columns:${props.scopeKey}`}
 						align="end"
 						contentClassName={styles.columnsDropdown}
 						content={({ close }) => (
@@ -329,8 +340,8 @@ export function JobsToolbar(props: Props) {
 				) : null}
 				{useCompactFilters ? (
 					<OverlaySheet
-						open={mobileFiltersOpen}
-						onClose={() => setMobileFiltersOpen(false)}
+						open={mobileFiltersOpenVisible}
+						onClose={() => setScopedMobileFiltersOpen(false)}
 						title="Job filters"
 						placement={screens.md ? 'right' : 'bottom'}
 						height={!screens.md ? 'min(80dvh, 560px)' : undefined}
@@ -342,7 +353,7 @@ export function JobsToolbar(props: Props) {
 								<Button onClick={props.onResetFilters} disabled={!props.filtersDirty}>
 									Reset filters
 								</Button>
-								<Button type="primary" onClick={() => setMobileFiltersOpen(false)}>
+								<Button type="primary" onClick={() => setScopedMobileFiltersOpen(false)}>
 									Done
 								</Button>
 							</>

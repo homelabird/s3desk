@@ -19,6 +19,7 @@ type Props = {
 }
 
 export function LocalPathBrowseModal(props: Props) {
+	const { api, onCancel, onSelect, open, profileId, title } = props
 	const [treeData, setTreeData] = useState<TreeNode[]>([])
 	const [expandedKeys, setExpandedKeys] = useState<string[]>([])
 	const [loadingKeys, setLoadingKeys] = useState<string[]>([])
@@ -28,17 +29,28 @@ export function LocalPathBrowseModal(props: Props) {
 	const [error, setError] = useState<string | null>(null)
 	const [selectedPath, setSelectedPath] = useState<string | null>(null)
 
-	const loadRoot = useCallback(async () => {
-		if (!props.profileId) return
-		const epoch = ++epochRef.current
-		setLoadingRoot(true)
-		setError(null)
-		setSelectedPath(null)
+	const resetBrowseState = useCallback(() => {
+		setTreeData([])
 		setExpandedKeys([])
 		setLoadingKeys([])
+		setLoadingRoot(false)
+		setError(null)
+		setSelectedPath(null)
 		loadedKeysRef.current.clear()
+	}, [])
+
+	const invalidateBrowseSession = useCallback(() => {
+		epochRef.current += 1
+	}, [])
+
+	const loadRoot = useCallback(async () => {
+		if (!profileId) return
+		invalidateBrowseSession()
+		const epoch = epochRef.current
+		resetBrowseState()
+		setLoadingRoot(true)
 		try {
-			const resp = await props.api.objects.listLocalEntries({ profileId: props.profileId })
+			const resp = await api.objects.listLocalEntries({ profileId })
 			if (epochRef.current !== epoch) return
 
 			const roots = (resp.entries ?? []).map((e): TreeNode => ({
@@ -62,16 +74,22 @@ export function LocalPathBrowseModal(props: Props) {
 		} finally {
 			if (epochRef.current === epoch) setLoadingRoot(false)
 		}
-	}, [props.api, props.profileId])
+	}, [api, invalidateBrowseSession, profileId, resetBrowseState])
 
 	useEffect(() => {
-		if (!props.open) return
+		if (!open) return
 		void loadRoot()
-	}, [loadRoot, props.open])
+	}, [loadRoot, open])
+
+	useEffect(() => {
+		if (open && profileId) return
+		invalidateBrowseSession()
+		resetBrowseState()
+	}, [invalidateBrowseSession, open, profileId, resetBrowseState])
 
 	const onLoadData = useCallback(
 		async (nodeKey: string) => {
-			if (!props.profileId) return
+			if (!profileId) return
 			const key = String(nodeKey)
 			if (!key) return
 			if (loadedKeysRef.current.has(key)) return
@@ -81,7 +99,7 @@ export function LocalPathBrowseModal(props: Props) {
 
 			const epoch = epochRef.current
 			try {
-				const resp = await props.api.objects.listLocalEntries({ profileId: props.profileId, path: key })
+				const resp = await api.objects.listLocalEntries({ profileId, path: key })
 				if (epochRef.current !== epoch) return
 				const children = (resp.entries ?? []).map((e): TreeNode => ({
 					key: e.path,
@@ -96,37 +114,44 @@ export function LocalPathBrowseModal(props: Props) {
 				setTreeData((prev) => upsertTreeChildren(prev, key, children))
 				setLoadingKeys((prev) => prev.filter((k) => k !== key))
 			} catch (err) {
+				if (epochRef.current !== epoch) return
 				loadedKeysRef.current.delete(key)
 				setError(formatErr(err))
 				setLoadingKeys((prev) => prev.filter((k) => k !== key))
 			}
 		},
-		[props.api, props.profileId],
+		[api, profileId],
 	)
 
+	const handleCancel = useCallback(() => {
+		invalidateBrowseSession()
+		resetBrowseState()
+		onCancel()
+	}, [invalidateBrowseSession, onCancel, resetBrowseState])
+
 	return (
-		<DialogModal
-			open={props.open}
-			title={props.title ?? 'Browse local folders'}
-			onClose={props.onCancel}
+			<DialogModal
+			open={open}
+			title={title ?? 'Browse local folders'}
+			onClose={handleCancel}
 			width={760}
 			footer={
 				<>
-					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button onClick={handleCancel}>Cancel</Button>
 					<Button
-						type="primary"
-						disabled={!selectedPath}
-						onClick={() => {
-							if (!selectedPath) return
-							props.onSelect(selectedPath)
-						}}
-					>
+							type="primary"
+							disabled={!selectedPath}
+							onClick={() => {
+								if (!selectedPath) return
+								onSelect(selectedPath)
+							}}
+						>
 						Select folder
 					</Button>
 				</>
 			}
 		>
-			{!props.profileId ? (
+				{!profileId ? (
 				<Alert type="warning" showIcon title="Select a profile first" />
 			) : (
 				<Space orientation="vertical" size="small" style={{ width: '100%' }}>

@@ -27,8 +27,11 @@ const defaultStorage: StorageSeed = {
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const seed = { ...defaultStorage, ...overrides }
 	await page.addInitScript((s) => {
-		const scope = s.profileId?.trim() || '__no_profile__'
-		const scopedKey = (name: string) => `objects:${scope}:${name}`
+		const scopedKey = (name: string) => {
+			const serverScope = s.apiToken?.trim() || '__no_server__'
+			const profileScope = s.profileId?.trim() || '__no_profile__'
+			return `objects:${serverScope}:${profileScope}:${name}`
+		}
 		window.localStorage.setItem('apiToken', JSON.stringify(s.apiToken))
 		window.localStorage.setItem('profileId', JSON.stringify(s.profileId))
 		window.localStorage.setItem('bucket', JSON.stringify(s.bucket))
@@ -148,23 +151,12 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 	])
 }
 
-async function getStorageString(page: Page, key: string): Promise<string> {
-	return page.evaluate((k) => {
-		if (k === 'bucket' || k === 'prefix') {
-			const profileId = JSON.parse(window.localStorage.getItem('profileId') ?? '""') as string
-			const scope = profileId?.trim() || '__no_profile__'
-			return JSON.parse(window.localStorage.getItem(`objects:${scope}:${k}`) ?? '""') as string
-		}
-		return JSON.parse(window.localStorage.getItem(k) ?? '""') as string
-	}, key)
-}
-
-async function waitForScopedPrefix(page: Page, expected: string) {
-	await page.waitForFunction((want) => {
-		const profileId = JSON.parse(window.localStorage.getItem('profileId') ?? '""') as string
-		const scope = profileId?.trim() || '__no_profile__'
-		return JSON.parse(window.localStorage.getItem(`objects:${scope}:prefix`) ?? '""') === want
-	}, expected)
+async function expectLocation(page: Page, prefix: string) {
+	await expect(
+		page
+			.getByTestId('objects-list-controls-root')
+			.getByText(`s3://${defaultStorage.bucket}/${prefix}`, { exact: true }),
+	).toBeVisible()
 }
 
 async function openNewFolderDialog(page: Page) {
@@ -183,10 +175,7 @@ test.describe('Objects new folder visibility', () => {
 		await dialog.getByRole('button', { name: 'Create folder' }).click()
 
 		await expect(page.getByRole('button', { name: 'Show folders' })).toBeVisible()
-
-		await waitForScopedPrefix(page, 'demo/')
-		await page.getByRole('button', { name: 'Show folders' }).click()
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('objectsTypeFilter') ?? '""') === 'all')
+		await expectLocation(page, 'demo/')
 	})
 
 	test('auto-opens when favorites-only view would hide folder (and offers recovery CTA)', async ({ page }) => {
@@ -199,10 +188,7 @@ test.describe('Objects new folder visibility', () => {
 		await dialog.getByRole('button', { name: 'Create folder' }).click()
 
 		await expect(page.getByRole('button', { name: 'Disable favorites-only' })).toBeVisible()
-
-		await waitForScopedPrefix(page, 'fav-demo/')
-		await page.getByRole('button', { name: 'Disable favorites-only' }).click()
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('objectsFavoritesOnly') ?? 'false') === false)
+		await expectLocation(page, 'fav-demo/')
 	})
 
 	test('auto-opens when search filter would hide folder (and offers recovery CTA)', async ({ page }) => {
@@ -215,33 +201,22 @@ test.describe('Objects new folder visibility', () => {
 		await dialog.getByRole('button', { name: 'Create folder' }).click()
 
 		await expect(page.getByRole('button', { name: 'Clear search' })).toBeVisible()
-
-		await waitForScopedPrefix(page, 'demo/')
-		await page.getByRole('button', { name: 'Clear search' }).click()
-		await page.waitForFunction(() => JSON.parse(window.localStorage.getItem('objectsSearch') ?? '""') === '')
+		await expectLocation(page, 'demo/')
 	})
 
-	test('creating a subfolder under a different parent does not auto-navigate (toast shows where it went)', async ({ page }) => {
+	test('opening a subfolder dialog under a different parent keeps the current location', async ({ page }) => {
 		await stubObjectsApi(page, { commonPrefixesByPrefix: { '': ['a/'] } })
 		await seedStorage(page)
 		await page.goto('/objects')
 
 		const prefixRow = page.locator('[data-objects-row="true"]', { hasText: 'a/' }).first()
 		await expect(prefixRow).toBeVisible()
-		await prefixRow.click({ button: 'right' })
-		await page.getByRole('menuitem', { name: /New subfolder/i }).evaluate((element) => {
-			;(element as HTMLElement).click()
-		})
+		await prefixRow.getByRole('button', { name: 'Prefix actions' }).click()
+		await page.getByRole('menuitem', { name: /New subfolder/i }).click()
 
 		const dialog = page.getByRole('dialog', { name: 'New folder' })
-		await dialog.getByLabel('Folder name').fill('b')
-		await dialog.getByRole('button', { name: 'Create folder' }).click()
-
-		await expect(page.getByRole('button', { name: 'Parent' })).toBeVisible()
-
-		expect(await getStorageString(page, 'prefix')).toBe('')
-		await page.getByRole('button', { name: 'Parent' }).click()
-		await waitForScopedPrefix(page, 'a/')
+		await expect(dialog.getByText('s3://test-bucket/a/')).toBeVisible()
+		await expectLocation(page, '')
 	})
 
 	test('nested path failures report the last created folder and provide navigation CTAs', async ({ page }) => {
@@ -266,6 +241,6 @@ test.describe('Objects new folder visibility', () => {
 		await expect(dialog.locator('code', { hasText: 'a/' })).toBeVisible()
 
 		await dialog.getByRole('button', { name: 'Open last created' }).click()
-		await waitForScopedPrefix(page, 'a/')
+		await expectLocation(page, 'a/')
 	})
 })

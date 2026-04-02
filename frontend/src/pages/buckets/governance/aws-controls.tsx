@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Button, Input, message, Typography } from "antd";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type {
   BucketAccessPutRequest,
@@ -16,6 +16,7 @@ import { ToggleSwitch } from "../../../components/ToggleSwitch";
 import { formatErrorWithHint as formatErr } from "../../../lib/errors";
 import styles from "../BucketGovernanceModal.module.css";
 import { invalidateLinkedBucketState } from "./invalidation";
+import { useGovernanceMutationScope } from "./mutationScope";
 import { GovernanceSummaryCard, AdvancedPolicySection, BucketGovernanceDialogShell, extractWarningList, renderWarningStack } from "./shell";
 import type { GovernanceControlsCommonProps } from "./types";
 import { buildGovernanceDraft, extractAdvancedPolicy, parseJSONArray } from "./utils";
@@ -34,13 +35,25 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
   );
   const [kmsKeyId, setKmsKeyId] = useState(draft.kmsKeyId);
   const [lifecycleText, setLifecycleText] = useState(draft.lifecycleText);
+  const publicExposureRequestTokenRef = useRef(0);
+  const accessRequestTokenRef = useRef(0);
+  const versioningRequestTokenRef = useRef(0);
+  const encryptionRequestTokenRef = useRef(0);
+  const lifecycleRequestTokenRef = useRef(0);
+  const mutationScope = useGovernanceMutationScope({
+    apiToken: props.apiToken,
+    profileId: props.profileId,
+    provider: props.provider,
+    bucket: props.bucket,
+  });
 
-  const refreshState = async () =>
+  const refreshState = async (apiToken: string) =>
     invalidateLinkedBucketState(
       props.queryClient,
       props.profileId,
       props.bucket,
       props.provider,
+      apiToken,
     );
 
   const publicExposureMutation = useMutation({
@@ -48,11 +61,19 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
       props.api.buckets.putBucketPublicExposure(props.profileId, props.bucket, {
         blockPublicAccess: publicAccessBlock,
       }),
-    onSuccess: async () => {
-      message.success("Public exposure updated");
-      await refreshState();
+    onMutate: () => {
+      publicExposureRequestTokenRef.current += 1;
+      return mutationScope.createContext(publicExposureRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, publicExposureRequestTokenRef.current)) return;
+      message.success("Public exposure updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, publicExposureRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const accessMutation = useMutation({
@@ -60,11 +81,19 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
       const req: BucketAccessPutRequest = { objectOwnership };
       return props.api.buckets.putBucketAccess(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("Object ownership updated");
-      await refreshState();
+    onMutate: () => {
+      accessRequestTokenRef.current += 1;
+      return mutationScope.createContext(accessRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, accessRequestTokenRef.current)) return;
+      message.success("Object ownership updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, accessRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const versioningMutation = useMutation({
@@ -72,11 +101,19 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
       const req: BucketVersioningPutRequest = { status: versioningStatus };
       return props.api.buckets.putBucketVersioning(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("Versioning updated");
-      await refreshState();
+    onMutate: () => {
+      versioningRequestTokenRef.current += 1;
+      return mutationScope.createContext(versioningRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, versioningRequestTokenRef.current)) return;
+      message.success("Versioning updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, versioningRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const encryptionMutation = useMutation({
@@ -90,11 +127,19 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
       };
       return props.api.buckets.putBucketEncryption(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("Default encryption updated");
-      await refreshState();
+    onMutate: () => {
+      encryptionRequestTokenRef.current += 1;
+      return mutationScope.createContext(encryptionRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, encryptionRequestTokenRef.current)) return;
+      message.success("Default encryption updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, encryptionRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const lifecycleMutation = useMutation({
@@ -107,11 +152,19 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
         rules,
       });
     },
-    onSuccess: async () => {
-      message.success("Lifecycle rules updated");
-      await refreshState();
+    onMutate: () => {
+      lifecycleRequestTokenRef.current += 1;
+      return mutationScope.createContext(lifecycleRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, lifecycleRequestTokenRef.current)) return;
+      message.success("Lifecycle rules updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, lifecycleRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const anyMutationPending =
@@ -120,6 +173,10 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
     versioningMutation.isPending ||
     encryptionMutation.isPending ||
     lifecycleMutation.isPending;
+  const handleClose = () => {
+    if (anyMutationPending) return;
+    props.onClose();
+  };
 
   const advancedPolicy = extractAdvancedPolicy(props.governance);
   const headerTags = useMemo(() => {
@@ -140,10 +197,10 @@ export function BucketGovernanceAWSControls(props: GovernanceControlsCommonProps
     <BucketGovernanceDialogShell
       mobile={props.isMobile}
       title={`Controls: ${props.bucket}`}
-      onClose={props.onClose}
+      onClose={handleClose}
       footer={
         <div className={styles.footerActions}>
-          <Button onClick={props.onClose}>Close</Button>
+          <Button onClick={handleClose} disabled={anyMutationPending}>Close</Button>
         </div>
       }
     >

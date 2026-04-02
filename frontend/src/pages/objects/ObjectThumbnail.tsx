@@ -12,6 +12,7 @@ import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
 
 type Props = {
 	api: APIClient
+	apiToken: string
 	profileId: string
 	bucket: string
 	objectKey: string
@@ -29,6 +30,7 @@ type Props = {
 export function ObjectThumbnail(props: Props) {
 	const thumbnailRequest = useMemo(
 		() => buildObjectThumbnailRequest({
+			apiToken: props.apiToken,
 			profileId: props.profileId,
 			bucket: props.bucket,
 			objectKey: props.objectKey,
@@ -37,7 +39,7 @@ export function ObjectThumbnail(props: Props) {
 			etag: props.etag,
 			lastModified: props.lastModified,
 		}),
-		[props.bucket, props.cacheKeySuffix, props.etag, props.lastModified, props.objectKey, props.profileId, props.size],
+		[props.apiToken, props.bucket, props.cacheKeySuffix, props.etag, props.lastModified, props.objectKey, props.profileId, props.size],
 	)
 	const cacheKey = useMemo(() => buildThumbnailCacheKey(thumbnailRequest), [thumbnailRequest])
 	const [, bumpCacheVersion] = useState(0)
@@ -87,6 +89,7 @@ export function ObjectThumbnail(props: Props) {
 		cacheKey,
 		failed,
 		props.api,
+		props.apiToken,
 		props.bucket,
 		props.cache,
 		props.contentType,

@@ -31,32 +31,17 @@ func buildMultipartCompletionParts(parts []models.UploadMultipartCompletePart) (
 	completed := make([]types.CompletedPart, 0, len(parts))
 	for _, part := range parts {
 		if part.Number < 1 {
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadRequest,
-				code:    "invalid_request",
-				message: "invalid part number",
-				details: map[string]any{"partNumber": part.Number},
-			}
+			return nil, uploadMultipartInvalidPartNumberError(part.Number)
 		}
 		etag := strings.TrimSpace(part.ETag)
 		if etag == "" {
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadRequest,
-				code:    "invalid_request",
-				message: "etag is required",
-				details: map[string]any{"partNumber": part.Number},
-			}
+			return nil, uploadMultipartInvalidETagError(part.Number)
 		}
 		etag = strings.Trim(etag, "\"")
 		etag = `"` + etag + `"`
 		num, err := multipartPartNumber(part.Number)
 		if err != nil {
-			return nil, &uploadHTTPError{
-				status:  http.StatusBadRequest,
-				code:    "invalid_request",
-				message: "invalid part number",
-				details: map[string]any{"partNumber": part.Number},
-			}
+			return nil, uploadMultipartInvalidPartNumberError(part.Number)
 		}
 		completed = append(completed, types.CompletedPart{
 			ETag:       &etag,
@@ -121,24 +106,15 @@ func (s *server) multipartClientFromContext(ctx context.Context, notSupportedMes
 func parseUploadChunkQuery(values url.Values, requireTotal bool) (uploadChunkQuery, *uploadHTTPError) {
 	pathRaw := sanitizeUploadPath(values.Get("path"))
 	if pathRaw == "" {
-		return uploadChunkQuery{}, &uploadHTTPError{
-			status:  http.StatusBadRequest,
-			code:    "invalid_request",
-			message: "path is required",
-		}
+		return uploadChunkQuery{}, uploadMultipartInvalidPathError()
 	}
 
 	query := uploadChunkQuery{path: pathRaw}
 	if requireTotal {
 		totalRaw := values.Get("total")
-		total, err := strconv.Atoi(totalRaw)
-		if err != nil || total <= 0 || total > maxMultipartUploadParts {
-			return uploadChunkQuery{}, &uploadHTTPError{
-				status:  http.StatusBadRequest,
-				code:    "invalid_request",
-				message: "invalid total",
-				details: map[string]any{"total": totalRaw},
-			}
+		total, uploadErr := uploadParseMultipartPartCount(totalRaw)
+		if uploadErr != nil {
+			return uploadChunkQuery{}, uploadErr
 		}
 		query.total = total
 	}
@@ -146,24 +122,14 @@ func parseUploadChunkQuery(values url.Values, requireTotal bool) (uploadChunkQue
 	chunkSizeRaw := values.Get("chunkSize")
 	chunkSize, err := strconv.ParseInt(chunkSizeRaw, 10, 64)
 	if err != nil || chunkSize <= 0 {
-		return uploadChunkQuery{}, &uploadHTTPError{
-			status:  http.StatusBadRequest,
-			code:    "invalid_request",
-			message: "invalid chunkSize",
-			details: map[string]any{"chunkSize": chunkSizeRaw},
-		}
+		return uploadChunkQuery{}, uploadMultipartInvalidChunkSizeError(chunkSizeRaw)
 	}
 	query.chunkSize = chunkSize
 
 	fileSizeRaw := values.Get("fileSize")
 	fileSize, err := strconv.ParseInt(fileSizeRaw, 10, 64)
 	if err != nil || fileSize <= 0 {
-		return uploadChunkQuery{}, &uploadHTTPError{
-			status:  http.StatusBadRequest,
-			code:    "invalid_request",
-			message: "invalid fileSize",
-			details: map[string]any{"fileSize": fileSizeRaw},
-		}
+		return uploadChunkQuery{}, uploadMultipartInvalidFileSizeError(fileSizeRaw)
 	}
 	query.fileSize = fileSize
 
@@ -227,7 +193,8 @@ func (s *server) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Re
 	profileID := r.Header.Get("X-Profile-Id")
 	uploadID := chi.URLParam(r, "uploadId")
 	if profileID == "" || uploadID == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "profile and uploadId are required", nil)
+		uploadErr := uploadMultipartSessionRequiredError()
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 
@@ -259,11 +226,13 @@ func (s *server) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Re
 	}
 	relPath := sanitizeUploadPath(req.Path)
 	if relPath == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "path is required", nil)
+		uploadErr := uploadMultipartInvalidPathError()
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	if len(req.Parts) == 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request", "parts are required", nil)
+		uploadErr := uploadMultipartInvalidPartsError()
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 
@@ -315,7 +284,8 @@ func (s *server) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Reque
 	profileID := r.Header.Get("X-Profile-Id")
 	uploadID := chi.URLParam(r, "uploadId")
 	if profileID == "" || uploadID == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "profile and uploadId are required", nil)
+		uploadErr := uploadMultipartSessionRequiredError()
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 
@@ -341,7 +311,8 @@ func (s *server) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Reque
 	}
 	relPath := sanitizeUploadPath(req.Path)
 	if relPath == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "path is required", nil)
+		uploadErr := uploadMultipartInvalidPathError()
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 
@@ -367,7 +338,8 @@ func (s *server) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
 	profileID := r.Header.Get("X-Profile-Id")
 	uploadID := chi.URLParam(r, "uploadId")
 	if profileID == "" || uploadID == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "profile and uploadId are required", nil)
+		uploadErr := uploadMultipartSessionRequiredError()
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 
@@ -437,7 +409,8 @@ func (s *server) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
 	relOS := filepath.FromSlash(query.path)
 	chunkDir := filepath.Join(stagingDir, ".chunks", relOS)
 	if !isUnderDir(stagingDir, chunkDir) {
-		writeError(w, http.StatusBadRequest, "invalid_request", "invalid upload path", map[string]any{"path": query.path})
+		uploadErr := uploadMultipartInvalidFieldError("invalid upload path", map[string]any{"path": query.path})
+		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
 		return
 	}
 	writeJSON(w, http.StatusOK, buildStagingMultipartChunkState(chunkDir, query.total, query.chunkSize, query.fileSize))

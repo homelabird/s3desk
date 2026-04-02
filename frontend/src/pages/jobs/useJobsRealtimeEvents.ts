@@ -38,19 +38,28 @@ export function useJobsRealtimeEvents({
 	const [eventsRetryCount, setEventsRetryCount] = useState(0)
 	const [eventsManualRetryToken, setEventsManualRetryToken] = useState(0)
 	const lastSeqRef = useRef<number>(0)
-	const lastSeqProfileIdRef = useRef<string | null>(null)
+	const lastSeqScopeKeyRef = useRef<string>('')
+	const currentScopeKey = `${apiToken || 'none'}:${profileId ?? 'none'}`
 
 	const retryRealtime = useCallback(() => {
 		setEventsManualRetryToken((prev) => prev + 1)
 	}, [])
 
 	useEffect(() => {
-		if (lastSeqProfileIdRef.current !== profileId) {
+		if (lastSeqScopeKeyRef.current !== currentScopeKey) {
 			lastSeqRef.current = 0
-			lastSeqProfileIdRef.current = profileId
+			lastSeqScopeKeyRef.current = currentScopeKey
+			setEventsConnected(false)
+			setEventsTransport(null)
+			setEventsRetryCount(0)
 		}
 
-		if (!profileId) return
+		if (!profileId) {
+			setEventsConnected(false)
+			setEventsTransport(null)
+			setEventsRetryCount(0)
+			return
+		}
 
 		let ws: WebSocket | null = null
 		let es: EventSource | null = null
@@ -63,9 +72,10 @@ export function useJobsRealtimeEvents({
 		let reconnectAttempt = 0
 		let connectNonce = 0
 		let wsUnavailable = false
+		const jobsQueryKey = ['jobs', profileId, apiToken] as const
 
 		const refreshJobs = () => {
-			queryClient.invalidateQueries({ queryKey: ['jobs'], exact: false }).catch(() => {})
+			queryClient.invalidateQueries({ queryKey: jobsQueryKey, exact: false }).catch(() => {})
 		}
 
 		const markRefreshOnReconnect = () => {
@@ -93,6 +103,16 @@ export function useJobsRealtimeEvents({
 			}
 		}
 
+		const closeEventSource = () => {
+			if (!es) return
+			try {
+				es.close()
+			} catch {
+				// ignore
+			}
+			es = null
+		}
+
 		const scheduleReconnect = () => {
 			if (stopped || reconnectTimer) return
 			const jitter = Math.floor(Math.random() * 250)
@@ -111,7 +131,7 @@ export function useJobsRealtimeEvents({
 		}
 
 		const scheduleWSProbe = () => {
-			if (stopped || wsProbeTimer || wsUnavailable) return
+			if (stopped || wsProbeTimer) return
 			wsProbeTimer = window.setTimeout(() => {
 				wsProbeTimer = null
 				if (stopped) return
@@ -124,6 +144,8 @@ export function useJobsRealtimeEvents({
 			setEventsConnected(true)
 			setEventsRetryCount(0)
 			reconnectAttempt = 0
+			clearReconnectTimer()
+			if (transport === 'ws') wsUnavailable = false
 			if (shouldRefreshOnOpen) {
 				shouldRefreshOnOpen = false
 				refreshJobs()
@@ -173,17 +195,13 @@ export function useJobsRealtimeEvents({
 						errorCode: payload.errorCode ?? job.errorCode,
 					})
 					queryClient.setQueriesData(
-						{ queryKey: ['jobs'], exact: false },
+						{ queryKey: jobsQueryKey, exact: false },
 						(old: InfiniteData<JobsListResponse, string | undefined> | undefined) =>
 							updateJob(old, msg.jobId!, applyJobPatch),
 					)
 					queryClient.setQueryData(
 						['job', profileId, msg.jobId, apiToken],
 						(old: Job | undefined) => (old ? applyJobPatch(old) : old),
-					)
-					queryClient.setQueriesData(
-						{ queryKey: ['job'], exact: false },
-						(old: Job | undefined) => (old && old.id === msg.jobId ? applyJobPatch(old) : old),
 					)
 					if (msg.type === 'job.completed') {
 						queryClient.invalidateQueries({ queryKey: ['job', profileId, msg.jobId, apiToken], exact: true }).catch(() => {})
@@ -216,13 +234,7 @@ export function useJobsRealtimeEvents({
 		const connectSSE = async () => {
 			if (stopped) return
 			const nonce = ++connectNonce
-			if (es) {
-				try {
-					es.close()
-				} catch {
-					// ignore
-				}
-			}
+			closeEventSource()
 			try {
 				const ticket = await fetchRealtimeTicket('sse')
 				if (stopped || nonce !== connectNonce) return
@@ -233,10 +245,12 @@ export function useJobsRealtimeEvents({
 			}
 			es.onopen = () => {
 				handleTransportOpen('sse')
-				if (!wsUnavailable) scheduleWSProbe()
+				scheduleWSProbe()
 			}
 			es.onerror = () => {
 				markRefreshOnReconnect()
+				clearWsProbeTimer()
+				closeEventSource()
 				setTransport('sse')
 				setEventsConnected(false)
 				scheduleReconnect()
@@ -246,10 +260,6 @@ export function useJobsRealtimeEvents({
 
 		const connectWS = async () => {
 			if (stopped) return
-			if (wsUnavailable) {
-				void connectSSE()
-				return
-			}
 			const nonce = ++connectNonce
 			clearReconnectTimer()
 			clearWsProbeTimer()
@@ -318,7 +328,7 @@ export function useJobsRealtimeEvents({
 		}
 
 		connectWS()
-		return () => {
+			return () => {
 			stopped = true
 			clearWsProbeTimer()
 			clearReconnectTimer()
@@ -327,9 +337,9 @@ export function useJobsRealtimeEvents({
 			} catch {
 				// ignore
 			}
-			es?.close()
+			closeEventSource()
 		}
-	}, [apiToken, eventsManualRetryToken, onJobsDeleted, profileId, queryClient])
+	}, [apiToken, currentScopeKey, eventsManualRetryToken, onJobsDeleted, profileId, queryClient])
 
 	return {
 		eventsConnected: profileId ? eventsConnected : false,

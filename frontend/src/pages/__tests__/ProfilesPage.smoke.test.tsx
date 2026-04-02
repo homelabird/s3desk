@@ -9,6 +9,13 @@ import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
 import type { ProfileFormValues } from '../profiles/profileTypes'
 
+vi.mock('../../api/useAPIClient', async () => {
+	const { APIClient } = await import('../../api/client')
+	return {
+		useAPIClient: () => new APIClient({ apiToken: 'test-token' }),
+	}
+})
+
 vi.mock('../profiles/profilesLazy', async () => {
 	const React = await import('react')
 
@@ -129,6 +136,16 @@ const defaultProfiles = [
 	},
 ]
 
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void
+	let reject!: (reason?: unknown) => void
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res
+		reject = rej
+	})
+	return { promise, resolve, reject }
+}
+
 function mockServerApi(meta = defaultMeta) {
 	const serverApi = {
 		getMeta: vi.fn().mockResolvedValue(meta as never),
@@ -142,6 +159,7 @@ function mockProfilesApi(
 		listProfiles: ReturnType<typeof vi.fn>
 		testProfile: ReturnType<typeof vi.fn>
 		createProfile: ReturnType<typeof vi.fn>
+		getProfileTLS: ReturnType<typeof vi.fn>
 		benchmarkProfile: ReturnType<typeof vi.fn>
 	}> = {},
 ) {
@@ -149,6 +167,7 @@ function mockProfilesApi(
 		listProfiles: vi.fn().mockResolvedValue(defaultProfiles as never),
 		testProfile: vi.fn(),
 		createProfile: vi.fn(),
+		getProfileTLS: vi.fn().mockResolvedValue(null as never),
 		benchmarkProfile: vi.fn(),
 		...overrides,
 	}
@@ -472,6 +491,129 @@ describe('ProfilesPage', () => {
 		await waitFor(() => expect(screen.getByTestId('profiles-search')).toHaveTextContent(''))
 	}, SLOW_PROFILES_TIMEOUT_MS)
 
+	it('keeps the current create modal open when an older create request resolves', async () => {
+		const client = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		mockServerApi()
+		const createProfileRequest = deferred<(typeof defaultProfiles)[number]>()
+		const profilesApi = mockProfilesApi({
+			listProfiles: vi.fn().mockResolvedValue([] as never),
+			createProfile: vi.fn().mockReturnValue(createProfileRequest.promise),
+		})
+		const setProfileId = vi.fn()
+		const successSpy = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+
+		render(
+			<QueryClientProvider client={client}>
+				<MemoryRouter initialEntries={['/profiles?create=1']}>
+					<ProfilesPage apiToken="token" profileId={null} setProfileId={setProfileId} />
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		const firstDialog = await screen.findByRole('dialog', { name: 'Create Profile' })
+		fireEvent.change(within(firstDialog).getByRole('textbox', { name: 'Name' }), {
+			target: { value: 'Created Profile' },
+		})
+		fireEvent.change(within(firstDialog).getByRole('textbox', { name: 'Access Key ID' }), {
+			target: { value: 'demo-access' },
+		})
+		fireEvent.change(within(firstDialog).getByLabelText('Secret'), {
+			target: { value: 'demo-secret' },
+		})
+
+		await act(async () => {
+			fireEvent.click(within(firstDialog).getByRole('button', { name: 'Create' }))
+		})
+
+		await waitFor(() => expect(profilesApi.createProfile).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			fireEvent.click(within(firstDialog).getByRole('button', { name: 'Close' }))
+		})
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create Profile' })).not.toBeInTheDocument())
+
+		await act(async () => {
+			fireEvent.click(screen.getAllByRole('button', { name: 'New Profile' })[0]!)
+		})
+
+		const reopenedDialog = await screen.findByRole('dialog', { name: 'Create Profile' })
+
+		await act(async () => {
+			createProfileRequest.resolve({
+				id: 'profile-created-stale',
+				name: 'Created Profile',
+				provider: 's3_compatible',
+				endpoint: 'http://127.0.0.1:9000',
+				region: 'us-east-1',
+				forcePathStyle: false,
+				preserveLeadingSlash: false,
+				tlsInsecureSkipVerify: false,
+				createdAt: '2024-01-01T00:00:00Z',
+				updatedAt: '2024-01-01T00:00:00Z',
+			})
+			await Promise.resolve()
+		})
+
+		expect(reopenedDialog).toBeInTheDocument()
+		expect(setProfileId).not.toHaveBeenCalled()
+		expect(successSpy).not.toHaveBeenCalled()
+	}, SLOW_PROFILES_TIMEOUT_MS)
+
+	it('closes the create modal and clears stale draft after the api token changes', async () => {
+		const client = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		mockProfilesPageBase()
+
+		const view = render(
+			<QueryClientProvider client={client}>
+				<MemoryRouter initialEntries={['/profiles?create=1']}>
+					<ProfilesPage apiToken="token-a" profileId={null} setProfileId={vi.fn()} />
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		const dialog = await screen.findByRole('dialog', { name: 'Create Profile' })
+		fireEvent.change(within(dialog).getByRole('textbox', { name: 'Name' }), {
+			target: { value: 'Created Profile' },
+		})
+		fireEvent.change(within(dialog).getByRole('textbox', { name: 'Access Key ID' }), {
+			target: { value: 'demo-access' },
+		})
+		fireEvent.change(within(dialog).getByLabelText('Secret'), {
+			target: { value: 'demo-secret' },
+		})
+
+		view.rerender(
+			<QueryClientProvider client={client}>
+				<MemoryRouter initialEntries={['/profiles?create=1']}>
+					<ProfilesPage apiToken="token-b" profileId={null} setProfileId={vi.fn()} />
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create Profile' })).not.toBeInTheDocument())
+
+		await act(async () => {
+			fireEvent.click(screen.getAllByRole('button', { name: 'New Profile' })[0]!)
+		})
+
+		const reopenedDialog = await screen.findByRole('dialog', { name: 'Create Profile' })
+		expect(within(reopenedDialog).getByRole('textbox', { name: 'Name' })).toHaveValue('')
+		expect(within(reopenedDialog).getByRole('textbox', { name: 'Access Key ID' })).toHaveValue('')
+		expect(within(reopenedDialog).getByLabelText('Secret')).toHaveValue('')
+	}, SLOW_PROFILES_TIMEOUT_MS)
+
 	it('renders compact profile cards on tablet widths', async () => {
 		const client = new QueryClient({
 			defaultOptions: {
@@ -628,4 +770,114 @@ describe('ProfilesPage', () => {
 			expect(successSpy).toHaveBeenCalledWith('Benchmark OK: ↑ 1.0 Mbps · ↓ 2.0 Mbps · upload 150ms · download 80ms', 8)
 		})
 	})
+
+	it('ignores stale benchmark responses after the api token changes', async () => {
+		const client = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		const benchmarkRequest = deferred<{
+			ok: boolean
+			message: string
+			cleanedUp: boolean
+			uploadBps: number
+			downloadBps: number
+			uploadMs: number
+			downloadMs: number
+		}>()
+		const profilesApi = mockProfilesPageBase()
+		profilesApi.benchmarkProfile.mockReturnValue(benchmarkRequest.promise)
+		const successSpy = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const warningSpy = vi.spyOn(message, 'warning').mockImplementation(() => undefined as never)
+		const errorSpy = vi.spyOn(message, 'error').mockImplementation(() => undefined as never)
+
+		const view = render(
+			<QueryClientProvider client={client}>
+				<MemoryRouter>
+					<ProfilesPage apiToken="token-a" profileId={null} setProfileId={vi.fn()} />
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		await openPrimaryProfileAction('Benchmark')
+		await waitFor(() => expect(profilesApi.benchmarkProfile).toHaveBeenCalledWith('profile-1'))
+
+		view.rerender(
+			<QueryClientProvider client={client}>
+				<MemoryRouter>
+					<ProfilesPage apiToken="token-b" profileId={null} setProfileId={vi.fn()} />
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		await act(async () => {
+			benchmarkRequest.resolve({
+				ok: true,
+				message: 'ok',
+				cleanedUp: true,
+				uploadBps: 1_000_000,
+				downloadBps: 2_000_000,
+				uploadMs: 150,
+				downloadMs: 80,
+			})
+			await Promise.resolve()
+		})
+
+		expect(successSpy).not.toHaveBeenCalled()
+		expect(warningSpy).not.toHaveBeenCalled()
+		expect(errorSpy).not.toHaveBeenCalled()
+	}, SLOW_PROFILES_TIMEOUT_MS)
+
+	it('closes the edit modal and ignores stale TLS queries after the api token changes', async () => {
+		const client = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+			},
+		})
+
+		mockServerApi({
+			...defaultMeta,
+			capabilities: {
+				...defaultMeta.capabilities,
+				profileTls: { enabled: true, reason: '' },
+			},
+		})
+		const getProfileTLSSpy = vi.fn().mockResolvedValue(null as never)
+		mockProfilesApi({
+			getProfileTLS: getProfileTLSSpy,
+		})
+
+		const view = render(
+			<QueryClientProvider client={client}>
+				<MemoryRouter>
+					<ProfilesPage apiToken="token-a" profileId={null} setProfileId={vi.fn()} />
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		fireEvent.click(
+			await screen.findByRole('button', { name: 'More actions for Primary Profile' }, { timeout: 5_000 }),
+		)
+		fireEvent.click(await screen.findByText('Edit', undefined, { timeout: 5_000 }))
+
+		expect(await screen.findByRole('dialog', { name: 'Edit Profile' })).toBeInTheDocument()
+		await waitFor(() => expect(getProfileTLSSpy).toHaveBeenCalledWith('profile-1'))
+
+		view.rerender(
+			<QueryClientProvider client={client}>
+				<MemoryRouter>
+					<ProfilesPage apiToken="token-b" profileId={null} setProfileId={vi.fn()} />
+				</MemoryRouter>
+			</QueryClientProvider>,
+		)
+
+		await waitFor(() => {
+			expect(screen.queryByRole('dialog', { name: 'Edit Profile' })).not.toBeInTheDocument()
+		})
+		expect(getProfileTLSSpy).toHaveBeenCalledTimes(1)
+	}, SLOW_PROFILES_TIMEOUT_MS)
+
 })

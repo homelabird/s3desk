@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useObjectsDnd } from '../useObjectsDnd'
 
-const confirmDangerActionMock = vi.fn((options: { onConfirm: () => Promise<void> | void }) => options.onConfirm())
+const confirmDangerActionMock = vi.fn()
 const messageOpenMock = vi.fn()
 const messageErrorMock = vi.fn()
 const messageWarningMock = vi.fn()
@@ -47,6 +47,16 @@ function createWrapper() {
 	}
 
 	return { queryClient, Wrapper }
+}
+
+function createDeferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void
+	let reject!: (reason?: unknown) => void
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res
+		reject = rej
+	})
+	return { promise, resolve, reject }
 }
 
 function buildDropEvent(payload: unknown) {
@@ -107,6 +117,7 @@ describe('useObjectsDnd', () => {
 			() =>
 				useObjectsDnd({
 					profileId: 'profile-1',
+					apiToken: 'token-1',
 					bucket: 'bucket-a',
 					prefix: '',
 					canDragDrop: true,
@@ -126,8 +137,14 @@ describe('useObjectsDnd', () => {
 			result.current.onDndTargetDrop(event, 'docs/')
 		})
 
-		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
 		expect(confirmDangerActionMock).toHaveBeenCalledTimes(1)
+		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
+
+		await act(async () => {
+			await confirmOptions.onConfirm()
+		})
+
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
 		expect(createJobWithRetry).toHaveBeenCalledWith({
 			type: 'transfer_move_batch',
 			payload: {
@@ -141,5 +158,160 @@ describe('useObjectsDnd', () => {
 			},
 		})
 		expect(messageOpenMock).toHaveBeenCalled()
+	})
+
+	it('ignores stale move confirmations after the objects context changes', async () => {
+		const { queryClient, Wrapper } = createWrapper()
+		const createJobWithRetry = vi.fn().mockResolvedValue({ id: 'job-1' })
+		const setSelectedKeys = vi.fn()
+		const setLastSelectedObjectKey = vi.fn()
+
+		const { result, rerender } = renderHook(
+			(props: { apiToken: string; profileId: string | null; bucket: string; prefix: string }) =>
+				useObjectsDnd({
+					profileId: props.profileId,
+					apiToken: props.apiToken,
+					bucket: props.bucket,
+					prefix: props.prefix,
+					canDragDrop: true,
+					isDesktop: true,
+					selectedKeys: new Set(['alpha.txt', 'beta.txt']),
+					setSelectedKeys,
+					setLastSelectedObjectKey,
+					createJobWithRetry,
+					queryClient,
+				}),
+			{
+				initialProps: { apiToken: 'token-1', profileId: 'profile-1', bucket: 'bucket-a', prefix: '' },
+				wrapper: Wrapper,
+			},
+		)
+
+		const event = buildDropEvent({ kind: 'objects', bucket: 'bucket-a', keys: ['alpha.txt', 'beta.txt'] })
+
+		await act(async () => {
+			result.current.onDndTargetDrop(event, 'docs/')
+		})
+
+		expect(confirmDangerActionMock).toHaveBeenCalledTimes(1)
+		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
+
+		await act(async () => {
+			rerender({ apiToken: 'token-1', profileId: 'profile-2', bucket: 'bucket-b', prefix: 'archive/' })
+		})
+
+		await act(async () => {
+			await confirmOptions.onConfirm()
+		})
+
+		expect(createJobWithRetry).not.toHaveBeenCalled()
+		expect(messageOpenMock).not.toHaveBeenCalled()
+	})
+
+	it('ignores stale move job responses after the objects context changes', async () => {
+		const { queryClient, Wrapper } = createWrapper()
+		const deferred = createDeferred<{ id: string }>()
+		const createJobWithRetry = vi.fn().mockReturnValue(deferred.promise)
+		const setSelectedKeys = vi.fn()
+		const setLastSelectedObjectKey = vi.fn()
+
+		const { result, rerender } = renderHook(
+			(props: { apiToken: string; profileId: string | null; bucket: string; prefix: string }) =>
+				useObjectsDnd({
+					profileId: props.profileId,
+					apiToken: props.apiToken,
+					bucket: props.bucket,
+					prefix: props.prefix,
+					canDragDrop: true,
+					isDesktop: true,
+					selectedKeys: new Set(['alpha.txt', 'beta.txt']),
+					setSelectedKeys,
+					setLastSelectedObjectKey,
+					createJobWithRetry,
+					queryClient,
+				}),
+			{
+				initialProps: { apiToken: 'token-1', profileId: 'profile-1', bucket: 'bucket-a', prefix: '' },
+				wrapper: Wrapper,
+			},
+		)
+
+		const event = buildDropEvent({ kind: 'objects', bucket: 'bucket-a', keys: ['alpha.txt', 'beta.txt'] })
+
+		await act(async () => {
+			result.current.onDndTargetDrop(event, 'docs/')
+		})
+
+		expect(confirmDangerActionMock).toHaveBeenCalledTimes(1)
+		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
+
+		await act(async () => {
+			void confirmOptions.onConfirm()
+			await Promise.resolve()
+		})
+
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		rerender({ apiToken: 'token-1', profileId: 'profile-2', bucket: 'bucket-b', prefix: 'archive/' })
+
+		await act(async () => {
+			deferred.resolve({ id: 'job-1' })
+			await Promise.resolve()
+		})
+
+		expect(messageOpenMock).not.toHaveBeenCalled()
+	})
+
+	it('ignores stale move job responses after the api token changes', async () => {
+		const { queryClient, Wrapper } = createWrapper()
+		const deferred = createDeferred<{ id: string }>()
+		const createJobWithRetry = vi.fn().mockReturnValue(deferred.promise)
+		const setSelectedKeys = vi.fn()
+		const setLastSelectedObjectKey = vi.fn()
+
+		const { result, rerender } = renderHook(
+			(props: { apiToken: string }) =>
+				useObjectsDnd({
+					profileId: 'profile-1',
+					apiToken: props.apiToken,
+					bucket: 'bucket-a',
+					prefix: '',
+					canDragDrop: true,
+					isDesktop: true,
+					selectedKeys: new Set(['alpha.txt', 'beta.txt']),
+					setSelectedKeys,
+					setLastSelectedObjectKey,
+					createJobWithRetry,
+					queryClient,
+				}),
+			{
+				initialProps: { apiToken: 'token-1' },
+				wrapper: Wrapper,
+			},
+		)
+
+		const event = buildDropEvent({ kind: 'objects', bucket: 'bucket-a', keys: ['alpha.txt', 'beta.txt'] })
+
+		await act(async () => {
+			result.current.onDndTargetDrop(event, 'docs/')
+		})
+
+		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
+
+		await act(async () => {
+			void confirmOptions.onConfirm()
+			await Promise.resolve()
+		})
+
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		rerender({ apiToken: 'token-2' })
+
+		await act(async () => {
+			deferred.resolve({ id: 'job-1' })
+			await Promise.resolve()
+		})
+
+		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
 })

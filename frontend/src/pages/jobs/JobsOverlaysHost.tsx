@@ -126,6 +126,7 @@ export function JobsOverlaysHost(props: Props) {
 		isLogsLoading,
 	} = useJobsLogsState({
 		api,
+		apiToken,
 		profileId,
 	})
 	const handledLogRequestNonceRef = useRef<number>(-1)
@@ -172,6 +173,7 @@ export function JobsOverlaysHost(props: Props) {
 	return (
 		<>
 			<JobsCreateModals
+				apiToken={apiToken}
 				profileId={profileId}
 				createOpen={createOpen}
 				createDownloadOpen={createDownloadOpen}

@@ -7,6 +7,13 @@ import { APIClient } from '../../api/client'
 import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
 
+vi.mock('../../api/useAPIClient', async () => {
+	const { APIClient } = await import('../../api/client')
+	return {
+		useAPIClient: () => new APIClient({ apiToken: 'test-token' }),
+	}
+})
+
 vi.mock('../profiles/profilesLazy', () => ({
 	ProfilesModals: ({
 		createOpen,

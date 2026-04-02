@@ -11,6 +11,37 @@ afterEach(() => {
 })
 
 describe('MenuPopover', () => {
+	it('hides an uncontrolled popover when the scope changes', () => {
+		const menu: MenuProps = {
+			items: [{ key: 'refresh', label: 'Refresh' }],
+		}
+		const { rerender } = render(
+			<MenuPopover menu={menu} scopeKey="token-a">
+				{({ toggle, open }) => (
+					<button type="button" aria-expanded={open} onClick={toggle}>
+						More
+					</button>
+				)}
+			</MenuPopover>,
+		)
+
+		fireEvent.click(screen.getByRole('button', { name: 'More' }))
+		expect(screen.getByRole('menuitem', { name: 'Refresh' })).toBeInTheDocument()
+
+		rerender(
+			<MenuPopover menu={menu} scopeKey="token-b">
+				{({ toggle, open }) => (
+					<button type="button" aria-expanded={open} onClick={toggle}>
+						More
+					</button>
+				)}
+			</MenuPopover>,
+		)
+
+		expect(screen.queryByRole('menuitem', { name: 'Refresh' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false')
+	})
+
 	it('focuses the first menu item, restores focus to the trigger, and leaves the parent dialog open on the first Escape', async () => {
 		function Example() {
 			const [dialogOpen, setDialogOpen] = useState(true)

@@ -6,6 +6,7 @@ import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { hasInternalObjectsDndPayload, resolveObjectsDropIntent } from './objectsDropIntent'
 
 type UseObjectsUploadDropArgs = {
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -84,6 +85,7 @@ const collectDroppedUploadFiles = async (dt: DataTransfer): Promise<File[]> => {
 }
 
 export function useObjectsUploadDrop({
+	apiToken,
 	profileId,
 	bucket,
 	prefix,
@@ -94,9 +96,21 @@ export function useObjectsUploadDrop({
 }: UseObjectsUploadDropArgs) {
 	const uploadDragCounterRef = useRef(0)
 	const [uploadDropActive, setUploadDropActive] = useState(false)
+	const [uploadDropScopeKey, setUploadDropScopeKey] = useState('')
+	const scopeVersionRef = useRef(0)
+	const currentScopeKey = `${apiToken || '__no_server__'}:${profileId?.trim() || '__no_profile__'}:${bucket}|${prefix}`
+	const currentScopeKeyRef = useRef(currentScopeKey)
+	const uploadDropVisible = uploadDropActive && uploadDropScopeKey === currentScopeKey
+
+	useEffect(() => {
+		currentScopeKeyRef.current = currentScopeKey
+		scopeVersionRef.current += 1
+	}, [currentScopeKey])
+
 	const resetUploadDropState = useCallback(() => {
 		uploadDragCounterRef.current = 0
 		setUploadDropActive(false)
+		setUploadDropScopeKey('')
 	}, [])
 
 	useEffect(() => {
@@ -154,8 +168,9 @@ export function useObjectsUploadDrop({
 			}
 			uploadDragCounterRef.current += 1
 			setUploadDropActive(true)
+			setUploadDropScopeKey(currentScopeKey)
 		},
-		[bucket, isOffline, profileId, uploadsEnabled],
+		[bucket, currentScopeKey, isOffline, profileId, uploadsEnabled],
 	)
 
 	const onUploadDragLeave = useCallback(
@@ -167,6 +182,7 @@ export function useObjectsUploadDrop({
 			if (uploadDragCounterRef.current <= 0) {
 				uploadDragCounterRef.current = 0
 				setUploadDropActive(false)
+				setUploadDropScopeKey('')
 			}
 		},
 		[bucket, isOffline, profileId, uploadsEnabled],
@@ -215,10 +231,16 @@ export function useObjectsUploadDrop({
 			}
 
 			const key = 'upload_prepare'
+			const scopeVersion = scopeVersionRef.current
+			const scopeKey = currentScopeKey
 			message.open({ type: 'loading', content: 'Preparing folder upload…', duration: 0, key })
 			void (async () => {
 				try {
 					const files = await collectDroppedUploadFiles(dt)
+					if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) {
+						message.destroy(key)
+						return
+					}
 					if (files.length === 0) {
 						message.open({ type: 'warning', content: 'No files found', key, duration: 2 })
 						return
@@ -226,15 +248,19 @@ export function useObjectsUploadDrop({
 					message.open({ type: 'success', content: `Queued ${files.length} file(s)`, key, duration: 2 })
 					startUploadFromFiles({ files })
 				} catch (err) {
+					if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) {
+						message.destroy(key)
+						return
+					}
 					message.open({ type: 'error', content: formatErr(err), key, duration: 4 })
 				}
 			})()
 		},
-		[bucket, isOffline, profileId, resetUploadDropState, startUploadFromFiles, uploadsDisabledReason, uploadsEnabled],
+		[bucket, currentScopeKey, isOffline, profileId, resetUploadDropState, startUploadFromFiles, uploadsDisabledReason, uploadsEnabled],
 	)
 
 	return {
-		uploadDropActive,
+		uploadDropActive: uploadDropVisible,
 		startUploadFromFiles,
 		onUploadDragEnter,
 		onUploadDragLeave,

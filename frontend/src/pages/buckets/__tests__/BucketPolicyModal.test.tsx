@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -22,12 +23,20 @@ import { ensureDomShims } from "../../../test/domShims";
 import { createMockApiClient } from "../../../test/mockApiClient";
 import { BucketPolicyModal } from "../BucketPolicyModal";
 
+const confirmDangerActionMock = vi.fn();
 const originalGetComputedStyle = window.getComputedStyle;
 const originalMatchMedia = window.matchMedia;
+const queryClients: QueryClient[] = [];
 const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(
   HTMLTextAreaElement.prototype,
   "scrollHeight",
 );
+
+vi.mock("../../../lib/confirmDangerAction", () => ({
+  confirmDangerAction: (options: {
+    onConfirm: () => Promise<void> | void;
+  }) => confirmDangerActionMock(options),
+}));
 
 beforeAll(() => {
   ensureDomShims();
@@ -80,8 +89,20 @@ beforeAll(() => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  cleanup();
+  message.destroy();
+  for (const client of queryClients.splice(0)) {
+    client.clear();
+  }
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
   window.matchMedia = originalMatchMedia;
+  confirmDangerActionMock.mockReset();
   vi.restoreAllMocks();
 });
 
@@ -113,6 +134,16 @@ function createApi(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function mockViewportWidth(width: number) {
   window.matchMedia = vi
     .fn()
@@ -140,6 +171,10 @@ function renderModal(
   options: {
     provider?: "aws_s3" | "gcp_gcs" | "azure_blob";
     onOpenControls?: (bucket: string) => void;
+    onClose?: () => void;
+    profileId?: string;
+    apiToken?: string;
+    bucket?: string | null;
   } = {},
 ) {
   const client = new QueryClient({
@@ -147,22 +182,23 @@ function renderModal(
       queries: { retry: false },
     },
   });
+  queryClients.push(client);
 
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <BucketPolicyModal
         api={api as never}
-        apiToken="token"
-        profileId="profile-1"
+        apiToken={options.apiToken ?? "token"}
+        profileId={options.profileId ?? "profile-1"}
         provider={options.provider ?? "aws_s3"}
-        bucket="demo-bucket"
-        onClose={vi.fn()}
+        bucket={options.bucket === undefined ? "demo-bucket" : options.bucket}
+        onClose={options.onClose ?? vi.fn()}
         onOpenControls={options.onOpenControls}
       />
     </QueryClientProvider>,
   );
 
-  return { client };
+  return { client, ...view };
 }
 
 describe("BucketPolicyModal", () => {
@@ -367,7 +403,8 @@ describe("BucketPolicyModal", () => {
     await waitFor(() => expect(api.buckets.putBucketPolicy).toHaveBeenCalled());
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["bucketGovernance", "profile-1", "demo-bucket"],
+        queryKey: ["bucketGovernance", "profile-1", "demo-bucket", "token"],
+        exact: true,
       }),
     );
   });
@@ -398,5 +435,264 @@ describe("BucketPolicyModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open Controls" }));
     expect(onOpenControls).toHaveBeenCalledWith("demo-bucket");
+  });
+
+  it("resets unsaved policy edits when the profile context changes", async () => {
+    mockViewportWidth(1280);
+    const api = createApi({
+      getBucketPolicy: vi
+        .fn()
+        .mockResolvedValueOnce({
+          bucket: "demo-bucket",
+          exists: true,
+          policy: {
+            Version: "2012-10-17",
+            Statement: [{ Sid: "ProfileOne" }],
+          },
+        })
+        .mockResolvedValueOnce({
+          bucket: "demo-bucket",
+          exists: true,
+          policy: {
+            Version: "2012-10-17",
+            Statement: [{ Sid: "ProfileTwo" }],
+          },
+        }),
+    });
+
+    const view = renderModal(api);
+
+    const editor = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+    expect(editor.value).toContain("ProfileOne");
+
+    fireEvent.change(editor, {
+      target: {
+        value: JSON.stringify(
+          {
+            Version: "2012-10-17",
+            Statement: [{ Sid: "EditedDraft" }],
+          },
+          null,
+          2,
+        ),
+      },
+    });
+    expect(editor.value).toContain("EditedDraft");
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-2"
+          provider="aws_s3"
+          bucket="demo-bucket"
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(api.buckets.getBucketPolicy).toHaveBeenCalledWith(
+        "profile-2",
+        "demo-bucket",
+      ),
+    );
+    await waitFor(() => {
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain(
+        "ProfileTwo",
+      );
+    });
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).not.toContain(
+      "EditedDraft",
+    );
+  });
+
+  it("ignores stale save responses after closing and reopening the modal", async () => {
+    mockViewportWidth(1280);
+    const putRequest = deferred<void>();
+    const api = createApi({
+      putBucketPolicy: vi.fn().mockReturnValue(putRequest.promise),
+    });
+    const firstOnClose = vi.fn();
+    const secondOnClose = vi.fn();
+    const successSpy = vi
+      .spyOn(message, "success")
+      .mockImplementation(() => undefined as never);
+
+    const view = renderModal(api, { onClose: firstOnClose });
+
+    const editor = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+    fireEvent.change(editor, {
+      target: {
+        value: JSON.stringify(
+          {
+            Version: "2012-10-17",
+            Statement: [{ Sid: "SaveStale" }],
+          },
+          null,
+          2,
+        ),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.buckets.putBucketPolicy).toHaveBeenCalled());
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket={null}
+          onClose={firstOnClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket="demo-bucket"
+          onClose={secondOnClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    await act(async () => {
+      putRequest.resolve();
+      await Promise.resolve();
+    });
+
+    expect(firstOnClose).not.toHaveBeenCalled();
+    expect(secondOnClose).not.toHaveBeenCalled();
+    expect(successSpy).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale delete confirmations after closing and reopening the modal", async () => {
+    mockViewportWidth(1280);
+    const api = createApi({
+      deleteBucketPolicy: vi.fn().mockResolvedValue(undefined),
+    });
+    const firstOnClose = vi.fn();
+    const secondOnClose = vi.fn();
+
+    const view = renderModal(api, { onClose: firstOnClose });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete policy" }));
+
+    const confirmCall = confirmDangerActionMock.mock.calls.at(-1)?.[0] as
+      | { onConfirm: () => Promise<void> | void }
+      | undefined;
+    expect(confirmCall).toBeDefined();
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket={null}
+          onClose={firstOnClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket="demo-bucket"
+          onClose={secondOnClose}
+        />
+      </QueryClientProvider>,
+    );
+
+    await act(async () => {
+      await confirmCall?.onConfirm();
+    });
+
+    expect(api.buckets.deleteBucketPolicy).not.toHaveBeenCalled();
+    expect(firstOnClose).not.toHaveBeenCalled();
+    expect(secondOnClose).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale validation responses after closing and reopening the modal", async () => {
+    mockViewportWidth(1280);
+    const validateRequest = deferred<{
+      ok: boolean;
+      provider: string;
+      errors: string[];
+      warnings: string[];
+    }>();
+    const api = createApi({
+      validateBucketPolicy: vi.fn().mockReturnValue(validateRequest.promise),
+    });
+    const warningSpy = vi
+      .spyOn(message, "warning")
+      .mockImplementation(() => undefined as never);
+    const successSpy = vi
+      .spyOn(message, "success")
+      .mockImplementation(() => undefined as never);
+
+    const view = renderModal(api);
+
+    const validateButton = await screen.findByRole("button", {
+      name: "Validate with provider",
+    });
+    await act(async () => {
+      fireEvent.click(validateButton);
+    });
+
+    await waitFor(() => expect(api.buckets.validateBucketPolicy).toHaveBeenCalled());
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket={null}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    view.rerender(
+      <QueryClientProvider client={view.client}>
+        <BucketPolicyModal
+          api={api as never}
+          apiToken="token"
+          profileId="profile-1"
+          provider="aws_s3"
+          bucket="demo-bucket"
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await act(async () => {
+      validateRequest.resolve({
+        ok: false,
+        provider: "aws_s3",
+        errors: ["Stale validation"],
+        warnings: [],
+      });
+      await Promise.resolve();
+    });
+
+    expect(warningSpy).not.toHaveBeenCalled();
+    expect(successSpy).not.toHaveBeenCalled();
   });
 });

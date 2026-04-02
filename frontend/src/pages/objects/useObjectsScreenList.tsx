@@ -73,19 +73,23 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 
 	useEffect(() => {
 		if (!bucket) return
-		const key = `${bucket}|${prefix}`
+		const serverScope = props.apiToken || '__no_server__'
+		const profileScope = props.profileId?.trim() || '__no_profile__'
+		const key = `${serverScope}:${profileScope}:${bucket}|${prefix}`
 		const id = window.setTimeout(() => setAutoScanReadyKey(key), 400)
 		return () => window.clearTimeout(id)
-	}, [bucket, prefix, setAutoScanReadyKey])
+	}, [bucket, prefix, props.apiToken, props.profileId, setAutoScanReadyKey])
 
 	useEffect(() => {
 		if (!bucket) return
 		if (!objectsQuery.data) return
 		if (objectsQuery.isFetching) return
-		const key = `${bucket}|${prefix}`
+		const serverScope = props.apiToken || '__no_server__'
+		const profileScope = props.profileId?.trim() || '__no_profile__'
+		const key = `${serverScope}:${profileScope}:${bucket}|${prefix}`
 		const id = window.setTimeout(() => setAutoScanReadyKey(key), 0)
 		return () => window.clearTimeout(id)
-	}, [bucket, objectsQuery.data, objectsQuery.isFetching, prefix, setAutoScanReadyKey])
+	}, [bucket, objectsQuery.data, objectsQuery.isFetching, prefix, props.apiToken, props.profileId, setAutoScanReadyKey])
 
 	const {
 		commandPaletteOpen,
@@ -98,6 +102,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		onCommandPaletteQueryChange,
 		onCommandPaletteKeyDown,
 	} = useObjectsScreenCommandPalette({
+		scopeKey: `${props.apiToken || '__no_server__'}:${props.profileId?.trim() || '__no_profile__'}:${bucket}:${prefix}`,
 		commandItems: interactions.commandItems,
 		commandPaletteOpener,
 	})

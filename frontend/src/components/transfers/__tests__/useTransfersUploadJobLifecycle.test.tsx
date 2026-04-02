@@ -43,6 +43,7 @@ describe('useTransfersUploadJobLifecycle', () => {
 			}
 
 			const lifecycle = useTransfersUploadJobLifecycle({
+				apiToken: 'token-a',
 				queryClient: { invalidateQueries } as unknown as QueryClient,
 				uploadTasksRef,
 				updateUploadTask,
@@ -69,9 +70,10 @@ describe('useTransfersUploadJobLifecycle', () => {
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
 		const invalidateArg = invalidateQueries.mock.calls[0]?.[0]
 		expect(invalidateArg).toMatchObject({ predicate: expect.any(Function) })
-		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', '', 'token'] })).toBe(true)
-		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'folder/', 'token'] })).toBe(true)
-		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'other/', 'token'] })).toBe(false)
+		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', '', 'token-a'] })).toBe(true)
+		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'folder/', 'token-a'] })).toBe(true)
+		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'folder/', 'token-b'] })).toBe(false)
+		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'other/', 'token-a'] })).toBe(false)
 		expect(result.current.uploadTasks[0]).toMatchObject({
 			status: 'succeeded',
 			loadedBytes: 100,
@@ -83,7 +85,8 @@ describe('useTransfersUploadJobLifecycle', () => {
 		const refreshEvent = dispatchSpy.mock.calls[0]?.[0]
 		expect(refreshEvent).toBeInstanceOf(CustomEvent)
 		expect((refreshEvent as CustomEvent).type).toBe('s3desk:objects-refresh')
-		expect((refreshEvent as CustomEvent<{ profileId: string; bucket: string; prefix: string; source: string }>).detail).toEqual({
+		expect((refreshEvent as CustomEvent<{ apiToken: string; profileId: string; bucket: string; prefix: string; source: string }>).detail).toEqual({
+			apiToken: 'token-a',
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
 			prefix: 'folder/',

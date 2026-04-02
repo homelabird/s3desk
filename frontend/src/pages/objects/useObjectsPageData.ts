@@ -26,13 +26,14 @@ export function useObjectsPageData(props: Props) {
 	const routeLocation = useLocation()
 	const navigate = useNavigate()
 	const environment = useObjectsPageEnvironment(props)
-	const locationState = useObjectsLocationState({ profileId: props.profileId })
+	const locationState = useObjectsLocationState({ apiToken: props.apiToken, profileId: props.profileId })
 	const currentBucket = locationState.bucket
 	const navigateToLocation = locationState.navigateToLocation
 	const clearInvalidLocation = locationState.clearInvalidLocation
 
 	const treeState = useObjectsTree({
 		api: environment.api,
+		apiToken: props.apiToken,
 		profileId: props.profileId,
 		bucket: locationState.bucket,
 		prefix: locationState.prefix,
@@ -41,6 +42,8 @@ export function useObjectsPageData(props: Props) {
 	})
 
 	const viewState = useObjectsPageViewState({
+		apiToken: props.apiToken,
+		profileId: props.profileId,
 		bucket: locationState.bucket,
 		prefix: locationState.prefix,
 		isOffline: environment.isOffline,
@@ -136,6 +139,7 @@ export function useObjectsPageData(props: Props) {
 
 	const zipJobs = useObjectsZipJobs({
 		profileId: props.profileId,
+		apiToken: props.apiToken,
 		bucket: locationState.bucket,
 		prefix: locationState.prefix,
 		transfers: environment.transfers,
@@ -145,6 +149,7 @@ export function useObjectsPageData(props: Props) {
 	const indexingJobs = useObjectsIndexing({
 		api: environment.api,
 		profileId: props.profileId,
+		apiToken: props.apiToken,
 		bucket: locationState.bucket,
 		prefix: locationState.prefix,
 		globalSearchOpen: viewState.globalSearchOpen,

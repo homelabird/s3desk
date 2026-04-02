@@ -82,15 +82,17 @@ describe('objectsQueryCache', () => {
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
 			changedPrefix: 'alpha/beta/',
+			apiToken: 'token-a',
 		}
 
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', '', 'token'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/beta/', 'token'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/beta/gamma/', 'token'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'other/', 'token'], location)).toBe(false)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-2', 'bucket-a', 'alpha/', 'token'], location)).toBe(false)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objectsIndexSearch', 'profile-1', 'bucket-a', 'alpha/', 'token'], location)).toBe(false)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', '', 'token-a'], location)).toBe(true)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(true)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/beta/', 'token-a'], location)).toBe(true)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/beta/gamma/', 'token-a'], location)).toBe(true)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-b'], location)).toBe(false)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'other/', 'token-a'], location)).toBe(false)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-2', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(false)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objectsIndexSearch', 'profile-1', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(false)
 	})
 
 	it('treats an empty changed prefix as bucket-wide for objects queries', () => {
@@ -98,10 +100,12 @@ describe('objectsQueryCache', () => {
 			profileId: 'profile-1',
 			bucket: 'bucket-a',
 			changedPrefix: '',
+			apiToken: 'token-a',
 		}
 
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', '', 'token'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-b', 'alpha/', 'token'], location)).toBe(false)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', '', 'token-a'], location)).toBe(true)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(true)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-b'], location)).toBe(false)
+		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-b', 'alpha/', 'token-a'], location)).toBe(false)
 	})
 })

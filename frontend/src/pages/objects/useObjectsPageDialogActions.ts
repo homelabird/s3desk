@@ -62,12 +62,14 @@ export function useObjectsPageDialogActions({
 }: Args) {
 	const renameActions = useObjectsRename({
 		profileId,
+		apiToken,
 		bucket,
 		createJobWithRetry,
 	})
 
 	const presignActions = useObjectsPresign({
 		api,
+		apiToken,
 		profileId,
 		bucket,
 		downloadLinkProxyEnabled,
@@ -76,6 +78,7 @@ export function useObjectsPageDialogActions({
 
 	const copyMoveActions = useObjectsCopyMove({
 		profileId,
+		apiToken,
 		bucket,
 		prefix,
 		createJobWithRetry,
@@ -84,6 +87,7 @@ export function useObjectsPageDialogActions({
 
 	const selectionMoveActions = useObjectsSelectionMove({
 		profileId,
+		apiToken,
 		bucket,
 		prefix,
 		selectedKeys,
@@ -94,6 +98,7 @@ export function useObjectsPageDialogActions({
 	const deleteActions = useObjectsDelete({
 		api,
 		profileId,
+		apiToken,
 		bucket,
 		prefix,
 		createJobWithRetry,
@@ -118,6 +123,7 @@ export function useObjectsPageDialogActions({
 
 	const downloadPrefixActions = useObjectsDownloadPrefix({
 		api,
+		apiToken,
 		profileId,
 		bucket,
 		prefix,
@@ -125,6 +131,7 @@ export function useObjectsPageDialogActions({
 	})
 
 	const deleteConfirmActions = useObjectsDeleteConfirm({
+		apiToken,
 		profileId,
 		bucket,
 		prefix,

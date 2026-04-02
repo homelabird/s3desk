@@ -1,5 +1,6 @@
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Collapse, Descriptions, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { useId, useLayoutEffect } from 'react'
 
 import type { Job } from '../../api/types'
 import { OverlaySheet } from '../../components/OverlaySheet'
@@ -235,7 +236,24 @@ type Props = {
 	borderRadius: number
 }
 
+const jobsDetailsDrawerContextVersions = new Map<string, number>()
+
 export function JobsDetailsDrawer(props: Props) {
+	const detailsInstanceId = useId()
+
+	useLayoutEffect(() => {
+		jobsDetailsDrawerContextVersions.set(
+			detailsInstanceId,
+			(jobsDetailsDrawerContextVersions.get(detailsInstanceId) ?? 0) + 1,
+		)
+	}, [detailsInstanceId, props.detailsJobId, props.job?.id, props.open])
+
+	useLayoutEffect(() => {
+		return () => {
+			jobsDetailsDrawerContextVersions.delete(detailsInstanceId)
+		}
+	}, [detailsInstanceId])
+
 	const detailsSections = props.job ? buildOperationalSections(props.job, props.uploadDetails) : null
 	const summary = props.job ? jobSummary(props.job) : null
 
@@ -262,18 +280,21 @@ export function JobsDetailsDrawer(props: Props) {
 						loading={props.deleteLoading}
 						onClick={() => {
 							if (!props.detailsJobId) return
+							const detailsJobId = props.detailsJobId
+							const confirmContextVersion = jobsDetailsDrawerContextVersions.get(detailsInstanceId) ?? 0
 							confirmDangerAction({
 								title: 'Delete job record?',
 								description: (
 									<Space orientation="vertical" style={{ width: '100%' }}>
 										<Typography.Text>
-											Job ID: <Typography.Text code>{props.detailsJobId}</Typography.Text>
+											Job ID: <Typography.Text code>{detailsJobId}</Typography.Text>
 										</Typography.Text>
 										<Typography.Text type="secondary">This removes the job record and deletes its log file.</Typography.Text>
 									</Space>
 								),
 								onConfirm: async () => {
-									await props.onDeleteJob(props.detailsJobId!)
+									if ((jobsDetailsDrawerContextVersions.get(detailsInstanceId) ?? 0) !== confirmContextVersion) return
+									await props.onDeleteJob(detailsJobId)
 								},
 							})
 						}}

@@ -1,3 +1,4 @@
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import {
 	OBJECTS_AUTO_INDEX_DEFAULT_ENABLED,
@@ -46,18 +47,62 @@ export type ObjectsFiltersState = {
 	autoIndexTtlHours: number
 }
 
-export function useObjectsFiltersState(): ObjectsFiltersState {
-	const [typeFilter, setTypeFilter] = useLocalStorageState<ObjectTypeFilter>('objectsTypeFilter', 'all')
-	const [favoritesOnly, setFavoritesOnly] = useLocalStorageState<boolean>('objectsFavoritesOnly', false)
-	const [favoritesFirst, setFavoritesFirst] = useLocalStorageState<boolean>('objectsFavoritesFirst', false)
-	const [favoritesSearch, setFavoritesSearch] = useLocalStorageState<string>('objectsFavoritesSearch', '')
-	const [favoritesOpenDetails, setFavoritesOpenDetails] = useLocalStorageState<boolean>('objectsFavoritesOpenDetails', false)
-	const [favoritesPaneExpanded, setFavoritesPaneExpanded] = useLocalStorageState<boolean>('objectsFavoritesPaneExpanded', false)
-	const [extFilter, setExtFilter] = useLocalStorageState<string>('objectsExtFilter', '')
-	const [minSize, setMinSize] = useLocalStorageState<number | null>('objectsMinSize', null)
-	const [maxSize, setMaxSize] = useLocalStorageState<number | null>('objectsMaxSize', null)
-	const [minModifiedMs, setMinModifiedMs] = useLocalStorageState<number | null>('objectsMinModifiedMs', null)
-	const [maxModifiedMs, setMaxModifiedMs] = useLocalStorageState<number | null>('objectsMaxModifiedMs', null)
+export function useObjectsFiltersState(apiToken: string, profileId: string | null = null): ObjectsFiltersState {
+	const [typeFilter, setTypeFilter] = useLocalStorageState<ObjectTypeFilter>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'typeFilter'),
+		'all',
+		{ legacyLocalStorageKey: 'objectsTypeFilter', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'typeFilter')] },
+	)
+	const [favoritesOnly, setFavoritesOnly] = useLocalStorageState<boolean>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'favoritesOnly'),
+		false,
+		{ legacyLocalStorageKey: 'objectsFavoritesOnly', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'favoritesOnly')] },
+	)
+	const [favoritesFirst, setFavoritesFirst] = useLocalStorageState<boolean>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'favoritesFirst'),
+		false,
+		{ legacyLocalStorageKey: 'objectsFavoritesFirst', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'favoritesFirst')] },
+	)
+	const [favoritesSearch, setFavoritesSearch] = useLocalStorageState<string>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'favoritesSearch'),
+		'',
+		{ legacyLocalStorageKey: 'objectsFavoritesSearch', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'favoritesSearch')] },
+	)
+	const [favoritesOpenDetails, setFavoritesOpenDetails] = useLocalStorageState<boolean>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'favoritesOpenDetails'),
+		false,
+		{ legacyLocalStorageKey: 'objectsFavoritesOpenDetails', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'favoritesOpenDetails')] },
+	)
+	const [favoritesPaneExpanded, setFavoritesPaneExpanded] = useLocalStorageState<boolean>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'favoritesPaneExpanded'),
+		false,
+		{ legacyLocalStorageKey: 'objectsFavoritesPaneExpanded', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'favoritesPaneExpanded')] },
+	)
+	const [extFilter, setExtFilter] = useLocalStorageState<string>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'extFilter'),
+		'',
+		{ legacyLocalStorageKey: 'objectsExtFilter', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'extFilter')] },
+	)
+	const [minSize, setMinSize] = useLocalStorageState<number | null>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'minSize'),
+		null,
+		{ legacyLocalStorageKey: 'objectsMinSize', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'minSize')] },
+	)
+	const [maxSize, setMaxSize] = useLocalStorageState<number | null>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'maxSize'),
+		null,
+		{ legacyLocalStorageKey: 'objectsMaxSize', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'maxSize')] },
+	)
+	const [minModifiedMs, setMinModifiedMs] = useLocalStorageState<number | null>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'minModifiedMs'),
+		null,
+		{ legacyLocalStorageKey: 'objectsMinModifiedMs', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'minModifiedMs')] },
+	)
+	const [maxModifiedMs, setMaxModifiedMs] = useLocalStorageState<number | null>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'maxModifiedMs'),
+		null,
+		{ legacyLocalStorageKey: 'objectsMaxModifiedMs', legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'maxModifiedMs')] },
+	)
 	const [sort, setSort] = useLocalStorageState<ObjectSort>('objectsSort', 'name_asc')
 	const [viewMode, setViewMode] = useLocalStorageState<ObjectsViewMode>('objectsViewMode', 'list')
 	const [showThumbnails] = useLocalStorageState<boolean>('objectsShowThumbnails', true)

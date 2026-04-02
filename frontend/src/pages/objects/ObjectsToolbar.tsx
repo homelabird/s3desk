@@ -24,6 +24,7 @@ export type ObjectsToolbarProps = {
 	isAdvanced: boolean
 	isOffline: boolean
 	hasProfile: boolean
+	bucketPickerScopeKey: string
 	bucket: string
 	recentBuckets: string[]
 	selectedCount: number
@@ -140,7 +141,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	)
 
 	const moreButton = (
-		<ObjectsMenuPopover menu={props.topMoreMenu} align="end">
+		<ObjectsMenuPopover menu={props.topMoreMenu} align="end" scopeKey={props.bucketPickerScopeKey}>
 			{({ toggle }) => (
 				<Badge count={props.activeTransferCount} size="small" showZero={false}>
 					<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} onClick={toggle} data-testid="objects-toolbar-more" aria-label="More actions">
@@ -153,6 +154,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 
 	const bucketPicker = (
 		<ObjectsBucketPicker
+			scopeKey={props.bucketPickerScopeKey}
 			isDesktop={props.isDesktop}
 			value={props.bucket}
 			recentBuckets={props.recentBuckets}

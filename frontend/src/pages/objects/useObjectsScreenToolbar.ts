@@ -21,6 +21,7 @@ export function useObjectsScreenToolbar({ props, data, actions, refresh, listSta
 	})
 
 	const { toolbarProps, canCreateFolder, createFolderTooltipText } = useObjectsToolbarProps({
+		apiToken: props.apiToken,
 		isDesktop: !!data.screens.lg,
 		showLabels: !!data.screens.sm,
 		isAdvanced: data.isAdvanced,

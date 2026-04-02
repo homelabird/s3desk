@@ -9,6 +9,7 @@ type Args = Pick<ObjectsScreenArgs, 'props' | 'data' | 'actions'> & {
 export function useObjectsScreenOverlays({ props, data, actions, listState }: Args) {
 	return buildObjectsPageOverlaysProps({
 		actions,
+		apiToken: props.apiToken,
 		profileId: props.profileId,
 		bucket: data.bucket,
 		prefix: data.prefix,

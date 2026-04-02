@@ -2,37 +2,64 @@ import { message } from 'antd'
 import type { InputRef } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import type { Location, LocationTab } from './objectsPageConstants'
 import { normalizePrefix } from './objectsListUtils'
 
 type UseObjectsLocationStateParams = {
+	apiToken: string
 	profileId: string | null
 }
 
-export function useObjectsLocationState({ profileId }: UseObjectsLocationStateParams) {
-	const storageScope = profileId?.trim() || '__no_profile__'
-	const storageKey = useCallback((name: string) => `objects:${storageScope}:${name}`, [storageScope])
+export function useObjectsLocationState({ apiToken, profileId }: UseObjectsLocationStateParams) {
+	const storageKey = useCallback(
+		(name: string) => profileScopedStorageKey('objects', apiToken, profileId, name),
+		[apiToken, profileId],
+	)
+	const legacyStorageKey = useCallback(
+		(name: string) => legacyProfileScopedStorageKey('objects', profileId, name),
+		[profileId],
+	)
 
-	const [bucket, setBucket] = useLocalStorageState<string>(storageKey('bucket'), '')
-	const [prefix, setPrefix] = useLocalStorageState<string>(storageKey('prefix'), '')
-	const [tabs, setTabs] = useLocalStorageState<LocationTab[]>(storageKey('tabs'), [])
-	const [activeTabId, setActiveTabId] = useLocalStorageState<string>(storageKey('activeTabId'), '')
-	const [recentBuckets, setRecentBuckets] = useLocalStorageState<string[]>(storageKey('recentBuckets'), [])
+	const [bucket, setBucket] = useLocalStorageState<string>(storageKey('bucket'), '', {
+		legacyLocalStorageKeys: [legacyStorageKey('bucket')],
+	})
+	const [prefix, setPrefix] = useLocalStorageState<string>(storageKey('prefix'), '', {
+		legacyLocalStorageKeys: [legacyStorageKey('prefix')],
+	})
+	const [tabs, setTabs] = useLocalStorageState<LocationTab[]>(storageKey('tabs'), [], {
+		legacyLocalStorageKeys: [legacyStorageKey('tabs')],
+	})
+	const [activeTabId, setActiveTabId] = useLocalStorageState<string>(storageKey('activeTabId'), '', {
+		legacyLocalStorageKeys: [legacyStorageKey('activeTabId')],
+	})
+	const [recentBuckets, setRecentBuckets] = useLocalStorageState<string[]>(storageKey('recentBuckets'), [], {
+		legacyLocalStorageKeys: [legacyStorageKey('recentBuckets')],
+	})
 	const [recentPrefixesByBucket, setRecentPrefixesByBucket] = useLocalStorageState<Record<string, string[]>>(
 		storageKey('recentPrefixesByBucket'),
 		{},
+		{ legacyLocalStorageKeys: [legacyStorageKey('recentPrefixesByBucket')] },
 	)
 	const [bookmarksByBucket, setBookmarksByBucket] = useLocalStorageState<Record<string, string[]>>(
 		storageKey('bookmarksByBucket'),
 		{},
+		{ legacyLocalStorageKeys: [legacyStorageKey('bookmarksByBucket')] },
 	)
-	const [prefixByBucket, setPrefixByBucket] = useLocalStorageState<Record<string, string>>(storageKey('prefixByBucket'), {})
+	const [prefixByBucket, setPrefixByBucket] = useLocalStorageState<Record<string, string>>(storageKey('prefixByBucket'), {}, {
+		legacyLocalStorageKeys: [legacyStorageKey('prefixByBucket')],
+	})
 	const prefixByBucketRef = useRef<Record<string, string>>(prefixByBucket)
+	const currentPathModalScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
 
 	const [pathDraft, setPathDraft] = useState(prefix)
 	const [pathModalOpen, setPathModalOpen] = useState(false)
+	const [pathModalScopeKey, setPathModalScopeKey] = useState('')
 	const pathInputRef = useRef<InputRef | null>(null)
+	const pathModalScopeMatches = pathModalScopeKey === currentPathModalScopeKey
+	const activePathModalOpen = pathModalOpen && pathModalScopeMatches
+	const activePathDraft = pathModalScopeMatches ? pathDraft : prefix
 
 	const activeTab = useMemo(() => tabs.find((t) => t.id === activeTabId) ?? tabs[0] ?? null, [activeTabId, tabs])
 
@@ -90,12 +117,13 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 			return
 		}
 		setPathDraft(prefix)
+		setPathModalScopeKey(currentPathModalScopeKey)
 		setPathModalOpen(true)
 		window.setTimeout(() => {
 			pathInputRef.current?.focus()
 			pathInputRef.current?.select?.()
 		}, 0)
-	}, [bucket, prefix, profileId])
+	}, [bucket, currentPathModalScopeKey, prefix, profileId])
 
 	const navigateToLocation = useCallback(
 		(nextBucket: string, nextPrefix: string, options?: { recordHistory?: boolean }) => {
@@ -246,13 +274,15 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 	)
 
 	const commitPathDraft = useCallback(() => {
+		if (!pathModalScopeMatches) return
 		if (!bucket) {
 			message.info('Select a bucket first')
 			return
 		}
 		navigateToLocation(bucket, pathDraft, { recordHistory: true })
 		setPathModalOpen(false)
-	}, [bucket, navigateToLocation, pathDraft])
+		setPathModalScopeKey('')
+	}, [bucket, navigateToLocation, pathDraft, pathModalScopeMatches])
 
 	const clearInvalidLocation = useCallback((invalidBucketRaw?: string) => {
 		const invalidBucket = (invalidBucketRaw ?? bucket).trim()
@@ -300,8 +330,17 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 			setPrefix('')
 			setPathDraft('')
 			setPathModalOpen(false)
+			setPathModalScopeKey('')
 		}
 	}, [bucket, setBookmarksByBucket, setBucket, setPathDraft, setPathModalOpen, setPrefix, setPrefixByBucket, setRecentBuckets, setRecentPrefixesByBucket, setTabs])
+
+	const handleSetPathModalOpen = useCallback((open: boolean) => {
+		setPathModalOpen(open)
+		setPathModalScopeKey(open ? currentPathModalScopeKey : '')
+		if (!open) {
+			setPathDraft(prefix)
+		}
+	}, [currentPathModalScopeKey, prefix])
 
 	return {
 		bucket,
@@ -310,10 +349,10 @@ export function useObjectsLocationState({ profileId }: UseObjectsLocationStatePa
 		activeTabId,
 		recentBuckets,
 		setActiveTabId,
-		pathDraft,
+		pathDraft: activePathDraft,
 		setPathDraft,
-		pathModalOpen,
-		setPathModalOpen,
+		pathModalOpen: activePathModalOpen,
+		setPathModalOpen: handleSetPathModalOpen,
 		pathInputRef,
 		openPathModal,
 		prefixByBucketRef,
