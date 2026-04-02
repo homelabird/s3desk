@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -167,6 +168,28 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			wantCode:   http.StatusOK,
 		},
 		{
+			name:       "allows ipv6 localhost by default",
+			url:        "http://[::1]:8080/api/v1/meta",
+			remoteAddr: "[::1]:1234",
+			origin:     "http://[::1]:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows https localhost origin by default",
+			url:        "https://localhost:8443/api/v1/meta",
+			remoteAddr: "127.0.0.1:1234",
+			origin:     "https://localhost:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows mixed case allowlisted host",
+			cfg:        config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
+			url:        "https://S3DESK.LOCAL.:8443/api/v1/meta",
+			remoteAddr: "10.1.2.3:1234",
+			origin:     "https://S3DESK.LOCAL.:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
 			name:       "allows private host when allow remote is enabled",
 			cfg:        config.Config{AllowRemote: true},
 			url:        "http://172.18.34.4:8080/api/v1/meta",
@@ -223,6 +246,9 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			}
 			if tc.secFetchSite != "" {
 				req.Header.Set("Sec-Fetch-Site", tc.secFetchSite)
+			}
+			if strings.HasPrefix(tc.url, "https://") {
+				req.TLS = &tls.ConnectionState{}
 			}
 
 			s.requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -6,18 +6,16 @@ import type { APIClient } from '../../api/client'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { formatProviderOperationFailureMessage, formatUnavailableOperationMessage } from '../../lib/providerOperationFeedback'
 import type { ProfileFormValues } from './profileTypes'
+import {
+	clearPendingModalState,
+	clearPendingProfileState,
+	matchesCurrentMutationRequest,
+	matchesServerScope,
+	type PendingModalState,
+	type PendingProfileState,
+} from './profileMutationScope'
 import { toCreateRequest, toUpdateRequest } from './profileMutationUtils'
 import { formatBps } from './profileViewModel'
-
-type PendingProfileState = {
-	profileId: string
-	scopeKey: string
-}
-
-type PendingModalState = {
-	session: number
-	scopeKey: string
-}
 
 export function useProfilesPageMutations(args: {
 	api: APIClient
@@ -77,21 +75,26 @@ export function useProfilesPageMutations(args: {
 			return context
 		},
 		onSuccess: async (created, values, context) => {
-			const matchesServerScope =
-				!!context &&
-				isActiveRef.current &&
-				context.scopeVersion === serverScopeVersionRef.current &&
-				context.scopeKey === currentScopeKey
-			const matchesCurrentSession =
-				matchesServerScope &&
-				context.modalSession === createModalSession &&
-				context.requestToken === createRequestTokenRef.current
+			const matchesCurrentSession = matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: createRequestTokenRef.current,
+				expectedModalSession: createModalSession,
+			})
+			const inCurrentServerScope = matchesServerScope({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+			})
 			if (matchesCurrentSession) {
 				message.success('Profile created')
 				setProfileId(created.id)
 				closeCreateModal()
 			}
-			if (matchesServerScope) {
+			if (inCurrentServerScope && context) {
 				await invalidateProfilesQuery(context.apiToken)
 				try {
 					await applyTLSUpdate(created.id, values, 'create', context.apiToken)
@@ -103,18 +106,16 @@ export function useProfilesPageMutations(args: {
 			}
 		},
 		onSettled: (_data, _err, _values, context) =>
-			setCreatePendingState((prev) =>
-				prev?.scopeKey === context?.scopeKey && prev?.session === context?.modalSession ? null : prev,
-			),
+			setCreatePendingState((prev) => clearPendingModalState(prev, context?.scopeKey, context?.modalSession)),
 		onError: (err, _values, context) => {
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.modalSession !== createModalSession ||
-				context.requestToken !== createRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: createRequestTokenRef.current,
+				expectedModalSession: createModalSession,
+			})) {
 				return
 			}
 			message.error(formatErr(err))
@@ -136,20 +137,25 @@ export function useProfilesPageMutations(args: {
 			return context
 		},
 		onSuccess: async (_, mutationArgs, context) => {
-			const matchesServerScope =
-				!!context &&
-				isActiveRef.current &&
-				context.scopeVersion === serverScopeVersionRef.current &&
-				context.scopeKey === currentScopeKey
-			const matchesCurrentSession =
-				matchesServerScope &&
-				context.modalSession === editModalSession &&
-				context.requestToken === updateRequestTokenRef.current
+			const matchesCurrentSession = matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: updateRequestTokenRef.current,
+				expectedModalSession: editModalSession,
+			})
+			const inCurrentServerScope = matchesServerScope({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+			})
 			if (matchesCurrentSession) {
 				message.success('Profile updated')
 				closeEditModal()
 			}
-			if (matchesServerScope) {
+			if (inCurrentServerScope && context) {
 				await invalidateProfilesQuery(context.apiToken)
 				try {
 					await applyTLSUpdate(mutationArgs.id, mutationArgs.values, 'edit', context.apiToken)
@@ -161,18 +167,16 @@ export function useProfilesPageMutations(args: {
 			}
 		},
 		onSettled: (_data, _err, _args, context) =>
-			setUpdatePendingState((prev) =>
-				prev?.scopeKey === context?.scopeKey && prev?.session === context?.modalSession ? null : prev,
-			),
+			setUpdatePendingState((prev) => clearPendingModalState(prev, context?.scopeKey, context?.modalSession)),
 		onError: (err, _args, context) => {
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.modalSession !== editModalSession ||
-				context.requestToken !== updateRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: updateRequestTokenRef.current,
+				expectedModalSession: editModalSession,
+			})) {
 				return
 			}
 			message.error(formatErr(err))
@@ -194,21 +198,21 @@ export function useProfilesPageMutations(args: {
 			return context
 		},
 		onSuccess: async (_, id, context) => {
-			if (
-				context &&
-				isActiveRef.current &&
-				context.scopeVersion === serverScopeVersionRef.current &&
-				context.scopeKey === currentScopeKey
-			) {
+			if (matchesServerScope({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+			}) && context) {
 				await invalidateProfilesQuery(context.apiToken)
 			}
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.requestToken !== deleteRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: deleteRequestTokenRef.current,
+			})) {
 				return
 			}
 			message.success('Profile deleted')
@@ -217,17 +221,15 @@ export function useProfilesPageMutations(args: {
 			}
 		},
 		onSettled: (_, __, id, context) =>
-			setDeletingProfileState((prev) =>
-				prev?.profileId === id && prev?.scopeKey === context?.scopeKey ? null : prev,
-			),
+			setDeletingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),
 		onError: (err, _id, context) => {
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.requestToken !== deleteRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: deleteRequestTokenRef.current,
+			})) {
 				return
 			}
 			message.error(formatErr(err))
@@ -248,13 +250,13 @@ export function useProfilesPageMutations(args: {
 			return context
 		},
 		onSuccess: (resp, _id, context) => {
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.requestToken !== testRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: testRequestTokenRef.current,
+			})) {
 				return
 			}
 			const storageType = resp.details?.storageType ?? ''
@@ -278,17 +280,15 @@ export function useProfilesPageMutations(args: {
 			}
 		},
 		onSettled: (_, __, id, context) =>
-			setTestingProfileState((prev) =>
-				prev?.profileId === id && prev?.scopeKey === context?.scopeKey ? null : prev,
-			),
+			setTestingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),
 		onError: (err, _id, context) => {
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.requestToken !== testRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: testRequestTokenRef.current,
+			})) {
 				return
 			}
 			const { content, duration } = formatUnavailableOperationMessage('Profile test unavailable', err)
@@ -310,13 +310,13 @@ export function useProfilesPageMutations(args: {
 			return context
 		},
 		onSuccess: (resp, _id, context) => {
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.requestToken !== benchmarkRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: benchmarkRequestTokenRef.current,
+			})) {
 				return
 			}
 			if (resp.ok) {
@@ -337,17 +337,15 @@ export function useProfilesPageMutations(args: {
 			}
 		},
 		onSettled: (_, __, id, context) =>
-			setBenchmarkingProfileState((prev) =>
-				prev?.profileId === id && prev?.scopeKey === context?.scopeKey ? null : prev,
-			),
+			setBenchmarkingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),
 		onError: (err, _id, context) => {
-			if (
-				!context ||
-				!isActiveRef.current ||
-				context.scopeVersion !== serverScopeVersionRef.current ||
-				context.scopeKey !== currentScopeKey ||
-				context.requestToken !== benchmarkRequestTokenRef.current
-			) {
+			if (!matchesCurrentMutationRequest({
+				context,
+				isActiveRef,
+				currentScopeKey,
+				currentScopeVersion: serverScopeVersionRef.current,
+				expectedRequestToken: benchmarkRequestTokenRef.current,
+			})) {
 				return
 			}
 			const { content, duration } = formatUnavailableOperationMessage('Benchmark unavailable', err)

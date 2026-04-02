@@ -5,6 +5,7 @@ that need to stay close to the codebase.
 
 - [RUNBOOK.md](RUNBOOK.md): deployment, backup, restore, reverse-proxy, and incident operations
 - [TESTING.md](TESTING.md): local checks, focused reproduction script usage (`./scripts/repro_backend_focus.sh`), the minimal CI pair wrapper (`./scripts/check_ci_pair.sh`), live smoke flows, and CI-facing test commands
+- [FRONTEND_STATE_BOUNDARIES.md](FRONTEND_STATE_BOUNDARIES.md): where auth state, API client state, route guards, and page-local orchestration belong after the provider split
 - [RELEASE_GATE.md](RELEASE_GATE.md): minimum release bar and required evidence
 - [PROVIDERS.md](PROVIDERS.md): provider support matrix and operator-facing capability notes
 - [PORTABLE_BACKUP.md](PORTABLE_BACKUP.md): portable backup/import scope, workflow, validation, and limits

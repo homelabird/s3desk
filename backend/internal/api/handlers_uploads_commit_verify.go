@@ -13,28 +13,6 @@ import (
 	"s3desk/internal/store"
 )
 
-func mergeUploadVerificationTargets(groups ...[]uploadVerificationTarget) []uploadVerificationTarget {
-	merged := make([]uploadVerificationTarget, 0)
-	seen := make(map[string]struct{})
-	for _, group := range groups {
-		for _, target := range group {
-			identity := target.Path
-			if identity == "" {
-				identity = target.Key
-			}
-			if identity == "" {
-				continue
-			}
-			if _, exists := seen[identity]; exists {
-				continue
-			}
-			seen[identity] = struct{}{}
-			merged = append(merged, target)
-		}
-	}
-	return merged
-}
-
 func (s *server) prepareImmediateUploadCommit(
 	ctx context.Context,
 	profileID, uploadID string,
@@ -43,40 +21,16 @@ func (s *server) prepareImmediateUploadCommit(
 	client *s3.Client,
 	multipartUploads []store.MultipartUpload,
 ) (uploadCommitArtifacts, *uploadHTTPError) {
-	trackedObjects, err := s.store.ListUploadObjects(ctx, profileID, uploadID)
-	if err != nil {
-		return uploadCommitArtifacts{}, &uploadHTTPError{
-			status:  http.StatusInternalServerError,
-			code:    "internal_error",
-			message: "failed to load upload objects",
-		}
-	}
-
-	trustedTargets := mergeUploadVerificationTargets(
-		buildUploadVerificationTargetsFromTracked(trackedObjects),
-		buildUploadVerificationTargetsFromMultipart(multipartUploads),
-	)
-	includeTotals := true
-	itemsTruncated := false
-	targets := trustedTargets
-	if len(targets) == 0 {
-		targets = buildUploadVerificationTargetsFromRequest(us, req)
-		includeTotals = !req.ItemsTruncated
-		itemsTruncated = req.ItemsTruncated
-	}
-	if len(targets) == 0 {
-		return uploadCommitArtifacts{}, &uploadHTTPError{
-			status:  http.StatusBadRequest,
-			code:    "upload_incomplete",
-			message: "no uploaded objects to commit",
-		}
-	}
-
-	verified, uploadErr := s.verifyImmediateUploadTargets(ctx, client, targets)
+	plan, uploadErr := s.buildImmediateUploadVerificationPlan(ctx, profileID, uploadID, us, req, multipartUploads)
 	if uploadErr != nil {
 		return uploadCommitArtifacts{}, uploadErr
 	}
-	return buildVerifiedUploadCommitArtifacts(uploadID, us, req, verified, includeTotals, itemsTruncated), nil
+
+	verified, uploadErr := s.verifyImmediateUploadTargets(ctx, client, plan.targets)
+	if uploadErr != nil {
+		return uploadCommitArtifacts{}, uploadErr
+	}
+	return buildVerifiedUploadCommitArtifacts(uploadID, us, req, verified, plan.includeTotals, plan.itemsTruncated), nil
 }
 
 func (s *server) verifyImmediateUploadTargets(ctx context.Context, client *s3.Client, targets []uploadVerificationTarget) ([]verifiedUploadObject, *uploadHTTPError) {

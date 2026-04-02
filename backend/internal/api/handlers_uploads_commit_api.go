@@ -28,14 +28,5 @@ func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
 		writeJSONDecodeError(w, err, uploadCommitJSONRequestBodyMaxBytes)
 		return
 	}
-	stagingArtifacts := buildUploadCommitArtifacts(session.uploadID, session.us, req)
-
-	switch session.mode {
-	case uploadModePresigned:
-		s.handlePresignedUploadCommit(w, r, session.profileID, session.uploadID, session.us, req)
-	case uploadModeDirect:
-		s.handleDirectUploadCommit(w, r, session.profileID, session.uploadID, session.us, req)
-	default:
-		s.handleStagingUploadCommit(w, r, session.profileID, stagingArtifacts.payload)
-	}
+	s.dispatchUploadCommit(w, r, session, req)
 }
