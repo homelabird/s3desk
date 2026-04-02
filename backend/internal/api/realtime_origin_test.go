@@ -22,6 +22,16 @@ func TestIsAllowedRealtimeOrigin_PolicyMatrix(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "https localhost allowed by default",
+			origin: "https://localhost:5443",
+			want:   true,
+		},
+		{
+			name:   "ipv6 localhost allowed by default",
+			origin: "http://[::1]:5173",
+			want:   true,
+		},
+		{
 			name:   "private origin rejected by default",
 			origin: "http://10.1.2.3:8080",
 			want:   false,
@@ -36,6 +46,12 @@ func TestIsAllowedRealtimeOrigin_PolicyMatrix(t *testing.T) {
 			name:   "allowlist accepts explicit host",
 			cfg:    config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
 			origin: "http://s3desk.local:8080",
+			want:   true,
+		},
+		{
+			name:   "allowlist accepts mixed case host with trailing dot",
+			cfg:    config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
+			origin: "https://S3DESK.LOCAL.:8443",
 			want:   true,
 		},
 		{
@@ -83,9 +99,25 @@ func TestRejectInvalidRealtimeOrigin_Table(t *testing.T) {
 			wantRejected: false,
 		},
 		{
+			name:         "ipv6 localhost origin allowed",
+			origin:       "http://[::1]:8080",
+			wantRejected: false,
+		},
+		{
+			name:         "https localhost origin allowed",
+			origin:       "https://localhost:8443",
+			wantRejected: false,
+		},
+		{
 			name:         "allowlisted remote origin allowed",
 			cfg:          config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
 			origin:       "http://s3desk.local:8080",
+			wantRejected: false,
+		},
+		{
+			name:         "allowlisted mixed case origin allowed",
+			cfg:          config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
+			origin:       "https://S3DESK.LOCAL.:8443",
 			wantRejected: false,
 		},
 		{

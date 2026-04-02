@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Grid, message } from 'antd'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { APIError } from '../../api/client'
@@ -11,6 +11,8 @@ import { getProviderCapabilities, getProviderCapabilityReason } from '../../lib/
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 import { useAPIClient } from '../../api/useAPIClient'
 import { buildDialogPreferenceKey } from '../../lib/dialogPreferences'
+import { buildBucketDeleteJobNavigationState, buildBucketObjectsNavigationState } from './bucketNotEmptyNavigation'
+import { useBucketScopedViewState } from './useBucketScopedViewState'
 
 const BUCKET_NOT_EMPTY_DIALOG_KEY = buildDialogPreferenceKey('warning', 'bucket_not_empty')
 
@@ -26,25 +28,24 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 	const screens = Grid.useBreakpoint()
 	const useCompactList = !screens.lg
 	const currentScopeKey = `${apiToken}:${profileId ?? 'none'}`
-	const [createOpenScope, setCreateOpenScope] = useState<string | null>(null)
-	const [deletingBucketState, setDeletingBucketState] = useState<{
-		bucketName: string
-		scopeKey: string
-	} | null>(null)
-	const [policyBucketState, setPolicyBucketState] = useState<{
-		bucketName: string
-		scopeKey: string
-	} | null>(null)
-	const [controlsBucketState, setControlsBucketState] = useState<{
-		bucketName: string
-		scopeKey: string
-	} | null>(null)
-	const [bucketNotEmptyDialogState, setBucketNotEmptyDialogState] = useState<{
-		bucketName: string
-		scopeKey: string
-	} | null>(null)
 	const bucketsPageContextVersionRef = useRef(0)
 	const latestScopeKeyRef = useRef(currentScopeKey)
+	const {
+		createOpen,
+		deletingBucket,
+		policyBucket,
+		controlsBucket,
+		bucketNotEmptyDialogBucket,
+		setDeletingBucketState,
+		setBucketNotEmptyDialogState,
+		openCreateModal,
+		closeCreateModal,
+		openPolicyModal,
+		openControlsModal,
+		closePolicyModal,
+		closeControlsModal,
+		closeBucketNotEmptyDialog,
+	} = useBucketScopedViewState(currentScopeKey)
 
 	useLayoutEffect(() => {
 		latestScopeKeyRef.current = currentScopeKey
@@ -90,16 +91,6 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 		selectedProfile?.provider === 'oci_object_storage'
 	const controlsUnsupportedReason = 'Typed controls are available for AWS S3, GCS, Azure Blob, and OCI summary views.'
 
-	const openPolicyModal = (bucketName: string) => {
-		setControlsBucketState(null)
-		setPolicyBucketState({ bucketName, scopeKey: currentScopeKey })
-	}
-
-	const openControlsModal = (bucketName: string) => {
-		setPolicyBucketState(null)
-		setControlsBucketState({ bucketName, scopeKey: currentScopeKey })
-	}
-
 	const bucketsQuery = useQuery({
 		queryKey: ['buckets', profileId, apiToken],
 		queryFn: () => api.buckets.listBuckets(profileId!),
@@ -128,7 +119,7 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 				context.contextVersion === bucketsPageContextVersionRef.current
 			if (isCurrent) {
 				message.success('Bucket created')
-				setCreateOpenScope(null)
+				closeCreateModal()
 			}
 			await queryClient.invalidateQueries({
 				queryKey: ['buckets', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
@@ -153,13 +144,13 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 						? `Bucket created, but secure defaults failed while applying ${applySection}.`
 						: 'Bucket created, but secure defaults were not fully applied.',
 				)
-				await queryClient.invalidateQueries({
-					queryKey: ['buckets', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
-					exact: true,
-				})
-				setCreateOpenScope(null)
-				return
-			}
+					await queryClient.invalidateQueries({
+						queryKey: ['buckets', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+						exact: true,
+					})
+					closeCreateModal()
+					return
+				}
 			message.error(formatErr(err))
 		},
 	})
@@ -228,28 +219,6 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 		},
 	})
 
-	const createOpen = createOpenScope === currentScopeKey
-	const deletingBucket =
-		deletingBucketState?.scopeKey === currentScopeKey
-			? deletingBucketState.bucketName
-			: null
-	const policyBucket =
-		policyBucketState?.scopeKey === currentScopeKey
-			? policyBucketState.bucketName
-			: null
-	const controlsBucket =
-		controlsBucketState?.scopeKey === currentScopeKey
-			? controlsBucketState.bucketName
-			: null
-	const bucketNotEmptyDialogBucket =
-		bucketNotEmptyDialogState?.scopeKey === currentScopeKey
-			? bucketNotEmptyDialogState.bucketName
-			: null
-
-	const openCreateModal = () => setCreateOpenScope(currentScopeKey)
-	const closeCreateModal = () => setCreateOpenScope(null)
-	const closePolicyModal = () => setPolicyBucketState(null)
-	const closeControlsModal = () => setControlsBucketState(null)
 	const submitCreateBucket = (req: BucketCreateRequest) =>
 		createMutation.mutate({
 			req,
@@ -269,27 +238,18 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 		})
 	}
 
-	const closeBucketNotEmptyDialog = () => setBucketNotEmptyDialogState(null)
 	const openBucketNotEmptyObjects = () => {
 		if (!bucketNotEmptyDialogBucket) return
 		setBucketNotEmptyDialogState(null)
 		navigate('/objects', {
-			state: {
-				openBucket: true,
-				bucket: bucketNotEmptyDialogBucket,
-				prefix: '',
-			},
+			state: buildBucketObjectsNavigationState(bucketNotEmptyDialogBucket),
 		})
 	}
 	const openBucketNotEmptyDeleteJob = () => {
 		if (!bucketNotEmptyDialogBucket) return
 		setBucketNotEmptyDialogState(null)
 		navigate('/jobs', {
-			state: {
-				openDeleteJob: true,
-				bucket: bucketNotEmptyDialogBucket,
-				deleteAll: true,
-			},
+			state: buildBucketDeleteJobNavigationState(bucketNotEmptyDialogBucket),
 		})
 	}
 

@@ -44,6 +44,7 @@ func (s *server) finalizeImmediateUploadCommit(ctx context.Context, profileID, u
 	if progress != nil {
 		eventPayload["progress"] = progress
 	}
+	s.cleanupImmediateUploadCommitState(ctx, profileID, uploadID)
 	s.hub.Publish(ws.Event{Type: "job.completed", JobID: job.ID, Payload: eventPayload})
 	return job, nil
 }
