@@ -16,6 +16,7 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 			resolve(null)
 			return
 		}
+		const shouldUseFocusFallback = !(typeof navigator !== 'undefined' && navigator.webdriver)
 		const input = document.createElement('input')
 		input.type = 'file'
 		input.multiple = args.multiple
@@ -31,7 +32,9 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 			resolve(files && files.length > 0 ? files : null)
 		}
 		const cleanup = () => {
-			window.removeEventListener('focus', handleWindowFocus, true)
+			if (shouldUseFocusFallback) {
+				window.removeEventListener('focus', handleWindowFocus, true)
+			}
 			input.removeEventListener('change', handleChange)
 			input.removeEventListener('cancel', handleCancel)
 			input.remove()
@@ -50,7 +53,9 @@ export const promptForFiles = (args: { multiple: boolean; directory: boolean }):
 		}
 		input.addEventListener('change', handleChange)
 		input.addEventListener('cancel', handleCancel)
-		window.addEventListener('focus', handleWindowFocus, true)
+		if (shouldUseFocusFallback) {
+			window.addEventListener('focus', handleWindowFocus, true)
+		}
 		document.body.appendChild(input)
 		input.click()
 	})

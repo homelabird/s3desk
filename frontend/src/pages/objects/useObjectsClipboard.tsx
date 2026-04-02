@@ -10,6 +10,25 @@ import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { fileNameFromKey, normalizePrefix } from './objectsListUtils'
 import type { ClipboardObjects } from './objectsActionCatalog'
 
+const INTERNAL_CLIPBOARD_BY_SERVER_SCOPE = new Map<string, ClipboardObjects>()
+
+function getClipboardServerScope(apiToken: string): string {
+	return apiToken.trim() || '__no_server__'
+}
+
+function readInternalClipboard(apiToken: string): ClipboardObjects | null {
+	return INTERNAL_CLIPBOARD_BY_SERVER_SCOPE.get(getClipboardServerScope(apiToken)) ?? null
+}
+
+function writeInternalClipboard(apiToken: string, value: ClipboardObjects | null) {
+	const scope = getClipboardServerScope(apiToken)
+	if (!value) {
+		INTERNAL_CLIPBOARD_BY_SERVER_SCOPE.delete(scope)
+		return
+	}
+	INTERNAL_CLIPBOARD_BY_SERVER_SCOPE.set(scope, value)
+}
+
 type UseObjectsClipboardArgs = {
 	profileId: string | null
 	apiToken: string
@@ -29,9 +48,17 @@ export function useObjectsClipboard({
 	createJobWithRetry,
 	queryClient,
 }: UseObjectsClipboardArgs) {
-	const [clipboardObjects, setClipboardObjects] = useState<ClipboardObjects | null>(null)
+	const [clipboardObjectsState, setClipboardObjectsState] = useState<ClipboardObjects | null>(() => readInternalClipboard(apiToken))
 	const navigate = useNavigate()
 	const clipboardContextVersionRef = useRef(0)
+	const setClipboardObjects = useCallback((value: ClipboardObjects | null) => {
+		writeInternalClipboard(apiToken, value)
+		setClipboardObjectsState(value)
+	}, [apiToken])
+
+	useEffect(() => {
+		setClipboardObjectsState(readInternalClipboard(apiToken))
+	}, [apiToken])
 
 	const invalidateClipboardContext = useCallback(() => {
 		clipboardContextVersionRef.current += 1
@@ -251,13 +278,13 @@ export function useObjectsClipboard({
 			return
 		}
 
-		if (clipboardObjects?.srcProfileId && clipboardObjects.srcProfileId !== profileId) {
+		if (clipboardObjectsState?.srcProfileId && clipboardObjectsState.srcProfileId !== profileId) {
 			setClipboardObjects(null)
 			message.warning('Clipboard objects came from a different profile. Copy them again after switching profiles.')
 			return
 		}
 
-		const src = clipboardObjects ?? (await readClipboardObjectsFromSystemClipboard())
+		const src = clipboardObjectsState ?? (await readClipboardObjectsFromSystemClipboard())
 		if (!src) return
 		if (pasteContextVersion !== clipboardContextVersionRef.current) return
 
@@ -290,10 +317,10 @@ export function useObjectsClipboard({
 		}
 
 		await doPaste()
-	}, [bucket, clipboardObjects, pasteObjectsMutation, prefix, profileId, readClipboardObjectsFromSystemClipboard])
+	}, [bucket, clipboardObjectsState, pasteObjectsMutation, prefix, profileId, readClipboardObjectsFromSystemClipboard, setClipboardObjects])
 
 	return {
-		clipboardObjects,
+		clipboardObjects: clipboardObjectsState,
 		onCopy,
 		copySelectionToClipboard,
 		pasteClipboardObjects,

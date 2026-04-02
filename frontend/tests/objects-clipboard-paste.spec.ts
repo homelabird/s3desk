@@ -30,14 +30,15 @@ type CreatedJobRequest = {
 }
 
 async function seedObjectsStorage(page: Page, overrides: Record<string, unknown> = {}) {
+	const apiToken = 'clipboard-token'
 	await seedLocalStorage(page, {
-		apiToken: 'clipboard-token',
+		apiToken,
 		profileId: profileA,
 		bucket,
 		prefix: sourcePrefix,
 		objectsUIMode: 'advanced',
-		[`objects:${profileB}:bucket`]: bucket,
-		[`objects:${profileB}:prefix`]: destinationPrefix,
+		[`objects:${apiToken}:${profileB}:bucket`]: bucket,
+		[`objects:${apiToken}:${profileB}:prefix`]: destinationPrefix,
 		...overrides,
 	})
 }

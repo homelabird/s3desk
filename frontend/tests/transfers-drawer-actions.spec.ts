@@ -1,3 +1,6 @@
+import path from 'path'
+import { fileURLToPath } from 'url'
+
 import { expect, test, type Page } from '@playwright/test'
 
 import {
@@ -12,6 +15,8 @@ import { ensureDialogOpen, transferUploadRow } from './support/ui'
 const now = '2024-01-01T00:00:00Z'
 const profileId = 'transfers-actions-profile'
 const bucket = 'transfers-actions-bucket'
+const testDir = path.dirname(fileURLToPath(import.meta.url))
+const fixtureRoot = path.join(testDir, 'fixtures', 'upload-folder')
 
 async function seedStorage(page: Page) {
 	await seedLocalStorage(page, {
@@ -30,12 +35,12 @@ function buildSucceededUploadJob(jobId: string) {
 		payload: {
 			bucket,
 			prefix: '',
-			rootName: 'alpha.txt',
-			rootKind: 'file',
-			totalFiles: 1,
-			totalBytes: 5,
+			rootName: 'upload-folder',
+			rootKind: 'folder',
+			totalFiles: 2,
+			totalBytes: 9,
 		},
-		progress: { bytesDone: 5, bytesTotal: 5 },
+		progress: { bytesDone: 9, bytesTotal: 9 },
 		createdAt: now,
 		startedAt: now,
 		finishedAt: now,
@@ -124,6 +129,9 @@ test('transfers drawer cancels, retries, and clears completed uploads', async ({
 
 	const apiState = await installTransfersActionApi(page)
 	await seedStorage(page)
+	await page.addInitScript(() => {
+		Reflect.deleteProperty(window, 'showDirectoryPicker')
+	})
 	await page.goto('/uploads')
 	await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible()
 
@@ -131,22 +139,20 @@ test('transfers drawer cancels, retries, and clears completed uploads', async ({
 	const sourceDialog = page.getByRole('dialog', { name: 'Add upload source' })
 	await expect(sourceDialog).toBeVisible()
 	const chooserPromise = page.waitForEvent('filechooser')
-	await sourceDialog.getByRole('button', { name: 'Choose files' }).click()
+	await sourceDialog.getByRole('button', { name: 'Choose folder' }).click()
 	const chooser = await chooserPromise
-	await chooser.setFiles({
-		name: 'alpha.txt',
-		mimeType: 'text/plain',
-		buffer: Buffer.from('alpha'),
-	})
+	await chooser.setFiles(fixtureRoot)
 
-	await page.getByRole('button', { name: /Queue upload \(1\)/i }).click()
+	const queueButton = page.getByRole('button', { name: /Queue upload/i })
+	await expect(queueButton).toBeEnabled({ timeout: 10_000 })
+	await queueButton.click()
 
 	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
 		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
 	})
 	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
 
-	const row = transferUploadRow(transfersDialog, 'Upload: alpha.txt')
+	const row = transferUploadRow(transfersDialog, 'upload-folder')
 	await expect(row).toBeVisible({ timeout: 10_000 })
 	await expect(row.getByRole('button', { name: 'Cancel' })).toBeVisible({ timeout: 10_000 })
 

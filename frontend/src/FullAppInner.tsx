@@ -356,6 +356,7 @@ export default function FullAppInner() {
 			apiToken={apiToken}
 			uploadDirectStream={uploadDirectStream}
 			uploadCapabilityByProfileId={uploadCapabilityByProfileId}
+			eager
 		>
 			<Layout className={styles.appLayout}>
 				{isDesktop ? (
