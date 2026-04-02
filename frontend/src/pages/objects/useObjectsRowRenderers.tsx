@@ -5,9 +5,16 @@ import type { MenuProps } from 'antd'
 import type { APIClient } from '../../api/client'
 import type { ObjectItem } from '../../api/types'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
-import { ObjectsObjectRowItem, ObjectsPrefixRowItem } from './ObjectsListRowItems'
+import {
+	ObjectsObjectRowItem,
+	ObjectsPrefixRowItem,
+} from './ObjectsListRowItems'
 import type { UIActionOrDivider } from './objectsActions'
-import type { ContextMenuMatch, ContextMenuPoint, ContextMenuState } from './useObjectsContextMenu'
+import type {
+	ContextMenuMatch,
+	ContextMenuPoint,
+	ContextMenuState,
+} from './useObjectsContextMenu'
 
 type UseObjectsRowRenderersArgs = {
 	api: APIClient
@@ -23,6 +30,7 @@ type UseObjectsRowRenderersArgs = {
 	listGridClassName: string
 	rowHeightCompactPx: number
 	rowHeightWidePx: number
+	measureElement?: (element: HTMLDivElement | null) => void
 	showThumbnails: boolean
 	thumbnailCache: ThumbnailCache
 	highlightText: (value: string) => ReactNode
@@ -32,8 +40,16 @@ type UseObjectsRowRenderersArgs = {
 	getObjectActions: (key: string, size?: number) => UIActionOrDivider[]
 	selectionContextMenuActions: UIActionOrDivider[]
 	recordContextMenuPoint: (event: MouseEvent) => ContextMenuPoint
-	openPrefixContextMenu: (key: string, source: 'context' | 'button', point?: ContextMenuPoint) => void
-	openObjectContextMenu: (key: string, source: 'context' | 'button', point?: ContextMenuPoint) => void
+	openPrefixContextMenu: (
+		key: string,
+		source: 'context' | 'button',
+		point?: ContextMenuPoint,
+	) => void
+	openObjectContextMenu: (
+		key: string,
+		source: 'context' | 'button',
+		point?: ContextMenuPoint,
+	) => void
 	closeContextMenu: (match?: ContextMenuMatch, reason?: string) => void
 	onOpenPrefix: (prefix: string) => void
 	onRowDragStartPrefix: (event: DragEvent, prefix: string) => void
@@ -68,6 +84,7 @@ export function useObjectsRowRenderers({
 	listGridClassName,
 	rowHeightCompactPx,
 	rowHeightWidePx,
+	measureElement,
 	showThumbnails,
 	thumbnailCache,
 	highlightText,
@@ -107,7 +124,7 @@ export function useObjectsRowRenderers({
 	}, [closeContextMenu])
 
 	const renderPrefixRow = useCallback(
-		(prefixKey: string, offset: number) => {
+		(prefixKey: string, offset: number, rowIndex: number) => {
 			const prefixButtonMenuOpen =
 				contextMenuState.open &&
 				contextMenuState.kind === 'prefix' &&
@@ -121,6 +138,8 @@ export function useObjectsRowRenderers({
 					currentPrefix={prefix}
 					offset={offset}
 					rowMinHeight={isCompactList ? rowHeightCompactPx : rowHeightWidePx}
+					virtualRowIndex={rowIndex}
+					measureElement={measureElement}
 					listGridClassName={listGridClassName}
 					isCompact={isCompactList}
 					canDragDrop={canDragDrop}
@@ -135,7 +154,9 @@ export function useObjectsRowRenderers({
 					onOpenPrefix={onOpenPrefix}
 					onRowDragStartPrefix={onRowDragStartPrefix}
 					onRowDragEnd={clearDndHover}
-					isDropTargetActive={canDragDrop && dndHoverPrefix === dropTargetPrefix}
+					isDropTargetActive={
+						canDragDrop && dndHoverPrefix === dropTargetPrefix
+					}
 					onDropTargetDragOver={onDndTargetDragOver}
 					onDropTargetDragLeave={onDndTargetDragLeave}
 					onDropTargetDrop={onDndTargetDrop}
@@ -164,6 +185,7 @@ export function useObjectsRowRenderers({
 			onRowDragStartPrefix,
 			openPrefixContextMenu,
 			prefix,
+			measureElement,
 			recordContextMenuPoint,
 			rowHeightCompactPx,
 			rowHeightWidePx,
@@ -172,7 +194,7 @@ export function useObjectsRowRenderers({
 	)
 
 	const renderObjectRow = useCallback(
-		(object: ObjectItem, offset: number) => {
+		(object: ObjectItem, offset: number, rowIndex: number) => {
 			const key = object.key
 			const objectButtonMenuOpen =
 				contextMenuState.open &&
@@ -187,6 +209,8 @@ export function useObjectsRowRenderers({
 					currentPrefix={prefix}
 					offset={offset}
 					rowMinHeight={isCompactList ? rowHeightCompactPx : rowHeightWidePx}
+					virtualRowIndex={rowIndex}
+					measureElement={measureElement}
 					listGridClassName={listGridClassName}
 					isCompact={isCompactList}
 					canDragDrop={canDragDrop}
@@ -198,7 +222,9 @@ export function useObjectsRowRenderers({
 					withContextMenuClassName={withContextMenuClassName}
 					isSelected={selectedKeys.has(key)}
 					isFavorite={favoriteKeys.has(key)}
-					favoriteDisabled={favoritePendingKeys.has(key) || isOffline || !profileId || !bucket}
+					favoriteDisabled={
+						favoritePendingKeys.has(key) || isOffline || !profileId || !bucket
+					}
 					buttonMenuOpen={objectButtonMenuOpen}
 					recordContextMenuPoint={recordContextMenuPoint}
 					openObjectContextMenu={openObjectContextMenu}
@@ -242,6 +268,7 @@ export function useObjectsRowRenderers({
 			onRowDragStartObjects,
 			openObjectContextMenu,
 			prefix,
+			measureElement,
 			profileId,
 			profileProvider,
 			recordContextMenuPoint,

@@ -4,17 +4,19 @@ import { buildProfileFixture, seedLocalStorage } from './support/apiFixtures'
 import { defaultWebviewStorage, escapeRegExp, seedWebviewStorage, stubWebviewApi } from './support/webviewFixtures'
 
 test.describe('webview routing', () => {
-	test('WV-001 redirects `/` to `/setup` when no stored profile exists', async ({ page }) => {
+	test('WV-001 redirects `/` to `/profiles` when no stored profile exists', async ({ page }) => {
+		const fallbackProfile = 'available-profile'
 		await stubWebviewApi(page, {
-			profiles: [buildProfileFixture({ id: 'available-profile', name: 'Available Profile' })],
+			profiles: [buildProfileFixture({ id: fallbackProfile, name: 'Available Profile' })],
 		})
 		await seedLocalStorage(page, { apiToken: defaultWebviewStorage.apiToken })
 
 		await page.goto('/')
 
-		await expect(page).toHaveURL(/\/setup$/)
-		await expect(page.getByText('Choose a profile')).toBeVisible()
-		await expect(page.getByText('No profile selected')).toBeVisible()
+		await expect(page).toHaveURL(/\/profiles$/)
+		await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
+		await expect(page.getByTestId('topbar-profile-select').getByLabel('Profile')).toHaveValue(fallbackProfile)
+		await expect(page.getByRole('button', { name: 'Selected' })).toBeVisible()
 	})
 
 	test('WV-001 redirects `/` to `/objects` when a stored profile exists', async ({ page }) => {

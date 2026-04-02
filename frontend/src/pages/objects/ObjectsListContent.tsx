@@ -20,8 +20,16 @@ type ObjectsListContentProps = {
 	canClearSearch: boolean
 	onClearSearch: () => void
 	viewMode: ObjectsViewMode
-	renderPrefixRow: (prefix: string, offset: number) => ReactNode
-	renderObjectRow: (object: ObjectItem, offset: number) => ReactNode
+	renderPrefixRow: (
+		prefix: string,
+		offset: number,
+		rowIndex: number,
+	) => ReactNode
+	renderObjectRow: (
+		object: ObjectItem,
+		offset: number,
+		rowIndex: number,
+	) => ReactNode
 	renderPrefixGridItem: (prefix: string) => ReactNode
 	renderObjectGridItem: (object: ObjectItem) => ReactNode
 	showLoadMore?: boolean
@@ -33,7 +41,11 @@ type ObjectsListContentProps = {
 export function ObjectsListContent(props: ObjectsListContentProps) {
 	const loadMoreButton =
 		props.showLoadMore && props.onLoadMore ? (
-			<Button size="small" onClick={props.onLoadMore} disabled={props.loadMoreDisabled}>
+			<Button
+				size="small"
+				onClick={props.onLoadMore}
+				disabled={props.loadMoreDisabled}
+			>
 				{props.loadMoreLabel ?? 'Load more'}
 			</Button>
 		) : null
@@ -46,8 +58,9 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 						props.virtualItems.map((vi) => {
 							const row = props.rows[vi.index]
 							if (!row) return null
-							if (row.kind === 'prefix') return props.renderPrefixRow(row.prefix, vi.start)
-							return props.renderObjectRow(row.object, vi.start)
+							if (row.kind === 'prefix')
+								return props.renderPrefixRow(row.prefix, vi.start, vi.index)
+							return props.renderObjectRow(row.object, vi.start, vi.index)
 						}),
 					{ items: props.virtualItems.length, rows: props.rows.length },
 				)
@@ -58,7 +71,8 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 					'ObjectsListContent.grid',
 					() =>
 						props.rows.map((row) => {
-							if (row.kind === 'prefix') return props.renderPrefixGridItem(row.prefix)
+							if (row.kind === 'prefix')
+								return props.renderPrefixGridItem(row.prefix)
 							return props.renderObjectGridItem(row.object)
 						}),
 					{ rows: props.rows.length },
@@ -76,9 +90,16 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 						<Spin />
 					</div>
 				) : (
-					<Empty description={props.emptyKind === 'empty' ? 'Empty folder' : 'No results'}>
+					<Empty
+						description={
+							props.emptyKind === 'empty' ? 'Empty folder' : 'No results'
+						}
+					>
 						{props.emptyKind === 'noresults' ? (
-							<Button onClick={props.onClearSearch} disabled={!props.canClearSearch}>
+							<Button
+								onClick={props.onClearSearch}
+								disabled={!props.canClearSearch}
+							>
 								Clear search
 							</Button>
 						) : null}
@@ -99,7 +120,10 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 
 	if (props.viewMode === 'grid') {
 		const content = (
-			<div className={gridStyles.gridContent} data-testid="objects-grid-content">
+			<div
+				className={gridStyles.gridContent}
+				data-testid="objects-grid-content"
+			>
 				{renderedGridItems}
 				{props.isFetchingNextPage ? (
 					<div className={gridStyles.gridFooter}>
@@ -118,7 +142,10 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 	}
 
 	const content = (
-		<div className={listStyles.virtualListContent} style={{ height: props.totalSize }}>
+		<div
+			className={listStyles.virtualListContent}
+			style={{ height: props.totalSize }}
+		>
 			{renderedRows}
 
 			{props.isFetchingNextPage ? (

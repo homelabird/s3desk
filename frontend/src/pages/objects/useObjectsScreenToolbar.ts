@@ -22,7 +22,7 @@ export function useObjectsScreenToolbar({ props, data, actions, refresh, listSta
 
 	const { toolbarProps, canCreateFolder, createFolderTooltipText } = useObjectsToolbarProps({
 		apiToken: props.apiToken,
-		isDesktop: !!data.screens.lg,
+		isDesktop: data.isDesktop,
 		showLabels: !!data.screens.sm,
 		isAdvanced: data.isAdvanced,
 		isOffline: data.isOffline,

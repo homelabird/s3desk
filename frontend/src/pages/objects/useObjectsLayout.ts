@@ -162,7 +162,7 @@ export function useObjectsLayout({
 		detailsResizeHandleWidth,
 	])
 
-	const isCompactList = !isDesktop || !isAdvanced || (isDesktop && (listViewportWidthPx <= 0 || listViewportWidthPx < compactListMinWidth))
+	const isCompactList = !isDesktop || (isDesktop && (listViewportWidthPx <= 0 || listViewportWidthPx < compactListMinWidth))
 
 	const treeResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
 	const onTreeResizePointerDown = useCallback(

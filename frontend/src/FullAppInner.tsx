@@ -531,19 +531,20 @@ export default function FullAppInner() {
 											/>
 										}
 									/>
-									<Route
-										path="/jobs"
-										element={
-											<JobsPage
-												key={`jobs:${apiToken || 'none'}:${safeProfileId ?? 'none'}:${location.key}`}
+										<Route
+											path="/jobs"
+											element={
+												<JobsPage
+													key={`jobs:${apiToken || 'none'}:${safeProfileId ?? 'none'}:${location.key}`}
 												apiToken={apiToken}
 												profileId={safeProfileId}
 											/>
-										}
-									/>
-									<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
-								</Routes>
-							</Suspense>
+											}
+										/>
+										<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
+										<Route path="*" element={<Navigate to="/profiles" replace />} />
+									</Routes>
+								</Suspense>
 						</main>
 					</Content>
 				</Layout>

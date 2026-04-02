@@ -13,17 +13,29 @@ import { formatBytes } from '../../lib/transfer'
 import thumbnailStyles from './ObjectsThumbnailPrimitives.module.css'
 import type { UIActionOrDivider } from './objectsActions'
 import { buildActionMenu } from './objectsActions'
-import { COMPACT_LIST_THUMBNAIL_PX, WIDE_LIST_THUMBNAIL_PX } from './objectsPageConstants'
+import {
+	COMPACT_LIST_THUMBNAIL_PX,
+	WIDE_LIST_THUMBNAIL_PX,
+} from './objectsPageConstants'
 import { ObjectsObjectRow, ObjectsPrefixRow } from './ObjectsListRow'
 import { ObjectThumbnail } from './ObjectThumbnail'
-import { displayNameForKey, displayNameForPrefix, isThumbnailKey } from './objectsListUtils'
-import type { ContextMenuMatch, ContextMenuPoint } from './useObjectsContextMenu'
+import {
+	displayNameForKey,
+	displayNameForPrefix,
+	isThumbnailKey,
+} from './objectsListUtils'
+import type {
+	ContextMenuMatch,
+	ContextMenuPoint,
+} from './useObjectsContextMenu'
 
 type ObjectsPrefixRowItemProps = {
 	prefixKey: string
 	currentPrefix: string
 	offset: number
 	rowMinHeight: number
+	virtualRowIndex?: number
+	measureElement?: (element: HTMLDivElement | null) => void
 	listGridClassName: string
 	isCompact: boolean
 	canDragDrop: boolean
@@ -33,7 +45,11 @@ type ObjectsPrefixRowItemProps = {
 	withContextMenuClassName: (menu: MenuProps) => MenuProps
 	buttonMenuOpen: boolean
 	recordContextMenuPoint: (event: MouseEvent) => ContextMenuPoint
-	openPrefixContextMenu: (key: string, source: 'context' | 'button', point?: ContextMenuPoint) => void
+	openPrefixContextMenu: (
+		key: string,
+		source: 'context' | 'button',
+		point?: ContextMenuPoint,
+	) => void
 	closeContextMenu: (match: ContextMenuMatch, reason?: string) => void
 	onOpenPrefix: (prefix: string) => void
 	onRowDragStartPrefix: (event: DragEvent, prefix: string) => void
@@ -44,7 +60,9 @@ type ObjectsPrefixRowItemProps = {
 	onDropTargetDrop: (event: DragEvent, prefix: string) => void
 }
 
-export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: ObjectsPrefixRowItemProps) {
+export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(
+	props: ObjectsPrefixRowItemProps,
+) {
 	const {
 		prefixKey,
 		currentPrefix,
@@ -73,16 +91,19 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 		() => displayNameForPrefix(prefixKey, currentPrefix),
 		[currentPrefix, prefixKey],
 	)
-	const menu = useMemo(
-		() => {
-			return withContextMenuClassName(buildActionMenu(getPrefixActions(prefixKey), isAdvanced))
-		},
-		[getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName],
-	)
+	const menu = useMemo(() => {
+		return withContextMenuClassName(
+			buildActionMenu(getPrefixActions(prefixKey), isAdvanced),
+		)
+	}, [getPrefixActions, isAdvanced, prefixKey, withContextMenuClassName])
 	const handleButtonMenuOpenChange = useCallback(
 		(open: boolean, info?: { source: PopoverOpenSource }) => {
 			if (open) openPrefixContextMenu(prefixKey, 'button')
-			else closeContextMenu({ key: prefixKey, kind: 'prefix', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
+			else
+				closeContextMenu(
+					{ key: prefixKey, kind: 'prefix', source: 'button' },
+					info?.source === 'menu' ? 'menu_item' : 'button_menu',
+				)
 		},
 		[closeContextMenu, openPrefixContextMenu, prefixKey],
 	)
@@ -95,17 +116,22 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 		},
 		[openPrefixContextMenu, prefixKey, recordContextMenuPoint],
 	)
-	const handleOpen = useCallback(() => onOpenPrefix(prefixKey), [onOpenPrefix, prefixKey])
+	const handleOpen = useCallback(
+		() => onOpenPrefix(prefixKey),
+		[onOpenPrefix, prefixKey],
+	)
 	const handleDragStart = useCallback(
 		(event: DragEvent) => onRowDragStartPrefix(event, prefixKey),
 		[onRowDragStartPrefix, prefixKey],
 	)
 	const handleDropTargetDragOver = useCallback(
-		(event: DragEvent<HTMLDivElement>) => onDropTargetDragOver(event, prefixKey),
+		(event: DragEvent<HTMLDivElement>) =>
+			onDropTargetDragOver(event, prefixKey),
 		[onDropTargetDragOver, prefixKey],
 	)
 	const handleDropTargetDragLeave = useCallback(
-		(event: DragEvent<HTMLDivElement>) => onDropTargetDragLeave(event, prefixKey),
+		(event: DragEvent<HTMLDivElement>) =>
+			onDropTargetDragLeave(event, prefixKey),
 		[onDropTargetDragLeave, prefixKey],
 	)
 	const handleDropTargetDrop = useCallback(
@@ -118,6 +144,8 @@ export const ObjectsPrefixRowItem = memo(function ObjectsPrefixRowItem(props: Ob
 			prefixKey={prefixKey}
 			offset={offset}
 			rowMinHeight={rowMinHeight}
+			virtualRowIndex={props.virtualRowIndex}
+			measureElement={props.measureElement}
 			listGridClassName={listGridClassName}
 			isCompact={isCompact}
 			canDragDrop={canDragDrop}
@@ -145,6 +173,8 @@ type ObjectsObjectRowItemProps = {
 	currentPrefix: string
 	offset: number
 	rowMinHeight: number
+	virtualRowIndex?: number
+	measureElement?: (element: HTMLDivElement | null) => void
 	listGridClassName: string
 	isCompact: boolean
 	canDragDrop: boolean
@@ -159,7 +189,11 @@ type ObjectsObjectRowItemProps = {
 	favoriteDisabled: boolean
 	buttonMenuOpen: boolean
 	recordContextMenuPoint: (event: MouseEvent) => ContextMenuPoint
-	openObjectContextMenu: (key: string, source: 'context' | 'button', point?: ContextMenuPoint) => void
+	openObjectContextMenu: (
+		key: string,
+		source: 'context' | 'button',
+		point?: ContextMenuPoint,
+	) => void
 	closeContextMenu: (match: ContextMenuMatch, reason?: string) => void
 	onSelectObject: (event: MouseEvent, key: string) => void
 	onSelectCheckbox: (event: MouseEvent, key: string) => void
@@ -176,7 +210,9 @@ type ObjectsObjectRowItemProps = {
 	thumbnailCache: ThumbnailCache
 }
 
-export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: ObjectsObjectRowItemProps) {
+export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(
+	props: ObjectsObjectRowItemProps,
+) {
 	const {
 		object,
 		currentPrefix,
@@ -216,8 +252,13 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		[currentPrefix, object.key],
 	)
 	const sizeLabel = useMemo(() => formatBytes(object.size), [object.size])
-	const timeLabel = useMemo(() => formatDateTime(object.lastModified), [object.lastModified])
-	const thumbnailSize = isCompact ? COMPACT_LIST_THUMBNAIL_PX : WIDE_LIST_THUMBNAIL_PX
+	const timeLabel = useMemo(
+		() => formatDateTime(object.lastModified),
+		[object.lastModified],
+	)
+	const thumbnailSize = isCompact
+		? COMPACT_LIST_THUMBNAIL_PX
+		: WIDE_LIST_THUMBNAIL_PX
 	const canShowThumbnail = showThumbnails && isThumbnailKey(object.key)
 	const thumbnail =
 		canShowThumbnail && profileId && bucket ? (
@@ -238,7 +279,9 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		) : null
 
 	const menu = useMemo(() => {
-		const actions = useSelectionMenu ? selectionContextMenuActions : getObjectActions(object.key, object.size)
+		const actions = useSelectionMenu
+			? selectionContextMenuActions
+			: getObjectActions(object.key, object.size)
 		return withContextMenuClassName(buildActionMenu(actions, isAdvanced))
 	}, [
 		object.key,
@@ -252,7 +295,11 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 	const handleButtonMenuOpenChange = useCallback(
 		(open: boolean, info?: { source: PopoverOpenSource }) => {
 			if (open) openObjectContextMenu(object.key, 'button')
-			else closeContextMenu({ key: object.key, kind: 'object', source: 'button' }, info?.source === 'menu' ? 'menu_item' : 'button_menu')
+			else
+				closeContextMenu(
+					{ key: object.key, kind: 'object', source: 'button' },
+					info?.source === 'menu' ? 'menu_item' : 'button_menu',
+				)
 		},
 		[closeContextMenu, object.key, openObjectContextMenu],
 	)
@@ -265,7 +312,10 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		},
 		[object.key, openObjectContextMenu, recordContextMenuPoint],
 	)
-	const handleClick = useCallback((event: MouseEvent) => onSelectObject(event, object.key), [object.key, onSelectObject])
+	const handleClick = useCallback(
+		(event: MouseEvent) => onSelectObject(event, object.key),
+		[object.key, onSelectObject],
+	)
 	const handleCheckboxClick = useCallback(
 		(event: MouseEvent) => onSelectCheckbox(event, object.key),
 		[object.key, onSelectCheckbox],
@@ -291,6 +341,8 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		<ObjectsObjectRow
 			offset={offset}
 			rowMinHeight={rowMinHeight}
+			virtualRowIndex={props.virtualRowIndex}
+			measureElement={props.measureElement}
 			listGridClassName={listGridClassName}
 			isCompact={isCompact}
 			canDragDrop={canDragDrop}

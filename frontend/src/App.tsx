@@ -1,62 +1,66 @@
-import { Suspense, lazy } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Suspense, lazy } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 
-import { useAuth } from './auth/useAuth'
-import { readLegacyActiveProfileIdForMigration, serverScopedStorageKey } from './lib/profileScopedStorage'
-import styles from './App.module.css'
-import LightApp from './LightApp'
+import { useAuth } from "./auth/useAuth";
+import {
+  readLegacyActiveProfileIdForMigration,
+  serverScopedStorageKey,
+} from "./lib/profileScopedStorage";
+import styles from "./App.module.css";
 
 const FullApp = lazy(async () => {
-	const m = await import('./FullApp')
-	return { default: m.default }
-})
+  const m = await import("./FullApp");
+  return { default: m.default };
+});
 
 function LoadingScreen() {
-	return (
-		<div role="status" className={styles.loadingScreen}>
-			<div className={styles.loadingPanel}>
-				<div className={styles.loadingTitle}>Loading…</div>
-				<div className={styles.loadingCopy}>Preparing the dashboard UI.</div>
-			</div>
-		</div>
-	)
+  return (
+    <div role="status" className={styles.loadingScreen}>
+      <div className={styles.loadingPanel}>
+        <div className={styles.loadingTitle}>Loading…</div>
+        <div className={styles.loadingCopy}>Preparing the dashboard UI.</div>
+      </div>
+    </div>
+  );
 }
 
 function readStoredString(storage: Storage, key: string): string | null {
-	try {
-		const raw = storage.getItem(key)
-		if (!raw) return null
-		const parsed = JSON.parse(raw)
-		return typeof parsed === 'string' && parsed.trim() ? parsed : null
-	} catch {
-		return null
-	}
+  try {
+    const raw = storage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "string" && parsed.trim() ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function readStoredProfileId(apiToken: string): string | null {
-	if (typeof window === 'undefined') return null
-	return (
-		readStoredString(window.localStorage, serverScopedStorageKey('app', apiToken, 'profileId')) ??
-		readLegacyActiveProfileIdForMigration(apiToken)
-	)
+  if (typeof window === "undefined") return null;
+  return (
+    readStoredString(
+      window.localStorage,
+      serverScopedStorageKey("app", apiToken, "profileId"),
+    ) ?? readLegacyActiveProfileIdForMigration(apiToken)
+  );
 }
 
 export default function App() {
-	const location = useLocation()
-	const { apiToken } = useAuth()
+  const location = useLocation();
+  const { apiToken } = useAuth();
 
-	if (location.pathname === '/') {
-		return <Navigate to={readStoredProfileId(apiToken) ? '/objects' : '/setup'} replace />
-	}
+  if (location.pathname === "/") {
+    return (
+      <Navigate
+        to={readStoredProfileId(apiToken) ? "/objects" : "/profiles"}
+        replace
+      />
+    );
+  }
 
-	// Keep setup/auth/profile-selection lightweight and separate from the full dashboard shell.
-	if (location.pathname === '/setup') {
-		return <LightApp />
-	}
-
-	return (
-		<Suspense fallback={<LoadingScreen />}>
-			<FullApp />
-		</Suspense>
-	)
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <FullApp />
+    </Suspense>
+  );
 }

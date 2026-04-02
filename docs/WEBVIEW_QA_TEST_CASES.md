@@ -173,7 +173,7 @@ Use the observed UI behavior below before starting the upload/download cases.
 
 1. Open the app directly at the target URL.
 2. Record the final URL after any redirects.
-3. If the app opens at `/`, note whether it lands on `/setup` or `/objects`.
+3. If the app opens at `/`, note whether it lands on `/profiles` or `/objects`.
 4. Confirm the app renders as a normal page and not as a blank frame or white
    screen.
 5. If the host is nesting the app inside another page/frame, stop this case and
@@ -182,7 +182,7 @@ Use the observed UI behavior below before starting the upload/download cases.
 **Expected results**
 
 - The app loads as a top-level page/view.
-- `/` lands on `/setup` when no profile is already stored, or `/objects` when an
+- `/` lands on `/profiles` when no profile is already stored, or `/objects` when an
   active profile is already stored.
 - No endless redirect, blank frame, or immediate render failure occurs.
 
@@ -190,7 +190,7 @@ Use the observed UI behavior below before starting the upload/download cases.
 
 - screenshot of the first usable screen
 - final URL and scheme
-- note whether the app landed on `/setup` or `/objects`
+- note whether the app landed on `/profiles` or `/objects`
 
 **Notes**
 
