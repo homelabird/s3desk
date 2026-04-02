@@ -9,6 +9,8 @@ import {
 	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 } from '../../components/transfers/transferConcurrencyPreferences'
+import { buildDialogPreferenceKey, countDismissedDialogs, setDialogDismissed } from '../../lib/dialogPreferences'
+import { serverScopedStorageKey } from '../../lib/profileScopedStorage'
 import { ensureDomShims } from '../../test/domShims'
 import { SettingsPage } from '../SettingsPage'
 
@@ -102,9 +104,18 @@ describe('SettingsPage', () => {
 		window.localStorage.setItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY, '6')
 		window.localStorage.setItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY, '4')
 		window.localStorage.setItem('uploadBatchConcurrency', '32')
+		window.localStorage.setItem('transfersTab', JSON.stringify('uploads'))
+		window.localStorage.setItem('profileId', JSON.stringify('legacy-profile'))
+		window.localStorage.setItem(serverScopedStorageKey('app', 'token-a', 'profileId'), JSON.stringify('profile-1'))
+		window.localStorage.setItem(serverScopedStorageKey('app', 'token-b', 'profileId'), JSON.stringify('profile-2'))
+		window.localStorage.setItem(serverScopedStorageKey('transfers', 'token-a', 'tab'), JSON.stringify('downloads'))
+		window.localStorage.setItem(serverScopedStorageKey('transfers', 'token-b', 'tab'), JSON.stringify('uploads'))
 		window.localStorage.setItem('objects:profile-1:bucket', 'scoped-bucket')
 		window.localStorage.setItem('objects:profile-1:prefix', 'nested/path/')
 		window.localStorage.setItem('objects:profile-1:tabs', '[{"id":"tab-1"}]')
+		window.localStorage.setItem('uploads:profile-1:bucket', JSON.stringify('upload-bucket'))
+		window.localStorage.setItem('uploads:profile-1:prefix', JSON.stringify('incoming/'))
+		window.localStorage.setItem('jobs:profile-1:bucket', JSON.stringify('jobs-bucket'))
 
 		renderSettingsPage()
 
@@ -118,10 +129,49 @@ describe('SettingsPage', () => {
 			expect(window.localStorage.getItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBeNull()
 			expect(window.localStorage.getItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY)).toBeNull()
 			expect(window.localStorage.getItem('uploadBatchConcurrency')).toBeNull()
+			expect(window.localStorage.getItem('transfersTab')).toBeNull()
+			expect(window.localStorage.getItem('profileId')).toBeNull()
+			expect(window.localStorage.getItem(serverScopedStorageKey('app', 'token-a', 'profileId'))).toBeNull()
+			expect(window.localStorage.getItem(serverScopedStorageKey('app', 'token-b', 'profileId'))).toBeNull()
+			expect(window.localStorage.getItem(serverScopedStorageKey('transfers', 'token-a', 'tab'))).toBeNull()
+			expect(window.localStorage.getItem(serverScopedStorageKey('transfers', 'token-b', 'tab'))).toBeNull()
 			expect(window.localStorage.getItem('objects:profile-1:bucket')).toBeNull()
 			expect(window.localStorage.getItem('objects:profile-1:prefix')).toBeNull()
 			expect(window.localStorage.getItem('objects:profile-1:tabs')).toBeNull()
+			expect(window.localStorage.getItem('uploads:profile-1:bucket')).toBeNull()
+			expect(window.localStorage.getItem('uploads:profile-1:prefix')).toBeNull()
+			expect(window.localStorage.getItem('jobs:profile-1:bucket')).toBeNull()
 		})
 		expect(successSpy).toHaveBeenCalledWith('Saved UI state reset. Reloading…')
+	})
+
+	it('resets dismissed dialog preferences only for the current api token scope', async () => {
+		const successSpy = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
+		const currentKey = buildDialogPreferenceKey('confirm', 'Delete profile|DELETE')
+		const otherKey = buildDialogPreferenceKey('warning', 'bucket_not_empty')
+		const legacyKey = buildDialogPreferenceKey('confirm', 'Delete bucket|DELETE')
+
+		setDialogDismissed(currentKey, true, 'token-a')
+		setDialogDismissed(otherKey, true, 'token-b')
+		window.localStorage.setItem(
+			'dismissedDialogPreferences',
+			JSON.stringify({
+				...JSON.parse(window.localStorage.getItem('dismissedDialogPreferences') ?? '{}'),
+				[legacyKey]: { dismissedAt: '2026-03-29T00:00:00.000Z' },
+			}),
+		)
+
+		renderSettingsPage({ apiToken: 'token-a' })
+
+		expect(await screen.findByText('2 dialog preference(s) are currently suppressed.')).toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Reset dismissed dialogs' }))
+
+		await waitFor(() => {
+			expect(screen.getByText('No dialog preferences are currently suppressed.')).toBeInTheDocument()
+		})
+		expect(countDismissedDialogs('token-a')).toBe(0)
+		expect(countDismissedDialogs('token-b')).toBe(1)
+		expect(successSpy).toHaveBeenCalledWith('Dismissed dialog preferences reset.')
 	})
 })

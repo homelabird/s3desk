@@ -1,9 +1,10 @@
 import { FolderOutlined } from '@ant-design/icons'
 import { message } from 'antd'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
 
 import type { APIClient } from '../../api/client'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import type { TreeNode } from '../../lib/tree'
 import { upsertTreeChildren } from '../../lib/tree'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
@@ -18,6 +19,7 @@ type LogFn = (
 
 type UseObjectsTreeArgs = {
 	api: APIClient
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -25,8 +27,15 @@ type UseObjectsTreeArgs = {
 	log: LogFn
 }
 
-export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, log }: UseObjectsTreeArgs) {
-	const [, setTreeExpandedByBucket] = useLocalStorageState<Record<string, string[]>>('objectsTreeExpandedByBucket', {})
+export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debugEnabled, log }: UseObjectsTreeArgs) {
+	const [treeExpandedByBucket, setTreeExpandedByBucket] = useLocalStorageState<Record<string, string[]>>(
+		profileScopedStorageKey('objects', apiToken, profileId, 'treeExpandedByBucket'),
+		{},
+		{
+			legacyLocalStorageKey: 'objectsTreeExpandedByBucket',
+			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'treeExpandedByBucket')],
+		},
+	)
 	const [treeData, setTreeData] = useState<TreeNode[]>(() => [
 		{ key: '/', title: '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} /> },
 	])
@@ -34,9 +43,22 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 	const [treeSelectedKeys, setTreeSelectedKeys] = useState<string[]>(['/'])
 	const treeLoadedKeysRef = useRef<Set<string>>(new Set())
 	const treeLoadingKeysRef = useRef<Set<string>>(new Set())
+	const lastTreeScopeKeyRef = useRef<string | null>(null)
 	const [treeLoadingKeys, setTreeLoadingKeys] = useState<string[]>([])
 	const treeEpochRef = useRef(0)
 	const [treeDrawerOpen, setTreeDrawerOpen] = useState(false)
+	const [treeDrawerScopeKey, setTreeDrawerScopeKey] = useState('')
+	const treeScopeKey = `${apiToken || '__no_server__'}:${profileId?.trim() || '__no_profile__'}:${bucket}`
+	const treeDrawerOpenVisible = treeDrawerOpen && treeDrawerScopeKey === treeScopeKey
+
+	const setScopedTreeDrawerOpen = useCallback(
+		(next: SetStateAction<boolean>) => {
+			const nextOpen = typeof next === 'function' ? next(treeDrawerOpenVisible) : next
+			setTreeDrawerOpen(nextOpen)
+			setTreeDrawerScopeKey(nextOpen ? treeScopeKey : '')
+		},
+		[treeDrawerOpenVisible, treeScopeKey],
+	)
 
 	const loadTreeChildren = useCallback(
 		async (nodeKey: string): Promise<void> => {
@@ -146,20 +168,29 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 	)
 
 	useEffect(() => {
+		if (lastTreeScopeKeyRef.current === treeScopeKey) return
+		lastTreeScopeKeyRef.current = treeScopeKey
 		treeEpochRef.current++
 		treeLoadedKeysRef.current.clear()
 		treeLoadingKeysRef.current.clear()
 		setTreeLoadingKeys([])
-		setTreeExpandedKeys([])
+		setTreeExpandedKeys(bucket ? [...(treeExpandedByBucket[bucket] ?? [])] : [])
 		setTreeData([
 			{ key: '/', title: bucket || '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} /> },
 		])
-	}, [bucket])
+	}, [apiToken, bucket, profileId, treeExpandedByBucket, treeScopeKey])
 
 	useEffect(() => {
 		if (!bucket) return
-		if (treeExpandedKeys.length === 0) return
-		setTreeExpandedByBucket((prev) => ({ ...prev, [bucket]: treeExpandedKeys }))
+		setTreeExpandedByBucket((prev) => {
+			const next = { ...prev }
+			if (treeExpandedKeys.length === 0) {
+				delete next[bucket]
+				return next
+			}
+			next[bucket] = [...treeExpandedKeys]
+			return next
+		})
 	}, [bucket, setTreeExpandedByBucket, treeExpandedKeys])
 
 	useEffect(() => {
@@ -183,7 +214,7 @@ export function useObjectsTree({ api, profileId, bucket, prefix, debugEnabled, l
 		onTreeLoadData,
 		refreshTreeNode,
 		treeLoadingKeys,
-		treeDrawerOpen,
-		setTreeDrawerOpen,
+		treeDrawerOpen: treeDrawerOpenVisible,
+		setTreeDrawerOpen: setScopedTreeDrawerOpen,
 	}
 }

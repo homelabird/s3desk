@@ -1,6 +1,6 @@
 import { Button, Space, Typography, message } from 'antd'
-import { useMutation } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
@@ -17,6 +17,7 @@ export type MoveSelectionValues = {
 
 type UseObjectsSelectionMoveArgs = {
 	profileId: string | null
+	apiToken: string
 	bucket: string
 	prefix: string
 	selectedKeys: Set<string>
@@ -26,37 +27,61 @@ type UseObjectsSelectionMoveArgs = {
 
 export function useObjectsSelectionMove({
 	profileId,
+	apiToken,
 	bucket,
 	prefix,
 	selectedKeys,
 	createJobWithRetry,
 	setSelectedKeys,
 }: UseObjectsSelectionMoveArgs) {
+	const queryClient = useQueryClient()
+	const currentScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
 	const [moveSelectionOpen, setMoveSelectionOpen] = useState(false)
 	const [moveSelectionValues, setMoveSelectionValues] = useState<MoveSelectionValues>({
 		dstBucket: '',
 		dstPrefix: '',
 		confirm: '',
 	})
+	const moveSelectionSessionRef = useRef(0)
 	const navigate = useNavigate()
+	const [moveSelectionStateScopeKey, setMoveSelectionStateScopeKey] = useState(currentScopeKey)
+	const moveSelectionScopeMatches = moveSelectionStateScopeKey === currentScopeKey
+
+	const invalidateMoveSelectionSession = useCallback(() => {
+		moveSelectionSessionRef.current += 1
+	}, [])
+
+	useEffect(() => {
+		invalidateMoveSelectionSession()
+	}, [apiToken, bucket, invalidateMoveSelectionSession, prefix, profileId])
 
 	const openMoveSelection = useCallback(() => {
 		if (!profileId || !bucket || selectedKeys.size === 0) return
+		setMoveSelectionStateScopeKey(currentScopeKey)
+		invalidateMoveSelectionSession()
 		setMoveSelectionValues({
 			dstBucket: bucket,
 			dstPrefix: prefix,
 			confirm: '',
 		})
 		setMoveSelectionOpen(true)
-	}, [bucket, prefix, profileId, selectedKeys.size])
+	}, [bucket, currentScopeKey, invalidateMoveSelectionSession, prefix, profileId, selectedKeys.size])
 
 	const handleMoveSelectionCancel = useCallback(() => {
+		setMoveSelectionStateScopeKey(currentScopeKey)
+		invalidateMoveSelectionSession()
 		setMoveSelectionOpen(false)
 		setMoveSelectionValues({ dstBucket: '', dstPrefix: '', confirm: '' })
-	}, [])
+	}, [currentScopeKey, invalidateMoveSelectionSession])
 
 	const moveSelectionMutation = useMutation({
-		mutationFn: async (args: { dstBucket: string; dstPrefix: string }) => {
+		mutationFn: async (args: {
+			dstBucket: string
+			dstPrefix: string
+			sessionId: number
+			scopeProfileId: string | null
+			scopeApiToken: string
+		}) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
 
@@ -108,7 +133,9 @@ export function useObjectsSelectionMove({
 				},
 			})
 		},
-		onSuccess: (job, args) => {
+		onSuccess: async (job, args) => {
+			await queryClient.invalidateQueries({ queryKey: ['jobs', args.scopeProfileId, args.scopeApiToken], exact: false })
+			if (args.sessionId !== moveSelectionSessionRef.current) return
 			message.open({
 				type: 'success',
 				content: (
@@ -127,12 +154,15 @@ export function useObjectsSelectionMove({
 			setSelectedKeys(new Set())
 			handleMoveSelectionCancel()
 		},
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err, args) => {
+			if (args.sessionId !== moveSelectionSessionRef.current) return
+			message.error(formatErr(err))
+		},
 	})
 
 	const handleMoveSelectionSubmit = useCallback(
 		(values: MoveSelectionValues) => {
-			if (!profileId || !bucket) return
+			if (!moveSelectionScopeMatches || !profileId || !bucket) return
 			if (selectedKeys.size === 0) {
 				message.info('Select at least one object first')
 				return
@@ -144,14 +174,17 @@ export function useObjectsSelectionMove({
 			moveSelectionMutation.mutate({
 				dstBucket: values.dstBucket,
 				dstPrefix: values.dstPrefix,
+				sessionId: moveSelectionSessionRef.current,
+				scopeProfileId: profileId,
+				scopeApiToken: apiToken,
 			})
 		},
-		[bucket, moveSelectionMutation, profileId, selectedKeys.size],
+		[apiToken, bucket, moveSelectionMutation, moveSelectionScopeMatches, profileId, selectedKeys.size],
 	)
 
 	return {
-		moveSelectionOpen,
-		moveSelectionValues,
+		moveSelectionOpen: moveSelectionScopeMatches ? moveSelectionOpen : false,
+		moveSelectionValues: moveSelectionScopeMatches ? moveSelectionValues : { dstBucket: '', dstPrefix: '', confirm: '' },
 		setMoveSelectionValues,
 		moveSelectionSubmitting: moveSelectionMutation.isPending,
 		openMoveSelection,

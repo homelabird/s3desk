@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { Alert, Button, Input, Tag, Typography, message } from "antd";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type {
   BucketAccessPutRequest,
@@ -14,6 +14,7 @@ import { ToggleSwitch } from "../../../components/ToggleSwitch";
 import { formatErrorWithHint as formatErr } from "../../../lib/errors";
 import styles from "../BucketGovernanceModal.module.css";
 import { invalidateLinkedBucketState } from "./invalidation";
+import { useGovernanceMutationScope } from "./mutationScope";
 import {
   AdvancedPolicySection,
   BucketGovernanceDialogShell,
@@ -49,13 +50,25 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
   );
   const [retentionDays, setRetentionDays] = useState(draft.retentionDays);
   const retentionLocked = props.governance.protection?.retention?.locked === true;
+  const publicExposureRequestTokenRef = useRef(0);
+  const accessRequestTokenRef = useRef(0);
+  const protectionRequestTokenRef = useRef(0);
+  const retentionRequestTokenRef = useRef(0);
+  const versioningRequestTokenRef = useRef(0);
+  const mutationScope = useGovernanceMutationScope({
+    apiToken: props.apiToken,
+    profileId: props.profileId,
+    provider: props.provider,
+    bucket: props.bucket,
+  });
 
-  const refreshState = async () =>
+  const refreshState = async (apiToken: string) =>
     invalidateLinkedBucketState(
       props.queryClient,
       props.profileId,
       props.bucket,
       props.provider,
+      apiToken,
     );
 
   const publicExposureMutation = useMutation({
@@ -64,11 +77,19 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
         mode: publicMode,
         publicAccessPrevention,
       }),
-    onSuccess: async () => {
-      message.success("Public exposure updated");
-      await refreshState();
+    onMutate: () => {
+      publicExposureRequestTokenRef.current += 1;
+      return mutationScope.createContext(publicExposureRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, publicExposureRequestTokenRef.current)) return;
+      message.success("Public exposure updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, publicExposureRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const accessMutation = useMutation({
@@ -79,11 +100,19 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
       };
       return props.api.buckets.putBucketAccess(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("IAM bindings updated");
-      await refreshState();
+    onMutate: () => {
+      accessRequestTokenRef.current += 1;
+      return mutationScope.createContext(accessRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, accessRequestTokenRef.current)) return;
+      message.success("IAM bindings updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, accessRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const protectionMutation = useMutation({
@@ -93,11 +122,19 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
       };
       return props.api.buckets.putBucketProtection(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("Uniform access updated");
-      await refreshState();
+    onMutate: () => {
+      protectionRequestTokenRef.current += 1;
+      return mutationScope.createContext(protectionRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, protectionRequestTokenRef.current)) return;
+      message.success("Uniform access updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, protectionRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const retentionMutation = useMutation({
@@ -114,11 +151,19 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
       };
       return props.api.buckets.putBucketProtection(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("Retention updated");
-      await refreshState();
+    onMutate: () => {
+      retentionRequestTokenRef.current += 1;
+      return mutationScope.createContext(retentionRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, retentionRequestTokenRef.current)) return;
+      message.success("Retention updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, retentionRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const versioningMutation = useMutation({
@@ -126,11 +171,19 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
       const req: BucketVersioningPutRequest = { status: versioningStatus };
       return props.api.buckets.putBucketVersioning(props.profileId, props.bucket, req);
     },
-    onSuccess: async () => {
-      message.success("Versioning updated");
-      await refreshState();
+    onMutate: () => {
+      versioningRequestTokenRef.current += 1;
+      return mutationScope.createContext(versioningRequestTokenRef.current);
     },
-    onError: (err) => message.error(formatErr(err)),
+    onSuccess: async (_, __, context) => {
+      if (!mutationScope.isCurrentRequest(context, versioningRequestTokenRef.current)) return;
+      message.success("Versioning updated");
+      await refreshState(context.apiToken);
+    },
+    onError: (err, _vars, context) => {
+      if (!mutationScope.isCurrentRequest(context, versioningRequestTokenRef.current)) return;
+      message.error(formatErr(err));
+    },
   });
 
   const headerTags = useMemo(() => {
@@ -153,15 +206,25 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
     }
     return items;
   }, [props.governance, publicMode, versioningStatus]);
+  const anyMutationPending =
+    publicExposureMutation.isPending ||
+    accessMutation.isPending ||
+    protectionMutation.isPending ||
+    retentionMutation.isPending ||
+    versioningMutation.isPending;
+  const handleClose = () => {
+    if (anyMutationPending) return;
+    props.onClose();
+  };
 
   return (
     <BucketGovernanceDialogShell
       mobile={props.isMobile}
       title={`Controls: ${props.bucket}`}
-      onClose={props.onClose}
+      onClose={handleClose}
       footer={
         <div className={styles.footerActions}>
-          <Button onClick={props.onClose}>Close</Button>
+          <Button onClick={handleClose} disabled={anyMutationPending}>Close</Button>
         </div>
       }
     >
@@ -169,14 +232,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
         title="GCS Controls"
         description="Manage IAM exposure, uniform bucket-level access, versioning, and retention from the typed GCS controls surface."
         tags={headerTags}
-        isRefreshing={
-          props.isFetching ||
-          publicExposureMutation.isPending ||
-          accessMutation.isPending ||
-          protectionMutation.isPending ||
-          retentionMutation.isPending ||
-          versioningMutation.isPending
-        }
+        isRefreshing={props.isFetching || anyMutationPending}
       />
 
       {renderWarningStack(extractWarningList(props.governance))}

@@ -6,30 +6,36 @@ describe('objectsRefreshEvents', () => {
 	it('treats ancestor prefixes as relevant', () => {
 		expect(
 			isObjectsRefreshRelevant(
-				{ profileId: 'profile-1', bucket: 'bucket-a', prefix: '' },
-				{ profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/2026/', source: 'upload' },
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: '' },
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/2026/', source: 'upload' },
 			),
 		).toBe(true)
 
 		expect(
 			isObjectsRefreshRelevant(
-				{ profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/' },
-				{ profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/2026/', source: 'upload' },
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/' },
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/2026/', source: 'upload' },
 			),
 		).toBe(true)
 	})
 
-	it('ignores unrelated bucket, profile, or sibling prefixes', () => {
+	it('ignores unrelated api token, bucket, profile, or sibling prefixes', () => {
 		expect(
 			isObjectsRefreshRelevant(
-				{ profileId: 'profile-1', bucket: 'bucket-a', prefix: 'videos/' },
-				{ profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/2026/', source: 'upload' },
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: '' },
+				{ apiToken: 'token-b', profileId: 'profile-1', bucket: 'bucket-a', prefix: '', source: 'upload' },
 			),
 		).toBe(false)
 		expect(
 			isObjectsRefreshRelevant(
-				{ profileId: 'profile-1', bucket: 'bucket-a', prefix: '' },
-				{ profileId: 'profile-2', bucket: 'bucket-a', prefix: '', source: 'upload' },
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: 'videos/' },
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: 'photos/2026/', source: 'upload' },
+			),
+		).toBe(false)
+		expect(
+			isObjectsRefreshRelevant(
+				{ apiToken: 'token-a', profileId: 'profile-1', bucket: 'bucket-a', prefix: '' },
+				{ apiToken: 'token-a', profileId: 'profile-2', bucket: 'bucket-a', prefix: '', source: 'upload' },
 			),
 		).toBe(false)
 	})

@@ -50,13 +50,6 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	await seedLocalStorage(page, { ...defaultStorage, ...overrides })
 }
 
-async function waitForScopedPrefix(page: Page, expectedPrefix: string) {
-	await page.waitForFunction(
-		({ scope, prefix }) => JSON.parse(window.localStorage.getItem(`objects:${scope}:prefix`) ?? '""') === prefix,
-		{ scope: defaultStorage.profileId, prefix: expectedPrefix },
-	)
-}
-
 async function scrollAppContentToBottom(page: Page) {
 	await page.locator('[data-scroll-container="app-content"]').evaluate((element) => {
 		element.scrollTo({ top: element.scrollHeight })
@@ -185,7 +178,6 @@ test('prefix navigation keeps its location while load-more failure recovers on r
 	await expect(prefixRow).toBeVisible()
 	await prefixRow.click()
 
-	await waitForScopedPrefix(page, 'docs/')
 	await expect(page.getByText('s3://prefix-bucket/docs/')).toBeVisible()
 	await expect(page.getByRole('button', { name: 'docs/' })).toBeVisible()
 	await expect(page.getByRole('checkbox', { name: 'Select todo-0001.txt' })).toBeVisible()
@@ -200,7 +192,6 @@ test('prefix navigation keeps its location while load-more failure recovers on r
 	const listError = page.getByRole('alert').filter({ hasText: 'Failed to list objects' })
 	await expect(listError).toBeVisible({ timeout: 15_000 })
 	await expect(listError).toContainText('temporary page failure')
-	await waitForScopedPrefix(page, 'docs/')
 	await expectVisibleTodoRows(page)
 
 	await scrollAppContentToBottom(page)
@@ -208,5 +199,5 @@ test('prefix navigation keeps its location while load-more failure recovers on r
 
 	await expect(page.getByRole('checkbox', { name: 'Select todo-1001.txt' })).toBeVisible()
 	await expect(listError).toHaveCount(0)
-	await waitForScopedPrefix(page, 'docs/')
+	await expect(page.getByText('s3://prefix-bucket/docs/')).toBeVisible()
 })

@@ -8,6 +8,7 @@ import {
 	StopOutlined,
 } from '@ant-design/icons'
 import { Button, Space, Typography, type MenuProps } from 'antd'
+import { useId, useLayoutEffect } from 'react'
 
 import type { Job } from '../../api/types'
 import { MenuPopover } from '../../components/MenuPopover'
@@ -23,6 +24,7 @@ type QueueDownloadJobArtifactArgs = {
 
 type Props = {
 	job: Job
+	apiToken: string
 	isOffline: boolean
 	isLogsLoading: boolean
 	activeLogJobId: string | null
@@ -42,8 +44,11 @@ type Props = {
 	onQueueDownloadJobArtifact: (args: QueueDownloadJobArtifactArgs) => void
 }
 
+const jobsRowActionsContextVersions = new Map<string, number>()
+
 export function JobsRowActions({
 	job,
+	apiToken,
 	isOffline,
 	isLogsLoading,
 	activeLogJobId,
@@ -62,6 +67,22 @@ export function JobsRowActions({
 	onRequestDeleteJob,
 	onQueueDownloadJobArtifact,
 }: Props) {
+	const actionsInstanceId = useId()
+	const menuScopeKey = `${apiToken || '__no_server__'}:${profileId?.trim() || '__no_profile__'}:${job.id}`
+
+	useLayoutEffect(() => {
+		jobsRowActionsContextVersions.set(
+			actionsInstanceId,
+			(jobsRowActionsContextVersions.get(actionsInstanceId) ?? 0) + 1,
+		)
+	}, [actionsInstanceId, apiToken, job.id, profileId])
+
+	useLayoutEffect(() => {
+		return () => {
+			jobsRowActionsContextVersions.delete(actionsInstanceId)
+		}
+	}, [actionsInstanceId])
+
 	const isZipJob = job.type === 's3_zip_prefix' || job.type === 's3_zip_objects'
 	const canDownloadArtifact = isZipJob && job.status !== 'failed' && job.status !== 'canceled'
 	const isCancelDisabled =
@@ -123,6 +144,7 @@ export function JobsRowActions({
 		danger: true,
 		disabled: isDeleteDisabled,
 		onClick: () => {
+			const confirmContextVersion = jobsRowActionsContextVersions.get(actionsInstanceId) ?? 0
 			confirmDangerAction({
 				title: 'Delete job record?',
 				description: (
@@ -134,6 +156,7 @@ export function JobsRowActions({
 					</Space>
 				),
 				onConfirm: async () => {
+					if ((jobsRowActionsContextVersions.get(actionsInstanceId) ?? 0) !== confirmContextVersion) return
 					await onRequestDeleteJob(job.id)
 				},
 			})
@@ -155,7 +178,7 @@ export function JobsRowActions({
 			>
 				Logs
 			</Button>
-			<MenuPopover menu={{ items: menuItems }} align="end">
+			<MenuPopover menu={{ items: menuItems }} align="end" scopeKey={menuScopeKey}>
 				{({ toggle }) => (
 					<Button type="text" size="small" icon={<MoreOutlined />} aria-label="Open actions menu" onClick={toggle}>
 						Actions

@@ -22,6 +22,7 @@ import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import styles from './ObjectsSearch.module.css'
 
 type ObjectsGlobalSearchDrawerProps = {
+	scopeKey: string
 	open: boolean
 	onClose: () => void
 	hasProfile: boolean
@@ -295,7 +296,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 					) : null}
 
 					<ObjectsGlobalSearchIndexPanel
-						key={props.isNotIndexed ? 'index-missing' : 'index-ready'}
+						key={`${props.scopeKey}:${props.bucket}:${props.isNotIndexed ? 'index-missing' : 'index-ready'}`}
 						bucket={props.bucket}
 						currentPrefix={props.currentPrefix}
 						indexPrefix={props.indexPrefix}

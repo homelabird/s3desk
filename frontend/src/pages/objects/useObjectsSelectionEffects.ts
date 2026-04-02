@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { normalizePrefix, parentPrefixFromKey } from './objectsListUtils'
 
 type UseObjectsSelectionEffectsArgs = {
+	apiToken: string
 	bucket: string
 	prefix: string
 	profileId: string | null
@@ -18,6 +19,7 @@ type UseObjectsSelectionEffectsArgs = {
 type PendingSelection = { key: string; openDetails: boolean }
 
 export function useObjectsSelectionEffects({
+	apiToken,
 	bucket,
 	prefix,
 	profileId,
@@ -34,11 +36,11 @@ export function useObjectsSelectionEffects({
 	useEffect(() => {
 		setSelectedKeys(new Set())
 		setLastSelectedObjectKey(null)
-	}, [bucket, prefix, profileId, setLastSelectedObjectKey, setSelectedKeys])
+	}, [apiToken, bucket, prefix, profileId, setLastSelectedObjectKey, setSelectedKeys])
 
 	useEffect(() => {
 		pendingSelectRef.current = null
-	}, [bucket])
+	}, [apiToken, bucket, profileId])
 
 	useEffect(() => {
 		const pending = pendingSelectRef.current

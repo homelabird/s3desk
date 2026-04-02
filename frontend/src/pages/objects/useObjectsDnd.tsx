@@ -1,6 +1,6 @@
 import { Button, Space, Typography, message } from 'antd'
 import type { QueryClient } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
@@ -49,6 +49,7 @@ type DndPayload =
 
 type UseObjectsDndArgs = {
 	profileId: string | null
+	apiToken: string
 	bucket: string
 	prefix: string
 	canDragDrop: boolean
@@ -62,6 +63,7 @@ type UseObjectsDndArgs = {
 
 export function useObjectsDnd({
 	profileId,
+	apiToken,
 	bucket,
 	prefix,
 	canDragDrop,
@@ -74,6 +76,15 @@ export function useObjectsDnd({
 }: UseObjectsDndArgs) {
 	const [dndHoverPrefix, setDndHoverPrefix] = useState<string | null>(null)
 	const navigate = useNavigate()
+	const dndContextVersionRef = useRef(0)
+
+	const invalidateDndContext = useCallback(() => {
+		dndContextVersionRef.current += 1
+	}, [])
+
+	useEffect(() => {
+		invalidateDndContext()
+	}, [apiToken, bucket, invalidateDndContext, prefix, profileId])
 
 	const normalizeDropTargetPrefix = useCallback((raw: string): string => {
 		const trimmed = raw.trim()
@@ -82,9 +93,16 @@ export function useObjectsDnd({
 	}, [])
 
 	const createJobAndNotify = useCallback(
-		async (req: JobCreateRequest) => {
+		async (
+			req: JobCreateRequest,
+			contextVersion: number,
+			scopeProfileId: string | null,
+			scopeApiToken: string,
+		) => {
 			if (!profileId) throw new Error('profile is required')
 			const job = await createJobWithRetry(req)
+			await queryClient.invalidateQueries({ queryKey: ['jobs', scopeProfileId, scopeApiToken], exact: false })
+			if (contextVersion !== dndContextVersionRef.current) return job
 			message.open({
 				type: 'success',
 				content: (
@@ -97,7 +115,6 @@ export function useObjectsDnd({
 				),
 				duration: 6,
 			})
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 			return job
 		},
 		[createJobWithRetry, navigate, profileId, queryClient],
@@ -105,6 +122,9 @@ export function useObjectsDnd({
 
 	const performDrop = useCallback(async (payload: DndPayload, targetPrefixRaw: string, mode: 'copy' | 'move') => {
 		if (!profileId || !bucket) return
+		const dropContextVersion = dndContextVersionRef.current
+		const dropScopeProfileId = profileId
+		const dropScopeApiToken = apiToken
 		if (payload.bucket !== bucket) {
 			message.warning('Drag & drop across buckets is not supported yet')
 			return
@@ -138,7 +158,7 @@ export function useObjectsDnd({
 						exclude: [],
 						dryRun: false,
 					},
-				})
+				}, dropContextVersion, dropScopeProfileId, dropScopeApiToken)
 
 			if (mode === 'move') {
 				confirmDangerAction({
@@ -156,6 +176,7 @@ export function useObjectsDnd({
 					confirmHint: 'Type "MOVE" to confirm',
 					okText: 'Move',
 					onConfirm: async () => {
+						if (dropContextVersion !== dndContextVersionRef.current) return
 						await doCreate()
 					},
 				})
@@ -193,7 +214,7 @@ export function useObjectsDnd({
 						items: pairs,
 						dryRun: false,
 					},
-				})
+				}, dropContextVersion, dropScopeProfileId, dropScopeApiToken)
 			}
 			return createJobAndNotify({
 				type: mode === 'copy' ? 'transfer_copy_object' : 'transfer_move_object',
@@ -204,7 +225,7 @@ export function useObjectsDnd({
 					dstKey: pairs[0].dstKey,
 					dryRun: false,
 				},
-			})
+			}, dropContextVersion, dropScopeProfileId, dropScopeApiToken)
 		}
 
 		if (mode === 'move') {
@@ -222,6 +243,7 @@ export function useObjectsDnd({
 				confirmHint: 'Type "MOVE" to confirm',
 				okText: 'Move',
 				onConfirm: async () => {
+					if (dropContextVersion !== dndContextVersionRef.current) return
 					await doCreate()
 				},
 			})
@@ -229,7 +251,7 @@ export function useObjectsDnd({
 		}
 
 		await doCreate()
-	}, [bucket, createJobAndNotify, normalizeDropTargetPrefix, prefix, profileId])
+	}, [apiToken, bucket, createJobAndNotify, normalizeDropTargetPrefix, prefix, profileId])
 
 	const onDndTargetDragOver = useCallback(
 		(e: React.DragEvent, targetPrefixRaw: string) => {

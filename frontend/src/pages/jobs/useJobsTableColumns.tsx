@@ -21,6 +21,7 @@ type QueueDownloadJobArtifactArgs = {
 
 type UseJobsTableColumnsArgs = {
 	mergedColumnVisibility: Record<ColumnKey, boolean>
+	apiToken: string
 	isOffline: boolean
 	isLogsLoading: boolean
 	activeLogJobId: string | null
@@ -42,6 +43,7 @@ type UseJobsTableColumnsArgs = {
 
 export function useJobsTableColumns({
 	mergedColumnVisibility,
+	apiToken,
 	isOffline,
 	isLogsLoading,
 	activeLogJobId,
@@ -186,6 +188,7 @@ export function useJobsTableColumns({
 				render: (_: unknown, row: Job) => (
 					<JobsRowActions
 						job={row}
+						apiToken={apiToken}
 						isOffline={isOffline}
 						isLogsLoading={isLogsLoading}
 						activeLogJobId={activeLogJobId}
@@ -211,6 +214,7 @@ export function useJobsTableColumns({
 		return columnDefs.filter((column) => mergedColumnVisibility[column.key as ColumnKey] !== false)
 	}, [
 		activeLogJobId,
+		apiToken,
 		cancelPending,
 		cancelingJobId,
 		deletePending,

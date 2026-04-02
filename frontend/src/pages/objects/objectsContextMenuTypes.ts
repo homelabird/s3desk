@@ -29,6 +29,7 @@ export type LogFn = (enabled: boolean, message: string, context?: Record<string,
 export type WithContextMenuClassName = (menu: MenuProps) => MenuProps
 
 export type UseObjectsContextMenuArgs = {
+	scopeKey: string
 	debugEnabled: boolean
 	log: LogFn
 	listScrollerEl: HTMLDivElement | null

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -101,65 +102,175 @@ func TestSecurityHeaders_DoesNotOverrideExistingValues(t *testing.T) {
 	}
 }
 
-func TestRequireLocalHost_BlocksCrossSiteFetchMetadataWithoutOrigin(t *testing.T) {
-	t.Parallel()
-
-	s := &server{}
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
-	req.RemoteAddr = "127.0.0.1:1234"
-	req.Header.Set("Sec-Fetch-Site", "cross-site")
-
-	s.requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("status=%d, want %d", rr.Code, http.StatusForbidden)
+func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
+	cases := []struct {
+		name             string
+		cfg              config.Config
+		url              string
+		remoteAddr       string
+		origin           string
+		secFetchSite     string
+		wantCode         int
+		wantErrorCode    string
+		wantBodyContains string
+	}{
+		{
+			name:             "blocks cross-site fetch metadata without origin",
+			url:              "http://127.0.0.1:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			secFetchSite:     "cross-site",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "cross-site requests are not allowed",
+		},
+		{
+			name:         "allows cross-site fetch metadata when origin is allowed",
+			url:          "http://127.0.0.1:8080/api/v1/meta",
+			remoteAddr:   "127.0.0.1:1234",
+			origin:       "http://localhost:5173",
+			secFetchSite: "cross-site",
+			wantCode:     http.StatusOK,
+		},
+		{
+			name:         "allows same-site fetch metadata",
+			url:          "http://127.0.0.1:8080/api/v1/meta",
+			remoteAddr:   "127.0.0.1:1234",
+			secFetchSite: "same-site",
+			wantCode:     http.StatusOK,
+		},
+		{
+			name:          "rejects private remote addr by default",
+			url:           "http://localhost:8080/api/v1/meta",
+			remoteAddr:    "10.1.2.3:1234",
+			wantCode:      http.StatusForbidden,
+			wantErrorCode: "forbidden",
+		},
+		{
+			name:       "allows private remote addr when allow remote is enabled",
+			cfg:        config.Config{AllowRemote: true},
+			url:        "http://localhost:8080/api/v1/meta",
+			remoteAddr: "10.1.2.3:1234",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:          "rejects private host by default",
+			url:           "http://172.18.34.4:8080/api/v1/meta",
+			remoteAddr:    "127.0.0.1:1234",
+			wantCode:      http.StatusForbidden,
+			wantErrorCode: "forbidden",
+		},
+		{
+			name:       "allows explicit allowed host",
+			cfg:        config.Config{AllowedHosts: []string{"s3desk.local"}},
+			url:        "http://s3desk.local:8080/api/v1/meta",
+			remoteAddr: "127.0.0.1:1234",
+			origin:     "http://s3desk.local:8080",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows ipv6 localhost by default",
+			url:        "http://[::1]:8080/api/v1/meta",
+			remoteAddr: "[::1]:1234",
+			origin:     "http://[::1]:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows https localhost origin by default",
+			url:        "https://localhost:8443/api/v1/meta",
+			remoteAddr: "127.0.0.1:1234",
+			origin:     "https://localhost:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows mixed case allowlisted host",
+			cfg:        config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
+			url:        "https://S3DESK.LOCAL.:8443/api/v1/meta",
+			remoteAddr: "10.1.2.3:1234",
+			origin:     "https://S3DESK.LOCAL.:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows private host when allow remote is enabled",
+			cfg:        config.Config{AllowRemote: true},
+			url:        "http://172.18.34.4:8080/api/v1/meta",
+			remoteAddr: "10.1.2.3:1234",
+			origin:     "http://172.18.34.4:8080",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows allowlisted host for private remote addr",
+			cfg:        config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
+			url:        "http://s3desk.local:8080/api/v1/meta",
+			remoteAddr: "10.1.2.3:1234",
+			origin:     "http://s3desk.local:8080",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:          "rejects non allowlisted private host when allow remote is enabled",
+			cfg:           config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
+			url:           "http://172.18.34.4:8080/api/v1/meta",
+			remoteAddr:    "10.1.2.3:1234",
+			origin:        "http://172.18.34.4:8080",
+			wantCode:      http.StatusForbidden,
+			wantErrorCode: "forbidden",
+		},
+		{
+			name:             "rejects private origin by default",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "http://10.1.2.3:8080",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "origin must be localhost",
+		},
+		{
+			name:             "rejects non allowlisted private origin when allow remote is enabled",
+			cfg:              config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "10.1.2.3:1234",
+			origin:           "http://10.1.2.3:8080",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "ALLOWED_HOSTS",
+		},
 	}
-	var resp models.ErrorResponse
-	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp.Error.Code != "forbidden" {
-		t.Fatalf("error.code=%q, want %q", resp.Error.Code, "forbidden")
-	}
-}
 
-func TestRequireLocalHost_AllowsCrossSiteFetchMetadataWhenOriginAllowed(t *testing.T) {
-	t.Parallel()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &server{cfg: tc.cfg}
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			req.RemoteAddr = tc.remoteAddr
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			if tc.secFetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", tc.secFetchSite)
+			}
+			if strings.HasPrefix(tc.url, "https://") {
+				req.TLS = &tls.ConnectionState{}
+			}
 
-	s := &server{}
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
-	req.RemoteAddr = "127.0.0.1:1234"
-	req.Header.Set("Sec-Fetch-Site", "cross-site")
-	req.Header.Set("Origin", "http://localhost:5173")
+			s.requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rr, req)
 
-	s.requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
-	}
-}
-
-func TestRequireLocalHost_AllowsSameSiteFetchMetadata(t *testing.T) {
-	t.Parallel()
-
-	s := &server{}
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
-	req.RemoteAddr = "127.0.0.1:1234"
-	req.Header.Set("Sec-Fetch-Site", "same-site")
-
-	s.requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status=%d, want %d", rr.Code, http.StatusOK)
+			if rr.Code != tc.wantCode {
+				t.Fatalf("status=%d, want %d: %s", rr.Code, tc.wantCode, rr.Body.String())
+			}
+			if tc.wantErrorCode != "" {
+				var resp models.ErrorResponse
+				if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("decode response: %v", err)
+				}
+				if resp.Error.Code != tc.wantErrorCode {
+					t.Fatalf("error.code=%q, want %q", resp.Error.Code, tc.wantErrorCode)
+				}
+			}
+			if tc.wantBodyContains != "" && !strings.Contains(rr.Body.String(), tc.wantBodyContains) {
+				t.Fatalf("body=%q, want to contain %q", rr.Body.String(), tc.wantBodyContains)
+			}
+		})
 	}
 }
 

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { APIClient } from '../../../api/client'
-import type { DownloadTask } from '../transferTypes'
+import type { DownloadTask, JobArtifactDownloadTask } from '../transferTypes'
 import { useTransfersDownloadQueue } from '../useTransfersDownloadQueue'
 
 const messageErrorMock = vi.fn()
@@ -40,6 +40,12 @@ function createDirectoryHandle(name: string): FileSystemDirectoryHandle {
 
 describe('useTransfersDownloadQueue', () => {
 	afterEach(() => {
+		try {
+			vi.runOnlyPendingTimers()
+		} catch {
+			// ignore when fake timers are not active
+		}
+		vi.useRealTimers()
 		vi.restoreAllMocks()
 		messageErrorMock.mockClear()
 		messageInfoMock.mockClear()
@@ -152,5 +158,81 @@ describe('useTransfersDownloadQueue', () => {
 
 		expect(messageInfoMock).toHaveBeenCalledWith('Skipped 1 already queued download(s)')
 		expect(openTransfers).toHaveBeenCalledWith('downloads')
+	})
+
+	it('does not overlap waiting-job polling while a previous fetch is still running', async () => {
+		vi.useFakeTimers()
+		let resolveJob: ((value: { status: string }) => void) | null = null
+		const getJob = vi.fn().mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveJob = resolve
+				}),
+		)
+		const waitingTask: JobArtifactDownloadTask = {
+			id: 'job-artifact-1',
+			kind: 'job_artifact',
+			profileId: 'profile-1',
+			jobId: 'job-1',
+			label: 'Job artifact',
+			status: 'waiting',
+			createdAtMs: 1,
+			loadedBytes: 0,
+			totalBytes: 10,
+			speedBps: 0,
+			etaSeconds: 0,
+		}
+
+		const { result, unmount } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([waitingTask])
+			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
+			const downloadEstimatorByTaskIdRef = useRef({})
+			const updateDownloadTask = (taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
+				setDownloadTasks((prev) => prev.map((task) => (task.id === taskId ? updater(task) : task)))
+			}
+
+			return {
+				downloadTasks,
+				...useTransfersDownloadQueue({
+					api: {
+						jobs: {
+							getJob,
+							downloadJobArtifact: vi.fn(),
+						},
+						objects: {
+							getObjectDownloadURL: vi.fn(),
+						},
+					} as unknown as APIClient,
+					downloadLinkProxyEnabled: false,
+					downloadConcurrency: 0,
+					downloadTasks,
+					setDownloadTasks,
+					downloadAbortByTaskIdRef,
+					downloadEstimatorByTaskIdRef,
+					updateDownloadTask,
+					openTransfers: vi.fn(),
+				}),
+			}
+		})
+
+		await act(async () => {
+			await Promise.resolve()
+		})
+		expect(result.current.downloadTasks).toHaveLength(1)
+		expect(getJob).toHaveBeenCalledTimes(1)
+
+		await act(async () => {
+			vi.advanceTimersByTime(4_500)
+			await Promise.resolve()
+		})
+
+		expect(getJob).toHaveBeenCalledTimes(1)
+
+		await act(async () => {
+			resolveJob?.({ status: 'running' })
+			await Promise.resolve()
+		})
+
+		unmount()
 	})
 })

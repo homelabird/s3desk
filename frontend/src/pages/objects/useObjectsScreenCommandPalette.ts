@@ -5,12 +5,13 @@ import type { ObjectsPageDataState } from './objectsScreenTypes'
 import { useObjectsCommandPaletteOverlayState } from './useObjectsCommandPaletteOverlayState'
 
 type UseObjectsScreenCommandPaletteArgs = {
+	scopeKey: string
 	commandItems: CommandItem[]
 	commandPaletteOpener: ObjectsPageDataState['commandPaletteOpener']
 }
 
 export function useObjectsScreenCommandPalette(args: UseObjectsScreenCommandPaletteArgs) {
-	const state = useObjectsCommandPaletteOverlayState({ items: args.commandItems })
+	const state = useObjectsCommandPaletteOverlayState({ scopeKey: args.scopeKey, items: args.commandItems })
 
 	useEffect(() => {
 		args.commandPaletteOpener.bind(state.openCommandPalette)

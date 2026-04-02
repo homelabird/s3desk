@@ -40,6 +40,7 @@ export function buildObjectsSearchOverlayProps(args: BuildObjectsPageOverlaysPro
 			: null,
 		globalSearchDrawerProps: args.globalSearchOpen
 			? {
+				scopeKey: `${args.apiToken || '__no_server__'}:${args.profileId?.trim() || '__no_profile__'}:${args.bucket || '__no_bucket__'}`,
 				open: args.globalSearchOpen,
 				onClose: args.closeGlobalSearch,
 				hasProfile: !!args.profileId,

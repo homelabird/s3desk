@@ -9,6 +9,7 @@ type PreviewFetchPlanArgs = {
 }
 
 type ObjectThumbnailRequestArgs = {
+	apiToken: string
 	profileId: string
 	bucket: string
 	objectKey: string
@@ -36,6 +37,7 @@ export function getPreviewFetchPlan(args: PreviewFetchPlanArgs) {
 
 export function buildObjectThumbnailRequest(args: ObjectThumbnailRequestArgs): ThumbnailCacheRequest {
 	return {
+		apiToken: args.apiToken,
 		profileId: args.profileId,
 		bucket: args.bucket,
 		objectKey: args.objectKey,

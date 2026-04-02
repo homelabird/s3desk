@@ -1,5 +1,5 @@
 import { Grid, message } from "antd";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { APIClient, APIError } from "../../api/client";
 import type {
@@ -93,6 +93,7 @@ export function BucketPolicyModal(props: {
     >
       {(policyData) => (
         <BucketPolicyEditor
+          key={`${props.profileId}:${props.apiToken}:${bucket}:${policyKind}`}
           api={props.api}
           apiToken={props.apiToken}
           profileId={props.profileId}
@@ -264,6 +265,7 @@ function BucketPolicyEditor(props: {
   const { putMutation, deleteMutation, validateMutation } =
     useBucketPolicyMutations({
       api: props.api,
+      apiToken: props.apiToken,
       profileId: props.profileId,
       bucket,
       provider: props.provider,
@@ -281,6 +283,14 @@ function BucketPolicyEditor(props: {
         return { policy: parsed.value } as BucketPolicyPutRequest;
       },
     });
+  const editorActiveRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      editorActiveRef.current = false;
+    };
+  }, []);
+
   const isBusy = hasPendingAction(
     props.policyIsFetching,
     putMutation.isPending,
@@ -433,6 +443,7 @@ function BucketPolicyEditor(props: {
   const serverValidationMessages = getServerValidationMessages(serverValidation);
 
   const handleSave = () => {
+    if (!editorActiveRef.current) return;
     if (isBusy) return;
     if (!parsed.ok) {
       message.error(parsed.error ?? "Invalid policy JSON");
@@ -465,7 +476,10 @@ function BucketPolicyEditor(props: {
       canSave={canSave}
       onCancel={handleClose}
       onSave={handleSave}
-      onDelete={() => deleteMutation.mutateAsync()}
+      onDelete={() => {
+        if (!editorActiveRef.current) return Promise.resolve();
+        return deleteMutation.mutateAsync();
+      }}
     />
   );
 
@@ -512,6 +526,7 @@ function BucketPolicyEditor(props: {
         diffStats={diffStats}
         isBusy={isBusy}
         onValidate={() => {
+          if (!editorActiveRef.current) return;
           if (isBusy) return;
           if (!parsed.ok) {
             message.error(parsed.error ?? "Invalid JSON policy");

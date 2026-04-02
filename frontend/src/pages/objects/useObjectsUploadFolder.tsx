@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { message } from 'antd'
 
 import type { TransfersContextValue } from '../../components/Transfers'
@@ -12,6 +12,7 @@ type UploadFolderValues = {
 }
 
 type UseObjectsUploadFolderArgs = {
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -21,6 +22,7 @@ type UseObjectsUploadFolderArgs = {
 }
 
 export function useObjectsUploadFolder({
+	apiToken,
 	profileId,
 	bucket,
 	prefix,
@@ -28,22 +30,37 @@ export function useObjectsUploadFolder({
 	uploadsDisabledReason,
 	transfers,
 }: UseObjectsUploadFolderArgs) {
+	const currentScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
 	const [uploadFolderOpen, setUploadFolderOpen] = useState(false)
 	const [uploadFolderValues, setUploadFolderValues] = useState<UploadFolderValues>(() => ({ localFolder: '' }))
 	const [uploadFolderHandle, setUploadFolderHandle] = useState<FileSystemDirectoryHandle | null>(null)
 	const [uploadFolderLabel, setUploadFolderLabel] = useState('')
 	const [uploadFolderSubmitting, setUploadFolderSubmitting] = useState(false)
+	const [uploadFolderScopeKey, setUploadFolderScopeKey] = useState(currentScopeKey)
+	const requestTokenRef = useRef(0)
+	const uploadFolderScopeMatches = uploadFolderScopeKey === currentScopeKey
+
+	const resetUploadFolderState = useCallback(() => {
+		setUploadFolderHandle(null)
+		setUploadFolderLabel('')
+		setUploadFolderValues({ localFolder: '' })
+		setUploadFolderSubmitting(false)
+	}, [])
+
+	useEffect(() => {
+		requestTokenRef.current += 1
+	}, [apiToken, bucket, prefix, profileId, uploadsEnabled])
 
 	const openUploadFolderModal = useCallback(() => {
 		if (!uploadsEnabled) {
 			message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
 			return
 		}
-		setUploadFolderHandle(null)
-		setUploadFolderLabel('')
-		setUploadFolderValues({ localFolder: '' })
+		setUploadFolderScopeKey(currentScopeKey)
+		requestTokenRef.current += 1
+		resetUploadFolderState()
 		setUploadFolderOpen(true)
-	}, [uploadsDisabledReason, uploadsEnabled])
+	}, [currentScopeKey, resetUploadFolderState, uploadsDisabledReason, uploadsEnabled])
 
 	const handleUploadFolderPick = useCallback((handle: FileSystemDirectoryHandle) => {
 		setUploadFolderHandle(handle)
@@ -51,14 +68,15 @@ export function useObjectsUploadFolder({
 	}, [])
 
 	const handleUploadFolderCancel = useCallback(() => {
+		setUploadFolderScopeKey(currentScopeKey)
+		requestTokenRef.current += 1
 		setUploadFolderOpen(false)
-		setUploadFolderHandle(null)
-		setUploadFolderLabel('')
-		setUploadFolderValues({ localFolder: '' })
-	}, [])
+		resetUploadFolderState()
+	}, [currentScopeKey, resetUploadFolderState])
 
 	const handleUploadFolderSubmit = useCallback(
 		async () => {
+			if (!uploadFolderScopeMatches) return
 			if (!profileId) {
 				message.info('Select a profile first')
 				return
@@ -76,9 +94,12 @@ export function useObjectsUploadFolder({
 				return
 			}
 
+			const requestToken = requestTokenRef.current + 1
+			requestTokenRef.current = requestToken
 			setUploadFolderSubmitting(true)
 			try {
 				const files = await collectFilesFromDirectoryHandle(uploadFolderHandle, '', { maxFiles: MAX_UPLOAD_FOLDER_FILES })
+				if (requestTokenRef.current !== requestToken) return
 				if (files.length === 0) {
 					message.info('No files found in the selected folder')
 					return
@@ -93,34 +114,40 @@ export function useObjectsUploadFolder({
 					directorySelectionMode: 'picker',
 				})
 				transfers.openTransfers('uploads')
+				if (requestTokenRef.current !== requestToken) return
+				setUploadFolderScopeKey(currentScopeKey)
 				setUploadFolderOpen(false)
-				setUploadFolderHandle(null)
-				setUploadFolderLabel('')
-				setUploadFolderValues({ localFolder: '' })
+				resetUploadFolderState()
 			} catch (err) {
+				if (requestTokenRef.current !== requestToken) return
 				message.error(formatErr(err))
 			} finally {
-				setUploadFolderSubmitting(false)
+				if (requestTokenRef.current === requestToken) {
+					setUploadFolderSubmitting(false)
+				}
 			}
 		},
 		[
 			bucket,
+			currentScopeKey,
 			prefix,
 			profileId,
+			resetUploadFolderState,
 			transfers,
 			uploadFolderHandle,
 			uploadFolderLabel,
+			uploadFolderScopeMatches,
 			uploadsDisabledReason,
 			uploadsEnabled,
 		],
 	)
 
 	return {
-		uploadFolderOpen,
-		uploadFolderValues,
+		uploadFolderOpen: uploadFolderScopeMatches ? uploadFolderOpen : false,
+		uploadFolderValues: uploadFolderScopeMatches ? uploadFolderValues : { localFolder: '' },
 		setUploadFolderValues,
-		uploadFolderSubmitting,
-		uploadFolderCanSubmit: !!uploadFolderHandle && uploadsEnabled,
+		uploadFolderSubmitting: uploadFolderScopeMatches ? uploadFolderSubmitting : false,
+		uploadFolderCanSubmit: uploadFolderScopeMatches && !!uploadFolderHandle && uploadsEnabled,
 		openUploadFolderModal,
 		handleUploadFolderSubmit,
 		handleUploadFolderCancel,

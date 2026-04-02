@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { message } from 'antd'
 
@@ -10,16 +10,38 @@ type PresignRequest = { key: string; size?: number; lastModified?: string }
 
 type UseObjectsPresignArgs = {
 	api: APIClient
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	downloadLinkProxyEnabled: boolean
 	presignedDownloadSupported: boolean
 }
 
-export function useObjectsPresign({ api, profileId, bucket, downloadLinkProxyEnabled, presignedDownloadSupported }: UseObjectsPresignArgs) {
-	const [presignOpen, setPresignOpen] = useState(false)
-	const [presign, setPresign] = useState<Presign | null>(null)
-	const [presignKey, setPresignKey] = useState<string | null>(null)
+export function useObjectsPresign({
+	api,
+	apiToken,
+	profileId,
+	bucket,
+	downloadLinkProxyEnabled,
+	presignedDownloadSupported,
+}: UseObjectsPresignArgs) {
+	const [presignState, setPresignState] = useState<{
+		scopeKey: string
+		open: boolean
+		presign: Presign | null
+		key: string | null
+	}>({
+		scopeKey: '',
+		open: false,
+		presign: null,
+		key: null,
+	})
+	const requestTokenRef = useRef(0)
+	const scopeKey = `${apiToken}:${profileId ?? ''}:${bucket}:${downloadLinkProxyEnabled ? 'proxy' : 'direct'}:${presignedDownloadSupported ? 'presign' : 'proxy-only'}`
+
+	useEffect(() => {
+		requestTokenRef.current += 1
+	}, [scopeKey])
 
 	const presignMutation = useMutation({
 		mutationFn: (req: PresignRequest) =>
@@ -31,24 +53,61 @@ export function useObjectsPresign({ api, profileId, bucket, downloadLinkProxyEna
 				size: req.size,
 				lastModified: req.lastModified,
 			}),
-		onMutate: (req) => setPresignKey(req.key),
-		onSuccess: (resp, req) => {
-			setPresign({ key: req.key, url: resp.url, expiresAt: resp.expiresAt })
-			setPresignOpen(true)
+		onMutate: (req) => {
+			const requestToken = requestTokenRef.current + 1
+			requestTokenRef.current = requestToken
+			setPresignState((prev) => ({
+				...prev,
+				scopeKey,
+				key: req.key,
+			}))
+			return { requestToken }
 		},
-		onSettled: (_, __, req) => setPresignKey((prev) => (prev === req.key ? null : prev)),
-		onError: (err) => message.error(formatErr(err)),
+		onSuccess: (resp, req, context) => {
+			if (context?.requestToken && requestTokenRef.current !== context.requestToken) return
+			setPresignState((prev) => ({
+				...prev,
+				scopeKey,
+				open: true,
+				presign: { key: req.key, url: resp.url, expiresAt: resp.expiresAt },
+			}))
+		},
+		onSettled: (_, __, req, context) => {
+			if (context?.requestToken && requestTokenRef.current !== context.requestToken) return
+			setPresignState((prev) =>
+				prev.key === req.key
+					? {
+							...prev,
+							scopeKey,
+							key: null,
+						}
+					: prev,
+			)
+		},
+		onError: (err, _req, context) => {
+			if (context?.requestToken && requestTokenRef.current !== context.requestToken) return
+			message.error(formatErr(err))
+		},
 	})
 
 	const closePresign = useCallback(() => {
-		setPresignOpen(false)
-		setPresign(null)
-	}, [])
+		requestTokenRef.current += 1
+		setPresignState({
+			scopeKey,
+			open: false,
+			presign: null,
+			key: null,
+		})
+	}, [scopeKey])
+
+	const visiblePresignOpen = presignState.scopeKey === scopeKey ? presignState.open : false
+	const visiblePresign = presignState.scopeKey === scopeKey ? presignState.presign : null
+	const visiblePresignKey = presignState.scopeKey === scopeKey ? presignState.key : null
 
 	return {
-		presignOpen,
-		presign,
-		presignKey,
+		presignOpen: visiblePresignOpen,
+		presign: visiblePresign,
+		presignKey: visiblePresignKey,
 		presignMutation,
 		closePresign,
 	}

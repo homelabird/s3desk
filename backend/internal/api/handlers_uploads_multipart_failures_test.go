@@ -432,49 +432,223 @@ func TestCompleteMultipartUploadFailureKeepsMetadata(t *testing.T) {
 	}
 }
 
-func TestCompleteMultipartUploadRejectsTrailingJSON(t *testing.T) {
+func TestCompleteMultipartUploadPreconditions(t *testing.T) {
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
 
-	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
-	seedMultipartUploadMetadata(t, st, profile.ID, upload.UploadID, "test-bucket", "incoming", "file.bin", "upload-1", 5, 10)
-
-	body := `{"path":"file.bin","parts":[{"number":1,"etag":"etag-1"},{"number":2,"etag":"etag-2"}]}{"extra":true}`
-	res := doRawJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/multipart/complete", profile.ID, body)
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		raw, _ := io.ReadAll(res.Body)
-		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(raw))
+	validBody := `{"path":"file.bin","parts":[{"number":1,"etag":"etag-1"},{"number":2,"etag":"etag-2"}]}`
+	cases := []struct {
+		name             string
+		mode             string
+		useMissingUpload bool
+		omitProfile      bool
+		seedMetadata     bool
+		body             string
+		wantCode         int
+		wantErrorCode    string
+		wantBodyContains string
+		wantMaxBytes     bool
+	}{
+		{
+			name:             "rejects missing profile header",
+			mode:             "presigned",
+			body:             validBody,
+			wantCode:         http.StatusBadRequest,
+			wantErrorCode:    "missing_profile",
+			wantBodyContains: "X-Profile-Id header is required",
+			omitProfile:      true,
+		},
+		{
+			name:             "rejects missing upload session",
+			useMissingUpload: true,
+			body:             validBody,
+			wantCode:         http.StatusNotFound,
+			wantErrorCode:    "not_found",
+			wantBodyContains: "upload session not found",
+		},
+		{
+			name:             "rejects non presigned mode",
+			mode:             "staging",
+			body:             validBody,
+			wantCode:         http.StatusBadRequest,
+			wantErrorCode:    "not_supported",
+			wantBodyContains: "presigned upload session",
+		},
+		{
+			name:          "rejects trailing json",
+			mode:          "presigned",
+			seedMetadata:  true,
+			body:          validBody + `{"extra":true}`,
+			wantCode:      http.StatusBadRequest,
+			wantErrorCode: "invalid_json",
+		},
+		{
+			name:             "rejects invalid path",
+			mode:             "presigned",
+			body:             `{"path":"../","parts":[{"number":1,"etag":"etag-1"}]}`,
+			wantCode:         http.StatusBadRequest,
+			wantErrorCode:    "invalid_request",
+			wantBodyContains: "path is required",
+		},
+		{
+			name:             "rejects missing parts",
+			mode:             "presigned",
+			body:             `{"path":"file.bin","parts":[]}`,
+			wantCode:         http.StatusBadRequest,
+			wantErrorCode:    "invalid_request",
+			wantBodyContains: "parts are required",
+		},
+		{
+			name:             "rejects missing multipart metadata",
+			mode:             "presigned",
+			body:             validBody,
+			wantCode:         http.StatusNotFound,
+			wantErrorCode:    "not_found",
+			wantBodyContains: "multipart upload not found",
+		},
+		{
+			name:          "rejects oversized json body",
+			mode:          "presigned",
+			body:          `{"path":"` + strings.Repeat("a", int(uploadMultipartJSONRequestBodyMaxBytes)) + `","parts":[{"number":1,"etag":"etag-1"}]}`,
+			wantCode:      http.StatusRequestEntityTooLarge,
+			wantErrorCode: "too_large",
+			wantMaxBytes:  true,
+		},
 	}
 
-	var errResp models.ErrorResponse
-	decodeJSONResponse(t, res, &errResp)
-	if errResp.Error.Code != "invalid_json" {
-		t.Fatalf("error.code=%q, want %q", errResp.Error.Code, "invalid_json")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uploadID := "missing-upload"
+			if !tc.useMissingUpload {
+				upload := createUploadSessionForMode(t, srv, profile.ID, tc.mode)
+				uploadID = upload.UploadID
+				if tc.seedMetadata {
+					seedMultipartUploadMetadata(t, st, profile.ID, upload.UploadID, "test-bucket", "incoming", "file.bin", "upload-1", 5, 10)
+				}
+			}
+
+			var res *http.Response
+			if tc.omitProfile {
+				req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/uploads/"+uploadID+"/multipart/complete", strings.NewReader(tc.body))
+				if err != nil {
+					t.Fatalf("new request: %v", err)
+				}
+				req.Header.Set("Content-Type", "application/json")
+				res, err = http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatalf("do request: %v", err)
+				}
+			} else {
+				res = doRawJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+uploadID+"/multipart/complete", profile.ID, tc.body)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != tc.wantCode {
+				raw, _ := io.ReadAll(res.Body)
+				t.Fatalf("expected status %d, got %d: %s", tc.wantCode, res.StatusCode, string(raw))
+			}
+
+			var errResp models.ErrorResponse
+			decodeJSONResponse(t, res, &errResp)
+			if errResp.Error.Code != tc.wantErrorCode {
+				t.Fatalf("error.code=%q, want %q", errResp.Error.Code, tc.wantErrorCode)
+			}
+			if tc.wantBodyContains != "" && !strings.Contains(errResp.Error.Message, tc.wantBodyContains) {
+				t.Fatalf("error.message=%q, want to contain %q", errResp.Error.Message, tc.wantBodyContains)
+			}
+			if tc.wantMaxBytes {
+				if got := errResp.Error.Details["maxBytes"]; got != float64(uploadMultipartJSONRequestBodyMaxBytes) {
+					t.Fatalf("details.maxBytes=%v, want %d", got, uploadMultipartJSONRequestBodyMaxBytes)
+				}
+			}
+		})
 	}
 }
 
-func TestAbortMultipartUploadRejectsOversizedJSONBody(t *testing.T) {
+func TestAbortMultipartUploadPreconditions(t *testing.T) {
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
 
-	upload := createUploadSessionForMode(t, srv, profile.ID, "presigned")
-
-	body := `{"path":"` + strings.Repeat("a", int(uploadMultipartJSONRequestBodyMaxBytes)) + `"}`
-	res := doRawJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/multipart/abort", profile.ID, body)
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusRequestEntityTooLarge {
-		raw, _ := io.ReadAll(res.Body)
-		t.Fatalf("expected status 413, got %d: %s", res.StatusCode, string(raw))
+	cases := []struct {
+		name             string
+		mode             string
+		useMissingUpload bool
+		body             string
+		wantCode         int
+		wantErrorCode    string
+		wantBodyContains string
+		wantMaxBytes     bool
+	}{
+		{
+			name:             "rejects missing upload session",
+			useMissingUpload: true,
+			body:             `{"path":"file.bin"}`,
+			wantCode:         http.StatusNotFound,
+			wantErrorCode:    "not_found",
+			wantBodyContains: "upload session not found",
+		},
+		{
+			name:             "rejects non presigned mode",
+			mode:             "staging",
+			body:             `{"path":"file.bin"}`,
+			wantCode:         http.StatusBadRequest,
+			wantErrorCode:    "not_supported",
+			wantBodyContains: "presigned upload session",
+		},
+		{
+			name:             "rejects invalid path",
+			mode:             "presigned",
+			body:             `{"path":"../"}`,
+			wantCode:         http.StatusBadRequest,
+			wantErrorCode:    "invalid_request",
+			wantBodyContains: "path is required",
+		},
+		{
+			name:             "rejects missing multipart metadata",
+			mode:             "presigned",
+			body:             `{"path":"file.bin"}`,
+			wantCode:         http.StatusNotFound,
+			wantErrorCode:    "not_found",
+			wantBodyContains: "multipart upload not found",
+		},
+		{
+			name:          "rejects oversized json body",
+			mode:          "presigned",
+			body:          `{"path":"` + strings.Repeat("a", int(uploadMultipartJSONRequestBodyMaxBytes)) + `"}`,
+			wantCode:      http.StatusRequestEntityTooLarge,
+			wantErrorCode: "too_large",
+			wantMaxBytes:  true,
+		},
 	}
 
-	var errResp models.ErrorResponse
-	decodeJSONResponse(t, res, &errResp)
-	if errResp.Error.Code != "too_large" {
-		t.Fatalf("error.code=%q, want %q", errResp.Error.Code, "too_large")
-	}
-	if got := errResp.Error.Details["maxBytes"]; got != float64(uploadMultipartJSONRequestBodyMaxBytes) {
-		t.Fatalf("details.maxBytes=%v, want %d", got, uploadMultipartJSONRequestBodyMaxBytes)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uploadID := "missing-upload"
+			if !tc.useMissingUpload {
+				upload := createUploadSessionForMode(t, srv, profile.ID, tc.mode)
+				uploadID = upload.UploadID
+			}
+
+			res := doRawJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+uploadID+"/multipart/abort", profile.ID, tc.body)
+			defer res.Body.Close()
+			if res.StatusCode != tc.wantCode {
+				raw, _ := io.ReadAll(res.Body)
+				t.Fatalf("expected status %d, got %d: %s", tc.wantCode, res.StatusCode, string(raw))
+			}
+
+			var errResp models.ErrorResponse
+			decodeJSONResponse(t, res, &errResp)
+			if errResp.Error.Code != tc.wantErrorCode {
+				t.Fatalf("error.code=%q, want %q", errResp.Error.Code, tc.wantErrorCode)
+			}
+			if tc.wantBodyContains != "" && !strings.Contains(errResp.Error.Message, tc.wantBodyContains) {
+				t.Fatalf("error.message=%q, want to contain %q", errResp.Error.Message, tc.wantBodyContains)
+			}
+			if tc.wantMaxBytes {
+				if got := errResp.Error.Details["maxBytes"]; got != float64(uploadMultipartJSONRequestBodyMaxBytes) {
+					t.Fatalf("details.maxBytes=%v, want %d", got, uploadMultipartJSONRequestBodyMaxBytes)
+				}
+			}
+		})
 	}
 }
 

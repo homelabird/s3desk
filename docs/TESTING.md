@@ -24,11 +24,88 @@ cd frontend
 npx playwright install --with-deps chromium
 ```
 
+## CI
+
+The CI path uses the same split build/test commands that the repository gate wraps:
+
+```bash
+cd frontend
+npm run build
+```
+
+```bash
+cd backend
+go test ./...
+```
+
+### Sandbox Notes
+
+- `frontend` `npm run build` is expected to run cleanly inside the normal workspace sandbox.
+- `backend` `go test ./...` can show false negatives inside a restricted sandbox when `httptest` needs to bind a local listener for API or websocket coverage.
+- If you see `httptest: failed to listen on a port` or `socket: operation not permitted`, rerun the backend test command outside the sandbox and treat that result as authoritative.
+
+Use `./scripts/check.sh` when you want the full repository gate locally instead of just the minimal CI pair above.
+
+## Focused Reproduction Commands
+
+Use these when you only need the `realtime` or `uploads` surfaces instead of the full backend suite.
+
+### Repo Script
+
+Use the checked-in helper from the repository root:
+
+```bash
+./scripts/repro_backend_focus.sh help
+./scripts/repro_backend_focus.sh list
+./scripts/repro_backend_focus.sh all
+./scripts/repro_backend_focus.sh realtime
+./scripts/repro_backend_focus.sh uploads
+./scripts/repro_backend_focus.sh uploads-staging
+./scripts/repro_backend_focus.sh uploads-direct
+./scripts/repro_backend_focus.sh uploads-multipart-preconditions
+```
+
+`./scripts/check.sh fast` now invokes `./scripts/repro_backend_focus.sh all` automatically when the backend test phase fails, so the focused repro buckets are emitted immediately after a fast-gate backend failure.
+
+### Realtime
+
+```bash
+cd backend
+go test ./internal/api -run 'TestRealtimeTransportOriginAndLimitPolicy|TestRealtimeSSESuccessPath|TestRealtimeWSSuccessPath|TestCreateRealtimeTicketOriginPolicy|TestRequireLocalHost_OriginHostCombinations|TestIsAllowedRealtimeOrigin_PolicyMatrix|TestRejectInvalidRealtimeOrigin_Table'
+```
+
+### Uploads
+
+```bash
+cd backend
+go test ./internal/api -run 'TestNormalizeUploadMode|TestParseUploadChunkHeaders|TestBuildMultipartCompletionParts|TestExpectedMultipartPartCount|TestMultipartPartNumber|TestBuildCompletedMultipartParts|TestUploadMultipartAndCommitLifecycle|TestUploadChunkAndCommitLifecycle'
+```
+
+### Uploads Staging
+
+```bash
+cd backend
+go test ./internal/api -run 'TestUploadMultipartAndCommitLifecycle|TestUploadChunkAndCommitLifecycle|TestCommitUploadQueueFullRollsBackCreatedJob|TestCommitUploadQueueFullThenRetrySucceeds|TestAbortMultipartUploadPreconditions'
+```
+
+### Uploads Direct
+
+```bash
+cd backend
+go test ./internal/api -run 'TestCommitUploadDirectMultipartListFailure|TestUploadFilesDirectMultipartInvalidCreateResponse|TestCommitUploadDirectMultipartCompleteFailure|TestCommitUploadDirectUsesVerifiedObjectMetadata'
+```
+
 ## Backend
 
 ```bash
 cd backend
 go test ./...
+```
+
+Minimal current-state pair wrapper:
+
+```bash
+./scripts/check_ci_pair.sh
 ```
 
 ### Backend Live Provider Smoke

@@ -95,4 +95,41 @@ describe('useObjectsPrefetch', () => {
 		const call = vi.mocked(args.queryClient.prefetchInfiniteQuery).mock.calls[0]?.[0]
 		expect(call?.queryKey).toEqual(['objects', 'profile-1', 'bucket-c', '', 'token'])
 	})
+
+	it('restarts initial background prefetch after the session scope changes', async () => {
+		const args = buildArgs()
+		const { rerender } = renderHook(
+			(props: Parameters<typeof useObjectsPrefetch>[0]) => useObjectsPrefetch(props),
+			{ initialProps: args },
+		)
+
+		await vi.runAllTimersAsync()
+		rerender({ ...args, profileId: 'profile-2', apiToken: 'token-2' })
+		await vi.runAllTimersAsync()
+
+		const queryKeys = vi
+			.mocked(args.queryClient.prefetchInfiniteQuery)
+			.mock.calls.map((call) => call[0]?.queryKey)
+
+		expect(queryKeys).toContainEqual(['objects', 'profile-1', 'bucket-b', '', 'token'])
+		expect(queryKeys).toContainEqual(['objects', 'profile-2', 'bucket-b', '', 'token-2'])
+	})
+
+	it('drops scheduled initial prefetch work from stale session scopes before it starts', async () => {
+		const args = buildArgs()
+		const { rerender } = renderHook(
+			(props: Parameters<typeof useObjectsPrefetch>[0]) => useObjectsPrefetch(props),
+			{ initialProps: args },
+		)
+
+		rerender({ ...args, profileId: 'profile-2', apiToken: 'token-2' })
+		await vi.runAllTimersAsync()
+
+		const queryKeys = vi
+			.mocked(args.queryClient.prefetchInfiniteQuery)
+			.mock.calls.map((call) => call[0]?.queryKey)
+
+		expect(queryKeys).not.toContainEqual(['objects', 'profile-1', 'bucket-b', '', 'token'])
+		expect(queryKeys).toContainEqual(['objects', 'profile-2', 'bucket-b', '', 'token-2'])
+	})
 })

@@ -19,6 +19,7 @@ import { getBucketsQueryStaleTimeMs } from '../lib/queryPolicy'
 import { inferUploadSelectionKind } from '../lib/uploadSelection'
 import { useIsOffline } from '../lib/useIsOffline'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../lib/profileScopedStorage'
 import styles from './UploadsPage.module.css'
 import { UploadsSelectionSection } from './uploads/UploadsSelectionSection'
 
@@ -31,9 +32,23 @@ export function UploadsPage(props: Props) {
 	const api = useMemo(() => new APIClient({ apiToken: props.apiToken }), [props.apiToken])
 	const transfers = useTransfers()
 	const isOffline = useIsOffline()
+	const bucketStorageKey = useMemo(
+		() => profileScopedStorageKey('uploads', props.apiToken, props.profileId, 'bucket'),
+		[props.apiToken, props.profileId],
+	)
+	const prefixStorageKey = useMemo(
+		() => profileScopedStorageKey('uploads', props.apiToken, props.profileId, 'prefix'),
+		[props.apiToken, props.profileId],
+	)
 
-	const [bucket, setBucket] = useLocalStorageState<string>('bucket', '')
-	const [prefix, setPrefix] = useLocalStorageState<string>('uploadPrefix', '')
+	const [bucket, setBucket] = useLocalStorageState<string>(bucketStorageKey, '', {
+		legacyLocalStorageKey: 'bucket',
+		legacyLocalStorageKeys: [legacyProfileScopedStorageKey('uploads', props.profileId, 'bucket')],
+	})
+	const [prefix, setPrefix] = useLocalStorageState<string>(prefixStorageKey, '', {
+		legacyLocalStorageKey: 'uploadPrefix',
+		legacyLocalStorageKeys: [legacyProfileScopedStorageKey('uploads', props.profileId, 'prefix')],
+	})
 	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 	const [selectedFolderLabel, setSelectedFolderLabel] = useState('')
 	const [selectedDirectorySelectionMode, setSelectedDirectorySelectionMode] = useState<'picker' | 'input' | undefined>(undefined)

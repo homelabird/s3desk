@@ -1,5 +1,6 @@
 import { Button, Space, Typography, message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
@@ -11,6 +12,7 @@ type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
 type UseObjectsZipJobsArgs = {
 	profileId: string | null
+	apiToken: string
 	bucket: string
 	prefix: string
 	transfers: TransfersContextValue
@@ -19,6 +21,7 @@ type UseObjectsZipJobsArgs = {
 
 export function useObjectsZipJobs({
 	profileId,
+	apiToken,
 	bucket,
 	prefix,
 	transfers,
@@ -26,6 +29,15 @@ export function useObjectsZipJobs({
 }: UseObjectsZipJobsArgs) {
 	const queryClient = useQueryClient()
 	const navigate = useNavigate()
+	const zipContextVersionRef = useRef(0)
+
+	const invalidateZipContext = useCallback(() => {
+		zipContextVersionRef.current += 1
+	}, [])
+
+	useEffect(() => {
+		invalidateZipContext()
+	}, [apiToken, bucket, invalidateZipContext, prefix, profileId, transfers])
 
 	const zipPrefixJobMutation = useMutation({
 		mutationFn: async (args: { prefix: string }) => {
@@ -36,7 +48,17 @@ export function useObjectsZipJobs({
 				payload: { bucket, prefix: normalizePrefix(args.prefix) },
 			})
 		},
-		onSuccess: async (job, args) => {
+		onMutate: () => ({
+			contextVersion: zipContextVersionRef.current,
+			scopeProfileId: profileId,
+			scopeApiToken: apiToken,
+		}),
+		onSuccess: async (job, args, context) => {
+			await queryClient.invalidateQueries({
+				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				exact: false,
+			})
+			if (context?.contextVersion !== zipContextVersionRef.current) return
 			const normPrefix = normalizePrefix(args.prefix)
 			const label = normPrefix ? `Folder zip: ${normPrefix}` : 'Folder zip: (root)'
 			transfers.queueDownloadJobArtifact({
@@ -61,9 +83,11 @@ export function useObjectsZipJobs({
 				),
 				duration: 6,
 			})
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 		},
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err, _args, context) => {
+			if (context?.contextVersion !== zipContextVersionRef.current) return
+			message.error(formatErr(err))
+		},
 	})
 
 	const zipObjectsJobMutation = useMutation({
@@ -81,7 +105,17 @@ export function useObjectsZipJobs({
 				},
 			})
 		},
-		onSuccess: async (job, args) => {
+		onMutate: () => ({
+			contextVersion: zipContextVersionRef.current,
+			scopeProfileId: profileId,
+			scopeApiToken: apiToken,
+		}),
+		onSuccess: async (job, args, context) => {
+			await queryClient.invalidateQueries({
+				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				exact: false,
+			})
+			if (context?.contextVersion !== zipContextVersionRef.current) return
 			const label = `Zip selection: ${args.keys.length} object(s)`
 			transfers.queueDownloadJobArtifact({
 				profileId: profileId!,
@@ -105,9 +139,11 @@ export function useObjectsZipJobs({
 				),
 				duration: 6,
 			})
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 		},
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err, _args, context) => {
+			if (context?.contextVersion !== zipContextVersionRef.current) return
+			message.error(formatErr(err))
+		},
 	})
 
 	return {

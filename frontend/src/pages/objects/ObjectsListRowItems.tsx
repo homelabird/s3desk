@@ -168,6 +168,7 @@ type ObjectsObjectRowItemProps = {
 	onRowDragEnd: () => void
 	onToggleFavorite: (key: string) => void
 	api: APIClient
+	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
 	bucket: string
@@ -203,6 +204,7 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 		onRowDragEnd,
 		onToggleFavorite,
 		api,
+		apiToken,
 		profileId,
 		bucket,
 		showThumbnails,
@@ -222,6 +224,7 @@ export const ObjectsObjectRowItem = memo(function ObjectsObjectRowItem(props: Ob
 			<ObjectThumbnail
 				key={`${bucket}:${object.key}:${thumbnailSize}`}
 				api={api}
+				apiToken={apiToken}
 				profileId={profileId}
 				bucket={bucket}
 				objectKey={object.key}

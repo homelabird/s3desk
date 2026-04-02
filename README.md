@@ -51,6 +51,14 @@ Requirements:
 ./scripts/check.sh
 ```
 
+### CI Verification
+
+The CI-facing execution path is intentionally explicit:
+
+- frontend build: `cd frontend && npm run build`
+- backend tests: `cd backend && go test ./...`
+- repository wrapper: `./scripts/build.sh` followed by `./scripts/check.sh`
+
 ## Deployment
 
 ### Remote Compose

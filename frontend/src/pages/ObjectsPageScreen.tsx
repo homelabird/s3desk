@@ -78,13 +78,13 @@ export function ObjectsPageScreen(props: Props) {
 			if (!(event instanceof CustomEvent)) return
 			const detail = event.detail as ObjectsRefreshEventDetail | undefined
 			if (!detail) return
-			if (!isObjectsRefreshRelevant({ profileId, bucket, prefix }, detail)) return
+			if (!isObjectsRefreshRelevant({ apiToken: props.apiToken, profileId, bucket, prefix }, detail)) return
 			void refreshTreeNode(normalizePrefix(prefix) || '/')
 		}
 
 		window.addEventListener(objectsRefreshEventName, handleObjectsRefresh as EventListener)
 		return () => window.removeEventListener(objectsRefreshEventName, handleObjectsRefresh as EventListener)
-	}, [bucket, prefix, props.profileId, refreshTreeNode])
+	}, [bucket, prefix, props.apiToken, props.profileId, refreshTreeNode])
 
 	const actions = useObjectsPageActions({
 		api,

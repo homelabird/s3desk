@@ -92,7 +92,7 @@ export function useJobsUploadDetails({
 	}, [uploadDetails])
 
 	const uploadEtagsQuery = useQuery({
-		queryKey: ['upload-etags', profileId, uploadDetails?.bucket ?? '', uploadItemsKey],
+		queryKey: ['upload-etags', profileId, uploadDetails?.bucket ?? '', uploadItemsKey, apiToken],
 		enabled:
 			!!profileId &&
 			!!uploadDetails?.bucket &&

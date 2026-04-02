@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
 import { APIError, type APIClient } from "../../api/client";
 import type {
@@ -15,6 +16,7 @@ import { message } from "antd";
 
 export function useBucketPolicyMutations(props: {
   api: APIClient;
+  apiToken: string;
   profileId: string;
   bucket: string;
   provider?: Profile["provider"];
@@ -26,22 +28,56 @@ export function useBucketPolicyMutations(props: {
   buildValidationRequest: () => BucketPolicyPutRequest;
 }) {
   const queryClient = useQueryClient();
+  const isActiveRef = useRef(true);
+  const putRequestTokenRef = useRef(0);
+  const deleteRequestTokenRef = useRef(0);
+  const validateRequestTokenRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      isActiveRef.current = false;
+    };
+  }, []);
+
+  const invalidatePolicyQueries = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["bucketPolicy", props.profileId, props.bucket, props.apiToken],
+      exact: true,
+    });
+    if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
+      await queryClient.invalidateQueries({
+        queryKey: ["bucketGovernance", props.profileId, props.bucket, props.apiToken],
+        exact: true,
+      });
+    }
+  };
 
   const putMutation = useMutation({
     mutationFn: (req: BucketPolicyPutRequest) =>
       props.api.buckets.putBucketPolicy(props.profileId, props.bucket, req),
-    onSuccess: async () => {
+    onMutate: () => {
+      putRequestTokenRef.current += 1;
+      return { requestToken: putRequestTokenRef.current };
+    },
+    onSuccess: async (_, __, context) => {
+      await invalidatePolicyQueries();
+      if (
+        !isActiveRef.current ||
+        context?.requestToken !== putRequestTokenRef.current
+      ) {
+        return;
+      }
       message.success("Policy saved");
       props.setLastProviderError(null);
-      await queryClient.invalidateQueries({ queryKey: ["bucketPolicy"] });
-      if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
-        await queryClient.invalidateQueries({
-          queryKey: ["bucketGovernance", props.profileId, props.bucket],
-        });
-      }
       props.onClose();
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      if (
+        !isActiveRef.current ||
+        context?.requestToken !== putRequestTokenRef.current
+      ) {
+        return;
+      }
       props.setActiveTab("validate");
       props.setLastProviderError(err instanceof APIError ? err : null);
       message.error(formatErr(err));
@@ -51,18 +87,29 @@ export function useBucketPolicyMutations(props: {
   const deleteMutation = useMutation({
     mutationFn: () =>
       props.api.buckets.deleteBucketPolicy(props.profileId, props.bucket),
-    onSuccess: async () => {
+    onMutate: () => {
+      deleteRequestTokenRef.current += 1;
+      return { requestToken: deleteRequestTokenRef.current };
+    },
+    onSuccess: async (_, __, context) => {
+      await invalidatePolicyQueries();
+      if (
+        !isActiveRef.current ||
+        context?.requestToken !== deleteRequestTokenRef.current
+      ) {
+        return;
+      }
       message.success("Policy deleted");
       props.setLastProviderError(null);
-      await queryClient.invalidateQueries({ queryKey: ["bucketPolicy"] });
-      if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
-        await queryClient.invalidateQueries({
-          queryKey: ["bucketGovernance", props.profileId, props.bucket],
-        });
-      }
       props.onClose();
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      if (
+        !isActiveRef.current ||
+        context?.requestToken !== deleteRequestTokenRef.current
+      ) {
+        return;
+      }
       props.setActiveTab("validate");
       props.setLastProviderError(err instanceof APIError ? err : null);
       message.error(formatErr(err));
@@ -76,7 +123,17 @@ export function useBucketPolicyMutations(props: {
         props.bucket,
         props.buildValidationRequest(),
       ),
-    onSuccess: (resp) => {
+    onMutate: () => {
+      validateRequestTokenRef.current += 1;
+      return { requestToken: validateRequestTokenRef.current };
+    },
+    onSuccess: (resp, _vars, context) => {
+      if (
+        !isActiveRef.current ||
+        context?.requestToken !== validateRequestTokenRef.current
+      ) {
+        return;
+      }
       props.setServerValidation(resp);
       props.setServerValidationError(null);
       const { content, duration } = formatValidationOperationMessage({
@@ -89,7 +146,13 @@ export function useBucketPolicyMutations(props: {
       if (resp.ok) message.success(content, duration);
       else message.warning(content, duration);
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      if (
+        !isActiveRef.current ||
+        context?.requestToken !== validateRequestTokenRef.current
+      ) {
+        return;
+      }
       props.setServerValidation(null);
       const { content, duration } = formatUnavailableOperationMessage(
         "Policy validation unavailable",

@@ -12,6 +12,7 @@ import {
 	THUMBNAIL_CACHE_MIN_ENTRIES,
 } from '../../lib/thumbnailCache'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
+import { shouldIgnoreGlobalKeyboardShortcut } from '../../lib/keyboardShortcuts'
 import { useObjectsFiltersState } from './useObjectsFiltersState'
 import { useObjectsGlobalSearchOverlayState } from './useObjectsGlobalSearchOverlayState'
 import { useObjectsGlobalSearchState } from './useObjectsGlobalSearchState'
@@ -22,6 +23,8 @@ import { type ObjectsUIMode } from './objectsPageConstants'
 type ScreensState = Partial<Record<'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl', boolean>>
 
 type Args = {
+	apiToken: string
+	profileId: string | null
 	bucket: string
 	prefix: string
 	isOffline: boolean
@@ -30,14 +33,23 @@ type Args = {
 	setTreeDrawerOpen: Dispatch<SetStateAction<boolean>>
 }
 
-export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, openPathModal, setTreeDrawerOpen }: Args) {
+export function useObjectsPageViewState({
+	apiToken,
+	profileId,
+	bucket,
+	prefix,
+	isOffline,
+	screens,
+	openPathModal,
+	setTreeDrawerOpen,
+}: Args) {
 	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
 	const isAdvanced = uiMode === 'advanced'
 	const isDesktop = !!screens.xl
 	const isWideDesktop = !!screens.xxl
 	const canDragDrop = isDesktop && !isOffline
 
-	const { search, searchDraft, setSearchDraft, clearSearch, deferredSearch } = useObjectsSearchState()
+	const { search, searchDraft, setSearchDraft, clearSearch, deferredSearch } = useObjectsSearchState({ apiToken, profileId })
 	const {
 		globalSearch,
 		setGlobalSearch,
@@ -63,8 +75,9 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		indexFullReindex,
 		setIndexFullReindex,
 		resetGlobalSearch,
-	} = useObjectsGlobalSearchState()
+	} = useObjectsGlobalSearchState({ apiToken, profileId, bucket })
 	const { globalSearchOpen, openGlobalSearch, closeGlobalSearch } = useObjectsGlobalSearchOverlayState({
+		scopeKey: `${apiToken || '__no_server__'}:${profileId?.trim() || '__no_profile__'}:${bucket || '__no_bucket__'}`,
 		globalSearch,
 		setGlobalSearch,
 		globalSearchDraft,
@@ -102,27 +115,52 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		objectsCostMode,
 		autoIndexEnabled,
 		autoIndexTtlHours,
-	} = useObjectsFiltersState()
+	} = useObjectsFiltersState(apiToken, profileId)
 
 	const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false)
+	const [filtersDrawerScopeKey, setFiltersDrawerScopeKey] = useState('')
 	const [detailsOpen, setDetailsOpen] = useLocalStorageState<boolean>('objectsDetailsOpen', true)
 	const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false)
+	const [detailsDrawerScopeKey, setDetailsDrawerScopeKey] = useState('')
 	const [downloadLinkProxyEnabled] = useLocalStorageState<boolean>('downloadLinkProxyEnabled', false)
 	const layoutRef = useRef<HTMLDivElement | null>(null)
 	const [layoutWidthPx, setLayoutWidthPx] = useState(0)
 	const [autoScanReadyKey, setAutoScanReadyKey] = useState('')
-	const autoScanKey = bucket ? `${bucket}|${prefix}` : ''
+	const currentOverlayScopeKey = `${apiToken || '__no_server__'}:${profileId?.trim() || '__no_profile__'}`
+	const filtersDrawerOpenVisible = filtersDrawerOpen && filtersDrawerScopeKey === currentOverlayScopeKey
+	const detailsDrawerOpenVisible = detailsDrawerOpen && detailsDrawerScopeKey === currentOverlayScopeKey
+	const autoScanServerScope = apiToken || '__no_server__'
+	const autoScanProfileScope = profileId?.trim() || '__no_profile__'
+	const autoScanKey = bucket ? `${autoScanServerScope}:${autoScanProfileScope}:${bucket}|${prefix}` : ''
 	const autoScanReady = !!bucket && autoScanReadyKey === autoScanKey
+
+	const setScopedFiltersDrawerOpen = useCallback(
+		(next: SetStateAction<boolean>) => {
+			const nextOpen = typeof next === 'function' ? next(filtersDrawerOpenVisible) : next
+			setFiltersDrawerOpen(nextOpen)
+			setFiltersDrawerScopeKey(nextOpen ? currentOverlayScopeKey : '')
+		},
+		[currentOverlayScopeKey, filtersDrawerOpenVisible],
+	)
+
+	const setScopedDetailsDrawerOpen = useCallback(
+		(next: SetStateAction<boolean>) => {
+			const nextOpen = typeof next === 'function' ? next(detailsDrawerOpenVisible) : next
+			setDetailsDrawerOpen(nextOpen)
+			setDetailsDrawerScopeKey(nextOpen ? currentOverlayScopeKey : '')
+		},
+		[currentOverlayScopeKey, detailsDrawerOpenVisible],
+	)
 
 	const handleToggleUiMode = useCallback(() => {
 		if (isAdvanced) {
 			setDetailsOpen(false)
-			setDetailsDrawerOpen(false)
+			setScopedDetailsDrawerOpen(false)
 			setUiMode('simple')
 			return
 		}
 		setUiMode('advanced')
-	}, [isAdvanced, setDetailsOpen, setUiMode])
+	}, [isAdvanced, setDetailsOpen, setScopedDetailsDrawerOpen, setUiMode])
 
 	const normalizedThumbnailCacheSize = useMemo(() => {
 		if (typeof thumbnailCacheSize !== 'number' || !Number.isFinite(thumbnailCacheSize)) {
@@ -169,14 +207,16 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		isWideDesktop,
 		isAdvanced,
 		detailsOpen,
-		detailsDrawerOpen,
-		setDetailsDrawerOpen,
+		detailsDrawerOpen: detailsDrawerOpenVisible,
+		setDetailsDrawerOpen: setScopedDetailsDrawerOpen,
 		setTreeDrawerOpen,
 	})
 
 	useEffect(() => {
 		const el = layoutRef.current
 		if (!el) return
+		setLayoutWidthPx(Math.max(0, Math.round(el.getBoundingClientRect().width)))
+		if (typeof ResizeObserver === 'undefined') return
 		const ro = new ResizeObserver((entries) => {
 			const next = entries[0]?.contentRect?.width ?? 0
 			setLayoutWidthPx(Math.max(0, Math.round(next)))
@@ -199,6 +239,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
+			if (shouldIgnoreGlobalKeyboardShortcut(event)) return
 			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
 				event.preventDefault()
 				openPathModal()
@@ -217,7 +258,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		closeGlobalSearch,
 		deferredGlobalSearch,
 		deferredSearch,
-		detailsDrawerOpen,
+		detailsDrawerOpen: detailsDrawerOpenVisible,
 		detailsOpen,
 		detailsResizeHandleWidth,
 		detailsVisible,
@@ -231,7 +272,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		favoritesOpenDetails,
 		favoritesPaneExpanded,
 		favoritesSearch,
-		filtersDrawerOpen,
+		filtersDrawerOpen: filtersDrawerOpenVisible,
 		globalSearch,
 		globalSearchDraft,
 		globalSearchExt,
@@ -265,7 +306,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		search,
 		searchDraft,
 		setAutoScanReadyKey,
-		setDetailsDrawerOpen,
+		setDetailsDrawerOpen: setScopedDetailsDrawerOpen,
 		setDetailsOpen,
 		setExtFilter,
 		setFavoritesFirst,
@@ -273,7 +314,7 @@ export function useObjectsPageViewState({ bucket, prefix, isOffline, screens, op
 		setFavoritesOpenDetails,
 		setFavoritesPaneExpanded,
 		setFavoritesSearch,
-		setFiltersDrawerOpen,
+		setFiltersDrawerOpen: setScopedFiltersDrawerOpen,
 		setGlobalSearch,
 		setGlobalSearchDraft,
 		setGlobalSearchExt,

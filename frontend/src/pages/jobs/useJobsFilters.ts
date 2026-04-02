@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 
 import type { JobStatus } from '../../api/types'
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 export type JobsFiltersState = {
@@ -19,11 +20,39 @@ export type JobsFiltersState = {
 	resetFilters: () => void
 }
 
-export function useJobsFilters(): JobsFiltersState {
-	const [statusFilter, setStatusFilter] = useLocalStorageState<JobStatus | 'all'>('jobsStatusFilter', 'all')
-	const [searchFilter, setSearchFilter] = useLocalStorageState('jobsSearchFilter', '')
-	const [typeFilter, setTypeFilter] = useLocalStorageState('jobsTypeFilter', '')
-	const [errorCodeFilter, setErrorCodeFilter] = useLocalStorageState('jobsErrorCodeFilter', '')
+export function useJobsFilters(apiToken: string, profileId: string | null): JobsFiltersState {
+	const [statusFilter, setStatusFilter] = useLocalStorageState<JobStatus | 'all'>(
+		profileScopedStorageKey('jobs', apiToken, profileId, 'statusFilter'),
+		'all',
+		{
+			legacyLocalStorageKey: 'jobsStatusFilter',
+			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'statusFilter')],
+		},
+	)
+	const [searchFilter, setSearchFilter] = useLocalStorageState(
+		profileScopedStorageKey('jobs', apiToken, profileId, 'searchFilter'),
+		'',
+		{
+			legacyLocalStorageKey: 'jobsSearchFilter',
+			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'searchFilter')],
+		},
+	)
+	const [typeFilter, setTypeFilter] = useLocalStorageState(
+		profileScopedStorageKey('jobs', apiToken, profileId, 'typeFilter'),
+		'',
+		{
+			legacyLocalStorageKey: 'jobsTypeFilter',
+			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'typeFilter')],
+		},
+	)
+	const [errorCodeFilter, setErrorCodeFilter] = useLocalStorageState(
+		profileScopedStorageKey('jobs', apiToken, profileId, 'errorCodeFilter'),
+		'',
+		{
+			legacyLocalStorageKey: 'jobsErrorCodeFilter',
+			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'errorCodeFilter')],
+		},
+	)
 
 	const searchFilterNormalized = searchFilter.trim()
 	const typeFilterNormalized = typeFilter.trim()

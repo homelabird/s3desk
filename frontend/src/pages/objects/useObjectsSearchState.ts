@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 const MAX_OBJECTS_SEARCH_LENGTH = 160
@@ -9,6 +10,8 @@ function sanitizeSearchInput(value: string): string {
 }
 
 type UseObjectsSearchStateArgs = {
+	apiToken?: string
+	profileId?: string | null
 	storageKey?: string
 	debounceMs?: number
 }
@@ -22,10 +25,17 @@ type UseObjectsSearchStateResult = {
 }
 
 export function useObjectsSearchState({
-	storageKey = 'objectsSearch',
+	apiToken = '',
+	profileId = null,
+	storageKey,
 	debounceMs = 250,
 }: UseObjectsSearchStateArgs = {}): UseObjectsSearchStateResult {
-	const [search, setSearch] = useLocalStorageState<string>(storageKey, '', { sanitize: sanitizeSearchInput })
+	const resolvedStorageKey = storageKey ?? profileScopedStorageKey('objects', apiToken, profileId, 'search')
+	const [search, setSearch] = useLocalStorageState<string>(resolvedStorageKey, '', {
+		legacyLocalStorageKey: storageKey ? undefined : 'objectsSearch',
+		legacyLocalStorageKeys: storageKey ? undefined : [legacyProfileScopedStorageKey('objects', profileId, 'search')],
+		sanitize: sanitizeSearchInput,
+	})
 	const [searchDraft, setSearchDraftState] = useState(search)
 	const deferredSearch = useDeferredValue(search)
 	const setSearchDraft = useCallback((next: string) => {

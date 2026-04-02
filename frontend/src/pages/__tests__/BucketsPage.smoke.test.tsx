@@ -15,6 +15,13 @@ import { APIClient, APIError } from "../../api/client";
 import { ensureDomShims } from "../../test/domShims";
 import { BucketsPage } from "../BucketsPage";
 
+vi.mock("../../api/useAPIClient", async () => {
+  const { APIClient } = await import("../../api/client");
+  return {
+    useAPIClient: () => new APIClient({ apiToken: "test-token" }),
+  };
+});
+
 const confirmDangerActionMock = vi.fn(
   (options: { onConfirm: () => Promise<void> | void }) => options.onConfirm(),
 );
@@ -72,6 +79,16 @@ const defaultProfiles = [
 const defaultBuckets = [
   { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
 ];
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function mockServerApi(meta = defaultMeta) {
   const serverApi = {
@@ -589,6 +606,170 @@ describe("BucketsPage", () => {
     );
   });
 
+  it("ignores stale delete confirmations after the profile changes", async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    mockViewportWidth(1200);
+    mockServerApi();
+    mockProfilesApi([
+      ...defaultProfiles,
+      {
+        id: "profile-2",
+        name: "Secondary Profile",
+        provider: "s3_compatible",
+        endpoint: "http://127.0.0.1:9001",
+        region: "us-west-2",
+        forcePathStyle: false,
+        preserveLeadingSlash: false,
+        tlsInsecureSkipVerify: false,
+        createdAt: "2024-01-02T00:00:00Z",
+        updatedAt: "2024-01-02T00:00:00Z",
+      },
+    ] as never);
+    const deleteBucket = vi.fn().mockResolvedValue(undefined);
+    mockBucketsApi({
+      deleteBucket,
+    });
+
+    let pendingConfirm:
+      | { onConfirm: () => Promise<void> | void }
+      | undefined;
+    confirmDangerActionMock.mockImplementationOnce((options) => {
+      pendingConfirm = options;
+      return undefined;
+    });
+
+    const view = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token" profileId="profile-1" />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const deleteButton = (
+      await within(
+        await screen.findByTestId("buckets-table-desktop"),
+      ).findAllByRole("button", { name: /delete/i })
+    )[0];
+    fireEvent.click(deleteButton);
+
+    expect(pendingConfirm).toBeDefined();
+    expect(deleteBucket).not.toHaveBeenCalled();
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token" profileId="profile-2" />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await act(async () => {
+      await pendingConfirm?.onConfirm();
+    });
+
+    expect(deleteBucket).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale create responses after the profile changes", async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+
+    mockViewportWidth(1200);
+    mockServerApi();
+    mockProfilesApi([
+      ...defaultProfiles,
+      {
+        id: "profile-2",
+        name: "Secondary Profile",
+        provider: "aws_s3",
+        region: "ap-northeast-2",
+        preserveLeadingSlash: false,
+        tlsInsecureSkipVerify: false,
+        createdAt: "2024-01-02T00:00:00Z",
+        updatedAt: "2024-01-02T00:00:00Z",
+      },
+    ] as never);
+    const createBucketRequest = deferred<void>();
+    const createBucket = vi.fn().mockReturnValue(createBucketRequest.promise);
+    mockBucketsApi({
+      listBuckets: vi.fn().mockResolvedValue([] as never),
+      createBucket,
+    });
+    const successSpy = vi
+      .spyOn(message, "success")
+      .mockImplementation(() => undefined as never);
+
+    const view = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token" profileId="profile-1" />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "New Bucket" }));
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: /bucket name/i }),
+      { target: { value: "stale-create-bucket" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(createBucket).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token" profileId="profile-2" />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+
+    await act(async () => {
+      createBucketRequest.resolve();
+      await Promise.resolve();
+    });
+
+    expect(successSpy).not.toHaveBeenCalled();
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ["buckets", "profile-1", "token"],
+      exact: true,
+    });
+  });
+
   it("routes to Objects with bucket context when deleting a non-empty bucket", async () => {
     const client = new QueryClient({
       defaultOptions: {
@@ -715,6 +896,76 @@ describe("BucketsPage", () => {
         bucket: "primary-bucket",
         deleteAll: true,
       }),
+    );
+  });
+
+  it("hides the non-empty bucket dialog when the api token changes", async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    mockViewportWidth(1200);
+    mockServerApi();
+    mockProfilesApi();
+    mockBucketsApi({
+      deleteBucket: vi.fn().mockRejectedValue(
+        new APIError({
+          status: 409,
+          code: "bucket_not_empty",
+          message: "bucket contains objects",
+        }),
+      ),
+    });
+
+    const view = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <RouterStateProbe />
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token-a" profileId="profile-1" />}
+            />
+            <Route path="/objects" element={<div>Objects Route</div>} />
+            <Route path="/jobs" element={<div>Jobs Route</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const deleteButton = (
+      await within(
+        await screen.findByTestId("buckets-table-desktop"),
+      ).findAllByRole("button", { name: /delete/i })
+    )[0];
+    fireEvent.click(deleteButton);
+
+    expect(
+      await screen.findByText('Bucket "primary-bucket" isn’t empty'),
+    ).toBeInTheDocument();
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <RouterStateProbe />
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token-b" profileId="profile-1" />}
+            />
+            <Route path="/objects" element={<div>Objects Route</div>} />
+            <Route path="/jobs" element={<div>Jobs Route</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Bucket "primary-bucket" isn’t empty'),
+      ).not.toBeInTheDocument(),
     );
   });
 });

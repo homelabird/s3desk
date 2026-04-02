@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { APIClient } from '../../api/client'
@@ -21,6 +22,21 @@ function renderLoginPage(props: Partial<Parameters<typeof LoginPage>[0]> = {}) {
 	}
 }
 
+function LoginPageHarness() {
+	const [token, setToken] = useState('saved-token')
+
+	return (
+		<ThemeModeProvider>
+			<LoginPage
+				key={token || 'empty'}
+				initialToken={token}
+				onLogin={vi.fn()}
+				onClearSavedToken={() => setToken('')}
+			/>
+		</ThemeModeProvider>
+	)
+}
+
 describe('LoginPage', () => {
 	afterEach(() => {
 		window.localStorage.clear()
@@ -34,6 +50,17 @@ describe('LoginPage', () => {
 
 		fireEvent.click(screen.getByRole('button', { name: 'Clear stored token' }))
 		expect(onClearSavedToken).toHaveBeenCalledTimes(1)
+	})
+
+	it('clears the input when the saved token is removed by the auth gate', () => {
+		render(<LoginPageHarness />)
+
+		expect(screen.getByDisplayValue('saved-token')).toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Clear stored token' }))
+
+		expect(screen.queryByDisplayValue('saved-token')).not.toBeInTheDocument()
+		expect(screen.getByPlaceholderText('API_TOKEN…')).toHaveValue('')
 	})
 
 	it('validates the token locally before making the API request', async () => {

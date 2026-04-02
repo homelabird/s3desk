@@ -8,6 +8,7 @@ export type ThumbnailCache = {
 }
 
 export type ThumbnailCacheRequest = {
+	apiToken: string
 	profileId: string
 	bucket: string
 	objectKey: string
@@ -43,7 +44,7 @@ const PERSISTENT_THUMBNAIL_EXTENSIONS = new Set([
 	'mkv',
 	'avi',
 ])
-const THUMBNAIL_CACHE_KEY_VERSION = 'v2'
+const THUMBNAIL_CACHE_KEY_VERSION = 'v3'
 
 type CacheOptions = {
 	maxEntries?: number
@@ -60,6 +61,7 @@ type PersistentThumbnailIndex = Record<string, number>
 export function buildThumbnailCacheBaseKey(args: Omit<ThumbnailCacheRequest, 'size'>): string {
 	return [
 		THUMBNAIL_CACHE_KEY_VERSION,
+		encodeURIComponent(args.apiToken),
 		encodeURIComponent(args.profileId),
 		encodeURIComponent(args.bucket),
 		encodeURIComponent(args.objectKey),
@@ -276,11 +278,11 @@ function normalizeThumbnailSize(size: number): number {
 
 function parseThumbnailCacheKey(cacheKey: string): ParsedThumbnailCacheKey | null {
 	const parts = cacheKey.split('|')
-	if (parts.length !== 6 || parts[0] !== THUMBNAIL_CACHE_KEY_VERSION) return null
-	const size = Number(parts[5])
+	if (parts.length !== 7 || parts[0] !== THUMBNAIL_CACHE_KEY_VERSION) return null
+	const size = Number(parts[6])
 	if (!Number.isFinite(size) || size < 0) return null
 	return {
-		baseKey: parts.slice(0, 5).join('|'),
+		baseKey: parts.slice(0, 6).join('|'),
 		size,
 		cacheKey,
 	}

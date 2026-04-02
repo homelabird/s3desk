@@ -1,22 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Checkbox, Empty, Space, Spin, Typography, message } from 'antd'
-import { Suspense, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Button, Space } from 'antd'
 
-import { APIClient } from '../api/client'
+import { queryKeys } from '../api/queryKeys'
 import type { Profile } from '../api/types'
-import { clipboardFailureHint, copyToClipboard } from '../lib/clipboard'
 import { confirmDangerAction } from '../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
-import { formatProviderOperationFailureMessage, formatUnavailableOperationMessage } from '../lib/providerOperationFeedback'
-import { LinkButton } from '../components/LinkButton'
 import { PageHeader } from '../components/PageHeader'
 import type { ProfileFormValues } from './profiles/profileTypes'
-import { buildTLSConfigFromValues, downloadTextFile, toCreateRequest, toUpdateRequest } from './profiles/profileMutationUtils'
-import { ProfilesModals } from './profiles/profilesLazy'
-import { ProfilesTable } from './profiles/ProfilesTable'
-import { buildProfileExportFilename, parseProfileYaml } from './profiles/profileYaml'
-import { buildProfilesTableRows, formatBps, toProfileEditInitialValues } from './profiles/profileViewModel'
+import { buildTLSConfigFromValues } from './profiles/profileMutationUtils'
+import { ProfilesDialogs } from './profiles/ProfilesDialogs'
+import { ProfilesOnboardingCard } from './profiles/ProfilesOnboardingCard'
+import { ProfilesStatusSection } from './profiles/ProfilesStatusSection'
+import { useProfilesPageData } from './profiles/useProfilesPageData'
+import { useProfilesPageMutations } from './profiles/useProfilesPageMutations'
+import { buildProfilesTableRows, toProfileEditInitialValues } from './profiles/profileViewModel'
+import { useProfilesYamlImportExport } from './profiles/useProfilesYamlImportExport'
 import styles from './ProfilesPage.module.css'
 
 type Props = {
@@ -25,71 +24,92 @@ type Props = {
 	setProfileId: (v: string | null) => void
 }
 
-function useProfilesPageOrchestration(apiToken: string) {
-	const queryClient = useQueryClient()
-	const api = useMemo(() => new APIClient({ apiToken }), [apiToken])
-	const [searchParams, setSearchParams] = useSearchParams()
-	return { queryClient, api, searchParams, setSearchParams }
-}
-
 export function ProfilesPage(props: Props) {
-	const { queryClient, api, searchParams, setSearchParams } = useProfilesPageOrchestration(props.apiToken)
-	const createRequested = searchParams.has('create')
-	const createOpen = createRequested
+	const currentScopeKey = props.apiToken || 'none'
 	const [editProfile, setEditProfile] = useState<Profile | null>(null)
-	const [testingProfileId, setTestingProfileId] = useState<string | null>(null)
-	const [benchmarkingProfileId, setBenchmarkingProfileId] = useState<string | null>(null)
-	const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null)
+	const [editScopeKey, setEditScopeKey] = useState<string | null>(null)
 	const [onboardingDismissed, setOnboardingDismissed] = useState(false)
-	const [yamlOpen, setYamlOpen] = useState(false)
-	const [yamlProfile, setYamlProfile] = useState<Profile | null>(null)
-	const [yamlContent, setYamlContent] = useState('')
-	const [yamlDraft, setYamlDraft] = useState('')
-	const [yamlError, setYamlError] = useState<string | null>(null)
-	const [exportingProfileId, setExportingProfileId] = useState<string | null>(null)
-	const [importOpen, setImportOpen] = useState(false)
-	const [importText, setImportText] = useState('')
-	const [importError, setImportError] = useState<string | null>(null)
+	const [createModalSession, setCreateModalSession] = useState(0)
+	const [editModalSession, setEditModalSession] = useState(0)
+	const serverScopeVersionRef = useRef(0)
+	const isActiveRef = useRef(true)
 
-	const profilesQuery = useQuery({
-		queryKey: ['profiles', props.apiToken],
-		queryFn: () => api.profiles.listProfiles(),
+	useLayoutEffect(() => {
+		serverScopeVersionRef.current += 1
+	}, [props.apiToken])
+
+	useEffect(() => {
+		return () => {
+			isActiveRef.current = false
+		}
+	}, [])
+
+	const activeEditProfile = editScopeKey === currentScopeKey ? editProfile : null
+	const {
+		api,
+		metaQuery,
+		profilesQuery,
+		queryClient,
+		searchParams,
+		setSearchParams,
+		invalidateProfilesQuery,
+	} = useProfilesPageData({
+		apiToken: props.apiToken,
 	})
+	const createRequested = searchParams.has('create')
+	const [createOpenScopeKey, setCreateOpenScopeKey] = useState<string | null>(() => (createRequested ? currentScopeKey : null))
+	const createOpen = createRequested && createOpenScopeKey === currentScopeKey
+
+	const openEditModal = (profile: Profile | null) => {
+		setEditModalSession((prev) => prev + 1)
+		setEditScopeKey(currentScopeKey)
+		setEditProfile(profile)
+	}
+
+	const closeEditModal = () => {
+		setEditModalSession((prev) => prev + 1)
+		setEditScopeKey(null)
+		setEditProfile(null)
+	}
+
 	const profiles = useMemo(() => profilesQuery.data ?? [], [profilesQuery.data])
 	const showProfilesEmpty = !profilesQuery.isFetching && profiles.length === 0
 	const openCreateModal = () => {
+		setCreateModalSession((prev) => prev + 1)
+		setCreateOpenScopeKey(currentScopeKey)
 		if (searchParams.has('create')) return
 		const next = new URLSearchParams(searchParams)
 		next.set('create', '1')
 		setSearchParams(next, { replace: true })
 	}
 	const closeCreateModal = () => {
+		setCreateOpenScopeKey(null)
 		if (!searchParams.has('create')) return
+		setCreateModalSession((prev) => prev + 1)
 		const next = new URLSearchParams(searchParams)
 		next.delete('create')
 		setSearchParams(next, { replace: true })
 	}
-
-	const metaQuery = useQuery({
-		queryKey: ['meta', props.apiToken],
-		queryFn: () => api.server.getMeta(),
-	})
-
 	const tlsCapability = metaQuery.data?.capabilities?.profileTls
 	const tlsCapabilityEnabled = tlsCapability?.enabled ?? true
 	const profileTLSQuery = useQuery({
-		queryKey: ['profileTls', editProfile?.id, props.apiToken],
-		enabled: !!editProfile && tlsCapabilityEnabled,
-		queryFn: () => api.profiles.getProfileTLS(editProfile!.id),
+		queryKey: queryKeys.profiles.tls(activeEditProfile?.id, props.apiToken),
+		enabled: !!activeEditProfile && tlsCapabilityEnabled,
+		queryFn: () => api.profiles.getProfileTLS(activeEditProfile!.id),
 	})
 
-	const applyTLSUpdate = async (profileId: string, values: ProfileFormValues, mode: 'create' | 'edit') => {
+	const applyTLSUpdate = async (
+		profileId: string,
+		values: ProfileFormValues,
+		mode: 'create' | 'edit',
+		scopeApiToken: string,
+	) => {
 		if (mode === 'create') {
 			if (!values.tlsEnabled) return
 			const tlsConfig = buildTLSConfigFromValues(values)
 			if (!tlsConfig) throw new Error('mTLS requires client certificate and key')
 			await api.profiles.updateProfileTLS(profileId, tlsConfig)
-			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
+			await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.tls(profileId, scopeApiToken), exact: true })
 			return
 		}
 
@@ -97,242 +117,102 @@ export function ProfilesPage(props: Props) {
 		if (action === 'keep') return
 		if (action === 'disable') {
 			await api.profiles.deleteProfileTLS(profileId)
-			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
+			await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.tls(profileId, scopeApiToken), exact: true })
 			return
 		}
 		if (action === 'enable') {
 			const tlsConfig = buildTLSConfigFromValues(values)
 			if (!tlsConfig) throw new Error('mTLS requires client certificate and key')
 			await api.profiles.updateProfileTLS(profileId, tlsConfig)
-			await queryClient.invalidateQueries({ queryKey: ['profileTls', profileId] })
+			await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.tls(profileId, scopeApiToken), exact: true })
 		}
 	}
-
-	const createMutation = useMutation({
-		mutationFn: (values: ProfileFormValues) => api.profiles.createProfile(toCreateRequest(values)),
-		onSuccess: async (created, values) => {
-			message.success('Profile created')
-			props.setProfileId(created.id)
-			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
-			closeCreateModal()
-			try {
-				await applyTLSUpdate(created.id, values, 'create')
-			} catch (err) {
-				message.error(`mTLS update failed: ${formatErr(err)}`)
-			}
-		},
-		onError: (err) => message.error(formatErr(err)),
+	const {
+		createMutation,
+		updateMutation,
+		deleteMutation,
+		testMutation,
+		benchmarkMutation,
+		createLoading,
+		editLoading,
+		testingProfileId,
+		benchmarkingProfileId,
+		deletingProfileId,
+	} = useProfilesPageMutations({
+		api,
+		apiToken: props.apiToken,
+		currentScopeKey,
+		profileId: props.profileId,
+		setProfileId: props.setProfileId,
+		createModalSession,
+		editModalSession,
+		closeCreateModal,
+		closeEditModal,
+		invalidateProfilesQuery,
+		applyTLSUpdate,
+		isActiveRef,
+		serverScopeVersionRef,
 	})
-
-	const updateMutation = useMutation({
-		mutationFn: (args: { id: string; values: ProfileFormValues }) => api.profiles.updateProfile(args.id, toUpdateRequest(args.values)),
-		onSuccess: async (_, args) => {
-			message.success('Profile updated')
-			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
-			try {
-				await applyTLSUpdate(args.id, args.values, 'edit')
-			} catch (err) {
-				message.error(`mTLS update failed: ${formatErr(err)}`)
-			}
-			setEditProfile(null)
-		},
-		onError: (err) => message.error(formatErr(err)),
+	const {
+		activeYamlOpen,
+		activeYamlProfile,
+		activeYamlContent,
+		activeYamlDraft,
+		activeYamlError,
+		activeExportingProfileId,
+		activeImportOpen,
+		activeImportText,
+		activeImportError,
+		activeImportLoading,
+		yamlFilename,
+		exportYamlPending,
+		saveYamlPending,
+		importSessionToken,
+		openYamlModal,
+		closeYamlModal,
+		setYamlDraft,
+		handleYamlCopy,
+		handleYamlDownload,
+		saveYaml,
+		openImportModal,
+		closeImportModal,
+		submitImport,
+		setImportText,
+		handleImportFileTextLoad,
+		clearImportError,
+	} = useProfilesYamlImportExport({
+		api,
+		apiToken: props.apiToken,
+		currentScopeKey,
+		queryClient,
+		isActiveRef,
+		serverScopeVersionRef,
 	})
-
-	const deleteMutation = useMutation({
-		mutationFn: (id: string) => api.profiles.deleteProfile(id),
-		onMutate: (id) => setDeletingProfileId(id),
-		onSuccess: async (_, id) => {
-			message.success('Profile deleted')
-			if (props.profileId === id) {
-				props.setProfileId(null)
-			}
-			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
-		},
-		onSettled: (_, __, id) => setDeletingProfileId((prev) => (prev === id ? null : prev)),
-		onError: (err) => message.error(formatErr(err)),
-	})
-
-	const testMutation = useMutation({
-		mutationFn: (id: string) => api.profiles.testProfile(id),
-		onMutate: (id) => setTestingProfileId(id),
-		onSuccess: (resp) => {
-			const storageType = resp.details?.storageType ?? ''
-			const storageSource = resp.details?.storageTypeSource ?? ''
-			const buckets = typeof resp.details?.buckets === 'number' ? resp.details.buckets : null
-			const suffixParts: string[] = []
-			if (storageType) suffixParts.push(`type: ${storageType}`)
-			if (storageSource) suffixParts.push(`source: ${storageSource}`)
-			if (typeof buckets === 'number') suffixParts.push(`buckets: ${buckets}`)
-			const suffix = suffixParts.length ? ` (${suffixParts.join(', ')})` : ''
-			if (resp.ok) message.success(`Profile test OK${suffix}`)
-			else {
-				const { content, duration } = formatProviderOperationFailureMessage({
-					defaultMessage: 'Profile test failed',
-					message: resp.message,
-					errorDetail: resp.details?.error,
-					normalizedError: resp.details?.normalizedError,
-					extraDetails: suffixParts,
-				})
-				message.warning(content, duration)
-			}
-		},
-		onSettled: (_, __, id) => setTestingProfileId((prev) => (prev === id ? null : prev)),
-		onError: (err) => {
-			const { content, duration } = formatUnavailableOperationMessage('Profile test unavailable', err)
-			message.error(content, duration)
-		},
-	})
-
-	const benchmarkMutation = useMutation({
-		mutationFn: (id: string) => api.profiles.benchmarkProfile(id),
-		onMutate: (id) => setBenchmarkingProfileId(id),
-		onSuccess: (resp) => {
-			if (resp.ok) {
-				const parts: string[] = []
-				if (resp.uploadBps != null) parts.push(`↑ ${formatBps(resp.uploadBps)}`)
-				if (resp.downloadBps != null) parts.push(`↓ ${formatBps(resp.downloadBps)}`)
-				if (resp.uploadMs != null) parts.push(`upload ${resp.uploadMs}ms`)
-				if (resp.downloadMs != null) parts.push(`download ${resp.downloadMs}ms`)
-				message.success(`Benchmark OK: ${parts.join(' · ')}`, 8)
-			} else {
-				const { content, duration } = formatProviderOperationFailureMessage({
-					defaultMessage: 'Benchmark failed',
-					message: resp.message,
-					errorDetail: resp.details?.error,
-					normalizedError: resp.details?.normalizedError,
-				})
-				message.warning(content, duration)
-			}
-		},
-		onSettled: (_, __, id) => setBenchmarkingProfileId((prev) => (prev === id ? null : prev)),
-		onError: (err) => {
-			const { content, duration } = formatUnavailableOperationMessage('Benchmark unavailable', err)
-			message.error(content, duration)
-		},
-	})
-
-	const exportYamlMutation = useMutation({
-		mutationFn: (id: string) => api.profiles.exportProfileYaml(id),
-		onMutate: (id) => {
-			setExportingProfileId(id)
-			setYamlContent('')
-			setYamlDraft('')
-			setYamlError(null)
-		},
-		onSuccess: (content) => {
-			setYamlContent(content)
-			setYamlDraft(content)
-		},
-		onError: (err) => {
-			const msg = formatErr(err)
-			setYamlError(msg)
-			message.error(msg)
-		},
-		onSettled: (_, __, id) => setExportingProfileId((prev) => (prev === id ? null : prev)),
-	})
-
-	const openYamlModal = (profile: Profile) => {
-		setYamlProfile(profile)
-		setYamlOpen(true)
-		exportYamlMutation.mutate(profile.id)
-	}
-
-	const closeYamlModal = () => {
-		setYamlOpen(false)
-		setYamlProfile(null)
-		setYamlContent('')
-		setYamlDraft('')
-		setYamlError(null)
-	}
-
-	const saveYamlMutation = useMutation({
-		mutationFn: async ({ profileId, yamlText }: { profileId: string; yamlText: string }) => {
-			const { updateRequest, tlsConfig, hasTLSBlock } = await parseProfileYaml(yamlText)
-			const updated = await api.profiles.updateProfile(profileId, updateRequest)
-			if (hasTLSBlock) {
-				if (tlsConfig) {
-					await api.profiles.updateProfileTLS(profileId, tlsConfig)
-				} else {
-					await api.profiles.deleteProfileTLS(profileId)
-				}
-			}
-			const canonicalYaml = await api.profiles.exportProfileYaml(profileId)
-			return { updated, canonicalYaml }
-		},
-		onSuccess: async ({ updated, canonicalYaml }) => {
-			message.success('Profile YAML saved')
-			setYamlProfile(updated)
-			setYamlContent(canonicalYaml)
-			setYamlDraft(canonicalYaml)
-			setYamlError(null)
-			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
-			await queryClient.invalidateQueries({ queryKey: ['profileTls', updated.id] })
-		},
-		onError: (err) => {
-			const msg = formatErr(err)
-			setYamlError(msg)
-			message.error(msg)
-		},
-	})
-
-	const closeImportModal = () => {
-		setImportOpen(false)
-		setImportText('')
-		setImportError(null)
-	}
-
-	const importMutation = useMutation({
-		mutationFn: async (yamlText: string) => {
-			const { request, tlsConfig } = await parseProfileYaml(yamlText)
-			const created = await api.profiles.createProfile(request)
-			if (tlsConfig) {
-				await api.profiles.updateProfileTLS(created.id, tlsConfig)
-			}
-			return created
-		},
-		onSuccess: async (created) => {
-			message.success(`Imported profile "${created.name}"`)
-			closeImportModal()
-			await queryClient.invalidateQueries({ queryKey: ['profiles'] })
-		},
-		onError: (err) => {
-			const msg = formatErr(err)
-			setImportError(msg)
-			message.error(msg)
-		},
-	})
-
-	const handleYamlCopy = async () => {
-		if (!yamlDraft) return
-		const res = await copyToClipboard(yamlDraft)
-		if (res.ok) {
-			message.success('Copied YAML')
-			return
-		}
-		message.error(clipboardFailureHint())
-	}
-
-	const handleYamlDownload = () => {
-		if (!yamlDraft) return
-		downloadTextFile(buildProfileExportFilename(yamlProfile), yamlDraft)
-		message.success('Downloaded YAML')
-	}
 
 	const apiTokenEnabled = metaQuery.data?.apiTokenEnabled ?? false
 	const transferEngine = metaQuery.data?.transferEngine
 	const onboardingVisible = !onboardingDismissed && (profiles.length === 0 || !props.profileId)
-	const yamlFilename = buildProfileExportFilename(yamlProfile)
-	const hasOpenModal = createOpen || !!editProfile || yamlOpen || importOpen
+	const hasOpenModal = createOpen || !!activeEditProfile || activeYamlOpen || activeImportOpen
 	const editInitialValues: Partial<ProfileFormValues> | undefined = useMemo(
-		() => toProfileEditInitialValues(editProfile),
-		[editProfile],
+		() => toProfileEditInitialValues(activeEditProfile),
+		[activeEditProfile],
 	)
 	const tableRows = useMemo(() => buildProfilesTableRows(profiles, props.profileId), [profiles, props.profileId])
 	const profilesNeedingAttention = useMemo(
 		() => profiles.filter((profile) => profile.validation?.valid === false && (profile.validation.issues?.length ?? 0) > 0),
 		[profiles],
 	)
+	const handleDeleteProfile = (profile: Profile) => {
+		confirmDangerAction({
+			title: `Delete profile "${profile.name}"?`,
+			description: 'This removes the profile and any TLS settings associated with it.',
+			confirmText: profile.name,
+			confirmHint: `Type "${profile.name}" to confirm`,
+			onConfirm: async () => {
+				await deleteMutation.mutateAsync(profile.id)
+			},
+		})
+	}
 
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
@@ -342,177 +222,91 @@ export function ProfilesPage(props: Props) {
 				subtitle="Create connection profiles, verify endpoints, and choose the active workspace used across buckets, objects, uploads, and jobs."
 				actions={
 					<Space wrap>
-						<Button onClick={() => setImportOpen(true)}>Import YAML</Button>
+						<Button onClick={openImportModal}>Import YAML</Button>
 						<Button type="primary" onClick={openCreateModal}>
 							New Profile
 						</Button>
 					</Space>
 				}
 			/>
-			{onboardingVisible ? (
-				<section className={styles.onboardingCard} aria-label="Getting started">
-					<div className={styles.onboardingHeader}>
-						<Typography.Title level={5} className={styles.onboardingTitle}>
-							Getting started
-						</Typography.Title>
-						<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
-					</div>
-					<div className={styles.onboardingChecklist}>
-						<Checkbox checked={metaQuery.isSuccess} disabled>
-							Backend connected
-						</Checkbox>
-						<Checkbox checked={transferEngine?.available ?? false} disabled>
-							Transfer engine detected (rclone)
-						</Checkbox>
-						<Checkbox checked={transferEngine?.compatible ?? false} disabled>
-							Transfer engine compatible
-							{transferEngine?.minVersion ? ` (>= ${transferEngine.minVersion})` : ''}
-						</Checkbox>
-						<Checkbox checked={apiTokenEnabled ? !!props.apiToken.trim() : true} disabled>
-							API token configured{apiTokenEnabled ? '' : ' (not required)'}
-						</Checkbox>
-						<Checkbox checked={profiles.length > 0} disabled>
-							At least one profile created
-						</Checkbox>
-						<Checkbox checked={!!props.profileId} disabled>
-							Active profile selected
-						</Checkbox>
-					</div>
-					<div className={styles.onboardingActions}>
-						<Button size="small" type="primary" onClick={openCreateModal}>
-							Create profile
-						</Button>
-						<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
-							Buckets
-						</LinkButton>
-						<LinkButton to="/objects" size="small" disabled={!props.profileId}>
-							Objects
-						</LinkButton>
-						<button type="button" className={styles.onboardingDismissButton} onClick={() => setOnboardingDismissed(true)}>
-							Dismiss
-						</button>
-					</div>
-				</section>
-			) : null}
+			<ProfilesOnboardingCard
+				visible={onboardingVisible}
+				backendConnected={metaQuery.isSuccess}
+				transferEngine={transferEngine}
+				apiTokenEnabled={apiTokenEnabled}
+				apiToken={props.apiToken}
+				profilesCount={profiles.length}
+				profileId={props.profileId}
+				onCreateProfile={openCreateModal}
+				onDismiss={() => setOnboardingDismissed(true)}
+			/>
 
-			{profilesQuery.isError ? (
-				<Alert type="error" showIcon title="Failed to load profiles" description={formatErr(profilesQuery.error)} />
-			) : null}
-
-			{profilesNeedingAttention.length > 0 ? (
-				<Alert
-					type="warning"
-					showIcon
-					title={`Profiles need updates (${profilesNeedingAttention.length})`}
-					description={
-						<Space orientation="vertical" size={8} className={styles.fullWidth}>
-							<Typography.Text type="secondary">
-								Some saved profiles no longer meet the current provider requirements. Edit each affected profile and save it again.
-							</Typography.Text>
-							<Button size="small" onClick={() => setEditProfile(profilesNeedingAttention[0] ?? null)}>
-								Open next profile to fix
-							</Button>
-							<Space orientation="vertical" size={4} className={styles.fullWidth}>
-								{profilesNeedingAttention.map((profile) => (
-									<Space key={profile.id} align="start" className={styles.fullWidth}>
-										<Typography.Text className={styles.fullWidth}>
-											<strong>{profile.name}</strong>: {profile.validation?.issues?.[0]?.message ?? 'Update required'}
-										</Typography.Text>
-										<Button size="small" type="link" onClick={() => setEditProfile(profile)} aria-label={`Edit profile ${profile.name}`}>
-											Edit profile
-										</Button>
-									</Space>
-								))}
-							</Space>
-						</Space>
-					}
-				/>
-			) : null}
-
-			{profilesQuery.isFetching && profiles.length === 0 ? (
-				<div className={styles.loadingRow}>
-					<Spin />
-				</div>
-			) : showProfilesEmpty ? (
-				<Empty description="No profiles yet">
-					<Button type="primary" onClick={openCreateModal}>
-						Create profile
-					</Button>
-				</Empty>
-			) : (
-				<ProfilesTable
-					rows={tableRows}
-					onUseProfile={props.setProfileId}
-					onEdit={setEditProfile}
-					onTest={(id) => testMutation.mutate(id)}
-					onBenchmark={(id) => benchmarkMutation.mutate(id)}
-					onOpenYaml={openYamlModal}
-					onDelete={(profile) => {
-						confirmDangerAction({
-							title: `Delete profile "${profile.name}"?`,
-							description: 'This removes the profile and any TLS settings associated with it.',
-							confirmText: profile.name,
-							confirmHint: `Type "${profile.name}" to confirm`,
-							onConfirm: async () => {
-								await deleteMutation.mutateAsync(profile.id)
-							},
-						})
-					}}
-					isTestPending={testMutation.isPending}
-					testingProfileId={testingProfileId}
-					isBenchmarkPending={benchmarkMutation.isPending}
-					benchmarkingProfileId={benchmarkingProfileId}
-					isExportYamlPending={exportYamlMutation.isPending}
-					exportingProfileId={exportingProfileId}
-					isDeletePending={deleteMutation.isPending}
-					deletingProfileId={deletingProfileId}
-				/>
-			)}
+			<ProfilesStatusSection
+				currentScopeKey={currentScopeKey}
+				profiles={profiles}
+				profilesError={profilesQuery.isError ? profilesQuery.error : null}
+				profilesNeedingAttention={profilesNeedingAttention}
+				profilesQueryIsFetching={profilesQuery.isFetching}
+				showProfilesEmpty={showProfilesEmpty}
+				tableRows={tableRows}
+				onUseProfile={props.setProfileId}
+				onEditProfile={openEditModal}
+				onTestProfile={(id) => testMutation.mutate(id)}
+				onBenchmarkProfile={(id) => benchmarkMutation.mutate(id)}
+				onOpenYaml={openYamlModal}
+				onDeleteProfile={handleDeleteProfile}
+				isTestPending={testMutation.isPending}
+				testingProfileId={testingProfileId}
+				isBenchmarkPending={benchmarkMutation.isPending}
+				benchmarkingProfileId={benchmarkingProfileId}
+				isExportYamlPending={exportYamlPending}
+				exportingProfileId={activeExportingProfileId}
+				isDeletePending={deleteMutation.isPending}
+				deletingProfileId={deletingProfileId}
+				onCreateProfile={openCreateModal}
+			/>
 
 			{hasOpenModal ? (
-				<Suspense fallback={null}>
-					<ProfilesModals
-						createOpen={createOpen}
-						closeCreateModal={closeCreateModal}
-						onCreateSubmit={(values) => createMutation.mutate(values)}
-						createLoading={createMutation.isPending}
-						editProfile={editProfile}
-						closeEditModal={() => setEditProfile(null)}
-						onEditSubmit={(id, values) => {
-							updateMutation.mutate({ id, values })
-						}}
-						editLoading={updateMutation.isPending}
-						editInitialValues={editInitialValues}
-						tlsCapability={tlsCapability ?? null}
-						tlsStatus={profileTLSQuery.data ?? null}
-						tlsStatusLoading={profileTLSQuery.isFetching}
-						tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
-						yamlOpen={yamlOpen}
-						closeYamlModal={closeYamlModal}
-						yamlProfile={yamlProfile}
-						yamlError={yamlError}
-						yamlContent={yamlContent}
-						yamlDraft={yamlDraft}
-						yamlFilename={yamlFilename}
-						exportYamlLoading={exportYamlMutation.isPending}
-						saveYamlLoading={saveYamlMutation.isPending}
-						onYamlCopy={() => void handleYamlCopy()}
-						onYamlDownload={handleYamlDownload}
-						onYamlDraftChange={setYamlDraft}
-						onYamlSave={() => {
-							if (!yamlProfile) return
-							saveYamlMutation.mutate({ profileId: yamlProfile.id, yamlText: yamlDraft })
-						}}
-						importOpen={importOpen}
-						closeImportModal={closeImportModal}
-						importText={importText}
-						importError={importError}
-						importLoading={importMutation.isPending}
-						onImportSubmit={() => importMutation.mutate(importText)}
-						onImportTextChange={setImportText}
-						onImportErrorClear={() => setImportError(null)}
-					/>
-				</Suspense>
+				<ProfilesDialogs
+					createOpen={createOpen}
+					closeCreateModal={closeCreateModal}
+					onCreateSubmit={(values) => createMutation.mutate(values)}
+					createLoading={createLoading}
+					editProfile={activeEditProfile}
+					closeEditModal={closeEditModal}
+					onEditSubmit={(id, values) => {
+						updateMutation.mutate({ id, values })
+					}}
+					editLoading={editLoading}
+					editInitialValues={editInitialValues}
+					tlsCapability={tlsCapability ?? null}
+					tlsStatus={profileTLSQuery.data ?? null}
+					tlsStatusLoading={profileTLSQuery.isFetching}
+					tlsStatusError={profileTLSQuery.isError ? formatErr(profileTLSQuery.error) : null}
+					yamlOpen={activeYamlOpen}
+					closeYamlModal={closeYamlModal}
+					yamlProfile={activeYamlProfile}
+					yamlError={activeYamlError}
+					yamlContent={activeYamlContent}
+					yamlDraft={activeYamlDraft}
+					yamlFilename={yamlFilename}
+					exportYamlLoading={activeYamlOpen && exportYamlPending}
+					saveYamlLoading={activeYamlOpen && saveYamlPending}
+					onYamlCopy={() => void handleYamlCopy()}
+					onYamlDownload={handleYamlDownload}
+					onYamlDraftChange={setYamlDraft}
+					onYamlSave={saveYaml}
+					importOpen={activeImportOpen}
+					closeImportModal={closeImportModal}
+					importSessionToken={importSessionToken}
+					importText={activeImportText}
+					importError={activeImportError}
+					importLoading={activeImportLoading}
+					onImportSubmit={submitImport}
+					onImportFileTextLoad={handleImportFileTextLoad}
+					onImportTextChange={setImportText}
+					onImportErrorClear={clearImportError}
+				/>
 			) : null}
 		</Space>
 	)

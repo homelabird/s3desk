@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { APIError } from './api/client'
 import { createLightAPIClient } from './api/lightClient'
+import { useAuth } from './auth/useAuth'
 import { BrandLockup } from './components/BrandLockup'
+import { clearPersistedTransfersStorage } from './components/transfers/useTransfersPersistence'
 import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
+import {
+	readLegacyActiveProfileIdForMigration,
+	serverScopedStorageKey,
+	shouldUseLegacyActiveProfileStorageMigration,
+} from './lib/profileScopedStorage'
 import { useLocalStorageState } from './lib/useLocalStorageState'
-import { useSessionStorageState } from './lib/useSessionStorageState'
 import { useThemeMode } from './useThemeMode'
 
 type LightProfile = {
@@ -160,8 +166,9 @@ function ProfilesList(props: {
 	profileId: string | null
 	setProfileId: (v: string | null) => void
 }) {
+	const { apiToken, profileId, setProfileId } = props
 	const navigate = useNavigate()
-	const api = useMemo(() => createLightAPIClient({ apiToken: props.apiToken }), [props.apiToken])
+	const api = useMemo(() => createLightAPIClient({ apiToken }), [apiToken])
 
 	const [reloadNonce, setReloadNonce] = useState(0)
 	const [profilesState, setProfilesState] = useState<
@@ -187,11 +194,20 @@ function ProfilesList(props: {
 		}
 	}, [api, reloadNonce])
 
-	const profiles = profilesState.status === 'success' ? profilesState.data : []
+	const successfulProfiles = profilesState.status === 'success' ? profilesState.data : null
+	const profiles = successfulProfiles ?? []
 	const hasProfiles = profiles.length > 0
+	const effectiveProfileId = profilesState.status === 'success' && profileId && profiles.some((profile) => profile.id === profileId) ? profileId : null
+
+	useEffect(() => {
+		if (!successfulProfiles) return
+		if (profileId === null) return
+		if (successfulProfiles.some((profile) => profile.id === profileId)) return
+		setProfileId(null)
+	}, [profileId, setProfileId, successfulProfiles])
 
 	const openDashboard = (path: '/buckets' | '/objects' | '/uploads' | '/jobs') => {
-		if (!props.profileId) return
+		if (!effectiveProfileId) return
 		navigate(path)
 	}
 
@@ -222,9 +238,9 @@ function ProfilesList(props: {
 				<section className={`${styles.section} ${styles.sectionOverflowHidden}`}>
 					<div className={styles.sectionHeader}>
 						<div className={styles.sectionHeading}>Choose a profile</div>
-						{props.profileId ? (
+						{effectiveProfileId ? (
 							<div className={styles.sectionSubtle}>
-								Selected: <code>{props.profileId}</code>
+								Selected: <code>{effectiveProfileId}</code>
 							</div>
 						) : (
 							<div className={styles.sectionSubtle}>No profile selected</div>
@@ -258,14 +274,14 @@ function ProfilesList(props: {
 					) : (
 						<ul className={styles.profileList}>
 							{profiles.map((p) => {
-								const selected = p.id === props.profileId
+								const selected = p.id === effectiveProfileId
 								const subtitleParts = [p.provider, p.region, p.endpoint].filter(Boolean)
 								const subtitle = subtitleParts.join(' · ')
 								return (
 									<li key={p.id} className={styles.profileItem}>
 										<button
 											type="button"
-											onClick={() => props.setProfileId(p.id)}
+											onClick={() => setProfileId(p.id)}
 											className={`${styles.profileButton} ${selected ? styles.profileButtonSelected : ''}`}
 											aria-pressed={selected}
 										>
@@ -293,14 +309,14 @@ function ProfilesList(props: {
 								key={path}
 								type="button"
 								onClick={() => openDashboard(path)}
-								disabled={!props.profileId}
-								className={`${styles.button} ${styles.buttonSecondary} ${props.profileId ? styles.buttonClickable : styles.openButtonDisabled}`}
+								disabled={!effectiveProfileId}
+								className={`${styles.button} ${styles.buttonSecondary} ${effectiveProfileId ? styles.buttonClickable : styles.openButtonDisabled}`}
 							>
 								{path.slice(1)}
 							</button>
 						))}
 					</div>
-					{props.profileId ? null : <div className={styles.openHint}>Select a profile first to open the dashboard.</div>}
+					{effectiveProfileId ? null : <div className={styles.openHint}>Select a profile first to open the dashboard.</div>}
 				</section>
 			</main>
 		</div>
@@ -308,8 +324,17 @@ function ProfilesList(props: {
 }
 
 export default function LightApp() {
-	const [apiToken, setApiToken] = useSessionStorageState('apiToken', '', { legacyLocalStorageKey: 'apiToken' })
-	const [profileId, setProfileId] = useLocalStorageState<string | null>('profileId', null)
+	const { apiToken, setApiToken } = useAuth()
+	const profileStorageKey = useMemo(() => serverScopedStorageKey('app', apiToken, 'profileId'), [apiToken])
+	const initialStoredProfileId = useMemo(() => readLegacyActiveProfileIdForMigration(apiToken), [apiToken])
+	const legacyActiveProfileStorageKey = useMemo(
+		() => (shouldUseLegacyActiveProfileStorageMigration(apiToken) ? 'profileId' : undefined),
+		[apiToken],
+	)
+	const [profileId, setProfileId] = useLocalStorageState<string | null>(profileStorageKey, initialStoredProfileId, {
+		legacyLocalStorageKey: legacyActiveProfileStorageKey,
+	})
+	const previousApiTokenRef = useRef<string | null | undefined>(undefined)
 	const { mode, toggleMode } = useThemeMode()
 
 	const api = useMemo(() => createLightAPIClient({ apiToken }), [apiToken])
@@ -319,6 +344,16 @@ export default function LightApp() {
 		| { status: 'success' }
 		| { status: 'error'; error: unknown }
 	>({ status: 'loading' })
+
+	useEffect(() => {
+		if (previousApiTokenRef.current === undefined) {
+			previousApiTokenRef.current = apiToken
+			return
+		}
+		if (previousApiTokenRef.current === apiToken) return
+		previousApiTokenRef.current = apiToken
+		clearPersistedTransfersStorage()
+	}, [apiToken])
 
 	useEffect(() => {
 		let cancelled = false
@@ -379,6 +414,7 @@ export default function LightApp() {
 				<div className={styles.centerShell}>
 					<div className={styles.topRightActions}>{themeToggleButton}</div>
 					<LightLogin
+						key={apiToken || 'empty'}
 						initialToken={apiToken}
 						onLogin={(token) => applyApiToken(token)}
 						onClearSavedToken={() => applyApiToken('')}

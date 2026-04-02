@@ -15,6 +15,7 @@ type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 type UseObjectsIndexingArgs = {
 	api: APIClient
 	profileId: string | null
+	apiToken: string
 	bucket: string
 	prefix: string
 	globalSearchOpen: boolean
@@ -31,6 +32,7 @@ type UseObjectsIndexingArgs = {
 export function useObjectsIndexing({
 	api,
 	profileId,
+	apiToken,
 	bucket,
 	prefix,
 	globalSearchOpen,
@@ -48,6 +50,11 @@ export function useObjectsIndexing({
 	const autoIndexPendingRef = useRef(false)
 	const autoIndexLastKeyRef = useRef<string | null>(null)
 	const autoIndexLastTriggeredRef = useRef<number>(0)
+	const indexContextVersionRef = useRef(0)
+
+	useEffect(() => {
+		indexContextVersionRef.current += 1
+	}, [apiToken, bucket, prefix, profileId])
 
 	const indexObjectsJobMutation = useMutation({
 		mutationFn: async (args: { prefix: string; fullReindex: boolean; silent?: boolean }) => {
@@ -65,7 +72,18 @@ export function useObjectsIndexing({
 				},
 			})
 		},
-		onSuccess: async (job, variables) => {
+		onMutate: () => ({
+			contextVersion: indexContextVersionRef.current,
+			scopeProfileId: profileId,
+			scopeApiToken: apiToken,
+		}),
+		onSuccess: async (job, variables, context) => {
+			const isCurrent = context?.contextVersion === indexContextVersionRef.current
+			await queryClient.invalidateQueries({
+				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				exact: false,
+			})
+			if (!isCurrent) return
 			if (!variables?.silent) {
 				message.open({
 					type: 'success',
@@ -80,9 +98,11 @@ export function useObjectsIndexing({
 					duration: 6,
 				})
 			}
-			await queryClient.invalidateQueries({ queryKey: ['jobs'] })
 		},
-		onError: (err) => message.error(formatErr(err)),
+		onError: (err, _variables, context) => {
+			if (context?.contextVersion !== indexContextVersionRef.current) return
+			message.error(formatErr(err))
+		},
 	})
 
 	useEffect(() => {
@@ -99,29 +119,40 @@ export function useObjectsIndexing({
 			return
 		}
 
+		let cancelled = false
 		autoIndexPendingRef.current = true
-		;(async () => {
-			let indexedAtMs = 0
-			const summary = await api.objects.getObjectIndexSummary({
-				profileId,
-				bucket,
-				prefix: targetPrefix,
-				sampleLimit: 1,
-			})
-			if (summary.indexedAt) {
-				indexedAtMs = Date.parse(summary.indexedAt)
+		void (async () => {
+			try {
+				let indexedAtMs = 0
+				const summary = await api.objects.getObjectIndexSummary({
+					profileId,
+					bucket,
+					prefix: targetPrefix,
+					sampleLimit: 1,
+				})
+				if (cancelled) return
+				if (summary.indexedAt) {
+					indexedAtMs = Date.parse(summary.indexedAt)
+				}
+
+				const stale = !indexedAtMs || Date.now() - indexedAtMs > autoIndexTtlMs
+				if (!stale) return
+
+				autoIndexLastKeyRef.current = key
+				autoIndexLastTriggeredRef.current = Date.now()
+				setIndexPrefix(targetPrefix)
+				indexObjectsJobMutation.mutate({ prefix: targetPrefix, fullReindex: true, silent: true })
+			} catch {
+				// Ignore background summary probe failures and wait for the next trigger.
+			} finally {
+				autoIndexPendingRef.current = false
 			}
+		})()
 
-			const stale = !indexedAtMs || Date.now() - indexedAtMs > autoIndexTtlMs
-			if (!stale) return
-
-			autoIndexLastKeyRef.current = key
-			autoIndexLastTriggeredRef.current = Date.now()
-			setIndexPrefix(targetPrefix)
-			indexObjectsJobMutation.mutate({ prefix: targetPrefix, fullReindex: true, silent: true })
-		})().finally(() => {
+		return () => {
+			cancelled = true
 			autoIndexPendingRef.current = false
-		})
+		}
 	}, [
 		api,
 		autoIndexCooldownMs,

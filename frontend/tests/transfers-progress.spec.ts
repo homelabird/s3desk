@@ -268,14 +268,10 @@ test('upload transfer shows failure and allows retry', async ({ page }) => {
 	await expect(row.getByText('Failed', { exact: true })).toBeVisible()
 	await expect(row.getByText('simulated failure')).toBeVisible()
 
-	await row.getByRole('button', { name: 'Retry' }).click()
-	const fileInput = page.locator('input[type="file"]').first()
-	const inputReady = await fileInput
-		.waitFor({ state: 'attached', timeout: 1000 })
-		.then(() => true)
-		.catch(() => false)
-	if (inputReady) {
-		await fileInput.setInputFiles({ name: 'broken.txt', mimeType: 'text/plain', buffer: Buffer.from('broken') })
-	}
+	const [fileChooser] = await Promise.all([
+		page.waitForEvent('filechooser'),
+		row.getByRole('button', { name: 'Retry' }).click(),
+	])
+	await fileChooser.setFiles({ name: 'broken.txt', mimeType: 'text/plain', buffer: Buffer.from('broken') })
 	await expect(row.getByText('Transferring', { exact: true })).toBeVisible()
 })

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"gorm.io/gorm"
 
@@ -30,6 +31,9 @@ const (
 	defaultUploadMaxConcurrentRequests = 16
 	defaultDBStartupTimeout            = 30 * time.Second
 	defaultDBStartupRetryInterval      = time.Second
+	defaultHTTPMaxHeaderBytes          = 1 << 20
+	defaultHTTPReadTimeout             = 30 * time.Second
+	defaultHTTPIdleTimeout             = 60 * time.Second
 )
 
 type dbOpenFunc func() (*gorm.DB, error)
@@ -38,6 +42,9 @@ type retrySleepFunc func(context.Context, time.Duration) error
 
 func Run(ctx context.Context, cfg config.Config) error {
 	if err := validateListenAddr(cfg.Addr, cfg.AllowRemote); err != nil {
+		return err
+	}
+	if err := validateAllowedHosts(cfg.AllowedHosts); err != nil {
 		return err
 	}
 	isLoopback, err := isLoopbackListenAddr(cfg.Addr)
@@ -50,6 +57,8 @@ func Run(ctx context.Context, cfg config.Config) error {
 			return fmt.Errorf("API_TOKEN (or --api-token) is required when --allow-remote is enabled and addr is non-loopback (addr=%q)", cfg.Addr)
 		case isPlaceholderAPIToken(cfg.APIToken):
 			return fmt.Errorf("API_TOKEN must not use a placeholder value when remote access is enabled (addr=%q)", cfg.Addr)
+		case len(cfg.AllowedHosts) == 0:
+			return fmt.Errorf("ALLOW_REMOTE is enabled on a non-loopback addr but ALLOWED_HOSTS is empty. Startup fails closed for this configuration (addr=%q)", cfg.Addr)
 		}
 	}
 
@@ -60,6 +69,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	cfg.AllowedLocalDirs = allowedDirs
+	if cfg.AllowRemote && len(allowedDirs) == 0 {
+		return fmt.Errorf("ALLOW_REMOTE is enabled but ALLOWED_LOCAL_DIRS is empty. Startup fails closed for this configuration")
+	}
 	if err := jobs.ValidateEnvironment(jobs.Config{
 		Concurrency:      cfg.JobConcurrency,
 		AllowedLocalDirs: allowedDirs,
@@ -185,8 +197,9 @@ func Run(ctx context.Context, cfg config.Config) error {
 		Addr:              cfg.Addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		ReadTimeout:       0,
+		MaxHeaderBytes:    defaultHTTPMaxHeaderBytes,
+		IdleTimeout:       defaultHTTPIdleTimeout,
+		ReadTimeout:       defaultHTTPReadTimeout,
 		WriteTimeout:      0,
 	}
 
@@ -426,6 +439,34 @@ func normalizeAllowedDirs(dirs []string) ([]string, error) {
 	return out, nil
 }
 
+func validateAllowedHosts(allowedHosts []string) error {
+	for _, host := range allowedHosts {
+		host = strings.TrimSpace(strings.ToLower(host))
+		if host == "" {
+			return fmt.Errorf("ALLOWED_HOSTS contains an empty value")
+		}
+
+		if strings.ContainsAny(host, "/\\?#*") {
+			return fmt.Errorf("ALLOWED_HOSTS contains an invalid value %q: must be a host name or IP", host)
+		}
+
+		if ip := net.ParseIP(host); ip != nil {
+			continue
+		}
+
+		normalizedHost := strings.Trim(host, "[]")
+		if ip := net.ParseIP(normalizedHost); ip != nil {
+			continue
+		}
+
+		if !isValidAllowedHostName(host) {
+			return fmt.Errorf("ALLOWED_HOSTS contains an invalid value %q: must be a valid IP or domain name", host)
+		}
+	}
+
+	return nil
+}
+
 func isPlaceholderAPIToken(token string) bool {
 	switch strings.TrimSpace(strings.ToLower(token)) {
 	case "", "change-me", "changeme", "default", "token", "api-token", "s3desk", "s3desk-local":
@@ -433,4 +474,26 @@ func isPlaceholderAPIToken(token string) bool {
 	default:
 		return false
 	}
+}
+
+func isValidAllowedHostName(host string) bool {
+	if host == "" || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
+		return false
+	}
+	labels := strings.Split(host, ".")
+	for _, label := range labels {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }

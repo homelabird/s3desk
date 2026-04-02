@@ -18,6 +18,7 @@ export type {
 } from './objectsContextMenuTypes'
 
 export function useObjectsContextMenu({
+	scopeKey,
 	debugEnabled,
 	log,
 	listScrollerEl,
@@ -40,6 +41,17 @@ export function useObjectsContextMenu({
 		key: null,
 	})
 	const [contextMenuPoint, setContextMenuPoint] = useState<ContextMenuPoint | null>(null)
+	const [contextMenuScopeKey, setContextMenuScopeKey] = useState('')
+	const contextMenuScopeMatches = contextMenuScopeKey === scopeKey
+	const visibleContextMenuState = contextMenuScopeMatches
+		? contextMenuState
+		: {
+				open: false,
+				source: null,
+				kind: null,
+				key: null,
+			}
+	const visibleContextMenuPoint = contextMenuScopeMatches ? contextMenuPoint : null
 
 	const recordContextMenuPoint = useCallback((event: React.MouseEvent) => {
 		const nextPoint = { x: event.clientX, y: event.clientY }
@@ -67,6 +79,7 @@ export function useObjectsContextMenu({
 				return { open: false, source: null, kind: null, key: null }
 			})
 			if (cleared) {
+				setContextMenuScopeKey('')
 				setContextMenuPoint(null)
 			}
 		},
@@ -83,9 +96,10 @@ export function useObjectsContextMenu({
 				source,
 				point: point ?? contextMenuPoint ?? undefined,
 			})
+			setContextMenuScopeKey(scopeKey)
 			setContextMenuState({ open: true, source, kind: 'object', key })
 		},
-		[contextMenuPoint, debugEnabled, ensureObjectSelected, log],
+		[contextMenuPoint, debugEnabled, ensureObjectSelected, log, scopeKey],
 	)
 
 	const openPrefixContextMenu = useCallback(
@@ -97,9 +111,10 @@ export function useObjectsContextMenu({
 				source,
 				point: point ?? contextMenuPoint ?? undefined,
 			})
+			setContextMenuScopeKey(scopeKey)
 			setContextMenuState({ open: true, source, kind: 'prefix', key })
 		},
-		[contextMenuPoint, debugEnabled, log],
+		[contextMenuPoint, debugEnabled, log, scopeKey],
 	)
 
 	const openListContextMenu = useCallback(
@@ -111,14 +126,15 @@ export function useObjectsContextMenu({
 				source: 'context',
 				point: point ?? contextMenuPoint ?? undefined,
 			})
+			setContextMenuScopeKey(scopeKey)
 			setContextMenuState({ open: true, source: 'context', kind: 'list', key: 'list' })
 		},
-		[contextMenuPoint, debugEnabled, log],
+		[contextMenuPoint, debugEnabled, log, scopeKey],
 	)
 
 	const { contextMenuVisible, contextMenuProps, withContextMenuClassName } = useObjectsContextMenuMenu({
-		contextMenuState,
-		contextMenuPoint,
+		contextMenuState: visibleContextMenuState,
+		contextMenuPoint: visibleContextMenuPoint,
 		getObjectActions,
 		getPrefixActions,
 		globalActionMap,
@@ -136,8 +152,8 @@ export function useObjectsContextMenu({
 			listScrollerEl,
 			scrollContainerRef,
 			selectedCount,
-			contextMenuState,
-			contextMenuPoint,
+			contextMenuState: visibleContextMenuState,
+			contextMenuPoint: visibleContextMenuPoint,
 			contextMenuVisible,
 			recordContextMenuPoint,
 			openListContextMenu,
@@ -147,7 +163,7 @@ export function useObjectsContextMenu({
 	return {
 		contextMenuClassName: CONTEXT_MENU_CLASS_NAME,
 		contextMenuRef,
-		contextMenuState,
+		contextMenuState: visibleContextMenuState,
 		contextMenuVisible,
 		contextMenuProps,
 		contextMenuStyle,

@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 
+import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 export type ColumnKey = 'id' | 'type' | 'summary' | 'status' | 'progress' | 'errorCode' | 'error' | 'createdAt' | 'actions'
@@ -15,7 +16,7 @@ export type JobsColumnsVisibilityState = {
 	resetColumns: () => void
 }
 
-export function useJobsColumnsVisibility(): JobsColumnsVisibilityState {
+export function useJobsColumnsVisibility(apiToken: string, profileId: string | null): JobsColumnsVisibilityState {
 	const defaultColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
 		() => ({
 			id: true,
@@ -32,8 +33,12 @@ export function useJobsColumnsVisibility(): JobsColumnsVisibilityState {
 	)
 
 	const [columnVisibility, setColumnVisibility] = useLocalStorageState<Record<ColumnKey, boolean>>(
-		'jobsColumnVisibility',
+		profileScopedStorageKey('jobs', apiToken, profileId, 'columnVisibility'),
 		defaultColumnVisibility,
+		{
+			legacyLocalStorageKey: 'jobsColumnVisibility',
+			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'columnVisibility')],
+		},
 	)
 
 	const mergedColumnVisibility = useMemo<Record<ColumnKey, boolean>>(
@@ -87,4 +92,3 @@ export function useJobsColumnsVisibility(): JobsColumnsVisibilityState {
 		resetColumns,
 	}
 }
-
