@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -25,6 +26,7 @@ import { BucketPolicyModal } from "../BucketPolicyModal";
 const confirmDangerActionMock = vi.fn();
 const originalGetComputedStyle = window.getComputedStyle;
 const originalMatchMedia = window.matchMedia;
+const queryClients: QueryClient[] = [];
 const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(
   HTMLTextAreaElement.prototype,
   "scrollHeight",
@@ -87,7 +89,18 @@ beforeAll(() => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  cleanup();
+  message.destroy();
+  for (const client of queryClients.splice(0)) {
+    client.clear();
+  }
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
   window.matchMedia = originalMatchMedia;
   confirmDangerActionMock.mockReset();
   vi.restoreAllMocks();
@@ -169,6 +182,7 @@ function renderModal(
       queries: { retry: false },
     },
   });
+  queryClients.push(client);
 
   const view = render(
     <QueryClientProvider client={client}>
