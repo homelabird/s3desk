@@ -42,14 +42,14 @@ test('@check-smoke login gate opens settings after successful auth', async ({ pa
 	await seedStorage(page)
 	await setupApiMocks(page, [validToken])
 
-	await page.goto('/setup')
+	await page.goto('/profiles')
 	await expect(page.getByRole('heading', { name: 'S3Desk' })).toBeVisible()
 
 	await page.getByPlaceholder('API_TOKEN').fill(validToken)
 	await page.getByRole('button', { name: 'Login' }).click()
-	await expect(page.getByText('Choose a profile')).toBeVisible({ timeout: 10_000 })
+	await expect(page.getByText('No profiles yet')).toBeVisible({ timeout: 10_000 })
 
-	await page.getByRole('link', { name: 'Settings' }).click()
+	await page.getByRole('button', { name: /Settings/ }).click()
 	const drawer = dialogByName(page, 'Settings')
 	await expect(drawer).toBeVisible()
 	await expect(drawer.getByPlaceholder('Must match API_TOKEN')).toBeVisible()
@@ -62,14 +62,14 @@ test('settings persist local state', async ({ page }) => {
 	await seedStorage(page)
 	await setupApiMocks(page, [validToken, updatedToken])
 
-	await page.goto('/setup')
+	await page.goto('/profiles')
 	await expect(page.getByRole('heading', { name: 'S3Desk' })).toBeVisible()
 
 	await page.getByPlaceholder('API_TOKEN').fill(validToken)
 	await page.getByRole('button', { name: 'Login' }).click()
-	await expect(page.getByText('Choose a profile')).toBeVisible({ timeout: 10_000 })
+	await expect(page.getByText('No profiles yet')).toBeVisible({ timeout: 10_000 })
 
-	await page.getByRole('link', { name: 'Settings' }).click()
+	await page.getByRole('button', { name: /Settings/ }).click()
 	const drawer = dialogByName(page, 'Settings')
 	await expect(drawer).toBeVisible()
 
@@ -81,6 +81,8 @@ test('settings persist local state', async ({ page }) => {
 		.poll(async () => page.evaluate(() => JSON.parse(window.sessionStorage.getItem('apiToken') ?? '""')))
 		.toBe(updatedToken)
 
+	await page.getByRole('button', { name: /Settings/ }).click()
+	await expect(drawer).toBeVisible()
 	await drawer.getByRole('tab', { name: 'Transfers' }).click()
 	await setSwitch(drawer, true)
 	const downloadProxy = await page.evaluate(() => JSON.parse(window.localStorage.getItem('downloadLinkProxyEnabled') ?? 'false'))

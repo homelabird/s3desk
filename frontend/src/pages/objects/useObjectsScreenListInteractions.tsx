@@ -1,6 +1,9 @@
 import { useCallback } from 'react'
 
-import { COMPACT_ROW_HEIGHT_PX, WIDE_ROW_HEIGHT_PX } from './objectsPageConstants'
+import {
+	COMPACT_ROW_HEIGHT_PX,
+	WIDE_ROW_HEIGHT_PX,
+} from './objectsPageConstants'
 import { logContextMenuDebug } from './objectsPageDebug'
 import styles from './ObjectsListView.module.css'
 import { useObjectDownloads } from './useObjectDownloads'
@@ -11,7 +14,14 @@ import { useObjectsGridRenderers } from './useObjectsGridRenderers'
 import { useObjectsPageListInteractions } from './useObjectsPageListInteractions'
 import type { ObjectsScreenArgs } from './objectsScreenTypes'
 
-export function useObjectsScreenListInteractions({ props, data, actions, previewState, viewportState, refresh }: ObjectsScreenArgs) {
+export function useObjectsScreenListInteractions({
+	props,
+	data,
+	actions,
+	previewState,
+	viewportState,
+	refresh,
+}: ObjectsScreenArgs) {
 	const {
 		activeTabId,
 		addTab,
@@ -83,18 +93,19 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 	} = actions
 
 	const { objectByKey, singleSelectedKey, singleSelectedItem } = previewState
-	const { listScrollerEl, scrollContainerRef } = viewportState
+	const { listScrollerEl, scrollContainerRef, measureElement } = viewportState
 
-	const { onDownload, onDownloadToDevice, handleDownloadSelected } = useObjectDownloads({
-		profileId: props.profileId,
-		bucket,
-		prefix,
-		selectedKeys,
-		selectedCount,
-		objectByKey,
-		transfers,
-		onZipObjects: (keys) => zipObjectsJobMutation.mutate({ keys }),
-	})
+	const { onDownload, onDownloadToDevice, handleDownloadSelected } =
+		useObjectDownloads({
+			profileId: props.profileId,
+			bucket,
+			prefix,
+			selectedKeys,
+			selectedCount,
+			objectByKey,
+			transfers,
+			onZipObjects: (keys) => zipObjectsJobMutation.mutate({ keys }),
+		})
 	const handlePresign = useCallback(
 		(key: string) => {
 			const item = objectByKey.get(key)
@@ -107,7 +118,12 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		[objectByKey, presignMutation],
 	)
 
-	const { clipboardObjects, onCopy, copySelectionToClipboard, pasteClipboardObjects } = useObjectsClipboard({
+	const {
+		clipboardObjects,
+		onCopy,
+		copySelectionToClipboard,
+		pasteClipboardObjects,
+	} = useObjectsClipboard({
 		profileId: props.profileId,
 		apiToken: props.apiToken,
 		bucket,
@@ -140,7 +156,9 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		queryClient,
 	})
 
-	const listGridClassName = isCompactList ? styles.listGridCompact : styles.listGridWide
+	const listGridClassName = isCompactList
+		? styles.listGridCompact
+		: styles.listGridWide
 	const {
 		getObjectActions,
 		getPrefixActions,
@@ -205,7 +223,8 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 			onConfirmDeletePrefixAsJob: confirmDeletePrefixAsJob,
 			onOpenCopyPrefix: openCopyPrefix,
 			onOpenDownloadPrefix: openDownloadPrefix,
-			onZipPrefix: (targetPrefix) => zipPrefixJobMutation.mutate({ prefix: targetPrefix }),
+			onZipPrefix: (targetPrefix) =>
+				zipPrefixJobMutation.mutate({ prefix: targetPrefix }),
 			onDownloadSelected: handleDownloadSelected,
 			onOpenMoveSelected: actions.openMoveSelection,
 			onCopySelectionToClipboard: (mode) => void copySelectionToClipboard(mode),
@@ -251,6 +270,7 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 			listGridClassName,
 			rowHeightCompactPx: COMPACT_ROW_HEIGHT_PX,
 			rowHeightWidePx: WIDE_ROW_HEIGHT_PX,
+			measureElement,
 			showThumbnails,
 			thumbnailCache,
 			highlightText,
@@ -274,46 +294,47 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		},
 	})
 
-	const { renderPrefixGridItem, renderObjectGridItem } = useObjectsGridRenderers({
-		api,
-		apiToken: props.apiToken,
-		profileId: props.profileId,
-		profileProvider: selectedProfileProvider,
-		bucket,
-		prefix,
-		canDragDrop,
-		isAdvanced,
-		isOffline,
-		showThumbnails,
-		thumbnailCache,
-		highlightText,
-		contextMenuState,
-		withContextMenuClassName,
-		getPrefixActions,
-		getObjectActions,
-		selectionContextMenuActions,
-		recordContextMenuPoint,
-		openPrefixContextMenu,
-		openObjectContextMenu,
-		closeContextMenu,
-		onOpenPrefix,
-		onOpenLargePreviewForKey: previewState.openLargePreviewForKey,
-		onRowDragStartPrefix,
-		onRowDragStartObjects,
-		dndHoverPrefix,
-		normalizeDropTargetPrefix,
-		onDndTargetDragOver,
-		onDndTargetDragLeave,
-		onDndTargetDrop,
-		clearDndHover,
-		selectObjectFromPointerEvent,
-		selectObjectFromCheckboxEvent,
-		selectedCount,
-		selectedKeys,
-		favoriteKeys,
-		favoritePendingKeys,
-		toggleFavorite,
-	})
+	const { renderPrefixGridItem, renderObjectGridItem } =
+		useObjectsGridRenderers({
+			api,
+			apiToken: props.apiToken,
+			profileId: props.profileId,
+			profileProvider: selectedProfileProvider,
+			bucket,
+			prefix,
+			canDragDrop,
+			isAdvanced,
+			isOffline,
+			showThumbnails,
+			thumbnailCache,
+			highlightText,
+			contextMenuState,
+			withContextMenuClassName,
+			getPrefixActions,
+			getObjectActions,
+			selectionContextMenuActions,
+			recordContextMenuPoint,
+			openPrefixContextMenu,
+			openObjectContextMenu,
+			closeContextMenu,
+			onOpenPrefix,
+			onOpenLargePreviewForKey: previewState.openLargePreviewForKey,
+			onRowDragStartPrefix,
+			onRowDragStartObjects,
+			dndHoverPrefix,
+			normalizeDropTargetPrefix,
+			onDndTargetDragOver,
+			onDndTargetDragLeave,
+			onDndTargetDrop,
+			clearDndHover,
+			selectObjectFromPointerEvent,
+			selectObjectFromCheckboxEvent,
+			selectedCount,
+			selectedKeys,
+			favoriteKeys,
+			favoritePendingKeys,
+			toggleFavorite,
+		})
 
 	const { breadcrumbItems } = useObjectsBreadcrumbItems({
 		scopeKey: `${props.apiToken || '__no_server__'}:${props.profileId?.trim() || '__no_profile__'}:${bucket}:${prefix}`,
@@ -369,8 +390,15 @@ export function useObjectsScreenListInteractions({ props, data, actions, preview
 		renderPrefixRow,
 		selectionActionMap,
 		selectionMenuActions,
-		showUploadDropOverlay: uploadDropActive && !!props.profileId && !!bucket && !isOffline && uploadSupported,
+		showUploadDropOverlay:
+			uploadDropActive &&
+			!!props.profileId &&
+			!!bucket &&
+			!isOffline &&
+			uploadSupported,
 	}
 }
 
-export type ObjectsScreenListInteractionsState = ReturnType<typeof useObjectsScreenListInteractions>
+export type ObjectsScreenListInteractionsState = ReturnType<
+	typeof useObjectsScreenListInteractions
+>

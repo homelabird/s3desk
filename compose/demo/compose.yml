@@ -85,6 +85,7 @@ services:
       EXTERNAL_BASE_URL: ${EXTERNAL_BASE_URL:-http://127.0.0.1:8080}
       DB_BACKEND: "sqlite"
       DATA_DIR: "/data"
+      ALLOWED_LOCAL_DIRS: "${ALLOWED_LOCAL_DIRS:-/tmp}"
       JOB_QUEUE_CAPACITY: "20"
       RCLONE_RETRY_ATTEMPTS: "3"
       RCLONE_RETRY_BASE_DELAY: "800ms"

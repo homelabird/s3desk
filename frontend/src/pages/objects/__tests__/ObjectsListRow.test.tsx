@@ -66,6 +66,42 @@ describe('ObjectsListRow', () => {
 		expect(onClick).toHaveBeenCalledTimes(1)
 	})
 
+	it('keeps wide object rows on a five-column contract when preview actions are present', () => {
+		render(
+			<ObjectsObjectRow
+				offset={12}
+				rowMinHeight={72}
+				listGridClassName={styles.listGridWide}
+				isCompact={false}
+				canDragDrop={false}
+				objectKey="photos/cat.png"
+				displayName="cat.png"
+				sizeLabel="1.2 MB"
+				timeLabel="2026-03-07 20:00"
+				isSelected={false}
+				isFavorite={false}
+				highlightText={(value) => value}
+				menu={{ items: [{ key: 'remove', label: 'Remove' }] }}
+				buttonMenuOpen={false}
+				onButtonMenuOpenChange={vi.fn()}
+				onClick={vi.fn()}
+				onContextMenu={vi.fn()}
+				onCheckboxClick={vi.fn()}
+				onDragStart={vi.fn()}
+				onDragEnd={vi.fn()}
+				onToggleFavorite={vi.fn()}
+				thumbnail={<span data-testid="row-thumbnail">thumb</span>}
+				previewAction={<button type="button">Preview</button>}
+			/>,
+		)
+
+		const row = screen.getByText('cat.png').closest('[data-objects-row="true"]')
+		expect(row).not.toBeNull()
+		expect(row?.children).toHaveLength(5)
+		expect(screen.getByRole('button', { name: 'Preview' })).toBeInTheDocument()
+		expect(screen.getByLabelText('Object actions')).toBeInTheDocument()
+	})
+
 	it('opens prefix rows on keyboard activation', () => {
 		const onOpen = vi.fn()
 		const onDropTargetDragOver = vi.fn()

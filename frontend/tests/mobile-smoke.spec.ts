@@ -91,12 +91,12 @@ async function stubCoreApi(page: Page, overrides?: StubCoreApiOptions) {
 }
 
 test.describe('mobile smoke', () => {
-	test('setup page renders', async ({ page }) => {
+	test('profiles page renders when no stored active profile exists', async ({ page }) => {
 		await stubCoreApi(page)
 		await seedStorage(page, { profileId: null })
-		await page.goto('/setup')
-		await expect(page.getByText('Choose a profile')).toBeVisible()
-		await expect(page.getByRole('link', { name: /Create profile/i })).toBeVisible()
+		await page.goto('/profiles')
+		await expect(page.getByText('Profiles', { exact: true }).first()).toBeVisible()
+		await expect(page.getByRole('button', { name: /^Selected$/ }).first()).toBeVisible()
 	})
 
 	test('profiles page renders', async ({ page }) => {

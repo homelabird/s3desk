@@ -77,7 +77,10 @@
 }
 
 .listGridWide {
-  grid-template-columns: 28px minmax(180px, 1fr) minmax(90px, 140px) minmax(140px, 200px) auto;
+  grid-template-columns: 28px minmax(180px, 1fr) minmax(90px, 140px) minmax(
+      140px,
+      200px
+    ) 128px;
   gap: 12px;
 }
 
@@ -122,8 +125,17 @@
 }
 
 .listRowDropActive {
-  background: color-mix(in srgb, var(--s3d-color-primary-light) 74%, var(--s3d-color-bg-card) 26%);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--s3d-color-primary) 42%, var(--s3d-color-border) 58%);
+  background: color-mix(
+    in srgb,
+    var(--s3d-color-primary-light) 74%,
+    var(--s3d-color-bg-card) 26%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--s3d-color-primary) 42%,
+      var(--s3d-color-border) 58%
+    );
 }
 
 .listRowNameCell {
@@ -158,7 +170,8 @@
 }
 
 .listRowMenuCell {
-  justify-self: end;
+  display: inline-flex;
+  align-items: center;
   position: relative;
   z-index: 1;
 }
@@ -186,9 +199,18 @@
 }
 
 .listRowAuxActions {
-  justify-self: end;
+  display: inline-flex;
+  align-items: center;
   position: relative;
   z-index: 1;
+}
+
+.listRowActionsCell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .virtualListContent {
@@ -323,7 +345,8 @@
   border-radius: 10px;
   border: 1px solid var(--s3d-color-border);
   background: var(--s3d-color-bg-code);
-  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  font-family:
+    ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
@@ -443,8 +466,16 @@
 }
 
 .listControlsSwitchChecked {
-  background: color-mix(in srgb, var(--s3d-color-primary) 20%, var(--s3d-color-bg-tertiary));
-  border-color: color-mix(in srgb, var(--s3d-color-primary) 55%, var(--s3d-color-border-input));
+  background: color-mix(
+    in srgb,
+    var(--s3d-color-primary) 20%,
+    var(--s3d-color-bg-tertiary)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--s3d-color-primary) 55%,
+    var(--s3d-color-border-input)
+  );
 }
 
 .listControlsSwitchThumb {
@@ -564,7 +595,10 @@
 
 @media (max-width: 1200px) {
   .listGridWide {
-    grid-template-columns: 28px minmax(140px, 1fr) minmax(80px, 120px) minmax(120px, 160px) auto;
+    grid-template-columns: 28px minmax(140px, 1fr) minmax(80px, 120px) minmax(
+        120px,
+        160px
+      ) 120px;
     gap: 10px;
   }
 }
