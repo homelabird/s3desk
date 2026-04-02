@@ -189,7 +189,7 @@ export function useObjectsClipboard({
 			}
 			message.warning(`Saved internally, but clipboard failed: ${clipboardFailureHint()}`)
 		},
-		[bucket, prefix, profileId, selectedKeys],
+		[bucket, prefix, profileId, selectedKeys, setClipboardObjects],
 	)
 
 	const commonPrefixFromKeys = useCallback((keys: string[]): string => {

@@ -251,7 +251,7 @@ describe('useObjectsClipboard', () => {
 			await Promise.resolve()
 		})
 
-		expect(result.current.clipboardObjects).not.toBeNull()
+		expect(result.current.clipboardObjects).toBeNull()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})

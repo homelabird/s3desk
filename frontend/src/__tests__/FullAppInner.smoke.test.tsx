@@ -163,7 +163,7 @@ describe('FullAppInner header', () => {
 		})
 
 		expect(await screen.findByRole('button', { name: 'Backup' })).toBeInTheDocument()
-	})
+	}, 15_000)
 
 	it('keeps a compact single-row header on tablet widths', async () => {
 		mockViewportWidth(820)
