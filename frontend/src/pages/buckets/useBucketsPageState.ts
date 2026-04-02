@@ -11,6 +11,7 @@ import { getProviderCapabilities, getProviderCapabilityReason } from '../../lib/
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 import { useAPIClient } from '../../api/useAPIClient'
 import { buildDialogPreferenceKey } from '../../lib/dialogPreferences'
+import { buildBucketDeleteJobNavigationState, buildBucketObjectsNavigationState } from './bucketNotEmptyNavigation'
 import { useBucketScopedViewState } from './useBucketScopedViewState'
 
 const BUCKET_NOT_EMPTY_DIALOG_KEY = buildDialogPreferenceKey('warning', 'bucket_not_empty')
@@ -241,22 +242,14 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 		if (!bucketNotEmptyDialogBucket) return
 		setBucketNotEmptyDialogState(null)
 		navigate('/objects', {
-			state: {
-				openBucket: true,
-				bucket: bucketNotEmptyDialogBucket,
-				prefix: '',
-			},
+			state: buildBucketObjectsNavigationState(bucketNotEmptyDialogBucket),
 		})
 	}
 	const openBucketNotEmptyDeleteJob = () => {
 		if (!bucketNotEmptyDialogBucket) return
 		setBucketNotEmptyDialogState(null)
 		navigate('/jobs', {
-			state: {
-				openDeleteJob: true,
-				bucket: bucketNotEmptyDialogBucket,
-				deleteAll: true,
-			},
+			state: buildBucketDeleteJobNavigationState(bucketNotEmptyDialogBucket),
 		})
 	}
 
