@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { APIError } from '../../api/client'
 import type { BucketCreateRequest, Profile } from '../../api/types'
+import { queryKeys } from '../../api/queryKeys'
 import { isDialogDismissed } from '../../lib/dialogPreferences'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { getProviderCapabilities, getProviderCapabilityReason } from '../../lib/providerCapabilities'
@@ -53,15 +54,14 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 	}, [currentScopeKey])
 
 	const metaQuery = useQuery({
-		queryKey: ['meta', apiToken],
+		queryKey: queryKeys.server.meta(apiToken),
 		queryFn: () => api.server.getMeta(),
-		enabled: !!apiToken,
+		retry: false,
 	})
 
 	const profilesQuery = useQuery({
-		queryKey: ['profiles', apiToken],
+		queryKey: queryKeys.profiles.list(apiToken),
 		queryFn: () => api.profiles.listProfiles(),
-		enabled: !!apiToken,
 	})
 
 	const selectedProfile: Profile | null = useMemo(() => {
@@ -256,11 +256,11 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 	return {
 		api,
 		useCompactList,
-		metaQuery,
-		profilesQuery,
-		selectedProfile,
-		profileResolved,
-		capabilities,
+			metaQuery,
+			profilesQuery,
+			selectedProfile,
+			profileResolved,
+			capabilities,
 		bucketCrudSupported,
 		bucketCrudUnsupportedReason,
 		policySupported,

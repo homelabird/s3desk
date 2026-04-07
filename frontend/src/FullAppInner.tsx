@@ -143,6 +143,9 @@ export default function FullAppInner() {
 		clearPersistedTransfersStorage()
 	}, [apiToken])
 	useEffect(() => {
+		if (profilesQuery.isPending) {
+			return
+		}
 		const profiles = profilesQuery.data ?? []
 		if (!profiles.length) {
 			if (profileId !== null) {
@@ -160,8 +163,12 @@ export default function FullAppInner() {
 			return
 		}
 		setProfileId(profiles[0]?.id ?? null)
-	}, [initialStoredProfileId, profileId, profilesQuery.data, setProfileId])
+	}, [initialStoredProfileId, profileId, profilesQuery.data, profilesQuery.isPending, setProfileId])
 	const safeProfileId = useMemo(() => {
+		const candidateProfileId = profileId?.trim() ? profileId : initialStoredProfileId?.trim() ? initialStoredProfileId : null
+		if (profilesQuery.isPending) {
+			return candidateProfileId
+		}
 		const profiles = profilesQuery.data ?? []
 		if (profiles.length === 0) {
 			return null
@@ -182,7 +189,7 @@ export default function FullAppInner() {
 			return storedProfileId
 		}
 		return profiles[0]?.id ?? null
-	}, [initialStoredProfileId, profileId, profilesQuery.data])
+	}, [initialStoredProfileId, profileId, profilesQuery.data, profilesQuery.isPending])
 	const profileGate = renderProfileGate({ pathname: location.pathname, profileId: safeProfileId })
 	const uploadCapabilityByProfileId = useMemo(() => {
 		const out: Record<string, { presignedUpload: boolean; directUpload: boolean }> = {}
@@ -356,7 +363,6 @@ export default function FullAppInner() {
 			apiToken={apiToken}
 			uploadDirectStream={uploadDirectStream}
 			uploadCapabilityByProfileId={uploadCapabilityByProfileId}
-			eager
 		>
 			<Layout className={styles.appLayout}>
 				{isDesktop ? (
@@ -531,19 +537,20 @@ export default function FullAppInner() {
 											/>
 										}
 									/>
-									<Route
-										path="/jobs"
-										element={
-											<JobsPage
-												key={`jobs:${apiToken || 'none'}:${safeProfileId ?? 'none'}:${location.key}`}
+										<Route
+											path="/jobs"
+											element={
+												<JobsPage
+													key={`jobs:${apiToken || 'none'}:${safeProfileId ?? 'none'}:${location.key}`}
 												apiToken={apiToken}
 												profileId={safeProfileId}
 											/>
-										}
-									/>
-									<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
-								</Routes>
-							</Suspense>
+											}
+										/>
+										<Route path="/settings" element={<Navigate to="/profiles?settings=1" replace />} />
+										<Route path="*" element={<Navigate to="/profiles" replace />} />
+									</Routes>
+								</Suspense>
 						</main>
 					</Content>
 				</Layout>
@@ -570,21 +577,25 @@ export default function FullAppInner() {
 					{renderNav(() => setNavState({ open: false, scopeKey: null }))}
 				</OverlaySheet>
 
-				<Suspense fallback={null}>
-					<SettingsDrawer
-						key={`settings:${shellScopeKey}`}
-						open={settingsOpen}
-						onClose={closeSettings}
-						apiToken={apiToken}
-						setApiToken={setApiToken}
-						profileId={safeProfileId}
-						setProfileId={setProfileId}
-					/>
-				</Suspense>
+				{settingsOpen ? (
+					<Suspense fallback={null}>
+						<SettingsDrawer
+							key={`settings:${shellScopeKey}`}
+							open={true}
+							onClose={closeSettings}
+							apiToken={apiToken}
+							setApiToken={setApiToken}
+							profileId={safeProfileId}
+							setProfileId={setProfileId}
+						/>
+					</Suspense>
+				) : null}
 			</Layout>
-			<Suspense fallback={null}>
-				<KeyboardShortcutGuide open={guideOpen} onClose={() => setGuideOpen(false)} />
-			</Suspense>
+			{guideOpen ? (
+				<Suspense fallback={null}>
+					<KeyboardShortcutGuide open={true} onClose={() => setGuideOpen(false)} />
+				</Suspense>
+			) : null}
 		</TransfersProvider>
 	)
 }

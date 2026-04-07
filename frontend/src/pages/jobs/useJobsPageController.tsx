@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useLocation } from 'react-router-dom'
 
 import { APIClient } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { Bucket, Job, JobCreateRequest, Profile } from '../../api/types'
 import { useTransfers } from '../../components/useTransfers'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
@@ -170,12 +171,12 @@ export function useJobsPageController(props: Props) {
   }, [updateTableScroll])
 
   const metaQuery = useQuery({
-    queryKey: ['meta', props.apiToken],
+    queryKey: queryKeys.server.meta(props.apiToken),
     queryFn: () => api.server.getMeta(),
     enabled: !!props.apiToken,
   })
   const profilesQuery = useQuery({
-    queryKey: ['profiles', props.apiToken],
+    queryKey: queryKeys.profiles.list(props.apiToken),
     queryFn: () => api.profiles.listProfiles(),
     enabled: !!props.apiToken,
   })

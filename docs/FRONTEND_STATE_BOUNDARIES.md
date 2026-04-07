@@ -31,7 +31,7 @@ Do not move API client creation or session persistence into this layer.
 
 ## `ProfileGate`
 
-- Redirects users without an active profile to `/setup`.
+- Redirects users without an active profile to `/profiles`.
 - Allows `/profiles` to render without a selected profile.
 - Should stay route-focused.
 

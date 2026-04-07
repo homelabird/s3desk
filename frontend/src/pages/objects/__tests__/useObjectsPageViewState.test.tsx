@@ -134,4 +134,42 @@ describe('useObjectsPageViewState', () => {
 		expect(result.current.filtersDrawerOpen).toBe(false)
 		expect(result.current.detailsDrawerOpen).toBe(false)
 	})
+
+	it('treats lg screens as desktop for object interactions', () => {
+		const { result } = renderHook(() =>
+			useObjectsPageViewState({
+				apiToken: 'token-a',
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				prefix: 'docs/',
+				isOffline: false,
+				screens: { lg: true },
+				openPathModal: vi.fn(),
+				setTreeDrawerOpen: vi.fn(),
+			}),
+		)
+
+		expect(result.current.isDesktop).toBe(true)
+		expect(result.current.canDragDrop).toBe(true)
+	})
+
+	it('treats xl screens as wide desktop for details docking', () => {
+		window.localStorage.setItem('objectsUIMode', JSON.stringify('advanced'))
+
+		const { result } = renderHook(() =>
+			useObjectsPageViewState({
+				apiToken: 'token-a',
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				prefix: 'docs/',
+				isOffline: false,
+				screens: { lg: true, xl: true },
+				openPathModal: vi.fn(),
+				setTreeDrawerOpen: vi.fn(),
+			}),
+		)
+
+		expect(result.current.isDesktop).toBe(true)
+		expect(result.current.dockDetails).toBe(true)
+	})
 })

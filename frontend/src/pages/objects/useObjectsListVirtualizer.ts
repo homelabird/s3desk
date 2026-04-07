@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
 type UseObjectsListVirtualizerArgs = {
@@ -31,14 +38,18 @@ export function useObjectsListVirtualizer({
 	overscan = 10,
 	scrollToTopDeps,
 }: UseObjectsListVirtualizerArgs) {
-	const [listScrollerEl, setListScrollerEl] = useState<HTMLDivElement | null>(null)
+	const [listScrollerEl, setListScrollerEl] = useState<HTMLDivElement | null>(
+		null,
+	)
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 	const [scrollMargin, setScrollMargin] = useState(0)
 
 	const listScrollerRef = useCallback((node: HTMLDivElement | null) => {
 		setListScrollerEl(node)
 		// The list scroller lives inside the app content scroller.
-		scrollContainerRef.current = node?.closest('[data-scroll-container="app-content"]') as HTMLDivElement | null
+		scrollContainerRef.current = node?.closest(
+			'[data-scroll-container="app-content"]',
+		) as HTMLDivElement | null
 	}, [])
 
 	useLayoutEffect(() => {
@@ -47,7 +58,10 @@ export function useObjectsListVirtualizer({
 		if (!container || !listEl) return
 		const listRect = listEl.getBoundingClientRect()
 		const containerRect = container.getBoundingClientRect()
-		const next = Math.max(0, Math.round(listRect.top - containerRect.top + container.scrollTop))
+		const next = Math.max(
+			0,
+			Math.round(listRect.top - containerRect.top + container.scrollTop),
+		)
 		setScrollMargin((prev) => (prev === next ? prev : next))
 	}, [listScrollerEl])
 
@@ -61,7 +75,11 @@ export function useObjectsListVirtualizer({
 
 	const virtualItems = rowVirtualizer.getVirtualItems()
 	const virtualItemsForRender = useMemo(
-		() => virtualItems.map((vi) => ({ index: vi.index, start: vi.start - scrollMargin })),
+		() =>
+			virtualItems.map((vi) => ({
+				index: vi.index,
+				start: vi.start - scrollMargin,
+			})),
 		[scrollMargin, virtualItems],
 	)
 	const totalSize = rowVirtualizer.getTotalSize()
@@ -87,6 +105,9 @@ export function useObjectsListVirtualizer({
 		listScrollerEl,
 		listScrollerRef,
 		scrollContainerRef,
+		measureElement: rowVirtualizer.measureElement as unknown as (
+			element: HTMLDivElement | null,
+		) => void,
 		rowVirtualizer,
 		virtualItems,
 		virtualItemsForRender,

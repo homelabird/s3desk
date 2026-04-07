@@ -11,7 +11,7 @@ test.describe('@mobile-responsive Login mobile responsive draft', () => {
 		await seedLoginMobileResponsiveStorage(page, '')
 		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
 		await page.setViewportSize({ width: 320, height: 568 })
-		await page.goto('/setup')
+		await page.goto('/profiles')
 
 		await expect(page.getByRole('heading', { name: 'S3Desk' })).toBeVisible()
 		await expect(page.getByPlaceholder('API_TOKEN…')).toBeVisible()
@@ -23,7 +23,7 @@ test.describe('@mobile-responsive Login mobile responsive draft', () => {
 		await seedLoginMobileResponsiveStorage(page, 'stale-token')
 		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
 		await page.setViewportSize({ width: 390, height: 844 })
-		await page.goto('/setup')
+		await page.goto('/profiles')
 
 		await expect(page.getByText('Stored API token for this browser session is invalid.')).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Login' })).toBeVisible()
@@ -36,9 +36,9 @@ test.describe('@mobile-responsive Login mobile responsive draft', () => {
 		await seedLoginMobileResponsiveStorage(page, '')
 		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
 		await page.setViewportSize({ width: 360, height: 800 })
-		await page.goto('/setup')
+		await page.goto('/profiles')
 
-		const toggle = page.getByRole('button', { name: /Switch to (dark|light) mode/i })
+		const toggle = page.getByRole('button', { name: /(switch to )?(dark|light) mode/i })
 		await expect(toggle).toBeVisible()
 		await expectLocatorWithinViewport(toggle)
 	})

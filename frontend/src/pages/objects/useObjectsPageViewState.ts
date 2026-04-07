@@ -45,8 +45,8 @@ export function useObjectsPageViewState({
 }: Args) {
 	const [uiMode, setUiMode] = useLocalStorageState<ObjectsUIMode>('objectsUIMode', 'simple')
 	const isAdvanced = uiMode === 'advanced'
-	const isDesktop = !!screens.xl
-	const isWideDesktop = !!screens.xxl
+	const isDesktop = !!screens.lg
+	const isWideDesktop = !!screens.xl
 	const canDragDrop = isDesktop && !isOffline
 
 	const { search, searchDraft, setSearchDraft, clearSearch, deferredSearch } = useObjectsSearchState({ apiToken, profileId })

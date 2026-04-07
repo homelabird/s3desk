@@ -100,9 +100,7 @@ function mockServerApi(meta = defaultMeta) {
   return serverApi;
 }
 
-function mockProfilesApi(
-  profiles = defaultProfiles as never,
-) {
+function mockProfilesApi(profiles = defaultProfiles as never) {
   const profilesApi = {
     listProfiles: vi.fn().mockResolvedValue(profiles),
   };
@@ -193,7 +191,7 @@ describe("BucketsPage", () => {
               path="/buckets"
               element={<BucketsPage apiToken="" profileId={null} />}
             />
-            <Route path="/setup" element={<div>Setup Route</div>} />
+            <Route path="/profiles" element={<div>Profiles Route</div>} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -203,7 +201,7 @@ describe("BucketsPage", () => {
       screen.getByText("Select a profile to view buckets"),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "Setup" }));
-    expect(screen.getByText("Setup Route")).toBeInTheDocument();
+    expect(screen.getByText("Profiles Route")).toBeInTheDocument();
   });
 
   it("disables bucket operations for gcs profiles missing project number", async () => {
@@ -339,126 +337,130 @@ describe("BucketsPage", () => {
     expect(screen.getByText("primary-bucket")).toBeInTheDocument();
   });
 
-  it("shows controls for aws buckets and opens the controls modal", async () => {
-    const client = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-      },
-    });
+  it(
+    "shows controls for aws buckets and opens the controls modal",
+    async () => {
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+        },
+      });
 
-    mockViewportWidth(1200);
-    mockServerApi();
-    mockProfilesApi([
-      {
-        id: "profile-1",
-        name: "AWS Profile",
-        provider: "aws_s3",
-        region: "ap-northeast-2",
-        preserveLeadingSlash: false,
-        tlsInsecureSkipVerify: false,
-        createdAt: "2024-01-01T00:00:00Z",
-        updatedAt: "2024-01-01T00:00:00Z",
-      },
-    ] as never);
-    const bucketsApi = mockBucketsApi({
-      getBucketGovernance: vi.fn().mockResolvedValue({
-        provider: "aws_s3",
-        bucket: "primary-bucket",
-        capabilities: {},
-        publicExposure: {
+      mockViewportWidth(1200);
+      mockServerApi();
+      mockProfilesApi([
+        {
+          id: "profile-1",
+          name: "AWS Profile",
+          provider: "aws_s3",
+          region: "ap-northeast-2",
+          preserveLeadingSlash: false,
+          tlsInsecureSkipVerify: false,
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+        },
+      ] as never);
+      const bucketsApi = mockBucketsApi({
+        getBucketGovernance: vi.fn().mockResolvedValue({
           provider: "aws_s3",
           bucket: "primary-bucket",
-          mode: "private",
-          blockPublicAccess: {
-            blockPublicAcls: true,
-            ignorePublicAcls: true,
-            blockPublicPolicy: true,
-            restrictPublicBuckets: true,
+          capabilities: {},
+          publicExposure: {
+            provider: "aws_s3",
+            bucket: "primary-bucket",
+            mode: "private",
+            blockPublicAccess: {
+              blockPublicAcls: true,
+              ignorePublicAcls: true,
+              blockPublicPolicy: true,
+              restrictPublicBuckets: true,
+            },
           },
-        },
-        access: {
-          provider: "aws_s3",
+          access: {
+            provider: "aws_s3",
+            bucket: "primary-bucket",
+            objectOwnership: { supported: true, mode: "bucket_owner_enforced" },
+          },
+          versioning: {
+            provider: "aws_s3",
+            bucket: "primary-bucket",
+            status: "enabled",
+          },
+          encryption: {
+            provider: "aws_s3",
+            bucket: "primary-bucket",
+            mode: "sse_s3",
+          },
+          lifecycle: {
+            provider: "aws_s3",
+            bucket: "primary-bucket",
+            rules: [],
+          },
+          advanced: {
+            rawPolicySupported: true,
+            rawPolicyEditable: true,
+          },
+        } as never),
+        getBucketPolicy: vi.fn().mockResolvedValue({
           bucket: "primary-bucket",
-          objectOwnership: { supported: true, mode: "bucket_owner_enforced" },
-        },
-        versioning: {
-          provider: "aws_s3",
-          bucket: "primary-bucket",
-          status: "enabled",
-        },
-        encryption: {
-          provider: "aws_s3",
-          bucket: "primary-bucket",
-          mode: "sse_s3",
-        },
-        lifecycle: {
-          provider: "aws_s3",
-          bucket: "primary-bucket",
-          rules: [],
-        },
-        advanced: {
-          rawPolicySupported: true,
-          rawPolicyEditable: true,
-        },
-      } as never),
-      getBucketPolicy: vi.fn().mockResolvedValue({
-        bucket: "primary-bucket",
-        exists: false,
-        policy: null,
-      } as never),
-    });
-    const { getBucketGovernance, getBucketPolicy } = bucketsApi;
+          exists: false,
+          policy: null,
+        } as never),
+      });
+      const { getBucketGovernance, getBucketPolicy } = bucketsApi;
 
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={["/buckets"]}>
-          <Routes>
-            <Route
-              path="/buckets"
-              element={<BucketsPage apiToken="token" profileId="profile-1" />}
-            />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+      render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={["/buckets"]}>
+            <Routes>
+              <Route
+                path="/buckets"
+                element={<BucketsPage apiToken="token" profileId="profile-1" />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
 
-    const controlsButton = (
-      await within(
-        await screen.findByTestId("buckets-table-desktop"),
-      ).findAllByRole("button", { name: /controls/i })
-    )[0];
-	    await act(async () => {
-	      fireEvent.click(controlsButton);
-	    });
+      const controlsButton = (
+        await within(
+          await screen.findByTestId("buckets-table-desktop"),
+        ).findAllByRole("button", { name: /controls/i })
+      )[0];
+      await act(async () => {
+        fireEvent.click(controlsButton);
+      });
 
-	    expect(await screen.findByText("AWS Controls")).toBeInTheDocument();
-	    await waitFor(() =>
-	      expect(getBucketGovernance).toHaveBeenCalledWith(
-	        "profile-1",
-	        "primary-bucket",
-	      ),
-	    );
+      expect(await screen.findByText("AWS Controls")).toBeInTheDocument();
+      await waitFor(() =>
+        expect(getBucketGovernance).toHaveBeenCalledWith(
+          "profile-1",
+          "primary-bucket",
+        ),
+      );
 
-	    const advancedPolicySection = await screen.findByTestId(
-	      "bucket-governance-advanced-policy",
-	    );
-	    await act(async () => {
-	      fireEvent.click(
-	        within(advancedPolicySection).getByRole("button", {
-	          name: "Open Policy",
-	        }),
-	      );
-	    });
-	    await waitFor(() =>
-	      expect(getBucketPolicy).toHaveBeenCalledWith(
-	        "profile-1",
-	        "primary-bucket",
-	      ),
-	    );
-	    expect(
-	      await screen.findByTestId("bucket-policy-desktop-shell"),
-	    ).toBeInTheDocument();
-	  }, SLOW_BUCKETS_TIMEOUT_MS);
+      const advancedPolicySection = await screen.findByTestId(
+        "bucket-governance-advanced-policy",
+      );
+      await act(async () => {
+        fireEvent.click(
+          within(advancedPolicySection).getByRole("button", {
+            name: "Open Policy",
+          }),
+        );
+      });
+      await waitFor(() =>
+        expect(getBucketPolicy).toHaveBeenCalledWith(
+          "profile-1",
+          "primary-bucket",
+        ),
+      );
+      expect(
+        await screen.findByTestId("bucket-policy-desktop-shell"),
+      ).toBeInTheDocument();
+    },
+    SLOW_BUCKETS_TIMEOUT_MS,
+  );
 
   it("shows controls for gcs buckets and opens the provider-aware controls modal", async () => {
     const client = new QueryClient({
@@ -635,9 +637,7 @@ describe("BucketsPage", () => {
       deleteBucket,
     });
 
-    let pendingConfirm:
-      | { onConfirm: () => Promise<void> | void }
-      | undefined;
+    let pendingConfirm: { onConfirm: () => Promise<void> | void } | undefined;
     confirmDangerActionMock.mockImplementationOnce((options) => {
       pendingConfirm = options;
       return undefined;

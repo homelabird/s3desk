@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import type { APIClient } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { Bucket, ListObjectsResponse, Profile } from '../../api/types'
 import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../../lib/providerCapabilities'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
@@ -81,13 +82,13 @@ export function useObjectsPageQueries({
 	favoritesOnly,
 }: UseObjectsPageQueriesArgs) {
 	const metaQuery = useQuery({
-		queryKey: ['meta', apiToken],
+		queryKey: queryKeys.server.meta(apiToken),
 		queryFn: () => api.server.getMeta(),
 		enabled: !!apiToken,
 	})
 
 	const profilesQuery = useQuery({
-		queryKey: ['profiles', apiToken],
+		queryKey: queryKeys.profiles.list(apiToken),
 		queryFn: () => api.profiles.listProfiles(),
 		enabled: !!apiToken,
 	})

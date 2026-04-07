@@ -41,6 +41,15 @@ describe('useObjectsLayout', () => {
 		expect(result.current.isCompactList).toBe(false)
 	})
 
+	it('keeps simple mode on the desktop list layout when the remaining list viewport is still wide', () => {
+		const { result } = renderHook(() => useObjectsLayout(buildArgs({ layoutWidthPx: 1340, isAdvanced: false })))
+
+		expect(result.current.dockTree).toBe(true)
+		expect(result.current.treeWidthUsed).toBe(256)
+		expect(result.current.listViewportWidthPx).toBe(1072)
+		expect(result.current.isCompactList).toBe(false)
+	})
+
 	it('keeps details undocked until the viewport is wide enough for a third pane', () => {
 		const mediumWide = renderHook(() =>
 			useObjectsLayout(buildArgs({ layoutWidthPx: 1560, detailsOpen: true, isWideDesktop: true })),
