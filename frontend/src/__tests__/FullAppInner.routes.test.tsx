@@ -101,20 +101,28 @@ vi.mock('../pages/LoginPage', async () => {
 
 vi.mock('../components/TransfersShell', async () => {
 	const React = await import('react')
+	const TransfersRuntimeRequestContext = React.createContext<(() => void) | null>(null)
 
 	return {
 		TransfersProvider: function TransfersProviderMock(props: { apiToken: string; children: ReactNode }) {
+			const [runtimeRequested, setRuntimeRequested] = React.useState(false)
 			const [seededToken] = React.useState(() => props.apiToken)
 			return (
-				<div data-testid="transfers-runtime-seeded-token">
-					{seededToken}
+				<TransfersRuntimeRequestContext.Provider value={() => setRuntimeRequested(true)}>
+					{runtimeRequested ? <div data-testid="transfers-runtime-seeded-token">{seededToken}</div> : null}
 					{props.children}
-				</div>
+				</TransfersRuntimeRequestContext.Provider>
 			)
 		},
 		TransfersButton: function TransfersButtonMock(props: { ariaLabel?: string; showLabel?: boolean; className?: string }) {
+			const requestRuntime = React.useContext(TransfersRuntimeRequestContext)
 			return (
-				<button type="button" aria-label={props.ariaLabel ?? 'Transfers'} className={props.className}>
+				<button
+					type="button"
+					aria-label={props.ariaLabel ?? 'Transfers'}
+					className={props.className}
+					onClick={() => requestRuntime?.()}
+				>
 					{props.showLabel ? 'Transfers' : 'Transfers'}
 				</button>
 			)
@@ -505,7 +513,7 @@ describe('FullAppInner route remounts', () => {
 		expect(window.localStorage.getItem('transfersHistoryV1')).toBeNull()
 	})
 
-	it('remounts the transfers runtime after the api token changes', async () => {
+	it('loads the transfers runtime on demand and reseeds it after the api token changes', async () => {
 		mockViewportWidth(1280)
 		mockAuthorizedShellApi()
 		window.sessionStorage.setItem('transfersHistoryV1', JSON.stringify({ version: 1, savedAtMs: 1, downloads: [], uploads: [] }))
@@ -513,14 +521,18 @@ describe('FullAppInner route remounts', () => {
 
 		renderShell(['/profiles'], 'token-a')
 
+		expect(screen.queryByTestId('transfers-runtime-seeded-token')).not.toBeInTheDocument()
+		fireEvent.click(await screen.findByRole('button', { name: 'Transfers' }))
 		expect(await screen.findByTestId('transfers-runtime-seeded-token')).toHaveTextContent('token-a')
 
 		fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 
 		await waitFor(() => {
-			expect(screen.getByTestId('transfers-runtime-seeded-token')).toHaveTextContent('token-b')
+			expect(screen.queryByTestId('transfers-runtime-seeded-token')).not.toBeInTheDocument()
 		})
+		fireEvent.click(await screen.findByRole('button', { name: 'Transfers' }))
+		expect(await screen.findByTestId('transfers-runtime-seeded-token')).toHaveTextContent('token-b')
 		expect(window.sessionStorage.getItem('transfersHistoryV1')).toBeNull()
 		expect(window.localStorage.getItem('transfersHistoryV1')).toBeNull()
 	})

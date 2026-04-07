@@ -3,6 +3,7 @@ import { Alert, Button, Empty, Input, Space, Tooltip, Typography, message } from
 import { useMemo, useState } from 'react'
 
 import { APIClient } from '../api/client'
+import { queryKeys } from '../api/queryKeys'
 import type { Bucket, Profile } from '../api/types'
 import { DatalistInput } from '../components/DatalistInput'
 import { LinkButton } from '../components/LinkButton'
@@ -56,12 +57,12 @@ export function UploadsPage(props: Props) {
 	const [uploadSourceBusy, setUploadSourceBusy] = useState(false)
 
 	const metaQuery = useQuery({
-		queryKey: ['meta', props.apiToken],
+		queryKey: queryKeys.server.meta(props.apiToken),
 		queryFn: () => api.server.getMeta(),
 		enabled: !!props.apiToken,
 	})
 	const profilesQuery = useQuery({
-		queryKey: ['profiles', props.apiToken],
+		queryKey: queryKeys.profiles.list(props.apiToken),
 		queryFn: () => api.profiles.listProfiles(),
 		enabled: !!props.apiToken,
 	})
