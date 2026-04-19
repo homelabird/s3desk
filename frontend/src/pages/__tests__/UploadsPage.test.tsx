@@ -3,13 +3,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { APIClient } from "../../api/client";
+import { APIClient, APIError } from "../../api/client";
 import { TransfersContext } from "../../components/useTransfers";
 import * as uploadUtils from "../../components/transfers/transfersUploadUtils";
 import * as deviceFs from "../../lib/deviceFs";
 import { ensureDomShims } from "../../test/domShims";
 import { transfersStub } from "../../test/transfersStub";
 import { UploadsPage } from "../UploadsPage";
+
+vi.mock("../../api/useAPIClient", () => ({
+  useAPIClient: () => new APIClient({ apiToken: "test-token" }),
+}));
 
 beforeAll(() => {
   ensureDomShims();
@@ -161,6 +165,26 @@ describe("UploadsPage", () => {
     expect(await screen.findByText("No buckets available")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "Go to Buckets" }));
     expect(screen.getByText("Buckets Route")).toBeInTheDocument();
+  });
+
+  it("shows the bucket lookup error without the empty-bucket state", async () => {
+    const { listBuckets } = mockUploadsPageBase();
+    listBuckets.mockRejectedValue(
+      new APIError({
+        status: 400,
+        code: "transfer_engine_missing",
+        message: "rclone is required to list buckets",
+      }),
+    );
+
+    renderUploadsPage();
+
+    expect(await screen.findByText("Failed to load buckets")).toBeInTheDocument();
+    expect(screen.queryByText("No buckets available")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Target & source" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Bucket")).toBeInTheDocument();
   });
 
   it("queues selected files and clears the staged selection", async () => {

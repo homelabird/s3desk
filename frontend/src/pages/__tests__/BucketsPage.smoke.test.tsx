@@ -268,6 +268,47 @@ describe("BucketsPage", () => {
     await waitFor(() => expect(listBuckets).not.toHaveBeenCalled());
   });
 
+  it("shows a buckets error without falling back to the empty state", async () => {
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    mockServerApi();
+    mockProfilesApi();
+    mockBucketsApi({
+      listBuckets: vi.fn().mockRejectedValue(
+        new APIError({
+          status: 400,
+          code: "transfer_engine_missing",
+          message: "rclone is required to list buckets",
+        }),
+      ),
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/buckets"]}>
+          <Routes>
+            <Route
+              path="/buckets"
+              element={<BucketsPage apiToken="token" profileId="profile-1" />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Failed to load buckets")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No buckets found in this storage."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Check profiles" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders compact bucket cards on tablet widths", async () => {
     const client = new QueryClient({
       defaultOptions: {

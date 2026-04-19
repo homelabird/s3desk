@@ -22,12 +22,13 @@ type ErrorCodeSuggestion = {
 	value: string
 }
 
-type Props = {
+export type JobsToolbarProps = {
 	scopeKey: string
 	activeProfileName?: string | null
 	isOffline: boolean
 	uploadSupported: boolean
 	uploadDisabledReason: string | null
+	bucketLookupErrorDescription?: string | null
 	eventsConnected: boolean
 	eventsTransport: 'ws' | 'sse' | null
 	eventsRetryCount: number
@@ -69,7 +70,7 @@ type Props = {
 
 const MOBILE_FILTERS_MEDIA_QUERY = '(max-width: 480px)'
 
-export function JobsToolbar(props: Props) {
+export function JobsToolbar(props: JobsToolbarProps) {
 	const screens = Grid.useBreakpoint()
 	const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 	const [mobileFiltersScopeKey, setMobileFiltersScopeKey] = useState('')
@@ -211,6 +212,14 @@ export function JobsToolbar(props: Props) {
 						showIcon
 						title="Upload actions are disabled for this provider"
 						description={props.uploadDisabledReason ?? 'This provider does not support upload transfers.'}
+					/>
+				) : null}
+				{props.bucketLookupErrorDescription ? (
+					<Alert
+						type="warning"
+						showIcon
+						title="Bucket lookup unavailable"
+						description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually in Upload, Download, and Delete dialogs.`}
 					/>
 				) : null}
 				{!props.eventsConnected && !props.isOffline ? (

@@ -358,4 +358,58 @@ describe('JobsToolbar', () => {
 
 		expect(screen.queryByRole('menuitem', { name: /Delete jobs/i })).not.toBeInTheDocument()
 	})
+
+	it('surfaces bucket lookup failures near the primary job actions', () => {
+		setMatchMedia(false)
+		render(
+			<JobsToolbar
+				scopeKey="token-a:profile-1"
+				activeProfileName="MinIO Demo"
+				isOffline={false}
+				uploadSupported
+				uploadDisabledReason={null}
+				bucketLookupErrorDescription="transfer_engine_missing: rclone is required to list buckets"
+				eventsConnected
+				eventsTransport="ws"
+				eventsRetryCount={0}
+				eventsRetryThreshold={3}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenCreateDownload={vi.fn()}
+				topActionsMenu={{ items: [] }}
+				statusFilter="all"
+				onStatusFilterChange={vi.fn()}
+				searchFilterNormalized=""
+				onSearchFilterChange={vi.fn()}
+				typeFilterNormalized=""
+				onTypeFilterChange={vi.fn()}
+				typeFilterSuggestions={[]}
+				errorCodeFilterNormalized=""
+				onErrorCodeFilterChange={vi.fn()}
+				errorCodeSuggestions={[]}
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				jobsStatusSummary={{
+					total: 0,
+					active: 0,
+					queued: 0,
+					running: 0,
+					succeeded: 0,
+					failed: 0,
+					canceled: 0,
+				}}
+				columnOptions={[]}
+				mergedColumnVisibility={mergedColumnVisibility}
+				onSetColumnVisible={vi.fn()}
+				columnsDirty={false}
+				onResetColumns={vi.fn()}
+				onRefreshJobs={vi.fn()}
+				jobsRefreshing={false}
+				jobsCount={0}
+			/>,
+		)
+
+		expect(screen.getByText('Bucket lookup unavailable')).toBeInTheDocument()
+		expect(screen.getByText(/You can still type a bucket name manually/i)).toBeInTheDocument()
+	})
 })

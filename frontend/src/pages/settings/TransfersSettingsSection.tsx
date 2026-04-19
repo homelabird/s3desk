@@ -48,7 +48,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 				<ToggleSwitch
 					checked={props.downloadLinkProxyEnabled}
 					onChange={props.setDownloadLinkProxyEnabled}
-					aria-label="Downloads and previews: Use server proxy"
+					ariaLabel="Downloads and previews: Use server proxy"
 				/>
 			</FormField>
 			<FormField
@@ -103,7 +103,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 									<ToggleSwitch
 										checked={props.uploadAutoTuneEnabled}
 										onChange={props.setUploadAutoTuneEnabled}
-										aria-label="Upload auto-tuning"
+										ariaLabel="Upload auto-tuning"
 									/>
 								</FormField>
 								<FormField
@@ -233,7 +233,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 									<ToggleSwitch
 										checked={props.uploadResumeConversionEnabled}
 										onChange={props.setUploadResumeConversionEnabled}
-										aria-label="Resume conversion mode"
+										ariaLabel="Resume conversion mode"
 									/>
 								</FormField>
 							</Space>

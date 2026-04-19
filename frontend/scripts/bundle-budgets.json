@@ -1,0 +1,38 @@
+{
+  "vendorUiGzip": {
+    "label": "vendor-ui gzip budget",
+    "env": "BUNDLE_BUDGET_VENDOR_UI_GZIP_KB",
+    "defaultKB": 170,
+    "reviewAction": "shrink first",
+    "rationale": "Shared UI/vendor surface is allowed to stay large because it amortizes across every browser lane entrypoint, but regressions here should still be noticeable."
+  },
+  "initialJsGzip": {
+    "label": "initial JS gzip budget",
+    "env": "BUNDLE_BUDGET_INITIAL_JS_GZIP_KB",
+    "defaultKB": 92,
+    "reviewAction": "shrink first",
+    "rationale": "Initial JS stays below the current desktop shell bootstrap envelope so login, settings, and shell boot gates do not quietly drift upward."
+  },
+  "objectsPageGzip": {
+    "label": "ObjectsPage gzip budget",
+    "env": "BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB",
+    "defaultKB": 62,
+    "reviewAction": "rebaseline if stable",
+    "rationale": "Objects is the heaviest task-completion surface; optional overlays already lazy-load, so the remaining tree/list/details orchestration sets a slightly higher stable floor for this route."
+  },
+  "uploadsPageGzip": {
+    "label": "UploadsPage gzip budget",
+    "env": "BUNDLE_BUDGET_UPLOADS_PAGE_GZIP_KB",
+    "defaultKB": 4.4,
+    "reviewTightHeadroomKB": 0.25,
+    "reviewAction": "shrink first",
+    "rationale": "Uploads remains intentionally tight because it should stay a thin entrypoint over shared transfer/runtime code, but the stable floor now includes the route's selection preview and source-sheet presentation."
+  },
+  "transfersGzip": {
+    "label": "Transfers gzip budget",
+    "env": "BUNDLE_BUDGET_TRANSFERS_GZIP_KB",
+    "defaultKB": 14.5,
+    "reviewAction": "shrink first",
+    "rationale": "Transfers carries realtime queue and job-event behavior, so the budget is looser than Uploads but still capped to catch accidental UI layering or duplicate runtime logic."
+  }
+}

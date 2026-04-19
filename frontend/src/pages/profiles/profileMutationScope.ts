@@ -10,15 +10,30 @@ export type PendingModalState = {
 	scopeKey: string
 }
 
-type MutationContext = {
+export type ScopedContext = {
 	scopeKey: string
 	scopeVersion: number
+}
+
+export type MutationContext = ScopedContext & {
 	requestToken: number
 	modalSession?: number
 }
 
+export type ScopedRequestIdContext = ScopedContext & {
+	requestId: number
+}
+
+export type ScopedProfileRequestContext = ScopedRequestIdContext & {
+	profileId: string
+}
+
+export type ScopedSessionContext = ScopedContext & {
+	sessionToken: number
+}
+
 export function matchesServerScope(args: {
-	context: MutationContext | undefined
+	context: ScopedContext | undefined
 	isActiveRef: MutableRefObject<boolean>
 	currentScopeKey: string
 	currentScopeVersion: number
@@ -43,19 +58,86 @@ export function matchesCurrentMutationRequest(args: {
 		expectedRequestToken,
 		expectedModalSession,
 	} = args
-		if (!matchesServerScope({ context, isActiveRef, currentScopeKey, currentScopeVersion })) {
-			return false
-		}
-		if (!context) {
-			return false
-		}
-		if (context.requestToken !== expectedRequestToken) {
-			return false
-		}
+	if (!matchesServerScope({ context, isActiveRef, currentScopeKey, currentScopeVersion })) {
+		return false
+	}
+	if (!context) {
+		return false
+	}
+	if (context.requestToken !== expectedRequestToken) {
+		return false
+	}
 	if (expectedModalSession !== undefined && context.modalSession !== expectedModalSession) {
 		return false
 	}
 	return true
+}
+
+export function matchesScopedRequestId(args: {
+	context: ScopedRequestIdContext | undefined
+	isActiveRef: MutableRefObject<boolean>
+	currentScopeKey: string
+	currentScopeVersion: number
+	expectedRequestId: number
+}) {
+	const { context, isActiveRef, currentScopeKey, currentScopeVersion, expectedRequestId } = args
+	if (!matchesServerScope({ context, isActiveRef, currentScopeKey, currentScopeVersion })) {
+		return false
+	}
+	if (!context) {
+		return false
+	}
+	return context.requestId === expectedRequestId
+}
+
+export function matchesScopedProfileRequest(args: {
+	context: ScopedProfileRequestContext | undefined
+	isActiveRef: MutableRefObject<boolean>
+	currentScopeKey: string
+	currentScopeVersion: number
+	expectedRequestId: number
+	expectedProfileId: string | null
+}) {
+	const {
+		context,
+		isActiveRef,
+		currentScopeKey,
+		currentScopeVersion,
+		expectedRequestId,
+		expectedProfileId,
+	} = args
+	if (
+		!matchesScopedRequestId({
+			context,
+			isActiveRef,
+			currentScopeKey,
+			currentScopeVersion,
+			expectedRequestId,
+		})
+	) {
+		return false
+	}
+	if (!context) {
+		return false
+	}
+	return context.profileId === expectedProfileId
+}
+
+export function matchesScopedSession(args: {
+	context: ScopedSessionContext | undefined
+	isActiveRef: MutableRefObject<boolean>
+	currentScopeKey: string
+	currentScopeVersion: number
+	expectedSessionToken: number
+}) {
+	const { context, isActiveRef, currentScopeKey, currentScopeVersion, expectedSessionToken } = args
+	if (!matchesServerScope({ context, isActiveRef, currentScopeKey, currentScopeVersion })) {
+		return false
+	}
+	if (!context) {
+		return false
+	}
+	return context.sessionToken === expectedSessionToken
 }
 
 export function clearPendingModalState(prev: PendingModalState | null, scopeKey?: string, modalSession?: number) {

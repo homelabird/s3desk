@@ -109,6 +109,8 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 		url              string
 		remoteAddr       string
 		origin           string
+		xForwardedFor    string
+		forwarded        string
 		secFetchSite     string
 		wantCode         int
 		wantErrorCode    string
@@ -182,11 +184,26 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			wantCode:   http.StatusOK,
 		},
 		{
+			name:       "allows uppercase https localhost origin by default",
+			url:        "https://localhost:8443/api/v1/meta",
+			remoteAddr: "127.0.0.1:1234",
+			origin:     "HTTPS://LOCALHOST:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
 			name:       "allows mixed case allowlisted host",
 			cfg:        config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
 			url:        "https://S3DESK.LOCAL.:8443/api/v1/meta",
 			remoteAddr: "10.1.2.3:1234",
 			origin:     "https://S3DESK.LOCAL.:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows ipv6 ula host and origin when allow remote is enabled",
+			cfg:        config.Config{AllowRemote: true},
+			url:        "http://[fd00::25]:8080/api/v1/meta",
+			remoteAddr: "[fd00::10]:1234",
+			origin:     "http://[fd00::25]:5173",
 			wantCode:   http.StatusOK,
 		},
 		{
@@ -233,6 +250,28 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			wantErrorCode:    "forbidden",
 			wantBodyContains: "ALLOWED_HOSTS",
 		},
+		{
+			name:             "rejects public remote addr even when x forwarded for claims loopback",
+			cfg:              config.Config{AllowRemote: true},
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "203.0.113.10:1234",
+			origin:           "http://localhost:5173",
+			xForwardedFor:    "127.0.0.1",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "remote address must be localhost or private",
+		},
+		{
+			name:             "rejects public remote addr even when forwarded header claims loopback",
+			cfg:              config.Config{AllowRemote: true},
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "203.0.113.10:1234",
+			origin:           "http://localhost:5173",
+			forwarded:        "for=127.0.0.1;host=localhost;proto=https",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "remote address must be localhost or private",
+		},
 	}
 
 	for _, tc := range cases {
@@ -243,6 +282,12 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			req.RemoteAddr = tc.remoteAddr
 			if tc.origin != "" {
 				req.Header.Set("Origin", tc.origin)
+			}
+			if tc.xForwardedFor != "" {
+				req.Header.Set("X-Forwarded-For", tc.xForwardedFor)
+			}
+			if tc.forwarded != "" {
+				req.Header.Set("Forwarded", tc.forwarded)
 			}
 			if tc.secFetchSite != "" {
 				req.Header.Set("Sec-Fetch-Site", tc.secFetchSite)
@@ -447,7 +492,7 @@ func TestRequireLocalHost_RejectsPrivateOriginByDefault(t *testing.T) {
 	}
 }
 
-func TestAuthLimiterClientKey_IgnoresForwardingHeaders(t *testing.T) {
+func TestAuthLimiterClientKey_UsesForwardedHeadersFromLoopbackProxy(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/api/v1/meta", nil)
@@ -455,8 +500,44 @@ func TestAuthLimiterClientKey_IgnoresForwardingHeaders(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "203.0.113.50")
 	req.Header.Set("X-Real-IP", "198.51.100.10")
 
-	if got := authLimiterClientKey(req); got != "127.0.0.1" {
-		t.Fatalf("authLimiterClientKey=%q, want %q", got, "127.0.0.1")
+	if got := authLimiterClientKey(req); got != "loopback-proxy:203.0.113.50" {
+		t.Fatalf("authLimiterClientKey=%q, want %q", got, "loopback-proxy:203.0.113.50")
+	}
+}
+
+func TestAuthLimiterClientKey_IgnoresForwardingHeadersFromNonLoopbackPeer(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/api/v1/meta", nil)
+	req.RemoteAddr = "10.1.2.3:4321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	req.Header.Set("X-Real-IP", "198.51.100.10")
+
+	if got := authLimiterClientKey(req); got != "peer:10.1.2.3" {
+		t.Fatalf("authLimiterClientKey=%q, want %q", got, "peer:10.1.2.3")
+	}
+}
+
+func TestAuthLimiterClientKey_UsesRealIPForLoopbackProxyWhenForwardedForMissing(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/api/v1/meta", nil)
+	req.RemoteAddr = "127.0.0.1:4321"
+	req.Header.Set("X-Real-IP", "198.51.100.10")
+
+	if got := authLimiterClientKey(req); got != "loopback-proxy:198.51.100.10" {
+		t.Fatalf("authLimiterClientKey=%q, want %q", got, "loopback-proxy:198.51.100.10")
+	}
+}
+
+func TestAuthLimiterClientKey_FallsBackToLoopbackPeerWithoutForwardingHeaders(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/api/v1/meta", nil)
+	req.RemoteAddr = "127.0.0.1:4321"
+
+	if got := authLimiterClientKey(req); got != "loopback:127.0.0.1" {
+		t.Fatalf("authLimiterClientKey=%q, want %q", got, "loopback:127.0.0.1")
 	}
 }
 

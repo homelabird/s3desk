@@ -1,76 +1,95 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
+	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/store"
 )
 
-func (s *server) handlePresignedUploadCommit(
-	w http.ResponseWriter,
-	r *http.Request,
+func (s *server) executePresignedUploadCommit(
+	ctx context.Context,
 	profileID, uploadID string,
 	us store.UploadSession,
 	req uploadCommitRequest,
-) {
-	multipartUploads, err := s.store.ListMultipartUploads(r.Context(), profileID, uploadID)
+) (models.JobCreatedResponse, *uploadHTTPError) {
+	multipartUploads, err := s.store.ListMultipartUploads(ctx, profileID, uploadID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load multipart uploads", nil)
-		return
+		return models.JobCreatedResponse{}, &uploadHTTPError{
+			status:  http.StatusInternalServerError,
+			code:    "internal_error",
+			message: "failed to load multipart uploads",
+		}
 	}
 	if len(multipartUploads) > 0 {
-		writeError(w, http.StatusBadRequest, "upload_incomplete", "multipart uploads are not finalized", nil)
-		return
+		return models.JobCreatedResponse{}, &uploadHTTPError{
+			status:  http.StatusBadRequest,
+			code:    "upload_incomplete",
+			message: "multipart uploads are not finalized",
+		}
 	}
 
-	client, uploadErr := s.multipartClientFromContext(r.Context(), "presigned uploads require an S3-compatible provider")
+	client, uploadErr := s.multipartClientFromContext(ctx, "presigned uploads require an S3-compatible provider")
 	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
+		return models.JobCreatedResponse{}, uploadErr
 	}
-	s.writeImmediateUploadCommitResponse(w, r.Context(), profileID, uploadID, us, req, client, multipartUploads)
+	return newUploadCommitExecutionService(s).executeImmediate(ctx, profileID, uploadID, us, req, client, multipartUploads)
 }
 
-func (s *server) handleDirectUploadCommit(
-	w http.ResponseWriter,
-	r *http.Request,
+func (s *server) executeDirectUploadCommit(
+	ctx context.Context,
 	profileID, uploadID string,
 	us store.UploadSession,
 	req uploadCommitRequest,
-) {
-	secrets, ok := profileFromContext(r.Context())
+) (models.JobCreatedResponse, *uploadHTTPError) {
+	secrets, ok := profileFromContext(ctx)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "internal_error", "missing profile secrets", nil)
-		return
+		return models.JobCreatedResponse{}, &uploadHTTPError{
+			status:  http.StatusInternalServerError,
+			code:    "internal_error",
+			message: "missing profile secrets",
+		}
 	}
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
-		writeError(w, http.StatusBadRequest, "not_supported", "direct streaming multipart uploads require an S3-compatible provider", nil)
-		return
+		return models.JobCreatedResponse{}, &uploadHTTPError{
+			status:  http.StatusBadRequest,
+			code:    "not_supported",
+			message: "direct streaming multipart uploads require an S3-compatible provider",
+		}
 	}
 	client, err := s3ClientFromProfile(secrets)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to prepare multipart client", nil)
-		return
+		return models.JobCreatedResponse{}, &uploadHTTPError{
+			status:  http.StatusInternalServerError,
+			code:    "internal_error",
+			message: "failed to prepare multipart client",
+		}
 	}
 
-	multipartUploads, err := s.store.ListMultipartUploads(r.Context(), profileID, uploadID)
+	multipartUploads, err := s.store.ListMultipartUploads(ctx, profileID, uploadID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load multipart uploads", nil)
-		return
+		return models.JobCreatedResponse{}, &uploadHTTPError{
+			status:  http.StatusInternalServerError,
+			code:    "internal_error",
+			message: "failed to load multipart uploads",
+		}
 	}
 
 	if len(multipartUploads) > 0 {
-		if err := s.completeDirectMultipartUploads(r.Context(), profileID, client, multipartUploads); err != nil {
+		if err := s.completeDirectMultipartUploads(ctx, profileID, client, multipartUploads); err != nil {
 			var uploadErr *uploadHTTPError
 			if errors.As(err, &uploadErr) {
-				writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-				return
+				return models.JobCreatedResponse{}, uploadErr
 			}
-			writeError(w, http.StatusInternalServerError, "internal_error", "failed to finalize multipart upload", nil)
-			return
+			return models.JobCreatedResponse{}, &uploadHTTPError{
+				status:  http.StatusInternalServerError,
+				code:    "internal_error",
+				message: "failed to finalize multipart upload",
+			}
 		}
 	}
-	s.writeImmediateUploadCommitResponse(w, r.Context(), profileID, uploadID, us, req, client, multipartUploads)
+	return newUploadCommitExecutionService(s).executeImmediate(ctx, profileID, uploadID, us, req, client, multipartUploads)
 }

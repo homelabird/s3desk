@@ -253,4 +253,26 @@ describe('Jobs create modals state sync', () => {
 		expect(screen.getByPlaceholderText('path/…')).toHaveValue('')
 		expect(screen.getByText('Nothing selected yet')).toBeInTheDocument()
 	})
+
+	it('shows a manual bucket entry hint when bucket lookup fails', () => {
+		render(
+			<CreateJobModal
+				profileId="profile-1"
+				open
+				onCancel={vi.fn()}
+				onSubmit={vi.fn()}
+				loading={false}
+				isOffline={false}
+				uploadSupported
+				uploadUnsupportedReason={null}
+				bucketLookupErrorDescription="transfer_engine_missing: rclone is required to list buckets"
+				bucket=""
+				setBucket={vi.fn()}
+				bucketOptions={[]}
+			/>,
+		)
+
+		expect(screen.getByText('Bucket lookup unavailable')).toBeInTheDocument()
+		expect(screen.getByText(/You can still type a bucket name manually\./i)).toBeInTheDocument()
+	})
 })

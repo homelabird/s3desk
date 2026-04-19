@@ -18,15 +18,5 @@ type uploadCommitItem struct {
 }
 
 func (s *server) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
-	session, uploadErr := s.loadUploadCommitSession(r)
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	req, err := decodeUploadCommitRequest(r)
-	if err != nil {
-		writeJSONDecodeError(w, err, uploadCommitJSONRequestBodyMaxBytes)
-		return
-	}
-	s.dispatchUploadCommit(w, r, session, req)
+	newUploadCommitHTTPService(s).handleCommitUpload(w, r)
 }

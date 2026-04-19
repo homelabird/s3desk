@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, type InitialEntry } from 'react-router-dom'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ensureDomShims } from '../../../test/domShims'
@@ -40,13 +40,9 @@ vi.mock('antd', async () => {
 	}
 })
 
-vi.mock('../../../api/client', async () => {
-	const actual = await vi.importActual<typeof import('../../../api/client')>('../../../api/client')
-	return {
-		...actual,
-		APIClient: vi.fn().mockImplementation(() => apiClientRef.current),
-	}
-})
+vi.mock('../../../api/useAPIClient', () => ({
+	useAPIClient: () => apiClientRef.current,
+}))
 
 vi.mock('../../../components/useTransfers', () => ({
 	useTransfers: () => transfersRef.current,
@@ -138,11 +134,11 @@ function createTransfersStub(): TransfersContextValue {
 	} as unknown as TransfersContextValue
 }
 
-function createWrapper(queryClient: QueryClient) {
+function createWrapper(queryClient: QueryClient, initialEntries: InitialEntry[] = ['/']) {
 	return function Wrapper(props: PropsWithChildren) {
 		return (
 			<QueryClientProvider client={queryClient}>
-				<MemoryRouter>{props.children}</MemoryRouter>
+				<MemoryRouter initialEntries={initialEntries}>{props.children}</MemoryRouter>
 			</QueryClientProvider>
 		)
 	}
@@ -206,7 +202,7 @@ describe('useJobsPageController', () => {
 
 		act(() => {
 			result.current.onOpenCreateDownload()
-			result.current.onCreateDownload({
+			result.current.overlaysHost.createFlow.onSubmitDownload({
 				bucket: 'bucket-a',
 				prefix: 'logs/',
 				dirHandle: { name: 'downloads' } as FileSystemDirectoryHandle,
@@ -214,10 +210,10 @@ describe('useJobsPageController', () => {
 		})
 
 		await waitFor(() => expect(listObjects).toHaveBeenCalledTimes(1))
-		expect(result.current.deviceDownloadLoading).toBe(true)
+		expect(result.current.overlaysHost.createFlow.downloadLoading).toBe(true)
 
 		act(() => {
-			result.current.onCloseDownload()
+			result.current.overlaysHost.createFlow.onCloseDownload()
 		})
 
 		await act(async () => {
@@ -231,8 +227,8 @@ describe('useJobsPageController', () => {
 		})
 
 		expect(transfersRef.current?.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
-		expect(result.current.createDownloadOpen).toBe(false)
-		expect(result.current.deviceDownloadLoading).toBe(false)
+		expect(result.current.overlaysHost.createFlow.createDownloadOpen).toBe(false)
+		expect(result.current.overlaysHost.createFlow.downloadLoading).toBe(false)
 	})
 
 	it('keeps the current delete modal open when an older create request resolves', async () => {
@@ -273,7 +269,7 @@ describe('useJobsPageController', () => {
 
 		act(() => {
 			result.current.onOpenDeleteJob()
-			result.current.onCreateDelete({
+			result.current.overlaysHost.createFlow.onSubmitDelete({
 				bucket: 'bucket-a',
 				prefix: 'logs/',
 				deleteAll: false,
@@ -287,7 +283,7 @@ describe('useJobsPageController', () => {
 		await waitFor(() => expect(createJob).toHaveBeenCalledTimes(1))
 
 		act(() => {
-			result.current.onCloseDelete()
+			result.current.overlaysHost.createFlow.onCloseDelete()
 			result.current.onOpenDeleteJob()
 		})
 
@@ -296,7 +292,7 @@ describe('useJobsPageController', () => {
 			await Promise.resolve()
 		})
 
-		expect(result.current.createDeleteOpen).toBe(true)
+		expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(true)
 		expect(messageSuccess).not.toHaveBeenCalled()
 		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
 	})
@@ -337,22 +333,151 @@ describe('useJobsPageController', () => {
 			result.current.onOpenCreateDownload()
 			result.current.onOpenDeleteJob()
 			result.current.onOpenDetails('job-1')
-			result.current.onOpenLogs('job-1')
+			result.current.overlaysHost.detailsState.onOpenLogs('job-1')
 		})
 
-		expect(result.current.createOpen).toBe(true)
-		expect(result.current.createDownloadOpen).toBe(true)
-		expect(result.current.createDeleteOpen).toBe(true)
-		expect(result.current.detailsOpen).toBe(true)
-		expect(result.current.logDrawerRequest.jobId).toBe('job-1')
+		expect(result.current.overlaysHost.createFlow.createOpen).toBe(true)
+		expect(result.current.overlaysHost.createFlow.createDownloadOpen).toBe(true)
+		expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(true)
+		expect(result.current.overlaysHost.detailsState.detailsOpen).toBe(true)
+		expect(result.current.overlaysHost.logsState.logRequestJobId).toBe('job-1')
 
 		rerender({ apiToken: 'token-b', profileId: 'profile-1' })
 
-		expect(result.current.createOpen).toBe(false)
-		expect(result.current.createDownloadOpen).toBe(false)
-		expect(result.current.createDeleteOpen).toBe(false)
-		expect(result.current.detailsOpen).toBe(false)
-		expect(result.current.detailsJobId).toBeNull()
-		expect(result.current.logDrawerRequest.jobId).toBeNull()
+		expect(result.current.overlaysHost.createFlow.createOpen).toBe(false)
+		expect(result.current.overlaysHost.createFlow.createDownloadOpen).toBe(false)
+		expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(false)
+		expect(result.current.overlaysHost.detailsState.detailsOpen).toBe(false)
+		expect(result.current.overlaysHost.detailsState.detailsJobId).toBeNull()
+		expect(result.current.overlaysHost.logsState.logRequestJobId).toBeNull()
+	})
+
+	it('hydrates the delete modal prefill from route state on initial render', async () => {
+		apiClientRef.current = createMockApiClient({
+			server: {
+				getMeta: vi.fn().mockResolvedValue({ capabilities: { providers: {} } }),
+			},
+			profiles: {
+				listProfiles: vi.fn().mockResolvedValue([]),
+			},
+			buckets: {
+				listBuckets: vi.fn().mockResolvedValue([]),
+			},
+			jobs: {
+				listJobs: vi.fn().mockResolvedValue({ items: [], nextCursor: undefined }),
+			},
+		})
+
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		const { result } = renderHook(
+			() =>
+				useJobsPageController({
+					apiToken: 'token',
+					profileId: 'profile-1',
+				}),
+			{
+				wrapper: createWrapper(queryClient, [
+					{
+						pathname: '/jobs',
+						state: {
+							openDeleteJob: true,
+							bucket: 'bucket-a',
+							prefix: 'logs/',
+							deleteAll: true,
+						},
+					},
+				]),
+			},
+		)
+
+		await waitFor(() => expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(true))
+		expect(result.current.overlaysHost.bucketState.deleteBucket).toBe('bucket-a')
+		expect(result.current.overlaysHost.bucketState.deletePrefill).toEqual({
+			prefix: 'logs/',
+			deleteAll: true,
+		})
+	})
+
+	it('blocks device uploads when the selected provider disables object uploads', async () => {
+		apiClientRef.current = createMockApiClient({
+			server: {
+				getMeta: vi.fn().mockResolvedValue({
+					capabilities: {
+						providers: {
+							s3_compatible: {
+								bucketCrud: true,
+								objectCrud: false,
+								jobTransfer: true,
+								bucketPolicy: true,
+								gcsIamPolicy: false,
+								azureContainerAccessPolicy: false,
+								presignedUpload: false,
+								presignedMultipartUpload: false,
+								directUpload: false,
+								reasons: {
+									objectCrud: 'Object API is unavailable.',
+								},
+							},
+						},
+					},
+				}),
+			},
+			profiles: {
+				listProfiles: vi.fn().mockResolvedValue([
+					{
+						id: 'profile-1',
+						name: 'Primary',
+						provider: 's3_compatible',
+						preserveLeadingSlash: false,
+						tlsInsecureSkipVerify: false,
+						createdAt: '2026-01-01T00:00:00Z',
+						updatedAt: '2026-01-01T00:00:00Z',
+					},
+				]),
+			},
+			buckets: {
+				listBuckets: vi.fn().mockResolvedValue([]),
+			},
+			jobs: {
+				listJobs: vi.fn().mockResolvedValue({ items: [], nextCursor: undefined }),
+			},
+		})
+
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		const { result } = renderHook(
+			() =>
+				useJobsPageController({
+					apiToken: 'token',
+					profileId: 'profile-1',
+				}),
+			{ wrapper: createWrapper(queryClient) },
+		)
+
+		await waitFor(() => expect(result.current.presentation.toolbar.uploadSupported).toBe(false))
+		expect(result.current.presentation.toolbar.uploadDisabledReason).toBe('Object API is unavailable.')
+
+		act(() => {
+			result.current.overlaysHost.createFlow.onSubmitCreate({
+				bucket: 'bucket-a',
+				prefix: 'logs/',
+				files: [new File(['hello'], 'report.txt', { type: 'text/plain' })],
+			})
+		})
+
+		expect(messageWarning).toHaveBeenCalledWith('Object API is unavailable.')
+		expect(transfersRef.current?.queueUploadFiles).not.toHaveBeenCalled()
+		expect(result.current.overlaysHost.createFlow.uploadLoading).toBe(false)
 	})
 })

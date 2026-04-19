@@ -27,6 +27,11 @@ func TestIsAllowedRealtimeOrigin_PolicyMatrix(t *testing.T) {
 			want:   true,
 		},
 		{
+			name:   "uppercase https localhost allowed by default",
+			origin: "HTTPS://LOCALHOST:5443",
+			want:   true,
+		},
+		{
 			name:   "ipv6 localhost allowed by default",
 			origin: "http://[::1]:5173",
 			want:   true,
@@ -40,6 +45,12 @@ func TestIsAllowedRealtimeOrigin_PolicyMatrix(t *testing.T) {
 			name:   "allow remote accepts private origin",
 			cfg:    config.Config{AllowRemote: true},
 			origin: "http://10.1.2.3:8080",
+			want:   true,
+		},
+		{
+			name:   "allow remote accepts ipv6 ula origin",
+			cfg:    config.Config{AllowRemote: true},
+			origin: "http://[fd00::25]:8080",
 			want:   true,
 		},
 		{
@@ -106,6 +117,17 @@ func TestRejectInvalidRealtimeOrigin_Table(t *testing.T) {
 		{
 			name:         "https localhost origin allowed",
 			origin:       "https://localhost:8443",
+			wantRejected: false,
+		},
+		{
+			name:         "uppercase https localhost origin allowed",
+			origin:       "HTTPS://LOCALHOST:8443",
+			wantRejected: false,
+		},
+		{
+			name:         "allow remote ipv6 ula origin allowed",
+			cfg:          config.Config{AllowRemote: true},
+			origin:       "http://[fd00::25]:8080",
 			wantRejected: false,
 		},
 		{

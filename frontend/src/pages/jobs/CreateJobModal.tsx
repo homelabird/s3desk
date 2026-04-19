@@ -26,6 +26,7 @@ export function CreateJobModal(props: {
 	isOffline: boolean
 	uploadSupported?: boolean
 	uploadUnsupportedReason?: string | null
+	bucketLookupErrorDescription?: string | null
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
@@ -142,6 +143,14 @@ export function CreateJobModal(props: {
 						showIcon
 						title="Uploads are not available for this provider"
 						description={props.uploadUnsupportedReason ?? 'This provider does not support upload transfers.'}
+					/>
+				) : null}
+				{props.bucketLookupErrorDescription ? (
+					<Alert
+						type="warning"
+						showIcon
+						title="Bucket lookup unavailable"
+						description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually.`}
 					/>
 				) : null}
 				<Alert

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"s3desk/internal/models"
-	"s3desk/internal/store"
 )
 
 type downloadProxyToken struct {
@@ -155,7 +154,7 @@ func requestScheme(r *http.Request) string {
 		if comma := strings.Index(xfProto, ","); comma >= 0 {
 			xfProto = xfProto[:comma]
 		}
-		xfProto = strings.ToLower(strings.TrimSpace(xfProto))
+		xfProto = normalizeRequestScheme(xfProto)
 		if xfProto != "" {
 			return xfProto
 		}
@@ -163,8 +162,10 @@ func requestScheme(r *http.Request) string {
 	if r.TLS != nil {
 		return "https"
 	}
-	if r.URL != nil && r.URL.Scheme != "" {
-		return r.URL.Scheme
+	if r.URL != nil {
+		if scheme := normalizeRequestScheme(r.URL.Scheme); scheme != "" {
+			return scheme
+		}
 	}
 	return "http"
 }
@@ -197,7 +198,7 @@ func parseForwardedProto(value string) string {
 			}
 			if strings.EqualFold(strings.TrimSpace(key), "proto") {
 				val = strings.Trim(strings.TrimSpace(val), "\"")
-				val = strings.ToLower(val)
+				val = normalizeRequestScheme(val)
 				if val != "" {
 					return val
 				}
@@ -207,116 +208,15 @@ func parseForwardedProto(value string) string {
 	return ""
 }
 
+func normalizeRequestScheme(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "http", "https":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
+}
+
 func (s *server) handleDownloadProxy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	profileID := strings.TrimSpace(r.URL.Query().Get("profileId"))
-	bucket := strings.TrimSpace(r.URL.Query().Get("bucket"))
-	key := strings.TrimSpace(r.URL.Query().Get("key"))
-	expiresRaw := strings.TrimSpace(r.URL.Query().Get("expires"))
-	sizeRaw := strings.TrimSpace(r.URL.Query().Get("size"))
-	sig := strings.TrimSpace(r.URL.Query().Get("sig"))
-	size, contentType, lastModified, err := parseDownloadProxyMetadataHints(sizeRaw, r.URL.Query().Get("contentType"), r.URL.Query().Get("lastModified"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), map[string]any{"size": sizeRaw})
-		return
-	}
-
-	if profileID == "" || bucket == "" || key == "" || expiresRaw == "" || sig == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "profileId, bucket, key, expires, sig are required", nil)
-		return
-	}
-	expiresAt, err := strconv.ParseInt(expiresRaw, 10, 64)
-	if err != nil || expiresAt <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request", "expires is invalid", map[string]any{"expires": expiresRaw})
-		return
-	}
-	if time.Now().UTC().Unix() > expiresAt {
-		writeError(w, http.StatusForbidden, "expired", "download link expired", nil)
-		return
-	}
-
-	token := downloadProxyToken{
-		ProfileID:    profileID,
-		Bucket:       bucket,
-		Key:          key,
-		Expires:      expiresAt,
-		Size:         size,
-		ContentType:  contentType,
-		LastModified: lastModified,
-	}
-	if !s.verifyDownloadProxy(token, sig) {
-		writeError(w, http.StatusForbidden, "invalid_signature", "download signature is invalid", nil)
-		return
-	}
-
-	secrets, ok, err := s.store.GetProfileSecrets(r.Context(), profileID)
-	if err != nil {
-		if errors.Is(err, store.ErrEncryptedCredentials) {
-			writeError(w, http.StatusBadRequest, "encrypted_credentials", err.Error(), nil)
-			return
-		}
-		if errors.Is(err, store.ErrEncryptionKeyRequired) {
-			writeError(w, http.StatusBadRequest, "encryption_required", err.Error(), nil)
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load profile", nil)
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusNotFound, "profile_not_found", "profile not found", map[string]any{"profileId": profileID})
-		return
-	}
-
-	entry, hasEmbeddedMetadata, stderr, err := s.resolveDownloadProxyEntry(r.Context(), secrets, token, bucket, key)
-	if hasEmbeddedMetadata {
-		if s.metrics != nil {
-			s.metrics.IncDownloadProxyMode("stat_skipped")
-		}
-	} else {
-		if s.metrics != nil {
-			s.metrics.IncDownloadProxyMode("stat_required")
-		}
-		if err != nil {
-			if rcloneIsNotFound(err, stderr) {
-				writeError(w, http.StatusNotFound, "not_found", "object not found", map[string]any{"bucket": bucket, "key": key})
-				return
-			}
-			writeRcloneAPIError(w, err, stderr, rcloneAPIErrorContext{
-				MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
-				DefaultStatus:  http.StatusBadRequest,
-				DefaultCode:    "s3_error",
-				DefaultMessage: "failed to download object",
-			}, map[string]any{"bucket": bucket, "key": key})
-			return
-		}
-	}
-
-	if r.Method == http.MethodHead {
-		applyDownloadHeaders(w.Header(), entry, key)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	args := append(s.rcloneDownloadFlags(), "cat", rcloneRemoteObject(bucket, key, secrets.PreserveLeadingSlash))
-	proc, err := s.startRclone(r.Context(), secrets, args, "download-proxy")
-	if err != nil {
-		writeRcloneAPIError(w, err, "", rcloneAPIErrorContext{
-			MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
-			DefaultStatus:  http.StatusBadRequest,
-			DefaultCode:    "s3_error",
-			DefaultMessage: "failed to download object",
-		}, map[string]any{"bucket": bucket, "key": key})
-		return
-	}
-
-	s.streamRcloneDownload(w, proc, entry, key, rcloneAPIErrorContext{
-		MissingMessage: "rclone is required to download objects (install it or set RCLONE_PATH)",
-		DefaultStatus:  http.StatusBadRequest,
-		DefaultCode:    "s3_error",
-		DefaultMessage: "failed to download object",
-	}, map[string]any{"bucket": bucket, "key": key})
+	newDownloadProxyHTTPService(s).handleDownloadProxy(w, r)
 }

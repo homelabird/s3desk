@@ -10,7 +10,7 @@ import { JobsMobileList } from './JobsMobileList'
 import type { JobsVirtualTableColumn, SortState } from './JobsVirtualTable'
 import styles from './JobsTableSection.module.css'
 
-type Props = {
+export type JobsTableSectionProps = {
 	bucketsError: unknown
 	jobsError: unknown
 	sortedJobs: Job[]
@@ -38,89 +38,58 @@ type Props = {
 	onTableContainerRef: (element: HTMLDivElement | null) => void
 }
 
-export function JobsTableSection({
-	bucketsError,
-	jobsError,
-	sortedJobs,
-	columns,
-	isCompact,
-	tableScrollY,
-	isLoading,
-	isOffline,
-	uploadSupported,
-	onOpenCreateUpload,
-	onOpenDownloadJob,
-	onOpenDeleteJob,
-	getJobSummary,
-	renderJobActions,
-	sortState,
-	onSortChange,
-	theme,
-	hasNextPage,
-	onLoadMore,
-	isFetchingNextPage,
-	onTableContainerRef,
-}: Props) {
+export function JobsTableSection(props: JobsTableSectionProps) {
 	const emptyState = (
 		<JobsEmptyState
-			isOffline={isOffline}
-			uploadSupported={uploadSupported}
-			onOpenCreateUpload={onOpenCreateUpload}
-			onOpenDownloadJob={onOpenDownloadJob}
-			onOpenDeleteJob={onOpenDeleteJob}
+			isOffline={props.isOffline}
+			uploadSupported={props.uploadSupported}
+			onOpenCreateUpload={props.onOpenCreateUpload}
+			onOpenDownloadJob={props.onOpenDownloadJob}
+			onOpenDeleteJob={props.onOpenDeleteJob}
 		/>
 	)
 
 	return (
 		<div className={styles.stack}>
-			{bucketsError ? (
-				<Alert
-					type="error"
-					showIcon
-					title="Failed to load buckets (autocomplete)"
-					description={formatErr(bucketsError)}
-				/>
-			) : null}
-
-			{jobsError ? <Alert type="error" showIcon title="Failed to load jobs" description={formatErr(jobsError)} /> : null}
+			{props.jobsError ? <Alert type="error" showIcon title="Failed to load jobs" description={formatErr(props.jobsError)} /> : null}
 
 			<PageSection
 				title="Queue history"
 				description="Recent jobs stay searchable here. Desktop keeps the full virtualized table, while smaller screens collapse the list into action-oriented cards. Use Objects when you need copy, move, or indexing workflows."
 				actions={
 					<Typography.Text type="secondary">
-						{sortedJobs.length ? `${sortedJobs.length.toLocaleString()} visible` : 'No visible jobs'}
+						{props.sortedJobs.length ? `${props.sortedJobs.length.toLocaleString()} visible` : 'No visible jobs'}
 					</Typography.Text>
 				}
 				flush
 			>
-				<div ref={onTableContainerRef} className={styles.surfaceBody}>
-					{isCompact ? (
-						isLoading && sortedJobs.length === 0 ? (
+				<div ref={props.onTableContainerRef} className={styles.surfaceBody}>
+					{props.isCompact ? (
+						props.isLoading && props.sortedJobs.length === 0 ? (
 							<div className={styles.loadingState}>
 								<Spin />
 							</div>
-						) : sortedJobs.length === 0 ? (
+						) : props.sortedJobs.length === 0 ? (
 							<div className={styles.emptyState}>{emptyState}</div>
 						) : (
-							<JobsMobileList jobs={sortedJobs} getJobSummary={getJobSummary} renderJobActions={renderJobActions} />
+							<JobsMobileList jobs={props.sortedJobs} getJobSummary={props.getJobSummary} renderJobActions={props.renderJobActions} />
 						)
 					) : (
 						<JobsDesktopTable
-							jobs={sortedJobs}
-							columns={columns}
-							tableScrollY={tableScrollY}
-							isLoading={isLoading}
+							jobs={props.sortedJobs}
+							columns={props.columns}
+							tableScrollY={props.tableScrollY}
+							isLoading={props.isLoading}
 							emptyState={emptyState}
-							sortState={sortState}
-							onSortChange={onSortChange}
-							theme={theme}
+							sortState={props.sortState}
+							onSortChange={props.onSortChange}
+							theme={props.theme}
 						/>
 					)}
 
-					{hasNextPage ? (
+					{props.hasNextPage ? (
 						<div className={styles.footer}>
-							<Button onClick={onLoadMore} loading={isFetchingNextPage} disabled={!hasNextPage || isOffline}>
+							<Button onClick={props.onLoadMore} loading={props.isFetchingNextPage} disabled={!props.hasNextPage || props.isOffline}>
 								Load more
 							</Button>
 						</div>

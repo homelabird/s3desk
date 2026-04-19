@@ -21,6 +21,7 @@ export function DeletePrefixJobModal(props: {
 	}) => void
 	loading: boolean
 	isOffline: boolean
+	bucketLookupErrorDescription?: string | null
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
@@ -100,6 +101,14 @@ export function DeletePrefixJobModal(props: {
 			}
 		>
 			<div className={styles.alertStack}>
+				{props.bucketLookupErrorDescription ? (
+					<Alert
+						type="warning"
+						showIcon
+						title="Bucket lookup unavailable"
+						description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually.`}
+					/>
+				) : null}
 				<Alert
 					type="warning"
 					showIcon

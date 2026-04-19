@@ -1,17 +1,21 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"s3desk/internal/models"
 	"s3desk/internal/store"
+	"s3desk/internal/ws"
 )
 
 func TestBuildVerifiedUploadCommitArtifactsUsesVerifiedState(t *testing.T) {
@@ -118,6 +122,150 @@ func TestHandleCommitUploadRejectsOversizedJSONBody(t *testing.T) {
 	}
 	if got := resp.Error.Details["maxBytes"]; got != float64(uploadCommitJSONRequestBodyMaxBytes) {
 		t.Fatalf("details.maxBytes=%v, want %d", got, uploadCommitJSONRequestBodyMaxBytes)
+	}
+}
+
+func TestUploadCommitFinalizeService_FinalizeImmediateCleansSessionStateAndPublishesCompletion(t *testing.T) {
+	ctx := context.Background()
+	st, _, _, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	us, err := st.CreateUploadSession(ctx, profile.ID, "test-bucket", "incoming", uploadModeDirect, "", expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	size := int64(11)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := st.UpsertUploadObject(ctx, store.UploadObject{
+		UploadID:     us.ID,
+		ProfileID:    profile.ID,
+		Path:         "docs/readme.txt",
+		Bucket:       us.Bucket,
+		ObjectKey:    "incoming/docs/readme.txt",
+		ExpectedSize: &size,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("upsert upload object: %v", err)
+	}
+	if err := st.UpsertMultipartUpload(ctx, store.MultipartUpload{
+		UploadID:   us.ID,
+		ProfileID:  profile.ID,
+		Path:       "docs/readme.txt",
+		Bucket:     us.Bucket,
+		ObjectKey:  "incoming/docs/readme.txt",
+		S3UploadID: "multipart-1",
+		ChunkSize:  5,
+		FileSize:   size,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}); err != nil {
+		t.Fatalf("upsert multipart upload: %v", err)
+	}
+
+	hub := ws.NewHub()
+	client := hub.Subscribe()
+	defer hub.Unsubscribe(client)
+
+	bytesDone := size
+	progress := &models.JobProgress{
+		BytesDone:  &bytesDone,
+		BytesTotal: &bytesDone,
+	}
+	srv := &server{store: st, hub: hub}
+
+	job, uploadErr := newUploadCommitFinalizeService(srv).finalizeImmediate(
+		ctx,
+		profile.ID,
+		us.ID,
+		us,
+		map[string]any{"uploadId": us.ID},
+		progress,
+		[]store.ObjectIndexEntry{{
+			Key:          "incoming/docs/readme.txt",
+			Size:         size,
+			ETag:         "\"etag-1\"",
+			LastModified: now,
+		}},
+	)
+	if uploadErr != nil {
+		t.Fatalf("finalizeImmediate: %v", uploadErr)
+	}
+	if job.Status != models.JobStatusSucceeded {
+		t.Fatalf("job.Status=%s, want %s", job.Status, models.JobStatusSucceeded)
+	}
+	if job.Progress == nil || job.Progress.BytesTotal == nil || *job.Progress.BytesTotal != size {
+		t.Fatalf("job.Progress=%+v, want bytesTotal %d", job.Progress, size)
+	}
+
+	savedJob, ok, err := st.GetJob(ctx, profile.ID, job.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected finalized job to exist")
+	}
+	if savedJob.Status != models.JobStatusSucceeded {
+		t.Fatalf("savedJob.Status=%s, want %s", savedJob.Status, models.JobStatusSucceeded)
+	}
+
+	_, ok, err = st.GetUploadSession(ctx, profile.ID, us.ID)
+	if err != nil {
+		t.Fatalf("get upload session: %v", err)
+	}
+	if ok {
+		t.Fatal("expected upload session to be deleted")
+	}
+	uploadObjects, err := st.ListUploadObjects(ctx, profile.ID, us.ID)
+	if err != nil {
+		t.Fatalf("list upload objects: %v", err)
+	}
+	if len(uploadObjects) != 0 {
+		t.Fatalf("expected upload objects cleanup, got %d", len(uploadObjects))
+	}
+	multipartUploads, err := st.ListMultipartUploads(ctx, profile.ID, us.ID)
+	if err != nil {
+		t.Fatalf("list multipart uploads: %v", err)
+	}
+	if len(multipartUploads) != 0 {
+		t.Fatalf("expected multipart uploads cleanup, got %d", len(multipartUploads))
+	}
+
+	summary, err := st.SummarizeObjectIndex(ctx, profile.ID, store.SummarizeObjectIndexInput{
+		Bucket:      us.Bucket,
+		SampleLimit: 5,
+	})
+	if err != nil {
+		t.Fatalf("summarize object index: %v", err)
+	}
+	if summary.ObjectCount != 1 {
+		t.Fatalf("summary.ObjectCount=%d, want 1", summary.ObjectCount)
+	}
+	if summary.TotalBytes != size {
+		t.Fatalf("summary.TotalBytes=%d, want %d", summary.TotalBytes, size)
+	}
+
+	select {
+	case msg := <-client.Messages():
+		if msg.Type != "job.completed" {
+			t.Fatalf("msg.Type=%q, want job.completed", msg.Type)
+		}
+		var evt ws.Event
+		if err := json.Unmarshal(msg.Data, &evt); err != nil {
+			t.Fatalf("unmarshal event: %v", err)
+		}
+		if evt.JobID != job.ID {
+			t.Fatalf("evt.JobID=%q, want %q", evt.JobID, job.ID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected completion event")
+	}
+
+	select {
+	case msg := <-client.Messages():
+		t.Fatalf("unexpected extra event %q", msg.Type)
+	case <-time.After(25 * time.Millisecond):
 	}
 }
 

@@ -36,7 +36,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 				<ToggleSwitch
 					checked={props.objectsShowThumbnails}
 					onChange={props.setObjectsShowThumbnails}
-					aria-label="Show image thumbnails"
+					ariaLabel="Show image thumbnails"
 				/>
 			</FormField>
 			<FormField
@@ -84,7 +84,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 									<ToggleSwitch
 										checked={props.objectsAutoIndexEnabled}
 										onChange={props.setObjectsAutoIndexEnabled}
-										aria-label="Auto index current prefix"
+										ariaLabel="Auto index current prefix"
 									/>
 								</FormField>
 								<FormField

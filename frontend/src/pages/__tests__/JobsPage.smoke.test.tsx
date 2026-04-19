@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { APIClient } from "../../api/client";
+import { APIClientContext } from "../../api/useAPIClient";
 import { TransfersContext } from "../../components/useTransfers";
 import { ensureDomShims } from "../../test/domShims";
 import { transfersStub } from "../../test/transfersStub";
@@ -26,17 +28,19 @@ describe("JobsPage", () => {
 
     render(
       <QueryClientProvider client={client}>
-        <TransfersContext.Provider value={transfersStub}>
-          <MemoryRouter initialEntries={["/jobs"]}>
-            <Routes>
-              <Route
-                path="/jobs"
-                element={<JobsPage apiToken="" profileId={null} />}
-              />
-              <Route path="/profiles" element={<div>Profiles Route</div>} />
-            </Routes>
-          </MemoryRouter>
-        </TransfersContext.Provider>
+        <APIClientContext.Provider value={new APIClient({ apiToken: "test-token" })}>
+          <TransfersContext.Provider value={transfersStub}>
+            <MemoryRouter initialEntries={["/jobs"]}>
+              <Routes>
+                <Route
+                  path="/jobs"
+                  element={<JobsPage apiToken="" profileId={null} />}
+                />
+                <Route path="/profiles" element={<div>Profiles Route</div>} />
+              </Routes>
+            </MemoryRouter>
+          </TransfersContext.Provider>
+        </APIClientContext.Provider>
       </QueryClientProvider>,
     );
 

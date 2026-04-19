@@ -33,6 +33,7 @@ type Props = {
 	isOffline: boolean
 	uploadSupported: boolean
 	uploadUnsupportedReason: string | null
+	bucketLookupErrorDescription?: string | null
 	bucket: string
 	onBucketChange: (next: string) => void
 	bucketOptions: BucketOption[]
@@ -69,6 +70,7 @@ export function JobsCreateModals(props: Props) {
 					isOffline={props.isOffline}
 					uploadSupported={props.uploadSupported}
 					uploadUnsupportedReason={props.uploadUnsupportedReason}
+					bucketLookupErrorDescription={props.bucketLookupErrorDescription}
 					bucket={props.bucket}
 					setBucket={props.onBucketChange}
 					bucketOptions={props.bucketOptions}
@@ -84,6 +86,7 @@ export function JobsCreateModals(props: Props) {
 					onSubmit={props.onSubmitDownload}
 					loading={props.downloadLoading}
 					isOffline={props.isOffline}
+					bucketLookupErrorDescription={props.bucketLookupErrorDescription}
 					bucket={props.bucket}
 					setBucket={props.onBucketChange}
 					bucketOptions={props.bucketOptions}
@@ -98,6 +101,7 @@ export function JobsCreateModals(props: Props) {
 					onSubmit={props.onSubmitDelete}
 					loading={props.deleteLoading}
 					isOffline={props.isOffline}
+					bucketLookupErrorDescription={props.bucketLookupErrorDescription}
 					bucket={props.deleteBucket}
 					setBucket={props.onBucketChange}
 					bucketOptions={props.bucketOptions}

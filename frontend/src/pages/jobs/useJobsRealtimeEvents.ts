@@ -2,6 +2,7 @@ import { type InfiniteData, type QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { buildApiHttpUrl, buildApiWsUrl } from '../../api/baseUrl'
+import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobProgress, JobsListResponse, JobStatus, WSEvent } from '../../api/types'
 import { updateJob } from './jobUtils'
 
@@ -72,7 +73,7 @@ export function useJobsRealtimeEvents({
 		let reconnectAttempt = 0
 		let connectNonce = 0
 		let wsUnavailable = false
-		const jobsQueryKey = ['jobs', profileId, apiToken] as const
+		const jobsQueryKey = queryKeys.jobs.scope(profileId, apiToken)
 
 		const refreshJobs = () => {
 			queryClient.invalidateQueries({ queryKey: jobsQueryKey, exact: false }).catch(() => {})
@@ -200,11 +201,11 @@ export function useJobsRealtimeEvents({
 							updateJob(old, msg.jobId!, applyJobPatch),
 					)
 					queryClient.setQueryData(
-						['job', profileId, msg.jobId, apiToken],
+						queryKeys.jobs.detail(profileId, msg.jobId, apiToken),
 						(old: Job | undefined) => (old ? applyJobPatch(old) : old),
 					)
 					if (msg.type === 'job.completed') {
-						queryClient.invalidateQueries({ queryKey: ['job', profileId, msg.jobId, apiToken], exact: true }).catch(() => {})
+						queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(profileId, msg.jobId, apiToken), exact: true }).catch(() => {})
 					}
 				}
 			} catch {

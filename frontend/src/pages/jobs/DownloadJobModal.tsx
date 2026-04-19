@@ -15,6 +15,7 @@ export function DownloadJobModal(props: {
 	onSubmit: (payload: { bucket: string; prefix: string; dirHandle: FileSystemDirectoryHandle; label?: string }) => void
 	loading: boolean
 	isOffline: boolean
+	bucketLookupErrorDescription?: string | null
 	bucket: string
 	setBucket: (v: string) => void
 	bucketOptions: { label: string; value: string }[]
@@ -87,6 +88,14 @@ export function DownloadJobModal(props: {
 						showIcon
 						title="Local folder access is not available"
 						description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
+					/>
+				) : null}
+				{props.bucketLookupErrorDescription ? (
+					<Alert
+						type="warning"
+						showIcon
+						title="Bucket lookup unavailable"
+						description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually.`}
 					/>
 				) : null}
 				<Alert

@@ -4,7 +4,7 @@ import { formatDateTime } from '../../lib/format'
 import styles from '../BucketsPage.module.css'
 import { BucketActions } from './BucketActions'
 
-type BucketsListProps = {
+export type BucketsListProps = {
 	buckets: { name: string; createdAt?: string | null }[]
 	useCompactList: boolean
 	policySupported: boolean

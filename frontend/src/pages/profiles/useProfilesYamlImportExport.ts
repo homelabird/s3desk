@@ -7,6 +7,7 @@ import { queryKeys } from '../../api/queryKeys'
 import type { Profile } from '../../api/types'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { matchesScopedProfileRequest, matchesScopedRequestId, matchesScopedSession } from './profileMutationScope'
 import { downloadTextFile } from './profileMutationUtils'
 import { buildProfileExportFilename, parseProfileYaml } from './profileYaml'
 
@@ -72,32 +73,45 @@ export function useProfilesYamlImportExport({
 			}
 		},
 		onSuccess: (content, _vars, context) => {
-			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (context.requestId !== yamlRequestIdRef.current) return
-			if (context.profileId !== yamlProfileIdRef.current) return
+			if (
+				!matchesScopedProfileRequest({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedRequestId: yamlRequestIdRef.current,
+					expectedProfileId: yamlProfileIdRef.current,
+				})
+			) return
 			setYamlContent(content)
 			setYamlDraft(content)
 		},
 		onError: (err, _vars, context) => {
-			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (context.requestId !== yamlRequestIdRef.current) return
-			if (context.profileId !== yamlProfileIdRef.current) return
+			if (
+				!matchesScopedProfileRequest({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedRequestId: yamlRequestIdRef.current,
+					expectedProfileId: yamlProfileIdRef.current,
+				})
+			) return
 			const msg = formatErr(err)
 			setYamlError(msg)
 			message.error(msg)
 		},
 		onSettled: (_, __, _vars, context) => {
+			if (
+				!matchesScopedRequestId({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedRequestId: yamlRequestIdRef.current,
+				})
+			) return
 			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (context.requestId !== yamlRequestIdRef.current) return
 			setExportingProfileId((prev) => (prev === context.profileId ? null : prev))
 		},
 	})
@@ -131,13 +145,17 @@ export function useProfilesYamlImportExport({
 			scopeKey: currentScopeKey,
 			scopeVersion: serverScopeVersionRef.current,
 		}),
-		onSuccess: async ({ updated, canonicalYaml, requestId }, vars, context) => {
-			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (requestId !== yamlRequestIdRef.current) return
-			if (vars.profileId !== yamlProfileIdRef.current) return
+		onSuccess: async ({ updated, canonicalYaml, requestId }, _vars, context) => {
+			if (
+				!matchesScopedProfileRequest({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedRequestId: requestId,
+					expectedProfileId: yamlProfileIdRef.current,
+				})
+			) return
 			message.success('Profile YAML saved')
 			yamlProfileIdRef.current = updated.id
 			setYamlProfile(updated)
@@ -151,12 +169,16 @@ export function useProfilesYamlImportExport({
 			})
 		},
 		onError: (err, vars, context) => {
-			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (vars.requestId !== yamlRequestIdRef.current) return
-			if (vars.profileId !== yamlProfileIdRef.current) return
+			if (
+				!matchesScopedProfileRequest({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedRequestId: vars.requestId,
+					expectedProfileId: yamlProfileIdRef.current,
+				})
+			) return
 			const msg = formatErr(err)
 			setYamlError(msg)
 			message.error(msg)
@@ -184,31 +206,43 @@ export function useProfilesYamlImportExport({
 			return context
 		},
 		onSuccess: async (created, _vars, context) => {
-			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (context.sessionToken !== importSessionTokenRef.current) return
+			if (
+				!matchesScopedSession({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedSessionToken: importSessionTokenRef.current,
+				})
+			) return
 			message.success(`Imported profile "${created.name}"`)
 			closeImportModal()
 			await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(context.scopeApiToken), exact: true })
 		},
 		onError: (err, _vars, context) => {
-			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (context.sessionToken !== importSessionTokenRef.current) return
+			if (
+				!matchesScopedSession({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedSessionToken: importSessionTokenRef.current,
+				})
+			) return
 			const msg = formatErr(err)
 			setImportError(msg)
 			message.error(msg)
 		},
 		onSettled: (_, __, _vars, context) => {
-			if (!context) return
-			if (!isActiveRef.current) return
-			if (context.scopeVersion !== serverScopeVersionRef.current) return
-			if (context.scopeKey !== currentScopeKey) return
-			if (context.sessionToken !== importSessionTokenRef.current) return
+			if (
+				!matchesScopedSession({
+					context,
+					isActiveRef,
+					currentScopeKey,
+					currentScopeVersion: serverScopeVersionRef.current,
+					expectedSessionToken: importSessionTokenRef.current,
+				})
+			) return
 			setImportLoading(false)
 		},
 	})

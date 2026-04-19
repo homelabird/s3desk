@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import { getBool, getNumber, getString, joinKeyWithPrefix } from './jobUtils'
 import type { JobsUploadDetailItem, JobsUploadDetails, JobsUploadTableRow } from './jobsUploadTypes'
 
@@ -32,7 +33,7 @@ export function useJobsUploadDetails({
 	uploadTablePageSize = 20,
 }: UseJobsUploadDetailsArgs) {
 	const jobDetailsQuery = useQuery({
-		queryKey: ['job', profileId, detailsJobId, apiToken],
+		queryKey: queryKeys.jobs.detail(profileId, detailsJobId, apiToken),
 		queryFn: () => api.jobs.getJob(profileId!, detailsJobId!),
 		enabled: !!profileId && !!detailsJobId && detailsOpen,
 	})

@@ -3,6 +3,7 @@ import { message } from 'antd'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import type { APIClient } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { withJobQueueRetry } from '../../lib/jobQueue'
 
@@ -51,8 +52,8 @@ export function useJobsActionMutations({
 	const deletingJobId = deletingJobState?.scopeKey === currentScopeKey ? deletingJobState.jobId : null
 
 	const invalidateJobQueries = async (scopeProfileId: string, scopeApiToken: string, jobId: string) => {
-		await queryClient.invalidateQueries({ queryKey: ['jobs', scopeProfileId, scopeApiToken], exact: false })
-		await queryClient.invalidateQueries({ queryKey: ['job', scopeProfileId, jobId, scopeApiToken], exact: true })
+		await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(scopeProfileId, scopeApiToken), exact: false })
+		await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(scopeProfileId, jobId, scopeApiToken), exact: true })
 	}
 
 	const cancelMutation = useMutation({
