@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { clipboardInsecureOriginHint } from '../src/lib/secureContext'
 import { defaultWebviewStorage, seedWebviewStorage, stubWebviewApi } from './support/webviewFixtures'
+import { gotoObjectsPage } from './support/ui'
 
 const clipboardWritesKey = '__s3deskWebviewClipboardWrites'
-const copyFailureHint = 'Copy failed. Clipboard access is restricted on insecure origins (try HTTPS or localhost).'
 const now = '2024-01-01T00:00:00Z'
 
 async function emulateSecureClipboard(page: Page) {
@@ -58,7 +59,7 @@ test.describe('webview clipboard', () => {
 		})
 		await seedWebviewStorage(page)
 
-		await page.goto('/objects')
+		await gotoObjectsPage(page, { ready: (scope) => scope.getByPlaceholder('Search current folder') })
 
 		await expect(page.getByText('summary.csv')).toBeVisible()
 		await expect(page.getByText(location, { exact: true })).toBeVisible()
@@ -66,7 +67,7 @@ test.describe('webview clipboard', () => {
 		await page.getByRole('button', { name: 'Copy location' }).click()
 
 		await expect(page.getByText('Copied')).toBeVisible()
-		await expect(page.getByText(copyFailureHint)).toHaveCount(0)
+		await expect(page.getByText(clipboardInsecureOriginHint())).toHaveCount(0)
 		await expect.poll(async () => (await readClipboardWrites(page)).at(-1)).toBe(location)
 	})
 })

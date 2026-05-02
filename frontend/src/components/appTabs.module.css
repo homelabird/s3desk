@@ -3,6 +3,28 @@
   position: relative;
 }
 
+.root::before,
+.root::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 24px;
+  height: 44px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--s3d-transition-fast);
+}
+
+.root::before {
+  left: 0;
+  background: linear-gradient(to right, var(--s3d-color-bg-page), transparent);
+}
+
+.root::after {
+  right: 0;
+  background: linear-gradient(to left, var(--s3d-color-bg-page), transparent);
+}
+
 .tabList {
   display: flex;
   align-items: flex-end;
@@ -143,23 +165,54 @@
   padding: 8px 12px;
 }
 
+@media (max-width: 1100px) {
+  .root[data-scrollable='true'][data-at-start='false']::before,
+  .root[data-scrollable='true'][data-at-end='false']::after {
+    opacity: 1;
+  }
+
+  .tabList {
+    padding-inline-end: 12px;
+    scroll-padding-inline: 12px;
+    scroll-snap-type: x proximity;
+  }
+
+  .sizeSmall.tabList {
+    gap: 4px;
+  }
+
+  .sizeSmall.tabListCard {
+    padding: 2px 2px 0;
+  }
+
+  .sizeSmall .tabWrap {
+    gap: 2px;
+  }
+
+  .sizeSmall .tabButtonCard {
+    padding: 4px 6px;
+    font-size: 13px;
+  }
+
+  .sizeSmall .closeButton {
+    padding: 0 4px;
+    min-width: 20px;
+  }
+
+  .sizeSmall .addButton {
+    padding: 4px 7px;
+    font-size: 13px;
+  }
+}
+
 @media (max-width: 640px) {
+  .root::before,
   .root::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 24px;
     height: 48px;
-    pointer-events: none;
-    background: linear-gradient(to left, var(--s3d-color-bg-page), transparent);
   }
 
   .tabList {
     gap: 8px;
-    padding-inline-end: 12px;
-    scroll-padding-inline: 12px;
-    scroll-snap-type: x proximity;
   }
 
   .tabButtonLine,

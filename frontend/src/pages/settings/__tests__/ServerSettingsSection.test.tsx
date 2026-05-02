@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import type { APIClient } from '../../../api/client'
+import type { APIClientShape } from '../../../api/client'
 import type { MetaResponse } from '../../../api/types'
 import { ServerSettingsSection } from '../ServerSettingsSection'
 
@@ -9,7 +9,7 @@ describe('ServerSettingsSection', () => {
 	it('shows the compatibility notice after moving backup tools to the sidebar', () => {
 		render(
 			<ServerSettingsSection
-				api={{} as APIClient}
+				api={{} as APIClientShape}
 				meta={undefined}
 				isFetching={false}
 				errorMessage={null}
@@ -53,7 +53,7 @@ describe('ServerSettingsSection', () => {
 
 		render(
 			<ServerSettingsSection
-				api={{} as APIClient}
+				api={{} as APIClientShape}
 				meta={meta}
 				isFetching={false}
 				errorMessage={null}

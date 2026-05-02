@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router-dom'
 
 type LinkButtonType = 'default' | 'primary' | 'dashed' | 'text' | 'link'
@@ -46,6 +46,7 @@ export function LinkButton(props: LinkButtonProps) {
 		style,
 		children,
 		onClick,
+		onKeyDown,
 		...linkProps
 	} = props
 
@@ -62,9 +63,24 @@ export function LinkButton(props: LinkButtonProps) {
 
 	if (disabled) {
 		return (
-			<span className={classes} style={style} role="link" aria-disabled="true">
+			<Link
+				{...linkProps}
+				className={classes}
+				style={style}
+				aria-disabled="true"
+				tabIndex={-1}
+				onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+					event.preventDefault()
+					event.stopPropagation()
+				}}
+				onKeyDown={(event: KeyboardEvent<HTMLAnchorElement>) => {
+					if (event.key !== 'Enter' && event.key !== ' ') return
+					event.preventDefault()
+					event.stopPropagation()
+				}}
+			>
 				{children}
-			</span>
+			</Link>
 		)
 	}
 
@@ -73,6 +89,7 @@ export function LinkButton(props: LinkButtonProps) {
 			{...linkProps}
 			className={classes}
 			style={style}
+			onKeyDown={onKeyDown}
 			onClick={(e) => {
 				onClick?.(e)
 			}}
@@ -81,4 +98,3 @@ export function LinkButton(props: LinkButtonProps) {
 		</Link>
 	)
 }
-

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { addUploadSourceFromDevice, gotoUploadsPage, openTransfersDialog } from './support/ui'
 
 const now = '2024-01-01T00:00:00Z'
 const profileId = 'uploads-more-profile'
@@ -52,13 +53,9 @@ test.describe('Uploads header actions', () => {
 	test('clears selected files from header action', async ({ page }) => {
 		await mockUploadsPageApi(page)
 		await seedStorage(page)
-		await page.goto('/uploads')
+		await gotoUploadsPage(page)
 
-		const fileChooserPromise = page.waitForEvent('filechooser')
-		await page.getByRole('button', { name: /Add from device/i }).click()
-		await page.getByRole('button', { name: 'Choose files' }).click()
-		const fileChooser = await fileChooserPromise
-		await fileChooser.setFiles({
+		await addUploadSourceFromDevice(page, {
 			name: 'alpha.txt',
 			mimeType: 'text/plain',
 			buffer: Buffer.from('alpha'),
@@ -74,12 +71,9 @@ test.describe('Uploads header actions', () => {
 	test('opens transfers drawer from header action', async ({ page }) => {
 		await mockUploadsPageApi(page)
 		await seedStorage(page)
-		await page.goto('/uploads')
+		await gotoUploadsPage(page)
 
-		await page.getByRole('button', { name: 'Open Transfers' }).click()
-
-		const transfersDialog = page.getByRole('dialog', { name: /Transfers/i })
-		await expect(transfersDialog).toBeVisible()
+		const transfersDialog = await openTransfersDialog(page, { triggerButtonName: 'Open Transfers', tabName: /Uploads/i })
 		await expect(transfersDialog.getByRole('tab', { name: /Uploads/i })).toHaveAttribute('aria-selected', 'true')
 	})
 })

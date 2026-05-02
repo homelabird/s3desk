@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Space, Typography, message } from 'antd'
+import { Button, Space, Typography } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
+import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { objectsFeedback } from './objectsFeedback'
 import { fileNameFromKey, folderLabelFromPrefix, normalizePrefix, parentPrefixFromKey } from './objectsListUtils'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
@@ -126,9 +127,9 @@ export function useObjectsRename({ profileId, apiToken, bucket, createJobWithRet
 			})
 		},
 		onSuccess: async (job, args) => {
-			await queryClient.invalidateQueries({ queryKey: ['jobs', args.scopeProfileId, args.scopeApiToken], exact: false })
+			await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(args.scopeProfileId, args.scopeApiToken), exact: false })
 			if (args.sessionId !== renameSessionRef.current) return
-			message.open({
+			objectsFeedback.open({
 				type: 'success',
 				content: (
 					<Space>
@@ -148,7 +149,7 @@ export function useObjectsRename({ profileId, apiToken, bucket, createJobWithRet
 		},
 		onError: (err, args) => {
 			if (args.sessionId !== renameSessionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 
@@ -156,7 +157,7 @@ export function useObjectsRename({ profileId, apiToken, bucket, createJobWithRet
 		(values: RenameFormValues) => {
 			if (!renameScopeMatches || !renameSource) return
 			if (values.confirm !== 'RENAME') {
-				message.error('Type RENAME to proceed')
+				objectsFeedback.typeRenameToProceed()
 				return
 			}
 			renameMutation.mutate({

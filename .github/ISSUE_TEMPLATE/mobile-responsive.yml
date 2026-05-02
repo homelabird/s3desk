@@ -32,6 +32,8 @@ body:
 
         If the issue is specific to `Objects`, use the `Objects mobile responsive issue` form instead.
 
+        Describe the broken workflow, not only the geometry symptom. Prefer reports like "cannot open the filter sheet" or "delete confirm is unreachable" over raw width or overflow measurements.
+
   - type: textarea
     id: summary
     attributes:

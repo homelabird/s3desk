@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import type { DragEvent, MouseEvent, ReactNode } from 'react'
 import type { MenuProps } from 'antd'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { ObjectItem } from '../../api/types'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import {
@@ -17,7 +17,7 @@ import type {
 } from './useObjectsContextMenu'
 
 type UseObjectsRowRenderersArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
@@ -27,6 +27,7 @@ type UseObjectsRowRenderersArgs = {
 	isCompactList: boolean
 	isAdvanced: boolean
 	isOffline: boolean
+	objectCrudSupported: boolean
 	listGridClassName: string
 	rowHeightCompactPx: number
 	rowHeightWidePx: number
@@ -81,6 +82,7 @@ export function useObjectsRowRenderers({
 	isCompactList,
 	isAdvanced,
 	isOffline,
+	objectCrudSupported,
 	listGridClassName,
 	rowHeightCompactPx,
 	rowHeightWidePx,
@@ -223,7 +225,7 @@ export function useObjectsRowRenderers({
 					isSelected={selectedKeys.has(key)}
 					isFavorite={favoriteKeys.has(key)}
 					favoriteDisabled={
-						favoritePendingKeys.has(key) || isOffline || !profileId || !bucket
+						favoritePendingKeys.has(key) || isOffline || !profileId || !bucket || !objectCrudSupported
 					}
 					buttonMenuOpen={objectButtonMenuOpen}
 					recordContextMenuPoint={recordContextMenuPoint}
@@ -263,6 +265,7 @@ export function useObjectsRowRenderers({
 			isAdvanced,
 			isCompactList,
 			isOffline,
+			objectCrudSupported,
 			listGridClassName,
 			onOpenLargePreviewForKey,
 			onRowDragStartObjects,

@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import type { ObjectTypeFilter } from './objectsTypes'
 import { useObjectsDetailsActions } from './useObjectsDetailsActions'
 import { useObjectsPageDialogActions } from './useObjectsPageDialogActions'
@@ -12,7 +12,7 @@ import { useObjectsSelectionEffects } from './useObjectsSelectionEffects'
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
 type UseObjectsPageActionsArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string

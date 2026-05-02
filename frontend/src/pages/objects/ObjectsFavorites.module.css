@@ -1,8 +1,51 @@
+.favoritesTitle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.favoritesTitleLabel {
+  flex: 0 0 auto;
+}
+
+.favoritesTitleSummary {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 11px;
+  line-height: 1.2;
+  opacity: 0.82;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .favoritesPane {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-height: 0;
+}
+
+.favoritesControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.favoritesControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.favoritesControlLabel {
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .favoritesList {
@@ -26,6 +69,9 @@
 }
 
 .favoritesItem {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   border: 1px solid transparent;
   background: transparent;
   border-radius: 20px;
@@ -47,18 +93,20 @@
 .favoritesItemTitle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 
 .favoritesStar {
   color: var(--s3d-color-star);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .favoritesItemName {
   display: block;
   min-width: 0;
+  font-size: 13px;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -66,10 +114,79 @@
 
 .favoritesItemPath {
   display: block;
-  font-size: 12px;
-  line-height: 1.2;
+  font-size: 11px;
+  line-height: 1.15;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 1200px) {
+  .favoritesList {
+    gap: 3px;
+  }
+
+  .favoritesItem {
+    padding: 3px 8px;
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .favoritesTitleSummary {
+    font-size: 10px;
+  }
+
+  .favoritesPane {
+    gap: 5px;
+  }
+
+  .favoritesControls {
+    gap: 4px 8px;
+  }
+
+  .favoritesControlLabel {
+    font-size: 13px;
+  }
+
+  .favoritesList {
+    gap: 3px;
+  }
+
+  .favoritesItem {
+    padding: 5px 9px;
+    border-radius: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .favoritesTitle {
+    gap: 5px;
+  }
+
+  .favoritesPane {
+    gap: 4px;
+  }
+
+  .favoritesControls {
+    gap: 3px 6px;
+  }
+
+  .favoritesControl {
+    gap: 5px;
+  }
+
+  .favoritesControlLabel {
+    font-size: 12px;
+  }
+
+  .favoritesItem {
+    padding: 5px 8px;
+    border-radius: 16px;
+  }
+
+  .favoritesItemPath {
+    font-size: 11px;
+  }
 }

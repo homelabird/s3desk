@@ -1,13 +1,12 @@
 import { FolderOutlined } from '@ant-design/icons'
-import { message } from 'antd'
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
 
-import type { APIClient } from '../../api/client'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import type { APIClientShape } from '../../api/client'
+import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import type { TreeNode } from '../../lib/tree'
 import { upsertTreeChildren } from '../../lib/tree'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
+import { objectsFeedback } from './objectsFeedback'
 import { folderLabelFromPrefix, treeAncestorKeys, treeKeyFromPrefix } from './objectsListUtils'
 
 type LogFn = (
@@ -18,7 +17,7 @@ type LogFn = (
 ) => void
 
 type UseObjectsTreeArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string
@@ -33,7 +32,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 		{},
 		{
 			legacyLocalStorageKey: 'objectsTreeExpandedByBucket',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'treeExpandedByBucket')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'treeExpandedByBucket'),
 		},
 	)
 	const [treeData, setTreeData] = useState<TreeNode[]>(() => [
@@ -45,6 +44,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 	const treeLoadingKeysRef = useRef<Set<string>>(new Set())
 	const lastTreeScopeKeyRef = useRef<string | null>(null)
 	const [treeLoadingKeys, setTreeLoadingKeys] = useState<string[]>([])
+	const [treeErrorMessage, setTreeErrorMessage] = useState<string | null>(null)
 	const treeEpochRef = useRef(0)
 	const [treeDrawerOpen, setTreeDrawerOpen] = useState(false)
 	const [treeDrawerScopeKey, setTreeDrawerScopeKey] = useState('')
@@ -65,6 +65,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 			if (!profileId || !bucket) return
 			if (treeLoadedKeysRef.current.has(nodeKey)) return
 			if (treeLoadingKeysRef.current.has(nodeKey)) return
+			setTreeErrorMessage(null)
 			treeLoadingKeysRef.current.add(nodeKey)
 			setTreeLoadingKeys((prev) => (prev.includes(nodeKey) ? prev : [...prev, nodeKey]))
 
@@ -126,7 +127,8 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 					token = nextToken
 				}
 			} catch (err) {
-				message.error(formatErr(err))
+				const nextErrorMessage = objectsFeedback.errorMessage(err)
+				setTreeErrorMessage(nextErrorMessage)
 				treeLoadingKeysRef.current.delete(nodeKey)
 				setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
 				return
@@ -148,6 +150,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 				}))
 
 			setTreeData((prev) => upsertTreeChildren(prev, nodeKey, children))
+			setTreeErrorMessage(null)
 			treeLoadedKeysRef.current.add(nodeKey)
 			treeLoadingKeysRef.current.delete(nodeKey)
 			setTreeLoadingKeys((prev) => prev.filter((k) => k !== nodeKey))
@@ -174,6 +177,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 		treeLoadedKeysRef.current.clear()
 		treeLoadingKeysRef.current.clear()
 		setTreeLoadingKeys([])
+		setTreeErrorMessage(null)
 		setTreeExpandedKeys(bucket ? [...(treeExpandedByBucket[bucket] ?? [])] : [])
 		setTreeData([
 			{ key: '/', title: bucket || '(root)', isLeaf: false, icon: <FolderOutlined style={{ color: 'var(--s3d-color-primary)' }} /> },
@@ -213,6 +217,7 @@ export function useObjectsTree({ api, apiToken, profileId, bucket, prefix, debug
 		setTreeSelectedKeys,
 		onTreeLoadData,
 		refreshTreeNode,
+		treeErrorMessage,
 		treeLoadingKeys,
 		treeDrawerOpen: treeDrawerOpenVisible,
 		setTreeDrawerOpen: setScopedTreeDrawerOpen,

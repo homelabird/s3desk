@@ -20,6 +20,8 @@ body:
         Reference checklist: `frontend/docs/OBJECTS_MOBILE_RESPONSIVE_CHECKLIST.md`
         Suite-level mobile responsive doc: `frontend/docs/MOBILE_RESPONSIVE_E2E.md`
 
+        Describe the broken workflow, not only the geometry symptom. Prefer reports like "cannot reach Details actions after selection" or "tree drawer traps navigation" over raw width or overflow measurements.
+
   - type: textarea
     id: summary
     attributes:

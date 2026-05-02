@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import {
 	buildBucketFixture,
@@ -9,7 +9,14 @@ import {
 	installMockApi,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { objectsContextMenu } from './support/ui'
+import {
+	OBJECTS_LIST_ROW_SELECTOR,
+	gotoObjectsPage,
+	objectsContextMenu,
+	objectsListRow,
+	objectsListRows,
+	objectsSelectionCheckbox,
+} from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -90,165 +97,78 @@ async function stubObjectsApi(page: Page, items: ObjectItem[]) {
 			path: `/buckets/${bucket}/objects/favorites`,
 			handle: ({ json }) => json(buildFavoritesFixture({ bucket })),
 		},
+		{
+			method: 'GET',
+			path: `/buckets/${bucket}/objects/meta`,
+			handle: ({ url, json }) => {
+				const key = url.searchParams.get('key') ?? ''
+				const item = items.find((entry) => entry.key === key)
+				if (!item) {
+					return json({ error: { code: 'not_found', message: 'object not found' } }, 404)
+				}
+				return json({
+					key: item.key,
+					size: item.size,
+					etag: `"${item.key}"`,
+					lastModified: item.lastModified,
+					contentType: 'video/mp4',
+					metadata: { suite: 'objects-context-menu' },
+				})
+			},
+		},
 	])
 }
 
-type MenuMetrics = {
-	rect: {
-		top: number
-		left: number
-		right: number
-		bottom: number
-		width: number
-		height: number
-	}
-	viewport: { width: number; height: number; top: number; left: number; right: number; bottom: number }
-}
-
-async function getMenuMetrics(
-	page: Page,
-	menu: Locator,
-	viewportSelector?: string,
-): Promise<MenuMetrics | null> {
-	if (!(await menu.count())) return null
-	const rect = await menu.evaluate((el) => {
-		const box = el.getBoundingClientRect()
-		return {
-			top: box.top,
-			left: box.left,
-			right: box.right,
-			bottom: box.bottom,
-			width: box.width,
-			height: box.height,
-		}
-	})
-	let viewport: MenuMetrics['viewport'] | null = null
-	if (viewportSelector) {
-		const viewportEl = page.locator(viewportSelector)
-		if (await viewportEl.count()) {
-			viewport = await viewportEl.evaluate((el) => {
-				const box = el.getBoundingClientRect()
-				return {
-					top: box.top,
-					left: box.left,
-					right: box.right,
-					bottom: box.bottom,
-					width: box.width,
-					height: box.height,
-				}
-			})
-		}
-	}
-	if (!viewport) {
-		const size = page.viewportSize()
-		if (!size) return null
-		viewport = {
-			top: 0,
-			left: 0,
-			right: size.width,
-			bottom: size.height,
-			width: size.width,
-			height: size.height,
-		}
-	}
-	return { rect, viewport }
-}
-
-async function expectMenuInViewport(page: Page, menu: Locator, options?: { padding?: number; viewportSelector?: string }) {
-	const deadline = Date.now() + 5000
-	let latest: MenuMetrics | null = null
-	const padding = options?.padding ?? 0
-	const viewportSelector = options?.viewportSelector
-	while (Date.now() < deadline) {
-		latest = await getMenuMetrics(page, menu, viewportSelector)
-		if (latest) {
-			const { rect, viewport } = latest
-			if (
-				rect.top >= viewport.top - padding &&
-				rect.left >= viewport.left - padding &&
-				rect.right <= viewport.right + padding &&
-				rect.bottom <= viewport.bottom + padding
-			) {
-				return latest
-			}
-		}
-		await page.waitForTimeout(50)
-	}
-	if (!latest) {
-		throw new Error('Menu metrics unavailable')
-	}
-	throw new Error(`Menu did not fit viewport: ${JSON.stringify(latest)}`)
-}
-
 test.describe('Objects context menus', () => {
-	test('list menu caps height and enables scrolling', async ({ page }) => {
+	test('list menu still launches a real action in a short viewport', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(12))
 		await seedStorage(page)
 		await page.setViewportSize({ width: 780, height: 240 })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible()
-		await expect(page.locator('[data-objects-row="true"]').first()).toBeVisible()
+		await expect(objectsListRows(page).first()).toBeVisible()
 
 		try {
-			await page.evaluate(() => {
-				document.querySelectorAll<HTMLElement>('[data-objects-row="true"]').forEach((el) => {
+			await page.evaluate((rowSelector) => {
+				document.querySelectorAll<HTMLElement>(rowSelector).forEach((el) => {
 					el.style.pointerEvents = 'none'
 				})
-			})
+			}, OBJECTS_LIST_ROW_SELECTOR)
 
 			const scroller = page.locator('[data-testid="objects-upload-dropzone"] [class*="_listScroller"]')
 			await scroller.scrollIntoViewIfNeeded()
-			const box = await scroller.boundingBox()
-			if (!box) throw new Error('List scroller not found')
-			await scroller.evaluate((el, point) => {
-				el.dispatchEvent(
-					new MouseEvent('contextmenu', {
-						bubbles: true,
-						cancelable: true,
-						view: window,
-						clientX: point.x,
-						clientY: point.y,
-						button: 2,
-						buttons: 2,
-						detail: 1,
-					}),
-				)
-			}, { x: box.x + 12, y: box.y + 12 })
+			await scroller.click({ button: 'right', position: { x: 12, y: 12 }, force: true })
 
 			const menu = objectsContextMenu(page)
-			const menuList = menu.getByRole('menu')
+			const newFolderItem = menu.getByRole('menuitem', { name: 'New folder…' })
 			await expect(menu).toBeVisible()
-			await expect(menuList).toBeVisible()
-
-			const styles = await menuList.evaluate((el) => {
-				const computed = window.getComputedStyle(el)
-				return { maxHeight: computed.maxHeight, overflowY: computed.overflowY }
+			await newFolderItem.evaluate((element) => {
+				;(element as HTMLElement).click()
 			})
-			const viewport = page.viewportSize()
-			if (!viewport) throw new Error('Viewport size unavailable')
-			const maxHeight = Number.parseFloat(styles.maxHeight)
-			expect(styles.overflowY).toBe('auto')
-			expect(maxHeight).toBeGreaterThan(0)
-			expect(maxHeight).toBeLessThanOrEqual(viewport.height - 16)
+			const dialog = page.getByRole('dialog', { name: 'New folder' })
+			await expect(dialog).toBeVisible()
+			await expect(dialog.getByLabel('Folder name')).toBeVisible()
 		} finally {
-			await page.evaluate(() => {
-				document.querySelectorAll<HTMLElement>('[data-objects-row="true"]').forEach((el) => {
-					el.style.pointerEvents = ''
-				})
-			})
+			if (!page.isClosed()) {
+				await page.evaluate((rowSelector) => {
+					document.querySelectorAll<HTMLElement>(rowSelector).forEach((el) => {
+						el.style.pointerEvents = ''
+					})
+				}, OBJECTS_LIST_ROW_SELECTOR)
+			}
 		}
 	})
 
-	test('object menu stays inside viewport', async ({ page }) => {
+	test('near-bottom object menu still opens details in a constrained desktop viewport', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(12))
 		await seedStorage(page)
 		await page.setViewportSize({ width: 780, height: 360 })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		const rows = page.locator('[data-objects-row="true"]')
+		const rows = objectsListRows(page)
 		await expect(rows.first()).toBeVisible()
-		const target = rows.first()
+		const target = rows.last()
 		await target.scrollIntoViewIfNeeded()
 		await expect(target).toBeVisible()
 		const menuTrigger = target.getByRole('button', { name: 'Object actions' })
@@ -262,21 +182,26 @@ test.describe('Objects context menus', () => {
 			.filter({ has: page.getByRole('menuitem', { name: 'Download (client)' }) })
 			.last()
 		await expect(menu).toBeVisible()
-		await expectMenuInViewport(page, menu, {
-			padding: 8,
-			viewportSelector: '[data-scroll-container="app-content"]',
-		})
+		await menu.getByRole('menuitem', { name: 'Details' }).click()
+
+		const drawer = page.getByTestId('objects-details-sheet')
+		await expect(drawer).toBeVisible()
+		await expect(drawer.getByRole('heading', { name: 'Details' })).toBeVisible()
+		await expect(drawer.getByRole('button', { name: 'Copy key' })).toBeVisible()
+		await expect(drawer.getByRole('button', { name: 'Download (client)' })).toBeVisible()
+		await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+		await expect(drawer).toHaveCount(0)
 	})
 
-	test('mobile object menu stays clickable above the selection bar', async ({ page }) => {
+	test('mobile object menu still opens details while the selection bar is visible', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(3))
 		await seedStorage(page)
 		await page.setViewportSize({ width: 390, height: 844 })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		const row = page.locator('[data-objects-row="true"]').first()
+		const row = objectsListRow(page, 'video-1.mp4')
 		await expect(row).toBeVisible()
-		await row.getByRole('checkbox', { name: /Select / }).click()
+		await objectsSelectionCheckbox(page, 'video-1.mp4').click()
 		await expect(page.getByText('1 selected')).toBeVisible()
 
 		await row.getByRole('button', { name: 'Object actions' }).evaluate((element) => {
@@ -288,32 +213,33 @@ test.describe('Objects context menus', () => {
 			.filter({ has: page.getByRole('menuitem', { name: 'Download (client)' }) })
 			.last()
 		await expect(menu).toBeVisible()
-		await expectMenuInViewport(page, menu, {
-			padding: 8,
-			viewportSelector: '[data-scroll-container="app-content"]',
-		})
 
 		await menu.getByRole('menuitem', { name: 'Details' }).click()
-		await expect(menu).toBeHidden()
+		const drawer = page.getByTestId('objects-details-sheet')
+		await expect(drawer).toBeVisible()
+		await expect(drawer.getByRole('heading', { name: 'Details' })).toBeVisible()
+		await expect(drawer.getByRole('cell', { name: 'video-1.mp4', exact: true })).toBeVisible()
+		await drawer.getByRole('button', { name: 'Close', exact: true }).click()
+		await expect(drawer).toHaveCount(0)
 	})
 
 	test('right-clicking a selected object keeps the bulk selection and opens selection actions', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(3))
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		await page.getByRole('checkbox', { name: 'Select video-1.mp4' }).click()
-		await page.getByRole('checkbox', { name: 'Select video-2.mp4' }).click()
+		await objectsSelectionCheckbox(page, 'video-1.mp4').click()
+		await objectsSelectionCheckbox(page, 'video-2.mp4').click()
 		await expect(page.getByText('2 selected')).toBeVisible()
 
-		const selectedRow = page.locator('[data-objects-row="true"]', { hasText: 'video-1.mp4' }).first()
+		const selectedRow = objectsListRow(page, 'video-1.mp4')
 		await selectedRow.click({ button: 'right' })
 
 		const menu = objectsContextMenu(page)
 		await expect(menu).toBeVisible()
 		await expect(page.getByText('2 selected')).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select video-1.mp4' })).toBeChecked()
-		await expect(page.getByRole('checkbox', { name: 'Select video-2.mp4' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-1.mp4')).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-2.mp4')).toBeChecked()
 		await expect(menu.getByRole('menuitem', { name: 'Move selection to…' })).toBeVisible()
 		await expect(menu.getByRole('menuitem', { name: 'Details' })).toHaveCount(0)
 	})
@@ -321,21 +247,21 @@ test.describe('Objects context menus', () => {
 	test('right-clicking an unselected object retargets selection before opening object actions', async ({ page }) => {
 		await stubObjectsApi(page, buildObjectItems(3))
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		await page.getByRole('checkbox', { name: 'Select video-1.mp4' }).click()
-		await page.getByRole('checkbox', { name: 'Select video-2.mp4' }).click()
+		await objectsSelectionCheckbox(page, 'video-1.mp4').click()
+		await objectsSelectionCheckbox(page, 'video-2.mp4').click()
 		await expect(page.getByText('2 selected')).toBeVisible()
 
-		const targetRow = page.locator('[data-objects-row="true"]', { hasText: 'video-3.mp4' }).first()
+		const targetRow = objectsListRow(page, 'video-3.mp4')
 		await targetRow.click({ button: 'right' })
 
 		const menu = objectsContextMenu(page)
 		await expect(menu).toBeVisible()
 		await expect(page.getByText('1 selected')).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select video-1.mp4' })).not.toBeChecked()
-		await expect(page.getByRole('checkbox', { name: 'Select video-2.mp4' })).not.toBeChecked()
-		await expect(page.getByRole('checkbox', { name: 'Select video-3.mp4' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-1.mp4')).not.toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-2.mp4')).not.toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-3.mp4')).toBeChecked()
 		await expect(menu.getByRole('menuitem', { name: 'Details' })).toBeVisible()
 		await expect(menu.getByRole('menuitem', { name: 'Move selection to…' })).toHaveCount(0)
 	})

@@ -191,6 +191,96 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			wantCode:   http.StatusOK,
 		},
 		{
+			name:             "rejects localhost origin with path",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "http://localhost:5173/app",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects localhost origin with trailing slash",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "https://localhost:5173/",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects localhost origin with query",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "https://localhost:5173?from=app",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects localhost origin with fragment",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "https://localhost:5173#stale-fragment",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects localhost origin with userinfo",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "https://user@localhost:5173",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects localhost origin with empty host",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "https://:5173",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects file origin",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "file://localhost",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects unsupported scheme origin",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "wss://localhost:8080",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects localhost origin with out of range port",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "https://localhost:65536",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
+			name:             "rejects null origin",
+			url:              "http://localhost:8080/api/v1/meta",
+			remoteAddr:       "127.0.0.1:1234",
+			origin:           "null",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "invalid origin",
+		},
+		{
 			name:       "allows mixed case allowlisted host",
 			cfg:        config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}},
 			url:        "https://S3DESK.LOCAL.:8443/api/v1/meta",
@@ -204,6 +294,14 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			url:        "http://[fd00::25]:8080/api/v1/meta",
 			remoteAddr: "[fd00::10]:1234",
 			origin:     "http://[fd00::25]:5173",
+			wantCode:   http.StatusOK,
+		},
+		{
+			name:       "allows allowlisted ipv6 ula host and origin",
+			cfg:        config.Config{AllowRemote: true, AllowedHosts: []string{"fd00::25"}},
+			url:        "https://[FD00::25]:8443/api/v1/meta",
+			remoteAddr: "[fd00::10]:1234",
+			origin:     "https://[fd00::25]:5173",
 			wantCode:   http.StatusOK,
 		},
 		{
@@ -230,6 +328,16 @@ func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 			origin:        "http://172.18.34.4:8080",
 			wantCode:      http.StatusForbidden,
 			wantErrorCode: "forbidden",
+		},
+		{
+			name:             "rejects non allowlisted ipv6 ula host when allow remote is enabled",
+			cfg:              config.Config{AllowRemote: true, AllowedHosts: []string{"fd00::25"}},
+			url:              "http://[fd00::26]:8080/api/v1/meta",
+			remoteAddr:       "[fd00::10]:1234",
+			origin:           "http://[fd00::26]:8080",
+			wantCode:         http.StatusForbidden,
+			wantErrorCode:    "forbidden",
+			wantBodyContains: "ALLOWED_HOSTS",
 		},
 		{
 			name:             "rejects private origin by default",
@@ -387,6 +495,72 @@ func TestCORS_OverridesCORPForAllowedOrigin(t *testing.T) {
 	}
 }
 
+func TestCORS_PreflightReturnsNoContentForAllowlistedIPv6ULAOrigin(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{AllowRemote: true, AllowedHosts: []string{"fd00::25"}}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "http://[fd00::25]:8080/api/v1/meta", nil)
+	req.RemoteAddr = "[fd00::10]:1234"
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "https://[FD00::25]:5173")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "X-Api-Token")
+
+	nextCalled := false
+	h := s.requireLocalHost(s.cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	})))
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if nextCalled {
+		t.Fatal("expected handler to short-circuit preflight")
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://[FD00::25]:5173" {
+		t.Fatalf("Access-Control-Allow-Origin=%q, want %q", got, "https://[FD00::25]:5173")
+	}
+	if got := rr.Header().Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
+		t.Fatalf("Cross-Origin-Resource-Policy=%q, want %q", got, "cross-origin")
+	}
+}
+
+func TestCORS_PreflightReturnsNoContentForAllowlistedMixedCaseHostOrigin(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.local"}}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "http://s3desk.local:8080/api/v1/meta", nil)
+	req.RemoteAddr = "172.18.0.10:1234"
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "https://S3DESK.LOCAL.:8443")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "X-Api-Token")
+
+	nextCalled := false
+	h := s.requireLocalHost(s.cors(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusInternalServerError)
+	})))
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusNoContent)
+	}
+	if nextCalled {
+		t.Fatal("expected handler to short-circuit preflight")
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://S3DESK.LOCAL.:8443" {
+		t.Fatalf("Access-Control-Allow-Origin=%q, want %q", got, "https://S3DESK.LOCAL.:8443")
+	}
+	if got := rr.Header().Get("Cross-Origin-Resource-Policy"); got != "cross-origin" {
+		t.Fatalf("Cross-Origin-Resource-Policy=%q, want %q", got, "cross-origin")
+	}
+}
+
 func TestRequireLocalHost_RejectsPrivateRemoteAddrByDefault(t *testing.T) {
 	t.Parallel()
 
@@ -474,6 +648,40 @@ func TestRequireLocalHost_AllowsPrivateHostWhenAllowRemoteEnabled(t *testing.T) 
 	}
 }
 
+func TestRequireLocalPeer_AllowsPrivateProbeHostWhenAllowedHostsConfigured(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{AllowRemote: true, AllowedHosts: []string{"s3desk.example.com"}}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://10.244.1.25:8080/healthz", nil)
+	req.RemoteAddr = "10.244.1.10:1234"
+
+	s.requireLocalPeer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+}
+
+func TestRequireLocalPeer_RejectsPrivateRemoteAddrByDefault(t *testing.T) {
+	t.Parallel()
+
+	s := &server{}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://10.244.1.25:8080/healthz", nil)
+	req.RemoteAddr = "10.244.1.10:1234"
+
+	s.requireLocalPeer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusForbidden)
+	}
+}
+
 func TestRequireLocalHost_RejectsPrivateOriginByDefault(t *testing.T) {
 	t.Parallel()
 
@@ -541,7 +749,7 @@ func TestAuthLimiterClientKey_FallsBackToLoopbackPeerWithoutForwardingHeaders(t 
 	}
 }
 
-func TestRequireAPITokenAcceptsHeaderToken(t *testing.T) {
+func TestAPIAuthAcceptsHeaderToken(t *testing.T) {
 	t.Parallel()
 
 	s := &server{cfg: config.Config{APIToken: "demo-token"}}
@@ -557,7 +765,7 @@ func TestRequireAPITokenAcceptsHeaderToken(t *testing.T) {
 	}
 }
 
-func TestRequireAPITokenAcceptsBearerToken(t *testing.T) {
+func TestAPIAuthAcceptsBearerToken(t *testing.T) {
 	t.Parallel()
 
 	s := &server{cfg: config.Config{APIToken: "demo-token"}}
@@ -573,7 +781,7 @@ func TestRequireAPITokenAcceptsBearerToken(t *testing.T) {
 	}
 }
 
-func TestRequireAPITokenRejectsQueryApiToken(t *testing.T) {
+func TestAPIAuthRejectsQueryToken(t *testing.T) {
 	t.Parallel()
 
 	s := &server{cfg: config.Config{APIToken: "demo-token"}}
@@ -596,7 +804,7 @@ func TestRequireAPITokenRejectsQueryApiToken(t *testing.T) {
 	}
 }
 
-func TestRequireAPITokenRejectsQueryApiTokenEvenWithHeaderToken(t *testing.T) {
+func TestAPIAuthRejectsQueryTokenEvenWithHeaderToken(t *testing.T) {
 	t.Parallel()
 
 	s := &server{cfg: config.Config{APIToken: "demo-token"}}
@@ -609,5 +817,21 @@ func TestRequireAPITokenRejectsQueryApiTokenEvenWithHeaderToken(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAPIAuthRejectsInvalidHeaderToken(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{APIToken: "demo-token"}}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/meta", nil)
+	req.Header.Set("X-Api-Token", "wrong-token")
+	s.requireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusUnauthorized)
 	}
 }

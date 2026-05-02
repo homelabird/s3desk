@@ -11,9 +11,54 @@
 .imageViewerMetaRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.imageViewerMetaStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.imageViewerMetaBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 82%, transparent);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.imageViewerFooter {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.imageViewerFooterGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.imageViewerToolbarButton {
+  min-height: 32px;
+  color: var(--s3d-color-text) !important;
+}
+
+.imageViewerToolbarButton > span,
+.imageViewerToolbarButton :global(.anticon) {
+  color: inherit !important;
 }
 
 .imageViewerStage {
@@ -32,6 +77,12 @@
 
 .imageViewerStageDragging {
   cursor: grabbing;
+}
+
+.imageViewerStage:focus-visible {
+  border-color: var(--s3d-color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 20%, transparent);
+  outline: none;
 }
 
 .imageViewerImage {
@@ -110,12 +161,62 @@
     min-height: calc(100dvh - 220px);
   }
 
+  .imageViewerShell {
+    gap: 10px;
+  }
+
+  .imageViewerMetaRow {
+    gap: 8px;
+  }
+
+  .imageViewerMetaStats,
+  .imageViewerFooter,
+  .imageViewerFooterGroup {
+    gap: 6px;
+  }
+
+  .imageViewerMetaBadge {
+    min-height: 22px;
+    padding: 1px 7px;
+    font-size: 11px;
+  }
+
   .imageViewerImage {
-    max-height: calc(100dvh - 360px);
+    max-height: calc(100dvh - 336px);
   }
 
   .imageViewerFallbackInner {
     min-width: 0;
     width: 100%;
+    min-height: 180px;
+    padding: 12px;
+  }
+
+  .imageViewerToolbarButton {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .imageViewerModalBody {
+    min-height: calc(100dvh - 196px);
+  }
+
+  .imageViewerShell {
+    gap: 8px;
+  }
+
+  .imageViewerMetaBadge {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .imageViewerImage {
+    max-height: calc(100dvh - 300px);
+  }
+
+  .imageViewerToolbarButton {
+    min-height: 40px;
+    padding-inline: 10px !important;
   }
 }

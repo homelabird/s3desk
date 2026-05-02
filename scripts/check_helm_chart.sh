@@ -7,10 +7,13 @@ RELEASE_NAME="${HELM_RELEASE_NAME:-s3desk}"
 
 helm lint "${CHART_PATH}"
 helm lint "${CHART_PATH}" --values "${CHART_PATH}/ci-values.yaml"
+helm lint "${CHART_PATH}" --values "${CHART_PATH}/values-production.yaml"
 
 helm template "${RELEASE_NAME}" "${CHART_PATH}" >/dev/null
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --values "${CHART_PATH}/ci-values.yaml" >/dev/null
+helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+  --values "${CHART_PATH}/values-production.yaml" >/dev/null
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set db.backend=postgres \
   --set-string db.databaseUrl='postgres://s3desk:password@postgres:5432/s3desk?sslmode=disable' \
@@ -30,6 +33,12 @@ helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set backup.restoreMaxBytes=123 >/dev/null
 helm template "${RELEASE_NAME}" "${CHART_PATH}" \
   --set-string backup.restoreMaxBytes=123 >/dev/null
+if helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=s3desk.example.com >/tmp/s3desk-helm-production-hardening-negative.out 2>&1; then
+  echo "[helm-check] expected browser-facing remote chart render without production hardening to fail" >&2
+  exit 1
+fi
 
 test "$(bash "${ROOT}/scripts/chart_version_from_tag.sh" 0.21v)" = "0.21.0"
 test "$(bash "${ROOT}/scripts/chart_version_from_tag.sh" 0.21v-rc2)" = "0.21.0-rc.2"

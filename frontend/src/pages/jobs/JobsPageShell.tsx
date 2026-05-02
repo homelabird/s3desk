@@ -1,7 +1,7 @@
 import { Space } from 'antd'
 import { Suspense } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { JobsOverlaysHostProps } from './JobsOverlaysHost'
 import { JobsTableSection, type JobsTableSectionProps } from './JobsTableSection'
 import { JobsToolbar, type JobsToolbarProps } from './JobsToolbar'
@@ -9,7 +9,7 @@ import { JobsOverlaysHost } from './jobsLazy'
 import styles from '../JobsPage.module.css'
 
 export type JobsPageShellProps = {
-  api: APIClient
+  api: APIClientShape
   apiToken: string
   profileId: string
   isOffline: boolean

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { chooseRowAction, commitComboboxValue, gotoJobsPage, jobsTableRow, openCreateDeleteJobDrawer } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -162,27 +163,21 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 	await seedStorage(page)
 	await setupApiMocks(page)
 
-	await page.goto('/jobs')
-	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+	await gotoJobsPage(page)
 	await expect(page.getByText('job-running')).toBeVisible()
 	await expect(page.getByText('job-failed')).toBeVisible()
 
-	await page.getByRole('button', { name: /More$/ }).click()
-	await page.getByRole('menuitem', { name: 'New Delete Job' }).click()
-	const deleteDrawer = page.getByRole('dialog', { name: 'Create delete job (S3)' })
-	await expect(deleteDrawer).toBeVisible()
-	await deleteDrawer.getByRole('combobox', { name: 'Bucket' }).fill(defaultStorage.bucket)
+	const deleteDrawer = await openCreateDeleteJobDrawer(page, { moreButtonName: /More$/ })
+	await commitComboboxValue(page, deleteDrawer, 'Bucket', defaultStorage.bucket)
 	await deleteDrawer.getByLabel('Prefix', { exact: true }).fill('to-delete/')
 	await deleteDrawer.getByRole('button', { name: 'Create' }).click()
 	await expect(page.getByRole('cell', { name: 'job-created' })).toBeVisible()
 
-	const runningRow = page.getByRole('row', { name: /job-running/i })
-	await runningRow.getByRole('button', { name: 'Open actions menu' }).click()
-	await page.getByRole('menuitem', { name: 'Cancel' }).click()
+	const runningRow = jobsTableRow(page, 'job-running')
+	await chooseRowAction(page, runningRow, 'Cancel')
 	await expect(runningRow.getByText('canceled')).toBeVisible()
 
-	const failedRow = page.getByRole('row', { name: /job-failed/i })
-	await failedRow.getByRole('button', { name: 'Open actions menu' }).click()
-	await page.getByRole('menuitem', { name: 'Retry' }).click()
+	const failedRow = jobsTableRow(page, 'job-failed')
+	await chooseRowAction(page, failedRow, 'Retry')
 	await expect(page.getByRole('cell', { name: 'job-retry-1' })).toBeVisible()
 })

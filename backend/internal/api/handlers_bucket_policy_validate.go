@@ -1,63 +1,16 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"s3desk/internal/models"
 )
 
 func (s *server) handleValidateBucketPolicy(w http.ResponseWriter, r *http.Request) {
-	secrets, ok := profileFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
-		return
-	}
-
-	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
-	if bucket == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "bucket is required", nil)
-		return
-	}
-
-	var req models.BucketPolicyPutRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
-		return
-	}
-
-	if len(req.Policy) == 0 || strings.TrimSpace(string(req.Policy)) == "" {
-		writeJSON(w, http.StatusOK, models.BucketPolicyValidateResponse{
-			Ok:       false,
-			Provider: secrets.Provider,
-			Errors:   []string{"policy is required"},
-		})
-		return
-	}
-
-	var raw any
-	if err := json.Unmarshal(req.Policy, &raw); err != nil {
-		writeJSON(w, http.StatusOK, models.BucketPolicyValidateResponse{
-			Ok:       false,
-			Provider: secrets.Provider,
-			Errors:   []string{"policy must be valid JSON"},
-			Warnings: []string{err.Error()},
-		})
-		return
-	}
-
-	errs, warns := validateBucketPolicyStatic(secrets.Provider, bucket, raw)
-	writeJSON(w, http.StatusOK, models.BucketPolicyValidateResponse{
-		Ok:       len(errs) == 0,
-		Provider: secrets.Provider,
-		Errors:   errs,
-		Warnings: warns,
-	})
+	newBucketPolicyValidateHTTPService(s).handleValidateBucketPolicy(w, r)
 }
 
 func validateBucketPolicyStatic(provider models.ProfileProvider, bucket string, policy any) (errs []string, warns []string) {

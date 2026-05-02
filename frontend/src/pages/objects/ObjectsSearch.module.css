@@ -3,16 +3,31 @@
 }
 
 .globalSearchContent {
+  --objects-search-content-gap: 16px;
+  --objects-search-section-gap: 10px;
+  --objects-search-field-gap: 12px;
+  --objects-search-card-inline-padding: 14px;
+  --objects-search-card-block-padding: 12px;
+  --objects-search-card-gap: 12px;
+  --objects-search-result-card-padding: 10px;
+  --objects-search-table-cell-block-padding: 10px;
+  --objects-search-table-cell-inline-padding: 12px;
+  --objects-search-table-modified-width: 220px;
+  --objects-search-table-actions-width: 260px;
+  --objects-search-table-action-gap: 8px;
+  --objects-search-table-button-min-height: 32px;
+  --objects-search-table-button-padding-inline: 12px;
+  --objects-search-table-button-font-size: 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--objects-search-content-gap);
   min-height: 0;
 }
 
 .globalSearchSection {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--objects-search-section-gap);
 }
 
 .globalSearchIntro {
@@ -27,7 +42,7 @@
 .globalSearchFieldRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--objects-search-field-gap);
   align-items: flex-start;
 }
 
@@ -47,8 +62,16 @@
   max-width: 100%;
 }
 
+.drawerCompactField {
+  min-height: 32px;
+}
+
 .drawerActions {
   justify-content: flex-end;
+}
+
+.globalSearchCompactButton {
+  min-height: 32px;
 }
 
 .globalSearchInputMd {
@@ -109,7 +132,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
+  padding: var(--objects-search-card-block-padding) var(--objects-search-card-inline-padding);
   cursor: pointer;
   text-align: left;
 }
@@ -131,14 +154,72 @@
 .globalSearchIndexPanel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 0 14px 14px;
+  gap: var(--objects-search-card-gap);
+  padding: 0 var(--objects-search-card-inline-padding) var(--objects-search-card-block-padding);
 }
 
 .globalSearchIndexHint,
 .globalSearchResultsMeta {
   margin: 0;
   color: var(--s3d-color-text-secondary);
+}
+
+.globalSearchResultsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.globalSearchResultCard {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--objects-search-card-gap) - 4px);
+  padding: var(--objects-search-result-card-padding);
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 10px;
+  background: var(--s3d-color-bg-secondary);
+}
+
+.globalSearchResultKey {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.globalSearchResultMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--s3d-color-text-secondary);
+  font-size: 12px;
+}
+
+.globalSearchResultMetaItem {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.globalSearchResultActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.globalSearchResultPrimaryButton {
+  flex: 1 1 84px;
+}
+
+.globalSearchResultSecondaryButton {
+  flex: 1 1 96px;
+}
+
+.globalSearchResultIconButton {
+  min-width: 28px;
+  width: 28px;
+  padding-inline: 0 !important;
 }
 
 .globalSearchCode {
@@ -180,6 +261,7 @@
 .globalSearchTable {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .globalSearchTableMd {
@@ -196,8 +278,11 @@
   z-index: 1;
   background: var(--s3d-color-bg-code);
   text-align: left;
-  padding: 10px 12px;
+  padding: var(--objects-search-table-cell-block-padding) var(--objects-search-table-cell-inline-padding);
   border-bottom: 1px solid var(--s3d-color-border);
+  font-size: 13px;
+  line-height: 1.25;
+  vertical-align: middle;
 }
 
 .globalSearchThSize {
@@ -205,22 +290,34 @@
 }
 
 .globalSearchThModified {
-  width: 220px;
+  width: var(--objects-search-table-modified-width);
 }
 
 .globalSearchThActions {
-  width: 260px;
+  width: var(--objects-search-table-actions-width);
 }
 
 .globalSearchTd {
-  padding: 10px 12px;
+  padding: var(--objects-search-table-cell-block-padding) var(--objects-search-table-cell-inline-padding);
   border-bottom: 1px solid var(--s3d-color-border);
+  font-size: 13px;
+  line-height: 1.25;
+  vertical-align: middle;
 }
 
 .globalSearchActionRow {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: var(--objects-search-table-action-gap);
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.globalSearchActionRow :global(.ant-btn.ant-btn-sm) {
+  height: var(--objects-search-table-button-min-height) !important;
+  min-height: var(--objects-search-table-button-min-height) !important;
+  padding-inline: var(--objects-search-table-button-padding-inline) !important;
+  font-size: var(--objects-search-table-button-font-size) !important;
+  line-height: 1.1;
 }
 
 .globalSearchKeyText {
@@ -239,6 +336,13 @@
   max-width: 260px;
 }
 
+.globalSearchDateText {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 .globalSearchMuted {
   color: var(--s3d-color-text-secondary);
 }
@@ -251,11 +355,13 @@
 
 @media (max-width: 360px) {
   .globalSearchContent {
-    gap: 14px;
-  }
-
-  .globalSearchFieldRow {
-    gap: 10px;
+    --objects-search-content-gap: 8px;
+    --objects-search-section-gap: 6px;
+    --objects-search-field-gap: 6px;
+    --objects-search-card-inline-padding: 8px;
+    --objects-search-card-block-padding: 8px;
+    --objects-search-card-gap: 8px;
+    --objects-search-result-card-padding: 8px;
   }
 
   .globalSearchButtonRow,
@@ -271,6 +377,31 @@
 
   .globalSearchKeyTextSm {
     max-width: 220px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .globalSearchContent {
+    --objects-search-table-cell-block-padding: 6px;
+    --objects-search-table-cell-inline-padding: 10px;
+    --objects-search-table-modified-width: 184px;
+    --objects-search-table-actions-width: 228px;
+    --objects-search-table-action-gap: 6px;
+    --objects-search-table-button-min-height: 28px;
+    --objects-search-table-button-padding-inline: 9px;
+    --objects-search-table-button-font-size: 13px;
+  }
+
+  .globalSearchTableMd {
+    min-width: 840px;
+  }
+
+  .globalSearchKeyTextMd {
+    max-width: 420px;
+  }
+
+  .globalSearchActionRow {
+    align-items: center;
   }
 }
 
@@ -293,6 +424,63 @@
 }
 
 @media (max-width: 768px) {
+  .globalSearchContent {
+    --objects-search-content-gap: 10px;
+    --objects-search-section-gap: 8px;
+    --objects-search-field-gap: 7px;
+    --objects-search-card-inline-padding: 10px;
+    --objects-search-card-block-padding: 9px;
+    --objects-search-card-gap: 10px;
+    --objects-search-result-card-padding: 8px;
+  }
+
+  .globalSearchSectionTitle {
+    font-size: 13px;
+  }
+
+  .globalSearchButtonRow,
+  .globalSearchActionRow,
+  .drawerActions {
+    gap: 6px;
+  }
+  .globalSearchCheckboxRow {
+    min-height: 28px;
+  }
+
+  .drawerCompactField,
+  .globalSearchNumberInput,
+  .globalSearchDateInput,
+  .globalSearchCompactButton {
+    min-height: 28px;
+    font-size: 13px;
+  }
+
+  .globalSearchNumberInput,
+  .globalSearchDateInput {
+    padding: 3px 8px;
+  }
+
+  .globalSearchResultsMeta {
+    font-size: 12px;
+  }
+
+  .globalSearchResultCard {
+    gap: 6px;
+  }
+
+  .globalSearchResultMeta {
+    gap: 5px 10px;
+    font-size: 11px;
+  }
+
+  .globalSearchResultActions {
+    gap: 5px;
+  }
+
+  .globalSearchLoadMoreRow {
+    padding-top: 10px;
+  }
+
   .globalSearchKeyTextSm {
     max-width: none;
     white-space: normal;
@@ -306,7 +494,6 @@
 
   .globalSearchTh,
   .globalSearchTd {
-    padding: 8px 10px;
     vertical-align: top;
   }
 
@@ -337,5 +524,81 @@
   .drawerActions :global(.ant-btn) {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .globalSearchContent {
+    --objects-search-content-gap: 8px;
+    --objects-search-section-gap: 6px;
+    --objects-search-field-gap: 6px;
+    --objects-search-card-inline-padding: 8px;
+    --objects-search-card-block-padding: 8px;
+    --objects-search-card-gap: 8px;
+    --objects-search-result-card-padding: 8px;
+  }
+
+  .globalSearchButtonRow,
+  .globalSearchActionRow,
+  .drawerActions {
+    gap: 4px;
+  }
+
+  .globalSearchCheckboxRow {
+    min-height: 26px;
+    padding: 0 2px;
+    font-size: 12px;
+  }
+
+  .drawerCompactField,
+  .globalSearchNumberInput,
+  .globalSearchDateInput,
+  .globalSearchCompactButton {
+    min-height: 26px;
+    font-size: 12px;
+  }
+
+  .globalSearchCompactButton {
+    padding-inline: 8px !important;
+  }
+
+  .globalSearchTh,
+  .globalSearchTd {
+    padding: 7px 8px;
+  }
+
+  .globalSearchResultsMeta,
+  .globalSearchIndexHint {
+    font-size: 11px;
+  }
+
+  .globalSearchResultsList {
+    gap: 6px;
+  }
+
+  .globalSearchResultCard {
+    gap: 5px;
+    padding: 8px;
+    border-radius: 8px;
+  }
+
+  .globalSearchResultMeta {
+    gap: 4px 8px;
+    font-size: 10px;
+  }
+
+  .globalSearchResultActions {
+    gap: 4px;
+  }
+
+  .globalSearchResultPrimaryButton,
+  .globalSearchResultSecondaryButton,
+  .globalSearchResultIconButton {
+    min-height: 26px !important;
+  }
+
+  .globalSearchResultIconButton {
+    min-width: 26px;
+    width: 26px;
   }
 }

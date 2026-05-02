@@ -59,7 +59,7 @@ func New(dep Dependencies) http.Handler {
 	apiRouter.Use(api.cors)
 	apiRouter.Use(api.requireAPIToken)
 
-	apiRouter.Get("/ws", api.handleWS)
+	apiRouter.Get("/ws", api.handleWSUpgrade)
 	apiRouter.Get("/events", api.handleEventsSSE)
 	apiRouter.Post("/realtime-ticket", api.handleCreateRealtimeTicket)
 	apiRouter.Get("/meta", api.handleGetMeta)
@@ -147,7 +147,7 @@ func New(dep Dependencies) http.Handler {
 		r.Get("/buckets/{bucket}/objects/search", api.handleSearchObjects)
 		r.Get("/buckets/{bucket}/objects/index-summary", api.handleGetObjectIndexSummary)
 		r.Get("/buckets/{bucket}/objects/meta", api.handleGetObjectMeta)
-		r.Post("/buckets/{bucket}/objects/folder", api.handleCreateFolder)
+		r.Post("/buckets/{bucket}/objects/folder", api.handleCreateObjectFolder)
 		r.Get("/buckets/{bucket}/objects/download", api.handleDownloadObject)
 		r.Get("/buckets/{bucket}/objects/download-url", api.handleGetObjectDownloadURL)
 		r.Get("/buckets/{bucket}/objects/favorites", api.handleListObjectFavorites)
@@ -158,14 +158,14 @@ func New(dep Dependencies) http.Handler {
 		r.Get("/local/entries", api.handleListLocalEntries)
 
 		r.Route("/uploads", func(r chi.Router) {
-			r.Post("/", api.handleCreateUpload)
+			r.Post("/", api.handleCreateUploadSession)
 			r.Post("/{uploadId}/files", api.handleUploadFiles)
 			r.Post("/{uploadId}/presign", api.handlePresignUpload)
 			r.Post("/{uploadId}/multipart/complete", api.handleCompleteMultipartUpload)
 			r.Post("/{uploadId}/multipart/abort", api.handleAbortMultipartUpload)
 			r.Get("/{uploadId}/chunks", api.handleGetUploadChunks)
 			r.Post("/{uploadId}/commit", api.handleCommitUpload)
-			r.Delete("/{uploadId}", api.handleDeleteUpload)
+			r.Delete("/{uploadId}", api.handleDeleteUploadSession)
 		})
 
 		r.Route("/jobs", func(r chi.Router) {
@@ -199,9 +199,9 @@ func New(dep Dependencies) http.Handler {
 	r.With(api.requireLocalHost).Get("/docs", serveOpenAPIDocs)
 	r.With(api.requireLocalHost).Get("/docs/", serveOpenAPIDocs)
 
-	r.With(api.requireLocalHost).Get("/healthz", api.handleHealthz)
-	r.With(api.requireLocalHost).Get("/readyz", api.handleReadyz)
-	r.With(api.requireLocalHost, api.requireAPIToken).Get("/metrics", api.handleMetrics)
+	r.With(api.requireLocalPeer).Get("/healthz", api.handleHealthz)
+	r.With(api.requireLocalPeer).Get("/readyz", api.handleReadyz)
+	r.With(api.requireLocalPeer, api.requireAPIToken).Get("/metrics", api.handleMetrics)
 
 	staticIndex := filepath.Join(dep.Config.StaticDir, "index.html")
 	uiEnabled := false

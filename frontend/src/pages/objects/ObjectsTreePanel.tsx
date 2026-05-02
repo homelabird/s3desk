@@ -2,6 +2,7 @@ import { Button } from 'antd'
 import { FolderAddOutlined } from '@ant-design/icons'
 import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 
+import { newFolderShortcutHint } from '../../lib/actionHints'
 import styles from './ObjectsShell.module.css'
 import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
@@ -30,6 +31,7 @@ type ObjectsTreePanelProps = {
 	favoritesLoading: boolean
 	favoritesError?: string | null
 	treeData: TreeNode[]
+	treeError?: string | null
 	loadingKeys?: string[]
 	expandedKeys: string[]
 	selectedKeys: string[]
@@ -54,14 +56,14 @@ type ObjectsTreePanelProps = {
 }
 
 export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
-	const favoritesQuery = props.favoritesSearch.trim()
-	const favoritesExpanded = props.favoritesExpanded || favoritesQuery.length > 0 || props.favoritesOnly
+	const favoritesExpanded = props.favoritesExpanded
 
 	const renderTreeView = (onSelectKey: (key: string) => void) => (
 		<ObjectsTreeView
 			hasProfile={props.hasProfile}
 			hasBucket={props.hasBucket}
 			treeData={props.treeData}
+			errorMessage={props.treeError}
 			loadingKeys={props.loadingKeys}
 			onLoadData={props.onLoadData}
 			selectedKeys={props.selectedKeys}
@@ -82,7 +84,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 		const selectedKey = String(props.selectedKeys[0] ?? '/')
 		const newFolderLabel = selectedKey === '/' ? 'New folder' : 'New subfolder'
 		return (
-			<div className={styles.treeStack}>
+			<div className={styles.treeStack} data-testid="objects-tree-content">
 				<ObjectsFavoritesPane
 					hasProfile={props.hasProfile}
 					hasBucket={props.hasBucket}
@@ -108,7 +110,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 							title={
 								props.canCreateFolder
 									? selectedKey === '/'
-										? 'New folder (Ctrl+Shift+N)'
+										? newFolderShortcutHint()
 										: 'New subfolder'
 									: props.createFolderTooltipText
 							}
@@ -116,9 +118,12 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 							<Button
 								size="small"
 								type="text"
+								className={styles.treeCompactActionButton}
 								icon={<FolderAddOutlined />}
 								disabled={!props.canCreateFolder}
+								data-testid="objects-tree-new-folder"
 								aria-label={newFolderLabel}
+								style={{ width: 24, height: 24, minWidth: 24, minHeight: 24, padding: 0 }}
 								onClick={() => props.onNewFolderAtPrefix(selectedKey)}
 							/>
 						</span>
@@ -157,6 +162,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 				placement="left"
 				width="min(100vw, 420px)"
 				dataTestId="objects-tree-sheet"
+				compactMobile
 			>
 				{renderPanel(props.onSelectKeyFromDrawer, props.onSelectFavoriteFromDrawer)}
 			</ObjectsOverlaySheet>

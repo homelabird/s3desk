@@ -37,6 +37,10 @@ function getTopOverlayLayer() {
 	return overlayLayerStack[overlayLayerStack.length - 1] ?? null
 }
 
+export function hasOpenOverlayLayer() {
+	return overlayLayerStack.length > 0
+}
+
 function isFocusableElement(element: HTMLElement) {
 	if (element.hidden) return false
 	if (element.getAttribute('aria-hidden') === 'true') return false

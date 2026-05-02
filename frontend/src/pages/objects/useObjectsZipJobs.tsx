@@ -1,11 +1,12 @@
-import { Button, Space, Typography, message } from 'antd'
+import { Button, Space, Typography } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/Transfers'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { TransfersContextValue } from '../../components/transfersTypes'
+import { objectsFeedback } from './objectsFeedback'
 import { normalizePrefix } from './objectsListUtils'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
@@ -55,7 +56,7 @@ export function useObjectsZipJobs({
 		}),
 		onSuccess: async (job, args, context) => {
 			await queryClient.invalidateQueries({
-				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				queryKey: queryKeys.jobs.scope(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
 				exact: false,
 			})
 			if (context?.contextVersion !== zipContextVersionRef.current) return
@@ -68,7 +69,7 @@ export function useObjectsZipJobs({
 				filenameHint: `job-${job.id}.zip`,
 				waitForJob: job.status !== 'succeeded',
 			})
-			message.open({
+			objectsFeedback.open({
 				type: 'success',
 				content: (
 					<Space>
@@ -86,7 +87,7 @@ export function useObjectsZipJobs({
 		},
 		onError: (err, _args, context) => {
 			if (context?.contextVersion !== zipContextVersionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 
@@ -112,7 +113,7 @@ export function useObjectsZipJobs({
 		}),
 		onSuccess: async (job, args, context) => {
 			await queryClient.invalidateQueries({
-				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				queryKey: queryKeys.jobs.scope(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
 				exact: false,
 			})
 			if (context?.contextVersion !== zipContextVersionRef.current) return
@@ -124,7 +125,7 @@ export function useObjectsZipJobs({
 				filenameHint: `job-${job.id}.zip`,
 				waitForJob: job.status !== 'succeeded',
 			})
-			message.open({
+			objectsFeedback.open({
 				type: 'success',
 				content: (
 					<Space>
@@ -142,7 +143,7 @@ export function useObjectsZipJobs({
 		},
 		onError: (err, _args, context) => {
 			if (context?.contextVersion !== zipContextVersionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 

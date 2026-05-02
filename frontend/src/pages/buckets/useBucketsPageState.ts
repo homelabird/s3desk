@@ -3,6 +3,7 @@ import { Grid } from 'antd'
 import { useNavigate } from 'react-router-dom'
 
 import { useAPIClient } from '../../api/useAPIClient'
+import type { BucketsPageControllerState } from './buildBucketsPageControllerState'
 import { useBucketsPageControllerState } from './useBucketsPageControllerState'
 
 type UseBucketsPageStateArgs = {
@@ -26,4 +27,4 @@ export function useBucketsPageState({ apiToken, profileId }: UseBucketsPageState
 	})
 }
 
-export type BucketsPageState = ReturnType<typeof useBucketsPageState>
+export type BucketsPageState = BucketsPageControllerState

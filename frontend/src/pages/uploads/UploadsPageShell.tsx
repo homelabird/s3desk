@@ -5,6 +5,7 @@ import { LinkButton } from '../../components/LinkButton'
 import { PageHeader } from '../../components/PageHeader'
 import { PageSection } from '../../components/PageSection'
 import { UploadSourceSheet } from '../../components/UploadSourceSheet'
+import { failedToLoadBucketsTitle, goToBucketsLabel, noBucketsAvailableHint, offlineUploadsDisabledHint } from '../../lib/actionHints'
 import styles from '../UploadsPage.module.css'
 import { UploadsSelectionSection } from './UploadsSelectionSection'
 import type { UploadsPagePresentationProps } from './buildUploadsPagePresentationProps'
@@ -43,7 +44,7 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 				}
 			/>
 
-			{presentation.alerts.showOffline ? <Alert type="warning" showIcon title="Offline: uploads are disabled." /> : null}
+			{presentation.alerts.showOffline ? <Alert type="warning" showIcon title={offlineUploadsDisabledHint()} /> : null}
 			{presentation.alerts.showUnsupported ? (
 				<Alert
 					type="info"
@@ -58,14 +59,14 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 					title="Destination bucket required"
 					description="Create a bucket first, then return here to choose the destination prefix."
 				>
-					<Empty description="No buckets available">
-						<LinkButton to="/buckets">Go to Buckets</LinkButton>
+					<Empty description={noBucketsAvailableHint()}>
+						<LinkButton to="/buckets">{goToBucketsLabel()}</LinkButton>
 					</Empty>
 				</PageSection>
 			) : null}
 
 			{presentation.alerts.bucketsErrorDescription ? (
-				<Alert type="error" showIcon title="Failed to load buckets" description={presentation.alerts.bucketsErrorDescription} />
+				<Alert type="error" showIcon title={failedToLoadBucketsTitle()} description={presentation.alerts.bucketsErrorDescription} />
 			) : null}
 
 			{presentation.targetSource.show ? (

@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -55,6 +56,41 @@ func TestTerminateJobProcessWithTimeoutsFallsBackToSigkill(t *testing.T) {
 	}
 	if err := <-waitDone; err == nil {
 		t.Fatal("wait succeeded want killed process error")
+	}
+}
+
+func TestTerminateJobProcessWithTimeoutsNoopsInvalidPID(t *testing.T) {
+	usedSigkill, err := terminateJobProcessWithTimeouts("job-noop", -1, time.Millisecond, time.Millisecond, time.Millisecond)
+	if err != nil {
+		t.Fatalf("terminateJobProcessWithTimeouts: %v", err)
+	}
+	if usedSigkill {
+		t.Fatal("usedSigkill=true want false for invalid pid no-op")
+	}
+}
+
+func TestTerminateJobProcessWithTimeoutsRejectsCurrentProcessPID(t *testing.T) {
+	usedSigkill, err := terminateJobProcessWithTimeouts("job-self", os.Getpid(), time.Millisecond, time.Millisecond, time.Millisecond)
+	if !errors.Is(err, errProcessSelfTermination) {
+		t.Fatalf("err=%v, want errProcessSelfTermination", err)
+	}
+	if usedSigkill {
+		t.Fatal("usedSigkill=true want false when rejecting current process")
+	}
+}
+
+func TestProcessTerminationSafetyHelpersRejectCurrentProcess(t *testing.T) {
+	if !IsSelfPID(os.Getpid()) {
+		t.Fatal("IsSelfPID returned false for current process")
+	}
+	if err := CanTerminate(os.Getpid()); !errors.Is(err, errProcessSelfTermination) {
+		t.Fatalf("CanTerminate err=%v, want errProcessSelfTermination", err)
+	}
+	if err := TryTerminate(os.Getpid()); !errors.Is(err, errProcessSelfTermination) {
+		t.Fatalf("TryTerminate err=%v, want errProcessSelfTermination", err)
+	}
+	if err := ForceTerminate(os.Getpid()); !errors.Is(err, errProcessSelfTermination) {
+		t.Fatalf("ForceTerminate err=%v, want errProcessSelfTermination", err)
 	}
 }
 

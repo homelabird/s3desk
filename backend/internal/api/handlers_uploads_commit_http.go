@@ -22,41 +22,34 @@ func buildUploadCommitHTTPErrorResponse(code, message string, details map[string
 	return resp
 }
 
-func (svc uploadCommitHTTPService) prepareCommit(r *http.Request) uploadCommitPreparedRequest {
-	return newUploadCommitRequestService(svc.server).prepare(r)
-}
-
-func (svc uploadCommitHTTPService) executePrepared(r *http.Request, prepared uploadCommitPreparedRequest) (*models.JobCreatedResponse, error, *uploadHTTPError) {
-	if prepared.decodeErr != nil {
-		return nil, prepared.decodeErr, nil
-	}
-	if prepared.err != nil {
-		return nil, nil, prepared.err
-	}
-
-	resp, uploadErr := svc.server.executeUploadCommit(r.Context(), prepared.session, prepared.req)
+func (svc uploadCommitHTTPService) executeCommit(r *http.Request) (*models.JobCreatedResponse, *uploadHTTPError, error) {
+	session, req, uploadErr, decodeErr := newUploadCommitRequestService(svc.server).prepare(r)
 	if uploadErr != nil {
-		return nil, nil, uploadErr
+		return nil, uploadErr, nil
+	}
+	if decodeErr != nil {
+		return nil, nil, decodeErr
+	}
+
+	resp, uploadErr := newUploadCommitExecutionService(svc.server).execute(r.Context(), session, req)
+	if uploadErr != nil {
+		return nil, uploadErr, nil
 	}
 	return &resp, nil, nil
 }
 
-func (svc uploadCommitHTTPService) executeCommit(r *http.Request) (*models.JobCreatedResponse, error, *uploadHTTPError) {
-	return svc.executePrepared(r, svc.prepareCommit(r))
-}
-
 func (svc uploadCommitHTTPService) handleCommitUpload(w http.ResponseWriter, r *http.Request) {
-	resp, decodeErr, uploadErr := svc.executeCommit(r)
-	if decodeErr != nil {
-		writeJSONDecodeError(w, decodeErr, uploadCommitJSONRequestBodyMaxBytes)
-		return
-	}
+	resp, uploadErr, decodeErr := svc.executeCommit(r)
 	if uploadErr != nil {
 		if uploadErr.code == "job_queue_full" {
 			w.Header().Set("Retry-After", "2")
 		}
 		errResp := buildUploadCommitHTTPErrorResponse(uploadErr.code, uploadErr.message, uploadErr.details)
 		writeJSON(w, uploadErr.status, &errResp)
+		return
+	}
+	if decodeErr != nil {
+		writeJSONDecodeError(w, decodeErr, uploadCommitJSONRequestBodyMaxBytes)
 		return
 	}
 	writeJSON(w, http.StatusCreated, resp)

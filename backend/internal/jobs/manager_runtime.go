@@ -28,17 +28,6 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	}
 	preserveLeadingSlash := profile.PreserveLeadingSlash
 
-	start := time.Now()
-	logging.InfoFields("job started", map[string]any{
-		"event":      "job.started",
-		"job_id":     jobID,
-		"job_type":   job.Type,
-		"profile_id": profileID,
-	})
-	if m.metrics != nil {
-		m.metrics.IncJobsStarted(job.Type)
-	}
-
 	ctx, cancel := context.WithCancel(rootCtx)
 	ctx = withJobType(ctx, job.Type)
 	m.mu.Lock()
@@ -52,8 +41,29 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	}()
 
 	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
-	if err := m.store.UpdateJobStatus(rootCtx, jobID, models.JobStatusRunning, &startedAt, nil, nil, nil, nil); err != nil {
+	updated, err := m.store.UpdateJobStatusIfCurrent(rootCtx, jobID, []models.JobStatus{models.JobStatusQueued}, models.JobStatusRunning, &startedAt, nil, nil, nil, nil)
+	if err != nil {
 		return err
+	}
+	if !updated {
+		logging.InfoFields("job start skipped after status change", map[string]any{
+			"event":      "job.start_skipped",
+			"job_id":     jobID,
+			"job_type":   job.Type,
+			"profile_id": profileID,
+		})
+		return nil
+	}
+
+	start := time.Now()
+	logging.InfoFields("job started", map[string]any{
+		"event":      "job.started",
+		"job_id":     jobID,
+		"job_type":   job.Type,
+		"profile_id": profileID,
+	})
+	if m.metrics != nil {
+		m.metrics.IncJobsStarted(job.Type)
 	}
 	m.hub.Publish(ws.Event{Type: "job.progress", JobID: jobID, Payload: map[string]any{"status": models.JobStatusRunning}})
 
@@ -64,6 +74,16 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	if errors.Is(ctx.Err(), context.Canceled) {
 		code := ErrorCodeCanceled
 		if err := m.finalizeJob(jobID, models.JobStatusCanceled, &finishedAt, nil, &code); err != nil {
+			if errors.Is(err, ErrJobStatusConflict) {
+				logging.InfoFields("skipped canceled job finalization after status change", map[string]any{
+					"event":      "job.finalize_skipped",
+					"job_id":     jobID,
+					"job_type":   job.Type,
+					"profile_id": profileID,
+					"status":     models.JobStatusCanceled,
+				})
+				return nil
+			}
 			logging.ErrorFields("failed to finalize canceled job", map[string]any{
 				"event":      "job.finalize_failed",
 				"job_id":     jobID,
@@ -123,6 +143,16 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 			}
 		}
 		if err := m.finalizeJob(jobID, models.JobStatusFailed, &finishedAt, &msg, &code); err != nil {
+			if errors.Is(err, ErrJobStatusConflict) {
+				logging.InfoFields("skipped failed job finalization after status change", map[string]any{
+					"event":      "job.finalize_skipped",
+					"job_id":     jobID,
+					"job_type":   job.Type,
+					"profile_id": profileID,
+					"status":     models.JobStatusFailed,
+				})
+				return nil
+			}
 			logging.ErrorFields("failed to finalize failed job", map[string]any{
 				"event":      "job.finalize_failed",
 				"job_id":     jobID,
@@ -165,6 +195,16 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 	}
 
 	if err := m.finalizeJob(jobID, models.JobStatusSucceeded, &finishedAt, nil, nil); err != nil {
+		if errors.Is(err, ErrJobStatusConflict) {
+			logging.InfoFields("skipped succeeded job finalization after status change", map[string]any{
+				"event":      "job.finalize_skipped",
+				"job_id":     jobID,
+				"job_type":   job.Type,
+				"profile_id": profileID,
+				"status":     models.JobStatusSucceeded,
+			})
+			return nil
+		}
 		logging.ErrorFields("failed to finalize succeeded job", map[string]any{
 			"event":      "job.finalize_failed",
 			"job_id":     jobID,
@@ -225,17 +265,26 @@ func (m *Manager) finalizeJob(jobID string, status models.JobStatus, finishedAt 
 	}
 
 	updateCtx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	err = m.store.UpdateJobStatus(updateCtx, jobID, status, nil, finishedAt, jp, errMsg, errorCode)
+	updated, err := m.store.UpdateJobStatusIfCurrent(updateCtx, jobID, []models.JobStatus{models.JobStatusRunning}, status, nil, finishedAt, jp, errMsg, errorCode)
 	cancel()
-	return err
+	if err != nil {
+		return err
+	}
+	if !updated {
+		return ErrJobStatusConflict
+	}
+	return nil
 }
 
 func (m *Manager) persistAndPublishRunningProgress(jobID string, jp *models.JobProgress) error {
 	updateCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	err := m.store.UpdateJobStatus(updateCtx, jobID, models.JobStatusRunning, nil, nil, jp, nil, nil)
+	updated, err := m.store.UpdateJobStatusIfCurrent(updateCtx, jobID, []models.JobStatus{models.JobStatusRunning}, models.JobStatusRunning, nil, nil, jp, nil, nil)
 	cancel()
 	if err != nil {
 		return err
+	}
+	if !updated {
+		return ErrJobStatusConflict
 	}
 	m.hub.Publish(ws.Event{
 		Type:  "job.progress",

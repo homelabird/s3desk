@@ -1,0 +1,2 @@
+export const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
+export const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024

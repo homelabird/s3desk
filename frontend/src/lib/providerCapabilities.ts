@@ -1,4 +1,5 @@
 import type { MetaResponse, Profile } from '../api/types'
+import { selectProfileFirstSentenceHint } from './actionHints'
 
 export type ProviderCapabilityName =
 	| 'bucketCrud'
@@ -228,7 +229,7 @@ export function getProviderCapabilities(
 	profile?: Profile,
 ): ProviderCapabilityMatrix {
 	if (!provider) {
-		return disabledCapabilities('Select a profile first.')
+		return disabledCapabilities(selectProfileFirstSentenceHint())
 	}
 	const profileCapability = profile?.effectiveCapabilities
 	if (profileCapability) {

@@ -3,7 +3,22 @@ import { fileURLToPath } from 'url'
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-import { dialogByName, ensureDialogOpen, transferDownloadRow, transferUploadRow } from './support/ui'
+import {
+	addUploadSourceFromDevice,
+	commitComboboxValue,
+	dialogByName,
+	ensureDialogOpen,
+	expectTransferRowState,
+	gotoBucketsPage,
+	gotoObjectsBucketPage,
+	gotoProfilesPage,
+	gotoUploadsPage,
+	namedTableRow,
+	objectsListRow,
+	openTransfersDownloadRow,
+	queueSelectedUpload,
+	transferUploadRow,
+} from './support/ui'
 
 const isLive = process.env.E2E_LIVE === '1'
 
@@ -74,7 +89,7 @@ test.describe('Live UI flow', () => {
 
 		try {
 			await seedStorage(page)
-			await page.goto('/profiles')
+			await gotoProfilesPage(page)
 			const profileModal = await ensureDialogOpen(page, 'Create Profile', async () => {
 				const createButton = page.getByRole('button', { name: 'New Profile' })
 				if (await createButton.isVisible().catch(() => false)) {
@@ -96,7 +111,7 @@ test.describe('Live UI flow', () => {
 			await setSwitch(profileModal, 'TLS Insecure Skip Verify', tlsSkipVerify)
 			await profileModal.getByRole('button', { name: 'Create', exact: true }).click()
 
-			const createdProfileRow = page.getByRole('row', { name: new RegExp(profileName) })
+			const createdProfileRow = namedTableRow(page, profileName)
 			await expect(createdProfileRow).toBeVisible({ timeout: 30_000 })
 			const useButton = createdProfileRow.getByRole('button', { name: 'Use' })
 			if (await useButton.isVisible().catch(() => false)) {
@@ -108,47 +123,35 @@ test.describe('Live UI flow', () => {
 			})
 			profileId = await page.evaluate(() => JSON.parse(window.localStorage.getItem('profileId') ?? 'null'))
 
-			await page.goto('/buckets')
+			await gotoBucketsPage(page)
 			await page.getByRole('button', { name: 'New Bucket' }).click()
 			await page.getByLabel('Bucket name').fill(bucketName)
 			const bucketModal = dialogByName(page, 'Create Bucket')
 			await bucketModal.getByRole('button', { name: 'Create', exact: true }).click()
-			await expect(page.getByRole('row', { name: new RegExp(bucketName) })).toBeVisible({ timeout: 30_000 })
+			await expect(namedTableRow(page, bucketName)).toBeVisible({ timeout: 30_000 })
 
-			await page.goto('/uploads')
-			const uploadsBucketSelect = page.getByRole('combobox', { name: 'Bucket' })
-			await uploadsBucketSelect.click()
-			await uploadsBucketSelect.fill(bucketName)
-			await page.keyboard.press('Enter')
+			await gotoUploadsPage(page)
+			await commitComboboxValue(page, page, 'Bucket', bucketName)
 
-			await page.getByRole('button', { name: 'Add from device…' }).click()
-			const sourceDialog = dialogByName(page, 'Add upload source')
-			await expect(sourceDialog).toBeVisible({ timeout: 10_000 })
-			const chooserPromise = page.waitForEvent('filechooser')
-			await sourceDialog.getByRole('button', { name: 'Choose files' }).click()
-			const chooser = await chooserPromise
-			await chooser.setFiles(uploadFixture)
-			await page.getByRole('button', { name: /Queue upload/i }).click()
+			await addUploadSourceFromDevice(page, uploadFixture)
+			await queueSelectedUpload(page)
 
 			const uploadRow = transferUploadRow(page, `Upload: ${uploadFilename}`)
 			await expect(uploadRow).toBeVisible({ timeout: 30_000 })
-			await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 180_000 })
+			await expectTransferRowState(uploadRow, 'Done', { timeout: 180_000 })
 
-			await page.goto('/objects')
-			await page.getByTestId('objects-bucket-picker-desktop').click()
-			await page.getByTestId(`objects-bucket-picker-option-${bucketName}`).click()
+			await gotoObjectsBucketPage(page, bucketName)
 
-			const objectRow = page.locator('[data-objects-row="true"]', { hasText: uploadFilename }).first()
+			const objectRow = objectsListRow(page, uploadFilename)
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
 
 			await objectRow.getByRole('button', { name: 'Object actions' }).click()
 			await page.getByRole('menuitem', { name: 'Download (client)' }).click()
-			await page.getByRole('button', { name: /Transfers/ }).first().click()
-			const transfersDialog = dialogByName(page, /Transfers/i)
-			await expect(transfersDialog).toBeVisible({ timeout: 30_000 })
-			const downloadRow = transferDownloadRow(transfersDialog, uploadFilename)
-			await expect(downloadRow).toBeVisible({ timeout: 30_000 })
-			await expect(downloadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 120_000 })
+			const { dialog: transfersDialog, row: downloadRow } = await openTransfersDownloadRow(page, uploadFilename, {
+				triggerButtonName: /Transfers/i,
+				timeout: 30_000,
+			})
+			await expectTransferRowState(downloadRow, 'Done', { timeout: 120_000 })
 			await transfersDialog.getByRole('button', { name: 'Close' }).click()
 			await expect(transfersDialog).toBeHidden({ timeout: 10_000 })
 
@@ -157,10 +160,10 @@ test.describe('Live UI flow', () => {
 			const objectConfirm = dialogByName(page, 'Delete object?')
 			await objectConfirm.getByPlaceholder('DELETE').fill('DELETE')
 			await objectConfirm.getByRole('button', { name: 'Delete' }).click()
-			await expect(page.locator('[data-objects-row="true"]', { hasText: uploadFilename })).toHaveCount(0, { timeout: 60_000 })
+			await expect(objectsListRow(page, uploadFilename)).toHaveCount(0, { timeout: 60_000 })
 
-			await page.goto('/buckets')
-			const bucketRow = page.getByRole('row', { name: new RegExp(bucketName) })
+			await gotoBucketsPage(page)
+			const bucketRow = namedTableRow(page, bucketName)
 			await bucketRow.getByRole('button', { name: 'Delete' }).click()
 			const bucketConfirm = dialogByName(page, new RegExp(bucketName))
 			await bucketConfirm.getByPlaceholder(bucketName).fill(bucketName)

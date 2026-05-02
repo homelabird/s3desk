@@ -3,6 +3,13 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+	failedToLoadFavoritesTitle,
+	loadingFavoritesCountLabel,
+	newFolderShortcutHint,
+	noFavoritesYetTitle,
+	starObjectsToKeepThemHereHint,
+} from '../../../lib/actionHints'
 import { ObjectsTreePanel } from '../ObjectsTreePanel'
 
 function buildProps(overrides: Partial<ComponentProps<typeof ObjectsTreePanel>> = {}): ComponentProps<typeof ObjectsTreePanel> {
@@ -33,6 +40,7 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsTreePanel>> 
 				children: [],
 			},
 		],
+		treeError: null,
 		loadingKeys: [],
 		expandedKeys: [],
 		selectedKeys: ['/'],
@@ -66,10 +74,13 @@ describe('ObjectsTreePanel', () => {
 	it('collapses the favorites pane by default when there are no favorites yet', () => {
 		render(<ObjectsTreePanel {...buildProps()} />)
 
+		expect(screen.getByTestId('objects-tree-content')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-favorites-pane')).toHaveAttribute('data-expanded', 'false')
 		expect(screen.queryByPlaceholderText('Find favorite…')).not.toBeInTheDocument()
-		expect(screen.queryByText('No favorites yet.')).not.toBeInTheDocument()
+		expect(screen.queryByText(noFavoritesYetTitle())).not.toBeInTheDocument()
 		expect(screen.getByTestId('objects-folders-pane')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-folders-pane-header')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-folders-pane-body')).toBeInTheDocument()
 	})
 
 	it('lets users expand the empty favorites pane on demand', () => {
@@ -84,8 +95,25 @@ describe('ObjectsTreePanel', () => {
 		rerender(<ObjectsTreePanel {...buildProps({ onFavoritesExpandedChange, favoritesExpanded: true })} />)
 
 		expect(screen.getByTestId('objects-favorites-pane')).toHaveAttribute('data-expanded', 'true')
-		expect(screen.getByText('No favorites yet.')).toBeInTheDocument()
-		expect(screen.getByText('Star objects from the list to pin quick paths here.')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-favorites-status')).toHaveAttribute('data-favorites-status-kind', 'empty')
+		expect(screen.getByText(noFavoritesYetTitle())).toBeInTheDocument()
+		expect(screen.getByText(starObjectsToKeepThemHereHint())).toBeInTheDocument()
+	})
+
+	it('keeps the favorites pane collapsed by default while the header badge announces loading', () => {
+		render(<ObjectsTreePanel {...buildProps({ favoritesLoading: true })} />)
+
+		expect(screen.getByTestId('objects-favorites-pane')).toHaveAttribute('data-expanded', 'false')
+		expect(screen.getByTestId('objects-favorites-badge')).toHaveAttribute('aria-label', loadingFavoritesCountLabel())
+		expect(screen.queryByTestId('objects-favorites-status')).not.toBeInTheDocument()
+	})
+
+	it('keeps the favorites pane collapsed by default while the header badge announces initial load errors', () => {
+		render(<ObjectsTreePanel {...buildProps({ favoritesError: 'favorites backend unavailable' })} />)
+
+		expect(screen.getByTestId('objects-favorites-pane')).toHaveAttribute('data-expanded', 'false')
+		expect(screen.getByTestId('objects-favorites-badge')).toHaveAttribute('aria-label', failedToLoadFavoritesTitle())
+		expect(screen.queryByTestId('objects-favorites-status')).not.toBeInTheDocument()
 	})
 
 	it('shows the favorite count without auto-expanding when pinned items exist', () => {
@@ -112,5 +140,63 @@ describe('ObjectsTreePanel', () => {
 		expect(screen.getByTestId('objects-favorites-pane')).toHaveAttribute('data-expanded', 'false')
 		expect(screen.getByText('1')).toBeInTheDocument()
 		expect(screen.queryByTestId('objects-favorite-item')).not.toBeInTheDocument()
+	})
+
+	it('keeps active favorites filters collapsed and summarizes them in the header', () => {
+		render(
+			<ObjectsTreePanel
+				{...buildProps({
+					favoritesSearch: 'report',
+					favoritesOnly: true,
+					favorites: [
+						{
+							key: 'reports/summary.txt',
+							size: 128,
+							lastModified: '2026-03-09T00:00:00Z',
+							storageClass: 'STANDARD',
+							etag: 'etag-1',
+							createdAt: '2026-03-09T00:00:00Z',
+						},
+					],
+					favoriteCount: 1,
+				})}
+			/>,
+		)
+
+		expect(screen.getByTestId('objects-favorites-pane')).toHaveAttribute('data-expanded', 'false')
+		expect(screen.getByTestId('objects-favorites-summary')).toHaveTextContent('Only · "report"')
+		expect(screen.queryByTestId('objects-favorites-controls')).not.toBeInTheDocument()
+		expect(screen.queryByTestId('objects-favorite-item')).not.toBeInTheDocument()
+	})
+
+	it('renders the favorites controls when pinned items are expanded', () => {
+		render(
+			<ObjectsTreePanel
+				{...buildProps({
+					favorites: [
+						{
+							key: 'docs/readme.txt',
+							size: 128,
+							lastModified: '2026-03-09T00:00:00Z',
+							storageClass: 'STANDARD',
+							etag: 'etag-1',
+							createdAt: '2026-03-09T00:00:00Z',
+						},
+					],
+					favoriteCount: 1,
+					favoritesExpanded: true,
+				})}
+			/>,
+		)
+
+		expect(screen.getByTestId('objects-favorites-controls')).toBeInTheDocument()
+		expect(screen.getByText('Favorites only')).toBeInTheDocument()
+		expect(screen.getByText('Open details on click')).toBeInTheDocument()
+	})
+
+	it('uses the shared new-folder shortcut tooltip at the root level', () => {
+		render(<ObjectsTreePanel {...buildProps({ canCreateFolder: true, selectedKeys: ['/'] })} />)
+
+		expect(screen.getByTitle(newFolderShortcutHint())).toBeInTheDocument()
 	})
 })

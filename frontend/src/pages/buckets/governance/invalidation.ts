@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { queryKeys } from "../../../api/queryKeys";
 import type { Profile } from "../../../api/types";
 
 export async function invalidateGovernance(
@@ -9,7 +10,7 @@ export async function invalidateGovernance(
   apiToken: string,
 ) {
   await queryClient.invalidateQueries({
-    queryKey: ["bucketGovernance", profileId, bucket, apiToken],
+    queryKey: queryKeys.buckets.governance(profileId, bucket, apiToken),
     exact: true,
   });
 }
@@ -24,7 +25,7 @@ export async function invalidateLinkedBucketState(
   await invalidateGovernance(queryClient, profileId, bucket, apiToken);
   if (provider === "gcp_gcs" || provider === "azure_blob") {
     await queryClient.invalidateQueries({
-      queryKey: ["bucketPolicy", profileId, bucket, apiToken],
+      queryKey: queryKeys.buckets.policy(profileId, bucket, apiToken),
       exact: true,
     });
   }

@@ -1,10 +1,10 @@
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { getSafeBrowserObjectUrl } from '../../api/baseUrl'
 
 import { getPreviewFetchPlan, shouldFallbackToProxy } from './objectPreviewPolicy'
 
 type LoadObjectPreviewAssetArgs = {
-	api: APIClient
+	api: APIClientShape
 	profileId: string
 	bucket: string
 	key: string

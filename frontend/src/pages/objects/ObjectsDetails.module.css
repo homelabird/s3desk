@@ -42,6 +42,16 @@
   flex-wrap: wrap;
 }
 
+.detailsActionButton,
+.detailsSectionActionButton {
+  min-height: 28px;
+}
+
+.detailsPrimaryDescriptions,
+.detailsMetadataDescriptions {
+  width: 100%;
+}
+
 .detailsSection {
   width: 100%;
   min-width: 0;
@@ -121,11 +131,59 @@
 
 @media (max-width: 767px) {
   .detailsContent {
-    gap: 14px;
+    gap: 12px;
+  }
+
+  .detailsActionRow {
+    gap: 6px;
   }
 
   .detailsSection {
+    gap: 7px;
+  }
+
+  .detailsSectionHeader {
     gap: 8px;
+  }
+
+  .detailsSectionActions {
+    gap: 6px;
+  }
+
+  .previewFrame,
+  .detailsCodePreview {
+    padding: 6px;
+  }
+
+  .detailsPreviewImage,
+  .detailsCodePreview {
+    max-height: 280px;
+  }
+
+  .detailsFeedback {
+    padding: 18px;
+  }
+
+  .detailsPrimaryDescriptions :global(.ant-descriptions-title),
+  .detailsMetadataDescriptions :global(.ant-descriptions-title) {
+    margin-bottom: 6px;
+  }
+
+  .detailsPrimaryDescriptions :global(.ant-descriptions-view th.ant-descriptions-item-label),
+  .detailsPrimaryDescriptions :global(.ant-descriptions-view td.ant-descriptions-item-content),
+  .detailsMetadataDescriptions :global(.ant-descriptions-view th.ant-descriptions-item-label),
+  .detailsMetadataDescriptions :global(.ant-descriptions-view td.ant-descriptions-item-content) {
+    padding: 7px 8px !important;
+  }
+
+  .detailsPrimaryDescriptions :global(.ant-descriptions-item-label > label),
+  .detailsMetadataDescriptions :global(.ant-descriptions-item-label > label) {
+    font-size: 12px;
+  }
+
+  .detailsPrimaryDescriptions :global(.ant-typography),
+  .detailsMetadataDescriptions :global(.ant-typography) {
+    font-size: 12px;
   }
 }
 
@@ -137,6 +195,51 @@
 
 @media (max-width: 480px) {
   .detailsBody {
-    padding: 8px;
+    padding: 6px;
+  }
+
+  .detailsContent {
+    gap: 10px;
+  }
+
+  .detailsActionRow {
+    gap: 4px;
+  }
+
+  .detailsActionButton,
+  .detailsSectionActionButton {
+    min-width: 28px;
+    min-height: 26px;
+    padding-inline: 6px !important;
+  }
+
+  .detailsActionButton :global(.ant-btn-icon + span),
+  .detailsSectionActionButton :global(.ant-btn-icon + span) {
+    display: none;
+  }
+
+  .detailsPrimaryDescriptions :global(.ant-descriptions-view th.ant-descriptions-item-label),
+  .detailsPrimaryDescriptions :global(.ant-descriptions-view td.ant-descriptions-item-content),
+  .detailsMetadataDescriptions :global(.ant-descriptions-view th.ant-descriptions-item-label),
+  .detailsMetadataDescriptions :global(.ant-descriptions-view td.ant-descriptions-item-content) {
+    padding: 6px 7px !important;
+  }
+
+  .detailsPrimaryDescriptions :global(.ant-descriptions-item-label > label),
+  .detailsMetadataDescriptions :global(.ant-descriptions-item-label > label),
+  .detailsPrimaryDescriptions :global(.ant-typography),
+  .detailsMetadataDescriptions :global(.ant-typography) {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .detailsPreviewImage,
+  .detailsCodePreview {
+    max-height: 220px;
+  }
+
+  .detailsPreviewCaption {
+    margin-top: 6px;
+    font-size: 11px;
   }
 }

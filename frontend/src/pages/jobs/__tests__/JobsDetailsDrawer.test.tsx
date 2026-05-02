@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import type { Job } from '../../../api/types'
+import { deleteSelectedObjectsLabel } from '../../../lib/actionHints'
 import { ensureDomShims } from '../../../test/domShims'
 import { JobsDetailsDrawer } from '../JobsDetailsDrawer'
 
@@ -47,6 +48,21 @@ const directUploadJob: Job = {
 	createdAt: '2026-03-11T09:00:00Z',
 	startedAt: '2026-03-11T09:00:05Z',
 	finishedAt: '2026-03-11T09:00:11Z',
+}
+
+const deleteObjectsJob: Job = {
+	id: 'job-delete-1',
+	type: 's3_delete_objects',
+	status: 'queued',
+	payload: {
+		bucket: 'media',
+		keys: ['a.txt', 'b.txt'],
+	},
+	error: null,
+	errorCode: null,
+	createdAt: '2026-03-11T10:00:00Z',
+	startedAt: null,
+	finishedAt: null,
 }
 
 describe('JobsDetailsDrawer', () => {
@@ -188,5 +204,42 @@ describe('JobsDetailsDrawer', () => {
 		})
 
 		expect(onDeleteJob).not.toHaveBeenCalled()
+	})
+
+	it('uses shared delete-selected-objects copy in behavior details for delete jobs', () => {
+		render(
+			<JobsDetailsDrawer
+				open
+				onClose={vi.fn()}
+				drawerWidth={720}
+				isOffline={false}
+				detailsJobId={deleteObjectsJob.id}
+				job={deleteObjectsJob}
+				isFetching={false}
+				isError={false}
+				error={null}
+				onRefresh={vi.fn()}
+				onDeleteJob={vi.fn(async () => {})}
+				deleteLoading={false}
+				onOpenLogs={vi.fn()}
+				uploadDetails={null}
+				uploadRootLabel={null}
+				uploadTablePageItems={[]}
+				uploadTableDataLength={0}
+				uploadTablePageSize={20}
+				uploadTablePageSafe={1}
+				uploadTableTotalPages={1}
+				onUploadTablePrevPage={vi.fn()}
+				onUploadTableNextPage={vi.fn()}
+				uploadHashesLoading={false}
+				uploadHashFailures={0}
+				borderColor="#ddd"
+				backgroundColor="#fff"
+				borderRadius={12}
+			/>,
+		)
+
+		expect(screen.getByText('Mode')).toBeInTheDocument()
+		expect(screen.getAllByText(deleteSelectedObjectsLabel()).length).toBeGreaterThan(0)
 	})
 })

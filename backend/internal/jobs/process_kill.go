@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"syscall"
 	"time"
 
@@ -15,6 +16,34 @@ const (
 	processTerminateKillWait    = 1 * time.Second
 	processTerminatePollEvery   = 50 * time.Millisecond
 )
+
+type KillOutcome string
+
+const (
+	KillOutcomeNoop        KillOutcome = "noop"
+	KillOutcomeGraceful    KillOutcome = "graceful"
+	KillOutcomeForceKilled KillOutcome = "force_killed"
+	KillOutcomeFailed      KillOutcome = "failed"
+)
+
+var (
+	errProcessSelfTermination      = errors.New("refusing to terminate current process")
+	errProcessSelfGroupTermination = errors.New("refusing to terminate current process group")
+)
+
+// KillPolicy defines the graceful and forced process termination windows.
+type KillPolicy struct {
+	GracePeriod time.Duration
+	KillWait    time.Duration
+	PollEvery   time.Duration
+}
+
+// KillResult records the final process termination outcome for callers and tests.
+type KillResult struct {
+	Outcome     KillOutcome
+	UsedSigkill bool
+	Err         error
+}
 
 type processCancelWatcher struct {
 	done   chan struct{}
@@ -50,32 +79,45 @@ func (w *processCancelWatcher) finish() error {
 }
 
 func terminateJobProcess(jobID string, pid int) error {
-	_, err := terminateJobProcessWithTimeouts(
+	result := terminateJobProcessWithPolicy(
 		jobID,
 		pid,
-		processTerminateGracePeriod,
-		processTerminateKillWait,
-		processTerminatePollEvery,
+		KillPolicy{},
 	)
-	return err
+	return result.Err
 }
 
 func terminateJobProcessWithTimeouts(jobID string, pid int, grace time.Duration, killWait time.Duration, pollEvery time.Duration) (usedSigkill bool, err error) {
+	result := terminateJobProcessWithPolicy(jobID, pid, KillPolicy{
+		GracePeriod: grace,
+		KillWait:    killWait,
+		PollEvery:   pollEvery,
+	})
+	return result.UsedSigkill, result.Err
+}
+
+func terminateJobProcessWithPolicy(jobID string, pid int, policy KillPolicy) KillResult {
+	policy = policy.withDefaults()
 	if pid <= 0 {
-		return false, nil
+		return KillResult{Outcome: KillOutcomeNoop}
+	}
+	if err := CanTerminate(pid); err != nil {
+		logProcessTerminationFailed(jobID, pid, 0, err)
+		return KillResult{Outcome: KillOutcomeFailed, Err: err}
 	}
 
 	pgid, err := syscall.Getpgid(pid)
 	switch {
 	case err == nil:
 	case errors.Is(err, syscall.ESRCH):
-		return false, nil
+		return KillResult{Outcome: KillOutcomeNoop}
 	default:
-		return false, err
+		logProcessTerminationFailed(jobID, pid, 0, err)
+		return KillResult{Outcome: KillOutcomeFailed, Err: err}
 	}
 
 	if pgid <= 0 {
-		return false, nil
+		return KillResult{Outcome: KillOutcomeNoop}
 	}
 
 	if pgid != pid {
@@ -85,73 +127,112 @@ func terminateJobProcessWithTimeouts(jobID string, pid int, grace time.Duration,
 			"pid":    pid,
 			"pgid":   pgid,
 		})
-		return terminateSingleProcess(jobID, pid, grace, killWait, pollEvery)
+		usedSigkill, err := terminateSingleProcess(jobID, pid, policy)
+		return killResult(usedSigkill, err)
 	}
 
 	logging.InfoFields("canceling job process group", map[string]any{
-		"event":  "job.process_cancel",
-		"job_id": jobID,
-		"pid":    pid,
-		"pgid":   pgid,
-		"signal": "SIGTERM",
+		"event":   "job.process_cancel",
+		"job_id":  jobID,
+		"pid":     pid,
+		"pgid":    pgid,
+		"signal":  "SIGTERM",
+		"outcome": "requested",
 	})
 	if err := signalProcessGroup(pgid, syscall.SIGTERM); err != nil {
-		return false, err
+		logProcessTerminationFailed(jobID, pid, pgid, err)
+		return KillResult{Outcome: KillOutcomeFailed, Err: err}
 	}
-	if waitForProcessGroupExit(pgid, grace, pollEvery) {
-		return false, nil
+	if waitForProcessGroupExit(pgid, policy.GracePeriod, policy.PollEvery) {
+		logProcessTerminated(jobID, pid, pgid, KillOutcomeGraceful)
+		return KillResult{Outcome: KillOutcomeGraceful}
 	}
 
 	logging.WarnFields("forcing job process group kill", map[string]any{
-		"event":  "job.process_force_kill",
-		"job_id": jobID,
-		"pid":    pid,
-		"pgid":   pgid,
-		"signal": "SIGKILL",
+		"event":   "job.process_force_kill",
+		"job_id":  jobID,
+		"pid":     pid,
+		"pgid":    pgid,
+		"signal":  "SIGKILL",
+		"outcome": "requested",
 	})
 	if err := signalProcessGroup(pgid, syscall.SIGKILL); err != nil {
-		return true, err
+		logProcessTerminationFailed(jobID, pid, pgid, err)
+		return KillResult{Outcome: KillOutcomeFailed, UsedSigkill: true, Err: err}
 	}
-	if waitForProcessGroupExit(pgid, killWait, pollEvery) {
-		return true, nil
+	if waitForProcessGroupExit(pgid, policy.KillWait, policy.PollEvery) {
+		logProcessTerminated(jobID, pid, pgid, KillOutcomeForceKilled)
+		return KillResult{Outcome: KillOutcomeForceKilled, UsedSigkill: true}
 	}
 
-	return true, fmt.Errorf("process group %d did not exit after SIGKILL", pgid)
+	err = fmt.Errorf("process group %d did not exit after SIGKILL", pgid)
+	logProcessTerminationFailed(jobID, pid, pgid, err)
+	return KillResult{Outcome: KillOutcomeFailed, UsedSigkill: true, Err: err}
 }
 
-func terminateSingleProcess(jobID string, pid int, grace time.Duration, killWait time.Duration, pollEvery time.Duration) (usedSigkill bool, err error) {
+func terminateSingleProcess(jobID string, pid int, policy KillPolicy) (usedSigkill bool, err error) {
 	logging.WarnFields("canceling job process directly", map[string]any{
-		"event":  "job.process_cancel_direct",
-		"job_id": jobID,
-		"pid":    pid,
-		"signal": "SIGTERM",
+		"event":   "job.process_cancel_direct",
+		"job_id":  jobID,
+		"pid":     pid,
+		"signal":  "SIGTERM",
+		"outcome": "requested",
 	})
-	if err := signalProcess(pid, syscall.SIGTERM); err != nil {
+	if err := TryTerminate(pid); err != nil {
 		return false, err
 	}
-	if waitForProcessExit(pid, grace, pollEvery) {
+	if waitForProcessExit(pid, policy.GracePeriod, policy.PollEvery) {
+		logProcessTerminated(jobID, pid, 0, KillOutcomeGraceful)
 		return false, nil
 	}
 
 	logging.WarnFields("forcing direct job process kill", map[string]any{
-		"event":  "job.process_force_kill_direct",
-		"job_id": jobID,
-		"pid":    pid,
-		"signal": "SIGKILL",
+		"event":   "job.process_force_kill_direct",
+		"job_id":  jobID,
+		"pid":     pid,
+		"signal":  "SIGKILL",
+		"outcome": "requested",
 	})
-	if err := signalProcess(pid, syscall.SIGKILL); err != nil {
+	if err := ForceTerminate(pid); err != nil {
 		return true, err
 	}
-	if waitForProcessExit(pid, killWait, pollEvery) {
+	if waitForProcessExit(pid, policy.KillWait, policy.PollEvery) {
+		logProcessTerminated(jobID, pid, 0, KillOutcomeForceKilled)
 		return true, nil
 	}
 
 	return true, fmt.Errorf("process %d did not exit after SIGKILL", pid)
 }
 
+// IsSelfPID reports whether pid identifies the current process.
+func IsSelfPID(pid int) bool {
+	return pid > 0 && pid == os.Getpid()
+}
+
+// CanTerminate returns an error when pid must not be terminated by this process.
+func CanTerminate(pid int) error {
+	if IsSelfPID(pid) {
+		return errProcessSelfTermination
+	}
+	return nil
+}
+
+// TryTerminate sends SIGTERM to pid after applying safety guards.
+func TryTerminate(pid int) error {
+	return signalProcess(pid, syscall.SIGTERM)
+}
+
+// ForceTerminate sends SIGKILL to pid after applying safety guards.
+func ForceTerminate(pid int) error {
+	return signalProcess(pid, syscall.SIGKILL)
+}
+
 func signalProcessGroup(pgid int, sig syscall.Signal) error {
 	if pgid <= 0 {
 		return nil
+	}
+	if isCurrentProcessGroup(pgid) {
+		return errProcessSelfGroupTermination
 	}
 	if err := syscall.Kill(-pgid, sig); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return err
@@ -162,6 +243,9 @@ func signalProcessGroup(pgid int, sig syscall.Signal) error {
 func signalProcess(pid int, sig syscall.Signal) error {
 	if pid <= 0 {
 		return nil
+	}
+	if err := CanTerminate(pid); err != nil {
+		return err
 	}
 	if err := syscall.Kill(pid, sig); err != nil && !errors.Is(err, syscall.ESRCH) {
 		return err
@@ -225,4 +309,62 @@ func waitForExit(timeout time.Duration, pollEvery time.Duration, exists func() (
 		}
 		time.Sleep(pollEvery)
 	}
+}
+
+func (policy KillPolicy) withDefaults() KillPolicy {
+	if policy.GracePeriod <= 0 {
+		policy.GracePeriod = processTerminateGracePeriod
+	}
+	if policy.KillWait <= 0 {
+		policy.KillWait = processTerminateKillWait
+	}
+	if policy.PollEvery <= 0 {
+		policy.PollEvery = processTerminatePollEvery
+	}
+	return policy
+}
+
+func killResult(usedSigkill bool, err error) KillResult {
+	if err != nil {
+		return KillResult{Outcome: KillOutcomeFailed, UsedSigkill: usedSigkill, Err: err}
+	}
+	if usedSigkill {
+		return KillResult{Outcome: KillOutcomeForceKilled, UsedSigkill: true}
+	}
+	return KillResult{Outcome: KillOutcomeGraceful}
+}
+
+func isCurrentProcessGroup(pgid int) bool {
+	if pgid <= 0 {
+		return false
+	}
+	currentPGID, err := syscall.Getpgid(os.Getpid())
+	return err == nil && currentPGID == pgid
+}
+
+func logProcessTerminated(jobID string, pid int, pgid int, outcome KillOutcome) {
+	fields := map[string]any{
+		"event":   "job.process_terminated",
+		"job_id":  jobID,
+		"pid":     pid,
+		"outcome": string(outcome),
+	}
+	if pgid > 0 {
+		fields["pgid"] = pgid
+	}
+	logging.InfoFields("job process terminated", fields)
+}
+
+func logProcessTerminationFailed(jobID string, pid int, pgid int, err error) {
+	fields := map[string]any{
+		"event":   "job.process_termination_failed",
+		"job_id":  jobID,
+		"pid":     pid,
+		"outcome": string(KillOutcomeFailed),
+		"error":   err.Error(),
+	}
+	if pgid > 0 {
+		fields["pgid"] = pgid
+	}
+	logging.WarnFields("job process termination failed", fields)
 }

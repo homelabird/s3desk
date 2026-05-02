@@ -70,7 +70,7 @@ func TestExecuteCommit_PreservesMissingProfileAndUploadID(t *testing.T) {
 	svc := newUploadCommitHTTPService(&server{})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/commit", bytes.NewBufferString(`{"label":"first"}`))
 
-	_, _, uploadErr := svc.executeCommit(req)
+	_, uploadErr, _ := svc.executeCommit(req)
 
 	if uploadErr == nil {
 		t.Fatal("expected upload error")
@@ -101,18 +101,18 @@ func TestUploadCommitRequestService_PreparePreservesLoadedSessionWhenJSONIsInval
 	req.Header.Set("Content-Type", "application/json")
 	req = withUploadIDParam(req, upload.ID)
 
-	prepared := svc.prepare(req)
+	session, _, uploadErr, decodeErr := svc.prepare(req)
 
-	if prepared.err != nil {
-		t.Fatalf("prepared.err=%v, want nil", prepared.err)
+	if uploadErr != nil {
+		t.Fatalf("uploadErr=%v, want nil", uploadErr)
 	}
-	if prepared.decodeErr == nil {
+	if decodeErr == nil {
 		t.Fatal("expected decodeErr")
 	}
-	if prepared.session.profileID != profile.ID {
-		t.Fatalf("prepared.session.profileID=%q, want %q", prepared.session.profileID, profile.ID)
+	if session.profileID != profile.ID {
+		t.Fatalf("session.profileID=%q, want %q", session.profileID, profile.ID)
 	}
-	if prepared.session.uploadID != upload.ID {
-		t.Fatalf("prepared.session.uploadID=%q, want %q", prepared.session.uploadID, upload.ID)
+	if session.uploadID != upload.ID {
+		t.Fatalf("session.uploadID=%q, want %q", session.uploadID, upload.ID)
 	}
 }

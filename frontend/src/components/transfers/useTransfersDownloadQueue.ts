@@ -1,13 +1,13 @@
-import { message } from 'antd'
 import { useCallback, useEffect, useRef } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { RequestAbortedError } from '../../api/client'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { TransferEstimator } from '../../lib/transfer'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
 import type { DownloadTask, JobArtifactDownloadTask, ObjectDownloadTask, TransfersTab } from './transferTypes'
+import { transfersFeedback } from './transfersFeedback'
 import {
 	defaultFilenameFromKey,
 	downloadURLWithProgress,
@@ -24,7 +24,7 @@ const isActiveDownloadStatus = (status: DownloadTask['status']) =>
 	status === 'queued' || status === 'waiting' || status === 'running'
 
 type UseTransfersDownloadQueueParams = {
-	api: APIClient
+	api: APIClientShape
 	downloadLinkProxyEnabled: boolean
 	downloadConcurrency: number
 	downloadTasks: DownloadTask[]
@@ -99,7 +99,7 @@ export function useTransfersDownloadQueue({
 						finishedAtMs: Date.now(),
 						loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
 					}))
-					message.success(`Downloaded ${current.targetPath}`)
+					transfersFeedback.downloaded(current.targetPath)
 				} catch (err) {
 					const error = err as Error
 					if (error?.name === 'AbortError' || err instanceof RequestAbortedError) {
@@ -109,7 +109,7 @@ export function useTransfersDownloadQueue({
 					maybeReportNetworkError(err)
 					const msg = formatErr(err)
 					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-					message.error(msg)
+					transfersFeedback.errorText(msg)
 				} finally {
 					delete downloadAbortByTaskIdRef.current[taskId]
 					delete downloadEstimatorByTaskIdRef.current[taskId]
@@ -172,7 +172,7 @@ export function useTransfersDownloadQueue({
 						loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
 						filenameHint: filename,
 					}))
-					message.success(`Downloaded ${filename}`)
+					transfersFeedback.downloaded(filename)
 				} catch (err) {
 					if (err instanceof RequestAbortedError) {
 						updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
@@ -181,7 +181,7 @@ export function useTransfersDownloadQueue({
 					maybeReportNetworkError(err)
 					const msg = formatErr(err)
 					updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-					message.error(msg)
+					transfersFeedback.errorText(msg)
 				} finally {
 					delete downloadAbortByTaskIdRef.current[taskId]
 					delete downloadEstimatorByTaskIdRef.current[taskId]
@@ -221,7 +221,7 @@ export function useTransfersDownloadQueue({
 					loadedBytes: typeof t.totalBytes === 'number' ? t.totalBytes : t.loadedBytes,
 					filenameHint: filename,
 				}))
-				message.success(`Downloaded ${filename}`)
+				transfersFeedback.downloaded(filename)
 			} catch (err) {
 				if (err instanceof RequestAbortedError) {
 					updateDownloadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
@@ -230,7 +230,7 @@ export function useTransfersDownloadQueue({
 				maybeReportNetworkError(err)
 				const msg = formatErr(err)
 				updateDownloadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-				message.error(msg)
+				transfersFeedback.errorText(msg)
 			} finally {
 				delete downloadAbortByTaskIdRef.current[taskId]
 				delete downloadEstimatorByTaskIdRef.current[taskId]
@@ -317,7 +317,7 @@ export function useTransfersDownloadQueue({
 			)
 			if (existing) {
 				openTransfers('downloads')
-				message.info('Download already queued')
+				transfersFeedback.downloadAlreadyQueued()
 				return
 			}
 
@@ -356,7 +356,7 @@ export function useTransfersDownloadQueue({
 		}) => {
 			const support = getDevicePickerSupport()
 			if (!support.ok) {
-				message.error(support.reason ?? 'Directory picker is not available.')
+				transfersFeedback.directoryPickerUnavailable(support.reason)
 				return
 			}
 
@@ -369,7 +369,7 @@ export function useTransfersDownloadQueue({
 				prefix: args.prefix,
 			})
 			if (tasks.length === 0) {
-				message.info('No objects to download')
+				transfersFeedback.noObjectsToDownload()
 				return
 			}
 
@@ -392,12 +392,12 @@ export function useTransfersDownloadQueue({
 			const duplicateCount = tasks.length - queuedTasks.length
 			if (queuedTasks.length === 0) {
 				openTransfers('downloads')
-				message.info(tasks.length === 1 ? 'Download already queued' : 'All downloads already queued')
+				transfersFeedback.downloadsAlreadyQueued(tasks.length)
 				return
 			}
 
 			if (duplicateCount > 0) {
-				message.info(`Skipped ${duplicateCount} already queued download(s)`)
+				transfersFeedback.skippedAlreadyQueuedDownloads(duplicateCount)
 			}
 
 			setDownloadTasks((prev) => [...queuedTasks, ...prev])
@@ -417,7 +417,7 @@ export function useTransfersDownloadQueue({
 			)
 			if (existing) {
 				openTransfers('downloads')
-				message.info('Artifact download already queued')
+				transfersFeedback.artifactDownloadAlreadyQueued()
 				return
 			}
 

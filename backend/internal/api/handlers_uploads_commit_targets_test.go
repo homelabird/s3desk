@@ -102,7 +102,7 @@ func TestUploadCommitVerificationServiceBuildPlanFallsBackToRequestTargets(t *te
 	}
 
 	size := int64(7)
-	plan, uploadErr := newUploadCommitVerificationService(&server{store: st}).buildPlan(
+	targets, includeTotals, itemsTruncated, uploadErr := newUploadCommitVerificationService(&server{store: st}).buildPlan(
 		ctx,
 		profile.ID,
 		us.ID,
@@ -124,13 +124,13 @@ func TestUploadCommitVerificationServiceBuildPlanFallsBackToRequestTargets(t *te
 		{Path: "folder/file.txt", Bucket: "demo", Key: "nested/folder/file.txt", ExpectedSize: &size},
 		{Path: "plain.txt", Bucket: "demo", Key: "nested/plain.txt", ExpectedSize: nil},
 	}
-	if !reflect.DeepEqual(plan.targets, want) {
-		t.Fatalf("plan.targets=%#v, want %#v", plan.targets, want)
+	if !reflect.DeepEqual(targets, want) {
+		t.Fatalf("targets=%#v, want %#v", targets, want)
 	}
-	if plan.includeTotals {
+	if includeTotals {
 		t.Fatal("expected includeTotals to be false when falling back to truncated request items")
 	}
-	if !plan.itemsTruncated {
+	if !itemsTruncated {
 		t.Fatal("expected itemsTruncated to be true")
 	}
 }
@@ -188,7 +188,7 @@ func TestUploadCommitVerificationServiceBuildPlanMergesTrackedAndMultipartTarget
 		t.Fatalf("upsert multipart upload: %v", err)
 	}
 
-	plan, uploadErr := newUploadCommitVerificationService(&server{store: st}).buildPlan(
+	targets, includeTotals, itemsTruncated, uploadErr := newUploadCommitVerificationService(&server{store: st}).buildPlan(
 		ctx,
 		profile.ID,
 		us.ID,
@@ -203,19 +203,19 @@ func TestUploadCommitVerificationServiceBuildPlanMergesTrackedAndMultipartTarget
 		t.Fatalf("buildPlan: %v", uploadErr)
 	}
 
-	if len(plan.targets) != 2 {
-		t.Fatalf("len(plan.targets)=%d, want 2", len(plan.targets))
+	if len(targets) != 2 {
+		t.Fatalf("len(targets)=%d, want 2", len(targets))
 	}
-	if plan.targets[0].Path != "a.txt" || plan.targets[0].Key != "nested/a.txt" {
-		t.Fatalf("first target=%#v, want tracked a.txt", plan.targets[0])
+	if targets[0].Path != "a.txt" || targets[0].Key != "nested/a.txt" {
+		t.Fatalf("first target=%#v, want tracked a.txt", targets[0])
 	}
-	if plan.targets[1].Path != "b.txt" || plan.targets[1].Key != "nested/b.txt" {
-		t.Fatalf("second target=%#v, want multipart b.txt", plan.targets[1])
+	if targets[1].Path != "b.txt" || targets[1].Key != "nested/b.txt" {
+		t.Fatalf("second target=%#v, want multipart b.txt", targets[1])
 	}
-	if !plan.includeTotals {
+	if !includeTotals {
 		t.Fatal("expected includeTotals to stay true when tracked or multipart state exists")
 	}
-	if plan.itemsTruncated {
+	if itemsTruncated {
 		t.Fatal("expected itemsTruncated to stay false when tracked or multipart state exists")
 	}
 }

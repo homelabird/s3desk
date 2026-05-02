@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { APIClient } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
 
@@ -409,9 +410,9 @@ describe('ProfilesPage YAML flow', () => {
 			expect(updateProfile).toHaveBeenCalledTimes(1)
 		})
 		await waitFor(() => {
-			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'list', 'token'], exact: true })
+			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.profiles.list('token'), exact: true })
 		})
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'tls', 'profile-1', 'token'], exact: true })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.profiles.tls('profile-1', 'token'), exact: true })
 	})
 
 	it('ignores stale YAML save responses after the api token changes', async () => {

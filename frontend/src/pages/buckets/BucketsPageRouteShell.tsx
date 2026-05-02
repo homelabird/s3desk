@@ -1,11 +1,6 @@
 import { SetupCallout } from '../../components/SetupCallout'
-import { BucketsPageShell, type BucketsPageShellProps } from './BucketsPageShell'
-
-export type BucketsPageRouteShellProps = {
-	apiToken: string
-	profileId: string | null
-	shell: Omit<BucketsPageShellProps, 'apiToken' | 'profileId'>
-}
+import { BucketsPageShell } from './BucketsPageShell'
+import type { BucketsPageRouteShellProps } from './bucketsPagePresentationTypes'
 
 export function BucketsPageRouteShell(props: BucketsPageRouteShellProps) {
 	if (!props.profileId) {

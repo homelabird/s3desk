@@ -13,7 +13,7 @@ import {
 	ObjectsPresignModal,
 	ObjectsRenameModal,
 	ObjectsMoveSelectionSheet,
-} from './objectsPageLazy'
+} from './objectsOverlayLazy'
 
 type ObjectsFiltersDrawerProps = Parameters<typeof import('./ObjectsFiltersDrawer').ObjectsFiltersDrawer>[0]
 type ObjectsPresignModalProps = Parameters<typeof import('./ObjectsPresignModal').ObjectsPresignModal>[0]

@@ -1,3 +1,4 @@
+import { bucketFieldPlaceholder, loadingBucketsPlaceholder } from '../../lib/actionHints'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import type { UploadSourceSheetProps } from '../../components/UploadSourceSheet'
 import type { UploadsSelectionSectionProps } from './UploadsSelectionSection'
@@ -67,7 +68,7 @@ export function buildUploadsPagePresentationProps(state: UploadsPageState): Uplo
 			destinationLabel: state.destinationLabel,
 			bucketValue: state.bucket,
 			onBucketChange: state.setBucket,
-			bucketPlaceholder: state.bucketsQuery.isFetching && !state.bucketsQuery.data ? 'Loading buckets…' : 'Bucket…',
+			bucketPlaceholder: state.bucketsQuery.isFetching && !state.bucketsQuery.data ? loadingBucketsPlaceholder() : bucketFieldPlaceholder(),
 			bucketDisabled: state.isOffline || !state.uploadsSupported || (state.bucketsQuery.isFetching && !state.bucketsQuery.data),
 			bucketOptions: state.bucketOptions.map((option) => ({ value: option.value, label: option.label })),
 			prefixValue: state.prefix,

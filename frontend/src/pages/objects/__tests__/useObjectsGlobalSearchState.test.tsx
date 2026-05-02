@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { useObjectsGlobalSearchState } from '../useObjectsGlobalSearchState'
 
 describe('useObjectsGlobalSearchState', () => {
@@ -26,12 +27,12 @@ describe('useObjectsGlobalSearchState', () => {
 		expect(result.current.globalSearchMaxModifiedMs).toBe(7890)
 
 		await waitFor(() => {
-			expect(window.localStorage.getItem('objects:token-a:profile-1:globalSearch')).toBe(JSON.stringify('invoice'))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:globalSearchPrefix')).toBe(JSON.stringify('reports/'))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:globalSearchLimit')).toBe(JSON.stringify(25))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:globalSearchExt')).toBe(JSON.stringify('pdf'))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:globalSearchMinSize')).toBe(JSON.stringify(512))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:globalSearchMaxModifiedMs')).toBe(JSON.stringify(7890))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'globalSearch'))).toBe(JSON.stringify('invoice'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'globalSearchPrefix'))).toBe(JSON.stringify('reports/'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'globalSearchLimit'))).toBe(JSON.stringify(25))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'globalSearchExt'))).toBe(JSON.stringify('pdf'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'globalSearchMinSize'))).toBe(JSON.stringify(512))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'globalSearchMaxModifiedMs'))).toBe(JSON.stringify(7890))
 		})
 
 		expect(window.localStorage.getItem('objectsGlobalSearch')).toBeNull()

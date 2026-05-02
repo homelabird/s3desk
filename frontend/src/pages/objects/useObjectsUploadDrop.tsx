@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { message } from 'antd'
 
-import type { TransfersContextValue } from '../../components/Transfers'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { TransfersContextValue } from '../../components/transfersTypes'
+import { objectsFeedback } from './objectsFeedback'
 import { hasInternalObjectsDndPayload, resolveObjectsDropIntent } from './objectsDropIntent'
 
 type UseObjectsUploadDropArgs = {
@@ -128,19 +127,19 @@ export function useObjectsUploadDrop({
 	const startUploadFromFiles = useCallback(
 		(args: { files: File[]; label?: string; directorySelectionMode?: 'picker' | 'input' }) => {
 			if (isOffline) {
-				message.warning('Offline: uploads are disabled.')
+				objectsFeedback.offlineUploadsDisabled()
 				return
 			}
 			if (!uploadsEnabled) {
-				message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+				objectsFeedback.uploadsUnsupported(uploadsDisabledReason)
 				return
 			}
 			if (!profileId) {
-				message.info('Select a profile first')
+				objectsFeedback.selectProfileFirst()
 				return
 			}
 			if (!bucket) {
-				message.info('Select a bucket first')
+				objectsFeedback.selectBucketFirst()
 				return
 			}
 			const cleanedFiles = args.files.filter((f) => !!f)
@@ -209,16 +208,16 @@ export function useObjectsUploadDrop({
 			e.stopPropagation()
 			resetUploadDropState()
 			if (!profileId || !bucket) {
-				if (!profileId) message.info('Select a profile first')
-				else message.info('Select a bucket first')
+				if (!profileId) objectsFeedback.selectProfileFirst()
+				else objectsFeedback.selectBucketFirst()
 				return
 			}
 			if (!uploadsEnabled) {
-				message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+				objectsFeedback.uploadsUnsupported(uploadsDisabledReason)
 				return
 			}
 			if (isOffline) {
-				message.warning('Offline: uploads are disabled.')
+				objectsFeedback.offlineUploadsDisabled()
 				return
 			}
 
@@ -233,26 +232,26 @@ export function useObjectsUploadDrop({
 			const key = 'upload_prepare'
 			const scopeVersion = scopeVersionRef.current
 			const scopeKey = currentScopeKey
-			message.open({ type: 'loading', content: 'Preparing folder upload…', duration: 0, key })
+			objectsFeedback.preparingFolderUpload(key)
 			void (async () => {
 				try {
 					const files = await collectDroppedUploadFiles(dt)
 					if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) {
-						message.destroy(key)
+						objectsFeedback.destroy(key)
 						return
 					}
 					if (files.length === 0) {
-						message.open({ type: 'warning', content: 'No files found', key, duration: 2 })
+						objectsFeedback.noFilesFound(key)
 						return
 					}
-					message.open({ type: 'success', content: `Queued ${files.length} file(s)`, key, duration: 2 })
+					objectsFeedback.queuedFiles(key, files.length)
 					startUploadFromFiles({ files })
 				} catch (err) {
 					if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) {
-						message.destroy(key)
+						objectsFeedback.destroy(key)
 						return
 					}
-					message.open({ type: 'error', content: formatErr(err), key, duration: 4 })
+					objectsFeedback.dropUploadFailed(key, err)
 				}
 			})()
 		},

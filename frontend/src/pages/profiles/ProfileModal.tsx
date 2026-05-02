@@ -1,5 +1,5 @@
 import { LockOutlined } from '@ant-design/icons'
-import { Button, Collapse, Grid, Tag, Typography, message } from 'antd'
+import { Button, Collapse, Grid, Tag, Typography } from 'antd'
 import { useCallback, useMemo, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
@@ -18,6 +18,7 @@ import {
 	type SectionKey,
 	validateProfileFormValues,
 } from './profileModalValidation'
+import { profilesFeedback } from './profilesFeedback'
 
 export function ProfileModal(props: {
 	open: boolean
@@ -153,7 +154,7 @@ function ProfileModalSession(props: {
 		setErrors(next)
 		if (Object.keys(next).length > 0) {
 			ensureSectionsOpenForErrors(next)
-			message.error('Fix the highlighted fields.')
+			profilesFeedback.fixHighlightedFields()
 			return
 		}
 
@@ -206,7 +207,11 @@ function ProfileModalSession(props: {
 						</div>
 						<div className={styles.heroMeta}>
 							<Tag>{viewState.providerLabel}</Tag>
-							<Tag icon={<LockOutlined />} color={props.editMode ? 'gold' : 'blue'}>
+							<Tag
+								icon={<LockOutlined />}
+								color={props.editMode ? undefined : 'blue'}
+								className={props.editMode ? styles.editModeTag : undefined}
+							>
 								{props.editMode ? 'Editing existing profile' : 'Creating new profile'}
 							</Tag>
 						</div>

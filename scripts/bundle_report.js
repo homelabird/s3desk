@@ -5,6 +5,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const zlib = require('node:zlib')
 
+const REPO_ROOT = path.resolve(__dirname, '..')
+const BUNDLE_BUDGETS_PATH = path.join(REPO_ROOT, 'frontend', 'scripts', 'bundle-budgets.json')
+const BUDGET_TIGHT_HEADROOM_BYTES = 1.5 * 1024
+const BUDGET_LOOSE_HEADROOM_BYTES = 16 * 1024
+const BUDGET_LOOSE_USAGE_RATIO = 0.75
+
 function isRecord(value) {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -15,6 +21,10 @@ function toNumber(value) {
 
 function formatKB(bytes) {
 	return `${(bytes / 1024).toFixed(1)} kB`
+}
+
+function formatPercent(ratio) {
+	return `${(ratio * 100).toFixed(1)}%`
 }
 
 function readJSON(p) {
@@ -140,10 +150,102 @@ function parseArgs(argv) {
 	return args
 }
 
-function main() {
-	const { statsPath, outPath, fail } = parseArgs(process.argv.slice(2))
+function readBudgetManifest() {
+	const manifest = readJSON(BUNDLE_BUDGETS_PATH)
+	if (!isRecord(manifest)) {
+		throw new Error(`invalid budget manifest: ${BUNDLE_BUDGETS_PATH}`)
+	}
+	return manifest
+}
+
+function resolveBudgets(manifest, env = process.env) {
+	const budgets = {}
+	for (const [key, rawEntry] of Object.entries(manifest)) {
+		if (!isRecord(rawEntry)) throw new Error(`invalid budget entry: ${key}`)
+		if (typeof rawEntry.label !== 'string' || rawEntry.label.length === 0) {
+			throw new Error(`missing budget label: ${key}`)
+		}
+		if (typeof rawEntry.env !== 'string' || rawEntry.env.length === 0) {
+			throw new Error(`missing budget env name: ${key}`)
+		}
+		if (typeof rawEntry.rationale !== 'string' || rawEntry.rationale.length === 0) {
+			throw new Error(`missing budget rationale: ${key}`)
+		}
+		if (typeof rawEntry.reviewAction !== 'string' || rawEntry.reviewAction.length === 0) {
+			throw new Error(`missing budget reviewAction: ${key}`)
+		}
+		if (rawEntry.reviewTightHeadroomKB != null && !Number.isFinite(rawEntry.reviewTightHeadroomKB)) {
+			throw new Error(`invalid reviewTightHeadroomKB: ${key}`)
+		}
+		if (!Number.isFinite(rawEntry.defaultKB)) {
+			throw new Error(`missing budget defaultKB: ${key}`)
+		}
+		const envOverride = env[rawEntry.env]
+		const kb = envOverride ? Number(envOverride) : Number(rawEntry.defaultKB)
+		if (!Number.isFinite(kb)) {
+			throw new Error(`invalid budget value for ${key}`)
+		}
+		budgets[key] = {
+			label: rawEntry.label,
+			env: rawEntry.env,
+			rationale: rawEntry.rationale,
+			reviewAction: rawEntry.reviewAction,
+			defaultKB: Number(rawEntry.defaultKB),
+			reviewTightHeadroomBytes:
+				rawEntry.reviewTightHeadroomKB != null ? Number(rawEntry.reviewTightHeadroomKB) * 1024 : BUDGET_TIGHT_HEADROOM_BYTES,
+			kb,
+			bytes: kb * 1024,
+		}
+	}
+	return budgets
+}
+
+function buildBudgetMeasurements(budgets, measuredGzipBytes) {
+	const measurements = {}
+	const reviewCandidates = []
+	const actionHints = []
+
+	for (const [key, entry] of Object.entries(budgets)) {
+		const actualBytes = measuredGzipBytes[key]
+		if (!Number.isFinite(actualBytes)) {
+			measurements[key] = null
+			continue
+		}
+		const headroomBytes = entry.bytes - actualBytes
+		const usageRatio = actualBytes / entry.bytes
+		measurements[key] = {
+			actualBytes,
+			headroomBytes,
+			usageRatio,
+		}
+		if (headroomBytes < 0) continue
+		if (headroomBytes <= entry.reviewTightHeadroomBytes) {
+			reviewCandidates.push(
+				`${entry.label}: only ${formatKB(headroomBytes)} headroom left (${formatPercent(usageRatio)} used); review whether this budget is too tight or the chunk should shrink.`,
+			)
+			actionHints.push(`${entry.label}: ${entry.reviewAction}`)
+			continue
+		}
+		if (headroomBytes >= BUDGET_LOOSE_HEADROOM_BYTES && usageRatio <= BUDGET_LOOSE_USAGE_RATIO) {
+			reviewCandidates.push(
+				`${entry.label}: ${formatKB(headroomBytes)} headroom remains (${formatPercent(usageRatio)} used); review whether this budget is now too loose.`,
+			)
+			actionHints.push(`${entry.label}: ${entry.reviewAction}`)
+		}
+	}
+
+	return { measurements, reviewCandidates, actionHints }
+}
+
+function warnMissingBudgetChunk(warnings, chunkName, budgetEntry) {
+	warnings.push(`${chunkName} chunk not found for ${budgetEntry.label}; review whether the lazy boundary was renamed, merged, or accidentally removed.`)
+}
+
+function generateBundleReport({ statsPath, outPath, fail = false, env = process.env }) {
 	const stats = readJSON(statsPath)
 	const distDir = path.dirname(statsPath)
+	const budgetManifest = readBudgetManifest()
+	const budgets = resolveBudgets(budgetManifest, env)
 
 	const vendorUi = findChunk(stats, 'vendor-ui-')
 	const vendorUiName = vendorUi ? vendorUi.name : null
@@ -151,6 +253,8 @@ function main() {
 	const objectsPageName = objectsPage ? objectsPage.name : null
 	const uploadsPage = findChunk(stats, 'UploadsPage-')
 	const uploadsPageName = uploadsPage ? uploadsPage.name : null
+	const uploadsExperience = findChunk(stats, 'UploadsPageExperience-')
+	const uploadsExperienceName = uploadsExperience ? uploadsExperience.name : null
 	const transfers = findChunk(stats, 'Transfers-')
 	const transfersName = transfers ? transfers.name : null
 
@@ -164,31 +268,42 @@ function main() {
 	const vendorUiSizes = vendorUiName ? readAssetBytes(distDir, vendorUiName) : null
 	const objectsPageSizes = objectsPageName ? readAssetBytes(distDir, objectsPageName) : null
 	const uploadsPageSizes = uploadsPageName ? readAssetBytes(distDir, uploadsPageName) : null
+	const uploadsExperienceSizes = uploadsExperienceName ? readAssetBytes(distDir, uploadsExperienceName) : null
 	const transfersSizes = transfersName ? readAssetBytes(distDir, transfersName) : null
 
-	const budgets = {
-		vendorUiGzip: Number(process.env.BUNDLE_BUDGET_VENDOR_UI_GZIP_KB || 170) * 1024,
-		initialJsGzip: Number(process.env.BUNDLE_BUDGET_INITIAL_JS_GZIP_KB || 92) * 1024,
-		objectsPageGzip: Number(process.env.BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB || 61) * 1024,
-		uploadsPageGzip: Number(process.env.BUNDLE_BUDGET_UPLOADS_PAGE_GZIP_KB || 3.5) * 1024,
-		transfersGzip: Number(process.env.BUNDLE_BUDGET_TRANSFERS_GZIP_KB || 14.5) * 1024,
-	}
-
 	const warnings = []
-	if (vendorUiSizes && vendorUiSizes.gzip > budgets.vendorUiGzip) {
-		warnings.push(`vendor-ui gzip ${formatKB(vendorUiSizes.gzip)} > budget ${formatKB(budgets.vendorUiGzip)}`)
+	if (!vendorUiSizes) {
+		warnMissingBudgetChunk(warnings, 'vendor-ui', budgets.vendorUiGzip)
 	}
-	if (initialTotalGzip > budgets.initialJsGzip) {
-		warnings.push(`initial JS gzip ${formatKB(initialTotalGzip)} > budget ${formatKB(budgets.initialJsGzip)}`)
+	if (vendorUiSizes && vendorUiSizes.gzip > budgets.vendorUiGzip.bytes) {
+		warnings.push(`vendor-ui gzip ${formatKB(vendorUiSizes.gzip)} > budget ${formatKB(budgets.vendorUiGzip.bytes)}`)
 	}
-	if (objectsPageSizes && objectsPageSizes.gzip > budgets.objectsPageGzip) {
-		warnings.push(`ObjectsPage gzip ${formatKB(objectsPageSizes.gzip)} > budget ${formatKB(budgets.objectsPageGzip)}`)
+	if (initialTotalGzip > budgets.initialJsGzip.bytes) {
+		warnings.push(`initial JS gzip ${formatKB(initialTotalGzip)} > budget ${formatKB(budgets.initialJsGzip.bytes)}`)
 	}
-	if (uploadsPageSizes && uploadsPageSizes.gzip > budgets.uploadsPageGzip) {
-		warnings.push(`UploadsPage gzip ${formatKB(uploadsPageSizes.gzip)} > budget ${formatKB(budgets.uploadsPageGzip)}`)
+	if (!objectsPageSizes) {
+		warnMissingBudgetChunk(warnings, 'ObjectsPage', budgets.objectsPageGzip)
 	}
-	if (transfersSizes && transfersSizes.gzip > budgets.transfersGzip) {
-		warnings.push(`Transfers gzip ${formatKB(transfersSizes.gzip)} > budget ${formatKB(budgets.transfersGzip)}`)
+	if (objectsPageSizes && objectsPageSizes.gzip > budgets.objectsPageGzip.bytes) {
+		warnings.push(`ObjectsPage gzip ${formatKB(objectsPageSizes.gzip)} > budget ${formatKB(budgets.objectsPageGzip.bytes)}`)
+	}
+	if (!uploadsPageSizes) {
+		warnMissingBudgetChunk(warnings, 'UploadsPage', budgets.uploadsPageGzip)
+	}
+	if (uploadsPageSizes && uploadsPageSizes.gzip > budgets.uploadsPageGzip.bytes) {
+		warnings.push(`UploadsPage gzip ${formatKB(uploadsPageSizes.gzip)} > budget ${formatKB(budgets.uploadsPageGzip.bytes)}`)
+	}
+	if (!uploadsExperienceSizes && budgets.uploadsExperienceGzip) {
+		warnMissingBudgetChunk(warnings, 'UploadsPageExperience', budgets.uploadsExperienceGzip)
+	}
+	if (uploadsExperienceSizes && budgets.uploadsExperienceGzip && uploadsExperienceSizes.gzip > budgets.uploadsExperienceGzip.bytes) {
+		warnings.push(`UploadsPageExperience gzip ${formatKB(uploadsExperienceSizes.gzip)} > budget ${formatKB(budgets.uploadsExperienceGzip.bytes)}`)
+	}
+	if (!transfersSizes) {
+		warnMissingBudgetChunk(warnings, 'Transfers', budgets.transfersGzip)
+	}
+	if (transfersSizes && transfersSizes.gzip > budgets.transfersGzip.bytes) {
+		warnings.push(`Transfers gzip ${formatKB(transfersSizes.gzip)} > budget ${formatKB(budgets.transfersGzip.bytes)}`)
 	}
 
 	const initialChunks = initialJs
@@ -197,6 +312,19 @@ function main() {
 
 	const topInitialPackages = topPackagesForChunks(stats, initialChunks, 20)
 	const topVendorUiModules = vendorUiName ? topModulesForChunk(stats, vendorUiName, 25) : []
+	const topObjectsPageModules = objectsPageName ? topModulesForChunk(stats, objectsPageName, 25) : []
+	const topUploadsPageModules = uploadsPageName ? topModulesForChunk(stats, uploadsPageName, 15) : []
+	const topUploadsExperienceModules = uploadsExperienceName ? topModulesForChunk(stats, uploadsExperienceName, 15) : []
+	const topTransfersModules = transfersName ? topModulesForChunk(stats, transfersName, 15) : []
+	const measuredGzipBytes = {
+		vendorUiGzip: vendorUiSizes?.gzip,
+		initialJsGzip: initialTotalGzip,
+		objectsPageGzip: objectsPageSizes?.gzip,
+		uploadsPageGzip: uploadsPageSizes?.gzip,
+		uploadsExperienceGzip: uploadsExperienceSizes?.gzip,
+		transfersGzip: transfersSizes?.gzip,
+	}
+	const { measurements: budgetMeasurements, reviewCandidates, actionHints } = buildBudgetMeasurements(budgets, measuredGzipBytes)
 
 	let md = ''
 	md += `# Bundle Report\n\n`
@@ -217,6 +345,9 @@ function main() {
 		md += `- UploadsPage: \`${uploadsPageName}\` (${formatKB(uploadsPageSizes.raw)} raw, ${formatKB(uploadsPageSizes.gzip)} gzip)\n`
 	} else {
 		md += `- UploadsPage: (not found)\n`
+	}
+	if (uploadsExperienceName && uploadsExperienceSizes) {
+		md += `- UploadsPageExperience: \`${uploadsExperienceName}\` (${formatKB(uploadsExperienceSizes.raw)} raw, ${formatKB(uploadsExperienceSizes.gzip)} gzip)\n`
 	}
 	if (transfersName && transfersSizes) {
 		md += `- Transfers: \`${transfersName}\` (${formatKB(transfersSizes.raw)} raw, ${formatKB(transfersSizes.gzip)} gzip)\n`
@@ -250,12 +381,81 @@ function main() {
 		md += `\n`
 	}
 
+	md += `### Top Modules in ObjectsPage (module gzip, approx)\n\n`
+	if (!objectsPageName) {
+		md += `ObjectsPage chunk not found in stats tree.\n\n`
+	} else {
+		md += `| gzip | rendered | module |\n|---:|---:|---|\n`
+		for (const row of topObjectsPageModules) {
+			md += `| ${formatKB(row.gzip)} | ${formatKB(row.rendered)} | \`${row.id}\` |\n`
+		}
+		md += `\n`
+	}
+
+	md += `### Top Modules in UploadsPage (module gzip, approx)\n\n`
+	if (!uploadsPageName) {
+		md += `UploadsPage chunk not found in stats tree.\n\n`
+	} else {
+		md += `| gzip | rendered | module |\n|---:|---:|---|\n`
+		for (const row of topUploadsPageModules) {
+			md += `| ${formatKB(row.gzip)} | ${formatKB(row.rendered)} | \`${row.id}\` |\n`
+		}
+		md += `\n`
+	}
+
+	md += `### Top Modules in UploadsPageExperience (module gzip, approx)\n\n`
+	if (!uploadsExperienceName) {
+		md += `UploadsPageExperience chunk not found in stats tree.\n\n`
+	} else {
+		md += `| gzip | rendered | module |\n|---:|---:|---|\n`
+		for (const row of topUploadsExperienceModules) {
+			md += `| ${formatKB(row.gzip)} | ${formatKB(row.rendered)} | \`${row.id}\` |\n`
+		}
+		md += `\n`
+	}
+
+	md += `### Top Modules in Transfers (module gzip, approx)\n\n`
+	if (!transfersName) {
+		md += `Transfers chunk not found in stats tree.\n\n`
+	} else {
+		md += `| gzip | rendered | module |\n|---:|---:|---|\n`
+		for (const row of topTransfersModules) {
+			md += `| ${formatKB(row.gzip)} | ${formatKB(row.rendered)} | \`${row.id}\` |\n`
+		}
+		md += `\n`
+	}
+
 	md += `## Budgets (Soft)\n\n`
-	md += `- vendor-ui gzip budget: ${formatKB(budgets.vendorUiGzip)}\n`
-	md += `- initial JS gzip budget: ${formatKB(budgets.initialJsGzip)}\n\n`
-	md += `- ObjectsPage gzip budget: ${formatKB(budgets.objectsPageGzip)}\n`
-	md += `- UploadsPage gzip budget: ${formatKB(budgets.uploadsPageGzip)}\n`
-	md += `- Transfers gzip budget: ${formatKB(budgets.transfersGzip)}\n\n`
+	md += `Defaults come from \`frontend/scripts/bundle-budgets.json\`. Temporary local experiments can override them with the matching \`BUNDLE_BUDGET_*_KB\` environment variables.\n\n`
+	for (const [key, entry] of Object.entries(budgets)) {
+		const measurement = budgetMeasurements[key]
+		md += `- ${entry.label}: budget ${formatKB(entry.bytes)}`
+		if (measurement) {
+			md += ` | actual ${formatKB(measurement.actualBytes)} | headroom ${formatKB(measurement.headroomBytes)} | usage ${formatPercent(measurement.usageRatio)}`
+		} else {
+			md += ` | actual n/a`
+		}
+		if (entry.kb !== entry.defaultKB) {
+			md += ` (env override via \`${entry.env}\`)`
+		}
+		md += `\n`
+		md += `  - ${entry.rationale}\n`
+	}
+	md += `\n`
+	if (reviewCandidates.length === 0) {
+		md += `No budget review candidates.\n\n`
+	} else {
+		md += `Budget review candidates:\n`
+		for (const candidate of reviewCandidates) md += `- ${candidate}\n`
+		md += `\n`
+	}
+	if (actionHints.length === 0) {
+		md += `No budget action hints.\n\n`
+	} else {
+		md += `Budget action hints:\n`
+		for (const actionHint of actionHints) md += `- ${actionHint}\n`
+		md += `\n`
+	}
 	if (warnings.length === 0) {
 		md += `No budget warnings.\n`
 	} else {
@@ -273,12 +473,31 @@ function main() {
 		for (const w of warnings) console.warn(`[bundle-report] ${w}`)
 		if (fail) process.exitCode = 1
 	}
+
+	return { warnings, reviewCandidates, actionHints, outPath }
 }
 
-try {
-	main()
-} catch (error) {
-	const msg = error instanceof Error ? error.message : String(error)
-	console.error(`[bundle-report] error: ${msg}`)
-	process.exit(1)
+function main() {
+	const { statsPath, outPath, fail } = parseArgs(process.argv.slice(2))
+	return generateBundleReport({ statsPath, outPath, fail })
+}
+
+if (require.main === module) {
+	try {
+		main()
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error)
+		console.error(`[bundle-report] error: ${msg}`)
+		process.exit(1)
+	}
+}
+
+module.exports = {
+	buildBudgetMeasurements,
+	generateBundleReport,
+	main,
+	parseArgs,
+	readBudgetManifest,
+	resolveBudgets,
+	warnMissingBudgetChunk,
 }

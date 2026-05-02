@@ -2,8 +2,6 @@ package api
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -17,18 +15,7 @@ func (s *server) handleStagingChunkUpload(
 	bytesTracked int64,
 	chunkIndexRaw string,
 ) {
-	chunkValues, uploadErr := parseUploadChunkHeadersWithoutSizes(r.Header, chunkIndexRaw, false)
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	if uploadErr := s.stagingChunkFlow(r, profileID, uploadID, stagingDir, bytesTracked, chunkValues); uploadErr != nil {
-		uploadWriteError(w, uploadErr)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	newUploadStagingHTTPService(s).handleStagingChunkUpload(w, r, profileID, uploadID, stagingDir, bytesTracked, chunkIndexRaw)
 }
 
 func (s *server) stagingChunkWrite(
@@ -82,53 +69,7 @@ func (s *server) handleStagingMultipartFormUpload(
 	profileID, uploadID, stagingDir string,
 	bytesTracked int64,
 ) {
-	reader, err := r.MultipartReader()
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "expected multipart/form-data", map[string]any{"error": err.Error()})
-		return
-	}
-
-	maxBytes := s.cfg.UploadMaxBytes
-	remainingBytes, uploadErr := uploadRemainingBytes(maxBytes, bytesTracked)
-	if uploadErr != nil {
-		uploadWriteError(w, uploadErr)
-		return
-	}
-
-	written := 0
-	skipped := 0
-	for {
-		part, err := reader.NextPart()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			writeError(w, http.StatusBadRequest, "invalid_multipart", "failed to read multipart body", map[string]any{"error": err.Error()})
-			return
-		}
-		if part.FormName() != "files" {
-			_ = part.Close()
-			continue
-		}
-
-		used, skippedPart, uploadErr := s.stagingMultipartFormPart(r, profileID, uploadID, stagingDir, part, &remainingBytes, maxBytes)
-		_ = part.Close()
-		if uploadErr != nil {
-			uploadWriteError(w, uploadErr)
-			return
-		}
-		written += used
-		skipped += skippedPart
-	}
-
-	if written == 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request", "no files uploaded", nil)
-		return
-	}
-	if skipped > 0 {
-		w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
-	}
-	w.WriteHeader(http.StatusNoContent)
+	newUploadStagingHTTPService(s).handleStagingMultipartFormUpload(w, r, profileID, uploadID, stagingDir, bytesTracked)
 }
 
 func (s *server) stagingMultipartFormPart(

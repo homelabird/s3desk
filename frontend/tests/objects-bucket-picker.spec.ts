@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { bucketFieldPlaceholder, selectBucketToBrowseObjectsHint } from '../src/lib/actionHints'
 import { installMockApi, seedLocalStorage } from './support/apiFixtures'
+import { gotoObjectsPage, objectsBucketPickerDesktop, objectsListRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -76,6 +78,7 @@ async function stubBucketPickerApi(page: Page) {
 					{
 						id: profileId,
 						name: 'Playwright',
+						provider: 's3_compatible',
 						endpoint: 'http://localhost:9000',
 						region: 'us-east-1',
 						forcePathStyle: true,
@@ -126,18 +129,18 @@ async function stubBucketPickerApi(page: Page) {
 }
 
 function rowFor(page: Page, key: string) {
-	return page.locator('[data-objects-row="true"]').filter({ hasText: key }).first()
+	return objectsListRow(page, key)
 }
 
 test.describe('Objects bucket picker', () => {
 	test('desktop picker shows current and recent buckets, then switches on click', async ({ page }) => {
 		await stubBucketPickerApi(page)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await expect(rowFor(page, 'alpha.txt')).toBeVisible()
 
-		const picker = page.getByTestId('objects-bucket-picker-desktop')
+		const picker = objectsBucketPickerDesktop(page)
 		await picker.click()
 
 		await expect(page.getByTestId('objects-bucket-picker-option-alpha-bucket')).toContainText('Current')
@@ -152,11 +155,11 @@ test.describe('Objects bucket picker', () => {
 	test('desktop picker does not navigate while typing and supports keyboard commit', async ({ page }) => {
 		await stubBucketPickerApi(page)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await expect(rowFor(page, 'alpha.txt')).toBeVisible()
 
-		const picker = page.getByTestId('objects-bucket-picker-desktop')
+		const picker = objectsBucketPickerDesktop(page)
 		await picker.click()
 		await page.keyboard.type('bravo-bucket')
 
@@ -167,29 +170,59 @@ test.describe('Objects bucket picker', () => {
 		await expect(page.getByText('s3://bravo-bucket/')).toBeVisible()
 	})
 
-	test('desktop picker popover is wider than the trigger so bucket metadata stays readable', async ({ page }) => {
+	test('desktop picker keeps keyboard focus contained while tabbing', async ({ page }) => {
 		await stubBucketPickerApi(page)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		const picker = page.getByTestId('objects-bucket-picker-desktop')
+		const picker = objectsBucketPickerDesktop(page)
 		await picker.click()
 
-		const triggerBox = await picker.boundingBox()
 		const popover = page.getByTestId('objects-bucket-picker-desktop-popover')
 		await expect(popover).toBeVisible()
-		const popoverBox = await popover.boundingBox()
+		await expect(popover.getByLabel('Search buckets')).toBeFocused()
 
-		expect(triggerBox).not.toBeNull()
-		expect(popoverBox).not.toBeNull()
-		expect((popoverBox?.width ?? 0) - (triggerBox?.width ?? 0)).toBeGreaterThan(80)
+		await page.keyboard.press('Shift+Tab')
+		await expect(picker).toBeFocused()
+
+		await page.keyboard.press('Shift+Tab')
+		await expect(page.getByTestId('objects-bucket-picker-option-bravo-bucket')).toBeFocused()
+
+		await page.keyboard.press('Tab')
+		await expect(picker).toBeFocused()
+
+		await page.keyboard.press('Escape')
+		await expect(popover).toBeHidden()
+	})
+
+	test('desktop picker clear resets the bucket and allows reselection from recents', async ({ page }) => {
+		await stubBucketPickerApi(page)
+		await seedStorage(page)
+		await gotoObjectsPage(page)
+
+		const picker = objectsBucketPickerDesktop(page)
+		await picker.click()
+
+		const popover = page.getByTestId('objects-bucket-picker-desktop-popover')
+		await expect(popover).toBeVisible()
+		await popover.getByRole('button', { name: 'Clear' }).click()
+
+		await expect(page.getByText(selectBucketToBrowseObjectsHint())).toBeVisible()
+		await expect(picker).toContainText(bucketFieldPlaceholder())
+
+		await picker.click()
+		await expect(page.getByTestId('objects-bucket-picker-option-charlie-bucket')).toContainText('Recent')
+		await page.getByTestId('objects-bucket-picker-option-charlie-bucket').click()
+
+		await expect(rowFor(page, 'charlie.txt')).toBeVisible()
+		await expect(page.getByText('s3://charlie-bucket/')).toBeVisible()
 	})
 
 	test('mobile drawer supports tap selection and clear', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await stubBucketPickerApi(page)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const trigger = page.getByTestId('objects-bucket-picker-mobile-trigger')
 		await expect(trigger).toContainText('alpha-bucket')
@@ -207,7 +240,34 @@ test.describe('Objects bucket picker', () => {
 		await trigger.click()
 		await page.getByTestId('objects-bucket-picker-mobile-clear').click()
 
-		await expect(page.getByText('Select a bucket to browse objects.')).toBeVisible()
-		await expect(trigger).toContainText('Bucket…')
+		await expect(page.getByText(selectBucketToBrowseObjectsHint())).toBeVisible()
+		await expect(trigger).toContainText(bucketFieldPlaceholder())
+	})
+
+	test('mobile drawer keeps keyboard focus contained and restores trigger focus', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await stubBucketPickerApi(page)
+		await seedStorage(page)
+		await gotoObjectsPage(page)
+
+		const trigger = page.getByTestId('objects-bucket-picker-mobile-trigger')
+		await trigger.click()
+
+		const drawer = page.getByTestId('objects-bucket-picker-mobile-drawer')
+		await expect(drawer).toBeVisible()
+		await expect(drawer.getByRole('button', { name: 'Close' })).toBeFocused()
+
+		await page.keyboard.press('Shift+Tab')
+		await expect(page.getByTestId('objects-bucket-picker-mobile-clear')).toBeFocused()
+
+		await page.keyboard.press('Shift+Tab')
+		await expect(page.getByTestId('objects-bucket-picker-option-bravo-bucket')).toBeFocused()
+
+		await page.keyboard.press('Tab')
+		await expect(page.getByTestId('objects-bucket-picker-mobile-clear')).toBeFocused()
+
+		await page.keyboard.press('Escape')
+		await expect(drawer).toBeHidden()
+		await expect(trigger).toBeFocused()
 	})
 })

@@ -9,12 +9,12 @@ import type {
 	FullAppShellChromeTheme,
 } from './FullAppShellChrome'
 import type { MetaResponse } from './api/types'
-import type { APIClient } from './api/client'
+import type { APIClientShape } from './api/client'
 import type { FullAppViewportState } from './useFullAppViewportState'
 import type { MenuProps } from 'antd'
 
 type UseFullAppShellViewModelArgs = {
-	api: APIClient
+	api: APIClientShape
 	meta?: MetaResponse
 	apiToken: string
 	profileId: string | null

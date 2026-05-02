@@ -685,6 +685,96 @@ func TestHandlePutBucketLifecycleAWS(t *testing.T) {
 	}
 }
 
+func TestHandleGetBucketSharingOCI(t *testing.T) {
+	t.Parallel()
+
+	supported := true
+	adapter := &fakeGovernanceAdapter{
+		sharing: models.BucketSharingView{
+			Provider:                models.ProfileProviderOciObjectStorage,
+			Bucket:                  "demo",
+			PreauthenticatedSupport: &supported,
+			PreauthenticatedRequests: []models.BucketPreauthenticatedRequestView{{
+				ID:   "par-1",
+				Name: "demo-par",
+			}},
+		},
+	}
+	srv := &server{
+		bucketGov: newGovernanceTestService(models.ProfileProviderOciObjectStorage, adapter),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/demo/governance/sharing", nil)
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderOciObjectStorage})
+	req = withBucketParam(req, "demo")
+	rr := httptest.NewRecorder()
+
+	srv.handleGetBucketSharing(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusOK)
+	}
+
+	var view models.BucketSharingView
+	decodeJSONResponse(t, res, &view)
+	if view.PreauthenticatedSupport == nil || !*view.PreauthenticatedSupport {
+		t.Fatalf("preauthenticatedSupport=%v, want true", view.PreauthenticatedSupport)
+	}
+	if len(view.PreauthenticatedRequests) != 1 || view.PreauthenticatedRequests[0].ID != "par-1" {
+		t.Fatalf("preauthenticatedRequests=%+v, want par-1", view.PreauthenticatedRequests)
+	}
+}
+
+func TestHandlePutBucketSharingOCI(t *testing.T) {
+	t.Parallel()
+
+	supported := true
+	adapter := &fakeGovernanceAdapter{
+		sharing: models.BucketSharingView{
+			Provider:                models.ProfileProviderOciObjectStorage,
+			Bucket:                  "demo",
+			PreauthenticatedSupport: &supported,
+			PreauthenticatedRequests: []models.BucketPreauthenticatedRequestView{{
+				ID:   "par-1",
+				Name: "demo-par",
+			}},
+		},
+	}
+	srv := &server{
+		bucketGov: newGovernanceTestService(models.ProfileProviderOciObjectStorage, adapter),
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/buckets/demo/governance/sharing", bytes.NewReader([]byte(`{
+		"preauthenticatedRequests": [{"id":"par-1","name":"demo-par"}]
+	}`)))
+	req.Header.Set("Content-Type", "application/json")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderOciObjectStorage})
+	req = withBucketParam(req, "demo")
+	rr := httptest.NewRecorder()
+
+	srv.handlePutBucketSharing(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusOK)
+	}
+	if adapter.putSharing == nil || len(adapter.putSharing.PreauthenticatedRequests) != 1 {
+		t.Fatalf("putSharing=%+v, want one PAR", adapter.putSharing)
+	}
+	if adapter.putSharing.PreauthenticatedRequests[0].ID != "par-1" {
+		t.Fatalf("par id=%q, want par-1", adapter.putSharing.PreauthenticatedRequests[0].ID)
+	}
+
+	var view models.BucketSharingView
+	decodeJSONResponse(t, res, &view)
+	if len(view.PreauthenticatedRequests) != 1 || view.PreauthenticatedRequests[0].ID != "par-1" {
+		t.Fatalf("preauthenticatedRequests=%+v, want par-1", view.PreauthenticatedRequests)
+	}
+}
+
 func TestHandlePutBucketAccessRejectsUnsupportedBindingsForAWS(t *testing.T) {
 	t.Parallel()
 
@@ -845,6 +935,39 @@ func TestHandleGetBucketVersioningUnsupportedProviderIncludesReason(t *testing.T
 	}
 	if got := errResp.Error.Details["capability"]; got != string(models.BucketGovernanceCapabilityVersioning) {
 		t.Fatalf("capability=%v, want %q", got, models.BucketGovernanceCapabilityVersioning)
+	}
+	if got := errResp.Error.Details["reason"]; got == nil || got == "" {
+		t.Fatalf("reason=%v, want populated reason", got)
+	}
+}
+
+func TestHandleGetBucketSharingUnsupportedProviderIncludesReason(t *testing.T) {
+	t.Parallel()
+
+	srv := &server{
+		bucketGov: bucketgov.NewService(bucketgov.NewDefaultRegistry()),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/demo/governance/sharing", nil)
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+	req = withBucketParam(req, "demo")
+	rr := httptest.NewRecorder()
+
+	srv.handleGetBucketSharing(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "bucket_sharing_unsupported" {
+		t.Fatalf("code=%q, want bucket_sharing_unsupported", errResp.Error.Code)
+	}
+	if got := errResp.Error.Details["capability"]; got != string(models.BucketGovernanceCapabilityPAR) {
+		t.Fatalf("capability=%v, want %q", got, models.BucketGovernanceCapabilityPAR)
 	}
 	if got := errResp.Error.Details["reason"]; got == nil || got == "" {
 		t.Fatalf("reason=%v, want populated reason", got)

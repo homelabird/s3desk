@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { queryKeys } from "../../../api/queryKeys";
 import { ensureDomShims } from "../../../test/domShims";
 import { createMockApiClient } from "../../../test/mockApiClient";
 import { BucketGovernanceModal } from "../BucketGovernanceModal";
@@ -709,7 +710,7 @@ describe("BucketGovernanceModal", () => {
     );
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["bucketPolicy", "profile-1", "demo-bucket", "token"],
+        queryKey: queryKeys.buckets.policy("profile-1", "demo-bucket", "token"),
         exact: true,
       }),
     );

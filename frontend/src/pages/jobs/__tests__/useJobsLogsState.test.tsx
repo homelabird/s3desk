@@ -6,6 +6,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useJobsLogsState } from '../useJobsLogsState'
 
+const { messageSuccess, messageInfo, messageError } = vi.hoisted(() => ({
+	messageSuccess: vi.fn(),
+	messageInfo: vi.fn(),
+	messageError: vi.fn(),
+}))
+
+vi.mock('antd', () => ({
+	message: {
+		success: messageSuccess,
+		info: messageInfo,
+		error: messageError,
+		warning: vi.fn(),
+	},
+}))
+
 function deferred<T>() {
 	let resolve!: (value: T) => void
 	let reject!: (reason?: unknown) => void
@@ -28,8 +43,15 @@ function createWrapper() {
 
 describe('useJobsLogsState', () => {
 	beforeEach(() => {
+		messageSuccess.mockReset()
+		messageInfo.mockReset()
+		messageError.mockReset()
 		window.localStorage.clear()
 		window.localStorage.setItem('jobsFollowLogs', JSON.stringify(false))
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: undefined,
+		})
 	})
 
 	it('opens logs and refreshes the active job logs', async () => {
@@ -325,5 +347,58 @@ describe('useJobsLogsState', () => {
 		rerender({ profileId: 'profile-1' })
 
 		expect(result.current.followLogs).toBe(true)
+	})
+
+	it('reports copy feedback for empty, filtered, and copied log lines', async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined)
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { writeText },
+		})
+		const getJobLogsTail = vi.fn().mockResolvedValue({
+			text: 'first line\nsecond line\n',
+			nextOffset: 24,
+		})
+		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 24 })
+		const api = createMockApiClient({
+			jobs: {
+				getJobLogsTail,
+				getJobLogsAfterOffset,
+			},
+		})
+
+		const { result } = renderHook(() => useJobsLogsState({ api, apiToken: 'token-a', profileId: 'profile-1' }), {
+			wrapper: createWrapper(),
+		})
+
+		await act(async () => {
+			await result.current.copyVisibleLogs()
+		})
+		expect(messageInfo).toHaveBeenCalledWith('No log lines to copy.')
+
+		act(() => {
+			result.current.openLogsForJob('job-1')
+		})
+		await waitFor(() => {
+			expect(result.current.visibleLogEntries).toEqual(['first line', 'second line'])
+		})
+
+		await act(async () => {
+			await result.current.copyVisibleLogs()
+		})
+		expect(writeText).toHaveBeenCalledWith('first line\nsecond line')
+		expect(messageSuccess).toHaveBeenCalledWith('Copied 2 line(s)')
+
+		act(() => {
+			result.current.setLogSearchQuery('missing')
+		})
+		await waitFor(() => {
+			expect(result.current.visibleLogEntries).toEqual([])
+		})
+		await act(async () => {
+			await result.current.copyVisibleLogs()
+		})
+		expect(messageInfo).toHaveBeenCalledWith('No matching log lines to copy.')
+		expect(messageError).not.toHaveBeenCalled()
 	})
 })

@@ -1,4 +1,4 @@
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import { useObjectsUploadDrop } from './useObjectsUploadDrop'
 import { useObjectsUploadPickers } from './useObjectsUploadPickers'
 

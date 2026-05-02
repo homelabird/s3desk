@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"s3desk/internal/logging"
 	"s3desk/internal/models"
 	"s3desk/internal/store"
 )
@@ -164,91 +163,50 @@ func (s *server) requireAPIToken(next http.Handler) http.Handler {
 	if s.cfg.APIToken == "" {
 		return next
 	}
+	auth := newAPITokenAuthService(s)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clientKey := authLimiterClientKey(r)
-		now := time.Now()
-		if retryAfter, allowed := s.authLimit.allow(clientKey, now); !allowed {
-			w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
-			writeError(w, http.StatusTooManyRequests, "too_many_attempts", "too many authentication attempts", map[string]any{
-				"retryAfterSeconds": int(mathCeilSeconds(retryAfter)),
-			})
+		if !auth.authorize(w, r) {
 			return
 		}
-
-		query := r.URL.Query()
-		if queryAPIToken := strings.TrimSpace(query.Get("apiToken")); queryAPIToken != "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", "apiToken query parameter is not supported; use X-Api-Token or Authorization: Bearer", nil)
-			return
-		}
-
-		token := strings.TrimSpace(r.Header.Get("X-Api-Token"))
-		if token == "" {
-			// Prometheus/ServiceMonitor and many HTTP clients support Bearer tokens
-			// out of the box, so accept Authorization: Bearer <token> as an alias.
-			if auth := strings.TrimSpace(r.Header.Get("Authorization")); auth != "" {
-				if parts := strings.SplitN(auth, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-					token = strings.TrimSpace(parts[1])
-				}
-			}
-		}
-		if token == "" && (isWebSocketUpgrade(r) || isSSERequest(r)) {
-			realtimeTicket := strings.TrimSpace(query.Get("realtimeTicket"))
-			if realtimeTicket != "" {
-				if s.rejectInvalidRealtimeOrigin(w, r, "realtime requests require a trusted Origin") {
-					return
-				}
-				transport := "sse"
-				if isWebSocketUpgrade(r) {
-					transport = "ws"
-				}
-				if s.realtimeTickets != nil && s.realtimeTickets.Consume(realtimeTicket, transport, now) {
-					s.authLimit.reset(clientKey)
-					next.ServeHTTP(w, r)
-					return
-				}
-				retryAfter := s.authLimit.recordFailure(clientKey, now)
-				if retryAfter > 0 {
-					w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
-				}
-				writeError(w, http.StatusUnauthorized, "unauthorized", "invalid realtime ticket", nil)
-				return
-			}
-		}
-		if token != "" && hasUnsafeTokenValue(token) {
-			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid api token", nil)
-			return
-		}
-		if len(token) > maxAPITokenBytes {
-			retryAfter := s.authLimit.recordFailure(clientKey, now)
-			if retryAfter > 0 {
-				w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
-			}
-			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid api token", nil)
-			return
-		}
-		if !apiTokenEqual(token, s.cfg.APIToken) {
-			retryAfter := s.authLimit.recordFailure(clientKey, now)
-			if retryAfter > 0 {
-				w.Header().Set("Retry-After", formatRetryAfterSeconds(retryAfter))
-			}
-			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid api token", nil)
-			return
-		}
-		s.authLimit.reset(clientKey)
 		next.ServeHTTP(w, r)
 	})
 }
 
 func authLimiterClientKey(r *http.Request) string {
-	host := r.RemoteAddr
+	peerHost := authLimiterPeerHost(r)
+	if peerHost == "" {
+		return "peer:unknown"
+	}
+	if ip := net.ParseIP(peerHost); ip != nil && ip.IsLoopback() {
+		if forwardedHost := authLimiterForwardedClientHost(r); forwardedHost != "" {
+			return "loopback-proxy:" + forwardedHost
+		}
+		return "loopback:" + peerHost
+	}
+	return "peer:" + peerHost
+}
+
+func authLimiterPeerHost(r *http.Request) string {
+	host := strings.TrimSpace(r.RemoteAddr)
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	host = strings.TrimSpace(host)
-	if host == "" {
-		return "unknown"
+	return strings.TrimSpace(host)
+}
+
+func authLimiterForwardedClientHost(r *http.Request) string {
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		parts := strings.Split(forwarded, ",")
+		if len(parts) > 0 {
+			if host := strings.TrimSpace(parts[0]); host != "" {
+				return host
+			}
+		}
 	}
-	return host
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+	return ""
 }
 
 func formatRetryAfterSeconds(d time.Duration) string {
@@ -272,38 +230,7 @@ func mathCeilSeconds(d time.Duration) int64 {
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		if h.Get("X-Frame-Options") == "" {
-			h.Set("X-Frame-Options", "DENY")
-		}
-		if h.Get("Content-Security-Policy") == "" {
-			h.Set("Content-Security-Policy", defaultContentSecurityPolicy)
-		}
-		if h.Get("Cross-Origin-Opener-Policy") == "" && isTrustworthyOrigin(r) {
-			// Keep popup/Window targeting isolated for trusted local/UI requests.
-			h.Set("Cross-Origin-Opener-Policy", "same-origin")
-		}
-		if h.Get("Cross-Origin-Resource-Policy") == "" {
-			h.Set("Cross-Origin-Resource-Policy", "same-origin")
-		}
-		if h.Get("Origin-Agent-Cluster") == "" {
-			h.Set("Origin-Agent-Cluster", "?1")
-		}
-		if h.Get("Permissions-Policy") == "" {
-			h.Set("Permissions-Policy", defaultPermissionsPolicy)
-		}
-		if h.Get("X-Permitted-Cross-Domain-Policies") == "" {
-			h.Set("X-Permitted-Cross-Domain-Policies", "none")
-		}
-		if h.Get("X-Content-Type-Options") == "" {
-			h.Set("X-Content-Type-Options", "nosniff")
-		}
-		if h.Get("Referrer-Policy") == "" {
-			h.Set("Referrer-Policy", "no-referrer")
-		}
-		if h.Get("Strict-Transport-Security") == "" && r.TLS != nil {
-			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
-		}
+		applySecurityHeaders(w, prepareSecurityHeadersRequest(r))
 		next.ServeHTTP(w, r)
 	})
 }
@@ -312,12 +239,11 @@ func isTrustworthyOrigin(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	host := r.Host
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
+	host := normalizeHost(r.Host)
+	if isLoopbackHost(host) {
+		return true
 	}
-	host = strings.ToLower(strings.TrimSpace(host))
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	return len(host) > len(".localhost") && strings.HasSuffix(host, ".localhost")
 }
 
 func isWebSocketUpgrade(r *http.Request) bool {
@@ -337,69 +263,16 @@ func (s *server) requestLogger(next http.Handler) http.Handler {
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
 
-		status := ww.Status()
-		if status == 0 {
-			status = http.StatusOK
-		}
-		duration := time.Since(start)
-		route := routePattern(r)
-		if s.metrics != nil {
-			s.metrics.ObserveHTTPRequest(r.Method, route, status, duration)
-		}
-		if shouldSkipAccessLog(r) {
-			return
-		}
-
-		fields := map[string]any{
-			"event":       "http.request",
-			"method":      r.Method,
-			"path":        r.URL.Path,
-			"status":      status,
-			"duration_ms": duration.Milliseconds(),
-			"bytes":       ww.BytesWritten(),
-			"remote_addr": requestRemoteAddr(r),
-			"user_agent":  r.UserAgent(),
-			"proto":       r.Proto,
-		}
-		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
-			fields["request_id"] = reqID
-		}
-		if route != "" {
-			fields["route"] = route
-		}
-		if profileID := r.Header.Get("X-Profile-Id"); profileID != "" {
-			fields["profile_id"] = profileID
-		}
-
-		if status >= http.StatusInternalServerError {
-			logging.ErrorFields("http request failed", fields)
-			return
-		}
-		if status >= http.StatusBadRequest {
-			logging.WarnFields("http request warning", fields)
-			return
-		}
-		logging.InfoFields("http request", fields)
+		status, duration, route, path, fields := buildRequestLogResult(r, ww.Status(), ww.BytesWritten(), time.Since(start))
+		observeRequestMetrics(s.metrics, r.Method, route, status, duration)
+		writeRequestLog(status, path, fields)
 	})
 }
 
 func (s *server) allowOnlySafeMethods(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch strings.ToUpper(r.Method) {
-		case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions:
-			break
-		default:
-			w.Header().Set("Allow", strings.Join(allowedHTTPMethods, ", "))
-			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not supported", map[string]any{
-				"method": r.Method,
-			})
-			return
-		}
-		if hasUnexpectedBody(r) {
-			w.Header().Set("Allow", strings.Join(allowedHTTPMethods, ", "))
-			writeError(w, http.StatusBadRequest, "invalid_request", "request body is not supported for this method", map[string]any{
-				"method": r.Method,
-			})
+		if err := prepareAllowedMethodRequest(r); err != nil {
+			writeRequestMethodMiddlewareError(w, err)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -433,10 +306,6 @@ func hasUnsafeTokenValue(value string) bool {
 	return false
 }
 
-func shouldSkipAccessLog(r *http.Request) bool {
-	return r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/metrics"
-}
-
 func routePattern(r *http.Request) string {
 	if rctx := chi.RouteContext(r.Context()); rctx != nil {
 		return rctx.RoutePattern()
@@ -464,85 +333,35 @@ func requestRemoteAddr(r *http.Request) string {
 }
 
 func (s *server) requireLocalHost(next http.Handler) http.Handler {
+	policy := newOriginAccessMiddlewareService(s)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hostFailureMsg := remoteHostFailureMessage(s.cfg.AllowRemote, len(s.cfg.AllowedHosts) > 0)
-		originFailureMsg := originFailureMessage(s.cfg.AllowRemote, len(s.cfg.AllowedHosts) > 0)
-
-		remoteHost := r.RemoteAddr
-		if h, _, err := net.SplitHostPort(remoteHost); err == nil {
-			remoteHost = h
-		}
-		ip := net.ParseIP(remoteHost)
-		if ip == nil || (!ip.IsLoopback() && !(s.cfg.AllowRemote && ip.IsPrivate())) {
-			msg := "remote address must be localhost"
-			if s.cfg.AllowRemote {
-				msg = "remote address must be localhost or private"
-			}
-			writeError(w, http.StatusForbidden, "forbidden", msg, map[string]any{"remoteAddr": r.RemoteAddr})
+		if err := policy.prepareLocalHostRequest(r); err != nil {
+			writeOriginAccessMiddlewareError(w, err)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
 
-		host := r.Host
-		if h, _, err := net.SplitHostPort(host); err == nil {
-			host = h
-		}
-		if !isAllowedHost(host, s.cfg.AllowRemote, s.cfg.AllowedHosts) {
-			writeError(w, http.StatusForbidden, "forbidden", hostFailureMsg, map[string]any{"host": r.Host})
+func (s *server) requireLocalPeer(next http.Handler) http.Handler {
+	policy := newOriginAccessMiddlewareService(s)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := policy.prepareLocalPeerRequest(r); err != nil {
+			writeOriginAccessMiddlewareError(w, err)
 			return
 		}
-
-		if origin := r.Header.Get("Origin"); origin != "" {
-			parsedOrigin, err := parseTrustedOrigin(strings.TrimSpace(origin))
-			if err != nil {
-				writeError(w, http.StatusForbidden, "forbidden", "invalid origin", nil)
-				return
-			}
-			if !isAllowedHost(parsedOrigin.Hostname(), s.cfg.AllowRemote, s.cfg.AllowedHosts) {
-				writeError(w, http.StatusForbidden, "forbidden", originFailureMsg, map[string]any{"origin": origin})
-				return
-			}
-		}
-
-		if fetchSite := strings.ToLower(r.Header.Get("Sec-Fetch-Site")); fetchSite == "cross-site" {
-			// Allow cross-site requests only when a valid Origin is present and allowed.
-			// Browsers include Origin for cross-site fetches; requests without Origin are rejected.
-			if strings.TrimSpace(r.Header.Get("Origin")) == "" {
-				writeError(w, http.StatusForbidden, "forbidden", "cross-site requests are not allowed", map[string]any{"secFetchSite": fetchSite})
-				return
-			}
-		}
-
 		next.ServeHTTP(w, r)
 	})
 }
 
 func (s *server) cors(next http.Handler) http.Handler {
+	policy := newOriginAccessMiddlewareService(s)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		if origin != "" {
-			if parsedOrigin, err := parseTrustedOrigin(origin); err == nil {
-				if isAllowedHost(parsedOrigin.Hostname(), s.cfg.AllowRemote, s.cfg.AllowedHosts) {
-					h := w.Header()
-					h.Set("Access-Control-Allow-Origin", origin)
-					h.Add("Vary", "Origin")
-					h.Set("Access-Control-Allow-Methods", "GET,POST,PATCH,PUT,DELETE,OPTIONS,HEAD")
-					h.Set("Access-Control-Allow-Headers", corsAllowHeaders)
-					h.Set("Access-Control-Expose-Headers", corsExposeHeaders)
-					h.Set("Access-Control-Max-Age", "600")
-					// securityHeaders() defaults CORP to same-origin, which breaks cross-origin API calls
-					// even when CORS is enabled. For allowed origins, explicitly allow cross-origin reads.
-					h.Set("Cross-Origin-Resource-Policy", "cross-origin")
-				}
-			}
+		prepared := policy.prepareCORSRequest(r)
+		applyCORSHeaders(w, prepared)
+		if writeCORSPreflight(w, r, prepared) {
+			return
 		}
-
-		if r.Method == http.MethodOptions {
-			if w.Header().Get("Access-Control-Allow-Origin") != "" {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-		}
-
 		next.ServeHTTP(w, r)
 	})
 }

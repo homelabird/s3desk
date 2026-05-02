@@ -15,6 +15,11 @@ case "${MODE}" in
 esac
 
 echo "[check] mode: ${MODE}"
+if [[ "${MODE}" == "full" ]]; then
+  echo "[check] local scope: mirrors the Release Gate workflow and includes check-smoke, but not the separate Core Mock E2E or Mobile Responsive E2E (Required) lanes"
+else
+  echo "[check] local scope: fast non-browser verification path; not equivalent to release-gate or the required browser checks"
+fi
 
 GO_BIN="${GO_BIN:-}"
 if [[ -z "${GO_BIN}" ]]; then
@@ -58,11 +63,31 @@ resolve_go_helper_tool() {
   return 1
 }
 
+third_party_notice_snapshot() {
+  (
+    cd "${ROOT}"
+    if [[ -f "THIRD_PARTY_NOTICES.md" ]]; then
+      sed '/^Generated at /d' "THIRD_PARTY_NOTICES.md" | sha256sum | awk '{print $1 "  THIRD_PARTY_NOTICES.md"}'
+    else
+      printf 'MISSING  THIRD_PARTY_NOTICES.md\n'
+    fi
+
+    if [[ -d "third_party/licenses" ]]; then
+      find "third_party/licenses" -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum
+    else
+      printf 'MISSING_DIR  third_party/licenses\n'
+    fi
+  )
+}
+
 echo "[check] openapi"
 bash "${ROOT}/scripts/validate_openapi.sh"
 
 echo "[check] release gate"
 bash "${ROOT}/scripts/check_release_gate.sh"
+
+echo "[check] github workflows"
+bash "${ROOT}/scripts/check_github_workflows.sh"
 
 if command -v helm >/dev/null 2>&1; then
   echo "[check] helm chart"
@@ -73,7 +98,7 @@ fi
 
 echo "[check] gofmt"
 backend_go_files=()
-if command -v git >/dev/null 2>&1; then
+if command -v git >/dev/null 2>&1 && git -C "${ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   while IFS= read -r -d '' path; do
     [[ "${path}" == *.go ]] || continue
     abs_path="${ROOT}/${path}"
@@ -184,11 +209,18 @@ if [[ "${npm_version}" != "${REQUIRED_NPM_VERSION}" ]]; then
   echo "[check] npm ${npm_version} found; recommended npm ${REQUIRED_NPM_VERSION}" >&2
 fi
 
+echo "[check] bundle report"
+(
+  cd "${ROOT}/frontend"
+  npm run check:bundle-report
+)
+
 echo "[check] frontend"
 (
   cd "${ROOT}/frontend"
   npm ci --no-audit --no-fund
   npm run check:openapi
+  npm run check:e2e:geometry
   npm run lint
   npm run test:unit
   npm run build
@@ -203,11 +235,19 @@ echo "[check] frontend"
 )
 
 echo "[check] third-party notices"
+third_party_notice_before="$(mktemp)"
+third_party_notice_after="$(mktemp)"
+cleanup_third_party_notice_snapshots() {
+  rm -f "${third_party_notice_before}" "${third_party_notice_after}"
+}
+trap cleanup_third_party_notice_snapshots EXIT
+
+third_party_notice_snapshot >"${third_party_notice_before}"
 python3 "${ROOT}/scripts/generate_third_party_notices.py"
-if command -v git >/dev/null 2>&1; then
-  git -C "${ROOT}" diff --exit-code -I '^Generated at ' -- THIRD_PARTY_NOTICES.md third_party/licenses
-else
-  echo "[check] git not found; skipping third-party notices diff check" >&2
+third_party_notice_snapshot >"${third_party_notice_after}"
+if ! diff -u "${third_party_notice_before}" "${third_party_notice_after}"; then
+  echo "[check] third-party notices are not reproducible; rerun scripts/generate_third_party_notices.py and include the generated files" >&2
+  exit 1
 fi
 
 echo "[check] ok"

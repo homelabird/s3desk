@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,6 +42,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+	cleanup()
 	window.matchMedia = originalMatchMedia
 	window.localStorage.clear()
 	window.sessionStorage.clear()

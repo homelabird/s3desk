@@ -1,31 +1,32 @@
-import { Button, Space, Typography, message } from 'antd'
+import { Button, Space, Typography } from 'antd'
 import { useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { transfersFeedback, transfersFeedbackCopy } from './transfersFeedback'
 import type { TransfersRuntimeNotifications } from './transfersTypes'
 
 export function useTransfersRuntimeNotifications(): TransfersRuntimeNotifications {
 	const navigate = useNavigate()
 
 	const info = useCallback((content: string) => {
-		message.info(content)
+		transfersFeedback.info(content)
 	}, [])
 
 	const warning = useCallback((content: string) => {
-		message.warning(content)
+		transfersFeedback.warning(content)
 	}, [])
 
 	const error = useCallback((content: string) => {
-		message.error(content)
+		transfersFeedback.errorText(content)
 	}, [])
 
 	const uploadCommitted = useCallback(
 		(jobId?: string) => {
-			message.open({
+			transfersFeedback.open({
 				type: 'success',
 				content: (
 					<Space>
-						<Typography.Text>Upload committed{jobId ? ` (job ${jobId})` : ''}</Typography.Text>
+						<Typography.Text>{transfersFeedbackCopy.uploadCommitted(jobId)}</Typography.Text>
 						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
 							Open Jobs
 						</Button>

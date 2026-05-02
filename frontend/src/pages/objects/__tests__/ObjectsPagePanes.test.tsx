@@ -2,13 +2,28 @@ import { act, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+	failedToListObjectsTitle,
+	failedToLoadFavoritesTitle,
+	loadingControlsTitle,
+	loadingFavoritesTitle,
+	loadingFoldersTitle,
+	offlineObjectActionsDisabledHint,
+	selectBucketToBrowseObjectsHint,
+} from '../../../lib/actionHints'
 import shellStyles from '../ObjectsShell.module.css'
 import { ObjectsPagePanes } from '../ObjectsPagePanes'
 import styles from '../objects.module.css'
 
+let suspendTreeSection = false
+const pendingTreeSection = new Promise<never>(() => {})
+
 vi.mock('../objectsPageLazy', () => ({
 	ObjectsContextMenuPortal: () => <div data-testid="objects-context-menu-portal">context-menu</div>,
-	ObjectsTreeSection: () => <div data-testid="objects-tree-section">tree</div>,
+	ObjectsTreeSection: () => {
+		if (suspendTreeSection) throw pendingTreeSection
+		return <div data-testid="objects-tree-section">tree</div>
+	},
 	ObjectsListHeader: () => <div data-testid="objects-list-header">header</div>,
 	ObjectsListControls: () => <div data-testid="objects-list-controls">controls</div>,
 	ObjectsListContent: () => <div data-testid="objects-list-content">content</div>,
@@ -213,6 +228,7 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 describe('ObjectsPagePanes', () => {
 	beforeEach(() => {
 		vi.useFakeTimers()
+		suspendTreeSection = false
 	})
 
 	afterEach(() => {
@@ -237,6 +253,49 @@ describe('ObjectsPagePanes', () => {
 		expect(listPaneWrapper).not.toBeNull()
 		expect(listPaneWrapper).toHaveClass(shellStyles.layoutPane)
 		expect(listPaneWrapper?.className).not.toMatch(/\bundefined\b/)
+	})
+
+	it('renders the shared empty-bucket alert copy when no bucket is selected', () => {
+		render(<ObjectsPagePanes {...buildProps()} />)
+
+		expect(screen.getByText(selectBucketToBrowseObjectsHint())).toBeInTheDocument()
+	})
+
+	it('renders shared offline and list-error alert copy in the list pane', () => {
+		render(
+			<ObjectsPagePanes
+				{...buildProps({
+					listProps: {
+						...buildProps().listProps,
+						hasBucket: true,
+						isOffline: true,
+						objectsErrorMessage: 'temporary outage',
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.getByText(offlineObjectActionsDisabledHint())).toBeInTheDocument()
+		expect(screen.getByText(failedToListObjectsTitle())).toBeInTheDocument()
+		expect(screen.getByText('temporary outage')).toBeInTheDocument()
+	})
+
+	it('renders the shared favorites-error alert copy when favorites-only loading fails', () => {
+		render(
+			<ObjectsPagePanes
+				{...buildProps({
+					listProps: {
+						...buildProps().listProps,
+						hasBucket: true,
+						favoritesOnly: true,
+						favoritesErrorMessage: 'favorites backend unavailable',
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.getByText(failedToLoadFavoritesTitle())).toBeInTheDocument()
+		expect(screen.getByText('favorites backend unavailable')).toBeInTheDocument()
 	})
 
 	it('renders a collapsed details affordance without loading the details section', () => {
@@ -294,12 +353,60 @@ describe('ObjectsPagePanes', () => {
 		)
 
 		expect(screen.queryByTestId('objects-list-controls')).not.toBeInTheDocument()
-		expect(screen.getAllByText('Loading controls…')).not.toHaveLength(0)
+		expect(screen.getAllByText(loadingControlsTitle())).not.toHaveLength(0)
 
 		await act(async () => {
 			vi.runAllTimers()
 		})
 
 		expect(screen.getByTestId('objects-list-controls')).toBeInTheDocument()
+	})
+
+	it('keeps the folders overlay shell visible while the tree bundle is loading', () => {
+		suspendTreeSection = true
+
+		render(
+			<ObjectsPagePanes
+				{...buildProps({
+					treeProps: {
+						...buildProps().treeProps,
+						treeDrawerOpen: true,
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.queryByTestId('objects-tree-section')).not.toBeInTheDocument()
+		expect(screen.getByTestId('objects-tree-sheet')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-favorites-pane')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-folders-pane')).toBeInTheDocument()
+		expect(screen.getByText(loadingFavoritesTitle())).toBeInTheDocument()
+		expect(screen.getByText(loadingFoldersTitle())).toBeInTheDocument()
+	})
+
+	it('keeps the docked folders shell visible while the tree bundle is loading', () => {
+		suspendTreeSection = true
+
+		render(
+			<ObjectsPagePanes
+				{...buildProps({
+					layoutProps: {
+						...buildProps().layoutProps,
+						treeDocked: true,
+					},
+					treeProps: {
+						...buildProps().treeProps,
+						dockTree: true,
+					},
+				})}
+			/>,
+		)
+
+		expect(screen.queryByTestId('objects-tree-section')).not.toBeInTheDocument()
+		expect(screen.getByTestId('objects-tree-content')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-favorites-pane')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-folders-pane')).toBeInTheDocument()
+		expect(screen.getByText(loadingFavoritesTitle())).toBeInTheDocument()
+		expect(screen.getByText(loadingFoldersTitle())).toBeInTheDocument()
 	})
 })

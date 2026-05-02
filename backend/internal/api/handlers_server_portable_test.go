@@ -40,6 +40,7 @@ func TestHandleGetServerBackup_PortableArchiveIncludesEntityFiles(t *testing.T) 
 		"data/jobs.jsonl",
 		"data/upload_sessions.jsonl",
 		"data/upload_multipart_uploads.jsonl",
+		"data/upload_objects.jsonl",
 		"data/object_index.jsonl",
 		"data/object_favorites.jsonl",
 	} {
@@ -72,6 +73,38 @@ func TestHandleGetServerBackup_PortableArchiveIncludesEntityFiles(t *testing.T) 
 	}
 	if _, ok := manifest.Entities["profile_connection_options"]; !ok {
 		t.Fatalf("manifest.entities[profile_connection_options] missing")
+	}
+}
+
+func TestHandlePreviewPortableImport_RejectsMultipartTempPreflightOverflow(t *testing.T) {
+	tempDir := os.TempDir()
+	freeBytes, err := availableDiskBytes(tempDir)
+	if err != nil {
+		t.Fatalf("availableDiskBytes(%q): %v", tempDir, err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/server/portable/preview", bytes.NewReader(nil))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=test")
+	req.ContentLength = serverRestoreMultipartFormMaxMemory + freeBytes + 1
+
+	rec := httptest.NewRecorder()
+	srv := &server{cfg: config.Config{}}
+	srv.handlePreviewPortableImport(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 409, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "portable_import_blocked" {
+		t.Fatalf("error.code=%q, want portable_import_blocked", resp.Error.Code)
+	}
+	if got := resp.Error.Details["path"]; got != tempDir {
+		t.Fatalf("details.path=%v, want %q", got, tempDir)
 	}
 }
 
@@ -152,6 +185,19 @@ func TestHandleGetServerBackup_PortableArchiveIncludesUploadState(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("upsert multipart upload: %v", err)
 	}
+	expectedSize := int64(11 * 1024 * 1024)
+	if err := st.UpsertUploadObject(context.Background(), store.UploadObject{
+		UploadID:     session.ID,
+		ProfileID:    profile.ID,
+		Path:         "multipart/large.bin",
+		Bucket:       "test-bucket",
+		ObjectKey:    "incoming/multipart/large.bin",
+		ExpectedSize: &expectedSize,
+		CreatedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+		UpdatedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("upsert upload object: %v", err)
+	}
 
 	archiveBytes := downloadPortableArchiveBytes(t, srv.URL, "/api/v1/server/backup?scope=portable")
 	entries := readTarGzEntries(t, bytes.NewReader(archiveBytes))
@@ -160,6 +206,9 @@ func TestHandleGetServerBackup_PortableArchiveIncludesUploadState(t *testing.T) 
 	}
 	if !bytes.Contains(entries["data/upload_multipart_uploads.jsonl"], []byte("multipart/large.bin")) {
 		t.Fatal("upload_multipart_uploads export missing multipart metadata")
+	}
+	if !bytes.Contains(entries["data/upload_objects.jsonl"], []byte("incoming/multipart/large.bin")) {
+		t.Fatal("upload_objects export missing tracked object metadata")
 	}
 
 	var manifest models.ServerMigrationManifest
@@ -171,6 +220,9 @@ func TestHandleGetServerBackup_PortableArchiveIncludesUploadState(t *testing.T) 
 	}
 	if got := manifest.Entities["upload_multipart_uploads"].Count; got < 1 {
 		t.Fatalf("manifest.entities[upload_multipart_uploads].count=%d, want >=1", got)
+	}
+	if got := manifest.Entities["upload_objects"].Count; got < 1 {
+		t.Fatalf("manifest.entities[upload_objects].count=%d, want >=1", got)
 	}
 }
 
@@ -225,6 +277,54 @@ func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyMissing(t *testing.T
 	body, _ := io.ReadAll(res.Body)
 	if !strings.Contains(string(body), "ENCRYPTION_KEY") {
 		t.Fatalf("expected preflight blocker mentioning ENCRYPTION_KEY, got: %s", string(body))
+	}
+}
+
+func TestHandlePreviewPortableImport_ReturnsDryRunResponseShape(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable/preview", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Mode != portableImportModeDryRun {
+		t.Fatalf("resp.Mode=%q, want %q", resp.Mode, portableImportModeDryRun)
+	}
+	if resp.TargetDBBackend != string(db.BackendSQLite) {
+		t.Fatalf("resp.TargetDBBackend=%q, want %q", resp.TargetDBBackend, db.BackendSQLite)
+	}
+	if len(resp.Preflight.Blockers) != 0 {
+		t.Fatalf("expected no blockers, got %v", resp.Preflight.Blockers)
+	}
+	if resp.Verification.PostImportHealthCheckPassed {
+		t.Fatal("expected preview to leave postImportHealthCheckPassed=false")
+	}
+	profilesEntity := findPortableImportEntityResult(t, resp.Entities, "profiles")
+	if profilesEntity.ExportedCount < 1 {
+		t.Fatalf("profiles exportedCount=%d, want >=1", profilesEntity.ExportedCount)
+	}
+	if profilesEntity.ImportedCount != 0 {
+		t.Fatalf("profiles importedCount=%d, want 0 for dry-run", profilesEntity.ImportedCount)
+	}
+	if !profilesEntity.ChecksumVerified {
+		t.Fatal("expected profiles checksum to be verified")
+	}
+	if resp.AssetStagingDir != "" {
+		t.Fatalf("assetStagingDir=%q, want empty for dry-run", resp.AssetStagingDir)
+	}
+	if profile.ID == "" {
+		t.Fatal("expected created profile id to be non-empty")
 	}
 }
 
@@ -412,7 +512,7 @@ func TestHandleImportPortableBackup_ReturnsBlockedPreviewWhenVersionsUnsupported
 		manifest.SchemaVersion = portableBackupSchemaVersion + 1
 	})
 
-	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	targetStore, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -422,11 +522,27 @@ func TestHandleImportPortableBackup_ReturnsBlockedPreviewWhenVersionsUnsupported
 
 	var resp models.ServerPortableImportResponse
 	decodeJSONResponse(t, res, &resp)
+	if resp.Mode != portableImportModeReplace {
+		t.Fatalf("resp.Mode=%q, want %q", resp.Mode, portableImportModeReplace)
+	}
+	if resp.TargetDBBackend != string(db.BackendSQLite) {
+		t.Fatalf("resp.TargetDBBackend=%q, want %q", resp.TargetDBBackend, db.BackendSQLite)
+	}
 	if resp.Preflight.SchemaReady {
 		t.Fatal("expected schemaReady=false for unsupported schema version")
 	}
 	if len(resp.Preflight.Blockers) == 0 {
 		t.Fatal("expected blocker for unsupported schema version")
+	}
+	if resp.Verification.PostImportHealthCheckPassed {
+		t.Fatal("expected blocked replace to skip health check")
+	}
+	profiles, err := targetStore.ListProfiles(context.Background())
+	if err != nil {
+		t.Fatalf("ListProfiles() error = %v", err)
+	}
+	if len(profiles) != 0 {
+		t.Fatalf("expected blocked replace to skip import, got %d profiles", len(profiles))
 	}
 }
 
@@ -463,6 +579,51 @@ func TestHandleImportPortableBackup_EncryptedBundleImportsWithMatchingKey(t *tes
 	}
 	if profiles[0].ID != profile.ID {
 		t.Fatalf("imported profile id=%q, want %q", profiles[0].ID, profile.ID)
+	}
+}
+
+func TestHandleImportPortableBackup_ReturnsReplaceResponseShapeAfterApply(t *testing.T) {
+	t.Parallel()
+
+	st, _, sourceSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	archiveBytes := downloadPortableArchiveBytes(t, sourceSrv.URL, "/api/v1/server/backup?scope=portable")
+
+	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup.tar.gz")
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 201, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Mode != portableImportModeReplace {
+		t.Fatalf("resp.Mode=%q, want %q", resp.Mode, portableImportModeReplace)
+	}
+	if resp.TargetDBBackend != string(db.BackendSQLite) {
+		t.Fatalf("resp.TargetDBBackend=%q, want %q", resp.TargetDBBackend, db.BackendSQLite)
+	}
+	if len(resp.Preflight.Blockers) != 0 {
+		t.Fatalf("expected no blockers, got %v", resp.Preflight.Blockers)
+	}
+	if !resp.Verification.PostImportHealthCheckPassed {
+		t.Fatal("expected replace import to mark postImportHealthCheckPassed=true")
+	}
+	profilesEntity := findPortableImportEntityResult(t, resp.Entities, "profiles")
+	if profilesEntity.ExportedCount < 1 {
+		t.Fatalf("profiles exportedCount=%d, want >=1", profilesEntity.ExportedCount)
+	}
+	if profilesEntity.ImportedCount != profilesEntity.ExportedCount {
+		t.Fatalf("profiles importedCount=%d, want %d", profilesEntity.ImportedCount, profilesEntity.ExportedCount)
+	}
+	if !profilesEntity.ChecksumVerified {
+		t.Fatal("expected profiles checksum to be verified")
+	}
+	if profile.ID == "" {
+		t.Fatal("expected created profile id to be non-empty")
 	}
 }
 
@@ -586,28 +747,44 @@ func TestExtractPortablePayloadEntry_RejectsOversizedFileBeforeWrite(t *testing.
 	t.Parallel()
 
 	tempRoot := t.TempDir()
-	freeBytes, err := availableDiskBytes(tempRoot)
-	if err != nil {
-		t.Fatalf("availableDiskBytes: %v", err)
-	}
-	if freeBytes == 0 {
-		t.Skip("disk reports zero free bytes")
-	}
 
 	payloadEntries := make([]serverBackupPayloadEntry, 0, 1)
 	header := &tar.Header{
 		Name:     "data/profiles.jsonl",
 		Typeflag: tar.TypeReg,
 		Mode:     0o600,
-		Size:     freeBytes + 1,
+		Size:     4097,
 	}
-	err = extractPortablePayloadEntry(context.Background(), tempRoot, "data/profiles.jsonl", header, bytes.NewReader(nil), &payloadEntries)
+	called := false
+	err := extractServerRestoreArchiveEntryWithDiskCheck(
+		tempRoot,
+		"data/profiles.jsonl",
+		"data/profiles.jsonl",
+		header,
+		bytes.NewReader([]byte("payload")),
+		&payloadEntries,
+		"portable archive entry",
+		func(root string, path string, requiredBytes int64) error {
+			called = true
+			return serverRestorePreflightError{
+				Path:           path,
+				RequiredBytes:  requiredBytes,
+				AvailableBytes: requiredBytes - 1,
+			}
+		},
+	)
 	var preflightErr serverRestorePreflightError
 	if !errors.As(err, &preflightErr) {
 		t.Fatalf("expected serverRestorePreflightError, got %v", err)
 	}
+	if !called {
+		t.Fatal("expected disk-space preflight to be called")
+	}
 	if preflightErr.Path != "data/profiles.jsonl" {
 		t.Fatalf("preflight path=%q, want data/profiles.jsonl", preflightErr.Path)
+	}
+	if _, statErr := os.Stat(filepath.Join(tempRoot, "data", "profiles.jsonl")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected no file write after preflight error, stat err=%v", statErr)
 	}
 }
 
@@ -713,6 +890,18 @@ func buildPortableArchiveMultipartBody(t *testing.T, archive []byte, filename st
 		t.Fatalf("close writer: %v", err)
 	}
 	return body, writer.FormDataContentType()
+}
+
+func findPortableImportEntityResult(t *testing.T, entities []models.ServerPortableImportEntityResult, name string) models.ServerPortableImportEntityResult {
+	t.Helper()
+
+	for _, entity := range entities {
+		if entity.Name == name {
+			return entity
+		}
+	}
+	t.Fatalf("portable import entity %q not found in %#v", name, entities)
+	return models.ServerPortableImportEntityResult{}
 }
 
 func mutatePortableArchiveManifest(t *testing.T, archiveBytes []byte, mutate func(*models.ServerMigrationManifest)) []byte {

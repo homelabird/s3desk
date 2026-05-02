@@ -1,23 +1,21 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
-import type { APIClient } from '../../api/client'
 import type { Bucket, MetaResponse, Profile } from '../../api/types'
 import { queryKeys } from '../../api/queryKeys'
-import {
-	getProviderCapabilities,
-	getProviderCapabilityReason,
-	type ProviderCapabilityMatrix,
-} from '../../lib/providerCapabilities'
+import type { BucketListQueriesAPI } from '../../lib/pageApiScopes'
+import { buildProfileCapabilityContext } from '../../lib/profileCapabilityContext'
+import type { ProviderCapabilityMatrix } from '../../lib/providerCapabilities'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 
 type UseBucketsPageQueriesStateArgs = {
-	api: APIClient
+	api: BucketListQueriesAPI
 	apiToken: string
 	profileId: string | null
 }
 
 export type BucketsPageQueriesState = {
+	profileId: string | null
 	metaQuery: UseQueryResult<MetaResponse>
 	profilesQuery: UseQueryResult<Profile[]>
 	selectedProfile: Profile | null
@@ -46,23 +44,29 @@ export function useBucketsPageQueriesState({
 		queryFn: () => api.profiles.listProfiles(),
 	})
 
-	const selectedProfile: Profile | null = useMemo(() => {
-		if (!profileId) return null
-		return profilesQuery.data?.find((profile) => profile.id === profileId) ?? null
-	}, [profileId, profilesQuery.data])
+	const profileCapabilityContext = useMemo(
+		() =>
+			buildProfileCapabilityContext({
+				profiles: profilesQuery.data,
+				profileId,
+				meta: metaQuery.data,
+			}),
+		[metaQuery.data, profileId, profilesQuery.data],
+	)
+	const {
+		selectedProfile,
+		capabilities,
+		bucketCrudSupported,
+		bucketCrudUnsupportedReason,
+	} = profileCapabilityContext
 
 	const profileResolved = !profileId || profilesQuery.isSuccess
-	const capabilities = selectedProfile
-		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers, selectedProfile)
-		: null
-	const bucketCrudSupported = capabilities?.bucketCrud ?? true
-	const bucketCrudUnsupportedReason =
-		getProviderCapabilityReason(capabilities, 'bucketCrud') ?? 'Bucket operations are not supported by this profile.'
+	const bucketCapabilityResolved = !profileId || (profilesQuery.isSuccess && metaQuery.isSuccess)
 
 	const bucketsQuery = useQuery({
 		queryKey: queryKeys.buckets.list(profileId, apiToken),
 		queryFn: () => api.buckets.listBuckets(profileId!),
-		enabled: !!profileId && profileResolved && bucketCrudSupported,
+		enabled: !!profileId && bucketCapabilityResolved && bucketCrudSupported,
 		retry: false,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
@@ -71,6 +75,7 @@ export function useBucketsPageQueriesState({
 	const showBucketsEmpty = bucketCrudSupported && bucketsQuery.isSuccess && buckets.length === 0
 
 	return {
+		profileId,
 		metaQuery,
 		profilesQuery,
 		selectedProfile,

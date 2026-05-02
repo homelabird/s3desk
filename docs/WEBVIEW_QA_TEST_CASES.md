@@ -69,7 +69,7 @@ Record the environment you are validating:
 - engine family/version if known
 - OS version
 - device model
-- target URL and scheme (`https`, `http`, or `localhost`)
+- target URL and scheme (`https`, `http`, or a localhost-based origin)
 - whether the app is running as a top-level page or inside another container
 - viewport/posture used for the run
 
@@ -103,9 +103,9 @@ actually validating.
 
 | Target environment | Required cases | Conditional / optional cases |
 | --- | --- | --- |
-| Desktop browser tab on `https://` or `localhost` | `WV-001`, `WV-003`, `WV-004` or `WV-005`, `WV-006` or `WV-007`, `WV-008`, `WV-010` | `WV-011`, `WV-012`, `WV-013`, `WV-014` |
-| Mobile browser tab on `https://` or `localhost` | `WV-001`, `WV-003`, `WV-004` or `WV-005`, `WV-006` or `WV-007`, `WV-008`, `WV-010`, `WV-012` | `WV-011`, `WV-013`, `WV-014` |
-| Embedded webview as a top-level host view on `https://` or `localhost` | `WV-001`, `WV-003`, `WV-004` or `WV-005`, `WV-006` or `WV-007`, `WV-008`, `WV-010`, `WV-011`, `WV-014` | `WV-012`, `WV-013`, `WV-015` |
+| Desktop browser tab on `https://` or a localhost-based origin | `WV-001`, `WV-003`, `WV-004` or `WV-005`, `WV-006` or `WV-007`, `WV-008`, `WV-010` | `WV-011`, `WV-012`, `WV-013`, `WV-014` |
+| Mobile browser tab on `https://` or a localhost-based origin | `WV-001`, `WV-003`, `WV-004` or `WV-005`, `WV-006` or `WV-007`, `WV-008`, `WV-010`, `WV-012` | `WV-011`, `WV-013`, `WV-014` |
+| Embedded webview as a top-level host view on `https://` or a localhost-based origin | `WV-001`, `WV-003`, `WV-004` or `WV-005`, `WV-006` or `WV-007`, `WV-008`, `WV-010`, `WV-011`, `WV-014` | `WV-012`, `WV-013`, `WV-015` |
 | Non-secure deployment on `http://` (non-localhost) | `WV-001`, `WV-007`, `WV-009`, `WV-015` | `WV-005` if folder-upload fallback still exists |
 | Any request to embed the app in an iframe | `WV-002` | none |
 
@@ -297,7 +297,7 @@ depend on folder upload
 
 **Preconditions**
 
-- target URL is `https://` or `localhost`
+- target URL is `https://` or a localhost-based origin
 - folder upload opens a native directory picker
 - local test folder exists:
 
@@ -496,7 +496,7 @@ non-secure, or operators rely on browser-managed downloads
 ### `WV-008` — Clipboard actions in secure context
 
 **Required when:** the target relies on copy/link/paste actions and is served on
-`https://` or `localhost`
+`https://` or a localhost-based origin
 
 **Optional when:** clipboard-driven workflows are not used by operators
 
@@ -566,7 +566,7 @@ non-secure, or operators rely on browser-managed downloads
 
 - QA must not treat non-secure context as full clipboard support.
 - If a copy/paste action fails, the app should surface:
-  `Copy failed. Clipboard access is restricted on insecure origins (try HTTPS or localhost).`
+  `Copy failed. Clipboard access is restricted on insecure origins (try HTTPS or a localhost-based origin).`
 - Some hosts may still allow limited legacy copy behavior. Record that exact
   behavior instead of assuming parity with a secure browser.
 

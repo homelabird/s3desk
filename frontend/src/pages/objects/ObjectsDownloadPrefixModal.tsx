@@ -4,6 +4,7 @@ import { DialogModal } from '../../components/DialogModal'
 import { FormField } from '../../components/FormField'
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
+import { localDeviceAccessBrowserHint, localFolderAccessUnavailableTitle } from '../../lib/secureContext'
 
 type DownloadPrefixValues = {
 	localFolder: string
@@ -51,8 +52,8 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 				<Alert
 					type="warning"
 					showIcon
-					title="Local folder access is not available"
-					description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
+					title={localFolderAccessUnavailableTitle()}
+					description={support.reason ?? localDeviceAccessBrowserHint()}
 					style={{ marginBottom: 12 }}
 				/>
 			) : null}

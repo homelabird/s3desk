@@ -1,10 +1,10 @@
 import { Alert, Space, Typography } from 'antd'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { MetaResponse } from '../../api/types'
 
 type ServerSettingsSectionProps = {
-	api: APIClient
+	api: APIClientShape
 	meta: MetaResponse | undefined
 	isFetching: boolean
 	errorMessage: string | null

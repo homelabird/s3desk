@@ -1,22 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, message, Typography } from 'antd'
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { ListObjectsResponse } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import type { ObjectTypeFilter } from './objectsTypes'
-import { getVisibleCreatedPrefix, insertOptimisticPrefixIntoObjectsData, invalidateObjectQueriesForPrefix } from './objectsQueryCache'
-import {
-	displayNameForPrefix,
-	matchesSearchTokens,
-	normalizeForSearch,
-	normalizePrefix,
-	splitSearchTokens,
-} from './objectsListUtils'
+import type { NewFolderFormValues } from './objectsNewFolderRuntime'
 
 type UseObjectsNewFolderArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string
@@ -31,36 +24,7 @@ type UseObjectsNewFolderArgs = {
 	onOpenPrefix: (prefix: string) => void
 }
 
-type NewFolderFormValues = { name: string; allowPath: boolean }
 type NewFolderMutationArgs = NewFolderFormValues & { sessionId: number }
-type CreateFolderPlan = { parentPrefix: string; parts: string[]; key: string; visiblePrefix: string }
-
-function buildCreateFolderPlan(values: NewFolderFormValues, parentPrefix: string): CreateFolderPlan {
-	const allowPath = !!values.allowPath
-	const rawInput = values.name.trim().replace(/\/+$/, '').replace(/^\/+/, '')
-	if (!rawInput) throw new Error('folder name is required')
-	if (rawInput.includes('\u0000')) throw new Error('invalid folder name')
-
-	const parts = rawInput.split('/').filter(Boolean)
-	if (parts.length === 0) throw new Error('folder name is required')
-	if (!allowPath && parts.length > 1) throw new Error("folder name must not contain '/'")
-	for (const part of parts) {
-		if (part === '.' || part === '..') throw new Error('invalid folder name')
-	}
-
-	const normalizedParentPrefix = normalizePrefix(parentPrefix)
-	let key = normalizedParentPrefix
-	for (const part of parts) {
-		key = `${key}${part}/`
-	}
-
-	return {
-		parentPrefix: normalizedParentPrefix,
-		parts,
-		key,
-		visiblePrefix: getVisibleCreatedPrefix(normalizedParentPrefix, key),
-	}
-}
 
 export function useObjectsNewFolder({
 	api,
@@ -115,35 +79,29 @@ export function useObjectsNewFolder({
 		mutationFn: async (args: NewFolderMutationArgs) => {
 			if (!profileId) throw new Error('profile is required')
 			if (!bucket) throw new Error('bucket is required')
-			const plan = buildCreateFolderPlan(args, newFolderParentPrefix)
-			let current = plan.parentPrefix
-			let last = ''
-			try {
-				for (const part of plan.parts) {
-					current = `${current}${part}/`
-					await api.objects.createFolder({ profileId, bucket, key: current })
-					last = current
-				}
-			} catch (err) {
-				const e = err instanceof Error ? err : new Error(String(err))
-				;(e as { partialKey?: string }).partialKey = last || undefined
-				throw e
-			}
-			return { key: last }
+			const runtime = await import('./objectsNewFolderRuntime')
+			return runtime.createFolderPath({
+				api,
+				profileId,
+				bucket,
+				parentPrefix: newFolderParentPrefix,
+				values: args,
+			})
 		},
 		onMutate: async (values: NewFolderMutationArgs) => {
 			if (!profileId || !bucket) return null
 
-			const parentPrefixNormalized = normalizePrefix(newFolderParentPrefix)
-			const currentPrefixNormalized = normalizePrefix(prefix)
-			if (parentPrefixNormalized !== currentPrefixNormalized) return null
-
-			const plan = buildCreateFolderPlan(values, newFolderParentPrefix)
-			const objectsQueryKey = ['objects', profileId, bucket, prefix, apiToken] as const
+			const [runtime, queryCache] = await Promise.all([
+				import('./objectsNewFolderRuntime'),
+				import('./objectsQueryCache'),
+			])
+			const plan = runtime.buildCreateFolderPlan(values, newFolderParentPrefix)
+			if (plan.parentPrefix !== runtime.normalizeNewFolderPrefix(prefix)) return null
+			const objectsQueryKey = queryKeys.objects.list(profileId, bucket, prefix, apiToken)
 			await queryClient.cancelQueries({ queryKey: objectsQueryKey, exact: true })
 			const previous = queryClient.getQueryData<InfiniteData<ListObjectsResponse, string | undefined>>(objectsQueryKey)
 			queryClient.setQueryData<InfiniteData<ListObjectsResponse, string | undefined> | undefined>(objectsQueryKey, (data) =>
-				insertOptimisticPrefixIntoObjectsData(data, plan.visiblePrefix),
+				queryCache.insertOptimisticPrefixIntoObjectsData(data, plan.visiblePrefix),
 			)
 
 			return {
@@ -163,61 +121,37 @@ export function useObjectsNewFolder({
 				return
 			}
 			const createdKey = resp.key
-			const parentPrefixNormalized = normalizePrefix(newFolderParentPrefix)
-			const currentPrefixNormalized = normalizePrefix(prefix)
-			const parentIsCurrent = parentPrefixNormalized === currentPrefixNormalized
-			const createdOutsideView = !parentIsCurrent
-			const searchRaw = (searchText ?? '').trim()
-			const tokens = splitSearchTokens(searchRaw)
-			const normalizedTokens = tokens.map(normalizeForSearch)
-			const matchesSearch = (value: string) => matchesSearchTokens(value, tokens, normalizedTokens)
-
-			let viewHideReason: 'favoritesOnly' | 'filesOnly' | 'search' | null = null
-			if (parentIsCurrent) {
-				if (favoritesOnly) {
-					viewHideReason = 'favoritesOnly'
-				} else if (typeFilter === 'files') {
-					viewHideReason = 'filesOnly'
-				} else if (tokens.length > 0) {
-					const displayName = displayNameForPrefix(createdKey, prefix)
-					if (!(matchesSearch(displayName) || matchesSearch(createdKey))) {
-						viewHideReason = 'search'
-					}
-				}
-			}
-
-			const autoOpened = parentIsCurrent && !!viewHideReason
-			if (autoOpened) {
+			const runtime = await import('./objectsNewFolderRuntime')
+			const visibility = runtime.buildNewFolderVisibilityOutcome({
+				createdKey,
+				parentPrefix: newFolderParentPrefix,
+				currentPrefix: prefix,
+				typeFilter,
+				favoritesOnly,
+				searchText,
+			})
+			if (visibility.autoOpened) {
 				onOpenPrefix(createdKey)
 			}
 
-			const viewHideLabel =
-				viewHideReason === 'favoritesOnly'
-					? 'favorites-only view'
-					: viewHideReason === 'filesOnly'
-						? 'files-only view'
-						: viewHideReason === 'search'
-							? 'search filter'
-							: null
-			const createdOutsideLabel = createdOutsideView ? (parentPrefixNormalized || '/') : null
-			const visiblePrefix = getVisibleCreatedPrefix(parentPrefixNormalized, createdKey)
 			let folderVisibleAfterRefresh = true
 			if (profileId) {
-				await invalidateObjectQueriesForPrefix(queryClient, {
+				const queryCache = await import('./objectsQueryCache')
+				await queryCache.invalidateObjectQueriesForPrefix(queryClient, {
 					profileId,
 					bucket,
 					changedPrefix: createdKey,
 					apiToken,
 				})
-				if (parentIsCurrent && !viewHideReason && !createdOutsideView) {
+				if (visibility.shouldVerifyVisibleAfterRefresh) {
 					const refreshed = await api.objects.listObjects({
 						profileId,
 						bucket,
-						prefix: parentPrefixNormalized,
+						prefix: visibility.parentPrefixNormalized,
 						delimiter: '/',
 						maxKeys: 200,
 					})
-					folderVisibleAfterRefresh = Array.isArray(refreshed.commonPrefixes) && refreshed.commonPrefixes.includes(visiblePrefix)
+					folderVisibleAfterRefresh = Array.isArray(refreshed.commonPrefixes) && refreshed.commonPrefixes.includes(visibility.visiblePrefix)
 				}
 			}
 
@@ -226,72 +160,28 @@ export function useObjectsNewFolder({
 			setNewFolderValues({ name: '', allowPath: false })
 			setNewFolderPartialKey(null)
 
-			const toastActionLabel = autoOpened ? 'Reopen' : 'Open'
-			const toastAction = (
-				<Button
-					type="link"
-					size="small"
-					style={{ paddingInline: 4 }}
-					onClick={() => {
-						onOpenPrefix(createdKey)
-					}}
-				>
-					{toastActionLabel}
-				</Button>
-			)
+			const feedback = await import('./objectsNewFolderFeedback')
 			if (!folderVisibleAfterRefresh) {
-				message.warning({
-					duration: 8,
-					content: (
-						<span>
-							Folder create request completed, but the provider did not return it after refresh: <Typography.Text code>{createdKey}</Typography.Text>{' '}
-							{toastAction}
-						</span>
-					),
+				feedback.showNewFolderVisibilityWarning({
+					createdKey,
+					onOpenPrefix,
 				})
 			} else {
-				message.success({
-					duration: 6,
-					content: (
-						<span>
-							Folder created{autoOpened ? ' and opened' : ''}
-							{viewHideLabel ? ` (${viewHideLabel})` : createdOutsideLabel ? ` (under ${createdOutsideLabel})` : ''}: <Typography.Text code>{createdKey}</Typography.Text>{' '}
-							{toastAction}
-							{autoOpened || createdOutsideView ? (
-								<>
-									<Button
-										type="link"
-										size="small"
-										style={{ paddingInline: 4 }}
-										onClick={() => onOpenPrefix(newFolderParentPrefix)}
-									>
-										Parent
-									</Button>
-									{autoOpened ? (
-										<>
-											{viewHideReason === 'favoritesOnly' ? (
-												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onDisableFavoritesOnly}>
-													Disable favorites-only
-												</Button>
-											) : viewHideReason === 'filesOnly' ? (
-												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onShowFolders}>
-													Show folders
-												</Button>
-											) : viewHideReason === 'search' ? (
-												<Button type="link" size="small" style={{ paddingInline: 4 }} onClick={onClearSearch}>
-													Clear search
-												</Button>
-											) : null}
-										</>
-									) : null}
-								</>
-							) : null}
-						</span>
-					),
+				feedback.showNewFolderCreatedFeedback({
+					autoOpened: visibility.autoOpened,
+					createdKey,
+					createdOutsideLabel: visibility.createdOutsideLabel,
+					createdOutsideView: visibility.createdOutsideView,
+					onClearSearch,
+					onDisableFavoritesOnly,
+					onOpenPrefix,
+					onShowFolders,
+					parentPrefix: newFolderParentPrefix,
+					viewHideLabel: visibility.viewHideLabel,
+					viewHideReason: visibility.viewHideReason,
 				})
 			}
-			const parentKey = normalizePrefix(newFolderParentPrefix) || '/'
-			void refreshTreeNode(parentKey)
+			void refreshTreeNode(visibility.parentTreeKey)
 		},
 		onError: (err, _values, context) => {
 			if (context?.objectsQueryKey) {

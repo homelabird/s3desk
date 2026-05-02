@@ -78,6 +78,10 @@ function renderBreadcrumb(items: BreadcrumbItem[]) {
 export function ObjectsListControls(props: ObjectsListControlsProps) {
 	const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null)
 	const location = buildS3Location(props.bucket, props.prefix)
+	const searchTrimmed = props.search.trim()
+	const searchCapped = !!searchTrimmed && props.hasNextPage && props.rawTotalCount >= props.searchAutoScanCap
+	const compactUsesInlineIndexedCta = props.isCompact && searchCapped && !props.isAdvanced
+	const compactFooterSearchLabel = props.isCompact ? (searchCapped ? 'Indexed search' : 'Bucket search') : 'Global Search (Indexed)'
 
 	useEffect(() => {
 		if (!copyFeedback) return
@@ -92,27 +96,66 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 	}
 
 	const globalSearchButton = props.isAdvanced ? (
-		<Button size="small" icon={<SearchOutlined />} disabled={!props.canInteract} onClick={props.onOpenGlobalSearch}>
-			{props.isCompact ? 'Bucket search' : 'Global Search (Indexed)'}
+		<Button
+			size="small"
+			icon={<SearchOutlined />}
+			disabled={!props.canInteract}
+			onClick={props.onOpenGlobalSearch}
+			aria-label={props.isCompact && searchCapped ? 'Global Search (Indexed)' : undefined}
+		>
+			{compactFooterSearchLabel}
 		</Button>
 	) : null
 
 	const searchStatus =
-		props.search.trim() && props.hasNextPage ? (
-			props.rawTotalCount >= props.searchAutoScanCap ? (
-				<Alert
-					banner
-					type="info"
-					showIcon
-					title={`Search paused at ${props.searchAutoScanCap.toLocaleString()} items`}
-					description="Use Global Search (Indexed) to scan the full bucket."
-					action={
-						<Button size="small" type="primary" disabled={!props.canInteract} onClick={props.onOpenGlobalSearch}>
-							Global Search (Indexed)
-						</Button>
-					}
-					className={styles.listControlsStatusAlert}
-				/>
+		searchTrimmed && props.hasNextPage ? (
+			searchCapped ? (
+				props.isCompact ? (
+					<div
+						className={styles.listControlsStatusCompact}
+						data-testid="objects-list-controls-status-compact"
+						data-has-action={compactUsesInlineIndexedCta ? 'true' : 'false'}
+						role="status"
+					>
+						<div className={styles.listControlsStatusCompactText}>
+							<strong className={styles.listControlsStatusCompactTitle}>
+								{`Search paused at ${props.searchAutoScanCap.toLocaleString()} items`}
+							</strong>
+							<span className={`${styles.listControlsStatusCompactHint} ${styles.listControlsSecondaryText}`}>
+								{props.isAdvanced
+									? 'Use Indexed search above to scan the whole bucket.'
+									: 'Use Global Search (Indexed) to scan the whole bucket.'}
+							</span>
+						</div>
+						{compactUsesInlineIndexedCta ? (
+							<Button
+								size="small"
+								type="primary"
+								icon={<SearchOutlined />}
+								disabled={!props.canInteract}
+								onClick={props.onOpenGlobalSearch}
+								aria-label="Global Search (Indexed)"
+								className={styles.listControlsStatusCompactAction}
+							>
+								Indexed search
+							</Button>
+						) : null}
+					</div>
+				) : (
+					<Alert
+						banner
+						type="info"
+						showIcon
+						title={`Search paused at ${props.searchAutoScanCap.toLocaleString()} items`}
+						description="Use Global Search (Indexed) to scan the full bucket."
+						action={
+							<Button size="small" type="primary" disabled={!props.canInteract} onClick={props.onOpenGlobalSearch}>
+								Global Search (Indexed)
+							</Button>
+						}
+						className={styles.listControlsStatusAlert}
+					/>
+				)
 			) : (
 				<span className={`${styles.listControlsStatusText} ${styles.listControlsSecondaryText}`}>
 					<span className={styles.listControlsStatusInline}>
@@ -182,6 +225,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 
 	const filterButton = (
 		<Button
+			size="small"
 			icon={<FilterOutlined />}
 			type={props.hasActiveView ? 'primary' : 'default'}
 			onClick={props.onOpenFilters}
@@ -251,7 +295,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						value={props.searchDraft}
 						onChange={(event) => props.onSearchDraftChange(event.target.value)}
 					/>
-					<div className={styles.listControlsCompactFooter}>
+					<div className={styles.listControlsCompactFooter} data-testid="objects-list-controls-compact-footer">
 						<div className={styles.listControlsCompactActions}>
 							{filterButton}
 							{globalSearchButton}
@@ -259,36 +303,39 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						{viewModeToggle}
 					</div>
 					{props.isAdvanced ? (
-						<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
-							{props.visiblePrefixCount} folders, {props.visibleFileCount} files
-						</span>
-					) : null}
-					{props.isAdvanced ? (
-						<span className={`${styles.listControlsHintText} ${styles.listControlsSecondaryText}`}>
-							Search this folder here, or use Bucket search for indexed results across the whole bucket.
-						</span>
+						<div className={styles.listControlsCompactMeta} data-testid="objects-list-controls-compact-meta">
+							<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
+								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
+							</span>
+							<span className={`${styles.listControlsHintText} ${styles.listControlsSecondaryText}`}>
+								Search here, or use Bucket search across the whole bucket.
+							</span>
+						</div>
 					) : null}
 					{searchStatus}
 				</div>
 			) : (
 				<div className={styles.listControlsStack}>
-					<div className={styles.listControlsDesktopRow}>
-						<div className={styles.listControlsDesktopLeft}>
-							<Input
-								allowClear
-								placeholder="Search current folder…"
-								aria-label="Search current folder"
-								className={styles.listControlsSearchInput}
-								value={props.searchDraft}
-								onChange={(event) => props.onSearchDraftChange(event.target.value)}
-							/>
+					<div className={styles.listControlsDesktopRow} data-testid="objects-list-controls-desktop-row">
+						<Input
+							allowClear
+							placeholder="Search current folder…"
+							aria-label="Search current folder"
+							className={styles.listControlsSearchInput}
+							value={props.searchDraft}
+							onChange={(event) => props.onSearchDraftChange(event.target.value)}
+						/>
+						<div className={styles.listControlsDesktopLeft} data-testid="objects-list-controls-desktop-actions">
 							{filterButton}
 							{globalSearchButton}
 							{viewModeToggle}
 							{sortControls}
 						</div>
 						{props.isAdvanced ? (
-							<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
+							<span
+								className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`.trim()}
+								data-testid="objects-list-controls-summary"
+							>
 								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
 							</span>
 						) : null}

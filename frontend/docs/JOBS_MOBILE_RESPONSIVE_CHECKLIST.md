@@ -6,7 +6,7 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 ## Scope
 
 - Page: `Jobs`
-- Goal: verify that the `Jobs` page stays usable on mobile without horizontal overflow, clipped filter sheets, or broken card stacking.
+- Goal: verify that `Jobs` still supports real mobile task completion for filtering, job creation entrypoints, queue visibility, and job detail access.
 
 ## Recommended Viewports
 
@@ -18,27 +18,28 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## Manual QA Checklist
 
-- [ ] Opening `Jobs` does not create page-level horizontal scrolling on narrow phones.
-- [ ] The filters sheet opens fully inside the viewport on mobile.
-- [ ] The upload creation sheet opens fully inside the viewport on mobile.
-- [ ] Health cards stack vertically on narrow widths instead of colliding horizontally.
-- [ ] Buttons and filter controls remain comfortably tappable.
-- [ ] Drawer or sheet content respects safe-area insets on mobile devices.
+- [ ] Opening `Jobs` on a phone still exposes the primary actions needed to filter, inspect, and create work.
+- [ ] The filters sheet can be opened, updated, and dismissed without losing the page state.
+- [ ] The upload creation sheet can be opened from mobile and either queues work or shows the correct provider/offline guard.
+- [ ] Queue summary and health indicators stay readable enough to decide the next action.
+- [ ] A job row or card still exposes details/log entrypoints on mobile.
+- [ ] Mobile interactions remain usable with touch-first controls and safe-area padding.
 
 ## `Jobs` Flow Checklist
 
-- [ ] Open the `Jobs` page on a narrow mobile viewport.
-- [ ] Open the filters sheet and confirm all controls remain reachable.
-- [ ] Open the upload creation sheet and verify it stays within the viewport.
-- [ ] Scroll through the jobs list and confirm health/status cards remain readable.
+- [ ] Open the `Jobs` page on a phone-sized viewport.
+- [ ] Open the filters sheet, apply at least one filter, and confirm the list reflects the change.
+- [ ] Reset filters and confirm the baseline list returns.
+- [ ] Open the upload creation sheet and confirm the mobile flow can continue or surfaces the correct guard reason.
+- [ ] Open job details or logs from a mobile row/card action.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile viewport test that asserts no page-level horizontal overflow in `Jobs`.
-- [ ] Add a test that verifies the filters sheet remains inside the viewport.
-- [ ] Add a test that verifies health cards stack vertically on narrow widths.
-- [ ] Add a test that verifies the upload creation sheet remains inside the viewport.
+- [ ] Add a mobile test that verifies filter open/apply/reset flows complete successfully.
+- [ ] Add a test that verifies the upload creation sheet still opens from mobile.
+- [ ] Add a test that verifies mobile job details or logs remain reachable.
+- [ ] Add a test that verifies queue or health state remains understandable after filtering or job creation.
 
 ## Notes
 
-- Prioritize filter-sheet containment and health-card stacking because those are the highest-risk mobile behaviors on the `Jobs` page.
+- Prioritize filter persistence, job creation entry, and detail access. Layout checks only matter when they block one of those actions.

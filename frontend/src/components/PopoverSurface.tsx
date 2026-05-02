@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type KeyboardEvent, type ReactNode } from 'react'
 
 import styles from './PopoverSurface.module.css'
 import { useOverlayLayer } from './useOverlayLayer'
@@ -118,6 +118,13 @@ export function PopoverSurface(props: Props) {
 	)
 	const close = useCallback((source: PopoverOpenSource = 'outside') => setOpen(false, source), [setOpen])
 	const toggle = useCallback(() => setOpen(!open, 'trigger'), [open, setOpen])
+	const handlePanelKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+		contentProps?.onKeyDown?.(event)
+		if (event.defaultPrevented || event.key !== 'Tab') return
+		event.preventDefault()
+		event.stopPropagation()
+		close('outside')
+	}, [close, contentProps])
 
 	useOverlayLayer({
 		open,
@@ -195,6 +202,7 @@ export function PopoverSurface(props: Props) {
 							tabIndex={contentProps?.tabIndex ?? -1}
 							className={[styles.panel, contentClassName ?? '', contentProps?.className ?? ''].filter(Boolean).join(' ')}
 							style={{ ...contentStyle, position: 'fixed', top: 16, left: 16, visibility: 'hidden' }}
+							onKeyDown={handlePanelKeyDown}
 						>
 							{content({ close })}
 						</div>,

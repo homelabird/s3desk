@@ -1,5 +1,5 @@
 import type { ObjectsPagePanesProps } from './ObjectsPagePanes'
-import type { BuildObjectsPagePanesPropsArgs } from './buildObjectsPagePanesProps'
+import type { BuildObjectsPagePanesPropsArgs } from './buildObjectsPagePanesPropsTypes'
 import type { UIAction } from './objectsActions'
 
 type ListProps = ObjectsPagePanesProps['listProps']

@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsPrefetch } from '../useObjectsPrefetch'
 
@@ -93,7 +94,7 @@ describe('useObjectsPrefetch', () => {
 
 		expect(args.queryClient.prefetchInfiniteQuery).toHaveBeenCalledTimes(1)
 		const call = vi.mocked(args.queryClient.prefetchInfiniteQuery).mock.calls[0]?.[0]
-		expect(call?.queryKey).toEqual(['objects', 'profile-1', 'bucket-c', '', 'token'])
+		expect(call?.queryKey).toEqual(queryKeys.objects.list('profile-1', 'bucket-c', '', 'token'))
 	})
 
 	it('restarts initial background prefetch after the session scope changes', async () => {
@@ -107,12 +108,12 @@ describe('useObjectsPrefetch', () => {
 		rerender({ ...args, profileId: 'profile-2', apiToken: 'token-2' })
 		await vi.runAllTimersAsync()
 
-		const queryKeys = vi
+		const prefetchQueryKeys = vi
 			.mocked(args.queryClient.prefetchInfiniteQuery)
 			.mock.calls.map((call) => call[0]?.queryKey)
 
-		expect(queryKeys).toContainEqual(['objects', 'profile-1', 'bucket-b', '', 'token'])
-		expect(queryKeys).toContainEqual(['objects', 'profile-2', 'bucket-b', '', 'token-2'])
+		expect(prefetchQueryKeys).toContainEqual(queryKeys.objects.list('profile-1', 'bucket-b', '', 'token'))
+		expect(prefetchQueryKeys).toContainEqual(queryKeys.objects.list('profile-2', 'bucket-b', '', 'token-2'))
 	})
 
 	it('drops scheduled initial prefetch work from stale session scopes before it starts', async () => {
@@ -125,11 +126,11 @@ describe('useObjectsPrefetch', () => {
 		rerender({ ...args, profileId: 'profile-2', apiToken: 'token-2' })
 		await vi.runAllTimersAsync()
 
-		const queryKeys = vi
+		const prefetchQueryKeys = vi
 			.mocked(args.queryClient.prefetchInfiniteQuery)
 			.mock.calls.map((call) => call[0]?.queryKey)
 
-		expect(queryKeys).not.toContainEqual(['objects', 'profile-1', 'bucket-b', '', 'token'])
-		expect(queryKeys).toContainEqual(['objects', 'profile-2', 'bucket-b', '', 'token-2'])
+		expect(prefetchQueryKeys).not.toContainEqual(queryKeys.objects.list('profile-1', 'bucket-b', '', 'token'))
+		expect(prefetchQueryKeys).toContainEqual(queryKeys.objects.list('profile-2', 'bucket-b', '', 'token-2'))
 	})
 })

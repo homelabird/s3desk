@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { QueryClient } from '@tanstack/react-query'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { useJobsRealtimeEvents } from '../useJobsRealtimeEvents'
 
 class MockWebSocket {
@@ -125,12 +126,12 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
-		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
+		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false })
 		expect(setQueriesData).toHaveBeenCalledTimes(2)
 		expect(setQueryData).toHaveBeenCalledTimes(2)
 		expect(setQueriesData).toHaveBeenNthCalledWith(
 			1,
-			{ queryKey: ['jobs', 'profile-1', 'token'], exact: false },
+			{ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false },
 			expect.any(Function),
 		)
 
@@ -184,7 +185,7 @@ describe('useJobsRealtimeEvents', () => {
 				errorCode?: string | null
 			}) => unknown,
 		]
-		expect(filters).toEqual(['job', 'profile-1', 'job-1', 'token'])
+		expect(filters).toEqual(queryKeys.jobs.detail('profile-1', 'job-1', 'token'))
 		expect(
 			updater({
 				id: 'job-1',
@@ -348,7 +349,7 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
-		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
+		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false })
 
 		unmount()
 	})
@@ -399,7 +400,7 @@ describe('useJobsRealtimeEvents', () => {
 		})
 
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
-		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
+		expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false })
 		expect(MockWebSocket.instances).toHaveLength(1)
 
 		unmount()

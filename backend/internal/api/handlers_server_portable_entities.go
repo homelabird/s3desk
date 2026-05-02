@@ -1,0 +1,93 @@
+package api
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"strings"
+
+	"s3desk/internal/models"
+	"s3desk/internal/store"
+)
+
+type portableImportEntityVerification struct {
+	results                 []models.ServerPortableImportEntityResult
+	entityChecksumsVerified bool
+	blockers                []string
+}
+
+func buildPortableImportEntityVerification(
+	manifestEntities map[string]models.ServerMigrationEntityManifest,
+	entityFiles map[string][]byte,
+) portableImportEntityVerification {
+	results := make([]models.ServerPortableImportEntityResult, 0, len(portableEntityOrder))
+	entityChecksumsVerified := true
+	blockers := make([]string, 0, len(portableEntityOrder))
+
+	for _, name := range portableEntityOrder {
+		manifestEntity, ok := manifestEntities[name]
+		if !ok {
+			entityChecksumsVerified = false
+			blockers = append(blockers, fmt.Sprintf("Portable manifest is missing entity summary for %s.", name))
+			continue
+		}
+		data, ok := entityFiles[name]
+		if !ok {
+			entityChecksumsVerified = false
+			blockers = append(blockers, fmt.Sprintf("Portable bundle is missing data/%s.jsonl.", name))
+			results = append(results, models.ServerPortableImportEntityResult{
+				Name:             name,
+				ExportedCount:    manifestEntity.Count,
+				ChecksumVerified: false,
+			})
+			continue
+		}
+		sum := sha256.Sum256(data)
+		checksumVerified := strings.EqualFold(hex.EncodeToString(sum[:]), manifestEntity.SHA256)
+		if !checksumVerified {
+			entityChecksumsVerified = false
+			blockers = append(blockers, fmt.Sprintf("Checksum mismatch for %s.", name))
+		}
+		results = append(results, models.ServerPortableImportEntityResult{
+			Name:             name,
+			ExportedCount:    manifestEntity.Count,
+			ChecksumVerified: checksumVerified,
+		})
+	}
+
+	return portableImportEntityVerification{
+		results:                 results,
+		entityChecksumsVerified: entityChecksumsVerified,
+		blockers:                blockers,
+	}
+}
+
+func applyPortableImportCounts(results []models.ServerPortableImportEntityResult, counts store.PortableImportCounts) []models.ServerPortableImportEntityResult {
+	importedByName := map[string]int{
+		"profiles":                   counts.Profiles,
+		"profile_connection_options": counts.ProfileConnectionOptions,
+		"jobs":                       counts.Jobs,
+		"upload_sessions":            counts.UploadSessions,
+		"upload_multipart_uploads":   counts.UploadMultipartUploads,
+		"upload_objects":             counts.UploadObjects,
+		"object_index":               counts.ObjectIndex,
+		"object_favorites":           counts.ObjectFavorites,
+	}
+	out := append([]models.ServerPortableImportEntityResult(nil), results...)
+	for i := range out {
+		out[i].ImportedCount = importedByName[out[i].Name]
+	}
+	return out
+}
+
+func verifyPortableImportCounts(results []models.ServerPortableImportEntityResult) bool {
+	for _, item := range results {
+		if item.ExportedCount != item.ImportedCount {
+			return false
+		}
+		if !item.ChecksumVerified {
+			return false
+		}
+	}
+	return true
+}

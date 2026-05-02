@@ -1,4 +1,4 @@
-import type { APIClient } from '../api/client'
+import type { APIClientShape } from '../api/client'
 import type { ObjectItem } from '../api/types'
 
 const DEBUG_OBJECTS_LIST_KEY = 'debugObjectsList'
@@ -19,7 +19,7 @@ function logObjectsDebug(enabled: boolean, message: string, context?: Record<str
 }
 
 export async function listAllObjects(args: {
-	api: APIClient
+	api: APIClientShape
 	profileId: string
 	bucket: string
 	prefix?: string

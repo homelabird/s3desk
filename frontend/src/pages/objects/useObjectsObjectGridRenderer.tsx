@@ -8,7 +8,7 @@ import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
 import gridStyles from './ObjectsGridCards.module.css'
 import listStyles from './ObjectsListView.module.css'
-import { ObjectThumbnail } from './ObjectThumbnail'
+import { LazyObjectThumbnail } from './ObjectThumbnailLazy'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import { buildActionMenu } from './objectsActions'
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
@@ -31,6 +31,7 @@ type UseObjectsObjectGridRendererArgs = Pick<
 	| 'highlightText'
 	| 'isAdvanced'
 	| 'isOffline'
+	| 'objectCrudSupported'
 	| 'onOpenLargePreviewForKey'
 	| 'onRowDragStartObjects'
 	| 'openObjectContextMenu'
@@ -64,6 +65,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 		highlightText,
 		isAdvanced,
 		isOffline,
+		objectCrudSupported,
 		onOpenLargePreviewForKey,
 		onRowDragStartObjects,
 		openObjectContextMenu,
@@ -86,7 +88,8 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			const key = object.key
 			const displayName = displayNameForKey(key, prefix)
 			const sizeLabel = formatBytes(object.size)
-			const timeLabel = formatDateTime(object.lastModified)
+			const timeLabel = formatDateTime(object.lastModified, { showSeconds: false })
+			const metaLabel = `${sizeLabel} \u00b7 ${timeLabel}`
 			const useSelectionMenu = selectedCount > 1 && selectedKeys.has(key)
 			const menu = withContextMenuClassName(
 				buildActionMenu(useSelectionMenu ? selectionContextMenuActions : getObjectActions(key, object.size), isAdvanced),
@@ -95,7 +98,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			const canOpenPreview = canShowThumbnail
 			const isSelected = selectedKeys.has(key)
 			const isFavorite = favoriteKeys.has(key)
-			const favoriteDisabled = favoritePendingKeys.has(key) || isOffline || !profileId || !bucket
+			const favoriteDisabled = favoritePendingKeys.has(key) || isOffline || !profileId || !bucket || !objectCrudSupported
 			const favoriteLabel = isFavorite ? 'Remove favorite' : 'Add favorite'
 			const buttonMenuOpen =
 				contextMenuState.open &&
@@ -141,6 +144,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 								<Button
 									size="small"
 									type="text"
+									className={gridStyles.gridCardIconButton}
 									icon={isFavorite ? <StarFilled className={listStyles.listRowFavoriteIcon} /> : <StarOutlined />}
 									disabled={favoriteDisabled}
 									aria-label={favoriteLabel}
@@ -163,6 +167,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 										<Button
 											size="small"
 											type="text"
+											className={gridStyles.gridCardIconButton}
 											icon={<EllipsisOutlined />}
 											aria-label="Object actions"
 											aria-haspopup="menu"
@@ -181,7 +186,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 						<div className={gridStyles.gridCardMedia}>
 							{canShowThumbnail ? (
 								<div className={gridStyles.gridCardPreviewFrame}>
-									<ObjectThumbnail
+									<LazyObjectThumbnail
 										api={api}
 										apiToken={apiToken}
 										profileId={profileId}
@@ -207,17 +212,15 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 							<Typography.Text className={gridStyles.gridCardTitle} title={key}>
 								{highlightText(displayName)}
 							</Typography.Text>
-							<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine}>
-								{sizeLabel}
-							</Typography.Text>
-							<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine}>
-								{timeLabel}
+							<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine} title={metaLabel}>
+								{metaLabel}
 							</Typography.Text>
 							{canOpenPreview ? (
 								<div className={gridStyles.gridCardBodyActions}>
 									<Button
 										size="small"
 										type="text"
+										className={gridStyles.gridCardPreviewActionButton}
 										icon={<ExpandOutlined />}
 										onClick={(event) => {
 											event.preventDefault()
@@ -252,6 +255,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			highlightText,
 			isAdvanced,
 			isOffline,
+			objectCrudSupported,
 			onOpenLargePreviewForKey,
 			onRowDragStartObjects,
 			openObjectContextMenu,

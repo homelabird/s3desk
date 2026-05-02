@@ -1,6 +1,10 @@
 ingress:
   enabled: false
 
+secrets:
+  existingSecret: s3desk-secrets
+  autoGenerateApiToken: false
+
 istio:
   virtualService:
     enabled: true
@@ -12,6 +16,45 @@ istio:
 server:
   allowedHosts:
     - s3desk.k8s.homelabird.com
+  externalBaseURL: "https://s3desk.k8s.homelabird.com"
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    allowSameNamespace: true
+    extra: []
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
 
 rclone:
   downloadMultiThreadStreams: 8

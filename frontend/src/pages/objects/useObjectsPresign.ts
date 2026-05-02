@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { message } from 'antd'
 
-import type { APIClient } from '../../api/client'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { APIClientShape } from '../../api/client'
+import { objectsFeedback } from './objectsFeedback'
 
 type Presign = { key: string; url: string; expiresAt: string }
 type PresignRequest = { key: string; size?: number; lastModified?: string }
 
 type UseObjectsPresignArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string
@@ -86,7 +85,7 @@ export function useObjectsPresign({
 		},
 		onError: (err, _req, context) => {
 			if (context?.requestToken && requestTokenRef.current !== context.requestToken) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 

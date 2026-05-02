@@ -1,7 +1,8 @@
-import { Button, Checkbox, Input, Space, Typography, message } from 'antd'
+import { Button, Checkbox, Input, Space, Typography } from 'antd'
 import { useState, type ReactNode } from 'react'
 
 import { DialogModal } from '../components/DialogModal'
+import { appFeedback } from './appFeedback'
 import { setDialogDismissed } from './dialogPreferences'
 
 type Props = {
@@ -27,7 +28,7 @@ export function ConfirmDangerDialog(props: Props) {
 
 	const handleConfirm = async () => {
 		if (currentValue.trim() !== confirmToken) {
-			message.error(`Type "${confirmToken}" to confirm`)
+			appFeedback.error(`Type "${confirmToken}" to confirm`)
 			return
 		}
 		setSubmitting(true)

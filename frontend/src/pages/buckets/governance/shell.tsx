@@ -105,6 +105,155 @@ export function GovernanceSummaryCard(props: {
   );
 }
 
+export function GovernanceControlSection(props: {
+  testId: string;
+  title: string;
+  description: ReactNode;
+  wide?: boolean;
+  saveLabel?: string;
+  saveLoading?: boolean;
+  saveDisabled?: boolean;
+  onSave?: () => void;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const saveAction = props.onSave ? (
+    <Button
+      type="primary"
+      loading={props.saveLoading}
+      disabled={props.saveDisabled}
+      onClick={props.onSave}
+    >
+      {props.saveLabel ?? "Save"}
+    </Button>
+  ) : null;
+  const actions =
+    props.actions || saveAction ? (
+      props.actions ? (
+        <div className={styles.sectionActions}>
+          {props.actions}
+          {saveAction}
+        </div>
+      ) : (
+        saveAction
+      )
+    ) : null;
+
+  return (
+    <section
+      className={
+        props.wide
+          ? `${styles.sectionCard} ${styles.sectionWide}`
+          : styles.sectionCard
+      }
+      data-testid={props.testId}
+    >
+      <div className={styles.sectionHeader}>
+        <div className={styles.sectionCopy}>
+          <Typography.Text strong>{props.title}</Typography.Text>
+          <Typography.Text type="secondary">
+            {props.description}
+          </Typography.Text>
+        </div>
+        {actions}
+      </div>
+      <div className={styles.sectionBody}>{props.children}</div>
+    </section>
+  );
+}
+
+export type GovernanceControlSectionModel = {
+  key?: string;
+  testId: string;
+  title: string;
+  description: ReactNode;
+  wide?: boolean;
+  saveLabel?: string;
+  saveLoading?: boolean;
+  saveDisabled?: boolean;
+  onSave?: () => void;
+  actions?: ReactNode;
+  content: ReactNode;
+};
+
+export function GovernanceControlSections(props: {
+  sections: GovernanceControlSectionModel[];
+}) {
+  return (
+    <>
+      {props.sections.map((section) => (
+        <GovernanceControlSection
+          key={section.key ?? section.testId}
+          testId={section.testId}
+          title={section.title}
+          description={section.description}
+          wide={section.wide}
+          saveLabel={section.saveLabel}
+          saveLoading={section.saveLoading}
+          saveDisabled={section.saveDisabled}
+          onSave={section.onSave}
+          actions={section.actions}
+        >
+          {section.content}
+        </GovernanceControlSection>
+      ))}
+    </>
+  );
+}
+
+export function GovernanceEditorList(props: { children: ReactNode }) {
+  return <div className={styles.editorList}>{props.children}</div>;
+}
+
+export function GovernanceEditorCard(props: {
+  testId?: string;
+  title: ReactNode;
+  description: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={styles.editorCard} data-testid={props.testId}>
+      <div className={styles.editorCardHeader}>
+        <div className={styles.sectionCopy}>
+          <Typography.Text strong>{props.title}</Typography.Text>
+          <Typography.Text type="secondary">
+            {props.description}
+          </Typography.Text>
+        </div>
+        {props.actions}
+      </div>
+      {props.children}
+    </div>
+  );
+}
+
+export function GovernanceNestedSectionStack(props: { children: ReactNode }) {
+  return <div className={styles.warningStack}>{props.children}</div>;
+}
+
+export function GovernanceNestedSectionCard(props: {
+  title: ReactNode;
+  description: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className={styles.sectionCard}>
+      <div className={styles.sectionHeader}>
+        <div className={styles.sectionCopy}>
+          <Typography.Text strong>{props.title}</Typography.Text>
+          <Typography.Text type="secondary">
+            {props.description}
+          </Typography.Text>
+        </div>
+        {props.actions}
+      </div>
+      <div className={styles.sectionBody}>{props.children}</div>
+    </section>
+  );
+}
+
 export function AdvancedPolicySection(props: {
   bucket: string;
   advancedPolicy?: BucketAdvancedView;
@@ -153,6 +302,56 @@ export function AdvancedPolicySection(props: {
         </div>
       </details>
     </section>
+  );
+}
+
+export function GovernanceControlsLayout(props: {
+  mobile: boolean;
+  bucket: string;
+  onClose: () => void;
+  closeDisabled: boolean;
+  summaryTitle: string;
+  summaryDescription: string;
+  summaryTags: string[];
+  isRefreshing: boolean;
+  warnings?: WarningCarrier | null;
+  advancedPolicy?: BucketAdvancedView;
+  onOpenAdvancedPolicy?: (bucket: string) => void;
+  children: ReactNode;
+}) {
+  const handleClose = () => {
+    if (props.closeDisabled) return;
+    props.onClose();
+  };
+
+  return (
+    <BucketGovernanceDialogShell
+      mobile={props.mobile}
+      title={`Controls: ${props.bucket}`}
+      onClose={handleClose}
+      footer={
+        <div className={styles.footerActions}>
+          <Button onClick={handleClose} disabled={props.closeDisabled}>Close</Button>
+        </div>
+      }
+    >
+      <GovernanceSummaryCard
+        title={props.summaryTitle}
+        description={props.summaryDescription}
+        tags={props.summaryTags}
+        isRefreshing={props.isRefreshing}
+      />
+
+      {renderWarningStack(extractWarningList(props.warnings))}
+
+      <AdvancedPolicySection
+        bucket={props.bucket}
+        advancedPolicy={props.advancedPolicy}
+        onOpenAdvancedPolicy={props.onOpenAdvancedPolicy}
+      />
+
+      <div className={styles.grid}>{props.children}</div>
+    </BucketGovernanceDialogShell>
   );
 }
 

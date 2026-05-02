@@ -45,6 +45,8 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 			return
 		}
 		for _, us := range sessions {
+			_ = m.store.DeleteMultipartUploadsBySession(ctx, us.ProfileID, us.ID)
+			_ = m.store.DeleteUploadObjectsBySession(ctx, us.ProfileID, us.ID)
 			_, _ = m.store.DeleteUploadSession(ctx, us.ProfileID, us.ID)
 			if us.StagingDir != "" {
 				if stagingDir, err := store.ResolveUploadStagingDir(m.dataDir, us.ID); err == nil {

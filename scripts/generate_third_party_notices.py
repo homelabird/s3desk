@@ -233,9 +233,17 @@ def resolve_generated_at() -> str:
             pass
 
     try:
-        git_ts = run(["git", "log", "-1", "--format=%ct"], cwd=REPO_ROOT).strip()
-        if git_ts.isdigit():
-            return datetime.fromtimestamp(int(git_ts), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+        git_repo = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=REPO_ROOT,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if git_repo.returncode == 0:
+            git_ts = run(["git", "log", "-1", "--format=%ct"], cwd=REPO_ROOT).strip()
+            if git_ts.isdigit():
+                return datetime.fromtimestamp(int(git_ts), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
 

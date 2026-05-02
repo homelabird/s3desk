@@ -17,6 +17,7 @@ type TransferDownloadRowProps = {
 export const TransferDownloadRow = memo(function TransferDownloadRow(props: TransferDownloadRowProps) {
 	const t = props.task
 	const percent = t.totalBytes && t.totalBytes > 0 ? Math.floor((t.loadedBytes / t.totalBytes) * 100) : 0
+	const progressPercent = t.status === 'succeeded' ? 100 : percent
 	const status = t.status === 'failed' ? 'exception' : t.status === 'succeeded' ? 'success' : t.status === 'running' ? 'active' : 'normal'
 	const tagColor =
 		t.status === 'running'
@@ -102,7 +103,12 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 			</div>
 
 			<div className={styles.rowProgress}>
-				<Progress percent={t.status === 'succeeded' ? 100 : percent} status={status} showInfo={t.status !== 'queued' && t.status !== 'waiting'} />
+				<Progress
+					aria-label={`Download progress for ${t.label}`}
+					percent={progressPercent}
+					status={status}
+					showInfo={t.status !== 'queued' && t.status !== 'waiting'}
+				/>
 				{progressText ? <Typography.Text type="secondary">{progressText}</Typography.Text> : null}
 			</div>
 		</div>

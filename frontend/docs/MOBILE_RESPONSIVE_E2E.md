@@ -32,19 +32,51 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## Local Commands
 
+- Fast boot-only smoke gates:
+  - `npm run test:e2e:smoke`
 - Full mobile responsive suite:
   - `npm run test:e2e:mobile-responsive`
 - `Settings` and `Login` only:
   - `npm run test:e2e:mobile-responsive:settings-login`
 - Core desktop/mock suite without mobile responsive coverage:
   - `npm run test:e2e:core`
+- Demo-only desktop flows:
+  - `npm run test:e2e:demo`
+- Opt-in perf probes:
+  - `npm run test:e2e:perf`
+- Geometry guard for Playwright authoring:
+  - `npm run check:e2e:geometry`
+- Workflow lint for browser-CI wiring:
+  - `bash ./scripts/check_github_workflows.sh`
 
 ## CI Equivalents
 
+The `Frontend E2E` Actions summaries should surface these lane meanings directly so reviewers can map `Workflow Lint`, `check-smoke`, `core`, and `mobile-responsive` without opening the docs first.
+
+- Workflow-lint-only changes should normally show `Workflow Lint: executed` while `Browser Lanes:` stays `not applicable (...)`.
+- The current required workflow does not maintain a narrower mobile-only runtime scope, so once the browser surface is in scope the `Mobile Responsive E2E (Required)` lane normally materializes too.
+
+- `Workflow Lint`
+  - equivalent local command: `bash ./scripts/check_github_workflows.sh`
+  - runs before browser lanes so workflow wiring breaks fail before Playwright setup
+
+- `check-smoke` boot gates inside `Frontend E2E`
+  - equivalent local command: `npm run test:e2e:smoke`
 - `Core Mock E2E`
   - equivalent local command: `npm run test:e2e:core`
 - `Mobile Responsive E2E (Required)`
   - equivalent local command: `npm run test:e2e:mobile-responsive`
+
+## Authoring Rules
+
+Mobile responsive coverage should prove task completion on constrained viewports, not layout trivia.
+
+- Prefer drawer, sheet, tab, filter, picker, queue, and persistence flows.
+- Keep page-level checklist wording aligned with that rule; checklist items should describe reachable actions and stable outcomes, not viewport math.
+- Keep bootstrap-only checks in `@check-smoke`; use `@mobile-responsive` only when the flow proves real mobile task completion.
+- Do not add viewport-fit or element-measurement assertions just to prove a page is "responsive".
+- `frontend/tests` and `frontend/tests/support` are guarded by `npm run check:e2e:geometry`.
+- If a mobile Playwright test truly requires a geometry probe, mark the exact line with `e2e-geometry-allow` and a short reason.
 
 ## Required Check
 

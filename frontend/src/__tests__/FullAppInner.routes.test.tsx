@@ -99,7 +99,7 @@ vi.mock('../pages/LoginPage', async () => {
 	}
 })
 
-vi.mock('../components/TransfersShell', async () => {
+	vi.mock('../components/TransfersShell', async () => {
 	const React = await import('react')
 	const TransfersRuntimeRequestContext = React.createContext<(() => void) | null>(null)
 

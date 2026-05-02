@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { DragEvent as ReactDragEvent } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { TransfersContextValue } from '../../../components/Transfers'
+import type { TransfersContextValue } from '../../../components/transfersTypes'
 import { useObjectsUploadDrop } from '../useObjectsUploadDrop'
 
 const messageErrorMock = vi.fn()

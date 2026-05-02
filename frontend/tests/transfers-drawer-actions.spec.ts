@@ -10,7 +10,14 @@ import {
 	installMockApi,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { ensureDialogOpen, transferUploadRow } from './support/ui'
+import {
+	addUploadSourceFromDevice,
+	clickTransferRowButton,
+	expectTransferRowState,
+	gotoUploadsPage,
+	openTransfersUploadRow,
+	queueSelectedUpload,
+} from './support/ui'
 
 const now = '2024-01-01T00:00:00Z'
 const profileId = 'transfers-actions-profile'
@@ -132,36 +139,21 @@ test('transfers drawer cancels, retries, and clears completed uploads', async ({
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'showDirectoryPicker')
 	})
-	await page.goto('/uploads')
-	await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible()
+	await gotoUploadsPage(page)
 
-	await page.getByRole('button', { name: /Add from device/i }).click()
-	const sourceDialog = page.getByRole('dialog', { name: 'Add upload source' })
-	await expect(sourceDialog).toBeVisible()
-	const chooserPromise = page.waitForEvent('filechooser')
-	await sourceDialog.getByRole('button', { name: 'Choose folder' }).click()
-	const chooser = await chooserPromise
-	await chooser.setFiles(fixtureRoot)
+	await addUploadSourceFromDevice(page, fixtureRoot, { chooseButtonName: 'Choose folder' })
 
-	const queueButton = page.getByRole('button', { name: /Queue upload/i })
-	await expect(queueButton).toBeEnabled({ timeout: 10_000 })
-	await queueButton.click()
+	await queueSelectedUpload(page, { timeout: 10_000 })
 
-	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
+	const { dialog: transfersDialog, row } = await openTransfersUploadRow(page, 'upload-folder', {
+		triggerButtonName: 'Open Transfers',
+		timeout: 10_000,
 	})
-	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
+	await clickTransferRowButton(row, 'Cancel', { timeout: 10_000 })
+	await expectTransferRowState(row, 'Canceled')
 
-	const row = transferUploadRow(transfersDialog, 'upload-folder')
-	await expect(row).toBeVisible({ timeout: 10_000 })
-	await expect(row.getByRole('button', { name: 'Cancel' })).toBeVisible({ timeout: 10_000 })
-
-	await row.getByRole('button', { name: 'Cancel' }).click()
-	await expect(row.getByText('Canceled', { exact: true })).toBeVisible()
-	await expect(row.getByRole('button', { name: 'Retry' })).toBeVisible()
-
-	await row.getByRole('button', { name: 'Retry' }).click()
-	await expect(row.getByText('Done', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await clickTransferRowButton(row, 'Retry')
+	await expectTransferRowState(row, 'Done', { timeout: 10_000 })
 	await expect.poll(() => apiState.getCommitCount(), { timeout: 10_000 }).toBe(1)
 
 	await expect(transfersDialog.getByRole('button', { name: 'Clear done' })).toBeEnabled()

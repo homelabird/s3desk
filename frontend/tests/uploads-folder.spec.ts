@@ -3,8 +3,8 @@ import { fileURLToPath } from 'url'
 
 import { expect, test } from '@playwright/test'
 
-import { installMockApi, metaJson, seedLocalStorage } from './support/apiFixtures'
-import { ensureDialogOpen, transferUploadRow } from './support/ui'
+import { buildProfileFixture, installMockApi, metaJson, seedLocalStorage } from './support/apiFixtures'
+import { addUploadSourceFromDevice, expectTransferRowState, gotoUploadsPage, openTransfersUploadRow, queueSelectedUpload } from './support/ui'
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
 const fixtureRoot = path.join(testDir, 'fixtures', 'upload-folder')
@@ -52,7 +52,7 @@ async function mockUploadsFolderApi(
 			path: '/profiles',
 			handle: (ctx) =>
 				ctx.json([
-					{
+					buildProfileFixture({
 						id: 'playwright-profile',
 						name: 'Playwright',
 						endpoint: 'http://localhost:9000',
@@ -61,7 +61,7 @@ async function mockUploadsFolderApi(
 						tlsInsecureSkipVerify: true,
 						createdAt: '2024-01-01T00:00:00Z',
 						updatedAt: '2024-01-01T00:00:00Z',
-					},
+					}),
 				]),
 		},
 		{
@@ -142,17 +142,11 @@ test('folder upload preserves relative paths', async ({ page }) => {
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'showDirectoryPicker')
 	})
-	await page.goto('/uploads')
+	await gotoUploadsPage(page)
 
-	await page.getByRole('button', { name: 'Add from device…' }).click()
-	const chooserPromise = page.waitForEvent('filechooser')
-	await page.getByRole('button', { name: 'Choose folder' }).click()
-	const chooser = await chooserPromise
-	await chooser.setFiles(fixtureRoot)
+	await addUploadSourceFromDevice(page, fixtureRoot, { chooseButtonName: 'Choose folder' })
 
-	const queueButton = page.getByRole('button', { name: /Queue upload/i })
-	await expect(queueButton).toBeEnabled()
-	await queueButton.click()
+	await queueSelectedUpload(page)
 
 	await expect.poll(() => uploadAttempts.length, { timeout: 5000 }).toBeGreaterThan(0)
 	await expect.poll(() => commitBody, { timeout: 5000 }).not.toBeNull()
@@ -165,11 +159,9 @@ test('folder upload preserves relative paths', async ({ page }) => {
 	expect(JSON.stringify(commitBody)).not.toContain('upload-folder/dir-a/alpha.txt')
 	expect(JSON.stringify(commitBody)).not.toContain('upload-folder/dir-b/nested/beta.txt')
 
-	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
+	const { row } = await openTransfersUploadRow(page, /upload-folder/, {
+		triggerButtonName: 'Open Transfers',
+		timeout: 10_000,
 	})
-	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
-	const row = transferUploadRow(transfersDialog, /upload-folder/)
-	await expect(row).toBeVisible({ timeout: 10_000 })
-	await expect(row.getByText('Done', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expectTransferRowState(row, 'Done', { timeout: 10_000 })
 })

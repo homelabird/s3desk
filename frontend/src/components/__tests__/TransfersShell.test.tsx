@@ -80,6 +80,29 @@ describe('TransfersShell', () => {
 		Object.values(runtimeApi).forEach((fn) => fn.mockReset())
 	})
 
+	it('eagerly mounts the runtime bridge in dev webdriver sessions', async () => {
+		const original = navigator.webdriver
+		Object.defineProperty(navigator, 'webdriver', {
+			configurable: true,
+			value: true,
+		})
+
+		try {
+			render(
+				<TransfersProvider apiToken="token-1">
+					<TransfersButton showLabel />
+				</TransfersProvider>,
+			)
+
+			expect(await screen.findByTestId('transfers-runtime-bridge')).toBeInTheDocument()
+		} finally {
+			Object.defineProperty(navigator, 'webdriver', {
+				configurable: true,
+				value: original,
+			})
+		}
+	})
+
 	it('does not mount the runtime bridge until a transfer action is requested', async () => {
 		render(
 			<TransfersProvider apiToken="token-1">

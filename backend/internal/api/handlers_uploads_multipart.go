@@ -9,11 +9,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/go-chi/chi/v5"
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
@@ -190,230 +188,15 @@ func expectedUploadChunkSize(index, total int, chunkSize, fileSize int64) int64 
 }
 
 func (s *server) handleCompleteMultipartUpload(w http.ResponseWriter, r *http.Request) {
-	profileID := r.Header.Get("X-Profile-Id")
-	uploadID := chi.URLParam(r, "uploadId")
-	if profileID == "" || uploadID == "" {
-		uploadErr := uploadMultipartSessionRequiredError()
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	us, ok, err := s.store.GetUploadSession(r.Context(), profileID, uploadID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load upload session", nil)
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusNotFound, "not_found", "upload session not found", map[string]any{"uploadId": uploadID})
-		return
-	}
-	mode := normalizeUploadMode(us.Mode)
-	if mode != uploadModePresigned {
-		writeError(w, http.StatusBadRequest, "not_supported", "multipart completion requires a presigned upload session", nil)
-		return
-	}
-	if expiresAt, err := time.Parse(time.RFC3339Nano, us.ExpiresAt); err == nil {
-		if time.Now().UTC().After(expiresAt) {
-			writeError(w, http.StatusBadRequest, "expired", "upload session expired", nil)
-			return
-		}
-	}
-
-	var req models.UploadMultipartCompleteRequest
-	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{maxBytes: uploadMultipartJSONRequestBodyMaxBytes}); err != nil {
-		writeJSONDecodeError(w, err, uploadMultipartJSONRequestBodyMaxBytes)
-		return
-	}
-	relPath := sanitizeUploadPath(req.Path)
-	if relPath == "" {
-		uploadErr := uploadMultipartInvalidPathError()
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	if len(req.Parts) == 0 {
-		uploadErr := uploadMultipartInvalidPartsError()
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	meta, uploadErr := s.loadMultipartUploadMeta(r.Context(), profileID, uploadID, relPath)
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	client, uploadErr := s.multipartClientFromContext(r.Context(), "multipart completion requires an S3-compatible provider")
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	completed, uploadErr := buildMultipartCompletionParts(req.Parts)
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	_, err = client.CompleteMultipartUpload(r.Context(), &s3.CompleteMultipartUploadInput{
-		Bucket:   &meta.Bucket,
-		Key:      &meta.ObjectKey,
-		UploadId: &meta.S3UploadID,
-		MultipartUpload: &types.CompletedMultipartUpload{
-			Parts: completed,
-		},
-	})
-	if err != nil {
-		writeError(w, http.StatusBadGateway, "upload_failed", "failed to complete multipart upload", map[string]any{"error": err.Error()})
-		return
-	}
-	expectedSize := meta.FileSize
-	if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
-		UploadID:     uploadID,
-		ProfileID:    profileID,
-		Path:         meta.Path,
-		Bucket:       meta.Bucket,
-		ObjectKey:    meta.ObjectKey,
-		ExpectedSize: &expectedSize,
-	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to persist upload object", nil)
-		return
-	}
-	_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, relPath)
-	w.WriteHeader(http.StatusNoContent)
+	newUploadMultipartHTTPService(s).handleCompleteMultipartUpload(w, r)
 }
 
 func (s *server) handleAbortMultipartUpload(w http.ResponseWriter, r *http.Request) {
-	profileID := r.Header.Get("X-Profile-Id")
-	uploadID := chi.URLParam(r, "uploadId")
-	if profileID == "" || uploadID == "" {
-		uploadErr := uploadMultipartSessionRequiredError()
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	us, ok, err := s.store.GetUploadSession(r.Context(), profileID, uploadID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load upload session", nil)
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusNotFound, "not_found", "upload session not found", map[string]any{"uploadId": uploadID})
-		return
-	}
-	mode := normalizeUploadMode(us.Mode)
-	if mode != uploadModePresigned {
-		writeError(w, http.StatusBadRequest, "not_supported", "multipart abort requires a presigned upload session", nil)
-		return
-	}
-
-	var req models.UploadMultipartAbortRequest
-	if err := decodeJSONWithOptions(r, &req, jsonDecodeOptions{maxBytes: uploadMultipartJSONRequestBodyMaxBytes}); err != nil {
-		writeJSONDecodeError(w, err, uploadMultipartJSONRequestBodyMaxBytes)
-		return
-	}
-	relPath := sanitizeUploadPath(req.Path)
-	if relPath == "" {
-		uploadErr := uploadMultipartInvalidPathError()
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	meta, uploadErr := s.loadMultipartUploadMeta(r.Context(), profileID, uploadID, relPath)
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	client, uploadErr := s.multipartClientFromContext(r.Context(), "multipart abort requires an S3-compatible provider")
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	if err := s.abortMultipartUpload(r.Context(), client, meta); err != nil {
-		writeError(w, http.StatusBadGateway, "upload_failed", "failed to abort multipart upload", map[string]any{"error": err.Error()})
-		return
-	}
-	_ = s.store.DeleteMultipartUpload(r.Context(), profileID, uploadID, relPath)
-	w.WriteHeader(http.StatusNoContent)
+	newUploadMultipartHTTPService(s).handleAbortMultipartUpload(w, r)
 }
 
 func (s *server) handleGetUploadChunks(w http.ResponseWriter, r *http.Request) {
-	profileID := r.Header.Get("X-Profile-Id")
-	uploadID := chi.URLParam(r, "uploadId")
-	if profileID == "" || uploadID == "" {
-		uploadErr := uploadMultipartSessionRequiredError()
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	us, ok, err := s.store.GetUploadSession(r.Context(), profileID, uploadID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "failed to load upload session", nil)
-		return
-	}
-	if !ok {
-		writeError(w, http.StatusNotFound, "not_found", "upload session not found", map[string]any{"uploadId": uploadID})
-		return
-	}
-	if expiresAt, err := time.Parse(time.RFC3339Nano, us.ExpiresAt); err == nil {
-		if time.Now().UTC().After(expiresAt) {
-			writeError(w, http.StatusBadRequest, "expired", "upload session expired", nil)
-			return
-		}
-	}
-	mode := normalizeUploadMode(us.Mode)
-	if mode == "" {
-		mode = uploadModeStaging
-	}
-	if mode != uploadModeStaging {
-		query, uploadErr := parseUploadChunkQuery(r.URL.Query(), false)
-		if uploadErr != nil {
-			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-			return
-		}
-		meta, uploadErr := s.loadMultipartUploadMeta(r.Context(), profileID, uploadID, query.path)
-		if uploadErr != nil {
-			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-			return
-		}
-		if meta.FileSize != query.fileSize || meta.ChunkSize != query.chunkSize {
-			writeError(w, http.StatusNotFound, "not_found", "multipart upload not found", nil)
-			return
-		}
-		client, uploadErr := s.multipartClientFromContext(r.Context(), "multipart status requires an S3-compatible provider")
-		if uploadErr != nil {
-			writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-			return
-		}
-		parts, err := s.listMultipartParts(r.Context(), client, meta)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "upload_failed", "failed to list multipart parts", map[string]any{"error": err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusOK, buildRemoteMultipartChunkState(parts, meta))
-		return
-	}
-
-	query, uploadErr := parseUploadChunkQuery(r.URL.Query(), true)
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	if us.StagingDir == "" {
-		writeError(w, http.StatusInternalServerError, "internal_error", "upload session is missing staging directory", nil)
-		return
-	}
-	stagingDir, err := store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "upload session has invalid staging directory", map[string]any{"error": err.Error()})
-		return
-	}
-
-	relOS := filepath.FromSlash(query.path)
-	chunkDir := filepath.Join(stagingDir, ".chunks", relOS)
-	if !isUnderDir(stagingDir, chunkDir) {
-		uploadErr := uploadMultipartInvalidFieldError("invalid upload path", map[string]any{"path": query.path})
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	writeJSON(w, http.StatusOK, buildStagingMultipartChunkState(chunkDir, query.total, query.chunkSize, query.fileSize))
+	newUploadMultipartHTTPService(s).handleGetUploadChunks(w, r)
 }
 
 func (s *server) listMultipartParts(ctx context.Context, client *s3.Client, meta store.MultipartUpload) ([]types.Part, error) {

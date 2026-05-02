@@ -1,8 +1,7 @@
-import { message } from 'antd'
-
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import type { ObjectItem } from '../../api/types'
 import { getDevicePickerSupport, pickDirectory } from '../../lib/deviceFs'
+import { objectsFeedback } from './objectsFeedback'
 import { displayNameForKey, normalizePrefix } from './objectsListUtils'
 
 type UseObjectDownloadsArgs = {
@@ -25,11 +24,11 @@ export type ObjectDownloadsResult = {
 export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownloadsResult {
 	const onDownload = (key: string, expectedBytes?: number) => {
 		if (!args.profileId) {
-			message.info('Select a profile first')
+			objectsFeedback.selectProfileFirst()
 			return
 		}
 		if (!args.bucket) {
-			message.info('Select a bucket first')
+			objectsFeedback.selectBucketFirst()
 			return
 		}
 
@@ -45,17 +44,17 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 
 	const onDownloadToDevice = async (key: string, expectedBytes?: number) => {
 		if (!args.profileId) {
-			message.info('Select a profile first')
+			objectsFeedback.selectProfileFirst()
 			return
 		}
 		if (!args.bucket) {
-			message.info('Select a bucket first')
+			objectsFeedback.selectBucketFirst()
 			return
 		}
 
 		const support = getDevicePickerSupport()
 		if (!support.ok) {
-			message.warning(support.reason ?? 'Directory picker is not available.')
+			objectsFeedback.directoryPickerUnavailable(support.reason)
 			return
 		}
 		try {
@@ -72,13 +71,13 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 		} catch (err) {
 			const error = err as Error
 			if (error?.name === 'AbortError') return
-			message.error(error?.message ?? 'Failed to select a local folder.')
+			objectsFeedback.localFolderSelectionFailed(error)
 		}
 	}
 
 	const handleDownloadSelected = async () => {
 		if (args.selectedCount <= 0) {
-			message.info('Select objects first')
+			objectsFeedback.selectObjectsFirst()
 			return
 		}
 		const keys = Array.from(args.selectedKeys)
@@ -91,7 +90,7 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 
 		const support = getDevicePickerSupport()
 		if (!support.ok) {
-			message.warning(support.reason ?? 'Directory picker is not available.')
+			objectsFeedback.directoryPickerUnavailable(support.reason)
 			args.onZipObjects(keys)
 			return
 		}
@@ -109,7 +108,7 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 		} catch (err) {
 			const error = err as Error
 			if (error?.name === 'AbortError') return
-			message.error(error?.message ?? 'Failed to select a local folder.')
+			objectsFeedback.localFolderSelectionFailed(error)
 		}
 	}
 

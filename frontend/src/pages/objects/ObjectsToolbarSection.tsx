@@ -4,6 +4,8 @@ import type { ObjectsToolbarProps } from './ObjectsToolbar'
 import { ObjectsToolbar } from './ObjectsToolbar'
 import { AppTabs } from '../../components/AppTabs'
 import { SetupCallout } from '../../components/SetupCallout'
+import { failedToLoadBucketsTitle } from '../../lib/actionHints'
+import styles from './ObjectsShell.module.css'
 
 type LocationTab = {
 	id: string
@@ -26,6 +28,7 @@ type ObjectsToolbarSectionProps = {
 }
 
 export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
+	const hasTabs = props.isAdvanced && props.tabs.length > 1
 	const tabItems = props.tabs.map((t) => {
 		const label = t.bucket ? `${t.bucket}${t.prefix ? `/${t.prefix}` : ''}` : '(no bucket selected)'
 		return {
@@ -43,27 +46,35 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 	const activeKey = props.activeTabId || props.tabs[0]?.id
 
 	return (
-		<>
+		<div className={styles.toolbarSectionStack} data-testid="objects-toolbar-section" data-has-tabs={hasTabs ? 'true' : 'false'}>
 			<SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to start browsing" />
 			{props.bucketsErrorMessage ? (
-				<Alert type="error" showIcon title="Failed to load buckets" description={props.bucketsErrorMessage} />
-			) : null}
-
-			{props.isAdvanced && props.tabs.length > 1 ? (
-				<AppTabs
-					type="editable-card"
-					size="small"
-					activeKey={activeKey}
-					onChange={(key) => props.onTabChange(String(key))}
-					onEdit={(targetKey, action) => {
-						if (action === 'add') props.onTabAdd()
-						if (action === 'remove') props.onTabClose(String(targetKey))
-					}}
-					items={tabItems}
+				<Alert
+					type="error"
+					showIcon
+					title={failedToLoadBucketsTitle()}
+					description={props.bucketsErrorMessage}
+					className={styles.pageHeaderAlert}
 				/>
 			) : null}
 
+			{hasTabs ? (
+				<div className={styles.toolbarTabsWrap} data-testid="objects-toolbar-tabs">
+					<AppTabs
+						type="editable-card"
+						size="small"
+						activeKey={activeKey}
+						onChange={(key) => props.onTabChange(String(key))}
+						onEdit={(targetKey, action) => {
+							if (action === 'add') props.onTabAdd()
+							if (action === 'remove') props.onTabClose(String(targetKey))
+						}}
+						items={tabItems}
+					/>
+				</div>
+			) : null}
+
 			<ObjectsToolbar {...props.toolbarProps} />
-		</>
+		</div>
 	)
 }

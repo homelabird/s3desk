@@ -9,6 +9,7 @@ import {
 	installApiFixtures,
 	seedLocalStorage,
 } from './support/apiFixtures'
+import { gotoObjectsPage, objectsSelectionCheckbox } from './support/ui'
 
 const profileId = 'playwright-move-profile'
 const bucket = 'move-bucket'
@@ -98,9 +99,9 @@ test('mobile selection bar opens move sheet and submits a move job', async ({ pa
 	})
 
 	await page.setViewportSize({ width: 390, height: 844 })
-	await page.goto('/objects')
+	await gotoObjectsPage(page)
 
-	await page.getByRole('checkbox', { name: 'Select notes/todo.txt' }).click()
+	await objectsSelectionCheckbox(page, 'notes/todo.txt').click()
 	await expect(page.getByRole('button', { name: 'Move to…' })).toBeVisible()
 
 	await page.getByRole('button', { name: 'Move to…' }).click()

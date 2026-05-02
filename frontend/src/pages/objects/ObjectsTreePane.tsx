@@ -17,6 +17,8 @@ type ObjectsTreePaneProps = {
 export function ObjectsTreePane(props: ObjectsTreePaneProps) {
 	const bodyId = useId()
 	const isExpanded = props.collapsible ? props.expanded !== false : true
+	const headerTestId = props.testId ? `${props.testId}-header` : undefined
+	const bodyTestId = props.testId ? `${props.testId}-body` : undefined
 
 	return (
 		<div
@@ -24,7 +26,7 @@ export function ObjectsTreePane(props: ObjectsTreePaneProps) {
 			data-testid={props.testId}
 			data-expanded={isExpanded ? 'true' : 'false'}
 		>
-			<div className={shellStyles.panelHeader}>
+			<div className={shellStyles.panelHeader} data-testid={headerTestId}>
 				{props.collapsible ? (
 					<button
 						type="button"
@@ -44,7 +46,7 @@ export function ObjectsTreePane(props: ObjectsTreePaneProps) {
 				{props.extra ?? null}
 			</div>
 			{isExpanded ? (
-				<div id={bodyId} className={shellStyles.panelBody}>
+				<div id={bodyId} className={shellStyles.panelBody} data-testid={bodyTestId}>
 					{props.children}
 				</div>
 			) : null}

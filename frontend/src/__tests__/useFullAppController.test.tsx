@@ -6,7 +6,7 @@ import type {
 	FullAppShellChromeProps,
 	FullAppShellChromeSession,
 } from '../FullAppShellChrome'
-import type { APIClient } from '../api/client'
+import type { APIClientShape } from '../api/client'
 import { useFullAppController } from '../useFullAppController'
 import type { FullAppViewportState } from '../useFullAppViewportState'
 
@@ -93,7 +93,7 @@ describe('useFullAppController', () => {
 	})
 
 	it('composes bootstrap, transfers, routes, and shell view-model state', () => {
-		const api = {} as APIClient
+		const api = {} as APIClientShape
 		const setApiToken = vi.fn()
 		const setProfileId = vi.fn()
 		const setGuideOpen = vi.fn()
@@ -257,7 +257,7 @@ describe('useFullAppController', () => {
 	})
 
 	it('uses the none transfer provider key when the api token is empty', () => {
-		const api = {} as APIClient
+		const api = {} as APIClientShape
 		const setApiToken = vi.fn()
 		const setProfileId = vi.fn()
 		const theme: FullAppShellChromeProps['theme'] = {

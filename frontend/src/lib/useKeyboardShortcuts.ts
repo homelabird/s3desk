@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type SetStateAction } from 'react'
 
+import { hasOpenOverlayLayer } from '../components/useOverlayLayer'
 import { shouldIgnoreGlobalKeyboardShortcut } from './keyboardShortcuts'
 
 /**
@@ -29,6 +30,7 @@ export function useKeyboardShortcuts(navigate: (path: string) => void, scopeKey 
 			if (shouldIgnoreGlobalKeyboardShortcut(e)) return
 
 			if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+				if (hasOpenOverlayLayer() && !guideOpen) return
 				e.preventDefault()
 				setGuideState((prev) => {
 					const prevOpen = prev.open && prev.scopeKey === scopeKey
@@ -59,7 +61,7 @@ export function useKeyboardShortcuts(navigate: (path: string) => void, scopeKey 
 			document.removeEventListener('keydown', handler)
 			if (gTimer) clearTimeout(gTimer)
 		}
-	}, [pendingG, navigate, scopeKey])
+	}, [guideOpen, pendingG, navigate, scopeKey])
 
 	return { guideOpen, setGuideOpen }
 }

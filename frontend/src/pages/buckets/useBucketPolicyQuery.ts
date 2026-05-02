@@ -1,16 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 
-import type { APIClient } from "../../api/client";
+import type { APIClientShape } from "../../api/client";
+import { queryKeys } from "../../api/queryKeys";
 
 export function useBucketPolicyQuery(
-  api: APIClient,
+  api: APIClientShape,
   profileId: string,
   bucket: string,
   apiToken: string,
   enabled: boolean,
 ) {
   return useQuery({
-    queryKey: ["bucketPolicy", profileId, bucket, apiToken],
+    queryKey: queryKeys.buckets.policy(profileId, bucket, apiToken),
     queryFn: () => api.buckets.getBucketPolicy(profileId, bucket),
     enabled,
   });

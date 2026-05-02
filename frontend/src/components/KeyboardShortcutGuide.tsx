@@ -1,5 +1,8 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
 
+import { goToBucketsLabel } from '../lib/actionHints'
+import { useOverlayLayer } from './useOverlayLayer'
+
 type Shortcut = {
 	keys: string
 	description: string
@@ -7,7 +10,7 @@ type Shortcut = {
 
 const navigationShortcuts: Shortcut[] = [
 	{ keys: 'G then P', description: 'Go to Profiles' },
-	{ keys: 'G then B', description: 'Go to Buckets' },
+	{ keys: 'G then B', description: goToBucketsLabel() },
 	{ keys: 'G then O', description: 'Go to Objects' },
 	{ keys: 'G then U', description: 'Go to Uploads' },
 	{ keys: 'G then J', description: 'Go to Jobs' },
@@ -22,7 +25,7 @@ const overlayStyle: CSSProperties = {
 	position: 'fixed',
 	inset: 0,
 	background: 'var(--s3d-color-scrim)',
-	zIndex: 1050,
+	zIndex: 1500,
 	display: 'flex',
 	alignItems: 'center',
 	justifyContent: 'center',
@@ -79,11 +82,20 @@ type Props = {
 
 export function KeyboardShortcutGuide(props: Props) {
 	const { open, onClose } = props
+	const panelRef = useRef<HTMLDivElement>(null)
 	const closeRef = useRef<HTMLButtonElement>(null)
+
+	useOverlayLayer({
+		open,
+		onEscape: onClose,
+		containerRef: panelRef,
+		initialFocusRef: closeRef,
+		lockBodyScroll: true,
+		trapFocus: true,
+	})
 
 	useEffect(() => {
 		if (!open) return
-		closeRef.current?.focus()
 		const handler = (e: KeyboardEvent) => {
 			if (e.key === 'Escape') onClose()
 		}
@@ -95,7 +107,14 @@ export function KeyboardShortcutGuide(props: Props) {
 
 	return (
 		<div style={overlayStyle} onClick={props.onClose} data-testid="keyboard-shortcut-guide">
-			<div style={cardStyle} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Keyboard shortcuts" aria-modal="true">
+			<div
+				ref={panelRef}
+				style={cardStyle}
+				onClick={(e) => e.stopPropagation()}
+				role="dialog"
+				aria-label="Keyboard shortcuts"
+				aria-modal="true"
+			>
 				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
 					<h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Keyboard shortcuts</h2>
 					<button

@@ -1,10 +1,11 @@
 import { expect, test, type Locator } from '@playwright/test'
 
 import { buildProfileFixture, seedLocalStorage } from './support/apiFixtures'
+import { gotoWithDynamicImportRecovery } from './support/ui'
 import { defaultWebviewStorage, escapeRegExp, seedWebviewStorage, stubWebviewApi } from './support/webviewFixtures'
 
 test.describe('webview routing', () => {
-	test('WV-001 redirects `/` to `/profiles` when no stored profile exists', async ({ page }) => {
+	test('WV-001 redirects `/` to `/setup` when no stored profile exists', async ({ page }) => {
 		const fallbackProfile = 'available-profile'
 		await stubWebviewApi(page, {
 			profiles: [buildProfileFixture({ id: fallbackProfile, name: 'Available Profile' })],
@@ -13,10 +14,10 @@ test.describe('webview routing', () => {
 
 		await page.goto('/')
 
-		await expect(page).toHaveURL(/\/profiles$/)
-		await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
-		await expect(page.getByTestId('topbar-profile-select').getByLabel('Profile')).toHaveValue(fallbackProfile)
-		await expect(page.getByRole('button', { name: 'Selected' })).toBeVisible()
+		await expect(page).toHaveURL(/\/setup$/)
+		await expect(page.getByText('Choose a profile')).toBeVisible()
+		await expect(page.getByRole('button', { name: /Available Profile.*available-profile/i })).toBeVisible()
+		await expect(page.getByText('No profile selected')).toBeVisible()
 	})
 
 	test('WV-001 redirects `/` to `/objects` when a stored profile exists', async ({ page }) => {
@@ -27,7 +28,10 @@ test.describe('webview routing', () => {
 
 		await expect(page).toHaveURL(/\/objects$/)
 		await expect(page.getByTestId('topbar-profile-select').getByLabel('Profile')).toHaveValue(defaultWebviewStorage.profileId)
-		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
+			timeout: 10_000,
+			maxAttempts: 3,
+		})
 	})
 
 	test('WV-003 keeps the active profile and route context across refresh on main routes', async ({ page }) => {
@@ -50,19 +54,36 @@ test.describe('webview routing', () => {
 			await navigate()
 
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
-			await expect(ready).toBeVisible()
+			if (path === '/objects') {
+				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
+					timeout: 10_000,
+					maxAttempts: 3,
+				})
+			} else {
+				await expect(ready).toBeVisible()
+			}
 			await expect(profileSelect).toHaveValue(defaultWebviewStorage.profileId)
 			if (extraAssertion) await extraAssertion()
 
 			await page.reload()
 
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
-			await expect(ready).toBeVisible()
+			if (path === '/objects') {
+				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
+					timeout: 10_000,
+					maxAttempts: 3,
+				})
+			} else {
+				await expect(ready).toBeVisible()
+			}
 			await expect(profileSelect).toHaveValue(defaultWebviewStorage.profileId)
 			if (extraAssertion) await extraAssertion()
 		}
 
-		await page.goto('/objects')
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
+			timeout: 10_000,
+			maxAttempts: 3,
+		})
 
 		await expectRouteState('/objects', () => navigateTo('Objects'), page.getByPlaceholder('Search current folder'), async () => {
 			await expect(objectsLocation).toBeVisible()

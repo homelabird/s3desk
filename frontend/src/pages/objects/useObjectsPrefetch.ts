@@ -1,7 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { ListObjectsResponse } from '../../api/types'
 import { getBucketPrefetchPlan, type ObjectsCostMode } from '../../lib/objectsCostMode'
 
@@ -10,7 +11,7 @@ type BucketOption = {
 }
 
 type UseObjectsPrefetchParams = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
@@ -41,7 +42,7 @@ export function useObjectsPrefetch({
 		async (bucketName: string) => {
 			if (!profileId || !bucketName) return
 			const savedPrefix = prefixByBucketRef.current[bucketName] ?? ''
-			const queryKey = ['objects', profileId, bucketName, savedPrefix, apiToken]
+			const queryKey = queryKeys.objects.list(profileId, bucketName, savedPrefix, apiToken)
 			const existing = queryClient.getQueryState(queryKey)
 			if (existing?.status === 'success' || existing?.fetchStatus === 'fetching') return
 			try {

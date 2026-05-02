@@ -3,11 +3,15 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
-import type { TransfersContextValue } from '../../../components/Transfers'
+import type { TransfersContextValue } from '../../../components/transfersTypes'
+import { noObjectsFoundUnderPrefixHint } from '../../../lib/secureContext'
 import { useJobsPageCreateFlows } from '../useJobsPageCreateFlows'
 
-const { messageInfo, messageWarning } = vi.hoisted(() => ({
+const { messageSuccess, messageError, messageInfo, messageWarning } = vi.hoisted(() => ({
+  messageSuccess: vi.fn(),
+  messageError: vi.fn(),
   messageInfo: vi.fn(),
   messageWarning: vi.fn(),
 }))
@@ -17,8 +21,8 @@ vi.mock('antd', async () => {
   return {
     ...actual,
     message: {
-      success: vi.fn(),
-      error: vi.fn(),
+      success: (...args: unknown[]) => messageSuccess(...args),
+      error: (...args: unknown[]) => messageError(...args),
       info: (...args: unknown[]) => messageInfo(...args),
       warning: (...args: unknown[]) => messageWarning(...args),
     },
@@ -103,6 +107,8 @@ function buildArgs(overrides: Partial<Parameters<typeof useJobsPageCreateFlows>[
 
 describe('useJobsPageCreateFlows', () => {
   beforeEach(() => {
+    messageSuccess.mockReset()
+    messageError.mockReset()
     messageInfo.mockReset()
     messageWarning.mockReset()
   })
@@ -177,5 +183,84 @@ describe('useJobsPageCreateFlows', () => {
 
     expect(args.transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
     expect(args.setCreateDownloadOpen).not.toHaveBeenCalledWith(false)
+  })
+
+  it('uses the shared empty-prefix hint when a device download source has no objects', async () => {
+    const args = buildArgs({
+      api: createMockApiClient({
+        objects: {
+          listObjects: vi.fn().mockResolvedValue({
+            items: [],
+            commonPrefixes: [],
+            isTruncated: false,
+            nextContinuationToken: undefined,
+          }),
+        },
+      }),
+    })
+
+    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
+      wrapper: createWrapper(args.queryClient),
+    })
+
+    await act(async () => {
+      await result.current.onCreateDownload({
+        bucket: 'bucket-a',
+        prefix: 'logs/',
+        dirHandle: { name: 'downloads' } as FileSystemDirectoryHandle,
+      })
+    })
+
+    expect(messageInfo).toHaveBeenCalledWith(noObjectsFoundUnderPrefixHint())
+    expect(args.transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
+    expect(args.setCreateDownloadOpen).not.toHaveBeenCalledWith(false)
+  })
+
+  it('reports delete job creation through the shared jobs feedback copy', async () => {
+    const args = buildArgs({
+      createJobWithRetry: vi.fn().mockResolvedValue({ id: 'job-delete-1' }),
+    })
+    const invalidateSpy = vi.spyOn(args.queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
+      wrapper: createWrapper(args.queryClient),
+    })
+
+    act(() => {
+      result.current.onCreateDelete({
+        bucket: 'bucket-a',
+        prefix: 'logs/',
+        deleteAll: false,
+        allowUnsafePrefix: false,
+        include: [],
+        exclude: [],
+        dryRun: false,
+      })
+    })
+
+    await waitFor(() => {
+      expect(args.createJobWithRetry).toHaveBeenCalledWith({
+        type: 'transfer_delete_prefix',
+        payload: {
+          bucket: 'bucket-a',
+          prefix: 'logs/',
+          deleteAll: false,
+          allowUnsafePrefix: false,
+          include: [],
+          exclude: [],
+          dryRun: false,
+        },
+      })
+    })
+    await waitFor(() => {
+      expect(messageSuccess).toHaveBeenCalledWith('Delete job created: job-delete-1')
+    })
+    expect(args.setCreateDeleteOpen).toHaveBeenCalledWith(false)
+    expect(args.setDeleteJobPrefill).toHaveBeenCalledWith(null)
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.jobs.scope('profile-1', 'token-a'),
+      exact: false,
+    })
+    expect(messageError).not.toHaveBeenCalled()
   })
 })

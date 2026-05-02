@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { RequestAbortedError } from '../../api/client'
 import {
 	buildThumbnailCacheKey,
@@ -10,8 +10,8 @@ import styles from './ObjectsThumbnailPrimitives.module.css'
 import { buildObjectThumbnailRequest, getThumbnailFailureTtlMs, shouldCacheThumbnailFailure } from './objectPreviewPolicy'
 import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
 
-type Props = {
-	api: APIClient
+export type ObjectThumbnailProps = {
+	api: APIClientShape
 	apiToken: string
 	profileId: string
 	bucket: string
@@ -27,7 +27,7 @@ type Props = {
 	altText?: string
 }
 
-export function ObjectThumbnail(props: Props) {
+export function ObjectThumbnail(props: ObjectThumbnailProps) {
 	const thumbnailRequest = useMemo(
 		() => buildObjectThumbnailRequest({
 			apiToken: props.apiToken,

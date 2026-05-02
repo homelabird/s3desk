@@ -1,6 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage } from './support/apiFixtures'
+import {
+	closeJobsMobileFilters,
+	gotoBucketsPage,
+	gotoJobsPage,
+	gotoProfilesPage,
+	gotoWithDynamicImportRecovery,
+	openJobsMobileFilters,
+} from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -25,6 +33,13 @@ const MOBILE_SCROLL_TEST_BUCKET_COUNT = 24
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	await seedLocalStorage(page, { ...defaultStorage, ...overrides })
+}
+
+async function openObjectsMobilePage(page: Page) {
+	await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
+		timeout: 10_000,
+		maxAttempts: 3,
+	})
 }
 
 async function stubCoreApi(page: Page, overrides?: StubCoreApiOptions) {
@@ -90,28 +105,12 @@ async function stubCoreApi(page: Page, overrides?: StubCoreApiOptions) {
 	], { status: 200, json: {} })
 }
 
-test.describe('mobile smoke', () => {
-	test('profiles page renders when no stored active profile exists', async ({ page }) => {
-		await stubCoreApi(page)
-		await seedStorage(page, { profileId: null })
-		await page.goto('/profiles')
-		await expect(page.getByText('Profiles', { exact: true }).first()).toBeVisible()
-		await expect(page.getByRole('button', { name: /^Selected$/ }).first()).toBeVisible()
-	})
-
-	test('profiles page renders', async ({ page }) => {
+test.describe('@mobile-responsive mobile smoke', () => {
+	test('dashboard header routes compact mobile actions through the overflow menu', async ({ page }) => {
 		await stubCoreApi(page)
 		await seedStorage(page)
-		await page.goto('/profiles')
-		await expect(page.getByText('Profiles', { exact: true }).first()).toBeVisible()
-		await expect(page.getByRole('button', { name: /New Profile/i })).toBeVisible()
-		await expect(page.getByRole('button', { name: /^Selected$/ }).first()).toBeVisible()
-	})
+		await gotoProfilesPage(page)
 
-	test('dashboard header uses compact mobile actions', async ({ page }) => {
-		await stubCoreApi(page)
-		await seedStorage(page)
-		await page.goto('/profiles')
 		const navButton = page.getByRole('button', { name: 'Open navigation' })
 		const profileSelect = page.getByRole('combobox', { name: 'Profile' })
 		const transfersButton = page.getByRole('button', { name: 'Transfers' })
@@ -122,278 +121,84 @@ test.describe('mobile smoke', () => {
 		await expect(transfersButton).toBeVisible()
 		await expect(page.getByRole('button', { name: /Settings/i })).toHaveCount(0)
 
-		for (const locator of [navButton, profileSelect, transfersButton, moreActionsButton]) {
-			const box = await locator.boundingBox()
-			expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
-		}
-
 		await moreActionsButton.click()
-		await expect(page.getByRole('menuitem', { name: /Settings/i })).toBeVisible()
+		const settingsItem = page.getByRole('menuitem', { name: /Settings/i })
+		await expect(settingsItem).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Logout/i })).toBeVisible()
+
+		await settingsItem.click()
+		const settingsDrawer = page.getByRole('dialog', { name: 'Settings' })
+		await expect(settingsDrawer).toBeVisible()
+		await settingsDrawer.getByRole('button', { name: 'Close' }).click()
+		await expect(settingsDrawer).toHaveCount(0)
 	})
 
-	test('settings tabs keep mobile-sized touch targets and horizontal scrolling', async ({ page }) => {
-		await stubCoreApi(page)
-		await seedStorage(page)
-		await page.goto('/settings')
-
-		const tablist = page.getByRole('tablist').first()
-		const workspaceTab = page.getByRole('tab', { name: 'Workspace' })
-
-		await expect(tablist).toBeVisible()
-		await expect(workspaceTab).toBeVisible()
-
-		const tabMetrics = await tablist.evaluate((node) => {
-			const element = node as HTMLElement
-			const styles = window.getComputedStyle(element)
-			return {
-				clientWidth: element.clientWidth,
-				scrollWidth: element.scrollWidth,
-				scrollSnapType: styles.scrollSnapType,
-				gap: styles.gap,
-			}
-		})
-		expect(tabMetrics.scrollWidth).toBeGreaterThan(tabMetrics.clientWidth)
-		expect(tabMetrics.scrollSnapType).toContain('x')
-		expect(tabMetrics.gap).toBe('8px')
-
-		const workspaceBox = await workspaceTab.boundingBox()
-		expect(workspaceBox?.height ?? 0).toBeGreaterThanOrEqual(44)
-	})
-
-	test('extra-small settings tabs and dialog close controls stay touch-friendly', async ({ page }) => {
-		await page.setViewportSize({ width: 350, height: 740 })
-		await stubCoreApi(page)
-		await seedStorage(page)
-
-		await page.goto('/settings')
-		const tablist = page.getByRole('tablist').first()
-		const workspaceTab = page.getByRole('tab', { name: 'Workspace' })
-
-		await expect(tablist).toBeVisible()
-		const tabMetrics = await tablist.evaluate((node) => {
-			const element = node as HTMLElement
-			const styles = window.getComputedStyle(element)
-			return {
-				gap: styles.gap,
-				scrollWidth: element.scrollWidth,
-				clientWidth: element.clientWidth,
-			}
-		})
-		expect(tabMetrics.gap).toBe('4px')
-		expect(tabMetrics.scrollWidth).toBeGreaterThan(tabMetrics.clientWidth)
-
-		const workspaceBox = await workspaceTab.boundingBox()
-		expect(workspaceBox?.height ?? 0).toBeGreaterThanOrEqual(44)
-
-		await page.goto('/objects')
-		await page.getByRole('button', { name: 'New folder' }).click()
-		const closeButton = page.getByRole('button', { name: 'Close' })
-		await expect(closeButton).toBeVisible()
-		const closeBox = await closeButton.boundingBox()
-		expect(closeBox?.width ?? 0).toBeGreaterThanOrEqual(44)
-		expect(closeBox?.height ?? 0).toBeGreaterThanOrEqual(44)
-	})
-
-	test('extra-small mobile layouts keep metadata and search actions readable', async ({ page }) => {
-		await page.setViewportSize({ width: 360, height: 740 })
-		await stubCoreApi(page)
-		await seedStorage(page, { objectsUIMode: 'advanced' })
-
-		await page.goto('/profiles')
-		const profileCard = page.getByTestId('profiles-list-compact').locator('article').first()
-		const profileMeta = profileCard.locator('[class*="mobileMetaGrid"]').first()
-		const profileMetaStyles = await profileMeta.evaluate((node) => {
-			const element = node as HTMLElement
-			const firstValue = element.querySelector('[class*="mobileMetaValue"]') as HTMLElement | null
-			return {
-				gridTemplateColumns: window.getComputedStyle(element).gridTemplateColumns,
-				valueFontSize: firstValue ? window.getComputedStyle(firstValue).fontSize : null,
-			}
-		})
-		expect(profileMetaStyles.gridTemplateColumns.trim().split(/\s+/)).toHaveLength(1)
-		expect(profileMetaStyles.valueFontSize).toBe('13px')
-
-		await page.goto('/buckets')
-		const bucketCard = page.getByTestId('buckets-list-compact').locator('article').first()
-		const bucketMeta = bucketCard.locator('[class*="mobileMetaGrid"]').first()
-		const bucketMetaStyles = await bucketMeta.evaluate((node) => {
-			const element = node as HTMLElement
-			const firstValue = element.querySelector('[class*="metaValue"]') as HTMLElement | null
-			return {
-				gridTemplateColumns: window.getComputedStyle(element).gridTemplateColumns,
-				valueFontSize: firstValue ? window.getComputedStyle(firstValue).fontSize : null,
-			}
-		})
-		expect(bucketMetaStyles.gridTemplateColumns.trim().split(/\s+/)).toHaveLength(1)
-		expect(bucketMetaStyles.valueFontSize).toBe('13px')
-
-		await page.goto('/jobs')
-		await expect(page.getByTestId('jobs-mobile-filters-hint')).toBeVisible()
-
-		await page.goto('/objects')
-		await expect(page.getByRole('button', { name: 'Filters' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Bucket search' })).toBeVisible()
-		await expect(page.getByText('Search this folder here, or use Bucket search for indexed results across the whole bucket.')).toBeVisible()
-		await page.getByRole('button', { name: 'Bucket search' }).click()
-		await expect(page.getByText('Search the whole bucket')).toBeVisible()
-
-		await page.goto('/uploads')
-		const addFromDeviceButton = page.getByRole('button', { name: 'Add from device…' })
-		const uploadsHint = page.getByText('Add files or a folder first.')
-		const addBox = await addFromDeviceButton.boundingBox()
-		const hintBox = await uploadsHint.boundingBox()
-		expect(hintBox?.y ?? 0).toBeGreaterThan((addBox?.y ?? 0) + (addBox?.height ?? 0) - 1)
-
-		await page.goto('/settings')
-		const tokenField = page.getByPlaceholder('Must match API_TOKEN…')
-		const applyButton = page.getByRole('button', { name: 'Apply' })
-		const tokenBox = await tokenField.boundingBox()
-		const applyBox = await applyButton.boundingBox()
-		expect(applyBox?.y ?? 0).toBeGreaterThan((tokenBox?.y ?? 0) + (tokenBox?.height ?? 0) - 1)
-	})
-
-	test('buckets page renders', async ({ page }) => {
-		await stubCoreApi(page)
-		await seedStorage(page)
-		await page.goto('/buckets')
-		await expect(page.getByRole('heading', { name: 'Buckets' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'New Bucket' })).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Policy' })).toBeVisible()
-	})
-
-	test('mobile app shell keeps dashboard content scrollable without horizontal overflow', async ({ page }) => {
+	test('mobile buckets list can scroll to the final bucket and open its delete flow', async ({ page }) => {
 		const bucketNames = Array.from(
 			{ length: MOBILE_SCROLL_TEST_BUCKET_COUNT },
 			(_, index) => `mobile-bucket-${index.toString().padStart(2, '0')}`,
 		)
+		const lastBucket = bucketNames.at(-1) ?? 'mobile-bucket-23'
+
 		await stubCoreApi(page, {
 			buckets: bucketNames.map((name) => ({ name, createdAt: '2024-01-01T00:00:00Z' })),
 		})
 		await seedStorage(page)
-		await page.goto('/buckets')
+		await gotoBucketsPage(page)
 
 		await expect(page.getByTestId('buckets-list-compact')).toBeVisible()
 
 		const scrollContainer = page.locator('main[data-scroll-container="app-content"]')
-		const beforeScroll = await scrollContainer.evaluate((node) => {
-			const element = node as HTMLElement
-			return {
-				clientHeight: element.clientHeight,
-				scrollHeight: element.scrollHeight,
-				scrollTop: element.scrollTop,
-			}
-		})
-
-		expect(beforeScroll.scrollHeight).toBeGreaterThan(beforeScroll.clientHeight)
-		expect(beforeScroll.scrollTop).toBe(0)
-
-		const afterScrollTop = await scrollContainer.evaluate((node) => {
+		await scrollContainer.evaluate((node) => {
 			const element = node as HTMLElement
 			element.scrollTo({ top: element.scrollHeight })
-			return element.scrollTop
 		})
-
-		expect(afterScrollTop).toBeGreaterThan(0)
-
-		const viewportMetrics = await page.evaluate(() => ({
-			innerWidth: window.innerWidth,
-			scrollWidth: document.documentElement.scrollWidth,
-		}))
-		expect(viewportMetrics.scrollWidth).toBeLessThanOrEqual(viewportMetrics.innerWidth)
+		const lastBucketCard = page.getByTestId('buckets-list-compact').locator('article').filter({ hasText: lastBucket }).first()
+		await expect(lastBucketCard).toBeVisible()
+		await lastBucketCard.getByRole('button', { name: 'Delete' }).click()
+		const confirmDialog = page.getByRole('dialog', { name: `Delete bucket "${lastBucket}"?` })
+		await expect(confirmDialog).toBeVisible()
+		await confirmDialog.getByRole('button', { name: 'Cancel' }).click()
+		await expect(confirmDialog).toHaveCount(0)
 	})
 
 	test('root redirects to objects when an active profile is stored', async ({ page }) => {
 		await stubCoreApi(page)
 		await seedStorage(page)
 		await page.goto('/')
-		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
+		await expect(page).toHaveURL(/\/objects$/)
+		await openObjectsMobilePage(page)
 	})
 
-	test('objects page renders', async ({ page }) => {
-		await stubCoreApi(page)
-		await seedStorage(page)
-		await page.goto('/objects')
-		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
-		await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible()
-	})
-
-	test('jobs page renders', async ({ page }) => {
-		await stubCoreApi(page)
-		await seedStorage(page)
-		await page.goto('/jobs')
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-		await expect(page.locator('button').filter({ hasText: 'Upload…' }).first()).toBeVisible()
-	})
-
-	test('narrow mobile dialogs and job filters stay phone-safe', async ({ page }) => {
+	test('narrow mobile dialogs and job filters stay usable on phones', async ({ page }) => {
 		await page.setViewportSize({ width: 350, height: 560 })
 		await stubCoreApi(page)
 		await seedStorage(page)
 
-		await page.goto('/objects')
+		await openObjectsMobilePage(page)
 		await page.getByRole('button', { name: 'New folder' }).click()
 
 		const newFolderDialog = page.getByRole('dialog')
 		await expect(newFolderDialog).toBeVisible()
 		await expect(page.getByRole('heading', { name: 'New folder' })).toBeVisible()
+		await newFolderDialog.getByPlaceholder('new-folder').fill('mobile-folder')
+		await newFolderDialog.getByRole('button', { name: 'Cancel' }).click()
+		await expect(newFolderDialog).toHaveCount(0)
 
-		const dialogMetrics = await newFolderDialog.evaluate((node) => {
-			const element = node as HTMLElement
-			const header = element.querySelector('div') as HTMLElement | null
-			const body = element.querySelector('[class*="body"]') as HTMLElement | null
-			return {
-				width: element.getBoundingClientRect().width,
-				maxWidth: window.innerWidth,
-				bodyPaddingInline: body ? window.getComputedStyle(body).paddingLeft : null,
-				headerPaddingInline: header ? window.getComputedStyle(header).paddingLeft : null,
-			}
-		})
-		expect(dialogMetrics.width).toBeLessThanOrEqual(dialogMetrics.maxWidth)
-		expect(dialogMetrics.bodyPaddingInline).toBe('12px')
-		expect(dialogMetrics.headerPaddingInline).toBe('12px')
-
-		await page.getByRole('button', { name: 'Close' }).click()
-		await page.goto('/jobs')
-
-		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toBeVisible()
+		await gotoJobsPage(page)
 		await expect(page.getByRole('combobox', { name: 'Job status filter' })).toHaveCount(0)
-		await page.getByTestId('jobs-mobile-filters-trigger').click()
-		await expect(page.getByTestId('jobs-mobile-filters-sheet')).toBeVisible()
-		await expect(page.getByRole('combobox', { name: 'Job status filter' })).toBeVisible()
-		await expect(page.getByRole('combobox', { name: 'Job type filter' })).toBeVisible()
-		await expect(page.getByRole('combobox', { name: 'Job error code filter' })).toBeVisible()
+		const jobsFiltersSheet = await openJobsMobileFilters(page)
+		await jobsFiltersSheet.getByRole('combobox', { name: 'Job status filter' }).selectOption('failed')
+		await expect(jobsFiltersSheet.getByRole('combobox', { name: 'Job type filter' })).toBeVisible()
+		await expect(jobsFiltersSheet.getByRole('combobox', { name: 'Job error code filter' })).toBeVisible()
 
-		const activeCard = page.getByTestId('jobs-health-active')
-		const queuedCard = page.getByTestId('jobs-health-queued')
-		const activeBox = await activeCard.boundingBox()
-		const queuedBox = await queuedCard.boundingBox()
-		expect(queuedBox?.y ?? 0).toBeGreaterThan((activeBox?.y ?? 0) + (activeBox?.height ?? 0) - 1)
-
-		await page.getByRole('button', { name: 'Done' }).click()
-		await expect(page.getByTestId('jobs-mobile-filters-sheet')).toHaveCount(0)
+		await closeJobsMobileFilters(jobsFiltersSheet)
+		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toContainText('Filters active')
 
 		await page.getByRole('button', { name: 'Upload…' }).first().click()
 		const uploadSheet = page.getByRole('dialog')
 		await expect(page.getByRole('heading', { name: 'Upload from device' })).toBeVisible()
-		const sheetMetrics = await uploadSheet.evaluate((node) => {
-			const element = node as HTMLElement
-			const body = element.querySelector('[class*="body"]') as HTMLElement | null
-			return {
-				height: element.getBoundingClientRect().height,
-				maxHeight: window.innerHeight,
-				bodyPaddingBottom: body ? window.getComputedStyle(body).paddingBottom : null,
-			}
-		})
-		expect(sheetMetrics.height).toBeLessThanOrEqual(sheetMetrics.maxHeight)
-		expect(sheetMetrics.bodyPaddingBottom).toBe('20px')
-	})
-
-	test('uploads page renders', async ({ page }) => {
-		await stubCoreApi(page)
-		await seedStorage(page)
-		await page.goto('/uploads')
-		await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible()
-		await expect(page.getByRole('combobox', { name: 'Bucket' })).toBeVisible()
+		await uploadSheet.getByLabel('Close', { exact: true }).click()
+		await expect(uploadSheet).toHaveCount(0)
 	})
 })

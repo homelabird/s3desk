@@ -1,10 +1,11 @@
-import { Alert, Button, Checkbox, Grid, Input, message } from 'antd'
+import { Alert, Button, Checkbox, Grid, Input } from 'antd'
 import { useState } from 'react'
 
 import { DatalistInput } from '../../components/DatalistInput'
 import { FormField } from '../../components/FormField'
 import { OverlaySheet } from '../../components/OverlaySheet'
 import { ToggleSwitch } from '../../components/ToggleSwitch'
+import { jobsFeedback } from './jobsFeedback'
 import styles from './JobsShared.module.css'
 
 export function DeletePrefixJobModal(props: {
@@ -46,27 +47,27 @@ export function DeletePrefixJobModal(props: {
 	const handleSubmit = () => {
 		const trimmedBucket = bucket.trim()
 		if (!trimmedBucket) {
-			message.error('Bucket is required')
+			jobsFeedback.bucketRequired()
 			return
 		}
 		if (props.isOffline) return
 
 		if (!deleteAll) {
 			if (!normalizedPrefix) {
-				message.error('Prefix is required unless deleteAll is enabled')
+				jobsFeedback.prefixRequiredUnlessDeleteAll()
 				return
 			}
 			if (normalizedPrefix.includes('*')) {
-				message.error('Wildcards are not allowed in prefix')
+				jobsFeedback.wildcardsNotAllowedInPrefix()
 				return
 			}
 			if (unsafePrefix && !unsafePrefixOk) {
-				message.error('Acknowledge unsafe prefix to proceed')
+				jobsFeedback.acknowledgeUnsafePrefix()
 				return
 			}
 		} else {
 			if (confirm !== 'DELETE') {
-				message.error('Type DELETE to proceed')
+				jobsFeedback.typeDeleteToProceed()
 				return
 			}
 		}

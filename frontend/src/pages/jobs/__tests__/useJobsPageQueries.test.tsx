@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MetaResponse, Profile } from '../../../api/types'
 import { createMockApiClient } from '../../../test/mockApiClient'
@@ -163,5 +163,74 @@ describe('useJobsPageQueries', () => {
 			{ label: 'bucket-b', value: 'bucket-b' },
 		])
 		expect(result.current.jobs[0]?.id).toBe('job-1')
+	})
+
+	it('keeps job listing active but skips bucket lookup when bucket CRUD is unsupported', async () => {
+		const listBuckets = vi.fn().mockResolvedValue([
+			{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' },
+		])
+		const api = createMockApiClient({
+			server: {
+				getMeta: async () => buildMeta(),
+			},
+			profiles: {
+				listProfiles: async () => [
+					buildProfile({
+						id: 'profile-1',
+						provider: 'gcp_gcs',
+						projectNumber: '',
+						endpoint: '',
+					}),
+				],
+			},
+			buckets: {
+				listBuckets,
+			},
+			jobs: {
+				listJobs: async () => ({
+					items: [
+						{
+							id: 'job-1',
+							type: 'transfer_delete_prefix',
+							status: 'queued',
+							payload: {},
+							createdAt: '2026-01-01T00:00:00Z',
+							updatedAt: '2026-01-01T00:00:00Z',
+						},
+					],
+					nextCursor: undefined,
+				}),
+			},
+		})
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		const { result } = renderHook(
+			() =>
+				useJobsPageQueries({
+					api,
+					apiToken: 'token',
+					profileId: 'profile-1',
+					filters: {
+						statusFilter: 'all',
+						typeFilterNormalized: '',
+						errorCodeFilterNormalized: '',
+					},
+					eventsConnected: true,
+				}),
+			{ wrapper: createWrapper(queryClient) },
+		)
+
+		await waitFor(() => expect(result.current.selectedProfile?.id).toBe('profile-1'))
+		await waitFor(() => expect(result.current.jobs).toHaveLength(1))
+
+		expect(result.current.bucketsQuery.fetchStatus).toBe('idle')
+		expect(result.current.bucketOptions).toEqual([])
+		expect(result.current.jobs[0]?.id).toBe('job-1')
+		expect(listBuckets).not.toHaveBeenCalled()
 	})
 })

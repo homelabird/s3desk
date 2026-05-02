@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockApi } from './support/apiFixtures'
-
+import { dropFileIntoObjectsUploadZone, gotoObjectsUploadBucketPage } from './support/ui'
 type StorageSeed = {
 	apiToken: string
 	profileId: string
@@ -22,11 +22,6 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
 		window.localStorage.setItem('objectsUIMode', JSON.stringify('simple'))
 	}, storage)
-}
-
-async function selectBucket(page: Page, name: string) {
-	await page.getByTestId('objects-bucket-picker-desktop').click()
-	await page.getByTestId(`objects-bucket-picker-option-${name}`).click()
 }
 
 test('objects drag and drop does not throw Illegal invocation', async ({ page }) => {
@@ -132,44 +127,17 @@ test('objects drag and drop does not throw Illegal invocation', async ({ page })
 	page.on('pageerror', (err) => errors.push(err.message))
 
 	await seedStorage(page)
-	await page.goto('/objects')
-	await selectBucket(page, defaultStorage.bucket)
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket)
 
 	await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
-	const dropZone = page.getByTestId('objects-upload-dropzone')
-	await expect(dropZone).toBeVisible()
-
-	const dataTransfer = await page.evaluateHandle(() => {
-		const dt = new DataTransfer()
-		const entry: {
-			isFile: boolean
-			isDirectory: boolean
-			fullPath: string
-			name: string
-			file: (success: (file: File) => void, error?: (err: unknown) => void) => void
-		} = {
-			isFile: true,
-			isDirectory: false,
-			fullPath: '/dir/hello.txt',
-			name: 'hello.txt',
-			file(success) {
-				if (this !== entry) {
-					throw new Error('Illegal invocation')
-				}
-				success(new File(['hello'], 'hello.txt', { type: 'text/plain' }))
-			},
-		}
-		const item = { webkitGetAsEntry: () => entry }
-		Object.defineProperty(dt, 'items', { value: [item] })
-		Object.defineProperty(dt, 'files', { value: [] })
-		Object.defineProperty(dt, 'types', { value: ['Files'] })
-		dt.dropEffect = 'none'
-		return dt
+	await dropFileIntoObjectsUploadZone(page, {
+		name: 'hello.txt',
+		contents: 'hello',
+		type: 'text/plain',
+		fullPath: '/dir/hello.txt',
+		assertEntryBinding: true,
+		dropEffect: 'none',
 	})
-
-	await dropZone.dispatchEvent('dragenter', { dataTransfer })
-	await dropZone.dispatchEvent('dragover', { dataTransfer })
-	await dropZone.dispatchEvent('drop', { dataTransfer })
 
 	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
 	expect(errors).toEqual([])

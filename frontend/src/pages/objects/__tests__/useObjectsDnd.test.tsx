@@ -12,6 +12,7 @@ const messageOpenMock = vi.fn()
 const messageErrorMock = vi.fn()
 const messageWarningMock = vi.fn()
 const messageInfoMock = vi.fn()
+const waitForLazyDndRuntime = { timeout: 5000 }
 
 vi.mock('../../../lib/confirmDangerAction', () => ({
 	confirmDangerAction: (options: { onConfirm: () => Promise<void> | void }) => confirmDangerActionMock(options),
@@ -137,7 +138,7 @@ describe('useObjectsDnd', () => {
 			result.current.onDndTargetDrop(event, 'docs/')
 		})
 
-		expect(confirmDangerActionMock).toHaveBeenCalledTimes(1)
+		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1), waitForLazyDndRuntime)
 		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
 
 		await act(async () => {
@@ -193,7 +194,7 @@ describe('useObjectsDnd', () => {
 			result.current.onDndTargetDrop(event, 'docs/')
 		})
 
-		expect(confirmDangerActionMock).toHaveBeenCalledTimes(1)
+		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1), waitForLazyDndRuntime)
 		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
 
 		await act(async () => {
@@ -242,7 +243,7 @@ describe('useObjectsDnd', () => {
 			result.current.onDndTargetDrop(event, 'docs/')
 		})
 
-		expect(confirmDangerActionMock).toHaveBeenCalledTimes(1)
+		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1), waitForLazyDndRuntime)
 		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
 
 		await act(async () => {
@@ -296,6 +297,7 @@ describe('useObjectsDnd', () => {
 			result.current.onDndTargetDrop(event, 'docs/')
 		})
 
+		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1), waitForLazyDndRuntime)
 		const confirmOptions = confirmDangerActionMock.mock.lastCall?.[0] as { onConfirm: () => Promise<void> }
 
 		await act(async () => {

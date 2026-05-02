@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { offlineUploadsDisabledHint, uploadsUnsupportedHint } from '../../../lib/actionHints'
 import { transfersStub } from '../../../test/transfersStub'
 import { useUploadsPageSelectionActions } from '../useUploadsPageSelectionActions'
 
@@ -155,7 +156,38 @@ describe('useUploadsPageSelectionActions', () => {
 		})
 
 		expect(setUploadSourceOpen).not.toHaveBeenCalled()
-		expect(messageWarningMock).toHaveBeenCalledWith('Offline: uploads are disabled.')
+		expect(messageWarningMock).toHaveBeenCalledWith(offlineUploadsDisabledHint())
 		expect(messageInfoMock).not.toHaveBeenCalled()
+	})
+
+	it('uses the shared uploads-unsupported fallback when no explicit provider reason is present', () => {
+		const setUploadSourceOpen = vi.fn()
+
+		const { result } = renderHook(() =>
+			useUploadsPageSelectionActions({
+				transfers: createTransfersValue(),
+				isOffline: false,
+				profileId: 'profile-1',
+				uploadsSupported: false,
+				uploadsUnsupportedReason: null,
+				bucket: 'bucket-a',
+				prefix: '',
+				selectedFiles: [],
+				selectedFolderLabel: '',
+				selectedDirectorySelectionMode: undefined,
+				setSelectedFiles: vi.fn(),
+				setSelectedFolderLabel: vi.fn(),
+				setSelectedDirectorySelectionMode: vi.fn(),
+				setUploadSourceOpen,
+				setUploadSourceBusy: vi.fn(),
+			}),
+		)
+
+		act(() => {
+			result.current.openUploadPicker()
+		})
+
+		expect(setUploadSourceOpen).not.toHaveBeenCalled()
+		expect(messageWarningMock).toHaveBeenCalledWith(uploadsUnsupportedHint())
 	})
 })

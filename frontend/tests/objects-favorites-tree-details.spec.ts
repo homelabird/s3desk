@@ -9,6 +9,7 @@ import {
 	seedLocalStorage,
 	textFixture,
 } from './support/apiFixtures'
+import { gotoObjectsPage, objectsFavoriteItem, objectsSelectionCheckbox, objectsTreeRow } from './support/ui'
 
 const profileId = 'favorites-tree-profile'
 const bucket = 'favorites-bucket'
@@ -165,42 +166,43 @@ test.describe('Objects favorites/tree/details sync', () => {
 
 	test('favorite click in the same prefix selects the object and opens details', async ({ page }) => {
 		await seedObjectsStorage(page, { prefix: 'docs/' })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await expect(page.getByText('Content Type')).toHaveCount(0)
-		await page.getByTestId('objects-favorite-item').filter({ hasText: 'spec.md' }).click()
+		await objectsFavoriteItem(page, 'spec.md').click()
 
 		await expect(page.getByText(`s3://${bucket}/docs/`)).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select spec.md' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'spec.md')).toBeChecked()
 		await expect(page.getByText('Content Type')).toBeVisible()
 		await expect(page.getByText('docs/spec.md')).toBeVisible()
 	})
 
 	test('favorite click in another prefix navigates and restores selection/details', async ({ page }) => {
 		await seedObjectsStorage(page, { prefix: '' })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		await page.getByTestId('objects-favorite-item').filter({ hasText: 'summary.txt' }).click()
+		await objectsFavoriteItem(page, 'summary.txt').click()
 
 		await expect(page.getByText(`s3://${bucket}/reports/2024/`)).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select summary.txt' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'summary.txt')).toBeChecked()
 		await expect(page.getByText('Content Type')).toBeVisible()
 		await expect(page.getByText('reports/2024/summary.txt')).toBeVisible()
 	})
 
 	test('tree selection updates the active prefix and list results', async ({ page }) => {
 		await seedObjectsStorage(page, { prefix: '' })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		const tree = page.getByRole('tree').first()
-		await expect(tree).toBeVisible()
-		await tree.getByRole('button', { name: 'Expand' }).first().click()
-		await expect(tree.getByRole('button', { name: 'docs' })).toBeVisible()
+		const rootRow = objectsTreeRow(page, 0).filter({ hasText: bucket }).first()
+		await expect(rootRow).toBeVisible()
+		await rootRow.getByRole('button', { name: `Expand ${bucket}` }).click()
 
-		await tree.getByRole('button', { name: 'docs' }).click()
+		const docsRow = objectsTreeRow(page, 1).filter({ hasText: 'docs' }).first()
+		await expect(docsRow).toBeVisible()
+		await docsRow.getByRole('button', { name: 'docs', exact: true }).click()
 
 		await expect(page.getByText(`s3://${bucket}/docs/`)).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select spec.md' })).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select guide.txt' })).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'spec.md')).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'guide.txt')).toBeVisible()
 	})
 })

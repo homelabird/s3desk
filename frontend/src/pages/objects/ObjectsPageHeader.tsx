@@ -2,8 +2,9 @@ import { Alert, Typography } from 'antd'
 import { Suspense } from 'react'
 
 import { UploadSourceSheet } from '../../components/UploadSourceSheet'
+import { uploadsUnsupportedHint } from '../../lib/actionHints'
 import styles from './ObjectsShell.module.css'
-import { ObjectsToolbarSection } from './objectsPageLazy'
+import { ObjectsToolbarSection } from './objectsToolbarLazy'
 
 type ObjectsToolbarSectionProps = Parameters<typeof import('./ObjectsToolbarSection').ObjectsToolbarSection>[0]
 
@@ -40,21 +41,24 @@ export function ObjectsPageHeader({
 
 	return (
 		<>
-			<Typography.Title level={2} style={{ margin: 0 }}>
-				Objects
-			</Typography.Title>
-			{!uploadSupported ? (
-				<Alert
-					type="info"
-					showIcon
-					title="Uploads are disabled for this provider"
-					description={uploadDisabledReason ?? 'Object uploads are not supported by the selected provider.'}
-				/>
-			) : null}
+			<div className={styles.pageHeader} data-testid="objects-page-header">
+				<Typography.Title level={2} className={styles.pageTitle}>
+					Objects
+				</Typography.Title>
+				{!uploadSupported ? (
+					<Alert
+						type="info"
+						showIcon
+						title="Uploads are disabled for this provider"
+						description={uploadDisabledReason ?? uploadsUnsupportedHint()}
+						className={styles.pageHeaderAlert}
+					/>
+				) : null}
 
-			<Suspense fallback={toolbarFallback}>
-				<ObjectsToolbarSection {...toolbarSectionProps} />
-			</Suspense>
+				<Suspense fallback={toolbarFallback}>
+					<ObjectsToolbarSection {...toolbarSectionProps} />
+				</Suspense>
+			</div>
 			<UploadSourceSheet
 				open={uploadSourceOpen}
 				title="Upload to this location"

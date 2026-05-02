@@ -24,6 +24,7 @@ type ObjectsTreeSectionProps = {
 	favoritesLoading: boolean
 	favoritesError?: string | null
 	treeData: TreeNode[]
+	treeError?: string | null
 	loadingKeys?: string[]
 	onLoadData: (nodeKey: string) => Promise<void>
 	selectedKeys: string[]

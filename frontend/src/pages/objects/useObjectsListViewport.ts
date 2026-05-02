@@ -1,3 +1,5 @@
+import type { Ref, RefObject } from 'react'
+
 import { COMPACT_ROW_HEIGHT_PX, WIDE_ROW_HEIGHT_PX } from './objectsPageConstants'
 import { useObjectsListVirtualizer } from './useObjectsListVirtualizer'
 
@@ -18,6 +20,28 @@ type UseObjectsListViewportArgs = {
 	maxModifiedMs: number | null
 }
 
+export type ObjectsViewportVirtualItem = {
+	index: number
+}
+
+export type ObjectsViewportRenderItem = {
+	index: number
+	start: number
+}
+
+export type ObjectsListViewportState = {
+	listScrollerEl: HTMLDivElement | null
+	listScrollerRef: Ref<HTMLDivElement>
+	scrollContainerRef: RefObject<HTMLDivElement | null>
+	measureElement: (element: HTMLDivElement | null) => void
+	rowVirtualizer: {
+		scrollToIndex: (index: number) => void
+	}
+	virtualItems: ObjectsViewportVirtualItem[]
+	virtualItemsForRender: ObjectsViewportRenderItem[]
+	totalSize: number
+}
+
 export function useObjectsListViewport({
 	rowCount,
 	isCompactList,
@@ -33,7 +57,7 @@ export function useObjectsListViewport({
 	maxSize,
 	minModifiedMs,
 	maxModifiedMs,
-}: UseObjectsListViewportArgs) {
+}: UseObjectsListViewportArgs): ObjectsListViewportState {
 	return useObjectsListVirtualizer({
 		rowCount,
 		isCompactList,
@@ -56,4 +80,3 @@ export function useObjectsListViewport({
 		},
 	})
 }
-

@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 
-import type { APIClient } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { FavoriteObjectItem, ListObjectsResponse, ObjectFavoritesResponse, ObjectItem } from '../../api/types'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { ObjectsFavoritesAPI } from '../../lib/pageApiScopes'
+import { objectsFeedback } from './objectsFeedback'
 
 type UseObjectsFavoritesArgs = {
-	api: APIClient
+	api: ObjectsFavoritesAPI
 	profileId: string | null
 	bucket: string
 	apiToken: string
 	objectsPages: ListObjectsResponse[]
 	hydrateItems: boolean
+	enabled?: boolean
 }
 
 function favoriteKeysFromResponse(response: ObjectFavoritesResponse | undefined): string[] {
@@ -54,7 +55,7 @@ function updateFavoriteResponse(
 	}
 }
 
-export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsPages, hydrateItems }: UseObjectsFavoritesArgs) {
+export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsPages, hydrateItems, enabled = true }: UseObjectsFavoritesArgs) {
 	const queryClient = useQueryClient()
 	const currentScopeKey = `${profileId ?? ''}:${bucket}:${apiToken}`
 	const favoriteContextVersionRef = useRef(0)
@@ -68,21 +69,21 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	}, [currentScopeKey])
 
 	const favoriteSummaryQueryKey = useMemo(
-		() => ['objectFavorites', profileId, bucket, apiToken, 'summary'],
+		() => queryKeys.objects.favoritesSummary(profileId, bucket, apiToken),
 		[apiToken, bucket, profileId],
 	)
 	const favoriteItemsQueryKey = useMemo(
-		() => ['objectFavorites', profileId, bucket, apiToken, 'items'],
+		() => queryKeys.objects.favoritesItems(profileId, bucket, apiToken),
 		[apiToken, bucket, profileId],
 	)
 	const favoriteSummaryQuery = useQuery({
 		queryKey: favoriteSummaryQueryKey,
-		enabled: !!profileId && !!bucket,
+		enabled: enabled && !!profileId && !!bucket,
 		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false }),
 	})
 	const favoriteItemsQuery = useQuery({
 		queryKey: favoriteItemsQueryKey,
-		enabled: !!profileId && !!bucket && hydrateItems,
+		enabled: enabled && !!profileId && !!bucket && hydrateItems,
 		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true }),
 	})
 	const favoritesQuery = hydrateItems ? favoriteItemsQuery : favoriteSummaryQuery
@@ -171,7 +172,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 		},
 		onError: (err, _key, context) => {
 			if (context?.contextVersion !== favoriteContextVersionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 
@@ -221,18 +222,19 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 		},
 		onError: (err, _key, context) => {
 			if (context?.contextVersion !== favoriteContextVersionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 
 	const toggleFavorite = useCallback(
 		(key: string) => {
+			if (!enabled) return
 			if (!profileId) {
-				message.info('Select a profile first')
+				objectsFeedback.selectProfileFirst()
 				return
 			}
 			if (!bucket) {
-				message.info('Select a bucket first')
+				objectsFeedback.selectBucketFirst()
 				return
 			}
 			if (favoriteKeys.has(key)) {
@@ -241,7 +243,7 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 			}
 			addFavoriteMutation.mutate(key)
 		},
-		[addFavoriteMutation, bucket, favoriteKeys, profileId, removeFavoriteMutation],
+		[addFavoriteMutation, bucket, enabled, favoriteKeys, profileId, removeFavoriteMutation],
 	)
 
 	return {

@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
 	"s3desk/internal/bucketgov"
 	"s3desk/internal/models"
 )
@@ -19,70 +17,11 @@ type bucketGovernanceSectionSpec struct {
 }
 
 func (s *server) handleGetBucketPublicExposure(w http.ResponseWriter, r *http.Request) {
-	secrets, bucket, ok := governanceRequestContext(w, r)
-	if !ok {
-		return
-	}
-	if s.bucketGov == nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "bucket governance service is not configured", nil)
-		return
-	}
-
-	view, err := s.bucketGov.GetPublicExposure(r.Context(), secrets, bucket)
-	if err != nil {
-		writeBucketGovernanceSectionError(w, err, secrets.Provider, bucket, bucketGovernanceSectionSpec{
-			Section:            "public-exposure",
-			UnsupportedCode:    "bucket_public_exposure_unsupported",
-			UnsupportedMessage: "bucket public exposure is not supported for this provider",
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, view)
+	newBucketPublicExposureHTTPService(s).handleGetBucketPublicExposure(w, r)
 }
 
 func (s *server) handlePutBucketPublicExposure(w http.ResponseWriter, r *http.Request) {
-	secrets, bucket, ok := governanceRequestContext(w, r)
-	if !ok {
-		return
-	}
-	if s.bucketGov == nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "bucket governance service is not configured", nil)
-		return
-	}
-
-	var req models.BucketPublicExposurePutRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
-		return
-	}
-
-	if err := s.bucketGov.PutPublicExposure(r.Context(), secrets, bucket, req); err != nil {
-		writeBucketGovernanceSectionError(w, err, secrets.Provider, bucket, bucketGovernanceSectionSpec{
-			Section:            "public-exposure",
-			UnsupportedCode:    "bucket_public_exposure_unsupported",
-			UnsupportedMessage: "bucket public exposure is not supported for this provider",
-		})
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func governanceRequestContext(w http.ResponseWriter, r *http.Request) (models.ProfileSecrets, string, bool) {
-	secrets, ok := profileFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
-		return models.ProfileSecrets{}, "", false
-	}
-
-	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
-	if bucket == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "bucket is required", nil)
-		return models.ProfileSecrets{}, "", false
-	}
-
-	return secrets, bucket, true
+	newBucketPublicExposureHTTPService(s).handlePutBucketPublicExposure(w, r)
 }
 
 func writeBucketGovernanceSectionError(w http.ResponseWriter, err error, provider models.ProfileProvider, bucket string, spec bucketGovernanceSectionSpec) {

@@ -19,6 +19,7 @@ import {
 } from "vitest";
 
 import { APIError } from "../../../api/client";
+import { queryKeys } from "../../../api/queryKeys";
 import { ensureDomShims } from "../../../test/domShims";
 import { createMockApiClient } from "../../../test/mockApiClient";
 import { BucketPolicyModal } from "../BucketPolicyModal";
@@ -403,7 +404,7 @@ describe("BucketPolicyModal", () => {
     await waitFor(() => expect(api.buckets.putBucketPolicy).toHaveBeenCalled());
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith({
-        queryKey: ["bucketGovernance", "profile-1", "demo-bucket", "token"],
+        queryKey: queryKeys.buckets.governance("profile-1", "demo-bucket", "token"),
         exact: true,
       }),
     );

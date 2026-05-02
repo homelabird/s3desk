@@ -2,6 +2,14 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import {
+	bucketFieldPlaceholder,
+	failedToLoadBucketsTitle,
+	goToBucketsLabel,
+	noBucketsAvailableHint,
+	offlineUploadsDisabledHint,
+	selectBucketFirstSentenceHint,
+} from '../../../lib/actionHints'
 import type { UploadsPagePresentationProps } from '../buildUploadsPagePresentationProps'
 import { UploadsPageShell } from '../UploadsPageShell'
 
@@ -43,7 +51,7 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 			subtitle: 'Primary Profile profile is active. Choose a bucket, stage files from this device, and queue an upload job.',
 			queueButtonLabel: 'Queue upload',
 			queueButtonDisabled: true,
-			queueButtonTooltip: 'Select a bucket first.',
+			queueButtonTooltip: selectBucketFirstSentenceHint(),
 			onQueueUpload,
 			onOpenTransfers,
 			onClearSelection,
@@ -63,7 +71,7 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 			destinationLabel: 's3://primary-bucket/photos/',
 			bucketValue: 'primary-bucket',
 			onBucketChange,
-			bucketPlaceholder: 'Bucket…',
+			bucketPlaceholder: bucketFieldPlaceholder(),
 			bucketDisabled: false,
 			bucketOptions: [{ label: 'primary-bucket', value: 'primary-bucket' }],
 			prefixValue: 'photos/',
@@ -74,7 +82,7 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 			onOpenPicker,
 			isOffline: false,
 			uploadsSupported: true,
-			queueDisabledReason: 'Select a bucket first.',
+			queueDisabledReason: selectBucketFirstSentenceHint(),
 			selectedFiles: [],
 			destinationLabel: 's3://primary-bucket/photos/',
 			selectionKind: 'empty',
@@ -126,8 +134,8 @@ describe('UploadsPageShell', () => {
 		expect(presentation.header.onQueueUpload).toHaveBeenCalledTimes(1)
 		expect(presentation.header.onOpenTransfers).toHaveBeenCalledTimes(1)
 		expect(presentation.header.onClearSelection).toHaveBeenCalledTimes(1)
-		expect(screen.getByText('No buckets available')).toBeInTheDocument()
-		expect(screen.getByRole('link', { name: 'Go to Buckets' })).toBeInTheDocument()
+		expect(screen.getByText(noBucketsAvailableHint())).toBeInTheDocument()
+		expect(screen.getByRole('link', { name: goToBucketsLabel() })).toBeInTheDocument()
 		expect(uploadsSelectionSectionMock).not.toHaveBeenCalled()
 	})
 
@@ -161,13 +169,14 @@ describe('UploadsPageShell', () => {
 			</MemoryRouter>,
 		)
 
-		expect(screen.getByText('Offline: uploads are disabled.')).toBeInTheDocument()
+		expect(screen.getByText(offlineUploadsDisabledHint())).toBeInTheDocument()
 		expect(screen.getByText('Uploads are not available for this provider')).toBeInTheDocument()
+		expect(screen.queryByText(failedToLoadBucketsTitle())).not.toBeInTheDocument()
 		expect(uploadsSelectionSectionMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				isOffline: true,
 				uploadsSupported: false,
-				queueDisabledReason: 'Select a bucket first.',
+				queueDisabledReason: selectBucketFirstSentenceHint(),
 				selectionKind: 'files',
 			}),
 		)
@@ -182,5 +191,24 @@ describe('UploadsPageShell', () => {
 		const closeSheet = uploadSourceSheetMock.mock.calls[0][0].onClose as () => void
 		closeSheet()
 		expect(onClose).toHaveBeenCalledTimes(1)
+	})
+
+	it('uses the shared failed-to-load-buckets title for bucket lookup errors', () => {
+		render(
+			<MemoryRouter>
+				<UploadsPageShell
+					presentation={buildPresentation({
+						alerts: {
+							showOffline: false,
+							showUnsupported: false,
+							unsupportedDescription: null,
+							bucketsErrorDescription: 'lookup failed',
+						},
+					})}
+				/>
+			</MemoryRouter>,
+		)
+
+		expect(screen.getByText(failedToLoadBucketsTitle())).toBeInTheDocument()
 	})
 })

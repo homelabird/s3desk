@@ -1,17 +1,5 @@
 package api
 
-import (
-	"context"
-
-	"s3desk/internal/store"
-)
-
-type uploadCommitVerificationPlan struct {
-	targets        []uploadVerificationTarget
-	includeTotals  bool
-	itemsTruncated bool
-}
-
 func mergeUploadVerificationTargets(groups ...[]uploadVerificationTarget) []uploadVerificationTarget {
 	merged := make([]uploadVerificationTarget, 0)
 	seen := make(map[string]struct{})
@@ -32,14 +20,4 @@ func mergeUploadVerificationTargets(groups ...[]uploadVerificationTarget) []uplo
 		}
 	}
 	return merged
-}
-
-func (s *server) buildImmediateUploadVerificationPlan(
-	ctx context.Context,
-	profileID, uploadID string,
-	us store.UploadSession,
-	req uploadCommitRequest,
-	multipartUploads []store.MultipartUpload,
-) (uploadCommitVerificationPlan, *uploadHTTPError) {
-	return newUploadCommitVerificationService(s).buildPlan(ctx, profileID, uploadID, us, req, multipartUploads)
 }

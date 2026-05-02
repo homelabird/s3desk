@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { gotoProfilesPage } from './support/ui'
+
 const isLive = process.env.E2E_LIVE === '1'
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
 const backupPassword = process.env.E2E_BACKUP_PASSWORD ?? 'operator-secret'
@@ -18,7 +20,9 @@ test.describe('Live server migration flow', () => {
 		test.setTimeout(180_000)
 
 		await seedStorage(page)
-		await page.goto('/profiles')
+		await gotoProfilesPage(page, {
+			ready: (scope) => scope.getByRole('button', { name: 'Backup' }),
+		})
 
 		await page.getByRole('button', { name: 'Backup' }).click()
 		const drawer = page.getByRole('dialog', { name: 'Backup and restore' })

@@ -1,4 +1,4 @@
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import { useUploadsPageScopedStorageState } from './useUploadsPageScopedStorageState'
 import { useUploadsPageSelectionActions } from './useUploadsPageSelectionActions'
 

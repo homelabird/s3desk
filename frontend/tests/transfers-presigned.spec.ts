@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockApi, type MockApiContext, type MockApiRoute } from './support/apiFixtures'
-import { ensureDialogOpen, transferUploadRow } from './support/ui'
+import { dropFileIntoObjectsUploadZone, expectTransferRowState, gotoObjectsUploadBucketPage, openTransfersUploadRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -23,46 +23,6 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 		window.localStorage.setItem('bucket', JSON.stringify(seed.bucket))
 		window.localStorage.setItem('objectsUIMode', JSON.stringify('simple'))
 	}, storage)
-}
-
-async function selectBucket(page: Page, name: string) {
-	await page.getByTestId('objects-bucket-picker-desktop').click()
-	await page.getByTestId(`objects-bucket-picker-option-${name}`).click()
-}
-
-async function dropSingleFile(page: Page, name: string, contents: string, type: string) {
-	const dataTransfer = await page.evaluateHandle(
-		({ name, contents, type }) => {
-			const dt = new DataTransfer()
-			const entry: {
-				isFile: boolean
-				isDirectory: boolean
-				fullPath: string
-				name: string
-				file: (success: (file: File) => void, error?: (err: unknown) => void) => void
-			} = {
-				isFile: true,
-				isDirectory: false,
-				fullPath: `/${name}`,
-				name,
-				file(success) {
-					success(new File([contents], name, { type }))
-				},
-			}
-			const item = { webkitGetAsEntry: () => entry }
-			Object.defineProperty(dt, 'items', { value: [item] })
-			Object.defineProperty(dt, 'files', { value: [] })
-			Object.defineProperty(dt, 'types', { value: ['Files'] })
-			return dt
-		},
-		{ name, contents, type },
-	)
-
-	const dropZone = page.getByTestId('objects-upload-dropzone')
-	await expect(dropZone).toBeVisible()
-	await dropZone.dispatchEvent('dragenter', { dataTransfer })
-	await dropZone.dispatchEvent('dragover', { dataTransfer })
-	await dropZone.dispatchEvent('drop', { dataTransfer })
 }
 
 const now = '2024-01-01T00:00:00Z'
@@ -202,9 +162,12 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 	})
 
 	await seedStorage(page)
-	await page.goto('/objects')
-	await selectBucket(page, defaultStorage.bucket)
-	await dropSingleFile(page, 'hello.txt', 'hello', 'text/plain')
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket)
+	await dropFileIntoObjectsUploadZone(page, {
+		name: 'hello.txt',
+		contents: 'hello',
+		type: 'text/plain',
+	})
 
 	await expect.poll(() => presignedAttempted, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => fallbackAttempted, { timeout: 5000 }).toBe(true)
@@ -264,20 +227,17 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 	})
 
 	await seedStorage(page)
-	await page.goto('/objects')
-	await selectBucket(page, defaultStorage.bucket)
-	await dropSingleFile(page, 'hello.txt', 'hello', 'text/plain')
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket)
+	await dropFileIntoObjectsUploadZone(page, {
+		name: 'hello.txt',
+		contents: 'hello',
+		type: 'text/plain',
+	})
 
 	await expect.poll(() => presignRequested, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => presignedUploadAttempted, { timeout: 5000 }).toBe(true)
-	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: /Transfers/i }).first().click()
-	})
-	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
-
-	const row = transferUploadRow(transfersDialog, 'Upload: hello.txt')
-	await expect(row).toBeVisible({ timeout: 5000 })
-	await expect(row.getByText(/network error/i)).toBeVisible()
+	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt', { triggerButtonName: /Transfers/i, timeout: 5000 })
+	await expectTransferRowState(row, /network error/i)
 	expect(commitCalled).toBe(false)
 })
 
@@ -381,10 +341,13 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 	])
 
 	await seedStorage(page)
-	await page.goto('/objects')
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket)
 	await expect.poll(() => profilesLoaded, { timeout: 5000 }).toBe(true)
-	await selectBucket(page, defaultStorage.bucket)
-	await dropSingleFile(page, 'hello.txt', 'hello', 'text/plain')
+	await dropFileIntoObjectsUploadZone(page, {
+		name: 'hello.txt',
+		contents: 'hello',
+		type: 'text/plain',
+	})
 
 	await expect.poll(() => stagingAttempted, { timeout: 5000 }).toBe(true)
 	await expect.poll(() => commitCalled, { timeout: 5000 }).toBe(true)

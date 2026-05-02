@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { bucketFieldPlaceholder, loadingBucketsPlaceholder } from '../../../lib/actionHints'
 import { buildUploadsPagePresentationProps } from '../buildUploadsPagePresentationProps'
 
 describe('buildUploadsPagePresentationProps', () => {
@@ -54,6 +55,7 @@ describe('buildUploadsPagePresentationProps', () => {
 		expect(presentation.header.subtitle).toContain('Primary Profile profile is active')
 		expect(presentation.header.queueButtonLabel).toBe('Queue upload (1)')
 		expect(presentation.header.queueButtonDisabled).toBe(false)
+		expect(presentation.targetSource.bucketPlaceholder).toBe(bucketFieldPlaceholder())
 		expect(presentation.targetSource.bucketValue).toBe('primary-bucket')
 		expect(presentation.targetSource.onBucketChange).toBe(setBucket)
 		expect(presentation.targetSource.prefixValue).toBe('photos/')
@@ -74,5 +76,45 @@ describe('buildUploadsPagePresentationProps', () => {
 		expect(setUploadSourceOpen).toHaveBeenCalledWith(false)
 		expect(chooseUploadFiles).toHaveBeenCalledTimes(1)
 		expect(chooseUploadFolder).toHaveBeenCalledTimes(1)
+	})
+
+	it('uses the shared loading-buckets placeholder before bucket data arrives', () => {
+		const presentation = buildUploadsPagePresentationProps({
+			transfers: { openTransfers: vi.fn() } as never,
+			isOffline: false,
+			bucket: '',
+			setBucket: vi.fn(),
+			prefix: '',
+			setPrefix: vi.fn(),
+			selectedFiles: [],
+			selectedFileCount: 0,
+			selectionKind: 'empty',
+			uploadSourceOpen: false,
+			setUploadSourceOpen: vi.fn(),
+			uploadSourceBusy: false,
+			selectedProfile: null,
+			uploadsSupported: true,
+			uploadsUnsupportedReason: null,
+			bucketsQuery: {
+				isError: false,
+				error: null,
+				isFetching: true,
+				data: undefined,
+				isFetched: false,
+			} as never,
+			bucketOptions: [],
+			showBucketsEmpty: false,
+			canQueueUpload: false,
+			queueDisabledReason: null,
+			folderSelectionSupport: { ok: true, mode: 'picker' },
+			destinationLabel: 's3://',
+			clearSelection: vi.fn(),
+			queueUpload: vi.fn(),
+			openUploadPicker: vi.fn(),
+			chooseUploadFiles: vi.fn(),
+			chooseUploadFolder: vi.fn(),
+		})
+
+		expect(presentation.targetSource.bucketPlaceholder).toBe(loadingBucketsPlaceholder())
 	})
 })

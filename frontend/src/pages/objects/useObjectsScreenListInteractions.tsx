@@ -1,404 +1,58 @@
-import { useCallback } from 'react'
+import type {
+	ObjectsListVm,
+	ObjectsLocationVm,
+	ObjectsOperationVm,
+	ObjectsPaneVm,
+	ObjectsScreenArgs,
+	ObjectsSelectionVm,
+} from './objectsScreenTypes'
+import { useObjectsScreenListActionRuntime } from './useObjectsScreenListActionRuntime'
+import { useObjectsScreenListRendering } from './useObjectsScreenListRendering'
 
-import {
-	COMPACT_ROW_HEIGHT_PX,
-	WIDE_ROW_HEIGHT_PX,
-} from './objectsPageConstants'
-import { logContextMenuDebug } from './objectsPageDebug'
-import styles from './ObjectsListView.module.css'
-import { useObjectDownloads } from './useObjectDownloads'
-import { useObjectsBreadcrumbItems } from './useObjectsBreadcrumbItems'
-import { useObjectsClipboard } from './useObjectsClipboard'
-import { useObjectsDnd } from './useObjectsDnd'
-import { useObjectsGridRenderers } from './useObjectsGridRenderers'
-import { useObjectsPageListInteractions } from './useObjectsPageListInteractions'
-import type { ObjectsScreenArgs } from './objectsScreenTypes'
-
-export function useObjectsScreenListInteractions({
-	props,
-	data,
-	actions,
-	previewState,
-	viewportState,
-	refresh,
-}: ObjectsScreenArgs) {
-	const {
-		activeTabId,
-		addTab,
-		api,
-		bucket,
-		canGoBack,
-		canGoForward,
-		canGoUp,
-		canDragDrop,
-		commandPaletteOpener,
-		createJobWithRetry,
-		debugContextMenu,
-		detailsVisible,
-		ensureObjectSelectedForContextMenu,
-		favoriteKeys,
-		favoritePendingKeys,
-		highlightText,
-		isAdvanced,
-		isCompactList,
-		isDesktop,
-		isOffline,
-		navigateToLocation,
-		objectCrudSupported,
-		onOpenPrefix,
-		onUp,
-		openGlobalSearch,
-		openPathModal,
-		prefix,
-		profileCapabilities,
-		selectedProfileProvider,
-		queryClient,
-		screens,
-		selectedCount,
-		selectedKeys,
-		selectObjectFromCheckboxEvent,
-		selectObjectFromPointerEvent,
-		setLastSelectedObjectKey,
-		setSelectedKeys,
-		setTreeDrawerOpen,
-		showThumbnails,
-		tabs,
-		thumbnailCache,
-		toggleFavorite,
-		transfers,
-		uploadSupported,
-		zipObjectsJobMutation,
-		zipPrefixJobMutation,
-	} = data
-
-	const {
-		openDetailsForKey,
-		openRenameObject,
-		openRenamePrefix,
-		presignMutation,
-		openCopyMove,
-		openCopyPrefix,
-		openNewFolder,
-		openDownloadPrefix,
-		uploadDropActive,
-		onUploadDragEnter,
-		onUploadDragLeave,
-		onUploadDragOver,
-		onUploadDrop,
-		confirmDeleteObjects,
-		confirmDeleteSelected,
-		confirmDeletePrefixAsJob,
-		openUploadPicker,
-		toggleDetails,
-	} = actions
-
-	const { objectByKey, singleSelectedKey, singleSelectedItem } = previewState
-	const { listScrollerEl, scrollContainerRef, measureElement } = viewportState
-
-	const { onDownload, onDownloadToDevice, handleDownloadSelected } =
-		useObjectDownloads({
-			profileId: props.profileId,
-			bucket,
-			prefix,
-			selectedKeys,
-			selectedCount,
-			objectByKey,
-			transfers,
-			onZipObjects: (keys) => zipObjectsJobMutation.mutate({ keys }),
-		})
-	const handlePresign = useCallback(
-		(key: string) => {
-			const item = objectByKey.get(key)
-			presignMutation.mutate({
-				key,
-				size: item?.size,
-				lastModified: item?.lastModified,
-			})
-		},
-		[objectByKey, presignMutation],
-	)
-
-	const {
-		clipboardObjects,
-		onCopy,
-		copySelectionToClipboard,
-		pasteClipboardObjects,
-	} = useObjectsClipboard({
-		profileId: props.profileId,
-		apiToken: props.apiToken,
-		bucket,
-		prefix,
-		selectedKeys,
-		createJobWithRetry,
-		queryClient,
-	})
-
-	const {
-		dndHoverPrefix,
-		normalizeDropTargetPrefix,
-		onDndTargetDragOver,
-		onDndTargetDragLeave,
-		onDndTargetDrop,
-		onRowDragStartObjects,
-		onRowDragStartPrefix,
-		clearDndHover,
-	} = useObjectsDnd({
-		profileId: props.profileId,
-		apiToken: props.apiToken,
-		bucket,
-		prefix,
-		canDragDrop,
-		isDesktop,
-		selectedKeys,
-		setSelectedKeys,
-		setLastSelectedObjectKey,
-		createJobWithRetry,
-		queryClient,
-	})
-
-	const listGridClassName = isCompactList
-		? styles.listGridCompact
-		: styles.listGridWide
-	const {
-		getObjectActions,
-		getPrefixActions,
-		currentPrefixActionMap,
-		selectionActionMap,
-		selectionContextMenuActions,
-		selectionMenuActions,
-		globalActionMap,
-		commandItems,
-		closeContextMenu,
-		contextMenuClassName,
-		contextMenuState,
-		contextMenuRef,
-		contextMenuVisible,
-		contextMenuProps,
-		contextMenuStyle,
-		getListScrollerElement,
-		recordContextMenuPoint,
-		openPrefixContextMenu,
-		openObjectContextMenu,
-		withContextMenuClassName,
-		handleListScrollerContextMenu,
-		handleListScrollerScroll,
-		handleListScrollerWheel,
-		renderPrefixRow,
-		renderObjectRow,
-		handleTreePrefixContextMenu,
-	} = useObjectsPageListInteractions({
-		actionCatalog: {
-			isAdvanced,
-			isOffline,
-			profileId: props.profileId,
-			bucket,
-			prefix,
-			objectCrudSupported,
-			presignedDownloadSupported: profileCapabilities?.presignedUpload ?? false,
-			uploadSupported,
-			selectedCount,
-			clipboardObjects,
-			singleSelectedKey,
-			singleSelectedItemSize: singleSelectedItem?.size,
-			canGoBack,
-			canGoForward,
-			canGoUp,
-			detailsVisible,
-			activeTabId,
-			tabsCount: tabs.length,
-			onGoBack: data.goBack,
-			onGoForward: data.goForward,
-			onGoUp: onUp,
-			onDownload,
-			onDownloadToDevice,
-			onPresign: handlePresign,
-			onCopy,
-			onOpenLargePreviewForKey: previewState.openLargePreviewForKey,
-			onOpenDetailsForKey: openDetailsForKey,
-			onOpenRenameObject: openRenameObject,
-			onOpenCopyMove: openCopyMove,
-			onConfirmDeleteObjects: confirmDeleteObjects,
-			onOpenPrefix,
-			onOpenRenamePrefix: openRenamePrefix,
-			onConfirmDeletePrefixAsJob: confirmDeletePrefixAsJob,
-			onOpenCopyPrefix: openCopyPrefix,
-			onOpenDownloadPrefix: openDownloadPrefix,
-			onZipPrefix: (targetPrefix) =>
-				zipPrefixJobMutation.mutate({ prefix: targetPrefix }),
-			onDownloadSelected: handleDownloadSelected,
-			onOpenMoveSelected: actions.openMoveSelection,
-			onCopySelectionToClipboard: (mode) => void copySelectionToClipboard(mode),
-			onPasteClipboardObjects: () => void pasteClipboardObjects(),
-			onClearSelection: data.clearSelection,
-			onConfirmDeleteSelected: confirmDeleteSelected,
-			onToggleDetails: toggleDetails,
-			onOpenTreeDrawer: () => setTreeDrawerOpen(true),
-			onRefresh: () => void refresh(),
-			onOpenPathModal: openPathModal,
-			onOpenUpload: openUploadPicker,
-			onOpenNewFolder: openNewFolder,
-			onOpenCommandPalette: commandPaletteOpener.open,
-			onOpenTransfers: () => transfers.openTransfers(),
-			onAddTab: addTab,
-			onCloseTab: data.closeTab,
-			onOpenGlobalSearch: openGlobalSearch,
-			onToggleUiMode: data.handleToggleUiMode,
-		},
-		contextMenu: {
-			scopeKey: `${props.apiToken || '__no_server__'}:${props.profileId?.trim() || '__no_profile__'}:${bucket}:${prefix}`,
-			debugEnabled: debugContextMenu,
-			log: logContextMenuDebug,
-			listScrollerEl,
-			scrollContainerRef,
-			selectedCount,
-			objectByKey,
-			selectedKeys,
-			isAdvanced,
-			ensureObjectSelected: ensureObjectSelectedForContextMenu,
-		},
-		rowRenderers: {
-			api,
-			apiToken: props.apiToken,
-			profileId: props.profileId,
-			profileProvider: selectedProfileProvider,
-			bucket,
-			prefix,
-			canDragDrop,
-			isCompactList,
-			isAdvanced,
-			isOffline,
-			listGridClassName,
-			rowHeightCompactPx: COMPACT_ROW_HEIGHT_PX,
-			rowHeightWidePx: WIDE_ROW_HEIGHT_PX,
-			measureElement,
-			showThumbnails,
-			thumbnailCache,
-			highlightText,
-			onOpenPrefix,
-			onRowDragStartPrefix,
-			onRowDragStartObjects,
-			dndHoverPrefix,
-			normalizeDropTargetPrefix,
-			onDndTargetDragOver,
-			onDndTargetDragLeave,
-			onDndTargetDrop,
-			clearDndHover,
-			selectObjectFromPointerEvent,
-			selectObjectFromCheckboxEvent,
-			onOpenLargePreviewForKey: previewState.openLargePreviewForKey,
-			selectedCount,
-			selectedKeys,
-			favoriteKeys,
-			favoritePendingKeys,
-			toggleFavorite,
-		},
-	})
-
-	const { renderPrefixGridItem, renderObjectGridItem } =
-		useObjectsGridRenderers({
-			api,
-			apiToken: props.apiToken,
-			profileId: props.profileId,
-			profileProvider: selectedProfileProvider,
-			bucket,
-			prefix,
-			canDragDrop,
-			isAdvanced,
-			isOffline,
-			showThumbnails,
-			thumbnailCache,
-			highlightText,
-			contextMenuState,
-			withContextMenuClassName,
-			getPrefixActions,
-			getObjectActions,
-			selectionContextMenuActions,
-			recordContextMenuPoint,
-			openPrefixContextMenu,
-			openObjectContextMenu,
-			closeContextMenu,
-			onOpenPrefix,
-			onOpenLargePreviewForKey: previewState.openLargePreviewForKey,
-			onRowDragStartPrefix,
-			onRowDragStartObjects,
-			dndHoverPrefix,
-			normalizeDropTargetPrefix,
-			onDndTargetDragOver,
-			onDndTargetDragLeave,
-			onDndTargetDrop,
-			clearDndHover,
-			selectObjectFromPointerEvent,
-			selectObjectFromCheckboxEvent,
-			selectedCount,
-			selectedKeys,
-			favoriteKeys,
-			favoritePendingKeys,
-			toggleFavorite,
-		})
-
-	const { breadcrumbItems } = useObjectsBreadcrumbItems({
-		scopeKey: `${props.apiToken || '__no_server__'}:${props.profileId?.trim() || '__no_profile__'}:${bucket}:${prefix}`,
-		bucket,
-		prefix,
-		isMd: !!screens.md,
-		canDragDrop,
-		dndHoverPrefix,
-		normalizeDropTargetPrefix,
-		onDndTargetDragOver,
-		onDndTargetDragLeave,
-		onDndTargetDrop,
-		navigateToLocation,
-	})
-
-	return {
-		breadcrumbItems,
-		closeContextMenu,
-		commandItems,
-		contextMenuState,
-		copySelectionToClipboard,
-		contextMenuClassName,
-		contextMenuProps,
-		contextMenuRef,
-		contextMenuStyle,
-		contextMenuVisible,
-		currentPrefixActionMap,
-		dndHoverPrefix,
-		getListScrollerElement,
-		getObjectActions,
-		getPrefixActions,
-		globalActionMap,
-		handleListScrollerContextMenu,
-		handleListScrollerScroll,
-		handleListScrollerWheel,
-		handleTreePrefixContextMenu,
-		listGridClassName,
-		normalizeDropTargetPrefix,
-		onCopy,
-		onDownload,
-		onPresign: handlePresign,
-		onDndTargetDragLeave,
-		onDndTargetDragOver,
-		onDndTargetDrop,
-		onUploadDragEnter,
-		onUploadDragLeave,
-		onUploadDragOver,
-		onUploadDrop,
-		pasteClipboardObjects,
-		renderObjectGridItem,
-		renderObjectRow,
-		renderPrefixGridItem,
-		renderPrefixRow,
-		selectionActionMap,
-		selectionMenuActions,
-		showUploadDropOverlay:
-			uploadDropActive &&
-			!!props.profileId &&
-			!!bucket &&
-			!isOffline &&
-			uploadSupported,
-	}
+type UseObjectsScreenListInteractionsArgs = Pick<
+	ObjectsScreenArgs,
+	'props' | 'actions' | 'previewState' | 'viewportState' | 'refresh'
+> & {
+	locationVm: ObjectsLocationVm
+	listVm: ObjectsListVm
+	selectionVm: ObjectsSelectionVm
+	operationVm: ObjectsOperationVm
+	paneVm: ObjectsPaneVm
 }
 
-export type ObjectsScreenListInteractionsState = ReturnType<
-	typeof useObjectsScreenListInteractions
->
+export function useObjectsScreenListInteractions(args: UseObjectsScreenListInteractionsArgs) {
+	const runtime = useObjectsScreenListActionRuntime({
+		props: args.props,
+		locationVm: args.locationVm,
+		selectionVm: args.selectionVm,
+		operationVm: args.operationVm,
+		paneVm: args.paneVm,
+		actions: args.actions,
+		previewState: args.previewState,
+	})
+	const rendering = useObjectsScreenListRendering({ ...args, runtime })
+
+	return {
+		...rendering,
+		copySelectionToClipboard: runtime.copySelectionToClipboard,
+		dndHoverPrefix: runtime.dndHoverPrefix,
+		normalizeDropTargetPrefix: runtime.normalizeDropTargetPrefix,
+		onCopy: runtime.onCopy,
+		onDownload: runtime.onDownload,
+		onPresign: runtime.onPresign,
+		onDndTargetDragLeave: runtime.onDndTargetDragLeave,
+		onDndTargetDragOver: runtime.onDndTargetDragOver,
+		onDndTargetDrop: runtime.onDndTargetDrop,
+		onUploadDragEnter: args.actions.onUploadDragEnter,
+		onUploadDragLeave: args.actions.onUploadDragLeave,
+		onUploadDragOver: args.actions.onUploadDragOver,
+		onUploadDrop: args.actions.onUploadDrop,
+		pasteClipboardObjects: runtime.pasteClipboardObjects,
+		showUploadDropOverlay:
+			args.actions.uploadDropActive &&
+			!!args.props.profileId &&
+			!!args.locationVm.bucket &&
+			!args.operationVm.isOffline &&
+			args.operationVm.uploadSupported,
+	}
+}

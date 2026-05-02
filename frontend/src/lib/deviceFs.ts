@@ -1,3 +1,11 @@
+import {
+	directoryPickerEnvironmentUnavailableReason,
+	directoryPickerInsecureOriginReason,
+	directoryPickerUnavailableHint,
+	directoryPickerUnsupportedBrowserReason,
+	localFolderWritePermissionDeniedHint,
+} from './secureContext'
+
 export type DevicePickerSupport = {
 	ok: boolean
 	reason?: string
@@ -15,14 +23,14 @@ type ShowDirectoryPicker = (options?: { mode?: 'read' | 'readwrite'; startIn?: F
 
 export function getDevicePickerSupport(): DevicePickerSupport {
 	if (typeof window === 'undefined') {
-		return { ok: false, reason: 'Directory picker is not available in this environment.' }
+		return { ok: false, reason: directoryPickerEnvironmentUnavailableReason() }
 	}
 	const picker = (window as typeof window & { showDirectoryPicker?: ShowDirectoryPicker }).showDirectoryPicker
 	if (!picker) {
-		return { ok: false, reason: 'Directory picker is not supported in this browser.' }
+		return { ok: false, reason: directoryPickerUnsupportedBrowserReason() }
 	}
 	if (!window.isSecureContext) {
-		return { ok: false, reason: 'Directory picker requires HTTPS or localhost.' }
+		return { ok: false, reason: directoryPickerInsecureOriginReason() }
 	}
 	return { ok: true }
 }
@@ -42,11 +50,11 @@ export function getDirectorySelectionSupport(): DirectorySelectionSupport {
 export async function pickDirectory(mode: 'read' | 'readwrite' = 'read'): Promise<FileSystemDirectoryHandle> {
 	const support = getDevicePickerSupport()
 	if (!support.ok) {
-		throw new Error(support.reason ?? 'Directory picker is not available.')
+		throw new Error(support.reason ?? directoryPickerUnavailableHint())
 	}
 	const picker = (window as typeof window & { showDirectoryPicker?: ShowDirectoryPicker }).showDirectoryPicker
 	if (!picker) {
-		throw new Error('Directory picker is not available.')
+		throw new Error(directoryPickerUnavailableHint())
 	}
 	return picker({ mode })
 }
@@ -56,7 +64,7 @@ export async function ensureReadWritePermission(handle: FileSystemDirectoryHandl
 	if (query === 'granted') return
 	const granted = await handle.requestPermission({ mode: 'readwrite' })
 	if (granted !== 'granted') {
-		throw new Error('Permission to write to the selected folder was denied.')
+		throw new Error(localFolderWritePermissionDeniedHint())
 	}
 }
 

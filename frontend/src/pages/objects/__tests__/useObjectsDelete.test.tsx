@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsDelete } from '../useObjectsDelete'
 
@@ -116,7 +117,7 @@ describe('useObjectsDelete', () => {
 
 		expect(setSelectedKeys).not.toHaveBeenCalled()
 		expect(messageSuccessMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
 		expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
 	})
@@ -164,7 +165,7 @@ describe('useObjectsDelete', () => {
 
 		expect(setSelectedKeys).not.toHaveBeenCalled()
 		expect(messageSuccessMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-2'], exact: false })
+		expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-2'), exact: false })
 		expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
 		expect(publishObjectsRefreshMock).not.toHaveBeenCalled()
 	})
@@ -216,7 +217,7 @@ describe('useObjectsDelete', () => {
 		})
 
 		expect(messageSuccessMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(api.jobs.getJob).not.toHaveBeenCalled()
 	})
 })

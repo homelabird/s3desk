@@ -1,9 +1,8 @@
-import { message } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { getDirectorySelectionSupport } from '../../lib/deviceFs'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { promptForFiles, promptForFolderFiles } from '../../components/transfers/transfersUploadUtils'
+import { objectsFeedback } from './objectsFeedback'
 
 export function useObjectsUploadPickers(args: {
 	apiToken: string
@@ -33,11 +32,11 @@ export function useObjectsUploadPickers(args: {
 
 	const ensureUploadAllowed = useCallback(() => {
 		if (isOffline) {
-			message.warning('Offline: uploads are disabled.')
+			objectsFeedback.offlineUploadsDisabled()
 			return false
 		}
 		if (!uploadsEnabled) {
-			message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+			objectsFeedback.uploadsUnsupported(uploadsDisabledReason)
 			return false
 		}
 		return true
@@ -69,7 +68,7 @@ export function useObjectsUploadPickers(args: {
 			startUploadFromFiles({ files })
 		} catch (err) {
 			if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		} finally {
 			setUploadSourceBusy(false)
 			if (scopeVersionRef.current === scopeVersion && currentScopeKeyRef.current === scopeKey) {
@@ -92,7 +91,7 @@ export function useObjectsUploadPickers(args: {
 			startUploadFromFiles({ files: result.files, label: result.label, directorySelectionMode: result.mode })
 		} catch (err) {
 			if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		} finally {
 			setUploadSourceBusy(false)
 			if (scopeVersionRef.current === scopeVersion && currentScopeKeyRef.current === scopeKey) {

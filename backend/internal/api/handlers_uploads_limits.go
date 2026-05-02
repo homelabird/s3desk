@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 )
 
@@ -61,8 +60,4 @@ func uploadParseMultipartPartCount(totalRaw string) (int, *uploadHTTPError) {
 		return 0, uploadMultipartInvalidChunkCountError(totalRaw)
 	}
 	return total, nil
-}
-
-func uploadWriteError(w http.ResponseWriter, err *uploadHTTPError) {
-	writeError(w, err.status, err.code, err.message, err.details)
 }

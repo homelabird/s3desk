@@ -5,6 +5,7 @@ import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { useObjectsRename } from '../useObjectsRename'
 
 const messageOpenMock = vi.fn()
@@ -100,7 +101,7 @@ describe('useObjectsRename', () => {
 		expect(result.current.renameOpen).toBe(true)
 		expect(result.current.renameKind).toBe('prefix')
 		expect(result.current.renameSource).toBe('logs/')
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
 
@@ -143,7 +144,7 @@ describe('useObjectsRename', () => {
 
 		expect(result.current.renameOpen).toBe(false)
 		expect(result.current.renameSource).toBeNull()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
 })

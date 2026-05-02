@@ -100,6 +100,28 @@ func TestApplySafeDefaultsPreservesConfiguredValues(t *testing.T) {
 	}
 }
 
+func TestIsPlaceholderAPITokenRejectsDocumentedExamples(t *testing.T) {
+	placeholderTokens := []string{
+		"",
+		"change-me",
+		"replace-me",
+		"replace-with-a-long-random-token",
+		"replace-me-with-a-strong-token",
+	}
+	for _, token := range placeholderTokens {
+		token := token
+		t.Run(token, func(t *testing.T) {
+			if !isPlaceholderAPIToken(token) {
+				t.Fatalf("expected %q to be treated as a placeholder token", token)
+			}
+		})
+	}
+
+	if isPlaceholderAPIToken("s3desk-test-token-1234567890") {
+		t.Fatalf("expected non-placeholder token to be accepted")
+	}
+}
+
 func TestOpenWithRetryRetriesTransientPostgresStartupError(t *testing.T) {
 	attempts := 0
 	sleeps := 0

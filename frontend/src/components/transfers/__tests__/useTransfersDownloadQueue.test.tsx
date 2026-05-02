@@ -2,9 +2,14 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { APIClient } from '../../../api/client'
+import type { APIClientShape } from '../../../api/client'
+import { directoryPickerUnavailableHint } from '../../../lib/secureContext'
 import type { DownloadTask, JobArtifactDownloadTask } from '../transferTypes'
 import { useTransfersDownloadQueue } from '../useTransfersDownloadQueue'
+
+const { devicePickerSupportRef } = vi.hoisted(() => ({
+	devicePickerSupportRef: { current: { ok: true } as { ok: boolean; reason?: string } },
+}))
 
 const messageErrorMock = vi.fn()
 const messageInfoMock = vi.fn()
@@ -23,15 +28,15 @@ vi.mock('antd', async () => {
 })
 
 vi.mock('../../../lib/deviceFs', () => ({
-	getDevicePickerSupport: () => ({ ok: true }),
+	getDevicePickerSupport: () => devicePickerSupportRef.current,
 }))
 
-function createApiStub(): APIClient {
+function createApiStub(): APIClientShape {
 	return {
 		getJob: vi.fn(),
 		getObjectDownloadURL: vi.fn(),
 		downloadJobArtifact: vi.fn(),
-	} as unknown as APIClient
+	} as unknown as APIClientShape
 }
 
 function createDirectoryHandle(name: string): FileSystemDirectoryHandle {
@@ -40,6 +45,7 @@ function createDirectoryHandle(name: string): FileSystemDirectoryHandle {
 
 describe('useTransfersDownloadQueue', () => {
 	afterEach(() => {
+		devicePickerSupportRef.current = { ok: true }
 		try {
 			vi.runOnlyPendingTimers()
 		} catch {
@@ -160,6 +166,49 @@ describe('useTransfersDownloadQueue', () => {
 		expect(openTransfers).toHaveBeenCalledWith('downloads')
 	})
 
+	it('uses the shared directory-picker fallback when device downloads are unavailable', async () => {
+		devicePickerSupportRef.current = { ok: false }
+		const openTransfers = vi.fn()
+
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([])
+			const downloadAbortByTaskIdRef = useRef<Record<string, () => void>>({})
+			const downloadEstimatorByTaskIdRef = useRef({})
+			const updateDownloadTask = (taskId: string, updater: (task: DownloadTask) => DownloadTask) => {
+				setDownloadTasks((prev) => prev.map((task) => (task.id === taskId ? updater(task) : task)))
+			}
+
+			return {
+				downloadTasks,
+				...useTransfersDownloadQueue({
+					api: createApiStub(),
+					downloadLinkProxyEnabled: false,
+					downloadConcurrency: 0,
+					downloadTasks,
+					setDownloadTasks,
+					downloadAbortByTaskIdRef,
+					downloadEstimatorByTaskIdRef,
+					updateDownloadTask,
+					openTransfers,
+				}),
+			}
+		})
+
+		act(() => {
+			result.current.queueDownloadObjectsToDevice({
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				items: [{ key: 'folder/alpha.txt', size: 10 }],
+				targetDirHandle: createDirectoryHandle('downloads'),
+				prefix: 'folder/',
+			})
+		})
+
+		expect(result.current.downloadTasks).toHaveLength(0)
+		expect(openTransfers).not.toHaveBeenCalled()
+		expect(messageErrorMock).toHaveBeenCalledWith(directoryPickerUnavailableHint())
+	})
+
 	it('does not overlap waiting-job polling while a previous fetch is still running', async () => {
 		vi.useFakeTimers()
 		let resolveJob: ((value: { status: string }) => void) | null = null
@@ -202,7 +251,7 @@ describe('useTransfersDownloadQueue', () => {
 						objects: {
 							getObjectDownloadURL: vi.fn(),
 						},
-					} as unknown as APIClient,
+					} as unknown as APIClientShape,
 					downloadLinkProxyEnabled: false,
 					downloadConcurrency: 0,
 					downloadTasks,

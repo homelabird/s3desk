@@ -106,7 +106,11 @@ server:
   logLevel: "info"
   staticDir: ""
   allowedHosts: []
-  allowedLocalDirs: []
+  # S3Desk fails closed when remote access is enabled without at least one
+  # allowed local directory. The default keeps local file operations scoped to
+  # the chart-managed DATA_DIR mount.
+  allowedLocalDirs:
+    - "/data"
 
 db:
   backend: "sqlite"

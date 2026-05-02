@@ -13,6 +13,11 @@ const FullApp = lazy(async () => {
   return { default: m.default };
 });
 
+const LightApp = lazy(async () => {
+  const m = await import("./LightApp");
+  return { default: m.default };
+});
+
 function LoadingScreen() {
   return (
     <div role="status" className={styles.loadingScreen}>
@@ -52,9 +57,17 @@ export default function App() {
   if (location.pathname === "/") {
     return (
       <Navigate
-        to={readStoredProfileId(apiToken) ? "/objects" : "/profiles"}
+        to={readStoredProfileId(apiToken) ? "/objects" : "/setup"}
         replace
       />
+    );
+  }
+
+  if (location.pathname === "/setup") {
+    return (
+      <Suspense fallback={<LoadingScreen />}>
+        <LightApp />
+      </Suspense>
     );
   }
 

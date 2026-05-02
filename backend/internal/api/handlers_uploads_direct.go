@@ -1,9 +1,6 @@
 package api
 
 import (
-	"errors"
-	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"path"
@@ -22,17 +19,7 @@ func (s *server) handleDirectMultipartChunkUpload(
 	us store.UploadSession,
 	chunkIndexRaw string,
 ) {
-	chunkValues, uploadErr := parseUploadChunkHeaders(r.Header, chunkIndexRaw, true)
-	if uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-	if uploadErr := s.directMultipartChunkFlow(r, profileID, uploadID, us, chunkValues); uploadErr != nil {
-		writeError(w, uploadErr.status, uploadErr.code, uploadErr.message, uploadErr.details)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	newUploadDirectHTTPService(s).handleDirectMultipartChunkUpload(w, r, profileID, uploadID, us, chunkIndexRaw)
 }
 
 func (s *server) directMultipartState(
@@ -117,59 +104,7 @@ func (s *server) handleDirectMultipartFormUpload(
 	profileID, uploadID string,
 	us store.UploadSession,
 ) {
-	secrets, ok := profileFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusInternalServerError, "internal_error", "missing profile secrets", nil)
-		return
-	}
-
-	reader, err := r.MultipartReader()
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "expected multipart/form-data", map[string]any{"error": err.Error()})
-		return
-	}
-
-	maxBytes := s.cfg.UploadMaxBytes
-	remainingBytes, uploadErr := uploadRemainingBytes(maxBytes, 0)
-	if uploadErr != nil {
-		uploadWriteError(w, uploadErr)
-		return
-	}
-
-	written := 0
-	skipped := 0
-	for {
-		part, err := reader.NextPart()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "failed to read multipart upload", map[string]any{"error": err.Error()})
-			return
-		}
-		if part.FormName() != "files" {
-			_ = part.Close()
-			continue
-		}
-
-		used, skippedPart, uploadErr := s.directMultipartFormPart(r, secrets, profileID, uploadID, us, part, &remainingBytes, maxBytes)
-		_ = part.Close()
-		if uploadErr != nil {
-			uploadWriteError(w, uploadErr)
-			return
-		}
-		written += used
-		skipped += skippedPart
-	}
-
-	if written == 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request", "no files uploaded", nil)
-		return
-	}
-	if skipped > 0 {
-		w.Header().Set("X-Upload-Skipped", fmt.Sprintf("%d", skipped))
-	}
-	w.WriteHeader(http.StatusNoContent)
+	newUploadDirectHTTPService(s).handleDirectMultipartFormUpload(w, r, profileID, uploadID, us)
 }
 
 func (s *server) directMultipartFormPart(

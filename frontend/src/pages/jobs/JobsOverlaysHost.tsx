@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { JobsCreateModals } from './JobsCreateModals'
 import { JobsDetailsDrawer } from './JobsDetailsDrawer'
 import { JobsLogsDrawer } from './JobsLogsDrawer'
@@ -73,7 +73,7 @@ export type JobsOverlaysHostLayout = {
 }
 
 export type JobsOverlaysHostProps = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string
 	isOffline: boolean

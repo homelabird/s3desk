@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { legacyTokenProfileScopedStorageKey, profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { useJobsFilters } from '../useJobsFilters'
 
 describe('useJobsFilters', () => {
@@ -22,16 +23,39 @@ describe('useJobsFilters', () => {
 		expect(result.current.errorCodeFilter).toBe('AccessDenied')
 
 		await waitFor(() => {
-			expect(window.localStorage.getItem('jobs:token-a:profile-1:statusFilter')).toBe(JSON.stringify('failed'))
-			expect(window.localStorage.getItem('jobs:token-a:profile-1:searchFilter')).toBe(JSON.stringify('invoice'))
-			expect(window.localStorage.getItem('jobs:token-a:profile-1:typeFilter')).toBe(JSON.stringify('s3_index_objects'))
-			expect(window.localStorage.getItem('jobs:token-a:profile-1:errorCodeFilter')).toBe(JSON.stringify('AccessDenied'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'statusFilter'))).toBe(JSON.stringify('failed'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'searchFilter'))).toBe(JSON.stringify('invoice'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'typeFilter'))).toBe(JSON.stringify('s3_index_objects'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'errorCodeFilter'))).toBe(JSON.stringify('AccessDenied'))
 		})
 
 		expect(window.localStorage.getItem('jobsStatusFilter')).toBeNull()
 		expect(window.localStorage.getItem('jobsSearchFilter')).toBeNull()
 		expect(window.localStorage.getItem('jobsTypeFilter')).toBeNull()
 		expect(window.localStorage.getItem('jobsErrorCodeFilter')).toBeNull()
+	})
+
+	it('migrates legacy raw-token profile-scoped filter keys into origin-scoped keys', async () => {
+		window.localStorage.setItem(
+			legacyTokenProfileScopedStorageKey('jobs', 'token-a', 'profile-1', 'statusFilter'),
+			JSON.stringify('failed'),
+		)
+		window.localStorage.setItem(
+			legacyTokenProfileScopedStorageKey('jobs', 'token-a', 'profile-1', 'searchFilter'),
+			JSON.stringify('invoice'),
+		)
+
+		const { result } = renderHook(() => useJobsFilters('token-a', 'profile-1'))
+
+		expect(result.current.statusFilter).toBe('failed')
+		expect(result.current.searchFilter).toBe('invoice')
+
+		await waitFor(() => {
+			expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'statusFilter'))).toBe(JSON.stringify('failed'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'searchFilter'))).toBe(JSON.stringify('invoice'))
+		})
+		expect(window.localStorage.getItem(legacyTokenProfileScopedStorageKey('jobs', 'token-a', 'profile-1', 'statusFilter'))).toBeNull()
+		expect(window.localStorage.getItem(legacyTokenProfileScopedStorageKey('jobs', 'token-a', 'profile-1', 'searchFilter'))).toBeNull()
 	})
 
 	it('keeps filter state isolated per profile', async () => {

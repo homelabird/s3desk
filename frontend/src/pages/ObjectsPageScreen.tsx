@@ -18,41 +18,21 @@ type Props = {
 
 export function ObjectsPageScreen(props: Props) {
 	const data = useObjectsPageData(props)
+	const { listVm, locationVm, operationVm, paneVm, selectionVm } = data
 	const {
-		api,
 		bucket,
-		clearSearch,
-		deferredSearch,
-		detailsVisible,
-		dockDetails,
-		downloadLinkProxyEnabled,
-		profileCapabilities,
-		favoritesOnly,
-		favoritesOpenDetails,
-		favoritesQuery,
 		navigateToLocation,
-		objectsQuery,
 		onOpenPrefix,
 		prefix,
-		refreshTreeNode,
+	} = locationVm
+	const {
+		clearSearch,
+		deferredSearch,
+		favoritesOnly,
+		favoritesQuery,
+		objectsQuery,
 		rows,
-		screens,
 		search,
-		selectedProfileProvider,
-		selectedCount,
-		selectedKeys,
-		setDetailsDrawerOpen,
-		setDetailsOpen,
-		setFavoritesOnly,
-		setLastSelectedObjectKey,
-		setSelectedKeys,
-		setTypeFilter,
-		setTreeDrawerOpen,
-		showThumbnails,
-		thumbnailCache,
-		typeFilter,
-		uploadDisabledReason,
-		uploadSupported,
 		favoritesFirst,
 		extFilter,
 		minSize,
@@ -60,7 +40,39 @@ export function ObjectsPageScreen(props: Props) {
 		minModifiedMs,
 		maxModifiedMs,
 		sort,
-	} = data
+		typeFilter,
+		setFavoritesOnly,
+		setTypeFilter,
+		showThumbnails,
+	} = listVm
+	const {
+		selectedCount,
+		selectedKeys,
+		setLastSelectedObjectKey,
+		setSelectedKeys,
+	} = selectionVm
+	const {
+		api,
+		downloadLinkProxyEnabled,
+		createJobWithRetry,
+		isOffline,
+		profileCapabilities,
+		selectedProfileProvider,
+		thumbnailCache,
+		transfers,
+		uploadDisabledReason,
+		uploadSupported,
+	} = operationVm
+	const {
+		detailsVisible,
+		dockDetails,
+		favoritesOpenDetails,
+		refreshTreeNode,
+		screens,
+		setDetailsDrawerOpen,
+		setDetailsOpen,
+		setTreeDrawerOpen,
+	} = paneVm
 
 	const refresh = useCallback(async () => {
 		if (favoritesOnly) {
@@ -95,7 +107,7 @@ export function ObjectsPageScreen(props: Props) {
 		dockDetails,
 		downloadLinkProxyEnabled,
 		presignedDownloadSupported: profileCapabilities?.presignedUpload ?? false,
-		createJobWithRetry: data.createJobWithRetry,
+		createJobWithRetry,
 		typeFilter,
 		favoritesOnly,
 		deferredSearch,
@@ -104,8 +116,8 @@ export function ObjectsPageScreen(props: Props) {
 		setTypeFilter,
 		refreshTreeNode,
 		onOpenPrefix,
-		transfers: data.transfers,
-		isOffline: data.isOffline,
+		transfers,
+		isOffline,
 		uploadSupported,
 		uploadDisabledReason,
 		selectedKeys,
@@ -128,8 +140,8 @@ export function ObjectsPageScreen(props: Props) {
 		selectedCount,
 		detailsVisible,
 		favoritesOnly,
-		favoriteItems: data.favoriteItems,
-		objectPages: data.objectsQuery.data?.pages,
+		favoriteItems: listVm.favoriteItems,
+		objectPages: objectsQuery.data?.pages,
 		downloadLinkProxyEnabled,
 		presignedDownloadSupported: profileCapabilities?.presignedUpload ?? false,
 		showThumbnails,
@@ -141,7 +153,7 @@ export function ObjectsPageScreen(props: Props) {
 
 	const viewportState = useObjectsListViewport({
 		rowCount: rows.length,
-		isCompactList: data.isCompactList,
+		isCompactList: listVm.isCompactList,
 		bucket,
 		prefix,
 		search,
@@ -158,7 +170,11 @@ export function ObjectsPageScreen(props: Props) {
 
 	const { toolbarSectionProps, onDownload, onPresign, panesProps, overlaysProps } = useObjectsScreenComposition({
 		props,
-		data,
+		locationVm,
+		listVm,
+		selectionVm,
+		operationVm,
+		paneVm,
 		actions,
 		previewState,
 		viewportState,
@@ -182,7 +198,7 @@ export function ObjectsPageScreen(props: Props) {
 				/>
 			</Suspense>
 
-			<ObjectsPagePanes layoutRef={data.layoutRef} {...panesProps} />
+			<ObjectsPagePanes layoutRef={paneVm.layoutRef} {...panesProps} />
 			<Suspense fallback={null}>
 				<ObjectsImageViewerModal
 					open={previewState.largePreviewOpen}

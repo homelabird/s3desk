@@ -1,4 +1,4 @@
-import { Alert, Button, Grid, Input, Typography, message } from 'antd'
+import { Alert, Button, Grid, Input, Typography } from 'antd'
 import { useState } from 'react'
 
 import { DatalistInput } from '../../components/DatalistInput'
@@ -7,8 +7,8 @@ import { OverlaySheet } from '../../components/OverlaySheet'
 import { UploadSourceSheet } from '../../components/UploadSourceSheet'
 import { promptForFiles, promptForFolderFiles } from '../../components/transfers/transfersUploadUtils'
 import { getDirectorySelectionSupport } from '../../lib/deviceFs'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { describeUploadSelection } from '../../lib/uploadSelection'
+import { jobsFeedback } from './jobsFeedback'
 import styles from './JobsShared.module.css'
 
 export function CreateJobModal(props: {
@@ -58,16 +58,16 @@ export function CreateJobModal(props: {
 
 	const handleSubmit = () => {
 		if (!uploadSupported) {
-			message.warning(props.uploadUnsupportedReason ?? 'This provider does not support upload transfers.')
+			jobsFeedback.uploadsUnsupported(props.uploadUnsupportedReason)
 			return
 		}
 		const trimmedBucket = bucket.trim()
 		if (!trimmedBucket) {
-			message.error('Bucket is required')
+			jobsFeedback.bucketRequired()
 			return
 		}
 		if (selectedFiles.length === 0) {
-			message.info('Choose files or a folder from this device first')
+			jobsFeedback.chooseFilesOrFolderFirst()
 			return
 		}
 		props.setBucket(trimmedBucket)
@@ -95,7 +95,7 @@ export function CreateJobModal(props: {
 			setSelectionLabel('')
 			setDirectorySelectionMode(undefined)
 		} catch (err) {
-			message.error(formatErr(err))
+			jobsFeedback.error(err)
 		} finally {
 			setSourceBusy(false)
 		}
@@ -111,7 +111,7 @@ export function CreateJobModal(props: {
 			setSelectionLabel(result.label ?? '')
 			setDirectorySelectionMode(result.mode)
 		} catch (err) {
-			message.error(formatErr(err))
+			jobsFeedback.error(err)
 		} finally {
 			setSourceBusy(false)
 		}

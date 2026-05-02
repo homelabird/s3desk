@@ -288,3 +288,127 @@ func TestCleanupOldJobs(t *testing.T) {
 		t.Fatalf("expected new artifact kept: %v", err)
 	}
 }
+
+func TestCleanupExpiredUploadSessionsRemovesTrackedRows(t *testing.T) {
+	dataDir := t.TempDir()
+	gormDB, err := db.Open(db.Config{
+		Backend:    db.BackendSQLite,
+		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
+	})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("open sql db: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	st, err := store.New(gormDB, store.Options{})
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	endpoint := "http://localhost:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	forcePathStyle := false
+
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "test",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		ForcePathStyle:        &forcePathStyle,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	manager := NewManager(Config{
+		Store:            st,
+		DataDir:          dataDir,
+		Hub:              ws.NewHub(),
+		Concurrency:      1,
+		UploadSessionTTL: time.Minute,
+	})
+
+	ctx := context.Background()
+	expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "prefix/", "direct", "", expiredAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+	stagingDir, err := store.ResolveUploadStagingDir(dataDir, session.ID)
+	if err != nil {
+		t.Fatalf("resolve staging dir: %v", err)
+	}
+	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
+		t.Fatalf("mkdir staging dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stagingDir, "chunk"), []byte("data"), 0o600); err != nil {
+		t.Fatalf("write staging file: %v", err)
+	}
+	if err := st.SetUploadSessionStagingDir(ctx, profile.ID, session.ID, stagingDir); err != nil {
+		t.Fatalf("set staging dir: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	expectedSize := int64(4)
+	if err := st.UpsertUploadObject(ctx, store.UploadObject{
+		UploadID:     session.ID,
+		ProfileID:    profile.ID,
+		Path:         "file.txt",
+		Bucket:       "bucket",
+		ObjectKey:    "prefix/file.txt",
+		ExpectedSize: &expectedSize,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("upsert upload object: %v", err)
+	}
+	if err := st.UpsertMultipartUpload(ctx, store.MultipartUpload{
+		UploadID:   session.ID,
+		ProfileID:  profile.ID,
+		Path:       "file.txt",
+		Bucket:     "bucket",
+		ObjectKey:  "prefix/file.txt",
+		S3UploadID: "multipart-id",
+		ChunkSize:  5 * 1024 * 1024,
+		FileSize:   expectedSize,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}); err != nil {
+		t.Fatalf("upsert multipart upload: %v", err)
+	}
+
+	manager.cleanupExpiredUploadSessions(ctx)
+
+	if _, ok, err := st.GetUploadSession(ctx, profile.ID, session.ID); err != nil {
+		t.Fatalf("get upload session: %v", err)
+	} else if ok {
+		t.Fatalf("expected upload session to be deleted")
+	}
+	objects, err := st.ListUploadObjects(ctx, profile.ID, session.ID)
+	if err != nil {
+		t.Fatalf("list upload objects: %v", err)
+	}
+	if len(objects) != 0 {
+		t.Fatalf("expected upload objects to be deleted, got %d", len(objects))
+	}
+	uploads, err := st.ListMultipartUploads(ctx, profile.ID, session.ID)
+	if err != nil {
+		t.Fatalf("list multipart uploads: %v", err)
+	}
+	if len(uploads) != 0 {
+		t.Fatalf("expected multipart uploads to be deleted, got %d", len(uploads))
+	}
+	if _, err := os.Stat(stagingDir); !os.IsNotExist(err) {
+		t.Fatalf("expected staging dir to be removed, err=%v", err)
+	}
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Profile } from '../../api/types'
+import { selectProfileFirstSentenceHint } from '../actionHints'
 import { getProviderCapabilities, getProviderCapabilityReason, getUploadCapabilityDisabledReason } from '../providerCapabilities'
 
 describe('getProviderCapabilities', () => {
@@ -86,6 +87,13 @@ describe('getProviderCapabilities', () => {
 		expect(capability.objectCrud).toBe(false)
 		expect(capability.bucketPolicy).toBe(false)
 		expect(capability.reasons.bucketCrud).toBeTruthy()
+	})
+
+	it('uses the shared select-profile sentence when no provider is selected', () => {
+		const capability = getProviderCapabilities(undefined)
+
+		expect(capability.reasons.bucketCrud).toBe(selectProfileFirstSentenceHint())
+		expect(capability.reasons.objectCrud).toBe(selectProfileFirstSentenceHint())
 	})
 
 	it('returns provider-specific reason for disabled capability', () => {

@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { ObjectItem, ObjectMeta } from '../../api/types'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
-import { ObjectThumbnail } from './ObjectThumbnail'
+import { LazyObjectThumbnail } from './ObjectThumbnailLazy'
 import { isImageKey, isThumbnailCandidate } from './objectsListUtils'
 import type { ObjectPreview } from './objectsTypes'
 import { useObjectPreview } from './useObjectPreview'
@@ -14,7 +15,7 @@ type PageLike = {
 }
 
 type Args = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
@@ -95,7 +96,7 @@ export function useObjectsScreenPreviewState({
 	const detailsKey = detailsVisible ? singleSelectedKey : null
 
 	const detailsMetaQueryRaw = useQuery({
-		queryKey: ['objectMeta', profileId, bucket, detailsKey, apiToken],
+		queryKey: queryKeys.objects.meta(profileId, bucket, detailsKey, apiToken),
 		enabled: !!profileId && !!bucket && !!detailsKey && detailsVisible,
 		queryFn: () => api.objects.getObjectMeta({ profileId: profileId!, bucket, key: detailsKey! }),
 		retry: false,
@@ -123,7 +124,7 @@ export function useObjectsScreenPreviewState({
 	})
 
 	const largePreviewMetaQueryRaw = useQuery({
-		queryKey: ['objectMeta', profileId, bucket, largePreviewKey, apiToken],
+		queryKey: queryKeys.objects.meta(profileId, bucket, largePreviewKey, apiToken),
 		enabled: !!profileId && !!bucket && !!largePreviewKey && largePreviewOpen,
 		queryFn: () => api.objects.getObjectMeta({ profileId: profileId!, bucket, key: largePreviewKey! }),
 		retry: false,
@@ -192,7 +193,7 @@ export function useObjectsScreenPreviewState({
 		isThumbnailCandidate(detailsMeta.contentType, detailsKey)
 	const detailsThumbnail =
 		shouldRenderInlineDetailsThumbnail ? (
-			<ObjectThumbnail
+			<LazyObjectThumbnail
 				api={api}
 				apiToken={apiToken}
 				profileId={profileId}
@@ -210,7 +211,7 @@ export function useObjectsScreenPreviewState({
 		) : null
 	const detailsPreviewThumbnail =
 		shouldRenderInlineDetailsThumbnail ? (
-			<ObjectThumbnail
+			<LazyObjectThumbnail
 				api={api}
 				apiToken={apiToken}
 				profileId={profileId}
@@ -233,7 +234,7 @@ export function useObjectsScreenPreviewState({
 		profileId &&
 		bucket &&
 		isImageKey(largePreviewKey) ? (
-			<ObjectThumbnail
+			<LazyObjectThumbnail
 				api={api}
 				apiToken={apiToken}
 				profileId={profileId}

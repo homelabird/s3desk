@@ -6,7 +6,7 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 ## Scope
 
 - Page: `Buckets`
-- Goal: verify that the `Buckets` page stays usable on mobile without horizontal overflow, broken compact cards, or inaccessible actions.
+- Goal: verify that `Buckets` still supports real mobile task completion for compact-card actions, policy/controls access, and delete fallback handling.
 
 ## Recommended Viewports
 
@@ -18,26 +18,26 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## Manual QA Checklist
 
-- [ ] Opening `Buckets` does not create page-level horizontal scrolling on narrow phones.
-- [ ] Compact/mobile card layout is active on phone-sized widths.
-- [ ] Bucket names and metadata remain readable without clipped text.
-- [ ] Compact card actions stack vertically on extra-small widths.
-- [ ] Buttons remain visible and comfortably tappable in narrow layouts.
-- [ ] Empty, loading, and populated states remain stable within the viewport.
+- [ ] Compact cards still expose the primary bucket actions on a phone-sized viewport.
+- [ ] Bucket names and metadata remain readable enough to choose the correct bucket.
+- [ ] Policy and controls overlays remain reachable from compact cards.
+- [ ] Delete actions from compact cards still surface either confirmation or the jobs fallback flow.
+- [ ] Empty, loading, and populated states all preserve the next required bucket action.
+- [ ] Mobile card interactions remain usable with touch-first controls and safe-area padding.
 
 ## `Buckets` Flow Checklist
 
-- [ ] Open the buckets list and confirm compact cards render correctly on mobile.
-- [ ] Trigger a bucket action from a compact card.
-- [ ] Verify bucket names and status text remain readable at narrow widths.
-- [ ] Scroll through multiple buckets and confirm cards do not overlap or overflow.
+- [ ] Open the buckets list and confirm compact cards expose the right bucket actions.
+- [ ] Open policy or controls from a compact card.
+- [ ] Trigger a delete from a compact card and confirm the flow reaches confirmation or jobs fallback.
+- [ ] Scroll through multiple buckets and confirm the final card can still execute an action.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile viewport test that asserts no page-level horizontal overflow in `Buckets`.
-- [ ] Add a test that verifies compact cards are active on mobile widths.
-- [ ] Add a test that verifies compact card actions stack vertically on extra-small widths.
+- [ ] Add a mobile test that verifies policy or controls overlays still open from compact cards.
+- [ ] Add a test that verifies delete actions still reach confirmation or jobs fallback on mobile.
+- [ ] Add a test that verifies compact-card actions remain usable on the last visible bucket.
 
 ## Notes
 
-- Prioritize compact card readability and action accessibility because those are the highest-risk mobile behaviors on this page.
+- Prioritize compact-card actions and delete fallback handling. Layout-only checks are secondary unless they block those actions.

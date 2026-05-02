@@ -16,6 +16,10 @@ func PrepareRcloneTLSFlags(profile models.ProfileSecrets) (flags []string, clean
 	cleanup = func() {}
 
 	if profile.TLSInsecureSkipVerify {
+		if err := profiletls.ValidateSkipVerifyPolicy(); err != nil {
+			return nil, cleanup, err
+		}
+		profiletls.LogSkipVerifyApplied("job.rclone_tls_skip_verify", profile)
 		flags = append(flags, "--no-check-certificate")
 	}
 	if profile.TLSConfig == nil {

@@ -3,9 +3,9 @@ import type { MenuProps } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useCallback, useMemo } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { withJobQueueRetry } from '../../lib/jobQueue'
 import { buildJobsPagePresentationProps } from './buildJobsPagePresentationProps'
@@ -33,7 +33,7 @@ type JobsPageControllerScreens = {
 }
 
 type Props = {
-  api: APIClient
+  api: APIClientShape
   apiToken: string
   isOffline: boolean
   locationState: unknown

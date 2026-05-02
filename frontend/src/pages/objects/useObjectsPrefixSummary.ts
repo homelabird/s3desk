@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 
 type UseObjectsPrefixSummaryArgs = {
-	api: APIClient
+	api: APIClientShape
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -21,7 +22,7 @@ export function useObjectsPrefixSummary({
 	enabled,
 }: UseObjectsPrefixSummaryArgs) {
 	const summaryQuery = useQuery({
-		queryKey: ['objectIndexSummary', profileId, bucket, prefix, apiToken],
+		queryKey: queryKeys.objects.indexSummary(profileId, bucket, prefix, apiToken),
 		enabled: enabled && !!profileId && !!bucket && !!prefix,
 		queryFn: () => api.objects.getObjectIndexSummary({ profileId: profileId!, bucket, prefix, sampleLimit: 5 }),
 		retry: false,

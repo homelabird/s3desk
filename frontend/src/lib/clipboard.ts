@@ -1,3 +1,5 @@
+import { clipboardInsecureOriginHint } from './secureContext'
+
 export type ClipboardCopyResult = {
 	ok: boolean
 	method: 'clipboard' | 'execCommand' | null
@@ -37,7 +39,7 @@ export async function copyToClipboard(text: string): Promise<ClipboardCopyResult
 
 export function clipboardFailureHint(): string {
 	if (typeof window !== 'undefined' && window.isSecureContext === false) {
-		return 'Copy failed. Clipboard access is restricted on insecure origins (try HTTPS or localhost).'
+		return clipboardInsecureOriginHint()
 	}
 	return 'Copy failed.'
 }

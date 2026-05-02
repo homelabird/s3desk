@@ -7,11 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
-	"s3desk/internal/azureacl"
-	"s3desk/internal/gcsiam"
-	"s3desk/internal/models"
 	"s3desk/internal/rcloneerrors"
 	"s3desk/internal/s3policy"
 )
@@ -46,7 +41,6 @@ func parseXMLError(body []byte) parsedUpstreamError {
 			Raw:       raw,
 		}
 	}
-	// Some providers might return plain text.
 	return parsedUpstreamError{Raw: raw}
 }
 
@@ -100,257 +94,27 @@ func isNoSuchBucket(code string, message string) bool {
 }
 
 func (s *server) handleGetBucketPolicy(w http.ResponseWriter, r *http.Request) {
-	secrets, ok := profileFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
-		return
-	}
-
-	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
-	if bucket == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "bucket is required", nil)
-		return
-	}
-
-	switch secrets.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.GetBucketPolicy(r.Context(), secrets, bucket)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "get", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		switch resp.Status {
-		case http.StatusOK:
-			writeJSON(w, http.StatusOK, models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body})
-			return
-		case http.StatusNotFound:
-			e := parseXMLError(resp.Body)
-			if isNoSuchBucketPolicy(e.Code, e.Message) {
-				writeJSON(w, http.StatusOK, models.BucketPolicyResponse{Bucket: bucket, Exists: false})
-				return
-			}
-			if isNoSuchBucket(e.Code, e.Message) {
-				writeError(w, http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket, "upstreamCode": e.Code})
-				return
-			}
-			s.writeS3PolicyUpstreamError(w, "get", bucket, resp)
-			return
-		default:
-			s.writeS3PolicyUpstreamError(w, "get", bucket, resp)
-			return
-		}
-
-	case models.ProfileProviderGcpGcs:
-		resp, err := gcsiam.GetBucketIamPolicy(r.Context(), secrets, bucket)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "get", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		switch resp.Status {
-		case http.StatusOK:
-			writeJSON(w, http.StatusOK, models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body})
-			return
-		case http.StatusNotFound:
-			writeError(w, http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket})
-			return
-		default:
-			s.writeGenericPolicyUpstreamError(w, "get", bucket, resp.Status, resp.Headers, resp.Body, "gcs")
-			return
-		}
-
-	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.GetContainerPolicy(r.Context(), secrets, bucket)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "get", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		switch resp.Status {
-		case http.StatusOK:
-			writeJSON(w, http.StatusOK, models.BucketPolicyResponse{Bucket: bucket, Exists: true, Policy: resp.Body})
-			return
-		case http.StatusNotFound:
-			writeError(w, http.StatusNotFound, string(models.NormalizedErrorNotFound), "container not found", map[string]any{"bucket": bucket})
-			return
-		default:
-			s.writeGenericPolicyUpstreamError(w, "get", bucket, resp.Status, resp.Headers, resp.Body, "azure")
-			return
-		}
-	default:
-		writeError(w, http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
-		return
-	}
+	newBucketPolicyHTTPService(s).handleGetBucketPolicy(w, r)
 }
 
 func (s *server) handlePutBucketPolicy(w http.ResponseWriter, r *http.Request) {
-	secrets, ok := profileFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
-		return
-	}
-
-	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
-	if bucket == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "bucket is required", nil)
-		return
-	}
-
-	var req models.BucketPolicyPutRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid request body", map[string]any{"error": err.Error()})
-		return
-	}
-	if len(req.Policy) == 0 || strings.TrimSpace(string(req.Policy)) == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "policy is required", nil)
-		return
-	}
-
-	switch secrets.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.PutBucketPolicy(r.Context(), secrets, bucket, req.Policy)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "put", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		if resp.Status == http.StatusNoContent || resp.Status == http.StatusOK {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		s.writeS3PolicyUpstreamError(w, "put", bucket, resp)
-		return
-
-	case models.ProfileProviderGcpGcs:
-		resp, err := gcsiam.PutBucketIamPolicy(r.Context(), secrets, bucket, req.Policy)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "put", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		if resp.Status == http.StatusOK {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		s.writeGenericPolicyUpstreamError(w, "put", bucket, resp.Status, resp.Headers, resp.Body, "gcs")
-		return
-
-	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.PutContainerPolicy(r.Context(), secrets, bucket, req.Policy)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "put", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		if resp.Status == http.StatusOK || resp.Status == http.StatusNoContent {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		s.writeGenericPolicyUpstreamError(w, "put", bucket, resp.Status, resp.Headers, resp.Body, "azure")
-		return
-
-	default:
-		writeError(w, http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
-		return
-	}
+	newBucketPolicyHTTPService(s).handlePutBucketPolicy(w, r)
 }
 
 func (s *server) handleDeleteBucketPolicy(w http.ResponseWriter, r *http.Request) {
-	secrets, ok := profileFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusBadRequest, "missing_profile", "profile is required", nil)
-		return
-	}
-
-	bucket := strings.TrimSpace(chi.URLParam(r, "bucket"))
-	if bucket == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "bucket is required", nil)
-		return
-	}
-
-	switch secrets.Provider {
-	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.DeleteBucketPolicy(r.Context(), secrets, bucket)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "delete", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		switch resp.Status {
-		case http.StatusNoContent, http.StatusOK:
-			w.WriteHeader(http.StatusNoContent)
-			return
-		case http.StatusNotFound:
-			e := parseXMLError(resp.Body)
-			if isNoSuchBucketPolicy(e.Code, e.Message) {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			if isNoSuchBucket(e.Code, e.Message) {
-				writeError(w, http.StatusNotFound, string(models.NormalizedErrorNotFound), "bucket not found", map[string]any{"bucket": bucket, "upstreamCode": e.Code})
-				return
-			}
-			s.writeS3PolicyUpstreamError(w, "delete", bucket, resp)
-			return
-		default:
-			s.writeS3PolicyUpstreamError(w, "delete", bucket, resp)
-			return
-		}
-
-	case models.ProfileProviderGcpGcs:
-		writeError(w, http.StatusBadRequest, "bucket_policy_delete_unsupported", "GCS IAM policy cannot be deleted; update it instead", map[string]any{"provider": secrets.Provider})
-		return
-
-	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.DeleteContainerPolicy(r.Context(), secrets, bucket)
-		if err != nil {
-			s.writeS3PolicyCallError(w, "delete", bucket, err)
-			return
-		}
-		if ra := strings.TrimSpace(resp.Headers.Get("Retry-After")); ra != "" {
-			w.Header().Set("Retry-After", ra)
-		}
-		if resp.Status == http.StatusOK || resp.Status == http.StatusNoContent {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		s.writeGenericPolicyUpstreamError(w, "delete", bucket, resp.Status, resp.Headers, resp.Body, "azure")
-		return
-	default:
-		writeError(w, http.StatusBadRequest, "bucket_policy_unsupported", "policy is not supported for this provider", map[string]any{"provider": secrets.Provider})
-		return
-	}
+	newBucketPolicyHTTPService(s).handleDeleteBucketPolicy(w, r)
 }
 
 func (s *server) writeS3PolicyCallError(w http.ResponseWriter, op, bucket string, err error) {
 	msg := strings.TrimSpace(err.Error())
-
-	// Classify using the same taxonomy as rclone stderr to keep UX consistent.
 	cls := rcloneerrors.Classify(err, msg)
 	status, code, ok := rcloneErrorStatus(err, msg)
 	if !ok {
-		// Heuristics for "local" (preflight) failures where stderr patterns are absent.
 		lower := strings.ToLower(msg)
 		if strings.Contains(lower, "missing access key") || strings.Contains(lower, "invalid endpoint") || strings.Contains(lower, "unsupported tls mode") {
 			status = http.StatusBadRequest
 			code = string(rcloneerrors.CodeInvalidConfig)
 		} else {
-			// Default: treat as network-ish upstream failure (bad gateway).
 			status = http.StatusBadGateway
 			code = string(cls.Code)
 			if strings.TrimSpace(code) == "" {
@@ -372,7 +136,6 @@ func (s *server) writeS3PolicyUpstreamError(w http.ResponseWriter, op, bucket st
 	cls := rcloneerrors.Classify(nil, body)
 	status, apiCode, ok := rcloneErrorStatus(nil, body)
 	if !ok {
-		// Fall back to the upstream status when it's meaningful.
 		if resp.Status >= 400 && resp.Status <= 599 {
 			status = resp.Status
 		} else {
@@ -414,9 +177,7 @@ func (s *server) writeGenericPolicyUpstreamError(w http.ResponseWriter, op, buck
 	_, apiCode, ok := rcloneErrorStatus(nil, bodyStr)
 	respStatus := status
 	if !ok {
-		if respStatus >= 400 && respStatus <= 599 {
-			// keep upstream
-		} else {
+		if respStatus < 400 || respStatus > 599 {
 			respStatus = http.StatusBadGateway
 		}
 		apiCode = string(cls.Code)
@@ -429,7 +190,6 @@ func (s *server) writeGenericPolicyUpstreamError(w http.ResponseWriter, op, buck
 	if providerHint == "gcs" {
 		up = parseGCSError(body)
 	} else {
-		// Azure error responses are XML (same shape as S3), and some S3-compatible endpoints might also reach here.
 		up = parseXMLError(body)
 	}
 
@@ -444,8 +204,6 @@ func (s *server) writeGenericPolicyUpstreamError(w http.ResponseWriter, op, buck
 	if strings.TrimSpace(up.HostID) != "" {
 		details["upstreamHostId"] = strings.TrimSpace(up.HostID)
 	}
-
-	// Provider-specific request IDs (best effort).
 	if reqID := strings.TrimSpace(headers.Get("x-goog-request-id")); reqID != "" {
 		details["upstreamRequestId"] = reqID
 	}

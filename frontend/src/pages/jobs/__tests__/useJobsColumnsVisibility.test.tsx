@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { useJobsColumnsVisibility } from '../useJobsColumnsVisibility'
 
 describe('useJobsColumnsVisibility', () => {
@@ -31,7 +32,7 @@ describe('useJobsColumnsVisibility', () => {
 		expect(result.current.mergedColumnVisibility.actions).toBe(true)
 
 		await waitFor(() => {
-			expect(window.localStorage.getItem('jobs:token-a:profile-1:columnVisibility')).not.toBeNull()
+			expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'columnVisibility'))).not.toBeNull()
 		})
 		expect(window.localStorage.getItem('jobsColumnVisibility')).toBeNull()
 	})

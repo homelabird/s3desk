@@ -29,16 +29,16 @@ func (svc uploadCommitVerificationService) prepareImmediate(
 	client *s3.Client,
 	multipartUploads []store.MultipartUpload,
 ) (uploadCommitArtifacts, *uploadHTTPError) {
-	plan, uploadErr := svc.buildPlan(ctx, profileID, uploadID, us, req, multipartUploads)
+	targets, includeTotals, itemsTruncated, uploadErr := svc.buildPlan(ctx, profileID, uploadID, us, req, multipartUploads)
 	if uploadErr != nil {
 		return uploadCommitArtifacts{}, uploadErr
 	}
 
-	verified, uploadErr := svc.verifyTargets(ctx, client, plan.targets)
+	verified, uploadErr := svc.verifyTargets(ctx, client, targets)
 	if uploadErr != nil {
 		return uploadCommitArtifacts{}, uploadErr
 	}
-	return newUploadCommitArtifactService().buildFromVerified(uploadID, us, req, verified, plan.includeTotals, plan.itemsTruncated), nil
+	return newUploadCommitArtifactService().buildFromVerified(uploadID, us, req, verified, includeTotals, itemsTruncated), nil
 }
 
 func (svc uploadCommitVerificationService) buildPlan(
@@ -47,34 +47,32 @@ func (svc uploadCommitVerificationService) buildPlan(
 	us store.UploadSession,
 	req uploadCommitRequest,
 	multipartUploads []store.MultipartUpload,
-) (uploadCommitVerificationPlan, *uploadHTTPError) {
+) ([]uploadVerificationTarget, bool, bool, *uploadHTTPError) {
 	trackedTargets, uploadErr := svc.loadTrackedTargets(ctx, profileID, uploadID)
 	if uploadErr != nil {
-		return uploadCommitVerificationPlan{}, uploadErr
+		return nil, false, false, uploadErr
 	}
 
 	targets := mergeUploadVerificationTargets(
 		trackedTargets,
 		buildUploadVerificationTargetsFromMultipart(multipartUploads),
 	)
-	plan := uploadCommitVerificationPlan{
-		targets:       targets,
-		includeTotals: true,
+	includeTotals := true
+	itemsTruncated := false
+	if len(targets) == 0 {
+		targets = buildUploadVerificationTargetsFromRequest(us, req)
+		includeTotals = !req.ItemsTruncated
+		itemsTruncated = req.ItemsTruncated
 	}
-	if len(plan.targets) == 0 {
-		plan.targets = buildUploadVerificationTargetsFromRequest(us, req)
-		plan.includeTotals = !req.ItemsTruncated
-		plan.itemsTruncated = req.ItemsTruncated
-	}
-	if len(plan.targets) == 0 {
-		return uploadCommitVerificationPlan{}, &uploadHTTPError{
+	if len(targets) == 0 {
+		return nil, false, false, &uploadHTTPError{
 			status:  http.StatusBadRequest,
 			code:    "upload_incomplete",
 			message: "no uploaded objects to commit",
 		}
 	}
 
-	return plan, nil
+	return targets, includeTotals, itemsTruncated, nil
 }
 
 func (svc uploadCommitVerificationService) loadTrackedTargets(

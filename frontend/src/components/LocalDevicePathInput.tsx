@@ -1,6 +1,7 @@
-import { Button, Input, message } from 'antd'
+import { Button, Input } from 'antd'
 import { useState } from 'react'
 
+import { appFeedback } from '../lib/appFeedback'
 import { getDevicePickerSupport, pickDirectory } from '../lib/deviceFs'
 
 type LocalDevicePathInputProps = {
@@ -18,10 +19,6 @@ export function LocalDevicePathInput(props: LocalDevicePathInputProps) {
 	const support = getDevicePickerSupport()
 
 	const handleBrowse = async () => {
-		if (!support.ok) {
-			message.warning(support.reason ?? 'Directory picker is not available.')
-			return
-		}
 		setPicking(true)
 		try {
 			const handle = await pickDirectory(props.pickerMode ?? 'read')
@@ -30,7 +27,7 @@ export function LocalDevicePathInput(props: LocalDevicePathInputProps) {
 		} catch (err) {
 			const error = err as Error
 			if (error?.name === 'AbortError') return
-			message.error(error?.message ?? 'Failed to open directory picker.')
+			appFeedback.error(error?.message ?? 'Failed to open directory picker.')
 		} finally {
 			setPicking(false)
 		}

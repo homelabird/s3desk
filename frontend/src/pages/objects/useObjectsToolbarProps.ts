@@ -1,5 +1,6 @@
 import { useCallback, useMemo, type MutableRefObject } from 'react'
 
+import { createNewFolderMarkerObjectHint, offlineNetworkConnectionHint, selectBucketFirstHint, selectProfileFirstHint } from '../../lib/actionHints'
 import type { ProviderCapabilityMatrix } from '../../lib/providerCapabilities'
 import { getProviderCapabilityReason } from '../../lib/providerCapabilities'
 import type { ObjectsToolbarProps } from './ObjectsToolbar'
@@ -101,15 +102,15 @@ export function useObjectsToolbarProps(args: {
 
 	const canCreateFolder = !!profileId && !!bucket && !isOffline && objectCrudSupported
 	const createFolderTooltipText = !profileId
-		? 'Select a profile first'
+		? selectProfileFirstHint()
 		: isOffline
-			? 'Offline: check your network connection'
+			? offlineNetworkConnectionHint()
 			: !bucket
-				? 'Select a bucket first'
+				? selectBucketFirstHint()
 				: !objectCrudSupported
 					? getProviderCapabilityReason(profileCapabilities, 'objectCrud', 'Selected provider does not support object APIs.') ??
 						'Selected provider does not support object APIs.'
-					: 'Create a new folder marker object'
+					: createNewFolderMarkerObjectHint()
 
 	const toolbarProps = useMemo<ObjectsToolbarProps>(
 		() => ({

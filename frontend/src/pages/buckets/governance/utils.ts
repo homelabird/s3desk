@@ -364,8 +364,7 @@ export function buildOCIDraft(governance: BucketGovernanceView): OCIGovernanceDr
 export function buildOCISharingDraft(
   governance: BucketGovernanceView,
 ): OCIPreauthenticatedRequestDraft[] {
-  const sharing = (governance as BucketGovernanceView & { sharing?: OCISharingView })
-    .sharing;
+  const sharing = getOCISharingView(governance);
   return Array.isArray(sharing?.preauthenticatedRequests)
     ? sharing.preauthenticatedRequests.map((item) => ({
         id: item.id ?? "",
@@ -383,6 +382,13 @@ export function buildOCISharingDraft(
         accessUri: item.accessUri ?? "",
       }))
     : [];
+}
+
+export function getOCISharingView(
+  governance: BucketGovernanceView,
+): OCISharingView | undefined {
+  return (governance as BucketGovernanceView & { sharing?: OCISharingView })
+    .sharing;
 }
 
 export function buildGovernanceDraftKey(

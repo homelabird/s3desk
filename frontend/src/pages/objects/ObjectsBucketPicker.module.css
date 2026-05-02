@@ -1,10 +1,13 @@
 .bucketPickerDesktop {
   position: relative;
-  width: 100%;
+  width: min(100%, var(--objects-bucket-picker-width, 100%));
+  max-width: 100%;
+  min-width: 0;
 }
 
 .bucketPickerDesktopTrigger {
   width: 100%;
+  min-width: 0;
   min-height: 40px;
   border: 1px solid var(--s3d-color-border-input);
   border-radius: 10px;
@@ -12,7 +15,7 @@
   color: inherit;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   padding: 10px 12px;
   text-align: left;
@@ -38,6 +41,8 @@
 
 .bucketPickerDesktopValue,
 .bucketPickerDesktopPlaceholder {
+  display: block;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -57,6 +62,7 @@
 .bucketPickerDesktopChevron {
   color: var(--s3d-color-text-secondary);
   flex: 0 0 auto;
+  margin-left: auto;
   transition: transform var(--s3d-transition-fast);
 }
 
@@ -350,4 +356,21 @@
   padding: 12px;
   color: var(--s3d-color-text-secondary);
   text-align: center;
+}
+
+@media (max-width: 640px) {
+  .bucketPickerTrigger {
+    min-height: 44px;
+    padding: 8px 10px;
+    gap: 10px;
+  }
+
+  .bucketPickerTriggerValue,
+  .bucketPickerTriggerPlaceholder {
+    font-size: 13px;
+  }
+
+  .bucketPickerTriggerHint {
+    font-size: 11px;
+  }
 }

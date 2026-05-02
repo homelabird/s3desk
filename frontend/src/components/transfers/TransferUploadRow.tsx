@@ -18,6 +18,7 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 	const t = props.task
 	const preview = t.preview
 	const percent = t.totalBytes > 0 ? Math.floor((t.loadedBytes / t.totalBytes) * 100) : 0
+	const progressPercent = t.status === 'queued' ? 0 : percent
 	const status =
 		t.status === 'failed'
 			? 'exception'
@@ -144,7 +145,12 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 			</div>
 
 			<div className={styles.rowProgress}>
-				<Progress percent={t.status === 'queued' ? 0 : percent} status={status} showInfo={t.status !== 'queued'} />
+				<Progress
+					aria-label={`Upload progress for ${t.label}`}
+					percent={progressPercent}
+					status={status}
+					showInfo={t.status !== 'queued'}
+				/>
 				{progressText ? <Typography.Text type="secondary">{progressText}</Typography.Text> : null}
 			</div>
 		</div>

@@ -1,5 +1,5 @@
 import type { ObjectsPagePanesProps } from './ObjectsPagePanes'
-import type { BuildObjectsPagePanesPropsArgs } from './buildObjectsPagePanesProps'
+import type { BuildObjectsPagePanesPropsArgs } from './buildObjectsPagePanesPropsTypes'
 
 type TreeProps = ObjectsPagePanesProps['treeProps']
 
@@ -27,6 +27,7 @@ export function buildObjectsTreePaneProps(args: BuildObjectsPagePanesPropsArgs):
 		favoritesLoading: args.favoritesLoading,
 		favoritesError: args.favoritesErrorMessage,
 		treeData: args.treeData,
+		treeError: args.treeErrorMessage,
 		loadingKeys: args.treeLoadingKeys,
 		onLoadData: args.onTreeLoadData,
 		selectedKeys: args.treeSelectedKeys,

@@ -39,57 +39,79 @@ export type JobsTableSectionProps = {
 }
 
 export function JobsTableSection(props: JobsTableSectionProps) {
+	const {
+		jobsError,
+		sortedJobs,
+		columns,
+		isCompact,
+		tableScrollY,
+		isLoading,
+		isOffline,
+		uploadSupported,
+		onOpenCreateUpload,
+		onOpenDownloadJob,
+		onOpenDeleteJob,
+		getJobSummary,
+		renderJobActions,
+		sortState,
+		onSortChange,
+		theme,
+		hasNextPage,
+		onLoadMore,
+		isFetchingNextPage,
+		onTableContainerRef,
+	} = props
 	const emptyState = (
 		<JobsEmptyState
-			isOffline={props.isOffline}
-			uploadSupported={props.uploadSupported}
-			onOpenCreateUpload={props.onOpenCreateUpload}
-			onOpenDownloadJob={props.onOpenDownloadJob}
-			onOpenDeleteJob={props.onOpenDeleteJob}
+			isOffline={isOffline}
+			uploadSupported={uploadSupported}
+			onOpenCreateUpload={onOpenCreateUpload}
+			onOpenDownloadJob={onOpenDownloadJob}
+			onOpenDeleteJob={onOpenDeleteJob}
 		/>
 	)
 
 	return (
 		<div className={styles.stack}>
-			{props.jobsError ? <Alert type="error" showIcon title="Failed to load jobs" description={formatErr(props.jobsError)} /> : null}
+			{jobsError ? <Alert type="error" showIcon title="Failed to load jobs" description={formatErr(jobsError)} /> : null}
 
 			<PageSection
 				title="Queue history"
 				description="Recent jobs stay searchable here. Desktop keeps the full virtualized table, while smaller screens collapse the list into action-oriented cards. Use Objects when you need copy, move, or indexing workflows."
 				actions={
 					<Typography.Text type="secondary">
-						{props.sortedJobs.length ? `${props.sortedJobs.length.toLocaleString()} visible` : 'No visible jobs'}
+						{sortedJobs.length ? `${sortedJobs.length.toLocaleString()} visible` : 'No visible jobs'}
 					</Typography.Text>
 				}
 				flush
 			>
-				<div ref={props.onTableContainerRef} className={styles.surfaceBody}>
-					{props.isCompact ? (
-						props.isLoading && props.sortedJobs.length === 0 ? (
+				<div ref={onTableContainerRef} className={styles.surfaceBody}>
+					{isCompact ? (
+						isLoading && sortedJobs.length === 0 ? (
 							<div className={styles.loadingState}>
 								<Spin />
 							</div>
-						) : props.sortedJobs.length === 0 ? (
+						) : sortedJobs.length === 0 ? (
 							<div className={styles.emptyState}>{emptyState}</div>
 						) : (
-							<JobsMobileList jobs={props.sortedJobs} getJobSummary={props.getJobSummary} renderJobActions={props.renderJobActions} />
+							<JobsMobileList jobs={sortedJobs} getJobSummary={getJobSummary} renderJobActions={renderJobActions} />
 						)
 					) : (
 						<JobsDesktopTable
-							jobs={props.sortedJobs}
-							columns={props.columns}
-							tableScrollY={props.tableScrollY}
-							isLoading={props.isLoading}
+							jobs={sortedJobs}
+							columns={columns}
+							tableScrollY={tableScrollY}
+							isLoading={isLoading}
 							emptyState={emptyState}
-							sortState={props.sortState}
-							onSortChange={props.onSortChange}
-							theme={props.theme}
+							sortState={sortState}
+							onSortChange={onSortChange}
+							theme={theme}
 						/>
 					)}
 
-					{props.hasNextPage ? (
+					{hasNextPage ? (
 						<div className={styles.footer}>
-							<Button onClick={props.onLoadMore} loading={props.isFetchingNextPage} disabled={!props.hasNextPage || props.isOffline}>
+							<Button onClick={onLoadMore} loading={isFetchingNextPage} disabled={!hasNextPage || isOffline}>
 								Load more
 							</Button>
 						</div>

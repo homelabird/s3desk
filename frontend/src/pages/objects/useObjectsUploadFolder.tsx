@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { message } from 'antd'
 
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import { collectFilesFromDirectoryHandle } from '../../lib/deviceFs'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { objectsFeedback } from './objectsFeedback'
 
 const MAX_UPLOAD_FOLDER_FILES = 5000
 
@@ -53,7 +52,7 @@ export function useObjectsUploadFolder({
 
 	const openUploadFolderModal = useCallback(() => {
 		if (!uploadsEnabled) {
-			message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+			objectsFeedback.uploadsUnsupported(uploadsDisabledReason)
 			return
 		}
 		setUploadFolderScopeKey(currentScopeKey)
@@ -78,19 +77,19 @@ export function useObjectsUploadFolder({
 		async () => {
 			if (!uploadFolderScopeMatches) return
 			if (!profileId) {
-				message.info('Select a profile first')
+				objectsFeedback.selectProfileFirst()
 				return
 			}
 			if (!bucket) {
-				message.info('Select a bucket first')
+				objectsFeedback.selectBucketFirst()
 				return
 			}
 			if (!uploadsEnabled) {
-				message.warning(uploadsDisabledReason ?? 'Uploads are not supported by this provider.')
+				objectsFeedback.uploadsUnsupported(uploadsDisabledReason)
 				return
 			}
 			if (!uploadFolderHandle) {
-				message.info('Select a local folder first')
+				objectsFeedback.selectLocalFolderFirst()
 				return
 			}
 
@@ -101,7 +100,7 @@ export function useObjectsUploadFolder({
 				const files = await collectFilesFromDirectoryHandle(uploadFolderHandle, '', { maxFiles: MAX_UPLOAD_FOLDER_FILES })
 				if (requestTokenRef.current !== requestToken) return
 				if (files.length === 0) {
-					message.info('No files found in the selected folder')
+					objectsFeedback.noFilesFoundInSelectedFolder()
 					return
 				}
 				const label = uploadFolderLabel || uploadFolderHandle.name
@@ -120,7 +119,7 @@ export function useObjectsUploadFolder({
 				resetUploadFolderState()
 			} catch (err) {
 				if (requestTokenRef.current !== requestToken) return
-				message.error(formatErr(err))
+				objectsFeedback.error(err)
 			} finally {
 				if (requestTokenRef.current === requestToken) {
 					setUploadFolderSubmitting(false)

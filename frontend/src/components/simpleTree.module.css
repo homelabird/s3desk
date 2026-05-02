@@ -4,14 +4,21 @@
   padding: 0;
 }
 
+.treeContent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 .row {
   display: flex;
   align-items: center;
   width: 100%;
   min-width: 0;
   gap: 4px;
-  padding: 2px 4px;
-  border-radius: 20px;
+  padding: 1px 3px;
+  border-radius: 16px;
   transition: background var(--s3d-transition-fast);
 }
 
@@ -24,8 +31,8 @@
 }
 
 .toggleButton {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border: none;
   background: transparent;
   border-radius: 6px;
@@ -43,14 +50,15 @@
 
 .toggleChevron {
   display: inline-block;
-  width: 14px;
+  width: 12px;
   line-height: 1;
   text-align: center;
+  font-size: 11px;
 }
 
 .toggleSpacer {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: inline-block;
 }
 
@@ -65,12 +73,14 @@
   border: none;
   background: transparent;
   text-align: left;
-  padding: 2px 4px;
+  padding: 1px 3px;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.15;
 }
 
 .labelButton:hover {
@@ -87,6 +97,47 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  line-height: inherit;
+}
+
+.titleSurface {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 2px;
+  border-radius: 4px;
+}
+
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.statusBlockMuted {
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 84%, transparent);
+}
+
+.statusBlockError {
+  background: color-mix(in srgb, var(--s3d-color-danger-bg) 80%, var(--s3d-color-bg-card) 20%);
+  border-color: color-mix(in srgb, var(--s3d-color-danger) 20%, var(--s3d-color-border));
+}
+
+.statusTitle {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.statusDescription {
+  color: var(--s3d-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .loadingSpinner {
@@ -97,6 +148,47 @@
   border-top-color: var(--s3d-color-primary);
   animation: spin 0.9s linear infinite;
   flex: 0 0 auto;
+}
+
+@media (max-width: 1200px) {
+  .treeContent {
+    gap: 5px;
+  }
+
+  .row {
+    gap: 3px;
+    padding: 1px 2px;
+  }
+
+  .toggleButton,
+  .toggleSpacer {
+    width: 18px;
+    height: 18px;
+  }
+
+  .labelButton {
+    padding: 1px 2px;
+    gap: 3px;
+  }
+
+  .titleSurface {
+    padding-inline: 1px;
+  }
+
+  .statusBlock {
+    gap: 1px;
+    padding: 4px 6px;
+  }
+
+  .statusTitle {
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .statusDescription {
+    font-size: 11px;
+    line-height: 1.2;
+  }
 }
 
 @keyframes spin {

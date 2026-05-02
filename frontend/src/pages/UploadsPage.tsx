@@ -1,6 +1,12 @@
-import { UploadsPageRouteShell } from './uploads/UploadsPageRouteShell'
-import { UploadsPageShell } from './uploads/UploadsPageShell'
-import { useUploadsPageCompositionState } from './uploads/useUploadsPageCompositionState'
+import { lazy, Suspense } from 'react'
+
+import { SetupCallout } from '../components/SetupCallout'
+
+const UploadsPageExperience = lazy(() =>
+	import('./uploads/UploadsPageExperience').then((module) => ({
+		default: module.UploadsPageExperience,
+	})),
+)
 
 type Props = {
 	apiToken: string
@@ -8,11 +14,21 @@ type Props = {
 }
 
 export function UploadsPage(props: Props) {
-	const composition = useUploadsPageCompositionState(props)
+	if (!props.profileId) {
+		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to upload files" />
+	}
 
 	return (
-		<UploadsPageRouteShell apiToken={composition.route.apiToken} profileId={composition.route.profileId}>
-			<UploadsPageShell presentation={composition.presentation} />
-		</UploadsPageRouteShell>
+		<Suspense fallback={<UploadsPageLoadingFallback />}>
+			<UploadsPageExperience apiToken={props.apiToken} profileId={props.profileId} />
+		</Suspense>
+	)
+}
+
+export function UploadsPageLoadingFallback() {
+	return (
+		<div role="status" aria-live="polite">
+			Loading uploads...
+		</div>
 	)
 }

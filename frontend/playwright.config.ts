@@ -5,13 +5,15 @@ const TRACE_MODES = ['off', 'on', 'retain-on-failure', 'on-first-retry', 'on-all
 const VIDEO_MODES = ['off', 'on', 'retain-on-failure', 'on-first-retry'] as const
 
 const isLive = process.env.E2E_LIVE === '1'
-const baseURL = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || 'http://127.0.0.1:8080'
+const managedWebServerPort = parseInteger(process.env.PLAYWRIGHT_WEB_SERVER_PORT) ?? 18080
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || process.env.BASE_URL || `http://127.0.0.1:${managedWebServerPort}`
 const recordVideos = isTruthy(process.env.PLAYWRIGHT_RECORD_VIDEOS)
 const recordArtifacts = isTruthy(process.env.PLAYWRIGHT_RECORD_ARTIFACTS)
 const recordHtmlReport = recordArtifacts || isTruthy(process.env.PLAYWRIGHT_HTML_REPORT)
 const recordingOutputDir = process.env.PLAYWRIGHT_OUTPUT_DIR
 const htmlReportDir = process.env.PLAYWRIGHT_HTML_REPORT_DIR
 const shouldManageWebServer = !isLive && !process.env.PLAYWRIGHT_BASE_URL && !process.env.BASE_URL
+const reuseExistingManagedWebServer = isTruthy(process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER)
 const headless = !isFalsey(process.env.PLAYWRIGHT_HEADLESS)
 const slowMoMs = parseInteger(process.env.PLAYWRIGHT_SLOW_MO_MS)
 
@@ -38,9 +40,9 @@ export default defineConfig({
 	...(shouldManageWebServer
 		? {
 				webServer: {
-					command: 'npm run dev -- --host 127.0.0.1 --port 8080 --strictPort',
+					command: `npm run dev -- --host 127.0.0.1 --port ${managedWebServerPort} --strictPort`,
 					url: baseURL,
-					reuseExistingServer: true,
+					reuseExistingServer: reuseExistingManagedWebServer,
 					timeout: 120_000,
 				},
 			}

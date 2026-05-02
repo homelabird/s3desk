@@ -1,27 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { APIClient, RequestAbortedError } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { ObjectMeta } from '../../api/types'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import {
-	buildThumbnailCacheKey,
-	setPersistentThumbnailBlob,
-	type ThumbnailCache,
-} from '../../lib/thumbnailCache'
-import { formatBytes } from '../../lib/transfer'
-import { buildObjectThumbnailRequest, getThumbnailFailureTtlMs, shouldCacheThumbnailFailure } from './objectPreviewPolicy'
-import { loadObjectPreviewAsset } from './loadObjectPreviewAsset'
-import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
-import type { ObjectPreview } from './objectsTypes'
+import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import { guessPreviewKind } from './objectsListUtils'
-
-export const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024
-export const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
-const IMAGE_PREVIEW_THUMBNAIL_SIZE = 360
-const VIDEO_PREVIEW_THUMBNAIL_SIZE = 360
+import type { ObjectPreview } from './objectsTypes'
 
 type UseObjectPreviewArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string
@@ -90,6 +76,9 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 		if (visiblePreview?.status === 'loading') return
 
 		const key = args.detailsMeta.key
+		const detailsMeta = args.detailsMeta
+		const kind = guessPreviewKind(detailsMeta.contentType, key)
+		const contentType = detailsMeta.contentType ?? null
 		const requestScopeKey = `${args.apiToken}:${args.profileId}:${args.bucket}:${key}:${args.detailsVisible ? 'visible' : 'hidden'}`
 		cleanupPreview()
 		const requestId = previewRequestIdRef.current + 1
@@ -101,148 +90,32 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 			setPreviewState({ scopeKey: requestScopeKey, preview: next })
 			return true
 		}
-		const kind = guessPreviewKind(args.detailsMeta.contentType, key)
-		const contentType = args.detailsMeta.contentType ?? null
-		const size = typeof args.detailsMeta.size === 'number' && Number.isFinite(args.detailsMeta.size) ? args.detailsMeta.size : 0
-
-		if (kind === 'unsupported') {
-			commitPreview({ key, status: 'unsupported', kind: 'unsupported', contentType, error: 'Preview not supported' })
-			return
-		}
-
-		const maxBytes = kind === 'image' ? IMAGE_PREVIEW_MAX_BYTES : TEXT_PREVIEW_MAX_BYTES
-		if (kind !== 'video' && size > maxBytes) {
-			commitPreview({
-				key,
-				status: 'blocked',
-				kind,
-				contentType,
-				error: `Preview is limited to ${formatBytes(maxBytes)}. This object is ${formatBytes(size)}.`,
-			})
-			return
-		}
-
-		commitPreview({ key, status: 'loading', kind, contentType })
-
-		if (kind === 'video') {
-			const thumbnailRequest = buildObjectThumbnailRequest({
-				apiToken: args.apiToken,
-				profileId: args.profileId,
-				bucket: args.bucket,
-				objectKey: key,
-				size: VIDEO_PREVIEW_THUMBNAIL_SIZE,
-				etag: args.detailsMeta.etag,
-				lastModified: args.detailsMeta.lastModified,
-			})
-			const cacheKey = buildThumbnailCacheKey(thumbnailRequest)
-			const handle = loadObjectThumbnailAsset({
-				api: args.api,
-				request: thumbnailRequest,
-				cache: args.thumbnailCache,
-				objectSize: args.detailsMeta.size,
-				etag: args.detailsMeta.etag ?? undefined,
-				lastModified: args.detailsMeta.lastModified ?? undefined,
-				contentType: args.detailsMeta.contentType ?? undefined,
-			})
-			setPreviewAbort(handle.abort)
-			try {
-				const resp = await handle.promise
-				if (isStale()) {
-					if (resp.owned && typeof URL.revokeObjectURL === 'function') {
-						URL.revokeObjectURL(resp.url)
-					}
-					return
-				}
+		if (kind !== 'unsupported') {
+			commitPreview({ key, status: 'loading', kind, contentType })
+			setPreviewAbort(() => {
+				previewRequestIdRef.current += 1
 				setPreviewAbort(null)
-				previewURLRef.current = resp.url
-				previewURLOwnedRef.current = resp.owned
-				commitPreview({ key, status: 'ready', kind: 'video', contentType: resp.contentType ?? contentType, url: resp.url })
-				return
-			} catch (err) {
-				setPreviewAbort(null)
-				if (isStale()) return
-				if (err instanceof RequestAbortedError) {
-					commitPreview({ key, status: 'blocked', kind, contentType, error: 'Preview canceled.' })
-					return
-				}
-				if (args.thumbnailCache && shouldCacheThumbnailFailure(err)) {
-					args.thumbnailCache.markFailed(cacheKey, getThumbnailFailureTtlMs(err))
-				}
-				commitPreview({ key, status: 'error', kind, contentType, error: formatErr(err) })
-				return
-			}
-		}
-
-		const controller = new AbortController()
-		setPreviewAbort(() => controller.abort())
-		try {
-			const resp = await loadObjectPreviewAsset({
-				api: args.api,
-				profileId: args.profileId,
-				bucket: args.bucket,
-				key,
-				size,
-				contentType: args.detailsMeta?.contentType ?? undefined,
-				lastModified: args.detailsMeta?.lastModified ?? undefined,
-				maxBytes,
-				downloadLinkProxyEnabled: args.downloadLinkProxyEnabled,
-				presignedDownloadSupported: args.presignedDownloadSupported,
-				signal: controller.signal,
 			})
-			if (isStale()) return
-			setPreviewAbort(null)
-			const effectiveContentType = resp.contentType ?? contentType
-
-			if (kind === 'image') {
-				const thumbnailRequest = buildObjectThumbnailRequest({
-					apiToken: args.apiToken,
-					profileId: args.profileId,
-					bucket: args.bucket,
-					objectKey: key,
-					size: IMAGE_PREVIEW_THUMBNAIL_SIZE,
-					etag: args.detailsMeta.etag,
-					lastModified: args.detailsMeta.lastModified,
-				})
-				const thumbnailCacheKey = buildThumbnailCacheKey(thumbnailRequest)
-				await setPersistentThumbnailBlob(thumbnailCacheKey, resp.blob)
-				if (isStale()) return
-				const url = URL.createObjectURL(resp.blob)
-				if (args.thumbnailCache) {
-					args.thumbnailCache.set(thumbnailCacheKey, url)
-					previewURLOwnedRef.current = false
-				} else {
-					previewURLOwnedRef.current = true
-				}
+		}
+		const { loadObjectPreviewRuntime } = await import('./objectPreviewRuntime')
+		if (isStale()) return
+		await loadObjectPreviewRuntime({
+			api: args.api,
+			apiToken: args.apiToken,
+			profileId: args.profileId,
+			bucket: args.bucket,
+			detailsMeta,
+			downloadLinkProxyEnabled: args.downloadLinkProxyEnabled,
+			presignedDownloadSupported: args.presignedDownloadSupported,
+			thumbnailCache: args.thumbnailCache,
+			isStale,
+			commitPreview,
+			setPreviewAbort,
+			setPreviewURL: (url, owned) => {
 				previewURLRef.current = url
-				if (!commitPreview({ key, status: 'ready', kind: 'image', contentType: effectiveContentType, url }) && !args.thumbnailCache) {
-					URL.revokeObjectURL(url)
-				}
-				return
-			}
-
-			const rawText = await resp.blob.text()
-			const maxChars = 200_000
-			const truncated = rawText.length > maxChars
-			let text = truncated ? rawText.slice(0, maxChars) : rawText
-
-			if (kind === 'json') {
-				try {
-					text = JSON.stringify(JSON.parse(text), null, 2)
-				} catch {
-					// keep raw text
-				}
-			}
-
-			commitPreview({ key, status: 'ready', kind, contentType: effectiveContentType, text, truncated })
-		} catch (err) {
-			setPreviewAbort(null)
-			if (isStale()) return
-			if (err instanceof RequestAbortedError || (err instanceof Error && err.name === 'AbortError')) {
-				commitPreview({ key, status: 'blocked', kind, contentType, error: 'Preview canceled.' })
-				return
-			}
-			commitPreview({ key, status: 'error', kind, contentType, error: formatErr(err) })
-		}
+				previewURLOwnedRef.current = owned
+			},
+		})
 	}, [
 		args.api,
 		args.apiToken,
@@ -259,8 +132,29 @@ export function useObjectPreview(args: UseObjectPreviewArgs): ObjectPreviewResul
 	])
 
 	const cancelPreview = useCallback(() => {
+		if (visiblePreview?.status === 'loading') {
+			previewRequestIdRef.current += 1
+		}
 		previewAbortRef.current?.()
-	}, [])
+		setPreviewAbort(null)
+		if (visiblePreview?.status !== 'loading') return
+		setPreviewState((current) =>
+			current.scopeKey === previewScopeKey &&
+			current.preview?.key === visiblePreview.key &&
+			current.preview.status === 'loading'
+				? {
+						scopeKey: previewScopeKey,
+						preview: {
+							key: visiblePreview.key,
+							status: 'blocked',
+							kind: visiblePreview.kind,
+							contentType: visiblePreview.contentType,
+							error: 'Preview canceled.',
+						},
+					}
+				: current,
+		)
+	}, [previewScopeKey, setPreviewAbort, visiblePreview])
 
 	return {
 		preview: visiblePreview,

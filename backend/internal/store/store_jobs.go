@@ -240,11 +240,59 @@ func (s *Store) GetJobByID(ctx context.Context, jobID string) (profileID string,
 }
 
 func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string, errorCode *string) error {
+	updates, err := jobStatusUpdateMap(status, startedAt, finishedAt, progress, errMsg, errorCode)
+	if err != nil {
+		return err
+	}
+
+	return s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Where("id = ?", jobID).
+		Updates(updates).Error
+}
+
+func (s *Store) UpdateJobStatusIfCurrent(ctx context.Context, jobID string, expected []models.JobStatus, status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string, errorCode *string) (bool, error) {
+	if len(expected) == 0 {
+		return false, errors.New("expected job statuses required")
+	}
+
+	updates, err := jobStatusUpdateMap(status, startedAt, finishedAt, progress, errMsg, errorCode)
+	if err != nil {
+		return false, err
+	}
+
+	expectedStatuses := make([]string, 0, len(expected))
+	for _, status := range expected {
+		expectedStatuses = append(expectedStatuses, string(status))
+	}
+
+	res := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Where("id = ? AND status IN ?", jobID, expectedStatuses).
+		Updates(updates)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	if res.RowsAffected > 0 {
+		return true, nil
+	}
+
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Model(&jobRow{}).
+		Where("id = ? AND status IN ?", jobID, expectedStatuses).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func jobStatusUpdateMap(status models.JobStatus, startedAt, finishedAt *string, progress *models.JobProgress, errMsg *string, errorCode *string) (map[string]any, error) {
 	var progressJSON *string
 	if progress != nil {
 		bytes, err := json.Marshal(progress)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		val := string(bytes)
 		progressJSON = &val
@@ -265,10 +313,7 @@ func (s *Store) UpdateJobStatus(ctx context.Context, jobID string, status models
 		updates["progress_json"] = *progressJSON
 	}
 
-	return s.db.WithContext(ctx).
-		Model(&jobRow{}).
-		Where("id = ?", jobID).
-		Updates(updates).Error
+	return updates, nil
 }
 
 func (s *Store) ListJobIDsByStatus(ctx context.Context, status models.JobStatus) ([]string, error) {

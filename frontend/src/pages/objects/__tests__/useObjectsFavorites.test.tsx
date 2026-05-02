@@ -109,6 +109,45 @@ describe('useObjectsFavorites', () => {
 		})
 	})
 
+	it('does not load or mutate favorites when object capability disables favorites', () => {
+		const listObjectFavorites = vi.fn()
+		const createObjectFavorite = vi.fn()
+		const deleteObjectFavorite = vi.fn()
+		const api = createMockApiClient({
+			objects: {
+				listObjectFavorites,
+				createObjectFavorite,
+				deleteObjectFavorite,
+			},
+		})
+		const { Wrapper } = createWrapper()
+
+		const { result } = renderHook(
+			() =>
+				useObjectsFavorites({
+					api,
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					apiToken: 'token',
+					objectsPages: [],
+					hydrateItems: true,
+					enabled: false,
+				}),
+			{
+				wrapper: Wrapper,
+			},
+		)
+
+		act(() => {
+			result.current.toggleFavorite('docs/readme.txt')
+		})
+
+		expect(result.current.favoritesQuery.fetchStatus).toBe('idle')
+		expect(listObjectFavorites).not.toHaveBeenCalled()
+		expect(createObjectFavorite).not.toHaveBeenCalled()
+		expect(deleteObjectFavorite).not.toHaveBeenCalled()
+	})
+
 	it('ignores stale favorite-add responses after the objects context changes', async () => {
 		const createFavoriteRequest = deferred<{ key: string; createdAt: string }>()
 		const api = createMockApiClient({

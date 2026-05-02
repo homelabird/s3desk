@@ -32,11 +32,15 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.25.9"
           cache-dependency-path: backend/go.sum
 
       - name: Setup Helm
         uses: azure/setup-helm@v4
+
+      - name: Install repo-local actionlint
+        shell: bash
+        run: bash ./scripts/install_actionlint.sh
 
       - name: Install backend security helper tools
         shell: bash
@@ -57,3 +61,20 @@ jobs:
       - name: Run full repository check gate
         shell: bash
         run: ./scripts/check.sh
+
+      - name: Write release gate summary
+        if: always()
+        run: |
+          {
+            echo "## Release Gate"
+            echo ""
+            echo "- Main command: \`./scripts/check.sh\`"
+            echo "- Workflow Lint: executed via repo-local \`actionlint\` installed by \`bash ./scripts/install_actionlint.sh\`."
+            echo "- Browser Lanes: smoke executed inside \`./scripts/check.sh\`; \`core\` and \`mobile-responsive\` remain separate checks in \`Frontend E2E\`."
+            echo "- Browser Guardrails: \`npm run check:e2e:geometry\` then \`npm run test:e2e:smoke\` run inside the full gate."
+            echo "- Bundle Budget: separate advisory signal in \`Frontend E2E\`."
+            echo "- Bundle Budget Contract: separate advisory signal in \`Frontend E2E\` via \`npm run check:bundle-report\`."
+            echo "- Local bundle equivalent when relevant: \`cd frontend && npm run bundle:budget\`"
+            echo "- Local contract equivalent when relevant: \`cd frontend && npm run check:bundle-report\`"
+            echo "- Policy references: \`docs/TESTING.md\`, \`docs/RELEASE_GATE.md\`, and \`frontend/docs/MOBILE_RESPONSIVE_E2E.md\`"
+          } >> "$GITHUB_STEP_SUMMARY"

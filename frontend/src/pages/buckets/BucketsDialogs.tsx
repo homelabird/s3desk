@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react'
 
 import { Button, Checkbox, Space, Typography } from 'antd'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { BucketCreateRequest, Profile } from '../../api/types'
 import { DialogModal } from '../../components/DialogModal'
 import { buildDialogPreferenceKey, setDialogDismissed } from '../../lib/dialogPreferences'
@@ -24,7 +24,7 @@ const BucketGovernanceModal = lazy(async () => {
 const BUCKET_NOT_EMPTY_DIALOG_KEY = buildDialogPreferenceKey('warning', 'bucket_not_empty')
 
 type BucketDialogsProps = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	selectedProfileProvider?: Profile['provider']

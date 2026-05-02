@@ -1,13 +1,13 @@
 import type { DragEvent, MouseEvent, ReactNode } from 'react'
 import type { MenuProps } from 'antd'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { ThumbnailCache } from '../../lib/thumbnailCache'
 import type { UIActionOrDivider } from './objectsActions'
 import type { ContextMenuMatch, ContextMenuPoint, ContextMenuState } from './objectsContextMenuTypes'
 
 export type UseObjectsGridRenderersArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	profileProvider?: string | null
@@ -16,6 +16,7 @@ export type UseObjectsGridRenderersArgs = {
 	canDragDrop: boolean
 	isAdvanced: boolean
 	isOffline: boolean
+	objectCrudSupported: boolean
 	showThumbnails: boolean
 	thumbnailCache: ThumbnailCache
 	highlightText: (value: string) => ReactNode

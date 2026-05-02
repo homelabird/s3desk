@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { installMockApi, type MockApiContext, type MockApiRoute } from './support/apiFixtures'
+import { gotoJobsPage, jobsTableRow, openJobLogsDrawer } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -106,24 +107,20 @@ test.describe('Jobs network resilience', () => {
 		let mockOffline = false
 		await setupApiMocks(page, () => mockOffline)
 
-	await page.goto('/jobs')
-	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+	await gotoJobsPage(page)
 
-	const jobRow = page.getByRole('row', { name: /job-test/ })
-	await jobRow.getByRole('button', { name: 'Logs' }).click()
+	const jobRow = jobsTableRow(page, 'job-test')
+	const logsDrawer = await openJobLogsDrawer(page, jobRow)
+	await expect(logsDrawer.getByText('hello')).toBeVisible()
 
-		const logsDrawer = page.getByRole('dialog', { name: 'Job Logs' })
-		await expect(logsDrawer).toBeVisible()
-		await expect(logsDrawer.getByText('hello')).toBeVisible()
+	mockOffline = true
+	await context.setOffline(true)
+	await expect(logsDrawer.getByText('Log polling paused')).toBeVisible({ timeout: 25_000 })
+	await expect(logsDrawer.getByRole('button', { name: 'Retry' })).toBeVisible({ timeout: 25_000 })
 
-		mockOffline = true
-		await context.setOffline(true)
-		await expect(logsDrawer.getByText('Log polling paused')).toBeVisible({ timeout: 25_000 })
-		await expect(logsDrawer.getByRole('button', { name: 'Retry' })).toBeVisible({ timeout: 25_000 })
-
-		mockOffline = false
-		await context.setOffline(false)
-		await logsDrawer.getByRole('button', { name: 'Retry' }).click()
-		await expect(logsDrawer.getByText('Log polling paused')).toHaveCount(0, { timeout: 10_000 })
+	mockOffline = false
+	await context.setOffline(false)
+	await logsDrawer.getByRole('button', { name: 'Retry' }).click()
+	await expect(logsDrawer.getByText('Log polling paused')).toHaveCount(0, { timeout: 10_000 })
 	})
 })

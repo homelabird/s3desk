@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -12,6 +13,8 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { APIClient, APIError } from "../../api/client";
+import { queryKeys } from "../../api/queryKeys";
+import { failedToLoadBucketsTitle } from "../../lib/actionHints";
 import { ensureDomShims } from "../../test/domShims";
 import { BucketsPage } from "../BucketsPage";
 
@@ -156,6 +159,7 @@ function mockViewportWidth(width: number) {
 }
 
 afterEach(() => {
+  cleanup();
   window.localStorage.clear();
   window.sessionStorage.clear();
   window.matchMedia = originalMatchMedia;
@@ -300,7 +304,9 @@ describe("BucketsPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("Failed to load buckets")).toBeInTheDocument();
+    expect(
+      await screen.findByText(failedToLoadBucketsTitle()),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("No buckets found in this storage."),
     ).not.toBeInTheDocument();
@@ -806,7 +812,7 @@ describe("BucketsPage", () => {
 
     expect(successSpy).not.toHaveBeenCalled();
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ["buckets", "profile-1", "token"],
+      queryKey: queryKeys.buckets.list("profile-1", "token"),
       exact: true,
     });
   });

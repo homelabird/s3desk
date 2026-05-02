@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIClient } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import { ensureDomShims } from '../../test/domShims'
 import { ProfilesPage } from '../ProfilesPage'
 
@@ -358,7 +359,7 @@ describe('ProfilesPage import flow', () => {
 			expect(createProfile).toHaveBeenCalledTimes(1)
 		})
 		await waitFor(() => {
-			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['profiles', 'list', 'token'], exact: true })
+			expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.profiles.list('token'), exact: true })
 		})
 	})
 })

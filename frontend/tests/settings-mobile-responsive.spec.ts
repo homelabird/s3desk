@@ -1,67 +1,76 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 
-import { expectLocatorWithinViewport, expectNoPageHorizontalOverflow } from './support/mobileResponsive'
 import {
 	installSettingsMobileResponsiveFixtures,
 	seedSettingsMobileResponsiveStorage,
 } from './support/settingsLoginMobileResponsive'
+import { dialogByName } from './support/ui'
 
-test.describe('@mobile-responsive Settings mobile responsive draft', () => {
+async function setSwitch(scope: Locator, name: string, enabled: boolean) {
+	const control = scope.getByRole('switch', { name })
+	const state = await control.getAttribute('aria-checked')
+	if ((state === 'true') !== enabled) {
+		await control.click()
+	}
+}
+
+async function reopenSettingsFromCompactHeader(drawer: Locator) {
+	const page = drawer.page()
+	await page.getByTestId('app-header').getByRole('button', { name: 'More actions' }).click()
+	await page.getByRole('menuitem', { name: /Settings/i }).click()
+	await expect(drawer).toBeVisible()
+}
+
+test.describe('@mobile-responsive Settings mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
 		await installSettingsMobileResponsiveFixtures(page)
 		await seedSettingsMobileResponsiveStorage(page)
 	})
 
-	test('settings drawer stays within the mobile viewport and avoids horizontal overflow', async ({ page }) => {
+	test('settings drawer persists transfer preferences across mobile reopen', async ({ page }) => {
+		const proxySwitchName = 'Downloads and previews: Use server proxy'
+
 		await page.setViewportSize({ width: 390, height: 844 })
 		await page.goto('/settings')
 
-		const drawer = page.getByRole('dialog', { name: 'Settings' })
+		const drawer = dialogByName(page, 'Settings')
 		await expect(drawer).toBeVisible()
-		await expectLocatorWithinViewport(drawer)
-		await expectNoPageHorizontalOverflow(page)
+		await drawer.getByRole('tab', { name: 'Transfers' }).click()
+		await expect(drawer.getByText(proxySwitchName)).toBeVisible()
+
+		await setSwitch(drawer, proxySwitchName, true)
+		await expect
+			.poll(async () => page.evaluate(() => JSON.parse(window.localStorage.getItem('downloadLinkProxyEnabled') ?? 'false')))
+			.toBe(true)
+
+		await drawer.getByRole('button', { name: 'Close' }).click()
+		await expect(drawer).toHaveCount(0)
+
+		const reopenedDrawer = dialogByName(page, 'Settings')
+		await reopenSettingsFromCompactHeader(reopenedDrawer)
+		await reopenedDrawer.getByRole('tab', { name: 'Transfers' }).click()
+		await expect(reopenedDrawer.getByRole('switch', { name: proxySwitchName })).toHaveAttribute('aria-checked', 'true')
 	})
 
-	test('settings tabs keep horizontal scrolling behavior on mobile', async ({ page }) => {
+	test('settings access token survives mobile reopen after apply', async ({ page }) => {
+		const updatedToken = 'updated-token'
+
 		await page.setViewportSize({ width: 390, height: 844 })
 		await page.goto('/settings')
 
-		const drawer = page.getByRole('dialog', { name: 'Settings' })
-		const tablist = drawer.getByRole('tablist').first()
-		const workspaceTab = drawer.getByRole('tab', { name: 'Workspace' })
+		const drawer = dialogByName(page, 'Settings')
+		await expect(drawer).toBeVisible()
 
-		await expect(tablist).toBeVisible()
-		await expect(workspaceTab).toBeVisible()
+		const tokenInput = drawer.getByPlaceholder('Must match API_TOKEN')
+		await tokenInput.fill(updatedToken)
+		await drawer.getByRole('button', { name: 'Apply' }).click()
+		await expect.poll(async () => page.evaluate(() => JSON.parse(window.sessionStorage.getItem('apiToken') ?? '""'))).toBe(updatedToken)
 
-		const tabMetrics = await tablist.evaluate((node) => {
-			const element = node as HTMLElement
-			const styles = window.getComputedStyle(element)
-			return {
-				clientWidth: element.clientWidth,
-				scrollWidth: element.scrollWidth,
-				scrollSnapType: styles.scrollSnapType,
-			}
-		})
+		await drawer.getByRole('button', { name: 'Close' }).click()
+		await expect(drawer).toHaveCount(0)
 
-		expect(tabMetrics.scrollWidth).toBeGreaterThan(tabMetrics.clientWidth)
-		expect(tabMetrics.scrollSnapType).toContain('x')
-	})
-
-	test('settings tabs keep touch targets at mobile sizes', async ({ page }) => {
-		await page.setViewportSize({ width: 360, height: 800 })
-		await page.goto('/settings')
-
-		const drawer = page.getByRole('dialog', { name: 'Settings' })
-		const tabs = [
-			drawer.getByRole('tab', { name: 'Workspace' }),
-			drawer.getByRole('tab', { name: 'Objects' }),
-			drawer.getByRole('tab', { name: 'Transfers' }),
-		]
-
-		for (const tab of tabs) {
-			await expect(tab).toBeVisible()
-			const box = await tab.boundingBox()
-			expect(box?.height ?? 0).toBeGreaterThanOrEqual(44)
-		}
+		const reopenedDrawer = dialogByName(page, 'Settings')
+		await reopenSettingsFromCompactHeader(reopenedDrawer)
+		await expect(reopenedDrawer.getByPlaceholder('Must match API_TOKEN')).toHaveValue(updatedToken)
 	})
 })

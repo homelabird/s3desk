@@ -79,6 +79,9 @@ describe('ObjectsListControls', () => {
 
 		expect(screen.getByText('s3://media/clips/trailer/')).toBeInTheDocument()
 		expect(screen.getByText('3 folders, 12 files')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-list-controls-desktop-row')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-list-controls-desktop-actions')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-list-controls-summary')).toHaveTextContent('3 folders, 12 files')
 
 		fireEvent.change(screen.getByLabelText('Search current folder'), { target: { value: 'poster' } })
 		expect(props.onSearchDraftChange).toHaveBeenCalledWith('poster')
@@ -126,10 +129,32 @@ describe('ObjectsListControls', () => {
 
 		render(<ObjectsListControls {...props} />)
 
+		expect(screen.getByTestId('objects-list-controls-compact-footer')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-list-controls-compact-meta')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Bucket search$/ })).toBeInTheDocument()
-		expect(
-			screen.getByText('Search this folder here, or use Bucket search for indexed results across the whole bucket.'),
-		).toBeInTheDocument()
+		expect(screen.getByText('Search here, or use Bucket search across the whole bucket.')).toBeInTheDocument()
+	})
+
+	it('keeps capped search guidance compact on mid-width layouts without duplicating the indexed CTA', () => {
+		const props = buildProps({
+			isCompact: true,
+			search: 'clip',
+			hasNextPage: true,
+			rawTotalCount: 600,
+			searchAutoScanCap: 500,
+		})
+
+		render(<ObjectsListControls {...props} />)
+
+		expect(screen.getByTestId('objects-list-controls-status-compact')).toHaveAttribute('data-has-action', 'false')
+		expect(screen.getByText('Search paused at 500 items')).toBeInTheDocument()
+		expect(screen.getByText('Use Indexed search above to scan the whole bucket.')).toBeInTheDocument()
+
+		const indexedSearchButtons = screen.getAllByRole('button', { name: 'Global Search (Indexed)' })
+		expect(indexedSearchButtons).toHaveLength(1)
+
+		fireEvent.click(indexedSearchButtons[0]!)
+		expect(props.onOpenGlobalSearch).toHaveBeenCalledTimes(1)
 	})
 })

@@ -7,6 +7,7 @@ import {
 	installMockApi,
 	seedLocalStorage,
 } from './support/apiFixtures'
+import { gotoJobsPage, jobsTableRow, openJobDetailsDrawer, openJobLogsDrawer } from './support/ui'
 
 const now = '2024-01-01T00:00:00Z'
 const profileId = 'jobs-realtime-profile'
@@ -272,15 +273,11 @@ test.describe('Jobs realtime overlays', () => {
 			apiState.setJobs([completedJob])
 		}, 3000)
 		await seedStorage(page)
-		await page.goto('/jobs')
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+		await gotoJobsPage(page)
 
-		const row = page.getByRole('row', { name: new RegExp(jobId, 'i') })
+		const row = jobsTableRow(page, jobId)
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: 'Details' }).click()
-
-		const drawer = page.getByRole('dialog', { name: 'Job Details' })
-		await expect(drawer).toBeVisible()
+		const drawer = await openJobDetailsDrawer(page, row)
 		const initialStatus = drawer.locator('text=/^(running|succeeded)$/').first()
 		await expect(initialStatus).toBeVisible({ timeout: 10_000 })
 		if ((await initialStatus.textContent())?.trim() === 'running') {
@@ -304,34 +301,77 @@ test.describe('Jobs realtime overlays', () => {
 			finishedAt: now,
 			progress: null,
 		})
-		await installRealtimeJobsApi(page, {
-			jobs: [initialJob],
-			eventDelayMs: 4000,
-			eventBody: `id: 1\ndata: ${JSON.stringify({
+		await page.addInitScript((seed) => {
+			class MockWebSocket {
+				static CONNECTING = 0
+				static OPEN = 1
+				static CLOSING = 2
+				static CLOSED = 3
+
+				url: string
+				readyState = MockWebSocket.CONNECTING
+				onopen: ((event: Event) => void) | null = null
+				onclose: ((event: Event) => void) | null = null
+				onerror: ((event: Event) => void) | null = null
+				onmessage: ((event: MessageEvent<string>) => void) | null = null
+
+				constructor(url: string) {
+					this.url = url
+					window.setTimeout(() => {
+						this.readyState = MockWebSocket.OPEN
+						this.onopen?.(new Event('open'))
+					}, seed.openDelayMs)
+					window.setTimeout(() => {
+						this.onmessage?.(
+							new MessageEvent('message', {
+								data: JSON.stringify(seed.realtimeMessage),
+							}),
+						)
+					}, seed.messageDelayMs)
+				}
+
+				close() {
+					this.readyState = MockWebSocket.CLOSED
+					this.onclose?.(new Event('close'))
+				}
+
+				send() {}
+			}
+
+			Object.defineProperty(window, 'WebSocket', {
+				configurable: true,
+				writable: true,
+				value: MockWebSocket,
+			})
+		}, {
+			openDelayMs: 50,
+			messageDelayMs: 4000,
+			realtimeMessage: {
 				type: 'jobs.deleted',
 				seq: 1,
 				payload: { jobIds: [jobId] },
-			})}\n\n`,
-			onFirstEventsResponse: ({ setJobs }) => {
-				setJobs([])
 			},
+		})
+		const apiState = await installRealtimeJobsApi(page, {
+			jobs: [initialJob],
+			eventBody: ': keepalive\n\n',
+			realtimeTransport: 'ws',
 			logsByJobId: {
 				[jobId]: '2024-01-01T00:00:00Z start\n2024-01-01T00:00:01Z failed: delete prefix\n',
 			},
 		})
+		setTimeout(() => {
+			apiState.setJobs([])
+		}, 3000)
 		await seedStorage(page)
-		await page.goto('/jobs')
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+		await gotoJobsPage(page)
 
-		const row = page.getByRole('row', { name: new RegExp(jobId, 'i') })
+		const row = jobsTableRow(page, jobId)
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: 'Logs' }).click()
-
-		const drawer = page.getByRole('dialog', { name: 'Job Logs' })
-		await expect(drawer).toBeVisible()
+		const drawer = await openJobLogsDrawer(page, row)
 		await expect(drawer.getByText('failed: delete prefix')).toBeVisible()
 
 		await expect(page.getByRole('dialog', { name: 'Job Logs' })).toHaveCount(0, { timeout: 10_000 })
-		await expect(page.getByRole('row', { name: new RegExp(jobId, 'i') })).toHaveCount(0, { timeout: 10_000 })
+		await expect(jobsTableRow(page, jobId)).toHaveCount(0, { timeout: 10_000 })
 	})
 })

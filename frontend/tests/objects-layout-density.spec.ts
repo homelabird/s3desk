@@ -1,6 +1,15 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import {
+	clearFavoritesFilterHint,
+	createFolderOrUploadFilesAtThisLevelHint,
+	failedToLoadFoldersTitle,
+	noFoldersHereYetTitle,
+	noFavoritesMatchQueryTitle,
+	pickBucketToBrowseFoldersAndNestedPrefixesHint,
+	selectBucketFirstHint,
+} from '../src/lib/actionHints'
+import {
 	buildBucketFixture,
 	buildMetaFixture,
 	buildObjectsListFixture,
@@ -11,24 +20,6 @@ import {
 	textFixture,
 } from './support/apiFixtures'
 import {
-	OBJECTS_BUCKET_PICKER_DESKTOP_SELECTOR,
-	OBJECTS_BUCKET_PICKER_DESKTOP_VALUE_SELECTOR,
-	OBJECTS_FAVORITE_ITEM_SELECTOR,
-	OBJECTS_FAVORITES_CONTROLS_SELECTOR,
-	OBJECTS_FAVORITES_LIST_SELECTOR,
-	OBJECTS_FOLDERS_PANE_BODY_SELECTOR,
-	OBJECTS_FOLDERS_PANE_SELECTOR,
-	OBJECTS_GLOBAL_SEARCH_TABLE_WRAP_SELECTOR,
-	OBJECTS_LIST_CONTROLS_COMPACT_FOOTER_SELECTOR,
-	OBJECTS_LIST_CONTROLS_COMPACT_META_SELECTOR,
-	OBJECTS_LIST_CONTROLS_ROOT_SELECTOR,
-	OBJECTS_LIST_CONTROLS_STATUS_COMPACT_SELECTOR,
-	OBJECTS_TOOLBAR_DESKTOP_ACTIONS_SELECTOR,
-	OBJECTS_TOOLBAR_DESKTOP_NAV_SELECTOR,
-	OBJECTS_TOOLBAR_TABS_SELECTOR,
-	OBJECTS_TREE_NEW_FOLDER_SELECTOR,
-	OBJECTS_TREE_ROW_SELECTOR,
-	OBJECTS_TREE_STATUS_SELECTOR,
 	objectsBucketPickerDesktop,
 	objectsFavoriteItem,
 	objectsFavoritesControls,
@@ -44,29 +35,6 @@ const bucket = 'layout-bucket'
 const longBucket = 'layout-bucket-regional-observability-archive-2026'
 const now = '2024-01-01T00:00:00Z'
 const availableBuckets = [bucket, longBucket]
-
-const objectsLayoutSelectors = {
-	bucketPickerDesktop: OBJECTS_BUCKET_PICKER_DESKTOP_SELECTOR,
-	bucketPickerDesktopValue: OBJECTS_BUCKET_PICKER_DESKTOP_VALUE_SELECTOR,
-	favoriteItem: OBJECTS_FAVORITE_ITEM_SELECTOR,
-	favoritesControls: OBJECTS_FAVORITES_CONTROLS_SELECTOR,
-	favoritesList: OBJECTS_FAVORITES_LIST_SELECTOR,
-	foldersPane: OBJECTS_FOLDERS_PANE_SELECTOR,
-	foldersPaneBody: OBJECTS_FOLDERS_PANE_BODY_SELECTOR,
-	globalSearchTableWrap: OBJECTS_GLOBAL_SEARCH_TABLE_WRAP_SELECTOR,
-	listControlsCompactFooter: OBJECTS_LIST_CONTROLS_COMPACT_FOOTER_SELECTOR,
-	listControlsCompactMeta: OBJECTS_LIST_CONTROLS_COMPACT_META_SELECTOR,
-	listControlsRoot: OBJECTS_LIST_CONTROLS_ROOT_SELECTOR,
-	listControlsStatusCompact: OBJECTS_LIST_CONTROLS_STATUS_COMPACT_SELECTOR,
-	toolbarDesktopActions: OBJECTS_TOOLBAR_DESKTOP_ACTIONS_SELECTOR,
-	toolbarDesktopNav: OBJECTS_TOOLBAR_DESKTOP_NAV_SELECTOR,
-	toolbarTabs: OBJECTS_TOOLBAR_TABS_SELECTOR,
-	treeNewFolder: OBJECTS_TREE_NEW_FOLDER_SELECTOR,
-	treeRowDepth0: `${OBJECTS_TREE_ROW_SELECTOR}[data-tree-depth="0"]`,
-	treeRowDepth1: `${OBJECTS_TREE_ROW_SELECTOR}[data-tree-depth="1"]`,
-	treeRow: OBJECTS_TREE_ROW_SELECTOR,
-	treeStatus: OBJECTS_TREE_STATUS_SELECTOR,
-} as const
 
 const objectsByPrefix = {
 	'': {
@@ -264,28 +232,8 @@ async function openObjectsPage(page: Page, overrides: Record<string, unknown> = 
 	})
 }
 
-async function readFoldersStatusMetrics(page: Page) {
-	return page.evaluate((selectors) => {
-		const pane = document.querySelector(selectors.foldersPane)
-		const body = pane?.querySelector(selectors.foldersPaneBody)
-		const status = pane?.querySelector(selectors.treeStatus)
-		if (!(body instanceof HTMLElement) || !(status instanceof HTMLElement)) {
-			return null
-		}
-
-		const bodyRect = body.getBoundingClientRect() // e2e-geometry-allow: explicit responsive density contract
-		const statusRect = status.getBoundingClientRect() // e2e-geometry-allow: explicit responsive density contract
-		return {
-			kind: status.getAttribute('data-tree-status-kind'),
-			height: Math.round(statusRect.height),
-			bodyTopInset: Math.round(statusRect.top - bodyRect.top),
-			overflowing: status.scrollWidth > status.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-		}
-	}, objectsLayoutSelectors)
-}
-
 test.describe('Objects adaptive desktop workflows', () => {
-	test('keeps tab, bucket picker, and toolbar groups tightly spaced on mid-width desktops', async ({ page }) => {
+	test('uses toolbar tabs, bucket picker, and navigation on mid-width desktops', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page, {
@@ -315,35 +263,23 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByTestId('objects-toolbar-desktop-nav')).toBeVisible()
 		await expect(page.getByTestId('objects-toolbar-desktop-actions')).toBeVisible()
 		await expect(objectsBucketPickerDesktop(page)).toBeVisible()
+		await expect(page.getByRole('tab', { name: bucket, exact: true })).toHaveAttribute('aria-selected', 'true')
 
-		const metrics = await page.evaluate((selectors) => {
-			const tabs = document.querySelector(selectors.toolbarTabs)
-			const topGroup = document.querySelector(selectors.toolbarDesktopNav)
-			const actions = document.querySelector(selectors.toolbarDesktopActions)
-			const bucketTrigger = document.querySelector(selectors.bucketPickerDesktop)
-			if (!(tabs instanceof HTMLElement) || !(topGroup instanceof HTMLElement) || !(actions instanceof HTMLElement) || !(bucketTrigger instanceof HTMLElement)) {
-				return null
-			}
+		await page.getByRole('tab', { name: `${bucket}/reports/`, exact: true }).click()
+		await expect(page.getByRole('tab', { name: `${bucket}/reports/`, exact: true })).toHaveAttribute('aria-selected', 'true')
+		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
 
-			const tabsRect = tabs.getBoundingClientRect() // e2e-geometry-allow: explicit responsive density contract
-			const topGroupRect = topGroup.getBoundingClientRect() // e2e-geometry-allow: explicit responsive density contract
-			const actionsRect = actions.getBoundingClientRect() // e2e-geometry-allow: explicit responsive density contract
-			const bucketRect = bucketTrigger.getBoundingClientRect() // e2e-geometry-allow: explicit responsive density contract
+		await expect(page.getByRole('button', { name: 'Go back' })).toBeEnabled()
+		await page.getByRole('button', { name: 'Go back' }).click()
+		await expect(page.getByText(`s3://${bucket}/`)).toBeVisible()
 
-			return {
-				tabsToToolbarGap: Math.round(topGroupRect.top - tabsRect.bottom),
-				tabsToBucketGap: Math.round(bucketRect.top - tabsRect.bottom),
-				groupGap: Math.round(actionsRect.top - topGroupRect.bottom),
-			}
-		}, objectsLayoutSelectors)
+		await expect(page.getByRole('button', { name: 'Go forward' })).toBeEnabled()
+		await page.getByRole('button', { name: 'Go forward' }).click()
+		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
 
-		if (!metrics) {
-			throw new Error('Missing mid-width toolbar metrics')
-		}
-
-		expect(metrics.tabsToToolbarGap, JSON.stringify(metrics)).toBeLessThan(12)
-		expect(metrics.tabsToBucketGap, JSON.stringify(metrics)).toBeLessThan(16)
-		expect(metrics.groupGap, JSON.stringify(metrics)).toBeLessThan(12)
+		await expect(page.getByRole('button', { name: 'Go up' })).toBeEnabled()
+		await page.getByRole('button', { name: 'Go up' }).click()
+		await expect(page.getByText(`s3://${bucket}/`)).toBeVisible()
 	})
 
 	test('shows tab overflow affordance on mid-width desktops when many locations are open', async ({ page }) => {
@@ -383,34 +319,13 @@ test.describe('Objects adaptive desktop workflows', () => {
 			objectsActiveTabId: 'tab-a',
 		})
 
-		const metrics = await page.evaluate((selectors) => {
-			const tabsWrap = document.querySelector(selectors.toolbarTabs)
-			const tabList = tabsWrap?.querySelector('[role="tablist"]')
-			const tabsRoot = tabList?.parentElement
-			if (!(tabsWrap instanceof HTMLElement) || !(tabList instanceof HTMLElement) || !(tabsRoot instanceof HTMLElement)) {
-				return null
-			}
-
-			return {
-				scrollable: tabsRoot.dataset.scrollable,
-				atStart: tabsRoot.dataset.atStart,
-				atEnd: tabsRoot.dataset.atEnd,
-				scrollWidth: Math.round(tabList.scrollWidth), // e2e-geometry-allow: explicit responsive density contract
-				clientWidth: Math.round(tabList.clientWidth), // e2e-geometry-allow: explicit responsive density contract
-			}
-		}, objectsLayoutSelectors)
-
-		if (!metrics) {
-			throw new Error('Missing tab overflow metrics')
-		}
-
-		expect(metrics.scrollable, JSON.stringify(metrics)).toBe('true')
-		expect(metrics.atStart, JSON.stringify(metrics)).toBe('true')
-		expect(metrics.atEnd, JSON.stringify(metrics)).toBe('false')
-		expect(metrics.scrollWidth, JSON.stringify(metrics)).toBeGreaterThan(metrics.clientWidth) // e2e-geometry-allow: explicit responsive density contract
+		const tabsRoot = page.getByTestId('objects-toolbar-tabs').getByRole('tablist').locator('xpath=..')
+		await expect(tabsRoot).toHaveAttribute('data-scrollable', 'true')
+		await expect(tabsRoot).toHaveAttribute('data-at-start', 'true')
+		await expect(tabsRoot).toHaveAttribute('data-at-end', 'false')
 	})
 
-	test('keeps long bucket names truncated without widening the mid-width toolbar', async ({ page }) => {
+	test('keeps long bucket names discoverable and switchable in the mid-width toolbar', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page, {
@@ -437,103 +352,68 @@ test.describe('Objects adaptive desktop workflows', () => {
 			objectsActiveTabId: 'tab-a',
 		})
 
-		const metrics = await page.evaluate((selectors) => {
-			const trigger = document.querySelector(selectors.bucketPickerDesktop)
-			const label = document.querySelector(selectors.bucketPickerDesktopValue)
-			const navGroup = document.querySelector(selectors.toolbarDesktopNav)
-			if (!(trigger instanceof HTMLElement) || !(label instanceof HTMLElement) || !(navGroup instanceof HTMLElement)) {
-				return null
-			}
+		const picker = objectsBucketPickerDesktop(page)
+		await expect(picker).toHaveAttribute('title', longBucket)
+		await expect(page.getByTestId('objects-bucket-picker-desktop-value')).toHaveAttribute('title', longBucket)
 
-			return {
-				triggerWidth: Math.round(trigger.getBoundingClientRect().width), // e2e-geometry-allow: explicit responsive density contract
-				labelClientWidth: Math.round(label.clientWidth), // e2e-geometry-allow: explicit responsive density contract
-				labelScrollWidth: Math.round(label.scrollWidth), // e2e-geometry-allow: explicit responsive density contract
-				triggerTitle: label.getAttribute('title'),
-				navOverflowing: navGroup.scrollWidth > navGroup.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-			}
-		}, objectsLayoutSelectors)
+		await picker.click()
+		const popover = page.getByTestId('objects-bucket-picker-desktop-popover')
+		await expect(popover).toBeVisible()
+		await expect(popover.getByText(longBucket)).toBeVisible()
 
-		if (!metrics) {
-			throw new Error('Missing bucket picker truncation metrics')
-		}
+		await popover.getByLabel('Search buckets').fill(bucket)
+		await popover.getByTestId('objects-bucket-picker-option-layout-bucket').click()
 
-		expect(metrics.triggerTitle, JSON.stringify(metrics)).toBe(longBucket)
-		expect(metrics.labelScrollWidth, JSON.stringify(metrics)).toBeGreaterThan(metrics.labelClientWidth)
-		expect(metrics.navOverflowing, JSON.stringify(metrics)).toBe(false)
-		expect(metrics.triggerWidth, JSON.stringify(metrics)).toBeLessThanOrEqual(260)
+		await expect(popover).toHaveCount(0)
+		await expect(objectsBucketPickerDesktop(page)).toHaveAttribute('title', bucket)
+		await expect(page.getByText(`s3://${bucket}/`)).toBeVisible()
 	})
 
-	test('compacts the desktop action group on mid-width screens to avoid wrapping', async ({ page }) => {
+	test('uses compact desktop action buttons on mid-width screens', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page)
 
-		const metrics = await page.evaluate((selectors) => {
-			const actions = document.querySelector(selectors.toolbarDesktopActions)
-			if (!(actions instanceof HTMLElement)) {
-				return null
-			}
+		const actions = page.getByTestId('objects-toolbar-desktop-actions')
+		await expect(actions).toHaveAttribute('data-compact', 'true')
+		await expect(actions.getByText('Upload…')).toHaveCount(0)
+		await expect(actions.getByText('New folder')).toHaveCount(0)
 
-			const buttons = Array.from(actions.querySelectorAll('button')).map((button) => ({
-				text: button.textContent?.trim() ?? '',
-				width: Math.round(button.getBoundingClientRect().width), // e2e-geometry-allow: explicit responsive density contract
-				height: Math.round(button.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-			}))
+		await expect(actions.getByRole('button', { name: 'Upload' })).toBeEnabled()
+		await expect(actions.getByRole('button', { name: 'New folder' })).toBeEnabled()
+		await expect(actions.getByRole('button', { name: 'More actions' })).toBeEnabled()
 
-			return {
-				compact: actions.dataset.compact,
-				height: Math.round(actions.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				overflowing: actions.scrollWidth > actions.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-				buttons,
-			}
-		}, objectsLayoutSelectors)
+		await actions.getByRole('button', { name: 'New folder' }).click()
+		const dialog = page.getByRole('dialog', { name: 'New folder' })
+		await expect(dialog).toBeVisible()
+		await dialog.getByRole('button', { name: 'Cancel' }).click()
+		await expect(dialog).toHaveCount(0)
 
-		if (!metrics) {
-			throw new Error('Missing desktop action group metrics')
-		}
-
-		expect(metrics.compact, JSON.stringify(metrics)).toBe('true')
-		expect(metrics.height, JSON.stringify(metrics)).toBeLessThanOrEqual(32)
-		expect(metrics.overflowing, JSON.stringify(metrics)).toBe(false)
-		expect(metrics.buttons.every((button) => button.text === ''), JSON.stringify(metrics)).toBe(true)
-		expect(metrics.buttons.every((button) => button.height <= 32), JSON.stringify(metrics)).toBe(true)
+		await actions.getByRole('button', { name: 'More actions' }).click()
+		await expect(page.getByRole('menuitem', { name: 'Folders' })).toBeVisible()
 	})
 
-	test('keeps compact list controls dense on mid-width desktops without horizontal overflow', async ({ page }) => {
+	test('uses compact list controls on mid-width desktops', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page)
 
-		const metrics = await page.evaluate((selectors) => {
-			const root = document.querySelector(selectors.listControlsRoot)
-			const footer = document.querySelector(selectors.listControlsCompactFooter)
-			const meta = document.querySelector(selectors.listControlsCompactMeta)
-			if (!(root instanceof HTMLElement) || !(footer instanceof HTMLElement) || !(meta instanceof HTMLElement)) {
-				return null
-			}
+		await expect(page.getByTestId('objects-list-controls-root')).toHaveAttribute('data-compact', 'true')
+		await expect(page.getByTestId('objects-list-controls-compact-footer')).toBeVisible()
+		await expect(page.getByTestId('objects-list-controls-compact-meta')).toContainText('1 folders, 0 files')
+		await expect(page.getByText('Search here, or use Bucket search across the whole bucket.')).toBeVisible()
 
-			return {
-				compact: root.dataset.compact,
-				footerHeight: Math.round(footer.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				metaHeight: Math.round(meta.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				rootOverflowing: root.scrollWidth > root.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-				footerOverflowing: footer.scrollWidth > footer.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-			}
-		}, objectsLayoutSelectors)
+		await expect(page.getByLabel('Search current folder')).toBeVisible()
+		await expect(page.getByRole('button', { name: /Filters$/ })).toBeVisible()
+		await expect(page.getByRole('button', { name: /Bucket search$/ })).toBeVisible()
 
-		if (!metrics) {
-			throw new Error('Missing compact list controls metrics')
-		}
-
-		expect(metrics.compact, JSON.stringify(metrics)).toBe('true')
-		expect(metrics.footerHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(40)
-		expect(metrics.metaHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(44)
-		expect(metrics.rootOverflowing, JSON.stringify(metrics)).toBe(false)
-		expect(metrics.footerOverflowing, JSON.stringify(metrics)).toBe(false)
+		const viewMode = page.getByRole('group', { name: 'View mode' })
+		await expect(viewMode.getByRole('button', { name: /List$/ })).toHaveAttribute('aria-pressed', 'true')
+		await viewMode.getByRole('button', { name: /Grid$/ }).click()
+		await expect(viewMode.getByRole('button', { name: /Grid$/ })).toHaveAttribute('aria-pressed', 'true')
 	})
 
-	test('keeps the capped search status compact on mid-width desktops', async ({ page }) => {
+	test('shows capped local search guidance and opens indexed search on mid-width desktops', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page, {
 			rootObjects: {
@@ -544,42 +424,28 @@ test.describe('Objects adaptive desktop workflows', () => {
 		})
 		await openObjectsPage(page, { objectsSearch: 'search-log' })
 
-		await expect(page.getByTestId('objects-list-controls-status-compact')).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Global Search (Indexed)' })).toBeVisible()
+		const status = page.getByTestId('objects-list-controls-status-compact')
+		await expect(status).toBeVisible()
+		await expect(status).toHaveAttribute('data-has-action', 'false')
+		await expect(status).toContainText('Search paused at 3,000 items')
+		await expect(status).toContainText('Use Indexed search above to scan the whole bucket.')
 
-		const metrics = await page.evaluate((selectors) => {
-			const root = document.querySelector(selectors.listControlsRoot)
-			const status = document.querySelector(selectors.listControlsStatusCompact)
-			if (!(root instanceof HTMLElement) || !(status instanceof HTMLElement)) {
-				return null
-			}
+		const indexedSearchButton = page.getByRole('button', { name: 'Global Search (Indexed)' })
+		await expect(indexedSearchButton).toHaveCount(1)
+		await indexedSearchButton.click()
 
-			return {
-				compact: root.dataset.compact,
-				hasAction: status.dataset.hasAction,
-				statusHeight: Math.round(status.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				rootOverflowing: root.scrollWidth > root.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-				statusOverflowing: status.scrollWidth > status.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-			}
-		}, objectsLayoutSelectors)
-
-		if (!metrics) {
-			throw new Error('Missing compact search status metrics')
-		}
-
-		expect(metrics.compact, JSON.stringify(metrics)).toBe('true')
-		expect(metrics.hasAction, JSON.stringify(metrics)).toBe('false')
-		expect(metrics.statusHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(56)
-		expect(metrics.rootOverflowing, JSON.stringify(metrics)).toBe(false)
-		expect(metrics.statusOverflowing, JSON.stringify(metrics)).toBe(false)
+		const drawer = page.getByTestId('objects-global-search-sheet')
+		await expect(drawer).toBeVisible()
+		await expect(drawer.getByLabel('Search query')).toBeVisible()
 	})
 
-	test('keeps the global search table rows and action column dense on mid-width desktops', async ({ page }) => {
+	test('uses global search table actions on mid-width desktops', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
+		const searchResultKey = 'reports/2024/mobile-density-review/alpha-findings-summary.txt'
 		await stubObjectsAdaptiveApi(page, {
 			globalSearchItems: [
 				{
-					key: 'reports/2024/mobile-density-review/alpha-findings-summary.txt',
+					key: searchResultKey,
 					size: 4096,
 					lastModified: now,
 				},
@@ -593,40 +459,20 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await drawer.getByLabel('Search query').fill('alpha')
 		await expect(objectsGlobalSearchTableWrap(drawer)).toBeVisible()
 
-		const metrics = await page.evaluate((selectors) => {
-			const tableWrap = document.querySelector(selectors.globalSearchTableWrap)
-			const firstRow = tableWrap?.querySelector('tbody tr')
-			const actionRow = tableWrap?.querySelector('[data-global-search-table-action-row="true"]')
-			const actionHeader = tableWrap?.querySelector('th:last-child')
-			if (!(tableWrap instanceof HTMLElement) || !(firstRow instanceof HTMLElement) || !(actionRow instanceof HTMLElement) || !(actionHeader instanceof HTMLElement)) {
-				return null
-			}
+		const row = objectsGlobalSearchTableWrap(drawer).locator('tbody tr').filter({ hasText: 'alpha-findings-summary.txt' }).first()
+		await expect(row).toBeVisible()
+		const openPrefixButton = row.getByRole('button', { name: `Open ${searchResultKey}` })
+		await expect(openPrefixButton).toBeVisible()
+		await expect(row.getByRole('button', { name: `Copy key ${searchResultKey}` })).toBeVisible()
+		await expect(row.getByRole('button', { name: `Download ${searchResultKey}` })).toBeVisible()
+		await expect(row.getByRole('button', { name: `Open details for ${searchResultKey}` })).toBeVisible()
 
-			const buttons = Array.from(actionRow.querySelectorAll('button')).map((button) => ({
-				height: Math.round(button.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-			}))
-
-			return {
-				rowHeight: Math.round(firstRow.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				actionRowHeight: Math.round(actionRow.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				actionHeaderWidth: Math.round(actionHeader.getBoundingClientRect().width), // e2e-geometry-allow: explicit responsive density contract
-				actionOverflowing: actionRow.scrollWidth > actionRow.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-				buttons,
-			}
-		}, objectsLayoutSelectors)
-
-		if (!metrics) {
-			throw new Error('Missing global search table metrics')
-		}
-
-		expect(metrics.rowHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(48)
-		expect(metrics.actionRowHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(30)
-		expect(metrics.actionHeaderWidth, JSON.stringify(metrics)).toBeLessThanOrEqual(230)
-		expect(metrics.actionOverflowing, JSON.stringify(metrics)).toBe(false)
-		expect(metrics.buttons.every((button) => button.height <= 28), JSON.stringify(metrics)).toBe(true)
+		await openPrefixButton.click()
+		await expect(drawer).toHaveCount(0)
+		await expect(page.getByText(`s3://${bucket}/reports/2024/mobile-density-review/`)).toBeVisible()
 	})
 
-	test('keeps the favorites controls tight inside the folders drawer on mid-width desktops', async ({ page }) => {
+	test('filters and toggles favorites controls inside the folders drawer', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page)
@@ -639,32 +485,27 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await drawer.getByRole('button', { name: 'Favorites' }).click()
 		await expect(objectsFavoritesControls(drawer)).toBeVisible()
 
-		const metrics = await page.evaluate((selectors) => {
-			const controls = document.querySelector(selectors.favoritesControls)
-			if (!(controls instanceof HTMLElement)) {
-				return null
-			}
+		const search = drawer.getByLabel('Find favorite')
+		await search.fill('summary')
+		await expect(objectsFavoriteItem(drawer, 'summary.txt')).toBeVisible()
 
-			const styles = window.getComputedStyle(controls)
-			return {
-				height: Math.round(controls.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				rowGap: Math.round(parseFloat(styles.rowGap || styles.gap || '0')),
-				columnGap: Math.round(parseFloat(styles.columnGap || styles.gap || '0')),
-				overflowing: controls.scrollWidth > controls.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-			}
-		}, objectsLayoutSelectors)
+		const favoritesOnly = drawer.getByRole('switch', { name: 'Favorites only' })
+		const openDetailsOnClick = drawer.getByRole('switch', { name: 'Open details on click' })
+		await expect(favoritesOnly).toHaveAttribute('aria-checked', 'false')
+		await favoritesOnly.click()
+		await expect(favoritesOnly).toHaveAttribute('aria-checked', 'true')
+		await expect(openDetailsOnClick).toHaveAttribute('aria-checked', 'true')
+		await openDetailsOnClick.click()
+		await expect(openDetailsOnClick).toHaveAttribute('aria-checked', 'false')
 
-		if (!metrics) {
-			throw new Error('Missing favorites controls metrics')
-		}
-
-		expect(metrics.height, JSON.stringify(metrics)).toBeLessThanOrEqual(32)
-		expect(metrics.rowGap, JSON.stringify(metrics)).toBeLessThanOrEqual(4)
-		expect(metrics.columnGap, JSON.stringify(metrics)).toBeLessThanOrEqual(10)
-		expect(metrics.overflowing, JSON.stringify(metrics)).toBe(false)
+		await search.fill('missing')
+		const status = drawer.getByTestId('objects-favorites-status')
+		await expect(status).toHaveAttribute('data-favorites-status-kind', 'empty')
+		await expect(status).toContainText(noFavoritesMatchQueryTitle('missing'))
+		await expect(status).toContainText(clearFavoritesFilterHint())
 	})
 
-	test('keeps favorite rows compact inside the folders drawer on mid-width desktops', async ({ page }) => {
+	test('opens a favorite from the folders drawer and restores object details', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page)
@@ -678,31 +519,16 @@ test.describe('Objects adaptive desktop workflows', () => {
 		const item = objectsFavoriteItem(drawer).first()
 		await expect(item).toBeVisible()
 
-		const metrics = await page.evaluate((selectors) => {
-			const list = document.querySelector(selectors.favoritesList)
-			const item = document.querySelector(selectors.favoriteItem)
-			if (!(list instanceof HTMLElement) || !(item instanceof HTMLElement)) {
-				return null
-			}
+		await item.click()
 
-			const listStyles = window.getComputedStyle(list)
-			return {
-				height: Math.round(item.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				rowGap: Math.round(parseFloat(listStyles.rowGap || listStyles.gap || '0')),
-				overflowing: item.scrollWidth > item.clientWidth + 1, // e2e-geometry-allow: explicit responsive density contract
-			}
-		}, objectsLayoutSelectors)
-
-		if (!metrics) {
-			throw new Error('Missing favorites row metrics')
-		}
-
-		expect(metrics.height, JSON.stringify(metrics)).toBeLessThanOrEqual(38)
-		expect(metrics.rowGap, JSON.stringify(metrics)).toBeLessThanOrEqual(3)
-		expect(metrics.overflowing, JSON.stringify(metrics)).toBe(false)
+		await expect(drawer).toHaveCount(0)
+		await expect(page.getByText(`s3://${bucket}/reports/2024/`)).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'summary.txt')).toBeChecked()
+		await expect(page.getByText('Content Type')).toBeVisible()
+		await expect(page.getByText('reports/2024/summary.txt')).toBeVisible()
 	})
 
-	test('keeps folder tree rows, indent, and header action compact on mid-width desktops', async ({ page }) => {
+	test('uses folder tree rows and new folder action inside the folders drawer', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page)
@@ -712,39 +538,32 @@ test.describe('Objects adaptive desktop workflows', () => {
 
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
-		await drawer.getByRole('button', { name: 'Expand' }).first().click()
-		await expect(objectsTreeRow(drawer, 1).first()).toBeVisible()
 
-		const metrics = await page.evaluate((selectors) => {
-			const pane = document.querySelector(selectors.foldersPane)
-			const rootRow = pane?.querySelector(selectors.treeRowDepth0)
-			const childRow = pane?.querySelector(selectors.treeRowDepth1)
-			const action = pane?.querySelector(selectors.treeNewFolder)
-			if (!(rootRow instanceof HTMLElement) || !(childRow instanceof HTMLElement) || !(action instanceof HTMLElement)) {
-				return null
-			}
+		const newFolderButton = drawer.getByTestId('objects-tree-new-folder')
+		await expect(newFolderButton).toBeEnabled()
+		await expect(newFolderButton).toHaveAttribute('aria-label', 'New folder')
 
-			return {
-				rootRowHeight: Math.round(rootRow.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				childRowHeight: Math.round(childRow.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				childIndent: Math.round(parseFloat(window.getComputedStyle(childRow).paddingLeft || '0')),
-				actionHeight: Math.round(action.getBoundingClientRect().height), // e2e-geometry-allow: explicit responsive density contract
-				actionWidth: Math.round(action.getBoundingClientRect().width), // e2e-geometry-allow: explicit responsive density contract
-			}
-		}, objectsLayoutSelectors)
+		await newFolderButton.click()
+		const dialog = page.getByRole('dialog', { name: 'New folder' })
+		await expect(dialog).toBeVisible()
+		await expect(dialog.getByLabel('Folder name')).toBeVisible()
+		await dialog.getByRole('button', { name: 'Cancel' }).click()
+		await expect(dialog).toHaveCount(0)
 
-		if (!metrics) {
-			throw new Error('Missing tree row metrics')
-		}
+		const rootRow = objectsTreeRow(drawer, 0).filter({ hasText: bucket }).first()
+		await expect(rootRow).toBeVisible()
+		await rootRow.getByRole('button', { name: 'Expand' }).click()
 
-		expect(metrics.rootRowHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(24)
-		expect(metrics.childRowHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(24)
-		expect(metrics.childIndent, JSON.stringify(metrics)).toBeLessThanOrEqual(12)
-		expect(metrics.actionHeight, JSON.stringify(metrics)).toBeLessThanOrEqual(24)
-		expect(metrics.actionWidth, JSON.stringify(metrics)).toBeLessThanOrEqual(24)
+		const childRow = objectsTreeRow(drawer, 1).filter({ hasText: 'reports' }).first()
+		await expect(childRow).toBeVisible()
+		await childRow.getByRole('button', { name: 'reports', exact: true }).click()
+
+		await expect(drawer).toHaveCount(0)
+		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'quarterly.csv')).toBeVisible()
 	})
 
-	test('keeps the folders prerequisite status block and body inset compact on mid-width desktops', async ({ page }) => {
+	test('shows the folders prerequisite status when no bucket is selected', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
 		await seedLocalStorage(page, {
@@ -767,20 +586,15 @@ test.describe('Objects adaptive desktop workflows', () => {
 
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
-		await expect(objectsTreeStatus(drawer)).toBeVisible()
+		const status = objectsTreeStatus(drawer)
 
-		const metrics = await readFoldersStatusMetrics(page)
-		if (!metrics) {
-			throw new Error('Missing folders prerequisite status metrics')
-		}
-
-		expect(metrics.kind, JSON.stringify(metrics)).toBe('prereq')
-		expect(metrics.height, JSON.stringify(metrics)).toBeLessThanOrEqual(52)
-		expect(metrics.bodyTopInset, JSON.stringify(metrics)).toBeLessThanOrEqual(6)
-		expect(metrics.overflowing, JSON.stringify(metrics)).toBe(false)
+		await expect(status).toBeVisible()
+		await expect(status).toHaveAttribute('data-tree-status-kind', 'prereq')
+		await expect(status).toContainText(selectBucketFirstHint())
+		await expect(status).toContainText(pickBucketToBrowseFoldersAndNestedPrefixesHint())
 	})
 
-	test('keeps the folders empty status block compact on mid-width desktops', async ({ page }) => {
+	test('shows the folders empty status after expanding a bucket with no nested folders', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page, { rootObjects: { commonPrefixes: [], items: [] } })
 		await openObjectsPage(page)
@@ -791,19 +605,14 @@ test.describe('Objects adaptive desktop workflows', () => {
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
 		await drawer.getByRole('button', { name: 'Expand' }).first().click()
-		await expect(objectsTreeStatus(drawer)).toHaveAttribute('data-tree-status-kind', 'empty')
+		const status = objectsTreeStatus(drawer)
 
-		const metrics = await readFoldersStatusMetrics(page)
-		if (!metrics) {
-			throw new Error('Missing folders empty status metrics')
-		}
-
-		expect(metrics.kind, JSON.stringify(metrics)).toBe('empty')
-		expect(metrics.height, JSON.stringify(metrics)).toBeLessThanOrEqual(52)
-		expect(metrics.overflowing, JSON.stringify(metrics)).toBe(false)
+		await expect(status).toHaveAttribute('data-tree-status-kind', 'empty')
+		await expect(status).toContainText(noFoldersHereYetTitle())
+		await expect(status).toContainText(createFolderOrUploadFilesAtThisLevelHint())
 	})
 
-	test('keeps the folders error status block compact on mid-width desktops', async ({ page }) => {
+	test('shows the folders error status when a nested prefix scan fails', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page, { prefixErrors: { 'reports/': 'Nested prefix scan failed.' } })
 		await openObjectsPage(page)
@@ -816,16 +625,12 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await drawer.getByRole('button', { name: 'Expand' }).first().click()
 		await expect(objectsTreeRow(drawer, 1).first()).toBeVisible()
 		await objectsTreeRow(drawer, 1).getByRole('button', { name: 'Expand' }).first().click()
-		await expect(objectsTreeStatus(drawer)).toHaveAttribute('data-tree-status-kind', 'error')
+		const status = objectsTreeStatus(drawer)
 
-		const metrics = await readFoldersStatusMetrics(page)
-		if (!metrics) {
-			throw new Error('Missing folders error status metrics')
-		}
-
-		expect(metrics.kind, JSON.stringify(metrics)).toBe('error')
-		expect(metrics.height, JSON.stringify(metrics)).toBeLessThanOrEqual(56)
-		expect(metrics.overflowing, JSON.stringify(metrics)).toBe(false)
+		await expect(status).toHaveAttribute('data-tree-status-kind', 'error')
+		await expect(status).toHaveAttribute('role', 'alert')
+		await expect(status).toContainText(failedToLoadFoldersTitle())
+		await expect(status).toContainText('Nested prefix scan failed.')
 	})
 
 	test('opens the folders sheet from the desktop overflow menu and navigates to a prefix', async ({ page }) => {
@@ -839,9 +644,13 @@ test.describe('Objects adaptive desktop workflows', () => {
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
 
-		const tree = drawer.getByRole('tree').first()
-		await tree.getByRole('button', { name: 'Expand' }).first().click()
-		await tree.getByRole('button', { name: 'reports' }).click()
+		const rootRow = objectsTreeRow(drawer, 0).filter({ hasText: bucket }).first()
+		await expect(rootRow).toBeVisible()
+		await rootRow.getByRole('button', { name: `Expand ${bucket}` }).click()
+
+		const reportsRow = objectsTreeRow(drawer, 1).filter({ hasText: 'reports' }).first()
+		await expect(reportsRow).toBeVisible()
+		await reportsRow.getByRole('button', { name: 'reports', exact: true }).click()
 
 		await expect(drawer).toHaveCount(0)
 		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()

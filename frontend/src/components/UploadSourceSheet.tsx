@@ -1,6 +1,12 @@
 import { CloudUploadOutlined, FolderOutlined } from '@ant-design/icons'
 import { Alert, Button, Grid, Typography } from 'antd'
 
+import {
+	directorySelectionUnavailableHint,
+	folderSelectionPreservesNestedPathsHint,
+	folderSelectionUnavailableTitle,
+	uploadFromDeviceTitle,
+} from '../lib/secureContext'
 import { OverlaySheet } from './OverlaySheet'
 import styles from './UploadSourceSheet.module.css'
 
@@ -16,6 +22,8 @@ type Props = {
 	onSelectFolder: () => void
 }
 
+export type UploadSourceSheetProps = Props
+
 export function UploadSourceSheet(props: Props) {
 	const screens = Grid.useBreakpoint()
 
@@ -23,7 +31,7 @@ export function UploadSourceSheet(props: Props) {
 		<OverlaySheet
 			open={props.open}
 			onClose={props.onClose}
-			title={props.title ?? 'Upload from this device'}
+			title={props.title ?? uploadFromDeviceTitle()}
 			placement={screens.md ? 'right' : 'bottom'}
 			width={screens.md ? 420 : undefined}
 			height={!screens.md ? 'auto' : undefined}
@@ -31,7 +39,7 @@ export function UploadSourceSheet(props: Props) {
 			<div className={styles.stack}>
 				<div className={styles.intro}>
 					<Typography.Text type="secondary">
-						Files and folders are classified automatically. Folder structure is preserved whenever relative paths are present.
+						Files and folders are classified automatically. Relative paths preserve folder structure.
 					</Typography.Text>
 					{props.destinationLabel ? <Typography.Text code>{props.destinationLabel}</Typography.Text> : null}
 				</div>
@@ -62,12 +70,12 @@ export function UploadSourceSheet(props: Props) {
 					<Alert
 						type="info"
 						showIcon
-						message="Folder selection is unavailable"
-						description={props.folderSelectionReason ?? 'This browser only supports file selection.'}
+						title={folderSelectionUnavailableTitle()}
+						description={props.folderSelectionReason ?? directorySelectionUnavailableHint()}
 					/>
 				) : (
 					<Typography.Text type="secondary" className={styles.hint}>
-						Use folder selection when you want the browser to include nested relative paths.
+						{folderSelectionPreservesNestedPathsHint()}
 					</Typography.Text>
 				)}
 			</div>

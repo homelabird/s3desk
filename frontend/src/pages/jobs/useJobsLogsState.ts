@@ -1,16 +1,15 @@
 import { useMutation } from '@tanstack/react-query'
-import { message } from 'antd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 
-import { type APIClient } from '../../api/client'
-import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import { type APIClientShape } from '../../api/client'
+import { copyToClipboard } from '../../lib/clipboard'
+import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
+import { jobsFeedback } from './jobsFeedback'
 
 type UseJobsLogsStateArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	maxLogLines?: number
@@ -52,7 +51,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		true,
 		{
 			legacyLocalStorageKey: 'jobsFollowLogs',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'followLogs')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'followLogs'),
 		},
 	)
 	const logsContainerRef = useRef<HTMLDivElement | null>(null)
@@ -103,7 +102,7 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 		},
 		onError: (err, { requestToken }) => {
 			if (requestToken !== logRequestTokenRef.current) return
-			message.error(formatErr(err))
+			jobsFeedback.error(err)
 		},
 	})
 
@@ -308,15 +307,15 @@ export function useJobsLogsState({ api, apiToken, profileId, maxLogLines = 2000 
 
 	const copyVisibleLogs = useCallback(async () => {
 		if (visibleLogEntries.length === 0) {
-			message.info(normalizedLogSearchQuery ? 'No matching log lines to copy.' : 'No log lines to copy.')
+			jobsFeedback.noLogsToCopy(!!normalizedLogSearchQuery)
 			return
 		}
 		const result = await copyToClipboard(visibleLogText)
 		if (result.ok) {
-			message.success(`Copied ${visibleLogEntries.length.toLocaleString()} line(s)`)
+			jobsFeedback.logsCopied(visibleLogEntries.length)
 			return
 		}
-		message.error(clipboardFailureHint())
+		jobsFeedback.clipboardFailed()
 	}, [normalizedLogSearchQuery, visibleLogEntries, visibleLogText])
 
 	return {

@@ -1,40 +1,13 @@
 import { Alert, Button, Empty, Space, Spin, Tooltip, Typography } from 'antd'
-import type { ComponentProps } from 'react'
 
-import type { APIClient } from '../../api/client'
-import type { BucketCreateRequest, Profile } from '../../api/types'
 import { LinkButton } from '../../components/LinkButton'
 import { PageHeader } from '../../components/PageHeader'
+import { failedToLoadBucketsTitle } from '../../lib/actionHints'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import styles from '../BucketsPage.module.css'
 import { BucketsDialogsPanel } from './BucketsDialogsPanel'
-import { BucketsList, type BucketsListProps } from './BucketsList'
-
-type BucketsDialogsPanelProps = ComponentProps<typeof BucketsDialogsPanel>
-
-export type BucketsPageShellProps = {
-	api: APIClient
-	apiToken: string
-	profileId: string
-	selectedProfile: Profile | null
-	bucketCrudSupported: boolean
-	bucketCrudUnsupportedReason: string
-	bucketsQueryError: unknown | null
-	bucketsLoading: boolean
-	buckets: BucketsListProps['buckets']
-	showBucketsEmpty: boolean
-	openCreateModal: () => void
-	createOpen: boolean
-	closeCreateModal: () => void
-	submitCreateBucket: (req: BucketCreateRequest) => void
-	createLoading: boolean
-	selectedProfileProvider?: Profile['provider']
-	list: BucketsListProps
-	dialogs: Omit<
-		BucketsDialogsPanelProps,
-		'api' | 'apiToken' | 'profileId' | 'selectedProfileProvider' | 'createOpen' | 'closeCreateModal' | 'submitCreateBucket' | 'createLoading'
-	>
-}
+import { BucketsList } from './BucketsList'
+import type { BucketsPageShellProps } from './bucketsPagePresentationTypes'
 
 export function BucketsPageShell(props: BucketsPageShellProps) {
 	return (
@@ -71,7 +44,7 @@ export function BucketsPageShell(props: BucketsPageShellProps) {
 				<Alert
 					type="error"
 					showIcon
-					title="Failed to load buckets"
+					title={failedToLoadBucketsTitle()}
 					description={formatErr(props.bucketsQueryError)}
 				/>
 			) : null}

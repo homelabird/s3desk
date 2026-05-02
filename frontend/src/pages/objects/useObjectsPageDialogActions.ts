@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { Job, JobCreateRequest } from '../../api/types'
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import type { ObjectTypeFilter } from './objectsTypes'
 import { splitLines } from './objectsListUtils'
 import { useObjectsCopyMove } from './useObjectsCopyMove'
@@ -18,7 +18,7 @@ import { useObjectsSelectionMove } from './useObjectsSelectionMove'
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
 
 type Args = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string

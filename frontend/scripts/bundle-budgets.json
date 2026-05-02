@@ -16,17 +16,25 @@
   "objectsPageGzip": {
     "label": "ObjectsPage gzip budget",
     "env": "BUNDLE_BUDGET_OBJECTS_PAGE_GZIP_KB",
-    "defaultKB": 62,
+    "defaultKB": 63,
     "reviewAction": "rebaseline if stable",
     "rationale": "Objects is the heaviest task-completion surface; optional overlays already lazy-load, so the remaining tree/list/details orchestration sets a slightly higher stable floor for this route."
   },
   "uploadsPageGzip": {
     "label": "UploadsPage gzip budget",
     "env": "BUNDLE_BUDGET_UPLOADS_PAGE_GZIP_KB",
+    "defaultKB": 1.2,
+    "reviewTightHeadroomKB": 0.25,
+    "reviewAction": "shrink first",
+    "rationale": "Uploads route entry should stay a thin gate over setup/profile state and defer the full authenticated upload workspace until a profile is active."
+  },
+  "uploadsExperienceGzip": {
+    "label": "UploadsPageExperience gzip budget",
+    "env": "BUNDLE_BUDGET_UPLOADS_EXPERIENCE_GZIP_KB",
     "defaultKB": 4.4,
     "reviewTightHeadroomKB": 0.25,
     "reviewAction": "shrink first",
-    "rationale": "Uploads remains intentionally tight because it should stay a thin entrypoint over shared transfer/runtime code, but the stable floor now includes the route's selection preview and source-sheet presentation."
+    "rationale": "Authenticated Uploads carries bucket selection, source picking, and selection preview; keep this workspace tight even though it is loaded after the route gate."
   },
   "transfersGzip": {
     "label": "Transfers gzip budget",

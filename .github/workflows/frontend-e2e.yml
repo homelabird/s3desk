@@ -23,40 +23,67 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       browser_facing: ${{ steps.filter.outputs.browser_facing }}
-      frontend_bundle: ${{ steps.filter.outputs.frontend_bundle }}
+      workflow_lint_scope: ${{ steps.filter.outputs.workflow_lint_scope }}
+      frontend_bundle_runtime: ${{ steps.filter.outputs.frontend_bundle_runtime }}
+      frontend_bundle_contract: ${{ steps.filter.outputs.frontend_bundle_contract }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Detect frontend and browser-facing change scope
+      - name: Detect frontend and browser-surface change scope
         id: filter
         uses: dorny/paths-filter@v3
         with:
           filters: |
             browser_facing:
-              - ".github/workflows/frontend-e2e.yml"
               - "compose/test/e2e.yml"
               - "compose/remote/**"
               - "deploy/caddy/**"
               - "charts/s3desk/**"
               - "scripts/compose.sh"
               - "scripts/run_live_e2e_local.sh"
-              - "scripts/bundle_report.js"
               - "openapi.yml"
-              - "frontend/**"
+              - "frontend/index.html"
+              - "frontend/package-lock.json"
+              - "frontend/package.json"
+              - "frontend/patches/**"
+              - "frontend/playwright.config.ts"
+              - "frontend/public/**"
+              - "frontend/src/**"
+              - "frontend/tests/**"
+              - "frontend/tsconfig*.json"
+              - "frontend/vite.config.ts"
               - "backend/cmd/server/**"
               - "backend/internal/app/**"
               - "backend/internal/api/**"
-            frontend_bundle:
+            workflow_lint_scope:
+              - ".github/workflows/**"
+              - "scripts/check_github_workflows.sh"
+              - "scripts/check_github_workflows.py"
+              - "scripts/install_actionlint.sh"
+            frontend_bundle_runtime:
+              - "openapi.yml"
+              - "frontend/index.html"
+              - "frontend/package-lock.json"
+              - "frontend/package.json"
+              - "frontend/patches/**"
+              - "frontend/public/**"
+              - "frontend/src/**"
+              - "frontend/tsconfig*.json"
+              - "frontend/vite.config.ts"
+            frontend_bundle_contract:
               - ".github/workflows/frontend-e2e.yml"
               - "scripts/bundle_report.js"
-              - "openapi.yml"
-              - "frontend/**"
+              - "scripts/__tests__/bundle_report.test.js"
+              - "frontend/scripts/bundle-budgets.json"
+              - "frontend/scripts/run-bundle-budget.mjs"
+              - "frontend/package.json"
 
   bundle-budget:
-    if: github.event_name != 'schedule' && needs.changes.outputs.frontend_bundle == 'true'
+    name: Bundle Budget
+    if: github.event_name != 'schedule' && (needs.changes.outputs.frontend_bundle_runtime == 'true' || needs.changes.outputs.frontend_bundle_contract == 'true')
     needs:
       - changes
     runs-on: ubuntu-latest
@@ -78,17 +105,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Run bundle report contract test
+        if: needs.changes.outputs.frontend_bundle_contract == 'true'
+        run: npm run check:bundle-report
+
       - name: Run bundle budget check
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          npm run build:analyze 2>&1 | tee dist/build-analyze.log
-          if grep -q 'Circular chunk:' dist/build-analyze.log; then
-            echo "circular chunk warning detected in bundle build" >&2
-            exit 1
-          fi
-          node ../scripts/bundle_report.js --fail
+        if: needs.changes.outputs.frontend_bundle_runtime == 'true'
+        run: npm run bundle:budget
 
       - name: Upload bundle report
         if: always()
@@ -102,11 +125,202 @@ jobs:
             frontend/dist/stats.html
           if-no-files-found: ignore
 
+      - name: Write bundle budget summary
+        if: always()
+        run: |
+          {
+            report_path="dist/bundle-report.md"
+            status_line="not applicable (no bundle-affecting runtime change)"
+            contract_status="not applicable (no bundle manifest/report/summary wiring change)"
+            review_targets=()
+            warning_targets=()
+            action_hints=()
+            runtime_scope_active=0
+            if [[ "${{ needs.changes.outputs.frontend_bundle_runtime }}" == "true" ]]; then
+              runtime_scope_active=1
+              status_line="executed"
+            fi
+            if [[ "${{ needs.changes.outputs.frontend_bundle_contract }}" == "true" ]]; then
+              contract_status="executed via \`npm run check:bundle-report\`"
+            fi
+            if [[ ${runtime_scope_active} -eq 1 && -f "${report_path}" ]]; then
+              mapfile -t warning_lines < <(awk '/^Budget warnings:/{flag=1;next} flag && /^- /{sub(/^- /, ""); print} flag && NF==0{flag=0}' "${report_path}")
+              mapfile -t candidate_lines < <(awk '/^Budget review candidates:/{flag=1;next} flag && /^- /{sub(/^- /, ""); print} flag && NF==0{flag=0}' "${report_path}")
+              mapfile -t action_lines < <(awk '/^Budget action hints:/{flag=1;next} flag && /^- /{sub(/^- /, ""); print} flag && NF==0{flag=0}' "${report_path}")
+              if grep -Fq "No budget warnings." "${report_path}" && grep -Fq "No budget review candidates." "${report_path}"; then
+                status_line="executed"
+              elif [[ ${#warning_lines[@]} -gt 0 || ${#candidate_lines[@]} -gt 0 ]]; then
+                status_line="executed; follow-up remains"
+              fi
+              for source in "${warning_lines[@]}"; do
+                target="${source%%:*}"
+                [[ -n "${target}" ]] || continue
+                duplicate=0
+                for existing in "${warning_targets[@]}"; do
+                  if [[ "${existing}" == "${target}" ]]; then
+                    duplicate=1
+                    break
+                  fi
+                done
+                if [[ ${duplicate} -eq 0 ]]; then
+                  warning_targets+=("${target}")
+                fi
+                if [[ ${#warning_targets[@]} -ge 2 ]]; then
+                  break
+                fi
+              done
+              for source in "${candidate_lines[@]}" "${warning_lines[@]}"; do
+                target="${source%%:*}"
+                [[ -n "${target}" ]] || continue
+                duplicate=0
+                for existing in "${review_targets[@]}"; do
+                  if [[ "${existing}" == "${target}" ]]; then
+                    duplicate=1
+                    break
+                  fi
+                done
+                if [[ ${duplicate} -eq 0 ]]; then
+                  review_targets+=("${target}")
+                fi
+                if [[ ${#review_targets[@]} -ge 2 ]]; then
+                  break
+                fi
+              done
+              for source in "${action_lines[@]}"; do
+                target="${source%%:*}"
+                action="${source#*: }"
+                [[ -n "${target}" && -n "${action}" ]] || continue
+                duplicate=0
+                for existing in "${action_hints[@]}"; do
+                  if [[ "${existing}" == "${target}: ${action}" ]]; then
+                    duplicate=1
+                    break
+                  fi
+                done
+                if [[ ${duplicate} -eq 0 ]]; then
+                  action_hints+=("${target}: ${action}")
+                fi
+                if [[ ${#action_hints[@]} -ge 2 ]]; then
+                  break
+                fi
+              done
+            fi
+            echo "## Bundle Budget"
+            echo ""
+            echo "- Bundle Budget: ${status_line}."
+            echo "- Bundle Budget Contract: ${contract_status}."
+            if [[ ${runtime_scope_active} -eq 0 ]]; then
+              echo "- Warnings: not applicable (no bundle-affecting runtime change)."
+            elif [[ ${#warning_targets[@]} -gt 0 ]]; then
+              {
+                printf -- "- Warnings:"
+                for target in "${warning_targets[@]}"; do
+                  printf -- " \`%s\`" "${target}"
+                done
+                printf -- ".\n"
+              }
+            else
+              echo "- Warnings: none."
+            fi
+            echo "- Lane role: frontend bundle-size regression signal for bundle-affecting changes."
+            echo "- Local equivalent: \`cd frontend && npm run bundle:budget\`"
+            echo "- CI command: \`npm run bundle:budget\`"
+            if [[ ${runtime_scope_active} -eq 1 ]]; then
+              echo "- Artifact: \`frontend-bundle-report\`"
+            else
+              echo "- Artifact: not applicable (no bundle-affecting runtime change)."
+            fi
+            if [[ ${runtime_scope_active} -eq 0 ]]; then
+              echo "- Review targets: not applicable (no bundle-affecting runtime change)."
+            elif [[ ${#review_targets[@]} -gt 0 ]]; then
+              {
+                printf -- "- Review targets:"
+                for target in "${review_targets[@]}"; do
+                  printf -- " \`%s\`" "${target}"
+                done
+                printf -- " (open \`frontend-bundle-report\` for the full markdown + stats bundle).\n"
+              }
+            else
+              echo "- Review targets: none."
+              echo "- Artifact review: open \`frontend-bundle-report\` when you need the full markdown + stats bundle."
+            fi
+            if [[ ${runtime_scope_active} -eq 0 ]]; then
+              echo "- Action hints: not applicable (no bundle-affecting runtime change)."
+            elif [[ ${#action_hints[@]} -gt 0 ]]; then
+              {
+                printf -- "- Action hints:"
+                for hint in "${action_hints[@]}"; do
+                  target="${hint%%:*}"
+                  action="${hint#*: }"
+                  printf -- " \`%s\` (%s)" "${target}" "${action}"
+                done
+                printf -- ".\n"
+              }
+            else
+              echo "- Action hints: none."
+            fi
+            echo "- Branch protection: normally advisory, not a default required check."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  workflow-lint:
+    name: Workflow Lint
+    if: github.event_name != 'schedule'
+    needs:
+      - changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.9"
+          cache-dependency-path: backend/go.sum
+
+      - name: Skip workflow lint when workflow wiring and browser surface are both out of scope
+        if: needs.changes.outputs.workflow_lint_scope != 'true' && needs.changes.outputs.browser_facing != 'true'
+        run: |
+          echo "No workflow or browser-surface changes detected."
+          echo "Workflow lint passes without running because neither workflow wiring nor browser lanes are in scope."
+
+      - name: Install repo-local actionlint
+        if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'
+        shell: bash
+        run: bash ./scripts/install_actionlint.sh
+
+      - name: Run workflow lint
+        if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'
+        shell: bash
+        run: bash ./scripts/check_github_workflows.sh
+
+      - name: Write workflow lint summary
+        if: always()
+        run: |
+          {
+            echo "## Workflow Lint"
+            echo ""
+            if [[ "${{ needs.changes.outputs.workflow_lint_scope }}" != "true" && "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+              echo "- Workflow Lint: not applicable (no workflow or browser-surface changes were detected)."
+              echo "- Browser lanes do not run for this change scope, and workflow wiring did not change either."
+            else
+              echo "- Workflow Lint: executed."
+              echo "- Tool install: \`bash ./scripts/install_actionlint.sh\`"
+              echo "- Lint command: \`bash ./scripts/check_github_workflows.sh\`"
+              echo "- Purpose: validate GitHub workflow wiring before browser lanes execute."
+              if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+                echo "- Browser Lanes: not applicable (workflow or browser-CI wiring changed, but the browser surface did not)."
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   mock-e2e:
     name: Core Mock E2E
     if: github.event_name != 'schedule'
     needs:
       - changes
+      - workflow-lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -123,10 +337,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Skip core mock suite when no browser-facing changes were detected
+      - name: Skip core mock suite when the browser surface is out of scope
         if: needs.changes.outputs.browser_facing != 'true'
         run: |
-          echo "No browser-facing changes detected."
+          echo "Browser surface is out of scope."
           echo "Required check passes without running the mock Playwright suite."
 
       - name: Install frontend dependencies
@@ -137,8 +351,30 @@ jobs:
         if: needs.changes.outputs.browser_facing == 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Run mock Playwright suite excluding dedicated mobile responsive specs
+      - name: Enforce E2E geometry guard
         if: needs.changes.outputs.browser_facing == 'true'
+        run: npm run check:e2e:geometry
+
+      - name: Run check-smoke boot gates
+        if: needs.changes.outputs.browser_facing == 'true'
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-check-smoke
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-check-smoke
+        run: npm run test:e2e:smoke
+
+      - name: Upload check-smoke Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-check-smoke-results
+          path: frontend/test-results-check-smoke
+          if-no-files-found: ignore
+
+      - name: Run core mock Playwright suite excluding check-smoke and dedicated mobile responsive specs
+        if: needs.changes.outputs.browser_facing == 'true'
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-core
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-core
         run: npm run test:e2e:core
 
       - name: Upload core mock Playwright artifacts
@@ -146,14 +382,130 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-core-mock-results
-          path: frontend/test-results
+          path: frontend/test-results-core
           if-no-files-found: ignore
+
+      - name: Write core mock summary
+        if: always()
+        run: |
+          {
+            echo "## Core Mock E2E"
+            echo ""
+            if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+              if [[ "${{ needs.changes.outputs.workflow_lint_scope }}" == "true" ]]; then
+                echo "- Browser Lanes: smoke + core not applicable (workflow or browser-CI wiring changed, but the browser surface did not)."
+              else
+                echo "- Browser Lanes: smoke + core not applicable (the browser surface is out of scope)."
+              fi
+              echo "- Required checks still report success when the change scope is outside the frontend browser surface."
+            else
+              echo "- Browser Lanes: smoke + core executed."
+              echo "- Lane role: browser-facing boot gates plus desktop/mock regression coverage."
+              echo "- Workflow lint prerequisite: see the separate \`Workflow Lint\` job."
+              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs before Playwright suites."
+              echo "- Boot-gate command: \`npm run test:e2e:smoke\`"
+              echo "- Boot-gate scope: login/settings bootstrap and objects route boot."
+              echo "- Core regression command: \`npm run test:e2e:core\`"
+              echo "- Core regression scope: excludes \`@check-smoke\`, \`@mobile-responsive\`, \`@demo\`, \`@perf\`, and \`@visual\`."
+              echo "- Check-smoke artifact: \`playwright-check-smoke-results\`"
+              echo "- Core artifact: \`playwright-core-mock-results\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  visual-regression-e2e:
+    name: Visual Regression E2E
+    if: github.event_name != 'schedule'
+    needs:
+      - changes
+      - workflow-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_HTML_REPORT: "1"
+      PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-visual
+      PLAYWRIGHT_OUTPUT_DIR: test-results-visual
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Skip visual regression suite when the browser surface is out of scope
+        if: needs.changes.outputs.browser_facing != 'true'
+        run: |
+          echo "Browser surface is out of scope."
+          echo "Visual regression check passes without running screenshot assertions."
+
+      - name: Install frontend dependencies
+        if: needs.changes.outputs.browser_facing == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium for visual regression
+        if: needs.changes.outputs.browser_facing == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Enforce E2E geometry guard
+        if: needs.changes.outputs.browser_facing == 'true'
+        run: npm run check:e2e:geometry
+
+      - name: Run visual regression Playwright suite
+        if: needs.changes.outputs.browser_facing == 'true'
+        run: npm run test:e2e:visual
+
+      - name: Upload visual regression HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-e2e-html-report
+          path: frontend/playwright-report-visual
+          if-no-files-found: ignore
+
+      - name: Upload visual regression Playwright results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-regression-e2e-test-results
+          path: frontend/test-results-visual
+          if-no-files-found: ignore
+
+      - name: Write visual regression summary
+        if: always()
+        run: |
+          {
+            echo "## Visual Regression E2E"
+            echo ""
+            if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+              if [[ "${{ needs.changes.outputs.workflow_lint_scope }}" == "true" ]]; then
+                echo "- Browser Lanes: visual not applicable (workflow or browser-CI wiring changed, but the browser surface did not)."
+              else
+                echo "- Browser Lanes: visual not applicable (the browser surface is out of scope)."
+              fi
+              echo "- Required checks still report success when the change scope is outside the frontend browser surface."
+            else
+              echo "- Browser Lanes: visual executed."
+              echo "- Lane role: screenshot baselines for visual-regression specs and dark-theme visual coverage."
+              echo "- Workflow lint prerequisite: see the separate \`Workflow Lint\` job."
+              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs before the visual suite."
+              echo "- Local/CI command: \`npm run test:e2e:visual\`"
+              echo "- HTML report artifact: \`visual-regression-e2e-html-report\`"
+              echo "- Raw test results artifact: \`visual-regression-e2e-test-results\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   mobile-responsive-e2e:
     name: Mobile Responsive E2E (Required)
     if: github.event_name != 'schedule'
     needs:
       - changes
+      - workflow-lint
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -174,10 +526,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Skip mobile responsive suite when no browser-facing changes were detected
+      - name: Skip mobile responsive suite when the browser surface is out of scope
         if: needs.changes.outputs.browser_facing != 'true'
         run: |
-          echo "No browser-facing changes detected."
+          echo "Browser surface is out of scope."
           echo "Required check passes without running the dedicated mobile responsive suite."
 
       - name: Install frontend dependencies
@@ -187,6 +539,10 @@ jobs:
       - name: Install Playwright Chromium for mobile responsive projects
         if: needs.changes.outputs.browser_facing == 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Enforce E2E geometry guard
+        if: needs.changes.outputs.browser_facing == 'true'
+        run: npm run check:e2e:geometry
 
       - name: Run dedicated mobile responsive Playwright suite
         if: needs.changes.outputs.browser_facing == 'true'
@@ -214,14 +570,27 @@ jobs:
           {
             echo "## Mobile Responsive E2E"
             echo ""
-            echo "- Required check: \`Mobile Responsive E2E (Required)\`"
-            echo "- Local/CI command: \`npm run test:e2e:mobile-responsive\`"
-            echo "- HTML report artifact: \`mobile-responsive-e2e-html-report\`"
-            echo "- HTML report directory: \`frontend/playwright-report-mobile-responsive/\`"
-            echo "- Report entry file: \`frontend/playwright-report-mobile-responsive/index.html\`"
-            echo "- Raw test results artifact: \`mobile-responsive-e2e-test-results\`"
-            echo "- Raw test results directory: \`frontend/test-results-mobile-responsive/\`"
-            echo "- Targeted Settings/Login command: \`npm run test:e2e:mobile-responsive:settings-login\`"
+            if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+              if [[ "${{ needs.changes.outputs.workflow_lint_scope }}" == "true" ]]; then
+                echo "- Browser Lanes: mobile-responsive not applicable (workflow or browser-CI wiring changed, but the browser surface did not)."
+              else
+                echo "- Browser Lanes: mobile-responsive not applicable (the browser surface is out of scope)."
+              fi
+              echo "- Required checks still report success when the change scope is outside the frontend browser surface."
+            else
+              echo "- Browser Lanes: mobile-responsive executed."
+              echo "- Required check: \`Mobile Responsive E2E (Required)\`"
+              echo "- Lane role: required mobile task-completion coverage for drawers, sheets, cards, tabs, filters, and touch flows."
+              echo "- Workflow lint prerequisite: see the separate \`Workflow Lint\` job."
+              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs before the mobile suite."
+              echo "- Local/CI command: \`npm run test:e2e:mobile-responsive\`"
+              echo "- HTML report artifact: \`mobile-responsive-e2e-html-report\`"
+              echo "- HTML report directory: \`frontend/playwright-report-mobile-responsive/\`"
+              echo "- Report entry file: \`frontend/playwright-report-mobile-responsive/index.html\`"
+              echo "- Raw test results artifact: \`mobile-responsive-e2e-test-results\`"
+              echo "- Raw test results directory: \`frontend/test-results-mobile-responsive/\`"
+              echo "- Targeted Settings/Login command: \`npm run test:e2e:mobile-responsive:settings-login\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   live-e2e-critical:

@@ -6,7 +6,7 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 ## Scope
 
 - Page: `Login`
-- Goal: verify that the login experience stays usable on mobile without horizontal overflow, hidden controls, or unreachable theme switching.
+- Goal: verify that the login experience still supports real mobile task completion for authentication, stale-token recovery, and theme switching.
 
 ## Recommended Viewports
 
@@ -17,25 +17,26 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## Manual QA Checklist
 
-- [ ] Opening `Login` does not create page-level horizontal scrolling on narrow phones.
-- [ ] The login form remains fully visible without clipped labels or actions.
-- [ ] Stored-token warning or recovery states do not hide critical controls.
-- [ ] The theme toggle remains visible and reachable on small screens.
-- [ ] Primary login controls remain comfortably tappable on mobile widths.
+- [ ] The login form still exposes the token input and submit action on a phone-sized viewport.
+- [ ] A valid token can still complete the login flow on mobile.
+- [ ] Stored-token warning or recovery states still expose the action needed to recover.
+- [ ] Theme switching remains reachable before and after authentication failures.
+- [ ] The page keeps the primary auth action visible during the common mobile flow.
 
 ## `Login` Flow Checklist
 
 - [ ] Open the login screen in a narrow mobile viewport.
-- [ ] Verify login inputs and submit controls remain visible with the virtual keyboard closed.
-- [ ] Simulate an invalid stored token state and confirm recovery controls remain visible.
-- [ ] Toggle the theme and confirm the control remains reachable after layout changes.
+- [ ] Sign in with a valid token and confirm the app leaves the login screen.
+- [ ] Simulate an invalid stored token state and confirm recovery controls remain visible and usable.
+- [ ] Clear the invalid state and confirm a second login attempt can succeed.
+- [ ] Toggle the theme and confirm the control remains reachable before or after recovery.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile viewport test that asserts no page-level horizontal overflow on `Login`.
-- [ ] Add a test that verifies controls remain visible with an invalid stored token state.
-- [ ] Add a test that verifies the theme toggle remains reachable on mobile.
+- [ ] Add a mobile test that verifies successful narrow-viewport login.
+- [ ] Add a test that verifies invalid stored token recovery remains usable.
+- [ ] Add a test that verifies theme switching remains reachable on mobile.
 
 ## Notes
 
-- `Login` is a release-critical entry point, so control visibility and tappability matter more than dense visual polish.
+- `Login` is a release-critical entry point, so auth completion and recovery matter more than cosmetic mobile polish.

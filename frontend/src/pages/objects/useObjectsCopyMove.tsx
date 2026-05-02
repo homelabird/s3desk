@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
+import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { objectsFeedback } from './objectsFeedback'
 import { normalizePrefix, suggestCopyPrefix } from './objectsListUtils'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
@@ -134,9 +134,9 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 				},
 			}),
 		onSuccess: async (job, args) => {
-			await queryClient.invalidateQueries({ queryKey: ['jobs', args.scopeProfileId, args.scopeApiToken], exact: false })
+			await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(args.scopeProfileId, args.scopeApiToken), exact: false })
 			if (args.sessionId !== copyPrefixSessionRef.current) return
-			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
+			objectsFeedback.copyMoveTaskStarted(args.mode, job.id)
 			setCopyPrefixStateScopeKey(currentScopeKey)
 			invalidateCopyPrefixSession()
 			setCopyPrefixOpen(false)
@@ -145,7 +145,7 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 		},
 		onError: (err, args) => {
 			if (args.sessionId !== copyPrefixSessionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 
@@ -173,9 +173,9 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 			})
 		},
 		onSuccess: async (job, args) => {
-			await queryClient.invalidateQueries({ queryKey: ['jobs', args.scopeProfileId, args.scopeApiToken], exact: false })
+			await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.scope(args.scopeProfileId, args.scopeApiToken), exact: false })
 			if (args.sessionId !== copyMoveSessionRef.current) return
-			message.success(`${args.mode === 'copy' ? 'Copy' : 'Move'} task started: ${job.id}`)
+			objectsFeedback.copyMoveTaskStarted(args.mode, job.id)
 			setCopyMoveStateScopeKey(currentScopeKey)
 			invalidateCopyMoveSession()
 			setCopyMoveOpen(false)
@@ -184,7 +184,7 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 		},
 		onError: (err, args) => {
 			if (args.sessionId !== copyMoveSessionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 
@@ -194,32 +194,32 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 
 			const dstBucket = values.dstBucket.trim()
 			if (!dstBucket) {
-				message.error('Destination bucket is required')
+				objectsFeedback.destinationBucketRequired()
 				return
 			}
 
 			const dstPrefix = normalizePrefix(values.dstPrefix)
 			if (!dstPrefix) {
-				message.error('Destination prefix is required')
+				objectsFeedback.destinationPrefixRequired()
 				return
 			}
 			if (dstPrefix.includes('*')) {
-				message.error('Wildcards are not allowed')
+				objectsFeedback.wildcardsNotAllowed()
 				return
 			}
 
 			if (copyPrefixMode === 'move' && !values.dryRun && values.confirm !== 'MOVE') {
-				message.error('Type MOVE to proceed')
+				objectsFeedback.typeMoveToProceed()
 				return
 			}
 
 			if (dstBucket === bucket) {
 				if (dstPrefix === copyPrefixSrcPrefix) {
-					message.error('Destination must be different')
+					objectsFeedback.destinationMustBeDifferent()
 					return
 				}
 				if (dstPrefix.startsWith(copyPrefixSrcPrefix)) {
-					message.error('Destination must not be under source')
+					objectsFeedback.destinationMustNotBeUnderSource()
 					return
 				}
 			}
@@ -246,27 +246,27 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 
 			const dstBucket = values.dstBucket.trim()
 			if (!dstBucket) {
-				message.error('Destination bucket is required')
+				objectsFeedback.destinationBucketRequired()
 				return
 			}
 
 			const dstKey = values.dstKey.trim().replace(/^\/+/, '')
 			if (!dstKey) {
-				message.error('Destination key is required')
+				objectsFeedback.destinationKeyRequired()
 				return
 			}
 			if (dstKey.includes('*')) {
-				message.error('Wildcards are not allowed')
+				objectsFeedback.wildcardsNotAllowed()
 				return
 			}
 
 			if (copyMoveMode === 'move' && !values.dryRun && values.confirm !== 'MOVE') {
-				message.error('Type MOVE to proceed')
+				objectsFeedback.typeMoveToProceed()
 				return
 			}
 
 			if (dstBucket === bucket && dstKey === copyMoveSrcKey) {
-				message.error('Destination must be different')
+				objectsFeedback.destinationMustBeDifferent()
 				return
 			}
 

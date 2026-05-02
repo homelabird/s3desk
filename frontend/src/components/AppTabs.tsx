@@ -1,5 +1,5 @@
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
-import { useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import styles from './appTabs.module.css'
 
@@ -32,6 +32,7 @@ function safeIdPart(value: string): string {
 export function AppTabs(props: AppTabsProps) {
 	const baseId = useId()
 	const [uncontrolledKey, setUncontrolledKey] = useState(() => props.defaultActiveKey ?? props.items[0]?.key ?? '')
+	const [scrollState, setScrollState] = useState({ scrollable: false, atStart: true, atEnd: true })
 
 	const resolvedActiveKey = props.activeKey ?? uncontrolledKey
 	const safeActiveKey = props.items.some((item) => item.key === resolvedActiveKey)
@@ -39,6 +40,7 @@ export function AppTabs(props: AppTabsProps) {
 		: (props.items[0]?.key ?? resolvedActiveKey)
 
 	const tabButtonByKeyRef = useRef(new Map<string, HTMLButtonElement | null>())
+	const tabListRef = useRef<HTMLDivElement | null>(null)
 	const setTabButtonRef = (key: string) => (el: HTMLButtonElement | null) => {
 		tabButtonByKeyRef.current.set(key, el)
 	}
@@ -103,9 +105,52 @@ export function AppTabs(props: AppTabsProps) {
 	const activePanelId = `${baseId}-panel-${safeIdPart(safeActiveKey)}`
 	const activeTabId = `${baseId}-tab-${safeIdPart(safeActiveKey)}`
 
+	useEffect(() => {
+		const list = tabListRef.current
+		if (!list) return
+
+		const updateScrollState = () => {
+			const scrollable = list.scrollWidth - list.clientWidth > 1
+			const maxScrollLeft = Math.max(0, list.scrollWidth - list.clientWidth)
+			const next = {
+				scrollable,
+				atStart: !scrollable || list.scrollLeft <= 1,
+				atEnd: !scrollable || list.scrollLeft >= maxScrollLeft - 1,
+			}
+			setScrollState((current) =>
+				current.scrollable === next.scrollable && current.atStart === next.atStart && current.atEnd === next.atEnd ? current : next,
+			)
+		}
+
+		updateScrollState()
+
+		const resizeObserver =
+			typeof ResizeObserver !== 'undefined'
+				? new ResizeObserver(() => {
+						updateScrollState()
+					})
+				: null
+		resizeObserver?.observe(list)
+
+		list.addEventListener('scroll', updateScrollState, { passive: true })
+		window.addEventListener('resize', updateScrollState)
+
+		return () => {
+			list.removeEventListener('scroll', updateScrollState)
+			window.removeEventListener('resize', updateScrollState)
+			resizeObserver?.disconnect()
+		}
+	}, [props.items, props.type, props.size])
+
 	return (
-		<div className={rootClasses} style={props.style}>
-			<div className={listClasses} role="tablist" aria-label={props.ariaLabel}>
+		<div
+			className={rootClasses}
+			style={props.style}
+			data-scrollable={scrollState.scrollable ? 'true' : 'false'}
+			data-at-start={scrollState.atStart ? 'true' : 'false'}
+			data-at-end={scrollState.atEnd ? 'true' : 'false'}
+		>
+			<div ref={tabListRef} className={listClasses} role="tablist" aria-label={props.ariaLabel}>
 				{props.items.map((item) => {
 					const selected = item.key === safeActiveKey
 					const tabId = `${baseId}-tab-${safeIdPart(item.key)}`

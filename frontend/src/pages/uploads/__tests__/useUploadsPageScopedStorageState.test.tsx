@@ -1,7 +1,7 @@
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
+import { legacyTokenProfileScopedStorageKey, profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { useUploadsPageScopedStorageState } from '../useUploadsPageScopedStorageState'
 
 afterEach(() => {
@@ -45,5 +45,33 @@ describe('useUploadsPageScopedStorageState', () => {
 
 		expect(result.current.bucket).toBe('beta-bucket')
 		expect(result.current.prefix).toBe('beta/')
+	})
+
+	it('migrates legacy raw-token profile-scoped destination state into origin-scoped keys', async () => {
+		window.localStorage.setItem(
+			legacyTokenProfileScopedStorageKey('uploads', 'token-a', 'profile-1', 'bucket'),
+			JSON.stringify('legacy-bucket'),
+		)
+		window.localStorage.setItem(
+			legacyTokenProfileScopedStorageKey('uploads', 'token-a', 'profile-1', 'prefix'),
+			JSON.stringify('legacy/prefix/'),
+		)
+
+		const { result } = renderHook(() =>
+			useUploadsPageScopedStorageState({
+				apiToken: 'token-a',
+				profileId: 'profile-1',
+			}),
+		)
+
+		expect(result.current.bucket).toBe('legacy-bucket')
+		expect(result.current.prefix).toBe('legacy/prefix/')
+
+		await waitFor(() => {
+			expect(window.localStorage.getItem(profileScopedStorageKey('uploads', 'token-a', 'profile-1', 'bucket'))).toBe(JSON.stringify('legacy-bucket'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('uploads', 'token-a', 'profile-1', 'prefix'))).toBe(JSON.stringify('legacy/prefix/'))
+		})
+		expect(window.localStorage.getItem(legacyTokenProfileScopedStorageKey('uploads', 'token-a', 'profile-1', 'bucket'))).toBeNull()
+		expect(window.localStorage.getItem(legacyTokenProfileScopedStorageKey('uploads', 'token-a', 'profile-1', 'prefix'))).toBeNull()
 	})
 })

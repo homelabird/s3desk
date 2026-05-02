@@ -29,6 +29,7 @@ export type {
 	ServerBackupDownloadOptions,
 	ServerBackupScope,
 } from './types'
+export type { APIClientShape } from './clientContracts'
 
 export class APIClient {
 	private baseUrl: string

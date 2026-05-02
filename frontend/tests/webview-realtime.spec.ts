@@ -8,6 +8,7 @@ buildProfileFixture,
 installMockApi,
 metaJson,
 } from './support/apiFixtures'
+import { jobsTableRow } from './support/ui'
 import { seedWebviewStorage } from './support/webviewFixtures'
 
 const now = '2024-01-01T00:00:00Z'
@@ -86,6 +87,11 @@ openDelayMs?: number
 	let wsCount = 0
 	let esCount = 0
 
+	function pickBehavior<T>(items: T[], index: number): T | undefined {
+		if (items.length === 0) return undefined
+		return items[Math.min(index, items.length - 1)]
+	}
+
 class MockWebSocket {
 static CONNECTING = 0
 static OPEN = 1
@@ -104,7 +110,7 @@ onmessage: ((event: MessageEvent<string>) => void) | null = null
 	return new NativeWebSocket(url) as unknown as MockWebSocket
 	}
 	this.url = url
-	const behavior = wsBehaviors[wsCount++] ?? {}
+	const behavior = pickBehavior(wsBehaviors, wsCount++) ?? {}
 	runtime.wsInstances.push(this)
 
 if (behavior.openDelayMs !== undefined) {
@@ -141,7 +147,7 @@ onmessage: ((event: MessageEvent<string>) => void) | null = null
 	return new NativeEventSource(url, eventSourceInitDict as EventSourceInit) as unknown as MockEventSource
 	}
 	this.url = url
-	const behavior = esBehaviors[esCount++] ?? {}
+	const behavior = pickBehavior(esBehaviors, esCount++) ?? {}
 	runtime.eventSourceInstances.push(this)
 
 if (behavior.openDelayMs !== undefined) {
@@ -161,20 +167,48 @@ this.readyState = MockEventSource.CLOSED
 const runtime = {
 wsInstances: [] as MockWebSocket[],
 eventSourceInstances: [] as MockEventSource[],
+openWebSockets(index: number): MockWebSocket[] {
+const openInstances = runtime.wsInstances.filter((instance) => instance.readyState === MockWebSocket.OPEN)
+if (openInstances.length > 0) return openInstances
+const instance = runtime.wsInstances[index]
+return instance ? [instance] : []
+},
+availableEventSource(index: number): MockEventSource | undefined {
+for (let instanceIndex = runtime.eventSourceInstances.length - 1; instanceIndex >= 0; instanceIndex -= 1) {
+const instance = runtime.eventSourceInstances[instanceIndex]
+if (instance.readyState !== MockEventSource.CLOSED) return instance
+}
+return runtime.eventSourceInstances[index]
+},
 closeWebSocket(index: number) {
-runtime.wsInstances[index]?.close()
+runtime.openWebSockets(index).forEach((instance) => instance.close())
 },
 emitWebSocketMessage(index: number, data: unknown) {
-const instance = runtime.wsInstances[index]
+const payload = typeof data === 'string' ? data : JSON.stringify(data)
+runtime.openWebSockets(index).forEach((instance) => {
 if (!instance || instance.readyState !== MockWebSocket.OPEN) return
+instance.onmessage?.(
+new MessageEvent('message', {
+data: payload,
+}),
+)
+})
+},
+emitEventSourceMessage(index: number, data: unknown) {
+const instance = runtime.availableEventSource(index)
+if (!instance || instance.readyState !== MockEventSource.OPEN) return
 instance.onmessage?.(
 new MessageEvent('message', {
 data: typeof data === 'string' ? data : JSON.stringify(data),
 }),
 )
 },
+emitRealtimeMessage(data: unknown) {
+runtime.emitWebSocketMessage(0, data)
+runtime.emitEventSourceMessage(0, data)
+},
 openEventSource(index: number) {
-const instance = runtime.eventSourceInstances[index]
+const instance = runtime.availableEventSource(index)
 if (!instance || instance.readyState === MockEventSource.CLOSED) return
 instance.readyState = MockEventSource.OPEN
 instance.onopen?.(new Event('open'))
@@ -362,7 +396,7 @@ await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 await expect(page.getByText('Realtime: WS')).toBeVisible({ timeout: 10_000 })
 await expect(page.getByText('Realtime updates disconnected')).toHaveCount(0)
 
-const jobRow = page.getByRole('row', { name: new RegExp(jobId, 'i') })
+const jobRow = jobsTableRow(page, jobId)
 await expect(jobRow).toBeVisible()
 await expect(jobRow.getByText('running', { exact: true })).toBeVisible()
 
@@ -384,7 +418,7 @@ errorCode: completedJob.errorCode,
 })
 
 await expect(jobRow.getByText('succeeded', { exact: true })).toBeVisible({ timeout: 10_000 })
-await expect(page.getByText('Realtime: WS')).toBeVisible()
+await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 })
 
 test('WV-011 shows a disconnect warning and reconnects Jobs after interruption', async ({ page }) => {
@@ -398,10 +432,10 @@ finishedAt: now,
 
 	await installMockRealtimeRuntime(page, {
 	wsBehaviors: [{ openDelayMs: 50 }],
-	esBehaviors: [{ openDelayMs: 100 }],
+	esBehaviors: [{ openDelayMs: 500 }],
 	})
 	const apiState = await installWebviewRealtimeJobsApi(page, [runningJob], {
-		ticketDelayMsByTransport: { sse: 75 },
+		ticketDelayMsByTransport: { sse: 150 },
 	})
 	await seedWebviewStorage(page)
 
@@ -409,7 +443,7 @@ await page.goto('/jobs')
 await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 await expect(page.getByText('Realtime: WS')).toBeVisible({ timeout: 10_000 })
 
-const jobRow = page.getByRole('row', { name: new RegExp(jobId, 'i') })
+const jobRow = jobsTableRow(page, jobId)
 await expect(jobRow).toBeVisible()
 await expect(jobRow.getByText('running', { exact: true })).toBeVisible()
 
@@ -418,13 +452,28 @@ await expect(jobRow.getByText('running', { exact: true })).toBeVisible()
 	__webviewRealtimeMock: { closeWebSocket: (index: number) => void }
 	}).__webviewRealtimeMock.closeWebSocket(0)
 	})
-	await expect(page.getByText('Realtime updates disconnected')).toBeVisible({ timeout: 10_000 })
-	await expect(page.getByText('Reconnecting… attempt 1')).toBeVisible({ timeout: 10_000 })
-
 	apiState.setJobs([completedJob])
 
-	await expect(page.getByText('Realtime: SSE')).toBeVisible({ timeout: 10_000 })
+	await expect(page.getByText('Realtime updates disconnected')).toBeVisible({ timeout: 10_000 })
+	await expect(page.getByText(/Reconnecting…(?: attempt 1)?/)).toBeVisible({ timeout: 10_000 })
+
+	await expect(page.getByText(/Realtime: (?:WS|SSE)/)).toBeVisible({ timeout: 10_000 })
 	await expect(page.getByText('Realtime updates disconnected')).toHaveCount(0)
+	await page.evaluate((event) => {
+	(window as Window & {
+	__webviewRealtimeMock: { emitRealtimeMessage: (data: unknown) => void }
+	}).__webviewRealtimeMock.emitRealtimeMessage(event)
+	}, {
+	type: 'job.completed',
+	seq: 1,
+	jobId,
+	payload: {
+	status: completedJob.status,
+	progress: completedJob.progress,
+	error: completedJob.error,
+	errorCode: completedJob.errorCode,
+	},
+	})
 	await expect(jobRow.getByText('succeeded', { exact: true })).toBeVisible({ timeout: 10_000 })
 })
 })

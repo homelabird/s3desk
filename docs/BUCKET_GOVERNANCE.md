@@ -54,6 +54,9 @@ as the starting point for backend live-provider smoke variables.
 - API response body on failure
 - Provider-native console or CLI confirmation on success
 
+Use [PROVIDER_LIVE_VALIDATION_TEMPLATE.md](release/evidence/PROVIDER_LIVE_VALIDATION_TEMPLATE.md)
+for release evidence files. Keep one completed record per affected provider.
+
 ### Minimal Backend Smoke
 
 Run this low-cost provider smoke before the manual UI pass:
@@ -63,7 +66,7 @@ cd backend
 set -a
 source ../docs/ci/provider_live_validation.env.example
 set +a
-go test ./internal/api -run 'TestLiveValidation(AwsS3|GcpGcs|AzureBlob|OciObjectStorage|MinioS3Compatible|CephS3Compatible)$'
+go test ./internal/api -run '^(TestLiveValidationAwsS3|TestLiveValidationGcpGcs|TestLiveValidationAzureBlob|TestLiveValidationOciObjectStorage|TestLiveValidationMinioS3Compatible|TestLiveValidationCephS3Compatible)$' -count=1
 ```
 
 ### Provider Pass Focus

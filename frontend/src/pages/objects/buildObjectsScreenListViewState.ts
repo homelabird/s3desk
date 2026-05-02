@@ -1,6 +1,12 @@
 import { normalizePrefix, parentPrefixFromKey } from './objectsListUtils'
 import type { ObjectSort } from './objectsTypes'
-import type { ObjectsScreenArgs } from './objectsScreenTypes'
+import type {
+	ObjectsListVm,
+	ObjectsLocationVm,
+	ObjectsOperationVm,
+	ObjectsPaneVm,
+	ObjectsScreenArgs,
+} from './objectsScreenTypes'
 
 type SortColumn = 'name' | 'size' | 'time'
 type SortDirection = 'asc' | 'desc' | null
@@ -21,27 +27,35 @@ function getSortDirForColumn(sort: ObjectSort, col: SortColumn): SortDirection {
 	return null
 }
 
-export function buildObjectsScreenListViewState(args: ObjectsScreenArgs) {
-	const { props, data, actions } = args
+type BuildObjectsScreenListViewStateArgs = Pick<ObjectsScreenArgs, 'props' | 'actions'> & {
+	locationVm: ObjectsLocationVm
+	listVm: ObjectsListVm
+	operationVm: ObjectsOperationVm
+	paneVm: ObjectsPaneVm
+}
+
+export function buildObjectsScreenListViewState(args: BuildObjectsScreenListViewStateArgs) {
+	const { props, locationVm, listVm, operationVm, paneVm, actions } = args
 	const {
 		bucket,
+		navigateToLocation,
+		prefix,
+	} = locationVm
+	const {
 		clearSearch,
 		extFilter,
 		favoritesFirst,
 		favoritesOnly,
-		isOffline,
 		maxModifiedMs,
 		maxSize,
 		minModifiedMs,
 		minSize,
-		navigateToLocation,
 		objectsQuery,
-		prefix,
 		search,
 		searchDraft,
 		sort,
 		typeFilter,
-	} = data
+	} = listVm
 
 	const hasActiveFilters =
 		typeFilter !== 'all' ||
@@ -55,32 +69,32 @@ export function buildObjectsScreenListViewState(args: ObjectsScreenArgs) {
 	const hasActiveView = hasActiveFilters || hasNonDefaultSort
 
 	const resetFilters = () => {
-		data.setTypeFilter('all')
-		data.setFavoritesOnly(false)
-		data.setFavoritesFirst(false)
-		data.setExtFilter('')
-		data.setMinSize(null)
-		data.setMaxSize(null)
-		data.setMinModifiedMs(null)
-		data.setMaxModifiedMs(null)
-		data.setSort('name_asc')
+		listVm.setTypeFilter('all')
+		listVm.setFavoritesOnly(false)
+		listVm.setFavoritesFirst(false)
+		listVm.setExtFilter('')
+		listVm.setMinSize(null)
+		listVm.setMaxSize(null)
+		listVm.setMinModifiedMs(null)
+		listVm.setMaxModifiedMs(null)
+		listVm.setSort('name_asc')
 	}
 
 	const handleClearSearch = clearSearch
 	const canClearSearch = !!search.trim() || !!searchDraft.trim()
-	const listIsFetching = favoritesOnly ? data.favoritesQuery.isFetching : objectsQuery.isFetching
+	const listIsFetching = favoritesOnly ? listVm.favoritesQuery.isFetching : objectsQuery.isFetching
 	const listIsFetchingNextPage = favoritesOnly ? false : objectsQuery.isFetchingNextPage
 	const loadMoreDisabled = listIsFetching || listIsFetchingNextPage
-	const canInteract = !!props.profileId && !!bucket && !isOffline
+	const canInteract = !!props.profileId && !!bucket && !operationVm.isOffline
 
 	const openGlobalSearchPrefix = (key: string) => {
-		data.closeGlobalSearch()
+		paneVm.closeGlobalSearch()
 		if (!bucket) return
 		navigateToLocation(bucket, parentPrefixFromKey(key), { recordHistory: true })
 	}
 
 	const openGlobalSearchDetails = (key: string) => {
-		data.closeGlobalSearch()
+		paneVm.closeGlobalSearch()
 		actions.openDetailsForKey(key)
 	}
 
@@ -88,14 +102,14 @@ export function buildObjectsScreenListViewState(args: ObjectsScreenArgs) {
 
 	const toggleSortColumn = (col: SortColumn) => {
 		if (col === 'name') {
-			data.setSort(sort === 'name_asc' ? 'name_desc' : 'name_asc')
+			listVm.setSort(sort === 'name_asc' ? 'name_desc' : 'name_asc')
 			return
 		}
 		if (col === 'size') {
-			data.setSort(sort === 'size_asc' ? 'size_desc' : 'size_asc')
+			listVm.setSort(sort === 'size_asc' ? 'size_desc' : 'size_asc')
 			return
 		}
-		data.setSort(sort === 'time_asc' ? 'time_desc' : 'time_asc')
+		listVm.setSort(sort === 'time_asc' ? 'time_desc' : 'time_asc')
 	}
 
 	return {

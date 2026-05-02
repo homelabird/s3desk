@@ -1,4 +1,4 @@
-import { Alert, Button, Grid, Input, message } from 'antd'
+import { Alert, Button, Grid, Input } from 'antd'
 import { useState } from 'react'
 
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
@@ -6,6 +6,11 @@ import { DatalistInput } from '../../components/DatalistInput'
 import { FormField } from '../../components/FormField'
 import { OverlaySheet } from '../../components/OverlaySheet'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
+import {
+	localDeviceAccessBrowserHint,
+	localFolderAccessUnavailableTitle,
+} from '../../lib/secureContext'
+import { jobsFeedback } from './jobsFeedback'
 import styles from './JobsShared.module.css'
 
 export function DownloadJobModal(props: {
@@ -43,11 +48,11 @@ export function DownloadJobModal(props: {
 	const handleSubmit = () => {
 		const trimmedBucket = bucket.trim()
 		if (!trimmedBucket) {
-			message.error('Bucket is required')
+			jobsFeedback.bucketRequired()
 			return
 		}
 		if (!dirHandle) {
-			message.info('Select a local folder first')
+			jobsFeedback.selectLocalFolderFirst()
 			return
 		}
 		props.setBucket(trimmedBucket)
@@ -86,8 +91,8 @@ export function DownloadJobModal(props: {
 					<Alert
 						type="warning"
 						showIcon
-						title="Local folder access is not available"
-						description={support.reason ?? 'Use HTTPS or localhost in a supported browser.'}
+						title={localFolderAccessUnavailableTitle()}
+						description={support.reason ?? localDeviceAccessBrowserHint()}
 					/>
 				) : null}
 				{props.bucketLookupErrorDescription ? (

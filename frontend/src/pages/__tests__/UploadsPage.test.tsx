@@ -6,10 +6,11 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { APIClient, APIError } from "../../api/client";
 import { TransfersContext } from "../../components/useTransfers";
 import * as uploadUtils from "../../components/transfers/transfersUploadUtils";
+import { failedToLoadBucketsTitle, goToBucketsLabel, noBucketsAvailableHint } from "../../lib/actionHints";
 import * as deviceFs from "../../lib/deviceFs";
 import { ensureDomShims } from "../../test/domShims";
 import { transfersStub } from "../../test/transfersStub";
-import { UploadsPage } from "../UploadsPage";
+import { UploadsPage, UploadsPageLoadingFallback } from "../UploadsPage";
 
 vi.mock("../../api/useAPIClient", () => ({
   useAPIClient: () => new APIClient({ apiToken: "test-token" }),
@@ -147,6 +148,12 @@ function renderUploadsPage(
 }
 
 describe("UploadsPage", () => {
+  it("renders a non-empty loading status while the upload workspace chunk loads", () => {
+    render(<UploadsPageLoadingFallback />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading uploads...");
+  });
+
   it("navigates to profiles from the setup callout", () => {
     renderUploadsPage({ apiToken: "", profileId: null });
 
@@ -162,8 +169,8 @@ describe("UploadsPage", () => {
 
     renderUploadsPage();
 
-    expect(await screen.findByText("No buckets available")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "Go to Buckets" }));
+    expect(await screen.findByText(noBucketsAvailableHint())).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: goToBucketsLabel() }));
     expect(screen.getByText("Buckets Route")).toBeInTheDocument();
   });
 
@@ -179,8 +186,8 @@ describe("UploadsPage", () => {
 
     renderUploadsPage();
 
-    expect(await screen.findByText("Failed to load buckets")).toBeInTheDocument();
-    expect(screen.queryByText("No buckets available")).not.toBeInTheDocument();
+    expect(await screen.findByText(failedToLoadBucketsTitle())).toBeInTheDocument();
+    expect(screen.queryByText(noBucketsAvailableHint())).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Target & source" }),
     ).toBeInTheDocument();

@@ -4,6 +4,7 @@ import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
+import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useBucketsPageCreateState } from '../useBucketsPageCreateState'
 
@@ -99,7 +100,7 @@ describe('useBucketsPageCreateState', () => {
 		)
 		expect(closeCreateModal).toHaveBeenCalledTimes(1)
 		expect(invalidateQueries).toHaveBeenCalledWith({
-			queryKey: ['buckets', 'profile-1', 'token-a'],
+			queryKey: queryKeys.buckets.list('profile-1', 'token-a'),
 			exact: true,
 		})
 		expect(messageSuccessMock).not.toHaveBeenCalled()

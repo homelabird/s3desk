@@ -4,9 +4,10 @@ import type { PropsWithChildren } from 'react'
 import { MemoryRouter, type InitialEntry } from 'react-router-dom'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { ensureDomShims } from '../../../test/domShims'
 import { createMockApiClient } from '../../../test/mockApiClient'
-import type { TransfersContextValue } from '../../../components/Transfers'
+import type { TransfersContextValue } from '../../../components/transfersTypes'
 import { useJobsPageController } from '../useJobsPageController'
 
 const {
@@ -294,7 +295,7 @@ describe('useJobsPageController', () => {
 
 		expect(result.current.overlaysHost.createFlow.createDeleteOpen).toBe(true)
 		expect(messageSuccess).not.toHaveBeenCalled()
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false })
 	})
 
 	it('closes transient overlays when the api token changes for the same profile', async () => {

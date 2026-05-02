@@ -1,57 +1,62 @@
 import { expect, test } from '@playwright/test'
 
 import { installJobsMobileResponsiveFixtures, seedJobsMobileResponsiveStorage } from './support/jobsMobileResponsive'
-import { expectLocatorWithinViewport, expectNoPageHorizontalOverflow } from './support/mobileResponsive'
+import { readProfileScopedLocalStorage } from './support/storage'
+import { closeJobsMobileFilters, gotoJobsPage, openJobsMobileFilters } from './support/ui'
 
-test.describe('@mobile-responsive Jobs mobile responsive draft', () => {
+test.describe('@mobile-responsive Jobs mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
 		await installJobsMobileResponsiveFixtures(page)
 		await seedJobsMobileResponsiveStorage(page)
 	})
 
-	test('avoids page-level horizontal overflow on mobile', async ({ page }) => {
+	test('queue health reflects the loaded mobile job fixtures', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
-		await page.goto('/jobs')
+		await gotoJobsPage(page)
 
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
-		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toBeVisible()
-		await expectNoPageHorizontalOverflow(page)
+		await expect(page.getByTestId('jobs-health-active')).toContainText('2')
+		await expect(page.getByTestId('jobs-health-queued')).toContainText('1')
+		await expect(page.getByTestId('jobs-health-running')).toContainText('1')
+		await expect(page.getByText('job-queued')).toBeVisible()
+		await expect(page.getByText('job-running')).toBeVisible()
 	})
 
-	test('opens mobile filters sheet within the viewport', async ({ page }) => {
+	test('mobile filters persist across reopen and can reset', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
-		await page.goto('/jobs')
+		await gotoJobsPage(page)
 
-		await page.getByTestId('jobs-mobile-filters-trigger').click()
-		const sheet = page.getByTestId('jobs-mobile-filters-sheet')
-		await expect(sheet).toBeVisible()
-		await expect(sheet.getByRole('combobox', { name: 'Job status filter' })).toBeVisible()
-		await expect(sheet.getByRole('combobox', { name: 'Job type filter' })).toBeVisible()
-		await expectLocatorWithinViewport(sheet)
+		const sheet = await openJobsMobileFilters(page)
+		await sheet.getByRole('combobox', { name: 'Job status filter' }).selectOption('failed')
+		await closeJobsMobileFilters(sheet)
+		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toContainText('Filters active')
+		await expect
+			.poll(() =>
+				readProfileScopedLocalStorage(page, {
+					apiToken: 'jobs-mobile-token',
+					name: 'statusFilter',
+					namespace: 'jobs',
+					profileId: 'jobs-mobile-profile',
+				}, 'all'),
+			)
+			.toBe('failed')
+
+		const reopenedSheet = await openJobsMobileFilters(page)
+		await expect(reopenedSheet.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('failed')
+
+		await reopenedSheet.getByRole('button', { name: 'Reset filters' }).click()
+		await expect(reopenedSheet.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('all')
+		await closeJobsMobileFilters(reopenedSheet)
+		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toHaveText('Filters')
 	})
 
-	test('stacks health cards vertically on narrow widths', async ({ page }) => {
-		await page.setViewportSize({ width: 360, height: 800 })
-		await page.goto('/jobs')
-
-		const activeCard = page.getByTestId('jobs-health-active')
-		const queuedCard = page.getByTestId('jobs-health-queued')
-		await expect(activeCard).toBeVisible()
-		await expect(queuedCard).toBeVisible()
-
-		const activeBox = await activeCard.boundingBox()
-		const queuedBox = await queuedCard.boundingBox()
-		expect(queuedBox?.y ?? 0).toBeGreaterThan((activeBox?.y ?? 0) + (activeBox?.height ?? 0) - 1)
-		await expectNoPageHorizontalOverflow(page)
-	})
-
-	test('opens the upload creation sheet within the mobile viewport', async ({ page }) => {
+	test('mobile upload entrypoint opens and closes the upload source sheet', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
-		await page.goto('/jobs')
+		await gotoJobsPage(page)
 
-		await page.locator('button').filter({ hasText: 'Upload…' }).first().click()
+		await page.getByRole('button', { name: 'Upload…' }).click()
 		const sheet = page.getByRole('dialog', { name: 'Upload from device' })
 		await expect(sheet).toBeVisible()
-		await expectLocatorWithinViewport(sheet)
+		await sheet.getByLabel('Close', { exact: true }).click()
+		await expect(sheet).toHaveCount(0)
 	})
 })

@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Space, Typography, message } from "antd";
+import { Alert, Button, Input, Space, Typography } from "antd";
 import type { ReactNode } from "react";
 
 import type { APIError } from "../../api/client";
@@ -6,6 +6,7 @@ import type { BucketPolicyValidateResponse } from "../../api/types";
 import { AppTabs } from "../../components/AppTabs";
 import { NativeSelect } from "../../components/NativeSelect";
 import { ToggleSwitch } from "../../components/ToggleSwitch";
+import { bucketsFeedback } from "./bucketsFeedback";
 import styles from "./BucketPolicyModal.module.css";
 import type { PolicyKind } from "./policyPresets";
 import type { ParsedPolicy } from "./policy/types";
@@ -93,7 +94,7 @@ export function BucketPolicyContentTabs(props: {
                           const next = value as "form" | "json";
                           if (next === "form") {
                             if (!props.parsed.ok) {
-                              message.error(props.parsed.error ?? "Fix JSON errors first");
+                              bucketsFeedback.fixJsonErrorsFirst(props.parsed.error);
                               return;
                             }
                             props.updateStructuredStateFromText(props.policyText);

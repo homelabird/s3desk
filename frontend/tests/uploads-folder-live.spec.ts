@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
-import { transferUploadRow } from './support/ui'
+import { addUploadSourceFromDevice, expectTransferRowState, gotoUploadsPage, queueSelectedUpload, transferUploadRow } from './support/ui'
 
 const isLive = process.env.E2E_LIVE === '1'
 
@@ -90,18 +90,14 @@ test.describe('Live folder uploads', () => {
 			await page.addInitScript(() => {
 				Reflect.deleteProperty(window, 'showDirectoryPicker')
 			})
-			await page.goto('/uploads')
+			await gotoUploadsPage(page)
 
-			await page.getByRole('button', { name: 'Add from device…' }).click()
-			const chooserPromise = page.waitForEvent('filechooser')
-			await page.getByRole('button', { name: 'Choose folder' }).click()
-			const chooser = await chooserPromise
-			await chooser.setFiles(fixtureRoot)
-			await page.getByRole('button', { name: /Queue upload/i }).click()
+			await addUploadSourceFromDevice(page, fixtureRoot, { chooseButtonName: 'Choose folder' })
+			await queueSelectedUpload(page)
 
 			const uploadRow = transferUploadRow(page, /upload-folder/)
 			await expect(uploadRow).toBeVisible({ timeout: 30_000 })
-			await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 180_000 })
+			await expectTransferRowState(uploadRow, 'Done', { timeout: 180_000 })
 
 			await expect.poll(() => listObjectKeys(request, profileId!, bucketName, 'dir-a/'), { timeout: 60_000 }).toContain('dir-a/alpha.txt')
 			await expect.poll(() => listObjectKeys(request, profileId!, bucketName, 'dir-b/nested/'), { timeout: 60_000 }).toContain(

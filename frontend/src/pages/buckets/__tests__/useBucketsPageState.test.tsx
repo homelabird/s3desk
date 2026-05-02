@@ -153,14 +153,14 @@ describe('useBucketsPageState', () => {
 			},
 		)
 
-		await waitFor(() => expect(result.current.profileResolved).toBe(true))
+		await waitFor(() => expect(result.current.queries.profileResolved).toBe(true))
 
-		expect(result.current.bucketCrudSupported).toBe(false)
-		expect(result.current.bucketCrudUnsupportedReason).toBe(
+		expect(result.current.queries.bucketCrudSupported).toBe(false)
+		expect(result.current.queries.bucketCrudUnsupportedReason).toBe(
 			'GCS bucket operations require Project Number on this profile.',
 		)
-		expect(result.current.bucketsQuery.fetchStatus).toBe('idle')
-		expect(result.current.showBucketsEmpty).toBe(false)
+		expect(result.current.queries.bucketsQuery.fetchStatus).toBe('idle')
+		expect(result.current.queries.showBucketsEmpty).toBe(false)
 		expect(listBuckets).not.toHaveBeenCalled()
 	})
 
@@ -188,9 +188,9 @@ describe('useBucketsPageState', () => {
 			},
 		)
 
-		await waitFor(() => expect(result.current.profileResolved).toBe(true))
+		await waitFor(() => expect(result.current.queries.profileResolved).toBe(true))
 
-		const staleDeleteBucket = result.current.deleteBucket
+		const staleDeleteBucket = result.current.shell.list.onDelete
 
 		rerender({ apiToken: 'token-b', profileId: 'profile-1' })
 
@@ -241,10 +241,10 @@ describe('useBucketsPageState', () => {
 			},
 		)
 
-		await waitFor(() => expect(result.current.bucketsQuery.isSuccess).toBe(true))
+		await waitFor(() => expect(result.current.queries.bucketsQuery.isSuccess).toBe(true))
 
 		await act(async () => {
-			await result.current.deleteBucket('primary-bucket').catch(() => undefined)
+			await result.current.shell.list.onDelete('primary-bucket').catch(() => undefined)
 		})
 
 		await waitFor(() =>
@@ -252,8 +252,8 @@ describe('useBucketsPageState', () => {
 				'Bucket "primary-bucket" isn’t empty. Open Objects or create a delete job from the Buckets page.',
 			),
 		)
-		expect(result.current.bucketNotEmptyDialogBucket).toBe(null)
-		expect(result.current.deletingBucket).toBe(null)
+		expect(result.current.shell.dialogs.bucketNotEmptyDialogBucket).toBe(null)
+		expect(result.current.shell.list.deletingBucket).toBe(null)
 		expect(messageErrorMock).not.toHaveBeenCalled()
 	})
 })

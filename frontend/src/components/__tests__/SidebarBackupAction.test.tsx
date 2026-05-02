@@ -158,10 +158,54 @@ describe('SidebarBackupAction', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
 
 		expect(await screen.findByRole('dialog', { name: 'Backup and restore' })).toBeInTheDocument()
-		expect(screen.getByText('Backup export')).toBeInTheDocument()
+		expect(await screen.findByText('Backup export')).toBeInTheDocument()
 		expect(screen.getByText('Stage restore bundle')).toBeInTheDocument()
 		expect(screen.getByText('Portable import')).toBeInTheDocument()
 		expect(screen.getByText('Staged restores')).toBeInTheDocument()
+	})
+
+	it('updates the trigger subtitle as backup capabilities change', () => {
+		const api = createApi()
+		const { rerender } = render(<SidebarBackupAction api={api} />)
+
+		expect(screen.getByText('Loading backup and restore status')).toBeInTheDocument()
+
+		rerender(<SidebarBackupAction api={api} meta={buildMeta()} />)
+		expect(screen.getByText('Unified backup export, restore staging, and portable import')).toBeInTheDocument()
+
+		rerender(
+			<SidebarBackupAction
+				api={api}
+				meta={buildMeta({
+					capabilities: {
+						profileTls: { enabled: true, reason: '' },
+						serverBackup: {
+							export: { enabled: false, reason: 'Backup export unavailable.' },
+							restoreStaging: { enabled: true, reason: '' },
+						},
+						providers: {},
+					},
+				})}
+			/>,
+		)
+		expect(screen.getByText('Restore staging and portable import tools')).toBeInTheDocument()
+
+		rerender(
+			<SidebarBackupAction
+				api={api}
+				meta={buildMeta({
+					capabilities: {
+						profileTls: { enabled: true, reason: '' },
+						serverBackup: {
+							export: { enabled: false, reason: 'Server backup tools unavailable' },
+							restoreStaging: { enabled: false, reason: 'Restore staging unavailable' },
+						},
+						providers: {},
+					},
+				})}
+			/>,
+		)
+		expect(screen.getByText('Server backup tools unavailable')).toBeInTheDocument()
 	})
 
 	it('closes the drawer when the scope key changes', async () => {
@@ -179,6 +223,37 @@ describe('SidebarBackupAction', () => {
 		await waitFor(() => {
 			expect(screen.queryByRole('dialog', { name: 'Backup and restore' })).not.toBeInTheDocument()
 		})
+	})
+
+	it('shows stale restore badges and enables stale cleanup when the inventory contains expired restores', async () => {
+		const api = createApi({
+			listServerRestores: vi.fn(() =>
+				Promise.resolve({
+					items: [
+						{
+							id: 'expired-restore',
+							stagedAt: '2000-01-01T00:00:00Z',
+							stagingDir: '/data/restores/expired-restore',
+							manifest: {
+								bundleKind: 'full',
+								dbBackend: 'sqlite',
+								confidentialityMode: 'encrypted',
+								payloadBytes: 1024,
+							},
+						},
+					],
+				}),
+			),
+		})
+
+		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
+		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+
+		expect(await screen.findByRole('dialog', { name: 'Backup and restore' })).toBeInTheDocument()
+		expect(await screen.findByText('expired-restore')).toBeInTheDocument()
+		expect(screen.getByText('1 stale')).toBeInTheDocument()
+		expect(screen.getByText(/^stale$/)).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Delete stale' })).toBeEnabled()
 	})
 
 	it('keeps portable import disabled until a clean preview exists', async () => {

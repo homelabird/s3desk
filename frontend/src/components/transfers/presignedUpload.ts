@@ -1,7 +1,7 @@
 import { clearNetworkStatus, publishNetworkStatus } from '../../lib/networkStatus'
 import {
 	RequestAbortedError,
-	type APIClient,
+	type APIClientShape,
 	type UploadFileItem,
 	type UploadFilesResult,
 } from '../../api/client'
@@ -109,7 +109,7 @@ const uploadPresignedBlob = (args: {
 }
 
 export const uploadPresignedFilesWithProgress = (args: {
-	api: APIClient
+	api: APIClientShape
 	profileId: string
 	uploadId: string
 	items: UploadFileItem[]

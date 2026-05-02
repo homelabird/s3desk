@@ -1,9 +1,27 @@
-import { Badge, Input, Space, Typography } from 'antd'
+import { Badge, Input, Typography } from 'antd'
 import { SearchOutlined, StarFilled } from '@ant-design/icons'
+import type { ReactNode } from 'react'
 
 import { ToggleSwitch } from '../../components/ToggleSwitch'
 import type { FavoriteObjectItem } from '../../api/types'
+import {
+	clearFavoritesFilterHint,
+	chooseProfileToShowPinnedObjectsHint,
+	failedToLoadFavoritesTitle,
+	fetchingPinnedObjectsHint,
+	favoritesUnavailableUntilBucketSelectedLabel,
+	favoritesUnavailableUntilProfileSelectedLabel,
+	loadingFavoritesTitle,
+	loadingFavoritesCountLabel,
+	noFavoritesMatchQueryTitle,
+	noFavoritesYetTitle,
+	pickBucketToShowPinnedObjectsHint,
+	selectBucketFirstHint,
+	selectProfileFirstHint,
+	starObjectsToKeepThemHereHint,
+} from '../../lib/actionHints'
 import styles from './ObjectsFavorites.module.css'
+import { ObjectsPaneStatus } from './ObjectsPaneStatus'
 import { ObjectsTreePane } from './ObjectsTreePane'
 
 type ObjectsFavoritesPaneProps = {
@@ -36,39 +54,116 @@ function splitFavoriteKey(key: string): { name: string; path: string } {
 
 export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 	const disabled = !props.hasProfile || !props.hasBucket
+	const isExpanded = props.expanded !== false
 	const availableFavorites = disabled ? [] : props.favorites
 	const favoriteCount = disabled ? 0 : props.favoriteCount
-	const query = props.query.trim().toLowerCase()
+	const queryText = props.query.trim()
+	const query = queryText.toLowerCase()
 	const filtered = query ? availableFavorites.filter((item) => item.key.toLowerCase().includes(query)) : availableFavorites
 	const sorted = [...filtered].sort((a, b) => a.key.localeCompare(b.key))
 	const hasFavorites = favoriteCount > 0
 	const showSearch = hasFavorites || query.length > 0
 	const showBehaviorControls = hasFavorites || props.favoritesOnly
+	const showLoadingBadge = !disabled && props.isLoading && favoriteCount === 0 && availableFavorites.length === 0
 
-	let emptyMessage: string | null = null
-	if (!props.hasProfile) emptyMessage = 'Select a profile to view favorites.'
-	else if (!props.hasBucket) emptyMessage = 'Select a bucket to view favorites.'
-	else if (props.errorMessage) emptyMessage = `Failed to load favorites: ${props.errorMessage}`
-	else if (props.isLoading && availableFavorites.length === 0) emptyMessage = 'Loading favorites…'
-	else if (availableFavorites.length === 0) emptyMessage = 'No favorites yet.'
-	else if (sorted.length === 0) emptyMessage = 'No favorites match your search.'
+	let status: {
+		kind: 'prereq' | 'loading' | 'empty' | 'error'
+		title: string
+		description?: string
+	} | null = null
+	if (!props.hasProfile) {
+		status = {
+			kind: 'prereq',
+			title: selectProfileFirstHint(),
+			description: chooseProfileToShowPinnedObjectsHint(),
+		}
+	} else if (!props.hasBucket) {
+		status = {
+			kind: 'prereq',
+			title: selectBucketFirstHint(),
+			description: pickBucketToShowPinnedObjectsHint(),
+		}
+	} else if (props.errorMessage) {
+		status = {
+			kind: 'error',
+			title: failedToLoadFavoritesTitle(),
+			description: props.errorMessage,
+		}
+	} else if (props.isLoading && availableFavorites.length === 0) {
+		status = {
+			kind: 'loading',
+			title: loadingFavoritesTitle(),
+			description: fetchingPinnedObjectsHint(),
+		}
+	} else if (availableFavorites.length === 0) {
+		status = {
+			kind: 'empty',
+			title: noFavoritesYetTitle(),
+			description: starObjectsToKeepThemHereHint(),
+		}
+	} else if (sorted.length === 0) {
+		status = {
+			kind: 'empty',
+			title: noFavoritesMatchQueryTitle(queryText),
+			description: clearFavoritesFilterHint(),
+		}
+	}
 
-	const emptyMessageType = props.errorMessage ? 'danger' : 'secondary'
+	let badgeCount: ReactNode = favoriteCount
+	let badgeLabel = favoriteCount === 1 ? '1 favorite pinned' : `${favoriteCount} favorites pinned`
+	if (!props.hasProfile) {
+		badgeCount = null
+		badgeLabel = favoritesUnavailableUntilProfileSelectedLabel()
+	} else if (!props.hasBucket) {
+		badgeCount = null
+		badgeLabel = favoritesUnavailableUntilBucketSelectedLabel()
+	} else if (props.errorMessage && favoriteCount === 0 && availableFavorites.length === 0) {
+		badgeCount = '!'
+		badgeLabel = failedToLoadFavoritesTitle()
+	} else if (showLoadingBadge) {
+		badgeCount = '…'
+		badgeLabel = loadingFavoritesCountLabel()
+	}
+
+	const collapsedSummaryParts: string[] = []
+	if (props.favoritesOnly) collapsedSummaryParts.push('Only')
+	if (queryText) collapsedSummaryParts.push(`"${queryText}"`)
+	const collapsedSummary = !isExpanded && collapsedSummaryParts.length > 0 ? collapsedSummaryParts.join(' · ') : null
 
 	return (
 		<ObjectsTreePane
-			title="Favorites"
+			title={
+				<span className={styles.favoritesTitle} data-testid="objects-favorites-title">
+					<span className={styles.favoritesTitleLabel}>Favorites</span>
+					{collapsedSummary ? (
+						<span
+							className={styles.favoritesTitleSummary}
+							data-testid="objects-favorites-summary"
+							title={collapsedSummary}
+						>
+							{collapsedSummary}
+						</span>
+					) : null}
+				</span>
+			}
 			testId="objects-favorites-pane"
 			collapsible
 			expanded={props.expanded}
 			onExpandedChange={props.onExpandedChange}
 			extra={
-				<Badge
-					count={favoriteCount}
-					overflowCount={999}
-					showZero
-					style={{ backgroundColor: favoriteCount > 0 ? 'var(--s3d-color-primary)' : 'var(--s3d-color-border-strong)' }}
-				/>
+				<span data-testid="objects-favorites-badge" aria-label={badgeLabel} title={badgeLabel}>
+					<Badge
+						count={badgeCount}
+						overflowCount={999}
+						showZero={!showLoadingBadge && badgeCount !== null}
+						style={{
+							backgroundColor:
+								showLoadingBadge || props.errorMessage || favoriteCount > 0
+									? 'var(--s3d-color-primary)'
+									: 'var(--s3d-color-border-strong)',
+						}}
+					/>
+				</span>
 			}
 		>
 			<div className={styles.favoritesPane}>
@@ -85,26 +180,30 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 					/>
 				) : null}
 				{showBehaviorControls ? (
-					<Space size="small" wrap>
-						<Space size={6} align="center">
+					<div className={styles.favoritesControls} data-testid="objects-favorites-controls">
+						<div className={styles.favoritesControl}>
 							<ToggleSwitch
 								checked={props.favoritesOnly}
 								onChange={props.onFavoritesOnlyChange}
 								disabled={disabled}
 								ariaLabel="Favorites only"
 							/>
-							<Typography.Text type="secondary">Favorites only</Typography.Text>
-						</Space>
-						<Space size={6} align="center">
+							<Typography.Text type="secondary" className={styles.favoritesControlLabel}>
+								Favorites only
+							</Typography.Text>
+						</div>
+						<div className={styles.favoritesControl}>
 							<ToggleSwitch
 								checked={props.openDetailsOnClick}
 								onChange={props.onOpenDetailsOnClickChange}
 								disabled={disabled}
 								ariaLabel="Open details on click"
 							/>
-							<Typography.Text type="secondary">Open details on click</Typography.Text>
-						</Space>
-					</Space>
+							<Typography.Text type="secondary" className={styles.favoritesControlLabel}>
+								Open details on click
+							</Typography.Text>
+						</div>
+					</div>
 				) : null}
 				<div className={styles.favoritesList}>
 					{sorted.map((item) => {
@@ -131,15 +230,14 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 							</button>
 						)
 					})}
-					{emptyMessage ? (
-						<div className={styles.favoritesEmptyState}>
-							<Typography.Text type={emptyMessageType}>{emptyMessage}</Typography.Text>
-							{props.hasProfile && props.hasBucket && !props.errorMessage && !props.isLoading && !hasFavorites ? (
-								<Typography.Text type="secondary" className={styles.favoritesEmptyHint}>
-									Star objects from the list to pin quick paths here.
-								</Typography.Text>
-							) : null}
-						</div>
+					{status ? (
+						<ObjectsPaneStatus
+							kind={status.kind}
+							title={status.title}
+							description={status.description}
+							testId="objects-favorites-status"
+							kindAttributeName="data-favorites-status-kind"
+						/>
 					) : null}
 				</div>
 			</div>

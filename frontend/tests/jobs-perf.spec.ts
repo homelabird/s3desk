@@ -173,7 +173,7 @@ async function setupObjectsApiMocks(page: Page, objectCount: number) {
 	])
 }
 
-test.describe('jobs performance', () => {
+test.describe('@perf jobs performance', () => {
 	const perfEnabled = process.env.PERF_TESTS === '1'
 	test.skip(!perfEnabled, 'set PERF_TESTS=1 to enable performance checks')
 
@@ -233,7 +233,7 @@ test.describe('jobs performance', () => {
 	})
 })
 
-test.describe('objects performance', () => {
+test.describe('@perf objects performance', () => {
 	const perfEnabled = process.env.PERF_TESTS === '1'
 	test.skip(!perfEnabled, 'set PERF_TESTS=1 to enable performance checks')
 

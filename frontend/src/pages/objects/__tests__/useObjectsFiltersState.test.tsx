@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { useObjectsFiltersState } from '../useObjectsFiltersState'
 
 describe('useObjectsFiltersState', () => {
@@ -26,12 +27,12 @@ describe('useObjectsFiltersState', () => {
 		expect(result.current.maxModifiedMs).toBe(123456)
 
 		await waitFor(() => {
-			expect(window.localStorage.getItem('objects:token-a:profile-1:typeFilter')).toBe(JSON.stringify('folders'))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:favoritesOnly')).toBe(JSON.stringify(true))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:favoritesSearch')).toBe(JSON.stringify('reports'))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:extFilter')).toBe(JSON.stringify('pdf'))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:minSize')).toBe(JSON.stringify(128))
-			expect(window.localStorage.getItem('objects:token-a:profile-1:maxModifiedMs')).toBe(JSON.stringify(123456))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'typeFilter'))).toBe(JSON.stringify('folders'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'favoritesOnly'))).toBe(JSON.stringify(true))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'favoritesSearch'))).toBe(JSON.stringify('reports'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'extFilter'))).toBe(JSON.stringify('pdf'))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'minSize'))).toBe(JSON.stringify(128))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'maxModifiedMs'))).toBe(JSON.stringify(123456))
 		})
 
 		expect(window.localStorage.getItem('objectsTypeFilter')).toBeNull()

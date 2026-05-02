@@ -24,6 +24,19 @@ describe('HelpTooltip', () => {
 		expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
 	})
 
+	it('opens from trigger focus even when custom host styling is present', () => {
+		render(<HelpTooltip text="Styled help" style={{ marginLeft: 12, display: 'block' }} />)
+		const trigger = screen.getByTestId('help-tooltip-trigger')
+		const host = trigger.parentElement!
+		expect(host).not.toBeNull()
+
+		fireEvent.focus(trigger)
+		expect(screen.getByRole('tooltip')).toHaveTextContent('Styled help')
+
+		fireEvent.blur(trigger)
+		expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+	})
+
 	it('keeps an accessible trigger', () => {
 		render(<HelpTooltip text="Example help" />)
 		const trigger = screen.getByLabelText('Help')

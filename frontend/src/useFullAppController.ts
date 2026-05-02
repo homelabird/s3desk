@@ -1,6 +1,6 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 
-import type { APIClient } from './api/client'
+import type { APIClientShape } from './api/client'
 import type { FullAppOverlaysHostProps } from './FullAppOverlaysHost'
 import type {
 	FullAppShellChromeProps,
@@ -40,7 +40,7 @@ export type FullAppRoutesState = {
 }
 
 type UseFullAppControllerArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	setApiToken: Dispatch<SetStateAction<string>>
 	pathname: string

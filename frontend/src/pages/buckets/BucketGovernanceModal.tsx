@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Grid, Typography } from "antd";
 
-import { APIClient } from "../../api/client";
+import type { APIClientShape } from "../../api/client";
+import { queryKeys } from "../../api/queryKeys";
 import type { Profile } from "../../api/types";
 import { formatErrorWithHint as formatErr } from "../../lib/errors";
 import { BucketGovernanceAWSControls } from "./governance/aws-controls";
@@ -13,7 +14,7 @@ import type { GovernanceControlsCommonProps } from "./governance/types";
 import { buildGovernanceDraftKey } from "./governance/utils";
 
 export function BucketGovernanceModal(props: {
-  api: APIClient;
+  api: APIClientShape;
   apiToken: string;
   profileId: string;
   provider?: Profile["provider"];
@@ -28,7 +29,7 @@ export function BucketGovernanceModal(props: {
   const queryClient = useQueryClient();
 
   const governanceQuery = useQuery({
-    queryKey: ["bucketGovernance", props.profileId, bucket, props.apiToken],
+    queryKey: queryKeys.buckets.governance(props.profileId, bucket, props.apiToken),
     queryFn: () => props.api.buckets.getBucketGovernance(props.profileId, bucket),
     enabled: open && !!props.profileId && !!bucket,
   });

@@ -1,13 +1,14 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { APIError } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { ObjectItem } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { normalizePrefix } from './objectsListUtils'
 
 type UseObjectsIndexedSearchQueryArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string
@@ -62,20 +63,19 @@ export function useObjectsIndexedSearchQuery({
 	const globalSearchModifiedBefore = globalSearchMaxTimeMs != null ? new Date(globalSearchMaxTimeMs).toISOString() : undefined
 
 	const indexedSearchQuery = useInfiniteQuery({
-		queryKey: [
-			'objectsIndexSearch',
+		queryKey: queryKeys.objects.indexSearch({
 			profileId,
 			bucket,
-			globalSearchQueryText,
-			globalSearchPrefixNormalized,
-			globalSearchLimitClamped,
-			globalSearchExtNormalized,
-			globalSearchMinSizeBytes,
-			globalSearchMaxSizeBytes,
-			globalSearchModifiedAfter,
-			globalSearchModifiedBefore,
+			query: globalSearchQueryText,
+			prefix: globalSearchPrefixNormalized,
+			limit: globalSearchLimitClamped,
+			ext: globalSearchExtNormalized,
+			minSize: globalSearchMinSizeBytes,
+			maxSize: globalSearchMaxSizeBytes,
+			modifiedAfter: globalSearchModifiedAfter,
+			modifiedBefore: globalSearchModifiedBefore,
 			apiToken,
-		],
+		}),
 		enabled: globalSearchOpen && !!profileId && !!bucket && !!globalSearchQueryText,
 		initialPageParam: undefined as string | undefined,
 		queryFn: async ({ pageParam }) =>
@@ -110,4 +110,3 @@ export function useObjectsIndexedSearchQuery({
 		indexedSearchErrorMessage,
 	}
 }
-

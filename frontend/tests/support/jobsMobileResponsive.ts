@@ -86,6 +86,17 @@ export async function installJobsMobileResponsiveFixtures(page: Page) {
 		]),
 		jsonFixture('GET', '/api/v1/buckets', [{ name: defaultStorage.bucket, createdAt: now }]),
 		jsonFixture('GET', '/api/v1/jobs', { items: jobs, nextCursor: null }),
+		{
+			method: 'GET',
+			path: /^\/api\/v1\/jobs\/([^/]+)$/,
+			handler: ({ path }) => {
+				const jobId = path.match(/^\/api\/v1\/jobs\/([^/]+)$/)?.[1] ?? ''
+				const job = jobs.find((entry) => entry.id === jobId)
+				return job
+					? { json: job }
+					: { status: 404, json: { error: { code: 'not_found', message: 'job not found' } } }
+			},
+		},
 		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),
 	])
 }

@@ -2,10 +2,10 @@ import { Button, Input } from 'antd'
 import { LoadingOutlined } from '@ant-design/icons'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 
-import { APIClient } from '../api/client'
+import type { APIClientShape } from '../api/client'
 
 type LocalPathInputProps = {
-	api: APIClient
+	api: APIClientShape
 	profileId: string | null
 	value?: string
 	onChange?: (value: string) => void

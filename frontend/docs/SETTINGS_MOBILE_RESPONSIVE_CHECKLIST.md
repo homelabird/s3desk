@@ -6,7 +6,7 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 ## Scope
 
 - Page: `Settings`
-- Goal: verify that the `Settings` experience remains usable on mobile with viewport-safe drawers, horizontally scrollable tabs, and touch-friendly controls.
+- Goal: verify that `Settings` still supports real mobile task completion for opening the settings surface, switching tabs, and saving stateful preferences.
 
 ## Recommended Viewports
 
@@ -18,26 +18,26 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## Manual QA Checklist
 
-- [ ] Opening `Settings` does not create page-level horizontal scrolling on narrow phones.
-- [ ] The settings drawer or overlay stays fully inside the viewport.
-- [ ] Drawer header, body, and actions respect mobile safe-area insets.
-- [ ] The tab strip scrolls horizontally instead of clipping or wrapping unusably.
-- [ ] Active and inactive tabs remain reachable on phone-sized widths.
-- [ ] Mobile touch targets remain at least comfortably tappable.
+- [ ] `Settings` still opens from the main UI on a phone-sized viewport.
+- [ ] Tab switching remains usable when some tabs require horizontal scrolling.
+- [ ] Preference controls remain reachable after changing tabs.
+- [ ] Saving or applying settings still leaves the user in a coherent mobile state.
+- [ ] Controls near the bottom edge stay usable with safe-area padding.
+- [ ] Token, transfer, or tab state changes are not hidden behind the overlay shell.
 
 ## `Settings` Flow Checklist
 
 - [ ] Open `Settings` from the main UI on a phone-sized viewport.
 - [ ] Switch across multiple tabs using horizontal scrolling when needed.
-- [ ] Verify tab content changes without clipping the drawer or overlay.
-- [ ] Confirm controls near the bottom edge remain usable above the safe area.
+- [ ] Change at least one setting and confirm the updated state persists after close/reopen.
+- [ ] Reopen `Settings` and confirm the previously changed state is still visible.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile viewport test that asserts the settings drawer remains inside the viewport.
-- [ ] Add a test that verifies horizontal tab scrolling works on mobile widths.
-- [ ] Add a test that verifies tab touch targets remain large enough for mobile use.
+- [ ] Add a mobile test that verifies `Settings` opens from the main UI.
+- [ ] Add a test that verifies horizontal tab scrolling still reaches the hidden tabs.
+- [ ] Add a test that verifies a representative setting persists after close/reopen on mobile.
 
 ## Notes
 
-- Prioritize drawer containment and tab usability because these are the highest-risk mobile behaviors on the `Settings` page.
+- Prioritize open, tab-switch, and persistence flows. Layout checks only matter when they block those actions.

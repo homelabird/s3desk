@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { message } from 'antd'
 
-import type { APIClient } from '../../api/client'
-import type { TransfersContextValue } from '../../components/Transfers'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { APIClientShape } from '../../api/client'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import { listAllObjects } from '../../lib/objects'
+import { objectsFeedback } from './objectsFeedback'
 import { normalizePrefix } from './objectsListUtils'
 
 type DownloadPrefixValues = { localFolder: string }
 
 type UseObjectsDownloadPrefixArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	bucket: string
@@ -62,7 +61,7 @@ export function useObjectsDownloadPrefix({ api, apiToken, profileId, bucket, pre
 			const srcPrefix = normalizePrefix(prefix)
 			if (!srcPrefix) return
 			if (!downloadPrefixFolderHandle) {
-				message.info('Select a local folder first')
+				objectsFeedback.selectLocalFolderFirst()
 				return
 			}
 
@@ -78,7 +77,7 @@ export function useObjectsDownloadPrefix({ api, apiToken, profileId, bucket, pre
 				})
 				if (requestTokenRef.current !== requestToken) return
 				if (items.length === 0) {
-					message.info('No objects found under this prefix')
+					objectsFeedback.noObjectsFoundUnderPrefix()
 					return
 				}
 
@@ -97,7 +96,7 @@ export function useObjectsDownloadPrefix({ api, apiToken, profileId, bucket, pre
 				resetDownloadPrefixState()
 			} catch (err) {
 				if (requestTokenRef.current !== requestToken) return
-				message.error(formatErr(err))
+				objectsFeedback.error(err)
 			} finally {
 				if (requestTokenRef.current === requestToken) {
 					setDownloadPrefixSubmitting(false)

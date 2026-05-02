@@ -18,6 +18,8 @@ type ObjectsListHeaderProps = {
 }
 
 export function ObjectsListHeader(props: ObjectsListHeaderProps) {
+	const sortLabelGap = props.isCompact ? 3 : 4
+
 	return (
 		<ObjectsListHeaderRow>
 			<div className={`${styles.listGridBase} ${styles.listHeaderGrid} ${props.listGridClassName}`}>
@@ -28,9 +30,17 @@ export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 					onChange={(e) => props.onToggleSelectAll(e.target.checked)}
 					aria-label="Select all objects"
 				/>
-				<Button type="text" size="small" onClick={() => props.onToggleSort('name')} style={{ padding: 0, height: 'auto' }}>
-					<Space size={4}>
-						<Typography.Text type="secondary">Name</Typography.Text>
+				<Button
+					type="text"
+					size="small"
+					className={styles.listHeaderSortButton}
+					onClick={() => props.onToggleSort('name')}
+					style={{ padding: 0, height: 'auto' }}
+				>
+					<Space size={sortLabelGap}>
+						<Typography.Text type="secondary" className={styles.listHeaderLabel}>
+							Name
+						</Typography.Text>
 						{props.sortDirForColumn('name') === 'asc' ? (
 							<CaretUpOutlined />
 						) : props.sortDirForColumn('name') === 'desc' ? (
@@ -39,7 +49,7 @@ export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 					</Space>
 				</Button>
 				{props.isCompact ? (
-					<Typography.Text type="secondary" style={{ justifySelf: 'end' }}>
+					<Typography.Text type="secondary" className={styles.listHeaderEndCell}>
 						<EllipsisOutlined />
 					</Typography.Text>
 				) : (
@@ -47,11 +57,14 @@ export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 						<Button
 							type="text"
 							size="small"
+							className={styles.listHeaderSortButton}
 							onClick={() => props.onToggleSort('size')}
 							style={{ padding: 0, height: 'auto', textAlign: 'right' }}
 						>
-							<Space size={4}>
-								<Typography.Text type="secondary">Size</Typography.Text>
+							<Space size={sortLabelGap}>
+								<Typography.Text type="secondary" className={styles.listHeaderLabel}>
+									Size
+								</Typography.Text>
 								{props.sortDirForColumn('size') === 'asc' ? (
 									<CaretUpOutlined />
 								) : props.sortDirForColumn('size') === 'desc' ? (
@@ -62,11 +75,14 @@ export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 						<Button
 							type="text"
 							size="small"
+							className={styles.listHeaderSortButton}
 							onClick={() => props.onToggleSort('time')}
 							style={{ padding: 0, height: 'auto' }}
 						>
-							<Space size={4}>
-								<Typography.Text type="secondary">Last modified</Typography.Text>
+							<Space size={sortLabelGap}>
+								<Typography.Text type="secondary" className={styles.listHeaderLabel}>
+									Last modified
+								</Typography.Text>
 								{props.sortDirForColumn('time') === 'asc' ? (
 									<CaretUpOutlined />
 								) : props.sortDirForColumn('time') === 'desc' ? (
@@ -74,7 +90,9 @@ export function ObjectsListHeader(props: ObjectsListHeaderProps) {
 								) : null}
 							</Space>
 						</Button>
-						<Typography.Text type="secondary">Actions</Typography.Text>
+						<Typography.Text type="secondary" className={styles.listHeaderEndCell}>
+							Actions
+						</Typography.Text>
 					</>
 				)}
 			</div>

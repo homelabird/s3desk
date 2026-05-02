@@ -1,10 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import {
-	APIClient,
-	type UploadFileItem,
-} from '../../api/client'
+import type { UploadFileItem } from '../../api/client'
+import { useAPIClient } from '../../api/useAPIClient'
 import { serverScopedStorageKey } from '../../lib/profileScopedStorage'
 import { TransferEstimator } from '../../lib/transfer'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
@@ -61,7 +59,7 @@ export type TransfersRuntimeController = {
 
 export function useTransfersRuntimeController(args: UseTransfersRuntimeControllerArgs): TransfersRuntimeController {
 	const queryClient = useQueryClient()
-	const api = useMemo(() => new APIClient({ apiToken: args.apiToken }), [args.apiToken])
+	const api = useAPIClient()
 	const transfersTabStorageKey = useMemo(() => serverScopedStorageKey('transfers', args.apiToken, 'tab'), [args.apiToken])
 
 	const [isOpen, setIsOpen] = useState(false)

@@ -16,9 +16,17 @@ if ! command -v "${NPM_BIN}" >/dev/null 2>&1; then
   exit 1
 fi
 
+echo "[check-ci-pair] scope: workflow lint + frontend build + backend test"
+echo "[check-ci-pair] excludes: bundle budget and Playwright lanes"
+echo "[check-ci-pair] note: green output is not the GitHub required-check set (release-gate, Core Mock E2E, Mobile Responsive E2E (Required))"
+
+echo "[check-ci-pair] workflow lint"
+bash "${ROOT}/scripts/check_github_workflows.sh"
+
 echo "[check-ci-pair] frontend build"
 (
   cd "${ROOT}/frontend"
+  "${NPM_BIN}" ci --no-audit --no-fund
   "${NPM_BIN}" run build
 )
 

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
-import { message } from 'antd'
 
+import { objectsFeedback } from './objectsFeedback'
 import { useObjectsListKeydown } from './useObjectsListKeydown'
 
 type UseObjectsListKeydownHandlerArgs = {
@@ -65,7 +65,7 @@ export function useObjectsListKeydownHandler({
 			warnRenameNoSelection()
 			return
 		}
-		message.info('Select a single object to rename')
+		objectsFeedback.selectSingleObjectToRename()
 	}, [warnRenameNoSelection])
 
 	return useObjectsListKeydown({

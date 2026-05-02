@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 
-import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 const MAX_GLOBAL_SEARCH_TEXT_LENGTH = 160
@@ -72,7 +72,7 @@ export function useObjectsGlobalSearchState({
 		'',
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearch',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearch')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearch'),
 			sanitize: (value) => clampText(value, MAX_GLOBAL_SEARCH_TEXT_LENGTH),
 		},
 	)
@@ -87,7 +87,7 @@ export function useObjectsGlobalSearchState({
 		'',
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearchPrefix',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearchPrefix')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearchPrefix'),
 			sanitize: (value) => clampText(value, MAX_GLOBAL_SEARCH_PREFIX_LENGTH),
 		},
 	)
@@ -96,7 +96,7 @@ export function useObjectsGlobalSearchState({
 		100,
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearchLimit',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearchLimit')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearchLimit'),
 			sanitize: clampLimit,
 		},
 	)
@@ -105,7 +105,7 @@ export function useObjectsGlobalSearchState({
 		'',
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearchExt',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearchExt')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearchExt'),
 			sanitize: (value) => clampText(value.replace(/^\.+/, '').toLowerCase(), MAX_GLOBAL_SEARCH_EXT_LENGTH),
 		},
 	)
@@ -114,7 +114,7 @@ export function useObjectsGlobalSearchState({
 		null,
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearchMinSize',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearchMinSize')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearchMinSize'),
 			sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_SIZE_BYTES),
 		},
 	)
@@ -123,7 +123,7 @@ export function useObjectsGlobalSearchState({
 		null,
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearchMaxSize',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearchMaxSize')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearchMaxSize'),
 			sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_SIZE_BYTES),
 		},
 	)
@@ -132,7 +132,7 @@ export function useObjectsGlobalSearchState({
 		null,
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearchMinModifiedMs',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearchMinModifiedMs')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearchMinModifiedMs'),
 			sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_MODIFIED_MS),
 		},
 	)
@@ -141,7 +141,7 @@ export function useObjectsGlobalSearchState({
 		null,
 		{
 			legacyLocalStorageKey: 'objectsGlobalSearchMaxModifiedMs',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('objects', profileId, 'globalSearchMaxModifiedMs')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('objects', apiToken, profileId, 'globalSearchMaxModifiedMs'),
 			sanitize: (value) => clampNullableNumber(value, MAX_GLOBAL_SEARCH_MODIFIED_MS),
 		},
 	)

@@ -1,0 +1,64 @@
+replicaCount: 1
+
+secrets:
+  existingSecret: s3desk-secrets
+  autoGenerateApiToken: false
+
+server:
+  allowRemote: true
+  externalBaseURL: "https://s3desk.example.com"
+  allowedLocalDirs:
+    - "/data"
+  logFormat: "json"
+  logLevel: "info"
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: s3desk.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: s3desk-tls
+      hosts:
+        - s3desk.example.com
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    allowSameNamespace: true
+    extra: []
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp

@@ -33,11 +33,19 @@ export function ObjectsDropZoneCard(props: {
 }
 
 export function ObjectsSelectionBar(props: { children: ReactNode }) {
-	return <div className={styles.selectionBar}>{props.children}</div>
+	return (
+		<div className={styles.selectionBar} data-testid="objects-selection-bar">
+			{props.children}
+		</div>
+	)
 }
 
 export function ObjectsListHeaderRow(props: { children: ReactNode }) {
-	return <div className={styles.listHeaderRow}>{props.children}</div>
+	return (
+		<div className={styles.listHeaderRow} data-testid="objects-list-header-row">
+			{props.children}
+		</div>
+	)
 }
 
 export type ObjectsListScrollerProps = {

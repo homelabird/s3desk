@@ -1,18 +1,17 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { useRef, useState, type MutableRefObject } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
 import type { Profile } from '../../api/types'
-import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { copyToClipboard } from '../../lib/clipboard'
 import { matchesScopedProfileRequest, matchesScopedRequestId, matchesScopedSession } from './profileMutationScope'
 import { downloadTextFile } from './profileMutationUtils'
 import { buildProfileExportFilename, parseProfileYaml } from './profileYaml'
+import { profilesFeedback } from './profilesFeedback'
 
 type UseProfilesYamlImportExportArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	currentScopeKey: string
 	queryClient: Pick<QueryClient, 'invalidateQueries'>
@@ -97,9 +96,8 @@ export function useProfilesYamlImportExport({
 					expectedProfileId: yamlProfileIdRef.current,
 				})
 			) return
-			const msg = formatErr(err)
+			const msg = profilesFeedback.errorMessage(err)
 			setYamlError(msg)
-			message.error(msg)
 		},
 		onSettled: (_, __, _vars, context) => {
 			if (
@@ -156,7 +154,7 @@ export function useProfilesYamlImportExport({
 					expectedProfileId: yamlProfileIdRef.current,
 				})
 			) return
-			message.success('Profile YAML saved')
+			profilesFeedback.profileYamlSaved()
 			yamlProfileIdRef.current = updated.id
 			setYamlProfile(updated)
 			setYamlContent(canonicalYaml)
@@ -179,9 +177,8 @@ export function useProfilesYamlImportExport({
 					expectedProfileId: yamlProfileIdRef.current,
 				})
 			) return
-			const msg = formatErr(err)
+			const msg = profilesFeedback.errorMessage(err)
 			setYamlError(msg)
-			message.error(msg)
 		},
 	})
 
@@ -215,7 +212,7 @@ export function useProfilesYamlImportExport({
 					expectedSessionToken: importSessionTokenRef.current,
 				})
 			) return
-			message.success(`Imported profile "${created.name}"`)
+			profilesFeedback.importedProfile(created.name)
 			closeImportModal()
 			await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(context.scopeApiToken), exact: true })
 		},
@@ -229,9 +226,8 @@ export function useProfilesYamlImportExport({
 					expectedSessionToken: importSessionTokenRef.current,
 				})
 			) return
-			const msg = formatErr(err)
+			const msg = profilesFeedback.errorMessage(err)
 			setImportError(msg)
-			message.error(msg)
 		},
 		onSettled: (_, __, _vars, context) => {
 			if (
@@ -287,16 +283,16 @@ export function useProfilesYamlImportExport({
 		if (yamlScopeKey !== currentScopeKey || !activeYamlDraft) return
 		const res = await copyToClipboard(activeYamlDraft)
 		if (res.ok) {
-			message.success('Copied YAML')
+			profilesFeedback.copiedYaml()
 			return
 		}
-		message.error(clipboardFailureHint())
+		profilesFeedback.clipboardFailed()
 	}
 
 	const handleYamlDownload = () => {
 		if (yamlScopeKey !== currentScopeKey || !activeYamlDraft) return
 		downloadTextFile(buildProfileExportFilename(activeYamlProfile), activeYamlDraft)
-		message.success('Downloaded YAML')
+		profilesFeedback.downloadedYaml()
 	}
 
 	const openImportModal = () => {

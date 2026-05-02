@@ -9,7 +9,14 @@ import {
 	installMockApi,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { ensureDialogOpen, transferUploadRow } from './support/ui'
+import {
+	clickTransferRowButton,
+	dropFileIntoObjectsUploadZone,
+	expectTransferRowState,
+	gotoObjectsUploadPage,
+	openTransfersUploadRow,
+	setFilesFromNextChooser,
+} from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -131,48 +138,18 @@ test('upload transfer shows job progress from events', async ({ page }) => {
 	)
 
 	await seedStorage(page)
-	await page.goto('/objects')
+	await gotoObjectsUploadPage(page)
+	await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible({ timeout: 10_000 })
 
-	const dropZone = page.getByTestId('objects-upload-dropzone')
-	await expect(dropZone).toBeVisible()
-
-	const dataTransfer = await page.evaluateHandle(() => {
-		const dt = new DataTransfer()
-		const entry: {
-			isFile: boolean
-			isDirectory: boolean
-			fullPath: string
-			name: string
-			file: (success: (file: File) => void, error?: (err: unknown) => void) => void
-		} = {
-			isFile: true,
-			isDirectory: false,
-			fullPath: '/hello.txt',
-			name: 'hello.txt',
-			file(success) {
-				success(new File(['hello'], 'hello.txt', { type: 'text/plain' }))
-			},
-		}
-		const item = { webkitGetAsEntry: () => entry }
-		Object.defineProperty(dt, 'items', { value: [item] })
-		Object.defineProperty(dt, 'files', { value: [] })
-		Object.defineProperty(dt, 'types', { value: ['Files'] })
-		return dt
+	await dropFileIntoObjectsUploadZone(page, {
+		name: 'hello.txt',
+		contents: 'hello',
+		type: 'text/plain',
 	})
-
-	await dropZone.dispatchEvent('dragenter', { dataTransfer })
-	await dropZone.dispatchEvent('dragover', { dataTransfer })
-	await dropZone.dispatchEvent('drop', { dataTransfer })
 
 	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
 
-	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: /Transfers/i }).first().click()
-	})
-	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
-
-	const row = transferUploadRow(transfersDialog, 'Upload: hello.txt')
-	await expect(row).toBeVisible({ timeout: 5000 })
+	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt', { triggerButtonName: /Transfers/i, timeout: 5000 })
 	await expect(row.getByText(/eta/)).toBeVisible()
 })
 
@@ -223,55 +200,27 @@ test('upload transfer shows failure and allows retry', async ({ page }) => {
 	)
 
 	await seedStorage(page)
-	await page.goto('/objects')
+	await gotoObjectsUploadPage(page)
+	await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible({ timeout: 10_000 })
 
-	const dropZone = page.getByTestId('objects-upload-dropzone')
-	await expect(dropZone).toBeVisible()
-
-	const dataTransfer = await page.evaluateHandle(() => {
-		const dt = new DataTransfer()
-		const entry: {
-			isFile: boolean
-			isDirectory: boolean
-			fullPath: string
-			name: string
-			file: (success: (file: File) => void, error?: (err: unknown) => void) => void
-		} = {
-			isFile: true,
-			isDirectory: false,
-			fullPath: '/broken.txt',
-			name: 'broken.txt',
-			file(success) {
-				success(new File(['broken'], 'broken.txt', { type: 'text/plain' }))
-			},
-		}
-		const item = { webkitGetAsEntry: () => entry }
-		Object.defineProperty(dt, 'items', { value: [item] })
-		Object.defineProperty(dt, 'files', { value: [] })
-		Object.defineProperty(dt, 'types', { value: ['Files'] })
-		return dt
+	await dropFileIntoObjectsUploadZone(page, {
+		name: 'broken.txt',
+		contents: 'broken',
+		type: 'text/plain',
 	})
-
-	await dropZone.dispatchEvent('dragenter', { dataTransfer })
-	await dropZone.dispatchEvent('dragover', { dataTransfer })
-	await dropZone.dispatchEvent('drop', { dataTransfer })
 
 	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
 
-	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: /Transfers/i }).first().click()
-	})
-	await transfersDialog.getByRole('tab', { name: /Uploads/i }).click()
-
-	const row = transferUploadRow(transfersDialog, 'Upload: broken.txt')
-	await expect(row).toBeVisible({ timeout: 5000 })
-	await expect(row.getByText('Failed', { exact: true })).toBeVisible()
+	const { row } = await openTransfersUploadRow(page, 'Upload: broken.txt', { triggerButtonName: /Transfers/i, timeout: 5000 })
+	await expectTransferRowState(row, 'Failed')
 	await expect(row.getByText('simulated failure')).toBeVisible()
 
-	const [fileChooser] = await Promise.all([
-		page.waitForEvent('filechooser'),
-		row.getByRole('button', { name: 'Retry' }).click(),
-	])
-	await fileChooser.setFiles({ name: 'broken.txt', mimeType: 'text/plain', buffer: Buffer.from('broken') })
+	await setFilesFromNextChooser(
+		page,
+		{ name: 'broken.txt', mimeType: 'text/plain', buffer: Buffer.from('broken') },
+		async () => {
+			await clickTransferRowButton(row, 'Retry')
+		},
+	)
 	await expect(row.getByText('Transferring', { exact: true })).toBeVisible()
 })

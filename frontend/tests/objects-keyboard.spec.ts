@@ -9,7 +9,7 @@ import {
 	installApiFixtures,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { dialogByName } from './support/ui'
+import { dialogByName, gotoObjectsPage, objectsSelectionCheckbox } from './support/ui'
 
 const profileId = 'playwright-keyboard-profile'
 const bucket = 'keyboard-bucket'
@@ -108,7 +108,7 @@ test.describe('Objects keyboard interactions', () => {
 	test('selection shortcuts cover range select, select all, clear, and rename', async ({ page }) => {
 		await installObjectsKeyboardApi(page)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const list = page.getByRole('list', { name: 'Objects list' })
 		await expect(list).toBeVisible()
@@ -118,21 +118,21 @@ test.describe('Objects keyboard interactions', () => {
 		await expect(page.locator('span').filter({ hasText: 'Select a single object to rename' })).toBeVisible()
 
 		await list.press('ArrowDown')
-		await expect(page.getByRole('checkbox', { name: 'Select alpha.txt' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeChecked()
 		await expect(page.getByText('1 selected')).toBeVisible()
 
 		await list.press('Shift+ArrowDown')
 		await expect(page.getByText('2 selected')).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select alpha.txt' })).toBeChecked()
-		await expect(page.getByRole('checkbox', { name: 'Select beta.txt' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toBeChecked()
 
 		await list.press(`${modifier}+A`)
 		await expect(page.getByText('3 selected')).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select gamma.txt' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'gamma.txt')).toBeChecked()
 
 		await list.press('Escape')
 		await expect(page.getByText('3 selected')).toHaveCount(0)
-		await expect(page.getByRole('checkbox', { name: 'Select alpha.txt' })).not.toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).not.toBeChecked()
 
 		await list.press('ArrowDown')
 		await list.press('F2')
@@ -144,7 +144,7 @@ test.describe('Objects keyboard interactions', () => {
 	test('backspace navigates to the parent prefix', async ({ page }) => {
 		await installObjectsKeyboardApi(page)
 		await seedStorage(page, { prefix: 'docs/reports/' })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await expect(page.getByText(`s3://${bucket}/docs/reports/`)).toBeVisible()
 		await expect(page.getByText('q1.txt')).toBeVisible()

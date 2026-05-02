@@ -10,10 +10,11 @@ This chart deploys S3Desk on Kubernetes with either:
 Install from the local chart with an explicit API token:
 
 ```bash
+API_TOKEN="$(openssl rand -base64 32)"
 helm upgrade --install s3desk ./charts/s3desk \
   --namespace s3desk \
   --create-namespace \
-  --set-string server.apiToken='replace-me-with-a-strong-token'
+  --set-string server.apiToken="${API_TOKEN}"
 ```
 
 If you omit `server.apiToken`, the chart auto-generates and persists one in the release Secret by default. Retrieve it with:
@@ -27,10 +28,15 @@ kubectl get secret <release-name> -n <namespace> -o jsonpath='{.data.apiToken}' 
 Remote/browser-facing deployment:
 
 ```bash
+kubectl create secret generic s3desk-secrets \
+  --namespace s3desk \
+  --from-literal=apiToken="$(openssl rand -base64 32)" \
+  --from-literal=encryptionKey="$(openssl rand -base64 32)"
+
 helm upgrade --install s3desk ./charts/s3desk \
   --namespace s3desk \
   --create-namespace \
-  --set-string server.apiToken='replace-me-with-a-strong-token' \
+  --values ./charts/s3desk/values-production.yaml \
   --set-string server.externalBaseURL='https://s3desk.example.com' \
   --set ingress.enabled=true \
   --set ingress.className=nginx \
@@ -40,10 +46,11 @@ helm upgrade --install s3desk ./charts/s3desk \
 Postgres-backed deployment:
 
 ```bash
+API_TOKEN="$(openssl rand -base64 32)"
 helm upgrade --install s3desk ./charts/s3desk \
   --namespace s3desk \
   --create-namespace \
-  --set-string server.apiToken='replace-me-with-a-strong-token' \
+  --set-string server.apiToken="${API_TOKEN}" \
   --set db.backend=postgres \
   --set-string db.databaseUrl='postgres://s3desk:password@postgres:5432/s3desk?sslmode=disable'
 ```
@@ -52,8 +59,8 @@ Existing Secret-backed deployment:
 
 ```bash
 kubectl create secret generic s3desk-secrets \
-  --from-literal=apiToken='replace-me' \
-  --from-literal=encryptionKey='base64-encoded-key' \
+  --from-literal=apiToken="$(openssl rand -base64 32)" \
+  --from-literal=encryptionKey="$(openssl rand -base64 32)" \
   --from-literal=databaseUrl='postgres://s3desk:password@postgres:5432/s3desk?sslmode=disable'
 
 helm upgrade --install s3desk ./charts/s3desk \
@@ -66,10 +73,11 @@ helm upgrade --install s3desk ./charts/s3desk \
 Network policy:
 
 ```bash
+API_TOKEN="$(openssl rand -base64 32)"
 helm upgrade --install s3desk ./charts/s3desk \
   --namespace s3desk \
   --create-namespace \
-  --set-string server.apiToken='replace-me-with-a-strong-token' \
+  --set-string server.apiToken="${API_TOKEN}" \
   --set networkPolicy.enabled=true \
   --set networkPolicy.policyTypes[0]=Ingress \
   --set networkPolicy.policyTypes[1]=Egress
@@ -87,6 +95,9 @@ helm upgrade --install s3desk ./charts/s3desk \
 ## Operational Notes
 
 - `server.externalBaseURL` should be set for ingress, reverse-proxy, and browser-facing download flows.
+- Browser-facing remote deployments (`server.allowRemote=true` with ingress or Istio enabled) require `server.encryptionKey` or `secrets.existingSecret`, `networkPolicy.enabled=true`, resource requests/limits, and the non-root/read-only security context shown in `values-production.yaml`.
+- `values-production.yaml` is the recommended baseline for internet-facing or shared-cluster installs; override hostnames, ingress class, Secret name, and resource sizes for your cluster.
+- `server.allowedLocalDirs` defaults to `/data` because remote mode fails closed unless at least one allowed local directory is configured.
 - `db.backend=postgres` requires either `db.databaseUrl` or `secrets.existingSecret`.
 - The chart creates a dedicated ServiceAccount by default and disables service-account token automount unless you override it.
 - `networkPolicy` is opt-in. The default policy type is ingress-only so existing outbound DB/provider traffic is not broken by accident.

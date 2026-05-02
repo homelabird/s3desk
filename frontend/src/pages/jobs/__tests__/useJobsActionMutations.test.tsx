@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { type PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useJobsActionMutations } from '../useJobsActionMutations'
 
@@ -89,17 +90,32 @@ describe('useJobsActionMutations', () => {
 		expect(onJobDeleted).toHaveBeenCalledWith('job-delete')
 
 		expect(messageError).not.toHaveBeenCalled()
-		expect(messageSuccess).toHaveBeenCalled()
+		expect(messageSuccess).toHaveBeenCalledWith('Cancel requested')
+		expect(messageSuccess).toHaveBeenCalledWith('Retry queued: job-retry-new')
+		expect(messageSuccess).toHaveBeenCalledWith('Job deleted')
 		expect(invalidateSpy).toHaveBeenCalled()
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token'], exact: false })
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-cancel', 'token'], exact: true })
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-retry', 'token'], exact: true })
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-retry-new', 'token'], exact: true })
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-delete', 'token'], exact: true })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false })
+		expect(invalidateSpy).toHaveBeenCalledWith({
+			queryKey: queryKeys.jobs.detail('profile-1', 'job-cancel', 'token'),
+			exact: true,
+		})
+		expect(invalidateSpy).toHaveBeenCalledWith({
+			queryKey: queryKeys.jobs.detail('profile-1', 'job-retry', 'token'),
+			exact: true,
+		})
+		expect(invalidateSpy).toHaveBeenCalledWith({
+			queryKey: queryKeys.jobs.detail('profile-1', 'job-retry-new', 'token'),
+			exact: true,
+		})
+		expect(invalidateSpy).toHaveBeenCalledWith({
+			queryKey: queryKeys.jobs.detail('profile-1', 'job-delete', 'token'),
+			exact: true,
+		})
 		expect(
 			invalidateSpy.mock.calls.filter(
 				([args]) =>
-					JSON.stringify(args) === JSON.stringify({ queryKey: ['jobs', 'profile-1', 'token'], exact: false }),
+					JSON.stringify(args) ===
+					JSON.stringify({ queryKey: queryKeys.jobs.scope('profile-1', 'token'), exact: false }),
 			),
 		).toHaveLength(4)
 	})
@@ -156,7 +172,10 @@ describe('useJobsActionMutations', () => {
 		expect(messageSuccess).not.toHaveBeenCalled()
 		expect(messageError).not.toHaveBeenCalled()
 		expect(result.current.deletingJobId).toBeNull()
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-a'], exact: false })
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['job', 'profile-1', 'job-delete', 'token-a'], exact: true })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-a'), exact: false })
+		expect(invalidateSpy).toHaveBeenCalledWith({
+			queryKey: queryKeys.jobs.detail('profile-1', 'job-delete', 'token-a'),
+			exact: true,
+		})
 	})
 })

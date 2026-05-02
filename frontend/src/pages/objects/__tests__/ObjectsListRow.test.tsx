@@ -57,6 +57,8 @@ describe('ObjectsListRow', () => {
 
 		const row = screen.getByRole('listitem')
 		expect(row.className).toContain(styles.listRowSelected)
+		expect(screen.getByLabelText('Add favorite').className).toContain(styles.listRowIconButton)
+		expect(screen.getByLabelText('Object actions').className).toContain(styles.listRowIconButton)
 
 		fireEvent.click(screen.getByLabelText('Add favorite'))
 		expect(onToggleFavorite).toHaveBeenCalledTimes(1)
@@ -102,6 +104,55 @@ describe('ObjectsListRow', () => {
 		expect(screen.getByLabelText('Object actions')).toBeInTheDocument()
 	})
 
+	it('keeps nested object row controls from triggering row activation', () => {
+		const onClick = vi.fn()
+		const onCheckboxClick = vi.fn()
+		const onToggleFavorite = vi.fn()
+
+		render(
+			<ObjectsObjectRow
+				offset={12}
+				rowMinHeight={72}
+				listGridClassName={styles.listGridWide}
+				isCompact={false}
+				canDragDrop={false}
+				objectKey="photos/cat.png"
+				displayName="cat.png"
+				sizeLabel="1.2 MB"
+				timeLabel="2026-03-07 20:00"
+				isSelected={false}
+				isFavorite={false}
+				highlightText={(value) => value}
+				menu={{ items: [{ key: 'remove', label: 'Remove' }] }}
+				buttonMenuOpen={false}
+				onButtonMenuOpenChange={vi.fn()}
+				onClick={onClick}
+				onContextMenu={vi.fn()}
+				onCheckboxClick={onCheckboxClick}
+				onDragStart={vi.fn()}
+				onDragEnd={vi.fn()}
+				onToggleFavorite={onToggleFavorite}
+				previewAction={<button type="button">Preview</button>}
+			/>,
+		)
+
+		const row = screen.getByText('cat.png').closest('[data-objects-row="true"]')
+		expect(row).not.toBeNull()
+		expect(row).not.toHaveAttribute('role', 'button')
+		expect(row).not.toHaveAttribute('tabindex')
+
+		fireEvent.keyDown(screen.getByLabelText('Select cat.png'), { key: ' ' })
+		fireEvent.keyDown(screen.getByLabelText('Add favorite'), { key: 'Enter' })
+		fireEvent.keyDown(screen.getByRole('button', { name: 'Preview' }), { key: 'Enter' })
+		fireEvent.keyDown(screen.getByLabelText('Object actions'), { key: ' ' })
+		expect(onClick).not.toHaveBeenCalled()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Select row for cat.png' }))
+		expect(onClick).toHaveBeenCalledTimes(1)
+		expect(onCheckboxClick).not.toHaveBeenCalled()
+		expect(onToggleFavorite).not.toHaveBeenCalled()
+	})
+
 	it('opens prefix rows on keyboard activation', () => {
 		const onOpen = vi.fn()
 		const onDropTargetDragOver = vi.fn()
@@ -132,12 +183,15 @@ describe('ObjectsListRow', () => {
 			/>,
 		)
 
-		const row = screen.getByRole('button', { name: /archive\//i })
+		const row = screen.getByTestId('objects-prefix-drop-target-archive%2F')
+		const bodyButton = screen.getByRole('button', { name: 'Open prefix archive/' })
+		expect(row).not.toHaveAttribute('role', 'button')
+		expect(row).not.toHaveAttribute('tabindex')
 		expect(row.className).toContain(styles.listRowDropActive)
 		fireEvent.dragOver(row)
 		fireEvent.dragLeave(row)
 		fireEvent.drop(row)
-		fireEvent.keyDown(row, { key: 'Enter' })
+		fireEvent.click(bodyButton)
 
 		expect(onDropTargetDragOver).toHaveBeenCalledTimes(1)
 		expect(onDropTargetDragLeave).toHaveBeenCalledTimes(1)

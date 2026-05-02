@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { gotoObjectsPage, gotoUploadsPage } from './support/ui'
 
 const now = '2024-01-01T00:00:00Z'
 const profileId = 'capability-profile'
@@ -80,7 +81,7 @@ async function mockProviderWithUploadDisabled(page: Page) {
 test('uploads page disables upload controls when provider capability blocks uploads', async ({ page }) => {
 	await mockProviderWithUploadDisabled(page)
 	await seedStorage(page)
-	await page.goto('/uploads')
+	await gotoUploadsPage(page)
 
 	await expect(page.getByText('Uploads are not available for this provider')).toBeVisible()
 	await expect(page.getByRole('button', { name: 'Add from device…' })).toBeDisabled()
@@ -90,7 +91,7 @@ test('uploads page disables upload controls when provider capability blocks uplo
 test('objects page disables upload button when provider capability blocks uploads', async ({ page }) => {
 	await mockProviderWithUploadDisabled(page)
 	await seedStorage(page)
-	await page.goto('/objects')
+	await gotoObjectsPage(page)
 
 	await expect(page.getByRole('heading', { name: 'Objects' })).toBeVisible()
 	await expect(page.locator('button').filter({ hasText: 'Upload…' }).first()).toBeDisabled()

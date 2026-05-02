@@ -5,6 +5,7 @@ import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { useObjectsSelectionMove } from '../useObjectsSelectionMove'
 
 const messageOpenMock = vi.fn()
@@ -112,7 +113,7 @@ describe('useObjectsSelectionMove', () => {
 		})
 		expect(setSelectedKeys).toHaveBeenCalledWith(new Set())
 		expect(messageOpenMock).toHaveBeenCalled()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
 	it('preserves the full key path when moving from the root prefix', async () => {
@@ -216,7 +217,7 @@ describe('useObjectsSelectionMove', () => {
 		})
 		expect(setSelectedKeys).not.toHaveBeenCalled()
 		expect(messageOpenMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
 	it('ignores stale move job responses after the api token changes', async () => {
@@ -269,6 +270,6 @@ describe('useObjectsSelectionMove', () => {
 		})
 		expect(setSelectedKeys).not.toHaveBeenCalled()
 		expect(messageOpenMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 })

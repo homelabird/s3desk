@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
+import { queryKeys } from '../../api/queryKeys'
 import type { Job, JobCreateRequest } from '../../api/types'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { objectsFeedback } from './objectsFeedback'
 import { invalidateObjectQueriesForPrefix } from './objectsQueryCache'
 import { publishObjectsRefresh, type ObjectsRefreshEventDetail } from './objectsRefreshEvents'
 
@@ -13,7 +13,7 @@ type DeleteMutationArgs = { keys: string[]; contextVersion: number }
 type DeletePrefixMutationArgs = { prefix: string; dryRun: boolean; contextVersion: number }
 
 type UseObjectsDeleteArgs = {
-	api: APIClient
+	api: APIClientShape
 	profileId: string | null
 	apiToken: string
 	bucket: string
@@ -79,7 +79,7 @@ export function useObjectsDelete({
 				}
 				if (job.status === 'failed' || job.status === 'canceled') {
 					if (job.error) {
-						message.error(job.error)
+						objectsFeedback.errorText(job.error)
 					}
 					return
 				}
@@ -124,14 +124,14 @@ export function useObjectsDelete({
 		onSuccess: async (result, { keys, contextVersion }, context) => {
 			if (result.kind === 'direct') {
 				if (contextVersion !== deleteContextVersionRef.current) return
-				message.success(`Deleted ${result.deleted}`)
+				objectsFeedback.deletedCount(result.deleted)
 			} else {
 				await queryClient.invalidateQueries({
-					queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+					queryKey: queryKeys.jobs.scope(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
 					exact: false,
 				})
 				if (contextVersion !== deleteContextVersionRef.current) return
-				message.success(`Delete task started: ${result.job.id}`)
+				objectsFeedback.deleteTaskStarted(result.job.id)
 				void watchDeleteJobCompletion(result.job.id, prefix, 'delete_objects', contextVersion)
 			}
 			if (contextVersion !== deleteContextVersionRef.current) return
@@ -167,7 +167,7 @@ export function useObjectsDelete({
 		},
 		onError: (err, { contextVersion }) => {
 			if (contextVersion !== deleteContextVersionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 
@@ -192,16 +192,16 @@ export function useObjectsDelete({
 		}),
 		onSuccess: async (job: Job, variables, context) => {
 			await queryClient.invalidateQueries({
-				queryKey: ['jobs', context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken],
+				queryKey: queryKeys.jobs.scope(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
 				exact: false,
 			})
 			if (variables.contextVersion !== deleteContextVersionRef.current) return
-			message.success(`Delete task started: ${job.id}`)
+			objectsFeedback.deleteTaskStarted(job.id)
 			void watchDeleteJobCompletion(job.id, variables.prefix, 'delete_prefix', variables.contextVersion)
 		},
 		onError: (err, variables, context) => {
 			if ((context?.contextVersion ?? variables.contextVersion) !== deleteContextVersionRef.current) return
-			message.error(formatErr(err))
+			objectsFeedback.error(err)
 		},
 	})
 

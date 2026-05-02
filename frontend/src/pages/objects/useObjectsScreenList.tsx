@@ -10,41 +10,79 @@ import { useObjectsScreenListInteractions } from './useObjectsScreenListInteract
 import { useObjectsSelectionBarActions } from './useObjectsSelectionBarActions'
 
 export function useObjectsScreenList(args: ObjectsScreenArgs) {
-	const { props, data, actions, previewState, viewportState } = args
 	const {
-		autoScanReady,
+		props,
+		locationVm,
+		listVm,
+		selectionVm,
+		operationVm,
+		paneVm,
+		actions,
+		previewState,
+		viewportState,
+	} = args
+	const {
 		bucket,
 		canGoUp,
-		clearSelection,
-		commandPaletteOpener,
-		debugObjectsList,
+		onUp,
+		prefix,
+	} = locationVm
+	const {
 		extFilter,
 		favoritesOnly,
 		isAdvanced,
-		lastSelectedObjectKey,
 		maxModifiedMs,
 		maxSize,
 		minModifiedMs,
 		minSize,
 		objectsQuery,
-		prefix,
+		orderedVisibleObjectKeys,
 		rawTotalCount,
 		rows,
 		rowIndexByObjectKey,
 		search,
+		typeFilter,
+		visibleObjectKeys,
+	} = listVm
+	const {
+		clearSelection,
+		lastSelectedObjectKey,
 		selectAllLoaded,
 		selectedCount,
 		selectRange,
-		setAutoScanReadyKey,
 		setLastSelectedObjectKey,
 		setSelectedKeys,
-		typeFilter,
-		visibleObjectKeys,
-	} = data
+	} = selectionVm
+	const {
+		commandPaletteOpener,
+		debugObjectsList,
+	} = operationVm
+	const {
+		autoScanReady,
+		setAutoScanReadyKey,
+	} = paneVm
 	const { rowVirtualizer, listScrollerRef, virtualItems } = viewportState
 	const { detailsKey, detailsMeta, detailsMetaQuery, preview, loadPreview, cancelPreview, canCancelPreview } = previewState
-	const interactions = useObjectsScreenListInteractions(args)
-	const viewState = buildObjectsScreenListViewState(args)
+	const interactions = useObjectsScreenListInteractions({
+		props,
+		locationVm,
+		listVm,
+		selectionVm,
+		operationVm,
+		paneVm,
+		actions,
+		previewState,
+		viewportState,
+		refresh: args.refresh,
+	})
+	const viewState = buildObjectsScreenListViewState({
+		props,
+		locationVm,
+		listVm,
+		operationVm,
+		paneVm,
+		actions,
+	})
 
 	const { hasNextPage, isFetchingNextPage, fetchNextPage } = objectsQuery
 	const { showLoadMore, loadMoreLabel, handleLoadMore, searchAutoScanCap } = useObjectsAutoScan({
@@ -116,7 +154,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		selectedCount,
 		singleSelectedKey: previewState.singleSelectedKey,
 		lastSelectedObjectKey,
-		orderedVisibleObjectKeys: data.orderedVisibleObjectKeys,
+		orderedVisibleObjectKeys,
 		visibleObjectKeys,
 		rowIndexByObjectKey,
 		canGoUp,
@@ -127,7 +165,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		copySelectionToClipboard: interactions.copySelectionToClipboard,
 		pasteClipboardObjects: interactions.pasteClipboardObjects,
 		openDetailsForKey: actions.openDetailsForKey,
-		onUp: data.onUp,
+		onUp,
 		confirmDeleteSelected: actions.confirmDeleteSelected,
 		setSelectedKeys,
 		setLastSelectedObjectKey,

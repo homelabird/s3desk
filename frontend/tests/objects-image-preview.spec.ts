@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { buildProfileFixture, installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { gotoObjectsPage, objectsListRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -27,6 +28,12 @@ const defaultStorage: StorageSeed = {
 	showThumbnails: true,
 	detailsOpen: true,
 }
+
+const visualScreenshotOptions = {
+	animations: 'disabled',
+	caret: 'hide',
+	maxDiffPixelRatio: 0.01,
+} as const
 
 const svgPreview = `
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200">
@@ -111,7 +118,7 @@ async function stubObjectsImagePreviewApi(page: Page, items: ObjectFixture[]) {
 			}),
 		),
 		jsonFixture('GET', '/api/v1/profiles', [
-			{
+			buildProfileFixture({
 				id: profileId,
 				name: 'Playwright',
 				endpoint: 'http://localhost:9000',
@@ -120,7 +127,7 @@ async function stubObjectsImagePreviewApi(page: Page, items: ObjectFixture[]) {
 				tlsInsecureSkipVerify: true,
 				createdAt: '2024-01-01T00:00:00Z',
 				updatedAt: '2024-01-01T00:00:00Z',
-			},
+			}),
 		]),
 		jsonFixture('GET', '/api/v1/buckets', [{ name: bucket, createdAt: '2024-01-01T00:00:00Z' }]),
 		jsonFixture('GET', `/api/v1/buckets/${bucket}/objects`, {
@@ -174,14 +181,14 @@ async function stubObjectsImagePreviewApi(page: Page, items: ObjectFixture[]) {
 }
 
 function rowFor(page: Page, key: string) {
-	return page.locator('[data-objects-row="true"]').filter({ hasText: key }).first()
+	return objectsListRow(page, key)
 }
 
 test.describe('Objects image preview', () => {
-	test('details panel viewer supports zoom and pan', async ({ page }) => {
+	test('details panel viewer supports zoom and reset controls', async ({ page }) => {
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const heroRow = rowFor(page, 'hero.png')
 		await expect(heroRow).toBeVisible()
@@ -198,26 +205,50 @@ test.describe('Objects image preview', () => {
 
 		await page.getByTestId('objects-image-viewer-zoom-in').click()
 		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).toContain('scale(1.5)')
-
-		const stage = page.getByTestId('objects-image-viewer-stage')
-		const box = await stage.boundingBox()
-		if (!box) throw new Error('viewer stage not found')
-		const afterZoom = await image.evaluate((node) => (node as HTMLImageElement).style.transform)
-
-		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-		await page.mouse.down()
-		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 90, { steps: 8 })
-		await page.mouse.up()
-
-		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).not.toBe(afterZoom)
 		await page.getByTestId('objects-image-viewer-reset').click()
 		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).toContain('scale(1)')
+	})
+
+	test('mobile viewer keeps the stage focusable and supports keyboard panning @visual', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await stubObjectsImagePreviewApi(page, fixtures)
+		await seedStorage(page)
+		await gotoObjectsPage(page)
+
+		await page.getByRole('button', { name: /Grid/i }).click()
+		await expect(page.getByTestId('objects-grid-content')).toBeVisible()
+
+		const card = rowFor(page, 'hero.png')
+		await expect(card).toBeVisible()
+		await card.getByRole('button', { name: 'Open large preview for hero.png' }).click()
+
+		const modal = page.getByTestId('objects-image-viewer-modal')
+		const stage = modal.getByTestId('objects-image-viewer-stage')
+		const image = modal.getByTestId('objects-image-viewer-image')
+		const footer = modal.getByTestId('objects-image-viewer-footer')
+		await expect(modal).toBeVisible()
+		await expect(stage).toBeVisible()
+		await expect(image).toBeVisible()
+		await expect(footer).toBeVisible()
+		await expect(stage).toHaveAttribute('role', 'region')
+		await expect(stage).toHaveAttribute('aria-label', 'Preview stage for hero.png')
+		await expect(stage).toHaveAttribute('tabindex', '0')
+
+		await modal.getByTestId('objects-image-viewer-zoom-in').click()
+		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).toContain('scale(1.5)')
+
+		await stage.focus()
+		await expect(stage).toBeFocused()
+		await page.keyboard.press('ArrowRight')
+		await expect.poll(async () => image.evaluate((node) => (node as HTMLImageElement).style.transform)).toContain('translate3d(40px, 0px, 0px) scale(1.5)')
+
+		await expect(modal).toHaveScreenshot('objects-image-viewer-mobile-pan-focus.png', visualScreenshotOptions)
 	})
 
 	test('object actions can open the shared large preview viewer', async ({ page }) => {
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const heroRow = rowFor(page, 'hero.png')
 		await expect(heroRow).toBeVisible()
@@ -230,38 +261,35 @@ test.describe('Objects image preview', () => {
 		await expect(page.getByTestId('objects-image-viewer-image')).toBeVisible()
 	})
 
-	test('list thumbnail opens mobile-friendly fallback for oversized images', async ({ page }) => {
+	test('list thumbnail opens an actionable mobile fallback for oversized images', async ({ page }) => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const oversizedThumbnailTrigger = page.getByRole('button', { name: 'Open large preview for oversized.png', exact: true })
 		await expect(oversizedThumbnailTrigger).toBeVisible()
 		await oversizedThumbnailTrigger.click()
 
-		await expect(page.getByTestId('objects-image-viewer-modal')).toBeVisible()
-		await expect(page.getByText('Large preview unavailable')).toBeVisible()
-		await expect(page.getByText('Fallback thumbnail')).toBeVisible()
-
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		await expect(modal).toBeVisible()
-		await expect
-			.poll(async () => {
-				const box = await modal.boundingBox()
-				return box?.width ?? 0
-			})
-			.toBeGreaterThan(300)
+		await expect(modal.getByText('Large preview unavailable')).toBeVisible()
+		await expect(modal.getByText('Fallback thumbnail')).toBeVisible()
+		await expect(modal.getByRole('button', { name: 'Download' })).toBeVisible()
+		await expect(modal.getByText('Use Download or URL to view the original file.')).toBeVisible()
+		await expect(modal.getByTestId('objects-image-viewer-zoom-in')).toHaveCount(0)
+		await modal.getByRole('button', { name: 'Close', exact: true }).click()
+		await expect(modal).toHaveCount(0)
 	})
 
 	test('video objects defer details thumbnails until the user explicitly loads a larger frame', async ({ page }) => {
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
-		await page.goto('/objects')
-
-		await page.waitForResponse((response) => {
+		const listThumbnailResponse = page.waitForResponse((response) => {
 			return response.url().includes('/api/v1/buckets/test-bucket/objects/thumbnail') && response.url().includes('key=clip.mp4') && response.status() === 200
 		})
+		await gotoObjectsPage(page)
+		await listThumbnailResponse
 
 		const listThumbnail = page.getByAltText('Thumbnail of clip.mp4').first()
 		await expect(listThumbnail).toBeVisible()

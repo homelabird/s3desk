@@ -469,7 +469,17 @@ func validateAllowedHosts(allowedHosts []string) error {
 
 func isPlaceholderAPIToken(token string) bool {
 	switch strings.TrimSpace(strings.ToLower(token)) {
-	case "", "change-me", "changeme", "default", "token", "api-token", "s3desk", "s3desk-local":
+	case "",
+		"change-me",
+		"changeme",
+		"default",
+		"token",
+		"api-token",
+		"s3desk",
+		"s3desk-local",
+		"replace-me",
+		"replace-with-a-long-random-token",
+		"replace-me-with-a-strong-token":
 		return true
 	default:
 		return false

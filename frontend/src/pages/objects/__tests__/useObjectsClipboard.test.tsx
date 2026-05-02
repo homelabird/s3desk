@@ -5,6 +5,7 @@ import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { useObjectsClipboard } from '../useObjectsClipboard'
 
 const confirmDangerActionMock = vi.fn()
@@ -198,7 +199,7 @@ describe('useObjectsClipboard', () => {
 		})
 
 		expect(result.current.clipboardObjects).not.toBeNull()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
 
@@ -252,7 +253,7 @@ describe('useObjectsClipboard', () => {
 		})
 
 		expect(result.current.clipboardObjects).toBeNull()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
 })

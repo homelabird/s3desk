@@ -3,6 +3,7 @@ import { Alert, Button, Checkbox, Grid, Space, Tag, Tooltip, Typography, type Me
 import { useEffect, useState } from 'react'
 
 import type { JobStatus } from '../../api/types'
+import { uploadFilesOrFoldersFromDeviceHint, uploadsUnsupportedHint } from '../../lib/actionHints'
 import { DatalistInput } from '../../components/DatalistInput'
 import { MenuPopover } from '../../components/MenuPopover'
 import { NativeSelect } from '../../components/NativeSelect'
@@ -171,8 +172,8 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						<Tooltip
 							title={
 								!props.uploadSupported
-									? props.uploadDisabledReason ?? 'Uploads are not supported by this provider.'
-									: 'Upload files or folders from this device'
+									? props.uploadDisabledReason ?? uploadsUnsupportedHint()
+									: uploadFilesOrFoldersFromDeviceHint()
 							}
 						>
 							<span>
@@ -211,7 +212,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						type="info"
 						showIcon
 						title="Upload actions are disabled for this provider"
-						description={props.uploadDisabledReason ?? 'This provider does not support upload transfers.'}
+						description={props.uploadDisabledReason ?? uploadsUnsupportedHint()}
 					/>
 				) : null}
 				{props.bucketLookupErrorDescription ? (

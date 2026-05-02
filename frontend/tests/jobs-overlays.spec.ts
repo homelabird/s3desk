@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
+import { gotoJobsPage, jobsTableRow, openJobDetailsDrawer, openJobLogsDrawer } from './support/ui'
 
 const now = '2024-01-01T00:00:00Z'
 const profileId = 'jobs-overlay-profile'
@@ -143,12 +144,9 @@ test.describe('Jobs overlays', () => {
 		await seedStorage(page)
 		await mockJobsOverlayApi(page)
 
-		await page.goto('/jobs')
-		const uploadRow = page.getByRole('row', { name: /job-upload-success/i })
-		await uploadRow.getByRole('button', { name: 'Details' }).click()
-
-		const drawer = page.getByRole('dialog', { name: 'Job Details' })
-		await expect(drawer).toBeVisible()
+		await gotoJobsPage(page)
+		const uploadRow = jobsTableRow(page, 'job-upload-success')
+		const drawer = await openJobDetailsDrawer(page, uploadRow)
 		await drawer.getByText('Upload details').click()
 		await expect(drawer.getByText('folder camera-roll')).toBeVisible()
 		await expect(drawer.getByText('alpha.txt')).toBeVisible()
@@ -159,12 +157,9 @@ test.describe('Jobs overlays', () => {
 		await seedStorage(page)
 		await mockJobsOverlayApi(page)
 
-		await page.goto('/jobs')
-		const failedRow = page.getByRole('row', { name: /job-failed-logs/i })
-		await failedRow.getByRole('button', { name: 'Logs' }).click()
-
-		const drawer = page.getByRole('dialog', { name: 'Job Logs' })
-		await expect(drawer).toBeVisible()
+		await gotoJobsPage(page)
+		const failedRow = jobsTableRow(page, 'job-failed-logs')
+		const drawer = await openJobLogsDrawer(page, failedRow)
 		await expect(drawer.getByText('failed: delete prefix')).toBeVisible()
 		await drawer.getByRole('textbox', { name: 'Search logs' }).fill('delete')
 		await expect(drawer.getByText(/Matches: 1/)).toBeVisible()

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 
 import type { JobStatus } from '../../api/types'
-import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 export type JobsFiltersState = {
@@ -26,7 +26,7 @@ export function useJobsFilters(apiToken: string, profileId: string | null): Jobs
 		'all',
 		{
 			legacyLocalStorageKey: 'jobsStatusFilter',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'statusFilter')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'statusFilter'),
 		},
 	)
 	const [searchFilter, setSearchFilter] = useLocalStorageState(
@@ -34,7 +34,7 @@ export function useJobsFilters(apiToken: string, profileId: string | null): Jobs
 		'',
 		{
 			legacyLocalStorageKey: 'jobsSearchFilter',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'searchFilter')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'searchFilter'),
 		},
 	)
 	const [typeFilter, setTypeFilter] = useLocalStorageState(
@@ -42,7 +42,7 @@ export function useJobsFilters(apiToken: string, profileId: string | null): Jobs
 		'',
 		{
 			legacyLocalStorageKey: 'jobsTypeFilter',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'typeFilter')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'typeFilter'),
 		},
 	)
 	const [errorCodeFilter, setErrorCodeFilter] = useLocalStorageState(
@@ -50,7 +50,7 @@ export function useJobsFilters(apiToken: string, profileId: string | null): Jobs
 		'',
 		{
 			legacyLocalStorageKey: 'jobsErrorCodeFilter',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'errorCodeFilter')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'errorCodeFilter'),
 		},
 	)
 

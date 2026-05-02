@@ -10,7 +10,7 @@ import {
 	seedLocalStorage,
 	textFixture,
 } from './support/apiFixtures'
-import { dialogByName } from './support/ui'
+import { dialogByName, gotoObjectsPage, objectsSelectionCheckbox } from './support/ui'
 
 const profileA = 'clipboard-profile-a'
 const profileB = 'clipboard-profile-b'
@@ -169,9 +169,9 @@ async function installObjectsClipboardFixtures(page: Page, createdJobs: CreatedJ
 }
 
 async function selectSourceObjects(page: Page) {
-	await expect(page.getByRole('checkbox', { name: 'Select alpha.txt' })).toBeVisible()
-	await page.getByRole('checkbox', { name: 'Select alpha.txt' }).click()
-	await page.getByRole('checkbox', { name: 'Select beta.txt' }).click()
+	await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
+	await objectsSelectionCheckbox(page, 'alpha.txt').click()
+	await objectsSelectionCheckbox(page, 'beta.txt').click()
 	await expect(page.getByText('2 selected')).toBeVisible()
 }
 
@@ -195,7 +195,7 @@ test.describe('Objects clipboard/paste', () => {
 
 		await installObjectsClipboardFixtures(page, createdJobs)
 		await seedObjectsStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await selectSourceObjects(page)
 		await focusObjectsList(page)
@@ -225,7 +225,7 @@ test.describe('Objects clipboard/paste', () => {
 
 		await installObjectsClipboardFixtures(page, createdJobs)
 		await seedObjectsStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await selectSourceObjects(page)
 		await focusObjectsList(page)
@@ -262,7 +262,7 @@ test.describe('Objects clipboard/paste', () => {
 
 		await installObjectsClipboardFixtures(page, createdJobs)
 		await seedObjectsStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		await selectSourceObjects(page)
 		await focusObjectsList(page)

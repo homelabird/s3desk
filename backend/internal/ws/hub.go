@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+const (
+	maxBufferedMessages        = 512
+	reconnectRequiredEventType = "reconnect_required"
+)
+
 type Event struct {
 	Type    string `json:"type"`
 	Ts      string `json:"ts"`
@@ -30,6 +35,16 @@ type Hub struct {
 type Client struct {
 	send        chan Message
 	includeLogs bool
+	closed      bool
+}
+
+type reconnectRequiredPayload struct {
+	Reason            string `json:"reason"`
+	RequestedAfterSeq int64  `json:"requestedAfterSeq,omitempty"`
+	OldestBufferedSeq int64  `json:"oldestBufferedSeq,omitempty"`
+	LatestSeq         int64  `json:"latestSeq,omitempty"`
+	DroppedSeq        int64  `json:"droppedSeq,omitempty"`
+	DroppedType       string `json:"droppedType,omitempty"`
 }
 
 func NewHub() *Hub {
@@ -55,7 +70,18 @@ func (h *Hub) SubscribeFrom(afterSeq int64, includeLogs bool) (client *Client, b
 	h.clients[c] = struct{}{}
 
 	if afterSeq > 0 && len(h.buffer) > 0 {
-		out := make([]Message, 0, len(h.buffer))
+		out := make([]Message, 0, len(h.buffer)+1)
+		oldestBufferedSeq := h.buffer[0].Seq
+		if oldestBufferedSeq > afterSeq+1 {
+			if reconnectMsg, err := newReconnectRequiredMessage(reconnectRequiredPayload{
+				Reason:            "resume_gap",
+				RequestedAfterSeq: afterSeq,
+				OldestBufferedSeq: oldestBufferedSeq,
+				LatestSeq:         h.seq,
+			}); err == nil {
+				out = append(out, reconnectMsg)
+			}
+		}
 		for _, msg := range h.buffer {
 			if msg.Seq > afterSeq {
 				out = append(out, msg)
@@ -72,8 +98,7 @@ func (c *Client) Messages() <-chan Message {
 
 func (h *Hub) Unsubscribe(c *Client) {
 	h.mu.Lock()
-	delete(h.clients, c)
-	close(c.send)
+	h.closeClientLocked(c)
 	h.mu.Unlock()
 }
 
@@ -85,19 +110,16 @@ func (h *Hub) Publish(evt Event) {
 	evt.Seq = h.seq
 	evt.Ts = time.Now().UTC().Format(time.RFC3339Nano)
 
-	data, err := json.Marshal(evt)
+	msg, err := newMessage(evt)
 	if err != nil {
 		return
 	}
 
-	msg := Message{Seq: evt.Seq, Type: evt.Type, Data: data}
-
 	// Keep a small buffer for resume (exclude logs; logs can be fetched via HTTP).
 	if evt.Type != "job.log" {
-		const maxBuffered = 512
 		h.buffer = append(h.buffer, msg)
-		if len(h.buffer) > maxBuffered {
-			h.buffer = h.buffer[len(h.buffer)-maxBuffered:]
+		if len(h.buffer) > maxBufferedMessages {
+			h.buffer = h.buffer[len(h.buffer)-maxBufferedMessages:]
 		}
 	}
 
@@ -108,6 +130,68 @@ func (h *Hub) Publish(evt Event) {
 		select {
 		case c.send <- msg:
 		default:
+			reconnectMsg, err := newReconnectRequiredMessage(reconnectRequiredPayload{
+				Reason:            "client_overflow",
+				OldestBufferedSeq: oldestBufferedSeq(h.buffer),
+				LatestSeq:         h.seq,
+				DroppedSeq:        msg.Seq,
+				DroppedType:       msg.Type,
+			})
+			if err != nil {
+				h.closeClientLocked(c)
+				continue
+			}
+			h.replaceBufferedMessagesWithLocked(c, reconnectMsg)
 		}
 	}
+}
+
+func newMessage(evt Event) (Message, error) {
+	data, err := json.Marshal(evt)
+	if err != nil {
+		return Message{}, err
+	}
+	return Message{Seq: evt.Seq, Type: evt.Type, Data: data}, nil
+}
+
+func newReconnectRequiredMessage(payload reconnectRequiredPayload) (Message, error) {
+	return newMessage(Event{
+		Type:    reconnectRequiredEventType,
+		Ts:      time.Now().UTC().Format(time.RFC3339Nano),
+		Seq:     0,
+		Payload: payload,
+	})
+}
+
+func oldestBufferedSeq(buffer []Message) int64 {
+	if len(buffer) == 0 {
+		return 0
+	}
+	return buffer[0].Seq
+}
+
+func (h *Hub) replaceBufferedMessagesWithLocked(c *Client, msg Message) {
+	if c == nil || c.closed {
+		return
+	}
+	delete(h.clients, c)
+	for {
+		select {
+		case <-c.send:
+		default:
+			c.send <- msg
+			close(c.send)
+			c.closed = true
+			return
+		}
+	}
+}
+
+func (h *Hub) closeClientLocked(c *Client) {
+	if c == nil || c.closed {
+		return
+	}
+	delete(h.clients, c)
+	close(c.send)
+	c.closed = true
 }

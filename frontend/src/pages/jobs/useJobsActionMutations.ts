@@ -1,14 +1,13 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { withJobQueueRetry } from '../../lib/jobQueue'
+import { jobsFeedback } from './jobsFeedback'
 
 type UseJobsActionMutationsArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	queryClient: QueryClient
@@ -83,7 +82,7 @@ export function useJobsActionMutations({
 			) {
 				return
 			}
-			message.success('Cancel requested')
+			jobsFeedback.cancelRequested()
 		},
 		onSettled: (_, __, jobId, context) =>
 			setCancelingJobState((prev) =>
@@ -98,7 +97,7 @@ export function useJobsActionMutations({
 			) {
 				return
 			}
-			message.error(formatErr(err))
+			jobsFeedback.error(err)
 		},
 	})
 
@@ -132,7 +131,7 @@ export function useJobsActionMutations({
 			) {
 				return
 			}
-			message.success(`Retry queued: ${job.id}`)
+			jobsFeedback.retryQueued(job.id)
 		},
 		onSettled: (_, __, jobId, context) =>
 			setRetryingJobState((prev) =>
@@ -147,7 +146,7 @@ export function useJobsActionMutations({
 			) {
 				return
 			}
-			message.error(formatErr(err))
+			jobsFeedback.error(err)
 		},
 	})
 
@@ -178,7 +177,7 @@ export function useJobsActionMutations({
 			) {
 				return
 			}
-			message.success('Job deleted')
+			jobsFeedback.jobDeleted()
 			onJobDeleted?.(jobId)
 		},
 		onSettled: (_, __, jobId, context) =>
@@ -194,7 +193,7 @@ export function useJobsActionMutations({
 			) {
 				return
 			}
-			message.error(formatErr(err))
+			jobsFeedback.error(err)
 		},
 	})
 

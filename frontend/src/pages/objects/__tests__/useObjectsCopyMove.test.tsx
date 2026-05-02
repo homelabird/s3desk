@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { useObjectsCopyMove } from '../useObjectsCopyMove'
 
 const messageSuccessMock = vi.fn()
@@ -100,7 +101,7 @@ describe('useObjectsCopyMove', () => {
 		expect(result.current.copyMoveMode).toBe('copy')
 		expect(result.current.copyMoveSrcKey).toBe('docs/b.txt')
 		expect(messageSuccessMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
 	it('ignores stale prefix copy/move responses after the dialog closes and reopens', async () => {
@@ -153,7 +154,7 @@ describe('useObjectsCopyMove', () => {
 		expect(result.current.copyPrefixMode).toBe('copy')
 		expect(result.current.copyPrefixSrcPrefix).toBe('images/')
 		expect(messageSuccessMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
 	it('ignores stale copy responses after the api token changes', async () => {
@@ -206,6 +207,6 @@ describe('useObjectsCopyMove', () => {
 			confirm: '',
 		})
 		expect(messageSuccessMock).not.toHaveBeenCalled()
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 })

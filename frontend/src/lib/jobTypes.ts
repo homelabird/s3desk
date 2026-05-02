@@ -1,3 +1,5 @@
+import { deleteSelectedObjectsLabel } from './actionHints'
+
 export type JobTypeInfo = {
 	type: string
 	label: string
@@ -87,7 +89,7 @@ const JOB_TYPES: JobTypeInfo[] = [
 	{
 		type: 's3_delete_objects',
 		category: 's3',
-		label: 'Delete selected objects',
+		label: deleteSelectedObjectsLabel(),
 		description: 'Deletes selected objects.',
 	},
 	{

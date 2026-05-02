@@ -34,6 +34,7 @@ services:
       ALLOW_REMOTE: "true"
       API_TOKEN: "${E2E_API_TOKEN:-live-e2e-token}"
       ALLOWED_HOSTS: "s3desk"
+      ALLOWED_LOCAL_DIRS: "/data"
       RCLONE_RETRY_ATTEMPTS: "3"
       RCLONE_RETRY_BASE_DELAY: "800ms"
       RCLONE_RETRY_MAX_DELAY: "8s"

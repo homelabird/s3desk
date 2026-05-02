@@ -88,7 +88,9 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 					>
 						<div className={styles.gridCardTopRow}>
 							<div className={styles.gridCardTopActions}>
-								<Typography.Text type="secondary">Folder</Typography.Text>
+								<Typography.Text type="secondary" className={styles.gridCardKindLabel}>
+									Folder
+								</Typography.Text>
 							</div>
 							<ObjectsMenuPopover
 								menu={menu}
@@ -103,6 +105,7 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 									<Button
 										size="small"
 										type="text"
+										className={styles.gridCardIconButton}
 										icon={<EllipsisOutlined />}
 										aria-label="Prefix actions"
 										aria-haspopup="menu"

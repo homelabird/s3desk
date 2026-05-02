@@ -6,7 +6,7 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 ## Scope
 
 - Page: `Profiles`
-- Goal: verify that the `Profiles` experience remains usable on mobile without horizontal overflow, unreadable cards, or cramped actions.
+- Goal: verify that `Profiles` still supports real mobile task completion for active-profile switching, edit/import entrypoints, and compact-card actions.
 
 ## Recommended Viewports
 
@@ -18,26 +18,28 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## Manual QA Checklist
 
-- [ ] Opening `Profiles` does not create page-level horizontal scrolling on narrow phones.
-- [ ] Compact/mobile card layout is active on phone-sized widths instead of a desktop table layout.
-- [ ] Card content remains readable without clipped text or overlapping controls.
-- [ ] Primary and secondary actions stack cleanly on extra-small widths.
-- [ ] Buttons in compact cards remain large enough to tap comfortably.
-- [ ] Empty, loading, and populated states stay inside the viewport.
+- [ ] Opening `Profiles` on a phone still exposes the active profile, compact-card actions, and onboarding/import entrypoints.
+- [ ] Compact-card actions can still switch the active profile without ambiguity.
+- [ ] Edit actions from a compact card still open with the correct profile prefilled.
+- [ ] YAML import/export entrypoints remain reachable on mobile.
+- [ ] Validation state, labels, and profile identifiers remain readable enough to choose the correct profile.
+- [ ] Empty, loading, and populated states still preserve the primary actions.
 
 ## `Profiles` Flow Checklist
 
-- [ ] Open the profiles list and confirm cards remain readable on mobile.
-- [ ] Open a profile action menu or primary action from a compact card.
-- [ ] Verify switching between multiple cards does not cause layout shift or overflow.
-- [ ] Confirm profile identifiers and labels remain readable on narrow widths.
+- [ ] Open the profiles list on a phone-sized viewport.
+- [ ] Switch the active profile from a compact card and confirm the choice persists after reload.
+- [ ] Open the edit flow from a compact card and verify the selected profile loads into the form.
+- [ ] Open the YAML import or export entrypoint from mobile and confirm the dialog/sheet can be used.
+- [ ] Confirm validation warnings still point to the right profile after switching cards.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile viewport test that asserts no page-level horizontal overflow in `Profiles`.
-- [ ] Add a test that verifies compact cards are active on mobile widths.
-- [ ] Add a test that verifies compact card actions stack vertically on extra-small widths.
+- [ ] Add a mobile test that verifies active-profile switching from compact cards.
+- [ ] Add a test that verifies the edit flow opens from a compact card with the correct profile.
+- [ ] Add a test that verifies the YAML import/export entrypoint is still reachable on mobile.
+- [ ] Add a test that verifies validation or label state remains readable after profile switching.
 
 ## Notes
 
-- Keep `Profiles` coverage focused on compact card behavior because that is the highest-risk mobile layout mode for this page.
+- Keep `Profiles` coverage focused on mobile profile selection and edit/import actions. Layout-only checks are secondary unless they block those flows.

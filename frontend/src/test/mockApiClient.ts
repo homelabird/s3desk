@@ -1,4 +1,4 @@
-import type { APIClient } from '../api/client'
+import type { APIClientShape } from '../api/client'
 import type { BucketsAPI, JobsAPI, ObjectsAPI, ProfilesAPI, ServerAPI, UploadsAPI } from '../api/clientContracts'
 
 export type MockApiClientOverrides = {
@@ -14,7 +14,7 @@ function toDomain<T>(overrides?: Partial<T>): T {
 	return { ...(overrides ?? {}) } as T
 }
 
-export function createMockApiClient(overrides: MockApiClientOverrides = {}): APIClient {
+export function createMockApiClient(overrides: MockApiClientOverrides = {}): APIClientShape {
 	return {
 		server: toDomain<ServerAPI>(overrides.server),
 		profiles: toDomain<ProfilesAPI>(overrides.profiles),
@@ -22,5 +22,5 @@ export function createMockApiClient(overrides: MockApiClientOverrides = {}): API
 		objects: toDomain<ObjectsAPI>(overrides.objects),
 		uploads: toDomain<UploadsAPI>(overrides.uploads),
 		jobs: toDomain<JobsAPI>(overrides.jobs),
-	} as unknown as APIClient
+	}
 }

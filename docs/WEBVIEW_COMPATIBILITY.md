@@ -84,14 +84,14 @@ webviews do not.
 ### Secure-Context Requirements
 
 - `frontend/src/lib/deviceFs.ts` rejects non-secure contexts with the message:
-  `Directory picker requires HTTPS or localhost.`
+  `Directory picker requires HTTPS or a localhost-based origin.`
 - `frontend/src/lib/clipboard.ts` also warns that clipboard access is
   restricted on insecure origins.
 - `backend/internal/api/middleware.go` only sets
   `Cross-Origin-Opener-Policy: same-origin` when the request origin is
-  trustworthy (`https`, `localhost`, or loopback).
+  trustworthy (`https`, `localhost`, `*.localhost`, or loopback).
 
-If S3Desk is served over plain HTTP (other than localhost) or inside a host
+If S3Desk is served over plain HTTP (other than a localhost-based origin) or inside a host
 shell that does not satisfy secure-context rules, these flows will degrade or
 fail.
 
@@ -142,8 +142,8 @@ backgrounded host shell is supported.
 
 | Environment | Current position | Operator guidance |
 | --- | --- | --- |
-| Desktop browser tab on `https://` or `localhost` | Best-aligned baseline | Closest match to current app model. Browser-side automation covers routing/session persistence, secure copy success, and realtime/reconnect UI; still validate File System Access workflows if you depend on folder pickers or download-to-device. |
-| Mobile browser tab on `https://` or `localhost` | Reasonable baseline for core UI | Current repo has portrait/mobile and responsive coverage plus one short-landscape posture check. Validate exact browser/OS combinations, keyboard overlap, and file-system-heavy flows. |
+| Desktop browser tab on `https://` or a localhost-based origin | Best-aligned baseline | Closest match to current app model. Browser-side automation covers routing/session persistence, secure copy success, and realtime/reconnect UI; still validate File System Access workflows if you depend on folder pickers or download-to-device. |
+| Mobile browser tab on `https://` or a localhost-based origin | Reasonable baseline for core UI | Current repo has portrait/mobile and responsive coverage plus one short-landscape posture check. Validate exact browser/OS combinations, keyboard overlap, and file-system-heavy flows. |
 | Embedded webview in a top-level host shell | Case-by-case only | Only browser-side evidence exists here. Do not claim general support without targeted validation of permissions, file pickers, downloads, clipboard handoff, realtime behavior, and background/resume handling in the exact host app. |
 | Embedded webview in a non-secure context | Not suitable for full functionality | Secure-context-gated features already fail or degrade. |
 | iframe inside another page/app | Not compatible as shipped | Blocked by `frame-ancestors 'none'` and `X-Frame-Options: DENY`. |

@@ -1,8 +1,9 @@
-import { Button, Input, Space, Spin, Typography, message } from 'antd'
+import { Button, Input, Space, Spin, Typography } from 'antd'
 
 import { DialogModal } from '../../components/DialogModal'
 import { getSafeBrowserObjectUrl } from '../../api/baseUrl'
-import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
+import { copyToClipboard } from '../../lib/clipboard'
+import { objectsFeedback } from './objectsFeedback'
 
 type PresignPayload = { key: string; url: string; expiresAt: string }
 
@@ -20,10 +21,10 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 		if (!url) return
 		const res = await copyToClipboard(url)
 		if (res.ok) {
-			message.success('Copied URL')
+			objectsFeedback.copiedUrl()
 			return
 		}
-		message.error(clipboardFailureHint())
+		objectsFeedback.clipboardFailed()
 	}
 
 	const handleOpen = () => {
@@ -32,7 +33,7 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 			const safeUrl = getSafeBrowserObjectUrl(url)
 			window.open(safeUrl.url.toString(), '_blank', 'noopener,noreferrer')
 		} catch (err) {
-			message.error(err instanceof Error ? err.message : 'Download URL is invalid.')
+			objectsFeedback.invalidDownloadUrl(err)
 		}
 	}
 

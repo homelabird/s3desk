@@ -19,6 +19,7 @@ type Props = {
 	showIcon?: boolean
 	loadingKeys?: ReadonlySet<string> | string[]
 	indentPx?: number
+	rowTestId?: string
 }
 
 function isLoading(loadingKeys: Props['loadingKeys'], key: string): boolean {
@@ -33,6 +34,11 @@ function safeCallLoadData(loadData: LoadDataFn, key: string) {
 		.catch(() => {
 			// loadData handles its own error UX; ignore here to avoid unhandled rejection noise.
 		})
+}
+
+function nodeAccessibleName(node: TreeNode) {
+	if (typeof node.title === 'string' || typeof node.title === 'number') return String(node.title)
+	return String(node.key)
 }
 
 export function SimpleTree(props: Props) {
@@ -106,18 +112,20 @@ export function SimpleTree(props: Props) {
 		const nodeLoading = isLoading(props.loadingKeys, key)
 
 		return (
-			<li
-				key={key}
-				role="treeitem"
-				aria-expanded={canExpand ? expanded : undefined}
-				aria-selected={selected ? true : undefined}
-			>
-				<div className={`${styles.row}${selected ? ` ${styles.rowSelected}` : ''}`} style={{ paddingLeft: depth * indentPx }}>
+			<li key={key}>
+				<div
+					className={`${styles.row}${selected ? ` ${styles.rowSelected}` : ''}`}
+					style={{ paddingLeft: depth * indentPx }}
+					data-testid={props.rowTestId}
+					data-tree-depth={String(depth)}
+					data-tree-key={key}
+				>
 					{canExpand ? (
 						<button
 							type="button"
 							className={styles.toggleButton}
-							aria-label={expanded ? 'Collapse' : 'Expand'}
+							aria-label={`${expanded ? 'Collapse' : 'Expand'} ${nodeAccessibleName(node)}`}
+							aria-expanded={expanded}
 							onClick={() => toggleExpanded(key)}
 						>
 							<span className={styles.toggleChevron} aria-hidden="true">
@@ -133,6 +141,7 @@ export function SimpleTree(props: Props) {
 					<button
 						type="button"
 						className={styles.labelButton}
+						aria-current={selected ? 'true' : undefined}
 						onClick={() => props.onSelectKey(key)}
 					>
 						<span className={styles.title}>{renderTitle(node)}</span>
@@ -141,7 +150,7 @@ export function SimpleTree(props: Props) {
 				</div>
 
 				{canExpand && expanded ? (
-					<ul role="group" className={styles.tree}>
+					<ul className={styles.tree}>
 						{node.children && Array.isArray(node.children) && node.children.length > 0
 							? node.children.map((child) => renderNode(child, depth + 1))
 							: null}
@@ -152,7 +161,7 @@ export function SimpleTree(props: Props) {
 	}
 
 	return (
-		<ul role="tree" className={styles.tree}>
+		<ul className={styles.tree}>
 			{props.nodes.map((n) => renderNode(n, 0))}
 		</ul>
 	)

@@ -13,8 +13,6 @@ import type {
 	UploadCapabilityByProfileId,
 } from './transfers/transfersTypes'
 
-export type { TransfersContextValue } from './transfers/transfersTypes'
-
 const TransfersRuntimeUiHost = lazy(async () => {
 	const m = await import('./transfers/TransfersRuntimeUiHost')
 	return { default: m.TransfersRuntimeUiHost }

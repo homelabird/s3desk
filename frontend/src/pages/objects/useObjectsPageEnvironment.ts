@@ -1,8 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Grid } from 'antd'
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 
-import { APIClient } from '../../api/client'
+import { useAPIClient } from '../../api/useAPIClient'
 import type { JobCreateRequest } from '../../api/types'
 import { useTransfers } from '../../components/useTransfers'
 import { withJobQueueRetry } from '../../lib/jobQueue'
@@ -17,7 +17,7 @@ type UseObjectsPageEnvironmentArgs = {
 
 export function useObjectsPageEnvironment(args: UseObjectsPageEnvironmentArgs) {
 	const queryClient = useQueryClient()
-	const api = useMemo(() => new APIClient({ apiToken: args.apiToken }), [args.apiToken])
+	const api = useAPIClient()
 	const transfers = useTransfers()
 	const screens = Grid.useBreakpoint()
 	const isOffline = useIsOffline()

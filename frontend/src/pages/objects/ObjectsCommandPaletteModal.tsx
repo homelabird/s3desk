@@ -1,10 +1,10 @@
 import { Button, Empty, Input, Space, Typography } from 'antd'
-import type { KeyboardEvent } from 'react'
+import { useId, type KeyboardEvent } from 'react'
 
 import { DialogModal } from '../../components/DialogModal'
 import type { CommandItem } from './objectsActions'
 
-type ObjectsCommandPaletteModalProps = {
+export type ObjectsCommandPaletteModalProps = {
 	open: boolean
 	query: string
 	commands: CommandItem[]
@@ -17,6 +17,9 @@ type ObjectsCommandPaletteModalProps = {
 }
 
 export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProps) {
+	const listboxId = useId()
+	const activeOptionId = props.commands[props.activeIndex] ? `${listboxId}-option-${props.activeIndex}` : undefined
+
 	return (
 		<DialogModal
 			open={props.open}
@@ -32,16 +35,27 @@ export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProp
 			<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 				<Input
 					id="objectsCommandPaletteInput"
+					role="combobox"
 					autoComplete="off"
 					placeholder="Type a command…"
 					aria-label="Command search"
+					aria-autocomplete="list"
+					aria-controls={listboxId}
+					aria-expanded={props.open}
+					aria-activedescendant={activeOptionId}
+					aria-haspopup="listbox"
 					value={props.query}
 					onChange={(e) => props.onQueryChange(e.target.value)}
 					onKeyDown={props.onKeyDown}
 					allowClear
 				/>
 
-				<div style={{ border: '1px solid var(--s3d-color-border)', borderRadius: 8, overflow: 'auto', maxHeight: 360 }}>
+				<div
+					id={listboxId}
+					role="listbox"
+					aria-label="Available commands"
+					style={{ border: '1px solid var(--s3d-color-border)', borderRadius: 8, overflow: 'auto', maxHeight: 360 }}
+				>
 					{props.commands.length === 0 ? (
 						<Empty description="No commands" style={{ padding: 24 }} />
 					) : (
@@ -50,8 +64,16 @@ export function ObjectsCommandPaletteModal(props: ObjectsCommandPaletteModalProp
 							return (
 								<div
 									key={cmd.id}
+									id={`${listboxId}-option-${idx}`}
+									role="option"
+									aria-selected={active}
+									aria-disabled={!cmd.enabled}
 									onMouseEnter={() => props.onActiveIndexChange(idx)}
-									onClick={() => props.onRunCommand(cmd)}
+									onMouseDown={(event) => event.preventDefault()}
+									onClick={() => {
+										if (!cmd.enabled) return
+										props.onRunCommand(cmd)
+									}}
 									style={{
 										display: 'flex',
 										alignItems: 'center',

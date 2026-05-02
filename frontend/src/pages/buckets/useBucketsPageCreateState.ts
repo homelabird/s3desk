@@ -1,14 +1,13 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { useCallback, type MutableRefObject } from 'react'
 
-import { APIError, type APIClient } from '../../api/client'
+import { APIError, type APIClientShape } from '../../api/client'
 import type { BucketCreateRequest } from '../../api/types'
 import { queryKeys } from '../../api/queryKeys'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import { bucketsFeedback } from './bucketsFeedback'
 
 type UseBucketsPageCreateStateArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	queryClient: QueryClient
@@ -41,7 +40,7 @@ export function useBucketsPageCreateState({
 				!context?.contextVersion ||
 				context.contextVersion === bucketsPageContextVersionRef.current
 			if (isCurrent) {
-				message.success('Bucket created')
+				bucketsFeedback.bucketCreated()
 				closeCreateModal()
 			}
 			await queryClient.invalidateQueries({
@@ -62,11 +61,7 @@ export function useBucketsPageCreateState({
 					typeof err.details?.applySection === 'string'
 						? err.details.applySection.trim()
 						: ''
-				message.warning(
-					applySection
-						? `Bucket created, but secure defaults failed while applying ${applySection}.`
-						: 'Bucket created, but secure defaults were not fully applied.',
-				)
+				bucketsFeedback.secureDefaultsApplyFailed(applySection)
 				await queryClient.invalidateQueries({
 					queryKey: queryKeys.buckets.list(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
 					exact: true,
@@ -74,7 +69,7 @@ export function useBucketsPageCreateState({
 				closeCreateModal()
 				return
 			}
-			message.error(formatErr(err))
+			bucketsFeedback.error(err)
 		},
 	})
 

@@ -345,6 +345,77 @@ describe('useObjectPreview', () => {
 		expect(getObjectDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ profileId: 'profile-1' }))
 	})
 
+	it('commits loading immediately and lets users cancel while the preview request is pending', async () => {
+		let resolveFetch: ((response: Response) => void) | null = null
+		vi.spyOn(globalThis, 'fetch').mockImplementation(
+			() =>
+				new Promise<Response>((resolve) => {
+					resolveFetch = resolve
+				}),
+		)
+		const getObjectDownloadURL = vi.fn().mockResolvedValue({
+			url: 'http://storage.local/direct.txt',
+			expiresAt: '2026-03-09T00:00:00Z',
+		})
+		const api = createMockApiClient({ objects: { getObjectDownloadURL } })
+
+		const { result } = renderHook(() =>
+			useObjectPreview({
+				api,
+				apiToken: 'token-a',
+				profileId: 'profile-1',
+				bucket: 'bucket-a',
+				detailsKey: 'report.txt',
+				detailsVisible: true,
+				detailsMeta: {
+					key: 'report.txt',
+					contentType: 'text/plain',
+					size: 1024,
+				} as never,
+				downloadLinkProxyEnabled: false,
+				presignedDownloadSupported: true,
+			}),
+		)
+
+		await act(async () => {
+			void result.current.loadPreview()
+			await Promise.resolve()
+		})
+
+		expect(result.current.preview).toMatchObject({
+			key: 'report.txt',
+			status: 'loading',
+			kind: 'text',
+			contentType: 'text/plain',
+		})
+		expect(result.current.canCancelPreview).toBe(true)
+
+		act(() => {
+			result.current.cancelPreview()
+		})
+
+		expect(result.current.preview).toMatchObject({
+			key: 'report.txt',
+			status: 'blocked',
+			kind: 'text',
+			error: 'Preview canceled.',
+		})
+		expect(result.current.canCancelPreview).toBe(false)
+
+		await act(async () => {
+			resolveFetch?.(
+				new Response(new Blob(['ignored'], { type: 'text/plain' }), {
+					status: 200,
+					headers: { 'content-type': 'text/plain' },
+				}),
+			)
+			await Promise.resolve()
+			await Promise.resolve()
+		})
+
+		expect(result.current.preview?.status).toBe('blocked')
+	})
+
 	it('ignores stale preview responses after the api token changes with the same object key', async () => {
 		let resolveFetch: ((response: Response) => void) | null = null
 		vi.spyOn(globalThis, 'fetch').mockImplementation(

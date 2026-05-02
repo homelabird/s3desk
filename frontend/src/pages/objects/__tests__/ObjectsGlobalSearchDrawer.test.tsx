@@ -2,7 +2,9 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { selectBucketFirstHint, selectProfileFirstHint } from '../../../lib/actionHints'
 import { ObjectsGlobalSearchDrawer } from '../ObjectsGlobalSearchDrawer'
+import styles from '../ObjectsSearch.module.css'
 
 function buildProps() {
 	return {
@@ -56,11 +58,25 @@ function buildProps() {
 }
 
 describe('ObjectsGlobalSearchDrawer', () => {
+	it('shows shared prerequisite warnings before a profile or bucket is selected', () => {
+		const { rerender } = render(<ObjectsGlobalSearchDrawer {...buildProps()} hasProfile={false} />)
+
+		expect(screen.getByText(selectProfileFirstHint())).toBeInTheDocument()
+
+		rerender(<ObjectsGlobalSearchDrawer {...buildProps()} hasBucket={false} />)
+
+		expect(screen.getByText(selectBucketFirstHint())).toBeInTheDocument()
+	})
+
 	it('resets the index panel disclosure state when the scope changes', () => {
 		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 		const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 		try {
 			const { rerender } = render(<ObjectsGlobalSearchDrawer {...buildProps()} />)
+			expect(screen.getByTestId('objects-global-search-sheet')).toBeInTheDocument()
+			expect(screen.getByTestId('objects-global-search-content')).toBeInTheDocument()
+			expect(screen.getByTestId('objects-global-search-index-card')).toBeInTheDocument()
+			expect(screen.getByTestId('objects-global-search-index-toggle')).toBeInTheDocument()
 
 			const toggle = screen.getByRole('button', { name: /Index management/i })
 			fireEvent.click(toggle)
@@ -79,5 +95,65 @@ describe('ObjectsGlobalSearchDrawer', () => {
 			consoleErrorSpy.mockRestore()
 			consoleWarnSpy.mockRestore()
 		}
+	})
+
+	it('renders compact result cards on mobile and wires row actions', () => {
+		const onOpenPrefixForKey = vi.fn()
+		const onCopyKey = vi.fn()
+		const onDownloadKey = vi.fn()
+		const onOpenDetails = vi.fn()
+
+		render(
+			<ObjectsGlobalSearchDrawer
+				{...buildProps()}
+				searchQueryText="alpha"
+				items={[{ key: 'alpha.txt', size: 12, lastModified: '2024-01-01T00:00:00Z' }]}
+				onOpenPrefixForKey={onOpenPrefixForKey}
+				onCopyKey={onCopyKey}
+				onDownloadKey={onDownloadKey}
+				onOpenDetails={onOpenDetails}
+			/>,
+		)
+
+		const card = screen.getByText('alpha.txt').closest('[data-global-search-result-card="true"]')
+		expect(card).toBeInTheDocument()
+		expect(screen.getByTestId('objects-global-search-index-card')).toBeInTheDocument()
+		expect(screen.getByTestId('objects-global-search-results')).toBeInTheDocument()
+		expect(screen.getByText('alpha.txt')).toHaveAttribute('data-global-search-result-key', 'true')
+		expect(screen.queryByRole('table')).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Open alpha.txt' })).toHaveClass(styles.globalSearchResultPrimaryButton)
+		expect(screen.getByRole('button', { name: 'Open details for alpha.txt' })).toHaveClass(styles.globalSearchResultSecondaryButton)
+
+		fireEvent.click(screen.getByRole('button', { name: 'Open alpha.txt' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Copy key alpha.txt' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Download alpha.txt' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Open details for alpha.txt' }))
+
+		expect(onOpenPrefixForKey).toHaveBeenCalledWith('alpha.txt')
+		expect(onCopyKey).toHaveBeenCalledWith('alpha.txt')
+		expect(onDownloadKey).toHaveBeenCalledWith('alpha.txt', 12)
+		expect(onOpenDetails).toHaveBeenCalledWith('alpha.txt')
+	})
+
+	it('announces loading and result-count changes', () => {
+		const { rerender } = render(
+			<ObjectsGlobalSearchDrawer
+				{...buildProps()}
+				searchQueryText="alpha"
+				isFetching
+			/>,
+		)
+
+		expect(screen.getByRole('status', { name: 'Loading search results' })).toHaveTextContent('Loading results...')
+
+		rerender(
+			<ObjectsGlobalSearchDrawer
+				{...buildProps()}
+				searchQueryText="alpha"
+				items={[{ key: 'alpha.txt', size: 12, lastModified: '2024-01-01T00:00:00Z' }]}
+			/>,
+		)
+
+		expect(screen.getByRole('status')).toHaveTextContent('1 result(s)')
 	})
 })

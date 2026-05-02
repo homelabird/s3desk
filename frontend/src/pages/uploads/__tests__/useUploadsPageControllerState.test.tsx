@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { selectBucketFirstSentenceHint } from '../../../lib/actionHints'
 import { useUploadsPageControllerState } from '../useUploadsPageControllerState'
 
 const queriesStateRef = {
@@ -27,7 +28,7 @@ const selectionStateRef = {
 		setUploadSourceOpen: vi.fn(),
 		uploadSourceBusy: false,
 		canQueueUpload: false,
-		queueDisabledReason: 'Select a bucket first.',
+		queueDisabledReason: selectBucketFirstSentenceHint(),
 		folderSelectionSupport: { ok: true, mode: 'picker' as const },
 		destinationLabel: 's3://bucket-a/photos/',
 		clearSelection: vi.fn(),
@@ -89,7 +90,7 @@ describe('useUploadsPageControllerState', () => {
 			selectedProfile: { id: 'profile-1', name: 'Primary Profile' },
 			bucket: 'bucket-a',
 			bucketOptions: [{ label: 'bucket-a', value: 'bucket-a' }],
-			queueDisabledReason: 'Select a bucket first.',
+			queueDisabledReason: selectBucketFirstSentenceHint(),
 			destinationLabel: 's3://bucket-a/photos/',
 		})
 	})

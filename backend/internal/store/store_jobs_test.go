@@ -208,3 +208,49 @@ func TestListJobsSkipsCorruptedPayload(t *testing.T) {
 		t.Fatalf("expected job ID %q, got %q", goodJob.ID, resp.Items[0].ID)
 	}
 }
+
+func TestUpdateJobStatusIfCurrentGuardsExpectedStatus(t *testing.T) {
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+
+	job, err := st.CreateJob(ctx, profile.ID, CreateJobInput{
+		Type:    "test",
+		Payload: map[string]any{"key": "value"},
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	updated, err := st.UpdateJobStatusIfCurrent(ctx, job.ID, []models.JobStatus{models.JobStatusQueued}, models.JobStatusRunning, &startedAt, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("guarded update to running: %v", err)
+	}
+	if !updated {
+		t.Fatalf("expected queued job to transition to running")
+	}
+
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	updated, err = st.UpdateJobStatusIfCurrent(ctx, job.ID, []models.JobStatus{models.JobStatusQueued}, models.JobStatusSucceeded, nil, &finishedAt, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("guarded update from stale status: %v", err)
+	}
+	if updated {
+		t.Fatalf("expected stale status guard to skip update")
+	}
+
+	got, ok, err := st.GetJob(ctx, profile.ID, job.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected job")
+	}
+	if got.Status != models.JobStatusRunning {
+		t.Fatalf("expected status to remain running, got %s", got.Status)
+	}
+	if got.FinishedAt != nil {
+		t.Fatalf("expected finishedAt to remain nil, got %q", *got.FinishedAt)
+	}
+}

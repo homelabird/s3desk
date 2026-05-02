@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { failedToListObjectsTitle } from '../src/lib/actionHints'
 import {
 	buildBucketFixture,
 	buildFavoritesFixture,
@@ -13,6 +14,7 @@ import {
 	type ApiFixture,
 	withDelay,
 } from './support/apiFixtures'
+import { objectsSelectionCheckbox } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -116,7 +118,7 @@ test.describe('Objects page network chaos', () => {
 		const navigation = page.goto('/objects')
 
 		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
-		const rowCheckbox = page.getByRole('checkbox', { name: 'Select notes/todo.txt' })
+		const rowCheckbox = objectsSelectionCheckbox(page, 'notes/todo.txt')
 		await expect(rowCheckbox).toHaveCount(0, { timeout: 250 })
 		await expect(rowCheckbox).toBeVisible({ timeout: 10_000 })
 		await navigation
@@ -143,7 +145,7 @@ test.describe('Objects page network chaos', () => {
 
 		await page.goto('/objects')
 
-		const listError = page.getByRole('alert').filter({ hasText: 'Failed to list objects' })
+		const listError = page.getByRole('alert').filter({ hasText: failedToListObjectsTitle() })
 		await expect(listError).toBeVisible({ timeout: 15_000 })
 		await expect(listError).toContainText('temporary outage')
 
@@ -152,6 +154,6 @@ test.describe('Objects page network chaos', () => {
 		await moreButton.click({ force: true })
 		await page.getByRole('menuitem', { name: 'Refresh' }).click()
 
-		await expect(page.getByRole('checkbox', { name: 'Select notes/todo.txt' })).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'notes/todo.txt')).toBeVisible()
 	})
 })

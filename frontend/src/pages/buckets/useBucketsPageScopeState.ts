@@ -28,3 +28,5 @@ export function useBucketsPageScopeState({
 		...viewState,
 	}
 }
+
+export type BucketsPageScopeState = ReturnType<typeof useBucketsPageScopeState>

@@ -1,13 +1,13 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { useJobsActionMutations } from './useJobsActionMutations'
 import { useJobsRealtimeEvents } from './useJobsRealtimeEvents'
 import type { JobsLogClearRequestState, JobsLogDrawerRequestState } from './useJobsPageSurfaceState'
 
 type Args = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	profileId: string | null
 	queryClient: QueryClient
@@ -18,44 +18,55 @@ type Args = {
 }
 
 export function useJobsPageEventActions(props: Args) {
+	const {
+		api,
+		apiToken,
+		profileId,
+		queryClient,
+		setDetailsJobId,
+		setDetailsOpen,
+		setLogClearRequest,
+		setLogDrawerRequest,
+	} = props
+
 	const handleJobsDeleted = useCallback((jobIds: string[]) => {
-		props.setDetailsJobId((prev) => {
+		setDetailsJobId((prev) => {
 			if (!prev || !jobIds.includes(prev)) return prev
-			props.setDetailsOpen(false)
+			setDetailsOpen(false)
 			return null
 		})
-		props.setLogDrawerRequest((prev) => {
+		setLogDrawerRequest((prev) => {
 			if (!prev.jobId || !jobIds.includes(prev.jobId)) return prev
 			return { jobId: null, nonce: prev.nonce }
 		})
-		props.setLogClearRequest((prev) => ({ jobIds, nonce: prev.nonce + 1 }))
-	}, [props])
+		setLogClearRequest((prev) => ({ jobIds, nonce: prev.nonce + 1 }))
+	}, [setDetailsJobId, setDetailsOpen, setLogClearRequest, setLogDrawerRequest])
 
 	const handleJobDeleted = useCallback((jobId: string) => {
-		props.setDetailsJobId((prev) => {
+		setDetailsJobId((prev) => {
 			if (prev !== jobId) return prev
-			props.setDetailsOpen(false)
+			setDetailsOpen(false)
 			return null
 		})
-		props.setLogDrawerRequest((prev) => {
+		setLogDrawerRequest((prev) => {
 			if (prev.jobId !== jobId) return prev
 			return { jobId: null, nonce: prev.nonce }
 		})
-		props.setLogClearRequest((prev) => ({ jobIds: [jobId], nonce: prev.nonce + 1 }))
-	}, [props])
+		setLogClearRequest((prev) => ({ jobIds: [jobId], nonce: prev.nonce + 1 }))
+	}, [setDetailsJobId, setDetailsOpen, setLogClearRequest, setLogDrawerRequest])
 
 	const realtime = useJobsRealtimeEvents({
-		apiToken: props.apiToken,
-		profileId: props.profileId,
-		queryClient: props.queryClient,
+		apiToken,
+		profileId,
+		queryClient,
 		onJobsDeleted: handleJobsDeleted,
 	})
 
 	const mutations = useJobsActionMutations({
-		api: props.api,
-		apiToken: props.apiToken,
-		profileId: props.profileId,
-		queryClient: props.queryClient,
+		api,
+		apiToken,
+		profileId,
+		queryClient,
 		onJobDeleted: handleJobDeleted,
 	})
 

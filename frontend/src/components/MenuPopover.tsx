@@ -3,6 +3,7 @@ import type { MenuProps } from 'antd'
 import { useState, type CSSProperties } from 'react'
 
 import { PopoverSurface, type PopoverOpenSource } from './PopoverSurface'
+import { handleMenuKeyboardNavigation } from './menuKeyboard'
 import styles from './MenuPopover.module.css'
 
 type MenuItems = NonNullable<MenuProps['items']>
@@ -69,7 +70,12 @@ function MenuList(props: {
 	const level = props.level ?? 0
 	const className = [level === 0 ? styles.menu : styles.submenu, level === 0 ? props.rootClassName ?? '' : ''].filter(Boolean).join(' ')
 	return (
-		<div role={level === 0 ? 'menu' : 'group'} className={className} style={level === 0 ? props.rootStyle : undefined}>
+		<div
+			role={level === 0 ? 'menu' : 'group'}
+			className={className}
+			style={level === 0 ? props.rootStyle : undefined}
+			onKeyDown={level === 0 ? handleMenuKeyboardNavigation : undefined}
+		>
 			{props.items.map((item, index) => {
 				if (!item) return null
 				if (isDivider(item)) return <div key={`divider-${level}-${index}`} className={styles.divider} />

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { offlineUploadsDisabledHint } from '../../../lib/actionHints'
 import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { transfersStub } from '../../../test/transfersStub'
@@ -275,7 +276,7 @@ describe('useUploadsPageState', () => {
 		})
 
 		expect(result.current.uploadSourceOpen).toBe(false)
-		expect(messageWarningMock).toHaveBeenCalledWith('Offline: uploads are disabled.')
+		expect(messageWarningMock).toHaveBeenCalledWith(offlineUploadsDisabledHint())
 		expect(messageInfoMock).not.toHaveBeenCalled()
 	})
 })

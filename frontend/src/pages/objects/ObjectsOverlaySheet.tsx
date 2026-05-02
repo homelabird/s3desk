@@ -19,6 +19,7 @@ type ObjectsOverlaySheetProps = {
 	children: ReactNode
 	bodyClassName?: string
 	panelClassName?: string
+	compactMobile?: boolean
 }
 
 export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
@@ -36,6 +37,7 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 		children,
 		bodyClassName,
 		panelClassName,
+		compactMobile = false,
 	} = props
 	const titleId = useId()
 	const closeButtonRef = useRef<HTMLButtonElement>(null)
@@ -69,7 +71,22 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 		.filter(Boolean)
 		.join(' ')
 
-	const resolvedBodyClassName = [styles.objectsOverlayBody, bodyClassName ?? ''].filter(Boolean).join(' ')
+	const resolvedHeaderClassName = [
+		styles.objectsOverlayHeader,
+		compactMobile ? styles.objectsOverlayHeaderCompactMobile : '',
+	]
+		.filter(Boolean)
+		.join(' ')
+
+	const resolvedBodyClassName = [
+		styles.objectsOverlayBody,
+		compactMobile ? styles.objectsOverlayBodyCompactMobile : '',
+		bodyClassName ?? '',
+	]
+		.filter(Boolean)
+		.join(' ')
+	const headerTestId = dataTestId ? `${dataTestId}-header` : undefined
+	const bodyTestId = dataTestId ? `${dataTestId}-body` : undefined
 
 	return createPortal(
 		<div
@@ -92,11 +109,12 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 				aria-labelledby={titleId}
 				tabIndex={-1}
 				data-testid={dataTestId}
+				data-compact-mobile={compactMobile ? 'true' : 'false'}
 				className={resolvedPanelClassName}
 				style={panelStyle}
 				onMouseDown={(event) => event.stopPropagation()}
 			>
-				<div className={styles.objectsOverlayHeader}>
+				<div className={resolvedHeaderClassName} data-testid={headerTestId}>
 					<div className={styles.objectsOverlayHeaderMain}>
 						<h2 id={titleId} className={styles.objectsOverlayTitle}>
 							{title}
@@ -113,7 +131,9 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 						<CloseOutlined />
 					</button>
 				</div>
-				<div className={resolvedBodyClassName}>{children}</div>
+				<div className={resolvedBodyClassName} data-testid={bodyTestId}>
+					{children}
+				</div>
 			</div>
 		</div>,
 		document.body,

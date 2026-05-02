@@ -2,8 +2,12 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { uploadFilesOrFoldersFromDeviceHint, uploadsUnsupportedHint } from '../../../lib/actionHints'
+import { ensureDomShims } from '../../../test/domShims'
 import type { ColumnKey } from '../useJobsColumnsVisibility'
 import { JobsToolbar } from '../JobsToolbar'
+
+ensureDomShims()
 
 const mergedColumnVisibility: Record<ColumnKey, boolean> = {
 	id: true,
@@ -411,5 +415,110 @@ describe('JobsToolbar', () => {
 
 		expect(screen.getByText('Bucket lookup unavailable')).toBeInTheDocument()
 		expect(screen.getByText(/You can still type a bucket name manually/i)).toBeInTheDocument()
+	})
+
+	it('uses the shared uploads-unsupported hint when no provider reason is supplied', () => {
+		setMatchMedia(false)
+		render(
+			<JobsToolbar
+				scopeKey="token-a:profile-1"
+				activeProfileName="MinIO Demo"
+				isOffline={false}
+				uploadSupported={false}
+				uploadDisabledReason={null}
+				eventsConnected
+				eventsTransport="ws"
+				eventsRetryCount={0}
+				eventsRetryThreshold={3}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenCreateDownload={vi.fn()}
+				topActionsMenu={{ items: [] }}
+				statusFilter="all"
+				onStatusFilterChange={vi.fn()}
+				searchFilterNormalized=""
+				onSearchFilterChange={vi.fn()}
+				typeFilterNormalized=""
+				onTypeFilterChange={vi.fn()}
+				typeFilterSuggestions={[]}
+				errorCodeFilterNormalized=""
+				onErrorCodeFilterChange={vi.fn()}
+				errorCodeSuggestions={[]}
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				jobsStatusSummary={{
+					total: 0,
+					active: 0,
+					queued: 0,
+					running: 0,
+					succeeded: 0,
+					failed: 0,
+					canceled: 0,
+				}}
+				columnOptions={[]}
+				mergedColumnVisibility={mergedColumnVisibility}
+				onSetColumnVisible={vi.fn()}
+				columnsDirty={false}
+				onResetColumns={vi.fn()}
+				onRefreshJobs={vi.fn()}
+				jobsRefreshing={false}
+				jobsCount={0}
+			/>,
+		)
+
+		expect(screen.getByText(uploadsUnsupportedHint())).toBeInTheDocument()
+	})
+
+	it('uses the shared device-upload tooltip copy when uploads are supported', async () => {
+		setMatchMedia(false)
+		render(
+			<JobsToolbar
+				scopeKey="token-a:profile-1"
+				activeProfileName="MinIO Demo"
+				isOffline={false}
+				uploadSupported
+				uploadDisabledReason={null}
+				eventsConnected
+				eventsTransport="ws"
+				eventsRetryCount={0}
+				eventsRetryThreshold={3}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenCreateDownload={vi.fn()}
+				topActionsMenu={{ items: [] }}
+				statusFilter="all"
+				onStatusFilterChange={vi.fn()}
+				searchFilterNormalized=""
+				onSearchFilterChange={vi.fn()}
+				typeFilterNormalized=""
+				onTypeFilterChange={vi.fn()}
+				typeFilterSuggestions={[]}
+				errorCodeFilterNormalized=""
+				onErrorCodeFilterChange={vi.fn()}
+				errorCodeSuggestions={[]}
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				jobsStatusSummary={{
+					total: 0,
+					active: 0,
+					queued: 0,
+					running: 0,
+					succeeded: 0,
+					failed: 0,
+					canceled: 0,
+				}}
+				columnOptions={[]}
+				mergedColumnVisibility={mergedColumnVisibility}
+				onSetColumnVisible={vi.fn()}
+				columnsDirty={false}
+				onResetColumns={vi.fn()}
+				onRefreshJobs={vi.fn()}
+				jobsRefreshing={false}
+				jobsCount={0}
+			/>,
+		)
+
+		fireEvent.mouseEnter(screen.getByText('Upload…').closest('button')!)
+		expect(await screen.findByText(uploadFilesOrFoldersFromDeviceHint())).toBeInTheDocument()
 	})
 })

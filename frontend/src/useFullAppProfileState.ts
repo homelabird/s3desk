@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef } from 'react'
 
-import type { APIClient } from './api/client'
+import type { APIClientShape } from './api/client'
 import { queryKeys } from './api/queryKeys'
 import { renderProfileGate } from './app/ProfileGate'
 import { clearPersistedTransfersStorage } from './components/transfers/useTransfersPersistence'
-import { getProviderCapabilities } from './lib/providerCapabilities'
+import { buildUploadCapabilityByProfileId } from './lib/profileCapabilityContext'
 import {
+	legacyServerScopedStorageKey,
 	readLegacyActiveProfileIdForMigration,
 	serverScopedStorageKey,
 	shouldUseLegacyActiveProfileStorageMigration,
@@ -14,7 +15,7 @@ import {
 import { useLocalStorageState } from './lib/useLocalStorageState'
 
 type UseFullAppProfileStateArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	pathname: string
 }
@@ -47,6 +48,10 @@ export function useFullAppProfileState({
 				: undefined,
 		[apiToken],
 	)
+	const legacyActiveProfileStorageKeys = useMemo(
+		() => [legacyServerScopedStorageKey('app', apiToken, 'profileId')],
+		[apiToken],
+	)
 	const initialStoredProfileId = useMemo(
 		() =>
 			readStoredProfileId(profileStorageKey) ??
@@ -58,6 +63,7 @@ export function useFullAppProfileState({
 		initialStoredProfileId,
 		{
 			legacyLocalStorageKey: legacyActiveProfileStorageKey,
+			legacyLocalStorageKeys: legacyActiveProfileStorageKeys,
 		},
 	)
 	const previousApiTokenRef = useRef<string | null | undefined>(undefined)
@@ -152,25 +158,8 @@ export function useFullAppProfileState({
 	})
 
 	const uploadCapabilityByProfileId = useMemo(() => {
-		const out: Record<
-			string,
-			{ presignedUpload: boolean; directUpload: boolean }
-		> = {}
-		const providerMatrix = metaQuery.data?.capabilities?.providers
-		for (const profile of profilesQuery.data ?? []) {
-			if (!profile.provider) continue
-			const capability = getProviderCapabilities(
-				profile.provider,
-				providerMatrix,
-				profile,
-			)
-			out[profile.id] = {
-				presignedUpload: capability.presignedUpload,
-				directUpload: capability.directUpload,
-			}
-		}
-		return out
-	}, [metaQuery.data?.capabilities?.providers, profilesQuery.data])
+		return buildUploadCapabilityByProfileId(profilesQuery.data, metaQuery.data)
+	}, [metaQuery.data, profilesQuery.data])
 
 	return {
 		metaQuery,

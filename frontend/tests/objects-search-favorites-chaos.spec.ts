@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { failedToLoadFavoritesTitle } from '../src/lib/actionHints'
 import {
 	buildBucketFixture,
 	buildMetaFixture,
@@ -12,7 +13,7 @@ import {
 	sequenceFixture,
 	textFixture,
 } from './support/apiFixtures'
-import { dialogByName } from './support/ui'
+import { dialogByName, gotoObjectsPage, objectsSelectionCheckbox } from './support/ui'
 
 const profileId = 'playwright-search-chaos-profile'
 const bucket = 'search-chaos-bucket'
@@ -132,11 +133,14 @@ test.describe('Objects global search and favorites chaos', () => {
 		await installFavoritesFailureFixtures(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
 		await page.setViewportSize({ width: 1600, height: 900 })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		const favoritesAlert = page.getByRole('alert').filter({ hasText: 'Failed to load favorites' })
-		await expect(favoritesAlert).toBeVisible({ timeout: 15_000 })
-		await expect(favoritesAlert).toContainText('favorites backend unavailable')
+		const favoritesPaneStatus = page.getByTestId('objects-favorites-status')
+		const favoritesAlerts = page.getByRole('alert').filter({ hasText: failedToLoadFavoritesTitle() })
+		await expect(favoritesPaneStatus).toHaveAttribute('data-favorites-status-kind', 'error', { timeout: 15_000 })
+		await expect(favoritesPaneStatus).toContainText(failedToLoadFavoritesTitle())
+		await expect(favoritesPaneStatus).toContainText('favorites backend unavailable')
+		await expect(favoritesAlerts).toHaveCount(2)
 
 		await page.getByRole('button', { name: 'View' }).click()
 		const viewDrawer = dialogByName(page, 'View options')
@@ -144,19 +148,19 @@ test.describe('Objects global search and favorites chaos', () => {
 		await viewDrawer.getByLabel('Favorites only').uncheck()
 		await viewDrawer.getByRole('button', { name: 'Done' }).click()
 
-		await expect(favoritesAlert).toHaveCount(0)
-		await expect(page.getByRole('checkbox', { name: 'Select alpha.txt' })).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select beta.txt' })).toBeVisible()
+		await expect(favoritesAlerts).toHaveCount(1)
+		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toBeVisible()
 	})
 
 	test('global indexed search recovers from a transient error while favoritesOnly view stays stable', async ({ page }) => {
 		await installSearchRecoveryFixtures(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
 		await page.setViewportSize({ width: 1600, height: 900 })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		await expect(page.getByRole('checkbox', { name: 'Select alpha.txt' })).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select beta.txt' })).toHaveCount(0)
+		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toHaveCount(0)
 
 		await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
 		const drawer = dialogByName(page, 'Global Search (Indexed)')
@@ -171,7 +175,7 @@ test.describe('Objects global search and favorites chaos', () => {
 		await expect(drawer.getByText('logs/error.log')).toBeVisible()
 		await expect(drawer.getByText('Search failed')).toHaveCount(0)
 
-		await expect(page.getByRole('checkbox', { name: 'Select alpha.txt' })).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select beta.txt' })).toHaveCount(0)
+		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
+		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toHaveCount(0)
 	})
 })

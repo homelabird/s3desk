@@ -12,7 +12,7 @@ import type {
 	TransfersRuntimeApi,
 	TransfersRuntimeSnapshot,
 	UploadCapabilityByProfileId,
-} from './transfers/transfersTypes'
+} from './transfersTypes'
 
 const TransfersRuntimeBridge = lazy(async () => {
 	const m = await import('./Transfers')
@@ -68,8 +68,6 @@ type TransfersProviderProps = {
 	eager?: boolean
 }
 
-export type { TransfersContextValue } from './transfers/transfersTypes'
-
 export function TransfersProvider({
 	apiToken,
 	uploadDirectStream,
@@ -81,7 +79,8 @@ export function TransfersProvider({
 	const [runtimeRequested, setRuntimeRequested] = useState(false)
 	const runtimeApiRef = useRef<TransfersRuntimeApi | null>(null)
 	const pendingCommandsRef = useRef<RuntimeCommand[]>([])
-	const shouldLoadRuntime = eager || runtimeRequested
+	const shouldLoadRuntime =
+		eager || runtimeRequested || (import.meta.env.DEV && typeof navigator !== 'undefined' && navigator.webdriver)
 
 	const flushPendingCommands = useCallback(() => {
 		const api = runtimeApiRef.current

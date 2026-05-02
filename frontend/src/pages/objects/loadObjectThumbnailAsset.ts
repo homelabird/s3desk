@@ -1,4 +1,4 @@
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import {
 	buildThumbnailCacheKey,
 	getReusablePersistentThumbnailBlob,
@@ -15,7 +15,7 @@ type TransferHandle<T> = {
 }
 
 type LoadObjectThumbnailAssetArgs = {
-	api: APIClient
+	api: APIClientShape
 	request: ThumbnailCacheRequest
 	cache?: ThumbnailCache
 	objectSize?: number

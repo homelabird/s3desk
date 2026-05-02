@@ -7,6 +7,7 @@ import {
 	isDialogDismissed,
 	setDialogDismissed,
 } from '../dialogPreferences'
+import { serverScopedStorageKey } from '../profileScopedStorage'
 
 describe('dialogPreferences', () => {
 	afterEach(() => {
@@ -49,7 +50,7 @@ describe('dialogPreferences', () => {
 
 		const stored = JSON.parse(window.localStorage.getItem('dismissedDialogPreferences') ?? '{}') as Record<string, unknown>
 		expect(stored[key]).toBeUndefined()
-		expect(stored['dialogPreference:token-a:warning:bucket_not_empty']).toBeTruthy()
+		expect(stored[serverScopedStorageKey('dialogPreference', 'token-a', key)]).toBeTruthy()
 
 		clearDismissedDialogs('token-a')
 		expect(window.localStorage.getItem('dismissedDialogPreferences')).toBeNull()

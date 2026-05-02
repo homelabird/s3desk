@@ -75,6 +75,143 @@ func TestHandleListObjectsMapsDecodeFailureToUpstreamInvalidCredentials(t *testi
 	}
 }
 
+func TestHandleGetObjectMetaReturnsNotFoundWhenObjectMissing(t *testing.T) {
+	lockTestEnv(t)
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "lsjson" {
+			return "", "Error 404: object not found", errors.New("exit status 3")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects/meta?key=missing.txt", nil)
+	req = withBucketParam(req, "my-test")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+	rr := httptest.NewRecorder()
+
+	srv.handleGetObjectMeta(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusNotFound)
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "not_found" {
+		t.Fatalf("code=%q, want not_found", errResp.Error.Code)
+	}
+	if got := errResp.Error.Details["bucket"]; got != "my-test" {
+		t.Fatalf("details.bucket=%v, want my-test", got)
+	}
+	if got := errResp.Error.Details["key"]; got != "missing.txt" {
+		t.Fatalf("details.key=%v, want missing.txt", got)
+	}
+}
+
+func TestHandleGetObjectDownloadURLReturnsNotFoundWhenObjectMissing(t *testing.T) {
+	lockTestEnv(t)
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "link" {
+			return "", "Error 404: object not found", errors.New("exit status 3")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects/download-url?key=missing.txt", nil)
+	req = withBucketParam(req, "my-test")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderOciObjectStorage})
+	rr := httptest.NewRecorder()
+
+	srv.handleGetObjectDownloadURL(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusNotFound)
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "not_found" {
+		t.Fatalf("code=%q, want not_found", errResp.Error.Code)
+	}
+	if got := errResp.Error.Details["bucket"]; got != "my-test" {
+		t.Fatalf("details.bucket=%v, want my-test", got)
+	}
+	if got := errResp.Error.Details["key"]; got != "missing.txt" {
+		t.Fatalf("details.key=%v, want missing.txt", got)
+	}
+}
+
+func TestHandleDownloadObjectReturnsNotFoundWhenObjectMissing(t *testing.T) {
+	lockTestEnv(t)
+	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {
+		if len(args) >= 1 && args[0] == "lsjson" {
+			return "", "Error 404: object not found", errors.New("exit status 3")
+		}
+		return "", "", errors.New("unexpected rclone args: " + joinArgs(args))
+	})
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects/download?key=missing.txt", nil)
+	req = withBucketParam(req, "my-test")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+	rr := httptest.NewRecorder()
+
+	srv.handleDownloadObject(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusNotFound)
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "not_found" {
+		t.Fatalf("code=%q, want not_found", errResp.Error.Code)
+	}
+	if got := errResp.Error.Details["bucket"]; got != "my-test" {
+		t.Fatalf("details.bucket=%v, want my-test", got)
+	}
+	if got := errResp.Error.Details["key"]; got != "missing.txt" {
+		t.Fatalf("details.key=%v, want missing.txt", got)
+	}
+}
+
+func TestHandleSearchObjectsReturnsNotIndexedWhenIndexMissing(t *testing.T) {
+	lockTestEnv(t)
+	st, _, _, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}, store: st}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/my-test/objects/search?q=report", nil)
+	req = withBucketParam(req, "my-test")
+	req.Header.Set("X-Profile-Id", profile.ID)
+	rr := httptest.NewRecorder()
+
+	srv.handleSearchObjects(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusConflict)
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "not_indexed" {
+		t.Fatalf("code=%q, want not_indexed", errResp.Error.Code)
+	}
+	if got := errResp.Error.Details["bucket"]; got != "my-test" {
+		t.Fatalf("details.bucket=%v, want my-test", got)
+	}
+}
+
 func TestHandleListObjectsEmitsSplitMetricOperations(t *testing.T) {
 	lockTestEnv(t)
 	installAPIRcloneCaptureHook(t, func(args []string) (string, string, error) {

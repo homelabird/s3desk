@@ -1,22 +1,11 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 
+import { parseObjectsListQueryKey } from '../../api/queryKeys'
 import type { ListObjectsResponse } from '../../api/types'
 import { normalizePrefix } from './objectsListUtils'
+import { getVisibleCreatedPrefix } from './objectsCreatedPrefix'
 
-export function getVisibleCreatedPrefix(parentPrefix: string, createdKey: string): string {
-	const parent = normalizePrefix(parentPrefix)
-	const created = normalizePrefix(createdKey)
-	if (!created) return ''
-	if (!parent || !created.startsWith(parent)) {
-		const parts = created.split('/').filter(Boolean)
-		return parts.length > 0 ? `${parts[0]}/` : created
-	}
-
-	const remainder = created.slice(parent.length)
-	const firstSegment = remainder.split('/').filter(Boolean)[0]
-	if (!firstSegment) return created
-	return `${parent}${firstSegment}/`
-}
+export { getVisibleCreatedPrefix }
 
 export function insertOptimisticPrefixIntoObjectsData(
 	data: InfiniteData<ListObjectsResponse, string | undefined> | undefined,
@@ -73,12 +62,12 @@ export function isObjectsQueryKeyRelevantToPrefix(
 	queryKey: readonly unknown[],
 	location: ObjectsQueryLocation,
 ): boolean {
-	if (queryKey[0] !== 'objects') return false
-	if (queryKey[1] !== location.profileId) return false
-	if (queryKey[2] !== location.bucket) return false
-	if (queryKey[4] !== location.apiToken) return false
-	const queryPrefix = typeof queryKey[3] === 'string' ? queryKey[3] : ''
-	return isPrefixRelated(queryPrefix, location.changedPrefix)
+	const parsed = parseObjectsListQueryKey(queryKey)
+	if (!parsed) return false
+	if (parsed.profileId !== location.profileId) return false
+	if (parsed.bucket !== location.bucket) return false
+	if (parsed.apiToken !== location.apiToken) return false
+	return isPrefixRelated(parsed.prefix, location.changedPrefix)
 }
 
 export async function invalidateObjectQueriesForPrefix(queryClient: QueryClient, location: ObjectsQueryLocation): Promise<void> {

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage } from './support/apiFixtures'
+import { gotoWithDynamicImportRecovery } from './support/ui'
 
 type StorageSeed = {
 	objectsUIMode: 'simple' | 'advanced'
@@ -75,10 +76,13 @@ async function stubObjectsSmokeApi(page: Page, overrides?: Partial<StorageSeed>)
 }
 
 test.describe('@check-smoke Objects page smoke', () => {
-	test('simple mode hides advanced controls', async ({ page }) => {
+	test('boots in simple mode and persists advanced-mode toggle to local storage', async ({ page }) => {
 		await stubObjectsSmokeApi(page, { objectsUIMode: 'simple' })
 		await seedStorage(page, { objectsUIMode: 'simple' })
-		await page.goto('/objects')
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByTestId('objects-list-controls-root'), {
+			timeout: 10_000,
+			maxAttempts: 3,
+		})
 
 		const controls = page.getByTestId('objects-list-controls-root')
 		await expect(controls).toBeVisible({ timeout: 10_000 })
@@ -88,24 +92,16 @@ test.describe('@check-smoke Objects page smoke', () => {
 		const moreButton = await getToolbarMoreButton(page)
 		await moreButton.scrollIntoViewIfNeeded()
 		await moreButton.click({ force: true })
-		await expect(page.getByRole('menuitem', { name: /Advanced mode/i })).toBeVisible()
+		const enableAdvancedMode = page.getByRole('menuitem', { name: /Advanced mode/i })
+		await expect(enableAdvancedMode).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Global search/i })).toHaveCount(0)
-	})
+		await enableAdvancedMode.click()
 
-	test('advanced mode shows advanced controls', async ({ page }) => {
-		await stubObjectsSmokeApi(page, { objectsUIMode: 'advanced' })
-		await seedStorage(page, { objectsUIMode: 'advanced' })
-		await page.goto('/objects')
-
-		const controls = page.getByTestId('objects-list-controls-root')
-		await expect(controls).toBeVisible({ timeout: 10_000 })
-		await expect(controls.getByLabel('Search current folder')).toBeVisible({ timeout: 10_000 })
-		await expect(controls.getByLabel('Go to path')).toBeVisible({ timeout: 10_000 })
-
-		const moreButton = await getToolbarMoreButton(page)
-		await moreButton.scrollIntoViewIfNeeded()
 		await moreButton.click({ force: true })
 		await expect(page.getByRole('menuitem', { name: /Simple mode/i })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Global search/i })).toBeVisible()
+		await expect
+			.poll(() => page.evaluate(() => window.localStorage.getItem('objectsUIMode')))
+			.toBe(JSON.stringify('advanced'))
 	})
 })

@@ -10,59 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
 	"s3desk/internal/models"
 )
 
 func (s *server) handleListServerRestores(w http.ResponseWriter, r *http.Request) {
-	items, err := s.listServerRestores()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "restore_list_failed", "failed to list staged restores", map[string]any{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, models.ServerStagedRestoreListResponse{Items: items})
+	newServerRestoreHTTPService(s).handleListServerRestores(w, r)
 }
 
 func (s *server) handleDeleteServerRestore(w http.ResponseWriter, r *http.Request) {
-	s.restoreMu.Lock()
-	defer s.restoreMu.Unlock()
-
-	restoreID := strings.TrimSpace(chi.URLParam(r, "restoreId"))
-	if restoreID == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "missing restore id", nil)
-		return
-	}
-
-	restoreBase := filepath.Join(s.cfg.DataDir, "restores")
-	targetPath, err := resolveRestorePath(restoreBase, restoreID)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "invalid restore id", map[string]any{"error": err.Error()})
-		return
-	}
-	if targetPath == filepath.Clean(restoreBase) {
-		writeError(w, http.StatusBadRequest, "invalid_request", "refusing to delete restore root", nil)
-		return
-	}
-
-	info, err := os.Stat(targetPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			writeError(w, http.StatusNotFound, "not_found", "staged restore not found", map[string]any{"restoreId": restoreID})
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "restore_delete_failed", "failed to stat staged restore", map[string]any{"error": err.Error()})
-		return
-	}
-	if !info.IsDir() {
-		writeError(w, http.StatusBadRequest, "invalid_request", "restore target is not a directory", map[string]any{"restoreId": restoreID})
-		return
-	}
-	if err := os.RemoveAll(targetPath); err != nil {
-		writeError(w, http.StatusInternalServerError, "restore_delete_failed", "failed to delete staged restore", map[string]any{"error": err.Error(), "restoreId": restoreID})
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	newServerRestoreHTTPService(s).handleDeleteServerRestore(w, r)
 }
 
 func (s *server) listServerRestores() ([]models.ServerStagedRestore, error) {

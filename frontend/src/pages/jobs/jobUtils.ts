@@ -9,7 +9,7 @@ export function statusColor(s: JobStatus): string {
 		case 'running':
 			return 'processing'
 		case 'succeeded':
-			return 'success'
+			return 'default'
 		case 'failed':
 			return 'error'
 		case 'canceled':

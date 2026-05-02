@@ -1,14 +1,14 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { queryKeys } from '../../api/queryKeys'
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { Profile } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
 import { buildTLSConfigFromValues } from './profileMutationUtils'
 
 type UseProfilesPageTLSStateArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	queryClient: Pick<QueryClient, 'invalidateQueries'>
 	activeEditProfile: Profile | null

@@ -1,11 +1,17 @@
-import { message } from 'antd'
 import { useMemo } from 'react'
 
-import type { TransfersContextValue } from '../../components/Transfers'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import { promptForFiles, promptForFolderFiles } from '../../components/transfers/transfersUploadUtils'
+import {
+	addFilesOrFolderFirstSentenceHint,
+	noBucketSelectedLabel,
+	offlineUploadsDisabledHint,
+	selectBucketFirstSentenceHint,
+	uploadsUnsupportedHint,
+} from '../../lib/actionHints'
 import { getDirectorySelectionSupport } from '../../lib/deviceFs'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { inferUploadSelectionKind } from '../../lib/uploadSelection'
+import { uploadsFeedback } from './uploadsFeedback'
 
 type UseUploadsPageSelectionActionsArgs = {
 	transfers: TransfersContextValue
@@ -30,16 +36,16 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 	const selectionKind = inferUploadSelectionKind(props.selectedFiles)
 	const folderSelectionSupport = getDirectorySelectionSupport()
 	const queueDisabledReason = useMemo(() => {
-		if (props.isOffline) return 'Offline: uploads are disabled.'
-		if (!props.uploadsSupported) return props.uploadsUnsupportedReason ?? 'Uploads are not supported by this provider.'
-		if (!props.bucket) return 'Select a bucket first.'
-		if (selectedFileCount === 0) return 'Add files or a folder first.'
+		if (props.isOffline) return offlineUploadsDisabledHint()
+		if (!props.uploadsSupported) return props.uploadsUnsupportedReason ?? uploadsUnsupportedHint()
+		if (!props.bucket) return selectBucketFirstSentenceHint()
+		if (selectedFileCount === 0) return addFilesOrFolderFirstSentenceHint()
 		return null
 	}, [props.bucket, props.isOffline, props.uploadsSupported, props.uploadsUnsupportedReason, selectedFileCount])
 
 	const canQueueUpload = !props.isOffline && props.uploadsSupported && !!props.bucket && props.selectedFiles.length > 0
 	const normalizedPrefix = props.prefix.trim().replace(/^\/+/, '')
-	const destinationLabel = props.bucket ? `s3://${props.bucket}${normalizedPrefix ? `/${normalizedPrefix}` : '/'}` : 'No bucket selected'
+	const destinationLabel = props.bucket ? `s3://${props.bucket}${normalizedPrefix ? `/${normalizedPrefix}` : '/'}` : noBucketSelectedLabel()
 
 	const clearSelection = () => {
 		props.setSelectedFiles([])
@@ -49,19 +55,19 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 
 	const queueUpload = () => {
 		if (props.isOffline) {
-			message.warning('Offline: uploads are disabled.')
+			uploadsFeedback.offlineUploadsDisabled()
 			return
 		}
 		if (!props.uploadsSupported) {
-			message.warning(props.uploadsUnsupportedReason ?? 'Uploads are not supported by this provider.')
+			uploadsFeedback.uploadsUnsupported(props.uploadsUnsupportedReason)
 			return
 		}
 		if (!props.bucket) {
-			message.info('Select a bucket first')
+			uploadsFeedback.selectBucketFirst()
 			return
 		}
 		if (props.selectedFiles.length === 0) {
-			message.info('Add files or a folder first')
+			uploadsFeedback.addFilesOrFolderFirst()
 			return
 		}
 		props.transfers.queueUploadFiles({
@@ -77,11 +83,11 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 
 	const openUploadPicker = () => {
 		if (props.isOffline) {
-			message.warning('Offline: uploads are disabled.')
+			uploadsFeedback.offlineUploadsDisabled()
 			return
 		}
 		if (!props.uploadsSupported) {
-			message.warning(props.uploadsUnsupportedReason ?? 'Uploads are not supported by this provider.')
+			uploadsFeedback.uploadsUnsupported(props.uploadsUnsupportedReason)
 			return
 		}
 		props.setUploadSourceOpen(true)
@@ -97,7 +103,7 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 			props.setSelectedFolderLabel('')
 			props.setSelectedDirectorySelectionMode(undefined)
 		} catch (err) {
-			message.error(formatErr(err))
+			uploadsFeedback.error(err)
 		} finally {
 			props.setUploadSourceBusy(false)
 		}
@@ -113,7 +119,7 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 			props.setSelectedFolderLabel(result.label ?? '')
 			props.setSelectedDirectorySelectionMode(result.mode)
 		} catch (err) {
-			message.error(formatErr(err))
+			uploadsFeedback.error(err)
 		} finally {
 			props.setUploadSourceBusy(false)
 		}

@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import type { UploadTask } from '../transferTypes'
 import { useTransfersUploadJobLifecycle } from '../useTransfersUploadJobLifecycle'
 
@@ -70,10 +71,10 @@ describe('useTransfersUploadJobLifecycle', () => {
 		expect(invalidateQueries).toHaveBeenCalledTimes(1)
 		const invalidateArg = invalidateQueries.mock.calls[0]?.[0]
 		expect(invalidateArg).toMatchObject({ predicate: expect.any(Function) })
-		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', '', 'token-a'] })).toBe(true)
-		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'folder/', 'token-a'] })).toBe(true)
-		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'folder/', 'token-b'] })).toBe(false)
-		expect(invalidateArg.predicate({ queryKey: ['objects', 'profile-1', 'bucket-a', 'other/', 'token-a'] })).toBe(false)
+		expect(invalidateArg.predicate({ queryKey: queryKeys.objects.list('profile-1', 'bucket-a', '', 'token-a') })).toBe(true)
+		expect(invalidateArg.predicate({ queryKey: queryKeys.objects.list('profile-1', 'bucket-a', 'folder/', 'token-a') })).toBe(true)
+		expect(invalidateArg.predicate({ queryKey: queryKeys.objects.list('profile-1', 'bucket-a', 'folder/', 'token-b') })).toBe(false)
+		expect(invalidateArg.predicate({ queryKey: queryKeys.objects.list('profile-1', 'bucket-a', 'other/', 'token-a') })).toBe(false)
 		expect(result.current.uploadTasks[0]).toMatchObject({
 			status: 'succeeded',
 			loadedBytes: 100,

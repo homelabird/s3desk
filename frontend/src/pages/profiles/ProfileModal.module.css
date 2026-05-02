@@ -45,6 +45,16 @@
 	align-items: flex-start;
 }
 
+.editModeTag {
+	color: var(--s3d-color-warning-text) !important;
+	background: var(--s3d-color-warning-bg) !important;
+	border-color: var(--s3d-color-warning-border) !important;
+}
+
+.editModeTag :global(.anticon) {
+	color: inherit !important;
+}
+
 .sections {
 	background: transparent;
 }

@@ -13,6 +13,18 @@ import {
 import { Badge, Button, Space, type MenuProps } from 'antd'
 import type { ReactNode } from 'react'
 
+import {
+	bucketFieldPlaceholder,
+	deleteSelectedObjectsLabel,
+	downloadToBrowserHint,
+	loadingBucketsPlaceholder,
+	newFolderShortcutHint,
+	offlineNetworkConnectionHint,
+	selectBucketFirstHint,
+	selectProfileFirstHint,
+	uploadFilesOrFoldersHint,
+	uploadsUnsupportedHint,
+} from '../../lib/actionHints'
 import { ObjectsBucketPicker } from './ObjectsBucketPicker'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { UIAction } from './objectsActions'
@@ -71,37 +83,36 @@ function buildMenuButtonLabel(label: string, showLabels: boolean) {
 }
 
 export function ObjectsToolbar(props: ObjectsToolbarProps) {
+	const compactDesktopActions = props.isDesktop && !props.showLabels
+	const actionButtonSize = compactDesktopActions ? 'small' : props.isDesktop ? 'middle' : 'small'
+	const desktopActionGroupSize: [number, number] = compactDesktopActions ? [8, 8] : [10, 10]
 	const canUseBucket = props.hasProfile && !props.isOffline
 	const canUpload = props.hasProfile && !!props.bucket && !props.isOffline && props.uploadEnabled
 	const uploadTooltipText = !props.hasProfile
-		? 'Select a profile first'
+		? selectProfileFirstHint()
 		: props.isOffline
-			? 'Offline: check your network connection'
+			? offlineNetworkConnectionHint()
 			: !props.bucket
-				? 'Select a bucket first'
+				? selectBucketFirstHint()
 				: !props.uploadEnabled
-					? props.uploadDisabledReason ?? 'Uploads are not supported by this provider'
-					: 'Upload files or folders'
+					? props.uploadDisabledReason ?? uploadsUnsupportedHint()
+					: uploadFilesOrFoldersHint()
 	const createFolderTooltipText = props.createFolderTooltipText
 	const showSelectionPrimaryActions = props.showPrimaryActions && props.selectedCount > 0
 	const downloadDisabledReason = !props.hasProfile
-		? 'Select a profile first'
+		? selectProfileFirstHint()
 		: props.isOffline
-			? 'Offline: check your network connection'
+			? offlineNetworkConnectionHint()
 			: !props.bucket
-				? 'Select a bucket first'
-				: props.selectedCount === 0
-					? 'Select objects to download'
-					: 'Download to your browser'
+				? selectBucketFirstHint()
+				: downloadToBrowserHint()
 	const deleteDisabledReason = !props.hasProfile
-		? 'Select a profile first'
+		? selectProfileFirstHint()
 		: props.isOffline
-			? 'Offline: check your network connection'
+			? offlineNetworkConnectionHint()
 			: !props.bucket
-				? 'Select a bucket first'
-				: props.selectedCount === 0
-					? 'Select objects to delete'
-					: 'Delete selected objects'
+				? selectBucketFirstHint()
+				: deleteSelectedObjectsLabel()
 
 	const renderPrimaryActionButton = (
 		action: UIAction | undefined,
@@ -112,7 +123,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 		const disabled = !action.enabled
 		const ariaLabel = action.label ?? opts.fallbackLabel
 		const button = (
-			<Button size="middle" icon={opts.icon} danger={opts.danger} disabled={disabled} onClick={action.run} aria-label={ariaLabel}>
+			<Button size={actionButtonSize} icon={opts.icon} danger={opts.danger} disabled={disabled} onClick={action.run} aria-label={ariaLabel}>
 				{label}
 			</Button>
 		)
@@ -120,32 +131,32 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	}
 
 	const uploadButtonDesktop = renderHinted(
-		<Button type="primary" icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload}>
-			Upload…
+		<Button type="primary" size={actionButtonSize} icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload} aria-label="Upload">
+			{buildMenuButtonLabel('Upload…', props.showLabels)}
 		</Button>,
 		uploadTooltipText,
 	)
 
 	const uploadButtonMobile = renderHinted(
-		<Button icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload} aria-label="Upload">
+		<Button size="small" icon={<CloudUploadOutlined />} disabled={!canUpload} onClick={props.onUpload} aria-label="Upload">
 			{buildMenuButtonLabel('Upload…', props.showLabels)}
 		</Button>,
 		uploadTooltipText,
 	)
 
 	const newFolderButton = renderHinted(
-		<Button icon={<FolderAddOutlined />} disabled={!props.canCreateFolder} onClick={props.onNewFolder} aria-label="New folder">
+		<Button size={actionButtonSize} icon={<FolderAddOutlined />} disabled={!props.canCreateFolder} onClick={props.onNewFolder} aria-label="New folder">
 			{props.showLabels ? 'New folder' : null}
 		</Button>,
-		props.canCreateFolder ? 'New folder (Ctrl+Shift+N)' : createFolderTooltipText,
+		props.canCreateFolder ? newFolderShortcutHint() : createFolderTooltipText,
 	)
 
 	const moreButton = (
 		<ObjectsMenuPopover menu={props.topMoreMenu} align="end" scopeKey={props.bucketPickerScopeKey}>
 			{({ toggle }) => (
 				<Badge count={props.activeTransferCount} size="small" showZero={false}>
-					<Button icon={<EllipsisOutlined />} disabled={!props.hasProfile} onClick={toggle} data-testid="objects-toolbar-more" aria-label="More actions">
-						{props.isDesktop ? 'More' : buildMenuButtonLabel('Actions', props.showLabels)}
+					<Button size={actionButtonSize} icon={<EllipsisOutlined />} disabled={!props.hasProfile} onClick={toggle} data-testid="objects-toolbar-more" aria-label="More actions">
+						{buildMenuButtonLabel(props.isDesktop ? 'More' : 'Actions', props.showLabels)}
 					</Button>
 				</Badge>
 			)}
@@ -159,7 +170,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 			value={props.bucket}
 			recentBuckets={props.recentBuckets}
 			options={props.bucketOptions}
-			placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? 'Loading buckets…' : 'Bucket…'}
+			placeholder={props.bucketsLoading && props.bucketOptions.length === 0 ? loadingBucketsPlaceholder() : bucketFieldPlaceholder()}
 			disabled={!canUseBucket || (props.bucketsLoading && props.bucketOptions.length === 0)}
 			className={props.isDesktop ? styles.toolbarBucketDesktop : styles.toolbarBucketMobile}
 			onChange={props.onBucketChange}
@@ -169,8 +180,8 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 
 	if (props.isDesktop) {
 		return (
-			<div className={styles.toolbarRow}>
-				<Space wrap className={styles.toolbarGroup}>
+			<div className={styles.toolbarRow} data-testid="objects-toolbar-desktop-row">
+				<Space wrap size={[10, 10]} className={styles.toolbarGroup} data-testid="objects-toolbar-desktop-nav">
 					{props.isAdvanced ? (
 						<>
 							<Button
@@ -199,7 +210,13 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					{bucketPicker}
 				</Space>
 
-				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}>
+				<Space
+					wrap
+					size={desktopActionGroupSize}
+					className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}
+					data-testid="objects-toolbar-desktop-actions"
+					data-compact={compactDesktopActions ? 'true' : 'false'}
+				>
 					{uploadButtonDesktop}
 					{newFolderButton}
 					{showSelectionPrimaryActions ? (
@@ -225,11 +242,12 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 
 	return (
 		<div className={styles.toolbarColumn}>
-			<Space wrap className={styles.toolbarTopRow}>
-				<Space wrap className={`${styles.toolbarGroup} ${styles.toolbarTopActions}`}>
+			<Space wrap size={[8, 8]} className={styles.toolbarTopRow} data-testid="objects-toolbar-mobile-top-row">
+				<Space wrap size={[8, 8]} className={`${styles.toolbarGroup} ${styles.toolbarTopActions}`} data-testid="objects-toolbar-mobile-actions">
 					{props.isAdvanced ? (
 						<>
 							<Button
+								size="small"
 								icon={<LeftOutlined />}
 								disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
 								onClick={props.onGoBack}
@@ -237,6 +255,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 								title="Back"
 							/>
 							<Button
+								size="small"
 								icon={<RightOutlined />}
 								disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
 								onClick={props.onGoForward}
@@ -244,12 +263,13 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 								title="Forward"
 							/>
 							<Button
+								size="small"
 								icon={<UpOutlined />}
 								disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
 								onClick={props.onGoUp}
 								aria-label="Go up"
 							>
-								Up
+								{buildMenuButtonLabel('Up', props.showLabels)}
 							</Button>
 						</>
 					) : null}
@@ -271,12 +291,12 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						</>
 					) : null}
 					{props.isAdvanced && !props.dockTree ? (
-						<Button icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile || props.isOffline} aria-label="Folders">
+						<Button size="small" icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile || props.isOffline} aria-label="Folders">
 							{props.showLabels ? 'Folders' : null}
 						</Button>
 					) : null}
 					{props.isAdvanced && !props.dockDetails ? (
-						<Button icon={<InfoCircleOutlined />} onClick={props.onOpenDetails} disabled={!props.hasProfile || props.isOffline} aria-label="Details">
+						<Button size="small" icon={<InfoCircleOutlined />} onClick={props.onOpenDetails} disabled={!props.hasProfile || props.isOffline} aria-label="Details">
 							{props.showLabels ? 'Details' : null}
 						</Button>
 					) : null}

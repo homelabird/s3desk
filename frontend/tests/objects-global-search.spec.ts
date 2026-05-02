@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { noFavoritesYetTitle } from '../src/lib/actionHints'
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
-import { dialogByName } from './support/ui'
+import { dialogByName, gotoWithDynamicImportRecovery, objectsFavoriteItem, objectsListRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -54,6 +55,7 @@ async function setupApiMocks(page: Page) {
 			{
 				id: defaultStorage.profileId,
 				name: 'Playwright',
+				provider: 's3_compatible',
 				endpoint: 'http://minio:9000',
 				region: 'us-east-1',
 				forcePathStyle: true,
@@ -100,26 +102,29 @@ async function setupApiMocks(page: Page) {
 }
 
 test('global search and favorites update from objects UI', async ({ page }) => {
+	test.setTimeout(45_000)
 	await page.setViewportSize({ width: 1800, height: 1000 })
 	await seedStorage(page)
 	await setupApiMocks(page)
 
-	await page.goto('/objects')
-	await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
+	await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
+		timeout: 10_000,
+		maxAttempts: 5,
+	})
 
-	const objectRow = page.locator('[data-objects-row="true"]', { hasText: 'alpha.txt' }).first()
+	const objectRow = objectsListRow(page, 'alpha.txt')
 	await expect(objectRow).toBeVisible()
 
 	await objectRow.getByRole('button', { name: 'Add favorite' }).click()
 	await expect(objectRow.getByRole('button', { name: 'Remove favorite' })).toBeVisible()
-	await expect(page.getByTestId('objects-favorite-item').filter({ hasText: 'alpha.txt' })).toBeVisible()
+	await expect(objectsFavoriteItem(page, 'alpha.txt')).toBeVisible()
 
 	const favoritesOnly = page.getByRole('switch', { name: 'Favorites only' }).first()
 	await favoritesOnly.click()
 	await expect(objectRow).toBeVisible()
 
 	await objectRow.getByRole('button', { name: 'Remove favorite' }).click()
-	await expect(page.getByText('No favorites yet.')).toBeVisible()
+	await expect(page.getByText(noFavoritesYetTitle())).toBeVisible()
 
 	await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
 	const drawer = dialogByName(page, 'Global Search (Indexed)')

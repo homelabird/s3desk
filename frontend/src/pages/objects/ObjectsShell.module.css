@@ -6,6 +6,34 @@
   min-height: 0;
 }
 
+.pageHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0 !important;
+  letter-spacing: -0.03em;
+}
+
+.pageHeaderAlert {
+  margin: 0;
+}
+
+.toolbarSectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.toolbarTabsWrap {
+  width: 100%;
+  min-width: 0;
+}
+
 .toolbarRow {
   display: flex;
   width: 100%;
@@ -43,7 +71,8 @@
 }
 
 .toolbarBucketDesktop {
-  width: 260px;
+  --objects-bucket-picker-width: 260px;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -98,6 +127,13 @@
 }
 
 .objectsOverlayPanel {
+  --objects-overlay-inline-padding-left: 20px;
+  --objects-overlay-inline-padding-right: 20px;
+  --objects-overlay-header-top-padding: 18px;
+  --objects-overlay-header-bottom-padding: 14px;
+  --objects-overlay-body-top-padding: 20px;
+  --objects-overlay-body-bottom-padding: 20px;
+  --objects-overlay-body-gap: 16px;
   display: flex;
   flex-direction: column;
   width: min(100%, 100vw);
@@ -130,7 +166,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px 14px;
+  padding:
+    var(--objects-overlay-header-top-padding)
+    var(--objects-overlay-inline-padding-right)
+    var(--objects-overlay-header-bottom-padding);
+  padding-left: var(--objects-overlay-inline-padding-left);
   border-bottom: 1px solid var(--s3d-color-border);
 }
 
@@ -183,10 +223,20 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 20px;
+  padding:
+    var(--objects-overlay-body-top-padding)
+    var(--objects-overlay-inline-padding-right)
+    var(--objects-overlay-body-bottom-padding);
+  padding-left: var(--objects-overlay-inline-padding-left);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--objects-overlay-body-gap);
+}
+
+.objectsOverlayHeaderCompactMobile {
+}
+
+.objectsOverlayBodyCompactMobile {
 }
 
 .objectsSheetBody {
@@ -230,6 +280,27 @@
   min-height: 0;
 }
 
+.treeCompactActionButton {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 !important;
+}
+
+@media (max-width: 1200px) {
+  .treeStack {
+    gap: 8px;
+  }
+
+  .treeCompactActionButton {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
 .resizeHandle {
   width: 12px;
   align-self: stretch;
@@ -268,7 +339,9 @@
 }
 
 .panelHeader {
-  padding: 8px 12px;
+  padding:
+    var(--objects-pane-header-block-padding, 8px)
+    var(--objects-pane-header-inline-padding, 12px);
   border-bottom: 1px solid var(--s3d-color-border);
   background: color-mix(in srgb, var(--s3d-color-bg-secondary) 80%, transparent);
   display: flex;
@@ -281,7 +354,10 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 6px 8px 8px;
+  padding:
+    var(--objects-pane-body-top-padding, 6px)
+    var(--objects-pane-body-inline-padding, 8px)
+    var(--objects-pane-body-bottom-padding, 8px);
 }
 
 .shellTextMuted {
@@ -379,7 +455,15 @@
 
 @media (max-width: 768px) {
   .page {
-    gap: 12px;
+    gap: 10px;
+  }
+
+  .pageHeader {
+    gap: 8px;
+  }
+
+  .toolbarSectionStack {
+    gap: 8px;
   }
 
   .toolbarRow {
@@ -387,15 +471,11 @@
   }
 
   .toolbarColumn {
-    gap: 6px;
+    gap: 5px;
   }
 
-  .panelHeader {
-    padding: 8px 10px;
-  }
-
-  .panelBody {
-    padding: 6px;
+  .toolbarTopRow {
+    gap: 8px;
   }
 
   .objectsOverlayPanelLeft,
@@ -406,39 +486,98 @@
   }
 
   .objectsOverlayHeader {
-    padding-left: max(16px, env(safe-area-inset-left));
-    padding-right: max(16px, env(safe-area-inset-right));
+    --objects-overlay-inline-padding-left: max(16px, env(safe-area-inset-left));
+    --objects-overlay-inline-padding-right: max(16px, env(safe-area-inset-right));
   }
 
   .objectsOverlayBody {
-    padding-left: max(16px, env(safe-area-inset-left));
-    padding-right: max(16px, env(safe-area-inset-right));
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    --objects-overlay-inline-padding-left: max(16px, env(safe-area-inset-left));
+    --objects-overlay-inline-padding-right: max(16px, env(safe-area-inset-right));
+    --objects-overlay-body-bottom-padding: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .objectsOverlayPanel[data-compact-mobile='true'] {
+    --objects-overlay-inline-padding-left: max(14px, env(safe-area-inset-left));
+    --objects-overlay-inline-padding-right: max(14px, env(safe-area-inset-right));
+    --objects-overlay-header-top-padding: 14px;
+    --objects-overlay-header-bottom-padding: 10px;
+    --objects-overlay-body-top-padding: 12px;
+    --objects-overlay-body-bottom-padding: max(14px, env(safe-area-inset-bottom));
+    --objects-overlay-body-gap: 12px;
+  }
+
+  .objectsOverlayHeaderCompactMobile {
+    gap: 12px;
   }
 
   .resizeHandle {
     padding-block: 6px;
   }
+
+  .treeStack {
+    gap: 8px;
+  }
 }
 
 @media (max-width: 480px) {
   .page {
+    gap: 6px;
+  }
+
+  .pageHeader {
+    gap: 5px;
+  }
+
+  .pageTitle {
+    font-size: 28px !important;
+    line-height: 1.12 !important;
+  }
+
+  .toolbarSectionStack {
+    gap: 5px;
+  }
+
+  .toolbarColumn {
+    gap: 3px;
+  }
+
+  .toolbarTopRow {
+    gap: 6px;
+  }
+
+  .objectsOverlayPanel[data-compact-mobile='true'] {
+    --objects-overlay-inline-padding-left: max(12px, env(safe-area-inset-left));
+    --objects-overlay-inline-padding-right: max(12px, env(safe-area-inset-right));
+    --objects-overlay-header-top-padding: 12px;
+    --objects-overlay-header-bottom-padding: 9px;
+    --objects-overlay-body-top-padding: 10px;
+    --objects-overlay-body-bottom-padding: max(12px, env(safe-area-inset-bottom));
+    --objects-overlay-body-gap: 10px;
+  }
+
+  .objectsOverlayHeaderCompactMobile {
     gap: 10px;
   }
 
-  .panelHeader {
-    padding: 8px;
+  .treeStack {
+    gap: 6px;
   }
 
-  .panelBody {
-    padding: 6px;
+  .treeCompactActionButton {
+    min-width: 26px;
+    min-height: 26px;
   }
 }
 
 @media (max-width: 1100px) {
+  .toolbarSectionStack[data-has-tabs='true'] {
+    gap: 8px;
+  }
+
   .toolbarRow {
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
   }
 
   .toolbarGroup {

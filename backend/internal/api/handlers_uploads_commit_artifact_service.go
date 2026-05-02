@@ -10,6 +10,12 @@ import (
 
 type uploadCommitArtifactService struct{}
 
+type uploadCommitArtifacts struct {
+	payload      map[string]any
+	indexEntries []store.ObjectIndexEntry
+	progress     *models.JobProgress
+}
+
 func newUploadCommitArtifactService() uploadCommitArtifactService {
 	return uploadCommitArtifactService{}
 }
@@ -170,8 +176,4 @@ func (svc uploadCommitArtifactService) buildVerifiedProgress(totalFiles int, tot
 		BytesDone:    &bytes,
 		BytesTotal:   &bytes,
 	}
-}
-
-func (svc uploadCommitArtifactService) buildStagingPayload(session uploadCommitSession, req uploadCommitRequest) map[string]any {
-	return svc.buildFromRequest(session.uploadID, session.us, req).payload
 }

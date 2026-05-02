@@ -20,9 +20,6 @@ import (
 func TestPersistAndPublishRunningProgressSkipsEventOnStoreError(t *testing.T) {
 	manager, st, hub, gormDB, profile, _ := newManagerConsistencyFixture(t)
 
-	injectedErr := errors.New("injected running progress update failure")
-	registerJobStatusUpdateFailure(t, gormDB, "test_progress_update_failure", models.JobStatusRunning, true, injectedErr)
-
 	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
 		Type:    JobTypeS3DeleteObjects,
 		Payload: map[string]any{"bucket": "test-bucket", "keys": []string{"a.txt"}},
@@ -30,6 +27,13 @@ func TestPersistAndPublishRunningProgressSkipsEventOnStoreError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create job: %v", err)
 	}
+	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := st.UpdateJobStatus(context.Background(), job.ID, models.JobStatusRunning, &startedAt, nil, nil, nil, nil); err != nil {
+		t.Fatalf("set job running: %v", err)
+	}
+
+	injectedErr := errors.New("injected running progress update failure")
+	registerJobStatusUpdateFailure(t, gormDB, "test_progress_update_failure", models.JobStatusRunning, true, injectedErr)
 
 	client := hub.Subscribe()
 	t.Cleanup(func() { hub.Unsubscribe(client) })
@@ -56,6 +60,49 @@ func TestPersistAndPublishRunningProgressSkipsEventOnStoreError(t *testing.T) {
 	}
 	if updated.Progress != nil {
 		t.Fatalf("expected progress to remain nil when persistence fails, got %+v", updated.Progress)
+	}
+
+	assertNoHubEventType(t, client, "job.progress")
+}
+
+func TestPersistAndPublishRunningProgressDoesNotReopenTerminalJob(t *testing.T) {
+	manager, st, hub, _, profile, _ := newManagerConsistencyFixture(t)
+
+	job, err := st.CreateJob(context.Background(), profile.ID, store.CreateJobInput{
+		Type:    JobTypeS3DeleteObjects,
+		Payload: map[string]any{"bucket": "test-bucket", "keys": []string{"a.txt"}},
+	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := st.UpdateJobStatus(context.Background(), job.ID, models.JobStatusCanceled, nil, &finishedAt, nil, nil, nil); err != nil {
+		t.Fatalf("set job canceled: %v", err)
+	}
+
+	client := hub.Subscribe()
+	t.Cleanup(func() { hub.Unsubscribe(client) })
+
+	done := int64(1)
+	err = manager.persistAndPublishRunningProgress(job.ID, &models.JobProgress{
+		ObjectsDone: &done,
+	})
+	if !errors.Is(err, ErrJobStatusConflict) {
+		t.Fatalf("expected status conflict, got %v", err)
+	}
+
+	updated, ok, err := st.GetJob(context.Background(), profile.ID, job.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected job")
+	}
+	if updated.Status != models.JobStatusCanceled {
+		t.Fatalf("expected status to remain canceled, got %s", updated.Status)
+	}
+	if updated.Progress != nil {
+		t.Fatalf("expected progress to remain nil, got %+v", updated.Progress)
 	}
 
 	assertNoHubEventType(t, client, "job.progress")

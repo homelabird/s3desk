@@ -5,10 +5,14 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
+	"s3desk/internal/logging"
 	"s3desk/internal/models"
 )
+
+const TLSSkipVerifyApprovalEnv = "S3DESK_ALLOW_INSECURE_TLS_SKIP_VERIFY"
 
 // BuildConfig translates stored profile TLS settings into a tls.Config.
 func BuildConfig(profile models.ProfileSecrets) (*tls.Config, error) {
@@ -18,6 +22,10 @@ func BuildConfig(profile models.ProfileSecrets) (*tls.Config, error) {
 
 	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	if profile.TLSInsecureSkipVerify {
+		if err := ValidateSkipVerifyPolicy(); err != nil {
+			return nil, err
+		}
+		LogSkipVerifyApplied("profile.tls_skip_verify", profile)
 		cfg.InsecureSkipVerify = true //nolint:gosec
 	}
 	if profile.TLSConfig == nil {
@@ -52,6 +60,53 @@ func BuildConfig(profile models.ProfileSecrets) (*tls.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func ValidateSkipVerifyPolicy() error {
+	runtimeEnv := NormalizedRuntimeEnv()
+	if IsProductionRuntimeEnv(runtimeEnv) && !SkipVerifyApproved() {
+		return fmt.Errorf("tlsInsecureSkipVerify requires %s=true when LOG_ENV=%s", TLSSkipVerifyApprovalEnv, runtimeEnv)
+	}
+	return nil
+}
+
+func NormalizedRuntimeEnv() string {
+	env := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_ENV")))
+	if env == "" {
+		return "local"
+	}
+	return env
+}
+
+func IsProductionRuntimeEnv(runtimeEnv string) bool {
+	switch strings.ToLower(strings.TrimSpace(runtimeEnv)) {
+	case "prod", "production":
+		return true
+	default:
+		return false
+	}
+}
+
+func SkipVerifyApproved() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(TLSSkipVerifyApprovalEnv))) {
+	case "1", "true", "yes", "approved":
+		return true
+	default:
+		return false
+	}
+}
+
+func LogSkipVerifyApplied(event string, profile models.ProfileSecrets) {
+	fields := map[string]any{
+		"event":        event,
+		"profile_id":   profile.ID,
+		"provider":     string(profile.Provider),
+		"risk":         "high",
+		"runtime_env":  NormalizedRuntimeEnv(),
+		"approval_env": TLSSkipVerifyApprovalEnv,
+		"approved":     SkipVerifyApproved(),
+	}
+	logging.WarnFields("TLS certificate verification disabled", fields)
 }
 
 func NormalizeMode(mode models.ProfileTLSMode) models.ProfileTLSMode {

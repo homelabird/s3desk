@@ -66,8 +66,10 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 			title={props.isAdvanced ? 'View options' : 'Filters'}
 			placement="right"
 			width="90%"
+			dataTestId="objects-filters-sheet"
+			compactMobile
 		>
-			<div className={styles.globalSearchContent}>
+			<div className={styles.globalSearchContent} data-testid="objects-filters-content">
 				<section className={styles.globalSearchSection}>
 					<div className={styles.globalSearchSectionTitle}>Favorites</div>
 					<div className={styles.globalSearchFieldRow}>
@@ -99,7 +101,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 						value={props.typeFilter}
 						onChange={(value) => props.onTypeFilterChange(value as ObjectTypeFilter)}
 						ariaLabel="Type filter"
-						className={styles.drawerFullWidth}
+						className={`${styles.drawerFullWidth} ${styles.drawerCompactField}`}
 						options={[
 							{ label: 'All', value: 'all' },
 							{ label: 'Folders', value: 'folders' },
@@ -119,6 +121,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 								ariaLabel="Extension filter"
 								allowClear
 								disabled={fileFiltersDisabled}
+								className={`${styles.drawerFullWidth} ${styles.drawerCompactField}`}
 								options={props.extOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
 							/>
 						</section>
@@ -185,7 +188,7 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 								value={props.sort}
 								onChange={(value) => props.onSortChange(value as ObjectSort)}
 								ariaLabel="Sort"
-								className={styles.drawerFullWidth}
+								className={`${styles.drawerFullWidth} ${styles.drawerCompactField}`}
 								options={[
 									{ label: 'Name (A -> Z)', value: 'name_asc' },
 									{ label: 'Name (Z -> A)', value: 'name_desc' },
@@ -199,11 +202,11 @@ export function ObjectsFiltersDrawer(props: ObjectsFiltersDrawerProps) {
 					</>
 				) : null}
 
-				<div className={`${styles.globalSearchButtonRow} ${styles.drawerActions}`}>
-					<Button onClick={props.onResetView} disabled={!props.hasActiveView}>
+				<div className={`${styles.globalSearchButtonRow} ${styles.drawerActions}`} data-testid="objects-filters-actions">
+					<Button size="small" className={styles.globalSearchCompactButton} onClick={props.onResetView} disabled={!props.hasActiveView}>
 						Reset view
 					</Button>
-					<Button type="primary" onClick={props.onClose}>
+					<Button type="primary" size="small" className={styles.globalSearchCompactButton} onClick={props.onClose}>
 						Done
 					</Button>
 				</div>

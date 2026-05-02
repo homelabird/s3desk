@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
+import { commitComboboxValue, gotoJobsPage, openCreateDeleteJobDrawer } from './support/ui'
+
 const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
@@ -203,19 +205,13 @@ test.describe('Live Jobs flow', () => {
 			expect(moveDestKeys).toContain(moveDestKey)
 
 			await seedStorage(page, { profileId, bucket: bucketName })
-			await page.goto('/jobs')
-			await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+			await gotoJobsPage(page)
 
 			const createResponse = page.waitForResponse(
 				(res) => res.url().includes('/api/v1/jobs') && res.request().method() === 'POST',
 			)
-			await page.getByRole('button', { name: 'More' }).click()
-			await page.getByRole('menuitem', { name: 'New Delete Job' }).click()
-			const deleteDrawer = page.getByRole('dialog', { name: 'Create delete job (S3)' })
-			await expect(deleteDrawer).toBeVisible()
-			const bucketSelect = deleteDrawer.getByRole('combobox', { name: 'Bucket' })
-			await bucketSelect.fill(bucketName)
-			await page.keyboard.press('Enter')
+			const deleteDrawer = await openCreateDeleteJobDrawer(page)
+			await commitComboboxValue(page, deleteDrawer, 'Bucket', bucketName)
 			await deleteDrawer.getByLabel('Prefix', { exact: true }).fill(deletePrefix)
 			await deleteDrawer.getByRole('button', { name: 'Create' }).click()
 

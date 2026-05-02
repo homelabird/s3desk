@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 
 import { buildApiHttpUrl, buildApiWsUrl } from '../../api/baseUrl'
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import type { JobProgress, JobStatus, WSEvent } from '../../api/types'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { maybeReportNetworkError } from './transferDownloadUtils'
 import type { UploadTask } from './transferTypes'
 
 type UseTransfersUploadJobEventsArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	hasPendingUploadJobs: boolean
 	uploadTasksRef: MutableRefObject<UploadTask[]>

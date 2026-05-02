@@ -8,6 +8,12 @@ vi.mock("../FullApp", () => ({
   },
 }));
 
+vi.mock("../LightApp", () => ({
+  default: function LightAppMock() {
+    return <div data-testid="light-app-mock">light app</div>;
+  },
+}));
+
 import App from "../App";
 import { AuthProvider } from "../auth/AuthProvider";
 import { serverScopedStorageKey } from "../lib/profileScopedStorage";
@@ -51,7 +57,7 @@ describe("App root routing", () => {
     expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
   });
 
-  it("redirects to the profiles shell when only another server has a scoped active profile", async () => {
+  it("redirects to the setup shell when only another server has a scoped active profile", async () => {
     window.sessionStorage.setItem("apiToken", JSON.stringify("token-a"));
     window.localStorage.setItem(
       serverScopedStorageKey("app", "token-b", "profileId"),
@@ -60,7 +66,7 @@ describe("App root routing", () => {
 
     renderAppAtRoot();
 
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
+    expect(await screen.findByTestId("light-app-mock")).toBeInTheDocument();
   });
 
   it("falls back to the legacy global profile id for migration", async () => {
@@ -102,12 +108,18 @@ describe("App root routing", () => {
 
     renderAppAtRoot();
 
-    expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
+    expect(await screen.findByTestId("light-app-mock")).toBeInTheDocument();
   });
 
   it("routes unknown direct URLs into the full app shell", async () => {
     renderAppAtPath("/legacy-entry");
 
     expect(await screen.findByTestId("full-app-mock")).toBeInTheDocument();
+  });
+
+  it("routes setup directly into the light app shell", async () => {
+    renderAppAtPath("/setup");
+
+    expect(await screen.findByTestId("light-app-mock")).toBeInTheDocument();
   });
 });

@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Grid, Typography } from 'antd'
 
-import { APIClient } from '../api/client'
 import { queryKeys } from '../api/queryKeys'
 import type { Profile } from '../api/types'
+import { useAPIClient } from '../api/useAPIClient'
 import { NativeSelect } from './NativeSelect'
 import styles from './TopBarProfileSelect.module.css'
 
@@ -19,12 +19,10 @@ type Props = {
 
 export function TopBarProfileSelect(props: Props) {
 	const screens = Grid.useBreakpoint()
+	const api = useAPIClient()
 	const profilesQuery = useQuery({
 		queryKey: queryKeys.profiles.list(props.apiToken),
-		queryFn: async () => {
-			const api = new APIClient({ apiToken: props.apiToken })
-			return api.profiles.listProfiles()
-		},
+		queryFn: () => api.profiles.listProfiles(),
 		retry: false,
 	})
 

@@ -1,4 +1,4 @@
-import { Button, message, Space, Typography } from 'antd'
+import { Button, Space, Typography } from 'antd'
 import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import {
@@ -32,8 +32,10 @@ import {
 import {
 	THUMBNAIL_CACHE_DEFAULT_MAX_ENTRIES,
 } from '../lib/thumbnailCache'
+import { appFeedback } from '../lib/appFeedback'
 import { useLocalStorageState } from '../lib/useLocalStorageState'
 import { reloadPage } from '../lib/reloadPage'
+import { clearResettableUiState } from '../lib/storageResetRegistry'
 import {
 	AccessSettingsSection,
 	NetworkSettingsSection,
@@ -48,72 +50,6 @@ type Props = {
 	profileId: string | null
 	setProfileId: (v: string | null) => void
 }
-
-const RESETTABLE_UI_STATE_KEYS = [
-	// Global navigation-ish state
-	'profileId',
-	'bucket',
-	'prefix',
-	'uploadPrefix',
-	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
-	'uploadBatchConcurrency',
-	'uploadBatchBytesMiB',
-	'uploadChunkSizeMiB',
-	'uploadChunkConcurrency',
-	'uploadChunkThresholdMiB',
-	'uploadChunkFileConcurrency',
-	'uploadAutoTuneEnabled',
-	'uploadResumeConversionEnabled',
-	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
-	'transfersTab',
-
-	// Jobs
-	'jobsFollowLogs',
-	'jobsStatusFilter',
-	'jobsSearchFilter',
-	'jobsTypeFilter',
-	'jobsErrorCodeFilter',
-	'jobsColumnVisibility',
-
-	// Objects: views/filters/layout
-	'objectsTabs',
-	'objectsActiveTabId',
-	'objectsRecentPrefixesByBucket',
-	'objectsBookmarksByBucket',
-	'objectsUIMode',
-	'objectsPrefixByBucket',
-	'objectsSearch',
-	'objectsGlobalSearch',
-	'objectsGlobalSearchPrefix',
-	'objectsGlobalSearchLimit',
-	'objectsGlobalSearchExt',
-	'objectsGlobalSearchMinSize',
-	'objectsGlobalSearchMaxSize',
-	'objectsGlobalSearchMinModifiedMs',
-	'objectsGlobalSearchMaxModifiedMs',
-	'objectsTypeFilter',
-	'objectsFavoritesOnly',
-	'objectsFavoritesFirst',
-	'objectsFavoritesSearch',
-	'objectsFavoritesOpenDetails',
-	'objectsExtFilter',
-	'objectsMinSize',
-	'objectsMaxSize',
-	'objectsMinModifiedMs',
-	'objectsMaxModifiedMs',
-	'objectsSort',
-	'objectsShowThumbnails',
-	'objectsThumbnailCacheSize',
-	'objectsCostMode',
-	'objectsAutoIndexEnabled',
-	'objectsAutoIndexTtlHours',
-	'objectsTreeWidth',
-	'objectsTreeExpandedByBucket',
-	'objectsDetailsOpen',
-	'objectsDetailsWidth',
-] as const
-
-const RESETTABLE_UI_STATE_PREFIXES = ['app:', 'objects:', 'uploads:', 'jobs:', 'transfers:'] as const
 
 export function SettingsPage(props: Props) {
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
@@ -212,24 +148,8 @@ export function SettingsPage(props: Props) {
 			confirmHint: 'RESET',
 			okText: 'Reset and reload',
 			onConfirm: async () => {
-				for (const k of RESETTABLE_UI_STATE_KEYS) {
-					try {
-						localStorage.removeItem(k)
-					} catch {
-						// ignore
-					}
-				}
-				for (let index = localStorage.length - 1; index >= 0; index -= 1) {
-					const key = localStorage.key(index)
-					if (!key) continue
-					if (!RESETTABLE_UI_STATE_PREFIXES.some((prefix) => key.startsWith(prefix))) continue
-					try {
-						localStorage.removeItem(key)
-					} catch {
-						// ignore
-					}
-				}
-				message.success('Saved UI state reset. Reloading…')
+				clearResettableUiState()
+				appFeedback.success('Saved UI state reset. Reloading…')
 				reloadPage()
 			},
 		})
@@ -237,7 +157,7 @@ export function SettingsPage(props: Props) {
 
 	const onResetDismissedDialogs = useCallback(() => {
 		clearDismissedDialogs(props.apiToken)
-		message.success('Dismissed dialog preferences reset.')
+		appFeedback.success('Dismissed dialog preferences reset.')
 	}, [props.apiToken])
 
 	return (

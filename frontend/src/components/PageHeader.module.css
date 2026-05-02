@@ -46,14 +46,48 @@
 	flex-wrap: wrap;
 }
 
+.actions > * {
+	max-width: 100%;
+}
+
 @media (max-width: 768px) {
 	.header {
-		padding: 20px 18px;
+		gap: 16px;
+		padding: 18px 16px;
 		border-radius: 20px;
 	}
 
 	.actions {
 		width: 100%;
 		justify-content: flex-start;
+	}
+}
+
+@media (max-width: 640px) {
+	.header {
+		gap: 12px;
+		padding: 16px;
+		border-radius: 18px;
+	}
+
+	.eyebrow {
+		margin-bottom: 6px;
+		font-size: 10px;
+		letter-spacing: 0.12em;
+	}
+
+	.title {
+		font-size: 27px !important;
+		line-height: 1.12 !important;
+	}
+
+	.subtitle {
+		margin-top: 8px;
+		font-size: 13px;
+		line-height: 1.45;
+	}
+
+	.actions {
+		gap: 8px;
 	}
 }

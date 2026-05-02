@@ -8,9 +8,9 @@ export function getAppTheme(mode: ThemeMode): ThemeConfig {
 	return {
 		algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
 		token: {
-			colorPrimary: isDark ? '#7cb8ff' : '#1a73e8',
-			colorInfo: isDark ? '#7cb8ff' : '#1a73e8',
-			colorLink: isDark ? '#9ac9ff' : '#1a73e8',
+			colorPrimary: '#1765cc',
+			colorInfo: isDark ? '#7cb8ff' : '#1765cc',
+			colorLink: isDark ? '#9ac9ff' : '#1765cc',
 			colorSuccess: isDark ? '#79d6a2' : '#2f9e44',
 			colorWarning: isDark ? '#e7be67' : '#f59f00',
 			colorError: isDark ? '#ef8c86' : '#d93025',

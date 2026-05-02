@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
 import { getBool, getNumber, getString, joinKeyWithPrefix } from './jobUtils'
 import type { JobsUploadDetailItem, JobsUploadDetails, JobsUploadTableRow } from './jobsUploadTypes'
 
 type UseJobsUploadDetailsArgs = {
-	api: APIClient
+	api: APIClientShape
 	profileId: string | null
 	apiToken: string
 	detailsJobId: string | null
@@ -93,7 +93,7 @@ export function useJobsUploadDetails({
 	}, [uploadDetails])
 
 	const uploadEtagsQuery = useQuery({
-		queryKey: ['upload-etags', profileId, uploadDetails?.bucket ?? '', uploadItemsKey, apiToken],
+		queryKey: queryKeys.jobs.uploadEtags(profileId, uploadDetails?.bucket ?? '', uploadItemsKey, apiToken),
 		enabled:
 			!!profileId &&
 			!!uploadDetails?.bucket &&

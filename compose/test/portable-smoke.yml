@@ -51,6 +51,7 @@ services:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"
       ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
+      ALLOWED_LOCAL_DIRS: "/data"
       API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
       EXTERNAL_BASE_URL: "http://source:8080"
       DB_BACKEND: "${PORTABLE_SMOKE_SOURCE_DB_BACKEND:-sqlite}"
@@ -70,6 +71,7 @@ services:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"
       ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
+      ALLOWED_LOCAL_DIRS: "/data"
       API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
       EXTERNAL_BASE_URL: "http://target:8080"
       DB_BACKEND: "${PORTABLE_SMOKE_TARGET_DB_BACKEND:-postgres}"

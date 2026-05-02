@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import type { APIClient } from "../../../api/client";
+import type { APIClientShape } from "../../../api/client";
 import type {
   BucketAccessBinding,
   BucketAdvancedView,
@@ -13,7 +13,7 @@ import type {
 } from "../../../api/types";
 
 export type GovernanceControlsCommonProps = {
-  api: APIClient;
+  api: APIClientShape;
   apiToken: string;
   profileId: string;
   provider: Profile["provider"];

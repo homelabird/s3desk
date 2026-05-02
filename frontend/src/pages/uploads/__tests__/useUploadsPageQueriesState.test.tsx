@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { PropsWithChildren } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { MetaResponse, Profile } from '../../../api/types'
 import { createMockApiClient } from '../../../test/mockApiClient'
@@ -142,5 +142,48 @@ describe('useUploadsPageQueriesState', () => {
 			{ label: 'bucket-b', value: 'bucket-b' },
 		])
 		expect(result.current.showBucketsEmpty).toBe(false)
+	})
+
+	it('does not list buckets when provider capability disables bucket CRUD', async () => {
+		const listBuckets = vi.fn().mockResolvedValue([
+			{ name: 'bucket-a', createdAt: '2026-04-08T00:00:00Z' },
+		])
+		const api = createMockApiClient({
+			server: {
+				getMeta: async () => buildMeta(),
+			},
+			profiles: {
+				listProfiles: async () => [
+					buildProfile({
+						id: 'profile-1',
+						provider: 'gcp_gcs',
+						projectNumber: '',
+						endpoint: '',
+					}),
+				],
+			},
+			buckets: {
+				listBuckets,
+			},
+		})
+
+		const { result } = renderHook(
+			() =>
+				useUploadsPageQueriesState({
+					api,
+					apiToken: 'token-a',
+					profileId: 'profile-1',
+				}),
+			{
+				wrapper: createWrapper(createQueryClient()),
+			},
+		)
+
+		await waitFor(() => expect(result.current.selectedProfile?.id).toBe('profile-1'))
+
+		expect(result.current.bucketsQuery.fetchStatus).toBe('idle')
+		expect(result.current.bucketOptions).toEqual([])
+		expect(result.current.showBucketsEmpty).toBe(false)
+		expect(listBuckets).not.toHaveBeenCalled()
 	})
 })

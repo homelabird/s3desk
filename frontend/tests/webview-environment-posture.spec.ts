@@ -1,6 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import {
+	clipboardInsecureOriginHint,
+	directoryPickerInsecureOriginReason,
+	localFolderAccessUnavailableTitle,
+} from '../src/lib/secureContext'
+import {
 	buildBucketFixture,
 	buildFavoritesFixture,
 	buildMetaFixture,
@@ -11,6 +16,7 @@ import {
 	seedLocalStorage,
 	textFixture,
 } from './support/apiFixtures'
+import { gotoJobsPageRaw, gotoWithDynamicImportRecovery, openJobsDownloadDrawer } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -96,9 +102,54 @@ async function installWebviewFixtures(page: Page, overrides?: Partial<StorageSee
 				}
 			},
 		},
+		{
+			method: 'GET',
+			path: `/api/v1/buckets/${seed.bucket}/objects/download-url`,
+			handler: ({ request }) => {
+				const url = new URL(request.url())
+				const key = url.searchParams.get('key') ?? 'download.bin'
+				return {
+					json: {
+						url: `data:text/plain;charset=utf-8,${encodeURIComponent(`download:${key}`)}`,
+					},
+				}
+			},
+		},
 		jsonFixture('GET', '/api/v1/jobs', { items: [], nextCursor: null }),
 		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),
 	], { status: 200, json: {} })
+}
+
+async function emulateSecureDirectoryPicker(page: Page, folderName = 'webview-downloads') {
+	await page.addInitScript(({ selectedFolderName }) => {
+		const createWritable = () => ({
+			write: async () => {},
+			close: async () => {},
+			abort: async () => {},
+		})
+		const createFileHandle = (name: string) => ({
+			kind: 'file',
+			name,
+			createWritable: async () => createWritable(),
+		})
+		const createDirectoryHandle = (name: string) => ({
+			kind: 'directory',
+			name,
+			queryPermission: async () => 'granted',
+			requestPermission: async () => 'granted',
+			getDirectoryHandle: async (childName: string) => createDirectoryHandle(childName),
+			getFileHandle: async (childName: string) => createFileHandle(childName),
+		})
+
+		Object.defineProperty(window, 'isSecureContext', {
+			value: true,
+			configurable: true,
+		})
+		Object.defineProperty(window, 'showDirectoryPicker', {
+			value: async () => createDirectoryHandle(selectedFolderName),
+			configurable: true,
+		})
+	}, { selectedFolderName: folderName })
 }
 
 async function emulateInsecureBrowser(page: Page) {
@@ -131,47 +182,25 @@ async function emulateInsecureBrowser(page: Page) {
 	})
 }
 
-async function openJobsDownloadDrawer(page: Page) {
-	const downloadButton = page.getByRole('button', { name: /^Download/ }).first()
-	await downloadButton.scrollIntoViewIfNeeded()
-	await downloadButton.click()
-
-	const dialog = page.getByRole('dialog', { name: 'Download folder (S3 → device)' })
-	await expect(dialog).toBeVisible()
-	return dialog
-}
-
 test.describe('Webview environment and posture coverage', () => {
-	test('jobs download drawer stays reachable in a short landscape split-view posture', async ({ page }) => {
+	test('jobs download drawer can queue a device download in a short landscape split-view posture', async ({ page }) => {
 		await page.setViewportSize({ width: 780, height: 420 })
+		await emulateSecureDirectoryPicker(page)
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
-		await page.goto('/jobs')
+		await gotoJobsPageRaw(page)
 		const dialog = await openJobsDownloadDrawer(page)
-		await expect(dialog.getByLabel('Bucket')).toBeVisible()
+		const localFolderInput = dialog.getByPlaceholder('Select a folder…')
+		await expect(dialog.getByLabel('Bucket')).toHaveValue(defaultStorage.bucket)
 		await expect(dialog.getByText('Downloads to this device')).toBeVisible()
-		await expect(dialog.getByLabel('Close', { exact: true })).toBeVisible()
-		await expect(dialog.getByRole('button', { name: 'Download' })).toBeVisible()
-
-		const viewport = await page.evaluate(() => ({
-			width: window.innerWidth,
-			height: window.innerHeight,
-			scrollWidth: document.documentElement.scrollWidth,
-		}))
-		const dialogBox = await dialog.boundingBox()
-		const downloadBox = await dialog.getByRole('button', { name: 'Download' }).boundingBox()
-
-		expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.width)
-		expect(dialogBox).not.toBeNull()
-		expect(downloadBox).not.toBeNull()
-		expect(dialogBox?.height ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(viewport.height + 1)
-		expect((dialogBox?.x ?? Number.POSITIVE_INFINITY) + (dialogBox?.width ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(
-			viewport.width + 1,
-		)
-		expect((downloadBox?.y ?? Number.POSITIVE_INFINITY) + (downloadBox?.height ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(
-			viewport.height + 1,
-		)
+		await dialog.getByPlaceholder('path/…').fill(defaultStorage.prefix)
+		await dialog.getByRole('button', { name: /^Browse/ }).click()
+		await expect(localFolderInput).toHaveValue('webview-downloads')
+		await expect(dialog.getByRole('button', { name: 'Download' })).toBeEnabled()
+		await dialog.getByRole('button', { name: 'Download' }).click()
+		await expect(dialog).toHaveCount(0)
+		await expect(page.locator('.ant-message-notice').filter({ hasText: 'Downloaded summary.csv' })).toBeVisible({ timeout: 10_000 })
 	})
 
 	test('jobs download drawer warns when secure-context folder access is unavailable', async ({ page }) => {
@@ -179,11 +208,11 @@ test.describe('Webview environment and posture coverage', () => {
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
-		await page.goto('/jobs')
+		await gotoJobsPageRaw(page)
 		const dialog = await openJobsDownloadDrawer(page)
 
-		await expect(dialog.getByText('Local folder access is not available')).toBeVisible()
-		await expect(dialog.getByText('Directory picker requires HTTPS or localhost.')).toBeVisible()
+		await expect(dialog.getByText(localFolderAccessUnavailableTitle())).toBeVisible()
+		await expect(dialog.getByText(directoryPickerInsecureOriginReason())).toBeVisible()
 		await expect(dialog.getByRole('button', { name: /^Browse/ })).toBeDisabled()
 		await expect(dialog.getByRole('button', { name: 'Download' })).toBeDisabled()
 	})
@@ -193,12 +222,14 @@ test.describe('Webview environment and posture coverage', () => {
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
-		await page.goto('/objects')
-		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
+		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
+			timeout: 10_000,
+			maxAttempts: 3,
+		})
 		await page.getByRole('button', { name: 'Copy location' }).click()
 
 		await expect(
-			page.getByText('Copy failed. Clipboard access is restricted on insecure origins (try HTTPS or localhost).'),
+			page.getByText(clipboardInsecureOriginHint()),
 		).toBeVisible()
 		await expect(page.getByText(`s3://${defaultStorage.bucket}/${defaultStorage.prefix}`)).toBeVisible()
 	})

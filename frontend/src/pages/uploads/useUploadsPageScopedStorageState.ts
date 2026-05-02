@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
-import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 
 type UseUploadsPageScopedStorageStateArgs = {
 	apiToken: string
@@ -20,11 +20,11 @@ export function useUploadsPageScopedStorageState(props: UseUploadsPageScopedStor
 
 	const [bucket, setBucket] = useLocalStorageState<string>(bucketStorageKey, '', {
 		legacyLocalStorageKey: 'bucket',
-		legacyLocalStorageKeys: [legacyProfileScopedStorageKey('uploads', props.profileId, 'bucket')],
+		legacyLocalStorageKeys: legacyProfileScopedStorageKeys('uploads', props.apiToken, props.profileId, 'bucket'),
 	})
 	const [prefix, setPrefix] = useLocalStorageState<string>(prefixStorageKey, '', {
 		legacyLocalStorageKey: 'uploadPrefix',
-		legacyLocalStorageKeys: [legacyProfileScopedStorageKey('uploads', props.profileId, 'prefix')],
+		legacyLocalStorageKeys: legacyProfileScopedStorageKeys('uploads', props.apiToken, props.profileId, 'prefix'),
 	})
 	const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 	const [selectedFolderLabel, setSelectedFolderLabel] = useState('')

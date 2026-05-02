@@ -13,7 +13,7 @@ workflow:
     - changes:
         - .gitlab-ci.yml
         - Containerfile
-        - docker-compose*.yml
+        - compose/**/*
         - openapi.yml
         - backend/**/*
         - charts/**/*
@@ -65,7 +65,7 @@ stages:
 
 variables:
   ALPINE_IMAGE: "harbor.k8s.homelabird.com/library/alpine:3.21"
-  GO_IMAGE: "harbor.k8s.homelabird.com/library/golang:1.24"
+  GO_IMAGE: "harbor.k8s.homelabird.com/library/golang:1.25.9"
   NODE_IMAGE: "harbor.k8s.homelabird.com/library/node:22-bookworm"
   PODMAN_IMAGE: "quay.io/podman/stable:latest"
   PLAYWRIGHT_IMAGE: "mcr.microsoft.com/playwright:v1.57.0-noble"
@@ -89,6 +89,8 @@ variables:
   GOCACHE: "$CI_PROJECT_DIR/.cache/go-build"
   GOVULNCHECK_VERSION: "latest"
   GOLANGCI_LINT_VERSION: "v1.64.8"
+  GOLANGCI_LINT_CONFIG: ".golangci.yml"
+  GO_COVERAGE_MIN_TOTAL: "50.0"
 
 .node_cache: &node_cache
   cache:
@@ -383,7 +385,7 @@ security_fs_scan:
     - changes:
         - .gitlab-ci.yml
         - Containerfile
-        - docker-compose*.yml
+        - compose/**/*
         - openapi.yml
         - backend/**/*
         - charts/**/*
@@ -416,7 +418,7 @@ gitleaks_scan:
         - .gitlab-ci.yml
         - .gitleaks.toml
         - Containerfile
-        - docker-compose*.yml
+        - compose/**/*
         - openapi.yml
         - backend/**/*
         - charts/**/*
@@ -567,6 +569,40 @@ build_release_images:
       - release-sqlite.tar
     expire_in: 7 days
 
+shellcheck:
+  stage: test
+  image: "$ALPINE_IMAGE"
+  interruptible: true
+  rules:
+    - changes:
+        - .gitlab-ci.yml
+        - scripts/*.sh
+        - scripts/**/*.sh
+    - when: never
+  before_script:
+    - apk add --no-cache bash shellcheck
+  script:
+    - |
+      set -o pipefail
+      mkdir -p artifacts/ci/shellcheck
+      find scripts -name '*.sh' -type f | sort > artifacts/ci/shellcheck/files.txt
+      if [ ! -s artifacts/ci/shellcheck/files.txt ]; then
+        echo "[shellcheck] no shell scripts found" | tee artifacts/ci/shellcheck/shellcheck.log
+        exit 0
+      fi
+      {
+        status=0
+        while IFS= read -r file; do
+          shellcheck -x "$file" || status=1
+        done < artifacts/ci/shellcheck/files.txt
+        exit "$status"
+      } 2>&1 | tee artifacts/ci/shellcheck/shellcheck.log
+  artifacts:
+    when: always
+    paths:
+      - artifacts/ci/shellcheck/
+    expire_in: 7 days
+
 gofmt:
   stage: test
   image: "$GO_IMAGE"
@@ -597,10 +633,31 @@ go_test:
   variables:
     KUBERNETES_MEMORY_REQUEST: "1Gi"
     KUBERNETES_MEMORY_LIMIT: "2Gi"
+  coverage: '/total:\s+\(statements\)\s+([0-9]+\.[0-9]+)%/'
   script:
-    - cd backend
-    - go vet ./...
-    - go test ./...
+    - |
+      set -o pipefail
+      mkdir -p artifacts/ci/backend
+      cd backend
+      go vet ./... 2>&1 | tee ../artifacts/ci/backend/go-vet.log
+      go test ./... -covermode=atomic -coverprofile=coverage.out 2>&1 | tee ../artifacts/ci/backend/go-test.log
+      go tool cover -func=coverage.out | tee ../artifacts/ci/backend/coverage-summary.txt
+      coverage_total="$(awk '/^total:/ {gsub(/%/, "", $3); print $3}' ../artifacts/ci/backend/coverage-summary.txt)"
+      if [ -z "$coverage_total" ]; then
+        echo "[coverage] total coverage not found" >&2
+        exit 1
+      fi
+      if ! awk -v actual="$coverage_total" -v required="$GO_COVERAGE_MIN_TOTAL" 'BEGIN { exit (actual + 0 >= required + 0) ? 0 : 1 }'; then
+        echo "[coverage] total ${coverage_total}% is below required ${GO_COVERAGE_MIN_TOTAL}%" >&2
+        exit 1
+      fi
+      echo "[coverage] total ${coverage_total}% >= ${GO_COVERAGE_MIN_TOTAL}%"
+  artifacts:
+    when: always
+    paths:
+      - artifacts/ci/backend/
+      - backend/coverage.out
+    expire_in: 7 days
 
 golangci_lint:
   stage: test
@@ -619,13 +676,24 @@ golangci_lint:
     GOLANGCI_LINT_TIMEOUT: "10m"
   script:
     - |
+      set -o pipefail
+      mkdir -p artifacts/ci/backend
+      if [ ! -f "${GOLANGCI_LINT_CONFIG}" ]; then
+        echo "[golangci-lint] missing config: ${GOLANGCI_LINT_CONFIG}" | tee artifacts/ci/backend/golangci-lint.log
+        exit 1
+      fi
       GOBIN="$(go env GOBIN)"
       if [ -z "$GOBIN" ]; then
         GOBIN="$(go env GOPATH)/bin"
       fi
       go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
       cd backend
-      "$GOBIN/golangci-lint" run --timeout "${GOLANGCI_LINT_TIMEOUT}" ./...
+      "$GOBIN/golangci-lint" run --config "../${GOLANGCI_LINT_CONFIG}" --timeout "${GOLANGCI_LINT_TIMEOUT}" ./... 2>&1 | tee ../artifacts/ci/backend/golangci-lint.log
+  artifacts:
+    when: always
+    paths:
+      - artifacts/ci/backend/golangci-lint.log
+    expire_in: 7 days
 
 govulncheck:
   stage: test
@@ -1010,7 +1078,7 @@ api_integration:
         - backend/**/*
         - e2e/runner/**/*
         - openapi.yml
-        - docker-compose.e2e.yml
+        - compose/test/e2e.yml
         - scripts/ci_podman_compose.sh
     - when: never
   needs:
@@ -1047,7 +1115,7 @@ api_integration:
           podman pull "$image"; \
         fi; \
       done
-    - COMPOSE_CMD="$(cat /tmp/compose_cmd)" COMPOSE_ARGS="$(cat /tmp/compose_args)" COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)" && $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml up --abort-on-container-exit --exit-code-from runner
+    - COMPOSE_CMD="$(cat /tmp/compose_cmd)" COMPOSE_ARGS="$(cat /tmp/compose_args)" COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)" && $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/test/e2e.yml up --abort-on-container-exit --exit-code-from runner
   after_script:
     - |
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
@@ -1057,9 +1125,9 @@ api_integration:
       mkdir -p artifacts/api_integration
       echo "job_status=${CI_JOB_STATUS}" > artifacts/api_integration/status.txt
       if [ "$CI_JOB_STATUS" != "success" ]; then
-        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml $LOGS_CMD | tee artifacts/api_integration/compose-logs.txt
+        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/test/e2e.yml $LOGS_CMD | tee artifacts/api_integration/compose-logs.txt
       fi
-      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.e2e.yml down -v
+      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/test/e2e.yml down -v
   artifacts:
     when: always
     paths:
@@ -1097,8 +1165,9 @@ release_postgres_smoke:
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
       COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
-      S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$BASE_TAG" S3DESK_PORT=18080 \
-        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml up -d
+      API_TOKEN="change-me" ALLOWED_HOSTS="127.0.0.1,localhost" ALLOWED_LOCAL_DIRS="/data" POSTGRES_PASSWORD="s3desk-smoke" \
+        S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$BASE_TAG" S3DESK_PORT=18080 \
+        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/remote/compose.yml up -d
       for i in $(seq 1 30); do
         if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
           break
@@ -1113,8 +1182,8 @@ release_postgres_smoke:
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
       COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
       LOGS_CMD="$(cat /tmp/compose_logs_cmd)"
-      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml $LOGS_CMD; fi
-      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+      if [ "$CI_JOB_STATUS" != "success" ]; then API_TOKEN="change-me" ALLOWED_HOSTS="127.0.0.1,localhost" ALLOWED_LOCAL_DIRS="/data" POSTGRES_PASSWORD="s3desk-smoke" S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$CI_COMMIT_TAG" S3DESK_PORT=18080 $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/remote/compose.yml $LOGS_CMD; fi
+      API_TOKEN="change-me" ALLOWED_HOSTS="127.0.0.1,localhost" ALLOWED_LOCAL_DIRS="/data" POSTGRES_PASSWORD="s3desk-smoke" S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$CI_COMMIT_TAG" S3DESK_PORT=18080 $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/remote/compose.yml down -v
 
 release_sqlite_smoke:
   stage: test
@@ -1575,8 +1644,9 @@ release_image_smoke:
       COMPOSE_CMD="$(cat /tmp/compose_cmd)"
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
       COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
-      S3DESK_IMAGE="$DOCKERHUB_REPO" S3DESK_TAG="$BASE_TAG" S3DESK_PORT=18080 \
-        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml up -d
+      API_TOKEN="change-me" ALLOWED_HOSTS="127.0.0.1,localhost" ALLOWED_LOCAL_DIRS="/data" POSTGRES_PASSWORD="s3desk-smoke" \
+        S3DESK_IMAGE="$DOCKERHUB_REPO" S3DESK_TAG="$BASE_TAG" S3DESK_PORT=18080 \
+        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/remote/compose.yml up -d
       for i in $(seq 1 30); do
         if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
           break
@@ -1585,11 +1655,15 @@ release_image_smoke:
       done
       curl -fsS http://127.0.0.1:18080/readyz >/dev/null
       curl -fsS -H "X-Api-Token: change-me" http://127.0.0.1:18080/api/v1/meta >/dev/null
-      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+      API_TOKEN="change-me" ALLOWED_HOSTS="127.0.0.1,localhost" ALLOWED_LOCAL_DIRS="/data" POSTGRES_PASSWORD="s3desk-smoke" \
+        S3DESK_IMAGE="$DOCKERHUB_REPO" S3DESK_TAG="$BASE_TAG" S3DESK_PORT=18080 \
+        $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/remote/compose.yml down -v
       podman run --rm -d --name s3desk-sqlite-smoke -p 18081:8080 \
         -e ADDR=0.0.0.0:8080 \
         -e ALLOW_REMOTE=true \
         -e API_TOKEN=change-me \
+        -e ALLOWED_HOSTS=127.0.0.1,localhost \
+        -e ALLOWED_LOCAL_DIRS=/data \
         "$SQLITE_IMAGE"
       for i in $(seq 1 30); do
         if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
@@ -1606,8 +1680,8 @@ release_image_smoke:
       COMPOSE_ARGS="$(cat /tmp/compose_args)"
       COMPOSE_PULL_ARGS="$(cat /tmp/compose_pull_args)"
       LOGS_CMD="$(cat /tmp/compose_logs_cmd)"
-      if [ "$CI_JOB_STATUS" != "success" ]; then $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml $LOGS_CMD; fi
-      $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f docker-compose.postgres.yml down -v
+      if [ "$CI_JOB_STATUS" != "success" ]; then API_TOKEN="change-me" ALLOWED_HOSTS="127.0.0.1,localhost" ALLOWED_LOCAL_DIRS="/data" POSTGRES_PASSWORD="s3desk-smoke" S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$CI_COMMIT_TAG" S3DESK_PORT=18080 $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/remote/compose.yml $LOGS_CMD; fi
+      API_TOKEN="change-me" ALLOWED_HOSTS="127.0.0.1,localhost" ALLOWED_LOCAL_DIRS="/data" POSTGRES_PASSWORD="s3desk-smoke" S3DESK_IMAGE="s3desk-release" S3DESK_TAG="$CI_COMMIT_TAG" S3DESK_PORT=18080 $COMPOSE_CMD $COMPOSE_ARGS $COMPOSE_PULL_ARGS -f compose/remote/compose.yml down -v
       if podman container exists s3desk-sqlite-smoke; then podman rm -f s3desk-sqlite-smoke; fi
 
 deploy_release_compose:

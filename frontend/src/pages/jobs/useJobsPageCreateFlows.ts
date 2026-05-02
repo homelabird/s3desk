@@ -1,14 +1,13 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
-import { message } from 'antd'
 import { useCallback } from 'react'
 
 import { queryKeys } from '../../api/queryKeys'
-import type { APIClient } from '../../api/client'
-import type { TransfersContextValue } from '../../components/Transfers'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
+import type { APIClientShape } from '../../api/client'
+import type { TransfersContextValue } from '../../components/transfersTypes'
 import { listAllObjects } from '../../lib/objects'
 import type { DeleteJobPrefill } from './jobsPageTypes'
 import { normalizePrefix as normalizeJobPrefix } from './jobUtils'
+import { jobsFeedback } from './jobsFeedback'
 
 type DeletePrefixJobPayload = {
   bucket: string
@@ -21,7 +20,7 @@ type DeletePrefixJobPayload = {
 }
 
 type UseJobsPageCreateFlowsArgs = {
-  api: APIClient
+  api: APIClientShape
   apiToken: string
   profileId: string | null
   queryClient: QueryClient
@@ -73,13 +72,13 @@ export function useJobsPageCreateFlows({
   }) => {
     if (!profileId) return
     if (!uploadSupported) {
-      message.warning(uploadDisabledReason ?? 'Uploads are not supported by this provider.')
+      jobsFeedback.uploadsUnsupported(uploadDisabledReason)
       return
     }
     setDeviceUploadLoading(true)
     try {
       if (args.files.length === 0) {
-        message.info('No files selected')
+        jobsFeedback.noFilesSelected()
         return
       }
       transfers.queueUploadFiles({
@@ -92,7 +91,7 @@ export function useJobsPageCreateFlows({
       })
       setCreateOpen(false)
     } catch (err) {
-      message.error(formatErr(err))
+      jobsFeedback.error(err)
     } finally {
       setDeviceUploadLoading(false)
     }
@@ -119,7 +118,7 @@ export function useJobsPageCreateFlows({
       const items = await listAllObjects({ api, profileId, bucket: args.bucket, prefix: normPrefix })
       if (!isCurrentDownloadRequest(requestToken)) return
       if (items.length === 0) {
-        message.info('No objects found under this prefix')
+        jobsFeedback.noObjectsFoundUnderPrefix()
         return
       }
       if (!isCurrentDownloadRequest(requestToken)) return
@@ -135,7 +134,7 @@ export function useJobsPageCreateFlows({
       setCreateDownloadOpen(false)
     } catch (err) {
       if (!isCurrentDownloadRequest(requestToken)) return
-      message.error(formatErr(err))
+      jobsFeedback.error(err)
     } finally {
       if (isCurrentDownloadRequest(requestToken)) {
         setDeviceDownloadLoading(false)
@@ -165,7 +164,7 @@ export function useJobsPageCreateFlows({
     onSuccess: async (job, _vars, context) => {
       const isCurrent = !context?.requestToken || isCurrentDeleteRequest(context.requestToken)
       if (isCurrent) {
-        message.success(`Delete job created: ${job.id}`)
+        jobsFeedback.deleteJobCreated(job.id)
         setCreateDeleteOpen(false)
         setDeleteJobPrefill(null)
       }
@@ -176,7 +175,7 @@ export function useJobsPageCreateFlows({
     },
     onError: (err, _vars, context) => {
       if (context?.requestToken && !isCurrentDeleteRequest(context.requestToken)) return
-      message.error(formatErr(err))
+      jobsFeedback.error(err)
     },
   })
 

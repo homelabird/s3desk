@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { legacyTokenProfileScopedStorageKey, profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { useObjectsSearchState } from '../useObjectsSearchState'
 
 describe('useObjectsSearchState', () => {
@@ -34,11 +35,11 @@ describe('useObjectsSearchState', () => {
 			vi.advanceTimersByTime(1)
 		})
 		expect(result.current.search).toBe('reports')
-		expect(window.localStorage.getItem('objects:token-a:profile-1:search')).toBe(JSON.stringify('reports'))
+		expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'search'))).toBe(JSON.stringify('reports'))
 	})
 
 	it('clears both committed and draft search', () => {
-		window.localStorage.setItem('objects:token-a:profile-1:search', JSON.stringify('invoices'))
+		window.localStorage.setItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'search'), JSON.stringify('invoices'))
 
 		const { result } = renderHook(() => useObjectsSearchState({ apiToken: 'token-a', profileId: 'profile-1' }))
 
@@ -51,7 +52,7 @@ describe('useObjectsSearchState', () => {
 
 		expect(result.current.search).toBe('')
 		expect(result.current.searchDraft).toBe('')
-		expect(window.localStorage.getItem('objects:token-a:profile-1:search')).toBe(JSON.stringify(''))
+		expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'search'))).toBe(JSON.stringify(''))
 	})
 
 	it('migrates the legacy global search key into a profile-scoped key', () => {
@@ -60,8 +61,23 @@ describe('useObjectsSearchState', () => {
 		const { result } = renderHook(() => useObjectsSearchState({ apiToken: 'token-a', profileId: 'profile-1' }))
 
 		expect(result.current.search).toBe('invoices')
-		expect(window.localStorage.getItem('objects:token-a:profile-1:search')).toBe(JSON.stringify('invoices'))
+		expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'search'))).toBe(JSON.stringify('invoices'))
 		expect(window.localStorage.getItem('objectsSearch')).toBeNull()
+	})
+
+	it('migrates legacy raw-token profile-scoped search into an origin-scoped key', async () => {
+		window.localStorage.setItem(
+			legacyTokenProfileScopedStorageKey('objects', 'token-a', 'profile-1', 'search'),
+			JSON.stringify('legacy search'),
+		)
+
+		const { result } = renderHook(() => useObjectsSearchState({ apiToken: 'token-a', profileId: 'profile-1' }))
+
+		expect(result.current.search).toBe('legacy search')
+		expect(result.current.searchDraft).toBe('legacy search')
+
+		expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'search'))).toBe(JSON.stringify('legacy search'))
+		expect(window.localStorage.getItem(legacyTokenProfileScopedStorageKey('objects', 'token-a', 'profile-1', 'search'))).toBeNull()
 	})
 
 	it('keeps search isolated per profile', () => {

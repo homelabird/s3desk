@@ -1,37 +1,25 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 
-import {
-	APIClient,
-	APIError,
-	RequestAbortedError,
-	type UploadFileItem,
-} from '../../api/client'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import { withJobQueueRetry } from '../../lib/jobQueue'
-import { TransferEstimator } from '../../lib/transfer'
+import type { APIClientShape, UploadFileItem } from '../../api/client'
+import type { TransferEstimator } from '../../lib/transfer'
 import type { UploadTask } from './transferTypes'
-import { maybeReportNetworkError, randomId } from './transferDownloadUtils'
-import { PresignedUploadNetworkError, uploadPresignedFilesWithProgress } from './presignedUpload'
+import { randomId } from './transferDownloadUtils'
 import type {
 	QueueUploadFilesArgs,
 	TransfersRuntimeNotifications,
 	UploadCapabilityByProfileId,
 } from './transfersTypes'
 import { useTransfersUploadJobEvents } from './useTransfersUploadJobEvents'
-import {
-	normalizeRelPath,
-	resolveUploadItemPath,
-	resolveUploadItemPathNormalized,
-} from './uploadPaths'
-import { createLocalVideoUploadPreview, isVideoUploadFile, revokeObjectURLSafe } from './uploadPreview'
-import { buildUploadCommitRequest, buildUploadItems, promptForFiles } from './transfersUploadUtils'
 import { buildQueuedUpload } from './transfersQueuedUpload'
 import type { UploadTuning } from './useTransfersUploadPreferences'
 import type { JobProgress, JobStatus } from '../../api/types'
+import { resolveRetryUploadItems } from './uploadRuntimeRetry'
+import { queueLocalUploadPreview } from './uploadRuntimePreview'
+import { runUploadTask } from './uploadRuntimeTask'
 
 type UseTransfersUploadRuntimeArgs = {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	queryClient: QueryClient
 	notifications: TransfersRuntimeNotifications
@@ -53,8 +41,15 @@ type UseTransfersUploadRuntimeArgs = {
 	openTransfers: (tab?: 'downloads' | 'uploads') => void
 }
 
-function isPresignedNetworkFailure(err: unknown): boolean {
-	return err instanceof PresignedUploadNetworkError
+function getUploadItems(
+	ref: MutableRefObject<Record<string, UploadFileItem[]>>,
+	taskId: string,
+): UploadFileItem[] | undefined {
+	return ref.current[taskId]
+}
+
+function setUploadItems(ref: MutableRefObject<Record<string, UploadFileItem[]>>, taskId: string, items: UploadFileItem[]) {
+	ref.current[taskId] = items
 }
 
 export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
@@ -63,64 +58,22 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			const current = args.uploadTasksRef.current.find((t) => t.id === taskId)
 			if (!current) return
 
-			let items = args.uploadItemsByTaskIdRef.current[taskId]
+			let items = getUploadItems(args.uploadItemsByTaskIdRef, taskId)
 			if (!items || items.length === 0) {
-				const resumeFiles = current.resumeFiles ?? []
-				const expectedPaths = (resumeFiles.length > 0 ? resumeFiles.map((f) => f.path) : current.filePaths ?? [])
-					.map(normalizeRelPath)
-					.filter(Boolean)
-				const expectDirectory = expectedPaths.some((p) => p.includes('/'))
-				const selected = await promptForFiles({
-					multiple: current.fileCount > 1 || expectDirectory,
-					directory: expectDirectory,
-				})
-				if (!selected) return
-
-				const selectedItems = buildUploadItems(selected, {
-					directorySelectionMode: expectDirectory ? 'input' : undefined,
-				})
-				if (expectedPaths.length > 0) {
-					const selectedByPath = new Map(
-						selectedItems.map((item) => [normalizeRelPath(item.relPath ?? item.file.name), item]),
-					)
-					const matched: UploadFileItem[] = []
-					const missing: string[] = []
-					for (const path of expectedPaths) {
-						const found = selectedByPath.get(path)
-						if (!found) {
-							missing.push(path)
-							continue
-						}
-						if (resumeFiles.length > 0) {
-							const resume = resumeFiles.find((f) => normalizeRelPath(f.path) === path)
-							if (resume && found.file?.size !== resume.size) {
-								missing.push(path)
-								continue
-							}
-						}
-						matched.push(found)
-					}
-					if (missing.length > 0) {
-						args.notifications.error(`Missing ${missing.length} file(s). Select the same files or folder to resume.`)
-						return
-					}
-					items = matched
-				} else {
-					items = selectedItems
-				}
-
-				const totalBytes = items.reduce((sum, item) => sum + (item.file?.size ?? 0), 0)
-				if (current.resumeFileSize && items.length === 1 && items[0]?.file?.size !== current.resumeFileSize) {
-					args.notifications.error('Selected file size does not match the previous upload.')
+				const retrySelection = await resolveRetryUploadItems({ task: current })
+				if (!retrySelection.ok) {
+					if ('error' in retrySelection) args.notifications.error(retrySelection.error)
 					return
 				}
-				args.uploadItemsByTaskIdRef.current[taskId] = items
+				const selectedItems = retrySelection.selection.items
+				items = selectedItems
+				setUploadItems(args.uploadItemsByTaskIdRef, taskId, selectedItems)
 				args.updateUploadTask(taskId, (t) => ({
 					...t,
-					fileCount: items.length,
-					totalBytes,
-					filePaths: items.map((item) => normalizeRelPath(item.relPath ?? item.file.name)).filter(Boolean),
-					resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
+					fileCount: selectedItems.length,
+					totalBytes: retrySelection.selection.totalBytes,
+					filePaths: retrySelection.selection.filePaths,
+					resumeFileSize: retrySelection.selection.resumeFileSize,
 				}))
 			}
 
@@ -144,345 +97,31 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			const current = args.uploadTasksRef.current.find((t) => t.id === taskId)
 			if (!current || current.status !== 'queued') return
 
-			const items = args.uploadItemsByTaskIdRef.current[taskId]
+			const items = getUploadItems(args.uploadItemsByTaskIdRef, taskId)
 			if (!items || items.length === 0) {
 				args.updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: 'missing files (remove and re-add)' }))
 				return
 			}
 
-			let estimator = new TransferEstimator({ totalBytes: current.totalBytes })
-			args.uploadEstimatorByTaskIdRef.current[taskId] = estimator
-			args.updateUploadTask(taskId, (t) => ({
-				...t,
-				status: 'staging',
-				startedAtMs: estimator.getStartedAtMs(),
-				finishedAtMs: undefined,
-				loadedBytes: 0,
-				speedBps: 0,
-				etaSeconds: 0,
-				error: undefined,
-				jobId: undefined,
-				uploadFallbackFrom: undefined,
-				uploadFallbackReason: undefined,
-			}))
-
-			let committed = false
-			let uploadId = ''
-			let existingChunksByPath: Record<string, number[]> | undefined
-			try {
-				const maxFileBytes = items.length > 0 ? Math.max(...items.map((entry) => entry.file?.size ?? 0)) : current.totalBytes
-				const tuning = args.pickUploadTuning(current.totalBytes, Number.isFinite(maxFileBytes) ? maxFileBytes : null)
-				const uploadCapability = args.uploadCapabilityByProfileId?.[current.profileId]
-				const canUsePresigned = uploadCapability ? uploadCapability.presignedUpload : true
-				const canUseDirect = uploadCapability ? uploadCapability.directUpload : !!args.uploadDirectStream
-				const directModePreferred = !!args.uploadDirectStream && canUseDirect
-				const fallbackMode: 'direct' | 'staging' = directModePreferred ? 'direct' : 'staging'
-				const preferredMode: 'presigned' | 'direct' | 'staging' = canUsePresigned ? 'presigned' : fallbackMode
-
-				const allowResume = current.uploadMode !== 'presigned'
-				const resumeFilesByPath = new Map<string, { size: number; chunkSizeBytes: number }>()
-				if (allowResume) {
-					if (current.resumeFiles && current.resumeFiles.length > 0) {
-						for (const file of current.resumeFiles) {
-							const pathKey = normalizeRelPath(file.path)
-							if (!pathKey) continue
-							resumeFilesByPath.set(pathKey, { size: file.size, chunkSizeBytes: file.chunkSizeBytes })
-						}
-					} else if (current.resumeChunkSizeBytes && current.resumeFileSize && items.length === 1) {
-						const pathKey = resolveUploadItemPathNormalized(items[0])
-						if (pathKey) {
-							resumeFilesByPath.set(pathKey, {
-								size: current.resumeFileSize,
-								chunkSizeBytes: current.resumeChunkSizeBytes,
-							})
-						}
-					}
-				}
-
-				let resumeChunkSizeBytes = 0
-				let allowPerFileChunkSize = false
-				if (allowResume && resumeFilesByPath.size > 0) {
-					allowPerFileChunkSize = args.uploadResumeConversionEnabled
-					const distinctSizes = new Set(Array.from(resumeFilesByPath.values()).map((v) => v.chunkSizeBytes))
-					if (distinctSizes.size > 1) {
-						if (!args.uploadResumeConversionEnabled) {
-							args.notifications.error('Resume requires consistent chunk size across files. Enable conversion mode or re-add files.')
-							return
-						}
-						allowPerFileChunkSize = true
-					}
-					resumeChunkSizeBytes = Array.from(distinctSizes)[0] ?? 0
-				}
-
-				if (allowResume && current.uploadId && resumeFilesByPath.size > 0) {
-					const existing: Record<string, number[]> = {}
-					let resumeAvailable = true
-					for (const item of items) {
-						const pathRaw = resolveUploadItemPath(item)
-						const pathKey = normalizeRelPath(pathRaw)
-						const resumeInfo = resumeFilesByPath.get(pathKey)
-						if (!resumeInfo) continue
-						if ((item.file?.size ?? 0) !== resumeInfo.size) {
-							args.notifications.error('Selected file size does not match the previous upload.')
-							return
-						}
-						try {
-							const chunkState = await args.api.uploads.getUploadChunks(current.profileId, current.uploadId, {
-								path: pathRaw,
-								total: Math.max(1, Math.ceil(resumeInfo.size / resumeInfo.chunkSizeBytes)),
-								chunkSize: resumeInfo.chunkSizeBytes,
-								fileSize: resumeInfo.size,
-							})
-							existing[pathRaw] = chunkState.present
-						} catch (err) {
-							if (err instanceof APIError && err.status === 404) {
-								resumeAvailable = false
-								break
-							}
-							throw err
-						}
-					}
-					if (resumeAvailable) {
-						uploadId = current.uploadId
-						existingChunksByPath = existing
-					}
-				}
-
-				const createUploadSession = async (
-					mode: 'presigned' | 'direct' | 'staging',
-				): Promise<{ uploadId: string; mode: 'staging' | 'direct' | 'presigned'; maxBytes?: number | null }> => {
-					return args.api.uploads.createUpload(current.profileId, {
-						bucket: current.bucket,
-						prefix: current.prefix ?? '',
-						mode,
-					})
-				}
-
-				let sessionMode: 'staging' | 'direct' | 'presigned' = current.uploadMode ?? preferredMode
-				if (!uploadId) {
-					let session: { uploadId: string; mode: 'staging' | 'direct' | 'presigned'; maxBytes?: number | null }
-					try {
-						session = await createUploadSession(preferredMode)
-					} catch (err) {
-						if (
-							canUsePresigned &&
-							err instanceof APIError &&
-							(err.code === 'not_supported' || err.code === 'invalid_request')
-						) {
-							session = await createUploadSession(fallbackMode)
-							args.updateUploadTask(taskId, (t) => ({
-								...t,
-								uploadFallbackFrom: 'presigned',
-								uploadFallbackReason: 'provider_unsupported',
-							}))
-							args.notifications.info(`Presigned uploads are not supported here. Falling back to ${fallbackMode} uploads.`)
-						} else if (
-							preferredMode === 'direct' &&
-							err instanceof APIError &&
-							(err.code === 'not_supported' || err.code === 'invalid_request')
-						) {
-							session = await createUploadSession('staging')
-							args.updateUploadTask(taskId, (t) => ({
-								...t,
-								uploadFallbackFrom: 'direct',
-								uploadFallbackReason: 'provider_unsupported',
-							}))
-						} else {
-							throw err
-						}
-					}
-					uploadId = session.uploadId
-					sessionMode = session.mode
-					if (session.maxBytes && current.totalBytes > session.maxBytes) {
-						throw new Error(`selected files exceed maxBytes (${current.totalBytes} > ${session.maxBytes})`)
-					}
-				}
-
-				const runUploadAttempt = async (attemptMode: 'staging' | 'direct' | 'presigned', attemptUploadId: string) => {
-					const chunkSizeBytes = resumeChunkSizeBytes > 0 && !allowPerFileChunkSize ? resumeChunkSizeBytes : tuning.chunkSizeBytes
-					const chunkThresholdBytes = tuning.chunkThresholdBytes
-					const shouldTrackResume = attemptMode !== 'presigned'
-					const chunkSizeByPath: Record<string, number> = {}
-
-					const resumeFilesNext = shouldTrackResume
-						? items
-								.filter((item) => {
-									const pathKey = resolveUploadItemPathNormalized(item)
-									if (resumeFilesByPath.has(pathKey)) return true
-									return (item.file?.size ?? 0) >= chunkThresholdBytes
-								})
-								.map((item) => {
-									const pathKey = resolveUploadItemPathNormalized(item)
-									const pathRaw = resolveUploadItemPath(item)
-									const resumeInfo = resumeFilesByPath.get(pathKey)
-									const fileChunkSize = resumeInfo?.chunkSizeBytes ?? chunkSizeBytes
-									if (pathRaw) {
-										chunkSizeByPath[pathRaw] = fileChunkSize
-									}
-									return {
-										path: pathKey,
-										size: item.file?.size ?? 0,
-										chunkSizeBytes: fileChunkSize,
-									}
-								})
-						: undefined
-
-					args.updateUploadTask(taskId, (t) => ({
-						...t,
-						uploadId: attemptUploadId,
-						uploadMode: attemptMode,
-						resumeChunkSizeBytes: shouldTrackResume && items.length === 1 ? chunkSizeBytes : undefined,
-						resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
-						resumeFiles: resumeFilesNext,
-					}))
-
-					const handle =
-						attemptMode === 'presigned'
-							? uploadPresignedFilesWithProgress({
-									api: args.api,
-									profileId: current.profileId,
-									uploadId: attemptUploadId,
-									items,
-									onProgress: (p) => {
-										const estimator = args.uploadEstimatorByTaskIdRef.current[taskId]
-										if (!estimator) return
-										const stats = estimator.update(p.loadedBytes, p.totalBytes)
-										args.updateUploadTask(taskId, (t) => ({
-											...t,
-											loadedBytes: stats.loadedBytes,
-											totalBytes: stats.totalBytes ?? t.totalBytes,
-											speedBps: stats.speedBps,
-											etaSeconds: stats.etaSeconds,
-										}))
-									},
-									singleConcurrency: tuning.batchConcurrency,
-									multipartFileConcurrency: args.uploadChunkFileConcurrency,
-									partConcurrency: tuning.chunkConcurrency,
-									chunkThresholdBytes,
-									chunkSizeBytes,
-								})
-							: args.api.uploads.uploadFilesWithProgress(current.profileId, attemptUploadId, items, {
-									onProgress: (p) => {
-										const estimator = args.uploadEstimatorByTaskIdRef.current[taskId]
-										if (!estimator) return
-										const stats = estimator.update(p.loadedBytes, p.totalBytes)
-										args.updateUploadTask(taskId, (t) => ({
-											...t,
-											loadedBytes: stats.loadedBytes,
-											totalBytes: stats.totalBytes ?? t.totalBytes,
-											speedBps: stats.speedBps,
-											etaSeconds: stats.etaSeconds,
-										}))
-									},
-									concurrency: tuning.batchConcurrency,
-									maxBatchBytes: tuning.batchBytes,
-									maxBatchItems: 50,
-									chunkSizeBytes,
-									chunkConcurrency: tuning.chunkConcurrency,
-									chunkThresholdBytes,
-									existingChunksByPath,
-									chunkSizeBytesByPath: allowPerFileChunkSize ? chunkSizeByPath : undefined,
-									chunkFileConcurrency: args.uploadChunkFileConcurrency,
-								})
-
-					args.uploadAbortByTaskIdRef.current[taskId] = handle.abort
-					try {
-						return await handle.promise
-					} finally {
-						delete args.uploadAbortByTaskIdRef.current[taskId]
-					}
-				}
-
-				let result
-				try {
-					result = await runUploadAttempt(sessionMode, uploadId)
-				} catch (err) {
-					if (sessionMode !== 'presigned' || !isPresignedNetworkFailure(err)) {
-						throw err
-					}
-					await args.api.uploads.deleteUpload(current.profileId, uploadId).catch(() => {})
-					const fallbackSession = await createUploadSession(fallbackMode)
-					uploadId = fallbackSession.uploadId
-					sessionMode = fallbackSession.mode
-					if (fallbackSession.maxBytes && current.totalBytes > fallbackSession.maxBytes) {
-						throw new Error(`selected files exceed maxBytes (${current.totalBytes} > ${fallbackSession.maxBytes})`)
-					}
-					existingChunksByPath = undefined
-					estimator = new TransferEstimator({ totalBytes: current.totalBytes })
-					args.uploadEstimatorByTaskIdRef.current[taskId] = estimator
-					args.updateUploadTask(taskId, (t) => ({
-						...t,
-						status: 'staging',
-						startedAtMs: estimator.getStartedAtMs(),
-						finishedAtMs: undefined,
-						loadedBytes: 0,
-						speedBps: 0,
-						etaSeconds: 0,
-						error: undefined,
-						uploadFallbackFrom: 'presigned',
-						uploadFallbackReason: 'network_path_failed',
-					}))
-					args.notifications.info(`Presigned upload network path failed. Falling back to ${sessionMode} uploads.`)
-					result = await runUploadAttempt(sessionMode, uploadId)
-				}
-				if (result.skipped > 0) {
-					args.notifications.warning(`Skipped ${result.skipped} file(s) with invalid paths.`)
-				}
-
-				args.updateUploadTask(taskId, (t) => ({
-					...t,
-					status: 'commit',
-					loadedBytes: t.totalBytes,
-					speedBps: 0,
-					etaSeconds: 0,
-				}))
-
-				const commitReq = buildUploadCommitRequest(current, items)
-				const resp = await withJobQueueRetry(() => args.api.uploads.commitUpload(current.profileId, uploadId, commitReq))
-				committed = true
-				delete args.uploadItemsByTaskIdRef.current[taskId]
-				args.updateUploadTask(taskId, (t) => ({
-					...t,
-					status: 'waiting_job',
-					finishedAtMs: undefined,
-					jobId: resp.jobId,
-					loadedBytes: 0,
-					speedBps: 0,
-					etaSeconds: 0,
-				}))
-
-				if (resp.jobId) {
-					void args.api
-						.jobs.getJob(current.profileId, resp.jobId)
-						.then((job) => args.handleUploadJobUpdate(taskId, job))
-						.catch((err) => {
-							maybeReportNetworkError(err)
-							args.updateUploadTask(taskId, (prev) => ({ ...prev, error: formatErr(err) }))
-						})
-				}
-
-				args.notifications.uploadCommitted(resp.jobId)
-				await args.queryClient.invalidateQueries({
-					queryKey: ['jobs', current.profileId, args.apiToken],
-					exact: false,
-				})
-			} catch (err) {
-				if (err instanceof RequestAbortedError) {
-					args.updateUploadTask(taskId, (t) => ({ ...t, status: 'canceled', finishedAtMs: Date.now() }))
-					args.notifications.info('Upload canceled')
-					return
-				}
-				maybeReportNetworkError(err)
-				const msg = formatErr(err)
-				args.updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: msg }))
-				args.notifications.error(msg)
-			} finally {
-				delete args.uploadAbortByTaskIdRef.current[taskId]
-				delete args.uploadEstimatorByTaskIdRef.current[taskId]
-				if (!committed && uploadId) {
-					await args.api.uploads.deleteUpload(current.profileId, uploadId).catch(() => {})
-				}
-			}
+			await runUploadTask({
+				api: args.api,
+				apiToken: args.apiToken,
+				queryClient: args.queryClient,
+				notifications: args.notifications,
+				taskId,
+				task: current,
+				items,
+				uploadCapabilityByProfileId: args.uploadCapabilityByProfileId,
+				uploadDirectStream: args.uploadDirectStream,
+				uploadChunkFileConcurrency: args.uploadChunkFileConcurrency,
+				uploadResumeConversionEnabled: args.uploadResumeConversionEnabled,
+				pickUploadTuning: args.pickUploadTuning,
+				uploadAbortByTaskIdRef: args.uploadAbortByTaskIdRef,
+				uploadEstimatorByTaskIdRef: args.uploadEstimatorByTaskIdRef,
+				uploadItemsByTaskIdRef: args.uploadItemsByTaskIdRef,
+				updateUploadTask: args.updateUploadTask,
+				handleUploadJobUpdate: args.handleUploadJobUpdate,
+			})
 		},
 		[args],
 	)
@@ -512,22 +151,17 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 			if (!queuedUpload) return
 
 			const { items, task } = queuedUpload
-			args.uploadItemsByTaskIdRef.current[taskId] = items
+			setUploadItems(args.uploadItemsByTaskIdRef, taskId, items)
 
 			args.setUploadTasks((prev) => [task, ...prev])
 			args.openTransfers('uploads')
 
-			const previewItem = items.find((item) => isVideoUploadFile(item.file))
-			if (!previewItem) return
-
-			void createLocalVideoUploadPreview(previewItem.file, { label: resolveUploadItemPath(previewItem) }).then((preview) => {
-				if (!preview) return
-				if (!args.uploadTasksRef.current.some((entry) => entry.id === taskId)) {
-					revokeObjectURLSafe(preview.url)
-					return
-				}
-				args.uploadPreviewUrlByTaskIdRef.current[taskId] = preview.url
-				args.updateUploadTask(taskId, (current) => ({ ...current, preview }))
+			void queueLocalUploadPreview({
+				items,
+				taskId,
+				uploadTasksRef: args.uploadTasksRef,
+				uploadPreviewUrlByTaskIdRef: args.uploadPreviewUrlByTaskIdRef,
+				updateUploadTask: args.updateUploadTask,
 			})
 		},
 		[args],

@@ -1,7 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockApi } from './support/apiFixtures'
-import { ensureDialogOpen, transferDownloadRow } from './support/ui'
+import {
+	chooseRowAction,
+	clickTransferRowButton,
+	expectTransferRowButton,
+	expectTransferRowState,
+	gotoJobsPage,
+	openTransfersDownloadRow,
+} from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -183,21 +190,15 @@ async function setupApiMocks(page: Page, scenario: JobArtifactApiScenario) {
 }
 
 async function queueZipArtifactDownload(page: Page) {
-	await page.goto('/jobs')
-	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+	await gotoJobsPage(page)
 
 	const zipRow = page.getByRole('row', { name: new RegExp(zipJobId, 'i') })
 	await expect(zipRow).toContainText(/zip s3:\/\/test-bucket\/reports\/\*/)
-	await zipRow.getByRole('button', { name: 'Open actions menu' }).click()
-	await page.getByRole('menuitem', { name: 'Download ZIP' }).click()
+	await chooseRowAction(page, zipRow, 'Download ZIP')
 
-	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: /Transfers/i }).first().click({ force: true })
-	})
-	const row = transferDownloadRow(transfersDialog, zipJobLabel)
-	await expect(row).toBeVisible()
+	const { row } = await openTransfersDownloadRow(page, zipJobLabel, { triggerButtonName: /Transfers/i })
 
-	return { transfersDialog, row }
+	return { row }
 }
 
 test('zip artifact download moves from waiting to done in Transfers', async ({ page }) => {
@@ -210,7 +211,7 @@ test('zip artifact download moves from waiting to done in Transfers', async ({ p
 
 	const { row } = await queueZipArtifactDownload(page)
 	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(1)
-	await expect(row.getByText('Done', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expectTransferRowState(row, 'Done', { timeout: 10_000 })
 })
 
 test('zip artifact waiting task becomes failed when the job fails', async ({ page }) => {
@@ -224,9 +225,9 @@ test('zip artifact waiting task becomes failed when the job fails', async ({ pag
 	const { row } = await queueZipArtifactDownload(page)
 
 	await expect.poll(() => apiState.getJobPollCount(), { timeout: 10_000 }).toBeGreaterThan(0)
-	await expect(row.getByText('Failed', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expectTransferRowState(row, 'Failed', { timeout: 10_000 })
 	await expect(row.getByText('zip artifact job failed')).toBeVisible()
-	await expect(row.getByRole('button', { name: 'Retry' })).toBeVisible()
+	await expectTransferRowButton(row, 'Retry')
 	expect(apiState.getArtifactRequestCount()).toBe(0)
 })
 
@@ -241,9 +242,9 @@ test('zip artifact waiting task becomes canceled when the job is canceled', asyn
 	const { row } = await queueZipArtifactDownload(page)
 
 	await expect.poll(() => apiState.getJobPollCount(), { timeout: 10_000 }).toBeGreaterThan(0)
-	await expect(row.getByText('Canceled', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expectTransferRowState(row, 'Canceled', { timeout: 10_000 })
 	await expect(row.getByText('zip canceled by operator')).toBeVisible()
-	await expect(row.getByRole('button', { name: 'Retry' })).toBeVisible()
+	await expectTransferRowButton(row, 'Retry')
 	expect(apiState.getArtifactRequestCount()).toBe(0)
 })
 
@@ -270,13 +271,11 @@ test('zip artifact download can be retried after the artifact request fails', as
 
 	const { row } = await queueZipArtifactDownload(page)
 
-	await expect(row.getByText('Failed', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expectTransferRowState(row, 'Failed', { timeout: 10_000 })
 	await expect(row.getByText(/artifact_unavailable: artifact still uploading/i)).toBeVisible()
-	await expect(row.getByRole('button', { name: 'Retry' })).toBeVisible()
 	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(1)
-
-	await row.getByRole('button', { name: 'Retry' }).click()
+	await clickTransferRowButton(row, 'Retry')
 
 	await expect.poll(() => apiState.getArtifactRequestCount(), { timeout: 10_000 }).toBe(2)
-	await expect(row.getByText('Done', { exact: true })).toBeVisible({ timeout: 10_000 })
+	await expectTransferRowState(row, 'Done', { timeout: 10_000 })
 })

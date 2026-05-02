@@ -47,6 +47,9 @@ func TestHandleGetServerBackup_IncludesSQLiteAndDataDirEntries(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dataDir, "logs", "jobs", "job-1.log"), []byte("log"), 0o600); err != nil {
 		t.Fatalf("write log: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(dataDir, "logs", "jobs", "job-1.rclone.conf"), []byte("secret_access_key = test"), 0o600); err != nil {
+		t.Fatalf("write rclone config: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Join(dataDir, "artifacts", "jobs"), 0o700); err != nil {
 		t.Fatalf("mkdir artifacts: %v", err)
 	}
@@ -82,6 +85,9 @@ func TestHandleGetServerBackup_IncludesSQLiteAndDataDirEntries(t *testing.T) {
 	}
 	if got := string(entries["data/logs/jobs/job-1.log"]); got != "log" {
 		t.Fatalf("log=%q, want %q", got, "log")
+	}
+	if _, ok := entries["data/logs/jobs/job-1.rclone.conf"]; ok {
+		t.Fatalf("rclone config must not be included in backup")
 	}
 	if got := string(entries["data/artifacts/jobs/job-1.zip"]); got != "zip" {
 		t.Fatalf("artifact=%q, want %q", got, "zip")
@@ -335,6 +341,49 @@ func TestHandleRestoreServerBackup_RejectsOversizedBundle(t *testing.T) {
 	if res.StatusCode != http.StatusRequestEntityTooLarge {
 		respBody, _ := io.ReadAll(res.Body)
 		t.Fatalf("expected status 413, got %d: %s", res.StatusCode, string(respBody))
+	}
+}
+
+func TestHandleRestoreServerBackup_RejectsMultipartTempPreflightOverflow(t *testing.T) {
+	tempDir := os.TempDir()
+	freeBytes, err := availableDiskBytes(tempDir)
+	if err != nil {
+		t.Fatalf("availableDiskBytes(%q): %v", tempDir, err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/server/restore", bytes.NewReader(nil))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=test")
+	req.ContentLength = serverRestoreMultipartFormMaxMemory + freeBytes + 1
+
+	rec := httptest.NewRecorder()
+	srv := &server{cfg: config.Config{}}
+	srv.handleRestoreServerBackup(rec, req)
+
+	res := rec.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusConflict {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 409, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "restore_preflight_failed" {
+		t.Fatalf("error.code=%q, want restore_preflight_failed", resp.Error.Code)
+	}
+	if got := resp.Error.Details["path"]; got != tempDir {
+		t.Fatalf("details.path=%v, want %q", got, tempDir)
+	}
+}
+
+func TestRequiredServerRestoreMultipartTempBytes(t *testing.T) {
+	t.Parallel()
+
+	if got := requiredServerRestoreMultipartTempBytes(serverRestoreMultipartFormMaxMemory); got != 0 {
+		t.Fatalf("required bytes at memory limit = %d, want 0", got)
+	}
+	if got := requiredServerRestoreMultipartTempBytes(serverRestoreMultipartFormMaxMemory + 1234); got != 1234 {
+		t.Fatalf("required bytes above memory limit = %d, want 1234", got)
 	}
 }
 

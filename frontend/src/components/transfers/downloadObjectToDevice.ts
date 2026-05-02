@@ -1,10 +1,10 @@
-import type { APIClient } from '../../api/client'
+import type { APIClientShape } from '../../api/client'
 import { ensureReadWritePermission, getFileHandleForPath, writeResponseToFile } from '../../lib/deviceFs'
 import type { ObjectDeviceDownloadTask } from './transferTypes'
 import { shouldFallbackToProxy } from './transferDownloadUtils'
 
 export async function downloadObjectToDevice(args: {
-	api: APIClient
+	api: APIClientShape
 	task: ObjectDeviceDownloadTask
 	downloadLinkProxyEnabled: boolean
 	signal: AbortSignal

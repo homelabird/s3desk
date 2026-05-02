@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { profileScopedStorageKey } from '../../../lib/profileScopedStorage'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsTree } from '../useObjectsTree'
 
@@ -111,7 +112,7 @@ describe('useObjectsTree', () => {
 		})
 
 		await waitFor(() => {
-			expect(window.localStorage.getItem('objects:token-a:profile-1:treeExpandedByBucket')).toBe(
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'treeExpandedByBucket'))).toBe(
 				JSON.stringify({ 'shared-bucket': ['/', 'docs/'] }),
 			)
 		})
@@ -137,7 +138,7 @@ describe('useObjectsTree', () => {
 		})
 
 		await waitFor(() => {
-			expect(window.localStorage.getItem('objects:token-a:profile-1:treeExpandedByBucket')).toBe(JSON.stringify({}))
+			expect(window.localStorage.getItem(profileScopedStorageKey('objects', 'token-a', 'profile-1', 'treeExpandedByBucket'))).toBe(JSON.stringify({}))
 		})
 
 		rerender({ apiToken: 'token-a', profileId: 'profile-1', bucket: 'other-bucket' })

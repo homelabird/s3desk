@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -39,6 +38,7 @@ const (
 	serverBackupConfidentialityEncrypted = "encrypted"
 	serverBackupPasswordHeader           = "X-S3Desk-Backup-Password" // #nosec G101 -- HTTP header name, not a credential value.
 	serverBackupPasswordMaxBytes         = 4096
+	serverRestoreMultipartFormMaxMemory  = 32 << 20
 )
 
 var serverBackupFullDataEntries = []string{
@@ -80,117 +80,11 @@ func (e serverRestorePreflightError) Error() string {
 }
 
 func (s *server) handleGetServerBackup(w http.ResponseWriter, r *http.Request) {
-	scope, err := parseServerBackupScope(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), map[string]any{
-			"supportedScopes": []string{serverBackupScopeFull, serverBackupScopeCacheMetadata, serverBackupScopePortable},
-		})
-		return
-	}
-	confidentiality, err := parseServerBackupConfidentiality(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), map[string]any{
-			"supportedConfidentialityModes": []string{serverBackupConfidentialityClear, serverBackupConfidentialityEncrypted},
-		})
-		return
-	}
-	backupPassword, err := parseServerBackupPasswordHeader(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
-		return
-	}
-	includeThumbnails := parsePortableBackupIncludeThumbnails(r)
-	secrets, err := resolveServerBackupExportSecrets(confidentiality, backupPassword, s.cfg.EncryptionKey)
-	if err != nil {
-		writeError(w, http.StatusConflict, "backup_confidentiality_unavailable", err.Error(), nil)
-		return
-	}
-
-	dbBackend, err := db.ParseBackend(s.cfg.DBBackend)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "server_config_invalid", "failed to resolve db backend", map[string]any{"error": err.Error()})
-		return
-	}
-	if dbBackend != db.BackendSQLite && scope != serverBackupScopePortable {
-		writeError(
-			w,
-			http.StatusConflict,
-			"backup_unsupported",
-			"server backup currently supports only sqlite-backed servers",
-			map[string]any{"dbBackend": string(dbBackend)},
-		)
-		return
-	}
-
-	tmp, err := os.CreateTemp("", "s3desk-backup-*.tar.gz")
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to create backup bundle", map[string]any{"error": err.Error()})
-		return
-	}
-	tmpPath := tmp.Name()
-	_ = tmp.Close()
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	if _, err := s.writeServerBackupArchive(r.Context(), tmpPath, scope, confidentiality, includeThumbnails, secrets); err != nil {
-		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to create backup bundle", map[string]any{"error": err.Error()})
-		return
-	}
-
-	// #nosec G304 -- tmpPath is the server-created backup bundle from os.CreateTemp.
-	file, err := os.Open(tmpPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to open backup bundle", map[string]any{"error": err.Error()})
-		return
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "backup_failed", "failed to stat backup bundle", map[string]any{"error": err.Error()})
-		return
-	}
-
-	filename := fmt.Sprintf("%s-%s.tar.gz", backupFilenamePrefix(scope, confidentiality), time.Now().UTC().Format("20060102-150405"))
-	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
-	http.ServeContent(w, r, filename, info.ModTime(), file)
+	newServerBackupHTTPService(s).handleGetServerBackup(w, r)
 }
 
 func (s *server) handleRestoreServerBackup(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.ServerRestoreMaxBytes > 0 {
-		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.ServerRestoreMaxBytes)
-	}
-	file, backupPassword, cleanup, err := openServerRestoreBundle(r)
-	if err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			writeError(w, http.StatusRequestEntityTooLarge, "bundle_too_large", "backup bundle exceeds restore upload limit", map[string]any{
-				"maxBytes": s.cfg.ServerRestoreMaxBytes,
-			})
-			return
-		}
-		writeError(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
-		return
-	}
-	defer cleanup()
-
-	resp, err := s.restoreServerBackupArchive(r.Context(), file, backupPassword, s.cfg.EncryptionKey)
-	if err != nil {
-		var preflightErr serverRestorePreflightError
-		if errors.As(err, &preflightErr) {
-			writeError(w, http.StatusConflict, "restore_preflight_failed", "failed restore preflight before staging", map[string]any{
-				"error":          preflightErr.Error(),
-				"path":           preflightErr.Path,
-				"requiredBytes":  preflightErr.RequiredBytes,
-				"availableBytes": preflightErr.AvailableBytes,
-			})
-			return
-		}
-		writeError(w, http.StatusBadRequest, "restore_failed", "failed to restore backup bundle", map[string]any{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusCreated, resp)
+	newServerBackupHTTPService(s).handleRestoreServerBackup(w, r)
 }
 
 func (s *server) writeServerBackupArchive(ctx context.Context, archivePath string, scope string, confidentiality string, includeThumbnails bool, secrets serverBackupSecrets) (models.ServerMigrationManifest, error) {
@@ -393,11 +287,12 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 	}
 
 	restoreID := ulid.Make().String()
-	tempRoot := filepath.Join(restoreBase, "."+restoreID+".tmp")
-	finalRoot := filepath.Join(restoreBase, restoreID)
-	if err := os.MkdirAll(tempRoot, 0o700); err != nil {
+	staging, err := newManagedServerRestoreStagingDir(restoreBase, restoreID)
+	if err != nil {
 		return models.ServerRestoreResponse{}, err
 	}
+	tempRoot := staging.TempRoot()
+	finalRoot := staging.FinalRoot()
 	diskFreeBytesBefore, err := availableDiskBytes(restoreBase)
 	if err != nil {
 		return models.ServerRestoreResponse{}, err
@@ -409,7 +304,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 	success := false
 	defer func() {
 		if !success {
-			_ = os.RemoveAll(tempRoot)
+			staging.Cleanup()
 		}
 	}()
 
@@ -498,35 +393,18 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 	if strings.TrimSpace(manifest.ConfidentialityMode) == serverBackupConfidentialityEncrypted && !validation.PayloadEncryptionDecrypted {
 		return models.ServerRestoreResponse{}, errors.New("encrypted backup payload is missing")
 	}
-	if manifest.PayloadSHA256 != "" {
-		validation.PayloadChecksumPresent = true
-		fileCount, payloadBytes, payloadSHA256 := buildServerBackupPayloadSummary(payloadEntries)
-		switch {
-		case manifest.PayloadFileCount != 0 && manifest.PayloadFileCount != fileCount:
-			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload file count mismatch: manifest=%d extracted=%d", manifest.PayloadFileCount, fileCount)
-		case manifest.PayloadBytes != 0 && manifest.PayloadBytes != payloadBytes:
-			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload bytes mismatch: manifest=%d extracted=%d", manifest.PayloadBytes, payloadBytes)
-		case !strings.EqualFold(manifest.PayloadSHA256, payloadSHA256):
-			return models.ServerRestoreResponse{}, fmt.Errorf("backup payload checksum mismatch: manifest=%s extracted=%s", manifest.PayloadSHA256, payloadSHA256)
-		}
-		validation.PayloadChecksumVerified = true
+	payloadVerification, err := verifyServerRestorePayload("backup", manifest, archiveManifest, payloadEntries, backupPassword, encryptionKey)
+	if err != nil {
+		return models.ServerRestoreResponse{}, err
 	}
-	if archiveManifest.PayloadHMACSHA256 != "" {
-		secrets := resolveServerBackupArchiveSecrets(manifest, backupPassword, encryptionKey)
-		expectedHMAC := buildServerBackupPayloadHMAC(manifest, secrets.HMACSecret, archiveManifest.PayloadEncryptionIV)
-		if expectedHMAC == "" {
-			validation.PayloadSignaturePresent = true
-		} else if !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {
-			return models.ServerRestoreResponse{}, errors.New("backup payload signature mismatch")
-		} else {
-			validation.PayloadSignaturePresent = true
-			validation.PayloadSignatureVerified = true
-		}
-	}
+	validation.PayloadChecksumPresent = payloadVerification.ChecksumPresent
+	validation.PayloadChecksumVerified = payloadVerification.ChecksumVerified
+	validation.PayloadSignaturePresent = payloadVerification.SignaturePresent
+	validation.PayloadSignatureVerified = payloadVerification.SignatureVerified
 	if manifest.DBBackend == string(db.BackendSQLite) && !sqliteSeen {
 		return models.ServerRestoreResponse{}, errors.New("sqlite database is missing from backup bundle")
 	}
-	if err := os.Rename(tempRoot, finalRoot); err != nil {
+	if err := staging.Commit(); err != nil {
 		return models.ServerRestoreResponse{}, err
 	}
 	success = true
@@ -545,7 +423,10 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 }
 
 func openServerRestoreBundle(r *http.Request) (multipartFile io.ReadCloser, bundlePassword string, cleanup func(), err error) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := preflightServerRestoreMultipart(r); err != nil {
+		return nil, "", nil, err
+	}
+	if err := r.ParseMultipartForm(serverRestoreMultipartFormMaxMemory); err != nil {
 		return nil, "", nil, fmt.Errorf("invalid multipart form: %w", err)
 	}
 	password, err := sanitizeServerBackupPassword(r.FormValue("password"))
@@ -568,6 +449,39 @@ func openServerRestoreBundle(r *http.Request) (multipartFile io.ReadCloser, bund
 			_ = r.MultipartForm.RemoveAll()
 		}
 	}, nil
+}
+
+func preflightServerRestoreMultipart(r *http.Request) error {
+	if r == nil || r.ContentLength <= 0 {
+		return nil
+	}
+	requiredBytes := requiredServerRestoreMultipartTempBytes(r.ContentLength)
+	if requiredBytes <= 0 {
+		return nil
+	}
+	tempDir := os.TempDir()
+	if strings.TrimSpace(tempDir) == "" {
+		return nil
+	}
+	freeBytes, err := availableDiskBytes(tempDir)
+	if err != nil {
+		return nil
+	}
+	if freeBytes < requiredBytes {
+		return serverRestorePreflightError{
+			Path:           tempDir,
+			RequiredBytes:  requiredBytes,
+			AvailableBytes: freeBytes,
+		}
+	}
+	return nil
+}
+
+func requiredServerRestoreMultipartTempBytes(contentLength int64) int64 {
+	if contentLength <= 0 || contentLength <= serverRestoreMultipartFormMaxMemory {
+		return 0
+	}
+	return contentLength - serverRestoreMultipartFormMaxMemory
 }
 
 func writeTarPathTree(ctx context.Context, tarWriter *tar.Writer, baseDir, rel string, now time.Time, payloadEntries *[]serverBackupPayloadEntry) error {
@@ -611,6 +525,9 @@ func writeTarPathTree(ctx context.Context, tarWriter *tar.Writer, baseDir, rel s
 		if !info.Mode().IsRegular() {
 			return nil
 		}
+		if shouldExcludeServerBackupDataFile(relPath) {
+			return nil
+		}
 		payloadEntry, err := writeTarFileFromDisk(tarWriter, pathOnDisk, archivePath)
 		if err != nil {
 			return err
@@ -618,6 +535,10 @@ func writeTarPathTree(ctx context.Context, tarWriter *tar.Writer, baseDir, rel s
 		*payloadEntries = append(*payloadEntries, payloadEntry)
 		return nil
 	})
+}
+
+func shouldExcludeServerBackupDataFile(relPath string) bool {
+	return strings.HasSuffix(filepath.Base(relPath), ".rclone.conf")
 }
 
 func writeTarJSONFile(tarWriter *tar.Writer, name string, value any, modTime time.Time) error {
@@ -703,59 +624,15 @@ func extractServerRestorePayloadEntry(
 	if relPath == "" {
 		return nil
 	}
-	targetPath, err := resolveRestorePath(tempRoot, relPath)
-	if err != nil {
+	if err := extractServerRestoreArchiveEntry(tempRoot, relPath, entryName, header, entryReader, payloadEntries, "archive entry"); err != nil {
 		return err
 	}
-	switch header.Typeflag {
-	case tar.TypeDir:
-		return os.MkdirAll(targetPath, 0o700)
-	case tar.TypeSymlink, tar.TypeLink:
-		return fmt.Errorf("archive entry %q uses an unsupported link type", header.Name)
-	default:
-		if !header.FileInfo().Mode().IsRegular() {
-			return fmt.Errorf("archive entry %q uses unsupported type %d", header.Name, header.Typeflag)
-		}
-		freeBytes, err := availableDiskBytes(tempRoot)
-		if err != nil {
-			return err
-		}
-		if header.Size > freeBytes {
-			return serverRestorePreflightError{
-				Path:           relPath,
-				RequiredBytes:  header.Size,
-				AvailableBytes: freeBytes,
-			}
-		}
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o700); err != nil {
-			return err
-		}
-		fileMode, err := archiveEntryFileMode(header.Mode)
-		if err != nil {
-			return err
-		}
-		// #nosec G304 -- targetPath is confined to tempRoot by resolveRestorePath.
-		out, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fileMode)
-		if err != nil {
-			return err
-		}
-		defer out.Close()
-		hasher := sha256.New()
-		if _, err := io.Copy(io.MultiWriter(out, hasher), entryReader); err != nil {
-			return err
-		}
-		*payloadEntries = append(*payloadEntries, serverBackupPayloadEntry{
-			ArchivePath: entryName,
-			Size:        header.Size,
-			SHA256:      hex.EncodeToString(hasher.Sum(nil)),
-		})
-		validation.PayloadFileCount++
-		validation.PayloadBytes += header.Size
-		if relPath == "s3desk.db" {
-			*sqliteSeen = true
-		}
-		return nil
+	validation.PayloadFileCount++
+	validation.PayloadBytes += header.Size
+	if relPath == "s3desk.db" {
+		*sqliteSeen = true
 	}
+	return nil
 }
 
 func extractEncryptedServerRestorePayload(
@@ -909,6 +786,8 @@ func buildServerBackupManifestWarnings(encryptionEnabled bool, scope string, con
 		warnings = append(warnings, "Portable backups export logical application data instead of a raw sqlite database file.")
 		warnings = append(warnings, "Use portable import to move data between sqlite and Postgres deployments.")
 		warnings = append(warnings, "Portable backups do not include logs, artifacts, or staged restore directories.")
+	} else {
+		warnings = append(warnings, "Transient rclone config files (*.rclone.conf) are excluded because they can contain provider credentials.")
 	}
 	if encryptionEnabled {
 		warnings = append(warnings, "Encrypted profile data is included, but the destination server must use the same ENCRYPTION_KEY to read it.")

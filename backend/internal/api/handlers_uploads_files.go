@@ -6,42 +6,33 @@ import (
 	"time"
 )
 
-func (s *server) loadWritableUploadSession(
-	w http.ResponseWriter,
-	r *http.Request,
-	us store.UploadSession,
-) (string, string, bool) {
+func (s *server) loadWritableUploadSession(us store.UploadSession) (string, string, *uploadHTTPError) {
 	mode := normalizeUploadMode(us.Mode)
 	if mode == "" {
 		mode = uploadModeStaging
 	}
 	if mode == uploadModePresigned {
-		writeError(w, http.StatusBadRequest, "not_supported", "presigned uploads do not accept file bodies", nil)
-		return "", "", false
+		return "", "", newUploadNotSupportedError("presigned uploads do not accept file bodies", nil)
 	}
 	if mode == uploadModeDirect && !s.cfg.UploadDirectStream {
-		writeError(w, http.StatusBadRequest, "not_supported", "direct streaming uploads are disabled", nil)
-		return "", "", false
+		return "", "", newUploadNotSupportedError("direct streaming uploads are disabled", nil)
 	}
 	if mode == uploadModeStaging && us.StagingDir == "" {
-		writeError(w, http.StatusInternalServerError, "internal_error", "upload session is missing staging directory", nil)
-		return "", "", false
+		return "", "", newUploadInternalError("upload session is missing staging directory", nil)
 	}
 
 	stagingDir := ""
 	if mode == uploadModeStaging {
 		resolved, err := store.ResolveUploadStagingDir(s.cfg.DataDir, us.ID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "upload session has invalid staging directory", map[string]any{"error": err.Error()})
-			return "", "", false
+			return "", "", newUploadInternalError("upload session has invalid staging directory", map[string]any{"error": err.Error()})
 		}
 		stagingDir = resolved
 	}
 
 	if expiresAt, err := time.Parse(time.RFC3339Nano, us.ExpiresAt); err == nil && time.Now().UTC().After(expiresAt) {
-		writeError(w, http.StatusBadRequest, "expired", "upload session expired", nil)
-		return "", "", false
+		return "", "", &uploadHTTPError{status: http.StatusBadRequest, code: "expired", message: "upload session expired"}
 	}
 
-	return mode, stagingDir, true
+	return mode, stagingDir, nil
 }

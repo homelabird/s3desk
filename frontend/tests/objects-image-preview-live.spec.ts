@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
+import { gotoObjectsBucketPage, objectsListRow } from './support/ui'
+
 const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
@@ -122,11 +124,9 @@ test.describe('Live objects image preview', () => {
 
 			await uploadObject(request, profileId, bucketName, objectKey, pngBody, 'image/png')
 			await seedStorage(page, { profileId, bucket: bucketName })
-			await page.goto('/objects')
-			await page.getByTestId('objects-bucket-picker-desktop').click()
-			await page.getByTestId(`objects-bucket-picker-option-${bucketName}`).click()
+			await gotoObjectsBucketPage(page, bucketName)
 
-			const objectRow = page.locator('[data-objects-row="true"]').filter({ hasText: objectKey }).first()
+			const objectRow = objectsListRow(page, objectKey)
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
 			await objectRow.getByRole('button', { name: 'Object actions' }).click()
 			await page.getByRole('menuitem', { name: /Open large preview/i }).click()

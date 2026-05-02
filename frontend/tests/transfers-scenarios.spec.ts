@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { installMockApi } from './support/apiFixtures'
+import { chooseRowAction, gotoJobsPage, jobsTableRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -190,14 +191,13 @@ test('transfer scenarios cover job types, progress, cancel, and retry', async ({
 	await seedStorage(page)
 	await setupApiMocks(page)
 
-	await page.goto('/jobs')
-	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+	await gotoJobsPage(page)
 
-	const localRow = page.getByRole('row', { name: /job-local/ })
-	const stagingRow = page.getByRole('row', { name: /job-staging/ })
-	const runningRow = page.getByRole('row', { name: /job-download/ })
-	const failedRow = page.getByRole('row', { name: /job-copy/ })
-	const deleteRow = page.getByRole('row', { name: /job-delete/ })
+	const localRow = jobsTableRow(page, 'job-local')
+	const stagingRow = jobsTableRow(page, 'job-staging')
+	const runningRow = jobsTableRow(page, 'job-download')
+	const failedRow = jobsTableRow(page, 'job-copy')
+	const deleteRow = jobsTableRow(page, 'job-delete')
 
 	await expect(localRow).toContainText(/Upload from device \u2192 S3/)
 	await expect(stagingRow).toContainText(/Finalize upload \(staging \u2192 S3\)/)
@@ -209,11 +209,9 @@ test('transfer scenarios cover job types, progress, cancel, and retry', async ({
 	await expect(failedRow).toContainText(/cp s3:\/\/test-bucket\/alpha\.txt/)
 	await expect(deleteRow).toContainText(/rm s3:\/\/test-bucket\/tmp\//)
 
-	await runningRow.getByRole('button', { name: 'Open actions menu' }).click()
-	await page.getByRole('menuitem', { name: 'Cancel' }).click()
+	await chooseRowAction(page, runningRow, 'Cancel')
 	await expect(runningRow.getByText('canceled')).toBeVisible()
 
-	await failedRow.getByRole('button', { name: 'Open actions menu' }).click()
-	await page.getByRole('menuitem', { name: 'Retry' }).click()
-	await expect(page.getByRole('row', { name: /job-retry-1/ })).toBeVisible()
+	await chooseRowAction(page, failedRow, 'Retry')
+	await expect(jobsTableRow(page, 'job-retry-1')).toBeVisible()
 })

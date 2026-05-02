@@ -1,17 +1,17 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
-import type { APIClient } from '../../api/client'
 import { queryKeys } from '../../api/queryKeys'
-import type { Bucket, ListObjectsResponse, Profile } from '../../api/types'
-import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../../lib/providerCapabilities'
+import type { Bucket, ListObjectsResponse } from '../../api/types'
+import type { ObjectsPageQueriesAPI } from '../../lib/pageApiScopes'
+import { buildProfileCapabilityContext } from '../../lib/profileCapabilityContext'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 import { useObjectsFavorites } from './useObjectsFavorites'
 import { OBJECTS_LIST_PAGE_SIZE } from './objectsPageConstants'
 import { logObjectsDebug } from './objectsPageDebug'
 
 type UseObjectsPageQueriesArgs = {
-	api: APIClient
+	api: ObjectsPageQueriesAPI
 	apiToken: string
 	profileId: string | null
 	bucket: string
@@ -93,28 +93,36 @@ export function useObjectsPageQueries({
 		enabled: !!apiToken,
 	})
 
-	const selectedProfile: Profile | null = useMemo(() => {
-		if (!profileId) return null
-		return profilesQuery.data?.find((profile) => profile.id === profileId) ?? null
-	}, [profileId, profilesQuery.data])
-
-	const profileCapabilities = selectedProfile?.provider
-		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers, selectedProfile)
-		: null
-	const objectCrudSupported = profileCapabilities ? profileCapabilities.objectCrud : true
-	const uploadSupported = profileCapabilities ? profileCapabilities.objectCrud && profileCapabilities.jobTransfer : true
-	const uploadDisabledReason = getUploadCapabilityDisabledReason(profileCapabilities)
+	const profileCapabilityContext = useMemo(
+		() =>
+			buildProfileCapabilityContext({
+				profiles: profilesQuery.data,
+				profileId,
+				meta: metaQuery.data,
+			}),
+		[metaQuery.data, profileId, profilesQuery.data],
+	)
+	const {
+		selectedProfile,
+		capabilities: profileCapabilities,
+		bucketCrudSupported,
+		objectCrudSupported,
+		uploadSupported,
+		uploadDisabledReason,
+	} = profileCapabilityContext
+	const profileCapabilityResolved = !profileId || (profilesQuery.isSuccess && metaQuery.isSuccess)
 
 	const bucketsQuery = useQuery({
-		queryKey: ['buckets', profileId, apiToken],
+		queryKey: queryKeys.buckets.list(profileId, apiToken),
 		queryFn: () => api.buckets.listBuckets(profileId!),
-		enabled: !!profileId,
+		enabled: !!profileId && profileCapabilityResolved && bucketCrudSupported,
+		retry: false,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})
 
 	const objectsQuery = useInfiniteQuery({
-		queryKey: ['objects', profileId, bucket, prefix, apiToken],
-		enabled: !!profileId && !!bucket,
+		queryKey: queryKeys.objects.list(profileId, bucket, prefix, apiToken),
+		enabled: !!profileId && !!bucket && profileCapabilityResolved && objectCrudSupported,
 		initialPageParam: undefined as string | undefined,
 		staleTime: 15_000,
 		queryFn: async ({ pageParam }) => {
@@ -145,6 +153,7 @@ export function useObjectsPageQueries({
 		apiToken,
 		objectsPages: objectsQuery.data?.pages ?? [],
 		hydrateItems: favoritesPaneExpanded || favoritesOnly,
+		enabled: profileCapabilityResolved && objectCrudSupported,
 	})
 
 	const bucketOptions = useMemo(

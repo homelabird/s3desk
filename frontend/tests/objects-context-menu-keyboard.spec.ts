@@ -9,7 +9,7 @@ import {
 	installMockApi,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { objectsContextMenu } from './support/ui'
+import { gotoObjectsPage, objectsContextMenu, objectsListRow, objectsSelectionCheckbox } from './support/ui'
 
 const profileId = 'playwright-context-keyboard-profile'
 const bucket = 'context-keyboard-bucket'
@@ -82,8 +82,8 @@ async function createKeyboardRangeSelection(page: Page) {
 	await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
 	await list.press('Shift+ArrowDown')
 	await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
-	await expect(page.getByRole('checkbox', { name: 'Select video-1.mp4' })).toBeChecked()
-	await expect(page.getByRole('checkbox', { name: 'Select video-2.mp4' })).toBeChecked()
+	await expect(objectsSelectionCheckbox(page, 'video-1.mp4')).toBeChecked()
+	await expect(objectsSelectionCheckbox(page, 'video-2.mp4')).toBeChecked()
 	return list
 }
 
@@ -91,13 +91,13 @@ test.describe('Objects context menu with keyboard selection', () => {
 	test.beforeEach(async ({ page }) => {
 		await stubObjectsApi(page)
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 	})
 
 	test('keyboard range selection still opens bulk context actions on a selected row', async ({ page }) => {
 		await createKeyboardRangeSelection(page)
 
-		const selectedRow = page.locator('[data-objects-row="true"]', { hasText: 'video-1.mp4' }).first()
+		const selectedRow = objectsListRow(page, 'video-1.mp4')
 		await selectedRow.click({ button: 'right' })
 
 		const menu = objectsContextMenu(page)
@@ -110,7 +110,7 @@ test.describe('Objects context menu with keyboard selection', () => {
 	test('closing the context menu outside the list keeps the keyboard-created selection intact', async ({ page }) => {
 		await createKeyboardRangeSelection(page)
 
-		const selectedRow = page.locator('[data-objects-row="true"]', { hasText: 'video-1.mp4' }).first()
+		const selectedRow = objectsListRow(page, 'video-1.mp4')
 		await selectedRow.click({ button: 'right' })
 
 		const menu = objectsContextMenu(page)
@@ -120,14 +120,14 @@ test.describe('Objects context menu with keyboard selection', () => {
 
 		await expect(menu).toBeHidden()
 		await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select video-1.mp4' })).toBeChecked()
-		await expect(page.getByRole('checkbox', { name: 'Select video-2.mp4' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-1.mp4')).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-2.mp4')).toBeChecked()
 	})
 
 	test('pressing Escape closes the context menu without clearing the keyboard-created selection', async ({ page }) => {
 		await createKeyboardRangeSelection(page)
 
-		const selectedRow = page.locator('[data-objects-row="true"]', { hasText: 'video-1.mp4' }).first()
+		const selectedRow = objectsListRow(page, 'video-1.mp4')
 		await selectedRow.click({ button: 'right' })
 
 		const menu = objectsContextMenu(page)
@@ -137,8 +137,8 @@ test.describe('Objects context menu with keyboard selection', () => {
 
 		await expect(menu).toBeHidden()
 		await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
-		await expect(page.getByRole('checkbox', { name: 'Select video-1.mp4' })).toBeChecked()
-		await expect(page.getByRole('checkbox', { name: 'Select video-2.mp4' })).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-1.mp4')).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-2.mp4')).toBeChecked()
 	})
 
 	test('a single keyboard-selected item still opens object actions from the row menu', async ({ page }) => {
@@ -148,7 +148,7 @@ test.describe('Objects context menu with keyboard selection', () => {
 		await list.press('ArrowDown')
 		await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
 
-		const row = page.locator('[data-objects-row="true"]', { hasText: 'video-1.mp4' }).first()
+		const row = objectsListRow(page, 'video-1.mp4')
 		await row.getByRole('button', { name: 'Object actions' }).evaluate((element) => {
 			;(element as HTMLElement).click()
 		})

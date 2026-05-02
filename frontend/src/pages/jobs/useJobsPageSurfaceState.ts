@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
-import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import type { DeleteJobPrefill } from './jobsPageTypes'
 import type { SortState } from './JobsVirtualTable'
 
@@ -32,7 +32,7 @@ export function useJobsPageSurfaceState({
   )
   const [bucket, setBucket] = useLocalStorageState<string>(bucketStorageKey, '', {
     legacyLocalStorageKey: 'bucket',
-    legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'bucket')],
+    legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'bucket'),
   })
 
   const [createOpen, setCreateOpen] = useState(false)

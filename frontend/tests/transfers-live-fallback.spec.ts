@@ -1,6 +1,14 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
-import { ensureDialogOpen, transferDownloadRow } from './support/ui'
+import {
+	addUploadSourceFromDevice,
+	expectTransferRowState,
+	gotoObjectsBucketPage,
+	gotoUploadsPage,
+	objectsListRow,
+	openTransfersDownloadRow,
+	queueSelectedUpload,
+} from './support/ui'
 
 const isLive = process.env.E2E_LIVE === '1'
 
@@ -207,19 +215,13 @@ test.describe('Live transfer fallback flows', () => {
 				})
 			})
 
-			await page.goto('/uploads')
-			await page.getByRole('button', { name: 'Add from device…' }).click()
-			const sourceDialog = page.getByRole('dialog', { name: 'Add upload source' })
-			await expect(sourceDialog).toBeVisible({ timeout: 10_000 })
-			const chooserPromise = page.waitForEvent('filechooser')
-			await sourceDialog.getByRole('button', { name: 'Choose files' }).click()
-			const chooser = await chooserPromise
-			await chooser.setFiles({
+			await gotoUploadsPage(page)
+			await addUploadSourceFromDevice(page, {
 				name: `capability-${runId}.txt`,
 				mimeType: 'text/plain',
 				buffer: Buffer.from(`capability-${runId}`),
 			})
-			await page.getByRole('button', { name: /Queue upload/i }).click()
+			await queueSelectedUpload(page)
 
 			await expect.poll(() => uploadModes.length, { timeout: 30_000 }).toBeGreaterThan(0)
 			expect(uploadModes[0]).toBe('staging')
@@ -310,23 +312,19 @@ test.describe('Live transfer fallback flows', () => {
 				await route.continue()
 			})
 
-			await page.goto('/objects')
-			await page.getByTestId('objects-bucket-picker-desktop').click()
-			await page.getByTestId(`objects-bucket-picker-option-${bucketName}`).click()
-			const objectRow = page.locator('[data-objects-row="true"]', { hasText: objectKey }).first()
+			await gotoObjectsBucketPage(page, bucketName)
+			const objectRow = objectsListRow(page, objectKey)
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
 
 			await objectRow.click()
 			await expect(page.getByText('1 selected')).toBeVisible({ timeout: 10_000 })
 			await page.getByRole('button', { name: 'Download (client)' }).first().click()
 
-			const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-				await page.getByRole('button', { name: /Transfers/i }).first().click()
+			const { row: downloadRow } = await openTransfersDownloadRow(page, objectKey, {
+				triggerButtonName: /Transfers/i,
+				timeout: 30_000,
 			})
-			await transfersDialog.getByRole('tab', { name: /Downloads/i }).click()
-			const downloadRow = transferDownloadRow(transfersDialog, objectKey)
-			await expect(downloadRow).toBeVisible({ timeout: 30_000 })
-			await expect(downloadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 120_000 })
+			await expectTransferRowState(downloadRow, 'Done', { timeout: 120_000 })
 
 			await expect.poll(() => directDownloadURLCalls, { timeout: 10_000 }).toBeGreaterThan(0)
 			await expect.poll(() => proxyDownloadURLCalls, { timeout: 10_000 }).toBeGreaterThan(0)

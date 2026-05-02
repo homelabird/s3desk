@@ -1,7 +1,8 @@
-import { Button, Collapse, Input, Space, Typography, message } from 'antd'
+import { Button, Collapse, Input, Space, Typography } from 'antd'
 import { useState } from 'react'
 
 import { FormField } from '../../components/FormField'
+import { appFeedback } from '../../lib/appFeedback'
 import { getHttpHeaderValueValidationError } from '../../lib/httpHeaderValue'
 import styles from '../SettingsPage.module.css'
 
@@ -22,7 +23,7 @@ function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => vo
 		const trimmed = draft.trim()
 		const error = getHttpHeaderValueValidationError('API token', trimmed)
 		if (error) {
-			message.error(error)
+			appFeedback.error(error)
 			return
 		}
 		props.setApiToken(trimmed)

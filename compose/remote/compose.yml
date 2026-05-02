@@ -28,7 +28,9 @@ services:
     environment:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"
+      LOG_ENV: "${LOG_ENV:-production}"
       API_TOKEN: "${API_TOKEN:?set API_TOKEN for remote deployment}"
+      ALLOWED_LOCAL_DIRS: "${ALLOWED_LOCAL_DIRS:?set ALLOWED_LOCAL_DIRS to one or more container paths S3Desk may access}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
       EXTERNAL_BASE_URL: "${EXTERNAL_BASE_URL:-}"
       DB_BACKEND: "postgres"

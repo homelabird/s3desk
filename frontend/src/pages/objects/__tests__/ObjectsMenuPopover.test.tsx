@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ObjectsMenuPopover } from '../ObjectsMenuPopover'
@@ -51,5 +51,49 @@ describe('ObjectsMenuPopover', () => {
 
 		expect(screen.queryByText('Refresh')).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-expanded', 'false')
+	})
+
+	it('supports Arrow, Home, and End keyboard focus movement', async () => {
+		render(
+			<ObjectsMenuPopover
+				scopeKey="token-a:profile-1"
+				menu={{
+					items: [
+						{ key: 'details', label: 'Details' },
+						{ key: 'disabled', label: 'Disabled action', disabled: true },
+						{ key: 'rename', label: 'Rename' },
+						{ key: 'delete', label: 'Delete' },
+					],
+				}}
+			>
+				{({ toggle, open }) => (
+					<button type="button" aria-expanded={open} onClick={toggle}>
+						More
+					</button>
+				)}
+			</ObjectsMenuPopover>,
+		)
+
+		fireEvent.click(screen.getByRole('button', { name: 'More' }))
+
+		const details = await screen.findByRole('menuitem', { name: 'Details' })
+		const rename = screen.getByRole('menuitem', { name: 'Rename' })
+		const deleteItem = screen.getByRole('menuitem', { name: 'Delete' })
+		await waitFor(() => expect(details).toHaveFocus())
+
+		fireEvent.keyDown(details, { key: 'ArrowDown', bubbles: true })
+		expect(rename).toHaveFocus()
+
+		fireEvent.keyDown(rename, { key: 'End', bubbles: true })
+		expect(deleteItem).toHaveFocus()
+
+		fireEvent.keyDown(deleteItem, { key: 'ArrowDown', bubbles: true })
+		expect(details).toHaveFocus()
+
+		fireEvent.keyDown(details, { key: 'ArrowUp', bubbles: true })
+		expect(deleteItem).toHaveFocus()
+
+		fireEvent.keyDown(deleteItem, { key: 'Home', bubbles: true })
+		expect(details).toHaveFocus()
 	})
 })

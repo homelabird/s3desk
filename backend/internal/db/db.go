@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
@@ -16,6 +17,33 @@ const (
 	BackendSQLite   Backend = "sqlite"
 	BackendPostgres Backend = "postgres"
 )
+
+const schemaMigrationsTableName = "schema_migrations"
+
+type schemaMigration struct {
+	ID    string
+	Apply func(*gorm.DB) error
+}
+
+var schemaMigrationRegistry = []schemaMigration{
+	{ID: "001_core_schema", Apply: applyCoreSchemaMigration},
+	{ID: "002_legacy_column_backfills", Apply: applyLegacyColumnBackfills},
+}
+
+var portableDataTableNames = []string{
+	"profiles",
+	"profile_connection_options",
+	"jobs",
+	"upload_sessions",
+	"upload_multipart_uploads",
+	"upload_objects",
+	"object_index",
+	"object_favorites",
+}
+
+func PortableDataTableNames() []string {
+	return append([]string(nil), portableDataTableNames...)
+}
 
 type Config struct {
 	Backend     Backend
@@ -103,6 +131,55 @@ func openPostgres(databaseURL string) (*gorm.DB, error) {
 }
 
 func migrate(db *gorm.DB) error {
+	if err := ensureSchemaMigrationsTable(db); err != nil {
+		return err
+	}
+	for _, migration := range schemaMigrationRegistry {
+		if err := applySchemaMigration(db, migration); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applySchemaMigration(db *gorm.DB, migration schemaMigration) error {
+	applied, err := hasSchemaMigration(db, migration.ID)
+	if err != nil {
+		return err
+	}
+	if applied {
+		return nil
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := migration.Apply(tx); err != nil {
+			return fmt.Errorf("apply schema migration %s: %w", migration.ID, err)
+		}
+		return recordSchemaMigration(tx, migration.ID)
+	})
+}
+
+func ensureSchemaMigrationsTable(db *gorm.DB) error {
+	return db.Exec(fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		id TEXT PRIMARY KEY,
+		applied_at TEXT NOT NULL
+	);`, schemaMigrationsTableName)).Error
+}
+
+func hasSchemaMigration(db *gorm.DB, id string) (bool, error) {
+	var count int64
+	if err := db.Table(schemaMigrationsTableName).Where("id = ?", id).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func recordSchemaMigration(db *gorm.DB, id string) error {
+	appliedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	return db.Exec(fmt.Sprintf(`INSERT INTO %s (id, applied_at) VALUES (?, ?);`, schemaMigrationsTableName), id, appliedAt).Error
+}
+
+func applyCoreSchemaMigration(db *gorm.DB) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS profiles (
 			id TEXT PRIMARY KEY,
@@ -242,6 +319,10 @@ func migrate(db *gorm.DB) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func applyLegacyColumnBackfills(db *gorm.DB) error {
 	if err := ensureProfileColumn(db, "preserve_leading_slash", "INTEGER", "0"); err != nil {
 		return err
 	}

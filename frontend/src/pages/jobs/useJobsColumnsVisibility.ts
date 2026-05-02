@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 
-import { legacyProfileScopedStorageKey, profileScopedStorageKey } from '../../lib/profileScopedStorage'
+import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
 export type ColumnKey = 'id' | 'type' | 'summary' | 'status' | 'progress' | 'errorCode' | 'error' | 'createdAt' | 'actions'
@@ -37,7 +37,7 @@ export function useJobsColumnsVisibility(apiToken: string, profileId: string | n
 		defaultColumnVisibility,
 		{
 			legacyLocalStorageKey: 'jobsColumnVisibility',
-			legacyLocalStorageKeys: [legacyProfileScopedStorageKey('jobs', profileId, 'columnVisibility')],
+			legacyLocalStorageKeys: legacyProfileScopedStorageKeys('jobs', apiToken, profileId, 'columnVisibility'),
 		},
 	)
 

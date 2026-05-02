@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { offlineUploadsDisabledHint, selectBucketFirstSentenceHint } from '../../../lib/actionHints'
 import { ensureDomShims } from '../../../test/domShims'
 import { UploadsSelectionSection } from '../UploadsSelectionSection'
 
@@ -32,7 +33,7 @@ describe('UploadsSelectionSection', () => {
 				onOpenPicker={onOpenPicker}
 				isOffline={false}
 				uploadsSupported
-				queueDisabledReason="Select a bucket first."
+				queueDisabledReason={selectBucketFirstSentenceHint()}
 				selectedFiles={[]}
 				destinationLabel="s3://primary-bucket/"
 				selectionKind="empty"
@@ -43,7 +44,7 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.getByText('0 B')).toBeInTheDocument()
 		expect(screen.getByText('s3://primary-bucket/')).toBeInTheDocument()
 		expect(screen.getByText('Not selected')).toBeInTheDocument()
-		expect(screen.getByText('Select a bucket first.')).toBeInTheDocument()
+		expect(screen.getByText(selectBucketFirstSentenceHint())).toBeInTheDocument()
 		expect(screen.getByText('No files or folders selected.')).toBeInTheDocument()
 
 		fireEvent.click(screen.getByRole('button', { name: /Add from device/i }))
@@ -89,7 +90,7 @@ describe('UploadsSelectionSection', () => {
 				onOpenPicker={vi.fn()}
 				isOffline
 				uploadsSupported={false}
-				queueDisabledReason="Offline: uploads are disabled."
+				queueDisabledReason={offlineUploadsDisabledHint()}
 				selectedFiles={[createFile('offline.txt', 512)]}
 				destinationLabel="s3://primary-bucket/"
 				selectionKind="files"
@@ -97,7 +98,7 @@ describe('UploadsSelectionSection', () => {
 		)
 
 		expect(screen.getByRole('button', { name: /Add from device/i })).toBeDisabled()
-		expect(screen.getByText('Offline: uploads are disabled.')).toBeInTheDocument()
+		expect(screen.getByText(offlineUploadsDisabledHint())).toBeInTheDocument()
 		expect(screen.getByText('Files')).toBeInTheDocument()
 	})
 })

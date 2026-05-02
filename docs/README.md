@@ -4,8 +4,8 @@ Keep this folder small. The retained docs are the operator and release reference
 that need to stay close to the codebase.
 
 - [RUNBOOK.md](RUNBOOK.md): deployment, backup, restore, reverse-proxy, and incident operations
-- [TESTING.md](TESTING.md): local checks, focused reproduction script usage (`./scripts/repro_backend_focus.sh`), the minimal CI pair wrapper (`./scripts/check_ci_pair.sh`), live smoke flows, and CI-facing test commands
-- [FRONTEND_STATE_BOUNDARIES.md](FRONTEND_STATE_BOUNDARIES.md): where auth state, API client state, route guards, and page-local orchestration belong after the provider split
+- [TESTING.md](TESTING.md): local checks, focused reproduction script usage (`./scripts/repro_backend_focus.sh`), the minimal CI pair wrapper (`./scripts/check_ci_pair.sh`) including workflow lint but excluding bundle-budget and Playwright lanes, explicit bundle-budget guidance, browser-test lane split and geometry-guard rules, reviewer quick-check guidance, repo-local `actionlint` installation plus workflow lint, and CI-facing test commands
+- [FRONTEND_STATE_BOUNDARIES.md](FRONTEND_STATE_BOUNDARIES.md): where auth state, API client state, `FullApp` shell state, and page shell/controller/composition layers belong after the provider split
 - [RELEASE_GATE.md](RELEASE_GATE.md): minimum release bar and required evidence
 - [PROVIDERS.md](PROVIDERS.md): provider support matrix and operator-facing capability notes
 - [PORTABLE_BACKUP.md](PORTABLE_BACKUP.md): portable backup/import scope, workflow, validation, and limits
@@ -28,6 +28,6 @@ Related repository test helpers:
 
 Release-prep documents:
 
-- [release/PR_BODY.md](release/PR_BODY.md): current PR body draft for the active quality/refactor rollout
-- [release/DEPLOYMENT_CHECKLIST.md](release/DEPLOYMENT_CHECKLIST.md): pre-deploy checklist for remote/realtime/upload hardening changes
+- [release/PR_BODY.md](release/PR_BODY.md): current PR body draft for the active quality/refactor rollout, including browser lane and workflow-lint evidence wording
+- [release/DEPLOYMENT_CHECKLIST.md](release/DEPLOYMENT_CHECKLIST.md): pre-deploy checklist for remote/realtime/upload hardening changes, including browser lane and workflow-lint verification
 - [release/REMAINING_STRUCTURE_DEBT.md](release/REMAINING_STRUCTURE_DEBT.md): one-page follow-up debt priority list

@@ -9,7 +9,6 @@ import {
 	seedLocalStorage,
 	textFixture,
 } from './apiFixtures'
-export { expectLocatorWithinViewport, expectNoPageHorizontalOverflow } from './mobileResponsive'
 
 type StorageSeed = {
 	apiToken: string
@@ -30,8 +29,11 @@ const defaultStorage: StorageSeed = {
 const now = '2024-01-01T00:00:00Z'
 const longKey =
 	'reports/mobile/a-very-long-object-key-that-should-wrap-on-mobile-without-causing-horizontal-overflow-or-clipped-actions.log'
+const previewImageKey = 'preview.png'
+const previewSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" rx="18" fill="#d7f0e8"/><circle cx="52" cy="52" r="18" fill="#7ab89f"/><path d="M24 112l32-30 22 18 18-14 24 26H24z" fill="#2f6f57"/><text x="72" y="132" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#1b4332">PNG</text></svg>'
 const objectItems = [
 	{ key: 'alpha.txt', size: 12, lastModified: now, etag: '"alpha"' },
+	{ key: previewImageKey, size: 2048, lastModified: now, etag: '"preview"' },
 	{ key: longKey, size: 4096, lastModified: now, etag: '"long"' },
 ]
 
@@ -42,6 +44,14 @@ const metaByKey = {
 		etag: '"alpha"',
 		lastModified: now,
 		contentType: 'text/plain',
+		metadata: { suite: 'mobile-responsive' },
+	},
+	[previewImageKey]: {
+		key: previewImageKey,
+		size: 2048,
+		etag: '"preview"',
+		lastModified: now,
+		contentType: 'image/png',
 		metadata: { suite: 'mobile-responsive' },
 	},
 	[longKey]: {
@@ -65,6 +75,14 @@ export async function seedObjectsMobileResponsiveStorage(page: Page, overrides: 
 }
 
 export async function installObjectsMobileResponsiveFixtures(page: Page) {
+	await page.route('**/__test__/preview/**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/svg+xml',
+			body: previewSvg,
+		})
+	})
+
 	await installApiFixtures(page, [
 		{
 			method: 'GET',
@@ -102,6 +120,27 @@ export async function installObjectsMobileResponsiveFixtures(page: Page) {
 						commonPrefixes: ['reports/'],
 						items: objectItems,
 					}),
+				}
+			},
+		},
+		{
+			method: 'GET',
+			path: new RegExp(`/api/v1/buckets/${defaultStorage.bucket}/objects/thumbnail(?:\\?.*)?$`),
+			handler: () => ({
+				contentType: 'image/svg+xml',
+				body: previewSvg,
+			}),
+		},
+		{
+			method: 'GET',
+			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/download-url`,
+			handler: ({ url }) => {
+				const key = url.searchParams.get('key') ?? previewImageKey
+				return {
+					json: {
+						url: `${url.origin}/__test__/preview/${encodeURIComponent(key)}`,
+						expiresAt: '2024-01-01T01:00:00Z',
+					},
 				}
 			},
 		},

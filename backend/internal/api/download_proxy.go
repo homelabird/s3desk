@@ -7,8 +7,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -112,7 +114,8 @@ func (s *server) buildDownloadProxyURL(r *http.Request, token downloadProxyToken
 
 	if base := s.externalBaseURL(); base != nil {
 		resolved := *base
-		resolved.Path = strings.TrimRight(resolved.Path, "/") + "/download-proxy"
+		resolved.Path = canonicalDownloadProxyBasePath(resolved.Path)
+		resolved.RawPath = ""
 		resolved.RawQuery = values.Encode()
 		resolved.Fragment = ""
 		return resolved.String()
@@ -141,7 +144,49 @@ func (s *server) externalBaseURL() *url.URL {
 	default:
 		return nil
 	}
+	if parsed.User != nil {
+		return nil
+	}
+	host, ok := canonicalExternalBaseHost(parsed.Host, parsed.Hostname(), parsed.Port())
+	if !ok {
+		return nil
+	}
+	parsed.Host = host
 	return parsed
+}
+
+func canonicalDownloadProxyBasePath(basePath string) string {
+	cleaned := path.Clean("/" + strings.TrimSpace(basePath))
+	return strings.TrimRight(cleaned, "/") + "/download-proxy"
+}
+
+func canonicalExternalBaseHost(rawHost, hostname, port string) (string, bool) {
+	host := normalizeHost(hostname)
+	if host == "" {
+		return "", false
+	}
+	if hasExplicitURLPort(rawHost) {
+		portNum, err := strconv.Atoi(strings.TrimSpace(port))
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return "", false
+		}
+		return net.JoinHostPort(host, strconv.Itoa(portNum)), true
+	}
+	if strings.Contains(host, ":") {
+		return "[" + host + "]", true
+	}
+	return host, true
+}
+
+func hasExplicitURLPort(rawHost string) bool {
+	rawHost = strings.TrimSpace(rawHost)
+	if rawHost == "" {
+		return false
+	}
+	if strings.HasPrefix(rawHost, "[") {
+		return strings.Contains(rawHost, "]:")
+	}
+	return strings.Count(rawHost, ":") == 1
 }
 
 func requestScheme(r *http.Request) string {

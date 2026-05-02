@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { selectProfileFirstHint } from '../../lib/actionHints'
 import { createMockApiClient } from '../../test/mockApiClient'
 import { LocalPathBrowseModal } from '../LocalPathBrowseModal'
 
@@ -199,7 +200,7 @@ describe('LocalPathBrowseModal', () => {
 			await Promise.resolve()
 		})
 
-		expect(screen.getByText('Select a profile first')).toBeInTheDocument()
+		expect(screen.getByText(selectProfileFirstHint())).toBeInTheDocument()
 		expect(screen.queryByTestId('node-/stale-after-profile-clear')).not.toBeInTheDocument()
 	})
 })

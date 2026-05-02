@@ -1,7 +1,7 @@
-import { Grid, message } from "antd";
+import { Grid } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { APIClient, APIError } from "../../api/client";
+import { APIError, type APIClientShape } from "../../api/client";
 import type {
   BucketPolicyPutRequest,
   BucketPolicyResponse,
@@ -11,6 +11,7 @@ import type {
 import { hasPendingAction, runIfActionIdle } from "../../lib/pendingActionGuard";
 import { BucketPolicyContentTabs } from "./BucketPolicyContentTabs";
 import { BucketPolicyFooterActions } from "./BucketPolicyFooterActions";
+import { bucketsFeedback } from "./bucketsFeedback";
 import {
   getVisibleUnifiedDiff,
   getUnifiedDiffStats,
@@ -48,7 +49,7 @@ import { useBucketPolicyQuery } from "./useBucketPolicyQuery";
 import { useBucketPolicyMutations } from "./useBucketPolicyMutations";
 
 export function BucketPolicyModal(props: {
-  api: APIClient;
+  api: APIClientShape;
   apiToken: string;
   profileId: string;
   provider?: Profile["provider"];
@@ -112,7 +113,7 @@ export function BucketPolicyModal(props: {
 }
 
 function BucketPolicyEditor(props: {
-  api: APIClient;
+  api: APIClientShape;
   apiToken: string;
   profileId: string;
   bucket: string;
@@ -446,13 +447,11 @@ function BucketPolicyEditor(props: {
     if (!editorActiveRef.current) return;
     if (isBusy) return;
     if (!parsed.ok) {
-      message.error(parsed.error ?? "Invalid policy JSON");
+      bucketsFeedback.invalidPolicyJson(parsed.error);
       return;
     }
     if (hasBlockingValidationIssues) {
-      message.error(
-        localValidationErrors[0] ?? "Fix local validation issues first",
-      );
+      bucketsFeedback.fixLocalValidationIssuesFirst(localValidationErrors[0]);
       setActiveTab("validate");
       return;
     }
@@ -529,11 +528,11 @@ function BucketPolicyEditor(props: {
           if (!editorActiveRef.current) return;
           if (isBusy) return;
           if (!parsed.ok) {
-            message.error(parsed.error ?? "Invalid JSON policy");
+            bucketsFeedback.invalidJsonPolicy(parsed.error);
             return;
           }
           if (hasBlockingValidationIssues) {
-            message.error(localValidationErrors[0] ?? "Fix local validation issues first");
+            bucketsFeedback.fixLocalValidationIssuesFirst(localValidationErrors[0]);
             return;
           }
           validateMutation.mutate();

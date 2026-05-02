@@ -95,6 +95,87 @@ func TestJobLogsTailAndOffsets(t *testing.T) {
 	}
 }
 
+func TestJobArtifactDownloadForSucceededZipJob(t *testing.T) {
+	t.Parallel()
+
+	st, _, srv, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	job := createJob(t, srv, profile.ID, jobs.JobTypeS3ZipPrefix, map[string]any{
+		"bucket": "test-bucket",
+		"prefix": "reports/",
+	})
+
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := st.UpdateJobStatus(context.Background(), job.ID, models.JobStatusSucceeded, nil, &finishedAt, nil, nil, nil); err != nil {
+		t.Fatalf("mark succeeded: %v", err)
+	}
+
+	artifactDir := filepath.Join(dataDir, "artifacts", "jobs")
+	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+		t.Fatalf("mkdir artifact dir: %v", err)
+	}
+	wantBody := []byte("zip-payload")
+	if err := os.WriteFile(filepath.Join(artifactDir, job.ID+".zip"), wantBody, 0o600); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodGet, "/api/v1/jobs/"+job.ID+"/artifact", profile.ID, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
+	}
+	if got := res.Header.Get("Content-Type"); got != "application/zip" {
+		t.Fatalf("expected application/zip, got %q", got)
+	}
+	if got := res.Header.Get("Content-Length"); got != strconv.FormatInt(int64(len(wantBody)), 10) {
+		t.Fatalf("expected content length %d, got %q", len(wantBody), got)
+	}
+	if got := res.Header.Get("Content-Disposition"); !strings.Contains(got, jobArtifactFilename(job)) {
+		t.Fatalf("expected content disposition to include %q, got %q", jobArtifactFilename(job), got)
+	}
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read artifact body: %v", err)
+	}
+	if !bytes.Equal(body, wantBody) {
+		t.Fatalf("unexpected artifact body %q", string(body))
+	}
+}
+
+func TestJobArtifactReturnsNotFoundWhenArchiveMissing(t *testing.T) {
+	t.Parallel()
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	job := createJob(t, srv, profile.ID, jobs.JobTypeS3ZipPrefix, map[string]any{
+		"bucket": "test-bucket",
+		"prefix": "reports/",
+	})
+
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := st.UpdateJobStatus(context.Background(), job.ID, models.JobStatusSucceeded, nil, &finishedAt, nil, nil, nil); err != nil {
+		t.Fatalf("mark succeeded: %v", err)
+	}
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodGet, "/api/v1/jobs/"+job.ID+"/artifact", profile.ID, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 404, got %d: %s", res.StatusCode, string(body))
+	}
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "not_found" {
+		t.Fatalf("expected not_found, got %q", errResp.Error.Code)
+	}
+	if errResp.Error.Message != "job artifact not found" {
+		t.Fatalf("expected job artifact not found, got %q", errResp.Error.Message)
+	}
+}
+
 func TestJobCancelLifecycle(t *testing.T) {
 	lockTestEnv(t)
 	installJobsProcessHooks(t, func(ctx context.Context, _ string, args []string, _ string, _ jobs.TestRunRcloneAttemptOptions, writeLog func(level string, message string)) (string, error) {
@@ -365,6 +446,65 @@ func TestJobCreateQueueFullRollsBackCreatedJob(t *testing.T) {
 	}
 	if listed.Items[0].ID != first.ID {
 		t.Fatalf("expected persisted job %s, got %s", first.ID, listed.Items[0].ID)
+	}
+}
+
+func TestJobRetryQueueFullRollsBackCreatedJob(t *testing.T) {
+	lockTestEnv(t)
+	t.Setenv("JOB_QUEUE_CAPACITY", "1")
+
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	first := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+		"bucket": "test-bucket",
+		"keys":   []any{"a.txt"},
+	})
+
+	ctx := context.Background()
+	retryable, err := st.CreateJob(ctx, profile.ID, store.CreateJobInput{
+		Type: jobs.JobTypeS3DeleteObjects,
+		Payload: map[string]any{
+			"bucket": "test-bucket",
+			"keys":   []any{"b.txt"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create retryable job: %v", err)
+	}
+
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	errorCode := jobs.ErrorCodeUnknown
+	if err := st.UpdateJobStatus(ctx, retryable.ID, models.JobStatusFailed, nil, &finishedAt, nil, nil, &errorCode); err != nil {
+		t.Fatalf("mark retryable failed: %v", err)
+	}
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs/"+retryable.ID+"/retry", profile.ID, nil)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusTooManyRequests {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 429, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "job_queue_full" {
+		t.Fatalf("expected job_queue_full, got %q", errResp.Error.Code)
+	}
+
+	listed, err := st.ListJobs(context.Background(), profile.ID, store.JobFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(listed.Items) != 2 {
+		t.Fatalf("expected exactly 2 persisted jobs, got %d", len(listed.Items))
+	}
+	persisted := map[string]bool{}
+	for _, item := range listed.Items {
+		persisted[item.ID] = true
+	}
+	if !persisted[first.ID] || !persisted[retryable.ID] {
+		t.Fatalf("expected only original jobs to persist, got %#v", persisted)
 	}
 }
 

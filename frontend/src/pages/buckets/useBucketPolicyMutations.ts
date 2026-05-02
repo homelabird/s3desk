@@ -1,21 +1,17 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { APIError, type APIClient } from "../../api/client";
+import { APIError, type APIClientShape } from "../../api/client";
+import { queryKeys } from "../../api/queryKeys";
 import type {
   BucketPolicyPutRequest,
   BucketPolicyValidateResponse,
   Profile,
 } from "../../api/types";
-import { formatErrorWithHint as formatErr } from "../../lib/errors";
-import {
-  formatUnavailableOperationMessage,
-  formatValidationOperationMessage,
-} from "../../lib/providerOperationFeedback";
-import { message } from "antd";
+import { bucketsFeedback } from "./bucketsFeedback";
 
 export function useBucketPolicyMutations(props: {
-  api: APIClient;
+  api: APIClientShape;
   apiToken: string;
   profileId: string;
   bucket: string;
@@ -41,12 +37,12 @@ export function useBucketPolicyMutations(props: {
 
   const invalidatePolicyQueries = async () => {
     await queryClient.invalidateQueries({
-      queryKey: ["bucketPolicy", props.profileId, props.bucket, props.apiToken],
+      queryKey: queryKeys.buckets.policy(props.profileId, props.bucket, props.apiToken),
       exact: true,
     });
     if (props.provider === "gcp_gcs" || props.provider === "azure_blob") {
       await queryClient.invalidateQueries({
-        queryKey: ["bucketGovernance", props.profileId, props.bucket, props.apiToken],
+        queryKey: queryKeys.buckets.governance(props.profileId, props.bucket, props.apiToken),
         exact: true,
       });
     }
@@ -67,7 +63,7 @@ export function useBucketPolicyMutations(props: {
       ) {
         return;
       }
-      message.success("Policy saved");
+      bucketsFeedback.policySaved();
       props.setLastProviderError(null);
       props.onClose();
     },
@@ -80,7 +76,7 @@ export function useBucketPolicyMutations(props: {
       }
       props.setActiveTab("validate");
       props.setLastProviderError(err instanceof APIError ? err : null);
-      message.error(formatErr(err));
+      bucketsFeedback.error(err);
     },
   });
 
@@ -99,7 +95,7 @@ export function useBucketPolicyMutations(props: {
       ) {
         return;
       }
-      message.success("Policy deleted");
+      bucketsFeedback.policyDeleted();
       props.setLastProviderError(null);
       props.onClose();
     },
@@ -112,7 +108,7 @@ export function useBucketPolicyMutations(props: {
       }
       props.setActiveTab("validate");
       props.setLastProviderError(err instanceof APIError ? err : null);
-      message.error(formatErr(err));
+      bucketsFeedback.error(err);
     },
   });
 
@@ -136,15 +132,7 @@ export function useBucketPolicyMutations(props: {
       }
       props.setServerValidation(resp);
       props.setServerValidationError(null);
-      const { content, duration } = formatValidationOperationMessage({
-        successMessage: "Validation OK",
-        failureMessage: "Validation found issues",
-        ok: resp.ok,
-        errors: resp.errors,
-        warnings: resp.warnings,
-      });
-      if (resp.ok) message.success(content, duration);
-      else message.warning(content, duration);
+      bucketsFeedback.policyValidationResult(resp);
     },
     onError: (err, _vars, context) => {
       if (
@@ -154,12 +142,8 @@ export function useBucketPolicyMutations(props: {
         return;
       }
       props.setServerValidation(null);
-      const { content, duration } = formatUnavailableOperationMessage(
-        "Policy validation unavailable",
-        err,
-      );
+      const content = bucketsFeedback.policyValidationUnavailable(err);
       props.setServerValidationError(content);
-      message.error(content, duration);
     },
   });
 

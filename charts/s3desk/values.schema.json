@@ -23,6 +23,18 @@
     "imagePullSecrets": {
       "type": "array"
     },
+    "podSecurityContext": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "securityContext": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "serviceAccount": {
       "type": "object",
       "properties": {
@@ -245,8 +257,23 @@
           "type": "string",
           "description": "API token used for authentication. Must not be the insecure placeholder value.",
           "not": {
-            "const": "change-me"
+            "enum": [
+              "change-me",
+              "changeme",
+              "default",
+              "token",
+              "api-token",
+              "s3desk",
+              "s3desk-local",
+              "replace-me",
+              "replace-with-a-long-random-token",
+              "replace-me-with-a-strong-token"
+            ]
           }
+        },
+        "encryptionKey": {
+          "type": "string",
+          "description": "Backup authentication/encryption key. Browser-facing remote deployments require this or secrets.existingSecret."
         },
         "allowedHosts": {
           "type": "array",
@@ -461,7 +488,18 @@
                     "type": "string",
                     "minLength": 1,
                     "not": {
-                      "const": "change-me"
+                      "enum": [
+                        "change-me",
+                        "changeme",
+                        "default",
+                        "token",
+                        "api-token",
+                        "s3desk",
+                        "s3desk-local",
+                        "replace-me",
+                        "replace-with-a-long-random-token",
+                        "replace-me-with-a-strong-token"
+                      ]
                     }
                   }
                 }

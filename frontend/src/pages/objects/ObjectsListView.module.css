@@ -43,6 +43,40 @@
   min-width: 0;
 }
 
+.selectionBarMeta,
+.selectionBarActions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.selectionBarMeta {
+  flex: 1 1 auto;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.selectionBarActions {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.selectionBarCount {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.selectionBarButton {
+  min-height: 24px;
+  line-height: 1.2;
+}
+
+.selectionBarIconOnlyButton {
+  min-width: 24px;
+}
+
 .listHeaderRow {
   padding: 8px 12px;
   border-bottom: 1px solid var(--s3d-color-border);
@@ -72,8 +106,8 @@
 }
 
 .listGridCompact {
-  grid-template-columns: 28px minmax(0, 1fr) 44px;
-  gap: 8px;
+  grid-template-columns: 24px minmax(0, 1fr) 32px;
+  gap: 6px;
 }
 
 .listGridWide {
@@ -86,6 +120,20 @@
 
 .listHeaderGrid {
   font-size: 12px;
+}
+
+.listHeaderSortButton {
+  min-height: 24px !important;
+  line-height: 1.2;
+}
+
+.listHeaderLabel,
+.listHeaderEndCell {
+  line-height: 1.2;
+}
+
+.listHeaderEndCell {
+  justify-self: end;
 }
 
 .listRowShell {
@@ -142,14 +190,20 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .listRowObjectMain {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+}
+
+.listRowCheckboxCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .listRowThumbnailWrap {
@@ -163,6 +217,28 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.listRowBodyButton {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 6px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.listRowBodyButton:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
 }
 
 .listRowMetricCellRight {
@@ -194,8 +270,8 @@
 }
 
 .listRowMetaCompact {
-  font-size: 12px;
-  line-height: 1.2;
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 .listRowAuxActions {
@@ -211,6 +287,13 @@
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.listRowIconButton {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0 !important;
+  flex: 0 0 auto;
 }
 
 .virtualListContent {
@@ -387,6 +470,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .listControlsViewToggle {
@@ -394,10 +478,11 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .listControlsSortSelect {
-  min-width: 180px;
+  min-width: 170px;
   max-width: 100%;
 }
 
@@ -505,6 +590,41 @@
   width: 100%;
 }
 
+.listControlsStatusCompact {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--s3d-color-info-border);
+  border-radius: var(--s3d-radius-sm);
+  background: color-mix(in srgb, var(--s3d-color-info-bg) 82%, var(--s3d-color-bg-card) 18%);
+}
+
+.listControlsStatusCompactText {
+  min-width: 0;
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.listControlsStatusCompactTitle {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.listControlsStatusCompactHint {
+  display: block;
+  line-height: 1.35;
+}
+
+.listControlsStatusCompactAction {
+  flex: 0 0 auto;
+}
+
 .listControlsStatusText {
   display: block;
 }
@@ -516,7 +636,7 @@
 }
 
 .listControlsSearchInput {
-  width: 320px;
+  width: min(100%, 320px);
   max-width: 100%;
 }
 
@@ -542,25 +662,35 @@
   flex-wrap: wrap;
 }
 
+.listControlsCompactMeta {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .listControlsDesktopRow {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 10px 12px;
 }
 
 .listControlsDesktopLeft {
   min-width: 0;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }
 
 .listControlsSummaryText {
   line-height: 1.5;
+  white-space: nowrap;
+  justify-self: end;
 }
 
 .listControlsHintText {
@@ -570,14 +700,19 @@
 
 @media (max-width: 768px) {
   .breadcrumbRow {
-    flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
+    flex-wrap: nowrap;
   }
 
-  .listControlsLocationRow,
   .listControlsDesktopLeft,
-  .listControlsTopActions {
+  .listControlsLocationRow {
     width: 100%;
+  }
+
+  .listControlsTopActions {
+    width: auto;
+    flex: 0 0 auto;
   }
 
   .listControlsCompactFooter {
@@ -585,11 +720,17 @@
   }
 
   .selectionBar {
-    padding: 8px 10px;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .selectionBarMeta,
+  .selectionBarActions {
+    gap: 5px;
   }
 
   .listHeaderRow {
-    padding: 6px 10px;
+    padding: 5px 10px;
   }
 }
 
@@ -601,16 +742,116 @@
       ) 120px;
     gap: 10px;
   }
+
+  .listControlsDesktopRow {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+  }
+
+  .listControlsCompactFooter {
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .listControlsCompactMeta {
+    gap: 3px 8px;
+  }
+
+  .listControlsStatusCompact {
+    gap: 6px 8px;
+    padding: 7px 8px;
+  }
+
+  .listControlsStatusCompactTitle,
+  .listControlsStatusCompactHint {
+    line-height: 1.3;
+  }
+
+  .listControlsSearchInput {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .listControlsDesktopLeft {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .listControlsSortGroup {
+    gap: 6px;
+  }
+
+  .listControlsSortSelect {
+    min-width: 150px;
+  }
+
+  .listControlsViewToggle {
+    gap: 6px;
+  }
+
+  .listControlsSummaryText {
+    justify-self: start;
+    line-height: 1.35;
+  }
 }
 
 @media (max-width: 640px) {
   .selectionBar {
-    flex-direction: column;
     align-items: flex-start;
   }
 }
 
 @media (max-width: 480px) {
+  .breadcrumbRow {
+    gap: 6px;
+  }
+
+  .listControlsLocationStack {
+    gap: 1px;
+  }
+
+  .listControlsLocationRow {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .listControlsLocationCode {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .breadcrumbList {
+    gap: 1px;
+  }
+
+  .breadcrumbListItem {
+    gap: 3px;
+  }
+
+  .breadcrumbLink {
+    font-size: 12px;
+  }
+
+  .listControlsSection {
+    gap: 6px;
+  }
+
+  .listControlsStack {
+    gap: 5px;
+  }
+
+  .listControlsTopActions {
+    gap: 4px;
+  }
+
+  .listControlsIconButton {
+    min-width: 30px;
+    min-height: 30px;
+  }
+
   .listControlsCompactActions {
     width: 100%;
   }
@@ -619,16 +860,106 @@
     flex: 1 1 160px;
   }
 
+  .listGridCompact {
+    grid-template-columns: 22px minmax(0, 1fr) 28px;
+    gap: 5px;
+  }
+
+  .listRowShell {
+    padding: 5px 8px;
+  }
+
+  .listRowNameCell {
+    gap: 5px;
+  }
+
+  .listRowMetaCompact {
+    font-size: 10px;
+  }
+
+  .listRowActionsCell {
+    gap: 2px;
+  }
+
+  .listRowIconButton {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
   .selectionBar {
-    padding: 8px;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .selectionBarMeta {
+    gap: 4px 6px;
+  }
+
+  .selectionBarActions {
+    gap: 4px;
+  }
+
+  .selectionBarCount {
+    font-size: 13px;
+  }
+
+  .selectionBarButton {
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  .selectionBarMoreButton {
+    min-width: 38px;
+    min-height: 38px;
+    padding-inline: 8px;
+  }
+
+  .selectionBarIconOnlyButton {
+    min-width: 38px;
+    min-height: 38px;
+    padding-inline: 8px;
+  }
+
+  .selectionBarMoreButton :global(.ant-btn-icon + span) {
+    display: none;
+  }
+
+  .selectionBarIconOnlyButton :global(.ant-btn-icon + span) {
+    display: none;
   }
 
   .listHeaderRow {
-    padding: 6px 8px;
+    padding: 4px 8px;
+  }
+
+  .listHeaderGrid {
+    font-size: 11px;
+  }
+
+  .listHeaderSortButton {
+    min-height: 36px !important;
   }
 }
 
 @media (max-width: 360px) {
+  .breadcrumbRow {
+    flex-wrap: wrap;
+  }
+
+  .selectionBarMeta,
+  .selectionBarActions {
+    width: 100%;
+  }
+
+  .selectionBarActions {
+    justify-content: flex-start;
+  }
+
+  .listControlsTopActions {
+    width: 100%;
+  }
+
   .listControlsCompactFooter {
     gap: 8px;
   }

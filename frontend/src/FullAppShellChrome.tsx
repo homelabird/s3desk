@@ -16,7 +16,7 @@ import { Button, Layout } from 'antd'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 
-import type { APIClient } from './api/client'
+import type { APIClientShape } from './api/client'
 import type { MetaResponse } from './api/types'
 import { BrandLockup } from './components/BrandLockup'
 import { MenuPopover } from './components/MenuPopover'
@@ -29,7 +29,7 @@ import type { ThemeMode } from './themeModeContext'
 import type { FullAppViewportState } from './useFullAppViewportState'
 import styles from './FullAppInner.module.css'
 
-const { Header, Content, Sider } = Layout
+const { Header, Sider } = Layout
 
 type NavItem = {
 	key: string
@@ -47,7 +47,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 export type FullAppShellChromeSession = {
-	api: APIClient
+	api: APIClientShape
 	meta?: MetaResponse
 	apiToken: string
 	profileId: string | null
@@ -75,7 +75,7 @@ export type FullAppShellChromeProps = {
 }
 
 function AppNavigation(props: {
-	api: APIClient
+	api: APIClientShape
 	meta?: MetaResponse
 	selectedKey: string
 	shellScopeKey: string
@@ -260,7 +260,7 @@ export function FullAppShellChrome({
 						</div>
 					) : null}
 				</Header>
-				<Content className={contentClassName}>{children}</Content>
+				<div className={contentClassName}>{children}</div>
 			</Layout>
 
 			<OverlaySheet

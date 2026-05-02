@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import {
 	getVisibleCreatedPrefix,
 	hasVisiblePrefixInObjectsData,
@@ -84,15 +85,34 @@ describe('objectsQueryCache', () => {
 			changedPrefix: 'alpha/beta/',
 			apiToken: 'token-a',
 		}
+		const listKey = (profileId: string, bucket: string, prefix: string, apiToken: string) =>
+			queryKeys.objects.list(profileId, bucket, prefix, apiToken)
+		const isRelevant = (queryKey: readonly unknown[]) => isObjectsQueryKeyRelevantToPrefix(queryKey, location)
 
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', '', 'token-a'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/beta/', 'token-a'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/beta/gamma/', 'token-a'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-b'], location)).toBe(false)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'other/', 'token-a'], location)).toBe(false)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-2', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(false)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objectsIndexSearch', 'profile-1', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(false)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', '', 'token-a'))).toBe(true)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/', 'token-a'))).toBe(true)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/beta/', 'token-a'))).toBe(true)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/beta/gamma/', 'token-a'))).toBe(true)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/', 'token-b'))).toBe(false)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', 'other/', 'token-a'))).toBe(false)
+		expect(isRelevant(listKey('profile-2', 'bucket-a', 'alpha/', 'token-a'))).toBe(false)
+		expect(
+			isRelevant(
+				queryKeys.objects.indexSearch({
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					query: 'alpha',
+					prefix: 'alpha/',
+					limit: 50,
+					ext: '',
+					minSize: null,
+					maxSize: null,
+					modifiedAfter: undefined,
+					modifiedBefore: undefined,
+					apiToken: 'token-a',
+				}),
+			),
+		).toBe(false)
 	})
 
 	it('treats an empty changed prefix as bucket-wide for objects queries', () => {
@@ -102,10 +122,13 @@ describe('objectsQueryCache', () => {
 			changedPrefix: '',
 			apiToken: 'token-a',
 		}
+		const listKey = (profileId: string, bucket: string, prefix: string, apiToken: string) =>
+			queryKeys.objects.list(profileId, bucket, prefix, apiToken)
+		const isRelevant = (queryKey: readonly unknown[]) => isObjectsQueryKeyRelevantToPrefix(queryKey, location)
 
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', '', 'token-a'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-a'], location)).toBe(true)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-a', 'alpha/', 'token-b'], location)).toBe(false)
-		expect(isObjectsQueryKeyRelevantToPrefix(['objects', 'profile-1', 'bucket-b', 'alpha/', 'token-a'], location)).toBe(false)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', '', 'token-a'))).toBe(true)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/', 'token-a'))).toBe(true)
+		expect(isRelevant(listKey('profile-1', 'bucket-a', 'alpha/', 'token-b'))).toBe(false)
+		expect(isRelevant(listKey('profile-1', 'bucket-b', 'alpha/', 'token-a'))).toBe(false)
 	})
 })

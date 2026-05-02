@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { failedToListObjectsTitle } from '../src/lib/actionHints'
 import {
 	buildBucketFixture,
 	buildFavoritesFixture,
@@ -10,6 +11,7 @@ import {
 	retryAfterErrorResponse,
 	seedLocalStorage,
 } from './support/apiFixtures'
+import { gotoObjectsPage, objectsListRow, objectsSelectionCheckbox } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -172,15 +174,15 @@ test('prefix navigation keeps its location while load-more failure recovers on r
 	await installPrefixPaginationFixtures(page)
 	await seedStorage(page)
 
-	await page.goto('/objects')
+	await gotoObjectsPage(page)
 
-	const prefixRow = page.locator('[data-objects-row="true"]', { hasText: 'docs/' }).first()
+	const prefixRow = objectsListRow(page, 'docs/')
 	await expect(prefixRow).toBeVisible()
 	await prefixRow.click()
 
 	await expect(page.getByText('s3://prefix-bucket/docs/')).toBeVisible()
 	await expect(page.getByRole('button', { name: 'docs/' })).toBeVisible()
-	await expect(page.getByRole('checkbox', { name: 'Select todo-0001.txt' })).toBeVisible()
+	await expect(objectsSelectionCheckbox(page, 'todo-0001.txt')).toBeVisible()
 	await expect(page.getByPlaceholder('Search current folder')).toHaveValue('docs')
 	await expect(page.getByText('Search paused at 1,000 items')).toBeVisible()
 
@@ -189,15 +191,15 @@ test('prefix navigation keeps its location while load-more failure recovers on r
 	await expect(loadMoreButton).toBeVisible()
 	await loadMoreButton.click()
 
-	const listError = page.getByRole('alert').filter({ hasText: 'Failed to list objects' })
-	await expect(listError).toBeVisible({ timeout: 15_000 })
+		const listError = page.getByRole('alert').filter({ hasText: failedToListObjectsTitle() })
+		await expect(listError).toBeVisible({ timeout: 15_000 })
 	await expect(listError).toContainText('temporary page failure')
 	await expectVisibleTodoRows(page)
 
 	await scrollAppContentToBottom(page)
 	await loadMoreButton.click()
 
-	await expect(page.getByRole('checkbox', { name: 'Select todo-1001.txt' })).toBeVisible()
+	await expect(objectsSelectionCheckbox(page, 'todo-1001.txt')).toBeVisible()
 	await expect(listError).toHaveCount(0)
 	await expect(page.getByText('s3://prefix-bucket/docs/')).toBeVisible()
 })

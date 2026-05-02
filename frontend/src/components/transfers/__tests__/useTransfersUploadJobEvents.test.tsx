@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { APIClient } from '../../../api/client'
+import type { APIClientShape } from '../../../api/client'
 import type { UploadTask } from '../transferTypes'
 import { getRealtimeSequenceState, useTransfersUploadJobEvents } from '../useTransfersUploadJobEvents'
 
@@ -138,7 +138,7 @@ describe('useTransfersUploadJobEvents', () => {
 			jobs: {
 				getJob: vi.fn().mockResolvedValue({ status: 'running' }),
 			},
-		} as unknown as APIClient
+		} as unknown as APIClientShape
 		const uploadTasksRef = { current: [buildUploadTask()] }
 
 		const { unmount } = renderHook(() =>
@@ -188,7 +188,7 @@ describe('useTransfersUploadJobEvents', () => {
 			jobs: {
 				getJob: vi.fn().mockResolvedValue({ status: 'running' }),
 			},
-		} as unknown as APIClient
+		} as unknown as APIClientShape
 		const uploadTasksRef = { current: [buildUploadTask()] }
 
 		const { unmount } = renderHook(() =>
@@ -242,7 +242,7 @@ describe('useTransfersUploadJobEvents', () => {
 			jobs: {
 				getJob: vi.fn().mockResolvedValue({ status: 'running' }),
 			},
-		} as unknown as APIClient
+		} as unknown as APIClientShape
 		const uploadTasksRef = { current: [buildUploadTask()] }
 
 		const { unmount } = renderHook(() =>
@@ -298,7 +298,7 @@ describe('useTransfersUploadJobEvents', () => {
 			jobs: {
 				getJob,
 			},
-		} as unknown as APIClient
+		} as unknown as APIClientShape
 		const uploadTasksRef = { current: [buildUploadTask()] }
 
 		const { unmount } = renderHook(() =>

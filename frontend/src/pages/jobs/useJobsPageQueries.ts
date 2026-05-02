@@ -2,10 +2,10 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 
 import { queryKeys } from '../../api/queryKeys'
-import type { APIClient } from '../../api/client'
-import type { Bucket, Job, JobStatus, Profile } from '../../api/types'
+import type { Bucket, Job, JobStatus } from '../../api/types'
+import type { JobsPageQueriesAPI } from '../../lib/pageApiScopes'
 import { measurePerf } from '../../lib/perf'
-import { getProviderCapabilities, getUploadCapabilityDisabledReason } from '../../lib/providerCapabilities'
+import { buildProfileCapabilityContext } from '../../lib/profileCapabilityContext'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
 
 type JobsPageQueryFilters = {
@@ -15,7 +15,7 @@ type JobsPageQueryFilters = {
 }
 
 type UseJobsPageQueriesArgs = {
-	api: APIClient
+	api: JobsPageQueriesAPI
 	apiToken: string
 	profileId: string | null
 	filters: JobsPageQueryFilters
@@ -35,21 +35,22 @@ export function useJobsPageQueries(props: UseJobsPageQueriesArgs) {
 		enabled: !!props.apiToken,
 	})
 
-	const selectedProfile: Profile | null = useMemo(() => {
-		if (!props.profileId) return null
-		return profilesQuery.data?.find((profile) => profile.id === props.profileId) ?? null
-	}, [profilesQuery.data, props.profileId])
-
-	const profileCapabilities = selectedProfile?.provider
-		? getProviderCapabilities(selectedProfile.provider, metaQuery.data?.capabilities?.providers, selectedProfile)
-		: null
-	const uploadSupported = profileCapabilities ? profileCapabilities.objectCrud && profileCapabilities.jobTransfer : true
-	const uploadDisabledReason = getUploadCapabilityDisabledReason(profileCapabilities)
+	const profileCapabilityContext = useMemo(
+		() =>
+			buildProfileCapabilityContext({
+				profiles: profilesQuery.data,
+				profileId: props.profileId,
+				meta: metaQuery.data,
+			}),
+		[metaQuery.data, profilesQuery.data, props.profileId],
+	)
+	const { selectedProfile, bucketCrudSupported, uploadSupported, uploadDisabledReason } = profileCapabilityContext
+	const bucketCapabilityResolved = !props.profileId || (profilesQuery.isSuccess && metaQuery.isSuccess)
 
 	const bucketsQuery = useQuery({
 		queryKey: queryKeys.buckets.list(props.profileId, props.apiToken),
 		queryFn: () => props.api.buckets.listBuckets(props.profileId!),
-		enabled: !!props.profileId,
+		enabled: !!props.profileId && bucketCapabilityResolved && bucketCrudSupported,
 		retry: false,
 		staleTime: getBucketsQueryStaleTimeMs(selectedProfile?.provider),
 	})

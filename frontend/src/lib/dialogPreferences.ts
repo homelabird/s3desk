@@ -1,4 +1,4 @@
-import { serverScopedStorageKey } from './profileScopedStorage'
+import { serverScopedStorageKey, serverStorageScope } from './profileScopedStorage'
 
 const STORAGE_KEY = 'dismissedDialogPreferences'
 const SCOPED_NAMESPACE = 'dialogPreference'
@@ -68,7 +68,7 @@ function isScopedPreferenceStorageKey(key: string): boolean {
 }
 
 function buildScopedPreferenceStoragePrefix(apiToken?: string | null): string {
-	const normalizedScope = resolveDialogPreferenceScopeApiToken(apiToken)?.trim() || '__no_server__'
+	const normalizedScope = serverStorageScope(resolveDialogPreferenceScopeApiToken(apiToken))
 	return `${SCOPED_NAMESPACE}:${normalizedScope}:`
 }
 

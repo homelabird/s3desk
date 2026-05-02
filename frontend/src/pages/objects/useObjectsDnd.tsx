@@ -1,15 +1,13 @@
-import { Button, Space, Typography, message } from 'antd'
 import type { QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { Job, JobCreateRequest } from '../../api/types'
-import { confirmDangerAction } from '../../lib/confirmDangerAction'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import { displayNameForKey, folderLabelFromPrefix, normalizePrefix } from './objectsListUtils'
+import { normalizePrefix } from './objectsListUtils'
 import { hasInternalObjectsDndPayload, OBJECTS_DND_MIME, resolveObjectsDropIntent } from './objectsDropIntent'
+import type { ObjectsDndPayload } from './objectsDndRuntime'
 
-const parseDndPayload = (dt: DataTransfer): DndPayload | null => {
+const parseDndPayload = (dt: DataTransfer): ObjectsDndPayload | null => {
 	const raw = dt.getData(OBJECTS_DND_MIME)
 	if (!raw) return null
 	try {
@@ -42,10 +40,6 @@ const dropModeFromEvent = (e: React.DragEvent): 'copy' | 'move' => {
 	const isCopy = e.ctrlKey || e.metaKey || e.altKey
 	return isCopy ? 'copy' : 'move'
 }
-
-type DndPayload =
-	| { kind: 'objects'; bucket: string; keys: string[] }
-	| { kind: 'prefix'; bucket: string; prefix: string }
 
 type UseObjectsDndArgs = {
 	profileId: string | null
@@ -92,167 +86,6 @@ export function useObjectsDnd({
 		return normalizePrefix(trimmed)
 	}, [])
 
-	const createJobAndNotify = useCallback(
-		async (
-			req: JobCreateRequest,
-			contextVersion: number,
-			scopeProfileId: string | null,
-			scopeApiToken: string,
-		) => {
-			if (!profileId) throw new Error('profile is required')
-			const job = await createJobWithRetry(req)
-			await queryClient.invalidateQueries({ queryKey: ['jobs', scopeProfileId, scopeApiToken], exact: false })
-			if (contextVersion !== dndContextVersionRef.current) return job
-			message.open({
-				type: 'success',
-				content: (
-					<Space>
-						<Typography.Text>Task started: {job.id}</Typography.Text>
-						<Button size="small" type="link" onClick={() => navigate('/jobs')}>
-							Open Jobs
-						</Button>
-					</Space>
-				),
-				duration: 6,
-			})
-			return job
-		},
-		[createJobWithRetry, navigate, profileId, queryClient],
-	)
-
-	const performDrop = useCallback(async (payload: DndPayload, targetPrefixRaw: string, mode: 'copy' | 'move') => {
-		if (!profileId || !bucket) return
-		const dropContextVersion = dndContextVersionRef.current
-		const dropScopeProfileId = profileId
-		const dropScopeApiToken = apiToken
-		if (payload.bucket !== bucket) {
-			message.warning('Drag & drop across buckets is not supported yet')
-			return
-		}
-
-		const targetPrefix = normalizeDropTargetPrefix(targetPrefixRaw)
-
-		if (payload.kind === 'prefix') {
-			const srcPrefix = normalizePrefix(payload.prefix)
-			const folderName = folderLabelFromPrefix(srcPrefix)
-			const dstPrefix = `${targetPrefix}${folderName}/`
-
-			if (dstPrefix === srcPrefix) {
-				message.info('Already in destination')
-				return
-			}
-			if (dstPrefix.startsWith(srcPrefix)) {
-				message.error('Cannot move/copy a folder into itself')
-				return
-			}
-
-			const doCreate = async () =>
-				createJobAndNotify({
-					type: mode === 'copy' ? 'transfer_copy_prefix' : 'transfer_move_prefix',
-					payload: {
-						srcBucket: bucket,
-						srcPrefix,
-						dstBucket: bucket,
-						dstPrefix,
-						include: [],
-						exclude: [],
-						dryRun: false,
-					},
-				}, dropContextVersion, dropScopeProfileId, dropScopeApiToken)
-
-			if (mode === 'move') {
-				confirmDangerAction({
-					title: `Move folder?`,
-					description: (
-						<Space orientation="vertical" size="small">
-							<Typography.Text>
-								Move <Typography.Text code>{`s3://${bucket}/${srcPrefix}`}</Typography.Text> →{' '}
-								<Typography.Text code>{`s3://${bucket}/${dstPrefix}`}</Typography.Text>
-							</Typography.Text>
-							<Typography.Text type="secondary">This will create a job and remove the source objects.</Typography.Text>
-						</Space>
-					),
-					confirmText: 'MOVE',
-					confirmHint: 'Type "MOVE" to confirm',
-					okText: 'Move',
-					onConfirm: async () => {
-						if (dropContextVersion !== dndContextVersionRef.current) return
-						await doCreate()
-					},
-				})
-				return
-			}
-
-			await doCreate()
-			return
-		}
-
-		const keys = payload.keys.filter(Boolean)
-		if (keys.length < 1) return
-
-		const pairs = keys
-			.map((srcKey) => {
-				const name = displayNameForKey(srcKey, prefix)
-				const dstKey = `${targetPrefix}${name}`
-				return { srcKey, dstKey }
-			})
-			.filter((p) => p.srcKey && p.dstKey)
-			.filter((p) => !(p.srcKey === p.dstKey))
-
-		if (pairs.length === 0) {
-			message.info('Already in destination')
-			return
-		}
-
-		const doCreate = async () => {
-			if (pairs.length > 1) {
-				return createJobAndNotify({
-					type: mode === 'copy' ? 'transfer_copy_batch' : 'transfer_move_batch',
-					payload: {
-						srcBucket: bucket,
-						dstBucket: bucket,
-						items: pairs,
-						dryRun: false,
-					},
-				}, dropContextVersion, dropScopeProfileId, dropScopeApiToken)
-			}
-			return createJobAndNotify({
-				type: mode === 'copy' ? 'transfer_copy_object' : 'transfer_move_object',
-				payload: {
-					srcBucket: bucket,
-					srcKey: pairs[0].srcKey,
-					dstBucket: bucket,
-					dstKey: pairs[0].dstKey,
-					dryRun: false,
-				},
-			}, dropContextVersion, dropScopeProfileId, dropScopeApiToken)
-		}
-
-		if (mode === 'move') {
-			confirmDangerAction({
-				title: `Move ${pairs.length} object(s)?`,
-				description: (
-					<Space orientation="vertical" size="small">
-						<Typography.Text>
-							Move to <Typography.Text code>{`s3://${bucket}/${targetPrefix}`}</Typography.Text>
-						</Typography.Text>
-						<Typography.Text type="secondary">This will create a job and remove the source objects.</Typography.Text>
-					</Space>
-				),
-				confirmText: 'MOVE',
-				confirmHint: 'Type "MOVE" to confirm',
-				okText: 'Move',
-				onConfirm: async () => {
-					if (dropContextVersion !== dndContextVersionRef.current) return
-					await doCreate()
-				},
-			})
-			return
-		}
-
-		await doCreate()
-	}, [apiToken, bucket, createJobAndNotify, normalizeDropTargetPrefix, prefix, profileId])
-
 	const onDndTargetDragOver = useCallback(
 		(e: React.DragEvent, targetPrefixRaw: string) => {
 			if (!canDragDrop) return
@@ -293,7 +126,9 @@ export function useObjectsDnd({
 				e.preventDefault()
 				e.stopPropagation()
 				setDndHoverPrefix(null)
-				message.info('Dropping local files on a folder target is not supported yet. Drop into the current folder area instead.')
+				void import('./objectsDndRuntime').then(({ showObjectsDndLocalFilesOnFolderTargetUnsupported }) => {
+					showObjectsDndLocalFilesOnFolderTargetUnsupported()
+				})
 				return
 			}
 			if (intent !== 'internal_object_dnd') return
@@ -304,9 +139,30 @@ export function useObjectsDnd({
 			const payload = parseDndPayload(e.dataTransfer)
 			if (!payload) return
 			const mode = dropModeFromEvent(e)
-			void performDrop(payload, targetPrefixRaw, mode).catch((err) => message.error(formatErr(err)))
+			const contextVersion = dndContextVersionRef.current
+			void import('./objectsDndRuntime')
+				.then(({ performObjectsDrop }) =>
+					performObjectsDrop({
+						payload,
+						targetPrefixRaw,
+						mode,
+						profileId,
+						apiToken,
+						bucket,
+						prefix,
+						contextVersion,
+						isCurrentContext: (version) => version === dndContextVersionRef.current,
+						createJobWithRetry,
+						queryClient,
+						onOpenJobs: () => navigate('/jobs'),
+					}),
+				)
+				.catch(async (err) => {
+					const { showObjectsDndError } = await import('./objectsDndRuntime')
+					showObjectsDndError(err)
+				})
 		},
-		[canDragDrop, performDrop],
+		[apiToken, bucket, canDragDrop, createJobWithRetry, navigate, prefix, profileId, queryClient],
 	)
 
 	const onRowDragStartObjects = useCallback(

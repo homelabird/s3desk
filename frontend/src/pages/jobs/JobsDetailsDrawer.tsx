@@ -4,6 +4,7 @@ import { useId, useLayoutEffect } from 'react'
 
 import type { Job } from '../../api/types'
 import { OverlaySheet } from '../../components/OverlaySheet'
+import { deleteSelectedObjectsLabel } from '../../lib/actionHints'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import { formatErrorWithHint as formatErr } from '../../lib/errors'
 import { formatDateTime } from '../../lib/format'
@@ -160,7 +161,7 @@ function buildOperationalSections(job: Job, uploadDetails: JobsUploadDetails | n
 		case 's3_delete_objects':
 			routing.push({ label: 'Target bucket', value: bucket ? `s3://${bucket}/` : null, code: true })
 			routing.push({ label: 'Selection', value: formatCount(keys.length || null, 'selected object') })
-			behavior.push({ label: 'Mode', value: 'Delete selected objects' })
+			behavior.push({ label: 'Mode', value: deleteSelectedObjectsLabel() })
 			break
 		case 's3_index_objects':
 			routing.push({ label: 'Target', value: formatS3Destination(bucket, prefix), code: true })

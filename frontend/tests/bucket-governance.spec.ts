@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, metaJson, seedLocalStorage } from './support/apiFixtures'
+import { gotoBucketsPage } from './support/ui'
 
 const now = '2026-03-10T00:00:00Z'
 const profileId = 'governance-profile'
@@ -81,8 +82,9 @@ async function seedBucketsPage(args: {
 }
 
 async function openControls(page: Page) {
-	await page.goto('/buckets')
-	await expect(page.getByText(bucket)).toBeVisible()
+	await gotoBucketsPage(page, {
+		ready: (scope) => scope.getByText(bucket),
+	})
 	await page.getByRole('button', { name: /controls/i }).first().click()
 }
 

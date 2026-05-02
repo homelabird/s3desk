@@ -42,6 +42,17 @@ For remote exposure, require all of the following:
 - an explicit `S3DESK_BIND_ADDRESS` choice in the compose environment
 - `EXTERNAL_BASE_URL` whenever generated browser-facing download links should stay rooted at a public hostname or reverse proxy URL
 
+## TLS Skip Verify Policy
+
+`tlsInsecureSkipVerify` is intended only for private, self-signed provider endpoints. The API validates that the profile endpoint is a custom private HTTPS endpoint before storing the setting.
+
+Runtime policy:
+
+- `./scripts/compose.sh remote` and `./scripts/compose.sh caddy` set `LOG_ENV=production` by default.
+- In production, rclone jobs refuse `tlsInsecureSkipVerify` unless `S3DESK_ALLOW_INSECURE_TLS_SKIP_VERIFY=true` is set.
+- When the exception is allowed, the backend emits a structured warning event named `job.rclone_tls_skip_verify`.
+- Do not enable the exception for public provider endpoints or shared credentials.
+
 ## Public HTTPS with Caddy
 
 Use `./scripts/compose.sh caddy` when you want Caddy to terminate TLS in front

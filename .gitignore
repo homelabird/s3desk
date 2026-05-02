@@ -2,6 +2,23 @@
 .tmp/
 data/
 backend/data/
+node_modules/
+test-results/
+playwright-report/
+.codex
+.codex/
+.playwright-mcp/
+
+# Root-local screenshots and exploratory Playwright notes.
+# Preserve release evidence under docs/release/evidence/ instead.
+/*-page.png
+/*-mobile.png
+/*-desktop.png
+/*-upload-modal.png
+/playwright-*-snapshot.md
+/*-deep.md
+/process
+
 *.db
 *.db-wal
 *.db-shm

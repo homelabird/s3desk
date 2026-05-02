@@ -5,7 +5,8 @@ import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { TransfersContextValue } from '../../../components/Transfers'
+import { queryKeys } from '../../../api/queryKeys'
+import type { TransfersContextValue } from '../../../components/transfersTypes'
 import { useObjectsZipJobs } from '../useObjectsZipJobs'
 
 const messageOpenMock = vi.fn()
@@ -117,7 +118,7 @@ describe('useObjectsZipJobs', () => {
 			await Promise.resolve()
 		})
 
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(transfers.queueDownloadJobArtifact).not.toHaveBeenCalled()
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
@@ -158,7 +159,7 @@ describe('useObjectsZipJobs', () => {
 			await Promise.resolve()
 		})
 
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(transfers.queueDownloadJobArtifact).not.toHaveBeenCalled()
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
@@ -199,7 +200,7 @@ describe('useObjectsZipJobs', () => {
 			await Promise.resolve()
 		})
 
-		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 		expect(transfers.queueDownloadJobArtifact).not.toHaveBeenCalled()
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})

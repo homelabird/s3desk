@@ -1,10 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
-import { message } from 'antd'
 import { useRef, useState, type MutableRefObject } from 'react'
 
-import type { APIClient } from '../../api/client'
-import { formatErrorWithHint as formatErr } from '../../lib/errors'
-import { formatProviderOperationFailureMessage, formatUnavailableOperationMessage } from '../../lib/providerOperationFeedback'
+import type { APIClientShape } from '../../api/client'
 import type { ProfileFormValues } from './profileTypes'
 import {
 	clearPendingModalState,
@@ -15,10 +12,10 @@ import {
 	type PendingProfileState,
 } from './profileMutationScope'
 import { toCreateRequest, toUpdateRequest } from './profileMutationUtils'
-import { formatBps } from './profileViewModel'
+import { profilesFeedback } from './profilesFeedback'
 
 export function useProfilesPageMutations(args: {
-	api: APIClient
+	api: APIClientShape
 	apiToken: string
 	currentScopeKey: string
 	profileId: string | null
@@ -90,7 +87,7 @@ export function useProfilesPageMutations(args: {
 				currentScopeVersion: serverScopeVersionRef.current,
 			})
 			if (matchesCurrentSession) {
-				message.success('Profile created')
+				profilesFeedback.profileCreated()
 				setProfileId(created.id)
 				closeCreateModal()
 			}
@@ -100,7 +97,7 @@ export function useProfilesPageMutations(args: {
 					await applyTLSUpdate(created.id, values, 'create', context.apiToken)
 				} catch (err) {
 					if (matchesCurrentSession) {
-						message.error(`mTLS update failed: ${formatErr(err)}`)
+						profilesFeedback.mtlsUpdateFailed(err)
 					}
 				}
 			}
@@ -118,7 +115,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			message.error(formatErr(err))
+			profilesFeedback.error(err)
 		},
 	})
 
@@ -152,7 +149,7 @@ export function useProfilesPageMutations(args: {
 				currentScopeVersion: serverScopeVersionRef.current,
 			})
 			if (matchesCurrentSession) {
-				message.success('Profile updated')
+				profilesFeedback.profileUpdated()
 				closeEditModal()
 			}
 			if (inCurrentServerScope && context) {
@@ -161,7 +158,7 @@ export function useProfilesPageMutations(args: {
 					await applyTLSUpdate(mutationArgs.id, mutationArgs.values, 'edit', context.apiToken)
 				} catch (err) {
 					if (matchesCurrentSession) {
-						message.error(`mTLS update failed: ${formatErr(err)}`)
+						profilesFeedback.mtlsUpdateFailed(err)
 					}
 				}
 			}
@@ -179,7 +176,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			message.error(formatErr(err))
+			profilesFeedback.error(err)
 		},
 	})
 
@@ -215,7 +212,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			message.success('Profile deleted')
+			profilesFeedback.profileDeleted()
 			if (profileId === id) {
 				setProfileId(null)
 			}
@@ -232,7 +229,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			message.error(formatErr(err))
+			profilesFeedback.error(err)
 		},
 	})
 
@@ -259,25 +256,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			const storageType = resp.details?.storageType ?? ''
-			const storageSource = resp.details?.storageTypeSource ?? ''
-			const buckets = typeof resp.details?.buckets === 'number' ? resp.details.buckets : null
-			const suffixParts: string[] = []
-			if (storageType) suffixParts.push(`type: ${storageType}`)
-			if (storageSource) suffixParts.push(`source: ${storageSource}`)
-			if (typeof buckets === 'number') suffixParts.push(`buckets: ${buckets}`)
-			const suffix = suffixParts.length ? ` (${suffixParts.join(', ')})` : ''
-			if (resp.ok) message.success(`Profile test OK${suffix}`)
-			else {
-				const { content, duration } = formatProviderOperationFailureMessage({
-					defaultMessage: 'Profile test failed',
-					message: resp.message,
-					errorDetail: resp.details?.error,
-					normalizedError: resp.details?.normalizedError,
-					extraDetails: suffixParts,
-				})
-				message.warning(content, duration)
-			}
+			profilesFeedback.profileTestResult(resp)
 		},
 		onSettled: (_, __, id, context) =>
 			setTestingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),
@@ -291,8 +270,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			const { content, duration } = formatUnavailableOperationMessage('Profile test unavailable', err)
-			message.error(content, duration)
+			profilesFeedback.profileTestUnavailable(err)
 		},
 	})
 
@@ -319,22 +297,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			if (resp.ok) {
-				const parts: string[] = []
-				if (resp.uploadBps != null) parts.push(`↑ ${formatBps(resp.uploadBps)}`)
-				if (resp.downloadBps != null) parts.push(`↓ ${formatBps(resp.downloadBps)}`)
-				if (resp.uploadMs != null) parts.push(`upload ${resp.uploadMs}ms`)
-				if (resp.downloadMs != null) parts.push(`download ${resp.downloadMs}ms`)
-				message.success(`Benchmark OK: ${parts.join(' · ')}`, 8)
-			} else {
-				const { content, duration } = formatProviderOperationFailureMessage({
-					defaultMessage: 'Benchmark failed',
-					message: resp.message,
-					errorDetail: resp.details?.error,
-					normalizedError: resp.details?.normalizedError,
-				})
-				message.warning(content, duration)
-			}
+			profilesFeedback.benchmarkResult(resp)
 		},
 		onSettled: (_, __, id, context) =>
 			setBenchmarkingProfileState((prev) => clearPendingProfileState(prev, id, context?.scopeKey)),
@@ -348,8 +311,7 @@ export function useProfilesPageMutations(args: {
 			})) {
 				return
 			}
-			const { content, duration } = formatUnavailableOperationMessage('Benchmark unavailable', err)
-			message.error(content, duration)
+			profilesFeedback.benchmarkUnavailable(err)
 		},
 	})
 

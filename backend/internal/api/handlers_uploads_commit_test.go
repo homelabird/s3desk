@@ -19,7 +19,7 @@ import (
 )
 
 func TestBuildVerifiedUploadCommitArtifactsUsesVerifiedState(t *testing.T) {
-	artifacts := buildVerifiedUploadCommitArtifacts("upload-1", store.UploadSession{
+	artifacts := newUploadCommitArtifactService().buildFromVerified("upload-1", store.UploadSession{
 		Bucket: "bucket-a",
 		Prefix: "incoming",
 	}, uploadCommitRequest{

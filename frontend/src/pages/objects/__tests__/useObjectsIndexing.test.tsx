@@ -4,6 +4,7 @@ import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
+import { queryKeys } from '../../../api/queryKeys'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsIndexing } from '../useObjectsIndexing'
 
@@ -218,7 +219,7 @@ describe('useObjectsIndexing', () => {
 		})
 
 		expect(messageOpenMock).not.toHaveBeenCalled()
-		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['jobs', 'profile-1', 'token-1'], exact: false })
+		expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
 	it('ignores stale manual index failures after the profile changes', async () => {

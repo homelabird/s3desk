@@ -9,6 +9,7 @@ import { clearPersistedTransfersStorage } from './components/transfers/useTransf
 import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import {
+	legacyServerScopedStorageKey,
 	readLegacyActiveProfileIdForMigration,
 	serverScopedStorageKey,
 	shouldUseLegacyActiveProfileStorageMigration,
@@ -331,8 +332,13 @@ export default function LightApp() {
 		() => (shouldUseLegacyActiveProfileStorageMigration(apiToken) ? 'profileId' : undefined),
 		[apiToken],
 	)
+	const legacyActiveProfileStorageKeys = useMemo(
+		() => [legacyServerScopedStorageKey('app', apiToken, 'profileId')],
+		[apiToken],
+	)
 	const [profileId, setProfileId] = useLocalStorageState<string | null>(profileStorageKey, initialStoredProfileId, {
 		legacyLocalStorageKey: legacyActiveProfileStorageKey,
+		legacyLocalStorageKeys: legacyActiveProfileStorageKeys,
 	})
 	const previousApiTokenRef = useRef<string | null | undefined>(undefined)
 	const { mode, toggleMode } = useThemeMode()

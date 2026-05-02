@@ -12,7 +12,20 @@ import {
 	installMockApi,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { ensureDialogOpen, transferUploadRow } from './support/ui'
+import {
+	addUploadSourceFromDevice,
+	commitComboboxValue,
+	expectTransferRowState,
+	gotoBucketsPage,
+	gotoJobsPage,
+	gotoProfilesPage,
+	gotoUploadsPage,
+	namedTableRow,
+	gotoObjectsBucketPage,
+	objectsListRow,
+	openTransfersUploadRow,
+	queueSelectedUpload,
+} from './support/ui'
 
 type ObjectItem = {
 	key: string
@@ -247,21 +260,19 @@ async function linger(page: Page, ms = 700) {
 	await page.waitForTimeout(ms)
 }
 
-test('demo flow: profile to jobs', async ({ page }) => {
+test('@demo demo flow: profile to jobs', async ({ page }) => {
 	test.setTimeout(180_000)
 
 	await installDemoApi(page)
 	await seedStorage(page)
 
 	console.log('[demo] profiles')
-	await page.goto('/profiles')
-	await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
-	await expect(page.getByRole('row', { name: new RegExp(profileName) })).toBeVisible()
+	await gotoProfilesPage(page)
+	await expect(namedTableRow(page, profileName)).toBeVisible()
 	await linger(page, 1200)
 
 	console.log('[demo] buckets')
-	await page.goto('/buckets')
-	await expect(page.getByRole('heading', { name: 'Buckets' })).toBeVisible()
+	await gotoBucketsPage(page)
 	await linger(page, 900)
 
 	console.log('[demo] create bucket')
@@ -271,42 +282,33 @@ test('demo flow: profile to jobs', async ({ page }) => {
 	await bucketModal.getByLabel('Bucket name').fill(bucketName)
 	await linger(page, 500)
 	await bucketModal.getByRole('button', { name: 'Create' }).click()
-	await expect(page.getByRole('row', { name: new RegExp(bucketName) })).toBeVisible()
+	await expect(namedTableRow(page, bucketName)).toBeVisible()
 	await linger(page, 1200)
 
 	console.log('[demo] uploads')
-	await page.goto('/uploads')
-	await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible()
-	await page.getByRole('combobox', { name: 'Bucket' }).fill(bucketName)
-	await page.keyboard.press('Enter')
+	await gotoUploadsPage(page)
+	await commitComboboxValue(page, page, 'Bucket', bucketName)
 	await linger(page, 700)
 
 	console.log('[demo] choose upload file')
-	await page.getByRole('button', { name: 'Add from device…' }).click()
-	const chooserPromise = page.waitForEvent('filechooser')
-	await page.getByRole('button', { name: 'Choose files' }).click()
-	const chooser = await chooserPromise
-	await chooser.setFiles(uploadFixture)
+	await addUploadSourceFromDevice(page, uploadFixture)
 	await linger(page, 900)
 
 	console.log('[demo] queue upload')
-	await page.getByRole('button', { name: /Queue upload \(1\)/i }).click()
+	await queueSelectedUpload(page, { count: 1 })
 	console.log('[demo] wait upload done')
-	const transfersDialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page.getByRole('button', { name: 'Open Transfers' }).click({ force: true })
+	const { dialog: transfersDialog, row: uploadRow } = await openTransfersUploadRow(page, `Upload: ${uploadFilename}`, {
+		triggerButtonName: 'Open Transfers',
+		timeout: 15_000,
 	})
-	const uploadRow = transferUploadRow(transfersDialog, `Upload: ${uploadFilename}`)
-	await expect(uploadRow).toBeVisible({ timeout: 15_000 })
-	await expect(uploadRow.getByText('Done', { exact: true })).toBeVisible({ timeout: 15_000 })
+	await expectTransferRowState(uploadRow, 'Done', { timeout: 15_000 })
 	await linger(page, 1200)
 	await transfersDialog.getByRole('button', { name: 'Close' }).click()
 
 	console.log('[demo] objects')
-	await page.goto('/objects')
+	await gotoObjectsBucketPage(page, bucketName)
 	await expect(page.getByRole('heading', { name: 'Objects' })).toBeVisible()
-	await page.getByTestId('objects-bucket-picker-desktop').click()
-	await page.getByTestId(`objects-bucket-picker-option-${bucketName}`).click()
-	const objectRow = page.locator('[data-objects-row="true"]', { hasText: uploadFilename }).first()
+	const objectRow = objectsListRow(page, uploadFilename)
 	await expect(objectRow).toBeVisible({ timeout: 15_000 })
 	await linger(page, 1200)
 
@@ -320,12 +322,11 @@ test('demo flow: profile to jobs', async ({ page }) => {
 	await deleteDialog.getByPlaceholder('DELETE').fill('DELETE')
 	await linger(page, 400)
 	await deleteDialog.getByRole('button', { name: 'Delete' }).click()
-	await expect(page.locator('[data-objects-row="true"]', { hasText: uploadFilename })).toHaveCount(0, { timeout: 15_000 })
+	await expect(objectsListRow(page, uploadFilename)).toHaveCount(0, { timeout: 15_000 })
 	await linger(page, 1200)
 
 	console.log('[demo] jobs')
-	await page.goto('/jobs')
-	await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+	await gotoJobsPage(page)
 	await expect(page.getByText('job-upload-1')).toBeVisible({ timeout: 15_000 })
 	await linger(page, 1800)
 })

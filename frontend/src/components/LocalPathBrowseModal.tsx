@@ -2,7 +2,8 @@ import { Alert, Button, Space, Spin, Typography } from 'antd'
 import { FolderOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { APIClient } from '../api/client'
+import type { APIClientShape } from '../api/client'
+import { selectProfileFirstHint } from '../lib/actionHints'
 import { formatErrorWithHint as formatErr } from '../lib/errors'
 import type { TreeNode } from '../lib/tree'
 import { upsertTreeChildren } from '../lib/tree'
@@ -10,7 +11,7 @@ import { DialogModal } from './DialogModal'
 import { SimpleTree } from './SimpleTree'
 
 type Props = {
-	api: APIClient
+	api: APIClientShape
 	profileId: string | null
 	open: boolean
 	onCancel: () => void
@@ -152,7 +153,7 @@ export function LocalPathBrowseModal(props: Props) {
 			}
 		>
 				{!profileId ? (
-				<Alert type="warning" showIcon title="Select a profile first" />
+				<Alert type="warning" showIcon title={selectProfileFirstHint()} />
 			) : (
 				<Space orientation="vertical" size="small" style={{ width: '100%' }}>
 					<Alert

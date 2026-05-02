@@ -28,6 +28,9 @@ func (m *Manager) RecoverAndRequeue(ctx context.Context) error {
 			}
 			finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
 			if err := m.finalizeJob(id, models.JobStatusFailed, &finishedAt, &msg, &code); err != nil {
+				if errors.Is(err, ErrJobStatusConflict) {
+					continue
+				}
 				return err
 			}
 

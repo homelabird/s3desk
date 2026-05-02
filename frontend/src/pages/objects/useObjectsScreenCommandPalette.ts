@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
 
 import type { CommandItem } from './objectsActions'
-import type { ObjectsPageDataState } from './objectsScreenTypes'
+import type { ObjectsOperationVm } from './objectsScreenTypes'
 import { useObjectsCommandPaletteOverlayState } from './useObjectsCommandPaletteOverlayState'
 
 type UseObjectsScreenCommandPaletteArgs = {
 	scopeKey: string
 	commandItems: CommandItem[]
-	commandPaletteOpener: ObjectsPageDataState['commandPaletteOpener']
+	commandPaletteOpener: ObjectsOperationVm['commandPaletteOpener']
 }
 
 export function useObjectsScreenCommandPalette(args: UseObjectsScreenCommandPaletteArgs) {

@@ -13,13 +13,6 @@ type uploadCommitSession struct {
 	mode      string
 }
 
-type uploadCommitPreparedRequest struct {
-	session   uploadCommitSession
-	req       uploadCommitRequest
-	decodeErr error
-	err       *uploadHTTPError
-}
-
 type uploadCommitRequestService struct {
 	server *server
 }
@@ -28,16 +21,16 @@ func newUploadCommitRequestService(s *server) uploadCommitRequestService {
 	return uploadCommitRequestService{server: s}
 }
 
-func (svc uploadCommitRequestService) prepare(r *http.Request) uploadCommitPreparedRequest {
+func (svc uploadCommitRequestService) prepare(r *http.Request) (uploadCommitSession, uploadCommitRequest, *uploadHTTPError, error) {
 	session, uploadErr := svc.loadSession(r)
 	if uploadErr != nil {
-		return uploadCommitPreparedRequest{err: uploadErr}
+		return uploadCommitSession{}, uploadCommitRequest{}, uploadErr, nil
 	}
 	req, err := svc.decode(r)
 	if err != nil {
-		return uploadCommitPreparedRequest{session: session, decodeErr: err}
+		return session, uploadCommitRequest{}, nil, err
 	}
-	return uploadCommitPreparedRequest{session: session, req: req}
+	return session, req, nil, nil
 }
 
 func (svc uploadCommitRequestService) loadSession(r *http.Request) (uploadCommitSession, *uploadHTTPError) {

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { installMockApi } from './support/apiFixtures'
+import { buildProfileFixture, installMockApi, seedLocalStorage } from './support/apiFixtures'
+import { gotoObjectsPage, objectsListRow } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -26,23 +27,7 @@ const defaultStorage: StorageSeed = {
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const seed = { ...defaultStorage, ...overrides }
-	await page.addInitScript((s) => {
-		const scopedKey = (name: string) => {
-			const serverScope = s.apiToken?.trim() || '__no_server__'
-			const profileScope = s.profileId?.trim() || '__no_profile__'
-			return `objects:${serverScope}:${profileScope}:${name}`
-		}
-		window.localStorage.setItem('apiToken', JSON.stringify(s.apiToken))
-		window.localStorage.setItem('profileId', JSON.stringify(s.profileId))
-		window.localStorage.setItem('bucket', JSON.stringify(s.bucket))
-		window.localStorage.setItem('prefix', JSON.stringify(s.prefix))
-		window.localStorage.setItem(scopedKey('bucket'), JSON.stringify(s.bucket))
-		window.localStorage.setItem(scopedKey('prefix'), JSON.stringify(s.prefix))
-		window.localStorage.setItem('objectsUIMode', JSON.stringify(s.objectsUIMode))
-		window.localStorage.setItem('objectsTypeFilter', JSON.stringify(s.objectsTypeFilter))
-		window.localStorage.setItem('objectsFavoritesOnly', JSON.stringify(s.objectsFavoritesOnly))
-		window.localStorage.setItem('objectsSearch', JSON.stringify(s.objectsSearch))
-	}, seed)
+	await seedLocalStorage(page, seed)
 }
 
 type StubObjectsOptions = {
@@ -86,7 +71,7 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 			path: '/profiles',
 			handle: (ctx) =>
 				ctx.json([
-					{
+					buildProfileFixture({
 						id: defaultStorage.profileId,
 						name: 'Playwright',
 						endpoint: 'http://localhost:9000',
@@ -95,7 +80,7 @@ async function stubObjectsApi(page: Page, opts: StubObjectsOptions = {}) {
 						tlsInsecureSkipVerify: true,
 						createdAt: now,
 						updatedAt: now,
-					},
+					}),
 				]),
 		},
 		{
@@ -168,7 +153,7 @@ test.describe('Objects new folder visibility', () => {
 	test('auto-opens when files-only view would hide folder (and offers recovery CTA)', async ({ page }) => {
 		await stubObjectsApi(page)
 		await seedStorage(page, { objectsTypeFilter: 'files' })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Folder name').fill('demo')
@@ -181,7 +166,7 @@ test.describe('Objects new folder visibility', () => {
 	test('auto-opens when favorites-only view would hide folder (and offers recovery CTA)', async ({ page }) => {
 		await stubObjectsApi(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Folder name').fill('fav-demo')
@@ -194,7 +179,7 @@ test.describe('Objects new folder visibility', () => {
 	test('auto-opens when search filter would hide folder (and offers recovery CTA)', async ({ page }) => {
 		await stubObjectsApi(page)
 		await seedStorage(page, { objectsSearch: 'zzz' })
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Folder name').fill('demo')
@@ -207,9 +192,9 @@ test.describe('Objects new folder visibility', () => {
 	test('opening a subfolder dialog under a different parent keeps the current location', async ({ page }) => {
 		await stubObjectsApi(page, { commonPrefixesByPrefix: { '': ['a/'] } })
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
-		const prefixRow = page.locator('[data-objects-row="true"]', { hasText: 'a/' }).first()
+		const prefixRow = objectsListRow(page, 'a/')
 		await expect(prefixRow).toBeVisible()
 		await prefixRow.getByRole('button', { name: 'Prefix actions' }).click()
 		await page.getByRole('menuitem', { name: /New subfolder/i }).click()
@@ -229,7 +214,7 @@ test.describe('Objects new folder visibility', () => {
 			},
 		})
 		await seedStorage(page)
-		await page.goto('/objects')
+		await gotoObjectsPage(page)
 
 		const dialog = await openNewFolderDialog(page)
 		await dialog.getByLabel('Allow nested path (a/b/c)').check()
