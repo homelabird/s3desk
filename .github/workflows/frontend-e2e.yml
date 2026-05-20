@@ -667,7 +667,9 @@ jobs:
         working-directory: frontend
         env:
           E2E_LIVE: "1"
-        run: npx playwright test ${CRITICAL_LIVE_TESTS} --project=chromium
+        run: |
+          read -r -a critical_live_tests <<< "${CRITICAL_LIVE_TESTS}"
+          npx playwright test "${critical_live_tests[@]}" --project=chromium
 
       - name: Capture live E2E stack logs
         if: always()
