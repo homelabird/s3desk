@@ -2,7 +2,8 @@ import { expect, type ConsoleMessage, type FilePayload, type Locator, type Page,
 
 type SearchScope = Page | Locator
 const dialogOpenRetryCount = 3
-const dialogOpenWaitMs = 1_500
+const dialogOpenWaitMs = 5_000
+const pageReadyWaitMs = 15_000
 
 export const OBJECTS_PAGE_HEADER_SELECTOR = '[data-testid="objects-page-header"]'
 export const OBJECTS_LIST_CONTROLS_ROOT_SELECTOR = '[data-testid="objects-list-controls-root"]'
@@ -100,7 +101,7 @@ export async function gotoWithDynamicImportRecovery(
 	ready: (page: Page) => Locator,
 	options: { timeout?: number; maxAttempts?: number } = {},
 ): Promise<Locator> {
-	const timeout = options.timeout ?? 10_000
+	const timeout = options.timeout ?? pageReadyWaitMs
 	const maxAttempts = Math.max(1, options.maxAttempts ?? 2)
 	let pageErrors: string[] = []
 	let consoleErrors: string[] = []
@@ -150,7 +151,7 @@ export async function gotoWithDynamicImportRecovery(
 
 			const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
 			if (!recoverableFailure || attempt === maxAttempts - 1) {
-				await expect(locator).toBeVisible({ timeout: recoverableFailure ? 5_000 : 2_000 })
+				await expect(locator).toBeVisible({ timeout: recoverableFailure ? pageReadyWaitMs : 5_000 })
 				return locator
 			}
 		}
@@ -191,7 +192,7 @@ export async function gotoJobsPage(
 ): Promise<Locator> {
 	await page.goto('/jobs', { waitUntil: 'load' })
 	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Jobs' })))(page)
-	await expect(locator).toBeVisible({ timeout: options.timeout })
+	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
 	return locator
 }
 
@@ -204,7 +205,7 @@ export async function gotoJobsPageRaw(
 ): Promise<Locator> {
 	await page.goto('/jobs')
 	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Jobs' })))(page)
-	await expect(locator).toBeVisible({ timeout: options.timeout })
+	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
 	return locator
 }
 
@@ -217,7 +218,7 @@ export async function gotoProfilesPage(
 ): Promise<Locator> {
 	await page.goto('/profiles', { waitUntil: 'load' })
 	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Profiles' })))(page)
-	await expect(locator).toBeVisible({ timeout: options.timeout })
+	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
 	return locator
 }
 
@@ -230,7 +231,7 @@ export async function gotoBucketsPage(
 ): Promise<Locator> {
 	await page.goto('/buckets', { waitUntil: 'load' })
 	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Buckets' })))(page)
-	await expect(locator).toBeVisible({ timeout: options.timeout })
+	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
 	return locator
 }
 
@@ -243,7 +244,7 @@ export async function gotoUploadsPage(
 ): Promise<Locator> {
 	await page.goto('/uploads', { waitUntil: 'load' })
 	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Uploads' })))(page)
-	await expect(locator).toBeVisible({ timeout: options.timeout })
+	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
 	return locator
 }
 

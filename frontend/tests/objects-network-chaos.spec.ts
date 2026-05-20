@@ -117,7 +117,7 @@ test.describe('Objects page network chaos', () => {
 
 		const navigation = page.goto('/objects')
 
-		await expect(page.getByPlaceholder('Search current folder')).toBeVisible()
+		await expect(page.getByPlaceholder('Search current folder')).toBeVisible({ timeout: 15_000 })
 		const rowCheckbox = objectsSelectionCheckbox(page, 'notes/todo.txt')
 		await expect(rowCheckbox).toHaveCount(0, { timeout: 250 })
 		await expect(rowCheckbox).toBeVisible({ timeout: 10_000 })

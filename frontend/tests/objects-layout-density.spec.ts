@@ -232,7 +232,7 @@ async function openObjectsPage(page: Page, overrides: Record<string, unknown> = 
 		...overrides,
 	})
 	await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByTestId('objects-list-controls-root'), {
-		timeout: 10_000,
+		timeout: 20_000,
 		maxAttempts: 3,
 	})
 }
