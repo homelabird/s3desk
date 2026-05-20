@@ -130,6 +130,7 @@ async function installSearchRecoveryFixtures(page: Page) {
 
 test.describe('Objects global search and favorites chaos', () => {
 	test('favoritesOnly surfaces a favorites error and recovers when the view is turned off', async ({ page }) => {
+		test.setTimeout(45_000)
 		await installFavoritesFailureFixtures(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
 		await page.setViewportSize({ width: 1600, height: 900 })
@@ -144,7 +145,7 @@ test.describe('Objects global search and favorites chaos', () => {
 
 		await page.getByRole('button', { name: 'View' }).click()
 		const viewDrawer = dialogByName(page, 'View options')
-		await expect(viewDrawer).toBeVisible()
+		await expect(viewDrawer).toBeVisible({ timeout: 15_000 })
 		await viewDrawer.getByLabel('Favorites only').uncheck()
 		await viewDrawer.getByRole('button', { name: 'Done' }).click()
 

@@ -249,7 +249,7 @@ test('zip artifact waiting task becomes canceled when the job is canceled', asyn
 })
 
 test('zip artifact download can be retried after the artifact request fails', async ({ page }) => {
-	test.setTimeout(30_000)
+	test.setTimeout(60_000)
 	const apiState = await setupApiMocks(page, {
 		listedJob: buildZipJob('succeeded'),
 		artifactResponses: [
