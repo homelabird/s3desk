@@ -335,7 +335,7 @@ jobs:
       - changes
       - workflow-lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: frontend
@@ -388,7 +388,7 @@ jobs:
         env:
           PLAYWRIGHT_OUTPUT_DIR: test-results-core
           PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-core
-        run: npm run test:e2e:core
+        run: npm run test:e2e:core -- --workers=2
 
       - name: Upload core mock Playwright artifacts
         if: always()

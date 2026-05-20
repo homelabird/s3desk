@@ -170,7 +170,7 @@ export async function gotoWithDynamicImportRecovery(
 			}
 
 			const locator = ready(page)
-			const attemptTimeout = attempt === maxAttempts - 1 ? timeout : Math.min(timeout, 8_000)
+			const attemptTimeout = attempt === maxAttempts - 1 ? timeout : Math.min(timeout, 4_000)
 			const deadline = Date.now() + attemptTimeout
 
 			while (Date.now() < deadline) {
