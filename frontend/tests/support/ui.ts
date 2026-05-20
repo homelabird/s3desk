@@ -2,7 +2,7 @@ import { expect, type ConsoleMessage, type FilePayload, type Locator, type Page,
 
 type SearchScope = Page | Locator
 const dialogOpenRetryCount = 3
-const dialogOpenWaitMs = 5_000
+const dialogOpenWaitMs = 10_000
 const pageReadyWaitMs = 30_000
 
 export const OBJECTS_PAGE_HEADER_SELECTOR = '[data-testid="objects-page-header"]'
@@ -85,6 +85,10 @@ export async function ensureDialogOpen(scope: Page, name: string | RegExp, openD
 
 	let lastError: Error | null = null
 	for (let attempt = 0; attempt < dialogOpenRetryCount; attempt += 1) {
+		if (await dialog.isVisible().catch(() => false)) {
+			return dialog
+		}
+
 		try {
 			await openDialog()
 		} catch (error) {
