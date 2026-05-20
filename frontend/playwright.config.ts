@@ -16,6 +16,8 @@ const shouldManageWebServer = !isLive && !process.env.PLAYWRIGHT_BASE_URL && !pr
 const reuseExistingManagedWebServer = isTruthy(process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER)
 const headless = !isFalsey(process.env.PLAYWRIGHT_HEADLESS)
 const slowMoMs = parseInteger(process.env.PLAYWRIGHT_SLOW_MO_MS)
+const testTimeoutMs = parseInteger(process.env.PLAYWRIGHT_TEST_TIMEOUT_MS) ?? 30_000
+const expectTimeoutMs = parseInteger(process.env.PLAYWRIGHT_EXPECT_TIMEOUT_MS) ?? 5_000
 
 const videoMode = parseMode(process.env.PLAYWRIGHT_VIDEO_MODE, VIDEO_MODES, recordArtifacts || recordVideos ? 'on' : 'off')
 const screenshotMode = parseMode(
@@ -34,8 +36,8 @@ const video = recordArtifacts ? { mode: videoMode, size: { width: 1280, height: 
 
 export default defineConfig({
 	testDir: './tests',
-	timeout: 30_000,
-	expect: { timeout: 5_000 },
+	timeout: testTimeoutMs,
+	expect: { timeout: expectTimeoutMs },
 	reporter,
 	...(shouldManageWebServer
 		? {

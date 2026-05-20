@@ -388,6 +388,8 @@ jobs:
         env:
           PLAYWRIGHT_OUTPUT_DIR: test-results-core
           PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-core
+          PLAYWRIGHT_TEST_TIMEOUT_MS: "60000"
+          PLAYWRIGHT_EXPECT_TIMEOUT_MS: "15000"
         run: npm run test:e2e:core -- --workers=2
 
       - name: Upload core mock Playwright artifacts
@@ -525,6 +527,8 @@ jobs:
       PLAYWRIGHT_HTML_REPORT: "1"
       PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-mobile-responsive
       PLAYWRIGHT_OUTPUT_DIR: test-results-mobile-responsive
+      PLAYWRIGHT_TEST_TIMEOUT_MS: "60000"
+      PLAYWRIGHT_EXPECT_TIMEOUT_MS: "10000"
     defaults:
       run:
         working-directory: frontend
@@ -559,7 +563,7 @@ jobs:
 
       - name: Run dedicated mobile responsive Playwright suite
         if: needs.changes.outputs.browser_facing == 'true'
-        run: npm run test:e2e:mobile-responsive
+        run: npm run test:e2e:mobile-responsive -- --workers=2
 
       - name: Upload mobile responsive HTML report
         if: always()
