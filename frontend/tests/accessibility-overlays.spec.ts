@@ -803,7 +803,7 @@ test.describe('overlay accessibility scans', () => {
 		await page.getByRole('button', { name: 'Import YAML' }).click()
 		const dialog = dialogByName(page, 'Import Profile YAML')
 		await expect(dialog).toBeVisible()
-		await expect(dialog.getByRole('textbox', { name: 'Paste YAML here…' })).toBeVisible()
+		await expect(dialog.getByRole('textbox', { name: 'Paste YAML' })).toBeVisible()
 
 		await expectNoA11yViolations(page, dialog)
 	})

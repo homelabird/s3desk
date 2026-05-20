@@ -69,7 +69,7 @@ func openPinnedDirFromRoot(root, rel, label string) (*os.File, error) {
 
 	current := root
 	if rel == "." || rel == "" {
-		return os.NewFile(uintptr(fd), label), nil
+		return newPinnedDirFile(fd, label)
 	}
 
 	parts := strings.Split(rel, string(os.PathSeparator))
@@ -95,7 +95,14 @@ func openPinnedDirFromRoot(root, rel, label string) (*os.File, error) {
 		current = nextPath
 	}
 
-	return os.NewFile(uintptr(fd), label), nil
+	return newPinnedDirFile(fd, label)
+}
+
+func newPinnedDirFile(fd int, label string) (*os.File, error) {
+	if fd < 0 {
+		return nil, fmt.Errorf("open local path %q: invalid file descriptor %d", label, fd)
+	}
+	return os.NewFile(uintptr(fd), label), nil // #nosec G115 -- successful unix.Open/Openat returns a non-negative OS file descriptor; os.NewFile requires uintptr.
 }
 
 func isSymlinkOpenError(path string, err error) bool {

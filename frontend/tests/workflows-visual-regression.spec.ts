@@ -296,7 +296,7 @@ test.describe('Workflow visual regression @visual', () => {
 		await page.getByRole('button', { name: 'Import YAML' }).click()
 		const dialog = dialogByName(page, 'Import Profile YAML')
 		await expect(dialog).toBeVisible()
-		await expect(dialog.getByRole('textbox', { name: 'Paste YAML here…' })).toBeVisible()
+		await expect(dialog.getByRole('textbox', { name: 'Paste YAML' })).toBeVisible()
 
 		await expect(dialog).toHaveScreenshot('profiles-mobile-yaml-import-dialog.png', visualScreenshotOptions)
 	})
