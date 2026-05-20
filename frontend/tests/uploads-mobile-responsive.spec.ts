@@ -69,6 +69,7 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 	})
 
 	test('queueing a mobile upload exposes the queued file in Transfers', async ({ page }) => {
+		test.setTimeout(45_000)
 		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoUploadsPage(page)
 

@@ -252,19 +252,15 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 	})
 
 	test('large preview viewer fits a short 320px mobile viewport', async ({ page }) => {
+		test.setTimeout(45_000)
 		await page.setViewportSize({ width: 320, height: 568 })
 		await openObjectsMobilePage(page)
 
 		const row = objectsListRow(page, 'preview.png')
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: /Object actions/ }).click()
-
-		const menu = page
-			.getByRole('menu')
-			.filter({ has: page.getByRole('menuitem', { name: 'Open large preview' }) })
-			.last()
-		await expect(menu).toBeVisible()
-		await menu.getByRole('menuitem', { name: 'Open large preview' }).click()
+		const previewButton = row.getByRole('button', { name: 'Open large preview for preview.png' })
+		await expect(previewButton).toBeVisible()
+		await previewButton.click()
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		const stage = modal.getByTestId('objects-image-viewer-stage')

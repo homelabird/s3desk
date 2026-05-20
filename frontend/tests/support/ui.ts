@@ -51,6 +51,27 @@ async function waitForDialogVisible(dialog: Locator, timeout: number): Promise<b
 	return dialog.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false)
 }
 
+async function findVisibleEnabledButton(page: Page, name: string | RegExp, timeout = pageReadyWaitMs): Promise<Locator> {
+	const buttons = page.getByRole('button', { name })
+	const deadline = Date.now() + timeout
+
+	while (Date.now() < deadline) {
+		const count = await buttons.count().catch(() => 0)
+		for (let index = 0; index < count; index += 1) {
+			const button = buttons.nth(index)
+			if ((await button.isVisible().catch(() => false)) && (await button.isEnabled().catch(() => false))) {
+				return button
+			}
+		}
+		await page.waitForTimeout(Math.min(200, Math.max(1, deadline - Date.now())))
+	}
+
+	const button = buttons.first()
+	await expect(button).toBeVisible({ timeout: 1_000 })
+	await expect(button).toBeEnabled({ timeout: 1_000 })
+	return button
+}
+
 export function dialogByName(scope: SearchScope, name: string | RegExp): Locator {
 	return scope.getByRole('dialog', { name })
 }
@@ -489,9 +510,7 @@ export async function openTransfersDialog(
 	} = {},
 ): Promise<Locator> {
 	const dialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		const button = page.getByRole('button', { name: options.triggerButtonName ?? /Open Transfers|Transfers/i }).first()
-		await expect(button).toBeVisible()
-		await expect(button).toBeEnabled()
+		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Open Transfers|Transfers/i)
 		await button.click()
 	})
 
