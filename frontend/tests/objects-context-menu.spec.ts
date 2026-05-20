@@ -171,14 +171,17 @@ test.describe('Objects context menus', () => {
 
 		const rows = objectsListRows(page)
 		await expect(rows.first()).toBeVisible()
-		const target = rows.last()
-		await target.scrollIntoViewIfNeeded()
-		await expect(target).toBeVisible()
-		const menuTrigger = target.getByRole('button', { name: /Object actions/ })
-		await expect(menuTrigger).toBeVisible()
-		await menuTrigger.evaluate((element) => {
-			;(element as HTMLElement).click()
+		const scroller = page.locator('[data-testid="objects-upload-dropzone"] [class*="_listScroller"]')
+		await expect(scroller).toBeVisible()
+		await scroller.evaluate((element) => {
+			element.scrollTop = element.scrollHeight
 		})
+
+		const target = objectsListRow(page, 'video-12.mp4')
+		await expect(target).toBeVisible()
+		const menuTrigger = target.getByRole('button', { name: /Object actions for video-12\.mp4/ })
+		await expect(menuTrigger).toBeVisible()
+		await menuTrigger.click()
 
 		const menu = page
 			.getByRole('menu')

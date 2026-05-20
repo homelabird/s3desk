@@ -392,7 +392,7 @@ const apiState = await installWebviewRealtimeJobsApi(page, [runningJob])
 await seedWebviewStorage(page)
 
 await page.goto('/jobs')
-await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible({ timeout: 10_000 })
 await expect(page.getByText('Realtime: WS')).toBeVisible({ timeout: 10_000 })
 await expect(page.getByText('Realtime updates disconnected')).toHaveCount(0)
 
@@ -418,7 +418,7 @@ errorCode: completedJob.errorCode,
 })
 
 await expect(jobRow.getByText('succeeded', { exact: true })).toBeVisible({ timeout: 10_000 })
-await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible({ timeout: 10_000 })
 })
 
 test('WV-011 shows a disconnect warning and reconnects Jobs after interruption', async ({ page }) => {

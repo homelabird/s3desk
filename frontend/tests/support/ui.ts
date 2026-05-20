@@ -51,11 +51,20 @@ async function waitForDialogVisible(dialog: Locator, timeout: number): Promise<b
 	return dialog.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false)
 }
 
-async function findVisibleEnabledButton(page: Page, name: string | RegExp, timeout = pageReadyWaitMs): Promise<Locator> {
+async function findVisibleEnabledButton(
+	page: Page,
+	name: string | RegExp,
+	timeout = pageReadyWaitMs,
+	options: { stopWhen?: () => Promise<boolean> } = {},
+): Promise<Locator> {
 	const buttons = page.getByRole('button', { name })
 	const deadline = Date.now() + timeout
 
 	while (Date.now() < deadline) {
+		if (options.stopWhen && (await options.stopWhen().catch(() => false))) {
+			throw new Error('Button search stopped because the target state is already visible')
+		}
+
 		const count = await buttons.count().catch(() => 0)
 		for (let index = 0; index < count; index += 1) {
 			const button = buttons.nth(index)
@@ -513,8 +522,15 @@ export async function openTransfersDialog(
 		tabName?: string | RegExp
 	} = {},
 ): Promise<Locator> {
-	const dialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Open Transfers|Transfers/i, dialogOpenWaitMs)
+	const dialogName = /Transfers/i
+	const dialogLocator = dialogByName(page, dialogName)
+	const dialog = await ensureDialogOpen(page, dialogName, async () => {
+		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Open Transfers|Transfers/i, dialogOpenWaitMs, {
+			stopWhen: () => dialogLocator.isVisible(),
+		})
+		if (await dialogLocator.isVisible().catch(() => false)) {
+			return
+		}
 		await button.click()
 	})
 
