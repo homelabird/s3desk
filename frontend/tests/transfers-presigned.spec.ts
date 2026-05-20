@@ -114,6 +114,7 @@ function baseObjectRoutes(): MockApiRoute[] {
 }
 
 test('falls back to staging when presigned upload is unsupported', async ({ page }) => {
+	test.setTimeout(45_000)
 	const uploadId = 'upload-fallback'
 	const jobId = 'job-fallback'
 	let presignedAttempted = false

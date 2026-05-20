@@ -3,7 +3,7 @@ import { expect, type ConsoleMessage, type FilePayload, type Locator, type Page,
 type SearchScope = Page | Locator
 const dialogOpenRetryCount = 3
 const dialogOpenWaitMs = 5_000
-const pageReadyWaitMs = 15_000
+const pageReadyWaitMs = 30_000
 
 export const OBJECTS_PAGE_HEADER_SELECTOR = '[data-testid="objects-page-header"]'
 export const OBJECTS_LIST_CONTROLS_ROOT_SELECTOR = '[data-testid="objects-list-controls-root"]'

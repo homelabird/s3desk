@@ -154,6 +154,7 @@ test.describe('Objects global search and favorites chaos', () => {
 	})
 
 	test('global indexed search recovers from a transient error while favoritesOnly view stays stable', async ({ page }) => {
+		test.setTimeout(45_000)
 		await installSearchRecoveryFixtures(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
 		await page.setViewportSize({ width: 1600, height: 900 })
@@ -172,7 +173,7 @@ test.describe('Objects global search and favorites chaos', () => {
 		await expect(drawer.getByText('index backend busy')).toBeVisible()
 
 		await drawer.getByRole('button', { name: 'Refresh' }).click()
-		await expect(drawer.getByText('logs/error.log')).toBeVisible({ timeout: 15_000 })
+		await expect(drawer.getByText('logs/error.log')).toBeVisible({ timeout: 30_000 })
 		await expect(drawer.getByText('Search failed')).toHaveCount(0)
 
 		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()

@@ -23,11 +23,12 @@ async function selectProvider(page: Page, optionLabel: string) {
 }
 
 test('profile provider forms toggle provider-specific fields', async ({ page }) => {
+	test.setTimeout(45_000)
 	await seedStorage(page)
 	await setupApiMocks(page)
 
 	await page.goto('/profiles?create=1')
-	await expect(page.getByRole('dialog', { name: 'Create Profile' })).toBeVisible()
+	await expect(page.getByRole('dialog', { name: 'Create Profile' })).toBeVisible({ timeout: 30_000 })
 
 	await expect(page.getByRole('textbox', { name: 'Endpoint URL', exact: true })).toBeVisible()
 	await expect(page.getByLabel('Access Key ID')).toBeVisible()

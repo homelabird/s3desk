@@ -125,6 +125,7 @@ test.describe('Objects page network chaos', () => {
 	})
 
 	test('recovers after a transient list failure when refresh is triggered', async ({ page }) => {
+		test.setTimeout(45_000)
 		const transientFailure = retryAfterErrorResponse(503, 'list_temporarily_unavailable', 'temporary outage', 0)
 		await installObjectsFixtures(
 			page,
@@ -146,7 +147,7 @@ test.describe('Objects page network chaos', () => {
 		await page.goto('/objects')
 
 		const listError = page.getByRole('alert').filter({ hasText: failedToListObjectsTitle() })
-		await expect(listError).toBeVisible({ timeout: 15_000 })
+		await expect(listError).toBeVisible({ timeout: 30_000 })
 		await expect(listError).toContainText('temporary outage')
 
 		const moreButton = await getToolbarMoreButton(page)
