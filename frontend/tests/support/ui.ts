@@ -170,7 +170,8 @@ export async function gotoWithDynamicImportRecovery(
 			}
 
 			const locator = ready(page)
-			const deadline = Date.now() + timeout
+			const attemptTimeout = attempt === maxAttempts - 1 ? timeout : Math.min(timeout, 8_000)
+			const deadline = Date.now() + attemptTimeout
 
 			while (Date.now() < deadline) {
 				if (await locator.isVisible().catch(() => false)) {
@@ -184,8 +185,8 @@ export async function gotoWithDynamicImportRecovery(
 			}
 
 			const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
-			if (!recoverableFailure || attempt === maxAttempts - 1) {
-				await expect(locator).toBeVisible({ timeout: recoverableFailure ? pageReadyWaitMs : 5_000 })
+			if (attempt === maxAttempts - 1) {
+				await expect(locator).toBeVisible({ timeout: recoverableFailure ? pageReadyWaitMs : Math.min(timeout, 10_000) })
 				return locator
 			}
 		}
