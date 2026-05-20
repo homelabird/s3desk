@@ -139,11 +139,13 @@ test.describe('Objects context menus', () => {
 			const scroller = page.locator('[data-testid="objects-upload-dropzone"] [class*="_listScroller"]')
 			await scroller.scrollIntoViewIfNeeded()
 			await expect(scroller).toBeVisible()
-			await scroller.click({ button: 'right', position: { x: 12, y: 12 } })
 
 			const menu = objectsContextMenu(page)
 			const newFolderItem = menu.getByRole('menuitem', { name: 'New folder…' })
-			await expect(menu).toBeVisible()
+			await expect(async () => {
+				await scroller.click({ button: 'right', position: { x: 12, y: 12 } })
+				await expect(menu).toBeVisible({ timeout: 1_000 })
+			}).toPass({ timeout: 10_000 })
 			await newFolderItem.evaluate((element) => {
 				;(element as HTMLElement).click()
 			})

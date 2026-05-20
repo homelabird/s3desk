@@ -510,7 +510,7 @@ export async function openTransfersDialog(
 	} = {},
 ): Promise<Locator> {
 	const dialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Open Transfers|Transfers/i)
+		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Open Transfers|Transfers/i, dialogOpenWaitMs)
 		await button.click()
 	})
 

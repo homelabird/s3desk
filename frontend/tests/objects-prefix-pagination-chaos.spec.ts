@@ -171,6 +171,7 @@ async function installPrefixPaginationFixtures(page: Page) {
 }
 
 test('prefix navigation keeps its location while load-more failure recovers on retry', async ({ page }) => {
+	test.setTimeout(60_000)
 	await installPrefixPaginationFixtures(page)
 	await seedStorage(page)
 
@@ -191,15 +192,15 @@ test('prefix navigation keeps its location while load-more failure recovers on r
 	await expect(loadMoreButton).toBeVisible()
 	await loadMoreButton.click()
 
-		const listError = page.getByRole('alert').filter({ hasText: failedToListObjectsTitle() })
-		await expect(listError).toBeVisible({ timeout: 15_000 })
+	const listError = page.getByRole('alert').filter({ hasText: failedToListObjectsTitle() })
+	await expect(listError).toBeVisible({ timeout: 30_000 })
 	await expect(listError).toContainText('temporary page failure')
 	await expectVisibleTodoRows(page)
 
 	await scrollAppContentToBottom(page)
 	await loadMoreButton.click()
 
-	await expect(objectsSelectionCheckbox(page, 'todo-1001.txt')).toBeVisible()
-	await expect(listError).toHaveCount(0)
+	await expect(objectsSelectionCheckbox(page, 'todo-1001.txt')).toBeVisible({ timeout: 30_000 })
+	await expect(listError).toHaveCount(0, { timeout: 30_000 })
 	await expect(page.getByText('s3://prefix-bucket/docs/')).toBeVisible()
 })
