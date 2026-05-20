@@ -36,9 +36,15 @@ Portable bundles currently carry:
 - `jobs`
 - `upload_sessions`
 - `upload_multipart_uploads`
+- `upload_objects`
 - `object_index`
 - `object_favorites`
 - optional thumbnail assets
+
+Encrypted portable bundles write `payload.enc` with the versioned `v2`
+payload format: PBKDF2-SHA256 key derivation, a per-bundle salt, and
+AES-256-GCM chunk authentication. Restore/import continues to accept legacy
+encrypted bundles that only have `payloadEncryptionIv` metadata.
 
 ## Migration Workflow
 
@@ -48,13 +54,20 @@ Portable bundles currently carry:
 4. Run the real portable import.
 5. Verify imported counts and destination health before cutover.
 
+For encrypted portable bundles, export uses the `X-S3Desk-Backup-Password`
+request header, while restore and portable import use the multipart `password`
+field (or the matching UI password input). A non-empty supplied password takes
+precedence over the destination `ENCRYPTION_KEY`. Use the same password on
+import when the bundle was exported with one; leave the password blank when the
+bundle was encrypted with the server key.
+
 ## Validation Commands
 
 Bidirectional smoke:
 
 ```bash
-./scripts/run_portable_sqlite_to_postgres_smoke.sh
-./scripts/run_portable_postgres_to_sqlite_smoke.sh
+bash scripts/run_portable_sqlite_to_postgres_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_smoke.sh
 ```
 
 Encrypted and password-protected smoke:
@@ -62,18 +75,18 @@ Encrypted and password-protected smoke:
 ```bash
 PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
 PORTABLE_BUNDLE_PASSWORD=operator-secret \
-./scripts/run_portable_sqlite_to_postgres_smoke.sh
+bash scripts/run_portable_sqlite_to_postgres_smoke.sh
 
 PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
 PORTABLE_BUNDLE_PASSWORD=operator-secret \
-./scripts/run_portable_postgres_to_sqlite_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_smoke.sh
 ```
 
 Failure-path smoke:
 
 ```bash
-./scripts/run_portable_failure_smoke.sh
-./scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
+bash scripts/run_portable_failure_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
 ```
 
 These failure flows cover:

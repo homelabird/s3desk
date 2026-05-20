@@ -16,29 +16,28 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 - `430x932`
 - `768x1024`
 
+## Automated Coverage
+
+Covered by `frontend/tests/jobs-mobile-responsive.spec.ts`.
+
+- [x] Queue health reflects loaded mobile job fixtures.
+- [x] Mobile filters persist across reopen and can reset.
+- [x] The mobile upload entrypoint opens and closes the upload source sheet.
+- [x] Mobile job details and logs drawers stay readable without horizontal overflow.
+
 ## Manual QA Checklist
 
-- [ ] Opening `Jobs` on a phone still exposes the primary actions needed to filter, inspect, and create work.
-- [ ] The filters sheet can be opened, updated, and dismissed without losing the page state.
-- [ ] The upload creation sheet can be opened from mobile and either queues work or shows the correct provider/offline guard.
-- [ ] Queue summary and health indicators stay readable enough to decide the next action.
-- [ ] A job row or card still exposes details/log entrypoints on mobile.
-- [ ] Mobile interactions remain usable with touch-first controls and safe-area padding.
-
-## `Jobs` Flow Checklist
-
-- [ ] Open the `Jobs` page on a phone-sized viewport.
-- [ ] Open the filters sheet, apply at least one filter, and confirm the list reflects the change.
-- [ ] Reset filters and confirm the baseline list returns.
-- [ ] Open the upload creation sheet and confirm the mobile flow can continue or surfaces the correct guard reason.
-- [ ] Open job details or logs from a mobile row/card action.
+- [ ] Verify the automated suite at `320x568`, `360x800`, `390x844`, `430x932`, and `768x1024` before a release candidate.
+- [ ] Confirm provider/offline guard copy remains correct when upload creation is unavailable.
+- [ ] Check touch-first controls and safe-area padding on a real device or browser emulation with device insets.
+- [ ] Record the exact viewport, component, and blocked task when a manual issue is found.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile test that verifies filter open/apply/reset flows complete successfully.
-- [ ] Add a test that verifies the upload creation sheet still opens from mobile.
-- [ ] Add a test that verifies mobile job details or logs remain reachable.
-- [ ] Add a test that verifies queue or health state remains understandable after filtering or job creation.
+- [x] Filter open/apply/reset flows complete successfully.
+- [x] Upload creation sheet still opens from mobile.
+- [x] Mobile job details and logs remain reachable.
+- [x] Queue or health state remains understandable on mobile fixtures.
 
 ## Notes
 

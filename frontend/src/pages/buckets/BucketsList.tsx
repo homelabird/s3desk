@@ -22,9 +22,14 @@ export function BucketsList(props: BucketsListProps) {
 	return (
 		<div className={styles.tableWrap}>
 			{props.useCompactList ? (
-				<div className={styles.mobileList} data-testid="buckets-list-compact">
+				<div
+					className={styles.mobileList}
+					data-testid="buckets-list-compact"
+					role="list"
+					aria-label="Buckets"
+				>
 					{props.buckets.map((row) => (
-						<article key={row.name} className={styles.mobileCard}>
+						<article key={row.name} className={styles.mobileCard} role="listitem">
 							<Typography.Text strong className={styles.mobileCardTitle}>
 								{row.name}
 							</Typography.Text>

@@ -13,19 +13,21 @@ import (
 )
 
 type portableImportApplyStore interface {
-	ImportPortableEntityFilesReplace(ctx context.Context, entityFiles map[string][]byte, dataDir string) (store.PortableImportCounts, error)
+	ImportPortableEntityFilesReplaceWithOptions(ctx context.Context, entityFiles map[string][]byte, dataDir string, opts store.PortableValidationOptions) (store.PortableImportCounts, error)
 	Ping(ctx context.Context) error
 }
 
 type portableImportPreflightService struct {
 	dataDir       string
 	encryptionKey string
+	allowRemote   bool
 	diskCheck     func(path string) (int64, error)
 }
 
 type portableImportApplyService struct {
-	store   portableImportApplyStore
-	dataDir string
+	store       portableImportApplyStore
+	dataDir     string
+	allowRemote bool
 }
 
 func newPortableImportPreflightService(dataDir, encryptionKey string) portableImportPreflightService {
@@ -49,7 +51,9 @@ func (s *server) buildPortableImportResponse(
 	manifest models.ServerMigrationManifest,
 	entityFiles map[string][]byte,
 ) models.ServerPortableImportResponse {
-	return newPortableImportPreflightService(s.cfg.DataDir, s.cfg.EncryptionKey).buildResponse(mode, dbBackend, manifest, entityFiles)
+	svc := newPortableImportPreflightService(s.cfg.DataDir, s.cfg.EncryptionKey)
+	svc.allowRemote = s.cfg.AllowRemote
+	return svc.buildResponse(mode, dbBackend, manifest, entityFiles)
 }
 
 func (svc portableImportPreflightService) buildResponse(
@@ -71,10 +75,10 @@ func (svc portableImportPreflightService) buildResponse(
 		preflight.Blockers = append(preflight.Blockers, fmt.Sprintf("Portable bundle schemaVersion %d is unsupported; expected %d.", manifest.SchemaVersion, portableBackupSchemaVersion))
 	}
 	if !preflight.EncryptionReady {
-		preflight.Blockers = append(preflight.Blockers, "Destination server is missing ENCRYPTION_KEY required by the portable bundle.")
+		preflight.Blockers = append(preflight.Blockers, "Destination server is missing "+portableImportDestinationKeyEnv+" required by the portable bundle.")
 	}
 	if manifest.EncryptionEnabled && manifest.EncryptionKeyHint != "" && !preflight.EncryptionKeyHintVerified {
-		preflight.Blockers = append(preflight.Blockers, "Destination ENCRYPTION_KEY does not match the portable bundle encryption fingerprint.")
+		preflight.Blockers = append(preflight.Blockers, "Destination "+portableImportDestinationKeyEnv+" does not match the portable bundle encryption fingerprint.")
 	}
 	if assetSummary, ok := manifest.Assets[portableAssetKeyThumbnails]; ok && assetSummary.Bytes > 0 {
 		freeBytes, diskErr := svc.diskCheck(svc.dataDir)
@@ -87,7 +91,12 @@ func (svc portableImportPreflightService) buildResponse(
 		}
 	}
 
-	entityVerification := buildPortableImportEntityVerification(manifest.Entities, entityFiles)
+	entityVerification := buildPortableImportEntityVerificationWithOptions(
+		manifest.Entities,
+		entityFiles,
+		svc.dataDir,
+		store.PortableValidationOptions{AllowRemote: svc.allowRemote},
+	)
 	preflight.Blockers = append(preflight.Blockers, entityVerification.blockers...)
 	return buildPortableImportResponseBody(mode, dbBackend, manifest, preflight, entityVerification)
 }
@@ -98,7 +107,9 @@ func (s *server) applyPortableImportPayload(
 	entityFiles map[string][]byte,
 	assetRoot string,
 ) error {
-	return newPortableImportApplyService(s.store, s.cfg.DataDir).apply(ctx, resp, entityFiles, assetRoot)
+	svc := newPortableImportApplyService(s.store, s.cfg.DataDir)
+	svc.allowRemote = s.cfg.AllowRemote
+	return svc.apply(ctx, resp, entityFiles, assetRoot)
 }
 
 func (svc portableImportApplyService) apply(
@@ -118,7 +129,7 @@ func (svc portableImportApplyService) apply(
 }
 
 func (svc portableImportApplyService) replaceEntities(ctx context.Context, entityFiles map[string][]byte) (store.PortableImportCounts, error) {
-	return svc.store.ImportPortableEntityFilesReplace(ctx, entityFiles, svc.dataDir)
+	return svc.store.ImportPortableEntityFilesReplaceWithOptions(ctx, entityFiles, svc.dataDir, store.PortableValidationOptions{AllowRemote: svc.allowRemote})
 }
 
 func (svc portableImportApplyService) applyAssets(resp *models.ServerPortableImportResponse, assetRoot string) {

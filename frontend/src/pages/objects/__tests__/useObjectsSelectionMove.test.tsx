@@ -220,6 +220,51 @@ describe('useObjectsSelectionMove', () => {
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
 
+	it('ignores duplicate move submits while the first request is pending', async () => {
+		const { Wrapper } = createWrapper()
+		const pendingJob = deferred<{ id: string }>()
+		const createJobWithRetry = vi.fn().mockReturnValue(pendingJob.promise)
+		const setSelectedKeys = vi.fn()
+
+		const { result } = renderHook(
+			() =>
+				useObjectsSelectionMove({
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix: 'docs/',
+					selectedKeys: new Set(['docs/a.txt']),
+					createJobWithRetry,
+					setSelectedKeys,
+				}),
+			{ wrapper: Wrapper },
+		)
+
+		await act(async () => {
+			result.current.openMoveSelection()
+		})
+
+		act(() => {
+			result.current.handleMoveSelectionSubmit({
+				dstBucket: 'bucket-a',
+				dstPrefix: 'archive/',
+				confirm: 'MOVE',
+			})
+			result.current.handleMoveSelectionSubmit({
+				dstBucket: 'bucket-a',
+				dstPrefix: 'archive/',
+				confirm: 'MOVE',
+			})
+		})
+
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			pendingJob.resolve({ id: 'job-1' })
+			await Promise.resolve()
+		})
+	})
+
 	it('ignores stale move job responses after the api token changes', async () => {
 		const { Wrapper, queryClient } = createWrapper()
 		const pendingJob = deferred<{ id: string }>()
@@ -271,5 +316,55 @@ describe('useObjectsSelectionMove', () => {
 		expect(setSelectedKeys).not.toHaveBeenCalled()
 		expect(messageOpenMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+	})
+
+	it('does not let an old-scope pending move disable a newly opened move dialog', async () => {
+		const { Wrapper } = createWrapper()
+		const oldPendingJob = deferred<{ id: string }>()
+		const createJobWithRetry = vi.fn().mockReturnValueOnce(oldPendingJob.promise).mockResolvedValueOnce({ id: 'job-new' })
+		const setSelectedKeys = vi.fn()
+
+		const { result, rerender } = renderHook(
+			({ apiToken }: { apiToken: string }) =>
+				useObjectsSelectionMove({
+					profileId: 'profile-1',
+					apiToken,
+					bucket: 'bucket-a',
+					prefix: 'docs/',
+					selectedKeys: new Set(['docs/a.txt']),
+					createJobWithRetry,
+					setSelectedKeys,
+				}),
+			{ initialProps: { apiToken: 'token-1' }, wrapper: Wrapper },
+		)
+
+		await act(async () => {
+			result.current.openMoveSelection()
+		})
+		await act(async () => {
+			result.current.handleMoveSelectionSubmit({
+				dstBucket: 'bucket-a',
+				dstPrefix: 'archive/',
+				confirm: 'MOVE',
+			})
+		})
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		rerender({ apiToken: 'token-2' })
+		await act(async () => {
+			result.current.openMoveSelection()
+		})
+
+		expect(result.current.moveSelectionSubmitting).toBe(false)
+
+		await act(async () => {
+			result.current.handleMoveSelectionSubmit({
+				dstBucket: 'bucket-a',
+				dstPrefix: 'archive-2/',
+				confirm: 'MOVE',
+			})
+		})
+
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(2))
 	})
 })

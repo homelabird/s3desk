@@ -18,6 +18,7 @@ export type SidebarBackupDrawerProps = {
 	api: APIClientShape
 	meta?: MetaResponse
 	open: boolean
+	sheetId?: string
 	onActionComplete?: () => void
 	onClose: () => void
 }
@@ -125,6 +126,7 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 			title="Backup and restore"
 			placement="right"
 			width="min(92vw, 560px)"
+			sheetId={props.sheetId}
 			extra={
 				<div className={styles.statusRow}>
 					{backupSupported ? <Tag color="blue">{backupTagLabel}</Tag> : <Tag color="warning">{backupTagLabel}</Tag>}

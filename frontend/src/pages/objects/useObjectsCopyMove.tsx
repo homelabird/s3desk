@@ -54,17 +54,29 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 	})
 	const copyMoveSessionRef = useRef(0)
 	const copyPrefixSessionRef = useRef(0)
+	const [copyMoveSessionId, setCopyMoveSessionId] = useState(0)
+	const [copyPrefixSessionId, setCopyPrefixSessionId] = useState(0)
+	const copyMoveSubmittingSessionRef = useRef<number | null>(null)
+	const copyPrefixSubmittingSessionRef = useRef<number | null>(null)
+	const [copyMoveSubmittingSessionId, setCopyMoveSubmittingSessionId] = useState<number | null>(null)
+	const [copyPrefixSubmittingSessionId, setCopyPrefixSubmittingSessionId] = useState<number | null>(null)
 	const [copyMoveStateScopeKey, setCopyMoveStateScopeKey] = useState(currentScopeKey)
 	const [copyPrefixStateScopeKey, setCopyPrefixStateScopeKey] = useState(currentScopeKey)
 	const copyMoveScopeMatches = copyMoveStateScopeKey === currentScopeKey
 	const copyPrefixScopeMatches = copyPrefixStateScopeKey === currentScopeKey
+	const copyMoveSubmitting = copyMoveScopeMatches && copyMoveSubmittingSessionId === copyMoveSessionId
+	const copyPrefixSubmitting = copyPrefixScopeMatches && copyPrefixSubmittingSessionId === copyPrefixSessionId
 
 	const invalidateCopyMoveSession = useCallback(() => {
-		copyMoveSessionRef.current += 1
+		const nextSessionId = copyMoveSessionRef.current + 1
+		copyMoveSessionRef.current = nextSessionId
+		setCopyMoveSessionId(nextSessionId)
 	}, [])
 
 	const invalidateCopyPrefixSession = useCallback(() => {
-		copyPrefixSessionRef.current += 1
+		const nextSessionId = copyPrefixSessionRef.current + 1
+		copyPrefixSessionRef.current = nextSessionId
+		setCopyPrefixSessionId(nextSessionId)
 	}, [])
 
 	useEffect(() => {
@@ -147,6 +159,11 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 			if (args.sessionId !== copyPrefixSessionRef.current) return
 			objectsFeedback.error(err)
 		},
+		onSettled: (_data, _error, args) => {
+			if (args.sessionId !== copyPrefixSubmittingSessionRef.current) return
+			copyPrefixSubmittingSessionRef.current = null
+			setCopyPrefixSubmittingSessionId(null)
+		},
 	})
 
 	const copyMoveMutation = useMutation({
@@ -186,10 +203,16 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 			if (args.sessionId !== copyMoveSessionRef.current) return
 			objectsFeedback.error(err)
 		},
+		onSettled: (_data, _error, args) => {
+			if (args.sessionId !== copyMoveSubmittingSessionRef.current) return
+			copyMoveSubmittingSessionRef.current = null
+			setCopyMoveSubmittingSessionId(null)
+		},
 	})
 
 	const handleCopyPrefixSubmit = useCallback(
 		(values: CopyPrefixValues) => {
+			if (copyPrefixSubmittingSessionRef.current === copyPrefixSessionRef.current) return
 			if (!copyPrefixScopeMatches || !profileId || !bucket || !copyPrefixSrcPrefix) return
 
 			const dstBucket = values.dstBucket.trim()
@@ -224,6 +247,8 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 				}
 			}
 
+			copyPrefixSubmittingSessionRef.current = copyPrefixSessionRef.current
+			setCopyPrefixSubmittingSessionId(copyPrefixSessionRef.current)
 			copyPrefixJobMutation.mutate({
 				mode: copyPrefixMode,
 				srcPrefix: copyPrefixSrcPrefix,
@@ -242,6 +267,7 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 
 	const handleCopyMoveSubmit = useCallback(
 		(values: CopyMoveValues) => {
+			if (copyMoveSubmittingSessionRef.current === copyMoveSessionRef.current) return
 			if (!copyMoveScopeMatches || !profileId || !bucket || !copyMoveSrcKey) return
 
 			const dstBucket = values.dstBucket.trim()
@@ -270,6 +296,8 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 				return
 			}
 
+			copyMoveSubmittingSessionRef.current = copyMoveSessionRef.current
+			setCopyMoveSubmittingSessionId(copyMoveSessionRef.current)
 			copyMoveMutation.mutate({
 				mode: copyMoveMode,
 				srcKey: copyMoveSrcKey,
@@ -306,7 +334,7 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 		copyMoveSrcKey: copyMoveScopeMatches ? copyMoveSrcKey : null,
 		copyMoveValues: copyMoveScopeMatches ? copyMoveValues : { dstBucket: '', dstKey: '', dryRun: false, confirm: '' },
 		setCopyMoveValues,
-		copyMoveSubmitting: copyMoveMutation.isPending,
+		copyMoveSubmitting,
 		openCopyMove,
 		handleCopyMoveSubmit,
 		handleCopyMoveCancel,
@@ -317,7 +345,7 @@ export function useObjectsCopyMove({ profileId, apiToken, bucket, prefix, create
 			? copyPrefixValues
 			: { dstBucket: '', dstPrefix: '', include: '', exclude: '', dryRun: false, confirm: '' },
 		setCopyPrefixValues,
-		copyPrefixSubmitting: copyPrefixJobMutation.isPending,
+		copyPrefixSubmitting,
 		openCopyPrefix,
 		handleCopyPrefixSubmit,
 		handleCopyPrefixCancel,

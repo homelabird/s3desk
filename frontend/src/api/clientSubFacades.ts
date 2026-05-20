@@ -144,7 +144,7 @@ export function createProfilesSubFacade(deps: SubFacadeDeps) {
 		deleteProfileTLS(profileId: string): Promise<void> {
 			return profilesDomain.deleteProfileTLS(deps.requestFn, profileId)
 		},
-		exportProfileYaml(profileId: string, args: { download?: boolean } = {}): Promise<string> {
+		exportProfileYaml(profileId: string, args: { download?: boolean; includeSecrets?: boolean } = {}): Promise<string> {
 			return profilesDomain.exportProfileYaml(deps.requestFn, profileId, args)
 		},
 	}

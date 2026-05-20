@@ -488,6 +488,7 @@ function BucketPolicyEditor(props: {
       title={title}
       onClose={handleClose}
       footer={footerContent}
+      closeDisabled={isBusy}
     >
       <BucketPolicyWorkspaceHeader
         policyKind={policyKind}

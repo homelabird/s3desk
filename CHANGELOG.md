@@ -37,8 +37,15 @@
 
 ### Release Candidate Notes
 - `0.21v-rc3` is a continuation release candidate; this is not a final `0.21v` release.
-- Keep this release candidate as final blocker until real-provider validation evidence is completed for AWS S3, GCS, Azure Blob, and OCI Object Storage.
+- Keep this release candidate as final blocker until real-provider validation evidence is completed for AWS S3, GCS, Azure Blob, OCI Object Storage, MinIO, and Ceph.
 - Keep reverse-proxy and browser-facing download/realtime smoke evidence updated before promoting to final `0.21v`.
+
+### Known Limitations
+- Azure legal hold remains read-only in S3Desk.
+- Azure immutability editing requires ARM credentials in addition to storage credentials.
+- OCI PAR edits are delete-and-recreate rather than in-place mutation, and the full access URI is only guaranteed at creation time.
+- AWS typed bucket governance still does not cover Object Lock.
+- In-product backup and staged restore target sqlite `DATA_DIR` workflows and do not replace Postgres disaster recovery.
 
 ### Full Changelog
 **Full Changelog**: https://github.com/homelabird/s3desk/compare/0.21v-rc2...0.21v-rc3

@@ -17,6 +17,8 @@ type BucketActionsProps = {
 }
 
 export function BucketActions(props: BucketActionsProps) {
+	const bucketActionContext = `bucket ${props.bucketName}`
+
 	return (
 		<div className={styles.actionGroup}>
 			{props.controlsSupported ? (
@@ -25,6 +27,7 @@ export function BucketActions(props: BucketActionsProps) {
 						<Button
 							size="small"
 							icon={<SettingOutlined />}
+							aria-label={`Controls for ${bucketActionContext}`}
 							onClick={() => {
 								props.onOpenControls(props.bucketName)
 							}}
@@ -36,7 +39,7 @@ export function BucketActions(props: BucketActionsProps) {
 			) : (
 				<Tooltip title={props.controlsUnsupportedReason}>
 					<span>
-						<Button size="small" icon={<SettingOutlined />} disabled>
+						<Button size="small" icon={<SettingOutlined />} aria-label={`Controls for ${bucketActionContext}`} disabled>
 							Controls
 						</Button>
 					</span>
@@ -48,6 +51,7 @@ export function BucketActions(props: BucketActionsProps) {
 					<Button
 						size="small"
 						icon={<FileTextOutlined />}
+						aria-label={`Policy for ${bucketActionContext}`}
 						disabled={!props.policySupported}
 						onClick={() => {
 							props.onOpenPolicy(props.bucketName)
@@ -63,6 +67,7 @@ export function BucketActions(props: BucketActionsProps) {
 				danger
 				icon={<DeleteOutlined />}
 				loading={props.deleteLoading}
+				aria-label={`Delete ${bucketActionContext}`}
 				onClick={() => {
 					confirmDangerAction({
 						title: `Delete bucket "${props.bucketName}"?`,

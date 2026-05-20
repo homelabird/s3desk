@@ -11,7 +11,7 @@ import (
 	"s3desk/internal/rcloneconfig"
 )
 
-func cleanupS3PrefixMarkerIfEmpty(ctx context.Context, secrets models.ProfileSecrets, bucket, prefix string) error {
+func cleanupS3PrefixMarkerIfEmpty(ctx context.Context, secrets models.ProfileSecrets, bucket, prefix string, allowRemote bool) error {
 	if !rcloneconfig.IsS3LikeProvider(secrets.Provider) {
 		return nil
 	}
@@ -22,7 +22,7 @@ func cleanupS3PrefixMarkerIfEmpty(ctx context.Context, secrets models.ProfileSec
 		return nil
 	}
 
-	client, err := s3ClientFromProfile(secrets)
+	client, err := s3ClientFromProfile(secrets, allowRemote)
 	if err != nil {
 		return err
 	}

@@ -31,19 +31,35 @@ type awsAdapter struct {
 	newClient func(models.ProfileSecrets) (awsPublicAccessBlockClient, error)
 }
 
+type DefaultRegistryOptions struct {
+	AllowRemote bool
+}
+
+type AWSAdapterOptions struct {
+	AllowRemote bool
+}
+
 func NewDefaultRegistry() *Registry {
+	return NewDefaultRegistryWithOptions(DefaultRegistryOptions{})
+}
+
+func NewDefaultRegistryWithOptions(opts DefaultRegistryOptions) *Registry {
 	registry := NewRegistry()
-	registry.Register(models.ProfileProviderAwsS3, NewAWSAdapter())
-	registry.Register(models.ProfileProviderGcpGcs, NewGCSAdapter())
-	registry.Register(models.ProfileProviderAzureBlob, NewAzureAdapter())
-	registry.Register(models.ProfileProviderOciObjectStorage, NewOCIAdapter())
+	registry.Register(models.ProfileProviderAwsS3, NewAWSAdapterWithOptions(AWSAdapterOptions(opts)))
+	registry.Register(models.ProfileProviderGcpGcs, NewGCSAdapterWithOptions(GCSAdapterOptions(opts)))
+	registry.Register(models.ProfileProviderAzureBlob, NewAzureAdapterWithOptions(AzureAdapterOptions(opts)))
+	registry.Register(models.ProfileProviderOciObjectStorage, NewOCIAdapterWithOptions(OCIAdapterOptions(opts)))
 	return registry
 }
 
 func NewAWSAdapter() Adapter {
+	return NewAWSAdapterWithOptions(AWSAdapterOptions{})
+}
+
+func NewAWSAdapterWithOptions(opts AWSAdapterOptions) Adapter {
 	return &awsAdapter{
 		newClient: func(secrets models.ProfileSecrets) (awsPublicAccessBlockClient, error) {
-			return s3client.FromProfile(secrets)
+			return s3client.FromProfileWithOptions(secrets, s3client.ProfileOptions{AllowRemote: opts.AllowRemote})
 		},
 	}
 }

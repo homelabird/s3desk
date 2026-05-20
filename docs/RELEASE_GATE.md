@@ -30,8 +30,9 @@ Attach or record these before release approval:
 - verification command results
 - changed docs, if operator behavior changed
 - screenshots or API bodies for any live validation failures
-- dirty-worktree inventory from `python3 scripts/report_release_scope.py` when release scope is still being reduced
+- dirty-worktree inventory from `python3 scripts/report_release_scope.py` when release scope is still being reduced, or `python3 scripts/report_release_scope.py --base <base-tag-or-sha> --head <candidate-tag-or-sha>` for a committed candidate comparison
 - final local artifact/scope check: `python3 scripts/report_release_scope.py --fail-on-root-artifacts --fail-on-dependency-scope-warning --fail-on-untracked-directories --fail-on-other-unit --untracked-files all`
+- final committed-candidate evidence check: `python3 scripts/check_release_evidence.py --base <base-tag-or-sha> --head <candidate-tag-or-sha> --strict --require-candidate-id --candidate-id <candidate-tag-or-sha>`
 - clean-snapshot local runner approximation: `python3 scripts/check_clean_snapshot.py full`
 - clean-snapshot copies do not include `.git`, so the release-scope status check is enforced in the source worktree and skipped inside the temporary snapshot.
 
@@ -42,7 +43,8 @@ The repository keeps automated enforcement for release readiness inside the stan
 - focused local release-doc check: `./scripts/check_release_gate.sh`
 - release-readiness blocker summary: `python3 scripts/check_release_readiness.py --candidate-id <tag-or-sha>`
   - runs the strict scope/evidence checks and live-evidence env preflight for the candidate
-  - exits non-zero until required provider/reverse-proxy evidence is present
+  - reports a candidate identity blocker when an existing tag candidate does not resolve to the checked `--head`
+  - exits non-zero until required provider/reverse-proxy/backup-portable evidence is present
   - does not replace `./scripts/check.sh full`, clean-snapshot verification, or the browser lanes
 - local workflow lint: `bash ./scripts/check_github_workflows.sh`
 - optional repo-local `actionlint` install: `bash ./scripts/install_actionlint.sh`
@@ -51,16 +53,25 @@ The repository keeps automated enforcement for release readiness inside the stan
 - third-party notice enforcement inside `./scripts/check.sh`: regenerates `THIRD_PARTY_NOTICES.md` and `third_party/licenses/`, then fails if the generated file tree is not reproducible from the current workspace
 - CI workflow: `Release Gate` (installs repo-local `actionlint`, then runs `./scripts/check.sh` on pull requests and `main`)
 - canonical release verdict: GitHub `Release Gate`; GitLab release/security jobs are parity and publish safeguards, not the source of truth for branch protection
-- backend toolchain pin: Go `1.25.9` is declared in `backend/go.mod`, `Containerfile`, GitHub workflow `go-version` fields, and GitLab `GO_IMAGE`, and `python3 scripts/check_go_toolchain.py` keeps those declarations aligned
+- backend toolchain pin: Go `1.25.10` is declared in `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub workflow `go-version` fields, and GitLab `GO_IMAGE`, and `python3 scripts/check_go_toolchain.py` keeps those declarations aligned
 - backend security gate inside `./scripts/check.sh full`: `go vet`, `staticcheck`, `gosec`, and `govulncheck`
 - GitLab additive security gates: `security_fs_scan` runs Trivy filesystem/config scans and `gitleaks_scan` runs Gitleaks when tag/default-branch/schedule or relevant source changes require them
+- GitLab release-builder images must be pinned; `PODMAN_IMAGE` uses a digest reference and must not point at `quay.io/podman/stable:latest`.
+- GitLab tag publish safeguard: `release_readiness_preflight` runs `bash scripts/check_gitlab_publish_readiness.sh "$CI_COMMIT_TAG"` before Docker Hub or Helm publication; the helper delegates to `scripts/verify_release_readiness.sh` so GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state are verified as part of the publish preflight. Set `DEPLOY_RELEASE_BASE` when the previous tag cannot be derived locally. `curl` plus a masked `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs for deterministic GitHub API checks.
+  - Default required GitHub checks are `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`. If branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the verifier default in the same change.
+- GitLab Helm chart publication must run after published Docker Hub image smoke, not just after Docker Hub push. `python3 scripts/check_gitlab_publish_dag.py` enforces the `publish_dockerhub` -> `release_image_smoke` -> `publish_helm_chart` -> `deploy_release_helm` order, including the dedicated `chart-publish` stage.
+- Deploy scripts run `python3 scripts/check_live_evidence_env.py --scope reverse-proxy` before compose or Helm target mutation; Helm deploy also performs a `helm upgrade --install --dry-run=client` render before the live upgrade.
+- Compose deploys require protected `DEPLOY_SSH_KNOWN_HOSTS` and strict SSH host-key checking; do not bootstrap production deploy trust with live `ssh-keyscan` output.
+- Release/security tooling used by CI must be version pinned. `govulncheck`, `go-licenses`, and `podman-compose` installs must not use mutable `latest` or unversioned package installs.
+- Runtime license audit is a release-publish blocker. GitLab tag pipelines run `license_audit_runtime`, Docker Hub publish depends on it, and GitHub release-readiness requires the `license-audit` check by default. The audit enforces explicit npm and Go license allow-lists; Go results are produced with `go-licenses report --ignore s3desk ./...` and parsed by `scripts/check_go_license_report.py` so `Unknown`/blocked/disallowed licenses fail deterministically. When release image tar artifacts are present, the audit also parses Alpine `lib/apk/db/installed` package metadata from `release-postgres.tar` and `release-sqlite.tar` with `scripts/check_runtime_image_licenses.py`; local runs can pass semicolon-separated tar paths through `LICENSE_AUDIT_IMAGE_TARS`. The same audit verifies that the copied runtime `rclone` binary has a `THIRD_PARTY_NOTICES.md` entry and license text under `third_party/licenses/external/`. The GitHub `License Audit` workflow is intentionally not path-scoped so the required check materializes for every PR/main candidate.
 - GitLab additive quality gates:
   - `shellcheck` runs `shellcheck -x` for repository shell scripts and publishes logs under `artifacts/ci/shellcheck/`
   - `go_test` runs `go vet`, backend tests with `coverage.out`, enforces `GO_COVERAGE_MIN_TOTAL`, and publishes logs under `artifacts/ci/backend/`
   - `golangci_lint` must use the checked-in `.golangci.yml` named by `GOLANGCI_LINT_CONFIG`; a missing config is a hard failure
 - CI workflow: `Frontend E2E` runs a dedicated `Workflow Lint` job with the same repo-local `actionlint` before the browser lanes
 - CI workflow: `Frontend E2E` also runs `Bundle Budget` for bundle-affecting frontend changes
-- CI workflow: `Frontend E2E` only treats the narrower browser surface as browser-facing (`frontend/src/**`, `frontend/tests/**`, `frontend/public/**`, `frontend/playwright.config.ts`, runtime/build config, backend API wiring, and live-E2E harness files), so frontend docs or bundle-only tooling changes do not retrigger required Playwright lanes by themselves
+- CI workflow: `Frontend E2E` only treats the narrower browser surface as browser-facing (`frontend/src/**`, `frontend/tests/**`, `frontend/public/**`, `frontend/playwright.config.ts`, runtime/build config, backend API/runtime wiring including jobs/store/localpath/redaction paths, and live-E2E harness files), so frontend docs or bundle-only tooling changes do not retrigger required Playwright lanes by themselves
+- `Frontend E2E` workflow wiring changes are browser-facing for gating purposes; required browser lanes must not self-skip when `.github/workflows/frontend-e2e.yml` changes.
 - CI workflow: workflow-lint-only changes still execute the dedicated `Workflow Lint` job, but leave `Browser Lanes:` as `not applicable (...)` unless the browser surface also changed
   - preferred CI wording: `Browser Lanes: smoke + core not applicable (workflow or browser-CI wiring changed, but the browser surface did not)`
 - CI summaries use the same evidence labels as the PR/release templates: `Workflow Lint:`, `Bundle Budget:`, `Bundle Budget Contract:`, and `Browser Lanes:`
@@ -144,7 +155,7 @@ The focused release-doc check specifically enforces that:
 It does not replace the actual live-provider validation pass.
 
 Use `python3 scripts/check_release_evidence.py` to audit whether the current changed files require
-provider-live or reverse-proxy evidence. Before release approval, use
+provider-live, reverse-proxy, or backup-portable evidence. Before release approval, use
 `python3 scripts/check_release_evidence.py --strict --require-candidate-id --candidate-id <tag-or-sha>` and resolve any missing-evidence, omitted-candidate, or mismatched-candidate blockers.
 
 ## Provider Change Gate
@@ -186,7 +197,8 @@ Minimum reverse-proxy smoke:
 2. authenticated `GET /api/v1/meta` through the reverse proxy
 3. `POST /api/v1/realtime-ticket` through the reverse proxy
 4. `GET /api/v1/buckets/{bucket}/objects/download-url?proxy=true` returns a browser-facing URL rooted at the expected external base URL
-5. recorded `S3Desk commit SHA or release tag` matches the candidate that was validated
+5. `HEAD` against the returned signed proxy URL succeeds
+6. recorded `S3Desk commit SHA or release tag` matches the candidate that was validated
 
 The evidence file must include sanitized base URL, expected external base URL, profile, bucket, object key, and each smoke check result from the `## Checks` section. Generated evidence records `HTTP 200` for healthz, meta, download-url, and HEAD checks, and `HTTP 201` for realtime-ticket creation. `Signed proxy URL root` must match `Expected external base URL`; expected-status reference lines alone do not satisfy the smoke evidence requirement.
 
@@ -197,6 +209,20 @@ when evidence must be filled in manually.
 
 Before running the smoke, use `python3 scripts/check_live_evidence_env.py --scope reverse-proxy`
 to check required environment variables without printing secret values.
+
+## Backup Portable Smoke Gate
+
+If a change touches in-product backup, restore, portable bundle export/import, staged restore verification, or the portable smoke stack, release readiness is blocked until candidate-bound backup-portable smoke evidence is recorded under `docs/release/evidence/backup-portable-smoke-<tag-or-sha>.md`.
+
+Minimum backup-portable evidence:
+
+1. `S3Desk commit SHA or release tag` matches the candidate that was validated
+2. source and target database backends are named
+3. export, import, verification workflow, and staged restore target are described with sanitized details
+4. `Backup portable smoke` and each portable smoke script in `## Smoke Results` records a pass/success result
+5. backup passwords, API tokens, database credentials, encryption keys, provider secrets, and private keys are omitted
+
+Use [BACKUP_PORTABLE_SMOKE_TEMPLATE.md](release/evidence/BACKUP_PORTABLE_SMOKE_TEMPLATE.md) and run the documented portable smoke scripts before filling the evidence file.
 
 ## Release Notes Requirements
 

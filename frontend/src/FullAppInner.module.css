@@ -56,6 +56,26 @@
 	font-weight: 700;
 }
 
+.skipLink {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 1200;
+	padding: 8px 12px;
+	border-radius: 6px;
+	background: var(--s3d-color-primary);
+	color: #fff;
+	text-decoration: none;
+	transform: translateY(-200%);
+	transition: transform 120ms ease;
+}
+
+.skipLink:focus {
+	transform: translateY(0);
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
 .fullscreenCenter {
 	min-height: 100dvh;
 	display: flex;
@@ -106,7 +126,7 @@
 
 .brandTitle {
 	margin: 0;
-	letter-spacing: -0.01em;
+	letter-spacing: 0;
 }
 
 .brandTitleDesktop {
@@ -211,7 +231,7 @@
 
 .mobileBrand {
 	font-size: 16px;
-	letter-spacing: -0.01em;
+	letter-spacing: 0;
 }
 
 .headerActions {

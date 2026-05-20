@@ -21,13 +21,22 @@ vi.mock('antd', () => ({
 		</button>
 	),
 	Input: (props: {
+		id?: string
 		value?: string
 		disabled?: boolean
 		placeholder?: string
+		'aria-label'?: string
 		addonAfter?: ReactNode
 	}) => (
 		<div>
-			<input readOnly value={props.value ?? ''} disabled={props.disabled} placeholder={props.placeholder} aria-label="Local device path" />
+			<input
+				id={props.id}
+				readOnly
+				value={props.value ?? ''}
+				disabled={props.disabled}
+				placeholder={props.placeholder}
+				aria-label={props['aria-label']}
+			/>
 			{props.addonAfter}
 		</div>
 	),
@@ -57,6 +66,19 @@ describe('LocalDevicePathInput', () => {
 
 		expect(screen.getByRole('button', { name: 'Browse…' })).toBeDisabled()
 		expect(pickDirectoryMock).not.toHaveBeenCalled()
+	})
+
+	it('forwards the input id so parent form labels name the textbox', () => {
+		getDevicePickerSupportMock.mockReturnValue({ ok: true })
+
+		render(
+			<>
+				<label htmlFor="local-folder-input">Local folder</label>
+				<LocalDevicePathInput id="local-folder-input" value="" onChange={vi.fn()} onPick={vi.fn()} />
+			</>,
+		)
+
+		expect(screen.getByRole('textbox', { name: 'Local folder' })).toBeInTheDocument()
 	})
 
 	it('picks a directory and forwards the selected handle name', async () => {

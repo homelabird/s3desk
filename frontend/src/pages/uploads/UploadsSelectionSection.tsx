@@ -49,7 +49,7 @@ export function UploadsSelectionSection(props: Props) {
 					</Typography.Text>
 				</div>
 
-				<div className={styles.summaryGrid}>
+				<div className={styles.summaryGrid} role="status" aria-live="polite" aria-atomic="true">
 					<div className={styles.summaryCard}>
 						<span className={styles.summaryLabel}>Selection</span>
 						<strong className={styles.summaryValue}>{selectedFileCount.toLocaleString()} item(s)</strong>

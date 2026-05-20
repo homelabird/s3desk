@@ -15,6 +15,7 @@ import (
 	"s3desk/internal/db"
 	"s3desk/internal/jobs"
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/store"
 	"s3desk/internal/ws"
 )
@@ -576,16 +577,6 @@ func stubProfileEndpointLookup(
 ) {
 	t.Helper()
 
-	originalCNAME := profileEndpointLookupCNAME
-	originalIP := profileEndpointLookupIPAddr
-	if lookupCNAME != nil {
-		profileEndpointLookupCNAME = lookupCNAME
-	}
-	if lookupIP != nil {
-		profileEndpointLookupIPAddr = lookupIP
-	}
-	t.Cleanup(func() {
-		profileEndpointLookupCNAME = originalCNAME
-		profileEndpointLookupIPAddr = originalIP
-	})
+	restore := profileendpoint.SetLookupHooksForTest(lookupCNAME, lookupIP)
+	t.Cleanup(restore)
 }

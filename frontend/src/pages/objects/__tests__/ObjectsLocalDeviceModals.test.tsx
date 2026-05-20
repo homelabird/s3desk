@@ -18,10 +18,10 @@ vi.mock('../../../lib/deviceFs', async () => {
 })
 
 vi.mock('../../../components/LocalDevicePathInput', () => ({
-	LocalDevicePathInput: (props: { placeholder?: string; disabled?: boolean; value?: string }) => (
+	LocalDevicePathInput: (props: { id?: string; placeholder?: string; disabled?: boolean; value?: string }) => (
 		<input
+			id={props.id}
 			readOnly
-			aria-label="Local device path"
 			placeholder={props.placeholder}
 			disabled={props.disabled}
 			value={props.value ?? ''}
@@ -34,6 +34,46 @@ beforeAll(() => {
 })
 
 describe('objects local-device modals', () => {
+	it('names upload-folder local path input from its visible label', () => {
+		getDevicePickerSupportMock.mockReturnValue({ ok: true })
+
+		render(
+			<ObjectsUploadFolderModal
+				open
+				destinationLabel="bucket-a/images/"
+				values={{ localFolder: '' }}
+				onValuesChange={vi.fn()}
+				isSubmitting={false}
+				onCancel={vi.fn()}
+				onFinish={vi.fn()}
+				onPickFolder={vi.fn()}
+				canSubmit={false}
+			/>,
+		)
+
+		expect(screen.getByRole('textbox', { name: 'Local folder' })).toBeInTheDocument()
+	})
+
+	it('names download-prefix local path input from its visible label', () => {
+		getDevicePickerSupportMock.mockReturnValue({ ok: true })
+
+		render(
+			<ObjectsDownloadPrefixModal
+				open
+				sourceLabel="bucket-a/images/"
+				values={{ localFolder: '' }}
+				onValuesChange={vi.fn()}
+				isSubmitting={false}
+				onCancel={vi.fn()}
+				onFinish={vi.fn()}
+				onPickFolder={vi.fn()}
+				canSubmit={false}
+			/>,
+		)
+
+		expect(screen.getByRole('textbox', { name: 'Local destination folder' })).toBeInTheDocument()
+	})
+
 	it('uses the shared local-device browser hint for upload-folder fallback messaging', async () => {
 		getDevicePickerSupportMock.mockReturnValue({ ok: false })
 

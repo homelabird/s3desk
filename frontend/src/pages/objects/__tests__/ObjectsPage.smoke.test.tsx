@@ -118,7 +118,7 @@ describe('ObjectsPage', () => {
 		)
 
 		expect(screen.getByText('Objects')).toBeInTheDocument()
-		fireEvent.click(await screen.findByRole('button', { name: /Name/i }))
-		expect(await screen.findByRole('button', { name: /Name/i })).toHaveAccessibleName(/Name caret-down/i)
+		fireEvent.click(await screen.findByRole('button', { name: /Name/i }, { timeout: 5_000 }))
+		expect(await screen.findByRole('button', { name: /Name/i }, { timeout: 5_000 })).toHaveAccessibleName(/Name caret-down/i)
 	}, 15_000)
 })

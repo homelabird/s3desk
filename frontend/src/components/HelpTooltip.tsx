@@ -1,26 +1,13 @@
-import type { CSSProperties, ReactNode } from 'react'
-import { useState } from 'react'
+import type { CSSProperties, KeyboardEvent, ReactNode } from 'react'
+import { useId, useState } from 'react'
+
+import styles from './HelpTooltip.module.css'
 
 type Props = {
 	text: ReactNode
+	ariaLabel?: string
+	id?: string
 	style?: CSSProperties
-}
-
-const iconStyle: CSSProperties = {
-	display: 'inline-flex',
-	alignItems: 'center',
-	justifyContent: 'center',
-	width: 16,
-	height: 16,
-	borderRadius: '50%',
-	border: '1px solid var(--s3d-color-tooltip-border)',
-	fontSize: 10,
-	fontWeight: 700,
-	color: 'var(--s3d-color-text-secondary)',
-	cursor: 'help',
-	userSelect: 'none',
-	verticalAlign: 'middle',
-	marginLeft: 4,
 }
 
 const popoverStyle: CSSProperties = {
@@ -46,26 +33,39 @@ const popoverStyle: CSSProperties = {
  */
 export function HelpTooltip(props: Props) {
 	const [visible, setVisible] = useState(false)
+	const generatedId = useId()
+	const tooltipId = props.id ?? `help-tooltip-${generatedId}`
+	const ariaLabel = props.ariaLabel ?? 'Help'
+	const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+		if (event.key !== 'Escape') return
+		event.preventDefault()
+		event.stopPropagation()
+		setVisible(false)
+	}
 
 	return (
 		<span
-			style={{ position: 'relative', display: 'inline-block', ...props.style }}
+			className={styles.host}
+			style={props.style}
 			onMouseEnter={() => setVisible(true)}
 			onMouseLeave={() => setVisible(false)}
-			onFocus={() => setVisible(true)}
-			onBlur={() => setVisible(false)}
 		>
-			<span
-				role="img"
-				aria-label="Help"
-				tabIndex={0}
-				style={iconStyle}
+			<button
+				type="button"
+				aria-label={ariaLabel}
+				aria-describedby={visible ? tooltipId : undefined}
+				className={styles.trigger}
 				data-testid="help-tooltip-trigger"
+				onFocus={() => setVisible(true)}
+				onBlur={() => setVisible(false)}
+				onKeyDown={handleTriggerKeyDown}
 			>
-				?
-			</span>
+				<span className={styles.glyph} aria-hidden="true">
+					?
+				</span>
+			</button>
 			{visible ? (
-				<span role="tooltip" style={popoverStyle} data-testid="help-tooltip-content">
+				<span id={tooltipId} role="tooltip" style={popoverStyle} data-testid="help-tooltip-content">
 					{props.text}
 				</span>
 			) : null}

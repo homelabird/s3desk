@@ -38,10 +38,13 @@ jobs:
         with:
           filters: |
             browser_facing:
+              - ".github/workflows/frontend-e2e.yml"
               - "compose/test/e2e.yml"
               - "compose/remote/**"
               - "deploy/caddy/**"
+              - "k8s/s3desk-caddy.yaml"
               - "charts/s3desk/**"
+              - "scripts/Caddyfile"
               - "scripts/compose.sh"
               - "scripts/run_live_e2e_local.sh"
               - "openapi.yml"
@@ -51,6 +54,7 @@ jobs:
               - "frontend/patches/**"
               - "frontend/playwright.config.ts"
               - "frontend/public/**"
+              - "frontend/scripts/check-e2e-geometry-probes.mjs"
               - "frontend/src/**"
               - "frontend/tests/**"
               - "frontend/tsconfig*.json"
@@ -58,6 +62,11 @@ jobs:
               - "backend/cmd/server/**"
               - "backend/internal/app/**"
               - "backend/internal/api/**"
+              - "backend/internal/jobs/**"
+              - "backend/internal/store/**"
+              - "backend/internal/localpath/**"
+              - "backend/internal/redact/**"
+              - "backend/internal/ws/**"
             workflow_lint_scope:
               - ".github/workflows/**"
               - "scripts/check_github_workflows.sh"
@@ -276,7 +285,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.9"
+          go-version: "1.25.10"
           cache-dependency-path: backend/go.sum
 
       - name: Skip workflow lint when workflow wiring and browser surface are both out of scope
@@ -289,6 +298,10 @@ jobs:
         if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'
         shell: bash
         run: bash ./scripts/install_actionlint.sh
+
+      - name: Install workflow validator Python dependency
+        if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'
+        run: python3 -m pip install --disable-pip-version-check PyYAML
 
       - name: Run workflow lint
         if: needs.changes.outputs.workflow_lint_scope == 'true' || needs.changes.outputs.browser_facing == 'true'

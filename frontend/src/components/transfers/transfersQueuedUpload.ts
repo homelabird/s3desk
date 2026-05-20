@@ -36,6 +36,7 @@ export function buildQueuedUpload(args: { taskId: string; queueArgs: QueueUpload
 			label:
 				args.queueArgs.label?.trim() || (items.length === 1 ? `Upload: ${items[0]?.file?.name ?? '1 file'}` : `Upload: ${items.length} file(s)`),
 			filePaths,
+			retryFileHandleState: 'remembered',
 			resumeFileSize: items.length === 1 ? items[0]?.file?.size ?? 0 : undefined,
 		},
 	}

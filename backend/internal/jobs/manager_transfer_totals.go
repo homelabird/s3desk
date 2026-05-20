@@ -3,10 +3,10 @@ package jobs
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/processio"
 )
 
 func (m *Manager) trySetJobTotals(jobID string, objectsTotal, bytesTotal int64) {
@@ -71,7 +71,7 @@ func (m *Manager) trySetJobTotalsFromS3Object(ctx context.Context, profileID, jo
 	if err != nil {
 		return
 	}
-	out, readErr := io.ReadAll(proc.stdout)
+	out, readErr := processio.ReadAll(proc.stdout, rcloneCaptureStdoutMaxBytes, "rclone stdout")
 	waitErr := proc.wait()
 	if readErr != nil || waitErr != nil {
 		return

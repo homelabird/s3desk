@@ -165,6 +165,7 @@ def is_placeholder_value(value: str) -> bool:
             "missing",
             "set",
             "todo",
+            "change-me",
             "changeme",
             "replace-me",
             "replace_me",

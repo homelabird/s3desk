@@ -202,6 +202,105 @@ function renderModal(
   return { client, ...view };
 }
 
+function createTwoBindingGcsPolicy() {
+  return {
+    bucket: "demo-bucket",
+    exists: true,
+    policy: {
+      version: 3,
+      etag: "etag-123",
+      bindings: [
+        {
+          role: "roles/storage.objectViewer",
+          members: ["user:reader@example.com"],
+        },
+        {
+          role: "roles/storage.admin",
+          members: ["group:admins@example.com"],
+        },
+      ],
+    },
+  };
+}
+
+function createTwoPolicyAzurePolicy() {
+  return {
+    bucket: "demo-bucket",
+    exists: true,
+    policy: {
+      publicAccess: "private",
+      storedAccessPolicies: [
+        {
+          id: "reader",
+          start: "2024-01-01T00:00:00Z",
+          expiry: "2024-02-01T00:00:00Z",
+          permission: "rl",
+        },
+        {
+          id: "writer",
+          start: "2024-03-01T00:00:00Z",
+          expiry: "2024-04-01T00:00:00Z",
+          permission: "rw",
+        },
+      ],
+    },
+  };
+}
+
+async function expectTwoGcsBindingControls() {
+  expect(
+    await screen.findByRole("textbox", { name: "Binding 1 role" }),
+  ).toHaveValue("roles/storage.objectViewer");
+  expect(screen.getByRole("textbox", { name: "Binding 1 members" })).toHaveValue(
+    "user:reader@example.com",
+  );
+  expect(
+    screen.getByRole("button", { name: "Remove binding 1" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: "Binding 2 role" })).toHaveValue(
+    "roles/storage.admin",
+  );
+  expect(screen.getByRole("textbox", { name: "Binding 2 members" })).toHaveValue(
+    "group:admins@example.com",
+  );
+  expect(
+    screen.getByRole("button", { name: "Remove binding 2" }),
+  ).toBeInTheDocument();
+}
+
+async function expectTwoAzurePolicyControls() {
+  expect(
+    await screen.findByRole("textbox", { name: "Stored access policy 1 id" }),
+  ).toHaveValue("reader");
+  expect(
+    screen.getByRole("textbox", { name: "Stored access policy 1 start" }),
+  ).toHaveValue("2024-01-01T00:00:00Z");
+  expect(
+    screen.getByRole("textbox", { name: "Stored access policy 1 expiry" }),
+  ).toHaveValue("2024-02-01T00:00:00Z");
+  expect(
+    screen.getByRole("textbox", { name: "Stored access policy 1 permission" }),
+  ).toHaveValue("rl");
+  expect(
+    screen.getByRole("button", { name: "Remove stored access policy 1" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("textbox", { name: "Stored access policy 2 id" }),
+  ).toHaveValue("writer");
+  expect(
+    screen.getByRole("textbox", { name: "Stored access policy 2 start" }),
+  ).toHaveValue("2024-03-01T00:00:00Z");
+  expect(
+    screen.getByRole("textbox", { name: "Stored access policy 2 expiry" }),
+  ).toHaveValue("2024-04-01T00:00:00Z");
+  expect(
+    screen.getByRole("textbox", { name: "Stored access policy 2 permission" }),
+  ).toHaveValue("rw");
+  expect(
+    screen.getByRole("button", { name: "Remove stored access policy 2" }),
+  ).toBeInTheDocument();
+}
+
 describe("BucketPolicyModal", () => {
   it("renders the desktop modal shell by default", async () => {
     mockViewportWidth(1280);
@@ -215,6 +314,12 @@ describe("BucketPolicyModal", () => {
     expect(
       screen.queryByTestId("bucket-policy-mobile-shell"),
     ).not.toBeInTheDocument();
+    expect(
+      await screen.findByTestId("bucket-policy-decision-header"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Recommended: Controls first")).toBeInTheDocument();
+    expect(screen.getByText("Advanced: Policy JSON")).toBeInTheDocument();
+    expect(screen.getAllByText("Delete policy").length).toBeGreaterThan(0);
   });
 
   it("renders GCS bindings as mobile cards on narrow screens", async () => {
@@ -276,6 +381,71 @@ describe("BucketPolicyModal", () => {
       await screen.findByTestId("bucket-policy-azure-mobile-policies"),
     ).toBeInTheDocument();
     expect(screen.getByText("Stored access policy 1")).toBeInTheDocument();
+  });
+
+  it("labels GCS binding controls by row in the desktop table layout", async () => {
+    mockViewportWidth(1280);
+    const api = createApi({
+      getBucketPolicy: vi.fn().mockResolvedValue(createTwoBindingGcsPolicy()),
+    });
+
+    renderModal(api, { provider: "gcp_gcs" });
+
+    expect(
+      await screen.findByTestId("bucket-policy-desktop-shell"),
+    ).toBeInTheDocument();
+    await expectTwoGcsBindingControls();
+
+    const publicReadCheckbox = screen.getByRole("checkbox", {
+      name: "Public read access",
+    });
+    expect(publicReadCheckbox).not.toBeChecked();
+
+    fireEvent.click(screen.getByText("Public read access"));
+
+    await waitFor(() => expect(publicReadCheckbox).toBeChecked());
+  });
+
+  it("labels GCS binding controls by row in the mobile card layout", async () => {
+    mockViewportWidth(390);
+    const api = createApi({
+      getBucketPolicy: vi.fn().mockResolvedValue(createTwoBindingGcsPolicy()),
+    });
+
+    renderModal(api, { provider: "gcp_gcs" });
+
+    expect(
+      await screen.findByTestId("bucket-policy-gcs-mobile-bindings"),
+    ).toBeInTheDocument();
+    await expectTwoGcsBindingControls();
+  });
+
+  it("labels Azure stored policy controls by row in the desktop table layout", async () => {
+    mockViewportWidth(1280);
+    const api = createApi({
+      getBucketPolicy: vi.fn().mockResolvedValue(createTwoPolicyAzurePolicy()),
+    });
+
+    renderModal(api, { provider: "azure_blob" });
+
+    expect(
+      await screen.findByTestId("bucket-policy-desktop-shell"),
+    ).toBeInTheDocument();
+    await expectTwoAzurePolicyControls();
+  });
+
+  it("labels Azure stored policy controls by row in the mobile card layout", async () => {
+    mockViewportWidth(390);
+    const api = createApi({
+      getBucketPolicy: vi.fn().mockResolvedValue(createTwoPolicyAzurePolicy()),
+    });
+
+    renderModal(api, { provider: "azure_blob" });
+
+    expect(
+      await screen.findByTestId("bucket-policy-azure-mobile-policies"),
+    ).toBeInTheDocument();
+    await expectTwoAzurePolicyControls();
   });
 
   it("shows validation warning details for ok=false provider responses", async () => {
@@ -463,7 +633,7 @@ describe("BucketPolicyModal", () => {
 
     const view = renderModal(api);
 
-    const editor = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+    const editor = (await screen.findByRole("textbox", { name: "Raw policy JSON" })) as HTMLTextAreaElement;
     expect(editor.value).toContain("ProfileOne");
 
     fireEvent.change(editor, {
@@ -500,11 +670,11 @@ describe("BucketPolicyModal", () => {
       ),
     );
     await waitFor(() => {
-      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain(
+      expect((screen.getByRole("textbox", { name: "Raw policy JSON" }) as HTMLTextAreaElement).value).toContain(
         "ProfileTwo",
       );
     });
-    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).not.toContain(
+    expect((screen.getByRole("textbox", { name: "Raw policy JSON" }) as HTMLTextAreaElement).value).not.toContain(
       "EditedDraft",
     );
   });
@@ -523,7 +693,7 @@ describe("BucketPolicyModal", () => {
 
     const view = renderModal(api, { onClose: firstOnClose });
 
-    const editor = (await screen.findByRole("textbox")) as HTMLTextAreaElement;
+    const editor = (await screen.findByRole("textbox", { name: "Raw policy JSON" })) as HTMLTextAreaElement;
     fireEvent.change(editor, {
       target: {
         value: JSON.stringify(

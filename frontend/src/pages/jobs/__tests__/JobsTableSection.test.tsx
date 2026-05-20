@@ -21,6 +21,10 @@ describe('JobsTableSection', () => {
 				isLoading={false}
 				isOffline={false}
 				uploadSupported
+				filtersDirty={false}
+				onResetFilters={vi.fn()}
+				eventsConnected
+				onRetryRealtime={vi.fn()}
 				onOpenCreateUpload={vi.fn()}
 				onOpenDownloadJob={vi.fn()}
 				onOpenDeleteJob={vi.fn()}
@@ -60,5 +64,43 @@ describe('JobsTableSection', () => {
 		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
 			'Queues a background delete job for a bucket or prefix. Use Objects for copy or move jobs.',
 		)
+	})
+
+	it('uses filtered empty state actions when filters hide all loaded jobs', () => {
+		const onResetFilters = vi.fn()
+		render(
+			<JobsTableSection
+				bucketsError={null}
+				jobsError={null}
+				sortedJobs={[]}
+				columns={[]}
+				isCompact={false}
+				tableScrollY={300}
+				isLoading={false}
+				isOffline={false}
+				uploadSupported
+				filtersDirty
+				onResetFilters={onResetFilters}
+				eventsConnected={false}
+				onRetryRealtime={vi.fn()}
+				onOpenCreateUpload={vi.fn()}
+				onOpenDownloadJob={vi.fn()}
+				onOpenDeleteJob={vi.fn()}
+				getJobSummary={vi.fn(() => null)}
+				renderJobActions={vi.fn(() => null)}
+				sortState={null}
+				onSortChange={vi.fn()}
+				theme={{ borderColor: '#ddd', bg: '#fff', hoverBg: '#f5f5f5' }}
+				hasNextPage={false}
+				onLoadMore={vi.fn()}
+				isFetchingNextPage={false}
+				onTableContainerRef={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByText('No jobs match the current filters.')).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }))
+		expect(onResetFilters).toHaveBeenCalledTimes(1)
+		expect(screen.getByRole('button', { name: 'Retry realtime' })).toBeInTheDocument()
 	})
 })

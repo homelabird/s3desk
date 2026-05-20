@@ -19,16 +19,16 @@ describe('AppTabs', () => {
 			/>,
 		)
 
-		const tabList = screen.getByRole('tablist')
-		const root = tabList.parentElement
+		const toolbar = screen.getByRole('toolbar', { name: 'View controls' })
+		const root = toolbar.parentElement
 		if (!(root instanceof HTMLElement)) {
 			throw new Error('Missing AppTabs root')
 		}
 
 		let scrollLeft = 0
-		Object.defineProperty(tabList, 'clientWidth', { configurable: true, get: () => 180 })
-		Object.defineProperty(tabList, 'scrollWidth', { configurable: true, get: () => 320 })
-		Object.defineProperty(tabList, 'scrollLeft', { configurable: true, get: () => scrollLeft })
+		Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 180 })
+		Object.defineProperty(toolbar, 'scrollWidth', { configurable: true, get: () => 320 })
+		Object.defineProperty(toolbar, 'scrollLeft', { configurable: true, get: () => scrollLeft })
 
 		window.dispatchEvent(new Event('resize'))
 
@@ -37,7 +37,7 @@ describe('AppTabs', () => {
 		expect(root).toHaveAttribute('data-at-end', 'false')
 
 		scrollLeft = 140
-		fireEvent.scroll(tabList)
+		fireEvent.scroll(toolbar)
 
 		await waitFor(() => expect(root).toHaveAttribute('data-at-start', 'false'))
 		expect(root).toHaveAttribute('data-at-end', 'true')
@@ -63,5 +63,45 @@ describe('AppTabs', () => {
 
 		expect(onEdit).toHaveBeenNthCalledWith(1, null, 'add')
 		expect(onEdit).toHaveBeenNthCalledWith(2, 'tab-a', 'remove')
+	})
+
+	it('can expose panel-backed tabs with tab semantics', () => {
+		render(
+			<AppTabs
+				type="card"
+				semanticRole="tabs"
+				ariaLabel="Object workspaces"
+				activeKey="tab-a"
+				items={[
+					{ key: 'tab-a', label: 'bucket-a', children: <div>bucket-a panel</div> },
+					{ key: 'tab-b', label: 'bucket-b', children: <div>bucket-b panel</div> },
+				]}
+			/>,
+		)
+
+		expect(screen.getByRole('tablist', { name: 'Object workspaces' })).toBeInTheDocument()
+		expect(screen.getByRole('tab', { name: 'bucket-a' })).toHaveAttribute('aria-selected', 'true')
+		expect(screen.getByRole('tab', { name: 'bucket-b' })).toHaveAttribute('aria-selected', 'false')
+		expect(screen.getByRole('tabpanel')).toHaveTextContent('bucket-a panel')
+	})
+
+	it('can wire tab semantics to externally controlled panels', () => {
+		render(
+			<AppTabs
+				type="editable-card"
+				semanticRole="tabs"
+				ariaLabel="Object workspaces"
+				activeKey="tab-a"
+				items={[
+					{ key: 'tab-a', label: 'bucket-a', panelId: 'workspace-panel-a' },
+					{ key: 'tab-b', label: 'bucket-b', panelId: 'workspace-panel-b' },
+				]}
+			/>,
+		)
+
+		expect(screen.getByRole('tablist', { name: 'Object workspaces' })).toBeInTheDocument()
+		expect(screen.getByRole('tab', { name: 'bucket-a' })).toHaveAttribute('aria-controls', 'workspace-panel-a')
+		expect(screen.getByRole('tab', { name: 'bucket-b' })).toHaveAttribute('aria-controls', 'workspace-panel-b')
+		expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument()
 	})
 })

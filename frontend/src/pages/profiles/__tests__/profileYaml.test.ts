@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Profile } from '../../../api/types'
-import { buildProfileExportFilename, parseProfileYaml, sanitizeExportFilename } from '../profileYaml'
+import { buildProfileExportFilename, parseProfileYaml, parseProfileYamlForUpdate, sanitizeExportFilename } from '../profileYaml'
 
 describe('profileYaml', () => {
 	it('infers azure provider when account credentials exist', async () => {
@@ -59,6 +59,31 @@ secretAccessKey: secret-key
 		await expect(parseProfileYaml(yamlText)).rejects.toThrow(
 			'oci_s3_compat is no longer offered for new profiles. Use oci_object_storage instead.',
 		)
+	})
+
+	it('allows sanitized s3 profile YAML for updates without secretAccessKey', async () => {
+		const yamlText = `
+profile:
+  name: s3-profile
+  provider: s3_compatible
+  endpoint: http://127.0.0.1:9000
+  region: us-east-1
+  accessKeyId: access
+  forcePathStyle: true
+  preserveLeadingSlash: false
+  tlsInsecureSkipVerify: false
+`
+		await expect(parseProfileYaml(yamlText)).rejects.toThrow('s3_compatible requires region, accessKeyId, and secretAccessKey')
+
+		const { updateRequest, hasTLSBlock } = await parseProfileYamlForUpdate(yamlText)
+		expect(updateRequest.provider).toBe('s3_compatible')
+		if (updateRequest.provider !== 's3_compatible') {
+			throw new Error('unexpected provider')
+		}
+		expect(updateRequest.secretAccessKey).toBeUndefined()
+		expect(updateRequest.sessionToken).toBeUndefined()
+		expect(updateRequest.accessKeyId).toBe('access')
+		expect(hasTLSBlock).toBe(false)
 	})
 
 	it('throws when tls mtls is missing client key', async () => {

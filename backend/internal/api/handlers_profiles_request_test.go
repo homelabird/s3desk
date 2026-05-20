@@ -70,6 +70,36 @@ func TestPrepareCreateProfileRequest_RejectsTLSSkipVerifyWithoutCustomEndpoint(t
 	}
 }
 
+func TestPrepareCreateProfileRequest_RejectsUnsafeGcpServiceAccountTokenURI(t *testing.T) {
+	t.Parallel()
+
+	projectNumber := "123456789"
+	serviceAccountJSON := `{"client_email":"demo@example.test","private_key":"placeholder","token_uri":"http://169.254.169.254/token"}`
+	_, err := prepareCreateProfileRequest(models.ProfileCreateRequest{
+		Provider:           models.ProfileProviderGcpGcs,
+		Name:               "gcs",
+		ProjectNumber:      &projectNumber,
+		ServiceAccountJSON: &serviceAccountJSON,
+	}, false)
+	if err == nil || !strings.Contains(err.Error(), "token_uri") {
+		t.Fatalf("prepareCreateProfileRequest() error=%v, want unsafe token_uri rejection", err)
+	}
+}
+
+func TestValidatePreparedUpdateProfileRequest_RejectsUnsafeGcpServiceAccountTokenURI(t *testing.T) {
+	t.Parallel()
+
+	serviceAccountJSON := `{"client_email":"demo@example.test","private_key":"placeholder","token_uri":"http://169.254.169.254/token"}`
+	err := validatePreparedUpdateProfileRequest(models.Profile{
+		Provider: models.ProfileProviderGcpGcs,
+	}, models.ProfileUpdateRequest{
+		ServiceAccountJSON: &serviceAccountJSON,
+	}, false)
+	if err == nil || !strings.Contains(err.Error(), "token_uri") {
+		t.Fatalf("validatePreparedUpdateProfileRequest() error=%v, want unsafe token_uri rejection", err)
+	}
+}
+
 func TestPrepareUpdateProfileRequest_TrimPreservesExplicitEmptySessionToken(t *testing.T) {
 	t.Parallel()
 

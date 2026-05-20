@@ -215,16 +215,16 @@ func (s *Store) EnsureProfilesEncrypted(ctx context.Context) (updated int, err e
 				return updated, err
 			}
 
-			var key string
+			var keys []string
 			switch provider {
 			case models.ProfileProviderAzureBlob:
-				key = "accountKey"
+				keys = []string{"accountKey", "clientSecret"}
 			case models.ProfileProviderGcpGcs:
-				key = "serviceAccountJson"
+				keys = []string{"serviceAccountJson"}
 			default:
-				key = ""
+				keys = nil
 			}
-			if key != "" {
+			for _, key := range keys {
 				if v, ok := sec[key].(string); ok && v != "" && !strings.HasPrefix(v, encryptedPrefix) {
 					enc, err := s.crypto.encryptString(v)
 					if err != nil {

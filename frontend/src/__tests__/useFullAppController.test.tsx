@@ -273,6 +273,7 @@ describe('useFullAppController', () => {
 			shellScopeKey: '__no_server__:__no_profile__',
 			selectedKey: '/profiles',
 			navOpen: false,
+			settingsOpen: false,
 			openNav: vi.fn(),
 			closeNav: vi.fn(),
 			openSettings: vi.fn(),

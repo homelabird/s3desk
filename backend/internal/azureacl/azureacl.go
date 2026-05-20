@@ -10,7 +10,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,7 +19,9 @@ import (
 
 	"s3desk/internal/azureutil"
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/profiletls"
+	"s3desk/internal/responsebody"
 )
 
 // Response is a minimal HTTP response wrapper for Azure Blob control-plane calls.
@@ -29,6 +30,10 @@ type Response struct {
 	Status  int
 	Headers http.Header
 	Body    []byte
+}
+
+type ClientOptions struct {
+	AllowRemote bool
 }
 
 // Policy is a JSON-friendly representation of container public access + stored access policies.
@@ -48,7 +53,11 @@ type StoredAccessPolicy struct {
 // GetContainerPolicy fetches public access + stored access policies for a container.
 // It returns a Response whose Body is a JSON document (Policy) when the upstream call succeeds.
 func GetContainerPolicy(ctx context.Context, profile models.ProfileSecrets, container string) (Response, error) {
-	resp, err := do(ctx, profile, http.MethodGet, container, "", nil)
+	return GetContainerPolicyWithOptions(ctx, profile, container, ClientOptions{})
+}
+
+func GetContainerPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, opts ClientOptions) (Response, error) {
+	resp, err := do(ctx, profile, http.MethodGet, container, "", nil, opts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -83,6 +92,10 @@ func GetContainerPolicy(ctx context.Context, profile models.ProfileSecrets, cont
 // PutContainerPolicy sets public access + stored access policies for a container.
 // The input is a JSON document representing Policy.
 func PutContainerPolicy(ctx context.Context, profile models.ProfileSecrets, container string, policyJSON []byte) (Response, error) {
+	return PutContainerPolicyWithOptions(ctx, profile, container, policyJSON, ClientOptions{})
+}
+
+func PutContainerPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, policyJSON []byte, opts ClientOptions) (Response, error) {
 	var pol Policy
 	if err := json.Unmarshal(policyJSON, &pol); err != nil {
 		return Response{}, fmt.Errorf("invalid azure policy json: %w", err)
@@ -126,17 +139,21 @@ func PutContainerPolicy(ctx context.Context, profile models.ProfileSecrets, cont
 		publicAccessHeader = pa
 	}
 
-	return do(ctx, profile, http.MethodPut, container, publicAccessHeader, xmlBody)
+	return do(ctx, profile, http.MethodPut, container, publicAccessHeader, xmlBody, opts)
 }
 
 // DeleteContainerPolicy resets container to private and clears all stored access policies.
 func DeleteContainerPolicy(ctx context.Context, profile models.ProfileSecrets, container string) (Response, error) {
-	return do(ctx, profile, http.MethodPut, container, "", nil)
+	return DeleteContainerPolicyWithOptions(ctx, profile, container, ClientOptions{})
+}
+
+func DeleteContainerPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, opts ClientOptions) (Response, error) {
+	return do(ctx, profile, http.MethodPut, container, "", nil, opts)
 }
 
 // ---- REST call implementation ----
 
-func do(ctx context.Context, profile models.ProfileSecrets, method, container, publicAccess string, body []byte) (Response, error) {
+func do(ctx context.Context, profile models.ProfileSecrets, method, container, publicAccess string, body []byte, opts ClientOptions) (Response, error) {
 	baseURL, accountName, accountKey, err := resolveEndpoint(profile)
 	if err != nil {
 		return Response{}, err
@@ -146,7 +163,7 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, container, p
 	u.Path = strings.TrimRight(u.Path, "/") + "/" + url.PathEscape(container)
 	u.RawQuery = "restype=container&comp=acl"
 
-	client, err := newHTTPClient(profile)
+	client, err := newHTTPClient(profile, opts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -184,7 +201,10 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, container, p
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := responsebody.ReadAll(resp.Body, responsebody.ControlPlaneMaxBytes)
+	if err != nil {
+		return Response{}, err
+	}
 	return Response{Status: resp.StatusCode, Headers: resp.Header.Clone(), Body: respBody}, nil
 }
 
@@ -213,19 +233,17 @@ func resolveEndpoint(profile models.ProfileSecrets) (*url.URL, string, string, e
 	return u, accountName, accountKey, nil
 }
 
-func newHTTPClient(profile models.ProfileSecrets) (*http.Client, error) {
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext
-
+func newHTTPClient(profile models.ProfileSecrets, opts ClientOptions) (*http.Client, error) {
 	tlsCfg, err := profiletls.BuildConfig(profile)
 	if err != nil {
 		return nil, err
 	}
-	if tlsCfg != nil {
-		tr.TLSClientConfig = tlsCfg
-	}
 
-	return &http.Client{Transport: tr, Timeout: 30 * time.Second}, nil
+	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
+		AllowRemote: opts.AllowRemote,
+		TLSConfig:   tlsCfg,
+		Timeout:     30 * time.Second,
+	}), nil
 }
 
 func looksLikeLocalEndpoint(endpoint string) bool {

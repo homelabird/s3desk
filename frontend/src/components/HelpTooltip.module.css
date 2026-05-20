@@ -1,0 +1,57 @@
+.host {
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+}
+
+.trigger {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	min-width: 24px;
+	height: 24px;
+	min-height: 24px;
+	margin-left: 4px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--s3d-color-text-secondary);
+	cursor: help;
+	font-family: inherit;
+	line-height: 1;
+	vertical-align: middle;
+	user-select: none;
+}
+
+.trigger:focus-visible {
+	outline: 2px solid var(--s3d-color-focus);
+	outline-offset: 2px;
+}
+
+.glyph {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 1px solid var(--s3d-color-tooltip-border);
+	border-radius: 50%;
+	box-sizing: border-box;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1;
+	pointer-events: none;
+}
+
+@media (pointer: coarse), (max-width: 640px) {
+	.trigger {
+		width: 44px;
+		min-width: 44px;
+		height: 44px;
+		min-height: 44px;
+	}
+}

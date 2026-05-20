@@ -39,50 +39,58 @@ export function AzurePolicyStructuredEditor(props: {
         <Typography.Text type="secondary">No stored access policies</Typography.Text>
       ) : props.useStructuredCards ? (
         <div className={styles.structuredCardList} data-testid="bucket-policy-azure-mobile-policies">
-          {props.azureStoredPolicies.map((row, index) => (
-            <section key={row.key} className={styles.structuredCard}>
-              <div className={styles.structuredCardHeader}>
-                <Typography.Text strong>{`Stored access policy ${index + 1}`}</Typography.Text>
-                <Button danger size="small" onClick={() => props.setAzureStoredPolicies((prev) => prev.filter((policy) => policy.key !== row.key))}>
-                  Remove
-                </Button>
-              </div>
-              <div className={styles.structuredFieldGrid}>
-                <Field label="ID">
-                  <Input
-                    value={row.id}
-                    aria-label="ID"
-                    onChange={(e) => updatePolicyRow(props, row.key, { id: e.target.value })}
-                    placeholder="policy-id…"
-                  />
-                </Field>
-                <Field label="Start">
-                  <Input
-                    value={row.start}
-                    aria-label="Start"
-                    onChange={(e) => updatePolicyRow(props, row.key, { start: e.target.value })}
-                    placeholder="2024-01-01T00:00:00Z…"
-                  />
-                </Field>
-                <Field label="Expiry">
-                  <Input
-                    value={row.expiry}
-                    aria-label="Expiry"
-                    onChange={(e) => updatePolicyRow(props, row.key, { expiry: e.target.value })}
-                    placeholder="2024-02-01T00:00:00Z…"
-                  />
-                </Field>
-                <Field label="Permission">
-                  <Input
-                    value={row.permission}
-                    aria-label="Permission"
-                    onChange={(e) => updatePolicyRow(props, row.key, { permission: e.target.value })}
-                    placeholder="rl…"
-                  />
-                </Field>
-              </div>
-            </section>
-          ))}
+          {props.azureStoredPolicies.map((row, index) => {
+            const policyNumber = index + 1
+            return (
+              <section key={row.key} className={styles.structuredCard}>
+                <div className={styles.structuredCardHeader}>
+                  <Typography.Text strong>{`Stored access policy ${policyNumber}`}</Typography.Text>
+                  <Button
+                    danger
+                    size="small"
+                    aria-label={`Remove stored access policy ${policyNumber}`}
+                    onClick={() => props.setAzureStoredPolicies((prev) => prev.filter((policy) => policy.key !== row.key))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                <div className={styles.structuredFieldGrid}>
+                  <Field label="ID">
+                    <Input
+                      value={row.id}
+                      aria-label={`Stored access policy ${policyNumber} id`}
+                      onChange={(e) => updatePolicyRow(props, row.key, { id: e.target.value })}
+                      placeholder="policy-id…"
+                    />
+                  </Field>
+                  <Field label="Start">
+                    <Input
+                      value={row.start}
+                      aria-label={`Stored access policy ${policyNumber} start`}
+                      onChange={(e) => updatePolicyRow(props, row.key, { start: e.target.value })}
+                      placeholder="2024-01-01T00:00:00Z…"
+                    />
+                  </Field>
+                  <Field label="Expiry">
+                    <Input
+                      value={row.expiry}
+                      aria-label={`Stored access policy ${policyNumber} expiry`}
+                      onChange={(e) => updatePolicyRow(props, row.key, { expiry: e.target.value })}
+                      placeholder="2024-02-01T00:00:00Z…"
+                    />
+                  </Field>
+                  <Field label="Permission">
+                    <Input
+                      value={row.permission}
+                      aria-label={`Stored access policy ${policyNumber} permission`}
+                      onChange={(e) => updatePolicyRow(props, row.key, { permission: e.target.value })}
+                      placeholder="rl…"
+                    />
+                  </Field>
+                </div>
+              </section>
+            )
+          })}
         </div>
       ) : (
         <div className={styles.tableWrap}>
@@ -97,27 +105,55 @@ export function AzurePolicyStructuredEditor(props: {
               </tr>
             </thead>
             <tbody>
-              {props.azureStoredPolicies.map((row) => (
-                <tr key={row.key}>
-                  <td className={styles.td}>
-                    <Input value={row.id} aria-label="ID" onChange={(e) => updatePolicyRow(props, row.key, { id: e.target.value })} placeholder="policy-id…" />
-                  </td>
-                  <td className={styles.td}>
-                    <Input value={row.start} aria-label="Start" onChange={(e) => updatePolicyRow(props, row.key, { start: e.target.value })} placeholder="2024-01-01T00:00:00Z…" />
-                  </td>
-                  <td className={styles.td}>
-                    <Input value={row.expiry} aria-label="Expiry" onChange={(e) => updatePolicyRow(props, row.key, { expiry: e.target.value })} placeholder="2024-02-01T00:00:00Z…" />
-                  </td>
-                  <td className={styles.td}>
-                    <Input value={row.permission} aria-label="Permission" onChange={(e) => updatePolicyRow(props, row.key, { permission: e.target.value })} placeholder="rl…" />
-                  </td>
-                  <td className={styles.td}>
-                    <Button danger size="small" onClick={() => props.setAzureStoredPolicies((prev) => prev.filter((policy) => policy.key !== row.key))}>
-                      Remove
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {props.azureStoredPolicies.map((row, index) => {
+                const policyNumber = index + 1
+                return (
+                  <tr key={row.key}>
+                    <td className={styles.td}>
+                      <Input
+                        value={row.id}
+                        aria-label={`Stored access policy ${policyNumber} id`}
+                        onChange={(e) => updatePolicyRow(props, row.key, { id: e.target.value })}
+                        placeholder="policy-id…"
+                      />
+                    </td>
+                    <td className={styles.td}>
+                      <Input
+                        value={row.start}
+                        aria-label={`Stored access policy ${policyNumber} start`}
+                        onChange={(e) => updatePolicyRow(props, row.key, { start: e.target.value })}
+                        placeholder="2024-01-01T00:00:00Z…"
+                      />
+                    </td>
+                    <td className={styles.td}>
+                      <Input
+                        value={row.expiry}
+                        aria-label={`Stored access policy ${policyNumber} expiry`}
+                        onChange={(e) => updatePolicyRow(props, row.key, { expiry: e.target.value })}
+                        placeholder="2024-02-01T00:00:00Z…"
+                      />
+                    </td>
+                    <td className={styles.td}>
+                      <Input
+                        value={row.permission}
+                        aria-label={`Stored access policy ${policyNumber} permission`}
+                        onChange={(e) => updatePolicyRow(props, row.key, { permission: e.target.value })}
+                        placeholder="rl…"
+                      />
+                    </td>
+                    <td className={styles.td}>
+                      <Button
+                        danger
+                        size="small"
+                        aria-label={`Remove stored access policy ${policyNumber}`}
+                        onClick={() => props.setAzureStoredPolicies((prev) => prev.filter((policy) => policy.key !== row.key))}
+                      >
+                        Remove
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

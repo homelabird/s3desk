@@ -5,6 +5,7 @@ import { FormField } from '../../components/FormField'
 import { LocalDevicePathInput } from '../../components/LocalDevicePathInput'
 import { getDevicePickerSupport } from '../../lib/deviceFs'
 import { localDeviceAccessBrowserHint, localFolderAccessUnavailableTitle } from '../../lib/secureContext'
+import styles from './ObjectsDialogs.module.css'
 
 type DownloadPrefixValues = {
 	localFolder: string
@@ -24,17 +25,23 @@ type ObjectsDownloadPrefixModalProps = {
 
 export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProps) {
 	const support = getDevicePickerSupport()
+	const localDestinationInputId = 'objects-download-prefix-local-input'
+	const submit = () => {
+		if (props.isSubmitting || !props.canSubmit) return
+		props.onFinish(props.values)
+	}
 
 	return (
 		<DialogModal
 			open={props.open}
 			title="Download to this device"
 			onClose={props.onCancel}
+			closeDisabled={props.isSubmitting}
 			width={640}
 			footer={
 				<>
-					<Button onClick={props.onCancel}>Cancel</Button>
-					<Button type="primary" loading={props.isSubmitting} disabled={!props.canSubmit} onClick={() => props.onFinish(props.values)}>
+					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
+					<Button type="primary" loading={props.isSubmitting} disabled={!props.canSubmit} onClick={submit}>
 						Start download
 					</Button>
 				</>
@@ -61,19 +68,22 @@ export function ObjectsDownloadPrefixModal(props: ObjectsDownloadPrefixModalProp
 			<form
 				onSubmit={(e) => {
 					e.preventDefault()
-					props.onFinish(props.values)
+					submit()
 				}}
 			>
 				<FormField label="Source">
-					<Typography.Text code>{props.sourceLabel}</Typography.Text>
+					<Typography.Text code className={styles.dialogCodeValue}>
+						{props.sourceLabel}
+					</Typography.Text>
 				</FormField>
 
-				<FormField label="Local destination folder" required>
+				<FormField label="Local destination folder" htmlFor={localDestinationInputId} required>
 					<LocalDevicePathInput
+						id={localDestinationInputId}
 						value={props.values.localFolder}
 						onChange={(value) => props.onValuesChange({ ...props.values, localFolder: value })}
 						placeholder="Select a folder…"
-						disabled={!support.ok}
+						disabled={props.isSubmitting || !support.ok}
 						pickerMode="readwrite"
 						onPick={props.onPickFolder}
 					/>

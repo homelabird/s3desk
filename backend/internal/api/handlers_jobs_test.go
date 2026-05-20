@@ -597,6 +597,44 @@ func TestJobCreateRejectsLocalPathOutsideAllowedRoots(t *testing.T) {
 	}
 }
 
+func TestJobCreateRejectsLocalPathSymlinkUnderAllowedRoots(t *testing.T) {
+	allowedRoot := t.TempDir()
+	st, _, srv, _ := newTestJobsServerWithAllowedDirs(t, testEncryptionKey(), false, []string{allowedRoot})
+	profile := createTestProfile(t, st)
+	realDir := filepath.Join(allowedRoot, "real")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("mkdir real dir: %v", err)
+	}
+	link := filepath.Join(allowedRoot, "link")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	req := models.JobCreateRequest{
+		Type: jobs.JobTypeTransferSyncLocalToS3,
+		Payload: map[string]any{
+			"bucket":    "test-bucket",
+			"prefix":    "path/",
+			"localPath": link,
+		},
+	}
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/jobs", profile.ID, req)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(body))
+	}
+
+	var errResp models.ErrorResponse
+	decodeJSONResponse(t, res, &errResp)
+	if errResp.Error.Code != "invalid_request" {
+		t.Fatalf("expected invalid_request, got %q", errResp.Error.Code)
+	}
+	if !strings.Contains(errResp.Error.Message, "symlinked local paths are not allowed") {
+		t.Fatalf("expected symlink guard message, got %q", errResp.Error.Message)
+	}
+}
+
 func TestJobCreateRejectsUnsupportedControlCharactersInFilesFromRawKeys(t *testing.T) {
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)

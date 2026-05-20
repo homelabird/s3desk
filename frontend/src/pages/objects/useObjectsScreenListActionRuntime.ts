@@ -35,6 +35,7 @@ export function useObjectsScreenListActionRuntime({
 	const { objectByKey } = previewState
 
 	const { onDownload, onDownloadToDevice, handleDownloadSelected } = useObjectDownloads({
+		apiToken: props.apiToken,
 		profileId: props.profileId,
 		bucket,
 		prefix,

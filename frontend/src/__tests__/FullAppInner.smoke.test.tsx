@@ -8,7 +8,6 @@ import { APIClient } from '../api/client'
 import { APIClientProvider } from '../api/APIClientProvider'
 import { AuthProvider } from '../auth/AuthProvider'
 import FullAppInner from '../FullAppInner'
-import * as reloadPageModule from '../lib/reloadPage'
 import { ensureDomShims } from '../test/domShims'
 import { ThemeModeProvider } from '../themeMode'
 
@@ -137,24 +136,27 @@ describe('FullAppInner header', () => {
 	it('stacks profile actions into a second row on narrow mobile screens', async () => {
 		mockViewportWidth(390)
 		mockShellApi()
-		const reloadSpy = vi.spyOn(reloadPageModule, 'reloadPage').mockImplementation(() => {})
 
 		renderShell()
 
 		expect(await screen.findByTestId('app-header-profile-row')).toBeInTheDocument()
-		expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument()
-		expect(screen.getByRole('button', { name: 'Refresh current page' })).toBeInTheDocument()
+		const navButton = screen.getByRole('button', { name: 'Open navigation' })
+		expect(navButton).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(navButton).toHaveAttribute('aria-expanded', 'false')
+		expect(navButton).toHaveAttribute('aria-controls', 'app-navigation-drawer')
+		expect(screen.getByRole('link', { name: 'Open objects workspace' })).toHaveAttribute('href', '/objects')
 		expect(screen.getByRole('combobox', { name: 'Profile' })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
-
-		fireEvent.click(screen.getByRole('button', { name: 'Refresh current page' }))
-		expect(reloadSpy).toHaveBeenCalledTimes(1)
+		const moreActionsButton = screen.getByRole('button', { name: 'More actions' })
+		expect(moreActionsButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(moreActionsButton).toHaveAttribute('aria-expanded', 'false')
 
 		await act(async () => {
-			fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+			fireEvent.click(moreActionsButton)
 		})
 
+		expect(moreActionsButton).toHaveAttribute('aria-expanded', 'true')
 		expect(await screen.findByRole('menuitem', { name: /Settings/i })).toBeInTheDocument()
 		expect(screen.getByRole('menuitem', { name: /Logout/i })).toBeInTheDocument()
 
@@ -162,6 +164,8 @@ describe('FullAppInner header', () => {
 			fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }))
 		})
 
+		expect(navButton).toHaveAttribute('aria-expanded', 'true')
+		expect(await screen.findByRole('dialog', { name: 'Navigation' })).toHaveAttribute('id', 'app-navigation-drawer')
 		expect(await screen.findByRole('button', { name: 'Backup' })).toBeInTheDocument()
 	}, 15_000)
 
@@ -182,7 +186,6 @@ describe('FullAppInner header', () => {
 	it('keeps inline settings and logout actions on desktop', async () => {
 		mockViewportWidth(1280)
 		mockShellApi()
-		const reloadSpy = vi.spyOn(reloadPageModule, 'reloadPage').mockImplementation(() => {})
 
 		renderShell()
 
@@ -192,10 +195,18 @@ describe('FullAppInner header', () => {
 		expect(screen.getByRole('button', { name: 'Backup' })).toBeInTheDocument()
 		expect(screen.getByText('Profile')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
-		expect(screen.getByRole('button', { name: /Settings/i })).toBeInTheDocument()
+		const settingsButton = screen.getByRole('button', { name: /Settings/i })
+		expect(settingsButton).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(settingsButton).toHaveAttribute('aria-expanded', 'false')
+		expect(settingsButton).toHaveAttribute('aria-controls', 'app-settings-drawer')
 		expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument()
+		expect(screen.getByRole('link', { name: 'Open objects workspace' })).toHaveAttribute('href', '/objects')
 
-		fireEvent.click(screen.getByRole('button', { name: 'Refresh current page' }))
-		expect(reloadSpy).toHaveBeenCalledTimes(1)
+		await act(async () => {
+			fireEvent.click(settingsButton)
+		})
+
+		expect(settingsButton).toHaveAttribute('aria-expanded', 'true')
+		expect(await screen.findByRole('dialog', { name: 'Settings' })).toHaveAttribute('id', 'app-settings-drawer')
 	})
 })

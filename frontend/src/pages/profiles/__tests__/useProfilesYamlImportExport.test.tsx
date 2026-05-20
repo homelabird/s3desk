@@ -9,7 +9,8 @@ import type { Profile } from '../../../api/types'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useProfilesYamlImportExport } from '../useProfilesYamlImportExport'
 
-const { parseProfileYamlMock } = vi.hoisted(() => ({
+const { parseProfileYamlForUpdateMock, parseProfileYamlMock } = vi.hoisted(() => ({
+	parseProfileYamlForUpdateMock: vi.fn(),
 	parseProfileYamlMock: vi.fn(),
 }))
 
@@ -17,6 +18,8 @@ vi.mock('../profileYaml', async () => {
 	const actual = await vi.importActual<typeof import('../profileYaml')>('../profileYaml')
 	return {
 		...actual,
+		parseProfileYamlForUpdate: (...args: Parameters<typeof actual.parseProfileYamlForUpdate>) =>
+			parseProfileYamlForUpdateMock(...args),
 		parseProfileYaml: (...args: Parameters<typeof actual.parseProfileYaml>) => parseProfileYamlMock(...args),
 	}
 })
@@ -71,6 +74,7 @@ function buildArgs(
 
 afterEach(() => {
 	vi.restoreAllMocks()
+	parseProfileYamlForUpdateMock.mockReset()
 	parseProfileYamlMock.mockReset()
 })
 
@@ -124,6 +128,43 @@ describe('useProfilesYamlImportExport', () => {
 		expect(result.current.activeExportingProfileId).toBe(null)
 	})
 
+	it('loads secret-inclusive YAML only through the explicit action', async () => {
+		const exportProfileYaml = vi
+			.fn()
+			.mockResolvedValueOnce('name: sanitized\n')
+			.mockResolvedValueOnce('name: full\nsecretAccessKey: secret\n')
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				mutations: { retry: false },
+			},
+		})
+		const args = buildArgs({
+			api: createMockApiClient({
+				profiles: { exportProfileYaml },
+			}),
+		})
+
+		const { result } = renderHook(() => useProfilesYamlImportExport(args), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		act(() => {
+			result.current.openYamlModal(buildProfile({ id: 'profile-7', name: 'Secure Profile' }))
+		})
+
+		await waitFor(() => expect(result.current.activeYamlDraft).toBe('name: sanitized\n'))
+		expect(result.current.activeYamlIncludesSecrets).toBe(false)
+		expect(exportProfileYaml).toHaveBeenNthCalledWith(1, 'profile-7')
+
+		act(() => {
+			result.current.loadYamlWithSecrets()
+		})
+
+		await waitFor(() => expect(result.current.activeYamlDraft).toBe('name: full\nsecretAccessKey: secret\n'))
+		expect(result.current.activeYamlIncludesSecrets).toBe(true)
+		expect(exportProfileYaml).toHaveBeenNthCalledWith(2, 'profile-7', { includeSecrets: true })
+	})
+
 	it('saves YAML, updates canonical state, and invalidates scoped list and TLS queries', async () => {
 		const invalidateQueries = vi.fn().mockResolvedValue(undefined)
 		const updateProfile = vi.fn().mockResolvedValue(
@@ -137,8 +178,7 @@ describe('useProfilesYamlImportExport', () => {
 			.mockResolvedValueOnce('name: canonical\n')
 		const successSpy = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
 
-		parseProfileYamlMock.mockResolvedValue({
-			request: { name: 'unused' },
+		parseProfileYamlForUpdateMock.mockResolvedValue({
 			updateRequest: { name: 'Updated Profile' },
 			tlsConfig: { mode: 'mtls', clientCertPem: 'cert', clientKeyPem: 'key' },
 			hasTLSBlock: true,
@@ -179,7 +219,7 @@ describe('useProfilesYamlImportExport', () => {
 			result.current.saveYaml()
 		})
 
-		await waitFor(() => expect(parseProfileYamlMock).toHaveBeenCalledWith('name: updated\n'))
+		await waitFor(() => expect(parseProfileYamlForUpdateMock).toHaveBeenCalledWith('name: updated\n'))
 		await waitFor(() => expect(updateProfile).toHaveBeenCalledWith('profile-9', { name: 'Updated Profile' }))
 		await waitFor(() =>
 			expect(updateProfileTLS).toHaveBeenCalledWith('profile-9', {

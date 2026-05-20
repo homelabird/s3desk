@@ -221,11 +221,12 @@ test.describe('@perf jobs performance', () => {
 		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
 		await expect(page.locator('code', { hasText: 'job-0' })).toBeVisible()
 
-		await page.getByRole('button', { name: 'Open actions menu' }).first().click()
-		await expect(page.getByRole('menuitem', { name: 'Logs' })).toBeVisible()
+		const jobRow = page.getByRole('row', { name: /job-0/ }).first()
+		const logsButton = jobRow.getByRole('button', { name: /^Logs(?: for job .+)?$/ })
+		await expect(logsButton).toBeVisible()
 
 		const started = Date.now()
-		await page.getByRole('menuitem', { name: 'Logs' }).click()
+		await logsButton.click()
 		await expect(page.getByText('Job Logs')).toBeVisible()
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `jobs_logs_drawer_ms=${elapsed}` })

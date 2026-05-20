@@ -5,6 +5,7 @@ import { appFeedback } from '../lib/appFeedback'
 import { getDevicePickerSupport, pickDirectory } from '../lib/deviceFs'
 
 type LocalDevicePathInputProps = {
+	id?: string
 	value?: string
 	onChange?: (value: string) => void
 	onPick?: (handle: FileSystemDirectoryHandle) => void
@@ -12,6 +13,7 @@ type LocalDevicePathInputProps = {
 	disabled?: boolean
 	buttonLabel?: string
 	pickerMode?: 'read' | 'readwrite'
+	ariaLabel?: string
 }
 
 export function LocalDevicePathInput(props: LocalDevicePathInputProps) {
@@ -35,10 +37,12 @@ export function LocalDevicePathInput(props: LocalDevicePathInputProps) {
 
 	return (
 		<Input
+			id={props.id}
 			value={props.value}
 			readOnly
 			disabled={props.disabled}
 			placeholder={props.placeholder}
+			aria-label={props.ariaLabel}
 			addonAfter={
 				<Button onClick={handleBrowse} disabled={props.disabled || !support.ok || picking}>
 					{props.buttonLabel ?? 'Browse…'}

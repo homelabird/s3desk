@@ -2,20 +2,34 @@ package bucketgov
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 )
 
+type ServiceOptions struct {
+	AllowRemote bool
+}
+
 type Service struct {
-	registry *Registry
+	registry    *Registry
+	allowRemote bool
 }
 
 func NewService(registry *Registry) *Service {
+	return NewServiceWithOptions(registry, ServiceOptions{})
+}
+
+func NewServiceWithOptions(registry *Registry, opts ServiceOptions) *Service {
 	if registry == nil {
 		registry = NewRegistry()
 	}
-	return &Service{registry: registry}
+	return &Service{
+		registry:    registry,
+		allowRemote: opts.AllowRemote,
+	}
 }
 
 func (s *Service) Registry() *Registry {
@@ -116,12 +130,24 @@ func (s *Service) PutSharing(ctx context.Context, profile models.ProfileSecrets,
 }
 
 func (s *Service) resolve(profile models.ProfileSecrets, bucket string) (Adapter, string, error) {
+	bucket = strings.TrimSpace(bucket)
 	if s == nil || s.registry == nil {
 		return nil, "", UnsupportedProviderError{Provider: profile.Provider}
+	}
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.allowRemote); err != nil {
+		return nil, "", &OperationError{
+			Status:  http.StatusBadRequest,
+			Code:    string(models.NormalizedErrorInvalidConfig),
+			Message: "profile endpoint is not allowed by current remote access policy",
+			Details: map[string]any{
+				"bucket": bucket,
+				"error":  err.Error(),
+			},
+		}
 	}
 	adapter, err := s.registry.Resolve(profile.Provider)
 	if err != nil {
 		return nil, "", err
 	}
-	return adapter, strings.TrimSpace(bucket), nil
+	return adapter, bucket, nil
 }

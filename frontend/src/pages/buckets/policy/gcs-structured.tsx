@@ -16,35 +16,37 @@ export function GcsPolicyStructuredEditor(props: {
   return (
     <Space orientation="vertical" className={styles.fullWidth} size="middle">
       <Space align="center" wrap className={styles.controlRow}>
-        <input
-          type="checkbox"
-          checked={props.gcsPublicRead}
-          aria-label="Public read access"
-          onChange={(event) => {
-            const checked = event.target.checked
-            props.setGcsBindings((prev) => {
-              const next = prev.map((b) => ({ ...b, members: [...b.members] }))
-              const role = 'roles/storage.objectViewer'
-              if (checked) {
-                const idx = next.findIndex((b) => b.role === role)
-                if (idx === -1) {
-                  next.push({ key: props.nextKey(), role, members: ['allUsers'] })
-                } else if (!next[idx].members.includes('allUsers')) {
-                  next[idx].members.push('allUsers')
+        <label className={styles.checkboxLabel}>
+          <input
+            type="checkbox"
+            checked={props.gcsPublicRead}
+            onChange={(event) => {
+              const checked = event.target.checked
+              props.setGcsBindings((prev) => {
+                const next = prev.map((b) => ({ ...b, members: [...b.members] }))
+                const role = 'roles/storage.objectViewer'
+                if (checked) {
+                  const idx = next.findIndex((b) => b.role === role)
+                  if (idx === -1) {
+                    next.push({ key: props.nextKey(), role, members: ['allUsers'] })
+                  } else if (!next[idx].members.includes('allUsers')) {
+                    next[idx].members.push('allUsers')
+                  }
+                } else {
+                  for (const binding of next) {
+                    binding.members = binding.members.filter((member) => member !== 'allUsers')
+                  }
+                  return next.filter((binding) => binding.members.length > 0 || binding.role.trim() !== '')
                 }
-              } else {
-                for (const binding of next) {
-                  binding.members = binding.members.filter((member) => member !== 'allUsers')
-                }
-                return next.filter((binding) => binding.members.length > 0 || binding.role.trim() !== '')
-              }
-              return next
-            })
-          }}
-        />
-        <Typography.Text>
-          Public read access (adds <Typography.Text code>allUsers</Typography.Text> to{' '}
-          <Typography.Text code>roles/storage.objectViewer</Typography.Text>)
+                return next
+              })
+            }}
+          />
+          <Typography.Text>Public read access</Typography.Text>
+        </label>
+        <Typography.Text type="secondary">
+          Adds <Typography.Text code>allUsers</Typography.Text> to{' '}
+          <Typography.Text code>roles/storage.objectViewer</Typography.Text>
         </Typography.Text>
       </Space>
 
@@ -73,47 +75,55 @@ export function GcsPolicyStructuredEditor(props: {
         <Typography.Text type="secondary">No bindings</Typography.Text>
       ) : props.useStructuredCards ? (
         <div className={styles.structuredCardList} data-testid="bucket-policy-gcs-mobile-bindings">
-          {props.gcsBindings.map((row, index) => (
-            <section key={row.key} className={styles.structuredCard}>
-              <div className={styles.structuredCardHeader}>
-                <Typography.Text strong>{`Binding ${index + 1}`}</Typography.Text>
-                <Button danger size="small" onClick={() => props.setGcsBindings((prev) => prev.filter((binding) => binding.key !== row.key))}>
-                  Remove
-                </Button>
-              </div>
-              <div className={styles.structuredField}>
-                <Typography.Text type="secondary" className={styles.structuredFieldLabel}>Role</Typography.Text>
-                <Input
-                  value={row.role}
-                  aria-label="Role"
-                  onChange={(e) => {
-                    const value = e.target.value
-                    props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, role: value } : binding)))
-                  }}
-                  placeholder="roles/storage.objectViewer…"
-                />
-              </div>
-              <div className={styles.structuredField}>
-                <Typography.Text type="secondary" className={styles.structuredFieldLabel}>Members</Typography.Text>
-                <Input.TextArea
-                  value={row.members.join('\n')}
-                  aria-label="Members"
-                  onChange={(e) => {
-                    const uniq = new Set(
-                      e.target.value
-                        .split(/[\n,]+/)
-                        .map((value) => value.trim())
-                        .filter(Boolean),
-                    )
-                    props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, members: Array.from(uniq) } : binding)))
-                  }}
-                  autoSize={{ minRows: 3, maxRows: 8 }}
-                  className={styles.membersInput}
-                  placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
-                />
-              </div>
-            </section>
-          ))}
+          {props.gcsBindings.map((row, index) => {
+            const bindingNumber = index + 1
+            return (
+              <section key={row.key} className={styles.structuredCard}>
+                <div className={styles.structuredCardHeader}>
+                  <Typography.Text strong>{`Binding ${bindingNumber}`}</Typography.Text>
+                  <Button
+                    danger
+                    size="small"
+                    aria-label={`Remove binding ${bindingNumber}`}
+                    onClick={() => props.setGcsBindings((prev) => prev.filter((binding) => binding.key !== row.key))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                <div className={styles.structuredField}>
+                  <Typography.Text type="secondary" className={styles.structuredFieldLabel}>Role</Typography.Text>
+                  <Input
+                    value={row.role}
+                    aria-label={`Binding ${bindingNumber} role`}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, role: value } : binding)))
+                    }}
+                    placeholder="roles/storage.objectViewer…"
+                  />
+                </div>
+                <div className={styles.structuredField}>
+                  <Typography.Text type="secondary" className={styles.structuredFieldLabel}>Members</Typography.Text>
+                  <Input.TextArea
+                    value={row.members.join('\n')}
+                    aria-label={`Binding ${bindingNumber} members`}
+                    onChange={(e) => {
+                      const uniq = new Set(
+                        e.target.value
+                          .split(/[\n,]+/)
+                          .map((value) => value.trim())
+                          .filter(Boolean),
+                      )
+                      props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, members: Array.from(uniq) } : binding)))
+                    }}
+                    autoSize={{ minRows: 3, maxRows: 8 }}
+                    className={styles.membersInput}
+                    placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
+                  />
+                </div>
+              </section>
+            )
+          })}
         </div>
       ) : (
         <div className={styles.tableWrap}>
@@ -126,44 +136,52 @@ export function GcsPolicyStructuredEditor(props: {
               </tr>
             </thead>
             <tbody>
-              {props.gcsBindings.map((row) => (
-                <tr key={row.key}>
-                  <td className={styles.td}>
-                    <Input
-                      value={row.role}
-                      aria-label="Role"
-                      onChange={(e) => {
-                        const value = e.target.value
-                        props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, role: value } : binding)))
-                      }}
-                      placeholder="roles/storage.objectViewer…"
-                    />
-                  </td>
-                  <td className={styles.td}>
-                    <Input.TextArea
-                      value={row.members.join('\n')}
-                      aria-label="Members"
-                      onChange={(e) => {
-                        const uniq = new Set(
-                          e.target.value
-                            .split(/[\n,]+/)
-                            .map((value) => value.trim())
-                            .filter(Boolean),
-                        )
-                        props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, members: Array.from(uniq) } : binding)))
-                      }}
-                      autoSize={{ minRows: 2, maxRows: 6 }}
-                      className={styles.membersInput}
-                      placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
-                    />
-                  </td>
-                  <td className={styles.td}>
-                    <Button danger size="small" onClick={() => props.setGcsBindings((prev) => prev.filter((binding) => binding.key !== row.key))}>
-                      Remove
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {props.gcsBindings.map((row, index) => {
+                const bindingNumber = index + 1
+                return (
+                  <tr key={row.key}>
+                    <td className={styles.td}>
+                      <Input
+                        value={row.role}
+                        aria-label={`Binding ${bindingNumber} role`}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, role: value } : binding)))
+                        }}
+                        placeholder="roles/storage.objectViewer…"
+                      />
+                    </td>
+                    <td className={styles.td}>
+                      <Input.TextArea
+                        value={row.members.join('\n')}
+                        aria-label={`Binding ${bindingNumber} members`}
+                        onChange={(e) => {
+                          const uniq = new Set(
+                            e.target.value
+                              .split(/[\n,]+/)
+                              .map((value) => value.trim())
+                              .filter(Boolean),
+                          )
+                          props.setGcsBindings((prev) => prev.map((binding) => (binding.key === row.key ? { ...binding, members: Array.from(uniq) } : binding)))
+                        }}
+                        autoSize={{ minRows: 2, maxRows: 6 }}
+                        className={styles.membersInput}
+                        placeholder="One per line (e.g. allUsers, user:alice@example.com)…"
+                      />
+                    </td>
+                    <td className={styles.td}>
+                      <Button
+                        danger
+                        size="small"
+                        aria-label={`Remove binding ${bindingNumber}`}
+                        onClick={() => props.setGcsBindings((prev) => prev.filter((binding) => binding.key !== row.key))}
+                      >
+                        Remove
+                      </Button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

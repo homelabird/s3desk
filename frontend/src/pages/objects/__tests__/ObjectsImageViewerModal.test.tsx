@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import styles from '../ObjectsImageViewer.module.css'
 import { ObjectsImageViewerModal } from '../ObjectsImageViewerModal'
 
 const originalGetComputedStyle = window.getComputedStyle
@@ -55,7 +56,7 @@ describe('ObjectsImageViewerModal', () => {
 
 		expect(await screen.findByTestId('objects-image-viewer-modal')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-image-viewer-image')).toHaveAttribute('src', 'blob:video-thumb')
-		expect(screen.getByText('video/mp4')).toBeInTheDocument()
+		expect(screen.getByText('video/mp4')).toHaveClass(styles.imageViewerMetaBadge)
 		expect(screen.queryByText('Large preview is only available for image objects.')).not.toBeInTheDocument()
 	})
 
@@ -180,7 +181,37 @@ describe('ObjectsImageViewerModal', () => {
 			/>,
 		)
 
-		expect(screen.getByRole('status', { name: 'Loading visual preview' })).toHaveTextContent('Loading full image preview')
+		expect(screen.getByRole('status', { name: 'Preview loading' })).toHaveTextContent('Fetching preview.')
+	})
+
+	it('shows shared recovery copy for oversized image previews', async () => {
+		render(
+			<ObjectsImageViewerModal
+				open
+				isMobile={false}
+				objectKey="oversized.png"
+				isMetaFetching={false}
+				objectMeta={{
+					key: 'oversized.png',
+					contentType: 'image/png',
+					size: 99_999_999,
+				} as never}
+				thumbnail={<img alt="thumbnail of oversized.png" src="blob:thumb" />}
+				preview={null}
+				onLoadPreview={vi.fn()}
+				onCancelPreview={vi.fn()}
+				canCancelPreview={false}
+				onClose={vi.fn()}
+				onDownload={vi.fn()}
+				onPresign={vi.fn()}
+				isPresignLoading={false}
+			/>,
+		)
+
+		expect(await screen.findByTestId('objects-image-viewer-modal')).toBeInTheDocument()
+		expect(screen.getByText('Preview too large')).toBeInTheDocument()
+		expect(screen.getByText('Use Download or URL to view the original file.')).toBeInTheDocument()
+		expect(screen.getByText('Fallback thumbnail shown')).toBeInTheDocument()
 	})
 
 	it('updates the preview transform while dragging a zoomed image', async () => {

@@ -2,7 +2,10 @@ package bucketgov
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"s3desk/internal/azureacl"
@@ -11,6 +14,94 @@ import (
 	"s3desk/internal/models"
 	"s3desk/internal/ocicli"
 )
+
+func TestNewDefaultRegistryWithOptionsThreadsAllowRemoteToProviderAdapters(t *testing.T) {
+	t.Parallel()
+
+	registry := NewDefaultRegistryWithOptions(DefaultRegistryOptions{AllowRemote: true})
+	cases := []struct {
+		name     string
+		provider models.ProfileProvider
+		run      func(Adapter) error
+	}{
+		{
+			name:     "aws",
+			provider: models.ProfileProviderAwsS3,
+			run: func(adapter Adapter) error {
+				_, err := adapter.(publicExposureSection).GetPublicExposure(context.Background(), models.ProfileSecrets{
+					Provider:        models.ProfileProviderAwsS3,
+					Endpoint:        "http://127.0.0.1:9000",
+					Region:          "us-east-1",
+					AccessKeyID:     "access",
+					SecretAccessKey: "secret",
+				}, "demo")
+				return err
+			},
+		},
+		{
+			name:     "azure",
+			provider: models.ProfileProviderAzureBlob,
+			run: func(adapter Adapter) error {
+				_, err := adapter.(accessSection).GetAccess(context.Background(), models.ProfileSecrets{
+					Provider:         models.ProfileProviderAzureBlob,
+					AzureAccountName: "acct",
+					AzureAccountKey:  base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+					AzureEndpoint:    "http://127.0.0.1:10000/acct",
+				}, "demo")
+				return err
+			},
+		},
+		{
+			name:     "gcs",
+			provider: models.ProfileProviderGcpGcs,
+			run: func(adapter Adapter) error {
+				_, err := adapter.(accessSection).GetAccess(context.Background(), models.ProfileSecrets{
+					Provider:     models.ProfileProviderGcpGcs,
+					GcpAnonymous: true,
+					GcpEndpoint:  "http://127.0.0.1:4443",
+				}, "demo")
+				return err
+			},
+		},
+		{
+			name:     "oci",
+			provider: models.ProfileProviderOciObjectStorage,
+			run: func(adapter Adapter) error {
+				_, err := adapter.(publicExposureSection).GetPublicExposure(context.Background(), models.ProfileSecrets{
+					Provider:     models.ProfileProviderOciObjectStorage,
+					OciNamespace: "namespace",
+					OciEndpoint:  "http://127.0.0.1:8080/opc/v1",
+				}, "demo")
+				return err
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			adapter, err := registry.Resolve(tt.provider)
+			if err != nil {
+				t.Fatalf("Resolve err=%v", err)
+			}
+			assertLoopbackOperationError(t, tt.run(adapter))
+		})
+	}
+}
+
+func assertLoopbackOperationError(t *testing.T, err error) {
+	t.Helper()
+
+	var opErr *OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("err=%T, want OperationError", err)
+	}
+	if got, _ := opErr.Details["error"].(string); !strings.Contains(got, "loopback or link-local") {
+		t.Fatalf("details.error=%q, want loopback rejection", got)
+	}
+}
 
 func TestGCSAdapterGetAccessAndPublicExposure(t *testing.T) {
 	t.Parallel()

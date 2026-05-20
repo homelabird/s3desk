@@ -111,6 +111,7 @@ export function BucketModal(props: {
 			open={props.open}
 			title="Create Bucket"
 			onClose={handleCancel}
+			closeDisabled={isBusy}
 			footer={footer}
 		>
 			<form className={styles.form} onSubmit={handleFormSubmit}>

@@ -7,6 +7,7 @@ import {
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import { ObjectsTreePane } from './ObjectsTreePane'
 import { ShellText } from './ObjectsPaneShellText'
+import { OBJECTS_TREE_DRAWER_ID } from './objectsOverlayIds'
 import shellStyles from './ObjectsShell.module.css'
 import styles from './objects.module.css'
 import { ObjectsTreeSection } from './objectsPageLazy'
@@ -58,6 +59,7 @@ function TreeSectionFallback(props: TreeSectionFallbackProps) {
 				onClose={props.onClose}
 				title="Browse"
 				placement="left"
+				sheetId={OBJECTS_TREE_DRAWER_ID}
 				width="min(100vw, 420px)"
 				dataTestId="objects-tree-sheet"
 				backdropInteractive={false}

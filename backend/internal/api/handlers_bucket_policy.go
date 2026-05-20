@@ -125,7 +125,7 @@ func (s *server) writeS3PolicyCallError(w http.ResponseWriter, op, bucket string
 
 	writeError(w, status, code, fmt.Sprintf("failed to %s bucket policy", op), map[string]any{
 		"bucket": bucket,
-		"error":  msg,
+		"error":  redactRcloneDiagnostic(msg),
 	})
 }
 
@@ -168,7 +168,7 @@ func (s *server) writeS3PolicyUpstreamError(w http.ResponseWriter, op, bucket st
 		details["upstreamError"] = body
 	}
 
-	writeError(w, status, apiCode, fmt.Sprintf("failed to %s bucket policy", op), details)
+	writeError(w, status, apiCode, fmt.Sprintf("failed to %s bucket policy", op), redactRcloneDiagnosticDetails(details))
 }
 
 func (s *server) writeGenericPolicyUpstreamError(w http.ResponseWriter, op, bucket string, status int, headers http.Header, body []byte, providerHint string) {
@@ -214,5 +214,5 @@ func (s *server) writeGenericPolicyUpstreamError(w http.ResponseWriter, op, buck
 		details["upstreamError"] = bodyStr
 	}
 
-	writeError(w, respStatus, apiCode, fmt.Sprintf("failed to %s bucket policy", op), details)
+	writeError(w, respStatus, apiCode, fmt.Sprintf("failed to %s bucket policy", op), redactRcloneDiagnosticDetails(details))
 }

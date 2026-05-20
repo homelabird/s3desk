@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"s3desk/internal/localpath"
 	"s3desk/internal/models"
 )
 
@@ -62,20 +63,22 @@ func newLocalEntriesHTTPService(s *server) localEntriesHTTPService {
 	return localEntriesHTTPService{server: s}
 }
 
-func parseLocalEntriesLimit(r *http.Request) int {
+func parseLocalEntriesLimit(r *http.Request) (int, error) {
 	limit := 2000
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil {
 			limit = parsed
+		} else {
+			return 0, err
 		}
 	}
 	if limit < 1 {
-		return 1
+		return 1, nil
 	}
 	if limit > 5000 {
-		return 5000
+		return 5000, nil
 	}
-	return limit
+	return limit, nil
 }
 
 func localEntryName(path string) string {
@@ -116,14 +119,12 @@ func listAllowedLocalDirectoryEntries(real string, allowedDirs []string, limit i
 		if name == "" {
 			continue
 		}
+		if ent.Type()&os.ModeSymlink != 0 {
+			continue
+		}
 
 		isDir := ent.IsDir()
 		full := filepath.Join(real, name)
-		if !isDir && ent.Type()&os.ModeSymlink != 0 {
-			if st, err := os.Stat(full); err == nil && st.IsDir() {
-				isDir = true
-			}
-		}
 		if !isDir {
 			continue
 		}
@@ -166,9 +167,20 @@ func (svc localEntriesHTTPService) prepareListLocalEntries(r *http.Request) loca
 
 	base := strings.TrimSpace(r.URL.Query().Get("path"))
 	if base == "" {
+		limit, err := parseLocalEntriesLimit(r)
+		if err != nil {
+			return localEntriesPreparedRequest{
+				err: newLocalEntriesPreparationError(
+					http.StatusBadRequest,
+					"invalid_request",
+					"limit is invalid",
+					map[string]any{"limit": r.URL.Query().Get("limit")},
+				),
+			}
+		}
 		return localEntriesPreparedRequest{
 			rootList: true,
-			limit:    parseLocalEntriesLimit(r),
+			limit:    limit,
 		}
 	}
 
@@ -267,11 +279,33 @@ func (svc localEntriesHTTPService) prepareListLocalEntries(r *http.Request) loca
 			),
 		}
 	}
+	if err := localpath.RejectSymlinkComponentsUnderRoots(abs, svc.server.cfg.AllowedLocalDirs); err != nil {
+		return localEntriesPreparedRequest{
+			err: newLocalEntriesPreparationError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"path is invalid",
+				map[string]any{"path": abs, "error": err.Error()},
+			),
+		}
+	}
+
+	limit, err := parseLocalEntriesLimit(r)
+	if err != nil {
+		return localEntriesPreparedRequest{
+			err: newLocalEntriesPreparationError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"limit is invalid",
+				map[string]any{"limit": r.URL.Query().Get("limit")},
+			),
+		}
+	}
 
 	return localEntriesPreparedRequest{
 		basePath: base,
 		realPath: real,
-		limit:    parseLocalEntriesLimit(r),
+		limit:    limit,
 	}
 }
 

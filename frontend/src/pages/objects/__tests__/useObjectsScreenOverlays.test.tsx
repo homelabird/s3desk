@@ -42,7 +42,7 @@ function seedOverlaysState() {
 	const data = {
 		bucket: 'bucket-a',
 			prefix: 'docs/',
-			screens: { md: true },
+			screens: { md: true, lg: true },
 			bucketOptions: [{ label: 'bucket-a', value: 'bucket-a' }],
 			bucketsQuery: { isFetching: true },
 			selectedCount: 2,
@@ -160,6 +160,7 @@ describe('useObjectsScreenOverlays', () => {
 			bucket: 'bucket-a',
 			prefix: 'docs/',
 			isMd: true,
+			isLg: true,
 			bucketOptions: [{ label: 'bucket-a', value: 'bucket-a' }],
 			bucketsLoading: true,
 			selectedCount: 2,

@@ -8,6 +8,15 @@
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+	min-width: 0;
+}
+
+.destinationLabel {
+	display: block;
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .actions {
@@ -21,4 +30,15 @@
 
 .hint {
 	margin-top: 4px;
+}
+
+@media (max-width: 575px) {
+	.actions {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.button {
+		width: 100%;
+		justify-content: center;
+	}
 }

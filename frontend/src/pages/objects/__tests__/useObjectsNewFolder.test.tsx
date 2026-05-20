@@ -204,4 +204,56 @@ describe('useObjectsNewFolder', () => {
 		expect(invalidateObjectQueriesForPrefixMock).not.toHaveBeenCalled()
 		expect(messageSuccessMock).not.toHaveBeenCalled()
 	})
+
+	it('does not let an old-scope pending create disable a newly opened folder dialog', async () => {
+		const { Wrapper } = createWrapper()
+		const oldCreateFolderRequest = deferred<void>()
+		const createFolder = vi.fn().mockReturnValueOnce(oldCreateFolderRequest.promise).mockResolvedValueOnce(undefined)
+
+		const { result, rerender } = renderHook(
+			({ apiToken }: { apiToken: string }) =>
+				useObjectsNewFolder({
+					api: {
+						objects: {
+							createFolder,
+							listObjects: vi.fn().mockResolvedValue({ commonPrefixes: ['docs/second/'] }),
+						},
+					} as never,
+					apiToken,
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					prefix: 'docs/',
+					typeFilter: 'all',
+					favoritesOnly: false,
+					searchText: '',
+					onClearSearch: vi.fn(),
+					onDisableFavoritesOnly: vi.fn(),
+					onShowFolders: vi.fn(),
+					refreshTreeNode: vi.fn(),
+					onOpenPrefix: vi.fn(),
+				}),
+			{ initialProps: { apiToken: 'token-1' }, wrapper: Wrapper },
+		)
+
+		act(() => {
+			result.current.openNewFolder()
+		})
+		await act(async () => {
+			result.current.handleNewFolderSubmit({ name: 'first', allowPath: false })
+		})
+		await waitFor(() => expect(createFolder).toHaveBeenCalledTimes(1))
+
+		rerender({ apiToken: 'token-2' })
+		act(() => {
+			result.current.openNewFolder()
+		})
+
+		expect(result.current.newFolderSubmitting).toBe(false)
+
+		await act(async () => {
+			result.current.handleNewFolderSubmit({ name: 'second', allowPath: false })
+		})
+
+		await waitFor(() => expect(createFolder).toHaveBeenCalledTimes(2))
+	})
 })

@@ -72,8 +72,6 @@ export async function ensureDialogOpen(scope: Page, name: string | RegExp, openD
 		if (await waitForDialogVisible(dialog, dialogOpenWaitMs)) {
 			return dialog
 		}
-
-		await scope.waitForTimeout(250 * (attempt + 1))
 	}
 
 	if (lastError) {
@@ -147,7 +145,7 @@ export async function gotoWithDynamicImportRecovery(
 				if (recoverableFailure) {
 					break
 				}
-				await page.waitForTimeout(200)
+				await locator.waitFor({ state: 'visible', timeout: Math.min(200, Math.max(1, deadline - Date.now())) }).catch(() => {})
 			}
 
 			const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
@@ -398,12 +396,21 @@ export async function openCreateDeleteJobDrawer(
 	return drawer
 }
 
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function contextualJobActionName(actionName: string | RegExp): string | RegExp {
+	if (actionName instanceof RegExp) return actionName
+	return new RegExp(`^${escapeRegExp(actionName)}(?: (?:for )?job .+)?$`)
+}
+
 export async function openJobDetailsDrawer(
 	page: Page,
 	row: Locator,
 	options: { timeout?: number } = {},
 ): Promise<Locator> {
-	await row.getByRole('button', { name: 'Details' }).click()
+	await row.getByRole('button', { name: /^Details(?: for job .+)?$/ }).click()
 	const drawer = page.getByRole('dialog', { name: 'Job Details' })
 	await expect(drawer).toBeVisible({ timeout: options.timeout })
 	return drawer
@@ -414,7 +421,7 @@ export async function openJobLogsDrawer(
 	row: Locator,
 	options: { timeout?: number } = {},
 ): Promise<Locator> {
-	await row.getByRole('button', { name: 'Logs' }).click()
+	await row.getByRole('button', { name: /^Logs(?: for job .+)?$/ }).click()
 	const drawer = page.getByRole('dialog', { name: 'Job Logs' })
 	await expect(drawer).toBeVisible({ timeout: options.timeout })
 	return drawer
@@ -426,10 +433,10 @@ export async function chooseRowAction(
 	actionName: string | RegExp,
 	options: { timeout?: number } = {},
 ): Promise<void> {
-	const trigger = row.getByRole('button', { name: 'Open actions menu' })
+	const trigger = row.getByRole('button', { name: /^(?:Open actions menu|Actions(?: for job .+)?)$/ })
 	await trigger.scrollIntoViewIfNeeded()
 	await trigger.click()
-	const action = page.getByRole('menuitem', { name: actionName })
+	const action = page.getByRole('menuitem', { name: contextualJobActionName(actionName) })
 	await expect(action).toBeVisible({ timeout: options.timeout })
 	await action.click()
 }
@@ -480,10 +487,10 @@ export async function openTransfersDialog(
 	} = {},
 ): Promise<Locator> {
 	const dialog = await ensureDialogOpen(page, /Transfers/i, async () => {
-		await page
-			.getByRole('button', { name: options.triggerButtonName ?? /Open Transfers|Transfers/i })
-			.first()
-			.click({ force: true })
+		const button = page.getByRole('button', { name: options.triggerButtonName ?? /Open Transfers|Transfers/i }).first()
+		await expect(button).toBeVisible()
+		await expect(button).toBeEnabled()
+		await button.click()
 	})
 
 	if (options.tabName) {

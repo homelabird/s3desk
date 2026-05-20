@@ -4,11 +4,11 @@
 	justify-content: space-between;
 	gap: 20px;
 	flex-wrap: wrap;
-	padding: 24px 28px;
+	padding: 20px 24px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 24px;
-	background: var(--s3d-gradient-page-header);
-	box-shadow: var(--s3d-shadow-sm);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-card);
+	box-shadow: none;
 }
 
 .copy {
@@ -27,7 +27,7 @@
 
 .title {
 	margin: 0 !important;
-	letter-spacing: -0.03em;
+	letter-spacing: 0;
 }
 
 .subtitle {
@@ -54,7 +54,7 @@
 	.header {
 		gap: 16px;
 		padding: 18px 16px;
-		border-radius: 20px;
+		border-radius: var(--s3d-radius-sm);
 	}
 
 	.actions {
@@ -67,7 +67,7 @@
 	.header {
 		gap: 12px;
 		padding: 16px;
-		border-radius: 18px;
+		border-radius: var(--s3d-radius-sm);
 	}
 
 	.eyebrow {

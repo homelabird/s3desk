@@ -142,6 +142,8 @@ function seedScreenListState(overrides?: { bucket?: string; objectsFetching?: bo
 	const setSelectedKeys = vi.fn()
 	const setLastSelectedObjectKey = vi.fn()
 	const closeContextMenu = vi.fn()
+	const getListScrollerElement = vi.fn()
+	const openObjectContextMenu = vi.fn()
 	const rowVirtualizerScrollToIndex = vi.fn()
 
 	const args = {
@@ -255,7 +257,7 @@ function seedScreenListState(overrides?: { bucket?: string; objectsFetching?: bo
 		contextMenuVisible: true,
 		currentPrefixActionMap: { mkdir: { key: 'mkdir' } },
 		dndHoverPrefix: 'docs/',
-		getListScrollerElement: vi.fn(),
+		getListScrollerElement,
 		getObjectActions: vi.fn(),
 		globalActionMap: { refresh: { key: 'refresh' } },
 		handleListScrollerContextMenu: vi.fn(),
@@ -264,6 +266,7 @@ function seedScreenListState(overrides?: { bucket?: string; objectsFetching?: bo
 		handleTreePrefixContextMenu: vi.fn(),
 		listGridClassName: 'grid',
 		normalizeDropTargetPrefix: vi.fn(),
+		openObjectContextMenu,
 		onCopy: vi.fn(),
 		onDownload: vi.fn(),
 		onPresign: vi.fn(),
@@ -330,6 +333,8 @@ function seedScreenListState(overrides?: { bucket?: string; objectsFetching?: bo
 		args,
 		setAutoScanReadyKey,
 		closeContextMenu,
+		getListScrollerElement,
+		openObjectContextMenu,
 		rowVirtualizerScrollToIndex,
 	}
 }
@@ -360,7 +365,7 @@ describe('useObjectsScreenList', () => {
 	})
 
 	it('composes interaction, auto-scan, command palette, selection bar, and keydown state', () => {
-		const { args, closeContextMenu, rowVirtualizerScrollToIndex } =
+		const { args, closeContextMenu, getListScrollerElement, openObjectContextMenu, rowVirtualizerScrollToIndex } =
 			seedScreenListState()
 
 		const { result } = renderHook(() => useObjectsScreenList(args))
@@ -442,12 +447,39 @@ describe('useObjectsScreenList', () => {
 			setLastSelectedObjectKey: args.data.setLastSelectedObjectKey,
 			selectRange: args.data.selectRange,
 			selectAllLoaded: args.data.selectAllLoaded,
+			openContextMenuForKey: expect.any(Function),
 		})
 
+		const scroller = document.createElement('div')
+		const shell = document.createElement('div')
+		shell.dataset.index = '0'
+		const row = document.createElement('div')
+		row.dataset.objectsRow = 'true'
+		shell.appendChild(row)
+		scroller.appendChild(shell)
+		vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({
+			x: 100,
+			y: 40,
+			left: 100,
+			top: 40,
+			right: 300,
+			bottom: 72,
+			width: 200,
+			height: 32,
+			toJSON: () => ({}),
+		} as DOMRect)
+		getListScrollerElement.mockReturnValue(scroller)
+
 		act(() => {
+			keydownArgs.openContextMenuForKey?.('docs/report.pdf')
 			keydownArgs.closeContextMenu!()
 			keydownArgs.scrollToIndex!(7)
 		})
+		expect(openObjectContextMenu).toHaveBeenCalledWith(
+			'docs/report.pdf',
+			'context',
+			{ x: 200, y: 56 },
+		)
 		expect(closeContextMenu).toHaveBeenCalledWith(undefined, 'escape_keydown')
 		expect(rowVirtualizerScrollToIndex).toHaveBeenCalledWith(7)
 

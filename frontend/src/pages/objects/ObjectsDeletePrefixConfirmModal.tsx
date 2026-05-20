@@ -1,6 +1,7 @@
 import { Alert, Button, Descriptions, Divider, Input, Space, Spin, Typography } from 'antd'
 
 import { DialogModal } from '../../components/DialogModal'
+import { FormField } from '../../components/FormField'
 import type { ObjectIndexSummaryResponse } from '../../api/types'
 import { formatBytes } from '../../lib/transfer'
 
@@ -29,24 +30,30 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 		!props.hasProfile ||
 		!props.hasBucket ||
 		!props.prefix ||
+		props.isConfirming ||
 		(!props.dryRun && props.confirmText !== 'DELETE')
 	const indexDisabled = !props.hasProfile || !props.hasBucket || !props.prefix
+	const confirmInputId = 'objects-delete-prefix-confirm'
 
 	return (
 		<DialogModal
 			open={props.open}
 			title={props.dryRun ? 'Preview delete folder' : 'Delete folder'}
 			onClose={props.onCancel}
+			closeDisabled={props.isConfirming}
 			width={680}
 			footer={
 				<>
-					<Button onClick={props.onCancel}>Cancel</Button>
+					<Button onClick={props.onCancel} disabled={props.isConfirming}>Cancel</Button>
 					<Button
 						type="primary"
 						danger={!props.dryRun}
 						loading={props.isConfirming}
 						disabled={confirmDisabled}
-						onClick={() => void props.onConfirm()}
+						onClick={() => {
+							if (props.isConfirming) return
+							void props.onConfirm()
+						}}
 					>
 						{props.dryRun ? 'Run preview' : 'Delete folder'}
 					</Button>
@@ -107,7 +114,12 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 						{props.summary.sampleKeys?.length ? (
 							<>
 								<Typography.Text type="secondary">Sample keys</Typography.Text>
-								<Input.TextArea value={props.summary.sampleKeys.join('\n')} readOnly autoSize={{ minRows: 3, maxRows: 6 }} />
+								<Input.TextArea
+									value={props.summary.sampleKeys.join('\n')}
+									readOnly
+									aria-label="Sample keys"
+									autoSize={{ minRows: 3, maxRows: 6 }}
+								/>
 							</>
 						) : null}
 					</>
@@ -116,13 +128,16 @@ export function ObjectsDeletePrefixConfirmModal(props: ObjectsDeletePrefixConfir
 				{props.dryRun ? null : (
 					<>
 						<Divider style={{ marginBlock: 8 }} />
-						<Typography.Text type="secondary">Type DELETE to confirm</Typography.Text>
-						<Input
-							placeholder="DELETE…"
-							value={props.confirmText}
-							onChange={(e) => props.onConfirmTextChange(e.target.value)}
-							autoComplete="off"
-						/>
+						<FormField label="Type DELETE to confirm" htmlFor={confirmInputId} required>
+							<Input
+								id={confirmInputId}
+								placeholder="DELETE…"
+								value={props.confirmText}
+								onChange={(e) => props.onConfirmTextChange(e.target.value)}
+								autoComplete="off"
+								disabled={props.isConfirming}
+							/>
+						</FormField>
 					</>
 				)}
 			</Space>

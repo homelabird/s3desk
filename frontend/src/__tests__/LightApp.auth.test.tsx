@@ -95,6 +95,33 @@ function renderLightApp() {
 }
 
 describe('LightApp auth gate', () => {
+	it('renders the setup skip link before shell actions and targets focusable main content', async () => {
+		mockViewportWidth(1280)
+		createLightAPIClientMock.mockReset()
+		createLightAPIClientMock.mockImplementation(() => ({
+			server: {
+				getMeta: vi.fn().mockResolvedValue({}),
+			},
+			profiles: {
+				listProfiles: vi.fn().mockResolvedValue([{ id: 'profile-1', name: 'Primary Profile', provider: 's3_compatible' }]),
+			},
+		}))
+
+		renderLightApp()
+
+		await screen.findByText('Choose a profile')
+
+		const skipLink = screen.getByRole('link', { name: 'Skip to content' })
+		const main = document.getElementById('main')
+		const firstFocusable = document.body.querySelector(
+			'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+		)
+
+		expect(skipLink).toHaveAttribute('href', '#main')
+		expect(firstFocusable).toBe(skipLink)
+		expect(main).toHaveAttribute('tabindex', '-1')
+	})
+
 	it('remounts the login form after clearing a saved token', async () => {
 		mockViewportWidth(1280)
 		window.localStorage.setItem('apiToken', JSON.stringify('saved-token'))

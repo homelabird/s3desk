@@ -145,7 +145,7 @@ test.describe('Live UI flow', () => {
 			const objectRow = objectsListRow(page, uploadFilename)
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
 
-			await objectRow.getByRole('button', { name: 'Object actions' }).click()
+			await objectRow.getByRole('button', { name: /Object actions/ }).click()
 			await page.getByRole('menuitem', { name: 'Download (client)' }).click()
 			const { dialog: transfersDialog, row: downloadRow } = await openTransfersDownloadRow(page, uploadFilename, {
 				triggerButtonName: /Transfers/i,

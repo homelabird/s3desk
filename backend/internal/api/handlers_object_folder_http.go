@@ -106,7 +106,7 @@ func (svc objectCreateFolderHTTPService) prepareCreateObjectFolder(r *http.Reque
 }
 
 func (svc objectCreateFolderHTTPService) executeS3Like(r *http.Request, secrets models.ProfileSecrets, bucket string, key string) (*models.CreateFolderResponse, error, string, rcloneAPIErrorContext, map[string]any, error) {
-	client, err := s3ClientFromProfile(secrets)
+	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectCreateFolderHTTPError(http.StatusInternalServerError, "internal_error", "failed to prepare S3 client", nil)
 	}

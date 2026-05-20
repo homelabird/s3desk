@@ -157,6 +157,18 @@ func (svc uploadMultipartHTTPService) executeComplete(r *http.Request, prepared 
 		return 0, prepared.err, prepared.decodeErr
 	}
 
+	expectedSize := prepared.meta.FileSize
+	if uploadErr := svc.server.upsertUploadObjectWithByteReservation(r.Context(), store.UploadObject{
+		UploadID:     prepared.session.uploadID,
+		ProfileID:    prepared.session.profileID,
+		Path:         prepared.meta.Path,
+		Bucket:       prepared.meta.Bucket,
+		ObjectKey:    prepared.meta.ObjectKey,
+		ExpectedSize: &expectedSize,
+	}); uploadErr != nil {
+		return 0, uploadErr, nil
+	}
+
 	_, err := prepared.client.CompleteMultipartUpload(r.Context(), &s3.CompleteMultipartUploadInput{
 		Bucket:   &prepared.meta.Bucket,
 		Key:      &prepared.meta.ObjectKey,
@@ -174,17 +186,6 @@ func (svc uploadMultipartHTTPService) executeComplete(r *http.Request, prepared 
 		}, nil
 	}
 
-	expectedSize := prepared.meta.FileSize
-	if err := svc.server.store.UpsertUploadObject(r.Context(), store.UploadObject{
-		UploadID:     prepared.session.uploadID,
-		ProfileID:    prepared.session.profileID,
-		Path:         prepared.meta.Path,
-		Bucket:       prepared.meta.Bucket,
-		ObjectKey:    prepared.meta.ObjectKey,
-		ExpectedSize: &expectedSize,
-	}); err != nil {
-		return 0, &uploadHTTPError{status: http.StatusInternalServerError, code: "internal_error", message: "failed to persist upload object"}, nil
-	}
 	_ = svc.server.store.DeleteMultipartUpload(r.Context(), prepared.session.profileID, prepared.session.uploadID, prepared.meta.Path)
 	return http.StatusNoContent, nil, nil
 }

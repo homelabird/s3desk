@@ -25,18 +25,46 @@ type azureAdapter struct {
 	extendImmutabilityPolicy func(context.Context, models.ProfileSecrets, string, azurearmimmutability.ExtendPolicyRequest) (azurearmimmutability.Response, error)
 }
 
+type AzureAdapterOptions struct {
+	AllowRemote bool
+}
+
 func NewAzureAdapter() Adapter {
+	return NewAzureAdapterWithOptions(AzureAdapterOptions{})
+}
+
+func NewAzureAdapterWithOptions(opts AzureAdapterOptions) Adapter {
 	return &azureAdapter{
-		getPolicy:                azureacl.GetContainerPolicy,
-		putPolicy:                azureacl.PutContainerPolicy,
-		getServiceProperties:     azureacl.GetBlobServiceProperties,
-		putServiceProperties:     azureacl.PutBlobServiceProperties,
-		getContainerProperties:   azureacl.GetContainerProperties,
-		getImmutabilityPolicy:    azurearmimmutability.GetPolicy,
-		putImmutabilityPolicy:    azurearmimmutability.PutPolicy,
-		deleteImmutabilityPolicy: azurearmimmutability.DeletePolicy,
-		lockImmutabilityPolicy:   azurearmimmutability.LockPolicy,
-		extendImmutabilityPolicy: azurearmimmutability.ExtendPolicy,
+		getPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string) (azureacl.Response, error) {
+			return azureacl.GetContainerPolicyWithOptions(ctx, profile, container, azureacl.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		putPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string, policyJSON []byte) (azureacl.Response, error) {
+			return azureacl.PutContainerPolicyWithOptions(ctx, profile, container, policyJSON, azureacl.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		getServiceProperties: func(ctx context.Context, profile models.ProfileSecrets) (azureacl.Response, error) {
+			return azureacl.GetBlobServicePropertiesWithOptions(ctx, profile, azureacl.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		putServiceProperties: func(ctx context.Context, profile models.ProfileSecrets, propsJSON []byte) (azureacl.Response, error) {
+			return azureacl.PutBlobServicePropertiesWithOptions(ctx, profile, propsJSON, azureacl.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		getContainerProperties: func(ctx context.Context, profile models.ProfileSecrets, container string) (azureacl.Response, error) {
+			return azureacl.GetContainerPropertiesWithOptions(ctx, profile, container, azureacl.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		getImmutabilityPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.GetPolicyWithOptions(ctx, profile, container, azurearmimmutability.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		putImmutabilityPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string, req azurearmimmutability.PutPolicyRequest) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.PutPolicyWithOptions(ctx, profile, container, req, azurearmimmutability.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		deleteImmutabilityPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string, ifMatch string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.DeletePolicyWithOptions(ctx, profile, container, ifMatch, azurearmimmutability.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		lockImmutabilityPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string, ifMatch string) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.LockPolicyWithOptions(ctx, profile, container, ifMatch, azurearmimmutability.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		extendImmutabilityPolicy: func(ctx context.Context, profile models.ProfileSecrets, container string, req azurearmimmutability.ExtendPolicyRequest) (azurearmimmutability.Response, error) {
+			return azurearmimmutability.ExtendPolicyWithOptions(ctx, profile, container, req, azurearmimmutability.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
 	}
 }
 

@@ -51,7 +51,6 @@ func TestHandleListObjectsMapsDecodeFailureToUpstreamInvalidCredentials(t *testi
 		Region:                "ap-tokyo-1",
 		OciNamespace:          "nrszxupgigok",
 		OciCompartment:        "ocid1.compartment.oc1..aaaaaaaaexample",
-		OciEndpoint:           "https://objectstorage.ap-tokyo-1.oraclecloud.com",
 		OciAuthProvider:       "user_principal_auth",
 		PreserveLeadingSlash:  false,
 		TLSInsecureSkipVerify: false,

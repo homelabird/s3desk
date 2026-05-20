@@ -64,6 +64,7 @@ export function useObjectsPageDialogActions({
 		profileId,
 		apiToken,
 		bucket,
+		prefix,
 		createJobWithRetry,
 	})
 

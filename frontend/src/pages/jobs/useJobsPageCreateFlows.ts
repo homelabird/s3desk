@@ -1,5 +1,5 @@
 import { useMutation, type QueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 
 import { queryKeys } from '../../api/queryKeys'
 import type { APIClientShape } from '../../api/client'
@@ -63,6 +63,9 @@ export function useJobsPageCreateFlows({
   beginDeleteRequest,
   isCurrentDeleteRequest,
 }: UseJobsPageCreateFlowsArgs) {
+  const deleteSubmittingRef = useRef(false)
+  const uploadSubmittingRef = useRef(false)
+
   const onCreateUpload = useCallback(async (args: {
     bucket: string
     prefix: string
@@ -70,11 +73,13 @@ export function useJobsPageCreateFlows({
     label?: string
     directorySelectionMode?: 'picker' | 'input'
   }) => {
+    if (uploadSubmittingRef.current) return
     if (!profileId) return
     if (!uploadSupported) {
       jobsFeedback.uploadsUnsupported(uploadDisabledReason)
       return
     }
+    uploadSubmittingRef.current = true
     setDeviceUploadLoading(true)
     try {
       if (args.files.length === 0) {
@@ -93,6 +98,7 @@ export function useJobsPageCreateFlows({
     } catch (err) {
       jobsFeedback.error(err)
     } finally {
+      uploadSubmittingRef.current = false
       setDeviceUploadLoading(false)
     }
   }, [
@@ -177,9 +183,14 @@ export function useJobsPageCreateFlows({
       if (context?.requestToken && !isCurrentDeleteRequest(context.requestToken)) return
       jobsFeedback.error(err)
     },
+    onSettled: () => {
+      deleteSubmittingRef.current = false
+    },
   })
 
   const onCreateDelete = useCallback((values: DeletePrefixJobPayload) => {
+    if (deleteSubmittingRef.current || createDeleteMutation.isPending) return
+    deleteSubmittingRef.current = true
     createDeleteMutation.mutate(values)
   }, [createDeleteMutation])
 

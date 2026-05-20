@@ -4,6 +4,13 @@ import type { ReactNode } from 'react'
 
 import type { ObjectMeta } from '../../api/types'
 import styles from './ObjectsDetails.module.css'
+import {
+	getObjectMediaStateDescriptor,
+	getObjectPreviewDescriptor,
+	getObjectPreviewLoadActionLabel,
+	getObjectPreviewLoadButtonText,
+	type ObjectMediaStateDescriptor,
+} from './objectsMediaState'
 import type { ObjectPreview } from './objectsTypes'
 
 type ObjectsDetailsThumbnailSectionProps = {
@@ -80,6 +87,8 @@ export function ObjectsDetailsPreviewSection({
 	previewFallbackThumbnail,
 }: ObjectsDetailsPreviewSectionProps) {
 	const previewActionButtonProps = { className: styles.detailsSectionActionButton }
+	const loadActionLabel = getObjectPreviewLoadActionLabel(preview)
+	const loadButtonText = getObjectPreviewLoadButtonText(preview)
 
 	return (
 		<div className={styles.detailsSection} data-testid="objects-details-preview-section">
@@ -117,11 +126,11 @@ export function ObjectsDetailsPreviewSection({
 						icon={<ReloadOutlined />}
 						onClick={onLoadPreview}
 						disabled={!detailsMeta}
-						aria-label={preview ? 'Reload preview' : 'Load preview'}
-						title={preview ? 'Reload preview' : 'Load preview'}
+						aria-label={loadActionLabel}
+						title={loadActionLabel}
 						{...previewActionButtonProps}
 					>
-						{preview ? 'Reload' : 'Load'}
+						{loadButtonText}
 					</Button>
 				</div>
 			</div>
@@ -148,37 +157,70 @@ function ObjectsDetailsPreviewBody({
 	'detailsKey' | 'isVideoObject' | 'onOpenLargePreview' | 'preview' | 'previewFallbackThumbnail'
 >) {
 	if (preview?.status === 'loading') {
+		const descriptor = getObjectPreviewDescriptor(preview)
 		return (
-			<div className={styles.detailsFeedback}>
+			<div className={styles.detailsFeedback} role="status" aria-live="polite" aria-label={descriptor.title}>
 				<Spin />
+				<span className="sr-only">{descriptor.title}</span>
 			</div>
 		)
 	}
 	if (preview?.status === 'blocked') {
-		return <Alert type="info" showIcon title="Preview unavailable" description={preview.error ?? 'Preview is not currently available.'} />
+		const descriptor = getObjectPreviewDescriptor(preview)
+		return (
+			<Alert
+				type="info"
+				showIcon
+				title={descriptor.title}
+				description={<PreviewStateDescription descriptor={descriptor} detail={preview.error} />}
+			/>
+		)
 	}
 	if (preview?.status === 'error') {
-		return <Alert type="error" showIcon title="Preview failed" description={preview.error ?? 'unknown error'} />
+		const descriptor = getObjectPreviewDescriptor(preview)
+		return (
+			<Alert
+				type="error"
+				showIcon
+				title={descriptor.title}
+				description={<PreviewStateDescription descriptor={descriptor} detail={preview.error ?? 'Unknown error.'} />}
+			/>
+		)
 	}
 	if (preview?.status === 'unsupported') {
-		return <Empty description={preview.error ?? 'Preview not available for this type'} />
+		const descriptor = getObjectPreviewDescriptor(preview)
+		return (
+			<Empty
+				description={
+					<div className={styles.detailsPreviewEmptyState}>
+						<Typography.Text>{descriptor.title}</Typography.Text>
+						<Typography.Text type="secondary">{descriptor.recoveryHint}</Typography.Text>
+					</div>
+				}
+			/>
+		)
 	}
 	if (preview?.status === 'ready' && preview.kind === 'image' && preview.url) {
+		const descriptor = getObjectPreviewDescriptor(preview)
 		return (
 			<button type="button" className={styles.previewTriggerButton} onClick={onOpenLargePreview} aria-label={`Open large preview for ${detailsKey}`}>
 				<div className={styles.previewFrame}>
 					<img src={preview.url} alt={detailsKey} width={360} height={360} className={styles.detailsPreviewImage} />
+					<Typography.Text type="secondary" className={styles.detailsPreviewCaption}>
+						{descriptor.recoveryHint}
+					</Typography.Text>
 				</div>
 			</button>
 		)
 	}
 	if (preview?.status === 'ready' && preview.kind === 'video' && preview.url) {
+		const descriptor = getObjectPreviewDescriptor(preview)
 		return (
 			<button type="button" className={styles.previewTriggerButton} onClick={onOpenLargePreview} aria-label={`Open large preview for ${detailsKey}`}>
 				<div className={styles.previewFrame}>
 					<img src={preview.url} alt={`Thumbnail preview of ${detailsKey}`} width={360} height={360} className={styles.detailsPreviewImage} />
 					<Typography.Text type="secondary" className={styles.detailsPreviewCaption}>
-						Video preview shows an extracted thumbnail frame.
+						{descriptor.recoveryHint}
 					</Typography.Text>
 				</div>
 			</button>
@@ -195,14 +237,36 @@ function ObjectsDetailsPreviewBody({
 		)
 	}
 	if (isVideoObject && previewFallbackThumbnail) {
+		const descriptor = getObjectMediaStateDescriptor('fallback-thumbnail-shown')
 		return (
 			<div className={styles.previewFrame}>
 				<div className={styles.detailsMediaCenter}>{previewFallbackThumbnail}</div>
 				<Typography.Text type="secondary" className={styles.detailsPreviewCaption}>
-					Load to fetch a larger thumbnail frame for this video.
+					{descriptor.recoveryHint}
 				</Typography.Text>
 			</div>
 		)
 	}
-	return <Typography.Text type="secondary">Click “Load” to fetch a larger preview.</Typography.Text>
+	const descriptor = getObjectPreviewDescriptor(null)
+	return (
+		<div className={styles.detailsPreviewEmptyState}>
+			<Typography.Text type="secondary">{descriptor.title}</Typography.Text>
+			<Typography.Text type="secondary">{descriptor.recoveryHint}</Typography.Text>
+		</div>
+	)
+}
+
+function PreviewStateDescription({
+	descriptor,
+	detail,
+}: {
+	descriptor: ObjectMediaStateDescriptor
+	detail?: string | null
+}) {
+	return (
+		<div className={styles.detailsPreviewStateDescription}>
+			{detail ? <Typography.Text>{detail}</Typography.Text> : null}
+			<Typography.Text type="secondary">{descriptor.recoveryHint}</Typography.Text>
+		</div>
+	)
 }

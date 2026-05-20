@@ -49,19 +49,18 @@ func (s *server) directMultipartFormStream(
 	target := rcloneRemoteObject(us.Bucket, key, secrets.PreserveLeadingSlash)
 	stderr, err := s.runRcloneStdin(r.Context(), secrets, []string{"rcat", target}, "upload-stream", counter)
 	if err != nil {
+		msg := redactRcloneDiagnostic(rcloneErrorMessage(err, stderr))
 		return 0, newUploadInternalError("failed to stream upload", map[string]any{
 			"path":  relPath,
-			"error": err.Error(),
+			"error": msg,
 		})
 	}
 	if uploadMaxBytesConfigured(maxBytes) {
 		if counter.n > *remainingBytes {
-			_, _, _ = s.runRcloneCapture(r.Context(), secrets, []string{"deletefile", target}, "upload-stream-cleanup")
 			return 0, newUploadTooLargeError("upload exceeds maxBytes", map[string]any{"maxBytes": maxBytes})
 		}
 		*remainingBytes -= counter.n
 	}
-	_ = stderr
 	return counter.n, nil
 }
 
@@ -69,18 +68,48 @@ func (s *server) directMultipartFormPersistPart(
 	r *http.Request,
 	profileID, uploadID, relPath, key, bucket string,
 	size int64,
-) *uploadHTTPError {
-	if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+) (store.UploadObjectReservation, *uploadHTTPError) {
+	reservation, uploadErr := s.upsertUploadObjectWithByteReservationRollback(r.Context(), store.UploadObject{
 		UploadID:     uploadID,
 		ProfileID:    profileID,
 		Path:         relPath,
 		Bucket:       bucket,
 		ObjectKey:    key,
 		ExpectedSize: &size,
-	}); err != nil {
-		return newUploadInternalError("failed to persist upload object", map[string]any{"error": err.Error()})
+	})
+	if uploadErr != nil {
+		return store.UploadObjectReservation{}, uploadErr
+	}
+	return reservation, nil
+}
+
+func (s *server) directMultipartFormPromoteTempPart(
+	r *http.Request,
+	secrets models.ProfileSecrets,
+	us store.UploadSession,
+	tempKey, key, relPath string,
+) *uploadHTTPError {
+	source := rcloneRemoteObject(us.Bucket, tempKey, secrets.PreserveLeadingSlash)
+	target := rcloneRemoteObject(us.Bucket, key, secrets.PreserveLeadingSlash)
+	_, stderr, err := s.runRcloneCapture(r.Context(), secrets, []string{"moveto", source, target}, "upload-promote")
+	if err != nil {
+		msg := redactRcloneDiagnostic(rcloneErrorMessage(err, stderr))
+		return newUploadInternalError("failed to promote upload", map[string]any{
+			"path":  relPath,
+			"error": msg,
+		})
 	}
 	return nil
+}
+
+func (s *server) directMultipartFormCleanupTempPart(
+	r *http.Request,
+	secrets models.ProfileSecrets,
+	us store.UploadSession,
+	tempKey string,
+) {
+	target := rcloneRemoteObject(us.Bucket, tempKey, secrets.PreserveLeadingSlash)
+	_, _, _ = s.runRcloneCapture(r.Context(), secrets, []string{"deletefile", target}, "upload-temp-cleanup")
 }
 
 func stagingMultipartFormPaths(
@@ -134,8 +163,8 @@ func (s *server) stagingMultipartFormPersistPart(
 	remainingBytes *int64,
 	maxBytes int64,
 ) *uploadHTTPError {
-	if err := s.store.AddUploadSessionBytes(r.Context(), profileID, uploadID, written); err != nil {
-		return newUploadInternalError("failed to update upload bytes", map[string]any{"error": err.Error()})
+	if uploadErr := s.addUploadSessionBytesWithReservation(r.Context(), profileID, uploadID, written); uploadErr != nil {
+		return uploadErr
 	}
 	if uploadMaxBytesConfigured(maxBytes) {
 		*remainingBytes -= written

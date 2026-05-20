@@ -16,27 +16,28 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 - `430x932`
 - `768x1024`
 
+## Automated Coverage
+
+Covered by `frontend/tests/buckets-mobile-responsive.spec.ts`.
+
+- [x] The create bucket flow opens and closes on mobile.
+- [x] Policy and controls overlays open from compact bucket cards.
+- [x] Non-empty delete fallback routes into a prefilled delete-job sheet.
+- [x] Compact-card actions remain usable on the final bucket in a multi-bucket mobile list.
+
 ## Manual QA Checklist
 
-- [ ] Compact cards still expose the primary bucket actions on a phone-sized viewport.
-- [ ] Bucket names and metadata remain readable enough to choose the correct bucket.
-- [ ] Policy and controls overlays remain reachable from compact cards.
-- [ ] Delete actions from compact cards still surface either confirmation or the jobs fallback flow.
-- [ ] Empty, loading, and populated states all preserve the next required bucket action.
-- [ ] Mobile card interactions remain usable with touch-first controls and safe-area padding.
-
-## `Buckets` Flow Checklist
-
-- [ ] Open the buckets list and confirm compact cards expose the right bucket actions.
-- [ ] Open policy or controls from a compact card.
-- [ ] Trigger a delete from a compact card and confirm the flow reaches confirmation or jobs fallback.
+- [ ] Verify the automated suite at `320x568`, `360x800`, `390x844`, `430x932`, and `768x1024` before a release candidate.
+- [ ] Confirm bucket names and metadata remain readable enough to choose the correct bucket.
+- [ ] Check empty, loading, and populated states for the next required bucket action.
 - [ ] Scroll through multiple buckets and confirm the final card can still execute an action.
+- [ ] Record the exact viewport, component, and blocked task when a manual issue is found.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile test that verifies policy or controls overlays still open from compact cards.
-- [ ] Add a test that verifies delete actions still reach confirmation or jobs fallback on mobile.
-- [ ] Add a test that verifies compact-card actions remain usable on the last visible bucket.
+- [x] Policy or controls overlays still open from compact cards.
+- [x] Delete actions still reach confirmation or jobs fallback on mobile.
+- [x] Compact-card actions remain usable on the last visible bucket.
 
 ## Notes
 

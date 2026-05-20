@@ -30,6 +30,11 @@
   background: var(--s3d-sidebar-active, var(--s3d-color-primary-bg));
 }
 
+.row:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
+}
+
 .toggleButton {
   width: 20px;
   height: 20px;
@@ -85,11 +90,6 @@
 
 .labelButton:hover {
   background: var(--s3d-color-primary-bg);
-}
-
-.labelButton:focus-visible {
-  outline: 2px solid var(--s3d-color-focus);
-  outline-offset: 2px;
 }
 
 .title {
@@ -188,6 +188,50 @@
   .statusDescription {
     font-size: 11px;
     line-height: 1.2;
+  }
+}
+
+@media (pointer: coarse) {
+  .row {
+    min-height: 44px;
+    gap: 4px;
+    padding: 2px 4px;
+    border-radius: 12px;
+  }
+
+  .toggleButton,
+  .toggleSpacer {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .labelButton {
+    min-height: 44px;
+    padding: 6px 4px;
+  }
+}
+
+@media (max-width: 768px) {
+  .row {
+    min-height: 44px;
+    gap: 4px;
+    padding: 2px 4px;
+    border-radius: 12px;
+  }
+
+  .toggleButton,
+  .toggleSpacer {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .labelButton {
+    min-height: 44px;
+    padding: 6px 4px;
   }
 }
 

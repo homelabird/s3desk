@@ -103,7 +103,7 @@ function ObjectsMenuList(props: {
 		.join(' ')
 	return (
 		<div
-			role={level === 0 ? 'menu' : 'group'}
+			role="menu"
 			className={className}
 			style={level === 0 ? props.rootStyle : undefined}
 			onKeyDown={level === 0 ? handleMenuKeyboardNavigation : undefined}
@@ -157,6 +157,7 @@ function ObjectsMenuSubmenu(props: {
 				type="button"
 				role="menuitem"
 				className={styles.toolbarMenuItem}
+				aria-haspopup="menu"
 				aria-expanded={open}
 				onClick={(event) => {
 					event.stopPropagation()

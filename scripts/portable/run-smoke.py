@@ -184,6 +184,7 @@ def main():
         "jobs",
         "upload_sessions",
         "upload_multipart_uploads",
+        "upload_objects",
         "object_index",
         "object_favorites",
     ]:

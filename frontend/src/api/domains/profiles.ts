@@ -60,9 +60,14 @@ export function deleteProfileTLS(request: RequestFn, profileId: string): Promise
 	return request(`/profiles/${encodeURIComponent(profileId)}/tls`, { method: 'DELETE' })
 }
 
-export function exportProfileYaml(request: RequestFn, profileId: string, args: { download?: boolean } = {}): Promise<string> {
+export function exportProfileYaml(
+	request: RequestFn,
+	profileId: string,
+	args: { download?: boolean; includeSecrets?: boolean } = {},
+): Promise<string> {
 	const params = new URLSearchParams()
 	if (args.download) params.set('download', 'true')
+	if (args.includeSecrets) params.set('includeSecrets', 'true')
 	const suffix = params.toString()
 	return request(`/profiles/${encodeURIComponent(profileId)}/export${suffix ? `?${suffix}` : ''}`, { method: 'GET' })
 }

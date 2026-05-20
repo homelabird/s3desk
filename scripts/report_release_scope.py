@@ -64,7 +64,7 @@ RELEASE_UNIT_ORDER = [
 RELEASE_UNIT_GUIDANCE = {
     "dependency-notices": "Keep dependency metadata, generated notices, and license snapshots together.",
     "release-scope-tooling": "Review release-scope scripts, reports, and ignore policy together.",
-    "release-gate-ci-deploy": "Review CI, release gate, workflow, container, compose, and chart changes together.",
+    "release-gate-ci-deploy": "Review CI, release gate, workflow, container, compose, deploy, and chart changes together.",
     "backend-api-provider-surface": "Review backend HTTP/API, provider, auth, realtime, and download-proxy behavior together.",
     "backend-runtime-store-jobs": "Review backend app, db, jobs, store, and websocket runtime behavior together.",
     "backend-other": "Review remaining backend changes by package.",
@@ -115,6 +115,70 @@ class StatusEntry:
         return self.path.split("/", 1)[0] if "/" in self.path else "(root)"
 
 
+def is_backend_go_mod_toolchain_only_change(root: Path, source: dict | None) -> bool:
+    commands: list[list[str]]
+    if source and source.get("mode") == "git-diff":
+        commands = [["git", "diff", "--unified=0", source["base"], source["head"], "--", "backend/go.mod"]]
+    else:
+        commands = [
+            ["git", "diff", "--unified=0", "--", "backend/go.mod"],
+            ["git", "diff", "--cached", "--unified=0", "--", "backend/go.mod"],
+        ]
+
+    changed_lines: list[str] = []
+    for command in commands:
+        try:
+            raw = subprocess.check_output(command, cwd=root, stderr=subprocess.DEVNULL).decode("utf-8", "surrogateescape")
+        except subprocess.CalledProcessError:
+            return False
+        for line in raw.splitlines():
+            if not line or line.startswith(("+++", "---", "@@")):
+                continue
+            if line[0] in {"+", "-"}:
+                changed_lines.append(line[1:].strip())
+
+    if not changed_lines:
+        return False
+    return all(line == "" or line.startswith("go ") or line.startswith("toolchain ") for line in changed_lines)
+
+
+def is_third_party_notices_timestamp_only_change(root: Path, source: dict | None) -> bool:
+    commands: list[list[str]]
+    if source and source.get("mode") == "git-diff":
+        commands = [["git", "diff", "--unified=0", source["base"], source["head"], "--", "THIRD_PARTY_NOTICES.md"]]
+    else:
+        commands = [
+            ["git", "diff", "--unified=0", "--", "THIRD_PARTY_NOTICES.md"],
+            ["git", "diff", "--cached", "--unified=0", "--", "THIRD_PARTY_NOTICES.md"],
+        ]
+
+    changed_lines: list[str] = []
+    for command in commands:
+        try:
+            raw = subprocess.check_output(command, cwd=root, stderr=subprocess.DEVNULL).decode("utf-8", "surrogateescape")
+        except subprocess.CalledProcessError:
+            return False
+        for line in raw.splitlines():
+            if not line or line.startswith(("+++", "---", "@@")):
+                continue
+            if line[0] in {"+", "-"}:
+                changed_lines.append(line[1:].strip())
+
+    if not changed_lines:
+        return False
+    return all(line.startswith("Generated at ") for line in changed_lines)
+
+
+def is_dependency_scope_entry(entry: StatusEntry, root: Path, source: dict | None) -> bool:
+    if not entry.is_dependency_scope:
+        return False
+    if entry.path == "backend/go.mod" and is_backend_go_mod_toolchain_only_change(root, source):
+        return False
+    if entry.path == "THIRD_PARTY_NOTICES.md" and is_third_party_notices_timestamp_only_change(root, source):
+        return False
+    return True
+
+
 def release_unit_for(path: str) -> str:
     if path in DEPENDENCY_METADATA or path.startswith(LICENSE_PREFIX):
         return "dependency-notices"
@@ -124,13 +188,16 @@ def release_unit_for(path: str) -> str:
         "docs/CODEBASE_FINAL_QUALITY_REPORT_2026-04-30.md",
         "scripts/report_release_scope.py",
         "scripts/report_release_scope_test.py",
+        "scripts/check_release_scope_audit.py",
     }:
         return "release-scope-tooling"
     if (
         path.startswith(".github/")
         or path.startswith("charts/")
         or path.startswith("compose/")
-        or path in {".env.example", ".gitlab-ci.yml", ".golangci.yml", "Containerfile"}
+        or path.startswith("deploy/")
+        or path.startswith("k8s/")
+        or path in {".dockerignore", ".env", ".env.example", ".gitlab-ci.yml", ".golangci.yml", "Containerfile", "Containerfile.local"}
         or path in {
             "docs/RELEASE_GATE.md",
             "docs/TESTING.md",
@@ -139,7 +206,10 @@ def release_unit_for(path: str) -> str:
             "docs/release/PR_BODY_2026-04-02.md",
         }
         or path.startswith("scripts/check")
+        or path == "scripts/Caddyfile"
+        or path == "scripts/deploy_helm_release.sh"
         or path == "scripts/install_actionlint.sh"
+        or path == "scripts/install_backend_security_tools.sh"
     ):
         return "release-gate-ci-deploy"
     if path.startswith("backend/internal/api/"):
@@ -174,7 +244,7 @@ def release_unit_for(path: str) -> str:
         return "frontend-uploads"
     if path.startswith("frontend/src/components/transfers/") or path == "frontend/src/components/Transfers.tsx" or path == "frontend/src/components/TransfersShell.tsx":
         return "frontend-transfers"
-    if path.startswith("frontend/src/api/"):
+    if path == "openapi.yml" or path.startswith("frontend/src/api/"):
         return "frontend-api-contracts"
     if path.startswith("frontend/src/lib/"):
         return "frontend-lib"
@@ -194,7 +264,7 @@ def release_unit_for(path: str) -> str:
         return "frontend-shell-theme"
     if path.startswith("frontend/"):
         return "frontend-other"
-    if path.startswith("docs/") or path == "README.md":
+    if path.startswith("docs/") or path.startswith("notes/") or path in {"CHANGELOG.md", "README.md"}:
         return "docs"
     if path.startswith("scripts/"):
         return "scripts-tooling"
@@ -226,6 +296,39 @@ def run_git_status(root: Path, untracked_files: str) -> list[StatusEntry]:
     return entries
 
 
+def run_git_diff(root: Path, base: str, head: str) -> list[StatusEntry]:
+    raw = subprocess.check_output(
+        ["git", "diff", "--name-status", "-z", "--find-renames", base, head],
+        cwd=root,
+    ).decode("utf-8", "surrogateescape")
+    records = [record for record in raw.split("\0") if record]
+    entries: list[StatusEntry] = []
+    index = 0
+    while index < len(records):
+        status = records[index]
+        index += 1
+        if not status:
+            continue
+        status_type = status[0]
+        if status_type in {"R", "C"}:
+            if index + 1 >= len(records):
+                break
+            old_path = records[index]
+            index += 1
+            new_path = records[index]
+            index += 1
+            entries.append(StatusEntry(f" {status_type}", old_path))
+            entries.append(StatusEntry(f" {status_type}", new_path))
+            continue
+        else:
+            if index >= len(records):
+                break
+            path = records[index]
+            index += 1
+        entries.append(StatusEntry(f" {status_type}", path))
+    return entries
+
+
 def byte_size(root: Path, path: str) -> int | None:
     candidate = root / path
     if not candidate.is_file():
@@ -247,7 +350,9 @@ def format_size(size: int | None) -> str:
 
 
 def is_root_artifact_candidate(entry: StatusEntry, root: Path) -> bool:
-    if not entry.is_untracked or "/" in entry.path:
+    if "/" in entry.path:
+        return False
+    if not entry.is_untracked and entry.code.strip() != "A":
         return False
     suffix = Path(entry.path).suffix.lower()
     if suffix in ROOT_ARTIFACT_SUFFIXES:
@@ -257,12 +362,18 @@ def is_root_artifact_candidate(entry: StatusEntry, root: Path) -> bool:
     return byte_size(root, entry.path) == 0
 
 
-def summarize(entries: Iterable[StatusEntry], root: Path) -> dict:
+def summarize(
+    entries: Iterable[StatusEntry],
+    root: Path,
+    *,
+    source: dict | None = None,
+    command_scope_args: list[str] | None = None,
+) -> dict:
     entry_list = list(entries)
     untracked = [entry for entry in entry_list if entry.is_untracked]
     deleted = [entry for entry in entry_list if entry.is_deleted]
     tracked = [entry for entry in entry_list if not entry.is_untracked]
-    dependency_scope = [entry for entry in entry_list if entry.is_dependency_scope]
+    dependency_scope = [entry for entry in entry_list if is_dependency_scope_entry(entry, root, source)]
     root_artifacts = [entry for entry in entry_list if is_root_artifact_candidate(entry, root)]
 
     untracked_by_group = Counter(entry.top_level for entry in untracked)
@@ -282,7 +393,9 @@ def summarize(entries: Iterable[StatusEntry], root: Path) -> dict:
     elif licenses_touched and not dependency_metadata_touched:
         dependency_scope_warnings.append("License snapshots changed without dependency metadata in the same status set.")
 
-    missing_notice_unit_paths = sorted(DEPENDENCY_NOTICE_UNIT - dependency_metadata_paths)
+    missing_notice_unit_paths: list[str] = []
+    if dependency_scope:
+        missing_notice_unit_paths = sorted(DEPENDENCY_NOTICE_UNIT - dependency_metadata_paths)
     dependency_notice_unit_complete = not dependency_scope or (
         not missing_notice_unit_paths and licenses_touched
     )
@@ -312,7 +425,7 @@ def summarize(entries: Iterable[StatusEntry], root: Path) -> dict:
         "dependency_notice_unit_missing_metadata": missing_notice_unit_paths,
         "dependency_scope_warning": dependency_scope_warning,
         "dependency_scope_warnings": dependency_scope_warnings,
-        "release_units": build_release_units(release_unit_entries),
+        "release_units": build_release_units(release_unit_entries, command_scope_args=command_scope_args),
         "root_artifact_candidates": [
             {
                 "status": entry.code,
@@ -322,10 +435,13 @@ def summarize(entries: Iterable[StatusEntry], root: Path) -> dict:
             }
             for entry in sorted(root_artifacts, key=lambda item: item.path)
         ],
+        "source": source or {"mode": "git-status"},
     }
 
 
-def build_release_units(release_unit_entries: dict[str, list[StatusEntry]]) -> list[dict]:
+def build_release_units(
+    release_unit_entries: dict[str, list[StatusEntry]], *, command_scope_args: list[str] | None = None
+) -> list[dict]:
     def unit_sort_key(unit: str) -> tuple[int, str]:
         try:
             return (RELEASE_UNIT_ORDER.index(unit), unit)
@@ -346,8 +462,10 @@ def build_release_units(release_unit_entries: dict[str, list[StatusEntry]]) -> l
                 "deleted": sum(1 for entry in entries if entry.is_deleted),
                 "paths": [{"status": entry.code, "path": entry.path} for entry in entries],
                 "sample_paths": [entry.path for entry in entries[:8]],
-                "path_list_command": path_list_command(unit),
-                "stage_command": stage_command(unit),
+                "review_command": review_command(unit, scope_args=command_scope_args),
+                "manifest_command": manifest_command(unit, scope_args=command_scope_args),
+                "path_list_command": path_list_command(unit, scope_args=command_scope_args),
+                "stage_command": stage_command(unit, scope_args=command_scope_args),
                 "guidance": RELEASE_UNIT_GUIDANCE.get(unit, "Review this group explicitly."),
             }
         )
@@ -363,10 +481,15 @@ def find_release_unit(summary: dict, unit_name: str) -> dict | None:
 
 def print_markdown(summary: dict) -> None:
     counts = summary["counts"]
+    source = summary.get("source", {"mode": "git-status"})
     print("# Release Scope Inventory")
     print()
     print("## Status")
     print()
+    if source.get("mode") == "git-diff":
+        print(f"- Source: `git diff --name-status --find-renames {source['base']} {source['head']}`")
+    else:
+        print("- Source: `git status --porcelain=v1`")
     print(f"- Tracked changes including deleted: `{counts['tracked_changes_including_deleted']}`")
     print(f"- Deleted tracked paths: `{counts['deleted']}`")
     print(f"- Untracked paths: `{counts['untracked']}`")
@@ -423,7 +546,7 @@ def print_markdown(summary: dict) -> None:
         if unit["untracked_directories"]:
             print(
                 "  - File-level review: "
-                f"`python3 scripts/report_release_scope.py --unit {unit['unit']} --format manifest --untracked-files all`"
+                f"`{unit['manifest_command']}`"
             )
     print()
 
@@ -453,8 +576,8 @@ def print_unit_markdown(unit: dict) -> None:
         )
     print(f"- Deleted: `{unit['deleted']}`")
     print(f"- Guidance: {unit['guidance']}")
-    print(f"- Path list: `{path_list_command(unit['unit'])}`")
-    print(f"- Stage command: `{stage_command(unit['unit'])}`")
+    print(f"- Path list: `{unit['path_list_command']}`")
+    print(f"- Stage command: `{unit['stage_command']}`")
     print()
     print("## Paths")
     print()
@@ -493,11 +616,11 @@ def print_checklist(summary: dict) -> None:
             print(f"  - Untracked directory entries: `{unit['untracked_directories']}`")
             print(
                 "  - File-level review: "
-                f"`python3 scripts/report_release_scope.py --unit {unit['unit']} --format manifest --untracked-files all`"
+                f"`{unit['manifest_command']}`"
             )
-        print(f"  - Review: `python3 scripts/report_release_scope.py --unit {unit['unit']}`")
-        print(f"  - Path list: `{path_list_command(unit['unit'])}`")
-        print(f"  - Stage command: `{stage_command(unit['unit'])}`")
+        print(f"  - Review: `{unit['review_command']}`")
+        print(f"  - Path list: `{unit['path_list_command']}`")
+        print(f"  - Stage command: `{unit['stage_command']}`")
 
 
 def print_manifest(summary: dict) -> None:
@@ -525,12 +648,12 @@ def print_manifest(summary: dict) -> None:
             print(f"- Untracked directory entries: `{unit['untracked_directories']}`")
             print(
                 "- File-level review: "
-                f"`python3 scripts/report_release_scope.py --unit {unit['unit']} --format manifest --untracked-files all`"
+                f"`{unit['manifest_command']}`"
             )
         print(f"- Deleted: `{unit['deleted']}`")
         print(f"- Guidance: {unit['guidance']}")
-        print(f"- Path list: `{path_list_command(unit['unit'])}`")
-        print(f"- Stage command: `{stage_command(unit['unit'])}`")
+        print(f"- Path list: `{unit['path_list_command']}`")
+        print(f"- Stage command: `{unit['stage_command']}`")
         print()
         for item in unit["paths"]:
             print(f"- [ ] `{item['status']}` `{item['path']}`")
@@ -544,23 +667,58 @@ def print_paths(unit: dict, null_terminated: bool) -> None:
         print(output, end=separator)
 
 
-def path_list_command(unit_name: str, untracked_files: str = "all") -> str:
+def review_command(unit_name: str, scope_args: list[str] | None = None) -> str:
     parts = [
         "python3",
         "scripts/report_release_scope.py",
+        *(scope_args or []),
+        "--unit",
+        unit_name,
+    ]
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def manifest_command(
+    unit_name: str,
+    untracked_files: str = "all",
+    scope_args: list[str] | None = None,
+) -> str:
+    parts = [
+        "python3",
+        "scripts/report_release_scope.py",
+        *(scope_args or []),
+        "--unit",
+        unit_name,
+        "--format",
+        "manifest",
+    ]
+    if not scope_args:
+        parts.extend(["--untracked-files", untracked_files])
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def path_list_command(
+    unit_name: str,
+    untracked_files: str = "all",
+    scope_args: list[str] | None = None,
+) -> str:
+    parts = [
+        "python3",
+        "scripts/report_release_scope.py",
+        *(scope_args or []),
         "--unit",
         unit_name,
         "--format",
         "paths",
         "--null",
-        "--untracked-files",
-        untracked_files,
     ]
+    if not scope_args:
+        parts.extend(["--untracked-files", untracked_files])
     return " ".join(shlex.quote(part) for part in parts)
 
 
-def stage_command(unit_name: str) -> str:
-    return f"{path_list_command(unit_name)} | git add --pathspec-from-file=- --pathspec-file-nul"
+def stage_command(unit_name: str, scope_args: list[str] | None = None) -> str:
+    return f"{path_list_command(unit_name, scope_args=scope_args)} | git add --pathspec-from-file=- --pathspec-file-nul"
 
 
 def collect_failures(
@@ -599,7 +757,17 @@ def collect_failures(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Report release-scope risks from git status.")
+    parser = argparse.ArgumentParser(description="Report release-scope risks from git status or an explicit git diff.")
+    parser.add_argument(
+        "--base",
+        default="",
+        help="Use git diff --name-status between this base ref and --head instead of dirty git status.",
+    )
+    parser.add_argument(
+        "--head",
+        default="HEAD",
+        help="Head ref for --base diff mode. Defaults to HEAD.",
+    )
     parser.add_argument(
         "--format",
         choices=("markdown", "json", "paths", "checklist", "manifest", "stage-command"),
@@ -648,11 +816,23 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.head != "HEAD" and not args.base:
+        print("[release-scope] --head requires --base", file=sys.stderr)
+        return 2
     if args.format in {"paths", "stage-command"} and not args.unit:
         print(f"[release-scope] --format {args.format} requires --unit", file=sys.stderr)
         return 2
 
-    summary = summarize(run_git_status(ROOT, args.untracked_files), ROOT)
+    if args.base:
+        command_scope_args = ["--base", args.base, "--head", args.head]
+        summary = summarize(
+            run_git_diff(ROOT, args.base, args.head),
+            ROOT,
+            source={"mode": "git-diff", "base": args.base, "head": args.head},
+            command_scope_args=command_scope_args,
+        )
+    else:
+        summary = summarize(run_git_status(ROOT, args.untracked_files), ROOT)
 
     selected_unit = None
     if args.unit:
@@ -671,7 +851,7 @@ def main() -> int:
         print_paths(selected_unit, null_terminated=args.null)
     elif args.format == "stage-command":
         assert selected_unit is not None
-        print(stage_command(selected_unit["unit"]))
+        print(selected_unit["stage_command"])
     elif args.format == "checklist":
         if selected_unit is not None:
             print_checklist({"counts": summary["counts"], "release_units": [selected_unit]})

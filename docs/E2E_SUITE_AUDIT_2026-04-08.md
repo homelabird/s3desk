@@ -79,7 +79,7 @@ instead of asking whether a mobile user can actually finish a task.
 
 The weakest examples were:
 
-- `frontend/tests/responsive-lists.spec.ts`
+- legacy responsive-list assertions before they were replaced by page-specific mobile specs
 - `frontend/tests/settings-mobile-responsive.spec.ts` before rewrite
 - `frontend/tests/login-mobile-responsive.spec.ts` before rewrite
 - `frontend/tests/mobile-smoke.spec.ts` before rewrite
@@ -120,7 +120,7 @@ The weakest examples were:
 
 ### Removed
 
-- Deleted `frontend/tests/responsive-lists.spec.ts`.
+- Deleted the legacy responsive-list spec.
   - Reason: it duplicated the same breakpoint and stacking contracts already exercised by the profiles/buckets mobile-responsive specs and did not add unique regression signal.
 
 ### Demoted From Required-Core Mock Coverage

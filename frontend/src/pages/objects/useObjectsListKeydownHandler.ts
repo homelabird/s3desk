@@ -19,6 +19,7 @@ type UseObjectsListKeydownHandlerArgs = {
 	copySelectionToClipboard: (mode: 'copy' | 'move') => void
 	pasteClipboardObjects: () => void
 	openDetailsForKey: (key: string) => void
+	openContextMenuForKey?: (key: string) => void
 	onUp: () => void
 	confirmDeleteSelected: () => void
 	setSelectedKeys: React.Dispatch<React.SetStateAction<Set<string>>>
@@ -45,6 +46,7 @@ export function useObjectsListKeydownHandler({
 	copySelectionToClipboard,
 	pasteClipboardObjects,
 	openDetailsForKey,
+	openContextMenuForKey,
 	onUp,
 	confirmDeleteSelected,
 	setSelectedKeys,
@@ -84,6 +86,7 @@ export function useObjectsListKeydownHandler({
 		onCopySelection: copySelectionToClipboard,
 		onPasteSelection: pasteClipboardObjects,
 		onOpenDetails: openDetailsForKey,
+		onOpenContextMenu: openContextMenuForKey,
 		onGoUp: onUp,
 		onDeleteSelected: confirmDeleteSelected,
 		onSelectKeys: handleSelectKeys,

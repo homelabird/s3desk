@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { SimpleTree } from '../SimpleTree'
@@ -37,8 +37,81 @@ describe('SimpleTree', () => {
 		expect(rows[1]).toHaveAttribute('data-tree-depth', '1')
 		expect(rows[1]).toHaveAttribute('data-tree-key', 'reports/')
 		expect(rows[1]).toHaveStyle({ paddingLeft: '12px' })
-		expect(screen.queryByRole('tree')).not.toBeInTheDocument()
-		expect(screen.getByRole('button', { name: 'Collapse root' })).toHaveAttribute('aria-expanded', 'true')
-		expect(screen.getByRole('button', { name: 'reports' })).toHaveAttribute('aria-current', 'true')
+		expect(screen.getByRole('tree', { name: 'Tree' })).toBeInTheDocument()
+
+		const root = screen.getByRole('treeitem', { name: 'root' })
+		const reports = screen.getByRole('treeitem', { name: 'reports' })
+		expect(root).toHaveAttribute('aria-expanded', 'true')
+		expect(root).toHaveAttribute('aria-level', '1')
+		expect(root).toHaveAttribute('aria-posinset', '1')
+		expect(root).toHaveAttribute('aria-setsize', '1')
+		expect(root).toHaveAttribute('aria-selected', 'false')
+		expect(reports).toHaveAttribute('aria-level', '2')
+		expect(reports).toHaveAttribute('aria-selected', 'true')
+		expect(reports).toHaveAttribute('tabindex', '0')
+	})
+
+	it('supports tree keyboard navigation and selection', () => {
+		const onExpandedKeysChange = vi.fn()
+		const onSelectKey = vi.fn()
+		render(
+			<SimpleTree
+				ariaLabel="Folders"
+				nodes={[
+					{
+						key: '/',
+						title: 'root',
+						children: [
+							{
+								key: 'reports/',
+								title: 'reports',
+								isLeaf: true,
+							},
+						],
+					},
+				]}
+				expandedKeys={['/']}
+				selectedKeys={['/']}
+				onExpandedKeysChange={onExpandedKeysChange}
+				onSelectKey={onSelectKey}
+			/>,
+		)
+
+		const root = screen.getByRole('treeitem', { name: 'root' })
+		const reports = screen.getByRole('treeitem', { name: 'reports' })
+
+		root.focus()
+		fireEvent.keyDown(root, { key: 'ArrowDown' })
+		expect(reports).toHaveFocus()
+
+		fireEvent.keyDown(reports, { key: 'Enter' })
+		expect(onSelectKey).toHaveBeenCalledWith('reports/')
+
+		fireEvent.keyDown(reports, { key: 'ArrowLeft' })
+		expect(root).toHaveFocus()
+
+		fireEvent.keyDown(root, { key: 'ArrowLeft' })
+		expect(onExpandedKeysChange).toHaveBeenCalledWith([])
+	})
+
+	it('announces loading tree items', () => {
+		render(
+			<SimpleTree
+				nodes={[
+					{
+						key: '/',
+						title: 'root',
+					},
+				]}
+				expandedKeys={['/']}
+				selectedKeys={['/']}
+				loadingKeys={['/']}
+				onExpandedKeysChange={vi.fn()}
+				onSelectKey={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByRole('treeitem', { name: 'root' })).toHaveAttribute('aria-busy', 'true')
+		expect(screen.getByRole('status')).toHaveTextContent('Loading root')
 	})
 })

@@ -39,10 +39,10 @@ vi.mock('../../../lib/deviceFs', async () => {
 })
 
 vi.mock('../../../components/LocalDevicePathInput', () => ({
-	LocalDevicePathInput: (props: { placeholder?: string; disabled?: boolean; value?: string }) => (
+	LocalDevicePathInput: (props: { id?: string; placeholder?: string; disabled?: boolean; value?: string }) => (
 		<input
+			id={props.id}
 			readOnly
-			aria-label="Local device path"
 			placeholder={props.placeholder}
 			disabled={props.disabled}
 			value={props.value ?? ''}
@@ -75,6 +75,69 @@ beforeEach(() => {
 })
 
 describe('Jobs create modal feedback', () => {
+	it('names upload modal text inputs from their visible labels', () => {
+		render(
+			<CreateJobModal
+				profileId="profile-1"
+				open
+				onCancel={vi.fn()}
+				onSubmit={vi.fn()}
+				loading={false}
+				isOffline={false}
+				uploadSupported
+				uploadUnsupportedReason={null}
+				bucket="bucket-a"
+				setBucket={vi.fn()}
+				bucketOptions={[]}
+			/>,
+		)
+
+		expect(screen.getByRole('textbox', { name: 'Prefix (optional)' })).toBeInTheDocument()
+	})
+
+	it('names download modal text inputs from their visible labels', () => {
+		render(
+			<DownloadJobModal
+				profileId="profile-1"
+				open
+				onCancel={vi.fn()}
+				onSubmit={vi.fn()}
+				loading={false}
+				isOffline={false}
+				bucket="bucket-a"
+				setBucket={vi.fn()}
+				bucketOptions={[]}
+			/>,
+		)
+
+		expect(screen.getByRole('textbox', { name: 'Prefix (optional)' })).toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: 'Local destination folder' })).toBeInTheDocument()
+	})
+
+	it('names delete modal text inputs from their visible labels', () => {
+		render(
+			<DeletePrefixJobModal
+				open
+				onCancel={vi.fn()}
+				onSubmit={vi.fn()}
+				loading={false}
+				isOffline={false}
+				bucket="bucket-a"
+				setBucket={vi.fn()}
+				bucketOptions={[]}
+				prefill={null}
+			/>,
+		)
+
+		expect(screen.getByRole('textbox', { name: 'Prefix' })).toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: 'Include patterns (one per line)' })).toBeInTheDocument()
+		expect(screen.getByRole('textbox', { name: 'Exclude patterns (one per line)' })).toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('switch', { name: 'Delete ALL objects in bucket' }))
+
+		expect(screen.getByRole('textbox', { name: 'Type "DELETE" to confirm' })).toBeInTheDocument()
+	})
+
 	it('routes upload validation feedback through the shared jobs catalog', () => {
 		render(
 			<CreateJobModal

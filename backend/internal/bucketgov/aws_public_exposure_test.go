@@ -3,6 +3,7 @@ package bucketgov
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -195,6 +196,29 @@ func TestAWSAdapterPutPublicExposure(t *testing.T) {
 	}
 	if derefBool(client.putInput.PublicAccessBlockConfiguration.IgnorePublicAcls) {
 		t.Fatalf("putInput=%+v, want ignorePublicAcls=false", client.putInput.PublicAccessBlockConfiguration)
+	}
+}
+
+func TestAWSAdapterRejectsLoopbackEndpointWhenRemoteEnabled(t *testing.T) {
+	t.Parallel()
+
+	adapter := NewAWSAdapterWithOptions(AWSAdapterOptions{AllowRemote: true})
+	_, err := adapter.(publicExposureSection).GetPublicExposure(context.Background(), models.ProfileSecrets{
+		Provider:        models.ProfileProviderAwsS3,
+		Endpoint:        "http://127.0.0.1:9000",
+		Region:          "us-east-1",
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+	}, "demo")
+	var opErr *OperationError
+	if ok := errorAs(err, &opErr); !ok {
+		t.Fatalf("err=%T, want OperationError", err)
+	}
+	if opErr.Code != "bucket_governance_client_error" {
+		t.Fatalf("code=%q, want bucket_governance_client_error", opErr.Code)
+	}
+	if got, _ := opErr.Details["error"].(string); !strings.Contains(got, "loopback or link-local") {
+		t.Fatalf("details.error=%q, want loopback rejection", got)
 	}
 }
 

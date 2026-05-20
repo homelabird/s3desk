@@ -2,11 +2,14 @@ package s3policy
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"s3desk/internal/models"
+	"s3desk/internal/responsebody"
 )
 
 func TestResolveEndpointDefaultsToAWSRegion(t *testing.T) {
@@ -69,5 +72,46 @@ func TestGetBucketPolicyUsesSignedPathStyleRequest(t *testing.T) {
 	}
 	if gotSessionToken != sessionToken {
 		t.Fatalf("session token=%q, want %q", gotSessionToken, sessionToken)
+	}
+}
+
+func TestGetBucketPolicyRejectsOversizedResponseBody(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(strings.Repeat("x", int(responsebody.ControlPlaneMaxBytes)+1)))
+	}))
+	defer srv.Close()
+
+	_, err := GetBucketPolicy(context.Background(), models.ProfileSecrets{
+		Endpoint:        srv.URL,
+		Region:          "us-east-1",
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+		ForcePathStyle:  true,
+	}, "demo")
+
+	var limitErr responsebody.TooLargeError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("GetBucketPolicy err=%v, want TooLargeError", err)
+	}
+	if limitErr.MaxBytes != responsebody.ControlPlaneMaxBytes {
+		t.Fatalf("MaxBytes=%d, want %d", limitErr.MaxBytes, responsebody.ControlPlaneMaxBytes)
+	}
+}
+
+func TestGetBucketPolicyWithOptionsRejectsLoopbackEndpointWhenRemoteEnabled(t *testing.T) {
+	t.Parallel()
+
+	_, err := GetBucketPolicyWithOptions(context.Background(), models.ProfileSecrets{
+		Endpoint:        "http://127.0.0.1:9000",
+		Region:          "us-east-1",
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+		ForcePathStyle:  true,
+	}, "demo", ClientOptions{AllowRemote: true})
+	if err == nil || !strings.Contains(err.Error(), "loopback or link-local") {
+		t.Fatalf("GetBucketPolicyWithOptions err=%v, want loopback rejection", err)
 	}
 }

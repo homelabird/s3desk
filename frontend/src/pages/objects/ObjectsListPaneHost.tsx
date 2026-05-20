@@ -110,6 +110,7 @@ export function ObjectsListPaneHost({ listProps }: { listProps: ObjectsListPaneP
 			onUploadDrop={listProps.onUploadDrop}
 			selectionBar={<ObjectsSelectionBarSection {...listProps.selectionBarProps} />}
 			listHeader={listHeader}
+			viewMode={listProps.controlsProps.viewMode}
 			listScrollerRef={listProps.listScrollerRef}
 			listScrollerTabIndex={listProps.listScrollerTabIndex}
 			onListScrollerClick={listProps.onListScrollerClick}

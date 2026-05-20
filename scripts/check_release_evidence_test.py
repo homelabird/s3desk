@@ -17,23 +17,82 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ReleaseEvidenceAuditTests(unittest.TestCase):
+    def test_run_git_diff_parses_name_status_entries(self):
+        raw = "M\0backend/internal/gcsbucket/client.go\0R100\0old.go\0backend/internal/api/download_proxy.go\0"
+
+        with mock.patch.object(MODULE.subprocess, "check_output", return_value=raw.encode("utf-8")) as check_output:
+            entries = MODULE.run_git_diff("v1.0.0", "HEAD")
+
+        check_output.assert_called_once_with(
+            ["git", "diff", "--name-status", "-z", "--find-renames", "v1.0.0", "HEAD"],
+            cwd=MODULE.ROOT,
+        )
+        self.assertEqual(
+            [(entry.code, entry.path) for entry in entries],
+            [
+                (" M", "backend/internal/gcsbucket/client.go"),
+                (" R", "old.go"),
+                (" R", "backend/internal/api/download_proxy.go"),
+            ],
+        )
+
     def test_detects_provider_and_reverse_proxy_trigger_paths(self):
         self.assertTrue(MODULE.is_provider_change("backend/internal/gcsbucket/client.go"))
+        self.assertTrue(MODULE.is_provider_change("backend/internal/gcsauth/token_uri.go"))
         self.assertTrue(MODULE.is_provider_change("backend/internal/bucketgov/aws_lifecycle.go"))
+        self.assertTrue(MODULE.is_provider_change("backend/internal/profileendpoint/profile.go"))
+        self.assertTrue(MODULE.is_provider_change("backend/internal/profiletls/config.go"))
+        self.assertTrue(MODULE.is_provider_change("backend/internal/rcloneconfig/config.go"))
+        self.assertTrue(MODULE.is_provider_change("backend/internal/jobs/rclone_attempt.go"))
+        self.assertTrue(MODULE.is_provider_change("backend/internal/s3policy/s3policy.go"))
+        self.assertTrue(MODULE.is_provider_change("backend/internal/store/store_profile_secrets.go"))
+        self.assertTrue(MODULE.is_provider_change("openapi.yml"))
         self.assertTrue(MODULE.is_provider_change("frontend/src/pages/buckets/governance/BucketGovernanceModal.tsx"))
         self.assertTrue(MODULE.is_provider_change("backend/internal/api/handlers_bucket_policy.go"))
         self.assertFalse(MODULE.is_provider_change("frontend/src/pages/settings/SettingsPage.tsx"))
 
         self.assertTrue(MODULE.is_reverse_proxy_change(".env.example"))
         self.assertTrue(MODULE.is_reverse_proxy_change("charts/s3desk/templates/ingress.yaml"))
+        self.assertTrue(MODULE.is_reverse_proxy_change("deploy/caddy/Caddyfile"))
+        self.assertTrue(MODULE.is_reverse_proxy_change("k8s/s3desk-caddy.yaml"))
+        self.assertTrue(MODULE.is_reverse_proxy_change("scripts/Caddyfile"))
         self.assertTrue(MODULE.is_reverse_proxy_change("backend/internal/api/download_proxy.go"))
+        self.assertTrue(MODULE.is_reverse_proxy_change("backend/internal/ws/hub.go"))
         self.assertFalse(MODULE.is_reverse_proxy_change("frontend/src/lib/profileCapabilityContext.ts"))
+
+    def test_detects_backup_portable_trigger_paths(self):
+        self.assertTrue(MODULE.is_backup_portable_change("backend/internal/api/handlers_server_backup.go"))
+        self.assertTrue(MODULE.is_backup_portable_change("backend/internal/api/handlers_server_portable_apply.go"))
+        self.assertTrue(MODULE.is_backup_portable_change("backend/internal/store/store_portable.go"))
+        self.assertTrue(MODULE.is_backup_portable_change("scripts/portable/run-smoke.py"))
+        self.assertTrue(MODULE.is_backup_portable_change("scripts/run_portable_sqlite_to_postgres_smoke.sh"))
+        self.assertTrue(MODULE.is_backup_portable_change("compose/test/portable-smoke.yml"))
+        self.assertTrue(MODULE.is_backup_portable_change("docs/PORTABLE_BACKUP.md"))
+        self.assertFalse(MODULE.is_backup_portable_change("docs/release/evidence/BACKUP_PORTABLE_SMOKE_TEMPLATE.md"))
+        self.assertFalse(MODULE.is_backup_portable_change("frontend/src/pages/settings/SettingsPage.tsx"))
 
     def test_suggests_provider_scopes_from_trigger_paths(self):
         self.assertEqual(MODULE.provider_scopes_for_path("backend/internal/gcsbucket/client.go"), ("gcs",))
+        self.assertEqual(MODULE.provider_scopes_for_path("backend/internal/gcsauth/token_uri.go"), ("gcs",))
         self.assertEqual(
             MODULE.provider_scopes_for_path("backend/internal/s3client/client.go"),
             ("aws", "minio", "ceph"),
+        )
+        self.assertEqual(
+            MODULE.provider_scopes_for_path("backend/internal/s3policy/s3policy.go"),
+            ("aws", "minio", "ceph"),
+        )
+        self.assertEqual(
+            MODULE.provider_scopes_for_path("backend/internal/rcloneconfig/config.go"),
+            MODULE.PROVIDER_SCOPES,
+        )
+        self.assertEqual(
+            MODULE.provider_scopes_for_path("backend/internal/profiletls/config.go"),
+            MODULE.PROVIDER_SCOPES,
+        )
+        self.assertEqual(
+            MODULE.provider_scopes_for_path("backend/internal/profileendpoint/profile.go"),
+            MODULE.PROVIDER_SCOPES,
         )
         self.assertEqual(
             MODULE.provider_scopes_for_path("backend/internal/api/handlers_bucket_policy.go"),
@@ -45,6 +104,7 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             entries=[
                 MODULE.StatusEntry(" M", "backend/internal/api/handlers_bucket_policy.go"),
                 MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go"),
+                MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_backup.go"),
             ],
             evidence_files={},
         )
@@ -56,6 +116,8 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         self.assertEqual(requirements["provider-live-validation"]["provider_scopes"], list(MODULE.PROVIDER_SCOPES))
         self.assertTrue(requirements["reverse-proxy-smoke"]["required"])
         self.assertFalse(requirements["reverse-proxy-smoke"]["satisfied"])
+        self.assertTrue(requirements["backup-portable-smoke"]["required"])
+        self.assertFalse(requirements["backup-portable-smoke"]["satisfied"])
 
     def test_ignores_templates_and_incomplete_provider_outcomes(self):
         summary = self._summarize_with_evidence(
@@ -116,6 +178,74 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         self.assertEqual(provider["missing_provider_scopes"], [])
         self.assertEqual(provider["evidence_files"], ["docs/release/evidence/provider-live-gcs-2026-04-30.md"])
         self.assertEqual(reverse_proxy["evidence_files"], ["docs/release/evidence/reverse-proxy-smoke-2026-04-30.md"])
+
+    def test_accepts_reverse_proxy_evidence_generated_by_deploy_smoke(self):
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go")],
+            evidence_files={
+                "reverse-proxy-smoke-2026-04-30.md": "\n".join(
+                    [
+                        "# Reverse Proxy Smoke Evidence",
+                        "",
+                        "- Generated at: `2026-04-30 12:34:56Z`",
+                        "- Commit SHA: `def456`",
+                        "- S3Desk commit SHA or release tag: `abc123`",
+                        "- Base URL: `https://s3desk.example.com`",
+                        "- Expected external base URL: `https://s3desk.example.com`",
+                        "- Profile identifier: `release-profile`",
+                        "- Bucket: `release-bucket`",
+                        "- Object key: `smoke/object.txt`",
+                        "",
+                        "## Checks",
+                        "",
+                        "- GET `/healthz`: HTTP `200`",
+                        "- Authenticated GET `/api/v1/meta`: HTTP `200`",
+                        "- POST `/api/v1/realtime-ticket?transport=ws`: HTTP `201`",
+                        "- GET `/api/v1/buckets/{bucket}/objects/download-url?proxy=true`: HTTP `200`",
+                        "- Signed proxy URL root: `https://s3desk.example.com`",
+                        "- HEAD signed proxy URL: HTTP `200`",
+                        "",
+                        "## Expected Statuses",
+                        "",
+                        "- GET `/healthz`: `200`",
+                        "- Authenticated GET `/api/v1/meta`: `200`",
+                        "- POST `/api/v1/realtime-ticket?transport=ws`: `201`",
+                        "- GET `/api/v1/buckets/{bucket}/objects/download-url?proxy=true`: `200`",
+                        "- Signed proxy URL root matches expected external base URL: URL-root match, no HTTP status",
+                        "- HEAD signed proxy URL: `200`",
+                        "",
+                        "## Result",
+                        "",
+                        "- Reverse-proxy smoke: pass",
+                    ]
+                )
+                + "\n",
+            },
+        )
+
+        reverse_proxy = self._requirement(summary, "reverse-proxy-smoke")
+        self.assertTrue(summary["ready"])
+        self.assertTrue(reverse_proxy["satisfied"])
+        self.assertEqual(
+            reverse_proxy["evidence_files"],
+            ["docs/release/evidence/reverse-proxy-smoke-2026-04-30.md"],
+        )
+
+    def test_accepts_backup_portable_smoke_evidence(self):
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_backup.go")],
+            evidence_files={
+                "backup-portable-smoke-2026-04-30.md": self._backup_portable_evidence(),
+            },
+        )
+
+        backup_portable = self._requirement(summary, "backup-portable-smoke")
+        self.assertTrue(summary["ready"])
+        self.assertTrue(backup_portable["satisfied"])
+        self.assertEqual(
+            backup_portable["evidence_files"],
+            ["docs/release/evidence/backup-portable-smoke-2026-04-30.md"],
+        )
 
     def test_accepts_indented_release_evidence_fields(self):
         summary = self._summarize_with_evidence(
@@ -291,17 +421,21 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         )
 
     def test_candidate_id_option_rejects_evidence_from_a_different_candidate(self):
-        evidence_files = {
-            "provider-live-gcs-2026-04-30.md": self._provider_evidence("GCS", candidate="rc1"),
-            "reverse-proxy-smoke-2026-04-30.md": self._reverse_proxy_evidence(candidate="rc1"),
-        }
         entries = [
             MODULE.StatusEntry(" M", "backend/internal/gcsbucket/client.go"),
             MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go"),
         ]
+        matching_evidence_files = {
+            "provider-live-gcs-rc1.md": self._provider_evidence("GCS", candidate="rc1"),
+            "reverse-proxy-smoke-rc1.md": self._reverse_proxy_evidence(candidate="rc1"),
+        }
+        mismatched_evidence_files = {
+            "provider-live-gcs-rc2.md": self._provider_evidence("GCS", candidate="rc1"),
+            "reverse-proxy-smoke-rc2.md": self._reverse_proxy_evidence(candidate="rc1"),
+        }
 
-        matching = self._summarize_with_evidence(entries, evidence_files, candidate_id="rc1")
-        mismatched = self._summarize_with_evidence(entries, evidence_files, candidate_id="rc2")
+        matching = self._summarize_with_evidence(entries, matching_evidence_files, candidate_id="rc1")
+        mismatched = self._summarize_with_evidence(entries, mismatched_evidence_files, candidate_id="rc2")
 
         self.assertTrue(matching["ready"])
         self.assertEqual(matching["candidate_id"], "rc1")
@@ -316,6 +450,61 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         self.assertTrue(
             all("Expected `rc2`." in finding["remediation"] for rejection in mismatched["rejected_evidence_files"] for finding in rejection["findings"])
         )
+
+    def test_candidate_id_option_rejects_evidence_from_a_different_filename_candidate(self):
+        entries = [
+            MODULE.StatusEntry(" M", "backend/internal/gcsbucket/client.go"),
+            MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go"),
+        ]
+        summary = self._summarize_with_evidence(
+            entries,
+            {
+                "provider-live-gcs-rc1.md": self._provider_evidence("GCS", candidate="rc2"),
+                "reverse-proxy-smoke-rc1.md": self._reverse_proxy_evidence(candidate="rc2"),
+            },
+            candidate_id="rc2",
+        )
+
+        self.assertFalse(summary["ready"])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/provider-live-gcs-rc1.md"],
+            {"evidence_filename_candidate_mismatch"},
+        )
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/reverse-proxy-smoke-rc1.md"],
+            {"evidence_filename_candidate_mismatch"},
+        )
+        self.assertTrue(
+            all(
+                "Expected `rc2`." in finding["remediation"]
+                for rejection in summary["rejected_evidence_files"]
+                for finding in rejection["findings"]
+            )
+        )
+
+    def test_candidate_id_option_accepts_resolved_tag_commit_sha_in_evidence_body(self):
+        entries = [
+            MODULE.StatusEntry(" M", "backend/internal/gcsbucket/client.go"),
+            MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go"),
+        ]
+        commit_sha = "0123456789abcdef0123456789abcdef01234567"
+        with mock.patch.object(MODULE.subprocess, "check_output", return_value=commit_sha):
+            summary = self._summarize_with_evidence(
+                entries,
+                {
+                    "provider-live-gcs-0.21v-rc3.md": self._provider_evidence("GCS", candidate=commit_sha),
+                    "reverse-proxy-smoke-0.21v-rc3.md": self._reverse_proxy_evidence(candidate=commit_sha),
+                },
+                candidate_id="0.21v-rc3",
+            )
+
+        self.assertTrue(summary["ready"])
+        self.assertEqual(summary["candidate_id"], "0.21v-rc3")
+        self.assertEqual(summary["rejected_evidence_files"], [])
 
     def test_rejects_placeholder_evidence_filenames(self):
         summary = self._summarize_with_evidence(
@@ -484,10 +673,76 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             },
         )
 
+    def test_rejects_reverse_proxy_evidence_with_status_free_check_prose(self):
+        evidence = self._reverse_proxy_evidence().replace(
+            "- Authenticated GET `/api/v1/meta`: HTTP `200`",
+            "- Authenticated GET `/api/v1/meta`: passed",
+        )
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go")],
+            evidence_files={"reverse-proxy-smoke-2026-04-30.md": evidence},
+        )
+
+        reverse_proxy = self._requirement(summary, "reverse-proxy-smoke")
+        self.assertFalse(summary["ready"])
+        self.assertEqual(reverse_proxy["evidence_files"], [])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/reverse-proxy-smoke-2026-04-30.md"],
+            {"reverse_proxy_meta_unexpected_status"},
+        )
+
+    def test_rejects_reverse_proxy_evidence_when_failure_mentions_expected_status(self):
+        evidence = self._reverse_proxy_evidence().replace(
+            "- GET `/healthz`: HTTP `200`",
+            "- GET `/healthz`: HTTP `503`, expected `200`",
+        )
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go")],
+            evidence_files={"reverse-proxy-smoke-2026-04-30.md": evidence},
+        )
+
+        reverse_proxy = self._requirement(summary, "reverse-proxy-smoke")
+        self.assertFalse(summary["ready"])
+        self.assertEqual(reverse_proxy["evidence_files"], [])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/reverse-proxy-smoke-2026-04-30.md"],
+            {"reverse_proxy_healthz_unexpected_status"},
+        )
+
     def test_rejects_reverse_proxy_evidence_with_mismatched_signed_proxy_root(self):
         evidence = self._reverse_proxy_evidence().replace(
             "- Signed proxy URL root: https://s3desk.example.com",
             "- Signed proxy URL root: https://unexpected.example.com",
+        )
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go")],
+            evidence_files={"reverse-proxy-smoke-2026-04-30.md": evidence},
+        )
+
+        reverse_proxy = self._requirement(summary, "reverse-proxy-smoke")
+        self.assertFalse(summary["ready"])
+        self.assertEqual(reverse_proxy["evidence_files"], [])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/reverse-proxy-smoke-2026-04-30.md"],
+            {"reverse_proxy_signed_proxy_root_unexpected_result"},
+        )
+
+    def test_rejects_reverse_proxy_evidence_with_pass_like_signed_proxy_root(self):
+        evidence = self._reverse_proxy_evidence().replace(
+            "- Signed proxy URL root: https://s3desk.example.com",
+            "- Signed proxy URL root: pass",
         )
         summary = self._summarize_with_evidence(
             entries=[MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go")],
@@ -555,6 +810,64 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
                 "reverse_proxy_download_url_missing",
                 "reverse_proxy_signed_proxy_root_missing",
                 "reverse_proxy_head_signed_proxy_url_missing",
+            },
+        )
+
+    def test_rejects_backup_portable_evidence_without_required_review_metadata(self):
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_portable.go")],
+            evidence_files={
+                "backup-portable-smoke-missing-metadata.md": "# Backup Portable Smoke Evidence\n\n- S3Desk commit SHA or release tag: abc123\n- Backup portable smoke: pass\n",
+            },
+        )
+
+        backup_portable = self._requirement(summary, "backup-portable-smoke")
+        self.assertFalse(summary["ready"])
+        self.assertEqual(backup_portable["evidence_files"], [])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/backup-portable-smoke-missing-metadata.md"],
+            {
+                "backup_portable_source_database_missing",
+                "backup_portable_target_database_missing",
+                "backup_portable_export_workflow_missing",
+                "backup_portable_import_workflow_missing",
+                "backup_portable_verification_workflow_missing",
+                "backup_portable_staged_restore_target_missing",
+                "backup_portable_failure_smoke_missing",
+                "backup_portable_postgres_to_sqlite_failure_smoke_missing",
+                "backup_portable_postgres_to_sqlite_smoke_missing",
+                "backup_portable_sqlite_to_postgres_smoke_missing",
+            },
+        )
+
+    def test_rejects_backup_portable_evidence_without_per_script_results(self):
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_portable.go")],
+            evidence_files={
+                "backup-portable-smoke-summary-only.md": self._backup_portable_evidence(
+                    include_smoke_results=False
+                ),
+            },
+        )
+
+        backup_portable = self._requirement(summary, "backup-portable-smoke")
+        self.assertFalse(summary["ready"])
+        self.assertEqual(backup_portable["evidence_files"], [])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/backup-portable-smoke-summary-only.md"],
+            {
+                "backup_portable_failure_smoke_missing",
+                "backup_portable_postgres_to_sqlite_failure_smoke_missing",
+                "backup_portable_postgres_to_sqlite_smoke_missing",
+                "backup_portable_sqlite_to_postgres_smoke_missing",
             },
         )
 
@@ -636,6 +949,27 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             {"authorization_header", "cookie_token", "api_token_assignment"},
         )
 
+    def test_rejects_backup_password_values_in_evidence(self):
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_backup.go")],
+            evidence_files={
+				"provider-live-minio-2026-04-30.md": self._provider_evidence(
+					"MinIO",
+					command="PORTABLE_BUNDLE_PASSWORD=operator-secret curl -H 'X-S3Desk-Backup-Password: restore-secret' /api/v1/server/backup\nBackup password: operator-secret",
+				),
+			},
+		)
+
+        self.assertFalse(summary["ready"])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/provider-live-minio-2026-04-30.md"],
+            {"backup_password_assignment"},
+        )
+
     def test_unrelated_changes_do_not_require_live_evidence(self):
         summary = self._summarize_with_evidence(
             entries=[MODULE.StatusEntry(" M", "frontend/src/pages/settings/SettingsPage.tsx")],
@@ -652,6 +986,7 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             entries=[
                 MODULE.StatusEntry(" M", "backend/internal/api/handlers_bucket_policy.go"),
                 MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go"),
+                MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_backup.go"),
             ],
             evidence_files={},
         )
@@ -688,6 +1023,10 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             "    - Signed proxy URL root: matches expected external base URL",
             checklist,
         )
+        self.assertIn("- [ ] `backup-portable-smoke`: `missing evidence`", checklist)
+        self.assertIn("bash scripts/run_portable_failure_smoke.sh", checklist)
+        self.assertIn("docs/release/evidence/BACKUP_PORTABLE_SMOKE_TEMPLATE.md", checklist)
+        self.assertIn("docs/release/evidence/backup-portable-smoke-<tag-or-sha>.md", checklist)
         self.assertIn(
             "python3 scripts/report_release_scope.py --fail-on-root-artifacts --fail-on-dependency-scope-warning --fail-on-untracked-directories --fail-on-other-unit --untracked-files all",
             checklist,
@@ -715,12 +1054,14 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             entries=[
                 MODULE.StatusEntry(" M", "backend/internal/api/handlers_bucket_policy.go"),
                 MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go"),
+                MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_backup.go"),
             ],
             evidence_files={},
         )
 
         provider = self._requirement(summary, "provider-live-validation")
         reverse_proxy = self._requirement(summary, "reverse-proxy-smoke")
+        backup_portable = self._requirement(summary, "backup-portable-smoke")
         self.assertEqual(
             provider["preflight_command"],
             "python3 scripts/check_live_evidence_env.py --scope aws --scope gcs --scope azure --scope oci --scope minio --scope ceph",
@@ -737,7 +1078,7 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         self.assertIn("Actual outcome", provider["required_metadata_fields"])
         self.assertEqual(
             reverse_proxy["smoke_command"],
-            "DEPLOY_RELEASE_CANDIDATE=<tag-or-sha> DEPLOY_SMOKE_EVIDENCE_FILE=docs/release/evidence/reverse-proxy-smoke-<tag-or-sha>.md bash ./scripts/deploy_smoke.sh",
+            "DEPLOY_BASE_URL=https://s3desk.example.com DEPLOY_API_TOKEN=... DEPLOY_PROFILE_ID=... DEPLOY_SMOKE_BUCKET=... DEPLOY_SMOKE_OBJECT_KEY=... DEPLOY_RELEASE_CANDIDATE=<tag-or-sha> DEPLOY_SMOKE_EVIDENCE_FILE=docs/release/evidence/reverse-proxy-smoke-<tag-or-sha>.md bash ./scripts/deploy_smoke.sh",
         )
         self.assertIn("Authenticated GET `/api/v1/meta`", reverse_proxy["required_metadata"])
         self.assertIn("Base URL", reverse_proxy["required_metadata_fields"])
@@ -752,6 +1093,24 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         self.assertEqual(
             reverse_proxy["check_result_expectations"]["Signed proxy URL root"],
             "matches expected external base URL",
+        )
+        self.assertEqual(
+            backup_portable["smoke_command"],
+            "bash scripts/run_portable_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_smoke.sh && bash scripts/run_portable_sqlite_to_postgres_smoke.sh",
+        )
+        self.assertEqual(
+            backup_portable["evidence_target"],
+            "docs/release/evidence/backup-portable-smoke-<tag-or-sha>.md",
+        )
+        self.assertIn("Staged restore target", backup_portable["required_metadata_fields"])
+        self.assertEqual(
+            backup_portable["required_check_fields"],
+            [
+                "bash scripts/run_portable_failure_smoke.sh",
+                "bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh",
+                "bash scripts/run_portable_postgres_to_sqlite_smoke.sh",
+                "bash scripts/run_portable_sqlite_to_postgres_smoke.sh",
+            ],
         )
         self.assertEqual(
             summary["final_gate_commands"]["release_scope"],
@@ -771,6 +1130,7 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
 
         provider = self._requirement(summary, "provider-live-validation")
         reverse_proxy = self._requirement(summary, "reverse-proxy-smoke")
+        backup_portable = self._requirement(summary, "backup-portable-smoke")
         self.assertEqual(
             provider["evidence_targets"]["gcs"],
             "docs/release/evidence/provider-live-gcs-rc1.md",
@@ -781,11 +1141,33 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         )
         self.assertEqual(
             reverse_proxy["smoke_command"],
-            "DEPLOY_RELEASE_CANDIDATE=rc1 DEPLOY_SMOKE_EVIDENCE_FILE=docs/release/evidence/reverse-proxy-smoke-rc1.md bash ./scripts/deploy_smoke.sh",
+            "DEPLOY_BASE_URL=https://s3desk.example.com DEPLOY_API_TOKEN=... DEPLOY_PROFILE_ID=... DEPLOY_SMOKE_BUCKET=... DEPLOY_SMOKE_OBJECT_KEY=... DEPLOY_RELEASE_CANDIDATE=rc1 DEPLOY_SMOKE_EVIDENCE_FILE=docs/release/evidence/reverse-proxy-smoke-rc1.md bash ./scripts/deploy_smoke.sh",
+        )
+        self.assertEqual(
+            backup_portable["evidence_target"],
+            "docs/release/evidence/backup-portable-smoke-rc1.md",
         )
         self.assertEqual(
             summary["final_gate_commands"]["release_evidence"],
             "python3 scripts/check_release_evidence.py --strict --require-candidate-id --candidate-id rc1",
+        )
+
+    def test_summary_preserves_diff_scope_in_final_gate_commands(self):
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/gcsbucket/client.go")],
+            evidence_files={},
+            candidate_id="rc1",
+            source={"mode": "git-diff", "base": "v1.0.0", "head": "HEAD"},
+        )
+
+        self.assertEqual(summary["source"]["mode"], "git-diff")
+        self.assertEqual(
+            summary["final_gate_commands"]["release_scope"],
+            "python3 scripts/report_release_scope.py --base v1.0.0 --head HEAD --fail-on-root-artifacts --fail-on-dependency-scope-warning --fail-on-untracked-directories --fail-on-other-unit",
+        )
+        self.assertEqual(
+            summary["final_gate_commands"]["release_evidence"],
+            "python3 scripts/check_release_evidence.py --base v1.0.0 --head HEAD --strict --require-candidate-id --candidate-id rc1",
         )
 
     def test_markdown_output_includes_remediation_commands(self):
@@ -793,6 +1175,7 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             entries=[
                 MODULE.StatusEntry(" M", "backend/internal/api/handlers_bucket_policy.go"),
                 MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go"),
+                MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_backup.go"),
             ],
             evidence_files={},
         )
@@ -811,7 +1194,7 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         self.assertIn("`Provider-native console or CLI confirmation on success`", audit)
         self.assertIn("  - `aws`: `docs/release/evidence/provider-live-aws-<tag-or-sha>.md`", audit)
         self.assertIn(
-            "- Smoke command: `DEPLOY_RELEASE_CANDIDATE=<tag-or-sha> DEPLOY_SMOKE_EVIDENCE_FILE=docs/release/evidence/reverse-proxy-smoke-<tag-or-sha>.md bash ./scripts/deploy_smoke.sh`",
+            "- Smoke command: `DEPLOY_BASE_URL=https://s3desk.example.com DEPLOY_API_TOKEN=... DEPLOY_PROFILE_ID=... DEPLOY_SMOKE_BUCKET=... DEPLOY_SMOKE_OBJECT_KEY=... DEPLOY_RELEASE_CANDIDATE=<tag-or-sha> DEPLOY_SMOKE_EVIDENCE_FILE=docs/release/evidence/reverse-proxy-smoke-<tag-or-sha>.md bash ./scripts/deploy_smoke.sh`",
             audit,
         )
         self.assertIn("Authenticated GET `/api/v1/meta`", audit)
@@ -824,6 +1207,11 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             "  - Signed proxy URL root: matches expected external base URL",
             audit,
         )
+        self.assertIn("- Smoke command: `bash scripts/run_portable_failure_smoke.sh", audit)
+        self.assertIn("- Evidence template: `docs/release/evidence/BACKUP_PORTABLE_SMOKE_TEMPLATE.md`", audit)
+        self.assertIn("- Evidence target: `docs/release/evidence/backup-portable-smoke-<tag-or-sha>.md`", audit)
+        self.assertIn("- Required smoke results:", audit)
+        self.assertIn("  - bash scripts/run_portable_failure_smoke.sh: pass/success", audit)
         self.assertIn("## Final Gate", audit)
         self.assertIn(
             "- `python3 scripts/report_release_scope.py --fail-on-root-artifacts --fail-on-dependency-scope-warning --fail-on-untracked-directories --fail-on-other-unit --untracked-files all` passes from the final candidate scope.",
@@ -906,7 +1294,41 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         lines.extend(extra_lines or [])
         return "\n".join(lines) + "\n"
 
-    def _summarize_with_evidence(self, entries, evidence_files, candidate_id=None):
+    @staticmethod
+    def _backup_portable_evidence(
+        candidate="abc123",
+        outcome="pass",
+        extra_lines=None,
+        include_smoke_results=True,
+    ):
+        lines = [
+            "# Backup Portable Smoke Evidence",
+            "",
+            f"- S3Desk commit SHA or release tag: {candidate}",
+            "- Source database: sqlite",
+            "- Target database: postgres",
+            "- Export workflow: server backup export from source fixture",
+            "- Import workflow: portable apply into staged target",
+            "- Verification workflow: scripts/portable/run-smoke.py compared source and target counts",
+            "- Staged restore target: disposable portable-smoke compose project",
+            f"- Backup portable smoke: {outcome}",
+        ]
+        if include_smoke_results:
+            lines.extend(
+                [
+                    "",
+                    "## Smoke Results",
+                    "",
+                    "- bash scripts/run_portable_failure_smoke.sh: pass",
+                    "- bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh: pass",
+                    "- bash scripts/run_portable_postgres_to_sqlite_smoke.sh: pass",
+                    "- bash scripts/run_portable_sqlite_to_postgres_smoke.sh: pass",
+                ]
+            )
+        lines.extend(extra_lines or [])
+        return "\n".join(lines) + "\n"
+
+    def _summarize_with_evidence(self, entries, evidence_files, candidate_id=None, source=None):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             evidence_dir = root / "docs" / "release" / "evidence"
@@ -914,7 +1336,7 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
             for name, content in evidence_files.items():
                 (evidence_dir / name).write_text(content, encoding="utf-8")
             with mock.patch.object(MODULE, "ROOT", root), mock.patch.object(MODULE, "EVIDENCE_DIR", evidence_dir):
-                return MODULE.summarize(entries, candidate_id)
+                return MODULE.summarize(entries, candidate_id, source=source)
 
     @staticmethod
     def _requirement(summary, name):

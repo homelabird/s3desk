@@ -5,6 +5,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 SCRIPT_PATH = pathlib.Path(__file__).with_name("report_release_scope.py")
@@ -22,8 +23,38 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertEqual(MODULE.release_unit_for("scripts/report_release_scope.py"), "release-scope-tooling")
         self.assertEqual(MODULE.release_unit_for("scripts/check_release_evidence_test.py"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for(".golangci.yml"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("Containerfile.local"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("deploy/caddy/Caddyfile"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("k8s/s3desk-caddy.yaml"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("scripts/Caddyfile"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("scripts/deploy_helm_release.sh"), "release-gate-ci-deploy")
+        self.assertEqual(MODULE.release_unit_for("scripts/install_backend_security_tools.sh"), "release-gate-ci-deploy")
         self.assertEqual(MODULE.release_unit_for("backend/internal/api/handlers_objects.go"), "backend-api-provider-surface")
+        self.assertEqual(MODULE.release_unit_for("openapi.yml"), "frontend-api-contracts")
         self.assertEqual(MODULE.release_unit_for("frontend/src/lib/profileCapabilityContext.ts"), "frontend-lib")
+        self.assertEqual(MODULE.release_unit_for("CHANGELOG.md"), "docs")
+        self.assertEqual(MODULE.release_unit_for("notes/FRONTEND_DESIGN_REPORT_OBJECTS_2026-05-17.md"), "docs")
+
+    def test_run_git_diff_parses_name_status_entries(self):
+        raw = "M\0README.md\0A\0new.txt\0D\0old.txt\0R100\0old/name.txt\0new/name.txt\0"
+
+        with mock.patch.object(MODULE.subprocess, "check_output", return_value=raw.encode("utf-8")) as check_output:
+            entries = MODULE.run_git_diff(pathlib.Path("/repo"), "v1.0.0", "HEAD")
+
+        check_output.assert_called_once_with(
+            ["git", "diff", "--name-status", "-z", "--find-renames", "v1.0.0", "HEAD"],
+            cwd=pathlib.Path("/repo"),
+        )
+        self.assertEqual(
+            [(entry.code, entry.path) for entry in entries],
+            [
+                (" M", "README.md"),
+                (" A", "new.txt"),
+                (" D", "old.txt"),
+                (" R", "old/name.txt"),
+                (" R", "new/name.txt"),
+            ],
+        )
 
     def test_summarize_counts_dependency_unit_and_release_units(self):
         entries = [
@@ -73,6 +104,103 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertFalse(license_only["dependency_notice_unit_complete"])
         self.assertIn("License snapshots changed without dependency metadata in the same status set.", license_only["dependency_scope_warnings"])
 
+    def test_empty_dependency_scope_does_not_report_missing_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = MODULE.summarize(
+                [MODULE.StatusEntry(" M", "README.md")],
+                pathlib.Path(tmp),
+            )
+
+        self.assertEqual(summary["dependency_scope"], [])
+        self.assertTrue(summary["dependency_notice_unit_complete"])
+        self.assertEqual(summary["dependency_notice_unit_missing_metadata"], [])
+
+    def test_toolchain_only_go_mod_change_does_not_require_license_snapshot(self):
+        diff = "\n".join(
+            [
+                "diff --git a/backend/go.mod b/backend/go.mod",
+                "@@ -3 +3 @@",
+                "-toolchain go1.25.9",
+                "+toolchain go1.25.10",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            with mock.patch.object(MODULE.subprocess, "check_output", return_value=diff.encode("utf-8")):
+                summary = MODULE.summarize(
+                    [MODULE.StatusEntry(" M", "backend/go.mod")],
+                    root,
+                    source={"mode": "git-diff", "base": "v1.0.0", "head": "HEAD"},
+                )
+
+        self.assertEqual(summary["dependency_scope"], [])
+        self.assertTrue(summary["dependency_notice_unit_complete"])
+        self.assertEqual(summary["dependency_scope_warnings"], [])
+
+    def test_notice_timestamp_only_change_does_not_require_dependency_metadata(self):
+        diff = "\n".join(
+            [
+                "diff --git a/THIRD_PARTY_NOTICES.md b/THIRD_PARTY_NOTICES.md",
+                "@@ -4 +4 @@",
+                "-Generated at 2026-04-19 13:34:58Z.",
+                "+Generated at 2026-05-02 06:08:18Z.",
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            with mock.patch.object(MODULE.subprocess, "check_output", return_value=diff.encode("utf-8")):
+                summary = MODULE.summarize(
+                    [MODULE.StatusEntry(" M", "THIRD_PARTY_NOTICES.md")],
+                    root,
+                    source={"mode": "git-diff", "base": "v1.0.0", "head": "HEAD"},
+                )
+
+        self.assertEqual(summary["dependency_scope"], [])
+        self.assertTrue(summary["dependency_notice_unit_complete"])
+        self.assertEqual(summary["dependency_scope_warnings"], [])
+
+    def test_toolchain_and_notice_timestamp_only_changes_do_not_false_block_scope(self):
+        diffs = {
+            ("git", "diff", "--unified=0", "--", "backend/go.mod"): "\n".join(
+                [
+                    "diff --git a/backend/go.mod b/backend/go.mod",
+                    "@@ -5 +5 @@",
+                    "-toolchain go1.25.9",
+                    "+toolchain go1.25.10",
+                ]
+            ),
+            ("git", "diff", "--cached", "--unified=0", "--", "backend/go.mod"): "",
+            ("git", "diff", "--unified=0", "--", "THIRD_PARTY_NOTICES.md"): "\n".join(
+                [
+                    "diff --git a/THIRD_PARTY_NOTICES.md b/THIRD_PARTY_NOTICES.md",
+                    "@@ -4 +4 @@",
+                    "-Generated at 2026-04-19 13:34:58Z.",
+                    "+Generated at 2026-05-02 06:08:18Z.",
+                ]
+            ),
+            ("git", "diff", "--cached", "--unified=0", "--", "THIRD_PARTY_NOTICES.md"): "",
+        }
+
+        def fake_check_output(command, cwd=None, stderr=None):
+            return diffs[tuple(command)].encode("utf-8")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            with mock.patch.object(MODULE.subprocess, "check_output", side_effect=fake_check_output):
+                summary = MODULE.summarize(
+                    [
+                        MODULE.StatusEntry(" M", "backend/go.mod"),
+                        MODULE.StatusEntry(" M", "THIRD_PARTY_NOTICES.md"),
+                    ],
+                    root,
+                )
+
+        self.assertEqual(summary["dependency_scope"], [])
+        self.assertTrue(summary["dependency_notice_unit_complete"])
+        self.assertEqual(summary["dependency_scope_warnings"], [])
+
     def test_root_artifact_candidates_are_root_untracked_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
@@ -92,6 +220,22 @@ class ReleaseScopeReportTests(unittest.TestCase):
 
         artifacts = {item["path"]: item["size_human"] for item in summary["root_artifact_candidates"]}
         self.assertEqual(artifacts, {"objects-page.png": "3 B", "process": "0 B"})
+
+    def test_root_artifact_candidates_include_added_root_files_from_diff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "debug.png").write_bytes(b"png")
+            (root / "README.md").write_text("docs", encoding="utf-8")
+            summary = MODULE.summarize(
+                [
+                    MODULE.StatusEntry(" A", "debug.png"),
+                    MODULE.StatusEntry(" M", "README.md"),
+                ],
+                root,
+            )
+
+        artifacts = {item["path"]: item["size_human"] for item in summary["root_artifact_candidates"]}
+        self.assertEqual(artifacts, {"debug.png": "3 B"})
 
     def test_collect_failures_combines_enabled_strict_checks(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -146,6 +290,34 @@ class ReleaseScopeReportTests(unittest.TestCase):
             checklist,
         )
 
+    def test_diff_scope_checklist_commands_preserve_base_and_head(self):
+        scope_args = ["--base", "v1.0.0", "--head", "HEAD"]
+        entries = [
+            MODULE.StatusEntry(" M", "frontend/src/pages/objects/useObjectsPageData.ts"),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = MODULE.summarize(
+                entries,
+                pathlib.Path(tmp),
+                source={"mode": "git-diff", "base": "v1.0.0", "head": "HEAD"},
+                command_scope_args=scope_args,
+            )
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            MODULE.print_checklist(summary)
+        checklist = output.getvalue()
+
+        self.assertIn(
+            "python3 scripts/report_release_scope.py --base v1.0.0 --head HEAD --unit frontend-objects",
+            checklist,
+        )
+        self.assertIn(
+            "python3 scripts/report_release_scope.py --base v1.0.0 --head HEAD --unit frontend-objects --format paths --null | git add --pathspec-from-file=- --pathspec-file-nul",
+            checklist,
+        )
+
     def test_stage_command_uses_file_level_pathspec_pipeline(self):
         self.assertEqual(
             MODULE.path_list_command("frontend-e2e"),
@@ -154,6 +326,31 @@ class ReleaseScopeReportTests(unittest.TestCase):
         self.assertEqual(
             MODULE.stage_command("frontend-e2e"),
             "python3 scripts/report_release_scope.py --unit frontend-e2e --format paths --null --untracked-files all | git add --pathspec-from-file=- --pathspec-file-nul",
+        )
+
+    def test_diff_scope_commands_preserve_base_and_head(self):
+        scope_args = ["--base", "v1.0.0", "--head", "HEAD"]
+        entries = [
+            MODULE.StatusEntry(" M", "frontend/src/pages/objects/useObjectsPageData.ts"),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = MODULE.summarize(
+                entries,
+                pathlib.Path(tmp),
+                source={"mode": "git-diff", "base": "v1.0.0", "head": "HEAD"},
+                command_scope_args=scope_args,
+            )
+
+        unit = MODULE.find_release_unit(summary, "frontend-objects")
+        self.assertIsNotNone(unit)
+        self.assertEqual(
+            unit["path_list_command"],
+            "python3 scripts/report_release_scope.py --base v1.0.0 --head HEAD --unit frontend-objects --format paths --null",
+        )
+        self.assertEqual(
+            unit["stage_command"],
+            "python3 scripts/report_release_scope.py --base v1.0.0 --head HEAD --unit frontend-objects --format paths --null | git add --pathspec-from-file=- --pathspec-file-nul",
         )
 
     def test_release_unit_json_includes_review_commands(self):

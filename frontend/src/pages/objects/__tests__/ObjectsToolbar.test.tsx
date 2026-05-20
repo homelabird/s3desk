@@ -23,8 +23,8 @@ vi.mock('../ObjectsMenuPopover', () => ({
 	ObjectsMenuPopover: ({
 		children,
 	}: {
-		children: (args: { toggle: () => void }) => ReactNode
-	}) => <div>{children({ toggle: vi.fn() })}</div>,
+		children: (args: { toggle: () => void; open: boolean }) => ReactNode
+	}) => <div>{children({ toggle: vi.fn(), open: false })}</div>,
 }))
 
 function buildProps(overrides: Partial<Parameters<typeof ObjectsToolbar>[0]> = {}): Parameters<typeof ObjectsToolbar>[0] {
@@ -60,7 +60,9 @@ function buildProps(overrides: Partial<Parameters<typeof ObjectsToolbar>[0]> = {
 		activeTransferCount: 0,
 		onOpenTransfers: vi.fn(),
 		dockTree: true,
+		treeDrawerOpen: false,
 		dockDetails: true,
+		detailsDrawerOpen: false,
 		onOpenTree: vi.fn(),
 		onOpenDetails: vi.fn(),
 		...overrides,
@@ -117,5 +119,38 @@ describe('ObjectsToolbar', () => {
 		render(<ObjectsToolbar {...buildProps({ canCreateFolder: true })} />)
 
 		expect(screen.getByTitle(newFolderShortcutHint())).toBeInTheDocument()
+	})
+
+	it('exposes the toolbar more menu disclosure state', () => {
+		render(<ObjectsToolbar {...buildProps()} />)
+
+		const moreButton = screen.getByRole('button', { name: 'More actions' })
+		expect(moreButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+	})
+
+	it('exposes mobile drawer disclosure state for folders and details', () => {
+		render(
+			<ObjectsToolbar
+				{...buildProps({
+					isDesktop: false,
+					showLabels: true,
+					dockTree: false,
+					treeDrawerOpen: true,
+					dockDetails: false,
+					detailsDrawerOpen: false,
+				})}
+			/>,
+		)
+
+		const foldersButton = screen.getByRole('button', { name: 'Folders' })
+		expect(foldersButton).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(foldersButton).toHaveAttribute('aria-expanded', 'true')
+		expect(foldersButton).toHaveAttribute('aria-controls', 'objects-tree-drawer')
+
+		const detailsButton = screen.getByRole('button', { name: 'Details' })
+		expect(detailsButton).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(detailsButton).toHaveAttribute('aria-expanded', 'false')
+		expect(detailsButton).toHaveAttribute('aria-controls', 'objects-details-drawer')
 	})
 })

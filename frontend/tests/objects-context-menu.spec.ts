@@ -138,7 +138,8 @@ test.describe('Objects context menus', () => {
 
 			const scroller = page.locator('[data-testid="objects-upload-dropzone"] [class*="_listScroller"]')
 			await scroller.scrollIntoViewIfNeeded()
-			await scroller.click({ button: 'right', position: { x: 12, y: 12 }, force: true })
+			await expect(scroller).toBeVisible()
+			await scroller.click({ button: 'right', position: { x: 12, y: 12 } })
 
 			const menu = objectsContextMenu(page)
 			const newFolderItem = menu.getByRole('menuitem', { name: 'New folder…' })
@@ -171,7 +172,7 @@ test.describe('Objects context menus', () => {
 		const target = rows.last()
 		await target.scrollIntoViewIfNeeded()
 		await expect(target).toBeVisible()
-		const menuTrigger = target.getByRole('button', { name: 'Object actions' })
+		const menuTrigger = target.getByRole('button', { name: /Object actions/ })
 		await expect(menuTrigger).toBeVisible()
 		await menuTrigger.evaluate((element) => {
 			;(element as HTMLElement).click()
@@ -204,7 +205,7 @@ test.describe('Objects context menus', () => {
 		await objectsSelectionCheckbox(page, 'video-1.mp4').click()
 		await expect(page.getByText('1 selected')).toBeVisible()
 
-		await row.getByRole('button', { name: 'Object actions' }).evaluate((element) => {
+		await row.getByRole('button', { name: /Object actions/ }).evaluate((element) => {
 			;(element as HTMLElement).click()
 		})
 

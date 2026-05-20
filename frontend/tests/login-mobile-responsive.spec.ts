@@ -44,4 +44,17 @@ test.describe('@mobile-responsive Login mobile workflows', () => {
 		await page.getByRole('button', { name: 'Login' }).click()
 		await expect(page.getByText('No profiles yet')).toBeVisible({ timeout: 10_000 })
 	})
+
+	test('theme switching remains reachable on mobile login', async ({ page }) => {
+		await seedLoginMobileResponsiveStorage(page, '')
+		await installLoginMobileResponsiveFixtures(page, ['valid-token'])
+		await page.setViewportSize({ width: 390, height: 844 })
+		await gotoProfilesPage(page, {
+			ready: (scope) => scope.getByRole('heading', { name: 'S3Desk' }),
+		})
+
+		await page.getByRole('button', { name: 'Dark mode' }).click()
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+		await expect(page.getByRole('button', { name: 'Light mode' })).toBeVisible()
+	})
 })

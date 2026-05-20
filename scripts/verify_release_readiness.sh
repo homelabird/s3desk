@@ -11,7 +11,42 @@ fi
 
 REPO="${GITHUB_REPOSITORY:-homelabird/s3desk}"
 API_URL="${GITHUB_API_URL:-https://api.github.com}"
-REQUIRED_CHECKS="${DEPLOY_REQUIRED_CHECKS:-release-gate,Core Mock E2E,Mobile Responsive E2E (Required)}"
+REQUIRED_CHECKS="${DEPLOY_REQUIRED_CHECKS:-release-gate,Core Mock E2E,Mobile Responsive E2E (Required),license-audit}"
+READINESS_HEAD="${DEPLOY_RELEASE_HEAD:-${TAG}}"
+READINESS_BASE="${DEPLOY_RELEASE_BASE:-}"
+
+if [[ -z "${READINESS_BASE}" ]]; then
+  READINESS_BASE="$(git -C "${ROOT}" describe --tags --abbrev=0 "${TAG}^{commit}^" 2>/dev/null || true)"
+fi
+if [[ -z "${READINESS_BASE}" ]]; then
+  echo "DEPLOY_RELEASE_BASE is required when the previous tag cannot be derived for '${TAG}'." >&2
+  exit 1
+fi
+
+readiness_output="$(
+  python3 "${ROOT}/scripts/check_release_readiness.py" \
+    --candidate-id "${TAG}" \
+    --base "${READINESS_BASE}" \
+    --head "${READINESS_HEAD}" \
+    --skip-release-gate 2>&1
+)" || {
+  readiness_status=$?
+  if [[ -n "${readiness_output}" ]]; then
+    printf '%s\n' "${readiness_output}" >&2
+  else
+    echo "Release readiness preflight failed before GitHub Release/check verification." >&2
+  fi
+  exit "${readiness_status}"
+}
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl is required to verify GitHub Release/check state before publication." >&2
+  exit 1
+fi
+if [[ -z "${GH_TOKEN:-}" && -z "${GITHUB_TOKEN:-}" ]]; then
+  echo "GH_TOKEN or GITHUB_TOKEN is required to verify GitHub Release/check state before publication." >&2
+  exit 1
+fi
 
 curl_args=(
   -fsSL
@@ -29,19 +64,9 @@ release_json="$(
     "${API_URL}/repos/${REPO}/releases/tags/${TAG}"
 )"
 
-draft_state="$(
-  RELEASE_JSON="${release_json}" python3 - <<'PY'
-import json
-import os
-
-data = json.loads(os.environ["RELEASE_JSON"])
-print("true" if data.get("draft") else "false")
-PY
-)"
-if [[ "${draft_state}" == "true" ]]; then
-  echo "GitHub release for tag '${TAG}' is still a draft." >&2
-  exit 1
-fi
+printf '%s' "${release_json}" | python3 "${ROOT}/scripts/verify_github_release_metadata.py" \
+  --tag "${TAG}" \
+  --base "${READINESS_BASE}"
 
 commit_sha="$(git -C "${ROOT}" rev-parse "${TAG}^{commit}" 2>/dev/null || true)"
 if [[ -z "${commit_sha}" ]]; then
@@ -101,31 +126,4 @@ check_runs_json="$(
     "${API_URL}/repos/${REPO}/commits/${commit_sha}/check-runs?per_page=100"
 )"
 
-CHECK_RUNS_JSON="${check_runs_json}" REQUIRED_CHECKS="${REQUIRED_CHECKS}" python3 - <<'PY'
-import json
-import os
-import sys
-
-allowed = {"success", "neutral", "skipped"}
-required = [item.strip() for item in os.environ["REQUIRED_CHECKS"].split(",") if item.strip()]
-check_runs = json.loads(os.environ["CHECK_RUNS_JSON"]).get("check_runs", [])
-states = {}
-for run in check_runs:
-    states[run.get("name", "")] = run.get("conclusion") or run.get("status") or "missing"
-
-missing = []
-failed = []
-for name in required:
-    state = states.get(name)
-    if state is None:
-        missing.append(name)
-    elif state not in allowed:
-        failed.append(f"{name}={state}")
-
-if missing or failed:
-    if missing:
-        print("Missing required checks: " + ", ".join(missing), file=sys.stderr)
-    if failed:
-        print("Non-passing required checks: " + ", ".join(failed), file=sys.stderr)
-    sys.exit(1)
-PY
+printf '%s' "${check_runs_json}" | python3 "${ROOT}/scripts/verify_release_readiness_checks.py" --required-checks "${REQUIRED_CHECKS}"

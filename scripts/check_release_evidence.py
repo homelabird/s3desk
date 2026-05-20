@@ -14,25 +14,45 @@ ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE_DIR = ROOT / "docs" / "release" / "evidence"
 EVIDENCE_TEMPLATE_NAMES = {
     "README.md",
+    "BACKUP_PORTABLE_SMOKE_TEMPLATE.md",
     "PROVIDER_LIVE_VALIDATION_TEMPLATE.md",
     "REVERSE_PROXY_SMOKE_TEMPLATE.md",
 }
 EVIDENCE_SUPPORT_PREFIXES = (
     "LIVE_EVIDENCE_CHECKLIST_",
 )
+PROVIDER_EVIDENCE_FILENAME_RE = re.compile(
+    r"provider-live-(?P<scope>aws|gcs|azure|oci|minio|ceph)-(?P<candidate>.+)\.md"
+)
+REVERSE_PROXY_EVIDENCE_FILENAME_RE = re.compile(
+    r"reverse-proxy-smoke-(?P<candidate>.+)\.md"
+)
+BACKUP_PORTABLE_EVIDENCE_FILENAME_RE = re.compile(
+    r"backup-portable-smoke-(?P<candidate>.+)\.md"
+)
 
 PROVIDER_CHANGE_PREFIXES = (
     "backend/internal/azureacl/",
     "backend/internal/azurearmimmutability/",
     "backend/internal/bucketgov/",
+    "backend/internal/gcsauth/",
     "backend/internal/gcsbucket/",
     "backend/internal/gcsiam/",
+    "backend/internal/jobs/rclone",
     "backend/internal/ocicli/",
+    "backend/internal/profileendpoint/",
+    "backend/internal/profiletls/",
+    "backend/internal/rcloneconfig/",
     "backend/internal/s3client/",
+    "backend/internal/s3policy/",
     "frontend/src/lib/providerCapabilities",
     "frontend/src/pages/buckets/governance/",
     "frontend/src/pages/profiles/",
 )
+PROVIDER_CHANGE_EXACT_PATHS = {
+    "backend/internal/store/store_profile_secrets.go",
+    "openapi.yml",
+}
 PROVIDER_CHANGE_TOKENS = (
     "bucket_governance",
     "bucket_policy",
@@ -69,7 +89,7 @@ GENERIC_PROVIDER_CHANGE_TOKENS = (
 )
 PROVIDER_SCOPE_HINTS = {
     "aws": ("aws", "s3client/", "aws_s3"),
-    "gcs": ("gcs", "gcp", "gcsiam/", "gcsbucket/"),
+    "gcs": ("gcs", "gcp", "gcsauth/", "gcsiam/", "gcsbucket/"),
     "azure": ("azure",),
     "oci": ("oci", "ocicli/"),
     "minio": ("minio",),
@@ -79,6 +99,8 @@ PROVIDER_SCOPE_HINTS = {
 REVERSE_PROXY_CHANGE_PREFIXES = (
     "charts/",
     "compose/remote/",
+    "backend/internal/ws/",
+    "deploy/caddy/",
 )
 REVERSE_PROXY_CHANGE_TOKENS = (
     "download_proxy",
@@ -99,8 +121,30 @@ REVERSE_PROXY_EXACT_PATHS = {
     "docs/RELEASE_GATE.md",
     "docs/TESTING.md",
     "docs/release/DEPLOYMENT_CHECKLIST.md",
+    "k8s/s3desk-caddy.yaml",
+    "scripts/Caddyfile",
     "scripts/deploy_smoke.sh",
 }
+BACKUP_PORTABLE_CHANGE_PREFIXES = (
+    "backend/internal/api/handlers_server_backup",
+    "backend/internal/api/handlers_server_portable",
+    "backend/internal/api/handlers_server_restore",
+    "backend/internal/store/store_portable",
+    "scripts/portable/",
+    "scripts/run_portable_",
+)
+BACKUP_PORTABLE_CHANGE_EXACT_PATHS = {
+    "compose/test/portable-smoke.yml",
+    "docs/PORTABLE_BACKUP.md",
+}
+BACKUP_PORTABLE_CHANGE_TOKENS = (
+    "portable-smoke",
+    "portable_backup",
+    "server_backup",
+    "server_portable",
+    "PortableBackup",
+    "PortableRestore",
+)
 
 SECRET_PATTERNS = (
     ("aws_access_key_id", re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")),
@@ -128,9 +172,17 @@ SECRET_PATTERNS = (
         ),
     ),
     ("api_token_assignment", re.compile(r"\b(?:DEPLOY_API_TOKEN|S3DESK_API_TOKEN|api[_-]?token)\s*[:=]\s*([^`\s]+)", re.IGNORECASE)),
+    (
+        "backup_password_assignment",
+        re.compile(
+            r"\b(?:X-S3Desk-Backup-Password|PORTABLE_BUNDLE(?:_EXPORT|_IMPORT)?_PASSWORD|S3DESK_BACKUP_PASSWORD|(?:portable\s+)?bundle\s+password|backup[_ -]?password)\s*[:=]\s*`?([^`\s]+)`?",
+            re.IGNORECASE,
+        ),
+    ),
 )
 SECRET_REMEDIATIONS = {
     "api_token_assignment": "Replace API token values with `<redacted>` and keep only the command shape.",
+    "backup_password_assignment": "Replace backup password values with `<redacted>` and keep only the command shape.",
     "authorization_header": "Replace authorization header values with `<redacted>` and keep only the checked route or status.",
     "cookie_token": "Replace cookie token values with `<redacted>` and keep only the checked route or status.",
     "credential_assignment": "Replace provider credential assignment values with `<redacted>` or move them to local env only.",
@@ -142,6 +194,7 @@ SECRET_REMEDIATIONS = {
     "azure_signed_url": "Redact `sig` query values and keep only the route or external base URL.",
 }
 EVIDENCE_HEADERS = (
+    "# Backup Portable Smoke Evidence",
     "# Provider Live Validation Evidence",
     "# Reverse Proxy Smoke Evidence",
 )
@@ -167,6 +220,9 @@ PROVIDER_METADATA_REMEDIATION = (
 )
 EVIDENCE_FILENAME_REMEDIATION = (
     "Rename the evidence file to include the release tag or commit SHA instead of a placeholder."
+)
+EVIDENCE_FILENAME_CANDIDATE_MISMATCH_REMEDIATION = (
+    "Rename the evidence file so its candidate suffix matches the expected release candidate identifier."
 )
 REVERSE_PROXY_METADATA_FIELDS = (
     (("Base URL",), "reverse_proxy_base_url"),
@@ -205,6 +261,29 @@ REVERSE_PROXY_STATUS_REMEDIATION = (
 REVERSE_PROXY_RESULT_REMEDIATION = (
     "Record a signed proxy URL root that matches `Expected external base URL`; rerun `scripts/deploy_smoke.sh` if the root differs."
 )
+BACKUP_PORTABLE_METADATA_FIELDS = (
+    ("Source database", "backup_portable_source_database"),
+    ("Target database", "backup_portable_target_database"),
+    ("Export workflow", "backup_portable_export_workflow"),
+    ("Import workflow", "backup_portable_import_workflow"),
+    ("Verification workflow", "backup_portable_verification_workflow"),
+    ("Staged restore target", "backup_portable_staged_restore_target"),
+)
+BACKUP_PORTABLE_CHECK_FIELDS = (
+    ("bash scripts/run_portable_failure_smoke.sh", "backup_portable_failure_smoke"),
+    (
+        "bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh",
+        "backup_portable_postgres_to_sqlite_failure_smoke",
+    ),
+    ("bash scripts/run_portable_postgres_to_sqlite_smoke.sh", "backup_portable_postgres_to_sqlite_smoke"),
+    ("bash scripts/run_portable_sqlite_to_postgres_smoke.sh", "backup_portable_sqlite_to_postgres_smoke"),
+)
+BACKUP_PORTABLE_METADATA_REMEDIATION = (
+    "Fill backup/portable smoke evidence metadata with sanitized source, target, workflow, and verification details."
+)
+BACKUP_PORTABLE_CHECK_REMEDIATION = (
+    "Record a pass/success result for each portable smoke script in the `Smoke Results` section."
+)
 
 
 @dataclass(frozen=True)
@@ -236,8 +315,45 @@ def run_git_status(untracked_files: str) -> list[StatusEntry]:
     return entries
 
 
+def run_git_diff(base: str, head: str) -> list[StatusEntry]:
+    raw = subprocess.check_output(
+        ["git", "diff", "--name-status", "-z", "--find-renames", base, head],
+        cwd=ROOT,
+    ).decode("utf-8", "surrogateescape")
+    records = [record for record in raw.split("\0") if record]
+    entries: list[StatusEntry] = []
+    index = 0
+    while index < len(records):
+        status = records[index]
+        index += 1
+        if not status:
+            continue
+        status_type = status[0]
+        if status_type in {"R", "C"}:
+            if index + 1 >= len(records):
+                break
+            old_path = records[index]
+            index += 1
+            new_path = records[index]
+            index += 1
+            entries.append(StatusEntry(f" {status_type}", old_path))
+            entries.append(StatusEntry(f" {status_type}", new_path))
+            continue
+        else:
+            if index >= len(records):
+                break
+            path = records[index]
+            index += 1
+        entries.append(StatusEntry(f" {status_type}", path))
+    return entries
+
+
 def is_provider_change(path: str) -> bool:
-    return path.startswith(PROVIDER_CHANGE_PREFIXES) or any(token in path for token in PROVIDER_CHANGE_TOKENS)
+    return (
+        path in PROVIDER_CHANGE_EXACT_PATHS
+        or path.startswith(PROVIDER_CHANGE_PREFIXES)
+        or any(token in path for token in PROVIDER_CHANGE_TOKENS)
+    )
 
 
 def provider_scopes_for_path(path: str) -> tuple[str, ...]:
@@ -252,7 +368,7 @@ def provider_scopes_for_path(path: str) -> tuple[str, ...]:
         for scope, hints in PROVIDER_SCOPE_HINTS.items()
         if any(hint in normalized for hint in hints)
     ]
-    if path.startswith("backend/internal/s3client/"):
+    if path.startswith(("backend/internal/s3client/", "backend/internal/s3policy/")):
         scopes.extend(scope for scope in ("aws", "minio", "ceph") if scope not in scopes)
     return tuple(scope for scope in PROVIDER_SCOPES if scope in scopes) or PROVIDER_SCOPES
 
@@ -262,6 +378,16 @@ def is_reverse_proxy_change(path: str) -> bool:
         path in REVERSE_PROXY_EXACT_PATHS
         or path.startswith(REVERSE_PROXY_CHANGE_PREFIXES)
         or any(token in path for token in REVERSE_PROXY_CHANGE_TOKENS)
+    )
+
+
+def is_backup_portable_change(path: str) -> bool:
+    if path.startswith("docs/release/evidence/"):
+        return False
+    return (
+        path in BACKUP_PORTABLE_CHANGE_EXACT_PATHS
+        or path.startswith(BACKUP_PORTABLE_CHANGE_PREFIXES)
+        or any(token in path for token in BACKUP_PORTABLE_CHANGE_TOKENS)
     )
 
 
@@ -332,6 +458,25 @@ def normalized_candidate_identifier(value: str) -> str:
     return value.strip().strip("\"'`")
 
 
+def equivalent_candidate_identifiers(candidate_id: str | None) -> set[str]:
+    normalized = normalized_candidate_identifier(candidate_id or "")
+    if not normalized:
+        return set()
+    identifiers = {normalized}
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", f"{normalized}^{{commit}}"],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return identifiers
+    if re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        identifiers.add(commit.lower())
+    return identifiers
+
+
 def is_placeholder_filename(value: str) -> bool:
     normalized = value.lower()
     return (
@@ -377,25 +522,28 @@ def markdown_section_lines(lines: list[str], heading: str) -> list[tuple[int, st
 
 
 def candidate_identifier_findings_for_evidence(
-    path: Path, expected_candidate_id: str | None = None
+    path: Path,
+    expected_candidate_id: str | None = None,
+    accepted_candidate_ids: set[str] | None = None,
 ) -> list[dict[str, str | int]]:
     text = path.read_text(encoding="utf-8", errors="ignore")
     if not is_release_evidence_document(text):
         return []
 
     expected = normalized_candidate_identifier(expected_candidate_id or "")
+    accepted = accepted_candidate_ids or ({expected} if expected else set())
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         value = release_evidence_field_value(raw_line, RELEASE_CANDIDATE_LABEL)
         if value is None:
             continue
         value = normalized_candidate_identifier(value)
         if not is_placeholder_value(value):
-            if expected and value != expected:
+            if expected and value not in accepted:
                 return [
                     {
                         "type": "candidate_identifier_mismatch",
                         "line": line_number,
-                        "remediation": f"{RELEASE_CANDIDATE_MISMATCH_REMEDIATION} Expected `{expected}`.",
+                        "remediation": f"{RELEASE_CANDIDATE_MISMATCH_REMEDIATION} Expected `{expected}`. A resolved commit SHA for that tag is also accepted.",
                     }
                 ]
             return []
@@ -416,19 +564,47 @@ def candidate_identifier_findings_for_evidence(
     ]
 
 
-def filename_findings_for_evidence(path: Path) -> list[dict[str, str | int]]:
+def evidence_filename_candidate(path: Path) -> str | None:
+    provider_match = PROVIDER_EVIDENCE_FILENAME_RE.fullmatch(path.name)
+    if provider_match:
+        return provider_match.group("candidate")
+    reverse_proxy_match = REVERSE_PROXY_EVIDENCE_FILENAME_RE.fullmatch(path.name)
+    if reverse_proxy_match:
+        return reverse_proxy_match.group("candidate")
+    backup_portable_match = BACKUP_PORTABLE_EVIDENCE_FILENAME_RE.fullmatch(path.name)
+    if backup_portable_match:
+        return backup_portable_match.group("candidate")
+    return None
+
+
+def filename_findings_for_evidence(
+    path: Path, expected_candidate_id: str | None = None
+) -> list[dict[str, str | int]]:
     text = path.read_text(encoding="utf-8", errors="ignore")
     if not is_release_evidence_document(text):
         return []
-    if not is_placeholder_filename(path.name):
-        return []
-    return [
-        {
-            "type": "evidence_filename_placeholder",
-            "line": 1,
-            "remediation": EVIDENCE_FILENAME_REMEDIATION,
-        }
-    ]
+    findings: list[dict[str, str | int]] = []
+    if is_placeholder_filename(path.name):
+        findings.append(
+            {
+                "type": "evidence_filename_placeholder",
+                "line": 1,
+                "remediation": EVIDENCE_FILENAME_REMEDIATION,
+            }
+        )
+    expected = normalized_candidate_identifier(expected_candidate_id or "")
+    filename_candidate = evidence_filename_candidate(path)
+    if expected and filename_candidate and filename_candidate != expected:
+        findings.append(
+            {
+                "type": "evidence_filename_candidate_mismatch",
+                "line": 1,
+                "remediation": (
+                    f"{EVIDENCE_FILENAME_CANDIDATE_MISMATCH_REMEDIATION} Expected `{expected}`."
+                ),
+            }
+        )
+    return findings
 
 
 def provider_identity_findings_for_evidence(path: Path) -> list[dict[str, str | int]]:
@@ -503,9 +679,7 @@ def provider_metadata_findings_for_evidence(path: Path) -> list[dict[str, str | 
 
 def is_expected_reverse_proxy_status(value: str, expected_statuses: tuple[str, ...]) -> bool:
     statuses = re.findall(r"\b[1-5][0-9]{2}\b", value)
-    if statuses:
-        return any(status in expected_statuses for status in statuses)
-    return is_pass_outcome(value)
+    return bool(statuses) and all(status in expected_statuses for status in statuses)
 
 
 def normalized_url_root(value: str) -> str:
@@ -513,8 +687,6 @@ def normalized_url_root(value: str) -> str:
 
 
 def is_expected_reverse_proxy_signed_root(value: str, expected_external_base_url: str) -> bool:
-    if is_pass_outcome(value):
-        return True
     actual_root = normalized_url_root(value)
     expected_root = normalized_url_root(expected_external_base_url)
     return bool(actual_root and expected_root and actual_root == expected_root)
@@ -637,6 +809,73 @@ def reverse_proxy_metadata_findings_for_evidence(path: Path) -> list[dict[str, s
     return findings
 
 
+def backup_portable_metadata_findings_for_evidence(path: Path) -> list[dict[str, str | int]]:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    if "# Backup Portable Smoke Evidence" not in text:
+        return []
+
+    findings: list[dict[str, str | int]] = []
+    lines = text.splitlines()
+    for label, finding_prefix in BACKUP_PORTABLE_METADATA_FIELDS:
+        found = False
+        for line_number, raw_line in enumerate(lines, start=1):
+            value = release_evidence_field_value(raw_line, label)
+            if value is None:
+                continue
+            found = True
+            if is_metadata_placeholder_value(value):
+                findings.append(
+                    {
+                        "type": f"{finding_prefix}_placeholder",
+                        "line": line_number,
+                        "remediation": BACKUP_PORTABLE_METADATA_REMEDIATION,
+                    }
+                )
+            break
+        if not found:
+            findings.append(
+                {
+                    "type": f"{finding_prefix}_missing",
+                    "line": 1,
+                    "remediation": BACKUP_PORTABLE_METADATA_REMEDIATION,
+                }
+            )
+    smoke_result_lines = markdown_section_lines(lines, "Smoke Results")
+    for label, finding_prefix in BACKUP_PORTABLE_CHECK_FIELDS:
+        found = False
+        for line_number, raw_line in smoke_result_lines:
+            value = release_evidence_field_value(raw_line, label)
+            if value is None:
+                continue
+            found = True
+            if is_metadata_placeholder_value(value):
+                findings.append(
+                    {
+                        "type": f"{finding_prefix}_placeholder",
+                        "line": line_number,
+                        "remediation": BACKUP_PORTABLE_CHECK_REMEDIATION,
+                    }
+                )
+            elif not is_pass_outcome(value):
+                findings.append(
+                    {
+                        "type": f"{finding_prefix}_unexpected_result",
+                        "line": line_number,
+                        "remediation": BACKUP_PORTABLE_CHECK_REMEDIATION,
+                    }
+                )
+            break
+        if not found:
+            findings.append(
+                {
+                    "type": f"{finding_prefix}_missing",
+                    "line": 1,
+                    "remediation": BACKUP_PORTABLE_CHECK_REMEDIATION,
+                }
+            )
+    return findings
+
+
 def secret_findings_for_evidence(path: Path) -> list[dict[str, str | int]]:
     text = path.read_text(encoding="utf-8", errors="ignore")
     findings: list[dict[str, str | int]] = []
@@ -675,6 +914,18 @@ def has_provider_live_outcome(path: Path) -> bool:
         return False
     for raw_line in text.splitlines():
         value = release_evidence_field_value(raw_line, "Actual outcome")
+        if value is None:
+            continue
+        return is_pass_outcome(value)
+    return False
+
+
+def has_backup_portable_pass(path: Path) -> bool:
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    if "# Backup Portable Smoke Evidence" not in text:
+        return False
+    for raw_line in text.splitlines():
+        value = release_evidence_field_value(raw_line, "Backup portable smoke")
         if value is None:
             continue
         return is_pass_outcome(value)
@@ -772,6 +1023,27 @@ def reverse_proxy_required_check_fields() -> list[str]:
     return [labels[0] for labels, _finding_prefix in REVERSE_PROXY_CHECK_FIELDS]
 
 
+def backup_portable_evidence_metadata_summary() -> str:
+    labels = ", ".join(f"`{label}`" for label, _finding_prefix in BACKUP_PORTABLE_METADATA_FIELDS)
+    check_labels = ", ".join(f"`{label}`" for label, _finding_prefix in BACKUP_PORTABLE_CHECK_FIELDS)
+    return (
+        f"`S3Desk commit SHA or release tag`, {labels}, pass/success "
+        f"`Backup portable smoke`, and per-script pass/success results for {check_labels}"
+    )
+
+
+def backup_portable_required_metadata_fields() -> list[str]:
+    return [
+        RELEASE_CANDIDATE_LABEL,
+        *(label for label, _finding_prefix in BACKUP_PORTABLE_METADATA_FIELDS),
+        "Backup portable smoke",
+    ]
+
+
+def backup_portable_required_check_fields() -> list[str]:
+    return [label for label, _finding_prefix in BACKUP_PORTABLE_CHECK_FIELDS]
+
+
 def reverse_proxy_check_status_expectations() -> dict[str, list[str]]:
     return {
         labels[0]: list(REVERSE_PROXY_EXPECTED_STATUSES[finding_prefix])
@@ -800,13 +1072,31 @@ def reverse_proxy_evidence_target(candidate_id: str | None = None) -> str:
     return f"docs/release/evidence/reverse-proxy-smoke-{evidence_candidate_identifier(candidate_id)}.md"
 
 
+def backup_portable_evidence_target(candidate_id: str | None = None) -> str:
+    return f"docs/release/evidence/backup-portable-smoke-{evidence_candidate_identifier(candidate_id)}.md"
+
+
 def reverse_proxy_smoke_command(candidate_id: str | None = None) -> str:
     candidate = evidence_candidate_identifier(candidate_id)
     evidence_target = reverse_proxy_evidence_target(candidate_id)
     return (
+        "DEPLOY_BASE_URL=https://s3desk.example.com "
+        "DEPLOY_API_TOKEN=... "
+        "DEPLOY_PROFILE_ID=... "
+        "DEPLOY_SMOKE_BUCKET=... "
+        "DEPLOY_SMOKE_OBJECT_KEY=... "
         f"DEPLOY_RELEASE_CANDIDATE={candidate} "
         f"DEPLOY_SMOKE_EVIDENCE_FILE={evidence_target} "
         "bash ./scripts/deploy_smoke.sh"
+    )
+
+
+def backup_portable_smoke_command() -> str:
+    return (
+        "bash scripts/run_portable_failure_smoke.sh && "
+        "bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh && "
+        "bash scripts/run_portable_postgres_to_sqlite_smoke.sh && "
+        "bash scripts/run_portable_sqlite_to_postgres_smoke.sh"
     )
 
 
@@ -843,41 +1133,66 @@ def reverse_proxy_remediation_fields(candidate_id: str | None = None) -> dict[st
     }
 
 
-def release_scope_final_gate_command() -> str:
+def backup_portable_remediation_fields(candidate_id: str | None = None) -> dict[str, object]:
+    return {
+        "smoke_command": backup_portable_smoke_command(),
+        "evidence_template": "docs/release/evidence/BACKUP_PORTABLE_SMOKE_TEMPLATE.md",
+        "evidence_target": backup_portable_evidence_target(candidate_id),
+        "required_metadata": backup_portable_evidence_metadata_summary(),
+        "required_metadata_fields": backup_portable_required_metadata_fields(),
+        "required_check_fields": backup_portable_required_check_fields(),
+    }
+
+
+def release_scope_final_gate_command(base: str = "", head: str = "HEAD") -> str:
+    scope_args = f"--base {base} --head {head} " if base else ""
+    untracked_args = "" if base else "--untracked-files all"
     return (
         "python3 scripts/report_release_scope.py "
+        f"{scope_args}"
         "--fail-on-root-artifacts "
         "--fail-on-dependency-scope-warning "
         "--fail-on-untracked-directories "
         "--fail-on-other-unit "
-        "--untracked-files all"
-    )
+        f"{untracked_args}"
+    ).strip()
 
 
-def release_evidence_final_gate_command(candidate_id: str | None = None) -> str:
+def release_evidence_final_gate_command(
+    candidate_id: str | None = None,
+    base: str = "",
+    head: str = "HEAD",
+) -> str:
     candidate = normalized_candidate_identifier(candidate_id or "") or "<tag-or-sha>"
+    scope_args = f"--base {base} --head {head} " if base else ""
     return (
         "python3 scripts/check_release_evidence.py "
+        f"{scope_args}"
         "--strict "
         "--require-candidate-id "
         f"--candidate-id {candidate}"
     )
 
 
-def final_gate_commands(candidate_id: str | None = None) -> dict[str, str]:
+def final_gate_commands(candidate_id: str | None = None, base: str = "", head: str = "HEAD") -> dict[str, str]:
     return {
-        "release_scope": release_scope_final_gate_command(),
-        "release_evidence": release_evidence_final_gate_command(candidate_id),
+        "release_scope": release_scope_final_gate_command(base, head),
+        "release_evidence": release_evidence_final_gate_command(candidate_id, base, head),
     }
 
 
-def evidence_rejection(path: Path, expected_candidate_id: str | None = None) -> dict | None:
+def evidence_rejection(
+    path: Path,
+    expected_candidate_id: str | None = None,
+    accepted_candidate_ids: set[str] | None = None,
+) -> dict | None:
     findings = (
-        filename_findings_for_evidence(path)
-        + candidate_identifier_findings_for_evidence(path, expected_candidate_id)
+        filename_findings_for_evidence(path, expected_candidate_id)
+        + candidate_identifier_findings_for_evidence(path, expected_candidate_id, accepted_candidate_ids)
         + provider_identity_findings_for_evidence(path)
         + provider_metadata_findings_for_evidence(path)
         + reverse_proxy_metadata_findings_for_evidence(path)
+        + backup_portable_metadata_findings_for_evidence(path)
         + secret_findings_for_evidence(path)
     )
     if not findings:
@@ -949,9 +1264,28 @@ def print_markdown_remediation(item: dict) -> None:
         print_reverse_proxy_status_expectations(item)
         print()
 
+    if item["name"] == "backup-portable-smoke":
+        print("### Remediation")
+        print()
+        print(f"- Smoke command: `{item['smoke_command']}`")
+        print(f"- Evidence template: `{item['evidence_template']}`")
+        print(f"- Evidence target: `{item['evidence_target']}`")
+        print(f"- Required metadata: {item['required_metadata']}")
+        if item.get("required_check_fields"):
+            print("- Required smoke results:")
+            for check in item["required_check_fields"]:
+                print(f"  - {check}: pass/success")
+        print()
 
-def summarize(entries: list[StatusEntry], expected_candidate_id: str | None = None) -> dict:
+
+def summarize(
+    entries: list[StatusEntry],
+    expected_candidate_id: str | None = None,
+    *,
+    source: dict | None = None,
+) -> dict:
     normalized_expected_candidate_id = normalized_candidate_identifier(expected_candidate_id or "")
+    accepted_candidate_ids = equivalent_candidate_identifiers(normalized_expected_candidate_id)
     provider_paths = sorted(entry.path for entry in entries if is_provider_change(entry.path))
     provider_scopes = sorted(
         {
@@ -963,7 +1297,10 @@ def summarize(entries: list[StatusEntry], expected_candidate_id: str | None = No
     )
     reverse_proxy_paths = sorted(entry.path for entry in entries if is_reverse_proxy_change(entry.path))
     evidence = evidence_files()
-    rejections = {path: evidence_rejection(path, normalized_expected_candidate_id) for path in evidence}
+    rejections = {
+        path: evidence_rejection(path, normalized_expected_candidate_id, accepted_candidate_ids)
+        for path in evidence
+    }
     rejected_evidence = [rejection for rejection in rejections.values() if rejection]
     provider_evidence = [
         path for path in evidence if has_provider_live_outcome(path) and not rejections[path]
@@ -977,6 +1314,10 @@ def summarize(entries: list[StatusEntry], expected_candidate_id: str | None = No
     ]
     reverse_proxy_evidence = [
         path for path in evidence if has_reverse_proxy_pass(path) and not rejections[path]
+    ]
+    backup_portable_paths = sorted(entry.path for entry in entries if is_backup_portable_change(entry.path))
+    backup_portable_evidence = [
+        path for path in evidence if has_backup_portable_pass(path) and not rejections[path]
     ]
 
     requirements = [
@@ -1004,6 +1345,18 @@ def summarize(entries: list[StatusEntry], expected_candidate_id: str | None = No
             "guidance": "Run scripts/deploy_smoke.sh with DEPLOY_SMOKE_EVIDENCE_FILE and keep the generated evidence file.",
             **reverse_proxy_remediation_fields(normalized_expected_candidate_id),
         },
+        {
+            "name": "backup-portable-smoke",
+            "required": bool(backup_portable_paths),
+            "satisfied": bool(backup_portable_evidence) if backup_portable_paths else True,
+            "trigger_paths": backup_portable_paths,
+            "evidence_files": [str(path.relative_to(ROOT)) for path in backup_portable_evidence],
+            "evidence_by_provider_scope": {},
+            "missing_provider_scopes": [],
+            "provider_scopes": [],
+            "guidance": "Run the portable backup/restore smoke scripts and keep one sanitized staged-restore evidence file.",
+            **backup_portable_remediation_fields(normalized_expected_candidate_id),
+        },
     ]
 
     return {
@@ -1012,7 +1365,12 @@ def summarize(entries: list[StatusEntry], expected_candidate_id: str | None = No
         "requirements": requirements,
         "evidence_files": [str(path.relative_to(ROOT)) for path in evidence],
         "rejected_evidence_files": rejected_evidence,
-        "final_gate_commands": final_gate_commands(normalized_expected_candidate_id),
+        "final_gate_commands": final_gate_commands(
+            normalized_expected_candidate_id,
+            source.get("base", "") if source else "",
+            source.get("head", "HEAD") if source else "HEAD",
+        ),
+        "source": source or {"mode": "git-status"},
     }
 
 
@@ -1022,6 +1380,11 @@ def print_markdown(summary: dict) -> None:
     print(f"- Status: `{'ready' if summary['ready'] else 'blocked'}`")
     if summary.get("candidate_id"):
         print(f"- Expected candidate: `{summary['candidate_id']}`")
+    source = summary.get("source") or {"mode": "git-status"}
+    if source.get("mode") == "git-diff":
+        print(f"- Change source: `git diff --name-status --find-renames {source['base']} {source['head']}`")
+    else:
+        print("- Change source: `git status --porcelain=v1`")
     print()
     if summary.get("rejected_evidence_files"):
         print("## Rejected Evidence Findings")
@@ -1114,6 +1477,15 @@ def print_checklist(summary: dict) -> None:
             print(f"  - Evidence target: `{item['evidence_target']}`")
             print(f"  - Required metadata: {item['required_metadata']}")
             print_reverse_proxy_status_expectations(item, indent="  ")
+        if item["name"] == "backup-portable-smoke" and required:
+            print(f"  - Smoke command: `{item['smoke_command']}`")
+            print(f"  - Evidence template: `{item['evidence_template']}`")
+            print(f"  - Evidence target: `{item['evidence_target']}`")
+            print(f"  - Required metadata: {item['required_metadata']}")
+            if item.get("required_check_fields"):
+                print("  - Required smoke results:")
+                for check in item["required_check_fields"]:
+                    print(f"    - {check}: pass/success")
         if item["evidence_files"]:
             print("  - Detected evidence:")
             for path in item["evidence_files"]:
@@ -1143,6 +1515,16 @@ def parse_args() -> argparse.Namespace:
         help="Output format.",
     )
     parser.add_argument(
+        "--base",
+        default="",
+        help="Use git diff --name-status between this base ref and --head instead of dirty git status.",
+    )
+    parser.add_argument(
+        "--head",
+        default="HEAD",
+        help="Head ref for --base diff mode. Defaults to HEAD.",
+    )
+    parser.add_argument(
         "--untracked-files",
         choices=("normal", "all"),
         default="normal",
@@ -1168,6 +1550,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.head != "HEAD" and not args.base:
+        print("[release-evidence] --head requires --base.", file=sys.stderr)
+        return 2
     candidate_id = normalized_candidate_identifier(args.candidate_id)
     if args.require_candidate_id and not candidate_id:
         print(
@@ -1178,7 +1563,14 @@ def main() -> int:
     if candidate_id and is_placeholder_value(candidate_id):
         print("[release-evidence] --candidate-id must be a concrete tag or commit SHA.", file=sys.stderr)
         return 2
-    summary = summarize(run_git_status(args.untracked_files), candidate_id)
+    if args.base:
+        summary = summarize(
+            run_git_diff(args.base, args.head),
+            candidate_id,
+            source={"mode": "git-diff", "base": args.base, "head": args.head},
+        )
+    else:
+        summary = summarize(run_git_status(args.untracked_files), candidate_id)
     if args.format == "json":
         print(json.dumps(summary, indent=2, sort_keys=True))
     elif args.format == "checklist":

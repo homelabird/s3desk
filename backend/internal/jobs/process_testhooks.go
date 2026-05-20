@@ -8,8 +8,9 @@ import (
 )
 
 type TestRunRcloneAttemptOptions struct {
-	TrackProgress bool
-	DryRun        bool
+	TrackProgress  bool
+	DryRun         bool
+	ExtraFileCount int
 }
 
 type processTestHooks struct {

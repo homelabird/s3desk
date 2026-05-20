@@ -24,9 +24,13 @@ log() {
 }
 
 sanitize_name() {
-  local name="$1"
-  name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"
-  printf '%s' "${name:0:63}"
+	local name="$1"
+	name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//')"
+	printf '%s' "${name:0:63}"
+}
+
+json_escape() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g'
 }
 
 default_ns="s3desk-ci-${CI_PIPELINE_ID:-local}-${CI_JOB_ID:-$(date +%s)}"
@@ -156,12 +160,21 @@ setup_pull_secret() {
     return
   fi
   IMAGE_PULL_SECRET="${IMAGE_PULL_SECRET_NAME:-harbor-registry}"
-  kubectl -n "${NAMESPACE}" create secret docker-registry "${IMAGE_PULL_SECRET}" \
-    --docker-server="${registry_host}" \
-    --docker-username="${HARBOR_USERNAME}" \
-    --docker-password="${HARBOR_PASSWORD}" \
-    --docker-email="${HARBOR_EMAIL:-ci@example.com}" \
+  local auth dockerconfig registry_json username_json password_json email_json auth_json
+  auth="$(printf '%s' "${HARBOR_USERNAME}:${HARBOR_PASSWORD}" | base64 | tr -d '\n')"
+  dockerconfig="$(mktemp)"
+  registry_json="$(json_escape "${registry_host}")"
+  username_json="$(json_escape "${HARBOR_USERNAME}")"
+  password_json="$(json_escape "${HARBOR_PASSWORD}")"
+  email_json="$(json_escape "${HARBOR_EMAIL:-ci@example.com}")"
+  auth_json="$(json_escape "${auth}")"
+  printf '{"auths":{"%s":{"username":"%s","password":"%s","email":"%s","auth":"%s"}}}\n' \
+    "${registry_json}" "${username_json}" "${password_json}" "${email_json}" "${auth_json}" >"${dockerconfig}"
+  kubectl -n "${NAMESPACE}" create secret generic "${IMAGE_PULL_SECRET}" \
+    --type=kubernetes.io/dockerconfigjson \
+    --from-file=.dockerconfigjson="${dockerconfig}" \
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  rm -f "${dockerconfig}"
 }
 
 wait_rollout() {

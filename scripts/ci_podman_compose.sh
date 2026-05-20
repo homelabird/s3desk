@@ -3,6 +3,7 @@ set -euo pipefail
 
 COMPOSE_POD_NAME="${COMPOSE_POD_NAME:-s3desk-ci}"
 COMPOSE_NETWORK="${COMPOSE_NETWORK:-slirp4netns}"
+PODMAN_COMPOSE_VERSION="${PODMAN_COMPOSE_VERSION:-1.5.0}"
 XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/tmp}"
 
 mkdir -p "${XDG_CONFIG_HOME}/containers"
@@ -42,7 +43,7 @@ if ! command -v podman-compose >/dev/null 2>&1; then
     apt-get update
     apt-get install -y --no-install-recommends python3 python3-pip
   fi
-  python3 -m pip install --no-cache-dir podman-compose
+  python3 -m pip install --no-cache-dir "podman-compose==${PODMAN_COMPOSE_VERSION}"
 fi
 
 COMPOSE_CMD="podman-compose"

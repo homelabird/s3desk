@@ -70,7 +70,7 @@ export function ObjectsObjectRow({
 		styles.listGridBase,
 		listGridClassName,
 	)
-	const favoriteLabel = isFavorite ? 'Remove favorite' : 'Add favorite'
+	const favoriteLabel = isFavorite ? `Remove favorite for ${displayName}` : `Add favorite for ${displayName}`
 
 	return (
 		<div
@@ -108,7 +108,7 @@ export function ObjectsObjectRow({
 							aria-label={favoriteLabel}
 							title={favoriteLabel}
 						/>
-						<button type="button" className={styles.listRowBodyButton} aria-label={`Select row for ${displayName}`}>
+						<button type="button" className={styles.listRowBodyButton} aria-label={`Select object ${displayName}`} aria-pressed={isSelected}>
 							{thumbnail ? <span className={styles.listRowThumbnailWrap}>{thumbnail}</span> : null}
 							<Typography.Text className={styles.listRowTextEllipsis} title={objectKey}>
 								{highlightText(displayName)}
@@ -141,7 +141,7 @@ export function ObjectsObjectRow({
 							menu,
 							buttonMenuOpen,
 							onButtonMenuOpenChange,
-							'Object actions',
+							`Object actions for ${displayName}`,
 							isCompact ? styles.listRowIconButton : undefined,
 						)}
 					</div>

@@ -2,6 +2,20 @@
 
 This backlog tracks the next UI/UX passes for S3Desk after the recent storage, governance, and backup feature work.
 
+## Current Status
+
+The original five backlog themes below are no longer the active queue. They were implemented or superseded by
+[FRONTEND_UX_SERVICE_AUDIT_PROMPTS_2026-05-21.md](FRONTEND_UX_SERVICE_AUDIT_PROMPTS_2026-05-21.md):
+
+- Objects media state polish: completed by Prompt 2.
+- Settings information architecture: completed by Prompt 3.
+- Profile setup progressive disclosure: completed by Prompt 4.
+- Upload fallback visibility: completed by Prompt 5.
+- Bucket policy and governance simplification: completed by Prompt 6.
+- Common visual-system consistency, Jobs signal hierarchy, and Auth/Light setup consolidation were added and completed as Prompts 1, 7, and 8.
+
+Use the mobile checklist documents under `frontend/docs/*_MOBILE_RESPONSIVE_CHECKLIST.md` and the audit prompt progress log as the current frontend UX follow-up source.
+
 ## Priority 0
 
 ### 1. Objects media state polish
@@ -85,7 +99,7 @@ Execution checklist:
 - [ ] Keep raw or advanced editors collapsed by default
 - [ ] Separate “safe defaults” from “dangerous mutations”
 
-## Current sequence
+## Completed sequence
 
 1. Objects media state polish
 2. Settings information architecture

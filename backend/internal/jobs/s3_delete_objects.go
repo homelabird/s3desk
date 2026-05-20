@@ -13,6 +13,7 @@ import (
 
 	"s3desk/internal/logging"
 	"s3desk/internal/models"
+	"s3desk/internal/redact"
 	"s3desk/internal/ws"
 )
 
@@ -127,6 +128,7 @@ func (m *Manager) runS3DeleteObjects(ctx context.Context, profileID, jobID strin
 }
 
 func (m *Manager) writeJobLog(w io.Writer, jobID, level, message string) {
+	message = redact.Diagnostic(message)
 	_, _ = w.Write([]byte("[" + level + "] " + message + "\n"))
 	m.hub.Publish(ws.Event{
 		Type:  "job.log",
@@ -143,6 +145,7 @@ func (m *Manager) emitJobLogStdout(jobID, level, message string) {
 	if !m.logEmitStdout {
 		return
 	}
+	message = redact.Diagnostic(message)
 	logging.WriteJSONLineStdout(map[string]any{
 		"ts":        time.Now().UTC().Format(time.RFC3339Nano),
 		"event":     "job.log",

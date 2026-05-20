@@ -312,6 +312,15 @@ describe("BucketGovernanceModal", () => {
     expect(
       await screen.findByText("Controls: demo-bucket"),
     ).toBeInTheDocument();
+    const decisionHeader = await screen.findByTestId(
+      "bucket-governance-decision-header",
+    );
+    expect(
+      within(decisionHeader).getByText("Recommended: Typed controls"),
+    ).toBeInTheDocument();
+    expect(
+      within(decisionHeader).getByText("Advanced: Raw policy"),
+    ).toBeInTheDocument();
     const publicExposureSection = await screen.findByTestId(
       "bucket-governance-public-exposure",
     );

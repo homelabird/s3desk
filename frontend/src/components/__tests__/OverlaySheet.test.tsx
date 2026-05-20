@@ -60,6 +60,7 @@ describe('OverlaySheet', () => {
 				title="Filters"
 				placement="right"
 				width={width}
+				sheetId="filters-sheet-panel"
 				dataTestId="filters-sheet"
 				extra={<button type="button">Reset</button>}
 				footer={<button type="button">Apply</button>}
@@ -72,6 +73,7 @@ describe('OverlaySheet', () => {
 
 		const sheet = screen.getByTestId('filters-sheet')
 		expect(sheet).toHaveAttribute('role', 'dialog')
+		expect(sheet).toHaveAttribute('id', 'filters-sheet-panel')
 		expect(sheet).toHaveClass('custom-panel')
 		expect(sheet.style.width).toBe(`${width}px`)
 		expect(within(sheet).getByText('Filters')).toBeInTheDocument()
@@ -96,5 +98,28 @@ describe('OverlaySheet', () => {
 		expect(sheet.style.height).toBe(height)
 		expect(within(sheet).getByText('Queue')).toBeInTheDocument()
 		expect(within(sheet).getByText('Bottom sheet')).toBeInTheDocument()
+	})
+
+	it('keeps busy sheets open when close gestures are disabled', async () => {
+		function Example() {
+			const [sheetOpen, setSheetOpen] = useState(true)
+
+			return (
+				<OverlaySheet open={sheetOpen} onClose={() => setSheetOpen(false)} closeDisabled title="Busy upload" placement="bottom">
+					<button type="button">Choose files</button>
+				</OverlaySheet>
+			)
+		}
+
+		render(<Example />)
+
+		expect(screen.getByText('Busy upload')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Close disabled while busy' })).toBeDisabled()
+
+		fireEvent.keyDown(document, { key: 'Escape', bubbles: true, cancelable: true })
+		expect(screen.getByText('Busy upload')).toBeInTheDocument()
+
+		fireEvent.mouseDown(screen.getByRole('dialog').parentElement as HTMLElement)
+		expect(screen.getByText('Busy upload')).toBeInTheDocument()
 	})
 })

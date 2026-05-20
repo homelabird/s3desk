@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -122,6 +124,45 @@ func TestHandleCommitUploadRejectsOversizedJSONBody(t *testing.T) {
 	}
 	if got := resp.Error.Details["maxBytes"]; got != float64(uploadCommitJSONRequestBodyMaxBytes) {
 		t.Fatalf("details.maxBytes=%v, want %d", got, uploadCommitJSONRequestBodyMaxBytes)
+	}
+}
+
+func TestHandleCommitUploadRejectsPendingStagingChunks(t *testing.T) {
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	upload := createUploadSessionForMode(t, srv, profile.ID, "staging")
+
+	us, ok, err := st.GetUploadSession(context.Background(), profile.ID, upload.UploadID)
+	if err != nil {
+		t.Fatalf("get upload session: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected upload session")
+	}
+
+	chunkPath := filepath.Join(us.StagingDir, ".chunks", "nested", "file.bin", chunkPartName(0))
+	if err := os.MkdirAll(filepath.Dir(chunkPath), 0o700); err != nil {
+		t.Fatalf("mkdir chunk dir: %v", err)
+	}
+	if err := os.WriteFile(chunkPath, []byte("partial"), 0o600); err != nil {
+		t.Fatalf("write chunk: %v", err)
+	}
+
+	res := doJSONRequestWithProfile(t, srv, http.MethodPost, "/api/v1/uploads/"+upload.UploadID+"/commit", profile.ID, map[string]any{
+		"totalFiles": 1,
+		"items": []map[string]any{
+			{"path": "nested/file.bin", "size": int64(12)},
+		},
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected status 400, got %d: %s", res.StatusCode, string(raw))
+	}
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Message != "upload has incomplete staged chunks" {
+		t.Fatalf("error.message=%q, want upload has incomplete staged chunks", resp.Error.Message)
 	}
 }
 

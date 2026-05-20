@@ -86,8 +86,9 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 				) : !props.hasBucket ? (
 					<Empty description="Select a bucket to start browsing objects (use the dropdown above)." />
 				) : props.isFetching ? (
-					<div className={listStyles.listEmptyLoading}>
+					<div className={listStyles.listEmptyLoading} role="status" aria-live="polite" aria-label="Loading objects">
 						<Spin />
+						<span className="sr-only">Loading objects...</span>
 					</div>
 				) : (
 					<Empty
@@ -123,14 +124,22 @@ export function ObjectsListContent(props: ObjectsListContentProps) {
 			<div
 				className={gridStyles.gridContent}
 				data-testid="objects-grid-content"
+				role="list"
+				aria-label="Objects card list"
 			>
 				{renderedGridItems}
 				{props.isFetchingNextPage ? (
 					<div className={gridStyles.gridFooter}>
-						<Spin />
+						<div className={gridStyles.gridFooterCell}>
+							<Spin />
+						</div>
 					</div>
 				) : loadMoreButton ? (
-					<div className={gridStyles.gridFooter}>{loadMoreButton}</div>
+					<div className={gridStyles.gridFooter}>
+						<div className={gridStyles.gridFooterCell}>
+							{loadMoreButton}
+						</div>
+					</div>
 				) : null}
 			</div>
 		)

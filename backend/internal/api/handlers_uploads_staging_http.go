@@ -36,7 +36,7 @@ func newUploadStagingHTTPService(s *server) uploadStagingHTTPService {
 }
 
 func (svc uploadStagingHTTPService) prepareChunk(profileID, uploadID, stagingDir string, bytesTracked int64, r *http.Request, chunkIndexRaw string) uploadStagingChunkPreparedRequest {
-	chunkValues, uploadErr := parseUploadChunkHeadersWithoutSizes(r.Header, chunkIndexRaw, false)
+	chunkValues, uploadErr := parseUploadChunkHeadersWithoutSizes(r.Header, chunkIndexRaw, true)
 	if uploadErr != nil {
 		return uploadStagingChunkPreparedRequest{err: uploadErr}
 	}

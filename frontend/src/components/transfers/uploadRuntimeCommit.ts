@@ -42,6 +42,7 @@ export async function commitUploadAndTrackJob(args: CommitUploadAndTrackJobArgs)
 		loadedBytes: 0,
 		speedBps: 0,
 		etaSeconds: 0,
+		retryFileHandleState: undefined,
 	}))
 
 	if (response.jobId) {

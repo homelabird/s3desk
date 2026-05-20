@@ -1,4 +1,4 @@
-import { Button, Tooltip } from "antd";
+import { Button, Tooltip, Typography } from "antd";
 
 import { confirmDangerAction } from "../../lib/confirmDangerAction";
 import styles from "./BucketPolicyModal.module.css";
@@ -20,32 +20,35 @@ export function BucketPolicyFooterActions(props: {
 }) {
   return (
     <div className={styles.footerActions}>
-      <Tooltip title={props.deleteDisabledReason || null}>
-        <span>
-          <Button
-            danger
-            disabled={!props.canDelete || props.isBusy}
-            loading={props.deleteLoading}
-            onClick={() => {
-              if (props.isBusy) return;
-              confirmDangerAction({
-                title:
-                  props.policyKind === "azure"
-                    ? "Reset container access policy?"
-                    : "Delete bucket policy?",
-                description: props.deleteHelp,
-                confirmText: "delete",
-                confirmHint: 'Type "delete" to confirm',
-                onConfirm: async () => {
-                  await props.onDelete();
-                },
-              });
-            }}
-          >
-            {props.deleteLabel}
-          </Button>
-        </span>
-      </Tooltip>
+      <div className={styles.footerDangerZone}>
+        <Typography.Text type="secondary">Danger zone</Typography.Text>
+        <Tooltip title={props.deleteDisabledReason || null}>
+          <span>
+            <Button
+              danger
+              disabled={!props.canDelete || props.isBusy}
+              loading={props.deleteLoading}
+              onClick={() => {
+                if (props.isBusy) return;
+                confirmDangerAction({
+                  title:
+                    props.policyKind === "azure"
+                      ? "Reset container access policy?"
+                      : "Delete bucket policy?",
+                  description: props.deleteHelp,
+                  confirmText: "delete",
+                  confirmHint: 'Type "delete" to confirm',
+                  onConfirm: async () => {
+                    await props.onDelete();
+                  },
+                });
+              }}
+            >
+              {props.deleteLabel}
+            </Button>
+          </span>
+        </Tooltip>
+      </div>
 
       <div className={styles.footerPrimaryActions}>
         <Button onClick={props.onCancel} disabled={props.isBusy}>

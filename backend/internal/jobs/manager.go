@@ -50,6 +50,7 @@ type Config struct {
 	JobRetention     time.Duration
 	JobLogRetention  time.Duration
 	AllowedLocalDirs []string
+	AllowRemote      bool
 	UploadSessionTTL time.Duration
 }
 
@@ -75,6 +76,7 @@ type Manager struct {
 	uploadTTL time.Duration
 
 	allowedLocalDirs []string
+	allowRemote      bool
 	logLineMaxBytes  int
 
 	rcloneTuneEnabled         bool
@@ -127,6 +129,7 @@ func NewManager(cfg Config) *Manager {
 		cancels:                    make(map[string]context.CancelFunc),
 		uploadTTL:                  cfg.UploadSessionTTL,
 		allowedLocalDirs:           wiring.allowedLocalDirs,
+		allowRemote:                cfg.AllowRemote,
 		logLineMaxBytes:            wiring.logLineMaxBytes,
 		rcloneTuneEnabled:          wiring.rcloneTuneEnabled,
 		rcloneMaxTransfers:         wiring.rcloneMaxTransfers,

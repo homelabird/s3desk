@@ -123,10 +123,29 @@ export function useTransfersTaskActions({
 	])
 
 	const clearAllTransfers = useCallback(() => {
-		abortAllTransfers()
+		for (const abort of Object.values(downloadAbortByTaskIdRef.current)) abort()
+		downloadAbortByTaskIdRef.current = {}
+		downloadEstimatorByTaskIdRef.current = {}
 		setDownloadTasks([])
-		setUploadTasks([])
-	}, [abortAllTransfers, setDownloadTasks, setUploadTasks])
+		setUploadTasks((prev) => {
+			for (const task of prev) {
+				if (task.status === 'commit') continue
+				uploadAbortByTaskIdRef.current[task.id]?.()
+				delete uploadAbortByTaskIdRef.current[task.id]
+				delete uploadEstimatorByTaskIdRef.current[task.id]
+				delete uploadItemsByTaskIdRef.current[task.id]
+			}
+			return prev.filter((task) => task.status === 'commit')
+		})
+	}, [
+		downloadAbortByTaskIdRef,
+		downloadEstimatorByTaskIdRef,
+		setDownloadTasks,
+		setUploadTasks,
+		uploadAbortByTaskIdRef,
+		uploadEstimatorByTaskIdRef,
+		uploadItemsByTaskIdRef,
+	])
 
 	return {
 		updateDownloadTask,

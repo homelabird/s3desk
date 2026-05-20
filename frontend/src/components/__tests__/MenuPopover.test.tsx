@@ -311,11 +311,14 @@ describe('MenuPopover', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'More' }))
 
 		const submenuTrigger = await screen.findByRole('menuitem', { name: /More actions/i })
+		expect(submenuTrigger).toHaveAttribute('aria-haspopup', 'menu')
 		expect(submenuTrigger).toHaveAttribute('aria-expanded', 'false')
+		expect(screen.getAllByRole('menu')).toHaveLength(1)
 		expect(screen.queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument()
 
 		fireEvent.click(submenuTrigger)
 		expect(submenuTrigger).toHaveAttribute('aria-expanded', 'true')
+		expect(screen.getAllByRole('menu')).toHaveLength(2)
 		expect(await screen.findByRole('menuitem', { name: 'Archive' })).toBeInTheDocument()
 		expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument()
 

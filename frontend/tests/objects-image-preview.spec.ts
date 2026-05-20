@@ -194,7 +194,7 @@ test.describe('Objects image preview', () => {
 		await expect(heroRow).toBeVisible()
 		await heroRow.click()
 
-		await heroRow.getByRole('button', { name: 'Object actions', exact: true }).evaluate((element) => {
+		await heroRow.getByRole('button', { name: /Object actions/ }).evaluate((element) => {
 			;(element as HTMLElement).click()
 		})
 		await page.getByRole('menuitem', { name: /Open large preview/i }).click()
@@ -252,7 +252,7 @@ test.describe('Objects image preview', () => {
 
 		const heroRow = rowFor(page, 'hero.png')
 		await expect(heroRow).toBeVisible()
-		await heroRow.getByRole('button', { name: 'Object actions', exact: true }).evaluate((element) => {
+		await heroRow.getByRole('button', { name: /Object actions/ }).evaluate((element) => {
 			;(element as HTMLElement).click()
 		})
 		await page.getByRole('menuitem', { name: /Open large preview/i }).click()
@@ -273,8 +273,8 @@ test.describe('Objects image preview', () => {
 
 		const modal = page.getByTestId('objects-image-viewer-modal')
 		await expect(modal).toBeVisible()
-		await expect(modal.getByText('Large preview unavailable')).toBeVisible()
-		await expect(modal.getByText('Fallback thumbnail')).toBeVisible()
+		await expect(modal.getByText('Preview too large')).toBeVisible()
+		await expect(modal.getByText('Fallback thumbnail shown')).toBeVisible()
 		await expect(modal.getByRole('button', { name: 'Download' })).toBeVisible()
 		await expect(modal.getByText('Use Download or URL to view the original file.')).toBeVisible()
 		await expect(modal.getByTestId('objects-image-viewer-zoom-in')).toHaveCount(0)
@@ -297,13 +297,13 @@ test.describe('Objects image preview', () => {
 		const videoRow = rowFor(page, 'clip.mp4')
 		await expect(videoRow).toBeVisible()
 		await videoRow.click()
-		await videoRow.getByRole('button', { name: 'Object actions', exact: true }).evaluate((element) => {
+		await videoRow.getByRole('button', { name: /Object actions/ }).evaluate((element) => {
 			;(element as HTMLElement).click()
 		})
 		await page.getByRole('menuitem', { name: 'Details' }).click()
 
 		await expect(page.getByTestId('objects-details-thumbnail-open-large')).toHaveCount(0)
-		await expect(page.getByText('Load to fetch a larger thumbnail frame for this video.')).toBeVisible()
+		await expect(page.getByText('Use Load preview to fetch a larger thumbnail frame.')).toBeVisible()
 
 		await page.getByTestId('objects-details-preview-load').click()
 

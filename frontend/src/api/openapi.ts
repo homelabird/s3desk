@@ -234,10 +234,15 @@ export interface paths {
          *     backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
          *     cache state such as thumbnails. Use `scope=portable` to export a logical
          *     database-neutral migration bundle for portable import flows. Use
-         *     `confidentiality=encrypted` to encrypt the payload with the current
-         *     `ENCRYPTION_KEY` while keeping the outer bundle metadata clear. Snapshot-style
-         *     export currently supports sqlite-backed servers only, while portable export
-         *     supports sqlite and postgres source deployments.
+         *     `confidentiality=encrypted` to encrypt the payload with
+         *     a non-empty `X-S3Desk-Backup-Password` when supplied, otherwise with the
+         *     current `ENCRYPTION_KEY`, while keeping the outer bundle metadata clear.
+         *     Restore/import endpoints do not read the export header; supply password-protected
+         *     bundles through their multipart `password` field or matching UI input. During
+         *     restore/import, a non-empty multipart password is used before destination
+         *     server `ENCRYPTION_KEY` fallback. Snapshot-style export currently supports
+         *     sqlite-backed servers only, while portable export supports sqlite and postgres
+         *     source deployments.
          */
         get: {
             parameters: {
@@ -246,12 +251,14 @@ export interface paths {
                     scope?: "full" | "cache_metadata" | "portable";
                     /** @description When `scope=portable`, includes thumbnail cache assets in the bundle. */
                     includeThumbnails?: boolean;
-                    /** @description Encrypts the bundle payload with the current ENCRYPTION_KEY while leaving the outer tar.gz manifest readable. */
+                    /** @description Encrypts the bundle payload with a non-empty `X-S3Desk-Backup-Password` when supplied, otherwise with the current `ENCRYPTION_KEY`, while leaving the outer tar.gz manifest readable. */
                     confidentiality?: "clear" | "encrypted";
                 };
                 header?: {
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */
                     "X-Api-Token"?: components["parameters"]["XApiToken"];
+                    /** @description Optional operator-supplied export password used when `confidentiality=encrypted`. Restore/import endpoints do not read this header; provide the same value in their multipart `password` field when processing password-protected bundles. */
+                    "X-S3Desk-Backup-Password"?: string;
                 };
                 path?: never;
                 cookie?: never;
@@ -269,6 +276,7 @@ export interface paths {
                         "application/gzip": string;
                     };
                 };
+                400: components["responses"]["ErrorResponse"];
                 401: components["responses"]["ErrorResponse"];
                 403: components["responses"]["ErrorResponse"];
                 409: components["responses"]["ErrorResponse"];
@@ -314,7 +322,7 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         bundle: string;
-                        /** @description Optional bundle password used when the backup payload was exported with operator-supplied password protection. */
+                        /** @description Optional multipart password field used when the backup payload was exported with operator-supplied password protection; omit it only when restoring an encrypted bundle with the destination server encryption key. */
                         password?: string;
                     };
                 };
@@ -371,7 +379,7 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         bundle: string;
-                        /** @description Optional bundle password used when the portable payload was exported with operator-supplied password protection. */
+                        /** @description Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key. */
                         password?: string;
                     };
                 };
@@ -428,7 +436,7 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         bundle: string;
-                        /** @description Optional bundle password used when the portable payload was exported with operator-supplied password protection. */
+                        /** @description Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key. */
                         password?: string;
                     };
                 };
@@ -797,6 +805,8 @@ export interface paths {
                 query?: {
                     /** @description When true, send Content-Disposition for file download. */
                     download?: boolean;
+                    /** @description When true, include provider secrets and TLS private material in the YAML export. Defaults to false. */
+                    includeSecrets?: boolean;
                 };
                 header?: {
                     /** @description Optional local API token to mitigate localhost/CSRF style attacks. */

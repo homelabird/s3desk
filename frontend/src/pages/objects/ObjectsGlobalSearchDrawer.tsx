@@ -18,6 +18,7 @@ type ObjectsGlobalSearchDrawerProps = {
 	bucket: string
 	currentPrefix: string
 	isMd: boolean
+	useWideResults: boolean
 	queryDraft: string
 	onQueryDraftChange: (value: string) => void
 	prefixFilter: string
@@ -150,6 +151,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							isFetching={props.isFetching}
 							isFetchingNextPage={props.isFetchingNextPage}
 							isMd={props.isMd}
+							useWideResults={props.useWideResults}
 							items={props.items}
 							onCopyKey={props.onCopyKey}
 							onDownloadKey={props.onDownloadKey}

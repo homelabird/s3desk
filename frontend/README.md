@@ -42,7 +42,7 @@ This repo includes `frontend/vercel.json` to ensure React Router deep links (for
 
 When the frontend runs on a different origin (Vercel), the backend must allow:
 - Cross-origin requests for the frontend origin (configure backend `ALLOWED_HOSTS` to include the frontend hostname).
-- Request headers used by the UI: `X-Api-Token`, `X-Profile-Id`.
+- Request headers used by the UI: `X-Api-Token`, `X-Profile-Id`, and `X-S3Desk-Backup-Password` for password-protected backup export.
 - Browser access to `/api/v1/ws` (WebSocket) and `/api/v1/events` (SSE fallback).
 
 ## UI Feedback Rules

@@ -81,9 +81,9 @@ export function ProfilesTable(props: ProfilesTableProps) {
 	return (
 		<div className={styles.tableWrap}>
 			{useCompactList ? (
-				<div className={styles.mobileList} data-testid="profiles-list-compact">
+				<div className={styles.mobileList} data-testid="profiles-list-compact" role="list" aria-label="Profiles">
 					{props.rows.map((row) => (
-						<article key={row.profile.id} className={styles.mobileCard}>
+						<article key={row.profile.id} className={styles.mobileCard} role="listitem">
 							<div className={styles.mobileCardTop}>
 								<div className={styles.mobileCardCopy}>
 									<div className={styles.mobileTitleRow}>
@@ -131,8 +131,14 @@ export function ProfilesTable(props: ProfilesTableProps) {
 									{row.isActive ? 'Selected' : 'Use profile'}
 								</Button>
 								<MenuPopover menu={buildRowMenu(row)} align="end" scopeKey={props.scopeKey}>
-									{({ toggle }) => (
-										<Button icon={<MoreOutlined />} aria-label={`More actions for ${row.profile.name}`} onClick={toggle}>
+									{({ toggle, open }) => (
+										<Button
+											icon={<MoreOutlined />}
+											aria-label={`More actions for ${row.profile.name}`}
+											aria-haspopup="menu"
+											aria-expanded={open}
+											onClick={toggle}
+										>
 											More
 										</Button>
 									)}
@@ -195,11 +201,13 @@ export function ProfilesTable(props: ProfilesTableProps) {
 												{row.isActive ? 'Selected' : 'Use'}
 											</Button>
 											<MenuPopover menu={buildRowMenu(row)} align="end" scopeKey={props.scopeKey}>
-												{({ toggle }) => (
+												{({ toggle, open }) => (
 													<Button
 														size="small"
 														icon={<MoreOutlined />}
 														aria-label={`More actions for ${row.profile.name}`}
+														aria-haspopup="menu"
+														aria-expanded={open}
 														onClick={toggle}
 													>
 														More

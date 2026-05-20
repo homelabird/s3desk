@@ -54,7 +54,10 @@ func (svc objectIndexSummaryHTTPService) prepareGetObjectIndexSummary(r *http.Re
 	}
 
 	prefix := strings.TrimSpace(r.URL.Query().Get("prefix"))
-	sampleLimit, _ := parseIntQueryClamped(r, "sampleLimit", 10, 0, 100)
+	sampleLimit, err := parseIntQueryClamped(r, "sampleLimit", 10, 0, 100)
+	if err != nil {
+		return "", "", "", 0, newObjectIndexSummaryHTTPError(http.StatusBadRequest, "invalid_request", "sampleLimit is invalid", map[string]any{"sampleLimit": r.URL.Query().Get("sampleLimit")})
+	}
 	return profileID, bucket, prefix, sampleLimit, nil
 }
 

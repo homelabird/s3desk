@@ -35,13 +35,18 @@ export function UploadSourceSheet(props: Props) {
 			placement={screens.md ? 'right' : 'bottom'}
 			width={screens.md ? 420 : undefined}
 			height={!screens.md ? 'auto' : undefined}
+			closeDisabled={!!props.busy}
 		>
 			<div className={styles.stack}>
 				<div className={styles.intro}>
 					<Typography.Text type="secondary">
 						Files and folders are classified automatically. Relative paths preserve folder structure.
 					</Typography.Text>
-					{props.destinationLabel ? <Typography.Text code>{props.destinationLabel}</Typography.Text> : null}
+					{props.destinationLabel ? (
+						<Typography.Text code className={styles.destinationLabel}>
+							{props.destinationLabel}
+						</Typography.Text>
+					) : null}
 				</div>
 
 				<div className={styles.actions}>

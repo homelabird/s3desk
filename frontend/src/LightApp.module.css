@@ -10,9 +10,9 @@
 
 .brandTitle {
 	margin: 0;
-	font-size: clamp(2.25rem, 3vw, 3.25rem);
+	font-size: 3rem;
 	line-height: 1;
-	letter-spacing: -0.05em;
+	letter-spacing: 0;
 }
 
 .brandSubtitle {
@@ -35,9 +35,9 @@
 .card,
 .section {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 24px;
+	border-radius: var(--s3d-radius-sm);
 	background: var(--s3d-color-bg-elevated);
-	box-shadow: var(--s3d-shadow-sm);
+	box-shadow: none;
 }
 
 .card {
@@ -47,7 +47,7 @@
 .cardTitle {
 	font-size: 18px;
 	font-weight: 800;
-	letter-spacing: -0.02em;
+	letter-spacing: 0;
 }
 
 .bodyText {
@@ -83,51 +83,6 @@
 	color: var(--s3d-color-text-secondary);
 }
 
-.statusCard {
-	border-radius: 16px;
-	padding: 14px 16px;
-	font-size: 13px;
-	line-height: 1.5;
-}
-
-.statusWarning {
-	border: 1px solid var(--s3d-color-warning-border);
-	background: var(--s3d-color-warning-bg);
-}
-
-.statusInfo {
-	border: 1px solid var(--s3d-color-info-border);
-	background: var(--s3d-color-info-bg);
-}
-
-.statusError {
-	border: 1px solid var(--s3d-color-error-border);
-	background: var(--s3d-color-error-bg);
-}
-
-.label {
-	display: block;
-	font-weight: 700;
-	font-size: 13px;
-}
-
-.tokenInput {
-	margin-top: 8px;
-	width: 100%;
-	border: 1px solid var(--s3d-color-border-input);
-	border-radius: 14px;
-	padding: 12px 14px;
-	font-size: 14px;
-	background: var(--s3d-color-bg-input);
-	transition: border-color var(--s3d-transition-fast), box-shadow var(--s3d-transition-fast);
-}
-
-.tokenInput:focus-visible {
-	outline: none;
-	border-color: var(--s3d-color-primary);
-	box-shadow: 0 0 0 4px var(--s3d-color-focus-ring);
-}
-
 .buttonRow,
 .headerActions,
 .openButtons,
@@ -142,7 +97,7 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 999px;
+	border-radius: var(--s3d-radius-sm);
 	padding: 10px 16px;
 	font-weight: 700;
 	text-decoration: none;
@@ -165,21 +120,11 @@
 	box-shadow: 0 10px 20px var(--s3d-color-primary-shadow);
 }
 
-.buttonPrimaryDisabled {
-	background: var(--s3d-color-info-border);
-	cursor: default;
-	box-shadow: none;
-}
-
 .buttonSecondary,
 .linkButtonSecondary {
 	border-color: var(--s3d-color-border-input);
 	background: var(--s3d-color-bg-elevated);
 	color: var(--s3d-color-text-dark);
-}
-
-.buttonSecondaryDisabled {
-	cursor: default;
 }
 
 .buttonClickable {
@@ -222,18 +167,21 @@
 	align-items: center;
 	gap: 12px;
 	flex-wrap: wrap;
-	background: var(--s3d-gradient-section);
+	background: var(--s3d-color-bg-secondary);
+	min-width: 0;
 }
 
 .sectionHeading {
 	font-size: 1.125rem;
 	font-weight: 800;
-	letter-spacing: -0.02em;
+	letter-spacing: 0;
 }
 
 .sectionSubtle {
 	font-size: 13px;
 	color: var(--s3d-color-text-secondary);
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .statusLine,
@@ -254,10 +202,12 @@
 
 .profileItem {
 	border-top: 1px solid var(--s3d-color-border);
+	min-width: 0;
 }
 
 .profileButton {
 	width: 100%;
+	min-width: 0;
 	text-align: left;
 	padding: 18px 20px;
 	border: none;
@@ -271,25 +221,36 @@
 }
 
 .profileButtonSelected {
-	background: linear-gradient(135deg, var(--s3d-color-primary-light), var(--s3d-color-primary-bg));
+	background: var(--s3d-color-primary-bg);
 }
 
 .profileName {
 	font-size: 1.05rem;
 	font-weight: 800;
-	letter-spacing: -0.02em;
+	letter-spacing: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .profileSubtitle {
 	margin-top: 6px;
 	font-size: 13px;
 	color: var(--s3d-color-text-secondary);
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .profileMeta {
 	margin-top: 10px;
 	font-size: 12px;
 	color: var(--s3d-color-text-secondary);
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.profileMeta code,
+.sectionSubtle code {
+	overflow-wrap: anywhere;
 }
 
 .profileSelectedMark {
@@ -351,17 +312,24 @@
 }
 
 @media (max-width: 768px) {
+	.centerShell {
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: flex-start;
+		padding: 18px 16px 24px;
+	}
+
+	.panelSmall,
+	.loadingCard {
+		width: 100%;
+	}
+
 	.panelLarge {
 		width: 100%;
 	}
 
 	.brandTitle {
 		font-size: 2.2rem;
-	}
-
-	.card,
-	.section {
-		border-radius: 20px;
 	}
 
 	.card,

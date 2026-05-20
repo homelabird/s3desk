@@ -1,4 +1,10 @@
-{{- if .Values.istio.virtualService.enabled -}}
+{{- $virtualService := .Values.istio.virtualService -}}
+{{- if $virtualService.enabled -}}
+{{- $hosts := $virtualService.hosts | default (list) -}}
+{{- $gateways := $virtualService.gateways | default (list) -}}
+{{- if or (eq (len $hosts) 0) (eq (len $gateways) 0) -}}
+{{- fail "Missing configuration: istio.virtualService.enabled=true requires at least one host and one gateway. Set istio.virtualService.hosts and istio.virtualService.gateways." -}}
+{{- end -}}
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
@@ -7,11 +13,11 @@ metadata:
     {{- include "s3desk.labels" . | nindent 4 }}
 spec:
   hosts:
-    {{- range .Values.istio.virtualService.hosts }}
+    {{- range $hosts }}
     - {{ . | quote }}
     {{- end }}
   gateways:
-    {{- range .Values.istio.virtualService.gateways }}
+    {{- range $gateways }}
     - {{ . | quote }}
     {{- end }}
   http:
@@ -20,4 +26,7 @@ spec:
             host: {{ include "s3desk.fullname" . }}
             port:
               number: {{ .Values.service.port }}
+      {{- with $virtualService.timeout }}
+      timeout: {{ . | quote }}
+      {{- end }}
 {{- end }}

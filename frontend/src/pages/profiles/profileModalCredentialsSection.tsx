@@ -5,6 +5,7 @@ import styles from './ProfileModal.module.css'
 import {
 	countConfiguredValues,
 	getCredentialsSummary,
+	profileFieldA11y,
 	renderAdvancedFieldDisclosure,
 	type ProfileModalSectionContentArgs,
 } from './profileModalSectionShared'
@@ -22,20 +23,20 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 			{viewState.isS3Provider ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label="Access Key ID" required={!editMode} error={errors.accessKeyId}>
+						<FormField label="Access Key ID" htmlFor="profile-access-key-id" required={!editMode} error={errors.accessKeyId}>
 							<Input
+								{...profileFieldA11y('profile-access-key-id', errors.accessKeyId)}
 								value={values.accessKeyId}
 								onChange={(e) => setField('accessKeyId', e.target.value)}
 								autoComplete="username"
-								aria-label="Access Key ID"
 							/>
 						</FormField>
-						<FormField label="Secret" required={!editMode} error={errors.secretAccessKey}>
+						<FormField label="Secret" htmlFor="profile-secret-access-key" required={!editMode} error={errors.secretAccessKey}>
 							<Input.Password
+								{...profileFieldA11y('profile-secret-access-key', errors.secretAccessKey)}
 								value={values.secretAccessKey}
 								onChange={(e) => setField('secretAccessKey', e.target.value)}
 								autoComplete="new-password"
-								aria-label="Secret"
 							/>
 						</FormField>
 					</div>
@@ -47,12 +48,12 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 						children: (
 							<>
 								<div className={styles.formGrid}>
-									<FormField label="Session Token (optional)">
+									<FormField label="Session Token (optional)" htmlFor="profile-session-token">
 										<Input.Password
+											id="profile-session-token"
 											value={values.sessionToken ?? ''}
 											onChange={(e) => setField('sessionToken', e.target.value)}
 											autoComplete="off"
-											aria-label="Session Token (optional)"
 											disabled={!!editMode && !!values.clearSessionToken}
 										/>
 									</FormField>
@@ -73,12 +74,12 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 			{viewState.isAzure ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label="Account Key" required={!editMode} error={errors.azureAccountKey}>
+						<FormField label="Account Key" htmlFor="profile-azure-account-key" required={!editMode} error={errors.azureAccountKey}>
 							<Input.Password
+								{...profileFieldA11y('profile-azure-account-key', errors.azureAccountKey)}
 								value={values.azureAccountKey}
 								onChange={(e) => setField('azureAccountKey', e.target.value)}
 								autoComplete="new-password"
-								aria-label="Account Key"
 							/>
 						</FormField>
 					</div>
@@ -88,12 +89,12 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 						configuredCount: countConfiguredValues([values.azureClientSecret]),
 						children: (
 							<div className={styles.formGrid}>
-								<FormField label="Client Secret (optional)" error={errors.azureClientSecret}>
+								<FormField label="Client Secret (optional)" htmlFor="profile-azure-client-secret" error={errors.azureClientSecret}>
 									<Input.Password
+										{...profileFieldA11y('profile-azure-client-secret', errors.azureClientSecret)}
 										value={values.azureClientSecret}
 										onChange={(e) => setField('azureClientSecret', e.target.value)}
 										autoComplete="new-password"
-										aria-label="Client Secret (optional)"
 									/>
 								</FormField>
 							</div>
@@ -119,12 +120,12 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 							Anonymous mode only works when the endpoint allows unauthenticated access. Project Number is still required.
 						</Typography.Text>
 					) : (
-						<FormField label="Service Account JSON" required={!editMode} error={errors.gcpServiceAccountJson}>
+						<FormField label="Service Account JSON" htmlFor="profile-gcp-service-account-json" required={!editMode} error={errors.gcpServiceAccountJson}>
 							<Input.TextArea
+								{...profileFieldA11y('profile-gcp-service-account-json', errors.gcpServiceAccountJson)}
 								value={values.gcpServiceAccountJson}
 								onChange={(e) => setField('gcpServiceAccountJson', e.target.value)}
 								autoSize={{ minRows: 8, maxRows: 14 }}
-								aria-label="Service Account JSON"
 								placeholder={`{
   "type": "service_account_json",
   "project_id": "example-project",
@@ -146,28 +147,28 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 						configuredCount: countConfiguredValues([values.ociAuthProvider, values.ociConfigFile, values.ociConfigProfile]),
 						children: (
 							<div className={styles.formGrid}>
-								<FormField label="Auth Provider (optional)">
+								<FormField label="Auth Provider (optional)" htmlFor="profile-oci-auth-provider">
 									<Input
+										id="profile-oci-auth-provider"
 										value={values.ociAuthProvider}
 										onChange={(e) => setField('ociAuthProvider', e.target.value)}
 										placeholder="user_principal_auth / instance_principal / api_key / resource_principal"
-										aria-label="Auth Provider (optional)"
 									/>
 								</FormField>
-								<FormField label="OCI Config File (optional)">
+								<FormField label="OCI Config File (optional)" htmlFor="profile-oci-config-file">
 									<Input
+										id="profile-oci-config-file"
 										value={values.ociConfigFile}
 										onChange={(e) => setField('ociConfigFile', e.target.value)}
 										placeholder="/home/user/.oci/config"
-										aria-label="OCI Config File (optional)"
 									/>
 								</FormField>
-								<FormField label="OCI Config Profile (optional)">
+								<FormField label="OCI Config Profile (optional)" htmlFor="profile-oci-config-profile">
 									<Input
+										id="profile-oci-config-profile"
 										value={values.ociConfigProfile}
 										onChange={(e) => setField('ociConfigProfile', e.target.value)}
 										placeholder="DEFAULT"
-										aria-label="OCI Config Profile (optional)"
 									/>
 								</FormField>
 							</div>

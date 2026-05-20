@@ -1,9 +1,10 @@
-import type { PointerEvent, ReactNode } from 'react'
+import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
 import { InfoCircleOutlined } from '@ant-design/icons'
 
 import styles from './ObjectsShell.module.css'
 import { ObjectsDetailsCollapsed, ObjectsDetailsPane } from './ObjectsDetailsPane'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
+import { OBJECTS_DETAILS_DRAWER_ID } from './objectsOverlayIds'
 
 type ObjectsDetailsPanelProps = {
 	dockDetails: boolean
@@ -17,6 +18,10 @@ type ObjectsDetailsPanelProps = {
 	onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerMove: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerUp: (event: PointerEvent<HTMLDivElement>) => void
+	onResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+	resizeMinWidth: number
+	resizeMaxWidth: number
+	resizeValue: number
 }
 
 export function ObjectsDetailsPanel(props: ObjectsDetailsPanelProps) {
@@ -28,10 +33,18 @@ export function ObjectsDetailsPanel(props: ObjectsDetailsPanelProps) {
 				props.detailsOpen ? (
 					<>
 						<div
+							role="separator"
+							tabIndex={0}
+							aria-label="Resize details pane"
+							aria-orientation="vertical"
+							aria-valuemin={props.resizeMinWidth}
+							aria-valuemax={props.resizeMaxWidth}
+							aria-valuenow={props.resizeValue}
 							onPointerDown={props.onResizePointerDown}
 							onPointerMove={props.onResizePointerMove}
 							onPointerUp={props.onResizePointerUp}
 							onPointerCancel={props.onResizePointerUp}
+							onKeyDown={props.onResizeKeyDown}
 							className={`${styles.resizeHandle} ${styles.layoutDetailsHandle}`}
 						>
 							<div className={styles.resizeBar} />
@@ -56,7 +69,7 @@ export function ObjectsDetailsPanel(props: ObjectsDetailsPanelProps) {
 				onClose={props.onCloseDrawer}
 				title="Details"
 				placement="right"
-				sheetId="details"
+				sheetId={OBJECTS_DETAILS_DRAWER_ID}
 				backdropInteractive={!props.detailsDrawerSuspended}
 				width="min(100vw, 520px)"
 				dataTestId="objects-details-sheet"

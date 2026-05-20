@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,8 +14,11 @@ import (
 
 	"s3desk/internal/jobs"
 	"s3desk/internal/models"
+	"s3desk/internal/processio"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/rcloneerrors"
+	"s3desk/internal/redact"
 )
 
 type rcloneListEntry struct {
@@ -33,11 +35,20 @@ type rcloneListEntry struct {
 
 type rcloneProcess struct {
 	stdout io.ReadCloser
-	stderr *bytes.Buffer
+	stderr rcloneProcessStderr
 	wait   func() error
 }
 
+type rcloneProcessStderr interface {
+	String() string
+}
+
 const ociFolderMarkerName = ".__s3desk_folder_marker__"
+
+var (
+	rcloneCaptureStdoutMaxBytes = processio.DefaultStdoutMaxBytes
+	rcloneStderrMaxBytes        = processio.DefaultStderrMaxBytes
+)
 
 func usesVisibleFolderMarker(p models.ProfileProvider) bool {
 	switch p {
@@ -131,10 +142,16 @@ func (s *server) rcloneDownloadFlags() []string {
 }
 
 func (s *server) prepareRcloneConfig(profile models.ProfileSecrets, hint string) (path string, cleanup func(), err error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+		return "", nil, err
+	}
 	return rcloneconfig.WriteTempConfig(s.cfg.DataDir, "api", hint, profile)
 }
 
 func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (*rcloneProcess, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+		return nil, err
+	}
 	hooks := currentAPIProcessTestHooks()
 	if hooks.startRclone != nil {
 		return hooks.startRclone(s, ctx, profile, args, hint)
@@ -185,10 +202,10 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 		return nil, err
 	}
 
-	var stderrBuf bytes.Buffer
+	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
 	stderrDone := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(&stderrBuf, stderrPipe)
+		_, _ = io.Copy(stderrBuf, stderrPipe)
 		close(stderrDone)
 	}()
 
@@ -201,12 +218,15 @@ func (s *server) startRclone(ctx context.Context, profile models.ProfileSecrets,
 
 	return &rcloneProcess{
 		stdout: stdout,
-		stderr: &stderrBuf,
+		stderr: stderrBuf,
 		wait:   wait,
 	}, nil
 }
 
 func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSecrets, args []string, hint string) (string, string, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+		return "", "", err
+	}
 	hooks := currentAPIProcessTestHooks()
 	if hooks.runRcloneCapture != nil {
 		return hooks.runRcloneCapture(s, ctx, profile, args, hint)
@@ -216,7 +236,10 @@ func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSec
 		return "", "", err
 	}
 
-	out, readErr := io.ReadAll(proc.stdout)
+	out, readErr := processio.ReadAll(proc.stdout, rcloneCaptureStdoutMaxBytes, "rclone stdout")
+	if readErr != nil {
+		_ = proc.stdout.Close()
+	}
 	waitErr := proc.wait()
 
 	if readErr != nil {
@@ -229,6 +252,9 @@ func (s *server) runRcloneCapture(ctx context.Context, profile models.ProfileSec
 }
 
 func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecrets, args []string, hint string, stdin io.Reader) (string, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, s.cfg.AllowRemote); err != nil {
+		return "", err
+	}
 	hooks := currentAPIProcessTestHooks()
 	if hooks.runRcloneStdin != nil {
 		return hooks.runRcloneStdin(s, ctx, profile, args, hint, stdin)
@@ -262,8 +288,8 @@ func (s *server) runRcloneStdin(ctx context.Context, profile models.ProfileSecre
 	cmd := exec.CommandContext(ctx, rclonePath, fullArgs...)
 	cmd.Stdin = stdin
 	cmd.Stdout = io.Discard
-	var stderrBuf bytes.Buffer
-	cmd.Stderr = &stderrBuf
+	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
+	cmd.Stderr = stderrBuf
 
 	err = cmd.Run()
 	return strings.TrimSpace(stderrBuf.String()), err
@@ -461,6 +487,16 @@ type rcloneAPIErrorContext struct {
 	DefaultMessage string
 }
 
+const rcloneDiagnosticRedacted = redact.Marker
+
+func redactRcloneDiagnostic(s string) string {
+	return redact.Diagnostic(s)
+}
+
+func redactRcloneDiagnosticDetails(details map[string]any) map[string]any {
+	return redact.DiagnosticDetails(details)
+}
+
 func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rcloneAPIErrorContext, details map[string]any) {
 	if errors.Is(err, jobs.ErrRcloneNotFound) {
 		writeError(w, http.StatusBadRequest, "transfer_engine_missing", ctx.MissingMessage, nil)
@@ -468,9 +504,9 @@ func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rc
 	}
 	var ie *jobs.RcloneIncompatibleError
 	if errors.As(err, &ie) {
-		out := map[string]any{}
-		for k, v := range details {
-			out[k] = v
+		out := redactRcloneDiagnosticDetails(details)
+		if out == nil {
+			out = map[string]any{}
 		}
 		if ie.CurrentVersion != "" {
 			out["currentVersion"] = ie.CurrentVersion
@@ -513,12 +549,13 @@ func writeRcloneAPIError(w http.ResponseWriter, err error, stderr string, ctx rc
 }
 
 func rcloneErrorDetails(err error, stderr string, details map[string]any) map[string]any {
-	msg := strings.TrimSpace(rcloneErrorMessage(err, stderr))
-	if msg == "" && len(details) == 0 {
-		return details
+	msg := strings.TrimSpace(redactRcloneDiagnostic(rcloneErrorMessage(err, stderr)))
+	redactedDetails := redactRcloneDiagnosticDetails(details)
+	if msg == "" && len(redactedDetails) == 0 {
+		return redactedDetails
 	}
-	out := make(map[string]any, len(details)+1)
-	for k, v := range details {
+	out := make(map[string]any, len(redactedDetails)+1)
+	for k, v := range redactedDetails {
 		out[k] = v
 	}
 	if msg != "" {

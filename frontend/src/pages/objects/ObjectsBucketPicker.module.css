@@ -129,7 +129,7 @@
 
 .bucketPickerSearchInput {
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid var(--s3d-color-border-input);
   border-radius: 12px;
   background: var(--s3d-color-bg-input);

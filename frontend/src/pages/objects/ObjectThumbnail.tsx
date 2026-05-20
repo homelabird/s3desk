@@ -9,6 +9,7 @@ import {
 import styles from './ObjectsThumbnailPrimitives.module.css'
 import { buildObjectThumbnailRequest, getThumbnailFailureTtlMs, shouldCacheThumbnailFailure } from './objectPreviewPolicy'
 import { loadObjectThumbnailAsset } from './loadObjectThumbnailAsset'
+import { getObjectMediaStateDescriptor } from './objectsMediaState'
 
 export type ObjectThumbnailProps = {
 	api: APIClientShape
@@ -114,18 +115,17 @@ export function ObjectThumbnail(props: ObjectThumbnailProps) {
 	}
 
 	if (!url) {
-		const statusLabel = failed ? 'Preview unavailable' : 'Loading preview'
-		const detailLabel = failed ? 'Open large preview or retry later.' : 'Fetching thumbnail…'
+		const descriptor = getObjectMediaStateDescriptor(failed ? 'thumbnail-unavailable' : 'thumbnail-loading')
 		return (
 			<span
 				className={`${styles.objectThumbnailPlaceholder} ${failed ? styles.objectThumbnailPlaceholderFailed : styles.objectThumbnailPlaceholderLoading}`}
 				style={style}
 				role="img"
-				aria-label={`${statusLabel} for ${fileName}`}
-				title={`${statusLabel}: ${fileName}`}
+				aria-label={`${descriptor.title} for ${fileName}`}
+				title={`${descriptor.title}: ${fileName}`}
 			>
-				<span className={styles.objectThumbnailPlaceholderBadge}>{failed ? 'Unavailable' : 'Loading'}</span>
-				<span className={styles.objectThumbnailPlaceholderLabel}>{detailLabel}</span>
+				<span className={styles.objectThumbnailPlaceholderBadge}>{descriptor.shortLabel}</span>
+				<span className={styles.objectThumbnailPlaceholderLabel}>{descriptor.recoveryHint}</span>
 			</span>
 		)
 	}

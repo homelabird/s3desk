@@ -42,17 +42,28 @@ type ObjectsCopyPrefixModalProps = {
 export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 	const isMove = props.mode === 'move'
 	const indexDisabled = !props.bucket || !props.srcPrefix
+	const destinationBucketInputId = 'objects-copy-prefix-destination-bucket'
+	const destinationFolderInputId = 'objects-copy-prefix-destination-folder'
+	const moveConfirmInputId = 'objects-copy-prefix-confirm'
+	const includePatternsInputId = 'objects-copy-prefix-include-patterns'
+	const excludePatternsInputId = 'objects-copy-prefix-exclude-patterns'
+	const submit = () => {
+		if (props.isSubmitting) return
+		props.onFinish(props.values)
+	}
 
 	return (
 		<DialogModal
 			open={props.open}
 			title={isMove ? 'Move folder…' : 'Copy folder…'}
 			onClose={props.onCancel}
+			closeDisabled={props.isSubmitting}
+			initialFocusSelector={`#${destinationBucketInputId}`}
 			width={760}
 			footer={
 				<>
-					<Button onClick={props.onCancel}>Cancel</Button>
-					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={() => props.onFinish(props.values)}>
+					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
+					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={submit}>
 						{isMove ? 'Start move' : 'Start copy'}
 					</Button>
 				</>
@@ -117,7 +128,12 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 					{props.summary.sampleKeys?.length ? (
 						<div className={styles.sampleKeysBlock}>
 							<Typography.Text type="secondary">Sample keys</Typography.Text>
-							<Input.TextArea value={props.summary.sampleKeys.join('\n')} readOnly autoSize={{ minRows: 3, maxRows: 6 }} />
+							<Input.TextArea
+								value={props.summary.sampleKeys.join('\n')}
+								readOnly
+								aria-label="Sample keys"
+								autoSize={{ minRows: 3, maxRows: 6 }}
+							/>
 						</div>
 					) : null}
 				</>
@@ -127,45 +143,51 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
-					props.onFinish(props.values)
+					submit()
 				}}
 			>
 				<FormField label="Source">
 					<Typography.Text code className={styles.sourceCode}>{props.sourceLabel}</Typography.Text>
 				</FormField>
 
-				<FormField label="Destination bucket" required>
+				<FormField label="Destination bucket" htmlFor={destinationBucketInputId} required>
 					<DatalistInput
+						id={destinationBucketInputId}
 						value={props.values.dstBucket}
 						onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: value })}
 						placeholder="bucket…"
 						ariaLabel="Destination bucket"
 						allowClear
-						disabled={props.isBucketsLoading && props.bucketOptions.length === 0}
+						disabled={props.isSubmitting || (props.isBucketsLoading && props.bucketOptions.length === 0)}
 						options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
 					/>
 				</FormField>
 
 				<FormField
 					label="Destination folder"
+					htmlFor={destinationFolderInputId}
 					required
 					extra={<span className={styles.summaryNote}>Normalized as: <Typography.Text code>{props.normalizePrefix(props.values.dstPrefix)}</Typography.Text></span>}
 				>
 					<Input
+						id={destinationFolderInputId}
 						value={props.values.dstPrefix}
 						onChange={(e) => props.onValuesChange({ ...props.values, dstPrefix: e.target.value })}
 						placeholder="target-folder/…"
 						autoComplete="off"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 
 				{isMove ? (
-					<FormField label='Type "MOVE" to confirm' required>
+					<FormField label='Type "MOVE" to confirm' htmlFor={moveConfirmInputId} required>
 						<Input
+							id={moveConfirmInputId}
 							value={props.values.confirm}
 							onChange={(e) => props.onValuesChange({ ...props.values, confirm: e.target.value })}
 							placeholder="MOVE…"
 							autoComplete="off"
+							disabled={props.isSubmitting}
 						/>
 					</FormField>
 				) : null}
@@ -175,23 +197,28 @@ export function ObjectsCopyPrefixModal(props: ObjectsCopyPrefixModalProps) {
 						checked={props.values.dryRun}
 						onChange={(checked) => props.onValuesChange({ ...props.values, dryRun: checked })}
 						ariaLabel="Dry run"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 
-				<FormField label="Include patterns (one per line)">
+				<FormField label="Include patterns (one per line)" htmlFor={includePatternsInputId}>
 					<Input.TextArea
+						id={includePatternsInputId}
 						value={props.values.include}
 						onChange={(e) => props.onValuesChange({ ...props.values, include: e.target.value })}
 						rows={4}
 						placeholder="*.log…"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
-				<FormField label="Exclude patterns (one per line)">
+				<FormField label="Exclude patterns (one per line)" htmlFor={excludePatternsInputId}>
 					<Input.TextArea
+						id={excludePatternsInputId}
 						value={props.values.exclude}
 						onChange={(e) => props.onValuesChange({ ...props.values, exclude: e.target.value })}
 						rows={4}
 						placeholder="tmp_*…"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 			</form>

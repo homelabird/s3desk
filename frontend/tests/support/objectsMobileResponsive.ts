@@ -30,6 +30,7 @@ const now = '2024-01-01T00:00:00Z'
 const longKey =
 	'reports/mobile/a-very-long-object-key-that-should-wrap-on-mobile-without-causing-horizontal-overflow-or-clipped-actions.log'
 const previewImageKey = 'preview.png'
+const longPreviewContentType = 'image/png; profile=mobile-responsive-preview-with-a-very-long-content-type-parameter-that-wraps'
 const previewSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" rx="18" fill="#d7f0e8"/><circle cx="52" cy="52" r="18" fill="#7ab89f"/><path d="M24 112l32-30 22 18 18-14 24 26H24z" fill="#2f6f57"/><text x="72" y="132" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#1b4332">PNG</text></svg>'
 const objectItems = [
 	{ key: 'alpha.txt', size: 12, lastModified: now, etag: '"alpha"' },
@@ -51,7 +52,7 @@ const metaByKey = {
 		size: 2048,
 		etag: '"preview"',
 		lastModified: now,
-		contentType: 'image/png',
+		contentType: longPreviewContentType,
 		metadata: { suite: 'mobile-responsive' },
 	},
 	[longKey]: {

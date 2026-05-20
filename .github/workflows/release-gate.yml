@@ -32,7 +32,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.9"
+          go-version: "1.25.10"
           cache-dependency-path: backend/go.sum
 
       - name: Setup Helm
@@ -42,13 +42,12 @@ jobs:
         shell: bash
         run: bash ./scripts/install_actionlint.sh
 
+      - name: Install workflow validator Python dependency
+        run: python3 -m pip install --disable-pip-version-check PyYAML
+
       - name: Install backend security helper tools
         shell: bash
-        run: |
-          set -euo pipefail
-          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.23.0
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+        run: bash ./scripts/install_backend_security_tools.sh
 
       - name: Install frontend dependencies for Playwright browser setup
         working-directory: frontend

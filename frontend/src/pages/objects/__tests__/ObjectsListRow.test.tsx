@@ -57,10 +57,11 @@ describe('ObjectsListRow', () => {
 
 		const row = screen.getByRole('listitem')
 		expect(row.className).toContain(styles.listRowSelected)
-		expect(screen.getByLabelText('Add favorite').className).toContain(styles.listRowIconButton)
-		expect(screen.getByLabelText('Object actions').className).toContain(styles.listRowIconButton)
+		expect(screen.getByRole('button', { name: 'Select object cat.png' })).toHaveAttribute('aria-pressed', 'true')
+		expect(screen.getByLabelText('Add favorite for cat.png').className).toContain(styles.listRowIconButton)
+		expect(screen.getByLabelText('Object actions for cat.png').className).toContain(styles.listRowIconButton)
 
-		fireEvent.click(screen.getByLabelText('Add favorite'))
+		fireEvent.click(screen.getByLabelText('Add favorite for cat.png'))
 		expect(onToggleFavorite).toHaveBeenCalledTimes(1)
 		expect(onClick).not.toHaveBeenCalled()
 
@@ -101,7 +102,7 @@ describe('ObjectsListRow', () => {
 		expect(row).not.toBeNull()
 		expect(row?.children).toHaveLength(5)
 		expect(screen.getByRole('button', { name: 'Preview' })).toBeInTheDocument()
-		expect(screen.getByLabelText('Object actions')).toBeInTheDocument()
+		expect(screen.getByLabelText('Object actions for cat.png')).toBeInTheDocument()
 	})
 
 	it('keeps nested object row controls from triggering row activation', () => {
@@ -142,12 +143,14 @@ describe('ObjectsListRow', () => {
 		expect(row).not.toHaveAttribute('tabindex')
 
 		fireEvent.keyDown(screen.getByLabelText('Select cat.png'), { key: ' ' })
-		fireEvent.keyDown(screen.getByLabelText('Add favorite'), { key: 'Enter' })
+		fireEvent.keyDown(screen.getByLabelText('Add favorite for cat.png'), { key: 'Enter' })
 		fireEvent.keyDown(screen.getByRole('button', { name: 'Preview' }), { key: 'Enter' })
-		fireEvent.keyDown(screen.getByLabelText('Object actions'), { key: ' ' })
+		fireEvent.keyDown(screen.getByLabelText('Object actions for cat.png'), { key: ' ' })
 		expect(onClick).not.toHaveBeenCalled()
 
-		fireEvent.click(screen.getByRole('button', { name: 'Select row for cat.png' }))
+		const rowButton = screen.getByRole('button', { name: 'Select object cat.png' })
+		expect(rowButton).toHaveAttribute('aria-pressed', 'false')
+		fireEvent.click(rowButton)
 		expect(onClick).toHaveBeenCalledTimes(1)
 		expect(onCheckboxClick).not.toHaveBeenCalled()
 		expect(onToggleFavorite).not.toHaveBeenCalled()

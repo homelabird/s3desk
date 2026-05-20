@@ -7,8 +7,11 @@ import {
 import { readServerScopedLocalStorage } from './support/storage'
 import { gotoProfilesPage } from './support/ui'
 
-async function setupProfilesPage(page: Page) {
-	await installProfilesBucketsMobileResponsiveFixtures(page)
+async function setupProfilesPage(
+	page: Page,
+	options?: Parameters<typeof installProfilesBucketsMobileResponsiveFixtures>[1],
+) {
+	await installProfilesBucketsMobileResponsiveFixtures(page, options)
 	await seedProfilesBucketsMobileResponsiveStorage(page)
 	await gotoProfilesPage(page)
 }
@@ -24,6 +27,8 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		const primaryCard = getProfileCard(page, 'Responsive Profile')
 		const secondaryCard = getProfileCard(page, 'Backup Profile')
 
+		await expect(primaryCard).toContainText('profiles-buckets-mobile-profile')
+		await expect(secondaryCard).toContainText('profiles-buckets-mobile-secondary')
 		await expect(primaryCard.getByRole('button', { name: 'Selected' })).toBeVisible()
 		await expect(secondaryCard.getByRole('button', { name: 'Use profile' })).toBeVisible()
 
@@ -74,5 +79,49 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await expect(dialog).toBeVisible()
 		await dialog.getByRole('button', { name: 'Cancel' }).click()
 		await expect(dialog).toHaveCount(0)
+	})
+
+	test('keeps validation warning labels readable after switching cards', async ({ page }) => {
+		await setupProfilesPage(page, {
+			profiles: [
+				{
+					id: 'profiles-buckets-mobile-profile',
+					name: 'Responsive Profile',
+					provider: 's3_compatible',
+					endpoint: 'http://localhost:9000',
+					region: 'us-east-1',
+					forcePathStyle: true,
+					preserveLeadingSlash: false,
+					tlsInsecureSkipVerify: true,
+					createdAt: '2024-01-01T00:00:00Z',
+					updatedAt: '2024-01-01T00:00:00Z',
+				},
+				{
+					id: 'profiles-buckets-mobile-secondary',
+					name: 'Backup Profile',
+					provider: 's3_compatible',
+					endpoint: '',
+					region: 'us-east-1',
+					forcePathStyle: true,
+					preserveLeadingSlash: false,
+					tlsInsecureSkipVerify: true,
+					validation: {
+						valid: false,
+						issues: [{ field: 'endpoint', message: 'Endpoint URL is required' }],
+					},
+					createdAt: '2024-01-01T00:00:00Z',
+					updatedAt: '2024-01-01T00:00:00Z',
+				},
+			],
+		})
+
+		const warningCard = getProfileCard(page, 'Backup Profile')
+		await expect(warningCard.getByText('Needs update')).toHaveAttribute('title', 'Endpoint URL is required')
+		await expect(warningCard.getByText('needs-update')).toBeVisible()
+
+		await warningCard.getByRole('button', { name: 'Use profile' }).click()
+
+		await expect(warningCard.getByRole('button', { name: 'Selected' })).toBeVisible()
+		await expect(warningCard.getByText('Needs update')).toHaveAttribute('title', 'Endpoint URL is required')
 	})
 })

@@ -50,8 +50,13 @@ describe('JobsRowActions menu scope', () => {
 	it('hides the uncontrolled actions menu when the api token changes', () => {
 		const { rerender } = renderActions('token-a')
 
-		fireEvent.click(screen.getByRole('button', { name: 'Open actions menu' }))
-		expect(screen.getByRole('menuitem', { name: /Retry/i })).toBeInTheDocument()
+		const actionsButton = screen.getByRole('button', { name: 'Actions for job job-1' })
+		expect(actionsButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(actionsButton).toHaveAttribute('aria-expanded', 'false')
+
+		fireEvent.click(actionsButton)
+		expect(actionsButton).toHaveAttribute('aria-expanded', 'true')
+		expect(screen.getByRole('menuitem', { name: 'Retry job job-1' })).toBeInTheDocument()
 
 		rerender(
 			<JobsRowActions
@@ -77,6 +82,6 @@ describe('JobsRowActions menu scope', () => {
 			/>,
 		)
 
-		expect(screen.queryByRole('menuitem', { name: /Retry/i })).not.toBeInTheDocument()
+		expect(screen.queryByRole('menuitem', { name: 'Retry job job-1' })).not.toBeInTheDocument()
 	})
 })

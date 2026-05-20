@@ -31,6 +31,7 @@ export type BuildObjectsPageOverlaysPropsArgs = {
 	bucket: string
 	prefix: string
 	isMd: boolean
+	isLg: boolean
 	bucketOptions: CopyMoveModalProps['bucketOptions']
 	bucketsLoading: boolean
 	selectedCount: number

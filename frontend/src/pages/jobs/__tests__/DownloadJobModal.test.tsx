@@ -33,10 +33,10 @@ vi.mock('../../../lib/deviceFs', async () => {
 })
 
 vi.mock('../../../components/LocalDevicePathInput', () => ({
-	LocalDevicePathInput: (props: { placeholder?: string; disabled?: boolean; value?: string }) => (
+	LocalDevicePathInput: (props: { id?: string; placeholder?: string; disabled?: boolean; value?: string }) => (
 		<input
+			id={props.id}
 			readOnly
-			aria-label="Local device path"
 			placeholder={props.placeholder}
 			disabled={props.disabled}
 			value={props.value ?? ''}

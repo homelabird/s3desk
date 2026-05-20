@@ -4,7 +4,7 @@ import { type PropsWithChildren } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockApiClient } from '../../../test/mockApiClient'
-import { useJobsLogsState } from '../useJobsLogsState'
+import { createJobsLogVisibleView, type JobsLogEntry, useJobsLogsState } from '../useJobsLogsState'
 
 const { messageSuccess, messageInfo, messageError } = vi.hoisted(() => ({
 	messageSuccess: vi.fn(),
@@ -88,6 +88,77 @@ describe('useJobsLogsState', () => {
 		await waitFor(() => {
 			expect(getJobLogsTail).toHaveBeenCalledTimes(2)
 		})
+	})
+
+	it('preserves source line numbers when visible logs are filtered', async () => {
+		const getJobLogsTail = vi.fn().mockResolvedValue({
+			text: 'first line\nneedle warning on source line two\n\n2026-03-11T09:00:04Z ERROR last needle\n',
+			nextOffset: 48,
+		})
+		const getJobLogsAfterOffset = vi.fn().mockResolvedValue({ text: '', nextOffset: 48 })
+		const api = createMockApiClient({
+			jobs: {
+				getJobLogsTail,
+				getJobLogsAfterOffset,
+			},
+		})
+
+		const { result } = renderHook(() => useJobsLogsState({ api, apiToken: 'token-a', profileId: 'profile-1' }), {
+			wrapper: createWrapper(),
+		})
+
+		act(() => {
+			result.current.openLogsForJob('job-1')
+		})
+		await waitFor(() => {
+			expect(result.current.visibleLogEntries).toEqual([
+				'first line',
+				'needle warning on source line two',
+				'2026-03-11T09:00:04Z ERROR last needle',
+			])
+		})
+
+		act(() => {
+			result.current.setLogSearchQuery('needle')
+		})
+
+		expect(result.current.visibleLogEntries).toEqual([
+			'needle warning on source line two',
+			'2026-03-11T09:00:04Z ERROR last needle',
+		])
+		expect(result.current.visibleLogLineNumbers).toEqual([2, 4])
+		expect(result.current.visibleLogSeveritySummary).toEqual({ error: 1, warn: 1 })
+		expect(result.current.latestVisibleLogErrorIndex).toBe(1)
+	})
+
+	it('reuses narrowed search results when extending a log search', () => {
+		let normalizedLineReads = 0
+		let failOnFullRescan = false
+		const entries = Array.from({ length: 250 }, (_, index) => {
+			const normalizedLine = index === 42 ? 'needle target payload' : `ordinary line ${index}`
+			return {
+				line: normalizedLine,
+				lineNumber: index + 1,
+				level: 'plain',
+				get normalizedLine() {
+					normalizedLineReads += 1
+					if (failOnFullRescan && index !== 42) throw new Error(`rescanned non-match ${index}`)
+					return normalizedLine
+				},
+			} as JobsLogEntry
+		})
+
+		const firstView = createJobsLogVisibleView(entries, 'needle')
+
+		expect(firstView.view.lineNumbers).toEqual([43])
+		expect(normalizedLineReads).toBe(entries.length)
+
+		normalizedLineReads = 0
+		failOnFullRescan = true
+		const refinedView = createJobsLogVisibleView(entries, 'needle target', firstView.searchCache)
+
+		expect(refinedView.view.lineNumbers).toEqual([43])
+		expect(normalizedLineReads).toBe(1)
 	})
 
 	it('clears logs and closes drawer for deleted active job', async () => {

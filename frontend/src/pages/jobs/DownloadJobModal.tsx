@@ -34,6 +34,8 @@ export function DownloadJobModal(props: {
 	const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null)
 	const [dirLabel, setDirLabel] = useState('')
 	const support = getDevicePickerSupport()
+	const prefixInputId = 'jobs-download-prefix-input'
+	const localDestinationInputId = 'jobs-download-local-destination-input'
 
 	const reset = () => {
 		setBucket(props.bucket)
@@ -129,12 +131,13 @@ export function DownloadJobModal(props: {
 					/>
 				</FormField>
 
-				<FormField label="Prefix (optional)">
-					<Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" />
+				<FormField label="Prefix (optional)" htmlFor={prefixInputId}>
+					<Input id={prefixInputId} value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" />
 				</FormField>
 
-				<FormField label="Local destination folder">
+				<FormField label="Local destination folder" htmlFor={localDestinationInputId}>
 					<LocalDevicePathInput
+						id={localDestinationInputId}
 						value={localFolder}
 						onChange={setLocalFolder}
 						placeholder="Select a folder…"

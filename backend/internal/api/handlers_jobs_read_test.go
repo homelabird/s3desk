@@ -55,6 +55,42 @@ func TestParseJobLogReadOptions_InvalidAfterOffset(t *testing.T) {
 	}
 }
 
+func TestParseJobLogReadOptions_InvalidTailBytes(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/job-1/logs?tailBytes=abc", nil)
+
+	_, err := parseJobLogReadOptions(req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var readErr *jobReadError
+	if !errors.As(err, &readErr) {
+		t.Fatalf("err=%v, want jobReadError", err)
+	}
+	if got := readErr.details["tailBytes"]; got != "abc" {
+		t.Fatalf("details.tailBytes=%v, want abc", got)
+	}
+}
+
+func TestParseJobLogReadOptions_InvalidMaxBytes(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/job-1/logs?afterOffset=1&maxBytes=abc", nil)
+
+	_, err := parseJobLogReadOptions(req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var readErr *jobReadError
+	if !errors.As(err, &readErr) {
+		t.Fatalf("err=%v, want jobReadError", err)
+	}
+	if got := readErr.details["maxBytes"]; got != "abc" {
+		t.Fatalf("details.maxBytes=%v, want abc", got)
+	}
+}
+
 func TestBuildJobArtifactReadResult_ReturnsPreparedContent(t *testing.T) {
 	t.Parallel()
 
@@ -94,6 +130,37 @@ func TestBuildJobArtifactReadResult_ReturnsPreparedContent(t *testing.T) {
 	}
 	if !bytes.Equal(body, wantBody) {
 		t.Fatalf("unexpected artifact body %q", string(body))
+	}
+}
+
+func TestBuildJobLogReadResultRejectsUnsafeJobID(t *testing.T) {
+	t.Parallel()
+
+	dataDir := t.TempDir()
+	outsideLogPath := filepath.Join(dataDir, "logs", "escape.log")
+	if err := os.MkdirAll(filepath.Dir(outsideLogPath), 0o755); err != nil {
+		t.Fatalf("mkdir outside log dir: %v", err)
+	}
+	if err := os.WriteFile(outsideLogPath, []byte("sentinel"), 0o600); err != nil {
+		t.Fatalf("write outside log: %v", err)
+	}
+
+	_, _, err := buildJobLogReadResult(dataDir, "../escape", jobLogReadOptions{
+		tailBytes: defaultJobLogReadBytes,
+		maxBytes:  defaultJobLogReadBytes,
+	})
+	if err == nil {
+		t.Fatal("expected unsafe job id to fail")
+	}
+	var readErr *jobReadError
+	if !errors.As(err, &readErr) {
+		t.Fatalf("err=%v, want jobReadError", err)
+	}
+	if readErr.status != http.StatusBadRequest {
+		t.Fatalf("readErr.status=%d, want %d", readErr.status, http.StatusBadRequest)
+	}
+	if got, err := os.ReadFile(outsideLogPath); err != nil || string(got) != "sentinel" {
+		t.Fatalf("outside log changed or unreadable: body=%q err=%v", string(got), err)
 	}
 }
 

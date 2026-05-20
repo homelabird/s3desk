@@ -42,8 +42,11 @@ Default local endpoints:
 
 Requirements:
 
-- Go `1.24+`
+- Go `1.25.10` for the pinned backend toolchain (`backend/go.mod` declares `go 1.25.0` with `toolchain go1.25.10`)
 - Node.js `22.x`
+- npm `10.9.4` is the recommended local version used by the check scripts
+- Python 3 with PyYAML (`python3-yaml` on Debian/Ubuntu) for workflow validation
+- Helm for the full repository gate
 - Docker / Podman compose for container workflows
 
 ```bash
@@ -57,17 +60,26 @@ The CI-facing execution path is intentionally explicit:
 
 - frontend build: `cd frontend && npm run build`
 - backend tests: `cd backend && go test ./...`
-- repository wrapper: `./scripts/build.sh` followed by `./scripts/check.sh`
+- repository gate: `./scripts/check.sh`
+
+`./scripts/build.sh` remains a local convenience wrapper; release and CI gates use
+`./scripts/check.sh` as the source of truth for frontend, backend, Helm, workflow,
+and release-policy checks.
 
 ## Deployment
 
 ### Remote Compose
 
 ```bash
-cp .env.example .env
-$EDITOR .env
+cp .env.example .env.local
+$EDITOR .env.local
+set -a; . ./.env.local; set +a
 ./scripts/compose.sh remote up -d
 ```
+
+The repository root `.env` is checked in for non-secret compose defaults. Keep
+deployment secrets in exported environment variables or ignored local files such
+as `.env.local`; do not commit real `API_TOKEN` or `POSTGRES_PASSWORD` values.
 
 Important remote settings:
 
@@ -89,14 +101,18 @@ Set at least:
 - `S3DESK_DOMAIN`
 - `EXTERNAL_BASE_URL`
 - `ALLOWED_HOSTS`
+- `API_TOKEN`
+- `POSTGRES_PASSWORD`
+- `ALLOWED_LOCAL_DIRS`
 
 ### Helm
 
 ```bash
+API_TOKEN="$(openssl rand -base64 32)"
 helm upgrade --install s3desk ./charts/s3desk \
   --namespace s3desk \
   --create-namespace \
-  --set-string server.apiToken='replace-me'
+  --set-string server.apiToken="${API_TOKEN}"
 ```
 
 For Postgres-backed installs, also set `db.backend=postgres` plus either
@@ -122,10 +138,10 @@ Important boundaries:
 Portable smoke commands:
 
 ```bash
-./scripts/run_portable_sqlite_to_postgres_smoke.sh
-./scripts/run_portable_postgres_to_sqlite_smoke.sh
-./scripts/run_portable_failure_smoke.sh
-./scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
+bash scripts/run_portable_sqlite_to_postgres_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_smoke.sh
+bash scripts/run_portable_failure_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
 ```
 
 For encrypted bundles:
@@ -133,7 +149,7 @@ For encrypted bundles:
 ```bash
 PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
 PORTABLE_BUNDLE_PASSWORD=operator-secret \
-./scripts/run_portable_sqlite_to_postgres_smoke.sh
+bash scripts/run_portable_sqlite_to_postgres_smoke.sh
 ```
 
 More detail lives in [docs/PORTABLE_BACKUP.md](docs/PORTABLE_BACKUP.md).
@@ -155,6 +171,7 @@ More detail lives in [docs/PORTABLE_BACKUP.md](docs/PORTABLE_BACKUP.md).
 - [docs/PORTABLE_BACKUP.md](docs/PORTABLE_BACKUP.md)
 - [docs/BUCKET_GOVERNANCE.md](docs/BUCKET_GOVERNANCE.md)
 - [docs/RELEASE_GATE.md](docs/RELEASE_GATE.md)
+- [notes/INDEX.md](notes/INDEX.md)
 
 ## License
 

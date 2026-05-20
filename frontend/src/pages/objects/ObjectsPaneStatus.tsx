@@ -9,6 +9,7 @@ type ObjectsPaneStatusProps = {
 }
 
 export function ObjectsPaneStatus(props: ObjectsPaneStatusProps) {
+	const isError = props.kind === 'error'
 	const statusAttributes = {
 		[props.kindAttributeName ?? 'data-pane-status-kind']: props.kind,
 	}
@@ -16,9 +17,11 @@ export function ObjectsPaneStatus(props: ObjectsPaneStatusProps) {
 	return (
 		<div
 			{...statusAttributes}
-			className={`${styles.statusBlock} ${props.kind === 'error' ? styles.statusBlockError : styles.statusBlockMuted}`}
+			aria-atomic={isError ? undefined : 'true'}
+			aria-live={isError ? undefined : 'polite'}
+			className={`${styles.statusBlock} ${isError ? styles.statusBlockError : styles.statusBlockMuted}`}
 			data-testid={props.testId}
-			role={props.kind === 'error' ? 'alert' : undefined}
+			role={isError ? 'alert' : 'status'}
 		>
 			<strong className={styles.statusTitle}>{props.title}</strong>
 			{props.description ? <span className={styles.statusDescription}>{props.description}</span> : null}

@@ -43,6 +43,7 @@ export function CreateJobModal(props: {
 	const [sourceBusy, setSourceBusy] = useState(false)
 	const support = getDirectorySelectionSupport()
 	const uploadSupported = props.uploadSupported ?? true
+	const prefixInputId = 'jobs-upload-prefix-input'
 
 	const reset = () => {
 		setBucket(props.bucket)
@@ -54,9 +55,10 @@ export function CreateJobModal(props: {
 		setSourceBusy(false)
 	}
 
-	const canSubmit = selectedFiles.length > 0 && !!bucket.trim() && !props.isOffline && uploadSupported
+	const canSubmit = selectedFiles.length > 0 && !!bucket.trim() && !props.isOffline && uploadSupported && !props.loading
 
 	const handleSubmit = () => {
+		if (props.loading) return
 		if (!uploadSupported) {
 			jobsFeedback.uploadsUnsupported(props.uploadUnsupportedReason)
 			return
@@ -179,8 +181,8 @@ export function CreateJobModal(props: {
 					/>
 				</FormField>
 
-				<FormField label="Prefix (optional)">
-					<Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" />
+				<FormField label="Prefix (optional)" htmlFor={prefixInputId}>
+					<Input id={prefixInputId} value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="path/…" />
 				</FormField>
 
 				<FormField label="Source selection">

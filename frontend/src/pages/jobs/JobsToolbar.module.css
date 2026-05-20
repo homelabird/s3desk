@@ -1,9 +1,33 @@
-.headerActions {
+.launchActions {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: flex-start;
 	gap: 10px;
 	flex-wrap: wrap;
+}
+
+.topRegion {
+	display: grid;
+	grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+	gap: 16px;
+	align-items: stretch;
+}
+
+.troubleshootingPanel {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.realtimeStatusRow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 10px 12px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-secondary);
 }
 
 .alertStack {
@@ -34,6 +58,7 @@
 
 .healthCardDanger {
 	border-color: color-mix(in srgb, var(--s3d-color-error) 28%, var(--s3d-color-border-soft));
+	background: color-mix(in srgb, var(--s3d-color-error-bg) 58%, var(--s3d-color-bg-elevated));
 }
 
 .healthCardSuccess {
@@ -52,7 +77,7 @@
 }
 
 .healthValue {
-	font-size: clamp(24px, 3vw, 30px);
+	font-size: 28px;
 	font-weight: 700;
 	line-height: 1;
 }
@@ -70,6 +95,7 @@
 
 .mobileFiltersTrigger {
 	flex: 0 0 auto;
+	min-height: 44px;
 }
 
 .searchFilterControl,
@@ -110,8 +136,13 @@
 }
 
 @media (max-width: 768px) {
-	.headerActions {
-		justify-content: flex-start;
+	.topRegion {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.launchActions :global(.ant-btn),
+	.realtimeStatusRow :global(.ant-btn) {
+		min-height: 44px;
 	}
 
 	.healthGrid {
@@ -119,11 +150,7 @@
 	}
 }
 
-@media (max-width: 480px) {
-	.healthGrid {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
+@media (max-width: 767px) {
 	.filtersRow {
 		align-items: stretch;
 		gap: 10px;
@@ -140,6 +167,16 @@
 
 	.mobileFiltersTrigger {
 		justify-content: center;
+	}
+
+	.filtersRow :global(.ant-btn) {
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 480px) {
+	.healthGrid {
+		grid-template-columns: minmax(0, 1fr);
 	}
 }
 

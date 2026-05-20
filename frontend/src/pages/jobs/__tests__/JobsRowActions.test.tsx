@@ -14,9 +14,15 @@ vi.mock('../../../lib/confirmDangerAction', () => ({
 }))
 
 vi.mock('../../../components/MenuPopover', () => ({
-	MenuPopover: ({ menu, children }: { menu: { items?: Array<Record<string, unknown>> }; children: (args: { toggle: () => void }) => ReactNode }) => (
+	MenuPopover: ({
+		menu,
+		children,
+	}: {
+		menu: { items?: Array<Record<string, unknown>> }
+		children: (args: { toggle: () => void; open: boolean }) => ReactNode
+	}) => (
 		<div>
-			{children({ toggle: vi.fn() })}
+			{children({ toggle: vi.fn(), open: false })}
 			<div>
 				{menu.items?.map((item) => {
 					if (!item || item.type === 'divider') return null
@@ -27,7 +33,7 @@ vi.mock('../../../components/MenuPopover', () => ({
 							disabled={Boolean(item.disabled)}
 							onClick={() => (item.onClick as (() => void) | undefined)?.()}
 						>
-							{typeof item.label === 'string' ? item.label : String(item.key)}
+							{typeof item.label === 'string' ? item.label : (item.label as ReactNode)}
 						</button>
 					)
 				})}
@@ -80,9 +86,12 @@ describe('JobsRowActions', () => {
 			/>,
 		)
 
-		expect(getByRole('button', { name: 'Details' })).toBeInTheDocument()
-		expect(getByRole('button', { name: 'Logs' })).toBeInTheDocument()
-		expect(getByRole('button', { name: 'Open actions menu' })).toBeInTheDocument()
+		expect(getByRole('button', { name: 'Details for job job-1' })).toHaveTextContent('Details')
+		expect(getByRole('button', { name: 'Logs for job job-1' })).toHaveTextContent('Logs')
+		const actionsButton = getByRole('button', { name: 'Actions for job job-1' })
+		expect(actionsButton).toHaveTextContent('Actions')
+		expect(actionsButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(actionsButton).toHaveAttribute('aria-expanded', 'false')
 	})
 
 	it('ignores stale delete confirmations after the jobs context changes', async () => {
@@ -111,7 +120,7 @@ describe('JobsRowActions', () => {
 			/>,
 		)
 
-		fireEvent.click(screen.getByRole('button', { name: 'Delete record' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Delete record for job job-1' }))
 
 		const confirmCall = confirmDangerActionMock.mock.calls.at(-1)?.[0] as { onConfirm: () => Promise<void> | void } | undefined
 		expect(confirmCall).toBeDefined()

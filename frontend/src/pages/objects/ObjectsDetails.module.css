@@ -52,6 +52,26 @@
   width: 100%;
 }
 
+.detailsPrimaryDescriptions :global(.ant-descriptions-item-label),
+.detailsMetadataDescriptions :global(.ant-descriptions-item-label) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.detailsCodeValueWrap {
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.detailsCodeValueWrap :global(code) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .detailsSection {
   width: 100%;
   min-width: 0;
@@ -109,6 +129,17 @@
   text-align: center;
 }
 
+.detailsPreviewEmptyState,
+.detailsPreviewStateDescription {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailsPreviewEmptyState {
+  align-items: flex-start;
+}
+
 .detailsCodePreview {
   border: 1px solid var(--s3d-color-border);
   border-radius: 8px;
@@ -136,6 +167,12 @@
 
   .detailsActionRow {
     gap: 6px;
+  }
+
+  .detailsActionButton,
+  .detailsSectionActionButton {
+    min-height: 44px;
+    padding-inline: 10px !important;
   }
 
   .detailsSection {
@@ -208,9 +245,9 @@
 
   .detailsActionButton,
   .detailsSectionActionButton {
-    min-width: 28px;
-    min-height: 26px;
-    padding-inline: 6px !important;
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 8px !important;
   }
 
   .detailsActionButton :global(.ant-btn-icon + span),

@@ -16,12 +16,16 @@ type Props = {
 
 export function JobsMobileList({ jobs, getJobSummary, renderJobActions }: Props) {
 	return (
-		<div className={styles.mobileList}>
+		<div className={styles.mobileList} role="list">
 			{jobs.map((job) => {
 				const summary = getJobSummary(job) ?? 'No summary available.'
 				const errorText = [job.errorCode, job.error].filter(Boolean).join(' · ')
+				const cardClassName =
+					job.status === 'failed'
+						? `${styles.mobileCard} ${styles.mobileCardFailed}`
+						: styles.mobileCard
 				return (
-					<article key={job.id} className={styles.mobileCard}>
+					<article key={job.id} className={cardClassName} role="listitem">
 						<div className={styles.mobileCardTop}>
 							<div className={styles.mobileCardCopy}>
 								<div className={styles.mobileTitleRow}>

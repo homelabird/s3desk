@@ -37,6 +37,8 @@ helm upgrade --install s3desk ./charts/s3desk \
   --namespace s3desk \
   --create-namespace \
   --values ./charts/s3desk/values-production.yaml \
+  --set-string image.repository='registry.example.com/s3desk' \
+  --set-string image.tag='0.21v-rc3' \
   --set-string server.externalBaseURL='https://s3desk.example.com' \
   --set ingress.enabled=true \
   --set ingress.className=nginx \
@@ -83,6 +85,99 @@ helm upgrade --install s3desk ./charts/s3desk \
   --set networkPolicy.policyTypes[1]=Egress
 ```
 
+Production ingress allow-list for NGINX Ingress Controller:
+
+```yaml
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    allowSameNamespace: false
+    extra:
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: ingress-nginx
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: ingress-nginx
+                app.kubernetes.io/component: controller
+        ports:
+          - protocol: TCP
+            port: 8080
+```
+
+Production ingress allow-list for an Istio ingress gateway:
+
+```yaml
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+  ingress:
+    allowSameNamespace: false
+    extra:
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: istio-system
+            podSelector:
+              matchLabels:
+                istio: ingressgateway
+        ports:
+          - protocol: TCP
+            port: 8080
+```
+
+Replace the namespace and pod labels with labels from your controller pods when your NGINX or Istio gateway runs outside the example namespaces.
+
+Escape hatches:
+
+- Keep `ingress.allowSameNamespace=true` for in-namespace proxies.
+- Add `ingress.extra: [{}]` only as a temporary allow-all ingress rule.
+- Omit `Egress` from `policyTypes` to leave outbound database, proxy, identity-provider, and object-store traffic unrestricted.
+- When enabling `Egress`, keep `egress.allowDns=true` and add `egress.extra` rules for your destinations. Use `egress.extra: [{}]` only as a short-lived unblocker.
+
+Egress allow-list examples:
+
+```yaml
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    allowDns: true
+    extra:
+      # Same-namespace Postgres pods.
+      - to:
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: postgresql
+        ports:
+          - protocol: TCP
+            port: 5432
+      # HTTPS object-store, proxy, or identity-provider networks.
+      # Kubernetes NetworkPolicy is IP/selector based; use your CNI's FQDN
+      # policy extension if you need hostname-based egress rules.
+      - to:
+          - ipBlock:
+              cidr: 10.0.0.0/8
+        ports:
+          - protocol: TCP
+            port: 443
+```
+
+Raw Istio manifests under `k8s/` are operator references, not part of the
+default Helm install path. Prefer the chart `istio.virtualService` settings and
+`values-istio.yaml`; if you apply `k8s/istio-s3desk-upload-gw.yaml`, scope the
+gateway labels, namespace, and matching `networkPolicy.ingress.extra` rule to
+your dedicated gateway deployment before applying it. The chart defaults
+`istio.virtualService.timeout` to `0s` for long browser uploads; set a finite
+timeout only after testing it with your `uploads.maxBytes`, concurrent upload
+count, gateway memory, and object-store latency.
+
 Prometheus Operator objects:
 
 ```bash
@@ -95,12 +190,13 @@ helm upgrade --install s3desk ./charts/s3desk \
 ## Operational Notes
 
 - `server.externalBaseURL` should be set for ingress, reverse-proxy, and browser-facing download flows.
+- Istio VirtualService installs require at least one `istio.virtualService.hosts` entry and one `istio.virtualService.gateways` entry when enabled.
 - Browser-facing remote deployments (`server.allowRemote=true` with ingress or Istio enabled) require `server.encryptionKey` or `secrets.existingSecret`, `networkPolicy.enabled=true`, resource requests/limits, and the non-root/read-only security context shown in `values-production.yaml`.
-- `values-production.yaml` is the recommended baseline for internet-facing or shared-cluster installs; override hostnames, ingress class, Secret name, and resource sizes for your cluster.
+- `values-production.yaml` is the recommended baseline for internet-facing or shared-cluster installs; override image repository/tag, hostnames, ingress class, Secret name, and resource sizes for your cluster.
 - `server.allowedLocalDirs` defaults to `/data` because remote mode fails closed unless at least one allowed local directory is configured.
 - `db.backend=postgres` requires either `db.databaseUrl` or `secrets.existingSecret`.
 - The chart creates a dedicated ServiceAccount by default and disables service-account token automount unless you override it.
-- `networkPolicy` is opt-in. The default policy type is ingress-only so existing outbound DB/provider traffic is not broken by accident.
+- `networkPolicy` is opt-in. The default policy type is ingress-only so existing outbound DB/provider traffic is not broken by accident; `values-production.yaml` shows an NGINX controller ingress allow-list and leaves egress policy disabled until destinations are known.
 - `ServiceMonitor` and `PodMonitor` are opt-in and default to the same API token Secret/key used by the app.
 - `DATA_DIR` persistence is still useful on Postgres for thumbnails, staged restores, and job artifacts.
 - In-product `Full backup` / `Cache + metadata` flows remain sqlite-only. Use portable backup/import for cross-backend migration.

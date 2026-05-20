@@ -2,13 +2,107 @@
   width: 100%;
 }
 
-.workspaceSummary {
-  margin-bottom: 16px;
-}
-
 .desktopShell,
 .mobileShell {
   width: 100%;
+}
+
+.decisionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-sm);
+  background: var(--s3d-color-bg);
+  box-shadow: var(--s3d-shadow-sm);
+}
+
+.decisionHeaderTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.decisionHeaderCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.decisionBadgeRow {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.decisionBadgeRow :global(.ant-tag) {
+  margin-inline-end: 0;
+}
+
+.decisionBadge {
+  color: var(--s3d-color-text);
+  border-color: var(--s3d-color-border);
+  background: var(--s3d-color-bg-secondary);
+}
+
+.decisionBadgeInfo {
+  color: var(--s3d-color-primary);
+  border-color: var(--s3d-color-info-border);
+  background: var(--s3d-color-info-bg);
+}
+
+.decisionBadgeWarning {
+  color: var(--s3d-color-warning-text);
+  border-color: var(--s3d-color-warning-border);
+  background: var(--s3d-color-warning-bg);
+}
+
+.decisionBadgeDanger {
+  color: var(--s3d-color-error-dark);
+  border-color: var(--s3d-color-error-border);
+  background: var(--s3d-color-danger-bg);
+}
+
+.decisionRouteGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.decisionRoute {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-sm);
+  background: var(--s3d-color-bg-secondary);
+}
+
+.decisionRoutePrimary {
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 45%, var(--s3d-color-border));
+  background: color-mix(in srgb, var(--s3d-color-primary) 5%, var(--s3d-color-bg));
+}
+
+.decisionRouteAdvanced {
+  background: color-mix(in srgb, var(--s3d-color-warning) 5%, var(--s3d-color-bg));
+}
+
+.decisionRouteList {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  color: var(--s3d-color-text-secondary);
+}
+
+.decisionRouteList li + li {
+  margin-top: 4px;
 }
 
 .tableWrap {
@@ -81,6 +175,13 @@
   gap: 12px;
 }
 
+.footerDangerZone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .footerPrimaryActions {
   display: flex;
   align-items: center;
@@ -90,6 +191,14 @@
 
 .controlRow {
   width: 100%;
+}
+
+.checkboxLabel {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
 }
 
 .disclosure {
@@ -124,6 +233,24 @@
 .publicAccessSelect {
   width: 360px;
   max-width: 100%;
+}
+
+.validationActionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 40%, var(--s3d-color-border));
+  border-radius: var(--s3d-radius-sm);
+  background: color-mix(in srgb, var(--s3d-color-primary) 4%, var(--s3d-color-bg));
+}
+
+.validationActionCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .structuredCardList {
@@ -173,14 +300,8 @@
   gap: 16px;
   padding: 14px 16px;
   border: 1px solid var(--s3d-color-border);
-  border-radius: 16px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--s3d-color-primary) 8%, transparent),
-      transparent 44%
-    ),
-    var(--s3d-gradient-section);
+  border-radius: var(--s3d-radius-sm);
+  background: color-mix(in srgb, var(--s3d-color-primary) 4%, var(--s3d-color-bg));
   box-shadow: var(--s3d-shadow-sm);
 }
 
@@ -214,6 +335,19 @@
 }
 
 @media (max-width: 768px) {
+  .decisionRouteGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decisionHeaderTop {
+    flex-direction: column;
+  }
+
+  .decisionBadgeRow {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+
   .gcsTable {
     min-width: 560px;
   }
@@ -239,6 +373,11 @@
     width: 100%;
   }
 
+  .validationActionRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .presetSelect {
     min-width: 240px;
     width: 100%;
@@ -251,6 +390,11 @@
   .footerActions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .footerDangerZone {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .footerPrimaryActions {

@@ -69,7 +69,7 @@ export type JobsToolbarProps = {
 	jobsCount: number
 }
 
-const MOBILE_FILTERS_MEDIA_QUERY = '(max-width: 480px)'
+const MOBILE_FILTERS_MEDIA_QUERY = '(max-width: 767px)'
 
 export function JobsToolbar(props: JobsToolbarProps) {
 	const screens = Grid.useBreakpoint()
@@ -88,6 +88,22 @@ export function JobsToolbar(props: JobsToolbarProps) {
 	] as const
 	const advancedFiltersDirty =
 		props.statusFilter !== 'all' || props.typeFilterNormalized.trim().length > 0 || props.errorCodeFilterNormalized.trim().length > 0
+	const realtimePaused =
+		!props.eventsConnected &&
+		!props.isOffline &&
+		props.eventsRetryCount >= props.eventsRetryThreshold
+	const realtimeStatusLabel = props.eventsConnected
+		? `Realtime: ${(props.eventsTransport ?? 'unknown').toUpperCase()}`
+		: props.isOffline
+			? 'Realtime paused offline'
+			: 'Realtime disconnected'
+	const failedJobsAvailable = props.jobsStatusSummary.failed > 0
+	const troubleshootingClean =
+		!props.isOffline &&
+		props.uploadSupported &&
+		!props.bucketLookupErrorDescription &&
+		props.eventsConnected &&
+		!failedJobsAvailable
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -105,6 +121,8 @@ export function JobsToolbar(props: JobsToolbarProps) {
 		return () => media.removeEventListener('change', listener)
 	}, [])
 	const mobileFiltersOpenVisible = mobileFiltersOpen && mobileFiltersScopeKey === props.scopeKey
+	const mobileFiltersSheetId = 'jobs-mobile-filters-sheet-panel'
+	const columnsPopoverId = 'jobs-columns-popover-panel'
 	const setScopedMobileFiltersOpen = (nextOpen: boolean) => {
 		setMobileFiltersOpen(nextOpen)
 		setMobileFiltersScopeKey(nextOpen ? props.scopeKey : '')
@@ -154,21 +172,17 @@ export function JobsToolbar(props: JobsToolbarProps) {
 				title="Jobs"
 				subtitle={
 					props.activeProfileName
-						? `${props.activeProfileName} profile is active. Monitor queue health, narrow the result set, and launch uploads, device downloads, or cleanup work from the same workspace.`
-						: 'Monitor queue health, narrow the result set, and launch uploads, device downloads, or cleanup work from the same workspace.'
+						? `${props.activeProfileName} profile is active. Scan active work, failures, and recovery signals before narrowing the queue.`
+						: 'Scan active work, failures, and recovery signals before narrowing the queue.'
 				}
-				actions={
-					<div className={styles.headerActions}>
-						<Tag color={props.eventsConnected ? 'success' : 'default'}>
-							{props.eventsConnected
-								? `Realtime: ${(props.eventsTransport ?? 'unknown').toUpperCase()}`
-								: 'Realtime disconnected'}
-						</Tag>
-						{!props.eventsConnected && props.eventsRetryCount >= props.eventsRetryThreshold ? (
-							<Button size="small" onClick={props.onRetryRealtime} disabled={props.isOffline}>
-								Retry realtime
-							</Button>
-						) : null}
+			/>
+
+			<div className={styles.topRegion}>
+				<PageSection
+					title="Launch work"
+					description="Start new background work. Filters and layout controls stay below the live queue state."
+				>
+					<div className={styles.launchActions}>
 						<Tooltip
 							title={
 								!props.uploadSupported
@@ -195,80 +209,130 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							</span>
 						</Tooltip>
 						<MenuPopover menu={props.topActionsMenu} align="end" scopeKey={props.scopeKey}>
-							{({ toggle }) => (
-								<Button icon={<MoreOutlined />} onClick={toggle}>
+							{({ toggle, open }) => (
+								<Button icon={<MoreOutlined />} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
 									More
 								</Button>
 							)}
 						</MenuPopover>
 					</div>
-				}
-			/>
-
-			<div className={styles.alertStack}>
-				{props.isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
-				{!props.uploadSupported ? (
-					<Alert
-						type="info"
-						showIcon
-						title="Upload actions are disabled for this provider"
-						description={props.uploadDisabledReason ?? uploadsUnsupportedHint()}
-					/>
-				) : null}
-				{props.bucketLookupErrorDescription ? (
-					<Alert
-						type="warning"
-						showIcon
-						title="Bucket lookup unavailable"
-						description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually in Upload, Download, and Delete dialogs.`}
-					/>
-				) : null}
-				{!props.eventsConnected && !props.isOffline ? (
-					<Alert
-						type="warning"
-						showIcon
-						title="Realtime updates disconnected"
-						description={
-							props.eventsRetryCount >= props.eventsRetryThreshold
-								? 'Auto-retry paused. Use Retry realtime to reconnect.'
-								: props.eventsRetryCount > 0
-									? `Reconnecting… attempt ${props.eventsRetryCount}`
-									: 'Reconnecting…'
-						}
-					/>
-				) : null}
-				</div>
+				</PageSection>
 
 				<PageSection
-					title="Queue health"
-					description={
-						props.filtersDirty
-							? 'Current loaded jobs after filters. Reset filters to return to the broader queue view.'
-							: 'Current loaded jobs split by status so active and failed work is visible at a glance.'
-					}
-					actions={
-						<Typography.Text type="secondary" className={styles.sectionMeta}>
-							{props.jobsStatusSummary.total
-								? `${props.jobsStatusSummary.total.toLocaleString()} loaded`
-								: 'No jobs loaded yet'}
-						</Typography.Text>
-					}
+					title="Troubleshooting"
+					description="Realtime, provider support, bucket lookup, and failure recovery signals that may need operator action."
 				>
-					<div className={styles.healthGrid}>
-						{healthItems.map((item) => (
-							<div
-								key={item.key}
-								data-testid={`jobs-health-${item.key}`}
-								className={`${styles.healthCard} ${styles[`healthCard${item.tone[0].toUpperCase()}${item.tone.slice(1)}`]}`}
-							>
-								<Typography.Text type="secondary" className={styles.healthLabel}>
-									{item.label}
-								</Typography.Text>
-								<Typography.Text className={styles.healthValue}>{item.value.toLocaleString()}</Typography.Text>
+					<div className={styles.troubleshootingPanel}>
+						<div className={styles.realtimeStatusRow}>
+							<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
+							<Typography.Text type="secondary">
+								{props.eventsConnected
+									? 'Live job updates are connected.'
+									: props.isOffline
+										? 'Network is offline; retry when connectivity returns.'
+										: realtimePaused
+											? 'Auto-retry paused.'
+											: props.eventsRetryCount > 0
+												? `Reconnecting attempt ${props.eventsRetryCount}.`
+												: 'Reconnecting.'}
+							</Typography.Text>
+						</div>
+
+						{troubleshootingClean ? (
+							<Alert type="success" showIcon title="No active troubleshooting warnings." />
+						) : (
+							<div className={styles.alertStack}>
+								{failedJobsAvailable ? (
+									<Alert
+										type="error"
+										showIcon
+										title={`${props.jobsStatusSummary.failed.toLocaleString()} failed job${props.jobsStatusSummary.failed === 1 ? '' : 's'} need review`}
+										description="Filter to failed jobs, open details, then use retry, logs, or delete actions on the affected rows."
+										action={
+											<Button
+												size="small"
+												onClick={() => props.onStatusFilterChange('failed')}
+												disabled={props.statusFilter === 'failed'}
+											>
+												Show failed jobs
+											</Button>
+										}
+									/>
+								) : null}
+								{props.isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
+								{!props.uploadSupported ? (
+									<Alert
+										type="info"
+										showIcon
+										title="Upload actions are disabled for this provider"
+										description={props.uploadDisabledReason ?? uploadsUnsupportedHint()}
+									/>
+								) : null}
+								{props.bucketLookupErrorDescription ? (
+									<Alert
+										type="warning"
+										showIcon
+										title="Bucket lookup unavailable"
+										description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually in Upload, Download, and Delete dialogs.`}
+									/>
+								) : null}
+								{!props.eventsConnected && !props.isOffline ? (
+									<Alert
+										type="warning"
+										showIcon
+										title="Realtime updates disconnected"
+										description={
+											realtimePaused
+												? 'Auto-retry paused. Use Retry realtime to reconnect.'
+												: props.eventsRetryCount > 0
+													? `Reconnecting… attempt ${props.eventsRetryCount}`
+													: 'Reconnecting…'
+										}
+										action={
+											realtimePaused ? (
+												<Button size="small" onClick={props.onRetryRealtime}>
+													Retry realtime
+												</Button>
+											) : null
+										}
+									/>
+								) : null}
 							</div>
-						))}
+						)}
 					</div>
 				</PageSection>
+			</div>
+
+			<PageSection
+				title="Queue health"
+				description={
+					props.filtersDirty
+						? 'Current loaded jobs after filters. Reset filters to return to the broader queue view.'
+						: 'Current loaded jobs split by status so active and failed work is visible at a glance.'
+				}
+				actions={
+					<Typography.Text type="secondary" className={styles.sectionMeta}>
+						{props.jobsStatusSummary.total
+							? `${props.jobsStatusSummary.total.toLocaleString()} loaded`
+							: 'No jobs loaded yet'}
+					</Typography.Text>
+				}
+			>
+				<div className={styles.healthGrid}>
+					{healthItems.map((item) => (
+						<div
+							key={item.key}
+							data-testid={`jobs-health-${item.key}`}
+							className={`${styles.healthCard} ${styles[`healthCard${item.tone[0].toUpperCase()}${item.tone.slice(1)}`]}`}
+						>
+							<Typography.Text type="secondary" className={styles.healthLabel}>
+								{item.label}
+							</Typography.Text>
+							<Typography.Text className={styles.healthValue}>{item.value.toLocaleString()}</Typography.Text>
+						</div>
+					))}
+				</div>
+			</PageSection>
 
 			<PageSection
 				title="Filters & layout"
@@ -296,6 +360,9 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							onClick={() => setScopedMobileFiltersOpen(true)}
 							data-testid="jobs-mobile-filters-trigger"
 							className={styles.mobileFiltersTrigger}
+							aria-haspopup="dialog"
+							aria-expanded={mobileFiltersOpenVisible}
+							aria-controls={mobileFiltersSheetId}
 						>
 							{advancedFiltersDirty ? 'Filters active' : 'Filters'}
 						</Button>
@@ -308,7 +375,13 @@ export function JobsToolbar(props: JobsToolbarProps) {
 					<PopoverSurface
 						key={`columns:${props.scopeKey}`}
 						align="end"
+						closeOnTab={false}
 						contentClassName={styles.columnsDropdown}
+						contentProps={{
+							id: columnsPopoverId,
+							role: 'dialog',
+							'aria-label': 'Job columns',
+						}}
 						content={({ close }) => (
 							<Space orientation="vertical" size={4} className={styles.columnsDropdownList}>
 								{props.columnOptions.map((option) => (
@@ -333,8 +406,15 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							</Space>
 						)}
 					>
-						{({ toggle }) => (
-							<Button icon={<SettingOutlined />} onClick={toggle}>
+						{({ toggle, open }) => (
+							<Button
+								icon={<SettingOutlined />}
+								onClick={toggle}
+								data-testid="jobs-columns-trigger"
+								aria-haspopup="dialog"
+								aria-expanded={open}
+								aria-controls={columnsPopoverId}
+							>
 								Columns
 							</Button>
 						)}
@@ -356,6 +436,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						placement={screens.md ? 'right' : 'bottom'}
 						height={!screens.md ? 'min(80dvh, 560px)' : undefined}
 						width={screens.md ? 520 : undefined}
+						sheetId={mobileFiltersSheetId}
 						dataTestId="jobs-mobile-filters-sheet"
 						bodyClassName={styles.mobileFiltersBody}
 						footer={

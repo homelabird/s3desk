@@ -39,7 +39,7 @@ func newJobListPreparationError(status int, code, message string, details map[st
 	}
 }
 
-func buildJobListFilter(r *http.Request) store.JobFilter {
+func buildJobListFilter(r *http.Request) (store.JobFilter, error) {
 	var filter store.JobFilter
 
 	if status := r.URL.Query().Get("status"); status != "" {
@@ -57,6 +57,13 @@ func buildJobListFilter(r *http.Request) store.JobFilter {
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil {
 			limit = parsed
+		} else {
+			return store.JobFilter{}, newJobListPreparationError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"limit is invalid",
+				map[string]any{"limit": raw},
+			)
 		}
 	}
 	filter.Limit = limit
@@ -65,7 +72,7 @@ func buildJobListFilter(r *http.Request) store.JobFilter {
 		filter.Cursor = &cursor
 	}
 
-	return filter
+	return filter, nil
 }
 
 func extractJobListPreparedRequest(r *http.Request) jobListPreparedRequest {
@@ -80,9 +87,14 @@ func extractJobListPreparedRequest(r *http.Request) jobListPreparedRequest {
 			),
 		}
 	}
+	filter, err := buildJobListFilter(r)
+	if err != nil {
+		return jobListPreparedRequest{err: err}
+	}
+
 	return jobListPreparedRequest{
 		profileID: profileID,
-		filter:    buildJobListFilter(r),
+		filter:    filter,
 	}
 }
 

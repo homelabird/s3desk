@@ -5,10 +5,14 @@ import (
 	"path/filepath"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/rcloneconfig"
 )
 
 func (m *Manager) writeRcloneConfig(jobID string, profile models.ProfileSecrets) (string, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, m.allowRemote); err != nil {
+		return "", err
+	}
 	dir := filepath.Join(m.dataDir, "logs", "jobs")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err

@@ -1,5 +1,5 @@
 import { Button, Checkbox, Input, Space, Typography } from 'antd'
-import { useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 
 import { DialogModal } from '../components/DialogModal'
 import { appFeedback } from './appFeedback'
@@ -21,6 +21,8 @@ type Props = {
 export function ConfirmDangerDialog(props: Props) {
 	const confirmToken = props.confirmText ?? 'DELETE'
 	const confirmHint = props.confirmHint ?? `Type "${confirmToken}" to confirm`
+	const confirmInputId = `${useId()}-confirm-input`
+	const confirmInputSelector = '[data-confirm-danger-token-input="true"]'
 	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 	const [currentValue, setCurrentValue] = useState('')
 	const [submitting, setSubmitting] = useState(false)
@@ -49,6 +51,8 @@ export function ConfirmDangerDialog(props: Props) {
 			onClose={props.onClose}
 			title={props.title}
 			width={520}
+			closeDisabled={submitting}
+			initialFocusSelector={confirmInputSelector}
 			footer={
 				<>
 					<Button onClick={props.onClose} disabled={submitting}>
@@ -64,8 +68,12 @@ export function ConfirmDangerDialog(props: Props) {
 				{props.description ? <div>{props.description}</div> : null}
 				{props.details ? <Typography.Text type="secondary">{props.details}</Typography.Text> : null}
 				<Space orientation="vertical" size={4} style={{ width: '100%' }}>
-					<Typography.Text type="secondary">{confirmHint}</Typography.Text>
+					<label htmlFor={confirmInputId}>
+						<Typography.Text type="secondary">{confirmHint}</Typography.Text>
+					</label>
 					<Input
+						id={confirmInputId}
+						data-confirm-danger-token-input="true"
 						placeholder={confirmToken}
 						autoComplete="off"
 						autoFocus={shouldAutoFocus}

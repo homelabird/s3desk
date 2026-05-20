@@ -175,6 +175,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		JobRetention:     cfg.JobRetention,
 		JobLogRetention:  cfg.JobLogRetention,
 		AllowedLocalDirs: allowedDirs,
+		AllowRemote:      cfg.AllowRemote,
 		UploadSessionTTL: cfg.UploadSessionTTL,
 	})
 

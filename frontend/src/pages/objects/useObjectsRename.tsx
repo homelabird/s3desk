@@ -14,30 +14,37 @@ type UseObjectsRenameArgs = {
 	profileId: string | null
 	apiToken: string
 	bucket: string
+	prefix: string
 	createJobWithRetry: CreateJobWithRetry
 }
 
 type RenameFormValues = { name: string; confirm: string }
 
-export function useObjectsRename({ profileId, apiToken, bucket, createJobWithRetry }: UseObjectsRenameArgs) {
+export function useObjectsRename({ profileId, apiToken, bucket, prefix, createJobWithRetry }: UseObjectsRenameArgs) {
 	const queryClient = useQueryClient()
 	const navigate = useNavigate()
-	const currentScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}`
+	const currentScopeKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
 	const [renameOpen, setRenameOpen] = useState(false)
 	const [renameKind, setRenameKind] = useState<'object' | 'prefix'>('object')
 	const [renameSource, setRenameSource] = useState<string | null>(null)
 	const [renameValues, setRenameValues] = useState<RenameFormValues>({ name: '', confirm: '' })
 	const [renameStateScopeKey, setRenameStateScopeKey] = useState(currentScopeKey)
 	const renameSessionRef = useRef(0)
+	const [renameSessionId, setRenameSessionId] = useState(0)
+	const renameSubmittingSessionRef = useRef<number | null>(null)
+	const [renameSubmittingSessionId, setRenameSubmittingSessionId] = useState<number | null>(null)
 	const renameScopeMatches = renameStateScopeKey === currentScopeKey
+	const renameSubmitting = renameScopeMatches && renameSubmittingSessionId === renameSessionId
 
 	const invalidateRenameSession = useCallback(() => {
-		renameSessionRef.current += 1
+		const nextSessionId = renameSessionRef.current + 1
+		renameSessionRef.current = nextSessionId
+		setRenameSessionId(nextSessionId)
 	}, [])
 
 	useEffect(() => {
 		invalidateRenameSession()
-	}, [apiToken, bucket, invalidateRenameSession, profileId])
+	}, [apiToken, bucket, invalidateRenameSession, prefix, profileId])
 
 	const focusRenameInput = useCallback(() => {
 		window.setTimeout(() => {
@@ -151,15 +158,23 @@ export function useObjectsRename({ profileId, apiToken, bucket, createJobWithRet
 			if (args.sessionId !== renameSessionRef.current) return
 			objectsFeedback.error(err)
 		},
+		onSettled: (_data, _error, args) => {
+			if (args.sessionId !== renameSubmittingSessionRef.current) return
+			renameSubmittingSessionRef.current = null
+			setRenameSubmittingSessionId(null)
+		},
 	})
 
 	const handleRenameSubmit = useCallback(
 		(values: RenameFormValues) => {
+			if (renameSubmittingSessionRef.current === renameSessionRef.current) return
 			if (!renameScopeMatches || !renameSource) return
 			if (values.confirm !== 'RENAME') {
 				objectsFeedback.typeRenameToProceed()
 				return
 			}
+			renameSubmittingSessionRef.current = renameSessionRef.current
+			setRenameSubmittingSessionId(renameSessionRef.current)
 			renameMutation.mutate({
 				kind: renameKind,
 				src: renameSource,
@@ -186,7 +201,7 @@ export function useObjectsRename({ profileId, apiToken, bucket, createJobWithRet
 		renameSource: renameScopeMatches ? renameSource : null,
 		renameValues: renameScopeMatches ? renameValues : { name: '', confirm: '' },
 		setRenameValues,
-		renameSubmitting: renameMutation.isPending,
+		renameSubmitting,
 		openRenameObject,
 		openRenamePrefix,
 		handleRenameSubmit,

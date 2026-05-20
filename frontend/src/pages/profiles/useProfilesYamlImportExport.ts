@@ -7,7 +7,7 @@ import type { Profile } from '../../api/types'
 import { copyToClipboard } from '../../lib/clipboard'
 import { matchesScopedProfileRequest, matchesScopedRequestId, matchesScopedSession } from './profileMutationScope'
 import { downloadTextFile } from './profileMutationUtils'
-import { buildProfileExportFilename, parseProfileYaml } from './profileYaml'
+import { buildProfileExportFilename, parseProfileYaml, parseProfileYamlForUpdate } from './profileYaml'
 import { profilesFeedback } from './profilesFeedback'
 
 type UseProfilesYamlImportExportArgs = {
@@ -33,6 +33,7 @@ export function useProfilesYamlImportExport({
 	const [yamlContent, setYamlContent] = useState('')
 	const [yamlDraft, setYamlDraft] = useState('')
 	const [yamlError, setYamlError] = useState<string | null>(null)
+	const [yamlIncludesSecrets, setYamlIncludesSecrets] = useState(false)
 	const [exportingProfileId, setExportingProfileId] = useState<string | null>(null)
 	const [importOpen, setImportOpen] = useState(false)
 	const [importScopeKey, setImportScopeKey] = useState<string | null>(null)
@@ -49,6 +50,7 @@ export function useProfilesYamlImportExport({
 	const activeYamlContent = yamlScopeKey === currentScopeKey ? yamlContent : ''
 	const activeYamlDraft = yamlScopeKey === currentScopeKey ? yamlDraft : ''
 	const activeYamlError = yamlScopeKey === currentScopeKey ? yamlError : null
+	const activeYamlIncludesSecrets = yamlScopeKey === currentScopeKey ? yamlIncludesSecrets : false
 	const activeExportingProfileId = yamlScopeKey === currentScopeKey ? exportingProfileId : null
 	const activeImportOpen = importOpen && importScopeKey === currentScopeKey
 	const activeImportText = importScopeKey === currentScopeKey ? importText : ''
@@ -56,17 +58,20 @@ export function useProfilesYamlImportExport({
 	const activeImportLoading = importScopeKey === currentScopeKey ? importLoading : false
 
 	const exportYamlMutation = useMutation({
-		mutationFn: ({ profileId }: { profileId: string; requestId: number }) => api.profiles.exportProfileYaml(profileId),
-		onMutate: ({ profileId, requestId }) => {
+		mutationFn: ({ profileId, includeSecrets }: { profileId: string; requestId: number; includeSecrets?: boolean }) =>
+			includeSecrets ? api.profiles.exportProfileYaml(profileId, { includeSecrets: true }) : api.profiles.exportProfileYaml(profileId),
+		onMutate: ({ profileId, requestId, includeSecrets }) => {
 			yamlRequestIdRef.current = requestId
 			yamlProfileIdRef.current = profileId
 			setExportingProfileId(profileId)
 			setYamlContent('')
 			setYamlDraft('')
 			setYamlError(null)
+			setYamlIncludesSecrets(!!includeSecrets)
 			return {
 				profileId,
 				requestId,
+				includeSecrets: !!includeSecrets,
 				scopeKey: currentScopeKey,
 				scopeVersion: serverScopeVersionRef.current,
 			}
@@ -81,10 +86,11 @@ export function useProfilesYamlImportExport({
 					expectedRequestId: yamlRequestIdRef.current,
 					expectedProfileId: yamlProfileIdRef.current,
 				})
-			) return
-			setYamlContent(content)
-			setYamlDraft(content)
-		},
+				) return
+				setYamlContent(content)
+				setYamlDraft(content)
+				setYamlIncludesSecrets(!!context?.includeSecrets)
+			},
 		onError: (err, _vars, context) => {
 			if (
 				!matchesScopedProfileRequest({
@@ -124,7 +130,7 @@ export function useProfilesYamlImportExport({
 			yamlText: string
 			requestId: number
 		}) => {
-			const { updateRequest, tlsConfig, hasTLSBlock } = await parseProfileYaml(yamlText)
+			const { updateRequest, tlsConfig, hasTLSBlock } = await parseProfileYamlForUpdate(yamlText)
 			const updated = await api.profiles.updateProfile(profileId, updateRequest)
 			if (hasTLSBlock) {
 				if (tlsConfig) {
@@ -156,11 +162,12 @@ export function useProfilesYamlImportExport({
 			) return
 			profilesFeedback.profileYamlSaved()
 			yamlProfileIdRef.current = updated.id
-			setYamlProfile(updated)
-			setYamlContent(canonicalYaml)
-			setYamlDraft(canonicalYaml)
-			setYamlError(null)
-			await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(context.scopeApiToken), exact: true })
+				setYamlProfile(updated)
+				setYamlContent(canonicalYaml)
+				setYamlDraft(canonicalYaml)
+				setYamlError(null)
+				setYamlIncludesSecrets(false)
+				await queryClient.invalidateQueries({ queryKey: queryKeys.profiles.list(context.scopeApiToken), exact: true })
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.profiles.tls(updated.id, context.scopeApiToken),
 				exact: true,
@@ -269,6 +276,7 @@ export function useProfilesYamlImportExport({
 		setYamlContent('')
 		setYamlDraft('')
 		setYamlError(null)
+		setYamlIncludesSecrets(false)
 	}
 
 	const saveYaml = () => {
@@ -277,6 +285,14 @@ export function useProfilesYamlImportExport({
 		yamlRequestIdRef.current = requestId
 		yamlProfileIdRef.current = activeYamlProfile.id
 		saveYamlMutation.mutate({ profileId: activeYamlProfile.id, yamlText: activeYamlDraft, requestId })
+	}
+
+	const loadYamlWithSecrets = () => {
+		if (!activeYamlProfile) return
+		const requestId = yamlRequestIdRef.current + 1
+		yamlRequestIdRef.current = requestId
+		yamlProfileIdRef.current = activeYamlProfile.id
+		exportYamlMutation.mutate({ profileId: activeYamlProfile.id, requestId, includeSecrets: true })
 	}
 
 	const handleYamlCopy = async () => {
@@ -337,6 +353,7 @@ export function useProfilesYamlImportExport({
 		activeYamlContent,
 		activeYamlDraft,
 		activeYamlError,
+		activeYamlIncludesSecrets,
 		activeExportingProfileId,
 		activeImportOpen,
 		activeImportText,
@@ -352,6 +369,7 @@ export function useProfilesYamlImportExport({
 		handleYamlCopy,
 		handleYamlDownload,
 		saveYaml,
+		loadYamlWithSecrets,
 		openImportModal,
 		closeImportModal,
 		submitImport,

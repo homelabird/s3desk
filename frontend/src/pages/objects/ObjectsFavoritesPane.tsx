@@ -129,6 +129,11 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 	if (props.favoritesOnly) collapsedSummaryParts.push('Only')
 	if (queryText) collapsedSummaryParts.push(`"${queryText}"`)
 	const collapsedSummary = !isExpanded && collapsedSummaryParts.length > 0 ? collapsedSummaryParts.join(' · ') : null
+	const liveStatusText = props.errorMessage
+		? `${failedToLoadFavoritesTitle()}: ${props.errorMessage}`
+		: props.isLoading && !disabled
+			? `${loadingFavoritesTitle()}: ${fetchingPinnedObjectsHint()}`
+			: badgeLabel
 
 	return (
 		<ObjectsTreePane
@@ -151,19 +156,30 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 			expanded={props.expanded}
 			onExpandedChange={props.onExpandedChange}
 			extra={
-				<span data-testid="objects-favorites-badge" aria-label={badgeLabel} title={badgeLabel}>
-					<Badge
-						count={badgeCount}
-						overflowCount={999}
-						showZero={!showLoadingBadge && badgeCount !== null}
-						style={{
-							backgroundColor:
-								showLoadingBadge || props.errorMessage || favoriteCount > 0
-									? 'var(--s3d-color-primary)'
-									: 'var(--s3d-color-border-strong)',
-						}}
-					/>
-				</span>
+				<>
+					<span data-testid="objects-favorites-badge" aria-label={badgeLabel} title={badgeLabel}>
+						<Badge
+							count={badgeCount}
+							overflowCount={999}
+							showZero={!showLoadingBadge && badgeCount !== null}
+							style={{
+								backgroundColor:
+									showLoadingBadge || props.errorMessage || favoriteCount > 0
+										? 'var(--s3d-color-primary)'
+										: 'var(--s3d-color-border-strong)',
+							}}
+						/>
+					</span>
+					<span
+						className="sr-only"
+						role={props.errorMessage ? 'alert' : 'status'}
+						aria-live={props.errorMessage ? 'assertive' : 'polite'}
+						aria-atomic="true"
+						data-testid="objects-favorites-live-status"
+					>
+						{liveStatusText}
+					</span>
+				</>
 			}
 		>
 			<div className={styles.favoritesPane}>

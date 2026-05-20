@@ -168,6 +168,58 @@ describe('ObjectsFavoritesPane', () => {
 		expect(summary).toHaveTextContent('Only · "report"')
 		expect(summary).toHaveAttribute('title', 'Only · "report"')
 		expect(screen.queryByTestId('objects-favorites-status')).not.toBeInTheDocument()
+		expect(screen.getByTestId('objects-favorites-live-status')).toHaveTextContent('0 favorites pinned')
+	})
+
+	it('keeps collapsed favorites status updates available to assistive technology', () => {
+		const { rerender } = render(<ObjectsFavoritesPane {...buildProps({ expanded: false, isLoading: true })} />)
+
+		let liveStatus = screen.getByTestId('objects-favorites-live-status')
+		expect(screen.queryByTestId('objects-favorites-status')).not.toBeInTheDocument()
+		expect(liveStatus).toHaveAttribute('role', 'status')
+		expect(liveStatus).toHaveTextContent(loadingFavoritesTitle())
+		expect(liveStatus).toHaveTextContent(fetchingPinnedObjectsHint())
+
+		rerender(
+			<ObjectsFavoritesPane
+				{...buildProps({
+					expanded: false,
+					errorMessage: 'favorite hydration failed',
+				})}
+			/>,
+		)
+
+		liveStatus = screen.getByTestId('objects-favorites-live-status')
+		expect(liveStatus).toHaveAttribute('role', 'alert')
+		expect(liveStatus).toHaveTextContent(failedToLoadFavoritesTitle())
+		expect(liveStatus).toHaveTextContent('favorite hydration failed')
+
+		rerender(
+			<ObjectsFavoritesPane
+				{...buildProps({
+					expanded: false,
+					favoriteCount: 2,
+					favorites: [
+						{
+							key: 'docs/readme.txt',
+							size: 12,
+							lastModified: '2026-03-09T00:00:00Z',
+							createdAt: '2026-03-09T00:00:00Z',
+						},
+						{
+							key: 'docs/notes.txt',
+							size: 16,
+							lastModified: '2026-03-09T00:00:00Z',
+							createdAt: '2026-03-09T00:00:00Z',
+						},
+					],
+				})}
+			/>,
+		)
+
+		liveStatus = screen.getByTestId('objects-favorites-live-status')
+		expect(liveStatus).toHaveAttribute('role', 'status')
+		expect(liveStatus).toHaveTextContent('2 favorites pinned')
 	})
 
 	it('hides the collapsed summary while the pane is expanded', () => {

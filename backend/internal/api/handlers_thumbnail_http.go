@@ -75,7 +75,13 @@ func (svc objectThumbnailHTTPService) prepareGetObjectThumbnail(metric *storageM
 		return models.ProfileSecrets{}, "", "", 0, newObjectThumbnailHTTPError(http.StatusBadRequest, "invalid_request", "bucket and key are required", nil)
 	}
 
-	return secrets, bucket, key, parseThumbnailSize(r.URL.Query().Get("size")), nil
+	size, err := parseThumbnailSize(r.URL.Query().Get("size"))
+	if err != nil {
+		metric.SetStatus("invalid_request")
+		return models.ProfileSecrets{}, "", "", 0, newObjectThumbnailHTTPError(http.StatusBadRequest, "invalid_request", "size is invalid", map[string]any{"size": r.URL.Query().Get("size")})
+	}
+
+	return secrets, bucket, key, size, nil
 }
 
 func (svc objectThumbnailHTTPService) executePrepared(metric *storageMetric, w http.ResponseWriter, r *http.Request, secrets models.ProfileSecrets, bucket string, key string, size int) (bool, error, string, rcloneAPIErrorContext, map[string]any, error) {

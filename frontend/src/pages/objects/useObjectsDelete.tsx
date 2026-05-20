@@ -9,8 +9,8 @@ import { invalidateObjectQueriesForPrefix } from './objectsQueryCache'
 import { publishObjectsRefresh, type ObjectsRefreshEventDetail } from './objectsRefreshEvents'
 
 type CreateJobWithRetry = (req: JobCreateRequest) => Promise<Job>
-type DeleteMutationArgs = { keys: string[]; contextVersion: number }
-type DeletePrefixMutationArgs = { prefix: string; dryRun: boolean; contextVersion: number }
+type DeleteMutationArgs = { keys: string[]; contextVersion: number; contextKey: string }
+type DeletePrefixMutationArgs = { prefix: string; dryRun: boolean; contextVersion: number; contextKey: string }
 
 type UseObjectsDeleteArgs = {
 	api: APIClientShape
@@ -33,6 +33,7 @@ export function useObjectsDelete({
 }: UseObjectsDeleteArgs) {
 	const queryClient = useQueryClient()
 	const currentContextKey = `${apiToken}:${profileId ?? ''}:${bucket}:${prefix}`
+	const [deleteContextVersion, setDeleteContextVersion] = useState(0)
 	const [deletingState, setDeletingState] = useState<{
 		key: string | null
 		contextVersion: number
@@ -42,10 +43,24 @@ export function useObjectsDelete({
 		contextVersion: 0,
 		contextKey: currentContextKey,
 	})
+	const [deletePendingState, setDeletePendingState] = useState<{
+		contextVersion: number
+		contextKey: string
+	} | null>(null)
+	const [deletePrefixPendingState, setDeletePrefixPendingState] = useState<{
+		contextVersion: number
+		contextKey: string
+	} | null>(null)
 	const deleteContextVersionRef = useRef(0)
+	const deleteMutationPending =
+		rawContextMatches(deletePendingState, currentContextKey, deleteContextVersion)
+	const deletePrefixJobMutationPending =
+		rawContextMatches(deletePrefixPendingState, currentContextKey, deleteContextVersion)
 
 	useEffect(() => {
-		deleteContextVersionRef.current += 1
+		const nextContextVersion = deleteContextVersionRef.current + 1
+		deleteContextVersionRef.current = nextContextVersion
+		setDeleteContextVersion(nextContextVersion)
 	}, [apiToken, bucket, prefix, profileId])
 
 	const watchDeleteJobCompletion = async (
@@ -109,16 +124,18 @@ export function useObjectsDelete({
 			}
 			return { kind: 'direct' as const, deleted }
 		},
-		onMutate: ({ keys, contextVersion }) => {
+		onMutate: ({ keys, contextVersion, contextKey }) => {
 			setDeletingState({
 				key: keys.length === 1 ? keys[0] : null,
 				contextVersion,
-				contextKey: currentContextKey,
+				contextKey,
 			})
+			setDeletePendingState({ contextVersion, contextKey })
 			return {
 				scopeProfileId: profileId,
 				scopeApiToken: apiToken,
 				contextVersion,
+				contextKey,
 			}
 		},
 		onSuccess: async (result, { keys, contextVersion }, context) => {
@@ -157,7 +174,10 @@ export function useObjectsDelete({
 				})
 			}
 		},
-		onSettled: (_, __, { keys, contextVersion }) => {
+		onSettled: (_, __, { keys, contextVersion, contextKey }) => {
+			setDeletePendingState((prev) =>
+				prev?.contextVersion === contextVersion && prev.contextKey === contextKey ? null : prev,
+			)
 			if (contextVersion !== deleteContextVersionRef.current) return
 			setDeletingState((prev) => {
 				if (prev.contextVersion !== contextVersion) return prev
@@ -185,11 +205,18 @@ export function useObjectsDelete({
 					dryRun,
 				},
 		}),
-		onMutate: (variables) => ({
-			contextVersion: variables.contextVersion,
-			scopeProfileId: profileId,
-			scopeApiToken: apiToken,
-		}),
+		onMutate: (variables) => {
+			setDeletePrefixPendingState({
+				contextVersion: variables.contextVersion,
+				contextKey: variables.contextKey,
+			})
+			return {
+				contextVersion: variables.contextVersion,
+				contextKey: variables.contextKey,
+				scopeProfileId: profileId,
+				scopeApiToken: apiToken,
+			}
+		},
 		onSuccess: async (job: Job, variables, context) => {
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.jobs.scope(context?.scopeProfileId ?? profileId, context?.scopeApiToken ?? apiToken),
@@ -203,23 +230,32 @@ export function useObjectsDelete({
 			if ((context?.contextVersion ?? variables.contextVersion) !== deleteContextVersionRef.current) return
 			objectsFeedback.error(err)
 		},
+		onSettled: (_data, _error, variables, context) => {
+			const contextVersion = context?.contextVersion ?? variables.contextVersion
+			const contextKey = context?.contextKey ?? variables.contextKey
+			setDeletePrefixPendingState((prev) =>
+				prev?.contextVersion === contextVersion && prev.contextKey === contextKey ? null : prev,
+			)
+		},
 	})
 
 	const deleteMutation = {
-		isPending: rawDeleteMutation.isPending,
+		isPending: rawDeleteMutation.isPending && deleteMutationPending,
 		mutateAsync: (keys: string[]) =>
 			rawDeleteMutation.mutateAsync({
 				keys,
 				contextVersion: deleteContextVersionRef.current,
+				contextKey: currentContextKey,
 			}),
 	}
 
 	const deletePrefixJobMutation = {
-		isPending: rawDeletePrefixJobMutation.isPending,
+		isPending: rawDeletePrefixJobMutation.isPending && deletePrefixJobMutationPending,
 		mutateAsync: (args: { prefix: string; dryRun: boolean }) =>
 			rawDeletePrefixJobMutation.mutateAsync({
 				...args,
 				contextVersion: deleteContextVersionRef.current,
+				contextKey: currentContextKey,
 			}),
 	}
 
@@ -229,4 +265,12 @@ export function useObjectsDelete({
 		deleteMutation,
 		deletePrefixJobMutation,
 	}
+}
+
+function rawContextMatches(
+	state: { contextVersion: number; contextKey: string } | null,
+	currentContextKey: string,
+	currentContextVersion: number,
+) {
+	return state?.contextKey === currentContextKey && state.contextVersion === currentContextVersion
 }

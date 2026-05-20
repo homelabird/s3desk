@@ -1,4 +1,5 @@
 import { Button, Collapse, Space, Tag, Typography } from 'antd'
+import { useState } from 'react'
 
 import {
 	DEFAULT_RETRY_COUNT,
@@ -27,44 +28,91 @@ function networkLogTagColor(kind: NetworkLogEvent['kind']): string {
 	return kind === 'retry' ? 'orange' : 'blue'
 }
 
+function clampNumber(value: number | null, fallback: number, min: number, max: number): number {
+	if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+	return Math.min(max, Math.max(min, value))
+}
+
 export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
+	const [retryDraft, setRetryDraft] = useState(() => ({
+		count: props.apiRetryCount,
+		delayMs: props.apiRetryDelayMs,
+	}))
+	const hasPendingRetryPolicy = retryDraft.count !== props.apiRetryCount || retryDraft.delayMs !== props.apiRetryDelayMs
+	const applyRetryPolicy = () => {
+		props.setApiRetryCount(retryDraft.count)
+		props.setApiRetryDelayMs(retryDraft.delayMs)
+	}
+	const resetRetryDraft = () => {
+		setRetryDraft({
+			count: props.apiRetryCount,
+			delayMs: props.apiRetryDelayMs,
+		})
+	}
+
 	return (
-		<div>
-			<FormField label="HTTP retry count" extra="Applies to GET and other idempotent requests.">
+		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+			<Typography.Text type="secondary" className={styles.sectionIntro}>
+				What this affects: API retry behavior and the current browser session's network troubleshooting log.
+			</Typography.Text>
+			<FormField
+				label="HTTP retry count"
+				htmlFor="settings-http-retry-count"
+				extra="Applies to GET and other idempotent requests."
+			>
 				<NumberField
+					id="settings-http-retry-count"
 					min={RETRY_COUNT_MIN}
 					max={RETRY_COUNT_MAX}
-					value={props.apiRetryCount}
+					value={retryDraft.count}
 					onChange={(value) =>
-						props.setApiRetryCount(
-							typeof value === 'number' ? Math.min(RETRY_COUNT_MAX, Math.max(RETRY_COUNT_MIN, value)) : DEFAULT_RETRY_COUNT,
-						)
+						setRetryDraft((current) => ({
+							...current,
+							count: clampNumber(value, DEFAULT_RETRY_COUNT, RETRY_COUNT_MIN, RETRY_COUNT_MAX),
+						}))
 					}
 					className={styles.fullWidth}
 				/>
 			</FormField>
-			<FormField label="Retry base delay (ms)" extra={`Exponential backoff, capped at ${RETRY_DELAY_MAX_MS}ms.`}>
+			<FormField
+				label="Retry base delay (ms)"
+				htmlFor="settings-retry-base-delay-ms"
+				extra={`Exponential backoff, capped at ${RETRY_DELAY_MAX_MS}ms.`}
+			>
 				<NumberField
+					id="settings-retry-base-delay-ms"
 					min={RETRY_DELAY_MIN_MS}
 					max={RETRY_DELAY_MAX_MS}
 					step={100}
-					value={props.apiRetryDelayMs}
+					value={retryDraft.delayMs}
 					onChange={(value) =>
-						props.setApiRetryDelayMs(
-							typeof value === 'number'
-								? Math.min(RETRY_DELAY_MAX_MS, Math.max(RETRY_DELAY_MIN_MS, value))
-								: DEFAULT_RETRY_DELAY_MS,
-						)
+						setRetryDraft((current) => ({
+							...current,
+							delayMs: clampNumber(value, DEFAULT_RETRY_DELAY_MS, RETRY_DELAY_MIN_MS, RETRY_DELAY_MAX_MS),
+						}))
 					}
 					className={styles.fullWidth}
 				/>
 			</FormField>
+			<div className={styles.settingsApplyBar}>
+				<Typography.Text type="secondary">
+					{hasPendingRetryPolicy ? 'Retry policy has unapplied changes.' : 'Retry policy matches the saved values.'}
+				</Typography.Text>
+				<Space wrap>
+					<Button type="primary" onClick={applyRetryPolicy} disabled={!hasPendingRetryPolicy}>
+						Apply retry policy
+					</Button>
+					<Button onClick={resetRetryDraft} disabled={!hasPendingRetryPolicy}>
+						Cancel retry changes
+					</Button>
+				</Space>
+			</div>
 			<Collapse
 				size="small"
 				items={[
 					{
 						key: 'advanced',
-						label: 'Advanced',
+						label: `Network log (${props.networkLog.length})`,
 						children: (
 							<FormField
 								label="Network diagnostics"
@@ -101,6 +149,6 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 					},
 				]}
 			/>
-		</div>
+		</Space>
 	)
 }

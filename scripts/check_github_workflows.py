@@ -12,11 +12,26 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError as exc:
+    if exc.name == "yaml":
+        print(
+            "[workflow-check] PyYAML is not installed; install it with `python3 -m pip install PyYAML` "
+            "or the OS package `python3-yaml`.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    raise
 
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
+REQUIRED_CANCEL_IN_PROGRESS_WORKFLOWS = {
+    "frontend-e2e.yml": "frontend-e2e-",
+    "release-gate.yml": "release-gate-",
+    "license-audit.yml": "license-audit-",
+}
 
 
 class WorkflowLoader(yaml.BaseLoader):
@@ -87,6 +102,22 @@ def validate_job(path: Path, job_id: str, job):
             validate_step(path, job_id, index, step)
 
 
+def validate_required_concurrency(path: Path, workflow):
+    group_prefix = REQUIRED_CANCEL_IN_PROGRESS_WORKFLOWS.get(path.name)
+    if not group_prefix:
+        return
+    context = f"{path}: concurrency"
+    if "concurrency" not in workflow:
+        fail(f"{path}: missing top-level 'concurrency' key")
+    concurrency = workflow["concurrency"]
+    require_mapping(concurrency, context)
+    group = concurrency.get("group")
+    if not isinstance(group, str) or not group.startswith(group_prefix):
+        fail(f"{context}.group must start with {group_prefix!r}")
+    if concurrency.get("cancel-in-progress") != "true":
+        fail(f"{context}.cancel-in-progress must be true")
+
+
 def validate_workflow(path: Path):
     workflow = load_workflow(path)
     require_mapping(workflow, f"{path}")
@@ -108,6 +139,7 @@ def validate_workflow(path: Path):
         if not isinstance(job_id, str) or not job_id.strip():
             fail(f"{path}: job ids must be non-empty strings")
         validate_job(path, job_id, job)
+    validate_required_concurrency(path, workflow)
 
 
 def main() -> int:

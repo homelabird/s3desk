@@ -1,5 +1,6 @@
 import { OverlaySheet } from './OverlaySheet'
 import { SettingsPage } from '../pages/SettingsPage'
+import { APP_SETTINGS_DRAWER_ID } from '../appShellIds'
 
 type Props = {
 	open: boolean
@@ -17,7 +18,8 @@ export function SettingsDrawer(props: Props) {
 			onClose={props.onClose}
 			title="Settings"
 			placement="right"
-			width="min(90vw, 960px)"
+			width="min(100vw, 960px)"
+			sheetId={APP_SETTINGS_DRAWER_ID}
 		>
 			<SettingsPage
 				apiToken={props.apiToken}

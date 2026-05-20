@@ -132,6 +132,7 @@ export function BucketGovernanceAzureControls(props: GovernanceControlsCommonPro
 
   return (
     <GovernanceControlsLayout
+      provider={props.provider}
       mobile={props.isMobile}
       bucket={props.bucket}
       onClose={props.onClose}

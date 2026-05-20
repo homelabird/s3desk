@@ -1,4 +1,13 @@
-# Optional: grant the GitLab runner service account namespace create/delete privileges.
+# Optional: grant a dedicated GitLab runner service account the privileges needed
+# by helm_k8s_* CI smoke jobs. Configure the GitLab Runner Kubernetes executor
+# for those jobs to use serviceAccountName: gitlab-runner-helm-smoke; do not bind
+# these privileges to the namespace default service account.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitlab-runner-helm-smoke
+  namespace: gitlab-runner
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -6,7 +15,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "create", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -18,17 +27,17 @@ roleRef:
   name: gitlab-runner-namespace-admin
 subjects:
   - kind: ServiceAccount
-    name: default
+    name: gitlab-runner-helm-smoke
     namespace: gitlab-runner
 ---
-# Required for helm_k8s_* jobs: allow managing resources in the gitlab-runner namespace.
+# Required for helm_k8s_* jobs: allow managing namespaced release resources in
+# dynamically created smoke-test namespaces.
 # trivy:ignore:KSV053 CI smoke tests need exec/port-forward for validation.
 # trivy:ignore:KSV056 CI smoke tests need to create services for helm release.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: gitlab-runner-helm-smoke
-  namespace: gitlab-runner
 rules:
   - apiGroups: [""]
     resources:
@@ -64,15 +73,14 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: gitlab-runner-helm-smoke
-  namespace: gitlab-runner
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
+  kind: ClusterRole
   name: gitlab-runner-helm-smoke
 subjects:
   - kind: ServiceAccount
-    name: default
+    name: gitlab-runner-helm-smoke
     namespace: gitlab-runner

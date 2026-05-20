@@ -23,6 +23,11 @@ type ObjectsMoveSelectionSheetProps = {
 }
 
 function Content(props: ObjectsMoveSelectionSheetProps) {
+	const controlsDisabled = props.isSubmitting
+	const destinationBucketInputId = 'objects-move-selection-destination-bucket'
+	const destinationFolderInputId = 'objects-move-selection-destination-folder'
+	const moveConfirmInputId = 'objects-move-selection-confirm'
+
 	return (
 		<>
 			<Alert
@@ -37,6 +42,7 @@ function Content(props: ObjectsMoveSelectionSheetProps) {
 				className={styles.form}
 				onSubmit={(event) => {
 					event.preventDefault()
+					if (props.isSubmitting) return
 					props.onFinish(props.values)
 				}}
 			>
@@ -50,35 +56,40 @@ function Content(props: ObjectsMoveSelectionSheetProps) {
 					</Typography.Text>
 				</FormField>
 
-				<FormField label="Destination bucket" required>
+				<FormField label="Destination bucket" htmlFor={destinationBucketInputId} required>
 					<DatalistInput
+						id={destinationBucketInputId}
 						value={props.values.dstBucket}
 						onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: value })}
 						placeholder="bucket…"
 						ariaLabel="Destination bucket"
 						allowClear
-						disabled={props.isBucketsLoading && props.bucketOptions.length === 0}
+						disabled={controlsDisabled || (props.isBucketsLoading && props.bucketOptions.length === 0)}
 						options={props.bucketOptions.map((option) => ({ value: option.value, label: option.label }))}
 					/>
 				</FormField>
 
-				<FormField label="Destination folder">
+				<FormField label="Destination folder" htmlFor={destinationFolderInputId}>
 					<Input
+						id={destinationFolderInputId}
 						value={props.values.dstPrefix}
 						onChange={(event) => props.onValuesChange({ ...props.values, dstPrefix: event.target.value })}
 						placeholder="folder/subfolder/"
 						aria-label="Destination folder"
 						autoComplete="off"
+						disabled={controlsDisabled}
 					/>
 				</FormField>
 
-				<FormField label='Type "MOVE" to confirm' required>
+				<FormField label='Type "MOVE" to confirm' htmlFor={moveConfirmInputId} required>
 					<Input
+						id={moveConfirmInputId}
 						value={props.values.confirm}
 						onChange={(event) => props.onValuesChange({ ...props.values, confirm: event.target.value })}
 						placeholder="MOVE…"
 						aria-label='Type "MOVE" to confirm'
 						autoComplete="off"
+						disabled={controlsDisabled}
 					/>
 				</FormField>
 			</form>
@@ -87,10 +98,20 @@ function Content(props: ObjectsMoveSelectionSheetProps) {
 }
 
 export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps) {
+	const destinationBucketFocusSelector = '#objects-move-selection-destination-bucket'
 	const actions = (
 		<div className={styles.sheetActions}>
-			<Button onClick={props.onCancel}>Cancel</Button>
-			<Button type="primary" danger loading={props.isSubmitting} onClick={() => props.onFinish(props.values)}>
+			<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
+			<Button
+				type="primary"
+				danger
+				loading={props.isSubmitting}
+				disabled={props.isSubmitting}
+				onClick={() => {
+					if (props.isSubmitting) return
+					props.onFinish(props.values)
+				}}
+			>
 				Start move
 			</Button>
 		</div>
@@ -106,6 +127,8 @@ export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps)
 				height="min(82dvh, 640px)"
 				dataTestId="objects-move-selection-sheet"
 				bodyClassName={styles.sheetBody}
+				closeDisabled={props.isSubmitting}
+				initialFocusSelector={destinationBucketFocusSelector}
 			>
 				<Content {...props} />
 				{actions}
@@ -120,6 +143,8 @@ export function ObjectsMoveSelectionSheet(props: ObjectsMoveSelectionSheetProps)
 			onClose={props.onCancel}
 			width={640}
 			footer={actions}
+			closeDisabled={props.isSubmitting}
+			initialFocusSelector={destinationBucketFocusSelector}
 		>
 			<Content {...props} />
 		</DialogModal>

@@ -12,6 +12,7 @@ import (
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
 	"s3desk/internal/rcloneerrors"
+	"s3desk/internal/redact"
 )
 
 func connectivityDetailsBase(profile models.ProfileSecrets) map[string]any {
@@ -34,7 +35,7 @@ func addNormalizedErrorDetails(details map[string]any, err error, stderr string)
 		msg = err.Error()
 	}
 	if msg != "" {
-		details["error"] = msg
+		details["error"] = redact.Diagnostic(msg)
 	}
 	cls := rcloneerrors.Classify(err, stderr)
 	details["normalizedError"] = map[string]any{

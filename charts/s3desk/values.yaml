@@ -45,6 +45,10 @@ istio:
     enabled: false
     gateways: []
     hosts: []
+    # Disable the per-route timeout for browser uploads and long object
+    # transfers. Set a finite value such as "30m" only after measuring your
+    # gateway, object-store, and uploadMaxBytes behavior together.
+    timeout: "0s"
 
 networkPolicy:
   enabled: false

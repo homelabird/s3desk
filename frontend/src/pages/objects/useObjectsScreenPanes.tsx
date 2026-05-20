@@ -87,6 +87,10 @@ export function useObjectsScreenPanes({
 		onTreeResizePointerDown: paneVm.onTreeResizePointerDown,
 		onTreeResizePointerMove: paneVm.onTreeResizePointerMove,
 		onTreeResizePointerUp: paneVm.onTreeResizePointerUp,
+		onTreeResizeKeyDown: paneVm.onTreeResizeKeyDown,
+		treeResizeMinWidth: paneVm.treeResizeMinWidth,
+		treeResizeMaxWidth: paneVm.treeResizeMaxWidth,
+		treeWidthUsed: paneVm.treeWidthUsed,
 		canCreateFolder,
 		createFolderTooltipText,
 		openNewFolder: actions.openNewFolder,
@@ -201,5 +205,9 @@ export function useObjectsScreenPanes({
 		onDetailsResizePointerDown: paneVm.onDetailsResizePointerDown,
 		onDetailsResizePointerMove: paneVm.onDetailsResizePointerMove,
 		onDetailsResizePointerUp: paneVm.onDetailsResizePointerUp,
+		onDetailsResizeKeyDown: paneVm.onDetailsResizeKeyDown,
+		detailsResizeMinWidth: paneVm.detailsResizeMinWidth,
+		detailsResizeMaxWidth: paneVm.detailsResizeMaxWidth,
+		detailsWidthUsed: paneVm.detailsWidthUsed,
 	})
 }

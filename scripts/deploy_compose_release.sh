@@ -25,6 +25,7 @@ fi
 : "${DEPLOY_SSH_HOST:?DEPLOY_SSH_HOST is required}"
 : "${DEPLOY_SSH_USER:?DEPLOY_SSH_USER is required}"
 : "${DEPLOY_COMPOSE_PATH:?DEPLOY_COMPOSE_PATH is required}"
+: "${DEPLOY_API_TOKEN:?DEPLOY_API_TOKEN is required}"
 
 DEPLOY_SSH_PORT="${DEPLOY_SSH_PORT:-22}"
 DEPLOY_COMPOSE_FILE="${DEPLOY_COMPOSE_FILE:-compose/remote/compose.yml}"
@@ -34,11 +35,19 @@ DEPLOY_BASE_URL="${DEPLOY_BASE_URL:-}"
 DEPLOY_API_TOKEN="${DEPLOY_API_TOKEN:-}"
 DEPLOY_REMOTE_DOCKER_BIN="${DEPLOY_REMOTE_DOCKER_BIN:-docker}"
 
+if [[ ! -s "${HOME}/.ssh/known_hosts" ]]; then
+  echo "A populated ~/.ssh/known_hosts file is required for compose deployments; set DEPLOY_SSH_KNOWN_HOSTS in CI." >&2
+  exit 1
+fi
+
 if [[ -z "${DEPLOY_BASE_URL}" && -n "${DEPLOY_HEALTHCHECK_URL}" ]]; then
   DEPLOY_BASE_URL="${DEPLOY_HEALTHCHECK_URL%/healthz}"
 fi
+DEPLOY_RELEASE_CANDIDATE="${DEPLOY_RELEASE_CANDIDATE:-${TAG}}"
+export DEPLOY_BASE_URL DEPLOY_API_TOKEN DEPLOY_RELEASE_CANDIDATE
+python3 "${ROOT}/scripts/check_live_evidence_env.py" --scope reverse-proxy >/dev/null
 
-ssh_args=(-p "${DEPLOY_SSH_PORT}")
+ssh_args=(-p "${DEPLOY_SSH_PORT}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts")
 if [[ -n "${DEPLOY_SSH_EXTRA_ARGS:-}" ]]; then
   # shellcheck disable=SC2206
   extra_args=( ${DEPLOY_SSH_EXTRA_ARGS} )
@@ -56,6 +65,7 @@ export DEPLOY_COMPOSE_PATH=$(printf '%q' "${DEPLOY_COMPOSE_PATH}")
 export DEPLOY_COMPOSE_FILE=$(printf '%q' "${DEPLOY_COMPOSE_FILE}")
 export DEPLOY_COMPOSE_SERVICE=$(printf '%q' "${DEPLOY_COMPOSE_SERVICE}")
 export DEPLOY_API_TOKEN=$(printf '%q' "${DEPLOY_API_TOKEN}")
+export API_TOKEN=$(printf '%q' "${DEPLOY_API_TOKEN}")
 export DEPLOY_REMOTE_DOCKER_BIN=$(printf '%q' "${DEPLOY_REMOTE_DOCKER_BIN}")
 export DOCKERHUB_USERNAME=$(printf '%q' "${DOCKERHUB_USERNAME:-}")
 export DOCKERHUB_TOKEN=$(printf '%q' "${DOCKERHUB_TOKEN:-}")
@@ -66,9 +76,10 @@ if [[ -n "\${DOCKERHUB_USERNAME}" && -n "\${DOCKERHUB_TOKEN}" ]]; then
   printf '%s' "\${DOCKERHUB_TOKEN}" | "\${DEPLOY_REMOTE_DOCKER_BIN}" login -u "\${DOCKERHUB_USERNAME}" --password-stdin docker.io
 fi
 
-S3DESK_IMAGE="\${S3DESK_IMAGE}" S3DESK_TAG="\${S3DESK_TAG}" "\${DEPLOY_REMOTE_DOCKER_BIN}" compose -f "\${DEPLOY_COMPOSE_FILE}" pull "\${DEPLOY_COMPOSE_SERVICE}"
-S3DESK_IMAGE="\${S3DESK_IMAGE}" S3DESK_TAG="\${S3DESK_TAG}" "\${DEPLOY_REMOTE_DOCKER_BIN}" compose -f "\${DEPLOY_COMPOSE_FILE}" up -d "\${DEPLOY_COMPOSE_SERVICE}"
-S3DESK_IMAGE="\${S3DESK_IMAGE}" S3DESK_TAG="\${S3DESK_TAG}" "\${DEPLOY_REMOTE_DOCKER_BIN}" compose -f "\${DEPLOY_COMPOSE_FILE}" ps
+API_TOKEN="\${API_TOKEN}" S3DESK_IMAGE="\${S3DESK_IMAGE}" S3DESK_TAG="\${S3DESK_TAG}" "\${DEPLOY_REMOTE_DOCKER_BIN}" compose -f "\${DEPLOY_COMPOSE_FILE}" config >/dev/null
+API_TOKEN="\${API_TOKEN}" S3DESK_IMAGE="\${S3DESK_IMAGE}" S3DESK_TAG="\${S3DESK_TAG}" "\${DEPLOY_REMOTE_DOCKER_BIN}" compose -f "\${DEPLOY_COMPOSE_FILE}" pull "\${DEPLOY_COMPOSE_SERVICE}"
+API_TOKEN="\${API_TOKEN}" S3DESK_IMAGE="\${S3DESK_IMAGE}" S3DESK_TAG="\${S3DESK_TAG}" "\${DEPLOY_REMOTE_DOCKER_BIN}" compose -f "\${DEPLOY_COMPOSE_FILE}" up -d "\${DEPLOY_COMPOSE_SERVICE}"
+API_TOKEN="\${API_TOKEN}" S3DESK_IMAGE="\${S3DESK_IMAGE}" S3DESK_TAG="\${S3DESK_TAG}" "\${DEPLOY_REMOTE_DOCKER_BIN}" compose -f "\${DEPLOY_COMPOSE_FILE}" ps
 EOF
 
 bash "${ROOT}/scripts/deploy_smoke.sh"

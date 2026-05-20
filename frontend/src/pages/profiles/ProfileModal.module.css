@@ -12,9 +12,9 @@
 	flex-wrap: wrap;
 	padding: 18px 20px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 20px;
-	background: var(--s3d-gradient-section);
-	box-shadow: var(--s3d-shadow-sm);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-card);
+	box-shadow: none;
 }
 
 .heroCopy {
@@ -55,15 +55,126 @@
 	color: inherit !important;
 }
 
+.providerChecklist {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 14px 16px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-card);
+	box-shadow: none;
+}
+
+.providerChecklistHeader {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.providerChecklistTitleBlock {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.providerChecklistMeta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.providerChecklistGroups {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.providerChecklistGroup {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+.providerChecklistGroupTitle {
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.35;
+	color: var(--s3d-color-text-secondary);
+}
+
+.providerChecklistItems {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.providerChecklistItem {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 8px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-elevated);
+}
+
+.providerChecklistItem[data-status="incomplete"] {
+	border-color: var(--s3d-color-warning-border);
+	background: var(--s3d-color-warning-bg);
+}
+
+.providerChecklistIcon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 16px;
+	min-height: 22px;
+	color: var(--s3d-color-text-secondary);
+}
+
+.providerChecklistItem[data-status="complete"] .providerChecklistIcon {
+	color: var(--s3d-color-success-text);
+}
+
+.providerChecklistItem[data-status="incomplete"] .providerChecklistIcon {
+	color: var(--s3d-color-warning-text);
+}
+
+.providerChecklistItemCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.providerChecklistItemTitle {
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1.35;
+	color: var(--s3d-color-text);
+}
+
+.providerChecklistItemDetail {
+	font-size: 12px;
+	line-height: 1.35;
+}
+
 .sections {
 	background: transparent;
 }
 
 .sections :global(.ant-collapse-item) {
 	border: 1px solid var(--s3d-color-border) !important;
-	border-radius: 18px !important;
+	border-radius: var(--s3d-radius-sm) !important;
 	background: var(--s3d-color-bg-card);
-	box-shadow: var(--s3d-shadow-sm);
+	box-shadow: none;
 	overflow: hidden;
 	margin-bottom: 12px;
 }
@@ -129,7 +240,7 @@
 	gap: 6px;
 	padding: 14px 16px;
 	border: 1px solid var(--s3d-color-info-border);
-	border-radius: 14px;
+	border-radius: var(--s3d-radius-sm);
 	background: var(--s3d-color-primary-bg);
 }
 
@@ -153,7 +264,7 @@
 	gap: 12px;
 	padding: 14px 16px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 14px;
+	border-radius: var(--s3d-radius-sm);
 	background: var(--s3d-color-bg-secondary);
 }
 
@@ -195,14 +306,28 @@
 .drawerFooter {
 	display: flex;
 	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.drawerFooterHint {
+	min-width: 0;
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.drawerFooterActions {
+	display: flex;
+	align-items: center;
 	justify-content: flex-end;
 	gap: 10px;
+	flex: 0 0 auto;
 }
 
 @media (max-width: 768px) {
 	.hero {
 		padding: 16px;
-		border-radius: 18px;
+		border-radius: var(--s3d-radius-sm);
 	}
 
 	.formGrid {
@@ -213,15 +338,34 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 
+	.providerChecklistGroups {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.providerChecklistItem {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.providerChecklistItem :global(.ant-tag) {
+		grid-column: 2;
+		justify-self: start;
+	}
+
 	.sectionHeader {
 		gap: 10px;
 	}
 
 	.drawerFooter {
 		width: 100%;
+		flex-direction: column;
+		align-items: stretch;
 	}
 
-	.drawerFooter :global(.ant-btn) {
+	.drawerFooterActions {
+		width: 100%;
+	}
+
+	.drawerFooterActions :global(.ant-btn) {
 		flex: 1 1 0;
 	}
 }

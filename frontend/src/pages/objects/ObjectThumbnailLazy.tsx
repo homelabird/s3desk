@@ -2,6 +2,7 @@ import { lazy, Suspense, type CSSProperties } from 'react'
 
 import type { ObjectThumbnailProps } from './ObjectThumbnail'
 import styles from './ObjectsThumbnailPrimitives.module.css'
+import { getObjectMediaStateDescriptor } from './objectsMediaState'
 
 const ObjectThumbnailImpl = lazy(async () => {
 	const m = await import('./ObjectThumbnail')
@@ -22,16 +23,17 @@ function buildFallbackStyle(props: Pick<ObjectThumbnailProps, 'fit' | 'size'>): 
 
 function ObjectThumbnailFallback(props: Pick<ObjectThumbnailProps, 'altText' | 'fit' | 'objectKey' | 'size'>) {
 	const fileName = props.objectKey.split('/').pop() ?? props.objectKey
+	const descriptor = getObjectMediaStateDescriptor('thumbnail-loading')
 	return (
 		<span
 			className={`${styles.objectThumbnailPlaceholder} ${styles.objectThumbnailPlaceholderLoading}`}
 			style={buildFallbackStyle(props)}
 			role="img"
-			aria-label={props.altText ?? `Loading preview for ${fileName}`}
-			title={`Loading preview: ${fileName}`}
+			aria-label={props.altText ?? `${descriptor.title} for ${fileName}`}
+			title={`${descriptor.title}: ${fileName}`}
 		>
-			<span className={styles.objectThumbnailPlaceholderBadge}>Loading</span>
-			<span className={styles.objectThumbnailPlaceholderLabel}>Fetching thumbnail...</span>
+			<span className={styles.objectThumbnailPlaceholderBadge}>{descriptor.shortLabel}</span>
+			<span className={styles.objectThumbnailPlaceholderLabel}>{descriptor.recoveryHint}</span>
 		</span>
 	)
 }

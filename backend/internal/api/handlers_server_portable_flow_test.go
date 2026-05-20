@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/oklog/ulid/v2"
+
 	"s3desk/internal/config"
 	"s3desk/internal/db"
 	"s3desk/internal/models"
@@ -22,7 +24,7 @@ type stubPortableImportApplyStore struct {
 	pingErr      error
 }
 
-func (s stubPortableImportApplyStore) ImportPortableEntityFilesReplace(_ context.Context, _ map[string][]byte, _ string) (store.PortableImportCounts, error) {
+func (s stubPortableImportApplyStore) ImportPortableEntityFilesReplaceWithOptions(_ context.Context, _ map[string][]byte, _ string, _ store.PortableValidationOptions) (store.PortableImportCounts, error) {
 	return s.importCounts, s.importErr
 }
 
@@ -61,6 +63,34 @@ func TestBuildPortableImportResponse_BlocksMissingEntityAndChecksumMismatch(t *t
 	}
 	if got := resp.Entities[0].Name; got != "profiles" {
 		t.Fatalf("first entity = %q, want profiles", got)
+	}
+}
+
+func TestBuildPortableImportResponseRejectsLocalhostPortableEndpointWhenRemoteEnabled(t *testing.T) {
+	t.Parallel()
+
+	srv := &server{cfg: config.Config{DataDir: t.TempDir(), EncryptionKey: testEncryptionKey(), AllowRemote: true}}
+	profileData := []byte(`{"ID":"` + ulid.Make().String() + `","Name":"local-minio","Provider":"s3_compatible","ConfigJSON":"{}","SecretsJSON":"{}","Endpoint":"http://localhost:9000","Region":"us-east-1","AccessKeyID":"access-key","SecretAccessKey":"secret-key","CreatedAt":"2026-05-19T00:00:00Z","UpdatedAt":"2026-05-19T00:00:00Z"}` + "\n")
+	sum := sha256.Sum256(profileData)
+	manifest := models.ServerMigrationManifest{
+		BundleKind:        serverBackupScopePortable,
+		Format:            serverBackupBundleFormat,
+		FormatVersion:     portableBackupFormatVersion,
+		SchemaVersion:     portableBackupSchemaVersion,
+		EncryptionEnabled: false,
+		Entities: map[string]models.ServerMigrationEntityManifest{
+			"profiles": {
+				Count:  1,
+				SHA256: hex.EncodeToString(sum[:]),
+			},
+		},
+	}
+	entityFiles := map[string][]byte{"profiles": profileData}
+
+	resp := srv.buildPortableImportResponse(portableImportModeDryRun, db.BackendSQLite, manifest, entityFiles)
+	blockers := strings.Join(resp.Preflight.Blockers, "\n")
+	if !strings.Contains(blockers, "must not target localhost") {
+		t.Fatalf("blockers=%v, want localhost endpoint rejection", resp.Preflight.Blockers)
 	}
 }
 

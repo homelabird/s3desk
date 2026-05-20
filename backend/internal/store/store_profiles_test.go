@@ -130,6 +130,57 @@ func TestEnsureProfilesEncryptedFailsOnCorruptedSecretsJSON(t *testing.T) {
 	}
 }
 
+func TestEnsureProfilesEncryptedEncryptsAzureClientSecret(t *testing.T) {
+	st := newProfileTestStore(t, Options{EncryptionKey: testStoreEncryptionKey()})
+	profile := createAzureProfile(t, st)
+
+	plainSecrets := `{"accountKey":"plain-account-key","clientSecret":"plain-client-secret"}`
+	if err := st.db.WithContext(context.Background()).
+		Model(&profileRow{}).
+		Where("id = ?", profile.ID).
+		Update("secrets_json", plainSecrets).Error; err != nil {
+		t.Fatalf("seed plain secrets_json: %v", err)
+	}
+
+	updated, err := st.EnsureProfilesEncrypted(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureProfilesEncrypted() error=%v", err)
+	}
+	if updated != 1 {
+		t.Fatalf("updated=%d, want 1", updated)
+	}
+
+	var row profileRow
+	if err := st.db.WithContext(context.Background()).
+		Where("id = ?", profile.ID).
+		Take(&row).Error; err != nil {
+		t.Fatalf("load profile row: %v", err)
+	}
+	var stored map[string]string
+	if err := json.Unmarshal([]byte(row.SecretsJSON), &stored); err != nil {
+		t.Fatalf("decode stored secrets: %v", err)
+	}
+	for _, key := range []string{"accountKey", "clientSecret"} {
+		if strings.Contains(stored[key], "plain-") {
+			t.Fatalf("%s was not encrypted: %q", key, stored[key])
+		}
+		if !strings.HasPrefix(stored[key], encryptedPrefix) {
+			t.Fatalf("%s=%q, want encrypted prefix", key, stored[key])
+		}
+	}
+
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if !ok || err != nil {
+		t.Fatalf("GetProfileSecrets() ok=%v err=%v", ok, err)
+	}
+	if secrets.AzureAccountKey != "plain-account-key" {
+		t.Fatalf("AzureAccountKey=%q, want decrypted account key", secrets.AzureAccountKey)
+	}
+	if secrets.AzureClientSecret != "plain-client-secret" {
+		t.Fatalf("AzureClientSecret=%q, want decrypted client secret", secrets.AzureClientSecret)
+	}
+}
+
 func TestCreateProfileGcpRequiresProjectNumber(t *testing.T) {
 	st := newProfileTestStore(t, Options{})
 	serviceAccountJSON := `{"type":"service_account","project_id":"p","client_email":"e","private_key":"k"}`
@@ -146,6 +197,25 @@ func TestCreateProfileGcpRequiresProjectNumber(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "projectNumber is required") {
 		t.Fatalf("expected projectNumber error, got %v", err)
+	}
+}
+
+func TestCreateProfileGcpRejectsUnsafeServiceAccountTokenURI(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	serviceAccountJSON := `{"type":"service_account","project_id":"p","client_email":"e","private_key":"k","token_uri":"http://169.254.169.254/token"}`
+	projectNumber := "123456789012"
+
+	_, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:           models.ProfileProviderGcpGcs,
+		Name:               "gcp",
+		ServiceAccountJSON: &serviceAccountJSON,
+		ProjectNumber:      &projectNumber,
+	})
+	if err == nil {
+		t.Fatal("expected unsafe token_uri error")
+	}
+	if !strings.Contains(err.Error(), "token_uri") {
+		t.Fatalf("expected token_uri error, got %v", err)
 	}
 }
 
@@ -179,6 +249,37 @@ func TestUpdateProfileGcpRejectsEmptyProjectNumber(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "projectNumber is required") {
 		t.Fatalf("expected projectNumber error, got %v", err)
+	}
+}
+
+func TestUpdateProfileGcpRejectsUnsafeServiceAccountTokenURI(t *testing.T) {
+	st := newProfileTestStore(t, Options{})
+	serviceAccountJSON := `{"type":"service_account","project_id":"p","client_email":"e","private_key":"k"}`
+	projectNumber := "123456789012"
+
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:           models.ProfileProviderGcpGcs,
+		Name:               "gcp",
+		ServiceAccountJSON: &serviceAccountJSON,
+		ProjectNumber:      &projectNumber,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	unsafeServiceAccountJSON := `{"type":"service_account","project_id":"p","client_email":"e","private_key":"k","token_uri":"http://169.254.169.254/token"}`
+	_, ok, err := st.UpdateProfile(context.Background(), profile.ID, models.ProfileUpdateRequest{
+		Provider:           models.ProfileProviderGcpGcs,
+		ServiceAccountJSON: &unsafeServiceAccountJSON,
+	})
+	if !ok {
+		t.Fatal("expected profile to exist")
+	}
+	if err == nil {
+		t.Fatal("expected unsafe token_uri error")
+	}
+	if !strings.Contains(err.Error(), "token_uri") {
+		t.Fatalf("expected token_uri error, got %v", err)
 	}
 }
 

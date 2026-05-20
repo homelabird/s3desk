@@ -15,6 +15,14 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 - `390x844`
 - `430x932`
 
+## Automated Coverage
+
+Covered by `frontend/tests/login-mobile-responsive.spec.ts`.
+
+- [x] Valid token login completes on a narrow mobile viewport.
+- [x] Invalid stored-token recovery can clear and replace the token on mobile.
+- [x] Theme switching remains reachable on the mobile login screen.
+
 ## Manual QA Checklist
 
 - [ ] The login form still exposes the token input and submit action on a phone-sized viewport.
@@ -25,17 +33,17 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## `Login` Flow Checklist
 
-- [ ] Open the login screen in a narrow mobile viewport.
-- [ ] Sign in with a valid token and confirm the app leaves the login screen.
-- [ ] Simulate an invalid stored token state and confirm recovery controls remain visible and usable.
-- [ ] Clear the invalid state and confirm a second login attempt can succeed.
-- [ ] Toggle the theme and confirm the control remains reachable before or after recovery.
+- [x] Open the login screen in a narrow mobile viewport.
+- [x] Sign in with a valid token and confirm the app leaves the login screen.
+- [x] Simulate an invalid stored token state and confirm recovery controls remain visible and usable.
+- [x] Clear the invalid state and confirm a second login attempt can succeed.
+- [x] Toggle the theme and confirm the control remains reachable before or after recovery.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile test that verifies successful narrow-viewport login.
-- [ ] Add a test that verifies invalid stored token recovery remains usable.
-- [ ] Add a test that verifies theme switching remains reachable on mobile.
+- [x] Add a mobile test that verifies successful narrow-viewport login.
+- [x] Add a test that verifies invalid stored token recovery remains usable.
+- [x] Add a test that verifies theme switching remains reachable on mobile.
 
 ## Notes
 

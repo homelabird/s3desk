@@ -127,8 +127,8 @@ are deliberately changed.
 - `frontend/index.html` sets `viewport-fit=cover`
 - `frontend/tests/mobile-smoke.spec.ts` covers phone-width portrait layouts,
   dialogs/sheets, uploads hints, and touch targets
-- `frontend/tests/responsive-lists.spec.ts` covers responsive table/card
-  switching and extra-small widths
+- `npm run test:e2e:mobile-responsive` covers responsive table/card switching
+  and extra-small widths across the current page-specific mobile specs
 - `frontend/tests/webview-environment-posture.spec.ts` covers one short
   landscape/split-view posture around the jobs download drawer
 - `docs/MOBILE_UX_AUDIT.md` documents narrow-screen, landscape, and foldable

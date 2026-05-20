@@ -5,14 +5,123 @@
 	gap: 20px;
 }
 
+.mobileShell :global(.ant-btn-primary:not(:disabled)) {
+	background: var(--s3d-color-primary-btn) !important;
+	border-color: var(--s3d-color-primary-btn) !important;
+	color: var(--s3d-color-bg) !important;
+}
+
+.mobileShell :global(.ant-btn-primary:not(:disabled):hover),
+.mobileShell :global(.ant-btn-primary:not(:disabled):focus-visible) {
+	background: var(--s3d-color-primary-hover) !important;
+	border-color: var(--s3d-color-primary-hover) !important;
+	color: var(--s3d-color-bg) !important;
+}
+
 .summaryCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 22px;
+	border-radius: var(--s3d-radius-sm);
 	padding: 18px;
-	background:
-		linear-gradient(135deg, color-mix(in srgb, var(--s3d-color-primary) 8%, transparent), transparent 40%),
-		var(--s3d-gradient-section);
-	box-shadow: var(--s3d-shadow-sm);
+	background: var(--s3d-color-bg-card);
+	box-shadow: none;
+}
+
+.decisionHeader {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg);
+	box-shadow: none;
+}
+
+.decisionHeaderTop {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 14px;
+}
+
+.decisionHeaderCopy {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.decisionBadgeRow {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 6px;
+	max-width: 360px;
+}
+
+.decisionBadgeRow :global(.ant-tag) {
+	margin-inline-end: 0;
+}
+
+.decisionBadge {
+	color: var(--s3d-color-text);
+	border-color: var(--s3d-color-border);
+	background: var(--s3d-color-bg-secondary);
+}
+
+.decisionBadgeInfo {
+	color: var(--s3d-color-primary);
+	border-color: var(--s3d-color-info-border);
+	background: var(--s3d-color-info-bg);
+}
+
+.decisionBadgeWarning {
+	color: var(--s3d-color-warning-text);
+	border-color: var(--s3d-color-warning-border);
+	background: var(--s3d-color-warning-bg);
+}
+
+.decisionBadgeDanger {
+	color: var(--s3d-color-error-dark);
+	border-color: var(--s3d-color-error-border);
+	background: var(--s3d-color-danger-bg);
+}
+
+.decisionRouteGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.decisionRoute {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	padding: 12px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-secondary);
+}
+
+.decisionRoutePrimary {
+	border-color: color-mix(in srgb, var(--s3d-color-primary) 45%, var(--s3d-color-border));
+	background: color-mix(in srgb, var(--s3d-color-primary) 5%, var(--s3d-color-bg));
+}
+
+.decisionRouteAdvanced {
+	background: color-mix(in srgb, var(--s3d-color-warning) 5%, var(--s3d-color-bg));
+}
+
+.decisionRouteList {
+	margin: 2px 0 0;
+	padding-left: 18px;
+	color: var(--s3d-color-text-secondary);
+}
+
+.decisionRouteList li + li {
+	margin-top: 4px;
 }
 
 .summaryHeader {
@@ -42,10 +151,10 @@
 
 .sectionCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 20px;
+	border-radius: var(--s3d-radius-sm);
 	padding: 16px;
 	background: var(--s3d-color-bg);
-	box-shadow: var(--s3d-shadow-sm);
+	box-shadow: none;
 }
 
 .sectionWide {
@@ -88,7 +197,7 @@
 
 .editorCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 16px;
+	border-radius: var(--s3d-radius-sm);
 	padding: 12px;
 	background: color-mix(in srgb, var(--s3d-color-primary) 3%, var(--s3d-color-bg));
 }
@@ -119,7 +228,7 @@
 	gap: 8px;
 	padding: 8px 10px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 12px;
+	border-radius: var(--s3d-radius-sm);
 	background: var(--s3d-color-bg);
 }
 
@@ -150,7 +259,7 @@
 
 .advancedDisclosure {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 16px;
+	border-radius: var(--s3d-radius-sm);
 	padding: 12px 14px;
 	background: color-mix(in srgb, var(--s3d-color-primary) 3%, var(--s3d-color-bg));
 }
@@ -178,6 +287,10 @@
 }
 
 @media (max-width: 820px) {
+	.decisionRouteGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.grid {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -185,5 +298,49 @@
 	.editorCardGrid,
 	.permissionGrid {
 		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 640px) {
+	.decisionHeaderTop {
+		flex-direction: column;
+	}
+
+	.decisionBadgeRow {
+		justify-content: flex-start;
+		max-width: 100%;
+	}
+
+	.sectionHeader,
+	.editorCardHeader,
+	.toggleRow {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.sectionActions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.sectionActions > *,
+	.editorCardHeader > :last-child {
+		max-width: 100%;
+	}
+
+	.sectionActions :global(.ant-btn) {
+		flex: 1 1 160px;
+	}
+
+	.toggleRow > :last-child {
+		align-self: flex-start;
+	}
+
+	.editorCard,
+	.advancedDisclosure,
+	.permissionItem {
+		border-color: color-mix(in srgb, var(--s3d-color-border) 70%, transparent);
+		background: transparent;
+		box-shadow: none;
 	}
 }

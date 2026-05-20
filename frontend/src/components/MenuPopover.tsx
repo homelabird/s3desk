@@ -71,7 +71,7 @@ function MenuList(props: {
 	const className = [level === 0 ? styles.menu : styles.submenu, level === 0 ? props.rootClassName ?? '' : ''].filter(Boolean).join(' ')
 	return (
 		<div
-			role={level === 0 ? 'menu' : 'group'}
+			role="menu"
 			className={className}
 			style={level === 0 ? props.rootStyle : undefined}
 			onKeyDown={level === 0 ? handleMenuKeyboardNavigation : undefined}
@@ -113,6 +113,7 @@ function MenuSubmenu(props: {
 				type="button"
 				role="menuitem"
 				className={styles.item}
+				aria-haspopup="menu"
 				aria-expanded={open}
 				onClick={() => setOpen((value) => !value)}
 				disabled={'disabled' in props.item ? !!props.item.disabled : false}

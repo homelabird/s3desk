@@ -97,7 +97,7 @@ func (svc objectDeleteHTTPService) deleteS3LikeMarkerObjects(r *http.Request, se
 		return nil
 	}
 
-	client, err := s3ClientFromProfile(secrets)
+	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return newObjectDeleteHTTPError(http.StatusInternalServerError, "internal_error", "failed to prepare S3 client", nil)
 	}

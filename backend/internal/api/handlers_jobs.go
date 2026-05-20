@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"s3desk/internal/jobs"
+	"s3desk/internal/localpath"
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneconfig"
 )
@@ -304,6 +305,9 @@ func validateLocalPathForRead(localPath string, allowedRoots []string) error {
 	}
 	for _, root := range allowedRoots {
 		if isUnderDir(root, real) {
+			if err := localpath.RejectSymlinkComponentsUnderRoots(abs, allowedRoots); err != nil {
+				return fmt.Errorf("payload.localPath is invalid: %w", err)
+			}
 			return nil
 		}
 	}
@@ -321,10 +325,28 @@ func validateLocalPathForCreate(localPath string, allowedRoots []string) error {
 	}
 	for _, root := range allowedRoots {
 		if isUnderDir(root, real) {
+			if err := rejectLocalPathSymlinkComponentsForCreate(localPath, allowedRoots); err != nil {
+				return err
+			}
 			return nil
 		}
 	}
 	return fmt.Errorf("payload.localPath %q is not under an allowed local directory", real)
+}
+
+func rejectLocalPathSymlinkComponentsForCreate(localPath string, allowedRoots []string) error {
+	clean := filepath.Clean(localPath)
+	if clean == "" || clean == "." {
+		return errors.New("payload.localPath is invalid")
+	}
+	abs, err := filepath.Abs(clean)
+	if err != nil {
+		return errors.New("payload.localPath is invalid")
+	}
+	if err := localpath.RejectSymlinkComponentsUnderRoots(abs, allowedRoots); err != nil {
+		return fmt.Errorf("payload.localPath is invalid: %w", err)
+	}
+	return nil
 }
 
 func resolveLocalPathForCreate(localPath string) (string, error) {

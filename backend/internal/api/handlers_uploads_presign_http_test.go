@@ -10,6 +10,7 @@ import (
 
 	"s3desk/internal/config"
 	"s3desk/internal/models"
+	"s3desk/internal/store"
 )
 
 func TestUploadPresignHTTPService_HandlePresignUpload_ReturnsMissingProfileAndUploadID(t *testing.T) {
@@ -67,6 +68,41 @@ func TestUploadPresignHTTPService_HandlePresignUpload_ReturnsInvalidJSON(t *test
 	}
 }
 
+func TestUploadPresignHTTPService_HandlePresignUpload_ReturnsInvalidExpiresSeconds(t *testing.T) {
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModePresigned, "", expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	srv := &server{cfg: config.Config{DataDir: dataDir}, store: st}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/presign", bytes.NewBufferString(`{"path":"file.bin","expiresSeconds":30}`))
+	req.Header.Set("X-Profile-Id", profile.ID)
+	req.Header.Set("Content-Type", "application/json")
+	req = withProfileSecrets(req, models.ProfileSecrets{ID: profile.ID, Provider: models.ProfileProviderS3Compatible})
+	req = withUploadIDParam(req, upload.ID)
+	rr := httptest.NewRecorder()
+
+	newUploadPresignHTTPService(srv).handlePresignUpload(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	}
+	if got := resp.Error.Details["expiresSeconds"]; got != float64(30) {
+		t.Fatalf("details.expiresSeconds=%v, want 30", got)
+	}
+}
+
 func TestExecutePresign_PreservesMissingProfileAndUploadID(t *testing.T) {
 	svc := newUploadPresignHTTPService(&server{})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/presign", bytes.NewBufferString(`{"path":"file.bin"}`))
@@ -81,5 +117,165 @@ func TestExecutePresign_PreservesMissingProfileAndUploadID(t *testing.T) {
 	}
 	if uploadErr.message != "profile and uploadId are required" {
 		t.Fatalf("uploadErr.message=%q, want profile and uploadId are required", uploadErr.message)
+	}
+}
+
+func TestExecuteSinglePartRejectsNegativeSize(t *testing.T) {
+	svc := newUploadPresignHTTPService(&server{})
+	size := int64(-1)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/presign", nil)
+
+	_, uploadErr := svc.executeSinglePart(req, uploadPresignPreparedRequest{
+		req: models.UploadPresignRequest{Size: &size},
+	})
+
+	if uploadErr == nil {
+		t.Fatal("expected upload error")
+	}
+	if uploadErr.status != http.StatusBadRequest {
+		t.Fatalf("uploadErr.status=%d, want %d", uploadErr.status, http.StatusBadRequest)
+	}
+	if uploadErr.code != "invalid_request" {
+		t.Fatalf("uploadErr.code=%q, want invalid_request", uploadErr.code)
+	}
+}
+
+func TestExecuteSinglePartRequiresSizeWhenUploadMaxBytesConfigured(t *testing.T) {
+	svc := newUploadPresignHTTPService(&server{cfg: config.Config{UploadMaxBytes: 10}})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/presign", nil)
+
+	_, uploadErr := svc.executeSinglePart(req, uploadPresignPreparedRequest{
+		req: models.UploadPresignRequest{},
+	})
+
+	if uploadErr == nil {
+		t.Fatal("expected upload error")
+	}
+	if uploadErr.status != http.StatusBadRequest {
+		t.Fatalf("uploadErr.status=%d, want %d", uploadErr.status, http.StatusBadRequest)
+	}
+	if uploadErr.code != "invalid_request" {
+		t.Fatalf("uploadErr.code=%q, want invalid_request", uploadErr.code)
+	}
+}
+
+func TestExecuteSinglePartRejectsUploadMaxBytes(t *testing.T) {
+	svc := newUploadPresignHTTPService(&server{cfg: config.Config{UploadMaxBytes: 10}})
+	size := int64(11)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/presign", nil)
+
+	_, uploadErr := svc.executeSinglePart(req, uploadPresignPreparedRequest{
+		req: models.UploadPresignRequest{Size: &size},
+	})
+
+	if uploadErr == nil {
+		t.Fatal("expected upload error")
+	}
+	if uploadErr.status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("uploadErr.status=%d, want %d", uploadErr.status, http.StatusRequestEntityTooLarge)
+	}
+	if uploadErr.code != "too_large" {
+		t.Fatalf("uploadErr.code=%q, want too_large", uploadErr.code)
+	}
+}
+
+func TestExecuteSinglePartRejectsSessionByteReservationOverLimit(t *testing.T) {
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModePresigned, "", expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+	existingSize := int64(8)
+	if err := st.UpsertUploadObjectWithByteLimit(context.Background(), store.UploadObject{
+		UploadID:     upload.ID,
+		ProfileID:    profile.ID,
+		Path:         "existing.bin",
+		Bucket:       upload.Bucket,
+		ObjectKey:    "incoming/existing.bin",
+		ExpectedSize: &existingSize,
+	}, 10); err != nil {
+		t.Fatalf("seed upload object: %v", err)
+	}
+
+	svc := newUploadPresignHTTPService(&server{
+		cfg:   config.Config{DataDir: dataDir, UploadMaxBytes: 10},
+		store: st,
+	})
+	size := int64(3)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/presign", nil)
+
+	_, uploadErr := svc.executeSinglePart(req, uploadPresignPreparedRequest{
+		profileID: profile.ID,
+		uploadID:  upload.ID,
+		us:        upload,
+		secrets: models.ProfileSecrets{
+			ID:              profile.ID,
+			Provider:        models.ProfileProviderS3Compatible,
+			Endpoint:        "http://127.0.0.1:9000",
+			Region:          "us-east-1",
+			AccessKeyID:     "access",
+			SecretAccessKey: "secret",
+			ForcePathStyle:  true,
+		},
+		req:       models.UploadPresignRequest{Path: "new.bin", Size: &size},
+		relPath:   "new.bin",
+		key:       "incoming/new.bin",
+		expires:   time.Minute,
+		expiresAt: time.Now().UTC().Add(time.Minute).Format(time.RFC3339Nano),
+	})
+
+	if uploadErr == nil {
+		t.Fatal("expected upload error")
+	}
+	if uploadErr.status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("uploadErr.status=%d, want %d", uploadErr.status, http.StatusRequestEntityTooLarge)
+	}
+	if uploadErr.code != "too_large" {
+		t.Fatalf("uploadErr.code=%q, want too_large", uploadErr.code)
+	}
+
+	stored, ok, err := st.GetUploadSession(context.Background(), profile.ID, upload.ID)
+	if err != nil {
+		t.Fatalf("get upload session: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected upload session")
+	}
+	if stored.Bytes != existingSize {
+		t.Fatalf("bytes=%d, want %d", stored.Bytes, existingSize)
+	}
+	objects, err := st.ListUploadObjects(context.Background(), profile.ID, upload.ID)
+	if err != nil {
+		t.Fatalf("list upload objects: %v", err)
+	}
+	if len(objects) != 1 || objects[0].Path != "existing.bin" {
+		t.Fatalf("objects=%#v, want only existing.bin", objects)
+	}
+}
+
+func TestExecuteMultipartRejectsUploadMaxBytes(t *testing.T) {
+	svc := newUploadPresignHTTPService(&server{cfg: config.Config{UploadMaxBytes: 10}})
+	fileSize := int64(11)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/presign", nil)
+
+	_, uploadErr := svc.executeMultipart(req, uploadPresignPreparedRequest{
+		req: models.UploadPresignRequest{
+			Multipart: &models.UploadMultipartPresignReq{
+				FileSize:      &fileSize,
+				PartSizeBytes: 5 * 1024 * 1024,
+			},
+		},
+	})
+
+	if uploadErr == nil {
+		t.Fatal("expected upload error")
+	}
+	if uploadErr.status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("uploadErr.status=%d, want %d", uploadErr.status, http.StatusRequestEntityTooLarge)
+	}
+	if uploadErr.code != "too_large" {
+		t.Fatalf("uploadErr.code=%q, want too_large", uploadErr.code)
 	}
 }

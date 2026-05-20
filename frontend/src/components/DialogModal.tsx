@@ -15,20 +15,38 @@ type Props = {
 	width?: number | string
 	footer?: ReactNode
 	dataTestId?: string
+	closeDisabled?: boolean
+	initialFocusSelector?: string
 	children: ReactNode
 }
 
 export function DialogModal(props: Props) {
-	const { open, onClose, title, subtitle, width, footer, dataTestId, children } = props
+	const {
+		open,
+		onClose,
+		title,
+		subtitle,
+		width,
+		footer,
+		dataTestId,
+		closeDisabled = false,
+		initialFocusSelector,
+		children,
+	} = props
 	const titleId = useId()
 	const closeButtonRef = useRef<HTMLButtonElement>(null)
 	const panelRef = useRef<HTMLDivElement>(null)
+	const handleClose = () => {
+		if (closeDisabled) return
+		onClose()
+	}
 
 	useOverlayLayer({
 		open,
-		onEscape: onClose,
+		onEscape: handleClose,
 		containerRef: panelRef,
 		initialFocusRef: closeButtonRef,
+		initialFocusSelector,
 		lockBodyScroll: true,
 		trapFocus: true,
 	})
@@ -40,7 +58,7 @@ export function DialogModal(props: Props) {
 	} as CSSProperties
 
 	return createPortal(
-		<div className={styles.backdrop} onMouseDown={onClose}>
+		<div className={styles.backdrop} onMouseDown={handleClose}>
 			<div
 				ref={panelRef}
 				role="dialog"
@@ -59,7 +77,15 @@ export function DialogModal(props: Props) {
 						</h2>
 						{subtitle ? <div className={styles.subtitle}>{subtitle}</div> : null}
 					</div>
-					<button ref={closeButtonRef} type="button" className={styles.close} onClick={onClose} aria-label="Close">
+					<button
+						ref={closeButtonRef}
+						type="button"
+						className={styles.close}
+						onClick={handleClose}
+						disabled={closeDisabled}
+						aria-label={closeDisabled ? 'Close disabled while busy' : 'Close'}
+						title={closeDisabled ? 'Finish the current operation first' : 'Close'}
+					>
 						<CloseOutlined />
 					</button>
 				</div>

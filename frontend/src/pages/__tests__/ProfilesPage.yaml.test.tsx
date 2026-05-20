@@ -17,35 +17,37 @@ vi.mock('../../api/useAPIClient', async () => {
 
 vi.mock('../profiles/profileYaml', async () => {
 	const actual = await vi.importActual<typeof import('../profiles/profileYaml')>('../profiles/profileYaml')
+	const parseYaml = async (yamlText: string) => ({
+		request: {
+			provider: 's3_compatible',
+			name: yamlText.trim() || 'Updated Profile',
+			endpoint: 'http://127.0.0.1:9000',
+			region: 'us-east-1',
+			accessKeyId: 'demo-access',
+			secretAccessKey: 'demo-secret',
+			sessionToken: null,
+			forcePathStyle: false,
+			preserveLeadingSlash: false,
+			tlsInsecureSkipVerify: false,
+		},
+		updateRequest: {
+			name: yamlText.trim() || 'Updated Profile',
+			endpoint: 'http://127.0.0.1:9000',
+			region: 'us-east-1',
+			accessKeyId: 'demo-access',
+			secretAccessKey: 'demo-secret',
+			sessionToken: null,
+			forcePathStyle: false,
+			preserveLeadingSlash: false,
+			tlsInsecureSkipVerify: false,
+		},
+		tlsConfig: undefined,
+		hasTLSBlock: false,
+	})
 	return {
 		...actual,
-		parseProfileYaml: vi.fn(async (yamlText: string) => ({
-			request: {
-				provider: 's3_compatible',
-				name: yamlText.trim() || 'Updated Profile',
-				endpoint: 'http://127.0.0.1:9000',
-				region: 'us-east-1',
-				accessKeyId: 'demo-access',
-				secretAccessKey: 'demo-secret',
-				sessionToken: null,
-				forcePathStyle: false,
-				preserveLeadingSlash: false,
-				tlsInsecureSkipVerify: false,
-			},
-			updateRequest: {
-				name: yamlText.trim() || 'Updated Profile',
-				endpoint: 'http://127.0.0.1:9000',
-				region: 'us-east-1',
-				accessKeyId: 'demo-access',
-				secretAccessKey: 'demo-secret',
-				sessionToken: null,
-				forcePathStyle: false,
-				preserveLeadingSlash: false,
-				tlsInsecureSkipVerify: false,
-			},
-			tlsConfig: undefined,
-			hasTLSBlock: false,
-		})),
+		parseProfileYaml: vi.fn(parseYaml),
+		parseProfileYamlForUpdate: vi.fn(parseYaml),
 	}
 })
 
@@ -120,6 +122,10 @@ function createClient() {
 	})
 }
 
+function findOpenYamlButton(profileName: string) {
+	return screen.findByRole('button', { name: `Open YAML ${profileName}` }, { timeout: 5_000 })
+}
+
 beforeAll(() => {
 	ensureDomShims()
 })
@@ -192,7 +198,7 @@ describe('ProfilesPage YAML flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(await screen.findByRole('button', { name: 'Open YAML Primary Profile' }))
+		fireEvent.click(await findOpenYamlButton('Primary Profile'))
 		expect(await screen.findByRole('dialog', { name: 'Profile YAML' })).toBeInTheDocument()
 
 		rerender(
@@ -293,7 +299,7 @@ describe('ProfilesPage YAML flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(await screen.findByRole('button', { name: 'Open YAML Primary Profile' }))
+		fireEvent.click(await findOpenYamlButton('Primary Profile'))
 		expect(await screen.findByRole('dialog', { name: 'Profile YAML' })).toBeInTheDocument()
 		expect(screen.getByTestId('yaml-profile')).toHaveTextContent('Primary Profile')
 
@@ -396,7 +402,7 @@ describe('ProfilesPage YAML flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(await screen.findByRole('button', { name: 'Open YAML Primary Profile' }))
+		fireEvent.click(await findOpenYamlButton('Primary Profile'))
 		await waitFor(() => {
 			expect(screen.getByRole('textbox', { name: 'YAML Draft' })).toHaveValue('name: original\n')
 		})
@@ -496,7 +502,7 @@ describe('ProfilesPage YAML flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(await screen.findByRole('button', { name: 'Open YAML Primary Profile' }))
+		fireEvent.click(await findOpenYamlButton('Primary Profile'))
 		await waitFor(() => {
 			expect(screen.getByRole('textbox', { name: 'YAML Draft' })).toHaveValue('name: original\n')
 		})

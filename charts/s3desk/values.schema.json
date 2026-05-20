@@ -169,14 +169,70 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Create a Kubernetes NetworkPolicy for the S3Desk pods."
         },
         "policyTypes": {
           "type": "array",
+          "description": "NetworkPolicy policyTypes. Defaults to Ingress only so outbound provider/database traffic is not restricted unless explicitly enabled.",
           "items": {
             "type": "string",
             "enum": ["Ingress", "Egress"]
           }
+        },
+        "ingress": {
+          "type": "object",
+          "description": "Ingress NetworkPolicy controls for traffic into the S3Desk service pods.",
+          "properties": {
+            "allowSameNamespace": {
+              "type": "boolean",
+              "description": "Allow any pod in the release namespace to reach S3Desk. Disable this in shared production namespaces and use ingress.extra with controller/gateway selectors."
+            },
+            "extra": {
+              "type": "array",
+              "description": "Additional Kubernetes NetworkPolicyIngressRule entries. Use namespaceSelector plus podSelector for NGINX/Istio controller namespaces; `{}` is a temporary allow-all ingress escape hatch.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "array"
+                  },
+                  "ports": {
+                    "type": "array"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": true
+        },
+        "egress": {
+          "type": "object",
+          "description": "Egress NetworkPolicy controls. These are only enforced when policyTypes includes Egress.",
+          "properties": {
+            "allowDns": {
+              "type": "boolean",
+              "description": "Allow TCP/UDP DNS on port 53 when Egress policy is enabled."
+            },
+            "extra": {
+              "type": "array",
+              "description": "Additional Kubernetes NetworkPolicyEgressRule entries for provider, database, proxy, or CIDR destinations. `{}` is a temporary allow-all egress escape hatch.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "array"
+                  },
+                  "ports": {
+                    "type": "array"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": true
         }
       },
       "additionalProperties": true
@@ -461,6 +517,54 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "required": ["istio"],
+        "properties": {
+          "istio": {
+            "type": "object",
+            "required": ["virtualService"],
+            "properties": {
+              "virtualService": {
+                "type": "object",
+                "required": ["enabled"],
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "description": "When Istio VirtualService is enabled, require at least one host and one gateway.",
+        "properties": {
+          "istio": {
+            "type": "object",
+            "properties": {
+              "virtualService": {
+                "type": "object",
+                "required": ["hosts", "gateways"],
+                "properties": {
+                  "hosts": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                  },
+                  "gateways": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

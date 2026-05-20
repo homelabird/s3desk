@@ -27,8 +27,18 @@ func (s *server) directMultipartChunkFlow(
 	if uploadErr := uploadRejectIfTooLarge(s.cfg.UploadMaxBytes, chunkValues.fileSize, "upload exceeds maxBytes"); uploadErr != nil {
 		return uploadErr
 	}
+	if uploadErr := s.upsertUploadObjectWithByteReservation(r.Context(), store.UploadObject{
+		UploadID:     uploadID,
+		ProfileID:    profileID,
+		Path:         chunkValues.relPath,
+		Bucket:       us.Bucket,
+		ObjectKey:    directUploadObjectKey(us.Prefix, chunkValues.relPath),
+		ExpectedSize: &chunkValues.fileSize,
+	}); uploadErr != nil {
+		return uploadErr
+	}
 
-	client, err := s3ClientFromProfile(secrets)
+	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote)
 	if err != nil {
 		return newUploadInternalError("failed to prepare multipart client", map[string]any{"error": err.Error()})
 	}
@@ -93,15 +103,15 @@ func (s *server) directMultipartChunkPersist(
 	profileID, uploadID, relPath, key, bucket string,
 	fileSize int64,
 ) *uploadHTTPError {
-	if err := s.store.UpsertUploadObject(r.Context(), store.UploadObject{
+	if uploadErr := s.upsertUploadObjectWithByteReservation(r.Context(), store.UploadObject{
 		UploadID:     uploadID,
 		ProfileID:    profileID,
 		Path:         relPath,
 		Bucket:       bucket,
 		ObjectKey:    key,
 		ExpectedSize: &fileSize,
-	}); err != nil {
-		return newUploadInternalError("failed to persist upload object", map[string]any{"error": err.Error()})
+	}); uploadErr != nil {
+		return uploadErr
 	}
 	return nil
 }
@@ -117,7 +127,21 @@ func (s *server) stagingChunkFlow(
 		return uploadErr
 	}
 
+	alreadyAssembled, uploadErr := stagingChunkAlreadyAssembled(stagingDir, relOS, filepath.Dir(chunkPath), chunkValues.fileSize)
+	if uploadErr != nil {
+		return uploadErr
+	}
+	if alreadyAssembled {
+		_ = r.Body.Close()
+		return nil
+	}
+
 	maxBytes := s.cfg.UploadMaxBytes
+	releasedBytes, uploadErr := s.releaseExistingStagingChunkFinal(r, profileID, uploadID, stagingDir, relOS)
+	if uploadErr != nil {
+		return uploadErr
+	}
+	bytesTracked -= releasedBytes
 	remainingBytes, uploadErr := uploadRemainingBytes(maxBytes, bytesTracked)
 	if uploadErr != nil {
 		return uploadErr

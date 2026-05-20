@@ -15,7 +15,7 @@
 
 .pageTitle {
   margin: 0 !important;
-  letter-spacing: -0.03em;
+  letter-spacing: 0;
 }
 
 .pageHeaderAlert {
@@ -294,10 +294,10 @@
   }
 
   .treeCompactActionButton {
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-    min-height: 24px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 
@@ -478,6 +478,12 @@
     gap: 8px;
   }
 
+  .toolbarTopRow :global(.ant-btn),
+  .toolbarHintWrap :global(.ant-btn) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .objectsOverlayPanelLeft,
   .objectsOverlayPanelRight {
     width: 100%;
@@ -494,6 +500,13 @@
     --objects-overlay-inline-padding-left: max(16px, env(safe-area-inset-left));
     --objects-overlay-inline-padding-right: max(16px, env(safe-area-inset-right));
     --objects-overlay-body-bottom-padding: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .objectsOverlayClose {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .objectsOverlayPanel[data-compact-mobile='true'] {
@@ -564,8 +577,8 @@
   }
 
   .treeCompactActionButton {
-    min-width: 26px;
-    min-height: 26px;
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 

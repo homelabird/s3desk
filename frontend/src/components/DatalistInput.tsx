@@ -9,6 +9,7 @@ export type DatalistOption = {
 }
 
 type DatalistInputProps = {
+	id?: string
 	listId?: string
 	value: string
 	onChange: (value: string) => void
@@ -32,6 +33,7 @@ export const DatalistInput = forwardRef<InputRef, DatalistInputProps>(function D
 	return (
 		<>
 			<Input
+				id={props.id}
 				ref={ref}
 				value={props.value}
 				onChange={(e) => props.onChange(e.target.value)}

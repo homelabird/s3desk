@@ -2,7 +2,7 @@
 # Requires a public DNS hostname that resolves to this server.
 services:
   postgres:
-    image: postgres:15-alpine
+    image: "${POSTGRES_IMAGE:-docker.io/library/postgres:15-alpine}"
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-s3desk}
@@ -44,7 +44,7 @@ services:
       - s3desk-data:/data
 
   caddy:
-    image: caddy:2.8.4
+    image: "${CADDY_IMAGE:-docker.io/library/caddy:2.8.4}"
     restart: unless-stopped
     depends_on:
       - s3desk

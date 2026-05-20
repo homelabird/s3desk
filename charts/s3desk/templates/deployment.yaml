@@ -36,7 +36,7 @@ spec:
       {{- end }}
       containers:
         - name: s3desk
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ include "s3desk.imageTag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -111,12 +111,17 @@ spec:
               Build an ALLOWED_HOSTS allowlist that works out of the box for
               common Kubernetes deployments:
               - in-cluster access via Service DNS (incl. Prometheus scraping)
+              - server.externalBaseURL hostnames
               - Ingress or Istio VirtualService hostnames
               - any explicit .Values.server.allowedHosts
             */}}
             {{- $allowedHosts := list }}
             {{- if .Values.server.allowedHosts }}
               {{- $allowedHosts = concat $allowedHosts .Values.server.allowedHosts }}
+            {{- end }}
+            {{- $externalBaseURLHost := trim (include "s3desk.externalBaseURLHost" .) }}
+            {{- if $externalBaseURLHost }}
+              {{- $allowedHosts = append $allowedHosts $externalBaseURLHost }}
             {{- end }}
             {{- if .Values.ingress.enabled }}
               {{- range .Values.ingress.hosts }}
@@ -187,29 +192,37 @@ spec:
               value: {{ .Values.rclone.retryJitterRatio | quote }}
             {{- end }}
             {{- $secretName := include "s3desk.secretName" . }}
-            {{- $needsManagedAPIToken := and (eq (trim .Values.server.apiToken) "") (eq (trim .Values.secrets.existingSecret) "") (.Values.secrets.autoGenerateApiToken | default false) (eq (include "s3desk.metricsTokenRequired" .) "true") }}
-            {{- $useSecret := or (ne (trim .Values.server.apiToken) "") $needsManagedAPIToken (ne (trim .Values.server.encryptionKey) "") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
+            {{- $apiToken := trim (default "" .Values.server.apiToken) }}
+            {{- $encryptionKey := trim (default "" .Values.server.encryptionKey) }}
+            {{- $databaseURL := trim (default "" .Values.db.databaseUrl) }}
+            {{- $existingSecret := trim (default "" .Values.secrets.existingSecret) }}
+            {{- $apiTokenRequired := eq (include "s3desk.metricsTokenRequired" .) "true" }}
+            {{- $browserFacing := or (.Values.ingress.enabled | default false) (.Values.istio.virtualService.enabled | default false) }}
+            {{- $encryptionKeyRequired := and (.Values.server.allowRemote | default false) $browserFacing }}
+            {{- $databaseURLRequired := eq .Values.db.backend "postgres" }}
+            {{- $needsManagedAPIToken := and (eq $apiToken "") (eq $existingSecret "") (.Values.secrets.autoGenerateApiToken | default false) $apiTokenRequired }}
+            {{- $useSecret := or (ne $apiToken "") $needsManagedAPIToken (ne $encryptionKey "") (ne $databaseURL "") (ne $existingSecret "") }}
             {{- if $useSecret }}
             - name: API_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ $secretName }}
                   key: {{ .Values.secrets.apiTokenKey }}
-                  optional: true
+                  optional: {{ not $apiTokenRequired }}
             - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ $secretName }}
                   key: {{ .Values.secrets.encryptionKeyKey }}
-                  optional: true
+                  optional: {{ not $encryptionKeyRequired }}
             {{- end }}
-            {{- if or (eq .Values.db.backend "postgres") (ne (trim .Values.db.databaseUrl) "") (ne (trim .Values.secrets.existingSecret) "") }}
+            {{- if or $databaseURLRequired (ne $databaseURL "") (ne $existingSecret "") }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ $secretName }}
                   key: {{ .Values.secrets.databaseUrlKey }}
-                  optional: true
+                  optional: {{ not $databaseURLRequired }}
             {{- end }}
             {{- if gt (int .Values.db.maxOpenConns) 0 }}
             - name: DB_MAX_OPEN_CONNS

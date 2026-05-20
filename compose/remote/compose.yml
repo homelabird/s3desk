@@ -2,7 +2,7 @@
 # For local development, use docker-compose.local-build.yml instead.
 services:
   postgres:
-    image: postgres:15-alpine
+    image: "${POSTGRES_IMAGE:-docker.io/library/postgres:15-alpine}"
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-s3desk}
@@ -31,7 +31,7 @@ services:
       LOG_ENV: "${LOG_ENV:-production}"
       API_TOKEN: "${API_TOKEN:?set API_TOKEN for remote deployment}"
       ALLOWED_LOCAL_DIRS: "${ALLOWED_LOCAL_DIRS:?set ALLOWED_LOCAL_DIRS to one or more container paths S3Desk may access}"
-      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:?set ALLOWED_HOSTS to allowed hostnames for remote deployment}"
       EXTERNAL_BASE_URL: "${EXTERNAL_BASE_URL:-}"
       DB_BACKEND: "postgres"
       DATABASE_URL: "postgres://${POSTGRES_USER:-s3desk}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD for remote deployment}@postgres:5432/${POSTGRES_DB:-s3desk}?sslmode=disable"

@@ -16,6 +16,7 @@ type UseObjectsListKeydownArgs = {
 	onCopySelection: (mode: 'copy' | 'move') => void
 	onPasteSelection: () => void
 	onOpenDetails: (key: string) => void
+	onOpenContextMenu?: (key: string) => void
 	onGoUp: () => void
 	onDeleteSelected: () => void
 	onSelectKeys: (keys: string[]) => void
@@ -26,9 +27,31 @@ type UseObjectsListKeydownArgs = {
 	onWarnRenameNoSelection: () => void
 }
 
+const objectsListShortcutIgnoredTargetSelector = [
+	'button',
+	'a[href]',
+	'input',
+	'select',
+	'textarea',
+	'[contenteditable="true"]',
+	'[role="button"]',
+	'[role="menuitem"]',
+].join(',')
+
+function isObjectsListShortcutIgnoredTarget(e: React.KeyboardEvent<HTMLDivElement>): boolean {
+	const target = e.target
+	const currentTarget = e.currentTarget
+	if (!(target instanceof Element) || !(currentTarget instanceof Element) || target === currentTarget) {
+		return false
+	}
+	const interactive = target.closest(objectsListShortcutIgnoredTargetSelector)
+	return Boolean(interactive && currentTarget.contains(interactive))
+}
+
 export function useObjectsListKeydown(args: UseObjectsListKeydownArgs) {
 	return useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>) => {
+			if (isObjectsListShortcutIgnoredTarget(e)) return
 			if (e.key === 'Escape') {
 				if (args.contextMenuOpen) {
 					e.preventDefault()
@@ -48,6 +71,14 @@ export function useObjectsListKeydown(args: UseObjectsListKeydownArgs) {
 					return
 				}
 				args.onWarnRenameNoSelection()
+				return
+			}
+			if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+				const key = args.singleSelectedKey ?? args.lastSelectedObjectKey
+				if (key && args.onOpenContextMenu) {
+					e.preventDefault()
+					args.onOpenContextMenu(key)
+				}
 				return
 			}
 			if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n') {

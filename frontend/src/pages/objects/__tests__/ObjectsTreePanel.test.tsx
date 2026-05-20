@@ -57,6 +57,10 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsTreePanel>> 
 		onResizePointerDown: vi.fn(),
 		onResizePointerMove: vi.fn(),
 		onResizePointerUp: vi.fn(),
+		onResizeKeyDown: vi.fn(),
+		resizeMinWidth: 220,
+		resizeMaxWidth: 720,
+		resizeValue: 280,
 		canCreateFolder: true,
 		createFolderTooltipText: '',
 		onNewFolderAtPrefix: vi.fn(),
@@ -81,6 +85,12 @@ describe('ObjectsTreePanel', () => {
 		expect(screen.getByTestId('objects-folders-pane')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-folders-pane-header')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-folders-pane-body')).toBeInTheDocument()
+	})
+
+	it('uses the stable tree drawer id when rendered as a sheet', () => {
+		render(<ObjectsTreePanel {...buildProps({ dockTree: false, treeDrawerOpen: true })} />)
+
+		expect(screen.getByRole('dialog', { name: 'Browse' })).toHaveAttribute('id', 'objects-tree-drawer')
 	})
 
 	it('lets users expand the empty favorites pane on demand', () => {
@@ -198,5 +208,19 @@ describe('ObjectsTreePanel', () => {
 		render(<ObjectsTreePanel {...buildProps({ canCreateFolder: true, selectedKeys: ['/'] })} />)
 
 		expect(screen.getByTitle(newFolderShortcutHint())).toBeInTheDocument()
+	})
+
+	it('exposes the docked tree resize handle as a keyboard separator', () => {
+		const onResizeKeyDown = vi.fn()
+		render(<ObjectsTreePanel {...buildProps({ onResizeKeyDown, resizeValue: 312 })} />)
+
+		const separator = screen.getByRole('separator', { name: 'Resize folder pane' })
+		expect(separator).toHaveAttribute('aria-orientation', 'vertical')
+		expect(separator).toHaveAttribute('aria-valuemin', '220')
+		expect(separator).toHaveAttribute('aria-valuemax', '720')
+		expect(separator).toHaveAttribute('aria-valuenow', '312')
+
+		fireEvent.keyDown(separator, { key: 'ArrowRight' })
+		expect(onResizeKeyDown).toHaveBeenCalledTimes(1)
 	})
 })

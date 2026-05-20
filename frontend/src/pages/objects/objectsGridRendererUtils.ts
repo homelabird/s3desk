@@ -4,6 +4,7 @@ import { fileExtensionFromKey } from './objectsListUtils'
 
 export function onActivateFromKeyboard(event: KeyboardEvent<HTMLDivElement>, onActivate: () => void) {
 	if (event.key !== 'Enter' && event.key !== ' ') return
+	if (event.target !== event.currentTarget) return
 	event.preventDefault()
 	onActivate()
 }

@@ -262,6 +262,7 @@ spec:
     - s3desk.k8s.homelabird.com
   http:
     - name: s3desk-upload
+      timeout: 0s
       route:
         - destination:
             host: s3desk.s3desk.svc.cluster.local
@@ -284,6 +285,8 @@ spec:
       patch:
         operation: MERGE
         value:
+          # Keep this aligned with measured upload concurrency and memory
+          # headroom. It is intentionally not part of the Helm default path.
           per_connection_buffer_limit_bytes: 1073741824
     - applyTo: NETWORK_FILTER
       match:

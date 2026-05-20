@@ -72,6 +72,7 @@ export type UploadTask = {
 	uploadMode?: 'staging' | 'direct' | 'presigned'
 	uploadFallbackFrom?: 'direct' | 'presigned'
 	uploadFallbackReason?: 'provider_unsupported' | 'network_path_failed'
+	retryFileHandleState?: 'remembered' | 'selection_required'
 	resumeChunkSizeBytes?: number
 	resumeFileSize?: number
 	resumeFiles?: Array<{ path: string; size: number; chunkSizeBytes: number }>

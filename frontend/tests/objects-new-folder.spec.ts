@@ -196,7 +196,7 @@ test.describe('Objects new folder visibility', () => {
 
 		const prefixRow = objectsListRow(page, 'a/')
 		await expect(prefixRow).toBeVisible()
-		await prefixRow.getByRole('button', { name: 'Prefix actions' }).click()
+		await prefixRow.getByRole('button', { name: /Prefix actions/ }).click()
 		await page.getByRole('menuitem', { name: /New subfolder/i }).click()
 
 		const dialog = page.getByRole('dialog', { name: 'New folder' })

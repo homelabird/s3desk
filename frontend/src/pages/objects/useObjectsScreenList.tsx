@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 
 import { buildObjectsScreenListViewState } from './buildObjectsScreenListViewState'
 import { logObjectsDebug } from './objectsPageDebug'
@@ -8,6 +8,32 @@ import type { ObjectsScreenArgs } from './objectsScreenTypes'
 import { useObjectsScreenCommandPalette } from './useObjectsScreenCommandPalette'
 import { useObjectsScreenListInteractions } from './useObjectsScreenListInteractions'
 import { useObjectsSelectionBarActions } from './useObjectsSelectionBarActions'
+
+function getKeyboardContextMenuPoint(scroller: HTMLElement | null, rowIndex: number | undefined) {
+	const row = typeof rowIndex === 'number'
+		? scroller?.querySelector<HTMLElement>(`[data-index="${rowIndex}"] [data-objects-row="true"]`)
+		: null
+	const anchor = row ?? scroller
+	if (anchor) {
+		const rect = anchor.getBoundingClientRect()
+		const width = Math.max(0, rect.width)
+		const height = Math.max(0, rect.height)
+		const xOffset = width > 0
+			? Math.min(Math.max(width / 2, 8), Math.max(width - 8, 8))
+			: 8
+		const yOffset = height > 0
+			? Math.min(Math.max(height / 2, 8), Math.max(height - 8, 8))
+			: 8
+		return { x: rect.left + xOffset, y: rect.top + yOffset }
+	}
+	if (typeof window !== 'undefined') {
+		return {
+			x: Math.max(8, Math.round(window.innerWidth / 2)),
+			y: Math.max(8, Math.round(window.innerHeight / 2)),
+		}
+	}
+	return { x: 8, y: 8 }
+}
 
 export function useObjectsScreenList(args: ObjectsScreenArgs) {
 	const {
@@ -149,6 +175,15 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		selectionActionMap: interactions.selectionActionMap,
 	})
 
+	const openKeyboardContextMenu = useCallback(
+		(key: string) => {
+			const scroller = interactions.getListScrollerElement()
+			const point = getKeyboardContextMenuPoint(scroller, rowIndexByObjectKey.get(key))
+			interactions.openObjectContextMenu(key, 'context', point)
+		},
+		[interactions, rowIndexByObjectKey],
+	)
+
 	const listKeydownHandler = useObjectsListKeydownHandler({
 		contextMenuOpen: interactions.contextMenuState.open,
 		selectedCount,
@@ -165,6 +200,7 @@ export function useObjectsScreenList(args: ObjectsScreenArgs) {
 		copySelectionToClipboard: interactions.copySelectionToClipboard,
 		pasteClipboardObjects: interactions.pasteClipboardObjects,
 		openDetailsForKey: actions.openDetailsForKey,
+		openContextMenuForKey: openKeyboardContextMenu,
 		onUp,
 		confirmDeleteSelected: actions.confirmDeleteSelected,
 		setSelectedKeys,

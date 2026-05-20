@@ -1,9 +1,12 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"mime/multipart"
 	"net/http"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -120,11 +123,25 @@ func (s *server) directMultipartFormPart(
 	if skipped {
 		return 0, 1, nil
 	}
-	size, uploadErr := s.directMultipartFormUploadPart(r, secrets, us, key, relPath, part, remainingBytes, maxBytes)
+	tempKey := directUploadTempObjectKey(us.Prefix, uploadID, relPath)
+	size, uploadErr := s.directMultipartFormUploadPart(r, secrets, us, tempKey, relPath, part, remainingBytes, maxBytes)
 	if uploadErr != nil {
+		s.directMultipartFormCleanupTempPart(r, secrets, us, tempKey)
 		return 0, 0, uploadErr
 	}
-	if uploadErr := s.directMultipartFormPersistPart(r, profileID, uploadID, relPath, key, us.Bucket, size); uploadErr != nil {
+	reservation, uploadErr := s.directMultipartFormPersistPart(r, profileID, uploadID, relPath, key, us.Bucket, size)
+	if uploadErr != nil {
+		s.directMultipartFormCleanupTempPart(r, secrets, us, tempKey)
+		return 0, 0, uploadErr
+	}
+	if uploadErr := s.directMultipartFormPromoteTempPart(r, secrets, us, tempKey, key, relPath); uploadErr != nil {
+		if rollbackErr := s.rollbackUploadObjectByteReservation(r.Context(), reservation); rollbackErr != nil {
+			if uploadErr.details == nil {
+				uploadErr.details = map[string]any{}
+			}
+			uploadErr.details["rollbackError"] = rollbackErr.message
+		}
+		s.directMultipartFormCleanupTempPart(r, secrets, us, tempKey)
 		return 0, 0, uploadErr
 	}
 	return 1, 0, nil
@@ -135,6 +152,22 @@ func directUploadObjectKey(prefix, relPath string) string {
 		return relPath
 	}
 	return path.Join(prefix, relPath)
+}
+
+func directUploadTempObjectKey(prefix, uploadID, relPath string) string {
+	return path.Join(directUploadTempSessionPrefix(prefix, uploadID), randomUploadTempToken(), relPath)
+}
+
+func directUploadTempSessionPrefix(prefix, uploadID string) string {
+	return directUploadObjectKey(prefix, path.Join(".s3desk-upload-temp", uploadID))
+}
+
+func randomUploadTempToken() string {
+	var token [8]byte
+	if _, err := rand.Read(token[:]); err == nil {
+		return hex.EncodeToString(token[:])
+	}
+	return strconv.FormatInt(time.Now().UTC().UnixNano(), 36)
 }
 
 func directMultipartContentLength(fileSize int64, chunkTotal, chunkIndex int, chunkSize int64) int64 {

@@ -31,6 +31,7 @@ vi.mock('../OverlaySheet', () => ({
 		placement: 'left' | 'right' | 'bottom'
 		width?: number | string
 		height?: number | string
+		closeDisabled?: boolean
 		children: ReactNode
 	}) =>
 		props.open ? (
@@ -41,7 +42,7 @@ vi.mock('../OverlaySheet', () => ({
 				data-height={props.height == null ? '' : String(props.height)}
 			>
 				<div>{props.title}</div>
-				<button type="button" onClick={props.onClose}>
+				<button type="button" onClick={props.onClose} disabled={props.closeDisabled}>
 					Mock close
 				</button>
 				{props.children}
@@ -129,6 +130,7 @@ describe('UploadSourceSheet', () => {
 	})
 
 	it('disables both actions while the sheet is busy', () => {
+		const onClose = vi.fn()
 		const onSelectFiles = vi.fn()
 		const onSelectFolder = vi.fn()
 
@@ -137,7 +139,7 @@ describe('UploadSourceSheet', () => {
 				open
 				folderSelectionSupported
 				busy
-				onClose={vi.fn()}
+				onClose={onClose}
 				onSelectFiles={onSelectFiles}
 				onSelectFolder={onSelectFolder}
 			/>,
@@ -145,13 +147,17 @@ describe('UploadSourceSheet', () => {
 
 		const chooseFiles = screen.getByRole('button', { name: /Choose files/i })
 		const chooseFolder = screen.getByRole('button', { name: /Choose folder/i })
+		const closeButton = screen.getByRole('button', { name: 'Mock close' })
 		expect(chooseFiles).toBeDisabled()
 		expect(chooseFolder).toBeDisabled()
+		expect(closeButton).toBeDisabled()
 
 		fireEvent.click(chooseFiles)
 		fireEvent.click(chooseFolder)
+		fireEvent.click(closeButton)
 
 		expect(onSelectFiles).not.toHaveBeenCalled()
 		expect(onSelectFolder).not.toHaveBeenCalled()
+		expect(onClose).not.toHaveBeenCalled()
 	})
 })

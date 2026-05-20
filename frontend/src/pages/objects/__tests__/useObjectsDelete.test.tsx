@@ -107,8 +107,11 @@ describe('useObjectsDelete', () => {
 		await act(async () => {
 			deletePromise = result.current.deleteMutation.mutateAsync(['logs/app.log'])
 		})
+		await waitFor(() => expect(result.current.deleteMutation.isPending).toBe(true))
 
 		rerender({ apiToken: 'token-1', profileId: 'profile-2', bucket: 'bucket-b', prefix: 'archive/' })
+		expect(result.current.deleteMutation.isPending).toBe(false)
+		expect(result.current.deletingKey).toBeNull()
 
 		await act(async () => {
 			deleteRequest.resolve({ deleted: 1 })
@@ -155,8 +158,11 @@ describe('useObjectsDelete', () => {
 		await act(async () => {
 			deletePromise = result.current.deleteMutation.mutateAsync(['logs/app.log'])
 		})
+		await waitFor(() => expect(result.current.deleteMutation.isPending).toBe(true))
 
 		rerender({ apiToken: 'token-2' })
+		expect(result.current.deleteMutation.isPending).toBe(false)
+		expect(result.current.deletingKey).toBeNull()
 
 		await act(async () => {
 			deleteRequest.resolve({ deleted: 1 })
@@ -208,8 +214,10 @@ describe('useObjectsDelete', () => {
 		})
 
 		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+		expect(result.current.deletePrefixJobMutation.isPending).toBe(true)
 
 		rerender({ apiToken: 'token-1', profileId: 'profile-2', bucket: 'bucket-b', prefix: 'archive/' })
+		expect(result.current.deletePrefixJobMutation.isPending).toBe(false)
 
 		await act(async () => {
 			jobRequest.resolve({ id: 'job-stale' })

@@ -85,6 +85,7 @@ func TestLocalEntriesHTTPService_HandleListLocalEntries_ReturnsAllowedDirectoryC
 	outside := t.TempDir()
 	outsideDir := filepath.Join(outside, "outside-child")
 	outsideLink := filepath.Join(root, "outside-link")
+	insideLink := filepath.Join(root, "inside-link")
 
 	for _, dir := range []string{insideA, insideB, outsideDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -96,6 +97,9 @@ func TestLocalEntriesHTTPService_HandleListLocalEntries_ReturnsAllowedDirectoryC
 	}
 	if err := os.Symlink(outsideDir, outsideLink); err != nil {
 		t.Fatalf("symlink outside dir: %v", err)
+	}
+	if err := os.Symlink(insideA, insideLink); err != nil {
+		t.Fatalf("symlink inside dir: %v", err)
 	}
 
 	svc := newLocalEntriesHTTPService(&server{
@@ -144,5 +148,67 @@ func TestLocalEntriesHTTPService_HandleListLocalEntries_ReturnsNotConfiguredErro
 	}
 	if resp.Error.Code != "not_configured" {
 		t.Fatalf("resp.Error.Code=%q, want not_configured", resp.Error.Code)
+	}
+}
+
+func TestLocalEntriesHTTPService_HandleListLocalEntries_ReturnsInvalidLimit(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	svc := newLocalEntriesHTTPService(&server{
+		cfg: config.Config{AllowedLocalDirs: []string{root}},
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/local/entries?path="+root+"&limit=abc", nil)
+
+	svc.handleListLocalEntries(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("rec.Code=%d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	}
+	if got := resp.Error.Details["limit"]; got != "abc" {
+		t.Fatalf("details.limit=%v, want abc", got)
+	}
+}
+
+func TestLocalEntriesHTTPService_HandleListLocalEntries_RejectsSymlinkPathInsideAllowedRoot(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatalf("symlink target: %v", err)
+	}
+
+	svc := newLocalEntriesHTTPService(&server{
+		cfg: config.Config{AllowedLocalDirs: []string{root}},
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/local/entries?path="+link, nil)
+
+	svc.handleListLocalEntries(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("rec.Code=%d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
 	}
 }

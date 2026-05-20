@@ -16,11 +16,6 @@ import (
 
 var errDownloadProxyProfileRequired = errors.New("download proxy profile id is required")
 
-func shouldUseDownloadProxy(raw string) bool {
-	raw = strings.ToLower(strings.TrimSpace(raw))
-	return raw == "1" || raw == "true" || raw == "yes"
-}
-
 func resolveDownloadProxyProfileID(r *http.Request, secrets models.ProfileSecrets) (string, error) {
 	profileID := strings.TrimSpace(secrets.ID)
 	if profileID == "" {
@@ -120,7 +115,7 @@ func parseSearchTimeParam(raw string) (time.Time, error) {
 }
 
 // parseIntQueryClamped reads an integer query parameter, falling back to
-// defaultVal when missing or unparseable, and clamps the result to [min, max].
+// defaultVal only when missing, and clamps the result to [min, max].
 func parseIntQueryClamped(r *http.Request, name string, defaultVal, min, max int) (int, error) {
 	v := defaultVal
 	if raw := r.URL.Query().Get(name); raw != "" {

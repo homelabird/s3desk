@@ -63,7 +63,7 @@ function Harness(props: {
 }
 
 describe('useObjectsObjectGridRenderer', () => {
-	it('renders compact grid actions and keeps preview clicks isolated from row selection', () => {
+	it('renders compact grid actions, exposes body selection, and keeps preview clicks isolated', () => {
 		const onPreview = vi.fn()
 		const onSelect = vi.fn()
 		const onToggleFavorite = vi.fn()
@@ -73,16 +73,27 @@ describe('useObjectsObjectGridRenderer', () => {
 		const cardTitle = screen.getByText('preview.png')
 		const card = cardTitle.closest('[data-objects-row="true"]')
 		expect(card).not.toBeNull()
+		expect(screen.getByRole('group', { name: 'Object preview.png' })).toBe(card)
+		expect(card).not.toHaveAttribute('aria-selected')
 		expect(card?.className).toContain(styles.gridCardSelected)
+		expect(screen.getByRole('checkbox', { name: 'Select preview.png' })).toBeChecked()
 		expect(screen.getByTestId('grid-thumbnail')).toBeInTheDocument()
 
-		const favoriteButton = screen.getByRole('button', { name: 'Add favorite' })
-		const objectActionsButton = screen.getByRole('button', { name: 'Object actions' })
+		const selectButton = screen.getByRole('button', { name: 'Select object preview.png' })
+		const favoriteButton = screen.getByRole('button', { name: 'Add favorite for preview.png' })
+		const objectActionsButton = screen.getByRole('button', { name: 'Object actions for preview.png' })
 		const previewButton = screen.getByRole('button', { name: 'Open large preview for preview.png' })
 
+		expect(selectButton.className).toContain(styles.gridCardBodyButton)
+		expect(selectButton).toHaveAttribute('aria-pressed', 'true')
+		expect(selectButton).toHaveTextContent('preview.png')
 		expect(favoriteButton.className).toContain(styles.gridCardIconButton)
 		expect(objectActionsButton.className).toContain(styles.gridCardIconButton)
 		expect(previewButton.className).toContain(styles.gridCardPreviewActionButton)
+
+		fireEvent.click(selectButton)
+		expect(onSelect).toHaveBeenCalledWith('preview.png')
+		onSelect.mockClear()
 
 		fireEvent.click(previewButton)
 		expect(onPreview).toHaveBeenCalledWith('preview.png')
@@ -91,6 +102,10 @@ describe('useObjectsObjectGridRenderer', () => {
 		fireEvent.click(favoriteButton)
 		expect(onToggleFavorite).toHaveBeenCalledWith('preview.png')
 		expect(onSelect).not.toHaveBeenCalled()
+
+		fireEvent.keyDown(favoriteButton, { key: 'Enter' })
+		fireEvent.keyDown(objectActionsButton, { key: ' ' })
+		expect(onSelect).not.toHaveBeenCalled()
 	})
 
 	it('disables favorite actions when object CRUD is unsupported', () => {
@@ -98,7 +113,7 @@ describe('useObjectsObjectGridRenderer', () => {
 
 		render(<Harness onToggleFavorite={onToggleFavorite} objectCrudSupported={false} />)
 
-		const favoriteButton = screen.getByRole('button', { name: 'Add favorite' })
+		const favoriteButton = screen.getByRole('button', { name: 'Add favorite for preview.png' })
 		expect(favoriteButton).toBeDisabled()
 
 		fireEvent.click(favoriteButton)

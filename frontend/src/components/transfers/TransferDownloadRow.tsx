@@ -57,19 +57,29 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 			: t.kind === 'object_device'
 				? `s3://${t.bucket}/${t.key} → ${(t.targetLabel ?? 'device')}/${t.targetPath}`
 				: `job ${t.jobId} artifact`
+	const downloadActionContext = `download ${t.label}`
+	const rowLabel = `Download ${t.label}, ${tagText}, ${subtitle}`
 
 	return (
-		<div className={styles.rowCard} data-testid="transfer-download-row" data-transfer-row-kind="download">
+		<div
+			className={styles.rowCard}
+			data-testid="transfer-download-row"
+			data-transfer-row-kind="download"
+			role="listitem"
+			aria-label={rowLabel}
+		>
 			<div className={styles.rowTop}>
 				<div className={styles.rowCopy}>
 					<div className={styles.rowHeader}>
 						<Typography.Text strong ellipsis={{ tooltip: t.label }} className={styles.rowTitle}>
 							{t.label}
 						</Typography.Text>
-						<Tag color={tagColor}>{tagText}</Tag>
+						<Tag color={tagColor} aria-live="polite" aria-atomic="true">
+							{tagText}
+						</Tag>
 					</div>
 					<div className={styles.rowSubtitle}>
-						<Typography.Text type="secondary" code ellipsis={{ tooltip: subtitle }} className={styles.rowTitle}>
+						<Typography.Text type="secondary" code title={subtitle} className={styles.rowDestination}>
 							{subtitle}
 						</Typography.Text>
 					</div>
@@ -82,21 +92,41 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 
 				<div className={styles.rowActions}>
 					{t.kind === 'job_artifact' && props.onOpenJobs ? (
-						<Button size="small" type="link" onClick={props.onOpenJobs}>
+						<Button
+							size="small"
+							type="link"
+							aria-label={`Jobs for ${downloadActionContext}`}
+							onClick={props.onOpenJobs}
+						>
 							Jobs
 						</Button>
 					) : null}
 					{t.status === 'running' || t.status === 'queued' || t.status === 'waiting' ? (
-						<Button size="small" onClick={() => props.onCancel(t.id)}>
+						<Button
+							size="small"
+							aria-label={`Cancel ${downloadActionContext}`}
+							onClick={() => props.onCancel(t.id)}
+						>
 							Cancel
 						</Button>
 					) : null}
 					{t.status === 'failed' || t.status === 'canceled' ? (
-						<Button size="small" icon={<ReloadOutlined />} onClick={() => props.onRetry(t.id)}>
+						<Button
+							size="small"
+							icon={<ReloadOutlined />}
+							aria-label={`Retry ${downloadActionContext}`}
+							onClick={() => props.onRetry(t.id)}
+						>
 							Retry
 						</Button>
 					) : null}
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => props.onRemove(t.id)}>
+					<Button
+						size="small"
+						danger
+						icon={<DeleteOutlined />}
+						aria-label={`Remove ${downloadActionContext}`}
+						onClick={() => props.onRemove(t.id)}
+					>
 						Remove
 					</Button>
 				</div>
@@ -109,7 +139,11 @@ export const TransferDownloadRow = memo(function TransferDownloadRow(props: Tran
 					status={status}
 					showInfo={t.status !== 'queued' && t.status !== 'waiting'}
 				/>
-				{progressText ? <Typography.Text type="secondary">{progressText}</Typography.Text> : null}
+				{progressText ? (
+					<Typography.Text type="secondary">
+						{progressText}
+					</Typography.Text>
+				) : null}
 			</div>
 		</div>
 	)

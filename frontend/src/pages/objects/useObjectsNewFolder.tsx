@@ -50,10 +50,16 @@ export function useObjectsNewFolder({
 	const [newFolderParentPrefix, setNewFolderParentPrefix] = useState('')
 	const [newFolderStateScopeKey, setNewFolderStateScopeKey] = useState(currentScopeKey)
 	const newFolderSessionRef = useRef(0)
+	const [newFolderSessionId, setNewFolderSessionId] = useState(0)
+	const newFolderSubmittingSessionRef = useRef<number | null>(null)
+	const [newFolderSubmittingSessionId, setNewFolderSubmittingSessionId] = useState<number | null>(null)
 	const newFolderScopeMatches = newFolderStateScopeKey === currentScopeKey
+	const newFolderSubmitting = newFolderScopeMatches && newFolderSubmittingSessionId === newFolderSessionId
 
 	const invalidateNewFolderSession = useCallback(() => {
-		newFolderSessionRef.current += 1
+		const nextSessionId = newFolderSessionRef.current + 1
+		newFolderSessionRef.current = nextSessionId
+		setNewFolderSessionId(nextSessionId)
 	}, [])
 
 	useEffect(() => {
@@ -195,13 +201,21 @@ export function useObjectsNewFolder({
 			setNewFolderPartialKey(partialKey)
 			setNewFolderError(formatErr(err))
 		},
+		onSettled: (_data, _error, values) => {
+			if (values.sessionId !== newFolderSubmittingSessionRef.current) return
+			newFolderSubmittingSessionRef.current = null
+			setNewFolderSubmittingSessionId(null)
+		},
 	})
 
 	const handleNewFolderSubmit = useCallback(
 		(values: NewFolderFormValues) => {
+			if (newFolderSubmittingSessionRef.current === newFolderSessionRef.current) return
 			if (!newFolderScopeMatches) return
 			setNewFolderError(null)
 			setNewFolderPartialKey(null)
+			newFolderSubmittingSessionRef.current = newFolderSessionRef.current
+			setNewFolderSubmittingSessionId(newFolderSessionRef.current)
 			createFolderMutation.mutate({
 				...values,
 				sessionId: newFolderSessionRef.current,
@@ -223,7 +237,7 @@ export function useObjectsNewFolder({
 		newFolderOpen: newFolderScopeMatches ? newFolderOpen : false,
 		newFolderValues: newFolderScopeMatches ? newFolderValues : { name: '', allowPath: false },
 		setNewFolderValues,
-		newFolderSubmitting: createFolderMutation.isPending,
+		newFolderSubmitting,
 		newFolderError: newFolderScopeMatches ? newFolderError : null,
 		newFolderPartialKey: newFolderScopeMatches ? newFolderPartialKey : null,
 		newFolderParentPrefix: newFolderScopeMatches ? newFolderParentPrefix : '',

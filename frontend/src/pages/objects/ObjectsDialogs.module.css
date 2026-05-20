@@ -49,6 +49,20 @@
 	max-width: 100%;
 }
 
+.dialogCodeValue {
+	display: block;
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+.dialogCodeValue :global(code) {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
 .loadingState {
 	display: flex;
 	justify-content: center;

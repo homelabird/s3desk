@@ -102,6 +102,67 @@ func TestSecurityHeaders_DoesNotOverrideExistingValues(t *testing.T) {
 	}
 }
 
+func TestRequireProfileRejectsLoopbackEndpointWhenRemoteEnabled(t *testing.T) {
+	st, _, _, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	s := &server{cfg: config.Config{AllowRemote: true}, store: st}
+
+	called := false
+	handler := s.requireProfile(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets", nil)
+	req.Header.Set("X-Profile-Id", profile.ID)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if called {
+		t.Fatal("next handler was called")
+	}
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	var resp models.ErrorResponse
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error.Code != "invalid_config" {
+		t.Fatalf("error.code=%q, want invalid_config", resp.Error.Code)
+	}
+	if got, _ := resp.Error.Details["error"].(string); !strings.Contains(got, "loopback or link-local") {
+		t.Fatalf("error.details.error=%q, want loopback rejection", got)
+	}
+}
+
+func TestRequireProfileAllowsLoopbackEndpointWhenRemoteDisabled(t *testing.T) {
+	st, _, _, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	s := &server{store: st}
+
+	called := false
+	handler := s.requireProfile(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if _, ok := profileFromContext(r.Context()); !ok {
+			t.Fatal("profile secrets missing from context")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets", nil)
+	req.Header.Set("X-Profile-Id", profile.ID)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if !called {
+		t.Fatal("next handler was not called")
+	}
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusNoContent)
+	}
+}
+
 func TestRequireLocalHost_OriginHostCombinations(t *testing.T) {
 	cases := []struct {
 		name             string
@@ -464,6 +525,7 @@ func TestCORS_PreflightReturnsNoContentAndSetsHeadersForAllowedOrigin(t *testing
 		"X-Upload-Chunk-Size",
 		"X-Upload-File-Size",
 		"X-Upload-Relative-Path",
+		"X-S3Desk-Backup-Password",
 	} {
 		if !strings.Contains(rr.Header().Get("Access-Control-Allow-Headers"), header) {
 			t.Fatalf("Access-Control-Allow-Headers=%q, want to contain %q", rr.Header().Get("Access-Control-Allow-Headers"), header)

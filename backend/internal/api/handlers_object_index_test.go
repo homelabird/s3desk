@@ -46,3 +46,31 @@ func TestHandleGetObjectIndexSummaryReturnsEmptySummaryWhenBucketIsNotIndexed(t 
 		t.Fatalf("indexedAt = %v, want nil", resp.IndexedAt)
 	}
 }
+
+func TestHandleGetObjectIndexSummaryReturnsInvalidSampleLimit(t *testing.T) {
+	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+
+	res := doJSONRequestWithProfile(
+		t,
+		srv,
+		http.MethodGet,
+		"/api/v1/buckets/test-bucket/objects/index-summary?sampleLimit=abc",
+		profile.ID,
+		nil,
+	)
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", res.StatusCode)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("code = %q, want invalid_request", resp.Error.Code)
+	}
+	if got := resp.Error.Details["sampleLimit"]; got != "abc" {
+		t.Fatalf("details.sampleLimit=%v, want abc", got)
+	}
+}

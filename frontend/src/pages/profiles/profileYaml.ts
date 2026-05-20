@@ -2,13 +2,16 @@ import type { Profile, ProfileCreateRequest, ProfileTLSConfig, ProfileUpdateRequ
 import type { ProfileProvider } from './profileTypes'
 
 type ProfileCreateRequestWithPublicEndpoint = ProfileCreateRequest & { publicEndpoint?: string }
-type ProfileCreateRequestWithAzureArm = ProfileCreateRequestWithPublicEndpoint & {
-	subscriptionId?: string
-	resourceGroup?: string
-	tenantId?: string
-	clientId?: string
-	clientSecret?: string
-}
+type AwsS3CreateRequest = Extract<ProfileCreateRequest, { provider: 'aws_s3' }> & { publicEndpoint?: string }
+type S3CompatibleCreateRequest = Extract<ProfileCreateRequest, { provider: 's3_compatible' }> & { publicEndpoint?: string }
+type AzureCreateRequest = Extract<ProfileCreateRequest, { provider: 'azure_blob' }>
+type GcpCreateRequest = Extract<ProfileCreateRequest, { provider: 'gcp_gcs' }>
+type OciCreateRequest = Extract<ProfileCreateRequest, { provider: 'oci_object_storage' }>
+type AwsS3UpdateRequest = Extract<ProfileUpdateRequest, { provider: 'aws_s3' }> & { publicEndpoint?: string }
+type S3CompatibleUpdateRequest = Extract<ProfileUpdateRequest, { provider: 's3_compatible' }> & { publicEndpoint?: string }
+type AzureUpdateRequest = Extract<ProfileUpdateRequest, { provider: 'azure_blob' }>
+type GcpUpdateRequest = Extract<ProfileUpdateRequest, { provider: 'gcp_gcs' }>
+type OciUpdateRequest = Extract<ProfileUpdateRequest, { provider: 'oci_object_storage' }>
 
 type ProfileYamlProfile = {
 	id?: string
@@ -46,6 +49,19 @@ type ProfileYamlTLS = {
 	clientCertPem?: string
 	clientKeyPem?: string
 	caCertPem?: string
+}
+
+type ParsedProfileYaml = {
+	request: ProfileCreateRequest
+	updateRequest: ProfileUpdateRequest
+	tlsConfig?: ProfileTLSConfig
+	hasTLSBlock: boolean
+}
+
+type ParsedProfileYamlUpdate = {
+	updateRequest: ProfileUpdateRequest
+	tlsConfig?: ProfileTLSConfig
+	hasTLSBlock: boolean
 }
 
 const PROFILE_PROVIDERS: ProfileProvider[] = [
@@ -89,9 +105,32 @@ function inferProvider(profile: ProfileYamlProfile): ProfileProvider {
 	return 'aws_s3'
 }
 
-export async function parseProfileYaml(
+export async function parseProfileYaml(yamlText: string): Promise<ParsedProfileYaml> {
+	const parsed = await parseProfileYamlInternal(yamlText, 'create')
+	if (!parsed.request) {
+		throw new Error('profile YAML is missing credentials required for import')
+	}
+	return {
+		request: parsed.request,
+		updateRequest: parsed.updateRequest,
+		tlsConfig: parsed.tlsConfig,
+		hasTLSBlock: parsed.hasTLSBlock,
+	}
+}
+
+export async function parseProfileYamlForUpdate(yamlText: string): Promise<ParsedProfileYamlUpdate> {
+	const parsed = await parseProfileYamlInternal(yamlText, 'update')
+	return {
+		updateRequest: parsed.updateRequest,
+		tlsConfig: parsed.tlsConfig,
+		hasTLSBlock: parsed.hasTLSBlock,
+	}
+}
+
+async function parseProfileYamlInternal(
 	yamlText: string,
-): Promise<{ request: ProfileCreateRequest; updateRequest: ProfileUpdateRequest; tlsConfig?: ProfileTLSConfig; hasTLSBlock: boolean }> {
+	mode: 'create' | 'update',
+): Promise<{ request?: ProfileCreateRequest; updateRequest: ProfileUpdateRequest; tlsConfig?: ProfileTLSConfig; hasTLSBlock: boolean }> {
 	// YAML parsing is an optional Profiles-only feature. Keep it out of the initial bundle.
 	const { parse: parseYaml } = await import('yaml')
 	const parsed = parseYaml(yamlText) as unknown
@@ -108,81 +147,140 @@ export async function parseProfileYaml(
 	const preserveLeadingSlash = profile.preserveLeadingSlash ?? false
 	const tlsInsecureSkipVerify = profile.tlsInsecureSkipVerify ?? false
 
-	let request: ProfileCreateRequestWithPublicEndpoint
+	let request: ProfileCreateRequestWithPublicEndpoint | undefined
+	let updateRequest: ProfileUpdateRequest
 	switch (provider) {
-		case 'azure_blob': {
-			const accountName = toOptionalString(profile.accountName)
-			const accountKey = toOptionalString(profile.accountKey)
-			if (!accountName || !accountKey) {
-				throw new Error('azure_blob requires accountName and accountKey')
+			case 'azure_blob': {
+				const accountName = toOptionalString(profile.accountName)
+				const accountKey = toOptionalString(profile.accountKey)
+				if (mode === 'create' && (!accountName || !accountKey)) {
+					throw new Error('azure_blob requires accountName and accountKey')
+				}
+				const endpoint = toOptionalString(profile.endpoint)
+				const subscriptionId = toOptionalString(profile.subscriptionId)
+				const resourceGroup = toOptionalString(profile.resourceGroup)
+				const tenantId = toOptionalString(profile.tenantId)
+				const clientId = toOptionalString(profile.clientId)
+				const clientSecret = toOptionalString(profile.clientSecret)
+				const azureUpdate: AzureUpdateRequest = {
+					provider: 'azure_blob',
+					name,
+					endpoint,
+					useEmulator: profile.useEmulator ?? false,
+					preserveLeadingSlash,
+					tlsInsecureSkipVerify,
+					...(accountName ? { accountName } : {}),
+					...(accountKey ? { accountKey } : {}),
+					...(subscriptionId ? { subscriptionId } : {}),
+					...(resourceGroup ? { resourceGroup } : {}),
+					...(tenantId ? { tenantId } : {}),
+					...(clientId ? { clientId } : {}),
+					...(clientSecret ? { clientSecret } : {}),
+				}
+				if (mode === 'create') {
+					const azureCreate: AzureCreateRequest = {
+						provider: 'azure_blob',
+						name,
+						accountName: accountName as string,
+						accountKey: accountKey as string,
+						endpoint,
+						useEmulator: profile.useEmulator ?? false,
+						preserveLeadingSlash,
+						tlsInsecureSkipVerify,
+						...(subscriptionId ? { subscriptionId } : {}),
+						...(resourceGroup ? { resourceGroup } : {}),
+						...(tenantId ? { tenantId } : {}),
+						...(clientId ? { clientId } : {}),
+						...(clientSecret ? { clientSecret } : {}),
+					}
+					request = azureCreate
+				}
+				updateRequest = azureUpdate
+				break
 			}
-			const azureRequest: ProfileCreateRequestWithAzureArm = {
-				provider,
-				name,
-				accountName,
-				accountKey,
-				endpoint: toOptionalString(profile.endpoint),
-				useEmulator: profile.useEmulator ?? false,
-				preserveLeadingSlash,
-				tlsInsecureSkipVerify,
-				...(toOptionalString(profile.subscriptionId) ? { subscriptionId: toOptionalString(profile.subscriptionId) } : {}),
-				...(toOptionalString(profile.resourceGroup) ? { resourceGroup: toOptionalString(profile.resourceGroup) } : {}),
-				...(toOptionalString(profile.tenantId) ? { tenantId: toOptionalString(profile.tenantId) } : {}),
-				...(toOptionalString(profile.clientId) ? { clientId: toOptionalString(profile.clientId) } : {}),
-				...(toOptionalString(profile.clientSecret) ? { clientSecret: toOptionalString(profile.clientSecret) } : {}),
-			}
-			request = azureRequest
-			break
-		}
-		case 'gcp_gcs': {
+			case 'gcp_gcs': {
 			const anonymous = profile.anonymous ?? false
 			const serviceAccountJson = toOptionalString(profile.serviceAccountJson)
 			const projectNumber = toOptionalString(profile.projectNumber)
 			if (!projectNumber) {
 				throw new Error('gcp_gcs requires projectNumber')
 			}
-			if (!anonymous && !serviceAccountJson) {
-				throw new Error('gcp_gcs requires serviceAccountJson unless anonymous=true')
+				if (mode === 'create' && !anonymous && !serviceAccountJson) {
+					throw new Error('gcp_gcs requires serviceAccountJson unless anonymous=true')
+				}
+				const endpoint = toOptionalString(profile.endpoint)
+				const gcpUpdate: GcpUpdateRequest = {
+					provider: 'gcp_gcs',
+					name,
+					anonymous,
+					endpoint,
+					projectNumber,
+					preserveLeadingSlash,
+					tlsInsecureSkipVerify,
+					...(serviceAccountJson ? { serviceAccountJson } : {}),
+				}
+				if (mode === 'create') {
+					const gcpCreate: GcpCreateRequest = {
+						provider: 'gcp_gcs',
+						name,
+						anonymous,
+						endpoint,
+						projectNumber,
+						preserveLeadingSlash,
+						tlsInsecureSkipVerify,
+						serviceAccountJson: anonymous ? '' : serviceAccountJson,
+					}
+					request = gcpCreate
+				}
+				updateRequest = gcpUpdate
+				break
 			}
-			request = {
-				provider,
-				name,
-				anonymous,
-				serviceAccountJson: anonymous ? '' : serviceAccountJson,
-				endpoint: toOptionalString(profile.endpoint),
-				projectNumber,
-				preserveLeadingSlash,
-				tlsInsecureSkipVerify,
-			}
-			break
-		}
-		case 'oci_object_storage': {
+			case 'oci_object_storage': {
 			const region = toOptionalString(profile.region)
 			const namespace = toOptionalString(profile.namespace)
 			const compartment = toOptionalString(profile.compartment)
-			if (!region || !namespace || !compartment) {
-				throw new Error('oci_object_storage requires region, namespace, and compartment')
+				if (!region || !namespace || !compartment) {
+					throw new Error('oci_object_storage requires region, namespace, and compartment')
+				}
+				const endpoint = toOptionalString(profile.endpoint)
+				const authProvider = toOptionalString(profile.authProvider)
+				const configFile = toOptionalString(profile.configFile)
+				const configProfile = toOptionalString(profile.configProfile)
+				const ociUpdate: OciUpdateRequest = {
+					provider: 'oci_object_storage',
+					name,
+					region,
+					namespace,
+					compartment,
+					endpoint,
+					authProvider,
+					configFile,
+					configProfile,
+					preserveLeadingSlash,
+					tlsInsecureSkipVerify,
+				}
+				const ociCreate: OciCreateRequest = {
+					provider: 'oci_object_storage',
+					name,
+					region,
+					namespace,
+					compartment,
+					endpoint,
+					authProvider,
+					configFile,
+					configProfile,
+					preserveLeadingSlash,
+					tlsInsecureSkipVerify,
+				}
+				request = ociCreate
+				updateRequest = ociUpdate
+				break
 			}
-			request = {
-				provider,
-				name,
-				region,
-				namespace,
-				compartment,
-				endpoint: toOptionalString(profile.endpoint),
-				authProvider: toOptionalString(profile.authProvider),
-				configFile: toOptionalString(profile.configFile),
-				configProfile: toOptionalString(profile.configProfile),
-				preserveLeadingSlash,
-				tlsInsecureSkipVerify,
-			}
-			break
-		}
-		default: {
+			default: {
 			const region = toOptionalString(profile.region)
 			const accessKeyId = toOptionalString(profile.accessKeyId)
 			const secretAccessKey = toOptionalString(profile.secretAccessKey)
-			if (!region || !accessKeyId || !secretAccessKey) {
+			if (!region || !accessKeyId || (mode === 'create' && !secretAccessKey)) {
 				throw new Error(`${provider} requires region, accessKeyId, and secretAccessKey`)
 			}
 			const endpoint = toOptionalString(profile.endpoint)
@@ -190,40 +288,67 @@ export async function parseProfileYaml(
 			if (provider === 's3_compatible' && !endpoint) {
 				throw new Error(`${provider} requires endpoint`)
 			}
-			const base = {
+			const updateBase = {
 				name,
 				region,
 				accessKeyId,
-				secretAccessKey,
-				sessionToken: profile.sessionToken ?? null,
 				forcePathStyle: profile.forcePathStyle ?? false,
 				preserveLeadingSlash,
 				tlsInsecureSkipVerify,
+				...(secretAccessKey ? { secretAccessKey } : {}),
+				...(profile.sessionToken !== undefined ? { sessionToken: profile.sessionToken } : {}),
 			}
-			if (provider === 'aws_s3') {
-				request = {
-					provider: 'aws_s3',
-					...base,
-					endpoint,
-					...(publicEndpoint ? { publicEndpoint } : {}),
-				}
-			} else if (provider === 's3_compatible') {
-				request = {
-					provider: 's3_compatible',
-					...base,
-					endpoint: endpoint as string,
-					...(publicEndpoint ? { publicEndpoint } : {}),
-				}
-			} else {
-				request = {
-					provider: 's3_compatible',
-					...base,
-					endpoint: endpoint as string,
-					...(publicEndpoint ? { publicEndpoint } : {}),
+				if (provider === 'aws_s3') {
+					const awsUpdate: AwsS3UpdateRequest = {
+						provider: 'aws_s3',
+						...updateBase,
+						endpoint,
+						...(publicEndpoint ? { publicEndpoint } : {}),
+					}
+					if (mode === 'create') {
+						const awsCreate: AwsS3CreateRequest = {
+							provider: 'aws_s3',
+							name,
+							endpoint,
+							region,
+							accessKeyId,
+							secretAccessKey: secretAccessKey as string,
+							sessionToken: profile.sessionToken ?? null,
+							forcePathStyle: profile.forcePathStyle ?? false,
+							preserveLeadingSlash,
+							tlsInsecureSkipVerify,
+							...(publicEndpoint ? { publicEndpoint } : {}),
+						}
+						request = awsCreate
+					}
+					updateRequest = awsUpdate
+				} else {
+					const s3Update: S3CompatibleUpdateRequest = {
+						provider: 's3_compatible',
+						...updateBase,
+						endpoint: endpoint as string,
+						...(publicEndpoint ? { publicEndpoint } : {}),
+					}
+					if (mode === 'create') {
+						const s3Create: S3CompatibleCreateRequest = {
+							provider: 's3_compatible',
+							name,
+							endpoint: endpoint as string,
+							region,
+							accessKeyId,
+							secretAccessKey: secretAccessKey as string,
+							sessionToken: profile.sessionToken ?? null,
+							forcePathStyle: profile.forcePathStyle ?? false,
+							preserveLeadingSlash,
+							tlsInsecureSkipVerify,
+							...(publicEndpoint ? { publicEndpoint } : {}),
+						}
+						request = s3Create
+					}
+					updateRequest = s3Update
 				}
 			}
 		}
-	}
 
 	const tlsMode = typeof tls?.mode === 'string' ? tls.mode : ''
 	const tlsConfig =
@@ -244,7 +369,7 @@ export async function parseProfileYaml(
 
 	return {
 		request,
-		updateRequest: request as ProfileUpdateRequest,
+		updateRequest,
 		tlsConfig,
 		hasTLSBlock: !!tls,
 	}

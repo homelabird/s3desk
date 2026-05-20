@@ -45,11 +45,28 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default (include "s3desk.fullname" .) .Values.secrets.existingSecret -}}
 {{- end }}
 
+{{- define "s3desk.imageTag" -}}
+{{- $tag := trim (toString .Values.image.tag) -}}
+{{- if eq $tag "chart-app-version" -}}
+{{- .Chart.AppVersion -}}
+{{- else -}}
+{{- $tag -}}
+{{- end -}}
+{{- end }}
+
 {{- define "s3desk.metricsTokenRequired" -}}
 {{- if or (.Values.server.allowRemote | default false) (.Values.monitoring.serviceMonitor.enabled | default false) (.Values.monitoring.podMonitor.enabled | default false) -}}
 true
 {{- else -}}
 false
+{{- end -}}
+{{- end }}
+
+{{- define "s3desk.externalBaseURLHost" -}}
+{{- $url := trim (default "" .Values.server.externalBaseURL) -}}
+{{- if regexMatch "^https?://[^/]+" $url -}}
+{{- $authority := regexReplaceAll "^https?://([^/]+).*$" $url "${1}" -}}
+{{- regexReplaceAll ":\\d+$" $authority "" -}}
 {{- end -}}
 {{- end }}
 
@@ -89,8 +106,20 @@ this template-level validation as a second line of defense.
   {{- $encryptionKey := trim (default "" .Values.server.encryptionKey) -}}
   {{- $autoGenerateAPIToken := .Values.secrets.autoGenerateApiToken | default false -}}
   {{- $tokenRequired := eq (include "s3desk.metricsTokenRequired" .) "true" -}}
-  {{- $browserFacing := or (.Values.ingress.enabled | default false) (.Values.istio.virtualService.enabled | default false) -}}
+  {{- $virtualServiceEnabled := .Values.istio.virtualService.enabled | default false -}}
+  {{- $virtualServiceHosts := .Values.istio.virtualService.hosts | default (list) -}}
+  {{- $virtualServiceGateways := .Values.istio.virtualService.gateways | default (list) -}}
+  {{- $serviceType := default "ClusterIP" .Values.service.type -}}
+  {{- $serviceBrowserFacing := ne $serviceType "ClusterIP" -}}
+  {{- $browserFacing := or (.Values.ingress.enabled | default false) $virtualServiceEnabled $serviceBrowserFacing -}}
   {{- $remoteBrowserFacing := and (.Values.server.allowRemote | default false) $browserFacing -}}
+  {{- $imageTag := lower (trim (include "s3desk.imageTag" .)) -}}
+  {{- $externalBaseURLHost := trim (include "s3desk.externalBaseURLHost" .) -}}
+  {{- $allowedHosts := .Values.server.allowedHosts | default (list) -}}
+
+  {{- if and $virtualServiceEnabled (or (eq (len $virtualServiceHosts) 0) (eq (len $virtualServiceGateways) 0)) -}}
+    {{- fail "Missing configuration: istio.virtualService.enabled=true requires at least one host and one gateway. Set istio.virtualService.hosts and istio.virtualService.gateways." -}}
+  {{- end -}}
 
   {{- $placeholderTokens := list "change-me" "changeme" "default" "token" "api-token" "s3desk" "s3desk-local" "replace-me" "replace-with-a-long-random-token" "replace-me-with-a-strong-token" -}}
   {{- if has (lower $apiToken) $placeholderTokens -}}
@@ -107,6 +136,14 @@ this template-level validation as a second line of defense.
 
   {{- if gt (int .Values.replicaCount) 1 -}}
     {{- fail "Unsupported configuration: S3Desk currently requires replicaCount=1 because job and DATA_DIR ownership are single-writer." -}}
+  {{- end -}}
+
+  {{- if and $remoteBrowserFacing (eq $imageTag "latest") -}}
+    {{- fail "Missing production hardening: browser-facing remote deployments require image.tag to be pinned, not latest." -}}
+  {{- end -}}
+
+  {{- if and $remoteBrowserFacing $serviceBrowserFacing (eq (len $allowedHosts) 0) (eq $externalBaseURLHost "") -}}
+    {{- fail "Missing production hardening: service.type LoadBalancer/NodePort with server.allowRemote=true requires server.allowedHosts or a parseable server.externalBaseURL hostname." -}}
   {{- end -}}
 
   {{- if and $remoteBrowserFacing (eq $encryptionKey "") (eq $existingSecret "") -}}

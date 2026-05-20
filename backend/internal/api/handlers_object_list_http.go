@@ -71,7 +71,11 @@ func (svc objectListHTTPService) prepareListObjects(metric *storageMetric, r *ht
 		return models.ProfileSecrets{}, "", "", "", "", 0, newObjectListHTTPError(http.StatusBadRequest, "invalid_request", "bucket is required", nil)
 	}
 
-	maxKeys, _ := parseIntQueryClamped(r, "maxKeys", 500, 1, 1000)
+	maxKeys, err := parseIntQueryClamped(r, "maxKeys", 500, 1, 1000)
+	if err != nil {
+		metric.SetStatus("invalid_request")
+		return models.ProfileSecrets{}, "", "", "", "", 0, newObjectListHTTPError(http.StatusBadRequest, "invalid_request", "maxKeys is invalid", map[string]any{"maxKeys": r.URL.Query().Get("maxKeys")})
+	}
 
 	return secrets, bucket, r.URL.Query().Get("prefix"), delimiter, token, maxKeys, nil
 }

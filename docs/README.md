@@ -21,6 +21,14 @@ Supporting assets that still live under `docs/`:
 - `S3Desk.insomnia_collection.json`
 - `grafana/*.json`
 
+Reports and audit indexes:
+
+- [../notes/INDEX.md](../notes/INDEX.md): engineering notes, project quality reports, and frontend design reports
+- [CODEBASE_FINAL_QUALITY_REPORT_2026-04-30.md](CODEBASE_FINAL_QUALITY_REPORT_2026-04-30.md): final codebase quality review snapshot
+- [FRONTEND_FINAL_QUALITY_REPORT_2026-04-29.md](FRONTEND_FINAL_QUALITY_REPORT_2026-04-29.md): retained frontend quality snapshot
+- [CODEBASE_SUBAGENT_GAP_REPORT_2026-04-24.md](CODEBASE_SUBAGENT_GAP_REPORT_2026-04-24.md): retained sub-agent gap analysis snapshot
+- [RELEASE_SCOPE_AUDIT_2026-04-30.md](RELEASE_SCOPE_AUDIT_2026-04-30.md): release-scope inventory and staging guard audit
+
 Related repository test helpers:
 
 - `scripts/repro_backend_focus.sh`
@@ -30,4 +38,5 @@ Release-prep documents:
 
 - [release/PR_BODY.md](release/PR_BODY.md): current PR body draft for the active quality/refactor rollout, including browser lane and workflow-lint evidence wording
 - [release/DEPLOYMENT_CHECKLIST.md](release/DEPLOYMENT_CHECKLIST.md): pre-deploy checklist for remote/realtime/upload hardening changes, including browser lane and workflow-lint verification
+- [release/evidence/README.md](release/evidence/README.md): provider-live, reverse-proxy, and backup-portable release evidence commands, templates, metadata requirements, and final gate checks
 - [release/REMAINING_STRUCTURE_DEBT.md](release/REMAINING_STRUCTURE_DEBT.md): one-page follow-up debt priority list

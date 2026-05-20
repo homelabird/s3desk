@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
 import { readProfileScopedLocalStorage } from './support/storage'
-import { addUploadSourceFromDevice, gotoUploadsPage, openTransfersUploadRow, queueSelectedUpload } from './support/ui'
+import { addUploadSourceFromDevice, dialogByName, gotoUploadsPage, openTransfersUploadRow, queueSelectedUpload } from './support/ui'
 
 test.describe('@mobile-responsive Uploads mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
@@ -32,6 +32,22 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 		await page.reload({ waitUntil: 'load' })
 		await expect(page.getByLabel('Upload prefix (optional)')).toHaveValue('photos/mobile')
 		await expect(page.locator('strong').filter({ hasText: 's3://uploads-mobile-bucket/photos/mobile' }).first()).toBeVisible()
+	})
+
+	test('upload source sheet opens from the mobile page', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 844 })
+		await gotoUploadsPage(page)
+
+		await page.getByRole('button', { name: /Add from device/i }).click()
+
+		const dialog = dialogByName(page, 'Add upload source')
+		await expect(dialog).toBeVisible()
+		await expect(dialog.getByRole('button', { name: 'Choose files' })).toBeVisible()
+		await expect(dialog.getByRole('button', { name: 'Choose folder' })).toBeVisible()
+		await expect(dialog.getByText('s3://uploads-mobile-bucket')).toBeVisible()
+
+		await dialog.getByLabel('Close', { exact: true }).click()
+		await expect(dialog).toHaveCount(0)
 	})
 
 	test('selected files can be cleared from the mobile uploads header', async ({ page }) => {
@@ -68,5 +84,21 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 		})
 		await expect(transfersDialog.getByRole('tab', { name: /Uploads/i })).toHaveAttribute('aria-selected', 'true')
 		await expect(row).toContainText('alpha.txt')
+		await expect
+			.poll(() =>
+				row.evaluate((element) => {
+					const dialog = element.closest('[role="dialog"]')
+					if (!dialog) return false
+					const rowRect = element.getBoundingClientRect() // e2e-geometry-allow verifies upload source rows fit the dialog viewport
+					const dialogRect = dialog.getBoundingClientRect() // e2e-geometry-allow bounds row/button checks to dialog viewport
+					const buttons = Array.from(element.querySelectorAll('button'))
+					const buttonsFit = buttons.every((button) => {
+						const rect = button.getBoundingClientRect() // e2e-geometry-allow validates mobile button hit area and containment
+						return rect.left >= dialogRect.left - 1 && rect.right <= dialogRect.right + 1 && rect.height >= 44
+					})
+					return rowRect.left >= dialogRect.left - 1 && rowRect.right <= dialogRect.right + 1 && element.scrollWidth <= element.clientWidth + 1 && buttonsFit // e2e-geometry-allow verifies row has no horizontal overflow
+				}),
+			)
+			.toBe(true)
 	})
 })

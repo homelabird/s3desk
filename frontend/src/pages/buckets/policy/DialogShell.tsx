@@ -9,6 +9,7 @@ export function BucketPolicyDialogShell(props: {
   title: string
   onClose: () => void
   footer?: ReactNode
+  closeDisabled?: boolean
   children: ReactNode
 }) {
   const shellContent = (
@@ -28,6 +29,7 @@ export function BucketPolicyDialogShell(props: {
         title={props.title}
         placement="right"
         footer={props.footer}
+        closeDisabled={props.closeDisabled}
         width="100vw"
       >
         {shellContent}
@@ -41,6 +43,7 @@ export function BucketPolicyDialogShell(props: {
       title={props.title}
       onClose={props.onClose}
       footer={props.footer ?? null}
+      closeDisabled={props.closeDisabled}
       width="min(96vw, 920px)"
     >
       {shellContent}

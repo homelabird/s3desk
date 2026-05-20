@@ -11,7 +11,7 @@ This round tracks what is still meaningfully open.
 ### 1. Real-provider live validation has not been executed yet
 
 - Risk:
-  - The bucket governance surface changed across AWS S3, GCS, Azure Blob, and OCI without attached real-cloud evidence.
+  - The bucket governance surface changed across AWS S3, GCS, Azure Blob, OCI, MinIO, and Ceph without attached real-cloud evidence.
   - Release confidence is limited until provider-native behavior is revalidated.
 - Evidence:
   - [BUCKET_GOVERNANCE.md](../docs/BUCKET_GOVERNANCE.md)
@@ -27,7 +27,7 @@ This round tracks what is still meaningfully open.
 
 - Risk:
   - Payload corruption is detectable, restore staging performs disk-space preflight, and operators can now export encrypted bundles that keep the payload encrypted at rest outside the source host.
-  - The confidentiality model is still intentionally simple: it reuses the current ENCRYPTION_KEY and does not yet cover key rotation, per-bundle passphrases, or detached signatures.
+  - The confidentiality model is still intentionally simple: it uses the current ENCRYPTION_KEY or an operator-supplied export password and does not yet cover key rotation or detached signatures.
 - Evidence:
   - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
   - [handlers_server_restores.go](../backend/internal/api/handlers_server_restores.go)
@@ -43,11 +43,11 @@ This round tracks what is still meaningfully open.
 
 ## Priority 1
 
-### 3. Postgres backup capability is documented, but not exposed as a first-class product capability
+### 3. Postgres backup capability is exposed, but operator workflow still needs release evidence
 
 - Risk:
-  - The current behavior is explained in docs, but the product surface still relies mostly on warning copy.
-  - Operators can still overestimate what in-product backup covers.
+  - The product surface now exposes backup capability by backend type, but release evidence still needs to show the sqlite and postgres operator paths.
+  - Operators can still overestimate what in-product backup covers if evidence is not kept current with the capability UI.
 - Evidence:
   - [handlers_server_backup.go](../backend/internal/api/handlers_server_backup.go)
   - [ServerSettingsSection.tsx](../frontend/src/pages/settings/ServerSettingsSection.tsx)
@@ -57,13 +57,13 @@ This round tracks what is still meaningfully open.
 - Why it matters:
   - Backup capability should be explicit and machine-readable, not only explained in text.
 - Next action:
-  - Expose backup capability by backend type and reflect it directly in the UI.
+  - Keep the capability UI and release evidence aligned when backup behavior changes.
 
-### 4. Release gate rules are documented, but not enforced by CI yet
+### 4. Release gate is enforced, but live evidence remains external
 
 - Risk:
-  - The current release gate can still be bypassed by omission.
-  - Live validation and known-limitations requirements are not automatically checked.
+  - CI now runs the repository release gate, but live provider and reverse-proxy validation still depends on attaching evidence files for the candidate.
+  - Evidence content can still go stale if the checklist and checker scopes diverge.
 - Evidence:
   - [RELEASE_GATE.md](../docs/RELEASE_GATE.md)
   - [TESTING.md](../docs/TESTING.md)
@@ -87,6 +87,9 @@ This round tracks what is still meaningfully open.
   - [process_testhooks.go](../backend/internal/jobs/process_testhooks.go)
 - Current status:
   - Addressed by replacing direct package-level hook variable access with internal test-hook registries and setter helpers in both API and jobs layers.
+  - Endpoint lookup test hooks now guard set, restore, and read access with a package-local mutex so shuffled or future parallel endpoint-validation tests do not race on resolver stubs.
+  - Guarded HTTP client tests now cover hostnames that resolve to metadata IPs, remote-mode IPv4/IPv6 loopback/link-local IPs, CNAME to blocked metadata hosts, or remote-mode localhost CNAMEs for both dial-time and redirect-time rejection.
+  - Shared endpoint validator tests now directly cover remote-mode localhost CNAME rejection, remote-mode IPv6 loopback/link-local resolution, and TLS skip-verify IPv6 private/public host policy.
 - Why it matters:
   - The current approach is useful as an intermediate step, but not ideal as a long-term boundary.
 - Next action:
@@ -106,15 +109,17 @@ This round tracks what is still meaningfully open.
 - Next action:
   - Keep future section work aligned to the section-oriented interfaces and validation context already introduced.
 
-### 7. Cost and restore observability still lack operator thresholds
+### 7. Cost and restore observability thresholds are defined, but need to stay aligned
 
 - Risk:
-  - Metrics exist, but the runbook does not yet define what counts as abnormal cache miss rate, restore buildup, or object-storage cost pressure.
+  - Metrics and working thresholds now exist, but stale thresholds can create either alert fatigue or missed incidents as cache, restore, and provider behavior evolves.
 - Evidence:
   - [metrics.go](../backend/internal/metrics/metrics.go)
-  - [RUNBOOK.md](RUNBOOK.md)
+  - [RUNBOOK.md](../docs/RUNBOOK.md)
+- Current status:
+  - Addressed by documenting warm-cache reuse, thumbnail latency, download-proxy stat fallback, object-storage operation/error/latency pressure, and staged restore count/age/size thresholds in the runbook.
 - Why it matters:
-  - Observability is less useful if operators do not know when to act.
+  - Observability is less useful if operators do not know when to act, and thresholds are only useful while they match the metrics emitted by the service.
 - Next action:
   - Keep the runbook thresholds aligned with the actual metrics emitted as cache and restore behavior evolves.
 

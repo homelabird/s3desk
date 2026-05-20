@@ -55,5 +55,9 @@ export function buildObjectsDetailsPaneProps(args: BuildObjectsPagePanesPropsArg
 		onResizePointerDown: args.onDetailsResizePointerDown,
 		onResizePointerMove: args.onDetailsResizePointerMove,
 		onResizePointerUp: args.onDetailsResizePointerUp,
+		onResizeKeyDown: args.onDetailsResizeKeyDown,
+		resizeMinWidth: args.detailsResizeMinWidth,
+		resizeMaxWidth: args.detailsResizeMaxWidth,
+		resizeValue: args.detailsWidthUsed,
 	}
 }

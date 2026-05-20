@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react'
 
 import type { Profile, ProfileTLSStatus } from '../../api/types'
 import { DialogModal } from '../../components/DialogModal'
+import { FormField } from '../../components/FormField'
 import styles from '../ProfilesPage.module.css'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
 
@@ -32,10 +33,12 @@ type ProfilesModalsProps = {
 	yamlContent: string
 	yamlDraft: string
 	yamlFilename: string
+	yamlIncludesSecrets: boolean
 	exportYamlLoading: boolean
 	saveYamlLoading: boolean
 	onYamlCopy: () => void
 	onYamlDownload: () => void
+	onYamlLoadSecrets: () => void
 	onYamlDraftChange: (value: string) => void
 	onYamlSave: () => void
 	importOpen: boolean
@@ -51,6 +54,11 @@ type ProfilesModalsProps = {
 }
 
 export function ProfilesModals(props: ProfilesModalsProps) {
+	const yamlTextAreaId = 'profile-yaml-contents'
+	const yamlErrorId = 'profile-yaml-contents-error'
+	const importTextAreaId = 'profile-yaml-import'
+	const importErrorId = 'profile-yaml-import-error'
+
 	return (
 		<>
 			<Suspense fallback={null}>
@@ -95,11 +103,20 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 					<Button key="copy" disabled={!props.yamlContent} onClick={props.onYamlCopy}>
 						Copy
 					</Button>,
-					<Button key="download" disabled={!props.yamlContent} onClick={props.onYamlDownload}>
-						Download
-					</Button>,
-					<Button
-						key="save"
+						<Button key="download" disabled={!props.yamlContent} onClick={props.onYamlDownload}>
+							Download
+						</Button>,
+						<Button
+							key="secrets"
+							danger
+							disabled={!props.yamlProfile || props.yamlIncludesSecrets || props.exportYamlLoading || props.saveYamlLoading}
+							loading={props.exportYamlLoading && !!props.yamlContent}
+							onClick={props.onYamlLoadSecrets}
+						>
+							Load with secrets
+						</Button>,
+						<Button
+							key="save"
 						type="primary"
 						disabled={!props.yamlDraft.trim() || props.exportYamlLoading}
 						loading={props.saveYamlLoading}
@@ -112,27 +129,39 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 					</Button>,
 				]}
 			>
-				<Space orientation="vertical" size="middle" className={styles.fullWidth}>
-					<Alert
-						type="warning"
-						showIcon
-						title="Contains credentials"
-						description="This export includes access keys and secrets. Store it securely."
-					/>
+					<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+						<Alert
+							type={props.yamlIncludesSecrets ? 'warning' : 'info'}
+							showIcon
+							title={props.yamlIncludesSecrets ? 'Secret-inclusive YAML loaded' : 'Secrets omitted'}
+							description={
+								props.yamlIncludesSecrets
+									? 'This YAML includes credentials and TLS private material. Store it securely.'
+									: 'Default YAML omits credentials and TLS private material. Load secrets only for controlled migration.'
+							}
+						/>
 					{props.yamlProfile ? (
 						<Typography.Text>
 							Profile: <Typography.Text code>{props.yamlProfile.name}</Typography.Text>
 						</Typography.Text>
 					) : null}
-					{props.yamlError ? <Alert type="error" showIcon title="YAML action failed" description={props.yamlError} /> : null}
 					{props.exportYamlLoading && !props.yamlContent ? (
 						<Spin />
 					) : (
-						<Input.TextArea
-							value={props.yamlDraft}
-							onChange={(e) => props.onYamlDraftChange(e.target.value)}
-							autoSize={{ minRows: 6, maxRows: 16 }}
-						/>
+						<FormField
+							label="Profile YAML contents"
+							htmlFor={yamlTextAreaId}
+							error={props.yamlError ? `YAML action failed: ${props.yamlError}` : undefined}
+							errorId={yamlErrorId}
+						>
+							<Input.TextArea
+								id={yamlTextAreaId}
+								value={props.yamlDraft}
+								onChange={(e) => props.onYamlDraftChange(e.target.value)}
+								autoSize={{ minRows: 6, maxRows: 16 }}
+								aria-describedby={props.yamlError ? yamlErrorId : undefined}
+							/>
+						</FormField>
 					)}
 					{props.yamlDraft ? <Typography.Text type="secondary">Filename: {props.yamlFilename}</Typography.Text> : null}
 				</Space>
@@ -156,11 +185,17 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 						</Button>
 					</>
 				}
-			>
-				<Space orientation="vertical" size="middle" className={styles.fullWidth}>
-					<Typography.Text type="secondary">
-						Import a profile exported from S3Desk. This will create a new profile (the YAML id is ignored).
-					</Typography.Text>
+				>
+					<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+						<Alert
+							type="warning"
+							showIcon
+							title="YAML may contain credentials"
+							description="Import only YAML from trusted sources. Secret fields are saved into the selected profile backend."
+						/>
+						<Typography.Text type="secondary">
+							Import a profile exported from S3Desk. This will create a new profile (the YAML id is ignored).
+						</Typography.Text>
 					<input
 						type="file"
 						accept=".yaml,.yml"
@@ -177,16 +212,19 @@ export function ProfilesModals(props: ProfilesModalsProps) {
 							reader.readAsText(file)
 						}}
 					/>
-					<Input.TextArea
-						value={props.importText}
-						onChange={(e) => {
-							props.onImportTextChange(e.target.value)
-							props.onImportErrorClear()
-						}}
-						autoSize={{ minRows: 8, maxRows: 16 }}
-						placeholder="Paste YAML here…"
-					/>
-					{props.importError ? <Alert type="error" showIcon title={props.importError} /> : null}
+					<FormField label="Paste YAML" htmlFor={importTextAreaId} error={props.importError} errorId={importErrorId}>
+						<Input.TextArea
+							id={importTextAreaId}
+							value={props.importText}
+							onChange={(e) => {
+								props.onImportTextChange(e.target.value)
+								props.onImportErrorClear()
+							}}
+							autoSize={{ minRows: 8, maxRows: 16 }}
+							placeholder="Paste YAML here..."
+							aria-describedby={props.importError ? importErrorId : undefined}
+						/>
+					</FormField>
 				</Space>
 			</DialogModal>
 		</>

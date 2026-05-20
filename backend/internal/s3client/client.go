@@ -10,26 +10,45 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/profiletls"
 )
 
+type ProfileOptions struct {
+	AllowRemote bool
+}
+
 func FromProfile(secrets models.ProfileSecrets) (*s3.Client, error) {
-	return fromProfileWithEndpoint(secrets, strings.TrimSpace(secrets.Endpoint))
+	return FromProfileWithOptions(secrets, ProfileOptions{})
+}
+
+func FromProfileWithOptions(secrets models.ProfileSecrets, opts ProfileOptions) (*s3.Client, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(secrets, opts.AllowRemote); err != nil {
+		return nil, err
+	}
+	return fromProfileWithEndpoint(secrets, strings.TrimSpace(secrets.Endpoint), opts)
 }
 
 func PresignFromProfile(secrets models.ProfileSecrets) (*s3.PresignClient, error) {
+	return PresignFromProfileWithOptions(secrets, ProfileOptions{})
+}
+
+func PresignFromProfileWithOptions(secrets models.ProfileSecrets, opts ProfileOptions) (*s3.PresignClient, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(secrets, opts.AllowRemote); err != nil {
+		return nil, err
+	}
 	endpoint := strings.TrimSpace(secrets.PublicEndpoint)
 	if endpoint == "" {
 		endpoint = strings.TrimSpace(secrets.Endpoint)
 	}
-	client, err := fromProfileWithEndpoint(secrets, endpoint)
+	client, err := fromProfileWithEndpoint(secrets, endpoint, opts)
 	if err != nil {
 		return nil, err
 	}
 	return s3.NewPresignClient(client), nil
 }
 
-func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string) (*s3.Client, error) {
+func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string, opts ProfileOptions) (*s3.Client, error) {
 	region := strings.TrimSpace(secrets.Region)
 	if region == "" {
 		region = "us-east-1"
@@ -44,9 +63,7 @@ func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string) (*s
 	if err != nil {
 		return nil, err
 	}
-	if tlsCfg != nil {
-		cfg.HTTPClient = newHTTPClient(tlsCfg)
-	}
+	cfg.HTTPClient = newHTTPClient(tlsCfg, opts.AllowRemote)
 
 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = secrets.ForcePathStyle
@@ -56,15 +73,11 @@ func fromProfileWithEndpoint(secrets models.ProfileSecrets, endpoint string) (*s
 	}), nil
 }
 
-func newHTTPClient(tlsCfg *tls.Config) *http.Client {
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-		cloned := transport.Clone()
-		cloned.TLSClientConfig = tlsCfg
-		return &http.Client{Transport: cloned}
-	}
-	return &http.Client{
-		Transport: &http.Transport{TLSClientConfig: tlsCfg},
-	}
+func newHTTPClient(tlsCfg *tls.Config, allowRemote bool) *http.Client {
+	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
+		AllowRemote: allowRemote,
+		TLSConfig:   tlsCfg,
+	})
 }
 
 func derefString(value *string) string {

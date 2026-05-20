@@ -41,6 +41,33 @@ func TestServerBackupHTTPService_HandleGetServerBackup_ReturnsBackupUnsupportedF
 	}
 }
 
+func TestServerBackupHTTPService_HandleGetServerBackup_ReturnsInvalidIncludeThumbnails(t *testing.T) {
+	t.Parallel()
+
+	svc := serverBackupHTTPService{
+		dbBackend:     string(db.BackendSQLite),
+		encryptionKey: testEncryptionKey(),
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/server/backup?scope=portable&includeThumbnails=maybe", nil)
+	rec := httptest.NewRecorder()
+
+	svc.handleGetServerBackup(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("rec.Code=%d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	var resp models.ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	}
+	if got := resp.Error.Details["includeThumbnails"]; got != "maybe" {
+		t.Fatalf("details.includeThumbnails=%v, want maybe", got)
+	}
+}
+
 func TestServerBackupHTTPService_HandleGetServerBackup_WritesAttachment(t *testing.T) {
 	t.Parallel()
 
@@ -125,6 +152,33 @@ func TestServerBackupHTTPService_HandleRestoreServerBackup_MapsPreflightError(t 
 	}
 	if got, _ := resp.Error.Details["path"].(string); got != "/tmp" {
 		t.Fatalf("resp.Error.Details[path]=%q, want /tmp", got)
+	}
+}
+
+func TestExtractEncryptedServerRestorePayload_RequiresBackupPasswordOrEncryptionKey(t *testing.T) {
+	t.Parallel()
+
+	validation := models.ServerRestoreValidation{}
+	payloadEntries := []serverBackupPayloadEntry{}
+	sqliteSeen := false
+
+	err := extractEncryptedServerRestorePayload(
+		context.Background(),
+		strings.NewReader("payload"),
+		t.TempDir(),
+		&validation,
+		&payloadEntries,
+		&sqliteSeen,
+		serverBackupArchiveManifest{},
+		"",
+		nil,
+	)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	want := "encrypted backup bundle requires the backup password or ENCRYPTION_KEY on the destination server"
+	if err.Error() != want {
+		t.Fatalf("err=%q, want %q", err.Error(), want)
 	}
 }
 

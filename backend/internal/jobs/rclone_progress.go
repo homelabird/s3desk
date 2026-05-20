@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strings"
 	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/redact"
 	"s3desk/internal/ws"
 )
 
@@ -21,6 +23,7 @@ type runRcloneOptions struct {
 	TrackProgress bool
 	DryRun        bool
 	ProgressMode  rcloneProgressMode
+	ExtraFiles    []*os.File
 }
 
 type rcloneStatsUpdate struct {
@@ -190,6 +193,7 @@ func (m *Manager) pipeLogs(ctx context.Context, r io.Reader, w io.Writer, jobID,
 		if rendered == "" {
 			rendered = line
 		}
+		rendered = redact.Diagnostic(rendered)
 		if capture != nil {
 			capture.Add(rendered)
 		}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"s3desk/internal/gcsauth"
 	"s3desk/internal/models"
 )
 
@@ -171,6 +172,11 @@ func validatePreparedUpdateProfileRequest(currentProfile models.Profile, req mod
 			return err
 		}
 	}
+	if req.ServiceAccountJSON != nil {
+		if err := gcsauth.ValidateServiceAccountJSON(*req.ServiceAccountJSON); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -271,6 +277,11 @@ func validateCreateProfileProvider(req *models.ProfileCreateRequest) error {
 		}
 		if !anonymous && (req.ServiceAccountJSON == nil || *req.ServiceAccountJSON == "") {
 			return errors.New("serviceAccountJson is required unless anonymous=true")
+		}
+		if req.ServiceAccountJSON != nil {
+			if err := gcsauth.ValidateServiceAccountJSON(*req.ServiceAccountJSON); err != nil {
+				return err
+			}
 		}
 		if hasUnexpectedFields(req.Region, req.AccessKeyID, req.SecretAccessKey, req.SessionToken, req.ForcePathStyle, req.PublicEndpoint, req.AccountName, req.AccountKey, req.SubscriptionID, req.ResourceGroup, req.TenantID, req.ClientID, req.ClientSecret, req.UseEmulator, req.Namespace, req.Compartment, req.AuthProvider, req.ConfigFile, req.ConfigProfile) {
 			return errors.New("unexpected fields for gcp_gcs")

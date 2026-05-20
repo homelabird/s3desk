@@ -55,6 +55,9 @@ func sanitizeUploadPath(name string) string {
 	}
 	name = strings.ReplaceAll(name, "\\", "/")
 	name = strings.TrimLeft(name, "/")
+	if strings.ContainsRune(name, 0) || containsParentPathSegment(name) {
+		return ""
+	}
 
 	cleaned := path.Clean(name)
 	if cleaned == "." || cleaned == ".." || cleaned == "" {
@@ -63,10 +66,24 @@ func sanitizeUploadPath(name string) string {
 	if strings.HasPrefix(cleaned, "../") {
 		return ""
 	}
-	if strings.ContainsRune(cleaned, 0) {
-		return ""
-	}
 	return cleaned
+}
+
+func validateUploadPrefix(prefix string) *uploadHTTPError {
+	prefix = strings.ReplaceAll(strings.TrimSpace(prefix), "\\", "/")
+	if strings.ContainsRune(prefix, 0) || containsParentPathSegment(prefix) {
+		return newUploadBadRequestError("prefix contains invalid path segment", map[string]any{"prefix": prefix})
+	}
+	return nil
+}
+
+func containsParentPathSegment(value string) bool {
+	for _, segment := range strings.Split(value, "/") {
+		if segment == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func safeUploadPath(part *multipart.Part) string {
@@ -154,6 +171,16 @@ func parseUploadChunkHeadersWithSizes(headers http.Header, chunkIndexRaw string,
 		index:   chunkIndex,
 	}
 	if !requireSizes {
+		if chunkSizeRaw := strings.TrimSpace(headers.Get("X-Upload-Chunk-Size")); chunkSizeRaw != "" {
+			if chunkSize, err := strconv.ParseInt(chunkSizeRaw, 10, 64); err == nil && chunkSize > 0 {
+				values.chunkSize = chunkSize
+			}
+		}
+		if fileSizeRaw := strings.TrimSpace(headers.Get("X-Upload-File-Size")); fileSizeRaw != "" {
+			if fileSize, err := strconv.ParseInt(fileSizeRaw, 10, 64); err == nil && fileSize > 0 {
+				values.fileSize = fileSize
+			}
+		}
 		return values, nil
 	}
 

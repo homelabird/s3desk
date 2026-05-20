@@ -50,6 +50,7 @@ export function ObjectsListHeaderRow(props: { children: ReactNode }) {
 
 export type ObjectsListScrollerProps = {
 	children: ReactNode
+	viewMode?: 'list' | 'grid'
 	onClick?: (e: MouseEvent<HTMLDivElement>) => void
 	onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void
 	onContextMenuCapture?: (e: MouseEvent<HTMLDivElement>) => void
@@ -60,9 +61,11 @@ export type ObjectsListScrollerProps = {
 }
 
 export const ObjectsListScroller = forwardRef<HTMLDivElement, ObjectsListScrollerProps>(function ObjectsListScroller(
-	{ children, onClick, onContextMenu, onContextMenuCapture, onKeyDown, onScroll, onWheel, tabIndex },
+	{ children, viewMode = 'list', onClick, onContextMenu, onContextMenuCapture, onKeyDown, onScroll, onWheel, tabIndex },
 	ref,
 ) {
+	const role = viewMode === 'grid' ? 'region' : 'list'
+	const ariaLabel = viewMode === 'grid' ? 'Objects grid viewport' : 'Objects list'
 	return (
 		<div
 			ref={ref}
@@ -74,8 +77,8 @@ export const ObjectsListScroller = forwardRef<HTMLDivElement, ObjectsListScrolle
 			onScroll={onScroll}
 			onWheel={onWheel}
 			className={styles.listScroller}
-			role="list"
-			aria-label="Objects list"
+			role={role}
+			aria-label={ariaLabel}
 		>
 			{children}
 		</div>

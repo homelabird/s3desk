@@ -274,9 +274,11 @@ func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyMissing(t *testing.T
 		body, _ := io.ReadAll(res.Body)
 		t.Fatalf("expected status 200, got %d: %s", res.StatusCode, string(body))
 	}
-	body, _ := io.ReadAll(res.Body)
-	if !strings.Contains(string(body), "ENCRYPTION_KEY") {
-		t.Fatalf("expected preflight blocker mentioning ENCRYPTION_KEY, got: %s", string(body))
+	var resp models.ServerPortableImportResponse
+	decodeJSONResponse(t, res, &resp)
+	blockers := strings.Join(resp.Preflight.Blockers, "\n")
+	if !strings.Contains(blockers, portableImportDestinationKeyEnv) {
+		t.Fatalf("expected preflight blocker mentioning %s, got: %v", portableImportDestinationKeyEnv, resp.Preflight.Blockers)
 	}
 }
 
@@ -351,7 +353,8 @@ func TestHandlePreviewPortableImport_BlocksWhenEncryptionKeyHintMismatches(t *te
 	if resp.Preflight.EncryptionKeyHintVerified {
 		t.Fatal("expected encryptionKeyHintVerified=false")
 	}
-	if !strings.Contains(strings.Join(resp.Preflight.Blockers, "\n"), "encryption fingerprint") {
+	blockers := strings.Join(resp.Preflight.Blockers, "\n")
+	if !strings.Contains(blockers, portableImportDestinationKeyEnv) || !strings.Contains(blockers, "encryption fingerprint") {
 		t.Fatalf("expected encryption fingerprint blocker, got %v", resp.Preflight.Blockers)
 	}
 }
@@ -557,6 +560,7 @@ func TestHandleImportPortableBackup_EncryptedBundleImportsWithMatchingKey(t *tes
 	if _, ok := entries["payload.enc"]; !ok {
 		t.Fatalf("encrypted portable backup must include payload.enc")
 	}
+	assertEncryptedPayloadV2Manifest(t, decodeServerBackupArchiveManifest(t, entries))
 
 	_, _, targetSrv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	res := postPortableArchive(t, targetSrv.URL, "/api/v1/server/import-portable", archiveBytes, "portable-backup-encrypted.tar.gz")
@@ -579,6 +583,27 @@ func TestHandleImportPortableBackup_EncryptedBundleImportsWithMatchingKey(t *tes
 	}
 	if profiles[0].ID != profile.ID {
 		t.Fatalf("imported profile id=%q, want %q", profiles[0].ID, profile.ID)
+	}
+}
+
+func TestExtractEncryptedPortablePayload_RequiresBackupPasswordOrDestinationKey(t *testing.T) {
+	t.Parallel()
+
+	payloadEntries := []serverBackupPayloadEntry{}
+	err := extractEncryptedPortablePayload(
+		context.Background(),
+		strings.NewReader("payload"),
+		t.TempDir(),
+		serverBackupArchiveManifest{},
+		"",
+		&payloadEntries,
+	)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	want := "encrypted portable bundle requires the backup password or " + portableImportDestinationKeyEnv + " on the destination server"
+	if err.Error() != want {
+		t.Fatalf("err=%q, want %q", err.Error(), want)
 	}
 }
 
@@ -785,6 +810,58 @@ func TestExtractPortablePayloadEntry_RejectsOversizedFileBeforeWrite(t *testing.
 	}
 	if _, statErr := os.Stat(filepath.Join(tempRoot, "data", "profiles.jsonl")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected no file write after preflight error, stat err=%v", statErr)
+	}
+}
+
+func TestExtractPortablePayloadEntry_RejectsCumulativeExtractLimitBeforeWrite(t *testing.T) {
+	t.Parallel()
+
+	tempRoot := t.TempDir()
+	payloadEntries := make([]serverBackupPayloadEntry, 0, 2)
+	extractBudget := newServerRestoreExtractBudget(5)
+
+	firstHeader := &tar.Header{
+		Name:     "data/profiles.jsonl",
+		Typeflag: tar.TypeReg,
+		Mode:     0o600,
+		Size:     4,
+	}
+	if err := extractPortablePayloadEntryWithBudget(
+		context.Background(),
+		tempRoot,
+		"data/profiles.jsonl",
+		firstHeader,
+		bytes.NewReader([]byte("aaaa")),
+		&payloadEntries,
+		extractBudget,
+	); err != nil {
+		t.Fatalf("extract first portable payload entry: %v", err)
+	}
+
+	secondHeader := &tar.Header{
+		Name:     "data/jobs.jsonl",
+		Typeflag: tar.TypeReg,
+		Mode:     0o600,
+		Size:     2,
+	}
+	err := extractPortablePayloadEntryWithBudget(
+		context.Background(),
+		tempRoot,
+		"data/jobs.jsonl",
+		secondHeader,
+		bytes.NewReader([]byte("bb")),
+		&payloadEntries,
+		extractBudget,
+	)
+	var limitErr serverRestoreExtractLimitError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("expected serverRestoreExtractLimitError, got %v", err)
+	}
+	if limitErr.Path != "data/jobs.jsonl" || limitErr.RequiredBytes != 6 || limitErr.MaxBytes != 5 {
+		t.Fatalf("limitErr=%+v, want path data/jobs.jsonl required 6 max 5", limitErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(tempRoot, "data", "jobs.jsonl")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("expected no second file write after extract limit error, stat err=%v", statErr)
 	}
 }
 

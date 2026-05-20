@@ -4,7 +4,7 @@ import { FormField } from '../../components/FormField'
 import { NativeSelect } from '../../components/NativeSelect'
 import styles from './ProfileModal.module.css'
 import type { TLSAction } from './profileTypes'
-import type { ProfileModalSectionContentArgs } from './profileModalSectionShared'
+import { profileFieldA11y, type ProfileModalSectionContentArgs } from './profileModalSectionShared'
 
 export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 	const { values, errors, editMode, setField, viewState } = args
@@ -23,8 +23,9 @@ export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 			{viewState.showTLSStatusError ? <Alert type="warning" showIcon title="Failed to load TLS status" description={viewState.showTLSStatusError} /> : null}
 
 			{editMode ? (
-				<FormField label="mTLS action">
+				<FormField label="mTLS action" htmlFor="profile-mtls-action">
 					<NativeSelect
+						id="profile-mtls-action"
 						disabled={viewState.tlsUnavailable}
 						value={tlsAction}
 						onChange={(v) => setField('tlsAction', v as TLSAction)}
@@ -33,7 +34,6 @@ export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 							{ label: 'Enable or update', value: 'enable' },
 							{ label: 'Disable', value: 'disable' },
 						]}
-						ariaLabel="mTLS action"
 					/>
 				</FormField>
 			) : (
@@ -57,33 +57,33 @@ export function buildSecuritySection(args: ProfileModalSectionContentArgs) {
 
 			{viewState.showTLSFields ? (
 				<>
-					<FormField label="Client Certificate (PEM)" required error={errors.tlsClientCertPem}>
+					<FormField label="Client Certificate (PEM)" htmlFor="profile-tls-client-cert-pem" required error={errors.tlsClientCertPem}>
 						<Input.TextArea
+							{...profileFieldA11y('profile-tls-client-cert-pem', errors.tlsClientCertPem)}
 							disabled={viewState.tlsUnavailable}
 							value={values.tlsClientCertPem ?? ''}
 							onChange={(e) => setField('tlsClientCertPem', e.target.value)}
 							autoSize={{ minRows: 5, maxRows: 10 }}
-							aria-label="Client Certificate (PEM)"
 							placeholder="-----BEGIN CERTIFICATE-----…"
 						/>
 					</FormField>
-					<FormField label="Client Key (PEM)" required error={errors.tlsClientKeyPem}>
+					<FormField label="Client Key (PEM)" htmlFor="profile-tls-client-key-pem" required error={errors.tlsClientKeyPem}>
 						<Input.TextArea
+							{...profileFieldA11y('profile-tls-client-key-pem', errors.tlsClientKeyPem)}
 							disabled={viewState.tlsUnavailable}
 							value={values.tlsClientKeyPem ?? ''}
 							onChange={(e) => setField('tlsClientKeyPem', e.target.value)}
 							autoSize={{ minRows: 5, maxRows: 10 }}
-							aria-label="Client Key (PEM)"
 							placeholder="-----BEGIN PRIVATE KEY-----…"
 						/>
 					</FormField>
-					<FormField label="CA Certificate (optional)">
+					<FormField label="CA Certificate (optional)" htmlFor="profile-tls-ca-cert-pem">
 						<Input.TextArea
+							id="profile-tls-ca-cert-pem"
 							disabled={viewState.tlsUnavailable}
 							value={values.tlsCaCertPem ?? ''}
 							onChange={(e) => setField('tlsCaCertPem', e.target.value)}
 							autoSize={{ minRows: 4, maxRows: 8 }}
-							aria-label="CA Certificate (optional)"
 							placeholder="-----BEGIN CERTIFICATE-----…"
 						/>
 					</FormField>

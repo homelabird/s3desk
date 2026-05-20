@@ -25,10 +25,12 @@ type Props = {
 	yamlContent: string
 	yamlDraft: string
 	yamlFilename: string
+	yamlIncludesSecrets: boolean
 	exportYamlLoading: boolean
 	saveYamlLoading: boolean
 	onYamlCopy: () => void
 	onYamlDownload: () => void
+	onYamlLoadSecrets: () => void
 	onYamlDraftChange: (value: string) => void
 	onYamlSave: () => void
 	importOpen: boolean
@@ -64,15 +66,17 @@ export function ProfilesDialogs(props: Props) {
 				closeYamlModal={props.closeYamlModal}
 				yamlProfile={props.yamlProfile}
 				yamlError={props.yamlError}
-				yamlContent={props.yamlContent}
-				yamlDraft={props.yamlDraft}
-				yamlFilename={props.yamlFilename}
-				exportYamlLoading={props.exportYamlLoading}
-				saveYamlLoading={props.saveYamlLoading}
-				onYamlCopy={props.onYamlCopy}
-				onYamlDownload={props.onYamlDownload}
-				onYamlDraftChange={props.onYamlDraftChange}
-				onYamlSave={props.onYamlSave}
+					yamlContent={props.yamlContent}
+					yamlDraft={props.yamlDraft}
+					yamlFilename={props.yamlFilename}
+					yamlIncludesSecrets={props.yamlIncludesSecrets}
+					exportYamlLoading={props.exportYamlLoading}
+					saveYamlLoading={props.saveYamlLoading}
+					onYamlCopy={props.onYamlCopy}
+					onYamlDownload={props.onYamlDownload}
+					onYamlLoadSecrets={props.onYamlLoadSecrets}
+					onYamlDraftChange={props.onYamlDraftChange}
+					onYamlSave={props.onYamlSave}
 				importOpen={props.importOpen}
 				closeImportModal={props.closeImportModal}
 				importSessionToken={props.importSessionToken}

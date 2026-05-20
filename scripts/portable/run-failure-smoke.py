@@ -237,12 +237,12 @@ def run_preflight_blocker():
     preview_status, preview = post_bundle("/server/import-portable/preview", archive)
     assert_true(preview_status == 200, f"preflight_blocker preview status={preview_status}")
     blockers = ((preview or {}).get("preflight") or {}).get("blockers") or []
-    assert_true(any("missing ENCRYPTION_KEY required by the portable bundle" in item for item in blockers), f"preflight_blocker preview blockers={blockers}")
+    assert_true(any("missing BACKUP_ENCRYPTION_KEY or ENCRYPTION_KEY required by the portable bundle" in item for item in blockers), f"preflight_blocker preview blockers={blockers}")
 
     import_status, imported = post_bundle("/server/import-portable", archive)
     assert_true(import_status == 200, f"preflight_blocker import status={import_status}")
     import_blockers = ((imported or {}).get("preflight") or {}).get("blockers") or []
-    assert_true(any("missing ENCRYPTION_KEY required by the portable bundle" in item for item in import_blockers), f"preflight_blocker import blockers={import_blockers}")
+    assert_true(any("missing BACKUP_ENCRYPTION_KEY or ENCRYPTION_KEY required by the portable bundle" in item for item in import_blockers), f"preflight_blocker import blockers={import_blockers}")
 
     return {
         "scenario": "preflight_blocker",

@@ -35,11 +35,14 @@ describe('ObjectsSelectionBar', () => {
 		)
 
 		expect(screen.getByTestId('objects-selection-bar')).toBeInTheDocument()
-		expect(screen.getByText('2 selected')).toBeInTheDocument()
+		expect(screen.getByRole('status', { name: '2 selected' })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Clear' })).toBeVisible()
 		expect(screen.getByRole('button', { name: 'Download' })).toBeVisible()
 		expect(screen.getByRole('button', { name: 'Move to…' })).toBeVisible()
-		expect(screen.getByRole('button', { name: 'More selection actions' })).toBeVisible()
+		const moreButton = screen.getByRole('button', { name: 'More selection actions' })
+		expect(moreButton).toBeVisible()
+		expect(moreButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(moreButton).toHaveAttribute('aria-expanded', 'false')
 		expect(screen.getByRole('button', { name: 'Delete' })).toBeVisible()
 	})
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"s3desk/internal/jobs"
@@ -144,6 +145,13 @@ func parseJobLogReadOptions(r *http.Request) (jobLogReadOptions, error) {
 	if raw := r.URL.Query().Get("tailBytes"); raw != "" {
 		if parsed, err := strconv.ParseInt(raw, 10, 64); err == nil {
 			options.tailBytes = parsed
+		} else {
+			return jobLogReadOptions{}, newJobReadError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"invalid tailBytes",
+				map[string]any{"tailBytes": raw},
+			)
 		}
 	}
 	if options.tailBytes < 1 {
@@ -172,6 +180,13 @@ func parseJobLogReadOptions(r *http.Request) (jobLogReadOptions, error) {
 	if rawMax := r.URL.Query().Get("maxBytes"); rawMax != "" {
 		if parsed, err := strconv.ParseInt(rawMax, 10, 64); err == nil {
 			options.maxBytes = parsed
+		} else {
+			return jobLogReadOptions{}, newJobReadError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"invalid maxBytes",
+				map[string]any{"maxBytes": rawMax},
+			)
 		}
 	}
 	if options.maxBytes < 1 {
@@ -206,7 +221,10 @@ func buildJobArtifactReadResult(dataDir string, request jobRequest) (string, int
 		)
 	}
 
-	artifactPath := filepath.Join(dataDir, "artifacts", "jobs", request.jobID+".zip")
+	artifactPath, err := jobResourcePath(dataDir, "artifacts", "jobs", request.jobID, ".zip")
+	if err != nil {
+		return "", 0, time.Time{}, nil, err
+	}
 	// #nosec G304 -- artifactPath is derived from the configured data directory.
 	f, err := os.Open(artifactPath)
 	if err != nil {
@@ -241,7 +259,10 @@ func buildJobArtifactReadResult(dataDir string, request jobRequest) (string, int
 }
 
 func buildJobLogReadResult(dataDir, jobID string, options jobLogReadOptions) ([]byte, int64, error) {
-	logPath := filepath.Join(dataDir, "logs", "jobs", jobID+".log")
+	logPath, err := jobResourcePath(dataDir, "logs", "jobs", jobID, ".log")
+	if err != nil {
+		return nil, 0, err
+	}
 	// #nosec G304 -- logPath is derived from the configured data directory.
 	f, err := os.Open(logPath)
 	if err != nil {
@@ -320,4 +341,26 @@ func buildJobLogReadResult(dataDir, jobID string, options jobLogReadOptions) ([]
 		)
 	}
 	return body, size, nil
+}
+
+func jobResourcePath(dataDir, kind, subdir, jobID, suffix string) (string, error) {
+	if !isSafeJobResourceID(jobID) {
+		return "", newJobReadError(
+			http.StatusBadRequest,
+			"invalid_request",
+			"invalid jobId",
+			map[string]any{"jobId": jobID},
+		)
+	}
+	return filepath.Join(dataDir, kind, subdir, jobID+suffix), nil
+}
+
+func isSafeJobResourceID(jobID string) bool {
+	if jobID == "" || jobID == "." || jobID == ".." {
+		return false
+	}
+	if strings.Contains(jobID, "/") || strings.Contains(jobID, `\`) {
+		return false
+	}
+	return !strings.Contains(jobID, "..")
 }

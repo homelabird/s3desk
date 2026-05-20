@@ -32,22 +32,29 @@ test('profile provider forms toggle provider-specific fields', async ({ page }) 
 	await expect(page.getByRole('textbox', { name: 'Endpoint URL', exact: true })).toBeVisible()
 	await expect(page.getByLabel('Access Key ID')).toBeVisible()
 	await expect(page.getByLabel('Secret')).toBeVisible()
+	await expect(page.getByLabel('S3 Compatible setup checklist')).toContainText('Endpoint, region, and profile name')
 
 	await selectProvider(page, 'Azure Blob Storage')
 	await expect(page.getByLabel('Storage Account Name')).toBeVisible()
 	await expect(page.getByLabel('Account Key')).toBeVisible()
 	await expect(page.getByLabel('Access Key ID')).toHaveCount(0)
+	await expect(page.getByLabel('Azure Blob setup checklist')).toContainText('Blob account access')
+	await expect(page.getByLabel('Azure Blob setup checklist')).toContainText('Azure ARM app credentials')
 
 	await selectProvider(page, 'Google Cloud Storage (GCS)')
 	await expect(page.getByLabel('Service Account JSON')).toBeVisible()
+	await expect(page.getByLabel('Google Cloud Storage setup checklist')).toContainText('Authentication path')
 	await page.getByRole('switch', { name: 'Anonymous' }).click()
 	await expect(page.getByLabel('Service Account JSON')).toHaveCount(0)
 	await expect(page.getByText('Anonymous mode only works when the endpoint allows unauthenticated access.')).toBeVisible()
+	await expect(page.getByLabel('Google Cloud Storage setup checklist')).toContainText('Anonymous access selected')
 
 	await selectProvider(page, 'Oracle OCI Object Storage (Native)')
 	await expect(page.getByLabel('Namespace')).toBeVisible()
 	await expect(page.getByLabel('Compartment OCID')).toBeVisible()
 	await expect(page.getByLabel('Storage Account Name')).toHaveCount(0)
+	await expect(page.getByLabel('OCI Object Storage setup checklist')).toContainText('Region, namespace, and compartment')
+	await expect(page.getByLabel('OCI Object Storage setup checklist')).toContainText('Auth provider and config overrides')
 })
 
 test('profile edit drawer keeps credentials collapsed by default', async ({ page }) => {
@@ -73,6 +80,8 @@ test('profile edit drawer keeps credentials collapsed by default', async ({ page
 
 	const drawer = page.getByRole('dialog', { name: 'Edit Profile' })
 	await expect(drawer).toBeVisible()
+	await expect(drawer.getByLabel('S3 Compatible setup checklist')).toContainText('Saved credentials will be kept unless replaced.')
+	await expect(drawer.getByText('After saving, use Test on the saved profile row to verify access.')).toBeVisible()
 	await expect(drawer.getByText('Credentials', { exact: true })).toBeVisible()
 	await expect(drawer.getByLabel('Access Key ID')).toHaveCount(0)
 

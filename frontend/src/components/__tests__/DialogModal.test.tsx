@@ -53,6 +53,20 @@ describe('DialogModal', () => {
 		})
 	})
 
+	it('uses a selector-targeted form control as the initial focus when provided', async () => {
+		render(
+			<DialogModal open onClose={() => {}} title="Create folder" initialFocusSelector="#folderName">
+				<label htmlFor="folderName">Folder name</label>
+				<input id="folderName" />
+				<button type="button">Secondary action</button>
+			</DialogModal>,
+		)
+
+		await waitFor(() => {
+			expect(screen.getByLabelText('Folder name')).toHaveFocus()
+		})
+	})
+
 	it('restores focus to the correct opener as stacked dialogs close one layer at a time', async () => {
 		function Example() {
 			const [outerOpen, setOuterOpen] = useState(false)
@@ -141,6 +155,28 @@ describe('DialogModal', () => {
 		await waitFor(() => {
 			expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 		})
+	})
+
+	it('keeps busy dialogs open when close gestures are disabled', () => {
+		function Example() {
+			const [open, setOpen] = useState(true)
+			return (
+				<DialogModal open={open} closeDisabled onClose={() => setOpen(false)} title="Saving changes">
+					<button type="button">Inner action</button>
+				</DialogModal>
+			)
+		}
+
+		render(<Example />)
+
+		expect(screen.getByText('Saving changes')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Close disabled while busy' })).toBeDisabled()
+
+		fireEvent.keyDown(document, { key: 'Escape', bubbles: true, cancelable: true })
+		expect(screen.getByText('Saving changes')).toBeInTheDocument()
+
+		fireEvent.mouseDown(screen.getByRole('dialog').parentElement as HTMLElement)
+		expect(screen.getByText('Saving changes')).toBeInTheDocument()
 	})
 
 	it('passes the width prop through the dialog CSS variable alongside subtitle and footer content', () => {

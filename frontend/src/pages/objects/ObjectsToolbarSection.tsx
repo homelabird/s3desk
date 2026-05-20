@@ -62,6 +62,8 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 				<div className={styles.toolbarTabsWrap} data-testid="objects-toolbar-tabs">
 					<AppTabs
 						type="editable-card"
+						semanticRole="toolbar"
+						ariaLabel="Object workspaces"
 						size="small"
 						activeKey={activeKey}
 						onChange={(key) => props.onTabChange(String(key))}

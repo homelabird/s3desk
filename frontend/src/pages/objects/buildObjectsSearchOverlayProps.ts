@@ -48,6 +48,7 @@ export function buildObjectsSearchOverlayProps(args: BuildObjectsPageOverlaysPro
 				bucket: args.bucket,
 				currentPrefix: args.prefix,
 				isMd: args.isMd,
+				useWideResults: args.isLg,
 				queryDraft: args.globalSearchDraft,
 				onQueryDraftChange: args.setGlobalSearchDraft,
 				prefixFilter: args.globalSearchPrefix,

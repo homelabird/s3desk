@@ -10,6 +10,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"gorm.io/gorm"
 
+	"s3desk/internal/gcsauth"
 	"s3desk/internal/models"
 )
 
@@ -212,6 +213,11 @@ func (s *Store) CreateProfile(ctx context.Context, req models.ProfileCreateReque
 		}
 		if !anonymous && sa == "" {
 			return models.Profile{}, errors.New("serviceAccountJson is required unless anonymous=true")
+		}
+		if sa != "" {
+			if err := gcsauth.ValidateServiceAccountJSON(sa); err != nil {
+				return models.Profile{}, err
+			}
 		}
 
 		projectID, clientEmail := extractGcpServiceAccountInfo(sa)
@@ -703,6 +709,11 @@ func (s *Store) UpdateProfile(ctx context.Context, profileID string, req models.
 		}
 		if !anonymous && sa == "" {
 			return models.Profile{}, true, errors.New("serviceAccountJson is required unless anonymous=true")
+		}
+		if sa != "" {
+			if err := gcsauth.ValidateServiceAccountJSON(sa); err != nil {
+				return models.Profile{}, true, err
+			}
 		}
 
 		projectID, clientEmail := extractGcpServiceAccountInfo(sa)

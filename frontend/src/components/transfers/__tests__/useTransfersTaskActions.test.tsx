@@ -121,4 +121,47 @@ describe('useTransfersTaskActions', () => {
 		expect(uploadEstimatorByTaskIdRef.current['u1']).toBeUndefined()
 		expect(uploadItemsByTaskIdRef.current['u1']).toBeUndefined()
 	})
+
+	it('clears all transfers without aborting or removing uploads that are committing', () => {
+		const downloadAbort = vi.fn()
+		const uploadAbort = vi.fn()
+		const commitAbort = vi.fn()
+		const downloadAbortByTaskIdRef = { current: { d1: downloadAbort } }
+		const downloadEstimatorByTaskIdRef = { current: { d1: {} } }
+		const uploadAbortByTaskIdRef = { current: { u1: uploadAbort, u2: commitAbort } }
+		const uploadEstimatorByTaskIdRef = { current: { u1: {}, u2: {} } }
+		const uploadItemsByTaskIdRef = { current: { u1: {}, u2: {} } }
+
+		const { result } = renderHook(() => {
+			const [downloadTasks, setDownloadTasks] = useState<DownloadTask[]>([buildDownloadTask('d1', 'running')])
+			const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([
+				buildUploadTask('u1', 'queued'),
+				buildUploadTask('u2', 'commit'),
+			])
+			const actions = useTransfersTaskActions({
+				setDownloadTasks,
+				setUploadTasks,
+				downloadAbortByTaskIdRef,
+				downloadEstimatorByTaskIdRef,
+				uploadAbortByTaskIdRef,
+				uploadEstimatorByTaskIdRef,
+				uploadItemsByTaskIdRef,
+			})
+			return { downloadTasks, uploadTasks, ...actions }
+		})
+
+		act(() => {
+			result.current.clearAllTransfers()
+		})
+
+		expect(downloadAbort).toHaveBeenCalledTimes(1)
+		expect(uploadAbort).toHaveBeenCalledTimes(1)
+		expect(commitAbort).not.toHaveBeenCalled()
+		expect(result.current.downloadTasks).toEqual([])
+		expect(result.current.uploadTasks.map((task) => task.id)).toEqual(['u2'])
+		expect(uploadAbortByTaskIdRef.current['u1']).toBeUndefined()
+		expect(uploadAbortByTaskIdRef.current['u2']).toBe(commitAbort)
+		expect(uploadEstimatorByTaskIdRef.current['u2']).toBeDefined()
+		expect(uploadItemsByTaskIdRef.current['u2']).toBeDefined()
+	})
 })

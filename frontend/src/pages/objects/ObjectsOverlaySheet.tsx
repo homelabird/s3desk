@@ -16,10 +16,12 @@ type ObjectsOverlaySheetProps = {
 	height?: number | string
 	dataTestId?: string
 	extra?: ReactNode
+	closeDisabled?: boolean
 	children: ReactNode
 	bodyClassName?: string
 	panelClassName?: string
 	compactMobile?: boolean
+	initialFocusSelector?: string
 }
 
 export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
@@ -34,20 +36,27 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 		height,
 		dataTestId,
 		extra,
+		closeDisabled = false,
 		children,
 		bodyClassName,
 		panelClassName,
 		compactMobile = false,
+		initialFocusSelector,
 	} = props
 	const titleId = useId()
 	const closeButtonRef = useRef<HTMLButtonElement>(null)
 	const panelRef = useRef<HTMLDivElement>(null)
+	const handleClose = () => {
+		if (closeDisabled) return
+		onClose()
+	}
 
 	useOverlayLayer({
 		open,
-		onEscape: onClose,
+		onEscape: handleClose,
 		containerRef: panelRef,
 		initialFocusRef: closeButtonRef,
+		initialFocusSelector,
 		lockBodyScroll: true,
 		trapFocus: true,
 	})
@@ -100,10 +109,11 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 						? styles.objectsOverlayBackdropLeft
 						: styles.objectsOverlayBackdropBottom,
 			].join(' ')}
-			onMouseDown={backdropInteractive ? onClose : undefined}
+			onMouseDown={backdropInteractive ? handleClose : undefined}
 		>
 			<div
 				ref={panelRef}
+				id={sheetId}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={titleId}
@@ -125,8 +135,10 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 						ref={closeButtonRef}
 						type="button"
 						className={styles.objectsOverlayClose}
-						onClick={onClose}
-						aria-label="Close"
+						onClick={handleClose}
+						disabled={closeDisabled}
+						aria-label={closeDisabled ? 'Close disabled while busy' : 'Close'}
+						title={closeDisabled ? 'Finish the current operation first' : 'Close'}
 					>
 						<CloseOutlined />
 					</button>

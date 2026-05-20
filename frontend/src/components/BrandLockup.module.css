@@ -73,17 +73,17 @@
 	font-size: 1.2rem;
 	font-weight: 900;
 	line-height: 0.94;
-	letter-spacing: -0.04em;
+	letter-spacing: 0;
 	color: var(--brand-title-color);
 }
 
 .hero .title {
-	font-size: clamp(2.25rem, 3vw, 3.25rem);
+	font-size: 3rem;
 }
 
 .compact .title {
 	font-size: 1rem;
-	letter-spacing: -0.03em;
+	letter-spacing: 0;
 }
 
 .sidebar .title {

@@ -50,15 +50,21 @@
 - remote 모드에서 허용되지 않은 host 접근이 실제로 차단되는지 확인
 - live evidence 필요 여부는 `python3 scripts/check_release_evidence.py`로 먼저 확인한다.
 - release blocker를 한 번에 확인하려면 `python3 scripts/check_release_readiness.py --candidate-id <tag-or-sha>`를 실행한다.
-  - 이 명령은 scope/evidence/env preflight를 요약하며, provider/reverse-proxy evidence가 없으면 실패한다.
+- GitLab 태그 publish 경로는 `bash scripts/check_gitlab_publish_readiness.sh <tag>`를 먼저 실행해야 하며, 이전 태그를 자동으로 찾을 수 없으면 `DEPLOY_RELEASE_BASE`를 지정한다.
+  - 이 명령은 `scripts/verify_release_readiness.sh`에 위임해 scope/evidence/env preflight와 GitHub Release tag/title/body/check 상태를 확인하며, provider/reverse-proxy/backup-portable evidence가 없으면 실패한다.
+  - GitHub API 확인을 위해 GitLab CI와 로컬 실행 모두에서 `curl`과 `GH_TOKEN` 또는 `GITHUB_TOKEN`이 필요하다.
   - 이 명령만으로 `./scripts/check.sh full`, clean-snapshot 검증, browser lane evidence를 대체하면 안 된다.
+- `bash scripts/license-audit.sh runtime-only`는 npm/Go allow-list와 release image tar의 Alpine APK package license scan을 함께 수행해야 한다. 로컬 tar 검증은 `LICENSE_AUDIT_IMAGE_TARS='release-postgres.tar;release-sqlite.tar' bash scripts/license-audit.sh runtime-only`로 실행한다.
+- Helm chart publish는 Docker Hub push 직후가 아니라 published-image smoke 이후에만 진행해야 한다. `python3 scripts/check_gitlab_publish_dag.py`가 `publish_dockerhub` -> `release_image_smoke` -> `publish_helm_chart` -> `deploy_release_helm` 순서와 `chart-publish` stage를 확인한다.
+- compose/Helm 배포 스크립트는 원격 대상 변경 전에 `python3 scripts/check_live_evidence_env.py --scope reverse-proxy`를 통과해야 하며, Helm 배포는 live upgrade 전에 client dry-run render도 수행한다.
+- compose 배포는 보호된 `DEPLOY_SSH_KNOWN_HOSTS`를 사전에 설정해야 하며, 배포 시점의 live `ssh-keyscan` 출력으로 production host trust를 bootstrap하면 안 된다.
 - release 승인 전에는 `python3 scripts/check_release_evidence.py --strict --require-candidate-id --candidate-id <tag-or-sha>`가 통과해야 한다.
 - reverse-proxy smoke 전 `python3 scripts/check_live_evidence_env.py --scope reverse-proxy`로 필수 환경변수 누락 여부를 확인한다.
 - reverse-proxy smoke 증거가 필요하면 `DEPLOY_RELEASE_CANDIDATE=<tag-or-sha> DEPLOY_SMOKE_EVIDENCE_FILE=docs/release/evidence/reverse-proxy-smoke-<tag-or-sha>.md bash ./scripts/deploy_smoke.sh`로 evidence 파일을 남긴다.
 - reverse-proxy evidence의 `Signed proxy URL root`는 `Expected external base URL`과 일치해야 하며, `## Expected Statuses` 예시만 남긴 파일은 release evidence로 인정하지 않는다.
 - provider live validation 전 `python3 scripts/check_live_evidence_env.py --scope <provider>`로 필수 환경변수 누락 여부를 확인한다.
-- provider/reverse-proxy evidence 명령과 target 파일은 `python3 scripts/check_release_evidence.py --format checklist`로 현재 변경 기준에서 재확인한다.
-- provider/reverse-proxy evidence의 `S3Desk commit SHA or release tag`에는 실제 검증한 release tag 또는 commit SHA를 기록한다.
+- provider/reverse-proxy/backup-portable evidence 명령과 target 파일은 `python3 scripts/check_release_evidence.py --format checklist`로 현재 변경 기준에서 재확인한다.
+- provider/reverse-proxy/backup-portable evidence의 `S3Desk commit SHA or release tag`에는 실제 검증한 release tag 또는 commit SHA를 기록한다.
 - provider-facing 변경이면 [PROVIDER_LIVE_VALIDATION_TEMPLATE.md](evidence/PROVIDER_LIVE_VALIDATION_TEMPLATE.md)를 사용해 영향받은 provider별 evidence를 남긴다.
 
 ## 롤백 준비

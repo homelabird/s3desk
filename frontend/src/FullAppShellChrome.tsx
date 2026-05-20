@@ -18,13 +18,13 @@ import type { ReactNode } from 'react'
 
 import type { APIClientShape } from './api/client'
 import type { MetaResponse } from './api/types'
+import { APP_NAVIGATION_DRAWER_ID, APP_SETTINGS_DRAWER_ID } from './appShellIds'
 import { BrandLockup } from './components/BrandLockup'
 import { MenuPopover } from './components/MenuPopover'
 import { OverlaySheet } from './components/OverlaySheet'
 import { SidebarBackupAction } from './components/SidebarBackupAction'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton } from './components/TransfersShell'
-import { reloadPage } from './lib/reloadPage'
 import type { ThemeMode } from './themeModeContext'
 import type { FullAppViewportState } from './useFullAppViewportState'
 import styles from './FullAppInner.module.css'
@@ -45,7 +45,6 @@ const NAV_ITEMS: NavItem[] = [
 	{ key: '/uploads', label: 'Uploads', icon: <CloudUploadOutlined />, to: '/uploads' },
 	{ key: '/jobs', label: 'Jobs', icon: <ToolOutlined />, to: '/jobs' },
 ]
-
 export type FullAppShellChromeSession = {
 	api: APIClientShape
 	meta?: MetaResponse
@@ -55,6 +54,7 @@ export type FullAppShellChromeSession = {
 	shellScopeKey: string
 	selectedKey: string
 	navOpen: boolean
+	settingsOpen: boolean
 	openNav: () => void
 	closeNav: () => void
 	openSettings: () => void
@@ -89,6 +89,7 @@ function AppNavigation(props: {
 						key={item.key}
 						to={item.to}
 						onClick={props.onSelect}
+						aria-current={props.selectedKey === item.key ? 'page' : undefined}
 						className={[
 							styles.navLink,
 							props.selectedKey === item.key ? styles.navLinkActive : '',
@@ -128,6 +129,7 @@ export function FullAppShellChrome({
 		shellScopeKey,
 		selectedKey,
 		navOpen,
+		settingsOpen,
 		openNav,
 		closeNav,
 		openSettings,
@@ -150,18 +152,20 @@ export function FullAppShellChrome({
 
 	return (
 		<Layout className={styles.appLayout}>
+			<a className={styles.skipLink} href="#main">
+				Skip to content
+			</a>
 			{isDesktop ? (
 				<Sider width={220} className={styles.desktopSider}>
 					<div className={styles.brandBlock}>
-						<button
-							type="button"
+						<Link
+							to={profileId ? '/objects' : '/profiles'}
 							className={styles.desktopBrandButton}
-							onClick={reloadPage}
-							aria-label="Refresh current page"
-							title="Refresh current page"
+							aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
+							title={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
 						>
 							<BrandLockup subtitle="Local Dashboard" variant="sidebar" />
-						</button>
+						</Link>
 					</div>
 					<AppNavigation
 						api={api}
@@ -182,18 +186,20 @@ export function FullAppShellChrome({
 									icon={<MenuOutlined />}
 									onClick={openNav}
 									aria-label="Open navigation"
+									aria-haspopup="dialog"
+									aria-expanded={!isDesktop && navOpen}
+									aria-controls={APP_NAVIGATION_DRAWER_ID}
 								/>
 							)}
 							{isDesktop ? null : (
-								<button
-									type="button"
+								<Link
+									to={profileId ? '/objects' : '/profiles'}
 									className={styles.mobileBrandButton}
-									onClick={reloadPage}
-									aria-label="Refresh current page"
-									title="Refresh current page"
+									aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
+									title={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
 								>
 									<BrandLockup variant="compact" className={styles.mobileBrandLockup} />
-								</button>
+								</Link>
 							)}
 						</div>
 						<div className={styles.headerActions}>
@@ -218,7 +224,13 @@ export function FullAppShellChrome({
 							{isStackedHeader ? null : <TransfersButton showLabel={isDesktop} ariaLabel="Transfers" />}
 							{isDesktop ? (
 								<>
-									<Button type="link" onClick={openSettings}>
+									<Button
+										type="link"
+										onClick={openSettings}
+										aria-haspopup="dialog"
+										aria-expanded={settingsOpen}
+										aria-controls={APP_SETTINGS_DRAWER_ID}
+									>
 										<SettingOutlined /> Settings
 									</Button>
 									{apiToken ? (
@@ -229,11 +241,13 @@ export function FullAppShellChrome({
 								</>
 							) : (
 								<MenuPopover menu={compactHeaderMenu} align="end" scopeKey={shellScopeKey}>
-									{({ toggle }) => (
+									{({ toggle, open }) => (
 										<Button
 											type="text"
 											icon={<EllipsisOutlined />}
 											aria-label="More actions"
+											aria-haspopup="menu"
+											aria-expanded={open}
 											onClick={toggle}
 										/>
 									)}
@@ -270,17 +284,18 @@ export function FullAppShellChrome({
 				title="Navigation"
 				width="min(80vw, 360px)"
 				bodyClassName={styles.navSheetBody}
+				sheetId={APP_NAVIGATION_DRAWER_ID}
 			>
 				<div className={styles.brandBlock}>
-					<button
-						type="button"
+					<Link
+						to={profileId ? '/objects' : '/profiles'}
 						className={styles.desktopBrandButton}
-						onClick={reloadPage}
-						aria-label="Refresh current page"
-						title="Refresh current page"
+						onClick={closeNav}
+						aria-label={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
+						title={profileId ? 'Open objects workspace' : 'Open profiles workspace'}
 					>
 						<BrandLockup subtitle="Local Dashboard" />
-					</button>
+					</Link>
 				</div>
 				<AppNavigation
 					api={api}

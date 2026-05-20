@@ -65,14 +65,16 @@ func (svc uploadSessionHTTPService) prepareCreateUploadSession(r *http.Request) 
 	if req.Bucket == "" {
 		return uploadSessionCreatePreparedRequest{err: newUploadBadRequestError("bucket is required", nil)}
 	}
+	if uploadErr := validateUploadPrefix(req.Prefix); uploadErr != nil {
+		return uploadSessionCreatePreparedRequest{err: uploadErr}
+	}
 
-	mode := normalizeUploadMode(req.Mode)
-	if mode == "" {
+	rawMode := strings.TrimSpace(req.Mode)
+	mode := normalizeUploadMode(rawMode)
+	if rawMode == "" {
 		mode = svc.defaultCreateMode()
 	}
-	switch mode {
-	case uploadModeStaging, uploadModeDirect, uploadModePresigned:
-	default:
+	if mode == "" {
 		return uploadSessionCreatePreparedRequest{err: newUploadBadRequestError("invalid upload mode", map[string]any{"mode": req.Mode})}
 	}
 	if mode == uploadModeDirect && !svc.server.cfg.UploadDirectStream {
@@ -162,12 +164,20 @@ func (svc uploadSessionHTTPService) executePreparedDelete(r *http.Request, prepa
 	if prepared.mode != uploadModeStaging {
 		secrets, ok := profileFromContext(r.Context())
 		if ok && rcloneconfig.IsS3LikeProvider(secrets.Provider) {
-			if client, err := s3ClientFromProfile(secrets); err == nil {
+			if client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote); err == nil {
 				if uploads, err := svc.server.store.ListMultipartUploads(r.Context(), prepared.profileID, prepared.uploadID); err == nil {
 					for _, meta := range uploads {
 						_ = svc.server.abortMultipartUpload(r.Context(), client, meta)
 					}
 				}
+			}
+		}
+		if prepared.mode == uploadModeDirect {
+			if !ok {
+				return newUploadInternalError("missing profile secrets", nil)
+			}
+			if uploadErr := svc.cleanupDirectUploadTempPrefix(r, prepared, secrets); uploadErr != nil {
+				return uploadErr
 			}
 		}
 		_ = svc.server.store.DeleteMultipartUploadsBySession(r.Context(), prepared.profileID, prepared.uploadID)
@@ -182,6 +192,17 @@ func (svc uploadSessionHTTPService) executePreparedDelete(r *http.Request, prepa
 	}
 
 	return nil
+}
+
+func (svc uploadSessionHTTPService) cleanupDirectUploadTempPrefix(r *http.Request, prepared uploadSessionDeletePreparedRequest, secrets models.ProfileSecrets) *uploadHTTPError {
+	tempPrefix := directUploadTempSessionPrefix(prepared.us.Prefix, prepared.uploadID)
+	target := rcloneRemoteDir(prepared.us.Bucket, tempPrefix, secrets.PreserveLeadingSlash)
+	_, stderr, err := svc.server.runRcloneCapture(r.Context(), secrets, []string{"delete", target}, "upload-temp-cleanup")
+	if err == nil {
+		return nil
+	}
+	msg := redactRcloneDiagnostic(rcloneErrorMessage(err, stderr))
+	return newUploadInternalError("failed to clean up upload temp objects", map[string]any{"error": msg})
 }
 
 func (svc uploadSessionHTTPService) executeCreate(r *http.Request) (*models.UploadCreateResponse, *uploadHTTPError, error) {

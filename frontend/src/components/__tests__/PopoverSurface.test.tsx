@@ -218,6 +218,27 @@ describe('PopoverSurface', () => {
 		])
 	})
 
+	it('can keep dialog-like popovers open on Tab', () => {
+		const onOpenChange = vi.fn()
+
+		render(
+			<PopoverSurface
+				open
+				closeOnTab={false}
+				onOpenChange={onOpenChange}
+				contentProps={{ 'data-testid': 'panel' }}
+				content={() => <button type="button">Inside</button>}
+			>
+				{() => <button type="button">Open</button>}
+			</PopoverSurface>,
+		)
+
+		fireEvent.keyDown(screen.getByTestId('panel'), { key: 'Tab' })
+
+		expect(screen.getByTestId('panel')).toBeInTheDocument()
+		expect(onOpenChange).not.toHaveBeenCalled()
+	})
+
 	it('reports trigger and content close sources in controlled mode', async () => {
 		const onOpenChange = vi.fn()
 

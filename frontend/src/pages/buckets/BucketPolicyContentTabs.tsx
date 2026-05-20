@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { APIError } from "../../api/client";
 import type { BucketPolicyValidateResponse } from "../../api/types";
 import { AppTabs } from "../../components/AppTabs";
+import { FormField } from "../../components/FormField";
 import { NativeSelect } from "../../components/NativeSelect";
 import { ToggleSwitch } from "../../components/ToggleSwitch";
 import { bucketsFeedback } from "./bucketsFeedback";
@@ -51,8 +52,11 @@ export function BucketPolicyContentTabs(props: {
   setShowDiffContext: (value: boolean) => void;
   visibleDiffText: string;
 }) {
+  const rawPolicyEditorId = "bucket-policy-raw-json-editor";
+
   return (
     <AppTabs
+      ariaLabel="Bucket policy sections"
       activeKey={props.activeTab}
       onChange={(key) => props.setActiveTab(key as "validate" | "preview" | "diff")}
       items={[
@@ -188,15 +192,22 @@ export function BucketPolicyContentTabs(props: {
                       description="Use raw JSON when the structured editor does not cover the policy you need. Review the diff before saving."
                     />
                     <Space orientation="vertical" size="small" className={styles.fullWidth}>
-                      <Input.TextArea
-                        value={props.policyText}
-                        onChange={(e) => {
-                          props.setPolicyText(e.target.value);
-                          props.resetServerValidationState();
-                        }}
-                        autoSize={{ minRows: 8, maxRows: 24 }}
-                        placeholder={props.editorPlaceholder}
-                      />
+                      <FormField
+                        label="Raw policy JSON"
+                        htmlFor={rawPolicyEditorId}
+                        extra="Edit the bucket policy JSON directly, then review the diff before saving."
+                      >
+                        <Input.TextArea
+                          id={rawPolicyEditorId}
+                          value={props.policyText}
+                          onChange={(e) => {
+                            props.setPolicyText(e.target.value);
+                            props.resetServerValidationState();
+                          }}
+                          autoSize={{ minRows: 8, maxRows: 24 }}
+                          placeholder={props.editorPlaceholder}
+                        />
+                      </FormField>
                       {!props.parsed.ok ? (
                         <Alert
                           type="warning"
@@ -266,15 +277,28 @@ export function BucketPolicyContentTabs(props: {
                 }
               />
 
-              <Button
-                onClick={props.onValidate}
-                loading={props.validateLoading}
-                disabled={
-                  props.isBusy || !props.parsed.ok || props.hasBlockingValidationIssues
-                }
+              <div
+                className={styles.validationActionRow}
+                data-testid="bucket-policy-validate-before-save"
               >
-                Validate with provider
-              </Button>
+                <div className={styles.validationActionCopy}>
+                  <Typography.Text strong>Validate before Save</Typography.Text>
+                  <Typography.Text type="secondary">
+                    Run provider validation here, then review Preview or Diff before
+                    saving.
+                  </Typography.Text>
+                </div>
+                <Button
+                  type={props.hasPolicyChanges ? "primary" : "default"}
+                  onClick={props.onValidate}
+                  loading={props.validateLoading}
+                  disabled={
+                    props.isBusy || !props.parsed.ok || props.hasBlockingValidationIssues
+                  }
+                >
+                  Validate with provider
+                </Button>
+              </div>
 
               {props.serverValidation ? (
                 <Alert
@@ -349,6 +373,7 @@ export function BucketPolicyContentTabs(props: {
               <Input.TextArea
                 value={props.previewText || props.effectivePolicyText}
                 readOnly
+                aria-label="Policy preview"
                 autoSize={{ minRows: 10, maxRows: 24 }}
               />
             </Space>
@@ -383,6 +408,7 @@ export function BucketPolicyContentTabs(props: {
               <Input.TextArea
                 value={props.visibleDiffText}
                 readOnly
+                aria-label="Policy diff"
                 autoSize={{ minRows: 10, maxRows: 24 }}
               />
             </Space>

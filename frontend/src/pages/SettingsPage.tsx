@@ -51,6 +51,57 @@ type Props = {
 	setProfileId: (v: string | null) => void
 }
 
+function SettingsSectionFallback() {
+	return (
+		<div role="status" className={styles.sectionFallback}>
+			<span>Loading settings…</span>
+			<span className={styles.sectionFallbackBar} aria-hidden="true" />
+		</div>
+	)
+}
+
+function RecoverySettingsSection({
+	dismissedDialogCount,
+	onResetDismissedDialogs,
+	onResetUiState,
+}: {
+	dismissedDialogCount: number
+	onResetDismissedDialogs: () => void
+	onResetUiState: () => void
+}) {
+	return (
+		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+			<Typography.Text type="secondary" className={styles.sectionIntro}>
+				What this affects: browser-stored layout, filters, selections, and dismissed safety dialogs.
+			</Typography.Text>
+			<div className={styles.recoveryCard}>
+				<Space orientation="vertical" size={8} className={styles.fullWidth}>
+					<Typography.Text strong>Saved UI state</Typography.Text>
+					<Typography.Text type="secondary">
+						Clears saved view, filter, and layout state from this browser. Use it when the UI looks stuck because an old local state was persisted.
+					</Typography.Text>
+					<Button danger onClick={onResetUiState}>
+						Reset saved UI state
+					</Button>
+				</Space>
+			</div>
+			<div className={styles.recoveryCard}>
+				<Space orientation="vertical" size={8} className={styles.fullWidth}>
+					<Typography.Text strong>Dismissed dialog confirmations</Typography.Text>
+					<Typography.Text type="secondary">
+						{dismissedDialogCount > 0
+							? `${dismissedDialogCount} dialog preference(s) are currently suppressed.`
+							: 'No dialog preferences are currently suppressed.'}
+					</Typography.Text>
+					<Button onClick={onResetDismissedDialogs} disabled={dismissedDialogCount === 0}>
+						Reset dismissed dialogs
+					</Button>
+				</Space>
+			</div>
+		</Space>
+	)
+}
+
 export function SettingsPage(props: Props) {
 	const [downloadLinkProxyEnabled, setDownloadLinkProxyEnabled] = useLocalStorageState<boolean>(
 		'downloadLinkProxyEnabled',
@@ -163,13 +214,14 @@ export function SettingsPage(props: Props) {
 	return (
 		<Space orientation="vertical" size="large" className={styles.fullWidth}>
 			<AppTabs
-				defaultActiveKey="workspace"
+				ariaLabel="Settings sections"
+				defaultActiveKey="access"
 				items={[
 					{
-						key: 'workspace',
-						label: 'Workspace',
+						key: 'access',
+						label: 'Access',
 						children: (
-							<Suspense fallback={null}>
+							<Suspense fallback={<SettingsSectionFallback />}>
 								<AccessSettingsSection
 									apiToken={props.apiToken}
 									setApiToken={props.setApiToken}
@@ -177,17 +229,15 @@ export function SettingsPage(props: Props) {
 									setProfileId={props.setProfileId}
 									apiDocsUrl={apiDocsUrl}
 									openapiUrl={openapiUrl}
-									dismissedDialogCount={dismissedDialogCount}
-									onResetDismissedDialogs={onResetDismissedDialogs}
 								/>
 							</Suspense>
 						),
 					},
 					{
-						key: 'objects',
-						label: 'Objects',
+						key: 'browsing',
+						label: 'Browsing',
 						children: (
-							<Suspense fallback={null}>
+							<Suspense fallback={<SettingsSectionFallback />}>
 								<ObjectsSettingsSection
 									objectsShowThumbnails={objectsShowThumbnails}
 									setObjectsShowThumbnails={setObjectsShowThumbnails}
@@ -207,7 +257,7 @@ export function SettingsPage(props: Props) {
 						key: 'transfers',
 						label: 'Transfers',
 						children: (
-							<Suspense fallback={null}>
+							<Suspense fallback={<SettingsSectionFallback />}>
 								<TransfersSettingsSection
 									downloadLinkProxyEnabled={downloadLinkProxyEnabled}
 									setDownloadLinkProxyEnabled={setDownloadLinkProxyEnabled}
@@ -239,26 +289,27 @@ export function SettingsPage(props: Props) {
 						key: 'diagnostics',
 						label: 'Diagnostics',
 						children: (
-							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
-								<Suspense fallback={null}>
-									<NetworkSettingsSection
-										apiRetryCount={apiRetryCount}
-										setApiRetryCount={setApiRetryCount}
-										apiRetryDelayMs={apiRetryDelayMs}
-										setApiRetryDelayMs={setApiRetryDelayMs}
-										networkLog={networkLog}
-										onClearNetworkLog={() => clearNetworkLog()}
-									/>
-								</Suspense>
-								<Space orientation="vertical" size={8} className={styles.fullWidth}>
-									<Typography.Text type="secondary">
-										Clears saved view, filter, and layout state from this browser. Use it when the UI looks stuck because an old local state was persisted.
-									</Typography.Text>
-									<Button danger onClick={onResetUiState}>
-										Reset saved UI state
-									</Button>
-								</Space>
-							</Space>
+							<Suspense fallback={<SettingsSectionFallback />}>
+								<NetworkSettingsSection
+									apiRetryCount={apiRetryCount}
+									setApiRetryCount={setApiRetryCount}
+									apiRetryDelayMs={apiRetryDelayMs}
+									setApiRetryDelayMs={setApiRetryDelayMs}
+									networkLog={networkLog}
+									onClearNetworkLog={() => clearNetworkLog()}
+								/>
+							</Suspense>
+						),
+					},
+					{
+						key: 'recovery',
+						label: 'Recovery',
+						children: (
+							<RecoverySettingsSection
+								dismissedDialogCount={dismissedDialogCount}
+								onResetDismissedDialogs={onResetDismissedDialogs}
+								onResetUiState={onResetUiState}
+							/>
 						),
 					},
 				]}

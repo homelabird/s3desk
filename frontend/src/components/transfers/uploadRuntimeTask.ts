@@ -21,6 +21,13 @@ import { resolveExistingResumeChunks } from './uploadRuntimeResume'
 import { createUploadSessionWithFallback } from './uploadRuntimeSession'
 import { executeUploadAttempt } from './uploadRuntimeAttempt'
 
+function getRetryFileHandleStateForFailure(message: string): UploadTask['retryFileHandleState'] {
+	if (/missing files|select the same|file size does not match|interrupted by refresh/i.test(message)) {
+		return 'selection_required'
+	}
+	return 'remembered'
+}
+
 type RunUploadTaskArgs = {
 	api: APIClientShape
 	apiToken: string
@@ -58,9 +65,20 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		etaSeconds: 0,
 		error: undefined,
 		jobId: undefined,
+		retryFileHandleState: 'remembered',
 		uploadFallbackFrom: undefined,
 		uploadFallbackReason: undefined,
 	}))
+	const failBeforeUpload = (message: string) => {
+		args.updateUploadTask(taskId, (current) => ({
+			...current,
+			status: 'failed',
+			finishedAtMs: Date.now(),
+			error: message,
+			retryFileHandleState: getRetryFileHandleStateForFailure(message),
+		}))
+		args.notifications.error(message)
+	}
 
 	let committed = false
 	let uploadId = ''
@@ -83,7 +101,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 			uploadResumeConversionEnabled: args.uploadResumeConversionEnabled,
 		})
 		if (!resumeChunkSettings.ok) {
-			args.notifications.error(resumeChunkSettings.error)
+			failBeforeUpload(resumeChunkSettings.error)
 			return
 		}
 		const { resumeChunkSizeBytes, allowPerFileChunkSize } = resumeChunkSettings
@@ -97,7 +115,7 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 				resumeFilesByPath,
 			})
 			if (!resumeChunks.ok) {
-				args.notifications.error(resumeChunks.error)
+				failBeforeUpload(resumeChunks.error)
 				return
 			}
 			if (resumeChunks.available) {
@@ -215,13 +233,24 @@ export async function runUploadTask(args: RunUploadTaskArgs): Promise<void> {
 		})
 	} catch (error) {
 		if (error instanceof RequestAbortedError) {
-			args.updateUploadTask(taskId, (current) => ({ ...current, status: 'canceled', finishedAtMs: Date.now() }))
+			args.updateUploadTask(taskId, (current) => ({
+				...current,
+				status: 'canceled',
+				finishedAtMs: Date.now(),
+				retryFileHandleState: 'remembered',
+			}))
 			args.notifications.info('Upload canceled')
 			return
 		}
 		maybeReportNetworkError(error)
 		const message = formatErr(error)
-		args.updateUploadTask(taskId, (current) => ({ ...current, status: 'failed', finishedAtMs: Date.now(), error: message }))
+		args.updateUploadTask(taskId, (current) => ({
+			...current,
+			status: 'failed',
+			finishedAtMs: Date.now(),
+			error: message,
+			retryFileHandleState: getRetryFileHandleStateForFailure(message),
+		}))
 		args.notifications.error(message)
 	} finally {
 		delete args.uploadAbortByTaskIdRef.current[taskId]

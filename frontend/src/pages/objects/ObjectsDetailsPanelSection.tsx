@@ -1,4 +1,4 @@
-import type { PointerEvent, ReactNode } from 'react'
+import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
 
 import type { ObjectMeta } from '../../api/types'
 import type { ObjectPreview } from './objectsTypes'
@@ -41,6 +41,10 @@ type ObjectsDetailsPanelSectionProps = {
 	onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerMove: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerUp: (event: PointerEvent<HTMLDivElement>) => void
+	onResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+	resizeMinWidth: number
+	resizeMaxWidth: number
+	resizeValue: number
 }
 
 export function ObjectsDetailsPanelSection(props: ObjectsDetailsPanelSectionProps) {
@@ -87,6 +91,10 @@ export function ObjectsDetailsPanelSection(props: ObjectsDetailsPanelSectionProp
 			onResizePointerDown={props.onResizePointerDown}
 			onResizePointerMove={props.onResizePointerMove}
 			onResizePointerUp={props.onResizePointerUp}
+			onResizeKeyDown={props.onResizeKeyDown}
+			resizeMinWidth={props.resizeMinWidth}
+			resizeMaxWidth={props.resizeMaxWidth}
+			resizeValue={props.resizeValue}
 		/>
 	)
 }

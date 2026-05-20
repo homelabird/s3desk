@@ -7,6 +7,7 @@ export type AppTabItem = {
 	key: string
 	label: ReactNode
 	children?: ReactNode
+	panelId?: string
 	disabled?: boolean
 	closable?: boolean
 	ariaLabel?: string
@@ -21,6 +22,7 @@ export type AppTabsProps = {
 	size?: 'small' | 'middle' | 'large'
 	onEdit?: (targetKey: string | null, action: 'add' | 'remove') => void
 	ariaLabel?: string
+	semanticRole?: 'tabs' | 'toolbar'
 	className?: string
 	style?: CSSProperties
 }
@@ -102,8 +104,14 @@ export function AppTabs(props: AppTabsProps) {
 		.join(' ')
 
 	const activeItem = props.items.find((item) => item.key === safeActiveKey)
-	const activePanelId = `${baseId}-panel-${safeIdPart(safeActiveKey)}`
+	const generatedActivePanelId = `${baseId}-panel-${safeIdPart(safeActiveKey)}`
 	const activeTabId = `${baseId}-tab-${safeIdPart(safeActiveKey)}`
+	const activePanelId = activeItem?.panelId ?? generatedActivePanelId
+	const usesTabSemantics =
+		props.semanticRole === 'tabs' ||
+		(props.semanticRole !== 'toolbar' && props.type !== 'editable-card' && props.items.some((item) => item.children != null))
+	const listRole = usesTabSemantics ? 'tablist' : 'toolbar'
+	const listAriaLabel = props.ariaLabel ?? (usesTabSemantics ? undefined : 'View controls')
 
 	useEffect(() => {
 		const list = tabListRef.current
@@ -150,11 +158,12 @@ export function AppTabs(props: AppTabsProps) {
 			data-at-start={scrollState.atStart ? 'true' : 'false'}
 			data-at-end={scrollState.atEnd ? 'true' : 'false'}
 		>
-			<div ref={tabListRef} className={listClasses} role="tablist" aria-label={props.ariaLabel}>
+			<div ref={tabListRef} className={listClasses} role={listRole} aria-label={listAriaLabel}>
 				{props.items.map((item) => {
 					const selected = item.key === safeActiveKey
 					const tabId = `${baseId}-tab-${safeIdPart(item.key)}`
-					const panelId = `${baseId}-panel-${safeIdPart(item.key)}`
+					const panelId = item.panelId ?? `${baseId}-panel-${safeIdPart(item.key)}`
+					const hasPanel = item.children != null || item.panelId != null
 					const tabButtonClasses = [
 						styles.tabButton,
 						isCard ? styles.tabButtonCard : styles.tabButtonLine,
@@ -169,11 +178,12 @@ export function AppTabs(props: AppTabsProps) {
 							<button
 								ref={setTabButtonRef(item.key)}
 								type="button"
-								role="tab"
-								id={tabId}
-								aria-selected={selected}
-								aria-controls={panelId}
-								tabIndex={selected ? 0 : -1}
+								role={usesTabSemantics ? 'tab' : undefined}
+								id={usesTabSemantics ? tabId : undefined}
+								aria-selected={usesTabSemantics ? selected : undefined}
+								aria-controls={usesTabSemantics && hasPanel ? panelId : undefined}
+								aria-pressed={usesTabSemantics ? undefined : selected}
+								tabIndex={usesTabSemantics ? (selected ? 0 : -1) : undefined}
 								disabled={item.disabled}
 								className={tabButtonClasses}
 								onClick={() => selectKey(item.key)}
@@ -212,7 +222,12 @@ export function AppTabs(props: AppTabsProps) {
 			</div>
 
 			{activeItem?.children != null ? (
-				<div role="tabpanel" id={activePanelId} aria-labelledby={activeTabId} className={styles.panel}>
+				<div
+					role={usesTabSemantics ? 'tabpanel' : undefined}
+					id={usesTabSemantics ? activePanelId : undefined}
+					aria-labelledby={usesTabSemantics ? activeTabId : undefined}
+					className={styles.panel}
+				>
 					{activeItem.children}
 				</div>
 			) : null}

@@ -2,7 +2,9 @@ package jobs
 
 import (
 	"context"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -44,7 +46,16 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 		if len(sessions) == 0 {
 			return
 		}
+		deleted := 0
 		for _, us := range sessions {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			if err := m.cleanupExpiredUploadSessionRemoteTemps(ctx, us); err != nil {
+				continue
+			}
 			_ = m.store.DeleteMultipartUploadsBySession(ctx, us.ProfileID, us.ID)
 			_ = m.store.DeleteUploadObjectsBySession(ctx, us.ProfileID, us.ID)
 			_, _ = m.store.DeleteUploadSession(ctx, us.ProfileID, us.ID)
@@ -53,8 +64,49 @@ func (m *Manager) cleanupExpiredUploadSessions(ctx context.Context) {
 					_ = os.RemoveAll(stagingDir)
 				}
 			}
+			deleted++
+		}
+		if deleted == 0 {
+			return
 		}
 	}
+}
+
+func (m *Manager) cleanupExpiredUploadSessionRemoteTemps(ctx context.Context, us store.UploadSession) error {
+	if strings.TrimSpace(strings.ToLower(us.Mode)) != "direct" {
+		return nil
+	}
+	if strings.TrimSpace(us.ID) == "" || strings.TrimSpace(us.Bucket) == "" {
+		return nil
+	}
+
+	secrets, ok, err := m.store.GetProfileSecrets(ctx, us.ProfileID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	tempPrefix := directUploadTempSessionPrefix(us.Prefix, us.ID)
+	target := rcloneRemoteDir(us.Bucket, tempPrefix, secrets.PreserveLeadingSlash)
+	proc, err := m.startRcloneCommand(ctx, secrets, "upload-session-cleanup-"+us.ID, []string{"delete", target})
+	if err != nil {
+		return err
+	}
+	_, _ = io.Copy(io.Discard, proc.stdout)
+	if err := proc.wait(); err != nil {
+		return jobErrorFromRclone(err, proc.stderr.String(), "rclone delete")
+	}
+	return nil
+}
+
+func directUploadTempSessionPrefix(prefix, uploadID string) string {
+	tempPrefix := path.Join(".s3desk-upload-temp", uploadID)
+	if prefix == "" {
+		return tempPrefix
+	}
+	return path.Join(prefix, tempPrefix)
 }
 
 func (m *Manager) cleanupOrphanArtifacts(ctx context.Context) {

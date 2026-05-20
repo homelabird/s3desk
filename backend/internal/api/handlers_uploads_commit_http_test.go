@@ -66,6 +66,37 @@ func TestUploadCommitHTTPService_HandleCommitUpload_ReturnsInvalidJSON(t *testin
 	}
 }
 
+func TestUploadCommitHTTPService_HandleCommitUpload_RejectsExpiredSession(t *testing.T) {
+	st, _, _, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
+	profile := createTestProfile(t, st)
+	expiresAt := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339Nano)
+	upload, err := st.CreateUploadSession(context.Background(), profile.ID, "test-bucket", "incoming", uploadModeStaging, "", expiresAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	srv := &server{cfg: config.Config{DataDir: dataDir, UploadDirectStream: false}, store: st}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/"+upload.ID+"/commit", bytes.NewBufferString(`{}`))
+	req.Header.Set("X-Profile-Id", profile.ID)
+	req.Header.Set("Content-Type", "application/json")
+	req = withUploadIDParam(req, upload.ID)
+	rr := httptest.NewRecorder()
+
+	newUploadCommitHTTPService(srv).handleCommitUpload(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "expired" {
+		t.Fatalf("resp.Error.Code=%q, want expired", resp.Error.Code)
+	}
+}
+
 func TestExecuteCommit_PreservesMissingProfileAndUploadID(t *testing.T) {
 	svc := newUploadCommitHTTPService(&server{})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/uploads/upload-1/commit", bytes.NewBufferString(`{"label":"first"}`))

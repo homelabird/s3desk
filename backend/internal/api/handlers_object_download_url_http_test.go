@@ -55,6 +55,108 @@ func TestObjectDownloadURLHTTPService_HandleGetObjectDownloadURL_ProxyRequiresPr
 	}
 }
 
+func TestObjectDownloadURLHTTPService_HandleGetObjectDownloadURL_ReturnsInvalidExpiresSeconds(t *testing.T) {
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/test-bucket/objects/download-url?key=report.txt&expiresSeconds=abc", nil)
+	req = withBucketParam(req, "test-bucket")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+	rr := httptest.NewRecorder()
+
+	newObjectDownloadURLHTTPService(srv).handleGetObjectDownloadURL(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	}
+	if got := resp.Error.Details["expiresSeconds"]; got != "abc" {
+		t.Fatalf("details.expiresSeconds=%v, want abc", got)
+	}
+}
+
+func TestObjectDownloadURLHTTPService_HandleGetObjectDownloadURL_ReturnsInvalidProxy(t *testing.T) {
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/test-bucket/objects/download-url?key=report.txt&proxy=maybe", nil)
+	req = withBucketParam(req, "test-bucket")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+	rr := httptest.NewRecorder()
+
+	newObjectDownloadURLHTTPService(srv).handleGetObjectDownloadURL(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	}
+	if got := resp.Error.Details["proxy"]; got != "maybe" {
+		t.Fatalf("details.proxy=%v, want maybe", got)
+	}
+}
+
+func TestObjectDownloadURLHTTPService_HandleGetObjectDownloadURL_ProxyAcceptsLegacyYes(t *testing.T) {
+	srv := &server{cfg: config.Config{DataDir: t.TempDir()}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/buckets/test-bucket/objects/download-url?key=report.txt&proxy=yes", nil)
+	req = withBucketParam(req, "test-bucket")
+	req = withProfileSecrets(req, models.ProfileSecrets{Provider: models.ProfileProviderAwsS3})
+	rr := httptest.NewRecorder()
+
+	newObjectDownloadURLHTTPService(srv).handleGetObjectDownloadURL(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", res.StatusCode, http.StatusBadRequest)
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "missing_profile" {
+		t.Fatalf("resp.Error.Code=%q, want missing_profile", resp.Error.Code)
+	}
+}
+
+func TestParseDownloadProxyBool_AcceptsLegacyTruthyFalsey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "yes", raw: "yes", want: true},
+		{name: "on", raw: "on", want: true},
+		{name: "no", raw: "no", want: false},
+		{name: "off", raw: "off", want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseDownloadProxyBool(tt.raw)
+			if err != nil {
+				t.Fatalf("parseDownloadProxyBool() err=%v, want nil", err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseDownloadProxyBool()=%v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildObjectDownloadURLResponse_SetsExpiresAt(t *testing.T) {
 	now := time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC)
 	resp := buildObjectDownloadURLResponse("https://example.invalid/object", 15*time.Minute, now)

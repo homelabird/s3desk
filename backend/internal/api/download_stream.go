@@ -57,7 +57,7 @@ func detailsWithError(details map[string]any, err error) map[string]any {
 	if out == nil {
 		out = make(map[string]any, 1)
 	}
-	out["error"] = err.Error()
+	out["error"] = redactRcloneDiagnostic(err.Error())
 	return out
 }
 
@@ -132,13 +132,13 @@ func (s *server) streamRcloneDownload(
 		fields[k] = v
 	}
 	if copyErr != nil {
-		fields["copy_error"] = copyErr.Error()
+		fields["copy_error"] = redactRcloneDiagnostic(copyErr.Error())
 	}
 	if waitErr != nil {
-		fields["wait_error"] = waitErr.Error()
+		fields["wait_error"] = redactRcloneDiagnostic(waitErr.Error())
 	}
 	if stderr != "" {
-		fields["stderr"] = stderr
+		fields["stderr"] = redactRcloneDiagnostic(stderr)
 	}
 	logging.WarnFields("download stream ended early", fields)
 }

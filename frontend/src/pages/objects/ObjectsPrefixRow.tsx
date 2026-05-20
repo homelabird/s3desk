@@ -96,7 +96,7 @@ export function ObjectsPrefixRow({
 							menu,
 							buttonMenuOpen,
 							onButtonMenuOpenChange,
-							'Prefix actions',
+							`Prefix actions for ${displayName}`,
 							isCompact ? styles.listRowIconButton : undefined,
 						)}
 					</div>
@@ -110,7 +110,7 @@ export function ObjectsPrefixRow({
 						</div>
 						<div className={styles.listRowActionsCell}>
 							<div className={styles.listRowMenuCell}>
-								{renderRowMenu(menu, buttonMenuOpen, onButtonMenuOpenChange, 'Prefix actions')}
+								{renderRowMenu(menu, buttonMenuOpen, onButtonMenuOpenChange, `Prefix actions for ${displayName}`)}
 							</div>
 						</div>
 					</>

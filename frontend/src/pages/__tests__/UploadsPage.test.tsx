@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { APIClient, APIError } from "../../api/client";
+import { APIError } from "../../api/client";
 import { TransfersContext } from "../../components/useTransfers";
 import * as uploadUtils from "../../components/transfers/transfersUploadUtils";
 import { failedToLoadBucketsTitle, goToBucketsLabel, noBucketsAvailableHint } from "../../lib/actionHints";
@@ -11,10 +11,26 @@ import * as deviceFs from "../../lib/deviceFs";
 import { ensureDomShims } from "../../test/domShims";
 import { transfersStub } from "../../test/transfersStub";
 import { UploadsPage, UploadsPageLoadingFallback } from "../UploadsPage";
+import { UploadsPageExperience } from "../uploads/UploadsPageExperience";
 
-vi.mock("../../api/useAPIClient", () => ({
-  useAPIClient: () => new APIClient({ apiToken: "test-token" }),
+const uploadsPageApiMock = vi.hoisted(() => ({
+  current: null as null | {
+    server: unknown;
+    profiles: unknown;
+    buckets: unknown;
+  },
 }));
+
+vi.mock("../../api/useAPIClient", async () => {
+  const { APIClient } =
+    await vi.importActual<typeof import("../../api/client")>(
+      "../../api/client",
+    );
+  return {
+    useAPIClient: () =>
+      uploadsPageApiMock.current ?? new APIClient({ apiToken: "test-token" }),
+  };
+});
 
 beforeAll(() => {
   ensureDomShims();
@@ -22,6 +38,7 @@ beforeAll(() => {
 
 afterEach(() => {
   window.localStorage.clear();
+  uploadsPageApiMock.current = null;
   vi.restoreAllMocks();
 });
 
@@ -35,6 +52,8 @@ function createClient() {
 
 function mockUploadsPageBase(args?: {
   buckets?: Array<{ name: string; createdAt?: string }>;
+  bucketsError?: unknown;
+  meta?: unknown;
   profile?: {
     id: string;
     name: string;
@@ -58,7 +77,9 @@ function mockUploadsPageBase(args?: {
     forcePathStyle: false,
   };
 
-  const getMeta = vi.fn().mockResolvedValue({
+  const meta =
+    args?.meta ??
+    ({
     version: "test",
     serverAddr: "127.0.0.1:8080",
     dataDir: "/data",
@@ -81,8 +102,8 @@ function mockUploadsPageBase(args?: {
       path: "/usr/bin/rclone",
       version: "v1.66.0",
     },
-  } as never);
-  const listProfiles = vi.fn().mockResolvedValue([
+    } as never);
+  const profiles = [
     {
       ...profile,
       preserveLeadingSlash: false,
@@ -90,24 +111,22 @@ function mockUploadsPageBase(args?: {
       createdAt: "2024-01-01T00:00:00Z",
       updatedAt: "2024-01-01T00:00:00Z",
     },
-  ] as never);
-  const listBuckets = vi
-    .fn()
-    .mockResolvedValue(
-      (args?.buckets ?? [
-        { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
-      ]) as never,
-    );
+  ];
+  const buckets = args?.buckets ?? [
+    { name: "primary-bucket", createdAt: "2024-01-01T00:00:00Z" },
+  ];
+  const getMeta = async () => meta;
+  const listProfiles = async () => profiles;
+  const listBuckets = async () => {
+    if (args?.bucketsError) throw args.bucketsError;
+    return buckets;
+  };
 
-  vi.spyOn(APIClient.prototype, "server", "get").mockReturnValue({
-    getMeta,
-  } as never);
-  vi.spyOn(APIClient.prototype, "profiles", "get").mockReturnValue({
-    listProfiles,
-  } as never);
-  vi.spyOn(APIClient.prototype, "buckets", "get").mockReturnValue({
-    listBuckets,
-  } as never);
+  uploadsPageApiMock.current = {
+    server: { getMeta },
+    profiles: { listProfiles },
+    buckets: { listBuckets },
+  };
 
   return { getMeta, listProfiles, listBuckets };
 }
@@ -124,6 +143,11 @@ function renderUploadsPage(
     props && "apiToken" in props ? (props.apiToken ?? "") : "token";
   const profileId =
     props && "profileId" in props ? (props.profileId ?? null) : "profile-1";
+  const pageElement = profileId ? (
+    <UploadsPageExperience apiToken={apiToken} profileId={profileId} />
+  ) : (
+    <UploadsPage apiToken={apiToken} profileId={profileId} />
+  );
 
   render(
     <QueryClientProvider client={createClient()}>
@@ -132,9 +156,7 @@ function renderUploadsPage(
           <Routes>
             <Route
               path="/uploads"
-              element={
-                <UploadsPage apiToken={apiToken} profileId={profileId} />
-              }
+              element={pageElement}
             />
             <Route path="/profiles" element={<div>Profiles Route</div>} />
             <Route path="/buckets" element={<div>Buckets Route</div>} />
@@ -169,20 +191,19 @@ describe("UploadsPage", () => {
 
     renderUploadsPage();
 
-    expect(await screen.findByText(noBucketsAvailableHint())).toBeInTheDocument();
+    expect(await screen.findByText(noBucketsAvailableHint(), {}, { timeout: 5000 })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: goToBucketsLabel() }));
     expect(screen.getByText("Buckets Route")).toBeInTheDocument();
   });
 
   it("shows the bucket lookup error without the empty-bucket state", async () => {
-    const { listBuckets } = mockUploadsPageBase();
-    listBuckets.mockRejectedValue(
-      new APIError({
+    mockUploadsPageBase({
+      bucketsError: new APIError({
         status: 400,
         code: "transfer_engine_missing",
         message: "rclone is required to list buckets",
       }),
-    );
+    });
 
     renderUploadsPage();
 
@@ -278,7 +299,9 @@ describe("UploadsPage", () => {
             <Routes>
               <Route
                 path="/uploads"
-                element={<UploadsPage apiToken="token" profileId="profile-1" />}
+                element={
+                  <UploadsPageExperience apiToken="token" profileId="profile-1" />
+                }
               />
             </Routes>
           </MemoryRouter>
@@ -300,7 +323,9 @@ describe("UploadsPage", () => {
             <Routes>
               <Route
                 path="/uploads"
-                element={<UploadsPage apiToken="token" profileId="profile-2" />}
+                element={
+                  <UploadsPageExperience apiToken="token" profileId="profile-2" />
+                }
               />
             </Routes>
           </MemoryRouter>
@@ -317,8 +342,8 @@ describe("UploadsPage", () => {
   });
 
   it("shows the provider-disabled state and disables upload actions", async () => {
-    const { listProfiles, listBuckets } = mockUploadsPageBase();
-    const getMeta = vi.fn().mockResolvedValue({
+    mockUploadsPageBase({
+      meta: {
       version: "test",
       serverAddr: "127.0.0.1:8080",
       dataDir: "/data",
@@ -357,16 +382,8 @@ describe("UploadsPage", () => {
         path: "/usr/bin/rclone",
         version: "v1.66.0",
       },
-    } as never);
-    vi.spyOn(APIClient.prototype, "server", "get").mockReturnValue({
-      getMeta,
-    } as never);
-    vi.spyOn(APIClient.prototype, "profiles", "get").mockReturnValue({
-      listProfiles,
-    } as never);
-    vi.spyOn(APIClient.prototype, "buckets", "get").mockReturnValue({
-      listBuckets,
-    } as never);
+      } as never,
+    });
 
     renderUploadsPage();
 

@@ -211,4 +211,23 @@ describe('UploadsPageShell', () => {
 
 		expect(screen.getByText(failedToLoadBucketsTitle())).toBeInTheDocument()
 	})
+
+	it('renders long target labels with the wrapping destination style', () => {
+		const destinationLabel = 's3://primary-bucket/a/very/long/destination/path/that/needs/to/wrap/on/mobile/'
+
+		render(
+			<MemoryRouter>
+				<UploadsPageShell
+					presentation={buildPresentation({
+						targetSource: {
+							...buildPresentation().targetSource,
+							destinationLabel,
+						},
+					})}
+				/>
+			</MemoryRouter>,
+		)
+
+		expect(screen.getByText(destinationLabel).className).toContain('destinationLabel')
+	})
 })

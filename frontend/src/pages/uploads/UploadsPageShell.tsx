@@ -74,7 +74,11 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 					<PageSection
 						title="Target & source"
 						description="Choose the bucket and optional prefix, then add files or a folder from this device."
-						actions={<Typography.Text type="secondary">{presentation.targetSource.destinationLabel}</Typography.Text>}
+						actions={
+							<Typography.Text type="secondary" className={styles.destinationLabel}>
+								{presentation.targetSource.destinationLabel}
+							</Typography.Text>
+						}
 					>
 						<div className={styles.controlsGrid}>
 							<label className={styles.fieldBlock}>

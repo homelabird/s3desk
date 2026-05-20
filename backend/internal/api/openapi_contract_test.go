@@ -99,6 +99,20 @@ func TestOpenAPIMetaAndMigrationSchemasCoverFrontendContract(t *testing.T) {
 	if backupPath == nil || backupPath.Get == nil {
 		t.Fatal("/server/backup GET missing from OpenAPI")
 	}
+	backupPasswordHeader := requireOpenAPIParameter(t, backupPath.Get, "X-S3Desk-Backup-Password")
+	if !strings.Contains(backupPasswordHeader.Description, "export password") {
+		t.Fatalf("backup password header description=%q, want export-password wording", backupPasswordHeader.Description)
+	}
+	if strings.Contains(backupPasswordHeader.Description, "destination encryption key") {
+		t.Fatalf("backup password header description=%q, must not describe restore/import destination-key precedence", backupPasswordHeader.Description)
+	}
+	confidentialityParam := requireOpenAPIParameter(t, backupPath.Get, "confidentiality")
+	if !strings.Contains(confidentialityParam.Description, "X-S3Desk-Backup-Password") || !strings.Contains(confidentialityParam.Description, "ENCRYPTION_KEY") {
+		t.Fatalf("backup confidentiality description=%q, want password and key precedence", confidentialityParam.Description)
+	}
+	assertOpenAPIOperationHasResponse(t, doc, "/server/backup", http.MethodGet, http.StatusBadRequest)
+	assertOpenAPIOperationHasResponse(t, doc, "/server/backup", http.MethodGet, http.StatusConflict)
+	assertOpenAPIOperationHasResponse(t, doc, "/server/backup", http.MethodGet, http.StatusInternalServerError)
 
 	restoreSchemaRef := doc.Components.Schemas["ServerRestoreResponse"]
 	if restoreSchemaRef == nil || restoreSchemaRef.Value == nil {
@@ -114,12 +128,16 @@ func TestOpenAPIMetaAndMigrationSchemasCoverFrontendContract(t *testing.T) {
 	assertOpenAPIOperationHasResponse(t, doc, "/server/restore", http.MethodPost, http.StatusRequestEntityTooLarge)
 	assertOpenAPIMultipartField(t, doc, "/server/restore", http.MethodPost, "bundle", true)
 	assertOpenAPIMultipartField(t, doc, "/server/restore", http.MethodPost, "password", false)
+	assertOpenAPIMultipartFieldDescriptionContains(t, doc, "/server/restore", http.MethodPost, "password", "multipart password")
+	assertOpenAPIMultipartFieldDescriptionContains(t, doc, "/server/restore", http.MethodPost, "password", "destination server encryption key")
 
 	assertOpenAPIOperationResponseSchemaAtStatus(t, doc, "/server/import-portable/preview", http.MethodPost, http.StatusOK, "#/components/schemas/ServerPortableImportResponse")
 	assertOpenAPIOperationHasResponse(t, doc, "/server/import-portable/preview", http.MethodPost, http.StatusConflict)
 	assertOpenAPIOperationHasResponse(t, doc, "/server/import-portable/preview", http.MethodPost, http.StatusRequestEntityTooLarge)
 	assertOpenAPIMultipartField(t, doc, "/server/import-portable/preview", http.MethodPost, "bundle", true)
 	assertOpenAPIMultipartField(t, doc, "/server/import-portable/preview", http.MethodPost, "password", false)
+	assertOpenAPIMultipartFieldDescriptionContains(t, doc, "/server/import-portable/preview", http.MethodPost, "password", "multipart password")
+	assertOpenAPIMultipartFieldDescriptionContains(t, doc, "/server/import-portable/preview", http.MethodPost, "password", "destination server encryption key")
 
 	assertOpenAPIOperationResponseSchemaAtStatus(t, doc, "/server/import-portable", http.MethodPost, http.StatusOK, "#/components/schemas/ServerPortableImportResponse")
 	assertOpenAPIOperationResponseSchemaAtStatus(t, doc, "/server/import-portable", http.MethodPost, http.StatusCreated, "#/components/schemas/ServerPortableImportResponse")
@@ -127,6 +145,8 @@ func TestOpenAPIMetaAndMigrationSchemasCoverFrontendContract(t *testing.T) {
 	assertOpenAPIOperationHasResponse(t, doc, "/server/import-portable", http.MethodPost, http.StatusRequestEntityTooLarge)
 	assertOpenAPIMultipartField(t, doc, "/server/import-portable", http.MethodPost, "bundle", true)
 	assertOpenAPIMultipartField(t, doc, "/server/import-portable", http.MethodPost, "password", false)
+	assertOpenAPIMultipartFieldDescriptionContains(t, doc, "/server/import-portable", http.MethodPost, "password", "multipart password")
+	assertOpenAPIMultipartFieldDescriptionContains(t, doc, "/server/import-portable", http.MethodPost, "password", "destination server encryption key")
 }
 
 func TestOpenAPIBucketGovernanceSchemasCoverFrontendContract(t *testing.T) {
@@ -360,6 +380,35 @@ func assertOpenAPIMultipartField(t *testing.T, doc *openapi3.T, path, method, na
 	if required != containsString(content.Schema.Value.Required, name) {
 		t.Fatalf("%s %s multipart field %q required=%t, want %t", method, path, name, containsString(content.Schema.Value.Required, name), required)
 	}
+}
+
+func assertOpenAPIMultipartFieldDescriptionContains(t *testing.T, doc *openapi3.T, path, method, name, want string) {
+	t.Helper()
+
+	op := requireOpenAPIOperation(t, doc, path, method)
+	content := op.RequestBody.Value.Content["multipart/form-data"]
+	fieldRef := content.Schema.Value.Properties[name]
+	if fieldRef == nil || fieldRef.Value == nil {
+		t.Fatalf("%s %s missing multipart field %q", method, path, name)
+	}
+	if !strings.Contains(fieldRef.Value.Description, want) {
+		t.Fatalf("%s %s multipart field %q description=%q, want substring %q", method, path, name, fieldRef.Value.Description, want)
+	}
+}
+
+func requireOpenAPIParameter(t *testing.T, op *openapi3.Operation, name string) *openapi3.Parameter {
+	t.Helper()
+
+	for _, paramRef := range op.Parameters {
+		if paramRef == nil || paramRef.Value == nil {
+			continue
+		}
+		if paramRef.Value.Name == name {
+			return paramRef.Value
+		}
+	}
+	t.Fatalf("parameter %q missing from OpenAPI operation", name)
+	return nil
 }
 
 func requireOpenAPIOperation(t *testing.T, doc *openapi3.T, path, method string) *openapi3.Operation {

@@ -22,6 +22,55 @@ vi.mock('../BucketsDialogsPanel', () => ({
 }))
 
 describe('BucketsPageShell', () => {
+	it('announces bucket loading status', () => {
+		render(
+			<BucketsPageShell
+				api={createMockApiClient()}
+				apiToken="token"
+				profileId="profile-1"
+				selectedProfile={{ name: 'Primary Profile' } as never}
+				bucketCrudSupported
+				bucketCrudUnsupportedReason="Bucket operations are unavailable."
+				bucketsQueryError={null}
+				bucketsLoading
+				buckets={[]}
+				showBucketsEmpty={false}
+				openCreateModal={vi.fn()}
+				createOpen={false}
+				closeCreateModal={vi.fn()}
+				submitCreateBucket={vi.fn()}
+				createLoading={false}
+				list={{
+					buckets: [],
+					useCompactList: false,
+					policySupported: false,
+					policyUnsupportedReason: 'unsupported',
+					controlsSupported: false,
+					controlsUnsupportedReason: 'unsupported',
+					deletePending: false,
+					deletingBucket: null,
+					onOpenControls: vi.fn(),
+					onOpenPolicy: vi.fn(),
+					onDelete: vi.fn(),
+				}}
+				dialogs={{
+					policyBucket: null,
+					closePolicyModal: vi.fn(),
+					openControlsModal: vi.fn(),
+					controlsBucket: null,
+					closeControlsModal: vi.fn(),
+					openPolicyModal: vi.fn(),
+					bucketNotEmptyDialogBucket: null,
+					closeBucketNotEmptyDialog: vi.fn(),
+					openBucketNotEmptyObjects: vi.fn(),
+					openBucketNotEmptyDeleteJob: vi.fn(),
+				}}
+			/>,
+		)
+
+		expect(screen.getByRole('status', { name: 'Loading buckets' })).toHaveTextContent('Loading buckets...')
+	})
+
 	it('shows the unsupported warning and still wires the dialogs panel', () => {
 		render(
 			<BucketsPageShell

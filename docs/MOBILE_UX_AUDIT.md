@@ -25,8 +25,8 @@ constraints that are already handled in the frontend.
 - `frontend/tests/mobile-smoke.spec.ts` verifies core mobile rendering, touch
   target sizing, responsive search/filter affordances, phone-safe dialogs, and
   the app-shell scroll container without horizontal overflow
-- `frontend/tests/responsive-lists.spec.ts` verifies compact list/table
-  switching for key pages at desktop, tablet, and extra-small widths
+- `npm run test:e2e:mobile-responsive` verifies compact list/table switching
+  through current page-specific mobile specs at phone-sized widths
 - the audit notes below come from code inspection of shared layouts, tabs,
   compact cards, dialogs, sheets, and page-level mobile states
 - `frontend/src/lib/deviceFs.ts`,
@@ -246,6 +246,6 @@ Recommended follow-up:
 ## Suggested Validation
 
 - rerun `frontend/tests/mobile-smoke.spec.ts` on both mobile projects
-- rerun `frontend/tests/responsive-lists.spec.ts`
+- rerun `npm run test:e2e:mobile-responsive`
 - capture screenshots for iPhone-style and Android-style mobile viewports
 - run Lighthouse accessibility checks against the mobile flows that change

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import {
 	installObjectsMobileResponsiveFixtures,
@@ -10,7 +10,6 @@ import {
 	gotoWithDynamicImportRecovery,
 	objectsListRow,
 	objectsSelectionCheckbox,
-	objectsTreeRow,
 } from './support/ui'
 
 async function openObjectsMobilePage(page: Page) {
@@ -18,6 +17,10 @@ async function openObjectsMobilePage(page: Page) {
 		timeout: 10_000,
 		maxAttempts: 3,
 	})
+}
+
+async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
+	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates public touch-target height contract
 }
 
 test.describe('@mobile-responsive Objects mobile workflows', () => {
@@ -57,7 +60,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const row = objectsListRow(page, 'alpha.txt')
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: 'Object actions' }).click()
+		await row.getByRole('button', { name: /Object actions/ }).click()
 
 		const menu = page
 			.getByRole('menu')
@@ -76,6 +79,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		await page.getByRole('button', { name: /Grid/i }).click()
 		await expect(page.getByTestId('objects-grid-content')).toBeVisible()
+		await expect(page.getByRole('region', { name: 'Objects' })).toBeVisible()
+		await expect(page.getByRole('list', { name: 'Objects card list' })).toBeVisible()
 
 		const card = objectsListRow(page, 'preview.png')
 		await expect(card).toBeVisible()
@@ -110,20 +115,29 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await openObjectsMobilePage(page)
 
-		await page.getByRole('button', { name: 'Folders' }).click()
+		const foldersButton = page.getByRole('button', { name: 'Folders' })
+		await expect(foldersButton).toHaveAttribute('aria-haspopup', 'dialog')
+		await expect(foldersButton).toHaveAttribute('aria-controls', 'objects-tree-drawer')
+		await expect(foldersButton).toHaveAttribute('aria-expanded', 'false')
+		await foldersButton.click()
+		await expect(foldersButton).toHaveAttribute('aria-expanded', 'true')
 
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
+		await expect(drawer).toHaveAttribute('id', 'objects-tree-drawer')
 		await expect(drawer.getByTestId('objects-folders-pane')).toBeVisible()
-		const rootRow = objectsTreeRow(drawer, 0).filter({ hasText: 'objects-mobile-bucket' }).first()
-		await expect(rootRow).toBeVisible()
-		await rootRow.getByRole('button', { name: 'Expand objects-mobile-bucket' }).click()
+		const rootTreeItem = drawer.getByRole('treeitem', { name: 'objects-mobile-bucket' })
+		await expect(rootTreeItem).toBeVisible()
+		await expect(rootTreeItem).toHaveAttribute('aria-expanded', 'false')
+		await rootTreeItem.press('ArrowRight')
+		await expect(rootTreeItem).toHaveAttribute('aria-expanded', 'true')
 
-		const reportsRow = objectsTreeRow(drawer, 1).filter({ hasText: 'reports' }).first()
-		await expect(reportsRow).toBeVisible()
-		await reportsRow.getByRole('button', { name: 'reports', exact: true }).click()
+		const reportsTreeItem = drawer.getByRole('treeitem', { name: 'reports' })
+		await expect(reportsTreeItem).toBeVisible()
+		await reportsTreeItem.click()
 
 		await expect(drawer).toHaveCount(0)
+		await expect(foldersButton).toHaveAttribute('aria-expanded', 'false')
 		await expect(page.getByText('s3://objects-mobile-bucket/reports/')).toBeVisible()
 	})
 
@@ -189,7 +203,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const row = objectsListRow(page, 'alpha.txt')
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: 'Object actions' }).click()
+		await row.getByRole('button', { name: /Object actions/ }).click()
 
 		const menu = page
 			.getByRole('menu')
@@ -202,8 +216,12 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(drawer).toBeVisible()
 		await expect(drawer.getByText('Content Type')).toBeVisible()
 		await expect(drawer.getByText('alpha.txt')).toBeVisible()
-		await expect(drawer.getByRole('button', { name: /Download/i })).toBeVisible()
-		await expect(drawer.getByRole('button', { name: 'Copy key' })).toBeVisible()
+		const downloadButton = drawer.getByRole('button', { name: /Download/i })
+		const copyKeyButton = drawer.getByRole('button', { name: 'Copy key' })
+		await expect(downloadButton).toBeVisible()
+		await expect(copyKeyButton).toBeVisible()
+		await expectMinTouchHeight(downloadButton)
+		await expectMinTouchHeight(copyKeyButton)
 
 		await drawer.getByRole('button', { name: 'Close' }).click()
 		await expect(drawer).toHaveCount(0)
@@ -215,7 +233,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 
 		const row = objectsListRow(page, 'preview.png')
 		await expect(row).toBeVisible()
-		await row.getByRole('button', { name: 'Object actions' }).click()
+		await row.getByRole('button', { name: /Object actions/ }).click()
 
 		const menu = page
 			.getByRole('menu')
@@ -228,10 +246,61 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(modal).toBeVisible()
 		await expect(modal.getByTestId('objects-image-viewer-image')).toBeVisible()
 		await expect(modal.getByTestId('objects-image-viewer-meta')).toContainText('image/png')
-		await expect(modal.getByRole('button', { name: 'Download' })).toBeVisible()
-		await expect(modal.getByRole('button', { name: 'Reload preview' })).toBeVisible()
+		const downloadButton = modal.getByRole('button', { name: 'Download' })
+		const reloadButton = modal.getByRole('button', { name: 'Reload preview' })
+		await expect(downloadButton).toBeVisible()
+		await expect(reloadButton).toBeVisible()
+		await expectMinTouchHeight(downloadButton)
+		await expectMinTouchHeight(reloadButton)
 		await modal.getByRole('button', { name: 'Close' }).click()
 		await expect(modal).toHaveCount(0)
+	})
+
+	test('large preview viewer fits a short 320px mobile viewport', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 568 })
+		await openObjectsMobilePage(page)
+
+		const row = objectsListRow(page, 'preview.png')
+		await expect(row).toBeVisible()
+		await row.getByRole('button', { name: /Object actions/ }).click()
+
+		const menu = page
+			.getByRole('menu')
+			.filter({ has: page.getByRole('menuitem', { name: 'Open large preview' }) })
+			.last()
+		await expect(menu).toBeVisible()
+		await menu.getByRole('menuitem', { name: 'Open large preview' }).click()
+
+		const modal = page.getByTestId('objects-image-viewer-modal')
+		const stage = modal.getByTestId('objects-image-viewer-stage')
+		const footer = modal.getByTestId('objects-image-viewer-footer')
+		await expect(modal).toBeVisible()
+		await expect(stage).toBeVisible()
+		await expect(footer).toBeVisible()
+		await expect(modal.getByTestId('objects-image-viewer-image')).toBeVisible()
+		await expect
+			.poll(() =>
+				modal.evaluate((element) => {
+					const rect = element.getBoundingClientRect() // e2e-geometry-allow verifies modal stays within mobile viewport
+					return (
+						rect.left >= -1 &&
+						rect.top >= -1 &&
+						rect.right <= window.innerWidth + 1 &&
+						rect.bottom <= window.innerHeight + 1 &&
+						element.scrollWidth <= element.clientWidth + 1 // e2e-geometry-allow verifies modal does not horizontally overflow
+					)
+				}),
+			)
+			.toBe(true)
+		await expect
+			.poll(() =>
+				stage.evaluate((element) => {
+					const rect = element.getBoundingClientRect() // e2e-geometry-allow verifies preview stage minimum height and fit
+					return rect.height >= 120 && rect.right <= window.innerWidth + 1 && element.scrollWidth <= element.clientWidth + 1 // e2e-geometry-allow verifies preview stage does not overflow
+				}),
+			)
+			.toBe(true)
+		await expect.poll(() => footer.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true) // e2e-geometry-allow verifies footer actions fit horizontally
 	})
 
 	test('global search preserves query filters across mobile reopen', async ({ page }) => {
@@ -259,7 +328,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 	})
 
 	test('global search result cards expose object actions on mobile', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
+		await page.setViewportSize({ width: 320, height: 568 })
 		await openObjectsMobilePage(page)
 
 		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
@@ -271,21 +340,33 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		const card = page.locator(OBJECTS_GLOBAL_SEARCH_RESULT_CARD_SELECTOR).first()
 		await expect(card).toBeVisible({ timeout: 10_000 })
 		await expect(card).toContainText('alpha.txt')
-		await expect(card.getByRole('button', { name: 'Copy key alpha.txt' })).toBeVisible()
-		await expect(card.getByRole('button', { name: 'Download alpha.txt' })).toBeVisible()
-		await expect(card.getByRole('button', { name: 'Open details for alpha.txt' })).toBeVisible()
+		const copyButton = card.getByRole('button', { name: 'Copy key alpha.txt' })
+		const downloadButton = card.getByRole('button', { name: 'Download alpha.txt' })
+		const detailsButton = card.getByRole('button', { name: 'Open details for alpha.txt' })
+		await expect(copyButton).toBeVisible()
+		await expect(downloadButton).toBeVisible()
+		await expect(detailsButton).toBeVisible()
+		await expectMinTouchHeight(copyButton)
+		await expectMinTouchHeight(downloadButton)
+		await expectMinTouchHeight(detailsButton)
 	})
 
 	test('filters drawer applies and clears file filters on mobile', async ({ page }) => {
-		await page.setViewportSize({ width: 390, height: 844 })
+		await page.setViewportSize({ width: 320, height: 568 })
 		await openObjectsMobilePage(page)
 
 		await page.getByRole('button', { name: /Filters|View|Filter/ }).click()
 
 		const drawer = dialogByName(page, 'View options')
 		await expect(drawer).toBeVisible()
-		await drawer.getByLabel('Extension filter').fill('log')
-		await drawer.getByRole('button', { name: 'Done' }).click()
+		await expectMinTouchHeight(drawer.locator('label').filter({ hasText: 'Favorites only' }).first())
+		await expectMinTouchHeight(drawer.locator('label').filter({ hasText: 'Favorites first' }).first())
+		const extensionFilter = drawer.getByLabel('Extension filter')
+		const doneButton = drawer.getByRole('button', { name: 'Done' })
+		await expectMinTouchHeight(extensionFilter)
+		await expectMinTouchHeight(doneButton)
+		await extensionFilter.fill('log')
+		await doneButton.click()
 		await expect(drawer).toHaveCount(0)
 		await expect(objectsListRow(page, /a-very-long-object-key/)).toBeVisible()
 		await expect(objectsListRow(page, 'alpha.txt')).toHaveCount(0)
@@ -293,8 +374,12 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.getByRole('button', { name: /Filters|View|Filter/ }).click()
 		const reopenedDrawer = dialogByName(page, 'View options')
 		await expect(reopenedDrawer).toBeVisible()
-		await reopenedDrawer.getByRole('button', { name: 'Reset view' }).click()
-		await reopenedDrawer.getByRole('button', { name: 'Done' }).click()
+		const resetButton = reopenedDrawer.getByRole('button', { name: 'Reset view' })
+		const reopenedDoneButton = reopenedDrawer.getByRole('button', { name: 'Done' })
+		await expectMinTouchHeight(resetButton)
+		await expectMinTouchHeight(reopenedDoneButton)
+		await resetButton.click()
+		await reopenedDoneButton.click()
 		await expect(reopenedDrawer).toHaveCount(0)
 		await expect(objectsListRow(page, 'alpha.txt')).toBeVisible()
 	})

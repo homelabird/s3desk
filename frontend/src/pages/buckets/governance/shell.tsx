@@ -1,17 +1,36 @@
 import type { ReactNode } from "react";
 import { Alert, Button, Tag, Typography } from "antd";
 
-import type { BucketAdvancedView } from "../../../api/types";
+import type { BucketAdvancedView, Profile } from "../../../api/types";
 import { DialogModal } from "../../../components/DialogModal";
 import { OverlaySheet } from "../../../components/OverlaySheet";
+import {
+  getBucketGovernanceDecisionGuide,
+  type BucketDecisionTone,
+} from "../bucketPolicyDecisionGuide";
 import styles from "../BucketGovernanceModal.module.css";
 import type { WarningCarrier } from "./types";
+
+function getDecisionBadgeClassName(tone: BucketDecisionTone) {
+  switch (tone) {
+    case "danger":
+      return `${styles.decisionBadge} ${styles.decisionBadgeDanger}`;
+    case "warning":
+      return `${styles.decisionBadge} ${styles.decisionBadgeWarning}`;
+    case "info":
+      return `${styles.decisionBadge} ${styles.decisionBadgeInfo}`;
+    case "default":
+    default:
+      return styles.decisionBadge;
+  }
+}
 
 export function BucketGovernanceDialogShell(props: {
   mobile: boolean;
   title: string;
   onClose: () => void;
   footer?: ReactNode;
+  closeDisabled?: boolean;
   children: ReactNode;
 }) {
   const shellContent = (
@@ -36,6 +55,7 @@ export function BucketGovernanceDialogShell(props: {
         placement="right"
         width="100vw"
         footer={props.footer}
+        closeDisabled={props.closeDisabled}
       >
         {shellContent}
       </OverlaySheet>
@@ -48,6 +68,7 @@ export function BucketGovernanceDialogShell(props: {
       title={props.title}
       onClose={props.onClose}
       footer={props.footer ?? null}
+      closeDisabled={props.closeDisabled}
       width="min(96vw, 1080px)"
     >
       {shellContent}
@@ -101,6 +122,69 @@ export function GovernanceSummaryCard(props: {
           ))}
         </div>
       ) : null}
+    </section>
+  );
+}
+
+export function GovernanceDecisionGuideCard(props: {
+  provider: Profile["provider"];
+}) {
+  const guide = getBucketGovernanceDecisionGuide(props.provider);
+
+  return (
+    <section
+      className={styles.decisionHeader}
+      data-testid="bucket-governance-decision-header"
+    >
+      <div className={styles.decisionHeaderTop}>
+        <div className={styles.decisionHeaderCopy}>
+          <Typography.Text strong>{guide.workspaceTitle}</Typography.Text>
+          <Typography.Text type="secondary">
+            {guide.workspaceDescription}
+          </Typography.Text>
+        </div>
+        <div
+          className={styles.decisionBadgeRow}
+          aria-label="Governance risk signals"
+        >
+          {guide.riskBadges.map((badge) => (
+            <Tag key={badge.label} className={getDecisionBadgeClassName(badge.tone)}>
+              {badge.label}
+            </Tag>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.decisionRouteGrid}>
+        <div
+          className={`${styles.decisionRoute} ${styles.decisionRoutePrimary}`}
+          data-testid="bucket-governance-recommended-route"
+        >
+          <Typography.Text strong>{guide.recommendedTitle}</Typography.Text>
+          <Typography.Text type="secondary">
+            {guide.recommendedDescription}
+          </Typography.Text>
+          <ul className={styles.decisionRouteList}>
+            {guide.recommendedItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div
+          className={`${styles.decisionRoute} ${styles.decisionRouteAdvanced}`}
+          data-testid="bucket-governance-advanced-route"
+        >
+          <Typography.Text strong>{guide.advancedTitle}</Typography.Text>
+          <Typography.Text type="secondary">
+            {guide.advancedDescription}
+          </Typography.Text>
+          <ul className={styles.decisionRouteList}>
+            {guide.advancedItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </section>
   );
 }
@@ -306,6 +390,7 @@ export function AdvancedPolicySection(props: {
 }
 
 export function GovernanceControlsLayout(props: {
+  provider: Profile["provider"];
   mobile: boolean;
   bucket: string;
   onClose: () => void;
@@ -329,6 +414,7 @@ export function GovernanceControlsLayout(props: {
       mobile={props.mobile}
       title={`Controls: ${props.bucket}`}
       onClose={handleClose}
+      closeDisabled={props.closeDisabled}
       footer={
         <div className={styles.footerActions}>
           <Button onClick={handleClose} disabled={props.closeDisabled}>Close</Button>
@@ -341,6 +427,8 @@ export function GovernanceControlsLayout(props: {
         tags={props.summaryTags}
         isRefreshing={props.isRefreshing}
       />
+
+      <GovernanceDecisionGuideCard provider={props.provider} />
 
       {renderWarningStack(extractWarningList(props.warnings))}
 

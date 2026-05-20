@@ -5,6 +5,7 @@ import { APIError } from './api/client'
 import { createLightAPIClient } from './api/lightClient'
 import { useAuth } from './auth/useAuth'
 import { BrandLockup } from './components/BrandLockup'
+import { TokenLoginPanel } from './components/TokenLoginPanel'
 import { clearPersistedTransfersStorage } from './components/transfers/useTransfersPersistence'
 import styles from './LightApp.module.css'
 import { WelcomeScreen } from './components/WelcomeScreen'
@@ -73,17 +74,13 @@ function LightErrorCard(props: { title: string; hint?: ReactNode; onRetry?: () =
 }
 
 function LightLogin(props: { initialToken: string; onLogin: (token: string) => void; onClearSavedToken?: () => void }) {
-	const [token, setToken] = useState(props.initialToken ?? '')
 	const [submitting, setSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const showSavedTokenWarning = !!props.initialToken
-	const hint = showSavedTokenWarning
-		? 'Stored API token for this browser session is invalid. Please log in again with a valid token.'
-		: 'This server requires an API token. Enter the backend API_TOKEN used to start the server.'
+	const shouldAutoFocus = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches
 
-	const submit = async () => {
-		const trimmed = token.trim()
-		if (!trimmed || submitting) return
+	const submit = async (trimmed: string) => {
+		if (submitting) return
 		setSubmitting(true)
 		setError(null)
 		try {
@@ -99,66 +96,19 @@ function LightLogin(props: { initialToken: string; onLogin: (token: string) => v
 	}
 
 	return (
-		<div className={styles.panelSmall}>
-			<BrandLockup titleAs="h1" subtitle="Setup" variant="hero" />
-
-			<div className={styles.spacer16} />
-
-			<div className={styles.card}>
-				<div className={`${styles.statusCard} ${showSavedTokenWarning ? styles.statusWarning : styles.statusInfo}`}>{hint}</div>
-
-				{error ? (
-					<div role="alert" className={`${styles.rowGap12} ${styles.statusCard} ${styles.statusError}`}>
-						{error}
-					</div>
-				) : null}
-
-				<form
-					onSubmit={(e) => {
-						e.preventDefault()
-						void submit()
-					}}
-					className={styles.rowGap12}
-				>
-					<label htmlFor="api-token" className={styles.label}>
-						API Token
-					</label>
-					<input
-						id="api-token"
-						type="password"
-						autoComplete="current-password"
-						value={token}
-						onChange={(e) => setToken(e.target.value)}
-						placeholder="API_TOKEN…"
-						className={styles.tokenInput}
-					/>
-
-					<div className={styles.buttonRow}>
-						<button
-							type="submit"
-							disabled={!token.trim() || submitting}
-							className={`${styles.button} ${styles.buttonPrimary} ${submitting ? styles.buttonPrimaryDisabled : styles.buttonClickable}`}
-						>
-							{submitting ? 'Logging in…' : 'Login'}
-						</button>
-						{props.onClearSavedToken ? (
-							<button
-								type="button"
-								onClick={props.onClearSavedToken}
-								disabled={submitting}
-								className={`${styles.button} ${styles.buttonSecondary} ${submitting ? styles.buttonSecondaryDisabled : styles.buttonClickable}`}
-							>
-								Clear stored token
-							</button>
-						) : null}
-					</div>
-				</form>
-
-				<div className={`${styles.rowGap12} ${styles.metaText}`}>
-					This is not your S3 access key. It must match the server <code>API_TOKEN</code> and is stored only for this browser session.
-				</div>
-			</div>
-		</div>
+		<TokenLoginPanel
+			key={props.initialToken || 'empty'}
+			initialToken={props.initialToken}
+			subtitle="Setup"
+			hintVariant={showSavedTokenWarning ? 'stored-token' : 'required'}
+			submitting={submitting}
+			validationError={error}
+			onSubmitToken={submit}
+			onClearSavedToken={props.onClearSavedToken}
+			autoFocus={shouldAutoFocus}
+			inputId="light-api-token"
+			errorId="light-api-token-error"
+		/>
 	)
 }
 
@@ -214,10 +164,6 @@ function ProfilesList(props: {
 
 	return (
 		<div className={styles.panelLarge}>
-			<a className="skip-link" href="#main">
-				Skip to content
-			</a>
-
 			<header className={styles.header}>
 				<BrandLockup titleAs="h1" subtitle="Setup" variant="hero" />
 				<div className={styles.headerActions}>
@@ -235,7 +181,7 @@ function ProfilesList(props: {
 
 			<div className={styles.spacer12} />
 
-			<main id="main">
+			<main id="main" tabIndex={-1}>
 				<section className={`${styles.section} ${styles.sectionOverflowHidden}`}>
 					<div className={styles.sectionHeader}>
 						<div className={styles.sectionHeading}>Choose a profile</div>
@@ -402,12 +348,17 @@ export default function LightApp() {
 
 	if (metaState.status === 'loading') {
 		return (
-			<div role="status" className={styles.centerShell}>
+			<div className={styles.centerShell}>
+				<a className="skip-link" href="#main">
+					Skip to content
+				</a>
 				<div className={styles.topRightActions}>{themeToggleButton}</div>
-				<div className={styles.loadingCard}>
-					<div className={styles.loadingTitle}>Loading…</div>
-					<div className={styles.loadingSubtitle}>Connecting to the backend.</div>
-				</div>
+				<main id="main" tabIndex={-1} className={styles.loadingCard}>
+					<div role="status">
+						<div className={styles.loadingTitle}>Loading…</div>
+						<div className={styles.loadingSubtitle}>Connecting to the backend.</div>
+					</div>
+				</main>
 			</div>
 		)
 	}
@@ -418,13 +369,18 @@ export default function LightApp() {
 		if (isUnauthorized) {
 			return (
 				<div className={styles.centerShell}>
+					<a className="skip-link" href="#main">
+						Skip to content
+					</a>
 					<div className={styles.topRightActions}>{themeToggleButton}</div>
-					<LightLogin
-						key={apiToken || 'empty'}
-						initialToken={apiToken}
-						onLogin={(token) => applyApiToken(token)}
-						onClearSavedToken={() => applyApiToken('')}
-					/>
+					<main id="main" tabIndex={-1}>
+						<LightLogin
+							key={apiToken || 'empty'}
+							initialToken={apiToken}
+							onLogin={(token) => applyApiToken(token)}
+							onClearSavedToken={() => applyApiToken('')}
+						/>
+					</main>
 				</div>
 			)
 		}
@@ -433,14 +389,22 @@ export default function LightApp() {
 		const hint = err instanceof APIError && err.status === 403 ? <LightHint403 /> : undefined
 		return (
 			<div className={styles.centerShell}>
+				<a className="skip-link" href="#main">
+					Skip to content
+				</a>
 				<div className={styles.topRightActions}>{themeToggleButton}</div>
-				<LightErrorCard title={title} hint={hint} onRetry={retryMeta} />
+				<main id="main" tabIndex={-1}>
+					<LightErrorCard title={title} hint={hint} onRetry={retryMeta} />
+				</main>
 			</div>
 		)
 	}
 
 	return (
 		<div className={`${styles.centerShell} ${styles.centerShellPage}`}>
+			<a className="skip-link" href="#main">
+				Skip to content
+			</a>
 			<div className={styles.topRightActions}>
 				{themeToggleButton}
 				{apiToken ? (

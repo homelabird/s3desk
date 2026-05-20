@@ -16,6 +16,7 @@ function buildProps() {
 		bucket: 'bucket-a',
 		currentPrefix: 'docs/',
 		isMd: false,
+		useWideResults: false,
 		queryDraft: '',
 		onQueryDraftChange: vi.fn(),
 		prefixFilter: '',

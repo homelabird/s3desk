@@ -64,7 +64,7 @@ export function ObjectsPresignModal(props: ObjectsPresignModalProps) {
 						Expires: <Typography.Text code>{props.presign.expiresAt}</Typography.Text>
 					</Typography.Text>
 					<Typography.Text type="secondary">URL</Typography.Text>
-					<Input.TextArea value={props.presign.url} readOnly autoSize={{ minRows: 2, maxRows: 6 }} />
+					<Input.TextArea value={props.presign.url} readOnly aria-label="Download URL" autoSize={{ minRows: 2, maxRows: 6 }} />
 				</Space>
 			) : (
 				<Spin />

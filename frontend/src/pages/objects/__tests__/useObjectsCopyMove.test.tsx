@@ -209,4 +209,54 @@ describe('useObjectsCopyMove', () => {
 		expect(messageSuccessMock).not.toHaveBeenCalled()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
 	})
+
+	it('does not let an old-scope pending object copy disable a newly opened copy dialog', async () => {
+		const { Wrapper } = createWrapper()
+		const oldPendingJob = deferred<{ id: string }>()
+		const createJobWithRetry = vi.fn().mockReturnValueOnce(oldPendingJob.promise).mockResolvedValueOnce({ id: 'job-new' })
+
+		const { result, rerender } = renderHook(
+			({ apiToken }: { apiToken: string }) =>
+				useObjectsCopyMove({
+					profileId: 'profile-1',
+					apiToken,
+					bucket: 'bucket-a',
+					prefix: 'docs/',
+					createJobWithRetry,
+					splitLines: (value) => value.split('\n').filter(Boolean),
+				}),
+			{ initialProps: { apiToken: 'token-1' }, wrapper: Wrapper },
+		)
+
+		act(() => {
+			result.current.openCopyMove('copy', 'docs/a.txt')
+		})
+		await act(async () => {
+			result.current.handleCopyMoveSubmit({
+				dstBucket: 'bucket-a',
+				dstKey: 'archive/a.txt',
+				dryRun: false,
+				confirm: '',
+			})
+		})
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		rerender({ apiToken: 'token-2' })
+		act(() => {
+			result.current.openCopyMove('copy', 'docs/b.txt')
+		})
+
+		expect(result.current.copyMoveSubmitting).toBe(false)
+
+		await act(async () => {
+			result.current.handleCopyMoveSubmit({
+				dstBucket: 'bucket-a',
+				dstKey: 'archive/b.txt',
+				dryRun: false,
+				confirm: '',
+			})
+		})
+
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(2))
+	})
 })

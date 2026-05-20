@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { hasOpenOverlayLayer } from '../../components/useOverlayLayer'
 import { shouldIgnoreGlobalKeyboardShortcut } from '../../lib/keyboardShortcuts'
 import type { CommandItem } from './objectsActions'
 import { useObjectsCommandPalette } from './useObjectsCommandPalette'
@@ -40,12 +41,13 @@ export function useObjectsCommandPaletteOverlayState({ scopeKey, items }: UseObj
 			if (shouldIgnoreGlobalKeyboardShortcut(e)) return
 			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
 				e.preventDefault()
+				if (!commandPaletteOpen && hasOpenOverlayLayer()) return
 				setScopedOpen((prev) => !prev)
 			}
 		}
 		window.addEventListener('keydown', onKeyDownWindow)
 		return () => window.removeEventListener('keydown', onKeyDownWindow)
-	}, [setScopedOpen])
+	}, [commandPaletteOpen, setScopedOpen])
 
 	useEffect(() => {
 		if (!commandPaletteOpen) return

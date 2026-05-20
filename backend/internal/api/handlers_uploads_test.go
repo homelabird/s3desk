@@ -36,7 +36,10 @@ func TestSanitizeUploadPath(t *testing.T) {
 		{in: "a/b.txt", want: "a/b.txt"},
 		{in: "a\\b\\c.txt", want: "a/b/c.txt"},
 		{in: "../c.txt", want: ""},
-		{in: "a/../c.txt", want: "c.txt"},
+		{in: "a/../c.txt", want: ""},
+		{in: "a/..", want: ""},
+		{in: "a/b/../../c.txt", want: ""},
+		{in: "a/..hidden/c.txt", want: "a/..hidden/c.txt"},
 		{in: "dir/", want: "dir"},
 		{in: "  spaced name.txt  ", want: "spaced name.txt"},
 	}
@@ -48,6 +51,20 @@ func TestSanitizeUploadPath(t *testing.T) {
 			got := sanitizeUploadPath(tc.in)
 			if got != tc.want {
 				t.Fatalf("sanitizeUploadPath(%q)=%q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateUploadPrefixRejectsParentSegments(t *testing.T) {
+	t.Parallel()
+
+	for _, prefix := range []string{"../root", "incoming/../root", `incoming\..\root`} {
+		prefix := prefix
+		t.Run(prefix, func(t *testing.T) {
+			t.Parallel()
+			if uploadErr := validateUploadPrefix(prefix); uploadErr == nil {
+				t.Fatal("validateUploadPrefix err=nil, want error")
 			}
 		})
 	}
@@ -220,6 +237,51 @@ func TestTryAssembleChunkFile_DeltaError(t *testing.T) {
 	finalPath := filepath.Join(stagingDir, relOS)
 	if _, statErr := os.Stat(finalPath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("expected no assembled file, stat err=%v", statErr)
+	}
+}
+
+func TestTryAssembleChunkFile_ReplacesExistingFinalAccounting(t *testing.T) {
+	t.Parallel()
+
+	stagingDir := t.TempDir()
+	relOS := filepath.FromSlash("nested/file.bin")
+	finalPath := filepath.Join(stagingDir, relOS)
+	if err := os.MkdirAll(filepath.Dir(finalPath), 0o700); err != nil {
+		t.Fatalf("mkdir final dir: %v", err)
+	}
+	oldBody := []byte("previous")
+	if err := os.WriteFile(finalPath, oldBody, 0o600); err != nil {
+		t.Fatalf("write existing final: %v", err)
+	}
+
+	chunkDir := filepath.Join(stagingDir, ".chunks", relOS)
+	if err := os.MkdirAll(chunkDir, 0o700); err != nil {
+		t.Fatalf("mkdir chunk dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(chunkDir, chunkPartName(0)), []byte("new "), 0o600); err != nil {
+		t.Fatalf("write chunk 0: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(chunkDir, chunkPartName(1)), []byte("body"), 0o600); err != nil {
+		t.Fatalf("write chunk 1: %v", err)
+	}
+
+	trackedBytes := int64(len(oldBody) + len("new ") + len("body"))
+	if err := tryAssembleChunkFile(stagingDir, relOS, chunkDir, 2, func(delta int64) error {
+		trackedBytes += delta
+		return nil
+	}); err != nil {
+		t.Fatalf("tryAssembleChunkFile: %v", err)
+	}
+
+	gotBody, err := os.ReadFile(finalPath)
+	if err != nil {
+		t.Fatalf("read final: %v", err)
+	}
+	if string(gotBody) != "new body" {
+		t.Fatalf("final body=%q, want new body", string(gotBody))
+	}
+	if trackedBytes != int64(len(gotBody)) {
+		t.Fatalf("trackedBytes=%d, want final size %d", trackedBytes, len(gotBody))
 	}
 }
 

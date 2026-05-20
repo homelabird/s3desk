@@ -175,12 +175,23 @@ paths:
         backup, or `scope=cache_metadata` for a lighter bundle containing metadata and
         cache state such as thumbnails. Use `scope=portable` to export a logical
         database-neutral migration bundle for portable import flows. Use
-        `confidentiality=encrypted` to encrypt the payload with the current
-        `ENCRYPTION_KEY` while keeping the outer bundle metadata clear. Snapshot-style
-        export currently supports sqlite-backed servers only, while portable export
-        supports sqlite and postgres source deployments.
+        `confidentiality=encrypted` to encrypt the payload with
+        a non-empty `X-S3Desk-Backup-Password` when supplied, otherwise with the
+        current `ENCRYPTION_KEY`, while keeping the outer bundle metadata clear.
+        Restore/import endpoints do not read the export header; supply password-protected
+        bundles through their multipart `password` field or matching UI input. During
+        restore/import, a non-empty multipart password is used before destination
+        server `ENCRYPTION_KEY` fallback. Snapshot-style export currently supports
+        sqlite-backed servers only, while portable export supports sqlite and postgres
+        source deployments.
       parameters:
         - $ref: "#/components/parameters/XApiToken"
+        - name: X-S3Desk-Backup-Password
+          in: header
+          required: false
+          description: Optional operator-supplied export password used when `confidentiality=encrypted`. Restore/import endpoints do not read this header; provide the same value in their multipart `password` field when processing password-protected bundles.
+          schema:
+            type: string
         - name: scope
           in: query
           schema:
@@ -200,7 +211,7 @@ paths:
             type: string
             enum: [clear, encrypted]
             default: clear
-          description: Encrypts the bundle payload with the current ENCRYPTION_KEY while leaving the outer tar.gz manifest readable.
+          description: Encrypts the bundle payload with a non-empty `X-S3Desk-Backup-Password` when supplied, otherwise with the current `ENCRYPTION_KEY`, while leaving the outer tar.gz manifest readable.
       responses:
         "200":
           description: OK
@@ -213,6 +224,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
         "401":
           $ref: "#/components/responses/ErrorResponse"
         "403":
@@ -246,7 +259,7 @@ paths:
                   format: binary
                 password:
                   type: string
-                  description: Optional bundle password used when the backup payload was exported with operator-supplied password protection.
+                  description: Optional multipart password field used when the backup payload was exported with operator-supplied password protection; omit it only when restoring an encrypted bundle with the destination server encryption key.
       responses:
         "201":
           description: Created
@@ -287,7 +300,7 @@ paths:
                   format: binary
                 password:
                   type: string
-                  description: Optional bundle password used when the portable payload was exported with operator-supplied password protection.
+                  description: Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key.
       responses:
         "200":
           description: OK
@@ -328,7 +341,7 @@ paths:
                   format: binary
                 password:
                   type: string
-                  description: Optional bundle password used when the portable payload was exported with operator-supplied password protection.
+                  description: Optional multipart password field used when the portable payload was exported with operator-supplied password protection; omit it only when importing an encrypted bundle with the destination server encryption key.
       responses:
         "200":
           description: OK (blocked by preflight; no data written)
@@ -525,6 +538,10 @@ paths:
         - name: download
           in: query
           description: When true, send Content-Disposition for file download.
+          schema: { type: boolean, default: false }
+        - name: includeSecrets
+          in: query
+          description: When true, include provider secrets and TLS private material in the YAML export. Defaults to false.
           schema: { type: boolean, default: false }
       responses:
         "200":

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import {
 	clearFavoritesFilterHint,
@@ -73,6 +73,11 @@ function buildSearchCapItems(count: number) {
 			etag: `"${fileName}"`,
 		}
 	})
+}
+
+async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
+	const box = await locator.boundingBox() // e2e-geometry-allow validates public touch-target height contract
+	expect(box?.height ?? 0).toBeGreaterThanOrEqual(minHeight)
 }
 
 const metaByKey = {
@@ -263,10 +268,10 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByTestId('objects-toolbar-desktop-nav')).toBeVisible()
 		await expect(page.getByTestId('objects-toolbar-desktop-actions')).toBeVisible()
 		await expect(objectsBucketPickerDesktop(page)).toBeVisible()
-		await expect(page.getByRole('tab', { name: bucket, exact: true })).toHaveAttribute('aria-selected', 'true')
+		await expect(page.getByRole('button', { name: bucket, exact: true })).toHaveAttribute('aria-pressed', 'true')
 
-		await page.getByRole('tab', { name: `${bucket}/reports/`, exact: true }).click()
-		await expect(page.getByRole('tab', { name: `${bucket}/reports/`, exact: true })).toHaveAttribute('aria-selected', 'true')
+		await page.getByRole('button', { name: `${bucket}/reports/`, exact: true }).click()
+		await expect(page.getByRole('button', { name: `${bucket}/reports/`, exact: true })).toHaveAttribute('aria-pressed', 'true')
 		await expect(page.getByText(`s3://${bucket}/reports/`)).toBeVisible()
 
 		await expect(page.getByRole('button', { name: 'Go back' })).toBeEnabled()
@@ -319,7 +324,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 			objectsActiveTabId: 'tab-a',
 		})
 
-		const tabsRoot = page.getByTestId('objects-toolbar-tabs').getByRole('tablist').locator('xpath=..')
+		const tabsRoot = page.getByTestId('objects-toolbar-tabs').getByRole('toolbar', { name: 'Object workspaces' }).locator('xpath=..')
 		await expect(tabsRoot).toHaveAttribute('data-scrollable', 'true')
 		await expect(tabsRoot).toHaveAttribute('data-at-start', 'true')
 		await expect(tabsRoot).toHaveAttribute('data-at-end', 'false')
@@ -472,6 +477,37 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByText(`s3://${bucket}/reports/2024/mobile-density-review/`)).toBeVisible()
 	})
 
+	test('keeps global search results within the drawer on tablet widths', async ({ page }) => {
+		await page.setViewportSize({ width: 860, height: 900 })
+		const searchResultKey = 'reports/2024/tablet-overflow-check/a-very-long-alpha-findings-summary-name.txt'
+		await stubObjectsAdaptiveApi(page, {
+			globalSearchItems: [
+				{
+					key: searchResultKey,
+					size: 4096,
+					lastModified: now,
+				},
+			],
+		})
+		await openObjectsPage(page)
+
+		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
+		const drawer = page.getByTestId('objects-global-search-sheet')
+		await expect(drawer).toBeVisible()
+		await drawer.getByLabel('Search query').fill('alpha')
+
+		const results = drawer.getByTestId('objects-global-search-results')
+		await expect(results).toBeVisible()
+		await expect(results.locator('[data-global-search-result-card="true"]').filter({ hasText: 'a-very-long-alpha-findings-summary-name.txt' })).toBeVisible()
+		await expect(objectsGlobalSearchTableWrap(drawer)).toHaveCount(0)
+
+		const metrics = await drawer.getByTestId('objects-global-search-content').evaluate((node) => ({
+			clientWidth: node.clientWidth, // e2e-geometry-allow compares content viewport width against scroll width
+			scrollWidth: node.scrollWidth, // e2e-geometry-allow catches horizontal overflow in responsive drawer content
+		}))
+		expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1) // e2e-geometry-allow asserts no horizontal overflow
+	})
+
 	test('filters and toggles favorites controls inside the folders drawer', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page)
@@ -542,6 +578,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		const newFolderButton = drawer.getByTestId('objects-tree-new-folder')
 		await expect(newFolderButton).toBeEnabled()
 		await expect(newFolderButton).toHaveAttribute('aria-label', 'New folder')
+		await expectMinTouchHeight(newFolderButton)
 
 		await newFolderButton.click()
 		const dialog = page.getByRole('dialog', { name: 'New folder' })

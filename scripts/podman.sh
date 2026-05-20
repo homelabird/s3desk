@@ -7,8 +7,9 @@ IMAGE="${IMAGE:-s3desk:local}"
 DATA_VOLUME="${DATA_VOLUME:-s3desk-data}"
 JOB_QUEUE_CAPACITY="${JOB_QUEUE_CAPACITY:-256}"
 JOB_LOG_MAX_LINE_BYTES="${JOB_LOG_MAX_LINE_BYTES:-262144}"
-ALLOWED_HOSTS="${ALLOWED_HOSTS:-}"
+ALLOWED_HOSTS="${ALLOWED_HOSTS:-127.0.0.1,localhost}"
 RCLONE_VERIFY_MODE="${RCLONE_VERIFY_MODE:-checksum}"
+RUN_PORT_BIND="${RUN_PORT_BIND:-127.0.0.1:8080:8080}"
 
 usage() {
   cat <<EOF
@@ -20,6 +21,7 @@ Env:
   JOB_QUEUE_CAPACITY      Max queued jobs before backpressure (default: ${JOB_QUEUE_CAPACITY})
   JOB_LOG_MAX_LINE_BYTES  Max bytes per log line before truncation (default: ${JOB_LOG_MAX_LINE_BYTES})
   ALLOWED_HOSTS           Comma-separated hostnames allowed for Host/Origin checks
+  RUN_PORT_BIND           Port binding for run-port (default: ${RUN_PORT_BIND})
   API_TOKEN    Required for run-port
 
 Notes:
@@ -46,7 +48,7 @@ case "${cmd}" in
       echo "[podman] API_TOKEN is required for run-port" >&2
       exit 1
     fi
-    podman run --rm -p 8080:8080 \
+    podman run --rm -p "${RUN_PORT_BIND}" \
       -e ADDR=0.0.0.0:8080 \
       -e ALLOW_REMOTE=true \
       -e API_TOKEN="${API_TOKEN}" \

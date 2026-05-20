@@ -79,7 +79,7 @@ func (svc bucketPolicyHTTPService) executeGet(r *http.Request) (*models.BucketPo
 
 	switch secrets.Provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.GetBucketPolicy(r.Context(), secrets, bucket)
+		resp, err := s3policy.GetBucketPolicyWithOptions(r.Context(), secrets, bucket, s3policy.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return nil, bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}
@@ -99,7 +99,7 @@ func (svc bucketPolicyHTTPService) executeGet(r *http.Request) (*models.BucketPo
 			return nil, "", nil, resp, 0, nil, nil, "", nil
 		}
 	case models.ProfileProviderGcpGcs:
-		resp, err := gcsiam.GetBucketIamPolicy(r.Context(), secrets, bucket)
+		resp, err := gcsiam.GetBucketIamPolicyWithOptions(r.Context(), secrets, bucket, gcsiam.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return nil, bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}
@@ -111,7 +111,7 @@ func (svc bucketPolicyHTTPService) executeGet(r *http.Request) (*models.BucketPo
 		}
 		return nil, "", nil, s3policy.Response{}, resp.Status, resp.Headers, resp.Body, "gcs", nil
 	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.GetContainerPolicy(r.Context(), secrets, bucket)
+		resp, err := azureacl.GetContainerPolicyWithOptions(r.Context(), secrets, bucket, azureacl.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return nil, bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}
@@ -135,7 +135,7 @@ func (svc bucketPolicyHTTPService) executePut(r *http.Request) (string, error, s
 
 	switch secrets.Provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.PutBucketPolicy(r.Context(), secrets, bucket, putReq.Policy)
+		resp, err := s3policy.PutBucketPolicyWithOptions(r.Context(), secrets, bucket, putReq.Policy, s3policy.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}
@@ -144,7 +144,7 @@ func (svc bucketPolicyHTTPService) executePut(r *http.Request) (string, error, s
 		}
 		return "", nil, resp, 0, nil, nil, "", nil
 	case models.ProfileProviderGcpGcs:
-		resp, err := gcsiam.PutBucketIamPolicy(r.Context(), secrets, bucket, putReq.Policy)
+		resp, err := gcsiam.PutBucketIamPolicyWithOptions(r.Context(), secrets, bucket, putReq.Policy, gcsiam.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}
@@ -153,7 +153,7 @@ func (svc bucketPolicyHTTPService) executePut(r *http.Request) (string, error, s
 		}
 		return "", nil, s3policy.Response{}, resp.Status, resp.Headers, resp.Body, "gcs", nil
 	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.PutContainerPolicy(r.Context(), secrets, bucket, putReq.Policy)
+		resp, err := azureacl.PutContainerPolicyWithOptions(r.Context(), secrets, bucket, putReq.Policy, azureacl.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}
@@ -174,7 +174,7 @@ func (svc bucketPolicyHTTPService) executeDelete(r *http.Request) (string, error
 
 	switch secrets.Provider {
 	case models.ProfileProviderAwsS3, models.ProfileProviderS3Compatible:
-		resp, err := s3policy.DeleteBucketPolicy(r.Context(), secrets, bucket)
+		resp, err := s3policy.DeleteBucketPolicyWithOptions(r.Context(), secrets, bucket, s3policy.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}
@@ -196,7 +196,7 @@ func (svc bucketPolicyHTTPService) executeDelete(r *http.Request) (string, error
 	case models.ProfileProviderGcpGcs:
 		return "", nil, s3policy.Response{}, 0, nil, nil, "", newBucketPolicyHTTPError(http.StatusBadRequest, "bucket_policy_delete_unsupported", "GCS IAM policy cannot be deleted; update it instead", map[string]any{"provider": secrets.Provider})
 	case models.ProfileProviderAzureBlob:
-		resp, err := azureacl.DeleteContainerPolicy(r.Context(), secrets, bucket)
+		resp, err := azureacl.DeleteContainerPolicyWithOptions(r.Context(), secrets, bucket, azureacl.ClientOptions{AllowRemote: svc.server.cfg.AllowRemote})
 		if err != nil {
 			return bucket, err, s3policy.Response{}, 0, nil, nil, "", nil
 		}

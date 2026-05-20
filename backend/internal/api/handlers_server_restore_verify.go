@@ -25,7 +25,22 @@ func verifyServerRestorePayload(
 ) (serverRestorePayloadVerification, error) {
 	var verification serverRestorePayloadVerification
 
-	if manifest.PayloadSHA256 != "" {
+	if subject == "portable" && manifest.FormatVersion == portableBackupFormatVersion {
+		fileCount, payloadBytes, payloadSHA256 := buildServerBackupPayloadSummary(payloadEntries)
+		if strings.TrimSpace(manifest.PayloadSHA256) == "" {
+			return verification, fmt.Errorf("%s payload checksum is required", subject)
+		}
+		switch {
+		case manifest.PayloadFileCount != fileCount:
+			return verification, fmt.Errorf("%s payload file count mismatch: manifest=%d extracted=%d", subject, manifest.PayloadFileCount, fileCount)
+		case manifest.PayloadBytes != payloadBytes:
+			return verification, fmt.Errorf("%s payload bytes mismatch: manifest=%d extracted=%d", subject, manifest.PayloadBytes, payloadBytes)
+		case !strings.EqualFold(manifest.PayloadSHA256, payloadSHA256):
+			return verification, fmt.Errorf("%s payload checksum mismatch: manifest=%s extracted=%s", subject, manifest.PayloadSHA256, payloadSHA256)
+		}
+		verification.ChecksumPresent = true
+		verification.ChecksumVerified = true
+	} else if manifest.PayloadSHA256 != "" {
 		verification.ChecksumPresent = true
 		fileCount, payloadBytes, payloadSHA256 := buildServerBackupPayloadSummary(payloadEntries)
 		switch {
@@ -42,7 +57,7 @@ func verifyServerRestorePayload(
 	if archiveManifest.PayloadHMACSHA256 != "" {
 		verification.SignaturePresent = true
 		secrets := resolveServerBackupArchiveSecrets(manifest, backupPassword, encryptionKey)
-		expectedHMAC := buildServerBackupPayloadHMAC(manifest, secrets.HMACSecret, archiveManifest.PayloadEncryptionIV)
+		expectedHMAC := buildServerBackupPayloadHMAC(archiveManifest, secrets.HMACSecret)
 		if expectedHMAC != "" && !hmac.Equal([]byte(strings.ToLower(strings.TrimSpace(archiveManifest.PayloadHMACSHA256))), []byte(expectedHMAC)) {
 			return verification, fmt.Errorf("%s payload signature mismatch", subject)
 		}

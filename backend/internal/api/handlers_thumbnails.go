@@ -110,20 +110,21 @@ func tryServeThumbnailBeforeStat(s *server, w http.ResponseWriter, r *http.Reque
 	return "", false
 }
 
-func parseThumbnailSize(raw string) int {
+func parseThumbnailSize(raw string) (int, error) {
 	if raw == "" {
-		return thumbnailDefaultSize
+		return thumbnailDefaultSize, nil
 	}
 	if parsed, err := strconv.Atoi(raw); err == nil {
 		if parsed < thumbnailMinSize {
-			return thumbnailMinSize
+			return thumbnailMinSize, nil
 		}
 		if parsed > thumbnailMaxSize {
-			return thumbnailMaxSize
+			return thumbnailMaxSize, nil
 		}
-		return parsed
+		return parsed, nil
+	} else {
+		return 0, err
 	}
-	return thumbnailDefaultSize
 }
 
 func thumbnailObjectKind(contentType, key string) string {

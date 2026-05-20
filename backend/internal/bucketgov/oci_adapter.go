@@ -23,6 +23,10 @@ type ociAdapter struct {
 	deletePreauthenticatedRequest func(context.Context, models.ProfileSecrets, string, string) (ocicli.Response, error)
 }
 
+type OCIAdapterOptions struct {
+	AllowRemote bool
+}
+
 type ociBucketResponse struct {
 	Data ociBucket `json:"data"`
 }
@@ -63,16 +67,38 @@ type ociPreauthenticatedRequest struct {
 }
 
 func NewOCIAdapter() Adapter {
+	return NewOCIAdapterWithOptions(OCIAdapterOptions{})
+}
+
+func NewOCIAdapterWithOptions(opts OCIAdapterOptions) Adapter {
 	return &ociAdapter{
-		getBucket:                     ocicli.GetBucket,
-		updateBucket:                  ocicli.UpdateBucket,
-		listRetentionRules:            ocicli.ListRetentionRules,
-		createRetentionRule:           ocicli.CreateRetentionRule,
-		updateRetentionRule:           ocicli.UpdateRetentionRule,
-		deleteRetentionRule:           ocicli.DeleteRetentionRule,
-		listPreauthenticatedRequests:  ocicli.ListPreauthenticatedRequests,
-		createPreauthenticatedRequest: ocicli.CreatePreauthenticatedRequest,
-		deletePreauthenticatedRequest: ocicli.DeletePreauthenticatedRequest,
+		getBucket: func(ctx context.Context, profile models.ProfileSecrets, bucket string) (ocicli.Response, error) {
+			return ocicli.GetBucketWithOptions(ctx, profile, bucket, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		updateBucket: func(ctx context.Context, profile models.ProfileSecrets, bucket string, publicAccessType string, versioning string) (ocicli.Response, error) {
+			return ocicli.UpdateBucketWithOptions(ctx, profile, bucket, publicAccessType, versioning, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		listRetentionRules: func(ctx context.Context, profile models.ProfileSecrets, bucket string) (ocicli.Response, error) {
+			return ocicli.ListRetentionRulesWithOptions(ctx, profile, bucket, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		createRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, days int, displayName string) (ocicli.Response, error) {
+			return ocicli.CreateRetentionRuleWithOptions(ctx, profile, bucket, days, displayName, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		updateRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string, days int, displayName string) (ocicli.Response, error) {
+			return ocicli.UpdateRetentionRuleWithOptions(ctx, profile, bucket, ruleID, days, displayName, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		deleteRetentionRule: func(ctx context.Context, profile models.ProfileSecrets, bucket string, ruleID string) (ocicli.Response, error) {
+			return ocicli.DeleteRetentionRuleWithOptions(ctx, profile, bucket, ruleID, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		listPreauthenticatedRequests: func(ctx context.Context, profile models.ProfileSecrets, bucket string) (ocicli.Response, error) {
+			return ocicli.ListPreauthenticatedRequestsWithOptions(ctx, profile, bucket, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		createPreauthenticatedRequest: func(ctx context.Context, profile models.ProfileSecrets, bucket string, name string, accessType string, timeExpires string, objectName string, bucketListingAction string) (ocicli.Response, error) {
+			return ocicli.CreatePreauthenticatedRequestWithOptions(ctx, profile, bucket, name, accessType, timeExpires, objectName, bucketListingAction, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		deletePreauthenticatedRequest: func(ctx context.Context, profile models.ProfileSecrets, bucket string, parID string) (ocicli.Response, error) {
+			return ocicli.DeletePreauthenticatedRequestWithOptions(ctx, profile, bucket, parID, ocicli.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
 	}
 }
 

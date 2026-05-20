@@ -8,6 +8,10 @@ playwright-report/
 .codex
 .codex/
 .playwright-mcp/
+.env.local
+.env.private
+.env.secret
+.env.*.local
 
 # Root-local screenshots and exploratory Playwright notes.
 # Preserve release evidence under docs/release/evidence/ instead.

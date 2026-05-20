@@ -292,6 +292,7 @@ def main():
             "jobs": 1,
             "upload_sessions": 2,
             "upload_multipart_uploads": 1,
+            "upload_objects": 1,
             "object_index": 1,
             "object_favorites": 1,
         },

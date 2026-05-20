@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 SRC_DIR="${OCI_SOURCE_DIR:-$HOME/.oci}"
 SRC_CONFIG="${OCI_SOURCE_CONFIG:-$SRC_DIR/config}"
@@ -23,8 +24,9 @@ fi
 PUBKEY_FILE="${KEY_FILE%.*}_public.pem"
 
 mkdir -p "$DEST_DIR"
+chmod 0700 "$DEST_DIR"
 cp "$KEY_FILE" "$DEST_KEY"
-chmod 0644 "$DEST_KEY"
+chmod 0600 "$DEST_KEY"
 
 if [[ -f "$PUBKEY_FILE" ]]; then
 	cp "$PUBKEY_FILE" "$DEST_PUBKEY"
@@ -44,6 +46,6 @@ awk -v dest_key="$CONTAINER_KEY_PATH" '
 	}
 	{ print }
 ' "$SRC_CONFIG" >"$DEST_CONFIG"
-chmod 0644 "$DEST_CONFIG"
+chmod 0600 "$DEST_CONFIG"
 
 echo "synced OCI runtime config to $DEST_DIR"

@@ -66,6 +66,15 @@
   min-height: 32px;
 }
 
+.drawerCompactField:global(.ant-input-affix-wrapper) {
+  min-height: 32px;
+  align-items: center;
+}
+
+.drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
+  min-height: 32px;
+}
+
 .drawerActions {
   justify-content: flex-end;
 }
@@ -353,6 +362,43 @@
   padding-top: 12px;
 }
 
+@media (max-width: 900px) {
+  .globalSearchContent {
+    --objects-search-table-cell-inline-padding: 8px;
+    --objects-search-table-modified-width: 156px;
+    --objects-search-table-actions-width: 196px;
+    --objects-search-table-action-gap: 4px;
+    --objects-search-table-button-padding-inline: 8px;
+    --objects-search-table-button-font-size: 12px;
+  }
+
+  .globalSearchTableMd {
+    min-width: 0;
+  }
+
+  .globalSearchThSize {
+    width: 84px;
+  }
+
+  .globalSearchKeyTextMd {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .globalSearchResultIconButton,
+  .globalSearchResultPrimaryButton,
+  .globalSearchResultSecondaryButton,
+  .globalSearchCompactButton {
+    min-height: 44px;
+  }
+
+  .globalSearchResultIconButton {
+    min-width: 44px;
+    width: 44px;
+  }
+}
+
 @media (max-width: 360px) {
   .globalSearchContent {
     --objects-search-content-gap: 8px;
@@ -444,20 +490,25 @@
     gap: 6px;
   }
   .globalSearchCheckboxRow {
-    min-height: 28px;
+    min-height: 44px;
   }
 
   .drawerCompactField,
   .globalSearchNumberInput,
   .globalSearchDateInput,
   .globalSearchCompactButton {
-    min-height: 28px;
+    min-height: 44px;
     font-size: 13px;
   }
 
   .globalSearchNumberInput,
   .globalSearchDateInput {
     padding: 3px 8px;
+  }
+
+  .drawerCompactField:global(.ant-input-affix-wrapper),
+  .drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
+    min-height: 44px;
   }
 
   .globalSearchResultsMeta {
@@ -545,7 +596,7 @@
   }
 
   .globalSearchCheckboxRow {
-    min-height: 26px;
+    min-height: 44px;
     padding: 0 2px;
     font-size: 12px;
   }
@@ -554,12 +605,17 @@
   .globalSearchNumberInput,
   .globalSearchDateInput,
   .globalSearchCompactButton {
-    min-height: 26px;
+    min-height: 44px;
     font-size: 12px;
   }
 
   .globalSearchCompactButton {
     padding-inline: 8px !important;
+  }
+
+  .drawerCompactField:global(.ant-input-affix-wrapper),
+  .drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
+    min-height: 44px;
   }
 
   .globalSearchTh,
@@ -594,11 +650,11 @@
   .globalSearchResultPrimaryButton,
   .globalSearchResultSecondaryButton,
   .globalSearchResultIconButton {
-    min-height: 26px !important;
+    min-height: 44px !important;
   }
 
   .globalSearchResultIconButton {
-    min-width: 26px;
-    width: 26px;
+    min-width: 44px;
+    width: 44px;
   }
 }

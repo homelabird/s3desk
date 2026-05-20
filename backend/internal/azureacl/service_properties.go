@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/responsebody"
 )
 
 type ServiceProperties struct {
@@ -40,7 +40,11 @@ type storageDeleteRetentionPolicyXML struct {
 }
 
 func GetBlobServiceProperties(ctx context.Context, profile models.ProfileSecrets) (Response, error) {
-	resp, err := doServiceProperties(ctx, profile, http.MethodGet, nil)
+	return GetBlobServicePropertiesWithOptions(ctx, profile, ClientOptions{})
+}
+
+func GetBlobServicePropertiesWithOptions(ctx context.Context, profile models.ProfileSecrets, opts ClientOptions) (Response, error) {
+	resp, err := doServiceProperties(ctx, profile, http.MethodGet, nil, opts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -68,6 +72,10 @@ func GetBlobServiceProperties(ctx context.Context, profile models.ProfileSecrets
 }
 
 func PutBlobServiceProperties(ctx context.Context, profile models.ProfileSecrets, propsJSON []byte) (Response, error) {
+	return PutBlobServicePropertiesWithOptions(ctx, profile, propsJSON, ClientOptions{})
+}
+
+func PutBlobServicePropertiesWithOptions(ctx context.Context, profile models.ProfileSecrets, propsJSON []byte, opts ClientOptions) (Response, error) {
 	var props ServiceProperties
 	if err := json.Unmarshal(propsJSON, &props); err != nil {
 		return Response{}, err
@@ -86,10 +94,14 @@ func PutBlobServiceProperties(ctx context.Context, profile models.ProfileSecrets
 	if err != nil {
 		return Response{}, err
 	}
-	return doServiceProperties(ctx, profile, http.MethodPut, body)
+	return doServiceProperties(ctx, profile, http.MethodPut, body, opts)
 }
 
 func GetContainerProperties(ctx context.Context, profile models.ProfileSecrets, container string) (Response, error) {
+	return GetContainerPropertiesWithOptions(ctx, profile, container, ClientOptions{})
+}
+
+func GetContainerPropertiesWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, opts ClientOptions) (Response, error) {
 	baseURL, accountName, accountKey, err := resolveEndpoint(profile)
 	if err != nil {
 		return Response{}, err
@@ -99,7 +111,7 @@ func GetContainerProperties(ctx context.Context, profile models.ProfileSecrets, 
 	u.Path = strings.TrimRight(u.Path, "/") + "/" + container
 	u.RawQuery = "restype=container"
 
-	client, err := newHTTPClient(profile)
+	client, err := newHTTPClient(profile, opts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -129,7 +141,7 @@ func GetContainerProperties(ctx context.Context, profile models.ProfileSecrets, 
 	return Response{Status: resp.StatusCode, Headers: resp.Header.Clone(), Body: body}, nil
 }
 
-func doServiceProperties(ctx context.Context, profile models.ProfileSecrets, method string, body []byte) (Response, error) {
+func doServiceProperties(ctx context.Context, profile models.ProfileSecrets, method string, body []byte, opts ClientOptions) (Response, error) {
 	baseURL, accountName, accountKey, err := resolveEndpoint(profile)
 	if err != nil {
 		return Response{}, err
@@ -138,7 +150,7 @@ func doServiceProperties(ctx context.Context, profile models.ProfileSecrets, met
 	u := *baseURL
 	u.RawQuery = "restype=service&comp=properties"
 
-	client, err := newHTTPClient(profile)
+	client, err := newHTTPClient(profile, opts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -168,6 +180,9 @@ func doServiceProperties(ctx context.Context, profile models.ProfileSecrets, met
 		return Response{}, err
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := responsebody.ReadAll(resp.Body, responsebody.ControlPlaneMaxBytes)
+	if err != nil {
+		return Response{}, err
+	}
 	return Response{Status: resp.StatusCode, Headers: resp.Header.Clone(), Body: respBody}, nil
 }

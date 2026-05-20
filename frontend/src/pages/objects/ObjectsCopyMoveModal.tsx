@@ -28,17 +28,26 @@ type ObjectsCopyMoveModalProps = {
 
 export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 	const isMove = props.mode === 'move'
+	const destinationBucketInputId = 'objects-copy-move-destination-bucket'
+	const destinationKeyInputId = 'objects-copy-move-destination-key'
+	const moveConfirmInputId = 'objects-copy-move-confirm'
+	const submit = () => {
+		if (props.isSubmitting) return
+		props.onFinish(props.values)
+	}
 
 	return (
 		<DialogModal
 			open={props.open}
 			title={isMove ? 'Move/Rename object…' : 'Copy object…'}
 			onClose={props.onCancel}
+			closeDisabled={props.isSubmitting}
+			initialFocusSelector={`#${destinationBucketInputId}`}
 			width={640}
 			footer={
 				<>
-					<Button onClick={props.onCancel}>Cancel</Button>
-					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={() => props.onFinish(props.values)}>
+					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
+					<Button type="primary" danger={isMove} loading={props.isSubmitting} onClick={submit}>
 						{isMove ? 'Start move' : 'Start copy'}
 					</Button>
 				</>
@@ -65,7 +74,7 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 			<form
 				onSubmit={(e) => {
 					e.preventDefault()
-					props.onFinish(props.values)
+					submit()
 				}}
 			>
 				<FormField label="Source">
@@ -74,24 +83,27 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 					</Typography.Text>
 				</FormField>
 
-				<FormField label="Destination bucket" required>
+				<FormField label="Destination bucket" htmlFor={destinationBucketInputId} required>
 					<DatalistInput
-											value={props.values.dstBucket}
-											onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: value })}
-											placeholder="bucket…"
-											ariaLabel="Destination bucket"
-											allowClear
-											disabled={props.isBucketsLoading && props.bucketOptions.length === 0}
-											options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
-										/>
+						id={destinationBucketInputId}
+						value={props.values.dstBucket}
+						onChange={(value) => props.onValuesChange({ ...props.values, dstBucket: value })}
+						placeholder="bucket…"
+						ariaLabel="Destination bucket"
+						allowClear
+						disabled={props.isSubmitting || (props.isBucketsLoading && props.bucketOptions.length === 0)}
+						options={props.bucketOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+					/>
 				</FormField>
 
-				<FormField label="Destination key" required>
+				<FormField label="Destination key" htmlFor={destinationKeyInputId} required>
 					<Input
+						id={destinationKeyInputId}
 						value={props.values.dstKey}
 						onChange={(e) => props.onValuesChange({ ...props.values, dstKey: e.target.value })}
 						placeholder="path/to/object…"
 						autoComplete="off"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 
@@ -100,16 +112,19 @@ export function ObjectsCopyMoveModal(props: ObjectsCopyMoveModalProps) {
 						checked={props.values.dryRun}
 						onChange={(checked) => props.onValuesChange({ ...props.values, dryRun: checked })}
 						ariaLabel="Dry run"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 
 				{isMove && !props.values.dryRun ? (
-					<FormField label='Type "MOVE" to confirm' required>
+					<FormField label='Type "MOVE" to confirm' htmlFor={moveConfirmInputId} required>
 						<Input
+							id={moveConfirmInputId}
 							value={props.values.confirm}
 							onChange={(e) => props.onValuesChange({ ...props.values, confirm: e.target.value })}
 							placeholder="MOVE…"
 							autoComplete="off"
+							disabled={props.isSubmitting}
 						/>
 					</FormField>
 				) : null}

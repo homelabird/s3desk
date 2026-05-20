@@ -65,6 +65,13 @@ Use `--format json` when the inventory needs to be attached to another report or
 The default matches normal `git status --porcelain` untracked handling. Use `--untracked-files all` only when you need file-level expansion inside untracked directories.
 Before final release review, add `--fail-on-root-artifacts --fail-on-dependency-scope-warning --fail-on-untracked-directories --fail-on-other-unit --untracked-files all` so the command exits non-zero if root evidence artifacts are still untracked, dependency metadata and license snapshots are split, untracked directories have not been expanded for file-level review, or paths still fall into the catch-all `other` release unit. The inventory also reports `Dependency notice unit: complete` when `backend/go.mod`, `backend/go.sum`, `frontend/package.json`, `frontend/package-lock.json`, `THIRD_PARTY_NOTICES.md`, and generated license snapshots are all present together.
 Use the `Release Unit Candidates` section as the first staging/review split for large dirty worktrees; it groups status entries by dependency notices, release tooling, backend surfaces, frontend page owners, browser E2E, docs, and scripts.
+For committed release-candidate comparisons, use explicit refs instead of the dirty worktree:
+
+```bash
+python3 scripts/report_release_scope.py --base <tag-or-sha> --head HEAD --format checklist
+```
+
+Diff mode uses `git diff --name-status --find-renames <base> <head>`, so it does not include untracked files. Unit `path_list_command` and `stage_command` fields preserve the same `--base`/`--head` arguments for repeatable review.
 Inspect a specific unit before staging:
 
 ```bash
@@ -236,15 +243,50 @@ python3 scripts/check_release_evidence.py --strict
 python3 scripts/check_release_evidence.py --strict --require-candidate-id --candidate-id <tag-or-sha>
 ```
 
-The strict form exits non-zero when changed files require provider-live or reverse-proxy evidence and no matching release evidence file is present under `docs/release/evidence/`. Matching evidence must include a non-placeholder `S3Desk commit SHA or release tag`; evidence with a blank or placeholder candidate identifier is rejected. Reverse-proxy evidence must record actual `## Checks` results, expected HTTP statuses, and a `Signed proxy URL root` that matches `Expected external base URL`; `## Expected Statuses` examples do not satisfy the evidence requirement by themselves. Add `--require-candidate-id --candidate-id <tag-or-sha>` for the final release-candidate check so omitted candidate IDs fail fast and stale evidence from another tag or commit is rejected. Use `--format json` when automation needs structured `check_status_expectations` and `check_result_expectations` fields.
+The strict form exits non-zero when changed files require provider-live, reverse-proxy, or backup-portable evidence and no matching release evidence file is present under `docs/release/evidence/`. Matching evidence must include a non-placeholder `S3Desk commit SHA or release tag`; evidence with a blank or placeholder candidate identifier is rejected. Reverse-proxy evidence must record actual `## Checks` results, expected HTTP statuses, and a `Signed proxy URL root` that matches `Expected external base URL`; `## Expected Statuses` examples do not satisfy the evidence requirement by themselves. Backup-portable evidence must record sanitized source/target database, export/import/verification workflow, staged restore target, a pass/success `Backup portable smoke` result, and pass/success result lines for all four portable smoke scripts in `## Smoke Results`. Add `--require-candidate-id --candidate-id <tag-or-sha>` for the final release-candidate check so omitted candidate IDs fail fast and stale evidence from another tag or commit is rejected. Use `--format json` when automation needs structured `check_status_expectations` and `check_result_expectations` fields, plus backup-portable remediation fields.
+For a committed candidate, pass the same explicit comparison used for release-scope review:
+
+```bash
+python3 scripts/check_release_evidence.py --base <base-tag-or-sha> --head <candidate-tag-or-sha> --strict --require-candidate-id --candidate-id <candidate-tag-or-sha>
+```
 
 To summarize the current release blocker set without replacing the full gates, run:
 
 ```bash
 python3 scripts/check_release_readiness.py --candidate-id <tag-or-sha>
+python3 scripts/check_release_readiness.py --candidate-id <candidate-tag-or-sha> --base <base-tag-or-sha> --head <candidate-tag-or-sha>
 ```
 
-This command runs the strict scope/evidence checks and the live-evidence env preflight for missing provider/reverse-proxy scopes. It exits non-zero while live evidence is still missing, and it does not replace `./scripts/check.sh full`, clean-snapshot verification, or browser-lane evidence.
+This command runs the strict scope/evidence checks, checks that an existing tag candidate resolves to the requested `--head`, and runs the live-evidence env preflight for missing provider/reverse-proxy scopes. It exits non-zero while live evidence is still missing or when an existing tag candidate does not match the checked head, and it does not replace `./scripts/check.sh full`, clean-snapshot verification, or browser-lane evidence.
+
+GitLab tag publishing also runs:
+
+```bash
+bash scripts/check_gitlab_publish_readiness.sh <tag>
+```
+
+That helper validates the tag format, derives the previous tag or uses `DEPLOY_RELEASE_BASE`, then delegates to `scripts/verify_release_readiness.sh` before Docker Hub or Helm publication. The preflight covers the committed candidate diff plus GitHub Release tag/title, body, `Full Changelog` compare link, prerelease flag, and required check state, so `curl` and `GH_TOKEN` or `GITHUB_TOKEN` are required in GitLab CI and local runs. By default it requires the exact GitHub check names `release-gate`, `Core Mock E2E`, `Mobile Responsive E2E (Required)`, and `license-audit`; if branch protection check names change or a new required check is added, update `DEPLOY_REQUIRED_CHECKS` or the script default in the same change. GitLab release-builder images must remain pinned; `PODMAN_IMAGE` must not point at `quay.io/podman/stable:latest`.
+
+The GitLab publish DAG is also checked locally:
+
+```bash
+python3 scripts/check_gitlab_publish_dag.py
+```
+
+This keeps Helm chart publication behind the published Docker Hub image smoke: `publish_dockerhub` -> `release_image_smoke` -> `publish_helm_chart` -> `deploy_release_helm`. The chart publish job must stay in the dedicated `chart-publish` stage and must need `release_image_smoke`.
+
+Release deploy scripts fail before remote mutation when reverse-proxy smoke inputs are missing:
+
+```bash
+python3 scripts/check_live_evidence_env.py --scope reverse-proxy
+```
+
+`deploy_helm_release.sh` also performs a client-side `helm upgrade --install --dry-run=client` render before applying the release.
+Compose release deploys require a pre-populated SSH host-key trust file. In GitLab CI, set protected `DEPLOY_SSH_KNOWN_HOSTS`; the deploy path must not use live `ssh-keyscan` output to bootstrap production trust.
+
+CI security and release-smoke tools are pinned for reproducibility. Keep `GOVULNCHECK_VERSION`, `GO_LICENSES_VERSION`, and `PODMAN_COMPOSE_VERSION` explicit when updating audit or compose-smoke tooling; do not replace them with mutable `latest` installs.
+
+Runtime license audit is part of release readiness. GitLab tag pipelines run `license_audit_runtime` with `bash scripts/license-audit.sh runtime-only`, Docker Hub publish waits for it, and GitHub release-readiness expects the `license-audit` check unless `DEPLOY_REQUIRED_CHECKS` is intentionally overridden. The audit uses explicit npm and Go license allow-lists; Go reports are generated with `go-licenses report --ignore s3desk ./...` and parsed by `scripts/check_go_license_report.py`, including case-insensitive `Unknown` handling and the checked-in `modernc.org/mathutil=BSD-3-Clause` override. On tag pipelines, `license_audit_runtime` also consumes `release-postgres.tar` and `release-sqlite.tar` from `build_release_images` and parses Alpine `lib/apk/db/installed` metadata with `scripts/check_runtime_image_licenses.py`; local runs can pass semicolon-separated tar paths via `LICENSE_AUDIT_IMAGE_TARS`. The same audit verifies that the copied runtime `rclone` binary has a `THIRD_PARTY_NOTICES.md` entry and license text under `third_party/licenses/external/`. The GitHub `License Audit` workflow is intentionally not path-scoped so this required check appears on non-dependency PRs and release candidates too.
 
 `python3 scripts/check_live_evidence_env.py` reports only set/missing status and treats blank or placeholder environment values as missing, so copied examples such as `...`, `<secret>`, or `replace-me` do not satisfy live evidence preflight.
 
@@ -293,7 +335,7 @@ npm run check:bundle-report
 - in PR/release evidence, `Bundle Budget Contract:` should normally be `executed` only when the bundle manifest, report wording, or CI summary wiring changed; otherwise record it as `not applicable` with a short reason
 - the `Frontend E2E` summary now follows the same rule automatically: it shows `Bundle Budget Contract: not applicable (no bundle manifest/report/summary wiring change)` unless that narrower contract scope changed
 - the `Frontend E2E` summary now also leaves `Bundle Budget: not applicable (no bundle-affecting runtime change)` when only the narrower contract scope changed
-- committed soft-budget defaults live in [bundle-budgets.json](/home/homelab/Downloads/project/s3desk/frontend/scripts/bundle-budgets.json)
+- committed soft-budget defaults live in [bundle-budgets.json](../frontend/scripts/bundle-budgets.json)
 - that manifest also carries the short rationale for each page/chunk threshold, so budget changes should update both the number and the explanation together
 - routes that are intentionally tighter or looser can also carry per-entry review thresholds in that same manifest, so the report only flags re-baseline candidates when the remaining headroom is actually surprising for that surface
 - the generated report now prints actual size, budget usage, remaining headroom, and any re-baseline candidates so reviewers can tell whether a threshold is becoming too tight or too loose
@@ -318,7 +360,8 @@ Mocked frontend Playwright lanes start a managed Vite server on `http://127.0.0.
   - run this for `.github/workflows/**`, `scripts/check_github_workflows.sh`, `scripts/check_github_workflows.py`, `scripts/install_actionlint.sh`, or browser-CI summary wiring changes
 - workflow-lint-only changes should normally show `Workflow Lint: executed` while `Browser Lanes:` stays `not applicable (...)`
   - preferred CI wording: `Browser Lanes: smoke + core not applicable (workflow or browser-CI wiring changed, but the browser surface did not)`
-- required browser lanes now key off the narrower browser surface (`frontend/src/**`, `frontend/tests/**`, `frontend/public/**`, `frontend/playwright.config.ts`, runtime/build config, API/runtime backend wiring, and live-E2E harness files), so frontend docs or bundle-only tooling changes no longer retrigger Playwright by default
+- required browser lanes now key off the narrower browser surface (`frontend/src/**`, `frontend/tests/**`, `frontend/public/**`, `frontend/playwright.config.ts`, runtime/build config, API/runtime backend wiring including jobs/store/localpath/redaction paths, and live-E2E harness files), so frontend docs or bundle-only tooling changes no longer retrigger Playwright by default
+- `.github/workflows/frontend-e2e.yml` changes are treated as browser-facing wiring changes so required browser lanes cannot self-skip when the workflow itself changes.
 
 - `npm run test:e2e:smoke`
   - `@check-smoke` only
@@ -430,8 +473,8 @@ Shared component and hook tests should also avoid cosmetic style locks unless th
 
 Keep exact size/style assertions only when they prove an intentional contract, for example:
 
-- [DialogModal width passthrough](/home/homelab/Downloads/project/s3desk/frontend/src/components/__tests__/DialogModal.test.tsx)
-- [OverlaySheet size passthrough](/home/homelab/Downloads/project/s3desk/frontend/src/components/__tests__/OverlaySheet.test.tsx)
+- [DialogModal width passthrough](../frontend/src/components/__tests__/DialogModal.test.tsx)
+- [OverlaySheet size passthrough](../frontend/src/components/__tests__/OverlaySheet.test.tsx)
 
 Do not add exact spacing, hover, or breakpoint numbers to unit tests when the behavior can be expressed as focus, open/close, enable/disable, or successful task completion.
 
@@ -468,7 +511,7 @@ Use this focused check when you only need the release-doc/changelog subset local
 
 GitHub Actions runs the `Release Gate` workflow as the full `./scripts/check.sh` pass so pull requests exercise the same repository gate used for local verification. The standalone `./scripts/check_release_gate.sh` command remains available for the release-doc/changelog subset.
 
-`./scripts/check_release_gate.sh` also runs `python3 scripts/check_go_toolchain.py`, which keeps the Go `1.25.9` declarations aligned across `backend/go.mod`, `Containerfile`, GitHub Actions, and GitLab CI.
+`./scripts/check_release_gate.sh` also runs `python3 scripts/check_go_toolchain.py`, which keeps the Go `1.25.10` declarations aligned across `backend/go.mod`, `Containerfile`, `Containerfile.local`, GitHub Actions, and GitLab CI.
 
 When the release scope is already selected and you need a concise blocker summary, use `python3 scripts/check_release_readiness.py --candidate-id <tag-or-sha>`. It is expected to fail until strict release evidence passes.
 
@@ -493,7 +536,7 @@ This covers:
 
 ## OpenAPI Schema Workflow
 
-Edit [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml), not the generated frontend schema file.
+Edit [openapi.yml](../openapi.yml), not the generated frontend schema file.
 
 ```bash
 cd frontend
@@ -501,7 +544,7 @@ npm run gen:openapi
 npm run check:openapi
 ```
 
-`npm run check:openapi` fails when [src/api/openapi.ts](/home/homelab/Downloads/project/s3desk/frontend/src/api/openapi.ts) no longer matches [openapi.yml](/home/homelab/Downloads/project/s3desk/openapi.yml).
+`npm run check:openapi` fails when [src/api/openapi.ts](../frontend/src/api/openapi.ts) no longer matches [openapi.yml](../openapi.yml).
 
 ## API / Provider E2E
 
@@ -515,8 +558,7 @@ npm run check:openapi
 These are the concrete portable backup/import validation paths.
 
 ```bash
-./scripts/run_portable_sqlite_to_postgres_smoke.sh
-./scripts/run_portable_postgres_to_sqlite_smoke.sh
+bash scripts/run_portable_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh && bash scripts/run_portable_postgres_to_sqlite_smoke.sh && bash scripts/run_portable_sqlite_to_postgres_smoke.sh
 ```
 
 The portable smoke stack verifies:
@@ -524,27 +566,31 @@ The portable smoke stack verifies:
 - source fixture creation through the public API on either sqlite or postgres
 - portable backup export from the configured source backend
 - preview and import on the configured target backend
-- imported `profiles`, `profile_connection_options`, `jobs`, `upload_sessions`, `upload_multipart_uploads`, `object_favorites`, and `object_index`
+- imported `profiles`, `profile_connection_options`, `jobs`, `upload_sessions`, `upload_multipart_uploads`, `upload_objects`, `object_favorites`, and `object_index`
 - thumbnail asset copy into the target `DATA_DIR`
 - incomplete multipart metadata stays incomplete after import and still rejects `commit`
+
+When backup, restore, portable bundle, or staged restore paths change, record candidate-bound release evidence using [BACKUP_PORTABLE_SMOKE_TEMPLATE.md](release/evidence/BACKUP_PORTABLE_SMOKE_TEMPLATE.md) at `docs/release/evidence/backup-portable-smoke-<tag-or-sha>.md`. Keep the evidence sanitized; do not include backup passwords, API tokens, database credentials, encryption keys, provider secrets, or private keys.
+
+Evidence `## Smoke Results` must use the exact `bash scripts/...` labels from `BACKUP_PORTABLE_SMOKE_TEMPLATE.md`; `./scripts/...` labels are not accepted by the strict evidence checker.
 
 Run the same smoke against encrypted, password-protected portable bundles:
 
 ```bash
 PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
 PORTABLE_BUNDLE_PASSWORD=operator-secret \
-./scripts/run_portable_sqlite_to_postgres_smoke.sh
+bash scripts/run_portable_sqlite_to_postgres_smoke.sh
 
 PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted \
 PORTABLE_BUNDLE_PASSWORD=operator-secret \
-./scripts/run_portable_postgres_to_sqlite_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_smoke.sh
 ```
 
 Failure-path validation is covered by:
 
 ```bash
-./scripts/run_portable_failure_smoke.sh
-./scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
+bash scripts/run_portable_failure_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
 ```
 
 These scripts verify:
@@ -556,7 +602,11 @@ These scripts verify:
 
 ## Reverse Proxy Smoke
 
-Use this minimal pass when auth, realtime transport, `download-proxy`, `EXTERNAL_BASE_URL`, or `ALLOWED_HOSTS` changes.
+Use this minimal pass as an operator quick smoke when auth, realtime transport,
+`download-proxy`, `EXTERNAL_BASE_URL`, or `ALLOWED_HOSTS` changes. It is not
+release evidence by itself; release approval must use `scripts/deploy_smoke.sh`
+with `DEPLOY_SMOKE_EVIDENCE_FILE` so candidate metadata, signed proxy URL root,
+and `HEAD signed proxy URL` results are recorded.
 
 Check required reverse-proxy smoke variables without printing secret values:
 
@@ -592,9 +642,10 @@ Expected result:
 
 ```bash
 cd frontend
-E2E_LIVE=1 E2E_API_TOKEN=change-me npm run test:e2e
+E2E_LIVE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 E2E_API_TOKEN=change-me npm run test:e2e
 ```
 
+Live Playwright runs do not start the managed mock Vite server. Set `PLAYWRIGHT_BASE_URL` or `BASE_URL` to the already-running S3Desk UI URL, or run `scripts/run_live_e2e_local.sh` from the repository root to start the local backend/MinIO harness automatically.
 Use `docs/ci/e2e_live.env.example` as the starting point for live Playwright environment variables.
 Use `docs/ci/provider_live_validation.env.example` as the starting point for backend live-provider smoke variables.
 

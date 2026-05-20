@@ -7,8 +7,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -31,14 +33,23 @@ import (
 )
 
 const (
-	serverBackupBundleFormat             = "s3desk-server-backup/v1"
-	serverBackupScopeFull                = "full"
-	serverBackupScopeCacheMetadata       = "cache_metadata"
-	serverBackupConfidentialityClear     = "clear"
-	serverBackupConfidentialityEncrypted = "encrypted"
-	serverBackupPasswordHeader           = "X-S3Desk-Backup-Password" // #nosec G101 -- HTTP header name, not a credential value.
-	serverBackupPasswordMaxBytes         = 4096
-	serverRestoreMultipartFormMaxMemory  = 32 << 20
+	serverBackupBundleFormat              = "s3desk-server-backup/v1"
+	serverBackupScopeFull                 = "full"
+	serverBackupScopeCacheMetadata        = "cache_metadata"
+	serverBackupConfidentialityClear      = "clear"
+	serverBackupConfidentialityEncrypted  = "encrypted"
+	serverBackupPasswordHeader            = "X-S3Desk-Backup-Password" // #nosec G101 -- HTTP header name, not a credential value.
+	serverBackupPasswordMaxBytes          = 4096
+	serverRestoreMultipartFormMaxMemory   = 32 << 20
+	serverBackupPayloadEncryptionV2       = "v2"
+	serverBackupPayloadCipherV2           = "aes-256-gcm-chunked"
+	serverBackupPayloadKDFV2              = "pbkdf2-sha256"
+	serverBackupPayloadKDFIterationsV2    = 210_000
+	serverBackupPayloadMaxKDFIterationsV2 = 1_000_000
+	serverBackupPayloadSaltBytesV2        = 16
+	serverBackupPayloadNonceBytesV2       = 12
+	serverBackupPayloadChunkBytesV2       = 1 << 20
+	serverBackupPayloadMaxChunkBytesV2    = 16 << 20
 )
 
 var serverBackupFullDataEntries = []string{
@@ -60,8 +71,15 @@ type serverBackupPayloadEntry struct {
 
 type serverBackupArchiveManifest struct {
 	models.ServerMigrationManifest
-	PayloadHMACSHA256   string `json:"payloadHmacSha256,omitempty"`
-	PayloadEncryptionIV string `json:"payloadEncryptionIv,omitempty"`
+	PayloadHMACSHA256          string `json:"payloadHmacSha256,omitempty"`
+	PayloadEncryptionIV        string `json:"payloadEncryptionIv,omitempty"`
+	PayloadEncryptionVersion   string `json:"payloadEncryptionVersion,omitempty"`
+	PayloadEncryptionCipher    string `json:"payloadEncryptionCipher,omitempty"`
+	PayloadEncryptionKDF       string `json:"payloadEncryptionKdf,omitempty"`
+	PayloadEncryptionKDFIters  int    `json:"payloadEncryptionKdfIterations,omitempty"`
+	PayloadEncryptionSalt      string `json:"payloadEncryptionSalt,omitempty"`
+	PayloadEncryptionNonce     string `json:"payloadEncryptionNonce,omitempty"`
+	PayloadEncryptionChunkSize int    `json:"payloadEncryptionChunkBytes,omitempty"`
 }
 
 type serverBackupSecrets struct {
@@ -139,20 +157,18 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 	payloadEntries := make([]serverBackupPayloadEntry, 0, 32)
 	if confidentiality == serverBackupConfidentialityEncrypted {
 		payloadPath := filepath.Join(tmpDir, "payload.tar")
-		payloadIV, err := writeEncryptedServerBackupPayload(ctx, payloadPath, sqliteBackupPath, scope, s.cfg.DataDir, now, &payloadEntries)
-		if err != nil {
+		if err := writeEncryptedServerBackupPayload(ctx, payloadPath, sqliteBackupPath, scope, s.cfg.DataDir, now, &payloadEntries); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
-		archiveManifest := serverBackupArchiveManifest{
-			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, secrets.HMACSecret, payloadIV),
-			PayloadEncryptionIV:     payloadIV,
+		archiveManifest, err := buildEncryptedServerBackupArchiveManifest(manifest, secrets.HMACSecret)
+		if err != nil {
+			return models.ServerMigrationManifest{}, err
 		}
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
-		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, payloadIV, secrets.PayloadSecret); err != nil {
+		if err := writeEncryptedPayloadFile(tarWriter, payloadPath, archiveManifest, secrets.PayloadSecret); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
 	} else {
@@ -170,10 +186,7 @@ func (s *server) writeServerBackupArchive(ctx context.Context, archivePath strin
 			}
 		}
 		manifest.PayloadFileCount, manifest.PayloadBytes, manifest.PayloadSHA256 = buildServerBackupPayloadSummary(payloadEntries)
-		archiveManifest := serverBackupArchiveManifest{
-			ServerMigrationManifest: manifest,
-			PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, secrets.HMACSecret, ""),
-		}
+		archiveManifest := buildServerBackupArchiveManifest(manifest, secrets.HMACSecret)
 		if err := writeTarJSONFile(tarWriter, "manifest.json", archiveManifest, now); err != nil {
 			return models.ServerMigrationManifest{}, err
 		}
@@ -199,48 +212,54 @@ func writeEncryptedServerBackupPayload(
 	dataDir string,
 	now time.Time,
 	payloadEntries *[]serverBackupPayloadEntry,
-) (string, error) {
+) error {
 	// #nosec G304 -- payloadPath lives under an os.MkdirTemp-managed workspace.
 	payloadFile, err := os.Create(payloadPath)
 	if err != nil {
-		return "", err
+		return err
 	}
 	payloadWriter := tar.NewWriter(payloadFile)
 	if err := writeTarDirHeader(payloadWriter, "data/", now); err != nil {
 		_ = payloadWriter.Close()
 		_ = payloadFile.Close()
-		return "", err
+		return err
 	}
 	sqliteEntry, err := writeTarFileFromDisk(payloadWriter, sqliteBackupPath, "data/s3desk.db")
 	if err != nil {
 		_ = payloadWriter.Close()
 		_ = payloadFile.Close()
-		return "", err
+		return err
 	}
 	*payloadEntries = append(*payloadEntries, sqliteEntry)
 	for _, rel := range serverBackupEntriesForScope(scope) {
 		if err := writeTarPathTree(ctx, payloadWriter, dataDir, rel, now, payloadEntries); err != nil {
 			_ = payloadWriter.Close()
 			_ = payloadFile.Close()
-			return "", err
+			return err
 		}
 	}
 	if err := payloadWriter.Close(); err != nil {
 		_ = payloadFile.Close()
-		return "", err
+		return err
 	}
 	if err := payloadFile.Close(); err != nil {
-		return "", err
+		return err
 	}
-
-	ivBytes := make([]byte, aes.BlockSize)
-	if _, err := rand.Read(ivBytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(ivBytes), nil
+	return nil
 }
 
-func writeEncryptedPayloadFile(tarWriter *tar.Writer, payloadPath string, payloadIV string, encryptionKey string) error {
+func writeEncryptedPayloadFile(tarWriter *tar.Writer, payloadPath string, archiveManifest serverBackupArchiveManifest, encryptionKey string) error {
+	switch strings.TrimSpace(archiveManifest.PayloadEncryptionVersion) {
+	case serverBackupPayloadEncryptionV2:
+		return writeEncryptedPayloadFileV2(tarWriter, payloadPath, archiveManifest, encryptionKey)
+	case "":
+		return writeLegacyEncryptedPayloadFile(tarWriter, payloadPath, archiveManifest.PayloadEncryptionIV, encryptionKey)
+	default:
+		return fmt.Errorf("unsupported payload encryption version %q", archiveManifest.PayloadEncryptionVersion)
+	}
+}
+
+func writeLegacyEncryptedPayloadFile(tarWriter *tar.Writer, payloadPath string, payloadIV string, encryptionKey string) error {
 	ivBytes, err := hex.DecodeString(strings.TrimSpace(payloadIV))
 	if err != nil {
 		return err
@@ -275,6 +294,87 @@ func writeEncryptedPayloadFile(tarWriter *tar.Writer, payloadPath string, payloa
 	stream := cipher.NewCTR(block, ivBytes)
 	_, err = io.Copy(&cipher.StreamWriter{S: stream, W: tarWriter}, payloadFile)
 	return err
+}
+
+func writeEncryptedPayloadFileV2(tarWriter *tar.Writer, payloadPath string, archiveManifest serverBackupArchiveManifest, encryptionKey string) error {
+	encryptedPath := payloadPath + ".enc"
+	if err := encryptServerBackupPayloadFileV2(payloadPath, encryptedPath, archiveManifest, encryptionKey); err != nil {
+		return err
+	}
+	defer os.Remove(encryptedPath)
+
+	// #nosec G304 -- encryptedPath is derived from an os.MkdirTemp-managed payload path.
+	encryptedFile, err := os.Open(encryptedPath)
+	if err != nil {
+		return err
+	}
+	defer encryptedFile.Close()
+	info, err := encryptedFile.Stat()
+	if err != nil {
+		return err
+	}
+	header := &tar.Header{
+		Name:     "payload.enc",
+		Mode:     0o600,
+		Size:     info.Size(),
+		ModTime:  info.ModTime(),
+		Typeflag: tar.TypeReg,
+	}
+	if err := tarWriter.WriteHeader(header); err != nil {
+		return err
+	}
+	_, err = io.Copy(tarWriter, encryptedFile)
+	return err
+}
+
+func encryptServerBackupPayloadFileV2(payloadPath string, encryptedPath string, archiveManifest serverBackupArchiveManifest, encryptionKey string) error {
+	aead, baseNonce, chunkSize, err := serverBackupPayloadAEADV2(archiveManifest, encryptionKey)
+	if err != nil {
+		return err
+	}
+	// #nosec G304 -- payloadPath lives under an os.MkdirTemp-managed workspace.
+	payloadFile, err := os.Open(payloadPath)
+	if err != nil {
+		return err
+	}
+	defer payloadFile.Close()
+	// #nosec G304 -- encryptedPath is derived from an os.MkdirTemp-managed payload path.
+	encryptedFile, err := os.OpenFile(encryptedPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	success := false
+	defer func() {
+		_ = encryptedFile.Close()
+		if !success {
+			_ = os.Remove(encryptedPath)
+		}
+	}()
+
+	buffer := make([]byte, chunkSize)
+	var counter uint64
+	for {
+		n, readErr := io.ReadFull(payloadFile, buffer)
+		if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+			return readErr
+		}
+		if n > 0 {
+			// #nosec G407 -- baseNonce is generated by crypto/rand and the counter only derives unique per-frame nonces.
+			sealed := aead.Seal(nil, serverBackupPayloadChunkNonce(baseNonce, counter), buffer[:n], nil)
+			if err := writeServerBackupPayloadFrame(encryptedFile, sealed); err != nil {
+				return err
+			}
+			counter++
+		}
+		if errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF) {
+			break
+		}
+	}
+	if err := encryptedFile.Close(); err != nil {
+		return err
+	}
+	success = true
+	return nil
 }
 
 func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string) (models.ServerRestoreResponse, error) {
@@ -320,6 +420,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 	manifestSeen := false
 	sqliteSeen := false
 	payloadEntries := make([]serverBackupPayloadEntry, 0, 32)
+	extractBudget := newServerRestoreExtractBudget(s.cfg.ServerRestoreMaxBytes)
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -366,7 +467,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 			if strings.TrimSpace(manifest.ConfidentialityMode) == serverBackupConfidentialityEncrypted {
 				return models.ServerRestoreResponse{}, errors.New("encrypted backup bundle cannot mix clear data/ entries with payload.enc")
 			}
-			if err := extractServerRestorePayloadEntry(ctx, tempRoot, entryName, header, tarReader, &validation, &payloadEntries, &sqliteSeen); err != nil {
+			if err := extractServerRestorePayloadEntry(ctx, tempRoot, entryName, header, tarReader, &validation, &payloadEntries, &sqliteSeen, extractBudget); err != nil {
 				return models.ServerRestoreResponse{}, err
 			}
 		case entryName == "payload.enc":
@@ -378,7 +479,7 @@ func (s *server) restoreServerBackupArchive(ctx context.Context, src io.Reader, 
 				return models.ServerRestoreResponse{}, errors.New("unexpected encrypted payload entry in clear backup bundle")
 			}
 			secrets := resolveServerBackupArchiveSecrets(manifest, backupPassword, encryptionKey)
-			if err := extractEncryptedServerRestorePayload(ctx, tarReader, tempRoot, &validation, &payloadEntries, &sqliteSeen, archiveManifest.PayloadEncryptionIV, secrets.PayloadSecret); err != nil {
+			if err := extractEncryptedServerRestorePayload(ctx, tarReader, tempRoot, &validation, &payloadEntries, &sqliteSeen, archiveManifest, secrets.PayloadSecret, extractBudget); err != nil {
 				return models.ServerRestoreResponse{}, err
 			}
 			validation.PayloadEncryptionDecrypted = true
@@ -619,12 +720,13 @@ func extractServerRestorePayloadEntry(
 	validation *models.ServerRestoreValidation,
 	payloadEntries *[]serverBackupPayloadEntry,
 	sqliteSeen *bool,
+	extractBudget *serverRestoreExtractBudget,
 ) error {
 	relPath := strings.TrimPrefix(entryName, "data/")
 	if relPath == "" {
 		return nil
 	}
-	if err := extractServerRestoreArchiveEntry(tempRoot, relPath, entryName, header, entryReader, payloadEntries, "archive entry"); err != nil {
+	if err := extractServerRestoreArchiveEntryWithBudget(tempRoot, relPath, entryName, header, entryReader, payloadEntries, "archive entry", extractBudget); err != nil {
 		return err
 	}
 	validation.PayloadFileCount++
@@ -642,25 +744,18 @@ func extractEncryptedServerRestorePayload(
 	validation *models.ServerRestoreValidation,
 	payloadEntries *[]serverBackupPayloadEntry,
 	sqliteSeen *bool,
-	payloadEncryptionIV string,
+	archiveManifest serverBackupArchiveManifest,
 	encryptionKey string,
+	extractBudget *serverRestoreExtractBudget,
 ) error {
 	if strings.TrimSpace(encryptionKey) == "" {
-		return errors.New("encrypted backup bundle requires ENCRYPTION_KEY on the destination server")
+		return errors.New("encrypted backup bundle requires the backup password or ENCRYPTION_KEY on the destination server")
 	}
-	ivBytes, err := hex.DecodeString(strings.TrimSpace(payloadEncryptionIV))
-	if err != nil {
-		return fmt.Errorf("invalid payload encryption IV: %w", err)
-	}
-	if len(ivBytes) != aes.BlockSize {
-		return fmt.Errorf("invalid payload encryption IV length %d", len(ivBytes))
-	}
-	block, err := aes.NewCipher(deriveServerBackupCipherKey(encryptionKey))
+	payloadTar, cleanup, err := openEncryptedServerBackupPayloadTarReader(ctx, encryptedPayload, archiveManifest, encryptionKey)
 	if err != nil {
 		return err
 	}
-	stream := cipher.NewCTR(block, ivBytes)
-	payloadTar := tar.NewReader(&cipher.StreamReader{S: stream, R: encryptedPayload})
+	defer cleanup()
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -680,7 +775,7 @@ func extractEncryptedServerRestorePayload(
 		case entryName == "", entryName == "data":
 			continue
 		case strings.HasPrefix(entryName, "data/"):
-			if err := extractServerRestorePayloadEntry(ctx, tempRoot, entryName, header, payloadTar, validation, payloadEntries, sqliteSeen); err != nil {
+			if err := extractServerRestorePayloadEntry(ctx, tempRoot, entryName, header, payloadTar, validation, payloadEntries, sqliteSeen, extractBudget); err != nil {
 				return err
 			}
 		default:
@@ -689,8 +784,108 @@ func extractEncryptedServerRestorePayload(
 	}
 }
 
+func openEncryptedServerBackupPayloadTarReader(
+	ctx context.Context,
+	encryptedPayload io.Reader,
+	archiveManifest serverBackupArchiveManifest,
+	encryptionKey string,
+) (*tar.Reader, func(), error) {
+	switch strings.TrimSpace(archiveManifest.PayloadEncryptionVersion) {
+	case serverBackupPayloadEncryptionV2:
+		payloadReader, err := newServerBackupPayloadV2Reader(ctx, encryptedPayload, archiveManifest, encryptionKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return tar.NewReader(payloadReader), func() {}, nil
+	case "":
+		streamReader, err := legacyEncryptedServerBackupPayloadReader(encryptedPayload, archiveManifest.PayloadEncryptionIV, encryptionKey)
+		if err != nil {
+			return nil, nil, err
+		}
+		return tar.NewReader(streamReader), func() {}, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported payload encryption version %q", archiveManifest.PayloadEncryptionVersion)
+	}
+}
+
+func legacyEncryptedServerBackupPayloadReader(encryptedPayload io.Reader, payloadEncryptionIV string, encryptionKey string) (io.Reader, error) {
+	ivBytes, err := hex.DecodeString(strings.TrimSpace(payloadEncryptionIV))
+	if err != nil {
+		return nil, fmt.Errorf("invalid payload encryption IV: %w", err)
+	}
+	if len(ivBytes) != aes.BlockSize {
+		return nil, fmt.Errorf("invalid payload encryption IV length %d", len(ivBytes))
+	}
+	block, err := aes.NewCipher(deriveServerBackupCipherKey(encryptionKey))
+	if err != nil {
+		return nil, err
+	}
+	stream := cipher.NewCTR(block, ivBytes)
+	return &cipher.StreamReader{S: stream, R: encryptedPayload}, nil
+}
+
+type serverBackupPayloadV2Reader struct {
+	ctx          context.Context
+	source       io.Reader
+	aead         cipher.AEAD
+	baseNonce    []byte
+	maxFrameSize int
+	counter      uint64
+	plaintext    []byte
+	done         bool
+}
+
+func newServerBackupPayloadV2Reader(ctx context.Context, encryptedPayload io.Reader, archiveManifest serverBackupArchiveManifest, encryptionKey string) (*serverBackupPayloadV2Reader, error) {
+	aead, baseNonce, chunkSize, err := serverBackupPayloadAEADV2(archiveManifest, encryptionKey)
+	if err != nil {
+		return nil, err
+	}
+	return &serverBackupPayloadV2Reader{
+		ctx:          ctx,
+		source:       encryptedPayload,
+		aead:         aead,
+		baseNonce:    baseNonce,
+		maxFrameSize: chunkSize + aead.Overhead(),
+	}, nil
+}
+
+func (r *serverBackupPayloadV2Reader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	for len(r.plaintext) == 0 {
+		if r.done {
+			return 0, io.EOF
+		}
+		if err := r.ctx.Err(); err != nil {
+			return 0, err
+		}
+		frame, err := readServerBackupPayloadFrame(r.source, r.maxFrameSize)
+		if errors.Is(err, io.EOF) {
+			r.done = true
+			return 0, io.EOF
+		}
+		if err != nil {
+			return 0, err
+		}
+		plaintext, err := r.aead.Open(nil, serverBackupPayloadChunkNonce(r.baseNonce, r.counter), frame, nil)
+		if err != nil {
+			return 0, errors.New("encrypted backup payload authentication failed")
+		}
+		r.plaintext = plaintext
+		r.counter++
+	}
+	n := copy(p, r.plaintext)
+	r.plaintext = r.plaintext[n:]
+	return n, nil
+}
+
 func cleanServerRestoreArchivePath(name string) (string, error) {
-	cleaned := path.Clean(strings.TrimPrefix(strings.TrimSpace(name), "./"))
+	raw := strings.TrimPrefix(strings.TrimSpace(name), "./")
+	if containsParentPathSegment(raw) {
+		return "", fmt.Errorf("archive entry %q contains an invalid path segment", name)
+	}
+	cleaned := path.Clean(raw)
 	switch {
 	case cleaned == ".", cleaned == "":
 		return "", nil
@@ -727,13 +922,17 @@ func parseServerBackupScope(r *http.Request) (string, error) {
 	}
 }
 
-func parsePortableBackupIncludeThumbnails(r *http.Request) bool {
+func parsePortableBackupIncludeThumbnails(r *http.Request) (bool, error) {
 	raw := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("includeThumbnails")))
 	switch raw {
+	case "":
+		return true, nil
+	case "1", "true", "yes", "on":
+		return true, nil
 	case "0", "false", "no", "off":
-		return false
+		return false, nil
 	default:
-		return true
+		return false, fmt.Errorf("includeThumbnails is invalid")
 	}
 }
 
@@ -857,6 +1056,35 @@ func backupSecretProvidedByPassword(payloadSecret string, encryptionKey string) 
 	return payloadSecret != "" && payloadSecret != encryptionKey
 }
 
+func buildServerBackupArchiveManifest(manifest models.ServerMigrationManifest, hmacSecret string) serverBackupArchiveManifest {
+	archiveManifest := serverBackupArchiveManifest{ServerMigrationManifest: manifest}
+	archiveManifest.PayloadHMACSHA256 = buildServerBackupPayloadHMAC(archiveManifest, hmacSecret)
+	return archiveManifest
+}
+
+func buildEncryptedServerBackupArchiveManifest(manifest models.ServerMigrationManifest, hmacSecret string) (serverBackupArchiveManifest, error) {
+	salt := make([]byte, serverBackupPayloadSaltBytesV2)
+	if _, err := rand.Read(salt); err != nil {
+		return serverBackupArchiveManifest{}, err
+	}
+	nonce := make([]byte, serverBackupPayloadNonceBytesV2)
+	if _, err := rand.Read(nonce); err != nil {
+		return serverBackupArchiveManifest{}, err
+	}
+	archiveManifest := serverBackupArchiveManifest{
+		ServerMigrationManifest:    manifest,
+		PayloadEncryptionVersion:   serverBackupPayloadEncryptionV2,
+		PayloadEncryptionCipher:    serverBackupPayloadCipherV2,
+		PayloadEncryptionKDF:       serverBackupPayloadKDFV2,
+		PayloadEncryptionKDFIters:  serverBackupPayloadKDFIterationsV2,
+		PayloadEncryptionSalt:      hex.EncodeToString(salt),
+		PayloadEncryptionNonce:     hex.EncodeToString(nonce),
+		PayloadEncryptionChunkSize: serverBackupPayloadChunkBytesV2,
+	}
+	archiveManifest.PayloadHMACSHA256 = buildServerBackupPayloadHMAC(archiveManifest, hmacSecret)
+	return archiveManifest, nil
+}
+
 func buildServerBackupPayloadSummary(entries []serverBackupPayloadEntry) (int, int64, string) {
 	if len(entries) == 0 {
 		return 0, 0, ""
@@ -879,8 +1107,9 @@ func buildServerBackupPayloadSummary(entries []serverBackupPayloadEntry) (int, i
 	return len(sortedEntries), payloadBytes, hex.EncodeToString(hasher.Sum(nil))
 }
 
-func buildServerBackupPayloadHMAC(manifest models.ServerMigrationManifest, encryptionKey string, payloadEncryptionIV string) string {
-	key := strings.TrimSpace(encryptionKey)
+func buildServerBackupPayloadHMAC(archiveManifest serverBackupArchiveManifest, hmacSecret string) string {
+	key := strings.TrimSpace(hmacSecret)
+	manifest := archiveManifest.ServerMigrationManifest
 	if key == "" || manifest.PayloadSHA256 == "" {
 		return ""
 	}
@@ -902,9 +1131,24 @@ func buildServerBackupPayloadHMAC(manifest models.ServerMigrationManifest, encry
 		_, _ = io.WriteString(mac, "\n")
 		_, _ = io.WriteString(mac, manifest.ConfidentialityMode)
 	}
-	if strings.TrimSpace(payloadEncryptionIV) != "" {
+	if strings.TrimSpace(archiveManifest.PayloadEncryptionVersion) != "" {
 		_, _ = io.WriteString(mac, "\n")
-		_, _ = io.WriteString(mac, strings.TrimSpace(payloadEncryptionIV))
+		_, _ = io.WriteString(mac, strings.TrimSpace(archiveManifest.PayloadEncryptionVersion))
+		_, _ = io.WriteString(mac, "\n")
+		_, _ = io.WriteString(mac, strings.TrimSpace(archiveManifest.PayloadEncryptionCipher))
+		_, _ = io.WriteString(mac, "\n")
+		_, _ = io.WriteString(mac, strings.TrimSpace(archiveManifest.PayloadEncryptionKDF))
+		_, _ = io.WriteString(mac, "\n")
+		_, _ = io.WriteString(mac, fmt.Sprintf("%d", archiveManifest.PayloadEncryptionKDFIters))
+		_, _ = io.WriteString(mac, "\n")
+		_, _ = io.WriteString(mac, strings.TrimSpace(archiveManifest.PayloadEncryptionSalt))
+		_, _ = io.WriteString(mac, "\n")
+		_, _ = io.WriteString(mac, strings.TrimSpace(archiveManifest.PayloadEncryptionNonce))
+		_, _ = io.WriteString(mac, "\n")
+		_, _ = io.WriteString(mac, fmt.Sprintf("%d", archiveManifest.PayloadEncryptionChunkSize))
+	} else if strings.TrimSpace(archiveManifest.PayloadEncryptionIV) != "" {
+		_, _ = io.WriteString(mac, "\n")
+		_, _ = io.WriteString(mac, strings.TrimSpace(archiveManifest.PayloadEncryptionIV))
 	}
 	return hex.EncodeToString(mac.Sum(nil))
 }
@@ -912,6 +1156,102 @@ func buildServerBackupPayloadHMAC(manifest models.ServerMigrationManifest, encry
 func deriveServerBackupCipherKey(encryptionKey string) []byte {
 	sum := sha256.Sum256([]byte("s3desk-backup-payload:v1\n" + strings.TrimSpace(encryptionKey)))
 	return sum[:]
+}
+
+func serverBackupPayloadAEADV2(archiveManifest serverBackupArchiveManifest, encryptionKey string) (cipher.AEAD, []byte, int, error) {
+	if strings.TrimSpace(archiveManifest.PayloadEncryptionVersion) != serverBackupPayloadEncryptionV2 {
+		return nil, nil, 0, fmt.Errorf("unsupported payload encryption version %q", archiveManifest.PayloadEncryptionVersion)
+	}
+	if strings.TrimSpace(archiveManifest.PayloadEncryptionCipher) != serverBackupPayloadCipherV2 {
+		return nil, nil, 0, fmt.Errorf("unsupported payload encryption cipher %q", archiveManifest.PayloadEncryptionCipher)
+	}
+	if strings.TrimSpace(archiveManifest.PayloadEncryptionKDF) != serverBackupPayloadKDFV2 {
+		return nil, nil, 0, fmt.Errorf("unsupported payload encryption KDF %q", archiveManifest.PayloadEncryptionKDF)
+	}
+	if archiveManifest.PayloadEncryptionKDFIters <= 0 || archiveManifest.PayloadEncryptionKDFIters > serverBackupPayloadMaxKDFIterationsV2 {
+		return nil, nil, 0, fmt.Errorf("invalid payload encryption KDF iteration count %d", archiveManifest.PayloadEncryptionKDFIters)
+	}
+	chunkSize := archiveManifest.PayloadEncryptionChunkSize
+	if chunkSize <= 0 || chunkSize > serverBackupPayloadMaxChunkBytesV2 {
+		return nil, nil, 0, fmt.Errorf("invalid payload encryption chunk size %d", chunkSize)
+	}
+	salt, err := decodeServerBackupPayloadHex("salt", archiveManifest.PayloadEncryptionSalt, serverBackupPayloadSaltBytesV2)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	nonce, err := decodeServerBackupPayloadHex("nonce", archiveManifest.PayloadEncryptionNonce, serverBackupPayloadNonceBytesV2)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	key, err := pbkdf2.Key(sha256.New, strings.TrimSpace(encryptionKey), salt, archiveManifest.PayloadEncryptionKDFIters, 32)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if aead.NonceSize() != len(nonce) {
+		return nil, nil, 0, fmt.Errorf("payload encryption nonce length %d does not match cipher nonce size %d", len(nonce), aead.NonceSize())
+	}
+	return aead, nonce, chunkSize, nil
+}
+
+func decodeServerBackupPayloadHex(name string, value string, wantBytes int) ([]byte, error) {
+	decoded, err := hex.DecodeString(strings.TrimSpace(value))
+	if err != nil {
+		return nil, fmt.Errorf("invalid payload encryption %s: %w", name, err)
+	}
+	if len(decoded) != wantBytes {
+		return nil, fmt.Errorf("invalid payload encryption %s length %d", name, len(decoded))
+	}
+	return decoded, nil
+}
+
+func serverBackupPayloadChunkNonce(baseNonce []byte, counter uint64) []byte {
+	nonce := append([]byte(nil), baseNonce...)
+	binary.BigEndian.PutUint64(nonce[len(nonce)-8:], counter)
+	return nonce
+}
+
+func writeServerBackupPayloadFrame(w io.Writer, frame []byte) error {
+	if len(frame) == 0 {
+		return errors.New("empty encrypted backup payload frame")
+	}
+	frameLen := uint64(len(frame))
+	if frameLen > uint64(^uint32(0)) {
+		return fmt.Errorf("encrypted backup payload frame too large: %d", len(frame))
+	}
+	var size [4]byte
+	binary.BigEndian.PutUint32(size[:], uint32(frameLen)) // #nosec G115 -- frameLen is bounded to uint32 above.
+	if _, err := w.Write(size[:]); err != nil {
+		return err
+	}
+	_, err := w.Write(frame)
+	return err
+}
+
+func readServerBackupPayloadFrame(r io.Reader, maxFrameSize int) ([]byte, error) {
+	var size [4]byte
+	if _, err := io.ReadFull(r, size[:]); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.EOF
+		}
+		return nil, fmt.Errorf("truncated encrypted backup payload frame header: %w", err)
+	}
+	frameSize := int(binary.BigEndian.Uint32(size[:]))
+	if frameSize <= 0 || frameSize > maxFrameSize {
+		return nil, fmt.Errorf("invalid encrypted backup payload frame size %d", frameSize)
+	}
+	frame := make([]byte, frameSize)
+	if _, err := io.ReadFull(r, frame); err != nil {
+		return nil, fmt.Errorf("truncated encrypted backup payload frame: %w", err)
+	}
+	return frame, nil
 }
 
 func buildServerRestoreNextSteps(stagingDir string, _ models.ServerMigrationManifest) []string {

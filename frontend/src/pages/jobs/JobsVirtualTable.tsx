@@ -39,6 +39,11 @@ type Props<Row> = {
 const DEFAULT_COL_WIDTH = 180
 const ESTIMATED_ROW_HEIGHT_PX = 54
 
+function getColumnLabel(title: ReactNode, fallback: string) {
+	if (typeof title === 'string' || typeof title === 'number') return String(title)
+	return fallback
+}
+
 export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>) {
 	const scrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -74,6 +79,13 @@ export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>)
 		return props.sort.direction === 'asc' ? '^' : 'v'
 	}
 
+	const getSortButtonAriaLabel = (key: string, title: ReactNode) => {
+		const label = getColumnLabel(title, key)
+		if (!props.sort || props.sort.key !== key) return `Sort by ${label}. Current sort: none.`
+		const current = props.sort.direction === 'asc' ? 'ascending' : 'descending'
+		return `Sort by ${label}. Current sort: ${current}.`
+	}
+
 	const toggleSort = (key: string) => {
 		const prev = props.sort
 		if (!prev || prev.key !== key) {
@@ -102,23 +114,29 @@ export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>)
 			)
 		) : (
 			<div ref={scrollRef} className={styles.scroll} style={{ maxHeight: props.height }}>
-				<table className={styles.table} style={{ minWidth }} aria-label={props.ariaLabel ?? 'Table'}>
+				<table
+					className={styles.table}
+					style={{ minWidth }}
+					aria-label={props.ariaLabel ?? 'Table'}
+					aria-rowcount={props.rows.length + 1}
+				>
 					<colgroup>
 						{props.columns.map((c) => (
 							<col key={c.key} style={{ width: c.width ?? DEFAULT_COL_WIDTH }} />
 						))}
 					</colgroup>
 					<thead>
-						<tr>
+						<tr aria-rowindex={1}>
 							{props.columns.map((c) => {
 								const sortable = !!c.sorter
 								const indicator = getSortIndicator(c.key)
-								const ariaSort =
-									props.sort && props.sort.key === c.key
+								const ariaSort = sortable
+									? props.sort && props.sort.key === c.key
 										? props.sort.direction === 'asc'
 											? 'ascending'
 											: 'descending'
 										: 'none'
+									: undefined
 								const thStyle: CSSProperties = {
 									textAlign: c.align ?? 'left',
 								}
@@ -129,9 +147,21 @@ export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>)
 								return (
 									<th key={c.key} className={thClassName} style={thStyle} aria-sort={ariaSort}>
 										{sortable ? (
-											<button type="button" className={styles.sortButton} onClick={() => toggleSort(c.key)}>
+											<button
+												type="button"
+												className={styles.sortButton}
+												aria-label={getSortButtonAriaLabel(c.key, c.title)}
+												onClick={() => toggleSort(c.key)}
+											>
 												<span>{c.title}</span>
-												{indicator ? <span className={styles.sortIndicator}>{indicator}</span> : null}
+												{indicator ? (
+													<>
+														<span className={styles.sortIndicator} aria-hidden="true">{indicator}</span>
+														<span className={styles.visuallyHidden}>
+															{props.sort?.direction === 'asc' ? 'sorted ascending' : 'sorted descending'}
+														</span>
+													</>
+												) : null}
 											</button>
 										) : (
 											c.title
@@ -155,6 +185,7 @@ export function JobsVirtualTable<Row extends { id?: string }>(props: Props<Row>)
 								<tr
 									key={key}
 									data-index={vi.index}
+									aria-rowindex={vi.index + 2}
 									ref={virtualizer.measureElement as unknown as (el: HTMLTableRowElement | null) => void}
 								>
 									{props.columns.map((c) => {

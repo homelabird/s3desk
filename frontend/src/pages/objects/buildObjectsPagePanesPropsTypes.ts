@@ -48,6 +48,10 @@ export type BuildObjectsPagePanesPropsArgs = {
 	onTreeResizePointerDown: TreeProps['onResizePointerDown']
 	onTreeResizePointerMove: TreeProps['onResizePointerMove']
 	onTreeResizePointerUp: TreeProps['onResizePointerUp']
+	onTreeResizeKeyDown: TreeProps['onResizeKeyDown']
+	treeResizeMinWidth: TreeProps['resizeMinWidth']
+	treeResizeMaxWidth: TreeProps['resizeMaxWidth']
+	treeWidthUsed: TreeProps['resizeValue']
 	canCreateFolder: boolean
 	createFolderTooltipText: string
 	openNewFolder: (parentPrefixOverride?: string) => void
@@ -161,4 +165,8 @@ export type BuildObjectsPagePanesPropsArgs = {
 	onDetailsResizePointerDown: DetailsProps['onResizePointerDown']
 	onDetailsResizePointerMove: DetailsProps['onResizePointerMove']
 	onDetailsResizePointerUp: DetailsProps['onResizePointerUp']
+	onDetailsResizeKeyDown: DetailsProps['onResizeKeyDown']
+	detailsResizeMinWidth: DetailsProps['resizeMinWidth']
+	detailsResizeMaxWidth: DetailsProps['resizeMaxWidth']
+	detailsWidthUsed: DetailsProps['resizeValue']
 }

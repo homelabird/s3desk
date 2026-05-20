@@ -34,6 +34,9 @@ export type TransfersDrawerProps = {
 }
 
 export function TransfersDrawer(props: TransfersDrawerProps) {
+	const clearableUploadCount = props.uploadTasks.filter((task) => task.status !== 'commit').length
+	const hasClearableTransfers = props.downloadTasks.length + clearableUploadCount > 0
+
 	return (
 		<OverlaySheet
 			open={props.open}
@@ -59,7 +62,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 						size="small"
 						danger
 						onClick={props.onClearAll}
-						disabled={props.downloadTasks.length + props.uploadTasks.length === 0}
+						disabled={!hasClearableTransfers}
 					>
 						Clear all
 					</Button>
@@ -67,6 +70,7 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 			}
 		>
 			<AppTabs
+				ariaLabel="Transfer queues"
 				size="small"
 				activeKey={props.tab}
 				onChange={(key) => props.onTabChange(key as TransfersTab)}
@@ -90,16 +94,18 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 										{props.downloadSummaryText ? (
 											<Typography.Text type="secondary">{props.downloadSummaryText}</Typography.Text>
 										) : null}
-										{props.downloadTasks.map((t) => (
-											<TransferDownloadRow
-												key={t.id}
-												task={t}
-												onCancel={props.onCancelDownload}
-												onRetry={props.onRetryDownload}
-												onRemove={props.onRemoveDownload}
-												onOpenJobs={props.onOpenJobs}
-											/>
-										))}
+										<div role="list" aria-label="Download transfers" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+											{props.downloadTasks.map((t) => (
+												<TransferDownloadRow
+													key={t.id}
+													task={t}
+													onCancel={props.onCancelDownload}
+													onRetry={props.onRetryDownload}
+													onRemove={props.onRemoveDownload}
+													onOpenJobs={props.onOpenJobs}
+												/>
+											))}
+										</div>
 									</div>
 								)}
 							</div>
@@ -133,16 +139,18 @@ export function TransfersDrawer(props: TransfersDrawerProps) {
 										{props.uploadSummaryText ? (
 											<Typography.Text type="secondary">{props.uploadSummaryText}</Typography.Text>
 										) : null}
-										{props.uploadTasks.map((t) => (
-											<TransferUploadRow
-												key={t.id}
-												task={t}
-												onOpenJobs={props.onOpenJobs}
-												onCancel={props.onCancelUpload}
-												onRetry={props.onRetryUpload}
-												onRemove={props.onRemoveUpload}
-											/>
-										))}
+										<div role="list" aria-label="Upload transfers" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+											{props.uploadTasks.map((t) => (
+												<TransferUploadRow
+													key={t.id}
+													task={t}
+													onOpenJobs={props.onOpenJobs}
+													onCancel={props.onCancelUpload}
+													onRetry={props.onRetryUpload}
+													onRemove={props.onRemoveUpload}
+												/>
+											))}
+										</div>
 									</div>
 								)}
 							</div>

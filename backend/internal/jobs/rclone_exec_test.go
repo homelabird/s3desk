@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,6 +189,32 @@ func TestStartRcloneCommandCancelFallsBackToSigkill(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("wait hung after forced cancel")
+	}
+}
+
+func TestStartRcloneCommandRejectsUnsafeProfileEndpointBeforeProcess(t *testing.T) {
+	called := false
+	restore := setProcessTestHooks(processTestHooks{
+		startRcloneCommand: func(context.Context, models.ProfileSecrets, string, []string) (*rcloneProcess, error) {
+			called = true
+			return nil, nil
+		},
+	})
+	t.Cleanup(restore)
+
+	manager := NewManager(Config{DataDir: t.TempDir()})
+	_, err := manager.startRcloneCommand(context.Background(), models.ProfileSecrets{
+		Provider:        models.ProfileProviderS3Compatible,
+		Endpoint:        "http://169.254.169.254/latest/meta-data",
+		Region:          "us-east-1",
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+	}, "job-unsafe", []string{"lsjson", "remote:"})
+	if err == nil || !strings.Contains(err.Error(), "blocked metadata host") {
+		t.Fatalf("startRcloneCommand err=%v, want blocked metadata host", err)
+	}
+	if called {
+		t.Fatal("startRcloneCommand hook was called for unsafe endpoint")
 	}
 }
 

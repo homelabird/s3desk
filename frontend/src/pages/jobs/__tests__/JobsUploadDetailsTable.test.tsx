@@ -34,13 +34,15 @@ describe('JobsUploadDetailsTable', () => {
 		)
 
 		expect(screen.getByText('Showing first 2 of 4 files.')).toBeInTheDocument()
+		expect(screen.getByRole('table', { name: 'Upload file details' })).toBeInTheDocument()
 		expect(screen.getByText('folder/a.txt')).toBeInTheDocument()
 		expect(screen.getByText('etag-a')).toBeInTheDocument()
+		expect(screen.getByRole('navigation', { name: 'Upload details pages' })).toBeInTheDocument()
 		expect(screen.getByText('Page 2 / 3')).toBeInTheDocument()
 		expect(screen.getByText('1 file(s) missing hash data.')).toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: 'Prev' }))
-		fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Previous upload details page' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Next upload details page' }))
 
 		expect(onPrev).toHaveBeenCalledTimes(1)
 		expect(onNext).toHaveBeenCalledTimes(1)

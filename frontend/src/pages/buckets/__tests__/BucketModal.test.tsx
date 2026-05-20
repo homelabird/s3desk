@@ -182,4 +182,20 @@ describe('BucketModal', () => {
 			defaults: undefined,
 		})
 	}, SLOW_BUCKET_MODAL_TIMEOUT_MS)
+
+	it('keeps the create dialog open while submission is pending', () => {
+		const onCancel = vi.fn()
+
+		render(<BucketModal open onCancel={onCancel} onSubmit={vi.fn()} loading provider="aws_s3" />)
+
+		expect(screen.getByRole('dialog', { name: 'Create Bucket' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Close disabled while busy' })).toBeDisabled()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Close disabled while busy' }))
+		fireEvent.keyDown(document, { key: 'Escape', bubbles: true, cancelable: true })
+		fireEvent.mouseDown(screen.getByRole('dialog', { name: 'Create Bucket' }).parentElement as HTMLElement)
+
+		expect(onCancel).not.toHaveBeenCalled()
+		expect(screen.getByRole('dialog', { name: 'Create Bucket' })).toBeInTheDocument()
+	})
 })

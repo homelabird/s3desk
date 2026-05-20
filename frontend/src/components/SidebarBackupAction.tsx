@@ -18,6 +18,7 @@ type SidebarBackupActionProps = {
 const SidebarBackupDrawer = lazy(() =>
 	import('./SidebarBackupDrawer').then((mod) => ({ default: mod.SidebarBackupDrawer })),
 )
+const SIDEBAR_BACKUP_DRAWER_ID = 'sidebar-backup-drawer-panel'
 
 export function SidebarBackupAction(props: SidebarBackupActionProps) {
 	const sessionKey = props.scopeKey ?? '__default__'
@@ -37,6 +38,7 @@ function SidebarBackupActionSession(props: SidebarBackupActionProps) {
 				aria-label="Backup"
 				aria-expanded={open}
 				aria-haspopup="dialog"
+				aria-controls={SIDEBAR_BACKUP_DRAWER_ID}
 			>
 				<span className={styles.triggerIcon} aria-hidden="true">
 					<CloudDownloadOutlined />
@@ -52,6 +54,7 @@ function SidebarBackupActionSession(props: SidebarBackupActionProps) {
 						api={props.api}
 						meta={props.meta}
 						open={open}
+						sheetId={SIDEBAR_BACKUP_DRAWER_ID}
 						onActionComplete={props.onActionComplete}
 						onClose={() => setOpen(false)}
 					/>
@@ -69,6 +72,7 @@ function SidebarBackupDrawerFallback(props: { onClose: () => void }) {
 			title="Backup and restore"
 			placement="right"
 			width="min(92vw, 560px)"
+			sheetId={SIDEBAR_BACKUP_DRAWER_ID}
 		>
 			<div className={styles.panel}>
 				<div className={styles.loadingRow} role="status" aria-live="polite">

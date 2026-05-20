@@ -40,6 +40,11 @@ Recommended order:
 2. Google Cloud Storage
 3. Azure Blob Storage
 4. OCI Object Storage
+5. MinIO S3-compatible
+6. Ceph S3-compatible
+
+For release candidates, treat `python3 scripts/check_release_evidence.py --format checklist ...`
+as the source of truth for the exact provider evidence required by the diff.
 
 Use [ci/provider_live_validation.env.example](ci/provider_live_validation.env.example)
 as the starting point for backend live-provider smoke variables.

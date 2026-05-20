@@ -29,17 +29,23 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 		props.onCancel()
 		props.onOpenPrefix(target)
 	}
+	const submit = () => {
+		if (props.isSubmitting) return
+		props.onFinish(props.values)
+	}
 
 	return (
 		<DialogModal
 			open={props.open}
 			title="New folder"
 			onClose={props.onCancel}
+			closeDisabled={props.isSubmitting}
+			initialFocusSelector="#objectsNewFolderName"
 			width={640}
 			footer={
 				<>
-					<Button onClick={props.onCancel}>Cancel</Button>
-					<Button type="primary" loading={props.isSubmitting} onClick={() => props.onFinish(props.values)}>
+					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
+					<Button type="primary" loading={props.isSubmitting} onClick={submit}>
 						Create folder
 					</Button>
 				</>
@@ -92,7 +98,7 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
-					props.onFinish(props.values)
+					submit()
 				}}
 			>
 				<FormField label="Parent">
@@ -114,12 +120,14 @@ export function ObjectsNewFolderModal(props: ObjectsNewFolderModalProps) {
 						placeholder="new-folder…"
 						autoComplete="off"
 						autoFocus
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 
 				<Checkbox
 					checked={props.values.allowPath}
 					onChange={(e) => props.onValuesChange({ ...props.values, allowPath: e.target.checked })}
+					disabled={props.isSubmitting}
 				>
 					Allow nested path (a/b/c)
 				</Checkbox>

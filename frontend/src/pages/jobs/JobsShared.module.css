@@ -3,6 +3,31 @@
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.drawerExtraGroup {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.detailValue {
+	display: inline-block;
+	max-width: 100%;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+.payloadBlock {
+	min-width: 0;
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: normal;
 }
 
 .alertStack {
@@ -46,11 +71,14 @@
 .uploadTableShell {
 	border: 1px solid var(--jobs-upload-table-border, var(--s3d-color-border));
 	border-radius: var(--jobs-upload-table-radius, 12px);
-	overflow: hidden;
+	overflow-x: auto;
+	overflow-y: hidden;
+	-webkit-overflow-scrolling: touch;
 }
 
 .uploadTable {
 	width: 100%;
+	min-width: 560px;
 	border-collapse: separate;
 	border-spacing: 0;
 	table-layout: fixed;
@@ -61,6 +89,8 @@
 	padding: 8px 12px;
 	border-bottom: 1px solid var(--jobs-upload-table-border, var(--s3d-color-border));
 	vertical-align: middle;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .uploadTableHeadCell {
@@ -106,14 +136,40 @@
 	flex-wrap: wrap;
 }
 
+.uploadTablePaginationButton {
+	min-width: 44px;
+}
+
 .uploadTableStatusNote {
 	display: block;
 	margin-top: 8px;
 }
 
 @media (max-width: 768px) {
+	.drawerExtra,
+	.drawerExtraGroup {
+		width: 100%;
+	}
+
+	.drawerExtra > button,
+	.drawerExtraGroup > button {
+		flex: 1 1 auto;
+	}
+
 	.uploadTablePagination {
 		flex-direction: column;
 		align-items: flex-start;
+	}
+
+	.uploadTablePaginationButton {
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 480px) {
+	.drawerExtra,
+	.drawerExtraGroup {
+		flex-direction: column;
+		align-items: stretch;
 	}
 }

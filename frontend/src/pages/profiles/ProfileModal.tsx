@@ -7,6 +7,8 @@ import { OverlaySheet } from '../../components/OverlaySheet'
 import { ConfirmDangerDialog } from '../../lib/ConfirmDangerDialog'
 import { runIfActionIdle } from '../../lib/pendingActionGuard'
 import styles from './ProfileModal.module.css'
+import { ProfileProviderChecklist } from './ProfileProviderChecklist'
+import { buildProfileProviderChecklist } from './profileModalChecklist'
 import { buildProfileModalSectionItems } from './ProfileModalSections'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
 import {
@@ -173,6 +175,12 @@ function ProfileModalSession(props: {
 		setField,
 		viewState,
 	})
+	const providerChecklist = buildProfileProviderChecklist({
+		values,
+		errors,
+		editMode: props.editMode,
+		viewState,
+	})
 
 	return (
 		<OverlaySheet
@@ -184,10 +192,15 @@ function ProfileModalSession(props: {
 			height={!screens.md ? mobileSheetHeight : undefined}
 			footer={
 				<div className={styles.drawerFooter}>
-					<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
-					<Button type="primary" loading={props.loading} disabled={isBusy} onClick={() => void validateAndSubmit()}>
-						{props.okText}
-					</Button>
+					<Typography.Text type="secondary" className={styles.drawerFooterHint}>
+						After saving, use Test on the saved profile row to verify access.
+					</Typography.Text>
+					<div className={styles.drawerFooterActions}>
+						<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
+						<Button type="primary" loading={props.loading} disabled={isBusy} onClick={() => void validateAndSubmit()}>
+							{props.okText}
+						</Button>
+					</div>
 				</div>
 			}
 		>
@@ -216,6 +229,8 @@ function ProfileModalSession(props: {
 							</Tag>
 						</div>
 					</div>
+
+					<ProfileProviderChecklist checklist={providerChecklist} />
 
 					<Collapse
 						className={styles.sections}

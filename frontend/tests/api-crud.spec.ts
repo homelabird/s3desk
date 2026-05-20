@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 
+import { waitForLiveJob } from './support/liveJobs'
+
 const isLive = process.env.E2E_LIVE === '1'
 
 const apiToken = process.env.E2E_API_TOKEN ?? 'change-me'
@@ -24,25 +26,7 @@ function uniqueId() {
 }
 
 async function waitForJob(request: APIRequestContext, profileId: string, jobId: string) {
-	const deadline = Date.now() + 120_000
-	let lastStatus = 'unknown'
-
-	while (Date.now() < deadline) {
-		const res = await request.get(`/api/v1/jobs/${jobId}`, { headers: apiHeaders(profileId) })
-		if (!res.ok()) {
-			throw new Error(`job status request failed (${res.status()})`)
-		}
-		const job = (await res.json()) as { status?: string; error?: string | null }
-		lastStatus = job.status ?? 'unknown'
-		if (job.status === 'succeeded') return
-		if (job.status === 'failed' || job.status === 'canceled') {
-			const err = job.error ? `: ${job.error}` : ''
-			throw new Error(`job ${jobId} ${job.status}${err}`)
-		}
-		await new Promise((resolve) => setTimeout(resolve, 2000))
-	}
-
-	throw new Error(`timed out waiting for job ${jobId} (last status: ${lastStatus})`)
+	await waitForLiveJob(request, { headers: apiHeaders(profileId), jobId })
 }
 
 test.describe('Live API CRUD', () => {

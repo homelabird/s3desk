@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"s3desk/internal/rcloneerrors"
+	"s3desk/internal/redact"
 	"strings"
 )
 
@@ -56,12 +57,12 @@ func jobErrorCode(err error) (string, bool) {
 }
 
 func jobErrorMessage(err error, stderr string) string {
-	msg := strings.TrimSpace(stderr)
+	msg := strings.TrimSpace(redact.Diagnostic(stderr))
 	if msg != "" {
 		return msg
 	}
 	if err != nil {
-		return err.Error()
+		return redact.Diagnostic(err.Error())
 	}
 	return ""
 }

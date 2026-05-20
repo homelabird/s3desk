@@ -39,7 +39,9 @@ type portableImportArchiveService struct {
 func newPortableImportArchiveService(s *server) portableImportArchiveService {
 	return portableImportArchiveService{
 		dbBackend: s.cfg.DBBackend,
-		extract:   extractPortableImportArchiveBundle,
+		extract: func(ctx context.Context, src io.Reader, backupPassword string, encryptionKey string) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
+			return extractPortableImportArchiveBundleWithLimit(ctx, src, backupPassword, encryptionKey, s.cfg.ServerRestoreMaxBytes)
+		},
 		buildResponse: func(mode string, dbBackend db.Backend, manifest models.ServerMigrationManifest, entityFiles map[string][]byte) models.ServerPortableImportResponse {
 			return s.buildPortableImportResponse(mode, dbBackend, manifest, entityFiles)
 		},
@@ -93,13 +95,14 @@ func (svc portableImportArchiveService) process(
 	return resp, portableImportArchiveOutcomeApplied, nil
 }
 
-func extractPortableImportArchiveBundle(
+func extractPortableImportArchiveBundleWithLimit(
 	ctx context.Context,
 	src io.Reader,
 	backupPassword string,
 	encryptionKey string,
+	maxExtractedBytes int64,
 ) (string, models.ServerMigrationManifest, map[string][]byte, string, error) {
-	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchive(ctx, src, backupPassword, encryptionKey)
+	tempRoot, manifest, entityFiles, assetRoot, _, err := extractPortableArchiveWithLimit(ctx, src, backupPassword, encryptionKey, maxExtractedBytes)
 	if err != nil {
 		return "", models.ServerMigrationManifest{}, nil, "", err
 	}

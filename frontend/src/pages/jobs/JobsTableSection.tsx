@@ -20,6 +20,10 @@ export type JobsTableSectionProps = {
 	isLoading: boolean
 	isOffline: boolean
 	uploadSupported: boolean
+	filtersDirty: boolean
+	onResetFilters: () => void
+	eventsConnected: boolean
+	onRetryRealtime: () => void
 	onOpenCreateUpload: () => void
 	onOpenDownloadJob: () => void
 	onOpenDeleteJob: () => void
@@ -48,6 +52,10 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 		isLoading,
 		isOffline,
 		uploadSupported,
+		filtersDirty,
+		onResetFilters,
+		eventsConnected,
+		onRetryRealtime,
 		onOpenCreateUpload,
 		onOpenDownloadJob,
 		onOpenDeleteJob,
@@ -65,6 +73,10 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 		<JobsEmptyState
 			isOffline={isOffline}
 			uploadSupported={uploadSupported}
+			filtersDirty={filtersDirty}
+			onResetFilters={onResetFilters}
+			eventsConnected={eventsConnected}
+			onRetryRealtime={onRetryRealtime}
 			onOpenCreateUpload={onOpenCreateUpload}
 			onOpenDownloadJob={onOpenDownloadJob}
 			onOpenDeleteJob={onOpenDeleteJob}

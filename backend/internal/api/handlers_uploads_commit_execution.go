@@ -3,7 +3,11 @@ package api
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
@@ -32,8 +36,83 @@ func (svc uploadCommitExecutionService) execute(
 	case uploadModeDirect:
 		return svc.executeDirect(ctx, session.profileID, session.uploadID, session.us, req)
 	default:
+		if uploadErr := svc.validateStagingReady(session.us.StagingDir, req); uploadErr != nil {
+			return models.JobCreatedResponse{}, uploadErr
+		}
 		return svc.executeStaging(ctx, session.profileID, newUploadCommitArtifactService().buildFromRequest(session.uploadID, session.us, req).payload)
 	}
+}
+
+var errStagingPendingArtifact = errors.New("staging upload has pending artifacts")
+
+func (svc uploadCommitExecutionService) validateStagingReady(stagingDir string, req uploadCommitRequest) *uploadHTTPError {
+	if stagingDir == "" {
+		return newUploadBadRequestError("upload session is missing staging directory", nil)
+	}
+	pendingPath, err := findPendingStagingArtifact(stagingDir)
+	if err != nil {
+		return newUploadInternalError("failed to inspect staged upload", map[string]any{"error": err.Error()})
+	}
+	if pendingPath != "" {
+		return newUploadBadRequestError("upload has incomplete staged chunks", map[string]any{"path": pendingPath})
+	}
+	return validateStagingCommitItems(stagingDir, req.Items)
+}
+
+func findPendingStagingArtifact(stagingDir string) (string, error) {
+	var pendingPath string
+	err := filepath.WalkDir(stagingDir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(stagingDir, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == "." || rel == "" {
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if rel == ".chunks" || strings.HasPrefix(rel, ".chunks/") || strings.HasSuffix(entry.Name(), ".tmp") {
+			pendingPath = rel
+			return errStagingPendingArtifact
+		}
+		return nil
+	})
+	if errors.Is(err, errStagingPendingArtifact) {
+		return pendingPath, nil
+	}
+	return "", err
+}
+
+func validateStagingCommitItems(stagingDir string, items []uploadCommitItem) *uploadHTTPError {
+	for _, item := range items {
+		cleanedPath := sanitizeUploadPath(item.Path)
+		if cleanedPath == "" {
+			continue
+		}
+		finalPath := filepath.Join(stagingDir, filepath.FromSlash(cleanedPath))
+		if !isUnderDir(stagingDir, finalPath) {
+			return newUploadBadRequestError("invalid upload path", map[string]any{"path": cleanedPath})
+		}
+		info, err := os.Lstat(finalPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return newUploadBadRequestError("upload item is missing from staging", map[string]any{"path": cleanedPath})
+			}
+			return newUploadInternalError("failed to inspect staged upload item", map[string]any{"path": cleanedPath, "error": err.Error()})
+		}
+		if !info.Mode().IsRegular() {
+			return newUploadBadRequestError("upload item is not a regular file", map[string]any{"path": cleanedPath})
+		}
+		if item.Size != nil && *item.Size >= 0 && info.Size() != *item.Size {
+			return newUploadBadRequestError("upload item size does not match staging", map[string]any{"path": cleanedPath, "expectedSize": *item.Size, "actualSize": info.Size()})
+		}
+	}
+	return nil
 }
 
 func (svc uploadCommitExecutionService) executeStaging(
@@ -141,7 +220,7 @@ func (svc uploadCommitExecutionService) executeDirect(
 			message: "direct streaming multipart uploads require an S3-compatible provider",
 		}
 	}
-	client, err := s3ClientFromProfile(secrets)
+	client, err := s3ClientFromProfile(secrets, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return models.JobCreatedResponse{}, &uploadHTTPError{
 			status:  http.StatusInternalServerError,

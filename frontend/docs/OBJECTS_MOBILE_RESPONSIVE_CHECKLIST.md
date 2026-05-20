@@ -16,34 +16,43 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 - `430x932`
 - `768x1024`
 
+## Automated Coverage
+
+Covered by `frontend/tests/objects-mobile-responsive.spec.ts`.
+
+- [x] The mobile header, location controls, and initial objects render at constrained width.
+- [x] Primary toolbar actions remain exposed at mid-width mobile breakpoints.
+- [x] Object action menus open and dismiss from mobile rows.
+- [x] Image preview opens directly from a mobile grid card.
+- [x] Selection actions appear and selected objects can be cleared on mobile.
+- [x] The folders drawer opens, navigates to a prefix, and closes on mobile.
+- [x] Core overlay drawers open and close at mid-width mobile sizes.
+- [x] Folder navigation, Global Search, and filters are exercised as task flows.
+- [x] Object details open from mobile actions and close cleanly.
+- [x] Large preview viewer opens with image metadata and actions on mobile.
+- [x] Large preview viewer fits a short `320px` mobile viewport.
+- [x] Global Search preserves query filters across mobile reopen.
+- [x] Global Search result cards expose object actions on mobile.
+- [x] Filters drawer applies and clears file filters on mobile.
+- [x] Copy key actions remain reachable from details and Global Search mobile surfaces.
+
 ## Manual QA Checklist
 
-- [ ] The folders drawer still opens, closes, and updates the current prefix on mobile.
-- [ ] Object details remain reachable from a row/card action and show the selected object metadata.
-- [ ] Filter and search entrypoints remain usable from constrained mobile controls.
-- [ ] Global Search still supports query entry, result inspection, and navigation into the matching prefix.
-- [ ] Copying or reusing the current bucket/prefix path remains reachable from mobile controls.
-- [ ] Mobile drawer/sheet interactions preserve safe-area padding and do not hide the next required action.
-
-## `Objects` Flow Checklist
-
-- [ ] Browse folders from the tree drawer and confirm navigation updates correctly.
-- [ ] Select an object and confirm the details drawer shows the correct metadata.
-- [ ] Toggle between list and grid view on mobile if the flow depends on a different presentation.
-- [ ] Apply filters from the compact/mobile controls and confirm the list updates.
-- [ ] Open Global Search and run a query with results.
-- [ ] Open a result from Global Search and verify navigation into the correct prefix.
-- [ ] Open object details from Global Search results.
-- [ ] Copy location/path from the mobile controls.
+- [ ] Verify the automated suite at `320x568`, `360x800`, `390x844`, `430x932`, and `768x1024` before a release candidate.
+- [ ] Confirm copy or path reuse actions remain reachable from the mobile controls.
+- [ ] Toggle between list and grid view on mobile if a release changes either presentation.
+- [ ] Check safe-area padding on a real device or browser emulation with device insets.
+- [ ] Record the exact viewport, component, and blocked task when a manual issue is found.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a test for opening and closing the tree drawer on mobile.
-- [ ] Add a test for opening and closing the details drawer on mobile.
-- [ ] Add a test for mobile filter application and state persistence.
-- [ ] Add a test for opening Global Search on mobile and navigating from a result.
-- [ ] Add a test that verifies copy/path actions remain reachable from constrained controls.
-- [ ] Add a tablet-width test only when it proves drawer-based task completion, not width math.
+- [x] Opening and closing the tree drawer on mobile.
+- [x] Opening and closing the details drawer on mobile.
+- [x] Mobile filter application and filter clearing.
+- [x] Opening Global Search on mobile and navigating from a result.
+- [x] Mobile search state persistence across reopen.
+- [x] Tablet-width drawer task completion coverage.
+- [x] Copy/path actions remain reachable from constrained controls.
 
 ## Notes
 

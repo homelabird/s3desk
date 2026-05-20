@@ -20,8 +20,9 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 			args,
 			jobID,
 			TestRunRcloneAttemptOptions{
-				TrackProgress: opts.TrackProgress,
-				DryRun:        opts.DryRun,
+				TrackProgress:  opts.TrackProgress,
+				DryRun:         opts.DryRun,
+				ExtraFileCount: len(opts.ExtraFiles),
 			},
 			func(level string, message string) {
 				m.writeJobLog(logWriter, jobID, level, message)
@@ -35,6 +36,7 @@ func (m *Manager) runRcloneAttempt(ctx context.Context, rclonePath string, args 
 	// #nosec G204 -- rclonePath and arguments are derived from trusted config and internal inputs.
 	cmd := exec.Command(rclonePath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.ExtraFiles = opts.ExtraFiles
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

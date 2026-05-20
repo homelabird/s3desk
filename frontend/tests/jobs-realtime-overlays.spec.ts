@@ -227,7 +227,12 @@ test.describe('Jobs realtime overlays', () => {
 						this.readyState = MockWebSocket.OPEN
 						this.onopen?.(new Event('open'))
 					}, seed.openDelayMs)
-					window.setTimeout(() => {
+					window.setTimeout(async () => {
+						await (
+							window as unknown as {
+								__s3deskApplyRealtimeJobCompletion?: () => Promise<void>
+							}
+						).__s3deskApplyRealtimeJobCompletion?.()
 						this.onmessage?.(
 							new MessageEvent('message', {
 								data: JSON.stringify(seed.realtimeMessage),
@@ -269,9 +274,9 @@ test.describe('Jobs realtime overlays', () => {
 			eventBody: ': keepalive\n\n',
 			realtimeTransport: 'ws',
 		})
-		setTimeout(() => {
+		await page.exposeFunction('__s3deskApplyRealtimeJobCompletion', () => {
 			apiState.setJobs([completedJob])
-		}, 3000)
+		})
 		await seedStorage(page)
 		await gotoJobsPage(page)
 
@@ -321,7 +326,12 @@ test.describe('Jobs realtime overlays', () => {
 						this.readyState = MockWebSocket.OPEN
 						this.onopen?.(new Event('open'))
 					}, seed.openDelayMs)
-					window.setTimeout(() => {
+					window.setTimeout(async () => {
+						await (
+							window as unknown as {
+								__s3deskApplyRealtimeJobDeletion?: () => Promise<void>
+							}
+						).__s3deskApplyRealtimeJobDeletion?.()
 						this.onmessage?.(
 							new MessageEvent('message', {
 								data: JSON.stringify(seed.realtimeMessage),
@@ -360,9 +370,9 @@ test.describe('Jobs realtime overlays', () => {
 				[jobId]: '2024-01-01T00:00:00Z start\n2024-01-01T00:00:01Z failed: delete prefix\n',
 			},
 		})
-		setTimeout(() => {
+		await page.exposeFunction('__s3deskApplyRealtimeJobDeletion', () => {
 			apiState.setJobs([])
-		}, 3000)
+		})
 		await seedStorage(page)
 		await gotoJobsPage(page)
 

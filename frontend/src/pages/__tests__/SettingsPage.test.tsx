@@ -5,6 +5,7 @@ import type { ComponentProps } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
+import { RETRY_COUNT_STORAGE_KEY, RETRY_DELAY_STORAGE_KEY } from '../../api/client'
 import {
 	DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY,
 	UPLOAD_TASK_CONCURRENCY_STORAGE_KEY,
@@ -81,13 +82,29 @@ describe('SettingsPage', () => {
 		expect(setProfileId).toHaveBeenCalledWith(null)
 	}, 20_000)
 
+	it('does not apply edited API token on blur', async () => {
+		const { setApiToken } = renderSettingsPage()
+		const tokenInput = await screen.findByPlaceholderText('Must match API_TOKEN…', undefined, { timeout: 10_000 })
+
+		fireEvent.change(tokenInput, { target: { value: 'draft-token' } })
+		fireEvent.blur(tokenInput)
+
+		expect(setApiToken).not.toHaveBeenCalled()
+		fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+		expect(setApiToken).toHaveBeenCalledWith('draft-token')
+	}, 20_000)
+
 	it('stores transfer preferences in localStorage', async () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
-		fireEvent.click(await screen.findByRole('switch'))
+		fireEvent.click(await screen.findByRole('switch', { name: 'Downloads and previews: Use server proxy' }))
 		fireEvent.change(await screen.findByLabelText('Download task concurrency'), { target: { value: '5' } })
 		fireEvent.change(screen.getByLabelText('Upload task concurrency'), { target: { value: '3' } })
+
+		expect(window.localStorage.getItem(DOWNLOAD_TASK_CONCURRENCY_STORAGE_KEY)).not.toBe('5')
+		expect(window.localStorage.getItem(UPLOAD_TASK_CONCURRENCY_STORAGE_KEY)).not.toBe('3')
+		fireEvent.click(screen.getByRole('button', { name: 'Apply transfer tuning' }))
 
 		await waitFor(() => {
 			expect(window.localStorage.getItem('downloadLinkProxyEnabled')).toBe('true')
@@ -119,7 +136,7 @@ describe('SettingsPage', () => {
 
 		renderSettingsPage()
 
-		fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
+		fireEvent.click(screen.getByRole('tab', { name: 'Recovery' }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Reset saved UI state' }))
 
 		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1))
@@ -145,6 +162,24 @@ describe('SettingsPage', () => {
 		expect(successSpy).toHaveBeenCalledWith('Saved UI state reset. Reloading…')
 	})
 
+	it('stores retry policy only after applying diagnostics tuning', async () => {
+		renderSettingsPage()
+
+		fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
+		fireEvent.change(await screen.findByLabelText('HTTP retry count'), { target: { value: '4' } })
+		fireEvent.change(screen.getByLabelText('Retry base delay (ms)'), { target: { value: '700' } })
+
+		expect(window.localStorage.getItem(RETRY_COUNT_STORAGE_KEY)).not.toBe('4')
+		expect(window.localStorage.getItem(RETRY_DELAY_STORAGE_KEY)).not.toBe('700')
+
+		fireEvent.click(screen.getByRole('button', { name: 'Apply retry policy' }))
+
+		await waitFor(() => {
+			expect(window.localStorage.getItem(RETRY_COUNT_STORAGE_KEY)).toBe('4')
+			expect(window.localStorage.getItem(RETRY_DELAY_STORAGE_KEY)).toBe('700')
+		})
+	})
+
 	it('resets dismissed dialog preferences only for the current api token scope', async () => {
 		const successSpy = vi.spyOn(message, 'success').mockImplementation(() => undefined as never)
 		const currentKey = buildDialogPreferenceKey('confirm', 'Delete profile|DELETE')
@@ -163,6 +198,7 @@ describe('SettingsPage', () => {
 
 		renderSettingsPage({ apiToken: 'token-a' })
 
+		fireEvent.click(screen.getByRole('tab', { name: 'Recovery' }))
 		expect(await screen.findByText('2 dialog preference(s) are currently suppressed.')).toBeInTheDocument()
 
 		fireEvent.click(screen.getByRole('button', { name: 'Reset dismissed dialogs' }))

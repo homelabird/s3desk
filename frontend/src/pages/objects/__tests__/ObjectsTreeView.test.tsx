@@ -54,6 +54,9 @@ describe('ObjectsTreeView', () => {
 
 		const status = screen.getByTestId('objects-tree-status')
 		expect(status).toHaveAttribute('data-tree-status-kind', 'prereq')
+		expect(status).toHaveAttribute('role', 'status')
+		expect(status).toHaveAttribute('aria-live', 'polite')
+		expect(status).toHaveAttribute('aria-atomic', 'true')
 		expect(status).toHaveTextContent(selectProfileFirstHint())
 		expect(status).toHaveTextContent(chooseProfileToLoadFoldersForWorkspaceHint())
 	})
@@ -63,6 +66,9 @@ describe('ObjectsTreeView', () => {
 
 		const status = screen.getByTestId('objects-tree-status')
 		expect(status).toHaveAttribute('data-tree-status-kind', 'prereq')
+		expect(status).toHaveAttribute('role', 'status')
+		expect(status).toHaveAttribute('aria-live', 'polite')
+		expect(status).toHaveAttribute('aria-atomic', 'true')
 		expect(status).toHaveTextContent(selectBucketFirstHint())
 		expect(status).toHaveTextContent(pickBucketToBrowseFoldersAndNestedPrefixesHint())
 	})
@@ -72,6 +78,9 @@ describe('ObjectsTreeView', () => {
 
 		const status = screen.getByTestId('objects-tree-status')
 		expect(status).toHaveAttribute('data-tree-status-kind', 'loading')
+		expect(status).toHaveAttribute('role', 'status')
+		expect(status).toHaveAttribute('aria-live', 'polite')
+		expect(status).toHaveAttribute('aria-atomic', 'true')
 		expect(status).toHaveTextContent(loadingFoldersTitle())
 		expect(status).toHaveTextContent(fetchingNestedPrefixesForThisLocationHint())
 	})
@@ -94,6 +103,9 @@ describe('ObjectsTreeView', () => {
 
 		const status = screen.getByTestId('objects-tree-status')
 		expect(status).toHaveAttribute('data-tree-status-kind', 'empty')
+		expect(status).toHaveAttribute('role', 'status')
+		expect(status).toHaveAttribute('aria-live', 'polite')
+		expect(status).toHaveAttribute('aria-atomic', 'true')
 		expect(status).toHaveTextContent(noFoldersHereYetTitle())
 		expect(status).toHaveTextContent(createFolderOrUploadFilesAtThisLevelHint())
 	})
@@ -104,6 +116,8 @@ describe('ObjectsTreeView', () => {
 		const status = screen.getByTestId('objects-tree-status')
 		expect(status).toHaveAttribute('data-tree-status-kind', 'error')
 		expect(status).toHaveAttribute('role', 'alert')
+		expect(status).not.toHaveAttribute('aria-live')
+		expect(status).not.toHaveAttribute('aria-atomic')
 		expect(status).toHaveTextContent(failedToLoadFoldersTitle())
 		expect(status).toHaveTextContent('prefix scan failed')
 	})

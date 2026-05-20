@@ -26,7 +26,7 @@ function setMatchMedia(matches: boolean) {
 		writable: true,
 		value: vi.fn().mockImplementation(() => ({
 			matches,
-			media: '(max-width: 480px)',
+			media: '(max-width: 767px)',
 			onchange: null,
 			addEventListener: vi.fn(),
 			removeEventListener: vi.fn(),
@@ -44,6 +44,7 @@ afterEach(() => {
 describe('JobsToolbar', () => {
 	it('renders queue health stats for the current result set', () => {
 		setMatchMedia(false)
+		const onStatusFilterChange = vi.fn()
 		render(
 			<JobsToolbar
 				scopeKey="token-a:profile-1"
@@ -60,7 +61,7 @@ describe('JobsToolbar', () => {
 				onOpenCreateDownload={vi.fn()}
 				topActionsMenu={{ items: [] }}
 				statusFilter="all"
-				onStatusFilterChange={vi.fn()}
+				onStatusFilterChange={onStatusFilterChange}
 				searchFilterNormalized=""
 				onSearchFilterChange={vi.fn()}
 				typeFilterNormalized=""
@@ -91,6 +92,8 @@ describe('JobsToolbar', () => {
 			/>,
 		)
 
+		expect(screen.getByRole('heading', { name: 'Launch work' })).toBeInTheDocument()
+		expect(screen.getByRole('heading', { name: 'Troubleshooting' })).toBeInTheDocument()
 		expect(screen.getByRole('heading', { name: 'Queue health' })).toBeInTheDocument()
 		expect(screen.getByText('Active')).toBeInTheDocument()
 		expect(screen.getByText('3')).toBeInTheDocument()
@@ -98,9 +101,25 @@ describe('JobsToolbar', () => {
 		expect(screen.getByText('10')).toBeInTheDocument()
 		expect(screen.getByText('15 loaded')).toBeInTheDocument()
 		expect(screen.getByRole('combobox', { name: 'Search jobs' })).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: 'Show failed jobs' }))
+		expect(onStatusFilterChange).toHaveBeenCalledWith('failed')
+
+		const columnsButton = screen.getByTestId('jobs-columns-trigger')
+		expect(columnsButton).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(columnsButton).toHaveAttribute('aria-expanded', 'false')
+		expect(columnsButton).toHaveAttribute('aria-controls', 'jobs-columns-popover-panel')
+
+		fireEvent.click(columnsButton)
+		expect(columnsButton).toHaveAttribute('aria-expanded', 'true')
+		const columnsPopover = screen.getByRole('dialog', { name: 'Job columns' })
+		expect(columnsPopover).toHaveAttribute('id', 'jobs-columns-popover-panel')
+
+		fireEvent.keyDown(columnsPopover, { key: 'Tab' })
+		expect(screen.getByRole('dialog', { name: 'Job columns' })).toBeInTheDocument()
+		expect(columnsButton).toHaveAttribute('aria-expanded', 'true')
 	})
 
-	it('collapses advanced filters into a mobile filter sheet trigger below 480px', () => {
+	it('collapses advanced filters into a mobile filter sheet trigger below the card breakpoint', () => {
 		setMatchMedia(true)
 		render(
 			<JobsToolbar
@@ -149,7 +168,11 @@ describe('JobsToolbar', () => {
 			/>,
 		)
 
-		expect(screen.getByTestId('jobs-mobile-filters-trigger')).toBeInTheDocument()
+		const trigger = screen.getByTestId('jobs-mobile-filters-trigger')
+		expect(trigger).toBeInTheDocument()
+		expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(trigger).toHaveAttribute('aria-expanded', 'false')
+		expect(trigger).toHaveAttribute('aria-controls', 'jobs-mobile-filters-sheet-panel')
 		expect(screen.getByRole('button', { name: /Filters active/i })).toBeInTheDocument()
 		expect(screen.getByTestId('jobs-mobile-filters-hint')).toHaveTextContent(
 			'Search current jobs here, or open Filters for status, type, and error code.',
@@ -208,7 +231,10 @@ describe('JobsToolbar', () => {
 			/>,
 		)
 
-		fireEvent.click(screen.getByTestId('jobs-mobile-filters-trigger'))
+		const trigger = screen.getByTestId('jobs-mobile-filters-trigger')
+		fireEvent.click(trigger)
+		expect(trigger).toHaveAttribute('aria-expanded', 'true')
+		expect(screen.getByTestId('jobs-mobile-filters-sheet')).toHaveAttribute('id', 'jobs-mobile-filters-sheet-panel')
 		expect(screen.getByText('Job filters')).toBeInTheDocument()
 
 		rerender(
@@ -310,7 +336,12 @@ describe('JobsToolbar', () => {
 			/>,
 		)
 
-		fireEvent.click(screen.getByRole('button', { name: /More/i }))
+		const moreButton = screen.getByRole('button', { name: /More/i })
+		expect(moreButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(moreButton).toHaveAttribute('aria-expanded', 'false')
+
+		fireEvent.click(moreButton)
+		expect(moreButton).toHaveAttribute('aria-expanded', 'true')
 		expect(screen.getByRole('menuitem', { name: 'Delete jobs' })).toBeInTheDocument()
 
 		rerender(

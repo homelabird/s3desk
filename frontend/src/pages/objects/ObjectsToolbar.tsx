@@ -28,6 +28,7 @@ import {
 import { ObjectsBucketPicker } from './ObjectsBucketPicker'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { UIAction } from './objectsActions'
+import { OBJECTS_DETAILS_DRAWER_ID, OBJECTS_TREE_DRAWER_ID } from './objectsOverlayIds'
 import styles from './ObjectsShell.module.css'
 
 export type ObjectsToolbarProps = {
@@ -65,7 +66,9 @@ export type ObjectsToolbarProps = {
 	activeTransferCount: number
 	onOpenTransfers: () => void
 	dockTree: boolean
+	treeDrawerOpen: boolean
 	dockDetails: boolean
+	detailsDrawerOpen: boolean
 	onOpenTree: () => void
 	onOpenDetails: () => void
 }
@@ -153,9 +156,18 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 
 	const moreButton = (
 		<ObjectsMenuPopover menu={props.topMoreMenu} align="end" scopeKey={props.bucketPickerScopeKey}>
-			{({ toggle }) => (
+			{({ toggle, open }) => (
 				<Badge count={props.activeTransferCount} size="small" showZero={false}>
-					<Button size={actionButtonSize} icon={<EllipsisOutlined />} disabled={!props.hasProfile} onClick={toggle} data-testid="objects-toolbar-more" aria-label="More actions">
+					<Button
+						size={actionButtonSize}
+						icon={<EllipsisOutlined />}
+						disabled={!props.hasProfile}
+						onClick={toggle}
+						data-testid="objects-toolbar-more"
+						aria-label="More actions"
+						aria-haspopup="menu"
+						aria-expanded={open}
+					>
 						{buildMenuButtonLabel(props.isDesktop ? 'More' : 'Actions', props.showLabels)}
 					</Button>
 				</Badge>
@@ -291,12 +303,30 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						</>
 					) : null}
 					{props.isAdvanced && !props.dockTree ? (
-						<Button size="small" icon={<FolderOutlined />} onClick={props.onOpenTree} disabled={!props.hasProfile || props.isOffline} aria-label="Folders">
+						<Button
+							size="small"
+							icon={<FolderOutlined />}
+							onClick={props.onOpenTree}
+							disabled={!props.hasProfile || props.isOffline}
+							aria-label="Folders"
+							aria-haspopup="dialog"
+							aria-expanded={props.treeDrawerOpen}
+							aria-controls={OBJECTS_TREE_DRAWER_ID}
+						>
 							{props.showLabels ? 'Folders' : null}
 						</Button>
 					) : null}
 					{props.isAdvanced && !props.dockDetails ? (
-						<Button size="small" icon={<InfoCircleOutlined />} onClick={props.onOpenDetails} disabled={!props.hasProfile || props.isOffline} aria-label="Details">
+						<Button
+							size="small"
+							icon={<InfoCircleOutlined />}
+							onClick={props.onOpenDetails}
+							disabled={!props.hasProfile || props.isOffline}
+							aria-label="Details"
+							aria-haspopup="dialog"
+							aria-expanded={props.detailsDrawerOpen}
+							aria-controls={OBJECTS_DETAILS_DRAWER_ID}
+						>
 							{props.showLabels ? 'Details' : null}
 						</Button>
 					) : null}

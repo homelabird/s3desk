@@ -15,6 +15,11 @@ const defaultStorage: StorageSeed = {
 }
 
 const now = '2024-01-01T00:00:00Z'
+const jobLogText = [
+	'2026-03-11T09:00:01Z INFO started mobile run',
+	'2026-03-11T09:00:02Z WARN downstream latency',
+	'2026-03-11T09:00:03Z ERROR transfer failed',
+].join('\n')
 
 const jobs = [
 	{
@@ -95,6 +100,26 @@ export async function installJobsMobileResponsiveFixtures(page: Page) {
 				return job
 					? { json: job }
 					: { status: 404, json: { error: { code: 'not_found', message: 'job not found' } } }
+			},
+		},
+		{
+			method: 'GET',
+			path: /^\/api\/v1\/jobs\/([^/]+)\/logs$/,
+			handler: ({ route, url }) => {
+				const afterOffset = Number.parseInt(url.searchParams.get('afterOffset') ?? '', 10)
+				if (Number.isFinite(afterOffset) && afterOffset >= jobLogText.length) {
+					return route.fulfill({
+						status: 204,
+						headers: { 'X-Log-Next-Offset': String(jobLogText.length) },
+					})
+				}
+				const body = Number.isFinite(afterOffset) && afterOffset > 0 ? jobLogText.slice(afterOffset) : jobLogText
+				return route.fulfill({
+					status: 200,
+					contentType: 'text/plain',
+					headers: { 'X-Log-Next-Offset': String(jobLogText.length) },
+					body,
+				})
 			},
 		},
 		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),

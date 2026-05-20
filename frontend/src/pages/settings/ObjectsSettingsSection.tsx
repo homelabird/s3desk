@@ -1,4 +1,4 @@
-import { Collapse, Select, Space } from 'antd'
+import { Collapse, Select, Space, Typography } from 'antd'
 
 import { FormField } from '../../components/FormField'
 import { NumberField } from '../../components/NumberField'
@@ -31,7 +31,10 @@ type ObjectsSettingsSectionProps = {
 
 export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 	return (
-		<div>
+		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+			<Typography.Text type="secondary" className={styles.sectionIntro}>
+				What this affects: object list browsing cost, thumbnail behavior, and Global Search prefix indexing.
+			</Typography.Text>
 			<FormField label="Show image thumbnails" extra="Controls thumbnails in the object list and details panel.">
 				<ToggleSwitch
 					checked={props.objectsShowThumbnails}
@@ -41,9 +44,12 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 			</FormField>
 			<FormField
 				label="Object storage cost mode"
+				htmlFor="settings-objects-cost-mode"
 				extra="Conservative reduces background listing, thumbnail concurrency, and automatic indexing. Balanced is the default. Aggressive favors responsiveness over request volume."
 			>
 				<Select
+					id="settings-objects-cost-mode"
+					aria-label="Object storage cost mode"
 					value={props.objectsCostMode}
 					onChange={(value) => props.setObjectsCostMode(value as ObjectsCostMode)}
 					options={[
@@ -61,8 +67,13 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 						label: 'Advanced',
 						children: (
 							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
-								<FormField label="Thumbnail cache size" extra="Max cached thumbnails kept in memory (LRU).">
+								<FormField
+									label="Thumbnail cache size"
+									htmlFor="settings-thumbnail-cache-size"
+									extra="Max cached thumbnails kept in memory (LRU)."
+								>
 									<NumberField
+										id="settings-thumbnail-cache-size"
 										min={THUMBNAIL_CACHE_MIN_ENTRIES}
 										max={THUMBNAIL_CACHE_MAX_ENTRIES}
 										step={50}
@@ -89,9 +100,11 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 								</FormField>
 								<FormField
 									label="Auto index TTL (hours)"
+									htmlFor="settings-auto-index-ttl-hours"
 									extra="Rebuild prefix index when it is older than this value."
 								>
 									<NumberField
+										id="settings-auto-index-ttl-hours"
 										min={OBJECTS_AUTO_INDEX_TTL_MIN_HOURS}
 										max={OBJECTS_AUTO_INDEX_TTL_MAX_HOURS}
 										step={1}
@@ -112,6 +125,6 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 					},
 				]}
 			/>
-		</div>
+		</Space>
 	)
 }

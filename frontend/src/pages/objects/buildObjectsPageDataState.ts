@@ -169,6 +169,8 @@ export interface ObjectsPaneVm extends Pick<
 	| 'detailsDrawerOpen'
 	| 'detailsOpen'
 	| 'detailsResizeHandleWidth'
+	| 'detailsResizeMaxWidth'
+	| 'detailsResizeMinWidth'
 	| 'detailsVisible'
 	| 'detailsWidthUsed'
 	| 'dockDetails'
@@ -192,9 +194,11 @@ export interface ObjectsPaneVm extends Pick<
 	| 'indexPrefix'
 	| 'isDesktop'
 	| 'layoutRef'
+	| 'onDetailsResizeKeyDown'
 	| 'onDetailsResizePointerDown'
 	| 'onDetailsResizePointerMove'
 	| 'onDetailsResizePointerUp'
+	| 'onTreeResizeKeyDown'
 	| 'onTreeResizePointerDown'
 	| 'onTreeResizePointerMove'
 	| 'onTreeResizePointerUp'
@@ -220,6 +224,8 @@ export interface ObjectsPaneVm extends Pick<
 	| 'setIndexPrefix'
 	| 'setUiMode'
 	| 'treeResizeHandleWidth'
+	| 'treeResizeMaxWidth'
+	| 'treeResizeMinWidth'
 	| 'treeWidthUsed'
 >,
 	Pick<ObjectsPageDataStateArgs['queries'], 'favoriteCount' | 'favoritePendingKeys'>,
@@ -383,6 +389,8 @@ export function buildObjectsPageDataState(args: ObjectsPageDataStateArgs): Objec
 		detailsDrawerOpen: args.view.detailsDrawerOpen,
 		detailsOpen: args.view.detailsOpen,
 		detailsResizeHandleWidth: args.view.detailsResizeHandleWidth,
+		detailsResizeMaxWidth: args.view.detailsResizeMaxWidth,
+		detailsResizeMinWidth: args.view.detailsResizeMinWidth,
 		detailsVisible: args.view.detailsVisible,
 		detailsWidthUsed: args.view.detailsWidthUsed,
 		dockDetails: args.view.dockDetails,
@@ -412,10 +420,12 @@ export function buildObjectsPageDataState(args: ObjectsPageDataStateArgs): Objec
 		indexPrefix: args.view.indexPrefix,
 		isDesktop: args.view.isDesktop,
 		layoutRef: args.view.layoutRef,
+		onDetailsResizeKeyDown: args.view.onDetailsResizeKeyDown,
 		onDetailsResizePointerDown: args.view.onDetailsResizePointerDown,
 		onDetailsResizePointerMove: args.view.onDetailsResizePointerMove,
 		onDetailsResizePointerUp: args.view.onDetailsResizePointerUp,
 		onTreeLoadData: args.tree.onTreeLoadData,
+		onTreeResizeKeyDown: args.view.onTreeResizeKeyDown,
 		onTreeResizePointerDown: args.view.onTreeResizePointerDown,
 		onTreeResizePointerMove: args.view.onTreeResizePointerMove,
 		onTreeResizePointerUp: args.view.onTreeResizePointerUp,
@@ -451,6 +461,8 @@ export function buildObjectsPageDataState(args: ObjectsPageDataStateArgs): Objec
 		treeExpandedKeys: args.tree.treeExpandedKeys,
 		treeLoadingKeys: args.tree.treeLoadingKeys,
 		treeResizeHandleWidth: args.view.treeResizeHandleWidth,
+		treeResizeMaxWidth: args.view.treeResizeMaxWidth,
+		treeResizeMinWidth: args.view.treeResizeMinWidth,
 		treeSelectedKeys: args.tree.treeSelectedKeys,
 		treeWidthUsed: args.view.treeWidthUsed,
 	}

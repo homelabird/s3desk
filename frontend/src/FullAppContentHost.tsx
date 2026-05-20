@@ -22,8 +22,9 @@ export function FullAppContentHost(props: FullAppContentHostProps) {
 			<FullAppRoutes
 				{...props}
 				loadingFallback={
-					<div className={styles.loadingFallback}>
+					<div className={styles.loadingFallback} role="status" aria-live="polite" aria-label="Loading page">
 						<Spin />
+						<span className="sr-only">Loading page...</span>
 					</div>
 				}
 			/>

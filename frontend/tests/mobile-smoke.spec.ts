@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage } from './support/apiFixtures'
 import {
@@ -40,6 +40,15 @@ async function openObjectsMobilePage(page: Page) {
 		timeout: 10_000,
 		maxAttempts: 3,
 	})
+}
+
+async function expectMinTouchTarget(locator: Locator, minSize = 44) {
+	const rect = await locator.evaluate((element) => {
+		const { height, width } = element.getBoundingClientRect() // e2e-geometry-allow validates shared mobile touch-target sizing
+		return { height, width }
+	})
+	expect(rect.height).toBeGreaterThanOrEqual(minSize)
+	expect(rect.width).toBeGreaterThanOrEqual(minSize)
 }
 
 async function stubCoreApi(page: Page, overrides?: StubCoreApiOptions) {
@@ -120,6 +129,10 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await expect(profileSelect).toBeVisible()
 		await expect(transfersButton).toBeVisible()
 		await expect(page.getByRole('button', { name: /Settings/i })).toHaveCount(0)
+		await expectMinTouchTarget(navButton)
+		await expectMinTouchTarget(profileSelect)
+		await expectMinTouchTarget(transfersButton)
+		await expectMinTouchTarget(moreActionsButton)
 
 		await moreActionsButton.click()
 		const settingsItem = page.getByRole('menuitem', { name: /Settings/i })

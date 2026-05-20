@@ -146,6 +146,10 @@
     gap: 4px 8px;
   }
 
+  .favoritesControl {
+    min-height: 44px;
+  }
+
   .favoritesControlLabel {
     font-size: 13px;
   }
@@ -155,6 +159,7 @@
   }
 
   .favoritesItem {
+    min-height: 44px;
     padding: 5px 9px;
     border-radius: 18px;
   }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type PointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent, type PointerEvent } from 'react'
 
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 import { clampNumber } from './objectsListUtils'
@@ -38,6 +38,8 @@ export function useObjectsLayout({
 	const minDockedTreeWidth = preferredDockedListWidth + minTreeWidth + treeResizeHandleWidth
 	const minDockedDetailsWidth = minDockedTreeWidth + minDetailsWidth + detailsResizeHandleWidth
 	const compactListMinWidth = isAdvanced ? 960 : 720
+	const resizeKeyboardStep = 24
+	const resizeKeyboardLargeStep = 80
 
 	const dockTree = isDesktop && (layoutWidthPx <= 0 || layoutWidthPx >= minDockedTreeWidth)
 	const dockDetails = isWideDesktop && (layoutWidthPx <= 0 || layoutWidthPx >= minDockedDetailsWidth)
@@ -195,6 +197,20 @@ export function useObjectsLayout({
 			// ignore
 		}
 	}, [])
+	const onTreeResizeKeyDown = useCallback(
+		(e: KeyboardEvent<HTMLDivElement>) => {
+			const step = e.shiftKey ? resizeKeyboardLargeStep : resizeKeyboardStep
+			let next: number | null = null
+			if (e.key === 'ArrowLeft') next = treeWidthUsed - step
+			if (e.key === 'ArrowRight') next = treeWidthUsed + step
+			if (e.key === 'Home') next = minTreeWidth
+			if (e.key === 'End') next = dynamicMaxTreeWidth
+			if (next == null) return
+			setTreeWidth(clampNumber(Math.round(next), minTreeWidth, dynamicMaxTreeWidth))
+			e.preventDefault()
+		},
+		[dynamicMaxTreeWidth, minTreeWidth, setTreeWidth, treeWidthUsed],
+	)
 
 	const detailsResizeRef = useRef<{ startX: number; startWidth: number } | null>(null)
 	const onDetailsResizePointerDown = useCallback(
@@ -227,6 +243,20 @@ export function useObjectsLayout({
 			// ignore
 		}
 	}, [])
+	const onDetailsResizeKeyDown = useCallback(
+		(e: KeyboardEvent<HTMLDivElement>) => {
+			const step = e.shiftKey ? resizeKeyboardLargeStep : resizeKeyboardStep
+			let next: number | null = null
+			if (e.key === 'ArrowLeft') next = detailsWidthUsed + step
+			if (e.key === 'ArrowRight') next = detailsWidthUsed - step
+			if (e.key === 'Home') next = minDetailsWidth
+			if (e.key === 'End') next = dynamicMaxDetailsWidth
+			if (next == null) return
+			setDetailsWidth(clampNumber(Math.round(next), minDetailsWidth, dynamicMaxDetailsWidth))
+			e.preventDefault()
+		},
+		[detailsWidthUsed, dynamicMaxDetailsWidth, minDetailsWidth, setDetailsWidth],
+	)
 
 	return {
 		dockTree,
@@ -235,6 +265,10 @@ export function useObjectsLayout({
 		detailsVisible,
 		treeWidthUsed,
 		detailsWidthUsed,
+		treeResizeMinWidth: minTreeWidth,
+		treeResizeMaxWidth: dynamicMaxTreeWidth,
+		detailsResizeMinWidth: minDetailsWidth,
+		detailsResizeMaxWidth: dynamicMaxDetailsWidth,
 		listViewportWidthPx,
 		isCompactList,
 		treeResizeHandleWidth,
@@ -242,8 +276,10 @@ export function useObjectsLayout({
 		onTreeResizePointerDown,
 		onTreeResizePointerMove,
 		onTreeResizePointerUp,
+		onTreeResizeKeyDown,
 		onDetailsResizePointerDown,
 		onDetailsResizePointerMove,
 		onDetailsResizePointerUp,
+		onDetailsResizeKeyDown,
 	}
 }

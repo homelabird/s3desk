@@ -1,0 +1,51 @@
+.root {
+	width: min(100%, 520px);
+}
+
+.brand {
+	margin-bottom: 16px;
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 18px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-elevated);
+	box-shadow: none;
+}
+
+.form {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.meta {
+	margin-bottom: 0;
+}
+
+@media (max-width: 480px) {
+	.card {
+		padding: 16px;
+	}
+
+	.actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.actions :global(.ant-btn) {
+		width: 100%;
+		min-height: 44px;
+	}
+}

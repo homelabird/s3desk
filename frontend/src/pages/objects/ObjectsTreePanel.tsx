@@ -1,6 +1,6 @@
 import { Button } from 'antd'
 import { FolderAddOutlined } from '@ant-design/icons'
-import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
+import type { DragEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 
 import { newFolderShortcutHint } from '../../lib/actionHints'
 import styles from './ObjectsShell.module.css'
@@ -8,6 +8,7 @@ import { ObjectsFavoritesPane } from './ObjectsFavoritesPane'
 import { ObjectsOverlaySheet } from './ObjectsOverlaySheet'
 import { ObjectsTreePane } from './ObjectsTreePane'
 import { ObjectsTreeView } from './ObjectsTreeView'
+import { OBJECTS_TREE_DRAWER_ID } from './objectsOverlayIds'
 import type { FavoriteObjectItem } from '../../api/types'
 import type { TreeNode } from '../../lib/tree'
 
@@ -48,6 +49,10 @@ type ObjectsTreePanelProps = {
 	onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerMove: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerUp: (event: PointerEvent<HTMLDivElement>) => void
+	onResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+	resizeMinWidth: number
+	resizeMaxWidth: number
+	resizeValue: number
 	canCreateFolder: boolean
 	createFolderTooltipText: string
 	onNewFolderAtPrefix: (prefixKey: string) => void
@@ -123,7 +128,6 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 								disabled={!props.canCreateFolder}
 								data-testid="objects-tree-new-folder"
 								aria-label={newFolderLabel}
-								style={{ width: 24, height: 24, minWidth: 24, minHeight: 24, padding: 0 }}
 								onClick={() => props.onNewFolderAtPrefix(selectedKey)}
 							/>
 						</span>
@@ -144,10 +148,18 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 					</div>
 
 					<div
+						role="separator"
+						tabIndex={0}
+						aria-label="Resize folder pane"
+						aria-orientation="vertical"
+						aria-valuemin={props.resizeMinWidth}
+						aria-valuemax={props.resizeMaxWidth}
+						aria-valuenow={props.resizeValue}
 						onPointerDown={props.onResizePointerDown}
 						onPointerMove={props.onResizePointerMove}
 						onPointerUp={props.onResizePointerUp}
 						onPointerCancel={props.onResizePointerUp}
+						onKeyDown={props.onResizeKeyDown}
 						className={`${styles.resizeHandle} ${styles.layoutTreeHandle}`}
 					>
 						<div className={styles.resizeBar} />
@@ -160,6 +172,7 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 				onClose={props.onCloseDrawer}
 				title="Browse"
 				placement="left"
+				sheetId={OBJECTS_TREE_DRAWER_ID}
 				width="min(100vw, 420px)"
 				dataTestId="objects-tree-sheet"
 				compactMobile

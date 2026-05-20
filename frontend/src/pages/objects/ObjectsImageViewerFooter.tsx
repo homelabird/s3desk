@@ -2,6 +2,7 @@ import { DownloadOutlined, LinkOutlined, MinusOutlined, PlusOutlined, ReloadOutl
 import { Button } from 'antd'
 
 import type { ObjectMeta } from '../../api/types'
+import { getObjectPreviewLoadActionLabel } from './objectsMediaState'
 import type { ObjectPreview } from './objectsTypes'
 import styles from './ObjectsImageViewer.module.css'
 import {
@@ -45,6 +46,7 @@ export function ObjectsImageViewerFooter({
 	updateScale,
 	visualPreviewReady,
 }: ObjectsImageViewerFooterProps) {
+	const previewLoadActionLabel = getObjectPreviewLoadActionLabel(preview)
 	const zoomControls = visualPreviewReady ? (
 		<div className={styles.imageViewerFooterGroup}>
 			<Button
@@ -103,7 +105,7 @@ export function ObjectsImageViewerFooter({
 							onClick={onLoadPreview}
 							disabled={!objectMeta}
 						>
-							Reload preview
+							{previewLoadActionLabel}
 						</Button>
 					)
 				) : null}

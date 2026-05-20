@@ -27,7 +27,7 @@ Use an error toast.
 
 ## Message Construction
 
-Use the shared helpers in [providerOperationFeedback.ts](../frontend/src/lib/providerOperationFeedback.ts):
+Use the shared helpers in [providerOperationFeedback.ts](../src/lib/providerOperationFeedback.ts):
 
 - `formatProviderOperationFailureMessage(...)`
   Use for `2xx` + `ok=false` responses that may include `details.error`, `details.normalizedError`, or similar provider-level fields.
@@ -60,17 +60,23 @@ If the new response shape introduces new formatting logic, add or update a unit 
 
 ## Current Reference Implementations
 
-- [ProfilesPage.tsx](../frontend/src/pages/ProfilesPage.tsx)
-  `test` and `benchmark` use `ok=false` warnings and API-error "unavailable" messages.
+- [profilesFeedback.ts](../src/pages/profiles/profilesFeedback.ts)
+  `test` and `benchmark` feedback formatting for `ok=false` warnings and API-error "unavailable" messages.
 
-- [BucketPolicyModal.tsx](../frontend/src/pages/buckets/BucketPolicyModal.tsx)
-  provider validation uses `ok=false` warnings and API-error "validation unavailable" messages.
+- [useProfilesPageMutations.ts](../src/pages/profiles/useProfilesPageMutations.ts)
+  profile mutation wiring for success, warning, and unavailable flows.
 
-- [providerOperationFeedback.test.ts](../frontend/src/lib/__tests__/providerOperationFeedback.test.ts)
+- [bucketsFeedback.ts](../src/pages/buckets/bucketsFeedback.ts)
+  bucket policy validation formatting for `ok=false` warnings and API-error "validation unavailable" messages.
+
+- [BucketPolicyModal.tsx](../src/pages/buckets/BucketPolicyModal.tsx)
+  modal-level wiring for provider validation feedback surfaces.
+
+- [providerOperationFeedback.test.ts](../src/lib/__tests__/providerOperationFeedback.test.ts)
   shared formatting contract tests
 
-- [ProfilesPage.smoke.test.tsx](../frontend/src/pages/__tests__/ProfilesPage.smoke.test.tsx)
+- [ProfilesPage.smoke.test.tsx](../src/pages/__tests__/ProfilesPage.smoke.test.tsx)
   screen-level wiring for success, warning, and unavailable flows
 
-- [BucketPolicyModal.test.tsx](../frontend/src/pages/buckets/__tests__/BucketPolicyModal.test.tsx)
+- [BucketPolicyModal.test.tsx](../src/pages/buckets/__tests__/BucketPolicyModal.test.tsx)
   validation warning and unavailable flows

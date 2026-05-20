@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { APIError } from '../../../api/client'
@@ -130,6 +130,21 @@ describe('ObjectThumbnail', () => {
 			).toBe(true),
 		)
 		expect(downloadObjectThumbnail).toHaveBeenCalledTimes(1)
+	})
+
+	it('labels thumbnail failures as preview-specific recovery states', async () => {
+		const cache = createThumbnailCache()
+		const downloadObjectThumbnail = vi.fn(() => ({
+			promise: Promise.reject(new APIError({ status: 413, code: 'too_large', message: 'object is too large for thumbnail' })),
+			abort: vi.fn(),
+		}))
+		const api = createMockApiClient({ objects: { downloadObjectThumbnail } })
+
+		render(<ObjectThumbnail api={api} apiToken="token-a" profileId="profile-1" bucket="bucket-a" objectKey="clip.mp4" size={72} cache={cache} />)
+
+		const thumbnailState = await screen.findByRole('img', { name: 'Thumbnail unavailable for clip.mp4' })
+		expect(thumbnailState.textContent).toContain('Unavailable')
+		expect(thumbnailState.textContent).toContain('Open large preview or use Download.')
 	})
 
 	it('retries thumbnail fetches after transient errors', async () => {

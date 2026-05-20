@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"s3desk/internal/localpath"
 	"s3desk/internal/rcloneconfig"
 )
 
@@ -26,6 +27,9 @@ func (m *Manager) ensureLocalPathAllowed(localPath string) error {
 
 	for _, dir := range m.allowedLocalDirs {
 		if isUnderDir(dir, real) {
+			if err := localpath.RejectSymlinkComponentsUnderRoots(abs, m.allowedLocalDirs); err != nil {
+				return fmt.Errorf("localPath %q is invalid: %w", localPath, err)
+			}
 			return nil
 		}
 	}
@@ -58,6 +62,9 @@ func (m *Manager) prepareLocalDestination(localPath string) (string, error) {
 			return "", fmt.Errorf("failed to create localPath %q: %w", abs, err)
 		}
 	}
+	if err := m.ensureLocalPathAllowed(abs); err != nil {
+		return "", err
+	}
 
 	// Normalize to a directory target for transfer operations.
 	if !strings.HasSuffix(abs, string(os.PathSeparator)) {
@@ -83,6 +90,9 @@ func (m *Manager) ensureLocalPathAllowedForCreate(localPath string) error {
 
 	for _, dir := range m.allowedLocalDirs {
 		if isUnderDir(dir, real) {
+			if err := localpath.RejectSymlinkComponentsUnderRoots(abs, m.allowedLocalDirs); err != nil {
+				return fmt.Errorf("localPath %q is invalid: %w", localPath, err)
+			}
 			return nil
 		}
 	}

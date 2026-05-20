@@ -3,6 +3,8 @@ package bucketgov
 import (
 	"context"
 	"errors"
+	"net/http"
+	"strings"
 	"testing"
 
 	"s3desk/internal/models"
@@ -138,5 +140,43 @@ func TestServiceDelegatesToRegisteredAdapter(t *testing.T) {
 	}
 	if adapter.bucketSeen != "demo" {
 		t.Fatalf("bucket=%q, want demo", adapter.bucketSeen)
+	}
+}
+
+func TestServiceRejectsLoopbackEndpointWhenRemoteEnabled(t *testing.T) {
+	t.Parallel()
+
+	registry := NewRegistry()
+	adapter := &stubAdapter{
+		governance: models.BucketGovernanceView{
+			Provider: models.ProfileProviderAwsS3,
+			Bucket:   "demo",
+		},
+	}
+	registry.Register(models.ProfileProviderAwsS3, adapter)
+	service := NewServiceWithOptions(registry, ServiceOptions{AllowRemote: true})
+
+	_, err := service.GetGovernance(context.Background(), models.ProfileSecrets{
+		Provider:        models.ProfileProviderAwsS3,
+		Endpoint:        "http://127.0.0.1:9000",
+		Region:          "us-east-1",
+		AccessKeyID:     "access",
+		SecretAccessKey: "secret",
+	}, "demo")
+	var opErr *OperationError
+	if !errors.As(err, &opErr) {
+		t.Fatalf("err=%T, want OperationError", err)
+	}
+	if opErr.Status != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", opErr.Status, http.StatusBadRequest)
+	}
+	if opErr.Code != string(models.NormalizedErrorInvalidConfig) {
+		t.Fatalf("code=%q, want %q", opErr.Code, models.NormalizedErrorInvalidConfig)
+	}
+	if got, _ := opErr.Details["error"].(string); !strings.Contains(got, "loopback or link-local") {
+		t.Fatalf("details.error=%q, want loopback rejection", got)
+	}
+	if adapter.bucketSeen != "" {
+		t.Fatalf("bucketSeen=%q, want empty because adapter was not called", adapter.bucketSeen)
 	}
 }

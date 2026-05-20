@@ -12,6 +12,7 @@ type UseOverlayLayerOptions = {
 	onEscape: () => void
 	containerRef: RefObject<HTMLElement | null>
 	initialFocusRef?: RefObject<HTMLElement | null>
+	initialFocusSelector?: string
 	lockBodyScroll?: boolean
 	trapFocus?: boolean
 }
@@ -59,6 +60,15 @@ function focusElement(element: HTMLElement | null | undefined) {
 	if (!element) return false
 	element.focus()
 	return typeof document !== 'undefined' ? document.activeElement === element : false
+}
+
+function getInitialFocusSelectorElement(container: HTMLElement | null, selector: string | undefined) {
+	if (!container || !selector) return null
+	try {
+		return container.querySelector<HTMLElement>(selector)
+	} catch {
+		return null
+	}
 }
 
 function scheduleFocusRestore(element: HTMLElement) {
@@ -196,8 +206,10 @@ export function useOverlayLayer(options: UseOverlayLayerOptions) {
 
 	useEffect(() => {
 		if (!options.open) return
+		const selectedElement = getInitialFocusSelectorElement(options.containerRef.current, options.initialFocusSelector)
+		if (focusElement(selectedElement)) return
 		if (focusElement(options.initialFocusRef?.current)) return
 		if (focusElement(getFocusableElements(options.containerRef.current)[0])) return
 		focusElement(options.containerRef.current)
-	}, [options.containerRef, options.initialFocusRef, options.open])
+	}, [options.containerRef, options.initialFocusRef, options.initialFocusSelector, options.open])
 }

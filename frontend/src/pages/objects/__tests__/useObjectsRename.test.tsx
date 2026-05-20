@@ -70,6 +70,7 @@ describe('useObjectsRename', () => {
 					profileId: 'profile-1',
 					apiToken,
 					bucket: 'bucket-a',
+					prefix: 'docs/',
 					createJobWithRetry,
 				}),
 			{ initialProps: { apiToken: 'token-1' }, wrapper: Wrapper },
@@ -117,6 +118,7 @@ describe('useObjectsRename', () => {
 					profileId: 'profile-1',
 					apiToken,
 					bucket: 'bucket-a',
+					prefix: 'docs/',
 					createJobWithRetry,
 				}),
 			{ initialProps: { apiToken: 'token-1' }, wrapper: Wrapper },
@@ -145,6 +147,93 @@ describe('useObjectsRename', () => {
 		expect(result.current.renameOpen).toBe(false)
 		expect(result.current.renameSource).toBeNull()
 		expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: queryKeys.jobs.scope('profile-1', 'token-1'), exact: false })
+		expect(messageOpenMock).not.toHaveBeenCalled()
+	})
+
+	it('does not let an old-scope pending rename disable a newly opened rename dialog', async () => {
+		const { Wrapper } = createWrapper()
+		const oldPendingJob = deferred<{ id: string }>()
+		const createJobWithRetry = vi.fn().mockReturnValueOnce(oldPendingJob.promise).mockResolvedValueOnce({ id: 'job-new' })
+
+		const { result, rerender } = renderHook(
+			({ apiToken }: { apiToken: string }) =>
+				useObjectsRename({
+					profileId: 'profile-1',
+					apiToken,
+					bucket: 'bucket-a',
+					prefix: 'docs/',
+					createJobWithRetry,
+				}),
+			{ initialProps: { apiToken: 'token-1' }, wrapper: Wrapper },
+		)
+
+		act(() => {
+			result.current.openRenameObject('docs/a.txt')
+		})
+		await act(async () => {
+			result.current.handleRenameSubmit({
+				name: 'renamed-a.txt',
+				confirm: 'RENAME',
+			})
+		})
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		rerender({ apiToken: 'token-2' })
+		act(() => {
+			result.current.openRenameObject('docs/b.txt')
+		})
+
+		expect(result.current.renameSubmitting).toBe(false)
+
+		await act(async () => {
+			result.current.handleRenameSubmit({
+				name: 'renamed-b.txt',
+				confirm: 'RENAME',
+			})
+		})
+
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(2))
+	})
+
+	it('closes stale rename state after navigating to another prefix in the same bucket', async () => {
+		const { Wrapper } = createWrapper()
+		const oldPendingJob = deferred<{ id: string }>()
+		const createJobWithRetry = vi.fn().mockReturnValue(oldPendingJob.promise)
+
+		const { result, rerender } = renderHook(
+			({ prefix }: { prefix: string }) =>
+				useObjectsRename({
+					profileId: 'profile-1',
+					apiToken: 'token-1',
+					bucket: 'bucket-a',
+					prefix,
+					createJobWithRetry,
+				}),
+			{ initialProps: { prefix: 'docs/' }, wrapper: Wrapper },
+		)
+
+		act(() => {
+			result.current.openRenameObject('docs/a.txt')
+		})
+		await act(async () => {
+			result.current.handleRenameSubmit({
+				name: 'renamed-a.txt',
+				confirm: 'RENAME',
+			})
+		})
+		await waitFor(() => expect(createJobWithRetry).toHaveBeenCalledTimes(1))
+
+		rerender({ prefix: 'archive/' })
+
+		expect(result.current.renameOpen).toBe(false)
+		expect(result.current.renameSource).toBeNull()
+		expect(result.current.renameSubmitting).toBe(false)
+
+		await act(async () => {
+			oldPendingJob.resolve({ id: 'job-stale' })
+			await Promise.resolve()
+		})
+
 		expect(messageOpenMock).not.toHaveBeenCalled()
 	})
 })

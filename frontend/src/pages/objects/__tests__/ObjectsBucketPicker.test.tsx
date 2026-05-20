@@ -127,10 +127,16 @@ describe('ObjectsBucketPicker', () => {
 
 		fireEvent.click(screen.getByTestId('objects-bucket-picker-mobile-trigger'))
 		const searchInput = screen.getByTestId('objects-bucket-picker-mobile-search')
+		const trigger = screen.getByTestId('objects-bucket-picker-mobile-trigger')
+		const drawer = screen.getByTestId('objects-bucket-picker-mobile-drawer')
+		expect(searchInput).toHaveFocus()
+		expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(trigger).toHaveAttribute('aria-expanded', 'true')
+		expect(trigger).toHaveAttribute('aria-controls', drawer.id)
 		fireEvent.change(searchInput, { target: { value: 'bucket-b' } })
 
 		expect(screen.getByDisplayValue('bucket-b')).toBeInTheDocument()
-		expect(screen.getByTestId('objects-bucket-picker-mobile-drawer')).toBeInTheDocument()
+		expect(drawer).toBeInTheDocument()
 
 		rerender(
 			<ObjectsBucketPicker
@@ -149,6 +155,7 @@ describe('ObjectsBucketPicker', () => {
 
 		expect(screen.queryByTestId('objects-bucket-picker-mobile-drawer')).not.toBeInTheDocument()
 		expect(screen.queryByDisplayValue('bucket-b')).not.toBeInTheDocument()
+		expect(screen.getByTestId('objects-bucket-picker-mobile-trigger')).toHaveAttribute('aria-expanded', 'false')
 	})
 
 	it('uses shared helper copy for the mobile trigger hint states', () => {

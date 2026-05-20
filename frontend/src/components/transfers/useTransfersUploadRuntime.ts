@@ -60,6 +60,10 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 
 			let items = getUploadItems(args.uploadItemsByTaskIdRef, taskId)
 			if (!items || items.length === 0) {
+				args.updateUploadTask(taskId, (t) => ({
+					...t,
+					retryFileHandleState: 'selection_required',
+				}))
 				const retrySelection = await resolveRetryUploadItems({ task: current })
 				if (!retrySelection.ok) {
 					if ('error' in retrySelection) args.notifications.error(retrySelection.error)
@@ -73,6 +77,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 					fileCount: selectedItems.length,
 					totalBytes: retrySelection.selection.totalBytes,
 					filePaths: retrySelection.selection.filePaths,
+					retryFileHandleState: 'remembered',
 					resumeFileSize: retrySelection.selection.resumeFileSize,
 				}))
 			}
@@ -87,6 +92,7 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 				etaSeconds: 0,
 				error: undefined,
 				jobId: undefined,
+				retryFileHandleState: 'remembered',
 			}))
 		},
 		[args],
@@ -99,7 +105,13 @@ export function useTransfersUploadRuntime(args: UseTransfersUploadRuntimeArgs) {
 
 			const items = getUploadItems(args.uploadItemsByTaskIdRef, taskId)
 			if (!items || items.length === 0) {
-				args.updateUploadTask(taskId, (t) => ({ ...t, status: 'failed', finishedAtMs: Date.now(), error: 'missing files (remove and re-add)' }))
+				args.updateUploadTask(taskId, (t) => ({
+					...t,
+					status: 'failed',
+					finishedAtMs: Date.now(),
+					error: 'Local files are no longer available. Retry and select the same files or folder.',
+					retryFileHandleState: 'selection_required',
+				}))
 				return
 			}
 

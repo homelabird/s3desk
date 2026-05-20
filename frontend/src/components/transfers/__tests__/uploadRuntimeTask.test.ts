@@ -221,9 +221,18 @@ describe('runUploadTask', () => {
 
 		await runUploadTask(args)
 
+		const updateUploadTaskMock = args.updateUploadTask as UpdateUploadTaskMock
+		const failedUpdate = updateUploadTaskMock.mock.calls
+			.map(([, updater]) => updater(args.task))
+			.find((next) => next.status === 'failed')
 		expect(args.notifications.error).toHaveBeenCalledWith(
 			'Resume requires consistent chunk size across files. Enable conversion mode or re-add files.',
 		)
+		expect(failedUpdate).toMatchObject({
+			status: 'failed',
+			error: 'Resume requires consistent chunk size across files. Enable conversion mode or re-add files.',
+		})
+		expect(failedUpdate?.finishedAtMs).toEqual(expect.any(Number))
 		expect(createUploadSessionWithFallbackMock).not.toHaveBeenCalled()
 		expect(executeUploadAttemptMock).not.toHaveBeenCalled()
 		expect(commitUploadAndTrackJobMock).not.toHaveBeenCalled()
@@ -284,7 +293,17 @@ describe('runUploadTask', () => {
 
 		await runUploadTask(args)
 
+		const updateUploadTaskMock = args.updateUploadTask as UpdateUploadTaskMock
+		const failedUpdate = updateUploadTaskMock.mock.calls
+			.map(([, updater]) => updater(args.task))
+			.find((next) => next.status === 'failed')
 		expect(args.notifications.error).toHaveBeenCalledWith('Selected file size does not match the previous upload.')
+		expect(failedUpdate).toMatchObject({
+			status: 'failed',
+			error: 'Selected file size does not match the previous upload.',
+			retryFileHandleState: 'selection_required',
+		})
+		expect(failedUpdate?.finishedAtMs).toEqual(expect.any(Number))
 		expect(createUploadSessionWithFallbackMock).not.toHaveBeenCalled()
 		expect(executeUploadAttemptMock).not.toHaveBeenCalled()
 		expect(commitUploadAndTrackJobMock).not.toHaveBeenCalled()
@@ -363,6 +382,7 @@ describe('runUploadTask', () => {
 			.map(([, updater]) => updater(args.task))
 			.find((task) => task.status === 'canceled')
 		expect(canceledUpdate).toMatchObject({ status: 'canceled' })
+		expect(canceledUpdate?.retryFileHandleState).toBe('remembered')
 		expect(args.notifications.info).toHaveBeenCalledWith('Upload canceled')
 		expect(args.notifications.error).not.toHaveBeenCalled()
 		expect(maybeReportNetworkErrorMock).not.toHaveBeenCalled()

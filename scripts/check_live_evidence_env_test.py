@@ -86,7 +86,7 @@ class LiveEvidenceEnvironmentPreflightTests(unittest.TestCase):
             )
 
     def test_blank_and_placeholder_values_are_missing(self):
-        requirement = MODULE.Requirement(("ONE", "TWO", "THREE", "FOUR", "FIVE"))
+        requirement = MODULE.Requirement(("ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX"))
         with mock.patch.dict(
             os.environ,
             {
@@ -94,7 +94,8 @@ class LiveEvidenceEnvironmentPreflightTests(unittest.TestCase):
                 "TWO": "...",
                 "THREE": "<secret>",
                 "FOUR": "${DEPLOY_API_TOKEN}",
-                "FIVE": "replace-me",
+                "FIVE": "change-me",
+                "SIX": "replace-me",
             },
             clear=True,
         ):
@@ -107,8 +108,29 @@ class LiveEvidenceEnvironmentPreflightTests(unittest.TestCase):
                     {"name": "THREE", "status": "missing"},
                     {"name": "FOUR", "status": "missing"},
                     {"name": "FIVE", "status": "missing"},
+                    {"name": "SIX", "status": "missing"},
                 ],
             )
+
+    def test_reverse_proxy_rejects_change_me_api_token_placeholder(self):
+        env = {
+            "DEPLOY_BASE_URL": "https://example.invalid",
+            "DEPLOY_API_TOKEN": "change-me",
+            "DEPLOY_PROFILE_ID": "profile-1",
+            "DEPLOY_SMOKE_BUCKET": "bucket-a",
+            "DEPLOY_SMOKE_OBJECT_KEY": "path/object.txt",
+        }
+
+        with mock.patch.dict(os.environ, env, clear=True):
+            result = MODULE.scope_result(MODULE.SCOPES["reverse-proxy"])
+
+        self.assertFalse(result["ready"])
+        variables = {
+            variable["name"]: variable["status"]
+            for requirement in result["required"]
+            for variable in requirement["variables"]
+        }
+        self.assertEqual(variables["DEPLOY_API_TOKEN"], "missing")
 
     def test_env_template_outputs_blank_exports_without_reading_secret_values(self):
         output = io.StringIO()

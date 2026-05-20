@@ -263,4 +263,43 @@ describe('useJobsPageCreateFlows', () => {
     })
     expect(messageError).not.toHaveBeenCalled()
   })
+
+  it('ignores duplicate delete job submits while the first request is pending', async () => {
+    const pendingJob = deferred<{ id: string }>()
+    const args = buildArgs({
+      createJobWithRetry: vi.fn().mockReturnValue(pendingJob.promise),
+    })
+
+    const { result } = renderHook(() => useJobsPageCreateFlows(args), {
+      wrapper: createWrapper(args.queryClient),
+    })
+
+    act(() => {
+      result.current.onCreateDelete({
+        bucket: 'bucket-a',
+        prefix: 'logs/',
+        deleteAll: false,
+        allowUnsafePrefix: false,
+        include: [],
+        exclude: [],
+        dryRun: false,
+      })
+      result.current.onCreateDelete({
+        bucket: 'bucket-a',
+        prefix: 'logs/',
+        deleteAll: false,
+        allowUnsafePrefix: false,
+        include: [],
+        exclude: [],
+        dryRun: false,
+      })
+    })
+
+    await waitFor(() => expect(args.createJobWithRetry).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      pendingJob.resolve({ id: 'job-delete-1' })
+      await Promise.resolve()
+    })
+  })
 })

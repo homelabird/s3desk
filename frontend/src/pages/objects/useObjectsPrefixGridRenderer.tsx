@@ -7,7 +7,6 @@ import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
 import { buildActionMenu } from './objectsActions'
 import { displayNameForPrefix } from './objectsListUtils'
-import { onActivateFromKeyboard } from './objectsGridRendererUtils'
 
 type UseObjectsPrefixGridRendererArgs = Pick<
 	UseObjectsGridRenderersArgs,
@@ -77,14 +76,13 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 						onDragOver={(event) => onDndTargetDragOver(event, prefixKey)}
 						onDragLeave={(event) => onDndTargetDragLeave(event, prefixKey)}
 						onDrop={(event) => onDndTargetDrop(event, prefixKey)}
-						onKeyDown={(event) => onActivateFromKeyboard(event, () => onOpenPrefix(prefixKey))}
 						draggable={canDragDrop}
 						onDragStart={(event) => onRowDragStartPrefix(event, prefixKey)}
 						onDragEnd={clearDndHover}
 						data-objects-row="true"
 						data-testid={`objects-prefix-drop-target-${encodeURIComponent(prefixKey)}`}
-						role="button"
-						tabIndex={0}
+						role="group"
+						aria-label={`Folder ${displayName}`}
 					>
 						<div className={styles.gridCardTopRow}>
 							<div className={styles.gridCardTopActions}>
@@ -107,10 +105,10 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 										type="text"
 										className={styles.gridCardIconButton}
 										icon={<EllipsisOutlined />}
-										aria-label="Prefix actions"
+										aria-label={`Prefix actions for ${displayName}`}
 										aria-haspopup="menu"
 										aria-expanded={buttonMenuOpen}
-										title="Prefix actions"
+										title={`Prefix actions for ${displayName}`}
 										onClick={(event) => {
 											event.stopPropagation()
 											toggle()
@@ -122,14 +120,22 @@ export function useObjectsPrefixGridRenderer(args: UseObjectsPrefixGridRendererA
 						<div className={`${styles.gridCardMedia} ${styles.gridCardMediaFolder}`}>
 							<FolderOutlined className={styles.gridCardFolderIcon} />
 						</div>
-						<div className={styles.gridCardBody}>
+						<button
+							type="button"
+							className={styles.gridCardBodyButton}
+							aria-label={`Open folder ${displayName}`}
+							onClick={(event) => {
+								event.stopPropagation()
+								onOpenPrefix(prefixKey)
+							}}
+						>
 							<Typography.Text className={styles.gridCardTitle} title={prefixKey}>
 								{highlightText(displayName)}
 							</Typography.Text>
 							<Typography.Text type="secondary" className={styles.gridCardMetaLine}>
 								Open folder
 							</Typography.Text>
-						</div>
+						</button>
 					</div>
 				</div>
 			)

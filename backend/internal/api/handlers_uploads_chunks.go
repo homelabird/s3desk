@@ -26,12 +26,12 @@ func (c *countingReader) Read(p []byte) (int, error) {
 func writePartToFile(part *multipart.Part, dstPath string, maxBytes int64) (int64, error) {
 	defer func() { _ = part.Close() }()
 
-	tmpPath := dstPath + ".tmp"
-	// #nosec G304 -- tmpPath is derived from the upload staging directory.
-	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	tmpFile, err := os.CreateTemp(filepath.Dir(dstPath), filepath.Base(dstPath)+".*.tmp")
 	if err != nil {
 		return 0, err
 	}
+	tmpPath := tmpFile.Name()
+	f := tmpFile
 	var r io.Reader = part
 	if maxBytes >= 0 {
 		r = io.LimitReader(part, maxBytes+1)
@@ -57,13 +57,13 @@ func writePartToFile(part *multipart.Part, dstPath string, maxBytes int64) (int6
 	return n, nil
 }
 
-func writeReaderToFile(r io.Reader, dstPath string, maxBytes int64) (int64, error) {
-	tmpPath := dstPath + ".tmp"
-	// #nosec G304 -- tmpPath is derived from the upload staging directory.
-	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+func writeReaderToTempFile(r io.Reader, dstPath string, maxBytes int64) (string, int64, error) {
+	tmpFile, err := os.CreateTemp(filepath.Dir(dstPath), filepath.Base(dstPath)+".*.tmp")
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
+	tmpPath := tmpFile.Name()
+	f := tmpFile
 	var reader io.Reader = r
 	if maxBytes >= 0 {
 		reader = io.LimitReader(r, maxBytes+1)
@@ -72,21 +72,17 @@ func writeReaderToFile(r io.Reader, dstPath string, maxBytes int64) (int64, erro
 	closeErr := f.Close()
 	if copyErr != nil {
 		_ = os.Remove(tmpPath)
-		return n, copyErr
+		return tmpPath, n, copyErr
 	}
 	if closeErr != nil {
 		_ = os.Remove(tmpPath)
-		return n, closeErr
+		return tmpPath, n, closeErr
 	}
 	if maxBytes >= 0 && n > maxBytes {
 		_ = os.Remove(tmpPath)
-		return n, errUploadTooLarge
+		return tmpPath, n, errUploadTooLarge
 	}
-	if err := os.Rename(tmpPath, dstPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return n, err
-	}
-	return n, nil
+	return tmpPath, n, nil
 }
 
 func chunkPartName(index int) string {
@@ -117,16 +113,17 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, o
 	if !isUnderDir(stagingDir, dstDir) {
 		return fmt.Errorf("invalid upload path")
 	}
+	previousFinalSize := fileSizeIfExists(finalPath)
 	if err := os.MkdirAll(dstDir, 0o700); err != nil {
 		return err
 	}
 
-	tmpPath := finalPath + ".tmp"
-	// #nosec G304 -- tmpPath is derived from the upload staging directory.
-	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	tmpFile, err := os.CreateTemp(dstDir, filepath.Base(finalPath)+".*.tmp")
 	if err != nil {
 		return err
 	}
+	tmpPath := tmpFile.Name()
+	f := tmpFile
 
 	var appliedDelta int64
 	rollbackDelta := func() {
@@ -199,6 +196,13 @@ func tryAssembleChunkFile(stagingDir, relOS, chunkDir string, totalChunks int, o
 		_ = os.Remove(tmpPath)
 		rollbackDelta()
 		return err
+	}
+	if previousFinalSize > 0 {
+		if err := applyDelta(-previousFinalSize); err != nil {
+			_ = os.Remove(tmpPath)
+			rollbackDelta()
+			return fmt.Errorf("apply upload byte delta: %w", err)
+		}
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		_ = os.Remove(tmpPath)

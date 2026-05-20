@@ -49,6 +49,12 @@
   padding: 6px 0 2px;
 }
 
+.gridFooterCell {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 .gridCardShell {
   min-width: 0;
 }
@@ -201,6 +207,25 @@
   min-width: 0;
 }
 
+.gridCardBodyButton {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gridCardBodyButton:focus-visible {
+  outline: 2px solid var(--s3d-color-focus);
+  outline-offset: 2px;
+}
+
 .gridCardTitle {
   display: block;
   min-width: 0;
@@ -241,6 +266,13 @@
   .gridCardMedia {
     min-height: 126px;
   }
+
+  .gridCardIconButton,
+  .gridCardPreviewActionButton {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 8px !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -265,8 +297,8 @@
   }
 
   .gridCardIconButton {
-    min-width: 26px;
-    min-height: 26px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .gridCardMedia {
@@ -309,8 +341,8 @@
   }
 
   .gridCardPreviewActionButton {
-    min-width: 28px;
-    min-height: 26px;
+    min-width: 44px;
+    min-height: 44px;
     padding-inline: 6px !important;
   }
 

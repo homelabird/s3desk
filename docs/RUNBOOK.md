@@ -9,7 +9,7 @@ This runbook covers the minimum operational checks for a normal S3Desk deploymen
   - `ADDR=0.0.0.0:8080`
   - `ALLOW_REMOTE=true`
   - `API_TOKEN` with a non-placeholder value
-- `ALLOWED_HOSTS` is only required for non-private hostnames
+- `ALLOWED_HOSTS` must include every browser-facing host when `ALLOW_REMOTE=true`
 
 Containerized defaults:
 
@@ -22,14 +22,19 @@ Containerized defaults:
 ## Start and Stop
 
 ```bash
-cp .env.example .env
-$EDITOR .env
+cp .env.example .env.local
+$EDITOR .env.local
+set -a; . ./.env.local; set +a
 ./scripts/compose.sh remote up -d
 ./scripts/compose.sh remote down
 ./scripts/compose.sh remote logs -f
 ```
 
-Use [.env.example](/home/homelab/Downloads/project/s3desk/.env.example) as the starting point for remote/Postgres deployments.
+Use [.env.example](../.env.example) as the starting point for remote/Postgres deployments.
+The repository root `.env` is checked in for non-secret compose defaults. Keep
+real deployment secrets in exported environment variables or ignored local files
+such as `.env.local`; do not commit real `API_TOKEN`, `POSTGRES_PASSWORD`, or
+provider credentials.
 
 If you are using `./scripts/compose.sh dev`, keep it local-only.
 
@@ -38,7 +43,7 @@ For remote exposure, require all of the following:
 - `ALLOW_REMOTE=true`
 - a non-placeholder `API_TOKEN`
 - explicit review of exposed host/port bindings
-- `ALLOWED_HOSTS` for non-private hostnames
+- `ALLOWED_HOSTS` for every browser-facing hostname or IP address
 - an explicit `S3DESK_BIND_ADDRESS` choice in the compose environment
 - `EXTERNAL_BASE_URL` whenever generated browser-facing download links should stay rooted at a public hostname or reverse proxy URL
 
@@ -65,12 +70,15 @@ Required environment:
 - `ALLOWED_HOSTS`
 - `API_TOKEN`
 - `POSTGRES_PASSWORD`
+- `ALLOWED_LOCAL_DIRS`
 
 Rules:
 
 - `S3DESK_DOMAIN`, `EXTERNAL_BASE_URL`, and `ALLOWED_HOSTS` must all describe the same browser-facing hostname
-- the backend still binds `127.0.0.1:${S3DESK_PORT:-8080}` on the host unless you explicitly change `S3DESK_BIND_ADDRESS`
-- Caddy is the only public entrypoint in this topology
+- `./scripts/compose.sh remote` publishes S3Desk on `${S3DESK_BIND_ADDRESS:-127.0.0.1}:${S3DESK_PORT:-8080}`
+- `./scripts/compose.sh caddy` keeps S3Desk internal to the compose network and publishes only Caddy on ports `80` and `443`
+- `S3DESK_BIND_ADDRESS` is a direct remote-compose setting; it is not the public bind for the Caddy topology
+- Caddy is the only public entrypoint in the Caddy topology
 
 Start and inspect the stack with:
 
@@ -97,6 +105,11 @@ Expected result:
 - `/api/v1/realtime-ticket` returns `201`
 - proxied download URLs stay rooted at the expected external hostname
 
+Release evidence smoke is stricter than this quick operator smoke. For release
+approval, run `scripts/deploy_smoke.sh` with `DEPLOY_SMOKE_EVIDENCE_FILE` and
+verify the evidence includes candidate metadata, the signed proxy URL root, and
+the `HEAD` check against the returned signed proxy URL.
+
 Common failures:
 
 - wrong hostname in `/download-proxy` output:
@@ -114,9 +127,9 @@ Common failures:
 
 Useful endpoints:
 
-- UI: `http://192.168.0.200:8080`
-- API docs: `http://192.168.0.200:8080/docs`
-- OpenAPI spec: `http://192.168.0.200:8080/openapi.yml`
+- UI: `http://127.0.0.1:8080` for local checks, or `https://s3desk.example.com` behind Caddy
+- API docs: `http://127.0.0.1:8080/docs`
+- OpenAPI spec: `http://127.0.0.1:8080/openapi.yml`
 
 ## Cost and Restore Thresholds
 
@@ -126,6 +139,7 @@ Watch these metrics together:
 - `storage_operation_duration_ms{provider,operation,status}`
 - `thumbnail_cache_hits_total{source}`
 - `download_proxy_mode_total{mode}`
+- `transfer_errors_total{code}`
 
 Use these operational thresholds:
 
@@ -141,6 +155,14 @@ Use these operational thresholds:
 - `download_proxy_mode_total{mode="stat_required"}` should not dominate normal image or object download traffic once metadata hints are flowing.
 - If `stat_required` remains above roughly `20%` of proxy traffic during steady-state use, inspect recent preview and download callers for missing signed metadata hints.
 
+### Object-storage cost pressure
+
+- Compare `storage_operations_total` by provider and operation before and after high-traffic UI changes.
+- Investigate when list/stat/head-style operations grow faster than the user-visible browse or preview workload they support; as a working threshold, treat sustained growth above roughly `2x` the expected browse/preview action rate as cost pressure.
+- Investigate when any provider operation has an error ratio above roughly `5%` for more than `10 minutes`; repeated failed operations often create both cost and latency pressure.
+- Investigate when `storage_operation_duration_ms` p95 for list or metadata operations stays above `3000ms` for more than `10 minutes`, because slow control-plane calls usually amplify retries, queue depth, and user refreshes.
+- For live providers with request pricing, review dashboards after any release that changes object listing, thumbnailing, preview, or download URL behavior.
+
 ### Staged restore buildup
 
 - `DATA_DIR/restores` should normally contain at most:
@@ -154,10 +176,12 @@ Use these operational thresholds:
 - Dashboard panels should break down `storage_operations_total` by provider and operation so thumbnail, list, and download spikes are obvious.
 - Track `thumbnail_cache_hits_total` by source to see whether hits come from request fingerprint, manifest, or post-stat paths.
 - Track `download_proxy_mode_total` split between `stat_skipped` and `stat_required`.
-- Create an alert or scheduled review for either of these conditions:
+- Create an alert or scheduled review for any of these conditions:
   - staged restore count > `2`
   - staged restore age > `7 days`
   - thumbnail cache reuse staying below the `80%` warm-cache threshold for a commonly revisited bucket
+  - storage operation error ratio > `5%` for `10 minutes`
+  - list or metadata operation p95 > `3000ms` for `10 minutes`
 
 ## Backup Guidance
 
@@ -166,6 +190,13 @@ Use these operational thresholds:
 - The in-product `Full backup` / `Cache + metadata backup` export is sqlite-only
 - Uploading a restore bundle stages a sqlite-backed `DATA_DIR`; it does not restore a running Postgres deployment
 - Keep `API_TOKEN` and any encryption-related secrets outside of the repository
+
+### Profile YAML Exports
+
+- Default profile YAML export omits provider secrets and TLS private material.
+- Secret-inclusive profile YAML export (`includeSecrets=true` or the UI's secret-loading option) is for controlled migration only.
+- Keep secret-inclusive YAML out of git, release evidence, support bundles, and shared chat/log systems.
+- Rotate provider credentials or TLS private material if a secret-inclusive export is shared outside the intended operator channel.
 
 ### Postgres Backup Story
 
@@ -187,7 +218,8 @@ Use these operational thresholds:
 - Portable bundles contain logical application data rather than a raw `s3desk.db` snapshot.
 - Portable import currently assumes replace semantics for portable-scope entities.
 - Keep `ENCRYPTION_KEY` aligned between source and destination when encrypted profile data is present.
-- When using `confidentiality=encrypted`, keep the export/import password aligned as well.
+- When using `confidentiality=encrypted`, a non-empty backup password overrides the destination `ENCRYPTION_KEY`; keep the export/import password aligned, or leave the password blank for server-key encrypted bundles.
+- New encrypted backup bundles use versioned PBKDF2-SHA256 plus AES-256-GCM payload encryption; older `payloadEncryptionIv` bundles remain import-compatible.
 - A safe migration flow is:
   1. Export a portable backup from the source server.
   2. Run portable import preview on the destination server.
@@ -195,14 +227,14 @@ Use these operational thresholds:
   4. Run the actual portable import into the destination database.
   5. Verify health and imported row counts before switching users to the new instance.
 - For a disposable local proof of the supported paths, run:
-  - `./scripts/run_portable_sqlite_to_postgres_smoke.sh`
-  - `./scripts/run_portable_postgres_to_sqlite_smoke.sh`
+  - `bash scripts/run_portable_sqlite_to_postgres_smoke.sh`
+  - `bash scripts/run_portable_postgres_to_sqlite_smoke.sh`
 - For encrypted/password-protected bundles, run:
-  - `PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted PORTABLE_BUNDLE_PASSWORD=operator-secret ./scripts/run_portable_sqlite_to_postgres_smoke.sh`
-  - `PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted PORTABLE_BUNDLE_PASSWORD=operator-secret ./scripts/run_portable_postgres_to_sqlite_smoke.sh`
+  - `PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted PORTABLE_BUNDLE_PASSWORD=operator-secret bash scripts/run_portable_sqlite_to_postgres_smoke.sh`
+  - `PORTABLE_BUNDLE_CONFIDENTIALITY=encrypted PORTABLE_BUNDLE_PASSWORD=operator-secret bash scripts/run_portable_postgres_to_sqlite_smoke.sh`
 - For failure-path validation, run:
-  - `./scripts/run_portable_failure_smoke.sh`
-  - `./scripts/run_portable_postgres_to_sqlite_failure_smoke.sh`
+  - `bash scripts/run_portable_failure_smoke.sh`
+  - `bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh`
 
 ### Staged Restore Lifecycle
 

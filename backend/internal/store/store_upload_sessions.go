@@ -96,6 +96,47 @@ func (s *Store) AddUploadSessionBytes(ctx context.Context, profileID, uploadID s
 		UpdateColumn("bytes_tracked", gorm.Expr("bytes_tracked + ?", delta)).Error
 }
 
+func (s *Store) AddUploadSessionBytesWithinLimit(ctx context.Context, profileID, uploadID string, delta, maxBytes int64) error {
+	if delta == 0 {
+		return nil
+	}
+
+	res := s.db.WithContext(ctx).
+		Model(&uploadSessionRow{}).
+		Where("profile_id = ? AND id = ?", profileID, uploadID).
+		Where("bytes_tracked + ? >= 0", delta)
+	if delta > 0 && maxBytes > 0 {
+		res = res.Where("bytes_tracked + ? <= ?", delta, maxBytes)
+	}
+	res = res.UpdateColumn("bytes_tracked", gorm.Expr("bytes_tracked + ?", delta))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		return nil
+	}
+
+	exists, err := s.uploadSessionExistsForProfile(ctx, profileID, uploadID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return ErrUploadSessionNotFound
+	}
+	return ErrUploadSessionBytesExceeded
+}
+
+func (s *Store) uploadSessionExistsForProfile(ctx context.Context, profileID, uploadID string) (bool, error) {
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Model(&uploadSessionRow{}).
+		Where("profile_id = ? AND id = ?", profileID, uploadID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (s *Store) GetMultipartUpload(ctx context.Context, profileID, uploadID, path string) (MultipartUpload, bool, error) {
 	var row uploadMultipartRow
 	if err := s.db.WithContext(ctx).

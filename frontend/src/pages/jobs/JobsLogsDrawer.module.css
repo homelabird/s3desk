@@ -1,3 +1,19 @@
+.drawerExtra {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.drawerExtraGroup {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
 .toolbar {
 	display: flex;
 	flex-wrap: wrap;
@@ -25,8 +41,16 @@
 }
 
 .logList {
-	display: flex;
-	flex-direction: column;
+	position: relative;
+	width: 100%;
+}
+
+.logVirtualRow {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	box-sizing: border-box;
 }
 
 .logRow {
@@ -73,8 +97,25 @@
 }
 
 @media (max-width: 768px) {
+	.drawerExtra,
+	.drawerExtraGroup {
+		width: 100%;
+	}
+
+	.drawerExtra > button {
+		flex: 1 1 auto;
+	}
+
 	.logRow {
 		grid-template-columns: 1fr;
 		gap: 8px;
+	}
+}
+
+@media (max-width: 480px) {
+	.drawerExtra,
+	.drawerExtraGroup {
+		flex-direction: column;
+		align-items: stretch;
 	}
 }

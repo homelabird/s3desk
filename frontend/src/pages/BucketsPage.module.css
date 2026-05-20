@@ -16,9 +16,9 @@
 
 .tableWrap {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 22px;
+	border-radius: var(--s3d-radius-sm);
 	background: var(--s3d-color-bg);
-	box-shadow: var(--s3d-shadow-sm);
+	box-shadow: none;
 	overflow: hidden;
 }
 
@@ -34,7 +34,7 @@
 }
 
 .headRow {
-	background: var(--s3d-gradient-section);
+	background: var(--s3d-color-bg-secondary);
 }
 
 .th {
@@ -142,11 +142,15 @@
 
 @media (max-width: 480px) {
 	.tableWrap {
-		border-radius: 18px;
+		border-radius: var(--s3d-radius-sm);
 	}
 
 	.mobileCard {
 		padding: 16px;
+	}
+
+	.mobileActionRow :global(.ant-btn) {
+		min-height: 44px;
 	}
 }
 
@@ -168,7 +172,6 @@
 
 	.mobileActionRow :global(.ant-btn) {
 		width: 100%;
-		min-height: 44px;
 		justify-content: center;
 	}
 }

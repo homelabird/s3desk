@@ -23,10 +23,12 @@ type BuildProfilesPageDialogsPropsArgs = {
 	yamlContent: string
 	yamlDraft: string
 	yamlFilename: string
+	yamlIncludesSecrets: boolean
 	exportYamlLoading: boolean
 	saveYamlLoading: boolean
 	onYamlCopy: ProfilesDialogsProps['onYamlCopy']
 	onYamlDownload: ProfilesDialogsProps['onYamlDownload']
+	onYamlLoadSecrets: ProfilesDialogsProps['onYamlLoadSecrets']
 	onYamlDraftChange: ProfilesDialogsProps['onYamlDraftChange']
 	onYamlSave: ProfilesDialogsProps['onYamlSave']
 	importOpen: boolean
@@ -66,15 +68,17 @@ export function buildProfilesPageDialogsProps(
 			closeYamlModal: args.closeYamlModal,
 			yamlProfile: args.yamlProfile,
 			yamlError: args.yamlError,
-			yamlContent: args.yamlContent,
-			yamlDraft: args.yamlDraft,
-			yamlFilename: args.yamlFilename,
-			exportYamlLoading: args.exportYamlLoading,
-			saveYamlLoading: args.saveYamlLoading,
-			onYamlCopy: args.onYamlCopy,
-			onYamlDownload: args.onYamlDownload,
-			onYamlDraftChange: args.onYamlDraftChange,
-			onYamlSave: args.onYamlSave,
+				yamlContent: args.yamlContent,
+				yamlDraft: args.yamlDraft,
+				yamlFilename: args.yamlFilename,
+				yamlIncludesSecrets: args.yamlIncludesSecrets,
+				exportYamlLoading: args.exportYamlLoading,
+				saveYamlLoading: args.saveYamlLoading,
+				onYamlCopy: args.onYamlCopy,
+				onYamlDownload: args.onYamlDownload,
+				onYamlLoadSecrets: args.onYamlLoadSecrets,
+				onYamlDraftChange: args.onYamlDraftChange,
+				onYamlSave: args.onYamlSave,
 			importOpen: args.importOpen,
 			closeImportModal: args.closeImportModal,
 			importSessionToken: args.importSessionToken,

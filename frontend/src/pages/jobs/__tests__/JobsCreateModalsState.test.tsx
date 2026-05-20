@@ -7,9 +7,9 @@ import { CreateJobModal } from '../CreateJobModal'
 import { JobsCreateModals } from '../JobsCreateModals'
 
 vi.mock('../../../components/LocalDevicePathInput', () => ({
-	LocalDevicePathInput: (props: { value: string; onChange: (value: string) => void; placeholder?: string }) => (
+	LocalDevicePathInput: (props: { id?: string; value: string; onChange: (value: string) => void; placeholder?: string }) => (
 		<input
-			aria-label="Local destination folder"
+			id={props.id}
 			value={props.value}
 			onChange={(event) => props.onChange(event.target.value)}
 			placeholder={props.placeholder}

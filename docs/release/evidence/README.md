@@ -13,17 +13,42 @@ python3 scripts/check_release_evidence.py --strict
 python3 scripts/check_release_evidence.py --strict --require-candidate-id --candidate-id <tag-or-sha>
 ```
 
-The audit reports provider-live and reverse-proxy evidence requirements from the current changed file set. Markdown and checklist output print the suggested provider scopes, missing provider scopes, preflight commands, env-template commands, provider test commands, smoke commands, target evidence filenames, reverse-proxy route-level expected statuses, non-status check expectations, and final gate commands for the required evidence. `--strict` exits non-zero when required evidence is missing. Add `--require-candidate-id --candidate-id <tag-or-sha>` before final approval when the release candidate is known; this rejects evidence whose `S3Desk commit SHA or release tag` does not match the candidate being released, and fails fast if the candidate identifier is omitted. Provider-live evidence must cover every suggested provider scope, include a supported `Provider name`, include non-placeholder bucket/profile/feature/command metadata, include non-placeholder provider-native console or CLI confirmation on success, include a non-placeholder `S3Desk commit SHA or release tag`, and use an `Actual outcome` pass/success result rather than failed or blocked. Reverse-proxy evidence must also include a non-placeholder `S3Desk commit SHA or release tag`, sanitized base URL/profile/bucket/object metadata, each required smoke check result, and the same pass/success semantics for `Reverse-proxy smoke`. Evidence files with missing or unsupported provider names, missing provider metadata, missing candidate identifiers, mismatched candidate identifiers, placeholder candidate identifiers, placeholder evidence filenames, missing reverse-proxy smoke metadata, suspected API tokens, authorization headers, cookie token values, provider credential assignments, access key identifiers or assignments, account keys, service account JSON, private keys, or signed URL signatures are rejected and must be corrected before release approval. Any rejected evidence blocks release readiness even when other matching pass evidence exists.
+The audit reports provider-live, reverse-proxy, and backup-portable evidence requirements from the current changed file set. Markdown and checklist output print the suggested provider scopes, missing provider scopes, preflight commands, env-template commands, provider test commands, smoke commands, target evidence filenames, reverse-proxy route-level expected statuses, non-status check expectations, backup-portable smoke commands and per-script smoke results, and final gate commands for the required evidence. `--strict` exits non-zero when required evidence is missing. Add `--require-candidate-id --candidate-id <tag-or-sha>` before final approval when the release candidate is known; this rejects evidence whose `S3Desk commit SHA or release tag` does not match the candidate being released, and fails fast if the candidate identifier is omitted. Provider-live evidence must cover every suggested provider scope, include a supported `Provider name`, include non-placeholder bucket/profile/feature/command metadata, include non-placeholder provider-native console or CLI confirmation on success, include a non-placeholder `S3Desk commit SHA or release tag`, and use an `Actual outcome` pass/success result rather than failed or blocked. Reverse-proxy evidence must also include a non-placeholder `S3Desk commit SHA or release tag`, sanitized base URL/profile/bucket/object metadata, each required smoke check result, and the same pass/success semantics for `Reverse-proxy smoke`. Backup-portable evidence must include a non-placeholder `S3Desk commit SHA or release tag`, sanitized source/target database and workflow metadata, staged restore target details, pass/success semantics for `Backup portable smoke`, and a pass/success result for each portable smoke script in `## Smoke Results`. Evidence files with missing or unsupported provider names, missing provider metadata, missing candidate identifiers, mismatched candidate identifiers, placeholder candidate identifiers, placeholder evidence filenames, missing reverse-proxy smoke metadata, missing backup-portable smoke metadata or per-script results, suspected API tokens, authorization headers, cookie token values, provider credential assignments, access key identifiers or assignments, account keys, service account JSON, private keys, backup passwords, or signed URL signatures are rejected and must be corrected before release approval. Any rejected evidence blocks release readiness even when other matching pass evidence exists.
 
-Use `--format json` when release automation needs the same remediation data without parsing Markdown. Each requirement includes structured command and metadata fields such as `preflight_command`, `env_template_command`, `evidence_targets` or `evidence_target`, `required_metadata`, `required_metadata_fields`, and the relevant provider test or reverse-proxy smoke command. Reverse-proxy requirements also include `required_check_fields`, `check_status_expectations`, and `check_result_expectations` so automation can verify HTTP status coverage and URL-root result coverage without parsing prose. When `--candidate-id <tag-or-sha>` is provided, remediation evidence targets and the reverse-proxy smoke command use that concrete candidate identifier instead of the `<tag-or-sha>` placeholder. The top-level `final_gate_commands` object includes the strict release-scope and release-evidence commands for the final candidate gate.
+Use `--format json` when release automation needs the same remediation data without parsing Markdown. Each requirement includes structured command and metadata fields such as `preflight_command`, `env_template_command`, `evidence_targets` or `evidence_target`, `required_metadata`, `required_metadata_fields`, and the relevant provider test, reverse-proxy smoke command, or backup-portable smoke command. Reverse-proxy requirements also include `required_check_fields`, `check_status_expectations`, and `check_result_expectations` so automation can verify HTTP status coverage and URL-root result coverage without parsing prose. Backup-portable requirements include `required_check_fields` so automation can verify the per-script smoke result lines. When `--candidate-id <tag-or-sha>` is provided, remediation evidence targets and the reverse-proxy smoke command use that concrete candidate identifier instead of the `<tag-or-sha>` placeholder. The top-level `final_gate_commands` object includes the strict release-scope and release-evidence commands for the final candidate gate.
 
 For the current release-candidate workspace, use [LIVE_EVIDENCE_CHECKLIST_2026-05-02.md](LIVE_EVIDENCE_CHECKLIST_2026-05-02.md) as the operator checklist before rerunning the strict evidence gate.
 
 Checklist drift is guarded by:
 
 ```bash
-python3 scripts/check_release_evidence_checklist.py --candidate-id rc1
+python3 scripts/check_release_evidence_checklist.py
 ```
+
+When `--candidate-id` is omitted, the checklist sync uses the latest versioned section in `CHANGELOG.md`.
+For committed-candidate comparisons, pass the same `--base <base-tag-or-sha> --head <candidate-tag-or-sha>`
+pair used with `check_release_evidence.py` and `check_release_readiness.py`.
+
+## Backup Portable Smoke
+
+Use [BACKUP_PORTABLE_SMOKE_TEMPLATE.md](BACKUP_PORTABLE_SMOKE_TEMPLATE.md) when backup, restore, portable bundle, or staged restore paths change. Keep one sanitized evidence record for the release candidate.
+
+Run the portable smoke scripts against disposable targets:
+
+```bash
+bash scripts/run_portable_failure_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_failure_smoke.sh
+bash scripts/run_portable_postgres_to_sqlite_smoke.sh
+bash scripts/run_portable_sqlite_to_postgres_smoke.sh
+```
+
+Record the result at:
+
+```bash
+docs/release/evidence/backup-portable-smoke-<tag-or-sha>.md
+```
+
+Backup-portable evidence must include sanitized `Source database`, `Target database`, `Export workflow`, `Import workflow`, `Verification workflow`, `Staged restore target`, `S3Desk commit SHA or release tag`, pass/success `Backup portable smoke`, and pass/success result lines for all four portable smoke scripts in `## Smoke Results`. Do not include backup passwords, API tokens, database credentials, encryption keys, provider secrets, or private keys.
 
 ## Reverse Proxy Smoke
 
@@ -75,7 +100,7 @@ The smoke covers:
 - `HEAD` against the returned signed proxy URL
 
 Reverse-proxy evidence must include sanitized `Base URL`, `Expected external base URL`, `Profile identifier`, `Bucket`, `Object key`, and all smoke check result lines from the `## Checks` section in `REVERSE_PROXY_SMOKE_TEMPLATE.md`. Generated evidence records `HTTP 200` for healthz, meta, download-url, and HEAD checks, and `HTTP 201` for realtime-ticket creation; other recorded HTTP statuses are rejected. `Signed proxy URL root` must match `Expected external base URL` or record a pass/success result for that check. The `## Expected Statuses` section is reference material only and does not satisfy evidence requirements by itself.
-Do not include API tokens, authorization header values, cookie token values, or provider secrets in evidence files.
+Do not include API tokens, authorization header values, cookie token values, backup passwords, or provider secrets in evidence files.
 Do not include full signed URLs with query signatures; record only the external base URL, route shape, or a redacted URL.
 Fill `S3Desk commit SHA or release tag` with the release tag or commit SHA used for validation; do not leave it blank or as `<tag-or-sha>`.
 Replace `<tag-or-sha>` in evidence filenames with the release tag or commit SHA before final approval.

@@ -13,7 +13,7 @@ RUN npm run ci:deps:build
 COPY frontend/ /src/frontend/
 RUN npm run gen:openapi && npm run build
 
-FROM harbor.k8s.homelabird.com/library/golang:1.25.9-alpine AS backend
+FROM harbor.k8s.homelabird.com/library/golang:1.25.10-alpine AS backend
 WORKDIR /src/backend
 COPY backend/go.mod backend/go.sum /src/backend/
 RUN go mod download

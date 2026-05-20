@@ -46,6 +46,10 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.getByText('Not selected')).toBeInTheDocument()
 		expect(screen.getByText(selectBucketFirstSentenceHint())).toBeInTheDocument()
 		expect(screen.getByText('No files or folders selected.')).toBeInTheDocument()
+		expect(screen.getByRole('status')).toHaveTextContent('0 item(s)')
+		expect(screen.getByRole('status')).toHaveTextContent('s3://primary-bucket/')
+		expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
+		expect(screen.getByRole('status')).toHaveAttribute('aria-atomic', 'true')
 
 		fireEvent.click(screen.getByRole('button', { name: /Add from device/i }))
 		expect(onOpenPicker).toHaveBeenCalledTimes(1)
@@ -82,6 +86,10 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.getByText('photos/f.txt')).toBeInTheDocument()
 		expect(screen.queryByText('photos/g.txt')).not.toBeInTheDocument()
 		expect(screen.getByText('+ 1 more item(s) selected')).toBeInTheDocument()
+		expect(screen.getByRole('status')).toHaveTextContent('7 item(s)')
+		expect(screen.getByRole('status')).toHaveTextContent('7.00 KB')
+		expect(screen.getByRole('status')).toHaveTextContent('s3://primary-bucket/photos')
+		expect(screen.getByRole('status')).toHaveTextContent('Folder')
 	})
 
 	it('disables the picker when uploads are unavailable', () => {

@@ -155,10 +155,17 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		const trigger = screen.getByRole('button', { name: 'Backup' })
+		expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(trigger).toHaveAttribute('aria-expanded', 'false')
+		expect(trigger).toHaveAttribute('aria-controls', 'sidebar-backup-drawer-panel')
 
-		expect(await screen.findByRole('dialog', { name: 'Backup and restore' })).toBeInTheDocument()
-		expect(await screen.findByText('Backup export')).toBeInTheDocument()
+		fireEvent.click(trigger)
+		expect(trigger).toHaveAttribute('aria-expanded', 'true')
+
+		const drawer = await screen.findByRole('dialog', { name: 'Backup and restore' })
+		expect(drawer).toHaveAttribute('id', 'sidebar-backup-drawer-panel')
+		expect(await screen.findByText('Backup export', {}, { timeout: 5_000 })).toBeInTheDocument()
 		expect(screen.getByText('Stage restore bundle')).toBeInTheDocument()
 		expect(screen.getByText('Portable import')).toBeInTheDocument()
 		expect(screen.getByText('Staged restores')).toBeInTheDocument()

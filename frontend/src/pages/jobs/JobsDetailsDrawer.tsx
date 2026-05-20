@@ -14,6 +14,7 @@ import { formatProgress, jobSummary } from './jobPresentation'
 import { formatS3Destination, getBool, getNumber, getString, parentPrefixFromKey, statusColor } from './jobUtils'
 import { JobsUploadDetailsTable } from './JobsUploadDetailsTable'
 import type { JobsUploadDetails, JobsUploadTableRow } from './jobsUploadTypes'
+import sharedStyles from './JobsShared.module.css'
 
 type DetailField = {
 	label: string
@@ -201,10 +202,10 @@ function buildOperationalSections(job: Job, uploadDetails: JobsUploadDetails | n
 
 function renderFieldValue(field: DetailField) {
 	if (!field.value) return <Typography.Text type="secondary">-</Typography.Text>
-	if (field.code) return <Typography.Text code>{field.value}</Typography.Text>
-	if (field.tone === 'danger') return <Typography.Text type="danger">{field.value}</Typography.Text>
-	if (field.tone === 'secondary') return <Typography.Text type="secondary">{field.value}</Typography.Text>
-	return <Typography.Text>{field.value}</Typography.Text>
+	if (field.code) return <Typography.Text code className={sharedStyles.detailValue}>{field.value}</Typography.Text>
+	if (field.tone === 'danger') return <Typography.Text type="danger" className={sharedStyles.detailValue}>{field.value}</Typography.Text>
+	if (field.tone === 'secondary') return <Typography.Text type="secondary" className={sharedStyles.detailValue}>{field.value}</Typography.Text>
+	return <Typography.Text className={sharedStyles.detailValue}>{field.value}</Typography.Text>
 }
 
 type Props = {
@@ -266,7 +267,7 @@ export function JobsDetailsDrawer(props: Props) {
 			placement="right"
 			width={typeof props.drawerWidth === 'number' ? `${props.drawerWidth}px` : props.drawerWidth}
 			extra={
-				<Space>
+				<div className={sharedStyles.drawerExtra}>
 					<Button icon={<ReloadOutlined />} disabled={!props.detailsJobId || props.isOffline} loading={props.isFetching} onClick={props.onRefresh}>
 						Refresh
 					</Button>
@@ -311,7 +312,7 @@ export function JobsDetailsDrawer(props: Props) {
 					>
 						Open logs
 					</Button>
-				</Space>
+				</div>
 			}
 		>
 			{props.isError ? <Alert type="error" showIcon title="Failed to load job" description={formatErr(props.error)} /> : null}
@@ -321,23 +322,23 @@ export function JobsDetailsDrawer(props: Props) {
 					<>
 						<Descriptions size="small" bordered column={1}>
 							<Descriptions.Item label="ID">
-								<Typography.Text code>{props.job.id}</Typography.Text>
+								<Typography.Text code className={sharedStyles.detailValue}>{props.job.id}</Typography.Text>
 							</Descriptions.Item>
 							<Descriptions.Item label="Type">
 								{(() => {
 									const info = getJobTypeInfo(props.job.type)
-									if (!info) return <Typography.Text code>{props.job.type}</Typography.Text>
+									if (!info) return <Typography.Text code className={sharedStyles.detailValue}>{props.job.type}</Typography.Text>
 									return (
 										<Space orientation="vertical" size={0} style={{ width: '100%' }}>
-											<Typography.Text strong>{info.label}</Typography.Text>
-											<Typography.Text type="secondary">{info.description}</Typography.Text>
-											<Typography.Text code>{props.job.type}</Typography.Text>
+											<Typography.Text strong className={sharedStyles.detailValue}>{info.label}</Typography.Text>
+											<Typography.Text type="secondary" className={sharedStyles.detailValue}>{info.description}</Typography.Text>
+											<Typography.Text code className={sharedStyles.detailValue}>{props.job.type}</Typography.Text>
 										</Space>
 									)
 								})()}
 							</Descriptions.Item>
 							<Descriptions.Item label="Summary">
-								{summary ? <Typography.Text type="secondary">{summary}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
+								{summary ? <Typography.Text type="secondary" className={sharedStyles.detailValue}>{summary}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
 							</Descriptions.Item>
 							<Descriptions.Item label="Status">
 								<Tag color={statusColor(props.job.status)}>{props.job.status}</Tag>
@@ -351,13 +352,13 @@ export function JobsDetailsDrawer(props: Props) {
 							</Descriptions.Item>
 							<Descriptions.Item label="Created">
 								<Tooltip title={props.job.createdAt}>
-									<Typography.Text code>{formatDateTime(props.job.createdAt)}</Typography.Text>
+									<Typography.Text code className={sharedStyles.detailValue}>{formatDateTime(props.job.createdAt)}</Typography.Text>
 								</Tooltip>
 							</Descriptions.Item>
 							<Descriptions.Item label="Started">
 								{props.job.startedAt ? (
 									<Tooltip title={props.job.startedAt}>
-										<Typography.Text code>{formatDateTime(props.job.startedAt)}</Typography.Text>
+										<Typography.Text code className={sharedStyles.detailValue}>{formatDateTime(props.job.startedAt)}</Typography.Text>
 									</Tooltip>
 								) : (
 									<Typography.Text type="secondary">-</Typography.Text>
@@ -366,17 +367,17 @@ export function JobsDetailsDrawer(props: Props) {
 							<Descriptions.Item label="Finished">
 								{props.job.finishedAt ? (
 									<Tooltip title={props.job.finishedAt}>
-										<Typography.Text code>{formatDateTime(props.job.finishedAt)}</Typography.Text>
+										<Typography.Text code className={sharedStyles.detailValue}>{formatDateTime(props.job.finishedAt)}</Typography.Text>
 									</Tooltip>
 								) : (
 									<Typography.Text type="secondary">-</Typography.Text>
 								)}
 							</Descriptions.Item>
 							<Descriptions.Item label="Error code">
-								{props.job.errorCode ? <Typography.Text code>{props.job.errorCode}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
+								{props.job.errorCode ? <Typography.Text code className={sharedStyles.detailValue}>{props.job.errorCode}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
 							</Descriptions.Item>
 							<Descriptions.Item label="Error">
-								{props.job.error ? <Typography.Text type="danger">{props.job.error}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
+								{props.job.error ? <Typography.Text type="danger" className={sharedStyles.detailValue}>{props.job.error}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
 							</Descriptions.Item>
 						</Descriptions>
 
@@ -428,16 +429,16 @@ export function JobsDetailsDrawer(props: Props) {
 														<Descriptions size="small" bordered column={1}>
 															<Descriptions.Item label="Destination">
 																{props.uploadDetails.bucket ? (
-																	<Typography.Text code>{formatS3Destination(props.uploadDetails.bucket, props.uploadDetails.prefix ?? '')}</Typography.Text>
+																	<Typography.Text code className={sharedStyles.detailValue}>{formatS3Destination(props.uploadDetails.bucket, props.uploadDetails.prefix ?? '')}</Typography.Text>
 																) : (
 																	<Typography.Text type="secondary">-</Typography.Text>
 																)}
 															</Descriptions.Item>
 															<Descriptions.Item label="Label">
-																{props.uploadDetails.label ? <Typography.Text>{props.uploadDetails.label}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
+																{props.uploadDetails.label ? <Typography.Text className={sharedStyles.detailValue}>{props.uploadDetails.label}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
 															</Descriptions.Item>
 															<Descriptions.Item label="Root">
-																{props.uploadRootLabel ? <Typography.Text>{props.uploadRootLabel}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
+																{props.uploadRootLabel ? <Typography.Text className={sharedStyles.detailValue}>{props.uploadRootLabel}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
 															</Descriptions.Item>
 															<Descriptions.Item label="Total files">
 																{props.uploadDetails.totalFiles != null ? <Typography.Text>{props.uploadDetails.totalFiles}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
@@ -478,7 +479,7 @@ export function JobsDetailsDrawer(props: Props) {
 									key: 'payload',
 									label: 'Payload (JSON)',
 									children: (
-										<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
+										<pre className={sharedStyles.payloadBlock}>
 											{JSON.stringify(props.job.payload, null, 2)}
 										</pre>
 									),

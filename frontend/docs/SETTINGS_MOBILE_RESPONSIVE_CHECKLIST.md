@@ -16,6 +16,15 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 - `430x932`
 - `768x1024`
 
+## Automated Coverage
+
+Covered by `frontend/tests/settings-mobile-responsive.spec.ts`.
+
+- [x] The settings drawer opens from the mobile route and compact header.
+- [x] The narrow mobile tab row can reach the `Recovery` workflow on `320x568`.
+- [x] Transfer preferences persist after close/reopen on mobile.
+- [x] API token changes persist after close/reopen on mobile.
+
 ## Manual QA Checklist
 
 - [ ] `Settings` still opens from the main UI on a phone-sized viewport.
@@ -27,16 +36,16 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## `Settings` Flow Checklist
 
-- [ ] Open `Settings` from the main UI on a phone-sized viewport.
-- [ ] Switch across multiple tabs using horizontal scrolling when needed.
-- [ ] Change at least one setting and confirm the updated state persists after close/reopen.
-- [ ] Reopen `Settings` and confirm the previously changed state is still visible.
+- [x] Open `Settings` from the main UI on a phone-sized viewport.
+- [x] Switch across multiple tabs using horizontal scrolling when needed.
+- [x] Change at least one setting and confirm the updated state persists after close/reopen.
+- [x] Reopen `Settings` and confirm the previously changed state is still visible.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile test that verifies `Settings` opens from the main UI.
-- [ ] Add a test that verifies horizontal tab scrolling still reaches the hidden tabs.
-- [ ] Add a test that verifies a representative setting persists after close/reopen on mobile.
+- [x] Add a mobile test that verifies `Settings` opens from the main UI.
+- [x] Add a test that verifies horizontal tab scrolling still reaches the hidden tabs.
+- [x] Add a test that verifies a representative setting persists after close/reopen on mobile.
 
 ## Notes
 

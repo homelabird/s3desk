@@ -1,6 +1,6 @@
 services:
   minio:
-    image: "${MINIO_IMAGE:-docker.io/minio/minio:latest}"
+    image: "${MINIO_IMAGE:-docker.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}"
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-portable-minio}
@@ -9,7 +9,7 @@ services:
       - portable-smoke-minio-data:/data
 
   minio-seed:
-    image: "${MINIO_MC_IMAGE:-docker.io/minio/mc:latest}"
+    image: "${MINIO_MC_IMAGE:-docker.io/minio/mc:RELEASE.2025-08-13T08-35-41Z}"
     entrypoint: ["/bin/sh", "/seed-minio.sh"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-portable-minio}

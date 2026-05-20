@@ -15,8 +15,12 @@ func TestParseRealtimeAfterSeq_PrefersHeaderBeforeQuery(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/events?afterSeq=7", nil)
 	req.Header.Set("Last-Event-ID", "12")
 
-	if got := parseRealtimeAfterSeq(req, "Last-Event-ID"); got != 12 {
-		t.Fatalf("got=%d, want 12", got)
+	parsed := parseRealtimeAfterSeq(req, "Last-Event-ID")
+	if !parsed.ok {
+		t.Fatalf("parse failed: field=%q value=%q", parsed.invalidField, parsed.invalidValue)
+	}
+	if parsed.value != 12 {
+		t.Fatalf("got=%d, want 12", parsed.value)
 	}
 }
 
@@ -25,18 +29,115 @@ func TestParseRealtimeAfterSeq_UsesQueryForWS(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/ws?afterSeq=9", nil)
 
-	if got := parseRealtimeAfterSeq(req, ""); got != 9 {
-		t.Fatalf("got=%d, want 9", got)
+	parsed := parseRealtimeAfterSeq(req, "")
+	if !parsed.ok {
+		t.Fatalf("parse failed: field=%q value=%q", parsed.invalidField, parsed.invalidValue)
+	}
+	if parsed.value != 9 {
+		t.Fatalf("got=%d, want 9", parsed.value)
 	}
 }
 
-func TestParseRealtimeIncludeLogs_DefaultsTrueOnInvalidValue(t *testing.T) {
+func TestParseRealtimeAfterSeq_RejectsInvalidHeaderBeforeQuery(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/events?afterSeq=7", nil)
+	req.Header.Set("Last-Event-ID", "abc")
+
+	parsed := parseRealtimeAfterSeq(req, "Last-Event-ID")
+	if parsed.ok {
+		t.Fatal("expected parse to fail")
+	}
+	if parsed.invalidField != "Last-Event-ID" {
+		t.Fatalf("invalidField=%q, want Last-Event-ID", parsed.invalidField)
+	}
+	if parsed.invalidValue != "abc" {
+		t.Fatalf("invalidValue=%q, want abc", parsed.invalidValue)
+	}
+}
+
+func TestParseRealtimeAfterSeq_RejectsNegativeQuery(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ws?afterSeq=-1", nil)
+
+	parsed := parseRealtimeAfterSeq(req, "")
+	if parsed.ok {
+		t.Fatal("expected parse to fail")
+	}
+	if parsed.invalidField != "afterSeq" {
+		t.Fatalf("invalidField=%q, want afterSeq", parsed.invalidField)
+	}
+	if parsed.invalidValue != "-1" {
+		t.Fatalf("invalidValue=%q, want -1", parsed.invalidValue)
+	}
+}
+
+func TestParseRealtimeIncludeLogs_InvalidValueReturnsNotOK(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/events?includeLogs=maybe", nil)
 
-	if got := parseRealtimeIncludeLogs(req); !got {
-		t.Fatal("expected includeLogs=true")
+	if _, ok := parseRealtimeIncludeLogs(req); ok {
+		t.Fatal("expected includeLogs parse to fail")
+	}
+}
+
+func TestPrepareRealtimeRequest_RejectsInvalidIncludeLogsAndReleasesSlot(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{}, realtimeLimit: newRequestLimiter(1), realtimeMax: 1}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/events?includeLogs=maybe", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+
+	if _, _, _, ok := s.prepareRealtimeRequest(rr, req, "sse", "trusted Origin required", "Last-Event-ID"); ok {
+		t.Fatal("expected prepare to reject invalid includeLogs")
+	}
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	if !s.realtimeLimit.tryAcquire() {
+		t.Fatal("expected realtime slot to be released after invalid includeLogs")
+	}
+}
+
+func TestPrepareRealtimeRequest_RejectsInvalidAfterSeqAndReleasesSlot(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{}, realtimeLimit: newRequestLimiter(1), realtimeMax: 1}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/events?afterSeq=abc", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+
+	if _, _, _, ok := s.prepareRealtimeRequest(rr, req, "sse", "trusted Origin required", "Last-Event-ID"); ok {
+		t.Fatal("expected prepare to reject invalid afterSeq")
+	}
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	if !s.realtimeLimit.tryAcquire() {
+		t.Fatal("expected realtime slot to be released after invalid afterSeq")
+	}
+}
+
+func TestPrepareRealtimeRequest_RejectsInvalidLastEventIDAndReleasesSlot(t *testing.T) {
+	t.Parallel()
+
+	s := &server{cfg: config.Config{}, realtimeLimit: newRequestLimiter(1), realtimeMax: 1}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8080/api/v1/events?afterSeq=7", nil)
+	req.Header.Set("Origin", "http://127.0.0.1:8080")
+	req.Header.Set("Last-Event-ID", "abc")
+
+	if _, _, _, ok := s.prepareRealtimeRequest(rr, req, "sse", "trusted Origin required", "Last-Event-ID"); ok {
+		t.Fatal("expected prepare to reject invalid Last-Event-ID")
+	}
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	if !s.realtimeLimit.tryAcquire() {
+		t.Fatal("expected realtime slot to be released after invalid Last-Event-ID")
 	}
 }
 

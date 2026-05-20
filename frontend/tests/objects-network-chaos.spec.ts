@@ -151,7 +151,9 @@ test.describe('Objects page network chaos', () => {
 
 		const moreButton = await getToolbarMoreButton(page)
 		await moreButton.scrollIntoViewIfNeeded()
-		await moreButton.click({ force: true })
+		await expect(moreButton).toBeVisible()
+		await expect(moreButton).toBeEnabled()
+		await moreButton.click()
 		await page.getByRole('menuitem', { name: 'Refresh' }).click()
 
 		await expect(objectsSelectionCheckbox(page, 'notes/todo.txt')).toBeVisible()

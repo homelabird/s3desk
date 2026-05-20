@@ -104,6 +104,9 @@
   color: var(--s3d-color-text-muted);
   cursor: pointer;
   border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .closeButton:hover {
@@ -218,10 +221,18 @@
   .tabButtonLine,
   .tabButtonCard,
   .addButton,
+  .closeButton,
   .sizeSmall .tabButtonLine,
   .sizeSmall .tabButtonCard,
+  .sizeSmall .closeButton,
   .sizeSmall .addButton {
     min-height: 44px;
+  }
+
+  .closeButton,
+  .sizeSmall .closeButton {
+    min-width: 44px;
+    padding: 0;
   }
 
   .tabButtonLine {
@@ -257,8 +268,19 @@
 
   .tabButtonCard,
   .addButton,
+  .closeButton,
   .sizeSmall .tabButtonCard,
+  .sizeSmall .closeButton,
   .sizeSmall .addButton {
     padding: 8px 10px;
+  }
+}
+
+@media (pointer: coarse) {
+  .closeButton,
+  .sizeSmall .closeButton {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
   }
 }

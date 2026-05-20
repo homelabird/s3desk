@@ -11,6 +11,7 @@ describe('buildProfilesPageDialogsProps', () => {
 		const closeYamlModal = vi.fn()
 		const onYamlCopy = vi.fn()
 		const onYamlDownload = vi.fn()
+		const onYamlLoadSecrets = vi.fn()
 		const onYamlDraftChange = vi.fn()
 		const onYamlSave = vi.fn()
 		const closeImportModal = vi.fn()
@@ -40,10 +41,12 @@ describe('buildProfilesPageDialogsProps', () => {
 			yamlContent: 'name: primary\n',
 			yamlDraft: 'name: primary\n',
 			yamlFilename: 'primary.yaml',
+			yamlIncludesSecrets: true,
 			exportYamlLoading: false,
 			saveYamlLoading: false,
 			onYamlCopy,
 			onYamlDownload,
+			onYamlLoadSecrets,
 			onYamlDraftChange,
 			onYamlSave,
 			importOpen: false,
@@ -64,6 +67,7 @@ describe('buildProfilesPageDialogsProps', () => {
 			editInitialValues: { name: 'Primary' },
 			tlsStatusError: 'tls failed',
 			yamlFilename: 'primary.yaml',
+			yamlIncludesSecrets: true,
 			importSessionToken: 3,
 			importText: 'name: imported\n',
 		})
@@ -74,6 +78,7 @@ describe('buildProfilesPageDialogsProps', () => {
 		expect(result.dialogs.closeYamlModal).toBe(closeYamlModal)
 		expect(result.dialogs.onYamlCopy).toBe(onYamlCopy)
 		expect(result.dialogs.onYamlDownload).toBe(onYamlDownload)
+		expect(result.dialogs.onYamlLoadSecrets).toBe(onYamlLoadSecrets)
 		expect(result.dialogs.onYamlDraftChange).toBe(onYamlDraftChange)
 		expect(result.dialogs.onYamlSave).toBe(onYamlSave)
 		expect(result.dialogs.closeImportModal).toBe(closeImportModal)

@@ -2,6 +2,60 @@
 	width: 100%;
 }
 
+.sectionIntro {
+	display: block;
+	line-height: 1.45;
+}
+
+.settingsApplyBar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	padding: 10px 12px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-sm);
+	background: var(--s3d-color-bg-secondary);
+}
+
+.recoveryCard {
+	width: 100%;
+	padding: 12px;
+	border: 1px solid color-mix(in srgb, var(--s3d-color-danger) 34%, var(--s3d-color-border));
+	border-radius: var(--s3d-radius-sm);
+	background: color-mix(in srgb, var(--s3d-color-danger) 5%, var(--s3d-color-bg-elevated));
+}
+
+.sectionFallback {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 88px;
+	padding: 12px;
+	color: var(--s3d-color-text-secondary);
+}
+
+.sectionFallbackBar {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 10px;
+	border-radius: 999px;
+	background: linear-gradient(90deg, var(--s3d-color-bg-secondary), var(--s3d-color-border), var(--s3d-color-bg-secondary));
+	background-size: 200% 100%;
+	animation: settingsFallbackPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes settingsFallbackPulse {
+	from {
+		background-position: 200% 0;
+	}
+
+	to {
+		background-position: -200% 0;
+	}
+}
+
 .paragraphTop8 {
 	margin-top: 8px;
 }
@@ -50,6 +104,14 @@
 }
 
 @media (max-width: 360px) {
+	.settingsApplyBar {
+		align-items: stretch;
+	}
+
+	.settingsApplyBar > * {
+		width: 100%;
+	}
+
 	.compactFieldRow {
 		flex-direction: column;
 	}

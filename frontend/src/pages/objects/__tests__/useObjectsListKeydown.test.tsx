@@ -5,13 +5,16 @@ import { useObjectsListKeydown } from '../useObjectsListKeydown'
 
 function createKeyboardEvent(
 	key: string,
-	overrides: Partial<Pick<React.KeyboardEvent<HTMLDivElement>, 'shiftKey' | 'ctrlKey' | 'metaKey'>> = {},
+	overrides: Partial<React.KeyboardEvent<HTMLDivElement>> = {},
 ) {
+	const currentTarget = document.createElement('div')
 	return {
 		key,
 		shiftKey: false,
 		ctrlKey: false,
 		metaKey: false,
+		target: currentTarget,
+		currentTarget,
 		preventDefault: vi.fn(),
 		...overrides,
 	} as unknown as React.KeyboardEvent<HTMLDivElement>
@@ -38,6 +41,7 @@ function createArgs(): Parameters<typeof useObjectsListKeydown>[0] {
 		onCopySelection: vi.fn(),
 		onPasteSelection: vi.fn(),
 		onOpenDetails: vi.fn(),
+		onOpenContextMenu: vi.fn(),
 		onGoUp: vi.fn(),
 		onDeleteSelected: vi.fn(),
 		onSelectKeys: vi.fn(),
@@ -113,5 +117,43 @@ describe('useObjectsListKeydown', () => {
 
 		expect(event.preventDefault).toHaveBeenCalledTimes(1)
 		expect(args.onSelectAllLoaded).toHaveBeenCalledTimes(1)
+	})
+
+	it('opens the selected object context menu from keyboard menu shortcuts', () => {
+		const args = createArgs()
+		const { result } = renderHook(() => useObjectsListKeydown(args))
+
+		const contextMenuEvent = createKeyboardEvent('ContextMenu')
+		act(() => {
+			result.current(contextMenuEvent)
+		})
+
+		expect(contextMenuEvent.preventDefault).toHaveBeenCalledTimes(1)
+		expect(args.onOpenContextMenu).toHaveBeenCalledWith('docs/a.txt')
+
+		args.singleSelectedKey = null
+		const shiftF10Event = createKeyboardEvent('F10', { shiftKey: true })
+		act(() => {
+			result.current(shiftF10Event)
+		})
+
+		expect(shiftF10Event.preventDefault).toHaveBeenCalledTimes(1)
+		expect(args.onOpenContextMenu).toHaveBeenLastCalledWith('docs/a.txt')
+	})
+
+	it('ignores shortcuts from nested interactive controls', () => {
+		const args = createArgs()
+		const { result } = renderHook(() => useObjectsListKeydown(args))
+		const currentTarget = document.createElement('div')
+		const nestedButton = document.createElement('button')
+		currentTarget.appendChild(nestedButton)
+
+		const event = createKeyboardEvent('Enter', { currentTarget, target: nestedButton })
+		act(() => {
+			result.current(event)
+		})
+
+		expect(event.preventDefault).not.toHaveBeenCalled()
+		expect(args.onOpenDetails).not.toHaveBeenCalled()
 	})
 })

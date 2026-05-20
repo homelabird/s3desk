@@ -22,9 +22,9 @@ spec:
         - protocol: TCP
           port: {{ .Values.service.port }}
     {{- end }}
-    {{- range .Values.networkPolicy.ingress.extra }}
-    - {{- toYaml . | nindent 6 | trim }}
-    {{- end }}
+{{- with .Values.networkPolicy.ingress.extra }}
+{{- toYaml . | nindent 4 }}
+{{- end }}
     {{- if and (not .Values.networkPolicy.ingress.allowSameNamespace) (eq (len .Values.networkPolicy.ingress.extra) 0) }}
     []
     {{- end }}
@@ -38,9 +38,9 @@ spec:
         - protocol: TCP
           port: 53
     {{- end }}
-    {{- range .Values.networkPolicy.egress.extra }}
-    - {{- toYaml . | nindent 6 | trim }}
-    {{- end }}
+{{- with .Values.networkPolicy.egress.extra }}
+{{- toYaml . | nindent 4 }}
+{{- end }}
     {{- if and (not .Values.networkPolicy.egress.allowDns) (eq (len .Values.networkPolicy.egress.extra) 0) }}
     []
     {{- end }}

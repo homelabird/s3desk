@@ -14,6 +14,7 @@ import (
 
 	"s3desk/internal/models"
 	"s3desk/internal/rcloneerrors"
+	"s3desk/internal/redact"
 )
 
 func sleepWithContext(ctx context.Context, d time.Duration) error {
@@ -87,7 +88,7 @@ func (m *Manager) maybeCaptureUnknownRcloneError(profile models.ProfileSecrets, 
 	if !m.captureUnknownRcloneErrors {
 		return
 	}
-	msg := strings.TrimSpace(stderr)
+	msg := strings.TrimSpace(redact.Diagnostic(stderr))
 	if msg == "" {
 		return
 	}

@@ -1,4 +1,4 @@
-import type { DragEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
+import type { DragEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent } from 'react'
 import type { FavoriteObjectItem } from '../../api/types'
 import type { TreeNode } from '../../lib/tree'
 
@@ -41,6 +41,10 @@ type ObjectsTreeSectionProps = {
 	onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerMove: (event: PointerEvent<HTMLDivElement>) => void
 	onResizePointerUp: (event: PointerEvent<HTMLDivElement>) => void
+	onResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+	resizeMinWidth: number
+	resizeMaxWidth: number
+	resizeValue: number
 	canCreateFolder: boolean
 	createFolderTooltipText: string
 	onNewFolderAtPrefix: (prefixKey: string) => void

@@ -129,6 +129,25 @@ func TestJobDeleteCompletedRemovesPersistedArtifacts(t *testing.T) {
 	}
 }
 
+func TestRemoveDeletedJobArtifactsRejectsUnsafeJobID(t *testing.T) {
+	t.Parallel()
+
+	dataDir := t.TempDir()
+	outsideLogPath := filepath.Join(dataDir, "logs", "escape.log")
+	if err := os.MkdirAll(filepath.Dir(outsideLogPath), 0o755); err != nil {
+		t.Fatalf("mkdir outside log dir: %v", err)
+	}
+	if err := os.WriteFile(outsideLogPath, []byte("sentinel"), 0o600); err != nil {
+		t.Fatalf("write outside log: %v", err)
+	}
+
+	removeDeletedJobArtifacts(dataDir, "../escape")
+
+	if got, err := os.ReadFile(outsideLogPath); err != nil || string(got) != "sentinel" {
+		t.Fatalf("outside log changed or unreadable: body=%q err=%v", string(got), err)
+	}
+}
+
 func TestJobDeleteRejectsActiveStatus(t *testing.T) {
 	t.Parallel()
 

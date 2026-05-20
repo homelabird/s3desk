@@ -73,7 +73,7 @@ func (svc uploadDirectHTTPService) prepareForm(profileID, uploadID string, us st
 	}
 
 	maxBytes := svc.server.cfg.UploadMaxBytes
-	remainingBytes, uploadErr := uploadRemainingBytes(maxBytes, 0)
+	remainingBytes, uploadErr := uploadRemainingBytes(maxBytes, us.Bytes)
 	if uploadErr != nil {
 		return uploadDirectFormPreparedRequest{err: uploadErr}
 	}

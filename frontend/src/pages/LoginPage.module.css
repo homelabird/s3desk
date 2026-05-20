@@ -1,0 +1,31 @@
+.shell {
+	position: relative;
+	min-height: 100dvh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40px 24px;
+	background: var(--s3d-gradient-page);
+}
+
+.topRightActions {
+	position: absolute;
+	top: 18px;
+	right: 18px;
+	display: flex;
+	justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+	.shell {
+		align-items: stretch;
+		justify-content: flex-start;
+		padding: 18px 16px 24px;
+	}
+
+	.topRightActions {
+		position: static;
+		width: 100%;
+		margin-bottom: 12px;
+	}
+}

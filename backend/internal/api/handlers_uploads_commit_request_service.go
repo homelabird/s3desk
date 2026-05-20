@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"s3desk/internal/store"
 )
@@ -59,6 +60,9 @@ func (svc uploadCommitRequestService) loadSession(r *http.Request) (uploadCommit
 			message: "upload session not found",
 			details: map[string]any{"uploadId": uploadID},
 		}
+	}
+	if expiresAt, err := time.Parse(time.RFC3339Nano, us.ExpiresAt); err == nil && time.Now().UTC().After(expiresAt) {
+		return uploadCommitSession{}, &uploadHTTPError{status: http.StatusBadRequest, code: "expired", message: "upload session expired"}
 	}
 
 	mode := normalizeUploadMode(us.Mode)

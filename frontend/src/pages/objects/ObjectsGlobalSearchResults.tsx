@@ -11,6 +11,7 @@ type ObjectsGlobalSearchResultsProps = {
 	isFetching: boolean
 	isFetchingNextPage: boolean
 	isMd: boolean
+	useWideResults: boolean
 	items: ObjectItem[]
 	onCopyKey: (key: string) => void
 	onDownloadKey: (key: string, size?: number) => void
@@ -81,6 +82,7 @@ export function ObjectsGlobalSearchResults({
 	isFetching,
 	isFetchingNextPage,
 	isMd,
+	useWideResults,
 	items,
 	onCopyKey,
 	onDownloadKey,
@@ -90,7 +92,7 @@ export function ObjectsGlobalSearchResults({
 	searchQueryText,
 }: ObjectsGlobalSearchResultsProps) {
 	const buttonSize = isMd ? 'middle' : 'small'
-	const showMobileResults = !isMd
+	const showMobileResults = !useWideResults
 	const tableWrapClass = `${styles.globalSearchTableWrap} ${isMd ? styles.globalSearchTableWrapMd : ''}`
 	const tableClass = `${styles.globalSearchTable} ${isMd ? styles.globalSearchTableMd : styles.globalSearchTableSm}`
 	const keyTextClass = `${styles.globalSearchKeyText} ${isMd ? styles.globalSearchKeyTextMd : styles.globalSearchKeyTextSm}`

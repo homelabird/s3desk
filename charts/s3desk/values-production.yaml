@@ -1,5 +1,10 @@
 replicaCount: 1
 
+image:
+  # Example pinned release image. Override both fields for your registry.
+  repository: "registry.example.com/s3desk"
+  tag: "0.21v-rc3"
+
 secrets:
   existingSecret: s3desk-secrets
   autoGenerateApiToken: false
@@ -30,7 +35,29 @@ networkPolicy:
   policyTypes:
     - Ingress
   ingress:
-    allowSameNamespace: true
+    # Production ingress should usually allow only the controller or gateway pods
+    # that front this Service. The namespace selector below assumes the standard
+    # Kubernetes namespace label; replace the namespace and pod labels for your
+    # ingress controller if they differ.
+    allowSameNamespace: false
+    extra:
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: ingress-nginx
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: ingress-nginx
+                app.kubernetes.io/component: controller
+        ports:
+          - protocol: TCP
+            port: 8080
+  egress:
+    # Egress policy is not enabled above so storage providers, IdPs, and
+    # external databases keep working until you add explicit allow-list rules.
+    # If you add Egress to policyTypes, keep DNS enabled and add egress.extra
+    # entries for your Postgres/proxy/CIDR destinations.
+    allowDns: true
     extra: []
 
 resources:

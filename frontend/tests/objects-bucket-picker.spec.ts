@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { bucketFieldPlaceholder, selectBucketToBrowseObjectsHint } from '../src/lib/actionHints'
 import { installMockApi, seedLocalStorage } from './support/apiFixtures'
@@ -132,6 +132,10 @@ function rowFor(page: Page, key: string) {
 	return objectsListRow(page, key)
 }
 
+async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
+	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates bucket picker search touch-target height
+}
+
 test.describe('Objects bucket picker', () => {
 	test('desktop picker shows current and recent buckets, then switches on click', async ({ page }) => {
 		await stubBucketPickerApi(page)
@@ -180,7 +184,9 @@ test.describe('Objects bucket picker', () => {
 
 		const popover = page.getByTestId('objects-bucket-picker-desktop-popover')
 		await expect(popover).toBeVisible()
-		await expect(popover.getByLabel('Search buckets')).toBeFocused()
+		const searchInput = popover.getByLabel('Search buckets')
+		await expect(searchInput).toBeFocused()
+		await expectMinTouchHeight(searchInput)
 
 		await page.keyboard.press('Shift+Tab')
 		await expect(picker).toBeFocused()
@@ -255,16 +261,16 @@ test.describe('Objects bucket picker', () => {
 
 		const drawer = page.getByTestId('objects-bucket-picker-mobile-drawer')
 		await expect(drawer).toBeVisible()
+		await expect(page.getByTestId('objects-bucket-picker-mobile-search')).toBeFocused()
+
+		await page.keyboard.press('Shift+Tab')
 		await expect(drawer.getByRole('button', { name: 'Close' })).toBeFocused()
 
 		await page.keyboard.press('Shift+Tab')
 		await expect(page.getByTestId('objects-bucket-picker-mobile-clear')).toBeFocused()
 
-		await page.keyboard.press('Shift+Tab')
-		await expect(page.getByTestId('objects-bucket-picker-option-bravo-bucket')).toBeFocused()
-
 		await page.keyboard.press('Tab')
-		await expect(page.getByTestId('objects-bucket-picker-mobile-clear')).toBeFocused()
+		await expect(drawer.getByRole('button', { name: 'Close' })).toBeFocused()
 
 		await page.keyboard.press('Escape')
 		await expect(drawer).toBeHidden()

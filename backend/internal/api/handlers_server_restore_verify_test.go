@@ -24,8 +24,8 @@ func TestVerifyServerRestorePayloadSuccess(t *testing.T) {
 	}
 	archiveManifest := serverBackupArchiveManifest{
 		ServerMigrationManifest: manifest,
-		PayloadHMACSHA256:       buildServerBackupPayloadHMAC(manifest, "local-secret", ""),
 	}
+	archiveManifest.PayloadHMACSHA256 = buildServerBackupPayloadHMAC(archiveManifest, "local-secret")
 
 	verification, err := verifyServerRestorePayload("backup", manifest, archiveManifest, payloadEntries, "", "local-secret")
 	if err != nil {
@@ -36,6 +36,41 @@ func TestVerifyServerRestorePayloadSuccess(t *testing.T) {
 	}
 	if !verification.SignaturePresent || !verification.SignatureVerified {
 		t.Fatalf("signature verification = %+v, want present+verified", verification)
+	}
+}
+
+func TestBuildServerBackupPayloadHMACIncludesEncryptionMetadata(t *testing.T) {
+	t.Parallel()
+
+	manifest := models.ServerMigrationManifest{
+		Format:              serverBackupBundleFormat,
+		BundleKind:          serverBackupScopeFull,
+		DBBackend:           "sqlite",
+		ConfidentialityMode: serverBackupConfidentialityEncrypted,
+		PayloadFileCount:    1,
+		PayloadBytes:        32,
+		PayloadSHA256:       strings.Repeat("a", 64),
+	}
+	archiveManifest := serverBackupArchiveManifest{
+		ServerMigrationManifest:    manifest,
+		PayloadEncryptionVersion:   serverBackupPayloadEncryptionV2,
+		PayloadEncryptionCipher:    serverBackupPayloadCipherV2,
+		PayloadEncryptionKDF:       serverBackupPayloadKDFV2,
+		PayloadEncryptionKDFIters:  serverBackupPayloadKDFIterationsV2,
+		PayloadEncryptionSalt:      strings.Repeat("1", serverBackupPayloadSaltBytesV2*2),
+		PayloadEncryptionNonce:     strings.Repeat("2", serverBackupPayloadNonceBytesV2*2),
+		PayloadEncryptionChunkSize: serverBackupPayloadChunkBytesV2,
+	}
+
+	first := buildServerBackupPayloadHMAC(archiveManifest, "local-secret")
+	archiveManifest.PayloadEncryptionNonce = strings.Repeat("3", serverBackupPayloadNonceBytesV2*2)
+	second := buildServerBackupPayloadHMAC(archiveManifest, "local-secret")
+
+	if first == "" || second == "" {
+		t.Fatal("expected non-empty payload HMACs")
+	}
+	if first == second {
+		t.Fatal("payload HMAC did not change after encryption metadata changed")
 	}
 }
 
@@ -57,5 +92,46 @@ func TestVerifyServerRestorePayloadMismatch(t *testing.T) {
 	_, err := verifyServerRestorePayload("portable", manifest, serverBackupArchiveManifest{ServerMigrationManifest: manifest}, payloadEntries, "", "")
 	if err == nil || !strings.Contains(err.Error(), "portable payload checksum mismatch") {
 		t.Fatalf("verifyServerRestorePayload() error = %v, want portable payload checksum mismatch", err)
+	}
+}
+
+func TestVerifyPortablePayloadRequiresSummary(t *testing.T) {
+	t.Parallel()
+
+	payloadEntries := []serverBackupPayloadEntry{
+		{ArchivePath: "assets/thumbnails/profile/bucket/thumb.jpg", Size: 5, SHA256: strings.Repeat("d", 64)},
+	}
+	manifest := models.ServerMigrationManifest{
+		Format:        serverBackupBundleFormat,
+		BundleKind:    serverBackupScopePortable,
+		FormatVersion: portableBackupFormatVersion,
+		DBBackend:     "sqlite",
+	}
+
+	_, err := verifyServerRestorePayload("portable", manifest, serverBackupArchiveManifest{ServerMigrationManifest: manifest}, payloadEntries, "", "")
+	if err == nil || !strings.Contains(err.Error(), "portable payload checksum is required") {
+		t.Fatalf("verifyServerRestorePayload() error = %v, want required portable checksum", err)
+	}
+}
+
+func TestVerifyPortableAssetManifestRejectsMismatchedThumbnailSummary(t *testing.T) {
+	t.Parallel()
+
+	payloadEntries := []serverBackupPayloadEntry{
+		{ArchivePath: "assets/thumbnails/profile/bucket/thumb.jpg", Size: 5, SHA256: strings.Repeat("d", 64)},
+	}
+	manifest := models.ServerMigrationManifest{
+		Assets: map[string]models.ServerMigrationAssetManifest{
+			portableAssetKeyThumbnails: {
+				FileCount: 1,
+				Bytes:     5,
+				SHA256:    strings.Repeat("e", 64),
+			},
+		},
+	}
+
+	err := verifyPortableAssetManifest(manifest, payloadEntries)
+	if err == nil || !strings.Contains(err.Error(), "portable thumbnail asset checksum mismatch") {
+		t.Fatalf("verifyPortableAssetManifest() error = %v, want thumbnail checksum mismatch", err)
 	}
 }

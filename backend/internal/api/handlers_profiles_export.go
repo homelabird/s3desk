@@ -21,10 +21,11 @@ type profileExportPreparationError struct {
 }
 
 type profileExportPreparedRequest struct {
-	profileID string
-	secrets   models.ProfileSecrets
-	download  bool
-	err       error
+	profileID      string
+	secrets        models.ProfileSecrets
+	download       bool
+	includeSecrets bool
+	err            error
 }
 
 type profileExportHTTPService struct {
@@ -124,6 +125,30 @@ func (svc profileExportHTTPService) prepareExportProfile(r *http.Request) profil
 			),
 		}
 	}
+	download, err := wantsProfileExportDownload(r)
+	if err != nil {
+		return profileExportPreparedRequest{
+			profileID: profileID,
+			err: newProfileExportPreparationError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"download must be a boolean",
+				map[string]any{"download": strings.TrimSpace(r.URL.Query().Get("download"))},
+			),
+		}
+	}
+	includeSecrets, err := wantsProfileExportIncludeSecrets(r)
+	if err != nil {
+		return profileExportPreparedRequest{
+			profileID: profileID,
+			err: newProfileExportPreparationError(
+				http.StatusBadRequest,
+				"invalid_request",
+				"includeSecrets must be a boolean",
+				map[string]any{"includeSecrets": strings.TrimSpace(r.URL.Query().Get("includeSecrets"))},
+			),
+		}
+	}
 
 	secrets, ok, err := svc.server.store.GetProfileSecrets(r.Context(), profileID)
 	if err != nil {
@@ -173,13 +198,14 @@ func (svc profileExportHTTPService) prepareExportProfile(r *http.Request) profil
 	}
 
 	return profileExportPreparedRequest{
-		profileID: profileID,
-		secrets:   secrets,
-		download:  wantsProfileExportDownload(r),
+		profileID:      profileID,
+		secrets:        secrets,
+		download:       download,
+		includeSecrets: includeSecrets,
 	}
 }
 
-func buildProfileExportFromSecrets(secrets models.ProfileSecrets) profileExport {
+func buildProfileExportFromSecrets(secrets models.ProfileSecrets, includeSecrets bool) profileExport {
 	exportProfile := profileExportProfile{
 		ID:                    secrets.ID,
 		Name:                  secrets.Name,
@@ -195,24 +221,30 @@ func buildProfileExportFromSecrets(secrets models.ProfileSecrets) profileExport 
 		exportProfile.PublicEndpoint = secrets.PublicEndpoint
 		exportProfile.Region = secrets.Region
 		exportProfile.AccessKeyID = secrets.AccessKeyID
-		exportProfile.SecretAccessKey = secrets.SecretAccessKey
-		exportProfile.SessionToken = secrets.SessionToken
+		if includeSecrets {
+			exportProfile.SecretAccessKey = secrets.SecretAccessKey
+			exportProfile.SessionToken = secrets.SessionToken
+		}
 		exportProfile.ForcePathStyle = &force
 	case models.ProfileProviderAzureBlob:
 		exportProfile.AccountName = secrets.AzureAccountName
-		exportProfile.AccountKey = secrets.AzureAccountKey
 		exportProfile.SubscriptionID = secrets.AzureSubscriptionID
 		exportProfile.ResourceGroup = secrets.AzureResourceGroup
 		exportProfile.TenantID = secrets.AzureTenantID
 		exportProfile.ClientID = secrets.AzureClientID
-		exportProfile.ClientSecret = secrets.AzureClientSecret
+		if includeSecrets {
+			exportProfile.AccountKey = secrets.AzureAccountKey
+			exportProfile.ClientSecret = secrets.AzureClientSecret
+		}
 		exportProfile.Endpoint = secrets.AzureEndpoint
 		if secrets.AzureUseEmulator {
 			useEmulator := true
 			exportProfile.UseEmulator = &useEmulator
 		}
 	case models.ProfileProviderGcpGcs:
-		exportProfile.ServiceAccountJSON = secrets.GcpServiceAccountJSON
+		if includeSecrets {
+			exportProfile.ServiceAccountJSON = secrets.GcpServiceAccountJSON
+		}
 		exportProfile.Endpoint = secrets.GcpEndpoint
 		if secrets.GcpAnonymous {
 			anonymous := true
@@ -230,7 +262,7 @@ func buildProfileExportFromSecrets(secrets models.ProfileSecrets) profileExport 
 	}
 
 	export := profileExport{Profile: exportProfile}
-	if secrets.TLSConfig != nil {
+	if includeSecrets && secrets.TLSConfig != nil {
 		tls := profileExportTLS{
 			Mode:          secrets.TLSConfig.Mode,
 			ClientCertPEM: secrets.TLSConfig.ClientCertPEM,
@@ -254,7 +286,7 @@ func (svc profileExportHTTPService) executePrepared(prepared profileExportPrepar
 		return nil, "", prepared.err
 	}
 
-	data, err := marshalProfileExport(buildProfileExportFromSecrets(prepared.secrets))
+	data, err := marshalProfileExport(buildProfileExportFromSecrets(prepared.secrets, prepared.includeSecrets))
 	if err != nil {
 		return nil, "", newProfileExportPreparationError(
 			http.StatusInternalServerError,
@@ -299,9 +331,26 @@ func (svc profileExportHTTPService) handleExportProfile(w http.ResponseWriter, r
 	_, _ = w.Write(body)
 }
 
-func wantsProfileExportDownload(r *http.Request) bool {
-	value := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("download")))
-	return value == "1" || value == "true" || value == "yes"
+func wantsProfileExportDownload(r *http.Request) (bool, error) {
+	return parseProfileExportBoolQuery(r, "download")
+}
+
+func wantsProfileExportIncludeSecrets(r *http.Request) (bool, error) {
+	return parseProfileExportBoolQuery(r, "includeSecrets")
+}
+
+func parseProfileExportBoolQuery(r *http.Request, name string) (bool, error) {
+	value := strings.TrimSpace(strings.ToLower(r.URL.Query().Get(name)))
+	switch value {
+	case "":
+		return false, nil
+	case "1", "true", "t", "yes", "y", "on":
+		return true, nil
+	case "0", "false", "f", "no", "n", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s must be a boolean", name)
+	}
 }
 
 func buildProfileExportContentDisposition(filename string) string {

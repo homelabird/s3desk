@@ -156,7 +156,17 @@ func (svc serverBackupHTTPService) prepareGetServerBackup(r *http.Request) (stri
 		)
 	}
 
-	return scope, confidentiality, backupPassword, parsePortableBackupIncludeThumbnails(r), secrets, nil
+	includeThumbnails, err := parsePortableBackupIncludeThumbnails(r)
+	if err != nil {
+		return "", "", "", false, serverBackupSecrets{}, newServerBackupPreparationError(
+			http.StatusBadRequest,
+			"invalid_request",
+			err.Error(),
+			map[string]any{"includeThumbnails": r.URL.Query().Get("includeThumbnails")},
+		)
+	}
+
+	return scope, confidentiality, backupPassword, includeThumbnails, secrets, nil
 }
 
 func (svc serverBackupHTTPService) executePreparedExport(
@@ -278,6 +288,10 @@ func (svc serverBackupHTTPService) handleRestoreServerBackup(w http.ResponseWrit
 	}
 	if err == nil {
 		writeJSON(w, http.StatusCreated, response)
+		return
+	}
+	if limitErr, ok := asServerRestoreExtractLimitError(err); ok {
+		writeServerRestoreExtractLimitError(w, "bundle_too_large", "backup bundle exceeds restore extracted payload limit", limitErr)
 		return
 	}
 	var preflightErr serverRestorePreflightError

@@ -324,6 +324,7 @@ export function useObjectsScreenListRendering({
 		handleListScrollerWheel,
 		handleTreePrefixContextMenu,
 		listGridClassName,
+		openObjectContextMenu,
 		renderObjectGridItem,
 		renderObjectRow,
 		renderPrefixGridItem,

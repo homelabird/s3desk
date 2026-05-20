@@ -5,6 +5,7 @@ import type { ObjectMeta } from '../../api/types'
 import { formatDateTime } from '../../lib/format'
 import { formatBytes } from '../../lib/transfer'
 import { IMAGE_PREVIEW_MAX_BYTES } from './objectPreviewLimits'
+import { getObjectMediaStateDescriptor, getObjectPreviewDescriptor } from './objectsMediaState'
 import type { ObjectPreview } from './objectsTypes'
 import styles from './ObjectsImageViewer.module.css'
 import type { ImageViewerDragState, ImageViewerPanOffset } from './useObjectsImageViewerPanZoom'
@@ -20,7 +21,6 @@ type ObjectsImageViewerBodyProps = {
 	imageRef: RefObject<HTMLImageElement | null>
 	isMetaFetching: boolean
 	isMobile: boolean
-	isVideoObject: boolean
 	objectKey: string | null
 	objectMeta: ObjectMeta | null
 	offset: ImageViewerPanOffset
@@ -44,7 +44,6 @@ export function ObjectsImageViewerBody({
 	imageRef,
 	isMetaFetching,
 	isMobile,
-	isVideoObject,
 	objectKey,
 	objectMeta,
 	offset,
@@ -68,39 +67,79 @@ export function ObjectsImageViewerBody({
 		)
 	}
 	if (!supportsVisualPreview) {
-		return <Empty description="Large preview is only available for image and video objects." />
+		const descriptor = getObjectMediaStateDescriptor('preview-unsupported')
+		return (
+			<Empty
+				description={
+					<div className={styles.imageViewerEmptyState}>
+						<Typography.Text>{descriptor.title}</Typography.Text>
+						<Typography.Text type="secondary">{descriptor.recoveryHint}</Typography.Text>
+					</div>
+				}
+			/>
+		)
 	}
 	if (imagePreviewTooLarge) {
+		const descriptor = getObjectMediaStateDescriptor('preview-blocked')
+		const fallbackDescriptor = getObjectMediaStateDescriptor('fallback-thumbnail-shown')
 		return (
 			<div className={styles.imageViewerStateStack}>
 				<Alert
 					type="info"
 					showIcon
-					message="Large preview unavailable"
-					description={`Image previews are limited to ${formatBytes(IMAGE_PREVIEW_MAX_BYTES)}. This object is ${formatBytes(detailsSize ?? 0)}.`}
+					title={descriptor.title}
+					description={
+						<div className={styles.imageViewerStateDescription}>
+							<Typography.Text>
+								Image previews are limited to {formatBytes(IMAGE_PREVIEW_MAX_BYTES)}. This object is {formatBytes(detailsSize ?? 0)}.
+							</Typography.Text>
+							<Typography.Text type="secondary">{descriptor.recoveryHint}</Typography.Text>
+						</div>
+					}
 				/>
 				{thumbnail ? (
 					<div className={styles.imageViewerFallbackFrame}>
 						<div className={styles.imageViewerFallbackInner}>{thumbnail}</div>
-						<Typography.Text type="secondary">Fallback thumbnail</Typography.Text>
+						<Typography.Text type="secondary">{fallbackDescriptor.title}</Typography.Text>
 					</div>
 				) : null}
-				<Typography.Text type="secondary">Use Download or URL to view the original file.</Typography.Text>
 			</div>
 		)
 	}
 	if (preview?.status === 'blocked') {
+		const descriptor = getObjectPreviewDescriptor(preview)
 		return (
 			<div className={styles.imageViewerStateStack}>
-				<Alert type="info" showIcon message="Preview unavailable" description={preview.error ?? 'Preview is not currently available.'} />
+				<Alert
+					type="info"
+					showIcon
+					title={descriptor.title}
+					description={
+						<div className={styles.imageViewerStateDescription}>
+							{preview.error ? <Typography.Text>{preview.error}</Typography.Text> : null}
+							<Typography.Text type="secondary">{descriptor.recoveryHint}</Typography.Text>
+						</div>
+					}
+				/>
 				{thumbnail ? <div className={styles.imageViewerFallbackInner}>{thumbnail}</div> : null}
 			</div>
 		)
 	}
 	if (preview?.status === 'error') {
+		const descriptor = getObjectPreviewDescriptor(preview)
 		return (
 			<div className={styles.imageViewerStateStack}>
-				<Alert type="error" showIcon message="Preview failed" description={preview.error ?? 'unknown error'} />
+				<Alert
+					type="error"
+					showIcon
+					title={descriptor.title}
+					description={
+						<div className={styles.imageViewerStateDescription}>
+							<Typography.Text>{preview.error ?? 'Unknown error.'}</Typography.Text>
+							<Typography.Text type="secondary">{descriptor.recoveryHint}</Typography.Text>
+						</div>
+					}
+				/>
 				{thumbnail ? <div className={styles.imageViewerFallbackInner}>{thumbnail}</div> : null}
 			</div>
 		)
@@ -140,11 +179,9 @@ export function ObjectsImageViewerBody({
 			>
 				{thumbnail && !visualPreviewReady ? <div className={styles.imageViewerThumbnailLayer}>{thumbnail}</div> : null}
 				{preview?.status === 'loading' || (open && !preview && !visualPreviewReady) ? (
-					<div className={styles.imageViewerLoadingOverlay} role="status" aria-live="polite" aria-label="Loading visual preview">
+					<div className={styles.imageViewerLoadingOverlay} role="status" aria-live="polite" aria-label={getObjectMediaStateDescriptor('preview-loading').title}>
 						<Spin size="large" />
-						<Typography.Text type="secondary">
-							{isVideoObject ? 'Loading extracted video thumbnail…' : 'Loading full image preview…'}
-						</Typography.Text>
+						<Typography.Text type="secondary">{getObjectMediaStateDescriptor('preview-loading').recoveryHint}</Typography.Text>
 					</div>
 				) : null}
 				{visualPreviewReady && preview?.url ? (

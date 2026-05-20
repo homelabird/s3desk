@@ -44,12 +44,19 @@ export function useObjectsSelectionMove({
 		confirm: '',
 	})
 	const moveSelectionSessionRef = useRef(0)
+	const [moveSelectionSessionId, setMoveSelectionSessionId] = useState(0)
 	const navigate = useNavigate()
 	const [moveSelectionStateScopeKey, setMoveSelectionStateScopeKey] = useState(currentScopeKey)
 	const moveSelectionScopeMatches = moveSelectionStateScopeKey === currentScopeKey
+	const moveSelectionSubmittingSessionRef = useRef<number | null>(null)
+	const [moveSelectionSubmittingSessionId, setMoveSelectionSubmittingSessionId] = useState<number | null>(null)
+	const moveSelectionSubmitting =
+		moveSelectionScopeMatches && moveSelectionSubmittingSessionId === moveSelectionSessionId
 
 	const invalidateMoveSelectionSession = useCallback(() => {
-		moveSelectionSessionRef.current += 1
+		const nextSessionId = moveSelectionSessionRef.current + 1
+		moveSelectionSessionRef.current = nextSessionId
+		setMoveSelectionSessionId(nextSessionId)
 	}, [])
 
 	useEffect(() => {
@@ -159,10 +166,16 @@ export function useObjectsSelectionMove({
 			if (args.sessionId !== moveSelectionSessionRef.current) return
 			objectsFeedback.error(err)
 		},
+		onSettled: (_data, _error, args) => {
+			if (args.sessionId !== moveSelectionSubmittingSessionRef.current) return
+			moveSelectionSubmittingSessionRef.current = null
+			setMoveSelectionSubmittingSessionId(null)
+		},
 	})
 
 	const handleMoveSelectionSubmit = useCallback(
 		(values: MoveSelectionValues) => {
+			if (moveSelectionSubmittingSessionRef.current === moveSelectionSessionRef.current) return
 			if (!moveSelectionScopeMatches || !profileId || !bucket) return
 			if (selectedKeys.size === 0) {
 				objectsFeedback.selectAtLeastOneObjectFirst()
@@ -172,6 +185,8 @@ export function useObjectsSelectionMove({
 				objectsFeedback.typeMoveToProceed()
 				return
 			}
+			moveSelectionSubmittingSessionRef.current = moveSelectionSessionRef.current
+			setMoveSelectionSubmittingSessionId(moveSelectionSessionRef.current)
 			moveSelectionMutation.mutate({
 				dstBucket: values.dstBucket,
 				dstPrefix: values.dstPrefix,
@@ -187,7 +202,7 @@ export function useObjectsSelectionMove({
 		moveSelectionOpen: moveSelectionScopeMatches ? moveSelectionOpen : false,
 		moveSelectionValues: moveSelectionScopeMatches ? moveSelectionValues : { dstBucket: '', dstPrefix: '', confirm: '' },
 		setMoveSelectionValues,
-		moveSelectionSubmitting: moveSelectionMutation.isPending,
+		moveSelectionSubmitting,
 		openMoveSelection,
 		handleMoveSelectionCancel,
 		handleMoveSelectionSubmit,

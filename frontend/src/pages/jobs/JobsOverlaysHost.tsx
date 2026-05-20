@@ -132,6 +132,9 @@ export function JobsOverlaysHost(props: JobsOverlaysHostProps) {
 		activeLogLines,
 		normalizedLogSearchQuery,
 		visibleLogEntries,
+		visibleLogLineNumbers,
+		visibleLogSeveritySummary,
+		latestVisibleLogErrorIndex,
 		visibleLogText,
 		copyVisibleLogs,
 		openLogsForJob,
@@ -276,6 +279,9 @@ export function JobsOverlaysHost(props: JobsOverlaysHostProps) {
 					onCopyVisibleLogs={copyVisibleLogs}
 					normalizedLogSearchQuery={normalizedLogSearchQuery}
 					visibleLogEntries={visibleLogEntries}
+					visibleLogLineNumbers={visibleLogLineNumbers}
+					visibleLogSeveritySummary={visibleLogSeveritySummary}
+					latestErrorIndex={latestVisibleLogErrorIndex}
 					activeLogLines={activeLogLines}
 					onLogsContainerRef={(element) => {
 						logsContainerRef.current = element

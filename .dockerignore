@@ -1,8 +1,26 @@
 .tools
 .tmp
+.git
+.github
+.gitlab
+.cache
+.playwright-mcp
+.license-audit
+.env
+.env.*
+!.env.example
 dist
 data
+artifacts
+logs
+node_modules
 **/*.log
+**/test-results
+**/playwright-report
+**/coverage
 
 frontend/node_modules
 frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/coverage

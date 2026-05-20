@@ -55,6 +55,7 @@ export function ObjectsBucketPicker({
 	const [mobileScopeKey, setMobileScopeKey] = useState('')
 	const [mobileQuery, setMobileQuery] = useState('')
 	const desktopPopoverId = useId()
+	const mobileDrawerId = useId()
 
 	const desktopScopeMatches = desktopScopeKey === scopeKey
 	const mobileScopeMatches = mobileScopeKey === scopeKey
@@ -254,6 +255,9 @@ export function ObjectsBucketPicker({
 				type="button"
 				className={`${styles.bucketPickerTrigger} ${className ?? ''}`.trim()}
 				aria-label={triggerLabel}
+				aria-haspopup="dialog"
+				aria-expanded={mobileOpenVisible}
+				aria-controls={mobileOpenVisible ? mobileDrawerId : undefined}
 				disabled={disabled}
 				onClick={openMobileDrawer}
 				data-testid="objects-bucket-picker-mobile-trigger"
@@ -274,8 +278,10 @@ export function ObjectsBucketPicker({
 				onClose={closeMobileDrawer}
 				title={selectBucketTitle()}
 				placement="bottom"
+				sheetId={mobileDrawerId}
 				height="78dvh"
 				dataTestId="objects-bucket-picker-mobile-drawer"
+				initialFocusSelector="[data-testid='objects-bucket-picker-mobile-search']"
 				extra={
 					value ? (
 						<button

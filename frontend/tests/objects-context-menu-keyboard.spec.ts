@@ -9,7 +9,7 @@ import {
 	installMockApi,
 	seedLocalStorage,
 } from './support/apiFixtures'
-import { gotoObjectsPage, objectsContextMenu, objectsListRow, objectsSelectionCheckbox } from './support/ui'
+import { dialogByName, gotoObjectsPage, objectsContextMenu, objectsListRow, objectsSelectionCheckbox } from './support/ui'
 
 const profileId = 'playwright-context-keyboard-profile'
 const bucket = 'context-keyboard-bucket'
@@ -141,6 +141,62 @@ test.describe('Objects context menu with keyboard selection', () => {
 		await expect(objectsSelectionCheckbox(page, 'video-2.mp4')).toBeChecked()
 	})
 
+	test('ContextMenu opens object actions for a single keyboard-selected item', async ({ page }) => {
+		const list = page.getByRole('list', { name: 'Objects list' })
+		await expect(list).toBeVisible()
+		await list.focus()
+		await list.press('ArrowDown')
+		await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
+
+		await list.press('ContextMenu')
+
+		const menu = objectsContextMenu(page)
+		await expect(menu).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: 'Details' })).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: 'Rename (F2)…' })).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: 'Move selection to…' })).toHaveCount(0)
+		await expect(objectsSelectionCheckbox(page, 'video-1.mp4')).toBeChecked()
+	})
+
+	test('keyboard-opened context menu supports typeahead and Enter activation', async ({ page }) => {
+		const list = page.getByRole('list', { name: 'Objects list' })
+		await expect(list).toBeVisible()
+		await list.focus()
+		await list.press('ArrowDown')
+		await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
+
+		await list.press('ContextMenu')
+
+		const menu = objectsContextMenu(page)
+		const downloadItem = menu.getByRole('menuitem', { name: 'Download (client)' })
+		const renameItem = menu.getByRole('menuitem', { name: 'Rename (F2)…' })
+		await expect(menu).toBeVisible()
+		await expect(downloadItem).toBeFocused()
+
+		await page.keyboard.press('r')
+		await expect(renameItem).toBeFocused()
+		await page.keyboard.press('Enter')
+
+		const renameDialog = dialogByName(page, 'Rename object…')
+		await expect(renameDialog).toBeVisible()
+		await expect(renameDialog.getByText(`s3://${bucket}/video-1.mp4`)).toBeVisible()
+		await expect(menu).toBeHidden()
+	})
+
+	test('Shift+F10 opens bulk actions for a keyboard-created range selection', async ({ page }) => {
+		const list = await createKeyboardRangeSelection(page)
+
+		await list.press('Shift+F10')
+
+		const menu = objectsContextMenu(page)
+		await expect(menu).toBeVisible()
+		await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: 'Move selection to…' })).toBeVisible()
+		await expect(menu.getByRole('menuitem', { name: 'Details' })).toHaveCount(0)
+		await expect(objectsSelectionCheckbox(page, 'video-1.mp4')).toBeChecked()
+		await expect(objectsSelectionCheckbox(page, 'video-2.mp4')).toBeChecked()
+	})
+
 	test('a single keyboard-selected item still opens object actions from the row menu', async ({ page }) => {
 		const list = page.getByRole('list', { name: 'Objects list' })
 		await expect(list).toBeVisible()
@@ -149,7 +205,7 @@ test.describe('Objects context menu with keyboard selection', () => {
 		await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
 
 		const row = objectsListRow(page, 'video-1.mp4')
-		await row.getByRole('button', { name: 'Object actions' }).evaluate((element) => {
+		await row.getByRole('button', { name: /Object actions/ }).evaluate((element) => {
 			;(element as HTMLElement).click()
 		})
 

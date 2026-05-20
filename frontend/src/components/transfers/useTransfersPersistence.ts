@@ -67,12 +67,21 @@ const normalizeDownloadTask = (task: PersistedDownloadTask, now: number): Downlo
 const normalizeUploadTask = (task: PersistedUploadTask, now: number): UploadTask => {
 	const normalized = withoutPreview(task as PersistedUploadTask & { preview?: unknown })
 	if (normalized.status === 'waiting_job') return normalized
-	if (!isActiveUploadStatus(task.status)) return normalized
+	if (!isActiveUploadStatus(task.status)) {
+		if (normalized.status === 'failed' || normalized.status === 'canceled') {
+			return {
+				...normalized,
+				retryFileHandleState: 'selection_required',
+			}
+		}
+		return normalized
+	}
 	return {
 		...normalized,
 		status: 'canceled',
 		finishedAtMs: now,
 		error: task.error ?? 'Transfer interrupted by refresh. Select the same file(s) and click Retry to resume.',
+		retryFileHandleState: 'selection_required',
 	}
 }
 

@@ -7,6 +7,7 @@ import type { ProfileFormValues } from './profileTypes'
 import {
 	countConfiguredValues,
 	getConnectionSummary,
+	profileFieldA11y,
 	renderAdvancedFieldDisclosure,
 	type ProfileModalSectionContentArgs,
 } from './profileModalSectionShared'
@@ -17,8 +18,9 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 	return (
 		<div className={styles.sectionBody}>
 			<div className={styles.formGrid}>
-				<FormField label="Provider" required error={errors.provider}>
+				<FormField label="Provider" htmlFor="profile-provider" required error={errors.provider}>
 					<NativeSelect
+						{...profileFieldA11y('profile-provider', errors.provider)}
 						disabled={!!editMode}
 						value={values.provider}
 						onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
@@ -29,12 +31,17 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 							{ label: 'Azure Blob Storage', value: 'azure_blob' },
 							{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
 						]}
-						ariaLabel="Provider"
 					/>
 				</FormField>
 
-				<FormField label="Name" required error={errors.name}>
-					<Input value={values.name} onChange={(e) => setField('name', e.target.value)} autoComplete="off" aria-label="Name" placeholder="Production S3" />
+				<FormField label="Name" htmlFor="profile-name" required error={errors.name}>
+					<Input
+						{...profileFieldA11y('profile-name', errors.name)}
+						value={values.name}
+						onChange={(e) => setField('name', e.target.value)}
+						autoComplete="off"
+						placeholder="Production S3"
+					/>
 				</FormField>
 			</div>
 
@@ -53,8 +60,14 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			{viewState.isS3Provider ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'} required={!viewState.isAws} error={errors.endpoint}>
+						<FormField
+							label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
+							htmlFor="profile-endpoint"
+							required={!viewState.isAws}
+							error={errors.endpoint}
+						>
 							<Input
+								{...profileFieldA11y('profile-endpoint', errors.endpoint)}
 								value={values.endpoint}
 								onChange={(e) => setField('endpoint', e.target.value)}
 								placeholder={
@@ -63,11 +76,15 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 										: 'https://s3.example.com'
 								}
 								autoComplete="off"
-								aria-label={viewState.isAws ? 'Endpoint URL (optional)' : 'Endpoint URL'}
 							/>
 						</FormField>
-						<FormField label="Region" required error={errors.region}>
-							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-east-1" aria-label="Region" />
+						<FormField label="Region" htmlFor="profile-region" required error={errors.region}>
+							<Input
+								{...profileFieldA11y('profile-region', errors.region)}
+								value={values.region}
+								onChange={(e) => setField('region', e.target.value)}
+								placeholder="us-east-1"
+							/>
 						</FormField>
 					</div>
 					{renderAdvancedFieldDisclosure({
@@ -77,13 +94,13 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 						children: (
 							<>
 								<div className={styles.formGrid}>
-									<FormField label="Public Endpoint URL (optional)" error={errors.publicEndpoint}>
+									<FormField label="Public Endpoint URL (optional)" htmlFor="profile-public-endpoint" error={errors.publicEndpoint}>
 										<Input
+											{...profileFieldA11y('profile-public-endpoint', errors.publicEndpoint)}
 											value={values.publicEndpoint}
 											onChange={(e) => setField('publicEndpoint', e.target.value)}
 											placeholder="http://127.0.0.1:9000"
 											autoComplete="off"
-											aria-label="Public Endpoint URL (optional)"
 										/>
 									</FormField>
 								</div>
@@ -100,18 +117,28 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			{viewState.isOciObjectStorage ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label="Region" required error={errors.region}>
-							<Input value={values.region} onChange={(e) => setField('region', e.target.value)} placeholder="us-ashburn-1" aria-label="Region" />
-						</FormField>
-						<FormField label="Namespace" required error={errors.ociNamespace}>
-							<Input value={values.ociNamespace} onChange={(e) => setField('ociNamespace', e.target.value)} placeholder="my-namespace" aria-label="Namespace" />
-						</FormField>
-						<FormField label="Compartment OCID" required error={errors.ociCompartment}>
+						<FormField label="Region" htmlFor="profile-oci-region" required error={errors.region}>
 							<Input
+								{...profileFieldA11y('profile-oci-region', errors.region)}
+								value={values.region}
+								onChange={(e) => setField('region', e.target.value)}
+								placeholder="us-ashburn-1"
+							/>
+						</FormField>
+						<FormField label="Namespace" htmlFor="profile-oci-namespace" required error={errors.ociNamespace}>
+							<Input
+								{...profileFieldA11y('profile-oci-namespace', errors.ociNamespace)}
+								value={values.ociNamespace}
+								onChange={(e) => setField('ociNamespace', e.target.value)}
+								placeholder="my-namespace"
+							/>
+						</FormField>
+						<FormField label="Compartment OCID" htmlFor="profile-oci-compartment" required error={errors.ociCompartment}>
+							<Input
+								{...profileFieldA11y('profile-oci-compartment', errors.ociCompartment)}
 								value={values.ociCompartment}
 								onChange={(e) => setField('ociCompartment', e.target.value)}
 								placeholder="ocid1.compartment.oc1..…"
-								aria-label="Compartment OCID"
 							/>
 						</FormField>
 					</div>
@@ -121,12 +148,12 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 						configuredCount: countConfiguredValues([values.ociEndpoint]),
 						children: (
 							<div className={styles.formGrid}>
-								<FormField label="Endpoint URL (optional)" error={errors.ociEndpoint}>
+								<FormField label="Endpoint URL (optional)" htmlFor="profile-oci-endpoint" error={errors.ociEndpoint}>
 									<Input
+										{...profileFieldA11y('profile-oci-endpoint', errors.ociEndpoint)}
 										value={values.ociEndpoint}
 										onChange={(e) => setField('ociEndpoint', e.target.value)}
 										placeholder="https://objectstorage.{region}.oraclecloud.com"
-										aria-label="Endpoint URL (optional)"
 									/>
 								</FormField>
 							</div>
@@ -138,12 +165,12 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			{viewState.isAzure ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label="Storage Account Name" required error={errors.azureAccountName}>
+						<FormField label="Storage Account Name" htmlFor="profile-azure-account-name" required error={errors.azureAccountName}>
 							<Input
+								{...profileFieldA11y('profile-azure-account-name', errors.azureAccountName)}
 								value={values.azureAccountName}
 								onChange={(e) => setField('azureAccountName', e.target.value)}
 								placeholder="mystorageaccount"
-								aria-label="Storage Account Name"
 							/>
 						</FormField>
 					</div>
@@ -160,48 +187,48 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 						children: (
 							<>
 								<div className={styles.formGrid}>
-									<FormField label="Endpoint URL (optional)" error={errors.azureEndpoint}>
+									<FormField label="Endpoint URL (optional)" htmlFor="profile-azure-endpoint" error={errors.azureEndpoint}>
 										<Input
+											{...profileFieldA11y('profile-azure-endpoint', errors.azureEndpoint)}
 											value={values.azureEndpoint}
 											onChange={(e) => setField('azureEndpoint', e.target.value)}
 											placeholder="http://127.0.0.1:10000/devstoreaccount1"
-											aria-label="Endpoint URL (optional)"
 										/>
 									</FormField>
 								</div>
 								<div className={styles.formGrid}>
-									<FormField label="Subscription ID (optional)" error={errors.azureSubscriptionId}>
+									<FormField label="Subscription ID (optional)" htmlFor="profile-azure-subscription-id" error={errors.azureSubscriptionId}>
 										<Input
+											{...profileFieldA11y('profile-azure-subscription-id', errors.azureSubscriptionId)}
 											value={values.azureSubscriptionId}
 											onChange={(e) => setField('azureSubscriptionId', e.target.value)}
 											placeholder="00000000-0000-0000-0000-000000000000"
-											aria-label="Subscription ID (optional)"
 										/>
 									</FormField>
-									<FormField label="Resource Group (optional)" error={errors.azureResourceGroup}>
+									<FormField label="Resource Group (optional)" htmlFor="profile-azure-resource-group" error={errors.azureResourceGroup}>
 										<Input
+											{...profileFieldA11y('profile-azure-resource-group', errors.azureResourceGroup)}
 											value={values.azureResourceGroup}
 											onChange={(e) => setField('azureResourceGroup', e.target.value)}
 											placeholder="my-storage-rg"
-											aria-label="Resource Group (optional)"
 										/>
 									</FormField>
 								</div>
 								<div className={styles.formGrid}>
-									<FormField label="Tenant ID (optional)" error={errors.azureTenantId}>
+									<FormField label="Tenant ID (optional)" htmlFor="profile-azure-tenant-id" error={errors.azureTenantId}>
 										<Input
+											{...profileFieldA11y('profile-azure-tenant-id', errors.azureTenantId)}
 											value={values.azureTenantId}
 											onChange={(e) => setField('azureTenantId', e.target.value)}
 											placeholder="00000000-0000-0000-0000-000000000000"
-											aria-label="Tenant ID (optional)"
 										/>
 									</FormField>
-									<FormField label="Client ID (optional)" error={errors.azureClientId}>
+									<FormField label="Client ID (optional)" htmlFor="profile-azure-client-id" error={errors.azureClientId}>
 										<Input
+											{...profileFieldA11y('profile-azure-client-id', errors.azureClientId)}
 											value={values.azureClientId}
 											onChange={(e) => setField('azureClientId', e.target.value)}
 											placeholder="00000000-0000-0000-0000-000000000000"
-											aria-label="Client ID (optional)"
 										/>
 									</FormField>
 								</div>
@@ -220,12 +247,12 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			{viewState.isGcp ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label="Project Number" required error={errors.gcpProjectNumber}>
+						<FormField label="Project Number" htmlFor="profile-gcp-project-number" required error={errors.gcpProjectNumber}>
 							<Input
+								{...profileFieldA11y('profile-gcp-project-number', errors.gcpProjectNumber)}
 								value={values.gcpProjectNumber}
 								onChange={(e) => setField('gcpProjectNumber', e.target.value)}
 								placeholder="123456789012"
-								aria-label="Project Number"
 							/>
 						</FormField>
 					</div>
@@ -235,12 +262,12 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 						configuredCount: countConfiguredValues([values.gcpEndpoint]),
 						children: (
 							<div className={styles.formGrid}>
-								<FormField label="Endpoint URL (optional)" error={errors.gcpEndpoint}>
+								<FormField label="Endpoint URL (optional)" htmlFor="profile-gcp-endpoint" error={errors.gcpEndpoint}>
 									<Input
+										{...profileFieldA11y('profile-gcp-endpoint', errors.gcpEndpoint)}
 										value={values.gcpEndpoint}
 										onChange={(e) => setField('gcpEndpoint', e.target.value)}
 										placeholder="https://storage.googleapis.com"
-										aria-label="Endpoint URL (optional)"
 									/>
 								</FormField>
 							</div>

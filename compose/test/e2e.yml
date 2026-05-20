@@ -6,8 +6,8 @@ services:
       MINIO_ROOT_USER: "minioadmin"
       MINIO_ROOT_PASSWORD: "minioadmin"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio-data:/data
 
@@ -15,7 +15,7 @@ services:
     image: "${AZURITE_IMAGE:-mcr.microsoft.com/azure-storage/azurite:3.33.0}"
     command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --loose --skipApiVersionCheck
     ports:
-      - "10000:10000"
+      - "127.0.0.1:10000:10000"
     volumes:
       - azurite-data:/data
 
@@ -23,12 +23,12 @@ services:
     image: "${FAKE_GCS_IMAGE:-fsouza/fake-gcs-server:1.47.7}"
     command: ["-scheme", "http", "-port", "4443", "-backend", "memory"]
     ports:
-      - "4443:4443"
+      - "127.0.0.1:4443:4443"
 
   s3desk:
     image: "${S3DESK_IMAGE:-s3desk:dev}"
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"

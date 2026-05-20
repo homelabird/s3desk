@@ -46,6 +46,10 @@ type Props = {
 
 const jobsRowActionsContextVersions = new Map<string, number>()
 
+function contextualMenuLabel(label: string, ariaLabel: string) {
+	return <span aria-label={ariaLabel}>{label}</span>
+}
+
 export function JobsRowActions({
 	job,
 	apiToken,
@@ -98,6 +102,7 @@ export function JobsRowActions({
 		job.status === 'queued' ||
 		job.status === 'running' ||
 		(deletePending && deletingJobId === job.id)
+	const jobActionContext = `job ${job.id}`
 
 	const label = jobSummary ? `Artifact: ${jobSummary}` : `Job artifact: ${job.id}`
 	const menuItems: MenuProps['items'] = []
@@ -105,8 +110,8 @@ export function JobsRowActions({
 	if (isZipJob) {
 		menuItems.push({
 			key: 'download',
-			icon: <DownloadOutlined />,
-			label: 'Download ZIP',
+			icon: <DownloadOutlined aria-hidden={true} />,
+			label: contextualMenuLabel('Download ZIP', `Download ZIP for ${jobActionContext}`),
 			disabled: isOffline || !canDownloadArtifact || !profileId,
 			onClick: () => {
 				if (!profileId) return
@@ -123,15 +128,15 @@ export function JobsRowActions({
 
 	menuItems.push({
 		key: 'retry',
-		icon: <RedoOutlined />,
-		label: 'Retry',
+		icon: <RedoOutlined aria-hidden={true} />,
+		label: contextualMenuLabel('Retry', `Retry ${jobActionContext}`),
 		disabled: isRetryDisabled,
 		onClick: () => onRequestRetryJob(job.id),
 	})
 	menuItems.push({
 		key: 'cancel',
-		icon: <StopOutlined />,
-		label: 'Cancel',
+		icon: <StopOutlined aria-hidden={true} />,
+		label: contextualMenuLabel('Cancel', `Cancel ${jobActionContext}`),
 		danger: true,
 		disabled: isCancelDisabled,
 		onClick: () => onRequestCancelJob(job.id),
@@ -139,8 +144,8 @@ export function JobsRowActions({
 	menuItems.push({ type: 'divider' })
 	menuItems.push({
 		key: 'delete',
-		icon: <DeleteOutlined />,
-		label: 'Delete record',
+		icon: <DeleteOutlined aria-hidden={true} />,
+		label: contextualMenuLabel('Delete record', `Delete record for ${jobActionContext}`),
 		danger: true,
 		disabled: isDeleteDisabled,
 		onClick: () => {
@@ -165,22 +170,37 @@ export function JobsRowActions({
 
 	return (
 		<Space size={4} wrap>
-			<Button type="text" size="small" icon={<InfoCircleOutlined />} aria-label="Details" disabled={isOffline} onClick={() => onOpenDetails(job.id)}>
+			<Button
+				type="text"
+				size="small"
+				icon={<InfoCircleOutlined />}
+				aria-label={`Details for ${jobActionContext}`}
+				disabled={isOffline}
+				onClick={() => onOpenDetails(job.id)}
+			>
 				Details
 			</Button>
 			<Button
 				type="text"
 				size="small"
 				icon={<FileTextOutlined />}
-				aria-label="Logs"
+				aria-label={`Logs for ${jobActionContext}`}
 				disabled={isOffline || (isLogsLoading && activeLogJobId === job.id)}
 				onClick={() => onOpenLogs(job.id)}
 			>
 				Logs
 			</Button>
 			<MenuPopover menu={{ items: menuItems }} align="end" scopeKey={menuScopeKey}>
-				{({ toggle }) => (
-					<Button type="text" size="small" icon={<MoreOutlined />} aria-label="Open actions menu" onClick={toggle}>
+				{({ toggle, open }) => (
+					<Button
+						type="text"
+						size="small"
+						icon={<MoreOutlined />}
+						aria-label={`Actions for ${jobActionContext}`}
+						aria-haspopup="menu"
+						aria-expanded={open}
+						onClick={toggle}
+					>
 						Actions
 					</Button>
 				)}

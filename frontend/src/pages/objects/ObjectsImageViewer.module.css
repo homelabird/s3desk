@@ -26,6 +26,8 @@
 .imageViewerMetaBadge {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
   min-height: 24px;
   padding: 2px 8px;
   border: 1px solid var(--s3d-color-border);
@@ -33,6 +35,9 @@
   background: color-mix(in srgb, var(--s3d-color-bg-secondary) 82%, transparent);
   font-size: 12px;
   line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .imageViewerFooter {
@@ -135,6 +140,17 @@
   gap: 16px;
 }
 
+.imageViewerEmptyState,
+.imageViewerStateDescription {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.imageViewerEmptyState {
+  align-items: center;
+}
+
 .imageViewerFallbackFrame {
   width: 100%;
   display: flex;
@@ -193,7 +209,7 @@
   }
 
   .imageViewerToolbarButton {
-    min-height: 40px;
+    min-height: 44px;
   }
 }
 
@@ -216,7 +232,7 @@
   }
 
   .imageViewerToolbarButton {
-    min-height: 40px;
+    min-height: 44px;
     padding-inline: 10px !important;
   }
 }

@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -17,33 +16,51 @@ import (
 	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/profiletls"
+	"s3desk/internal/responsebody"
 )
 
 // Response is a minimal HTTP response wrapper for S3 control-plane calls.
-// It captures status, headers, and the full response body.
+// It captures status, headers, and a bounded response body.
 type Response struct {
 	Status  int
 	Headers http.Header
 	Body    []byte
 }
 
+type ClientOptions struct {
+	AllowRemote bool
+}
+
 // GetBucketPolicy fetches bucket policy via S3 API: GET ?policy.
 func GetBucketPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string) (Response, error) {
-	return do(ctx, profile, http.MethodGet, bucket, nil)
+	return GetBucketPolicyWithOptions(ctx, profile, bucket, ClientOptions{})
+}
+
+func GetBucketPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, opts ClientOptions) (Response, error) {
+	return do(ctx, profile, http.MethodGet, bucket, nil, opts)
 }
 
 // PutBucketPolicy sets bucket policy via S3 API: PUT ?policy.
 func PutBucketPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string, policyJSON []byte) (Response, error) {
-	return do(ctx, profile, http.MethodPut, bucket, policyJSON)
+	return PutBucketPolicyWithOptions(ctx, profile, bucket, policyJSON, ClientOptions{})
+}
+
+func PutBucketPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, policyJSON []byte, opts ClientOptions) (Response, error) {
+	return do(ctx, profile, http.MethodPut, bucket, policyJSON, opts)
 }
 
 // DeleteBucketPolicy deletes bucket policy via S3 API: DELETE ?policy.
 func DeleteBucketPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string) (Response, error) {
-	return do(ctx, profile, http.MethodDelete, bucket, nil)
+	return DeleteBucketPolicyWithOptions(ctx, profile, bucket, ClientOptions{})
 }
 
-func do(ctx context.Context, profile models.ProfileSecrets, method, bucket string, body []byte) (Response, error) {
+func DeleteBucketPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, opts ClientOptions) (Response, error) {
+	return do(ctx, profile, http.MethodDelete, bucket, nil, opts)
+}
+
+func do(ctx context.Context, profile models.ProfileSecrets, method, bucket string, body []byte, opts ClientOptions) (Response, error) {
 	baseURL, region, err := resolveEndpoint(profile)
 	if err != nil {
 		return Response{}, err
@@ -75,7 +92,7 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, bucket strin
 		payload = nil
 	}
 
-	client, err := newHTTPClient(profile)
+	client, err := newHTTPClient(profile, opts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -110,7 +127,10 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, bucket strin
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := responsebody.ReadAll(resp.Body, responsebody.ControlPlaneMaxBytes)
+	if err != nil {
+		return Response{}, err
+	}
 	return Response{
 		Status:  resp.StatusCode,
 		Headers: resp.Header.Clone(),
@@ -159,23 +179,18 @@ func resolveEndpoint(profile models.ProfileSecrets) (*url.URL, string, error) {
 	return u, region, nil
 }
 
-func newHTTPClient(profile models.ProfileSecrets) (*http.Client, error) {
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext
-
+func newHTTPClient(profile models.ProfileSecrets, opts ClientOptions) (*http.Client, error) {
 	// Only configure TLS if scheme is https; the Transport will ignore TLS settings for http.
 	tlsCfg, err := profiletls.BuildConfig(profile)
 	if err != nil {
 		return nil, err
 	}
-	if tlsCfg != nil {
-		tr.TLSClientConfig = tlsCfg
-	}
 
-	return &http.Client{
-		Transport: tr,
-		Timeout:   30 * time.Second,
-	}, nil
+	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
+		AllowRemote: opts.AllowRemote,
+		TLSConfig:   tlsCfg,
+		Timeout:     30 * time.Second,
+	}), nil
 }
 
 func joinURLPath(basePath, bucket string) string {

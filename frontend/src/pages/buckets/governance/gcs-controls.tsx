@@ -121,6 +121,7 @@ export function BucketGovernanceGCSControls(props: GovernanceControlsCommonProps
 
   return (
     <GovernanceControlsLayout
+      provider={props.provider}
       mobile={props.isMobile}
       bucket={props.bucket}
       onClose={props.onClose}

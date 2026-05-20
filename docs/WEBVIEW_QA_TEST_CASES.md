@@ -37,8 +37,9 @@ for untested webviews.
 - `frontend/tests/mobile-smoke.spec.ts` covers portrait/mobile rendering,
   dialog/sheet reachability, uploads-hint stacking, and no-overflow checks that
   support `WV-012`.
-- `frontend/tests/responsive-lists.spec.ts` covers compact-card/table switching
-  and extra-small action stacking.
+- `npm run test:e2e:mobile-responsive` covers compact-card/table switching,
+  mobile sheets/dialogs, and extra-small action stacking across the current
+  page-specific mobile specs.
 - `frontend/tests/uploads-folder.spec.ts` covers `webkitdirectory`-style
   folder-upload relative-path preservation (`WV-005` browser-side evidence
   only).

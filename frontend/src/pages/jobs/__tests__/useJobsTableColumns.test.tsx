@@ -83,8 +83,8 @@ describe('useJobsTableColumns', () => {
 			<table><tbody><tr><td>{actionsColumn!.render!(undefined, baseJob)}</td></tr></tbody></table>,
 		)
 
-		expect(getByRole('button', { name: 'Details' })).toBeInTheDocument()
-		expect(getByRole('button', { name: 'Logs' })).toBeInTheDocument()
-		expect(getByRole('button', { name: 'Open actions menu' })).toBeInTheDocument()
+		expect(getByRole('button', { name: 'Details for job job-1' })).toHaveTextContent('Details')
+		expect(getByRole('button', { name: 'Logs for job job-1' })).toHaveTextContent('Logs')
+		expect(getByRole('button', { name: 'Actions for job job-1' })).toHaveTextContent('Actions')
 	})
 })

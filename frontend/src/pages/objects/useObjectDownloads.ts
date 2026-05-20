@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from 'react'
+
 import type { TransfersContextValue } from '../../components/transfersTypes'
 import type { ObjectItem } from '../../api/types'
 import { getDevicePickerSupport, pickDirectory } from '../../lib/deviceFs'
@@ -5,6 +7,7 @@ import { objectsFeedback } from './objectsFeedback'
 import { displayNameForKey, normalizePrefix } from './objectsListUtils'
 
 type UseObjectDownloadsArgs = {
+	apiToken: string
 	profileId: string | null
 	bucket: string
 	prefix: string
@@ -22,6 +25,15 @@ export type ObjectDownloadsResult = {
 }
 
 export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownloadsResult {
+	const currentScopeKey = `${args.apiToken}:${args.profileId ?? ''}:${args.bucket}:${args.prefix}`
+	const currentScopeKeyRef = useRef(currentScopeKey)
+	const scopeVersionRef = useRef(0)
+
+	useLayoutEffect(() => {
+		currentScopeKeyRef.current = currentScopeKey
+		scopeVersionRef.current += 1
+	}, [currentScopeKey])
+
 	const onDownload = (key: string, expectedBytes?: number) => {
 		if (!args.profileId) {
 			objectsFeedback.selectProfileFirst()
@@ -57,18 +69,25 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 			objectsFeedback.directoryPickerUnavailable(support.reason)
 			return
 		}
+		const profileId = args.profileId
+		const bucket = args.bucket
+		const prefix = normalizePrefix(args.prefix)
+		const scopeVersion = scopeVersionRef.current
+		const scopeKey = currentScopeKey
 		try {
 			const dirHandle = await pickDirectory('readwrite')
+			if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) return
 			args.transfers.queueDownloadObjectsToDevice({
-				profileId: args.profileId,
-				bucket: args.bucket,
+				profileId,
+				bucket,
 				items: [{ key, size: expectedBytes }],
 				targetDirHandle: dirHandle,
 				targetLabel: dirHandle.name,
-				prefix: normalizePrefix(args.prefix),
+				prefix,
 			})
 			args.transfers.openTransfers('downloads')
 		} catch (err) {
+			if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) return
 			const error = err as Error
 			if (error?.name === 'AbortError') return
 			objectsFeedback.localFolderSelectionFailed(error)
@@ -78,6 +97,14 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 	const handleDownloadSelected = async () => {
 		if (args.selectedCount <= 0) {
 			objectsFeedback.selectObjectsFirst()
+			return
+		}
+		if (!args.profileId) {
+			objectsFeedback.selectProfileFirst()
+			return
+		}
+		if (!args.bucket) {
+			objectsFeedback.selectBucketFirst()
 			return
 		}
 		const keys = Array.from(args.selectedKeys)
@@ -94,18 +121,25 @@ export function useObjectDownloads(args: UseObjectDownloadsArgs): ObjectDownload
 			args.onZipObjects(keys)
 			return
 		}
+		const profileId = args.profileId
+		const bucket = args.bucket
+		const prefix = normalizePrefix(args.prefix)
+		const scopeVersion = scopeVersionRef.current
+		const scopeKey = currentScopeKey
 		try {
 			const dirHandle = await pickDirectory('readwrite')
+			if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) return
 			args.transfers.queueDownloadObjectsToDevice({
-				profileId: args.profileId!,
-				bucket: args.bucket,
+				profileId,
+				bucket,
 				items: keys.map((key) => ({ key, size: args.objectByKey.get(key)?.size })),
 				targetDirHandle: dirHandle,
 				targetLabel: dirHandle.name,
-				prefix: normalizePrefix(args.prefix),
+				prefix,
 			})
 			args.transfers.openTransfers('downloads')
 		} catch (err) {
+			if (scopeVersionRef.current !== scopeVersion || currentScopeKeyRef.current !== scopeKey) return
 			const error = err as Error
 			if (error?.name === 'AbortError') return
 			objectsFeedback.localFolderSelectionFailed(error)

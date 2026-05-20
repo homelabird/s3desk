@@ -32,13 +32,107 @@ if [[ -z "${STACK}" || "${STACK}" == "-h" || "${STACK}" == "--help" ]]; then
 fi
 shift || true
 
+is_placeholder_secret() {
+  local value="${1:-}"
+  local normalized
+  normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  case "${normalized}" in
+    ""|change-me|changeme|default|token|api-token|s3desk|s3desk-local|replace-me|replace-with-a-long-random-token|replace-with-a-strong-db-password|replace-me-with-a-strong-token)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+env_or_dotenv_value() {
+  local name="$1"
+  local value="${!name:-}"
+  if [[ -z "${value}" && -f "${ROOT_DIR}/.env" ]]; then
+    value="$(
+      awk -F= -v key="${name}" '
+        $0 !~ /^[[:space:]]*#/ && $1 == key {
+          value = substr($0, index($0, "=") + 1)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+          gsub(/^["'\'']|["'\'']$/, "", value)
+          print value
+          exit
+        }
+      ' "${ROOT_DIR}/.env"
+    )"
+  fi
+  printf '%s' "${value}"
+}
+
+require_non_placeholder_secret() {
+  local name="$1"
+  local value
+  value="$(env_or_dotenv_value "${name}")"
+  if is_placeholder_secret "${value}"; then
+    echo "${name} must be set to a non-placeholder value for ${STACK}" >&2
+    exit 1
+  fi
+}
+
+is_placeholder_public_host() {
+  local value="${1:-}"
+  local normalized
+  normalized="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  normalized="${normalized#http://}"
+  normalized="${normalized#https://}"
+  normalized="${normalized%%/*}"
+  normalized="${normalized%%:*}"
+  case "${normalized}" in
+    ""|s3desk.example.com|example.com|replace-me|changeme|change-me)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+require_non_placeholder_public_host() {
+  local name="$1"
+  local value
+  value="$(env_or_dotenv_value "${name}")"
+  if is_placeholder_public_host "${value}"; then
+    echo "${name} must be set to a real hostname for ${STACK}; replace s3desk.example.com before starting remote stacks" >&2
+    exit 1
+  fi
+}
+
+require_non_empty_setting() {
+  local name="$1"
+  local value
+  value="$(env_or_dotenv_value "${name}")"
+  if [[ -z "${value//[[:space:]]/}" ]]; then
+    echo "${name} must be set for ${STACK}" >&2
+    exit 1
+  fi
+}
+
 declare -a COMPOSE_FILES=()
 case "${STACK}" in
   remote|prod)
     COMPOSE_FILES=("compose/remote/compose.yml")
+    require_non_placeholder_secret API_TOKEN
+    require_non_placeholder_secret POSTGRES_PASSWORD
+    require_non_empty_setting ALLOWED_LOCAL_DIRS
+    require_non_placeholder_public_host ALLOWED_HOSTS
+    if [[ -n "$(env_or_dotenv_value EXTERNAL_BASE_URL)" ]]; then
+      require_non_placeholder_public_host EXTERNAL_BASE_URL
+    fi
     ;;
   caddy|remote-caddy)
-    COMPOSE_FILES=("compose/remote/compose.yml" "compose/remote/caddy.yml")
+    COMPOSE_FILES=("compose/remote/caddy.yml")
+    require_non_placeholder_secret API_TOKEN
+    require_non_placeholder_secret POSTGRES_PASSWORD
+    require_non_empty_setting ALLOWED_LOCAL_DIRS
+    require_non_placeholder_public_host ALLOWED_HOSTS
+    require_non_placeholder_public_host EXTERNAL_BASE_URL
+    require_non_placeholder_public_host S3DESK_DOMAIN
     ;;
   dev|local)
     COMPOSE_FILES=("compose/dev/compose.yml")

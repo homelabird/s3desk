@@ -96,4 +96,43 @@ describe('ObjectsMenuPopover', () => {
 		fireEvent.keyDown(deleteItem, { key: 'Home', bubbles: true })
 		expect(details).toHaveFocus()
 	})
+
+	it('exposes nested submenu semantics', async () => {
+		render(
+			<ObjectsMenuPopover
+				scopeKey="token-a:profile-1"
+				menu={{
+					items: [
+						{
+							key: 'more-actions',
+							label: 'More actions',
+							children: [
+								{ key: 'copy', label: 'Copy path' },
+								{ key: 'download', label: 'Download' },
+							],
+						},
+					],
+				}}
+			>
+				{({ toggle, open }) => (
+					<button type="button" aria-expanded={open} onClick={toggle}>
+						More
+					</button>
+				)}
+			</ObjectsMenuPopover>,
+		)
+
+		fireEvent.click(screen.getByRole('button', { name: 'More' }))
+
+		const submenuTrigger = await screen.findByRole('menuitem', { name: /More actions/i })
+		expect(submenuTrigger).toHaveAttribute('aria-haspopup', 'menu')
+		expect(submenuTrigger).toHaveAttribute('aria-expanded', 'false')
+		expect(screen.getAllByRole('menu')).toHaveLength(1)
+
+		fireEvent.click(submenuTrigger)
+
+		expect(submenuTrigger).toHaveAttribute('aria-expanded', 'true')
+		expect(screen.getAllByRole('menu')).toHaveLength(2)
+		expect(await screen.findByRole('menuitem', { name: 'Copy path' })).toBeInTheDocument()
+	})
 })

@@ -29,6 +29,14 @@ HARBOR_REGISTRY="${HARBOR_REGISTRY:-harbor.k8s.homelabird.com}"
 HELM_TIMEOUT="${HELM_TIMEOUT:-300s}"
 CHART_VERSION="$(bash "${ROOT}/scripts/chart_version_from_tag.sh" "${TAG}")"
 DEPLOY_HELM_CHART_REF="${DEPLOY_HELM_CHART_REF:-oci://${HARBOR_REGISTRY}/library/charts/s3desk}"
+DEPLOY_HEALTHCHECK_URL="${DEPLOY_HEALTHCHECK_URL:-}"
+DEPLOY_BASE_URL="${DEPLOY_BASE_URL:-}"
+if [[ -z "${DEPLOY_BASE_URL}" && -n "${DEPLOY_HEALTHCHECK_URL}" ]]; then
+  DEPLOY_BASE_URL="${DEPLOY_HEALTHCHECK_URL%/healthz}"
+fi
+DEPLOY_RELEASE_CANDIDATE="${DEPLOY_RELEASE_CANDIDATE:-${TAG}}"
+export DEPLOY_BASE_URL DEPLOY_API_TOKEN DEPLOY_RELEASE_CANDIDATE
+python3 "${ROOT}/scripts/check_live_evidence_env.py" --scope reverse-proxy >/dev/null
 
 KUBECONFIG_PATH=""
 cleanup() {
@@ -45,7 +53,7 @@ if [[ -n "${DEPLOY_KUBECONFIG_B64:-}" ]]; then
 fi
 
 if [[ -n "${HARBOR_USERNAME:-}" && -n "${HARBOR_PASSWORD:-}" ]]; then
-  helm registry login "${HARBOR_REGISTRY}" -u "${HARBOR_USERNAME}" -p "${HARBOR_PASSWORD}"
+  printf '%s' "${HARBOR_PASSWORD}" | helm registry login "${HARBOR_REGISTRY}" -u "${HARBOR_USERNAME}" --password-stdin
 fi
 
 helm_args=(
@@ -74,6 +82,7 @@ if [[ -n "${DEPLOY_HELM_EXTRA_ARGS:-}" ]]; then
   helm_args+=("${extra_args[@]}")
 fi
 
+helm "${helm_args[@]}" --dry-run=client >/dev/null
 helm "${helm_args[@]}"
 
 mapfile -t deployments < <(

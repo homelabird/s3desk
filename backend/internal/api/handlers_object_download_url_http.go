@@ -52,6 +52,20 @@ func buildObjectDownloadURLResponse(url string, expires time.Duration, now time.
 	}
 }
 
+func parseDownloadProxyBool(raw string) (bool, error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	switch raw {
+	case "":
+		return false, nil
+	case "1", "true", "t", "yes", "y", "on":
+		return true, nil
+	case "0", "false", "f", "no", "n", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("proxy must be a boolean")
+	}
+}
+
 func firstNonEmptyLine(raw string) string {
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
@@ -77,9 +91,18 @@ func (svc objectDownloadURLHTTPService) prepareGetObjectDownloadURL(metric *stor
 		return models.ProfileSecrets{}, "", "", 0, 0, false, 0, "", "", newObjectDownloadURLHTTPError(http.StatusBadRequest, "invalid_request", "bucket and key are required", nil)
 	}
 
-	expiresSeconds, _ := parseIntQueryClamped(r, "expiresSeconds", 900, 60, 3600)
+	expiresSeconds, err := parseIntQueryClamped(r, "expiresSeconds", 900, 60, 3600)
+	if err != nil {
+		metric.SetStatus("invalid_request")
+		return models.ProfileSecrets{}, "", "", 0, 0, false, 0, "", "", newObjectDownloadURLHTTPError(http.StatusBadRequest, "invalid_request", "expiresSeconds is invalid", map[string]any{"expiresSeconds": r.URL.Query().Get("expiresSeconds")})
+	}
 	expires := time.Duration(expiresSeconds) * time.Second
-	useProxy := shouldUseDownloadProxy(r.URL.Query().Get("proxy"))
+	proxyRaw := strings.TrimSpace(r.URL.Query().Get("proxy"))
+	useProxy, err := parseDownloadProxyBool(proxyRaw)
+	if err != nil {
+		metric.SetStatus("invalid_request")
+		return models.ProfileSecrets{}, "", "", 0, 0, false, 0, "", "", newObjectDownloadURLHTTPError(http.StatusBadRequest, "invalid_request", "proxy must be a boolean", map[string]any{"proxy": proxyRaw})
+	}
 	sizeRaw := strings.TrimSpace(r.URL.Query().Get("size"))
 	sizeHint, contentType, lastModified, err := parseDownloadProxyMetadataHints(sizeRaw, r.URL.Query().Get("contentType"), r.URL.Query().Get("lastModified"))
 	if err != nil {
@@ -113,7 +136,7 @@ func (svc objectDownloadURLHTTPService) executeGet(metric *storageMetric, r *htt
 	}
 
 	if secrets.Provider == models.ProfileProviderAwsS3 || secrets.Provider == models.ProfileProviderS3Compatible {
-		presigner, err := s3PresignClientFromProfile(secrets)
+		presigner, err := s3PresignClientFromProfile(secrets, svc.server.cfg.AllowRemote)
 		if err != nil {
 			metric.SetStatus("internal_error")
 			return nil, nil, "", rcloneAPIErrorContext{}, nil, newObjectDownloadURLHTTPError(http.StatusInternalServerError, "internal_error", "failed to prepare download presigner", nil)

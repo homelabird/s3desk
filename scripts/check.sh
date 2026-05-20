@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-full}"
 REPRO_FOCUS_SCRIPT="${ROOT}/scripts/repro_backend_focus.sh"
+export GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
 
 case "${MODE}" in
   fast|full) ;;
@@ -93,23 +94,18 @@ if command -v helm >/dev/null 2>&1; then
   echo "[check] helm chart"
   bash "${ROOT}/scripts/check_helm_chart.sh"
 else
-  echo "[check] helm not found; skipping helm chart validation" >&2
+  if [[ "${MODE}" == "full" ]]; then
+    echo "[check] helm not found; full mode requires helm chart validation" >&2
+    exit 1
+  fi
+  echo "[check] helm not found; skipping helm chart validation in fast mode" >&2
 fi
 
 echo "[check] gofmt"
 backend_go_files=()
-if command -v git >/dev/null 2>&1 && git -C "${ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  while IFS= read -r -d '' path; do
-    [[ "${path}" == *.go ]] || continue
-    abs_path="${ROOT}/${path}"
-    [[ -f "${abs_path}" ]] || continue
-    backend_go_files+=("${abs_path}")
-  done < <(git -C "${ROOT}" ls-files -z -- backend)
-else
-  while IFS= read -r -d '' path; do
-    backend_go_files+=("${path}")
-  done < <(find "${ROOT}/backend" -name '*.go' -type f -print0)
-fi
+while IFS= read -r -d '' path; do
+  backend_go_files+=("${path}")
+done < <(find "${ROOT}/backend" -name '*.go' -type f -print0)
 
 UNFORMATTED=""
 if [[ ${#backend_go_files[@]} -gt 0 ]]; then

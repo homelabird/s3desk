@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
@@ -10,15 +9,29 @@ import (
 
 	"s3desk/internal/logging"
 	"s3desk/internal/models"
+	"s3desk/internal/processio"
+	"s3desk/internal/profileendpoint"
 )
 
 type rcloneProcess struct {
 	stdout io.ReadCloser
-	stderr *bytes.Buffer
+	stderr rcloneProcessStderr
 	wait   func() error
 }
 
+type rcloneProcessStderr interface {
+	String() string
+}
+
+var (
+	rcloneCaptureStdoutMaxBytes = processio.DefaultStdoutMaxBytes
+	rcloneStderrMaxBytes        = processio.DefaultStderrMaxBytes
+)
+
 func (m *Manager) startRcloneCommand(ctx context.Context, profile models.ProfileSecrets, jobID string, args []string) (*rcloneProcess, error) {
+	if err := profileendpoint.ValidateProfileSecretsEndpoints(profile, m.allowRemote); err != nil {
+		return nil, err
+	}
 	hooks := currentProcessTestHooks()
 	if hooks.startRcloneCommand != nil {
 		return hooks.startRcloneCommand(ctx, profile, jobID, args)
@@ -76,10 +89,10 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 	}
 	cancelWatcher := startProcessCancelWatcher(ctx, jobID, pid)
 
-	var stderrBuf bytes.Buffer
+	stderrBuf := processio.NewLimitBuffer(rcloneStderrMaxBytes)
 	stderrDone := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(&stderrBuf, stderrPipe)
+		_, _ = io.Copy(stderrBuf, stderrPipe)
 		close(stderrDone)
 	}()
 
@@ -115,7 +128,7 @@ func (m *Manager) startRcloneCommand(ctx context.Context, profile models.Profile
 
 	return &rcloneProcess{
 		stdout: stdout,
-		stderr: &stderrBuf,
+		stderr: stderrBuf,
 		wait:   wait,
 	}, nil
 }

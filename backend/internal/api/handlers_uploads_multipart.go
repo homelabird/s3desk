@@ -90,7 +90,7 @@ func (s *server) multipartClientFromContext(ctx context.Context, notSupportedMes
 			message: notSupportedMessage,
 		}
 	}
-	client, err := s3ClientFromProfile(secrets)
+	client, err := s3ClientFromProfile(secrets, s.cfg.AllowRemote)
 	if err != nil {
 		return nil, &uploadHTTPError{
 			status:  http.StatusInternalServerError,

@@ -24,18 +24,24 @@ type ObjectsRenameModalProps = {
 export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 	const isPrefix = props.kind === 'prefix'
 	const sourceLabel = props.bucket && props.source ? `s3://${props.bucket}/${isPrefix ? `${props.source}*` : props.source}` : '-'
-	const canSubmit = !!props.source && !!props.values.name.trim()
+	const canSubmit = !!props.source && !!props.values.name.trim() && !props.isSubmitting
+	const submit = () => {
+		if (!canSubmit) return
+		props.onFinish(props.values)
+	}
 
 	return (
 		<DialogModal
 			open={props.open}
 			title={isPrefix ? 'Rename folder…' : 'Rename object…'}
 			onClose={props.onCancel}
+			closeDisabled={props.isSubmitting}
+			initialFocusSelector="#objectsRenameInput"
 			width={640}
 			footer={
 				<>
-					<Button onClick={props.onCancel}>Cancel</Button>
-					<Button type="primary" danger loading={props.isSubmitting} disabled={!canSubmit} onClick={() => props.onFinish(props.values)}>
+					<Button onClick={props.onCancel} disabled={props.isSubmitting}>Cancel</Button>
+					<Button type="primary" danger loading={props.isSubmitting} disabled={!canSubmit} onClick={submit}>
 						Rename
 					</Button>
 				</>
@@ -54,7 +60,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 				className={styles.form}
 				onSubmit={(e) => {
 					e.preventDefault()
-					props.onFinish(props.values)
+					submit()
 				}}
 			>
 				<FormField label="Source">
@@ -70,6 +76,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 						onChange={(e) => props.onValuesChange({ ...props.values, name: e.target.value })}
 						placeholder={isPrefix ? 'folder-name' : 'file-name'}
 						autoComplete="off"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 
@@ -80,6 +87,7 @@ export function ObjectsRenameModal(props: ObjectsRenameModalProps) {
 						onChange={(e) => props.onValuesChange({ ...props.values, confirm: e.target.value })}
 						placeholder="RENAME…"
 						autoComplete="off"
+						disabled={props.isSubmitting}
 					/>
 				</FormField>
 			</form>

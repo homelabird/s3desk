@@ -10,6 +10,7 @@ type ObjectsListSectionProps = {
 	selectionBar: ReactNode
 	listHeader: ReactNode
 	listContent: ReactNode
+	viewMode?: 'list' | 'grid'
 	listScrollerRef: Ref<HTMLDivElement>
 	listScrollerTabIndex?: number
 	onListScrollerClick?: (e: MouseEvent<HTMLDivElement>) => void
@@ -31,6 +32,7 @@ export function ObjectsListSection({
 	selectionBar,
 	listHeader,
 	listContent,
+	viewMode,
 	listScrollerRef,
 	listScrollerTabIndex,
 	onListScrollerClick,
@@ -86,6 +88,7 @@ export function ObjectsListSection({
 					{listHeader}
 					<ObjectsListScroller
 						ref={listScrollerRef}
+						viewMode={viewMode}
 						tabIndex={listScrollerTabIndex}
 						onClick={onListScrollerClick}
 						onKeyDown={onListScrollerKeyDown}

@@ -1,5 +1,6 @@
 import { Button, Dropdown, Typography } from 'antd'
 import { DeleteOutlined, DownloadOutlined, EllipsisOutlined } from '@ant-design/icons'
+import { useState } from 'react'
 
 import styles from './ObjectsListView.module.css'
 import { ObjectsSelectionBar } from './ObjectsListPane'
@@ -22,6 +23,7 @@ type ObjectsSelectionBarContentProps = {
 }
 
 export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProps) {
+	const [moreActionsOpen, setMoreActionsOpen] = useState(false)
 	const selectionMenuActions = trimActionDividers(props.selectionMenuActions)
 	const menuActions: UIActionOrDivider[] = props.singleSelectedKey
 		? trimActionDividers(
@@ -36,7 +38,14 @@ export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProp
 	return (
 		<ObjectsSelectionBar>
 			<div className={styles.selectionBarMeta}>
-				<Typography.Text strong className={styles.selectionBarCount}>
+				<Typography.Text
+					strong
+					className={styles.selectionBarCount}
+					role="status"
+					aria-live="polite"
+					aria-atomic="true"
+					aria-label={`${props.selectedCount} selected`}
+				>
 					{props.selectedCount} selected
 				</Typography.Text>
 				<Button
@@ -73,12 +82,19 @@ export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProp
 					</Button>
 				) : null}
 				{hasActions ? (
-					<Dropdown trigger={['click']} menu={buildActionMenu(menuActions, props.isAdvanced)}>
+					<Dropdown
+						trigger={['click']}
+						menu={buildActionMenu(menuActions, props.isAdvanced)}
+						open={moreActionsOpen}
+						onOpenChange={setMoreActionsOpen}
+					>
 						<Button
 							size="small"
 							className={`${styles.selectionBarButton} ${styles.selectionBarMoreButton}`}
 							icon={<EllipsisOutlined />}
 							aria-label="More selection actions"
+							aria-haspopup="menu"
+							aria-expanded={moreActionsOpen}
 						>
 							More
 						</Button>

@@ -13,11 +13,9 @@ type AccessSettingsSectionProps = {
 	setProfileId: (v: string | null) => void
 	apiDocsUrl: string
 	openapiUrl: string
-	dismissedDialogCount: number
-	onResetDismissedDialogs: () => void
 }
 
-function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => void }) {
+function ApiTokenField(props: { apiToken: string; inputId: string; setApiToken: (v: string) => void }) {
 	const [draft, setDraft] = useState(props.apiToken)
 	const apply = () => {
 		const trimmed = draft.trim()
@@ -31,10 +29,10 @@ function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => vo
 	return (
 		<div className={styles.compactFieldRow}>
 			<Input.Password
+				id={props.inputId}
 				placeholder="Must match API_TOKEN…"
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
-				onBlur={apply}
 				onPressEnter={(e) => {
 					e.preventDefault()
 					apply()
@@ -51,35 +49,30 @@ function ApiTokenField(props: { apiToken: string; setApiToken: (v: string) => vo
 export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+			<Typography.Text type="secondary" className={styles.sectionIntro}>
+				What this affects: browser access to this S3Desk server, the active storage profile, and API reference links.
+			</Typography.Text>
 			<div>
-				<FormField label="Backend API Token (X-Api-Token)">
-					<ApiTokenField key={props.apiToken} apiToken={props.apiToken} setApiToken={props.setApiToken} />
+				<FormField label="Backend API Token (X-Api-Token)" htmlFor="settings-api-token">
+					<ApiTokenField
+						key={props.apiToken}
+						apiToken={props.apiToken}
+						inputId="settings-api-token"
+						setApiToken={props.setApiToken}
+					/>
 					<Typography.Paragraph type="secondary" className={styles.paragraphTop8}>
 						This must match the server's <Typography.Text code>API_TOKEN</Typography.Text> (or{' '}
 						<Typography.Text code>--api-token</Typography.Text>). It is not related to S3 credentials and is stored only for the current browser session.
 					</Typography.Paragraph>
 				</FormField>
 
-				<FormField label="Selected Profile" extra="Used by most pages to scope S3 operations.">
+				<FormField label="Selected Profile" htmlFor="settings-selected-profile" extra="Used by most pages to scope S3 operations.">
 					<div className={styles.compactFieldRow}>
-						<Input value={props.profileId ?? ''} placeholder="(none)…" readOnly />
+						<Input id="settings-selected-profile" value={props.profileId ?? ''} placeholder="(none)…" readOnly />
 						<Button danger onClick={() => props.setProfileId(null)}>
 							Clear
 						</Button>
 					</div>
-				</FormField>
-
-				<FormField label="Dialog confirmations" extra="Controls confirmations or warnings you chose not to see again.">
-					<Space orientation="vertical" size={8} className={styles.fullWidth}>
-						<Typography.Text type="secondary">
-							{props.dismissedDialogCount > 0
-								? `${props.dismissedDialogCount} dialog preference(s) are currently suppressed.`
-								: 'No dialog preferences are currently suppressed.'}
-						</Typography.Text>
-						<Button onClick={props.onResetDismissedDialogs} disabled={props.dismissedDialogCount === 0}>
-							Reset dismissed dialogs
-						</Button>
-					</Space>
 				</FormField>
 			</div>
 

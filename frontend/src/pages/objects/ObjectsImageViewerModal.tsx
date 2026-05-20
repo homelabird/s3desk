@@ -60,7 +60,6 @@ function ObjectsImageViewerModalSession({
 	}, [objectKey, objectMeta])
 	const supportsVisualPreview = objectPreviewKind === 'image' || objectPreviewKind === 'video'
 	const isImageObject = objectPreviewKind === 'image'
-	const isVideoObject = objectPreviewKind === 'video'
 	const detailsSize = typeof objectMeta?.size === 'number' && Number.isFinite(objectMeta.size) ? objectMeta.size : null
 	const imagePreviewTooLarge = isImageObject && detailsSize != null && detailsSize > IMAGE_PREVIEW_MAX_BYTES
 	const visualPreviewReady = preview?.status === 'ready' && (preview.kind === 'image' || preview.kind === 'video') && !!preview.url
@@ -136,7 +135,6 @@ function ObjectsImageViewerModalSession({
 					imageRef={panZoom.imageRef}
 					isMetaFetching={isMetaFetching}
 					isMobile={isMobile}
-					isVideoObject={isVideoObject}
 					objectKey={objectKey}
 					objectMeta={objectMeta}
 					offset={panZoom.offset}

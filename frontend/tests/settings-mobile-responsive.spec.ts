@@ -14,6 +14,10 @@ async function setSwitch(scope: Locator, name: string, enabled: boolean) {
 	}
 }
 
+async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
+	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates shared switch touch-target height
+}
+
 async function reopenSettingsFromCompactHeader(drawer: Locator) {
 	const page = drawer.page()
 	await page.getByTestId('app-header').getByRole('button', { name: 'More actions' }).click()
@@ -37,6 +41,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await expect(drawer).toBeVisible()
 		await drawer.getByRole('tab', { name: 'Transfers' }).click()
 		await expect(drawer.getByText(proxySwitchName)).toBeVisible()
+		await expectMinTouchHeight(drawer.getByRole('switch', { name: proxySwitchName }))
 
 		await setSwitch(drawer, proxySwitchName, true)
 		await expect
@@ -72,5 +77,19 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		const reopenedDrawer = dialogByName(page, 'Settings')
 		await reopenSettingsFromCompactHeader(reopenedDrawer)
 		await expect(reopenedDrawer.getByPlaceholder('Must match API_TOKEN')).toHaveValue(updatedToken)
+	})
+
+	test('settings tabs can reach the recovery workflow on narrow mobile', async ({ page }) => {
+		await page.setViewportSize({ width: 320, height: 568 })
+		await page.goto('/settings')
+
+		const drawer = dialogByName(page, 'Settings')
+		await expect(drawer).toBeVisible()
+
+		await drawer.getByRole('tab', { name: 'Access' }).focus()
+		await page.keyboard.press('End')
+
+		await expect(drawer.getByRole('tab', { name: 'Recovery' })).toHaveAttribute('aria-selected', 'true')
+		await expect(drawer.getByRole('button', { name: 'Reset saved UI state' })).toBeVisible()
 	})
 })

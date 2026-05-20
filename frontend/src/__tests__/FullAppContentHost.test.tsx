@@ -66,6 +66,7 @@ describe('FullAppContentHost', () => {
 		expect(screen.getByTestId('content-host-job-banner')).toBeInTheDocument()
 		expect(screen.getByTestId('content-host-routes')).toBeInTheDocument()
 		expect(screen.getByTestId('content-host-spinner')).toBeInTheDocument()
+		expect(screen.getByRole('status', { name: 'Loading page' })).toHaveTextContent('Loading page...')
 
 		expect(routesPropsRef.current).not.toBeNull()
 		expect(routesPropsRef.current).toMatchObject({

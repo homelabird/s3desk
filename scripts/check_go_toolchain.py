@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 EXPECTED_GO_DIRECTIVE = "1.25.0"
-EXPECTED_TOOLCHAIN = "1.25.9"
+EXPECTED_TOOLCHAIN = "1.25.10"
 EXPECTED_TOOLCHAIN_DIRECTIVE = f"go{EXPECTED_TOOLCHAIN}"
 
 
@@ -44,11 +44,11 @@ def check_go_mod() -> None:
         fail(f"backend/go.mod toolchain is {toolchain}, want {EXPECTED_TOOLCHAIN_DIRECTIVE}")
 
 
-def check_containerfile() -> None:
-    text = read_text(ROOT / "Containerfile")
-    image_version = require_match(r"golang:([0-9.]+)-alpine", text, "Containerfile").group(1)
+def check_containerfile(path_name: str) -> None:
+    text = read_text(ROOT / path_name)
+    image_version = require_match(r"golang:([0-9.]+)-alpine", text, path_name).group(1)
     if image_version != EXPECTED_TOOLCHAIN:
-        fail(f"Containerfile Go image is {image_version}, want {EXPECTED_TOOLCHAIN}")
+        fail(f"{path_name} Go image is {image_version}, want {EXPECTED_TOOLCHAIN}")
 
 
 def check_gitlab() -> None:
@@ -74,7 +74,8 @@ def check_github_workflows() -> None:
 
 def main() -> int:
     check_go_mod()
-    check_containerfile()
+    check_containerfile("Containerfile")
+    check_containerfile("Containerfile.local")
     check_gitlab()
     check_github_workflows()
     print(f"[go-toolchain] ok ({EXPECTED_TOOLCHAIN})")

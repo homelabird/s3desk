@@ -47,6 +47,11 @@
 	border-top: none;
 }
 
+.mobileCardFailed {
+	border-left: 4px solid var(--s3d-color-error);
+	background: color-mix(in srgb, var(--s3d-color-error-bg) 55%, var(--s3d-color-bg));
+}
+
 .mobileCardTop {
 	display: flex;
 	align-items: flex-start;
@@ -153,6 +158,10 @@
 	.mobileCard {
 		gap: 12px;
 		padding: 14px;
+	}
+
+	.mobileCardFailed {
+		border-left-width: 3px;
 	}
 
 	.mobileMetaGrid {

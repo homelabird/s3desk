@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
+	"s3desk/internal/responsebody"
 )
 
 const (
@@ -58,6 +60,10 @@ type Client struct {
 	httpClient *http.Client
 }
 
+type ClientOptions struct {
+	AllowRemote bool
+}
+
 type tokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
@@ -72,8 +78,21 @@ type policyRequestProperties struct {
 	AllowProtectedAppendWritesAll         *bool `json:"allowProtectedAppendWritesAll,omitempty"`
 }
 
-var defaultClient = &Client{
-	httpClient: &http.Client{Timeout: 30 * time.Second},
+var newHTTPClient = func(opts ClientOptions) *http.Client {
+	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
+		AllowRemote: opts.AllowRemote,
+		Timeout:     30 * time.Second,
+	})
+}
+
+var defaultClient = NewClient()
+
+func NewClient() *Client {
+	return NewClientWithOptions(ClientOptions{})
+}
+
+func NewClientWithOptions(opts ClientOptions) *Client {
+	return &Client{httpClient: newHTTPClient(opts)}
 }
 
 func HasConfig(profile models.ProfileSecrets) bool {
@@ -88,20 +107,40 @@ func GetPolicy(ctx context.Context, profile models.ProfileSecrets, container str
 	return defaultClient.GetPolicy(ctx, profile, container)
 }
 
+func GetPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).GetPolicy(ctx, profile, container)
+}
+
 func PutPolicy(ctx context.Context, profile models.ProfileSecrets, container string, req PutPolicyRequest) (Response, error) {
 	return defaultClient.PutPolicy(ctx, profile, container, req)
+}
+
+func PutPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, req PutPolicyRequest, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).PutPolicy(ctx, profile, container, req)
 }
 
 func DeletePolicy(ctx context.Context, profile models.ProfileSecrets, container string, ifMatch string) (Response, error) {
 	return defaultClient.DeletePolicy(ctx, profile, container, ifMatch)
 }
 
+func DeletePolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, ifMatch string, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).DeletePolicy(ctx, profile, container, ifMatch)
+}
+
 func LockPolicy(ctx context.Context, profile models.ProfileSecrets, container string, ifMatch string) (Response, error) {
 	return defaultClient.LockPolicy(ctx, profile, container, ifMatch)
 }
 
+func LockPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, ifMatch string, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).LockPolicy(ctx, profile, container, ifMatch)
+}
+
 func ExtendPolicy(ctx context.Context, profile models.ProfileSecrets, container string, req ExtendPolicyRequest) (Response, error) {
 	return defaultClient.ExtendPolicy(ctx, profile, container, req)
+}
+
+func ExtendPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, container string, req ExtendPolicyRequest, opts ClientOptions) (Response, error) {
+	return NewClientWithOptions(opts).ExtendPolicy(ctx, profile, container, req)
 }
 
 func (c *Client) GetPolicy(ctx context.Context, profile models.ProfileSecrets, container string) (Response, error) {
@@ -190,7 +229,7 @@ func (c *Client) getToken(ctx context.Context, profile models.ProfileSecrets) (s
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := responsebody.ReadAll(resp.Body, responsebody.TokenMaxBytes)
 	if err != nil {
 		return "", err
 	}
@@ -232,7 +271,7 @@ func (c *Client) do(ctx context.Context, method string, rawURL string, token str
 	}
 	defer resp.Body.Close()
 
-	payload, err := io.ReadAll(resp.Body)
+	payload, err := responsebody.ReadAll(resp.Body, responsebody.ControlPlaneMaxBytes)
 	if err != nil {
 		return Response{}, err
 	}

@@ -62,7 +62,10 @@ func (svc objectSearchHTTPService) prepareSearchObjects(r *http.Request) (string
 	}
 
 	prefix := strings.TrimSpace(r.URL.Query().Get("prefix"))
-	limit, _ := parseIntQueryClamped(r, "limit", 50, 1, 200)
+	limit, err := parseIntQueryClamped(r, "limit", 50, 1, 200)
+	if err != nil {
+		return "", store.SearchObjectIndexInput{}, newObjectSearchHTTPError(http.StatusBadRequest, "invalid_request", "limit is invalid", map[string]any{"limit": r.URL.Query().Get("limit")})
+	}
 
 	var cursor *string
 	if raw := strings.TrimSpace(r.URL.Query().Get("cursor")); raw != "" {

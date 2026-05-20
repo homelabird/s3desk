@@ -14,7 +14,7 @@ import { buildActionMenu } from './objectsActions'
 import type { UseObjectsGridRenderersArgs } from './objectsGridRendererTypes'
 import { GRID_CARD_THUMBNAIL_PX } from './objectsPageConstants'
 import { displayNameForKey, isThumbnailKey } from './objectsListUtils'
-import { extensionLabel, onActivateFromKeyboard } from './objectsGridRendererUtils'
+import { extensionLabel } from './objectsGridRendererUtils'
 
 type UseObjectsObjectGridRendererArgs = Pick<
 	UseObjectsGridRenderersArgs,
@@ -99,7 +99,7 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 			const isSelected = selectedKeys.has(key)
 			const isFavorite = favoriteKeys.has(key)
 			const favoriteDisabled = favoritePendingKeys.has(key) || isOffline || !profileId || !bucket || !objectCrudSupported
-			const favoriteLabel = isFavorite ? 'Remove favorite' : 'Add favorite'
+			const favoriteLabel = isFavorite ? `Remove favorite for ${displayName}` : `Add favorite for ${displayName}`
 			const buttonMenuOpen =
 				contextMenuState.open &&
 				contextMenuState.kind === 'object' &&
@@ -117,17 +117,12 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 							const point = recordContextMenuPoint(event)
 							openObjectContextMenu(key, 'context', point)
 						}}
-						onKeyDown={(event) =>
-							onActivateFromKeyboard(event, () =>
-								selectObjectFromPointerEvent(event as unknown as ReactMouseEvent, key),
-							)
-						}
 						draggable={canDragDrop}
 						onDragStart={(event) => onRowDragStartObjects(event, key)}
 						onDragEnd={clearDndHover}
 						data-objects-row="true"
-						role="button"
-						tabIndex={0}
+						role="group"
+						aria-label={`Object ${displayName}`}
 					>
 						<div className={gridStyles.gridCardTopRow}>
 							<div className={gridStyles.gridCardCheckboxWrap}>
@@ -169,10 +164,10 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 											type="text"
 											className={gridStyles.gridCardIconButton}
 											icon={<EllipsisOutlined />}
-											aria-label="Object actions"
+											aria-label={`Object actions for ${displayName}`}
 											aria-haspopup="menu"
 											aria-expanded={buttonMenuOpen}
-											title="Object actions"
+											title={`Object actions for ${displayName}`}
 											onClick={(event) => {
 												event.stopPropagation()
 												toggle()
@@ -209,12 +204,23 @@ export function useObjectsObjectGridRenderer(args: UseObjectsObjectGridRendererA
 						</div>
 
 						<div className={gridStyles.gridCardBody}>
-							<Typography.Text className={gridStyles.gridCardTitle} title={key}>
-								{highlightText(displayName)}
-							</Typography.Text>
-							<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine} title={metaLabel}>
-								{metaLabel}
-							</Typography.Text>
+							<button
+								type="button"
+								className={gridStyles.gridCardBodyButton}
+								aria-label={`Select object ${displayName}`}
+								aria-pressed={isSelected}
+								onClick={(event) => {
+									event.stopPropagation()
+									selectObjectFromPointerEvent(event as unknown as ReactMouseEvent, key)
+								}}
+							>
+								<Typography.Text className={gridStyles.gridCardTitle} title={key}>
+									{highlightText(displayName)}
+								</Typography.Text>
+								<Typography.Text type="secondary" className={gridStyles.gridCardMetaLine} title={metaLabel}>
+									{metaLabel}
+								</Typography.Text>
+							</button>
 							{canOpenPreview ? (
 								<div className={gridStyles.gridCardBodyActions}>
 									<Button

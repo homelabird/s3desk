@@ -13,15 +13,17 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"s3desk/internal/gcsauth"
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/profiletls"
+	"s3desk/internal/responsebody"
 )
 
 // Response is a minimal HTTP response wrapper for GCS JSON API calls.
@@ -32,21 +34,33 @@ type Response struct {
 	Body    []byte
 }
 
+type ClientOptions struct {
+	AllowRemote bool
+}
+
 // GetBucketIamPolicy fetches bucket IAM policy via the GCS JSON API:
 //
 //	GET /b/{bucket}/iam
 func GetBucketIamPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string) (Response, error) {
-	return do(ctx, profile, http.MethodGet, bucket, nil)
+	return GetBucketIamPolicyWithOptions(ctx, profile, bucket, ClientOptions{})
+}
+
+func GetBucketIamPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, opts ClientOptions) (Response, error) {
+	return do(ctx, profile, http.MethodGet, bucket, nil, opts)
 }
 
 // PutBucketIamPolicy updates bucket IAM policy via the GCS JSON API:
 //
 //	PUT /b/{bucket}/iam
 func PutBucketIamPolicy(ctx context.Context, profile models.ProfileSecrets, bucket string, policyJSON []byte) (Response, error) {
-	return do(ctx, profile, http.MethodPut, bucket, policyJSON)
+	return PutBucketIamPolicyWithOptions(ctx, profile, bucket, policyJSON, ClientOptions{})
 }
 
-func do(ctx context.Context, profile models.ProfileSecrets, method, bucket string, body []byte) (Response, error) {
+func PutBucketIamPolicyWithOptions(ctx context.Context, profile models.ProfileSecrets, bucket string, policyJSON []byte, opts ClientOptions) (Response, error) {
+	return do(ctx, profile, http.MethodPut, bucket, policyJSON, opts)
+}
+
+func do(ctx context.Context, profile models.ProfileSecrets, method, bucket string, body []byte, opts ClientOptions) (Response, error) {
 	baseURL, err := resolveEndpoint(profile)
 	if err != nil {
 		return Response{}, err
@@ -55,7 +69,7 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, bucket strin
 	u := *baseURL
 	u.Path = strings.TrimRight(u.Path, "/") + "/b/" + url.PathEscape(bucket) + "/iam"
 
-	client, err := newHTTPClient(profile)
+	client, err := newHTTPClient(profile, opts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -74,7 +88,7 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, bucket strin
 	}
 
 	// Auth: allow anonymous only when explicitly configured, usually for emulator/local endpoints.
-	if token, err := resolveBearerToken(ctx, profile); err != nil {
+	if token, err := resolveBearerToken(ctx, profile, opts); err != nil {
 		return Response{}, err
 	} else if strings.TrimSpace(token) != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -86,7 +100,10 @@ func do(ctx context.Context, profile models.ProfileSecrets, method, bucket strin
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := responsebody.ReadAll(resp.Body, responsebody.ControlPlaneMaxBytes)
+	if err != nil {
+		return Response{}, err
+	}
 	return Response{Status: resp.StatusCode, Headers: resp.Header.Clone(), Body: respBody}, nil
 }
 
@@ -119,19 +136,24 @@ func resolveEndpoint(profile models.ProfileSecrets) (*url.URL, error) {
 	return u, nil
 }
 
-func newHTTPClient(profile models.ProfileSecrets) (*http.Client, error) {
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.DialContext = (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext
-
+func newHTTPClient(profile models.ProfileSecrets, opts ClientOptions) (*http.Client, error) {
 	tlsCfg, err := profiletls.BuildConfig(profile)
 	if err != nil {
 		return nil, err
 	}
-	if tlsCfg != nil {
-		tr.TLSClientConfig = tlsCfg
-	}
 
-	return &http.Client{Transport: tr, Timeout: 30 * time.Second}, nil
+	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
+		AllowRemote: opts.AllowRemote,
+		TLSConfig:   tlsCfg,
+		Timeout:     30 * time.Second,
+	}), nil
+}
+
+var newTokenHTTPClient = func(opts ClientOptions) *http.Client {
+	return profileendpoint.NewHTTPClient(profileendpoint.HTTPClientOptions{
+		AllowRemote: opts.AllowRemote,
+		Timeout:     20 * time.Second,
+	})
 }
 
 func looksLikeLocalEndpoint(endpoint string) bool {
@@ -169,7 +191,7 @@ type tokenResponse struct {
 	ExpiresIn   int64  `json:"expires_in"`
 }
 
-func resolveBearerToken(ctx context.Context, profile models.ProfileSecrets) (string, error) {
+func resolveBearerToken(ctx context.Context, profile models.ProfileSecrets, opts ClientOptions) (string, error) {
 	// Allow anonymous access only for custom endpoints (e.g. fake-gcs-server).
 	if profile.GcpAnonymous {
 		if ep := strings.TrimSpace(profile.GcpEndpoint); ep != "" {
@@ -191,9 +213,9 @@ func resolveBearerToken(ctx context.Context, profile models.ProfileSecrets) (str
 	if strings.TrimSpace(sa.ClientEmail) == "" || strings.TrimSpace(sa.PrivateKey) == "" {
 		return "", errors.New("gcp service account json missing client_email/private_key")
 	}
-	tokenURI := strings.TrimSpace(sa.TokenURI)
-	if tokenURI == "" {
-		tokenURI = "https://oauth2.googleapis.com/token" // #nosec G101 -- well-known OAuth token URL
+	tokenURI, err := gcsauth.NormalizeTokenURI(sa.TokenURI)
+	if err != nil {
+		return "", err
 	}
 
 	jwt, err := buildSignedJWT(sa.ClientEmail, sa.PrivateKey, tokenURI)
@@ -211,13 +233,16 @@ func resolveBearerToken(ctx context.Context, profile models.ProfileSecrets) (str
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := newTokenHTTPClient(opts)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := responsebody.ReadAll(resp.Body, responsebody.TokenMaxBytes)
+	if err != nil {
+		return "", fmt.Errorf("read gcp access token response: %w", err)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("failed to fetch gcp access token: %s", strings.TrimSpace(string(body)))
 	}

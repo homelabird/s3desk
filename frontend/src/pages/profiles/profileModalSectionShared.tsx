@@ -31,6 +31,15 @@ export function countConfiguredValues(values: Array<string | null | undefined>) 
 	return values.reduce((count, value) => (value && value.trim() ? count + 1 : count), 0)
 }
 
+export function profileFieldA11y(id: string, error?: ReactNode) {
+	const hasError = Boolean(error)
+	return {
+		id,
+		'aria-invalid': hasError || undefined,
+		'aria-describedby': hasError ? `${id}-error` : undefined,
+	}
+}
+
 export function getConnectionSummary(viewState: ProfileModalViewState) {
 	if (viewState.isS3Provider) {
 		return viewState.isAws

@@ -50,8 +50,9 @@ export function BucketsPageShell(props: BucketsPageShellProps) {
 			) : null}
 
 			{!props.bucketCrudSupported ? null : props.bucketsLoading ? (
-				<div className={styles.loadingRow}>
+				<div className={styles.loadingRow} role="status" aria-live="polite" aria-label="Loading buckets">
 					<Spin />
+					<span className="sr-only">Loading buckets...</span>
 				</div>
 			) : props.bucketsQueryError ? null : props.showBucketsEmpty ? (
 				<Empty

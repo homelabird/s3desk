@@ -45,7 +45,10 @@ func New(dep Dependencies) http.Handler {
 		uploadLimit:     newRequestLimiter(dep.Config.UploadMaxConcurrentRequests),
 		realtimeLimit:   newRequestLimiter(defaultRealtimeMaxConnections),
 		realtimeMax:     defaultRealtimeMaxConnections,
-		bucketGov:       bucketgov.NewService(bucketgov.NewDefaultRegistry()),
+		bucketGov: bucketgov.NewServiceWithOptions(
+			bucketgov.NewDefaultRegistryWithOptions(bucketgov.DefaultRegistryOptions{AllowRemote: dep.Config.AllowRemote}),
+			bucketgov.ServiceOptions{AllowRemote: dep.Config.AllowRemote},
+		),
 	}
 
 	r.Use(api.allowOnlySafeMethods)

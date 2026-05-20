@@ -55,6 +55,16 @@ function createTransfersStub(): TransfersContextValue {
 	} as unknown as TransfersContextValue
 }
 
+function createDeferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void
+	let reject!: (reason?: unknown) => void
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res
+		reject = rej
+	})
+	return { promise, resolve, reject }
+}
+
 describe('useObjectDownloads', () => {
 	afterEach(() => {
 		devicePickerSupportRef.current = { ok: true }
@@ -71,6 +81,7 @@ describe('useObjectDownloads', () => {
 
 		const { result } = renderHook(() =>
 			useObjectDownloads({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				prefix: 'folder/',
@@ -98,6 +109,7 @@ describe('useObjectDownloads', () => {
 
 		const { result } = renderHook(() =>
 			useObjectDownloads({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				prefix: 'folder/',
@@ -126,6 +138,7 @@ describe('useObjectDownloads', () => {
 
 		const { result } = renderHook(() =>
 			useObjectDownloads({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				prefix: 'folder/',
@@ -153,6 +166,7 @@ describe('useObjectDownloads', () => {
 
 		const { result } = renderHook(() =>
 			useObjectDownloads({
+				apiToken: 'token-a',
 				profileId: null,
 				bucket: 'bucket-a',
 				prefix: 'folder/',
@@ -177,6 +191,7 @@ describe('useObjectDownloads', () => {
 
 		const { result } = renderHook(() =>
 			useObjectDownloads({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: '',
 				prefix: 'folder/',
@@ -201,6 +216,7 @@ describe('useObjectDownloads', () => {
 
 		const { result } = renderHook(() =>
 			useObjectDownloads({
+				apiToken: 'token-a',
 				profileId: 'profile-1',
 				bucket: 'bucket-a',
 				prefix: 'folder/',
@@ -219,5 +235,74 @@ describe('useObjectDownloads', () => {
 		expect(messageInfoMock).toHaveBeenCalledWith(selectObjectsFirstHint())
 		expect(transfers.queueDownloadObject).not.toHaveBeenCalled()
 		expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
+	})
+
+	it('does not queue a single device download when the object scope changes before the picker resolves', async () => {
+		const transfers = createTransfersStub()
+		const picker = createDeferred<FileSystemDirectoryHandle>()
+		pickDirectoryMock.mockReturnValueOnce(picker.promise)
+		const initialProps = {
+			apiToken: 'token-a',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			prefix: 'folder/',
+			selectedKeys: new Set(['folder/a.txt']),
+			selectedCount: 1,
+			objectByKey: new Map([['folder/a.txt', { key: 'folder/a.txt', size: 10, lastModified: '2026-04-23T00:00:00Z' }]]),
+			transfers,
+			onZipObjects: vi.fn(),
+		}
+
+		const { result, rerender } = renderHook((props: typeof initialProps) => useObjectDownloads(props), { initialProps })
+
+		let pending!: Promise<void>
+		act(() => {
+			pending = result.current.onDownloadToDevice('folder/a.txt', 10)
+		})
+		rerender({ ...initialProps, apiToken: 'token-b' })
+
+		await act(async () => {
+			picker.resolve({ name: 'Downloads' } as FileSystemDirectoryHandle)
+			await pending
+		})
+
+		expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
+		expect(transfers.openTransfers).not.toHaveBeenCalled()
+	})
+
+	it('does not queue a multi-select device download when the object scope changes before the picker resolves', async () => {
+		const transfers = createTransfersStub()
+		const picker = createDeferred<FileSystemDirectoryHandle>()
+		pickDirectoryMock.mockReturnValueOnce(picker.promise)
+		const initialProps = {
+			apiToken: 'token-a',
+			profileId: 'profile-1',
+			bucket: 'bucket-a',
+			prefix: 'folder/',
+			selectedKeys: new Set(['folder/a.txt', 'folder/b.txt']),
+			selectedCount: 2,
+			objectByKey: new Map([
+				['folder/a.txt', { key: 'folder/a.txt', size: 10, lastModified: '2026-04-23T00:00:00Z' }],
+				['folder/b.txt', { key: 'folder/b.txt', size: 20, lastModified: '2026-04-23T00:00:00Z' }],
+			]),
+			transfers,
+			onZipObjects: vi.fn(),
+		}
+
+		const { result, rerender } = renderHook((props: typeof initialProps) => useObjectDownloads(props), { initialProps })
+
+		let pending!: Promise<void>
+		act(() => {
+			pending = result.current.handleDownloadSelected()
+		})
+		rerender({ ...initialProps, profileId: 'profile-2' })
+
+		await act(async () => {
+			picker.resolve({ name: 'Downloads' } as FileSystemDirectoryHandle)
+			await pending
+		})
+
+		expect(transfers.queueDownloadObjectsToDevice).not.toHaveBeenCalled()
+		expect(transfers.openTransfers).not.toHaveBeenCalled()
 	})
 })

@@ -100,10 +100,10 @@ func (svc uploadPresignHTTPService) preparePresign(r *http.Request) uploadPresig
 		expiresSeconds = *req.ExpiresSeconds
 	}
 	if expiresSeconds < 60 {
-		expiresSeconds = 60
+		return uploadPresignPreparedRequest{err: newUploadBadRequestError("expiresSeconds must be between 60 and 3600", map[string]any{"expiresSeconds": expiresSeconds})}
 	}
 	if expiresSeconds > 3600 {
-		expiresSeconds = 3600
+		return uploadPresignPreparedRequest{err: newUploadBadRequestError("expiresSeconds must be between 60 and 3600", map[string]any{"expiresSeconds": expiresSeconds})}
 	}
 	expires := time.Duration(expiresSeconds) * time.Second
 
@@ -120,14 +120,25 @@ func (svc uploadPresignHTTPService) preparePresign(r *http.Request) uploadPresig
 	}
 }
 
-func (svc uploadPresignHTTPService) executeSinglePart(r *http.Request, prepared uploadPresignPreparedRequest) (*models.UploadPresignResponse, *uploadHTTPError) {
-	if prepared.req.Size != nil {
-		if uploadErr := uploadRejectIfTooLarge(svc.server.cfg.UploadMaxBytes, *prepared.req.Size, "upload exceeds maxBytes"); uploadErr != nil {
-			return nil, uploadErr
+func validateSinglePartPresignSize(maxBytes int64, size *int64) *uploadHTTPError {
+	if size == nil {
+		if uploadMaxBytesConfigured(maxBytes) {
+			return newUploadBadRequestError("size is required when maxBytes is configured", map[string]any{"maxBytes": maxBytes})
 		}
+		return nil
+	}
+	if *size < 0 {
+		return newUploadBadRequestError("size must be non-negative", map[string]any{"size": *size})
+	}
+	return uploadRejectIfTooLarge(maxBytes, *size, "upload exceeds maxBytes")
+}
+
+func (svc uploadPresignHTTPService) executeSinglePart(r *http.Request, prepared uploadPresignPreparedRequest) (*models.UploadPresignResponse, *uploadHTTPError) {
+	if uploadErr := validateSinglePartPresignSize(svc.server.cfg.UploadMaxBytes, prepared.req.Size); uploadErr != nil {
+		return nil, uploadErr
 	}
 
-	presigner, err := s3PresignClientFromProfile(prepared.secrets)
+	presigner, err := s3PresignClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return nil, newUploadInternalError("failed to prepare presigner", nil)
 	}
@@ -160,15 +171,15 @@ func (svc uploadPresignHTTPService) executeSinglePart(r *http.Request, prepared 
 		size := *prepared.req.Size
 		expectedSize = &size
 	}
-	if err := svc.server.store.UpsertUploadObject(r.Context(), store.UploadObject{
+	if uploadErr := svc.server.upsertUploadObjectWithByteReservation(r.Context(), store.UploadObject{
 		UploadID:     prepared.uploadID,
 		ProfileID:    prepared.profileID,
 		Path:         prepared.relPath,
 		Bucket:       prepared.us.Bucket,
 		ObjectKey:    prepared.key,
 		ExpectedSize: expectedSize,
-	}); err != nil {
-		return nil, newUploadInternalError("failed to persist upload object", nil)
+	}); uploadErr != nil {
+		return nil, uploadErr
 	}
 
 	return &models.UploadPresignResponse{
@@ -196,6 +207,9 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 	}
 
 	fileSize := *prepared.req.Multipart.FileSize
+	if uploadErr := uploadRejectIfTooLarge(svc.server.cfg.UploadMaxBytes, fileSize, "upload exceeds maxBytes"); uploadErr != nil {
+		return nil, uploadErr
+	}
 	partCount, err := expectedMultipartPartCount(fileSize, partSize)
 	if err != nil {
 		return nil, newUploadBadRequestError(err.Error(), nil)
@@ -228,14 +242,15 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		return nil, newUploadInternalError("failed to load multipart upload", nil)
 	}
 	if found && (meta.FileSize != fileSize || meta.ChunkSize != partSize) {
-		if client, err := s3ClientFromProfile(prepared.secrets); err == nil {
+		if client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote); err == nil {
 			_ = svc.server.abortMultipartUpload(r.Context(), client, meta)
 		}
 		_ = svc.server.store.DeleteMultipartUpload(r.Context(), prepared.profileID, prepared.uploadID, prepared.relPath)
 		found = false
 	}
+	createdMeta := false
 	if !found {
-		client, err := s3ClientFromProfile(prepared.secrets)
+		client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
 		if err != nil {
 			return nil, newUploadInternalError("failed to prepare multipart client", nil)
 		}
@@ -264,20 +279,27 @@ func (svc uploadPresignHTTPService) executeMultipart(r *http.Request, prepared u
 		if err := svc.server.store.UpsertMultipartUpload(r.Context(), meta); err != nil {
 			return nil, newUploadInternalError("failed to persist multipart upload", nil)
 		}
+		createdMeta = true
 	}
 
-	if err := svc.server.store.UpsertUploadObject(r.Context(), store.UploadObject{
+	if uploadErr := svc.server.upsertUploadObjectWithByteReservation(r.Context(), store.UploadObject{
 		UploadID:     prepared.uploadID,
 		ProfileID:    prepared.profileID,
 		Path:         prepared.relPath,
 		Bucket:       prepared.us.Bucket,
 		ObjectKey:    prepared.key,
 		ExpectedSize: &fileSize,
-	}); err != nil {
-		return nil, newUploadInternalError("failed to persist upload object", nil)
+	}); uploadErr != nil {
+		if createdMeta {
+			if client, err := s3ClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote); err == nil {
+				_ = svc.server.abortMultipartUpload(r.Context(), client, meta)
+			}
+			_ = svc.server.store.DeleteMultipartUpload(r.Context(), prepared.profileID, prepared.uploadID, prepared.relPath)
+		}
+		return nil, uploadErr
 	}
 
-	presigner, err := s3PresignClientFromProfile(prepared.secrets)
+	presigner, err := s3PresignClientFromProfile(prepared.secrets, svc.server.cfg.AllowRemote)
 	if err != nil {
 		return nil, newUploadInternalError("failed to prepare presigner", nil)
 	}

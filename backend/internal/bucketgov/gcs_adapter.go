@@ -20,6 +20,10 @@ type gcsAdapter struct {
 	patchBucket func(context.Context, models.ProfileSecrets, string, []byte) (gcsbucket.Response, error)
 }
 
+type GCSAdapterOptions struct {
+	AllowRemote bool
+}
+
 type gcsIAMPolicy struct {
 	Version  int             `json:"version,omitempty"`
 	ETag     string          `json:"etag,omitempty"`
@@ -53,11 +57,23 @@ type gcsRetentionPolicy struct {
 }
 
 func NewGCSAdapter() Adapter {
+	return NewGCSAdapterWithOptions(GCSAdapterOptions{})
+}
+
+func NewGCSAdapterWithOptions(opts GCSAdapterOptions) Adapter {
 	return &gcsAdapter{
-		getPolicy:   gcsiam.GetBucketIamPolicy,
-		putPolicy:   gcsiam.PutBucketIamPolicy,
-		getBucket:   gcsbucket.GetBucket,
-		patchBucket: gcsbucket.PatchBucket,
+		getPolicy: func(ctx context.Context, profile models.ProfileSecrets, bucket string) (gcsiam.Response, error) {
+			return gcsiam.GetBucketIamPolicyWithOptions(ctx, profile, bucket, gcsiam.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		putPolicy: func(ctx context.Context, profile models.ProfileSecrets, bucket string, policyJSON []byte) (gcsiam.Response, error) {
+			return gcsiam.PutBucketIamPolicyWithOptions(ctx, profile, bucket, policyJSON, gcsiam.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		getBucket: func(ctx context.Context, profile models.ProfileSecrets, bucket string) (gcsbucket.Response, error) {
+			return gcsbucket.GetBucketWithOptions(ctx, profile, bucket, gcsbucket.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
+		patchBucket: func(ctx context.Context, profile models.ProfileSecrets, bucket string, patchJSON []byte) (gcsbucket.Response, error) {
+			return gcsbucket.PatchBucketWithOptions(ctx, profile, bucket, patchJSON, gcsbucket.ClientOptions{AllowRemote: opts.AllowRemote})
+		},
 	}
 }
 

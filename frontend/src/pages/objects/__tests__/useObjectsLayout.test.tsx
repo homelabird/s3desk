@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useObjectsLayout } from '../useObjectsLayout'
@@ -60,5 +60,40 @@ describe('useObjectsLayout', () => {
 			useObjectsLayout(buildArgs({ layoutWidthPx: 1700, detailsOpen: true, isWideDesktop: true })),
 		)
 		expect(extraWide.result.current.dockDetails).toBe(true)
+	})
+
+	it('resizes the docked tree pane from keyboard separator commands', () => {
+		const { result } = renderHook(() => useObjectsLayout(buildArgs({ layoutWidthPx: 1440 })))
+		const preventDefault = vi.fn()
+
+		act(() => {
+			result.current.onTreeResizeKeyDown({
+				key: 'ArrowRight',
+				shiftKey: false,
+				preventDefault,
+			} as never)
+		})
+
+		expect(preventDefault).toHaveBeenCalledTimes(1)
+		expect(result.current.treeWidthUsed).toBe(280)
+	})
+
+	it('resizes the docked details pane from keyboard separator commands', () => {
+		const { result } = renderHook(() =>
+			useObjectsLayout(buildArgs({ layoutWidthPx: 2200, detailsOpen: true, isWideDesktop: true })),
+		)
+		const preventDefault = vi.fn()
+		const before = result.current.detailsWidthUsed
+
+		act(() => {
+			result.current.onDetailsResizeKeyDown({
+				key: 'ArrowLeft',
+				shiftKey: false,
+				preventDefault,
+			} as never)
+		})
+
+		expect(preventDefault).toHaveBeenCalledTimes(1)
+		expect(result.current.detailsWidthUsed).toBe(before + 24)
 	})
 })

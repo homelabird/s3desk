@@ -14,7 +14,9 @@ export function ObjectsDetailsMetadata({ detailsMeta }: ObjectsDetailsMetadataPr
 		<>
 			<Descriptions size="small" bordered column={1} className={styles.detailsPrimaryDescriptions}>
 				<Descriptions.Item label="Key">
-					<Typography.Text code>{detailsMeta.key}</Typography.Text>
+					<Typography.Text code className={styles.detailsCodeValueWrap}>
+						{detailsMeta.key}
+					</Typography.Text>
 				</Descriptions.Item>
 				<Descriptions.Item label="Size">
 					{typeof detailsMeta.size === 'number' && Number.isFinite(detailsMeta.size) ? (
@@ -24,7 +26,13 @@ export function ObjectsDetailsMetadata({ detailsMeta }: ObjectsDetailsMetadataPr
 					)}
 				</Descriptions.Item>
 				<Descriptions.Item label="ETag">
-					{detailsMeta.etag ? <Typography.Text code>{detailsMeta.etag}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>}
+					{detailsMeta.etag ? (
+						<Typography.Text code className={styles.detailsCodeValueWrap}>
+							{detailsMeta.etag}
+						</Typography.Text>
+					) : (
+						<Typography.Text type="secondary">-</Typography.Text>
+					)}
 				</Descriptions.Item>
 				<Descriptions.Item label="Last Modified">
 					{detailsMeta.lastModified ? (
@@ -35,7 +43,9 @@ export function ObjectsDetailsMetadata({ detailsMeta }: ObjectsDetailsMetadataPr
 				</Descriptions.Item>
 				<Descriptions.Item label="Content Type">
 					{detailsMeta.contentType ? (
-						<Typography.Text code>{detailsMeta.contentType}</Typography.Text>
+						<Typography.Text code className={styles.detailsCodeValueWrap}>
+							{detailsMeta.contentType}
+						</Typography.Text>
 					) : (
 						<Typography.Text type="secondary">-</Typography.Text>
 					)}
@@ -46,7 +56,9 @@ export function ObjectsDetailsMetadata({ detailsMeta }: ObjectsDetailsMetadataPr
 				<Descriptions size="small" bordered column={1} title="Metadata" className={styles.detailsMetadataDescriptions}>
 					{Object.entries(detailsMeta.metadata).map(([key, value]) => (
 						<Descriptions.Item key={key} label={key}>
-							<Typography.Text code>{value}</Typography.Text>
+							<Typography.Text code className={styles.detailsCodeValueWrap}>
+								{value}
+							</Typography.Text>
 						</Descriptions.Item>
 					))}
 				</Descriptions>

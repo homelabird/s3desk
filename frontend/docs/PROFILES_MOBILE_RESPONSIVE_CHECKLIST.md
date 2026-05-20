@@ -16,6 +16,15 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 - `430x932`
 - `768x1024`
 
+## Automated Coverage
+
+Covered by `frontend/tests/profiles-mobile-responsive.spec.ts`.
+
+- [x] Active profile switching works from compact mobile cards and persists after reload.
+- [x] Compact-card edit opens the selected profile with the correct fields prefilled.
+- [x] YAML import opens and closes from mobile.
+- [x] Profile identifiers and validation warning labels remain readable after switching cards.
+
 ## Manual QA Checklist
 
 - [ ] Opening `Profiles` on a phone still exposes the active profile, compact-card actions, and onboarding/import entrypoints.
@@ -27,18 +36,18 @@ Release gate expectations and required check policy live in [RELEASE_GATE.md](..
 
 ## `Profiles` Flow Checklist
 
-- [ ] Open the profiles list on a phone-sized viewport.
-- [ ] Switch the active profile from a compact card and confirm the choice persists after reload.
-- [ ] Open the edit flow from a compact card and verify the selected profile loads into the form.
-- [ ] Open the YAML import or export entrypoint from mobile and confirm the dialog/sheet can be used.
-- [ ] Confirm validation warnings still point to the right profile after switching cards.
+- [x] Open the profiles list on a phone-sized viewport.
+- [x] Switch the active profile from a compact card and confirm the choice persists after reload.
+- [x] Open the edit flow from a compact card and verify the selected profile loads into the form.
+- [x] Open the YAML import or export entrypoint from mobile and confirm the dialog/sheet can be used.
+- [x] Confirm validation warnings still point to the right profile after switching cards.
 
 ## Playwright Coverage Checklist
 
-- [ ] Add a mobile test that verifies active-profile switching from compact cards.
-- [ ] Add a test that verifies the edit flow opens from a compact card with the correct profile.
-- [ ] Add a test that verifies the YAML import/export entrypoint is still reachable on mobile.
-- [ ] Add a test that verifies validation or label state remains readable after profile switching.
+- [x] Add a mobile test that verifies active-profile switching from compact cards.
+- [x] Add a test that verifies the edit flow opens from a compact card with the correct profile.
+- [x] Add a test that verifies the YAML import/export entrypoint is still reachable on mobile.
+- [x] Add a test that verifies validation or label state remains readable after profile switching.
 
 ## Notes
 

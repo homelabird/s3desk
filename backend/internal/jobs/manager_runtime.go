@@ -7,6 +7,7 @@ import (
 
 	"s3desk/internal/logging"
 	"s3desk/internal/models"
+	"s3desk/internal/redact"
 	"s3desk/internal/ws"
 )
 
@@ -123,7 +124,7 @@ func (m *Manager) runJob(rootCtx context.Context, jobID string) error {
 		return nil
 	}
 	if runErr != nil {
-		msg := runErr.Error()
+		msg := redact.Diagnostic(runErr.Error())
 		code := ErrorCodeUnknown
 		if c, ok := jobErrorCode(runErr); ok {
 			code = c

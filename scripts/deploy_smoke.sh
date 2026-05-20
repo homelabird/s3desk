@@ -60,6 +60,46 @@ assert_status() {
   fi
 }
 
+normalize_url_root() {
+  URL_TO_PARSE="$1" python3 - <<'PY'
+from urllib.parse import urlsplit, urlunsplit
+import os
+
+parts = urlsplit(os.environ["URL_TO_PARSE"])
+path = parts.path.rstrip("/")
+print(urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, "", "")).rstrip("/"))
+PY
+}
+
+download_proxy_url_root() {
+  URL_TO_PARSE="$1" python3 - <<'PY'
+from urllib.parse import urlsplit, urlunsplit
+import os
+
+parts = urlsplit(os.environ["URL_TO_PARSE"])
+path = parts.path.rstrip("/")
+marker = "/download-proxy"
+if path == marker:
+    root_path = ""
+elif path.endswith(marker):
+    root_path = path[:-len(marker)].rstrip("/")
+else:
+    root_path = path.rsplit("/", 1)[0].rstrip("/") if "/" in path else ""
+print(urlunsplit((parts.scheme.lower(), parts.netloc.lower(), root_path, "", "")).rstrip("/"))
+PY
+}
+
+redact_url_query() {
+  URL_TO_PARSE="$1" python3 - <<'PY'
+from urllib.parse import urlsplit, urlunsplit
+import os
+
+parts = urlsplit(os.environ["URL_TO_PARSE"])
+query = "<redacted>" if parts.query else ""
+print(urlunsplit((parts.scheme, parts.netloc, parts.path, query, "")))
+PY
+}
+
 wait_for_healthz() {
   local result body_file status
   for _ in $(seq 1 "${DEPLOY_SMOKE_RETRIES}"); do
@@ -127,10 +167,14 @@ if [[ -z "${download_url}" ]]; then
   exit 1
 fi
 
-if [[ "${download_url}" != "${expected_base}"* ]]; then
+expected_root="$(normalize_url_root "${expected_base}")"
+download_url_root="$(download_proxy_url_root "${download_url}")"
+
+if [[ "${download_url_root}" != "${expected_root}" ]]; then
   echo "Signed proxy URL is not rooted at the expected external base URL." >&2
-  echo "expected prefix: ${expected_base}" >&2
-  echo "actual url: ${download_url}" >&2
+  echo "expected root: ${expected_root}" >&2
+  echo "actual root: ${download_url_root}" >&2
+  echo "actual url: $(redact_url_query "${download_url}")" >&2
   exit 1
 fi
 
@@ -164,7 +208,7 @@ if [[ -n "${DEPLOY_SMOKE_EVIDENCE_FILE}" ]]; then
     echo "- Authenticated GET \`/api/v1/meta\`: HTTP \`${meta_status}\`"
     echo "- POST \`/api/v1/realtime-ticket?transport=ws\`: HTTP \`${realtime_ticket_status}\`"
     echo "- GET \`/api/v1/buckets/{bucket}/objects/download-url?proxy=true\`: HTTP \`${download_url_status}\`"
-    echo "- Signed proxy URL root: \`${expected_base}\`"
+    echo "- Signed proxy URL root: \`${download_url_root}\`"
     echo "- HEAD signed proxy URL: HTTP \`${download_proxy_head_status}\`"
     echo
     echo "## Expected Statuses"

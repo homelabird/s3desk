@@ -100,6 +100,39 @@ class ReleaseScopeAuditSyncTests(unittest.TestCase):
 
         self.assertTrue(any("release unit table entry frontend-objects" in error for error in errors))
 
+    def test_dynamic_scope_marker_skips_live_count_sync(self):
+        audit = sample_audit().replace(
+            "## Summary\n",
+            (
+                "## Summary\n\n"
+                f"{MODULE.DYNAMIC_SCOPE_MARKER}\n\n"
+                f"- Current scope source of truth: `{MODULE.STRICT_SCOPE_COMMAND}`.\n"
+            ),
+        ).replace("`untracked=3`", "`untracked=99`", 1)
+
+        self.assertEqual(MODULE.check_audit_text(audit, sample_summary()), [])
+
+    def test_dynamic_scope_marker_requires_strict_command_guidance(self):
+        audit = sample_audit().replace("## Summary\n", f"## Summary\n\n{MODULE.DYNAMIC_SCOPE_MARKER}\n")
+
+        errors = MODULE.check_audit_text(audit, sample_summary())
+
+        self.assertIn("dynamic scope audit marker requires the strict report_release_scope.py command guidance", errors)
+
+    def test_enforce_current_snapshot_still_checks_dynamic_audit(self):
+        audit = sample_audit().replace(
+            "## Summary\n",
+            (
+                "## Summary\n\n"
+                f"{MODULE.DYNAMIC_SCOPE_MARKER}\n\n"
+                f"- Current scope source of truth: `{MODULE.STRICT_SCOPE_COMMAND}`.\n"
+            ),
+        ).replace("`untracked=3`", "`untracked=99`", 1)
+
+        errors = MODULE.check_audit_text(audit, sample_summary(), enforce_current_snapshot=True)
+
+        self.assertTrue(any("Summary status counts" in error for error in errors))
+
     def test_main_skips_outside_git_worktree(self):
         output = io.StringIO()
         with mock.patch.object(MODULE, "is_git_worktree", return_value=False), mock.patch.object(

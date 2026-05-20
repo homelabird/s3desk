@@ -132,6 +132,20 @@ func TestArchiveEntryFileModeRejectsOutOfRangeValues(t *testing.T) {
 	}
 }
 
+func TestCleanServerRestoreArchivePathRejectsInternalParentSegments(t *testing.T) {
+	t.Parallel()
+
+	if _, err := cleanServerRestoreArchivePath("data/profile-a/../s3desk.db"); err == nil {
+		t.Fatal("expected internal parent segment to fail")
+	}
+	if _, err := cleanServerRestoreArchivePath("./data/profile-a/../s3desk.db"); err == nil {
+		t.Fatal("expected internal parent segment after leading dot to fail")
+	}
+	if got, err := cleanServerRestoreArchivePath("data/profile-a/s3desk.db"); err != nil || got != "data/profile-a/s3desk.db" {
+		t.Fatalf("cleanServerRestoreArchivePath=%q err=%v, want data/profile-a/s3desk.db", got, err)
+	}
+}
+
 func TestHandleGetServerBackup_ClearBundleRetainsHMACIntegrity(t *testing.T) {
 	t.Parallel()
 
@@ -145,7 +159,7 @@ func TestHandleGetServerBackup_ClearBundleRetainsHMACIntegrity(t *testing.T) {
 	if archiveManifest.PayloadHMACSHA256 == "" {
 		t.Fatal("clear backup payload HMAC is empty")
 	}
-	expected := buildServerBackupPayloadHMAC(archiveManifest.ServerMigrationManifest, testEncryptionKey(), "")
+	expected := buildServerBackupPayloadHMAC(archiveManifest, testEncryptionKey())
 	if archiveManifest.PayloadHMACSHA256 != expected {
 		t.Fatalf("payload hmac=%q, want %q", archiveManifest.PayloadHMACSHA256, expected)
 	}
@@ -428,6 +442,7 @@ func TestHandleRestoreServerBackup_StagesPasswordProtectedBundleWithMatchingPass
 	if _, ok := entries["payload.enc"]; !ok {
 		t.Fatalf("password-protected backup must include payload.enc")
 	}
+	assertEncryptedPayloadV2Manifest(t, decodeServerBackupArchiveManifest(t, entries))
 
 	_, _, targetSrv, _ := newTestJobsServer(t, "", false)
 	res := postRestoreArchiveWithPassword(t, targetSrv.URL, "/api/v1/server/restore", archiveBytes, "password-protected-backup.tar.gz", "operator-secret")
@@ -504,6 +519,39 @@ func decodeServerBackupArchiveManifest(t *testing.T, entries map[string][]byte) 
 		t.Fatalf("decode manifest: %v", err)
 	}
 	return manifest
+}
+
+func assertEncryptedPayloadV2Manifest(t *testing.T, manifest serverBackupArchiveManifest) {
+	t.Helper()
+	if manifest.PayloadEncryptionVersion != serverBackupPayloadEncryptionV2 {
+		t.Fatalf("payload encryption version=%q, want %q", manifest.PayloadEncryptionVersion, serverBackupPayloadEncryptionV2)
+	}
+	if manifest.PayloadEncryptionCipher != serverBackupPayloadCipherV2 {
+		t.Fatalf("payload encryption cipher=%q, want %q", manifest.PayloadEncryptionCipher, serverBackupPayloadCipherV2)
+	}
+	if manifest.PayloadEncryptionKDF != serverBackupPayloadKDFV2 {
+		t.Fatalf("payload encryption KDF=%q, want %q", manifest.PayloadEncryptionKDF, serverBackupPayloadKDFV2)
+	}
+	if manifest.PayloadEncryptionKDFIters != serverBackupPayloadKDFIterationsV2 {
+		t.Fatalf("payload encryption KDF iterations=%d, want %d", manifest.PayloadEncryptionKDFIters, serverBackupPayloadKDFIterationsV2)
+	}
+	if manifest.PayloadEncryptionChunkSize != serverBackupPayloadChunkBytesV2 {
+		t.Fatalf("payload encryption chunk size=%d, want %d", manifest.PayloadEncryptionChunkSize, serverBackupPayloadChunkBytesV2)
+	}
+	if manifest.PayloadEncryptionIV != "" {
+		t.Fatalf("payload encryption IV=%q, want empty for v2 payloads", manifest.PayloadEncryptionIV)
+	}
+	salt, err := hex.DecodeString(manifest.PayloadEncryptionSalt)
+	if err != nil || len(salt) != serverBackupPayloadSaltBytesV2 {
+		t.Fatalf("payload encryption salt length=%d err=%v, want %d bytes", len(salt), err, serverBackupPayloadSaltBytesV2)
+	}
+	nonce, err := hex.DecodeString(manifest.PayloadEncryptionNonce)
+	if err != nil || len(nonce) != serverBackupPayloadNonceBytesV2 {
+		t.Fatalf("payload encryption nonce length=%d err=%v, want %d bytes", len(nonce), err, serverBackupPayloadNonceBytesV2)
+	}
+	if manifest.PayloadHMACSHA256 == "" {
+		t.Fatal("payload HMAC is empty")
+	}
 }
 
 func mutateServerBackupArchive(t *testing.T, archiveBytes []byte, mutate func(*serverBackupArchiveManifest, map[string][]byte)) []byte {

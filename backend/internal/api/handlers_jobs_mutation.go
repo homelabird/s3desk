@@ -251,8 +251,10 @@ func (svc jobMutationHTTPService) executeCancelPrepared(ctx context.Context, req
 }
 
 func removeDeletedJobArtifacts(dataDir, jobID string) {
-	logPath := filepath.Join(dataDir, "logs", "jobs", jobID+".log")
-	_ = os.Remove(logPath)
+	if !isSafeJobResourceID(jobID) {
+		return
+	}
+	_ = os.Remove(filepath.Join(dataDir, "logs", "jobs", jobID+".log"))
 	_ = os.Remove(filepath.Join(dataDir, "logs", "jobs", jobID+".cmd"))
 	_ = os.Remove(filepath.Join(dataDir, "artifacts", "jobs", jobID+".zip"))
 	_ = os.Remove(filepath.Join(dataDir, "artifacts", "jobs", jobID+".zip.tmp"))

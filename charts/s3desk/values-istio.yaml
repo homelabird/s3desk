@@ -1,6 +1,11 @@
 ingress:
   enabled: false
 
+image:
+  # Example pinned release image. Override both fields for your registry.
+  repository: "registry.example.com/s3desk"
+  tag: "0.21v-rc3"
+
 secrets:
   existingSecret: s3desk-secrets
   autoGenerateApiToken: false
@@ -12,6 +17,7 @@ istio:
       - istio-system/s3desk-gw
     hosts:
       - s3desk.k8s.homelabird.com
+    timeout: "0s"
 
 server:
   allowedHosts:
@@ -23,8 +29,18 @@ networkPolicy:
   policyTypes:
     - Ingress
   ingress:
-    allowSameNamespace: true
-    extra: []
+    allowSameNamespace: false
+    extra:
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: istio-system
+            podSelector:
+              matchLabels:
+                istio: ingressgateway
+        ports:
+          - protocol: TCP
+            port: 8080
 
 resources:
   requests:

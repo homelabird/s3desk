@@ -114,6 +114,7 @@ describe('useTransfersPersistence', () => {
 		expect(result.current.downloadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
 		expect(result.current.uploadTasks[0]?.status).toBe('canceled')
 		expect(result.current.uploadTasks[0]?.error).toBe(INTERRUPTED_MESSAGE)
+		expect(result.current.uploadTasks[0]?.retryFileHandleState).toBe('selection_required')
 		expect(result.current.downloadTasks[0]?.finishedAtMs).toBeTypeOf('number')
 		expect(result.current.uploadTasks[0]?.finishedAtMs).toBeTypeOf('number')
 		expect(result.current.uploadTasks[0]?.preview).toBeUndefined()

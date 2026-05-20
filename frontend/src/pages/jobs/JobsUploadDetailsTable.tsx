@@ -62,6 +62,7 @@ export function JobsUploadDetailsTable({
 			) : null}
 			<div className={styles.uploadTableShell} style={tableVars}>
 				<table className={styles.uploadTable}>
+					<caption className="sr-only">Upload file details</caption>
 					<thead>
 						<tr>
 							<th className={styles.uploadTableHeadCell}>
@@ -101,19 +102,31 @@ export function JobsUploadDetailsTable({
 				</table>
 			</div>
 			{uploadTableDataLength > uploadTablePageSize ? (
-				<div className={styles.uploadTablePagination}>
+				<nav className={styles.uploadTablePagination} aria-label="Upload details pages">
 					<div className={styles.uploadTablePaginationActions}>
-						<Button size="small" disabled={uploadTablePageSafe <= 1} onClick={onUploadTablePrevPage}>
+						<Button
+							size="small"
+							className={styles.uploadTablePaginationButton}
+							disabled={uploadTablePageSafe <= 1}
+							onClick={onUploadTablePrevPage}
+							aria-label="Previous upload details page"
+						>
 							Prev
 						</Button>
-						<Button size="small" disabled={uploadTablePageSafe >= uploadTableTotalPages} onClick={onUploadTableNextPage}>
+						<Button
+							size="small"
+							className={styles.uploadTablePaginationButton}
+							disabled={uploadTablePageSafe >= uploadTableTotalPages}
+							onClick={onUploadTableNextPage}
+							aria-label="Next upload details page"
+						>
 							Next
 						</Button>
 					</div>
-					<Typography.Text type="secondary">
+					<Typography.Text type="secondary" aria-live="polite">
 						Page {uploadTablePageSafe} / {uploadTableTotalPages}
 					</Typography.Text>
-				</div>
+				</nav>
 			) : null}
 			{jobStatus !== 'succeeded' ? (
 				<Typography.Text type="secondary" className={styles.uploadTableStatusNote}>

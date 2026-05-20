@@ -5,6 +5,7 @@ import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { UploadTask } from './transferTypes'
 import { formatBytes, formatDurationSeconds } from '../../lib/transfer'
 import styles from './transferRows.module.css'
+import { buildUploadRecoveryDescriptor } from './uploadRecoveryDescriptor'
 
 type TransferUploadRowProps = {
 	task: UploadTask
@@ -66,11 +67,19 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 							: 'Starting upload job…'
 				: null
 	const subtitle = `s3://${t.bucket}/${normalizePrefix(t.prefix)}`
-	const uploadModeDescriptionText = t.uploadMode ? uploadModeDescription(t.uploadMode) : null
-	const fallbackMessage = getUploadFallbackMessage(t)
+	const recovery = buildUploadRecoveryDescriptor(t)
+	const isFinalizingCommit = t.status === 'commit'
+	const uploadActionContext = `upload ${t.label}`
+	const rowLabel = `Upload ${t.label}, ${tagText}, ${subtitle}`
 
 	return (
-		<div className={styles.rowCard} data-testid="transfer-upload-row" data-transfer-row-kind="upload">
+		<div
+			className={styles.rowCard}
+			data-testid="transfer-upload-row"
+			data-transfer-row-kind="upload"
+			role="listitem"
+			aria-label={rowLabel}
+		>
 			<div className={styles.rowTop}>
 				<div className={`${styles.rowCopy} ${styles.rowCopyWithPreview}`}>
 					{preview ? (
@@ -88,30 +97,30 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 							<Typography.Text strong ellipsis={{ tooltip: t.label }} className={styles.rowTitle}>
 								{t.label}
 							</Typography.Text>
-							<Tag color={tagColor}>{tagText}</Tag>
-							{t.uploadMode ? <Tag>{uploadModeLabel(t.uploadMode)}</Tag> : null}
-							{fallbackMessage ? <Tag color="gold">Fallback</Tag> : null}
+							<Tag color={tagColor} aria-live="polite" aria-atomic="true">
+								{tagText}
+							</Tag>
+							{recovery.modeTagLabel ? <Tag>{recovery.modeTagLabel}</Tag> : null}
+							{recovery.showFallbackTag ? <Tag color="gold">Fallback</Tag> : null}
 							{preview ? <Tag color="blue">Local preview</Tag> : null}
-							{t.jobId ? <Tag>{t.jobId}</Tag> : null}
+							{t.jobId ? (
+								<Tag className={styles.jobIdTag} title={t.jobId} aria-label={`Job ${t.jobId}`}>
+									{formatJobIdForTag(t.jobId)}
+								</Tag>
+							) : null}
 						</div>
 						<div className={styles.rowSubtitle}>
-							<Typography.Text type="secondary" code ellipsis={{ tooltip: subtitle }} className={styles.rowTitle}>
+							<Typography.Text type="secondary" code title={subtitle} className={styles.rowDestination}>
 								{subtitle}
 							</Typography.Text>
 						</div>
-						{uploadModeDescriptionText ? (
-							<div className={styles.rowPreviewLabel}>
-								<Typography.Text type="secondary">Current path: {uploadModeDescriptionText}</Typography.Text>
-							</div>
-						) : null}
-						{preview ? (
-							<div className={styles.rowPreviewLabel}>
-								<Typography.Text type="secondary">Preview frame: {preview.label}</Typography.Text>
-							</div>
-						) : null}
-						{fallbackMessage ? (
-							<div className={styles.rowPreviewLabel}>
-								<Typography.Text type="warning">{fallbackMessage}</Typography.Text>
+						{recovery.lines.length > 0 ? (
+							<div className={styles.rowRecovery} data-testid="transfer-upload-recovery">
+								{recovery.lines.map((line) => (
+									<Typography.Text key={line.text} type={line.tone}>
+										{line.text}
+									</Typography.Text>
+								))}
 							</div>
 						) : null}
 						{t.error ? (
@@ -124,23 +133,54 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 
 				<div className={styles.rowActions}>
 					{t.jobId && props.onOpenJobs ? (
-						<Button size="small" type="link" onClick={props.onOpenJobs}>
+						<Button
+							size="small"
+							type="link"
+							aria-label={`Jobs for ${uploadActionContext}`}
+							onClick={props.onOpenJobs}
+						>
 							Jobs
 						</Button>
 					) : null}
-						{t.status === 'queued' || t.status === 'staging' || t.status === 'waiting_job' ? (
-							<Button size="small" onClick={() => props.onCancel(t.id)}>
-								Cancel
-							</Button>
-						) : null}
+					{t.status === 'queued' || t.status === 'staging' || t.status === 'waiting_job' ? (
+						<Button
+							size="small"
+							aria-label={`Cancel ${uploadActionContext}`}
+							onClick={() => props.onCancel(t.id)}
+						>
+							Cancel
+						</Button>
+					) : null}
 					{t.status === 'failed' || t.status === 'canceled' ? (
-						<Button size="small" icon={<ReloadOutlined />} onClick={() => props.onRetry(t.id)}>
+						<Button
+							size="small"
+							icon={<ReloadOutlined />}
+							aria-label={`Retry ${uploadActionContext}`}
+							title={
+								recovery.retryRequiresFileSelection
+									? 'Retry opens the file picker so you can select the same files or folder.'
+									: undefined
+							}
+							onClick={() => props.onRetry(t.id)}
+						>
 							Retry
 						</Button>
 					) : null}
-					<Button size="small" danger icon={<DeleteOutlined />} onClick={() => props.onRemove(t.id)}>
-						Remove
-					</Button>
+					{isFinalizingCommit ? (
+						<Typography.Text type="secondary" className={styles.rowActionHint}>
+							Finalizing upload…
+						</Typography.Text>
+					) : (
+						<Button
+							size="small"
+							danger
+							icon={<DeleteOutlined />}
+							aria-label={`Remove ${uploadActionContext}`}
+							onClick={() => props.onRemove(t.id)}
+						>
+							Remove
+						</Button>
+					)}
 				</div>
 			</div>
 
@@ -151,7 +191,11 @@ export const TransferUploadRow = memo(function TransferUploadRow(props: Transfer
 					status={status}
 					showInfo={t.status !== 'queued'}
 				/>
-				{progressText ? <Typography.Text type="secondary">{progressText}</Typography.Text> : null}
+				{progressText ? (
+					<Typography.Text type="secondary">
+						{progressText}
+					</Typography.Text>
+				) : null}
 			</div>
 		</div>
 	)
@@ -165,25 +209,7 @@ function normalizePrefix(p: string): string {
 	return trimmed.endsWith('/') ? trimmed : `${trimmed}/`
 }
 
-function uploadModeLabel(mode: UploadTask['uploadMode']): string {
-	if (mode === 'presigned') return 'Presigned'
-	if (mode === 'direct') return 'Direct'
-	return 'Staging'
-}
-
-function uploadModeDescription(mode: UploadTask['uploadMode']): string {
-	if (mode === 'presigned') return 'Browser presigned upload'
-	if (mode === 'direct') return 'Server direct stream upload'
-	return 'Server staging upload'
-}
-
-function getUploadFallbackMessage(task: UploadTask): string | null {
-	if (!task.uploadFallbackFrom || !task.uploadMode || task.uploadFallbackFrom === task.uploadMode) return null
-	if (task.uploadFallbackReason === 'provider_unsupported') {
-		return `${uploadModeLabel(task.uploadFallbackFrom)} uploads are not supported here. Using ${uploadModeLabel(task.uploadMode)} instead.`
-	}
-	if (task.uploadFallbackReason === 'network_path_failed') {
-		return `${uploadModeLabel(task.uploadFallbackFrom)} upload path failed. Switched to ${uploadModeLabel(task.uploadMode)}.`
-	}
-	return null
+function formatJobIdForTag(jobId: string): string {
+	if (jobId.length <= 24) return jobId
+	return `${jobId.slice(0, 12)}...${jobId.slice(-8)}`
 }

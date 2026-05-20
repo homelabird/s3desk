@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +22,10 @@ func TestBuildJobListFilter_UsesQueryValues(t *testing.T) {
 		nil,
 	)
 
-	filter := buildJobListFilter(req)
+	filter, err := buildJobListFilter(req)
+	if err != nil {
+		t.Fatalf("buildJobListFilter error = %v", err)
+	}
 	if filter.Status == nil || *filter.Status != models.JobStatusFailed {
 		t.Fatalf("filter.Status=%v, want failed", filter.Status)
 	}
@@ -39,13 +43,23 @@ func TestBuildJobListFilter_UsesQueryValues(t *testing.T) {
 	}
 }
 
-func TestBuildJobListFilter_InvalidLimitUsesDefault(t *testing.T) {
+func TestBuildJobListFilter_InvalidLimitReturnsError(t *testing.T) {
 	t.Parallel()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs?limit=oops", nil)
-	filter := buildJobListFilter(req)
-	if filter.Limit != 50 {
-		t.Fatalf("filter.Limit=%d, want 50", filter.Limit)
+	_, err := buildJobListFilter(req)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var prepErr *jobListPreparationError
+	if !errors.As(err, &prepErr) {
+		t.Fatalf("err=%v, want jobListPreparationError", err)
+	}
+	if prepErr.status != http.StatusBadRequest {
+		t.Fatalf("prepErr.status=%d, want %d", prepErr.status, http.StatusBadRequest)
+	}
+	if got := prepErr.details["limit"]; got != "oops" {
+		t.Fatalf("details.limit=%v, want oops", got)
 	}
 }
 

@@ -47,14 +47,34 @@
 .rowHeader {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px 8px;
 	flex-wrap: wrap;
 	min-width: 0;
+}
+
+.rowHeader :global(.ant-tag) {
+	margin-inline-end: 0;
+}
+
+.jobIdTag {
+	max-width: min(220px, 100%);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--s3d-font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
 }
 
 .rowTitle {
 	display: inline-block;
 	max-width: min(520px, 100%);
+}
+
+.rowDestination {
+	display: inline-block;
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .rowSubtitle {
@@ -68,6 +88,17 @@
 	margin-top: 4px;
 }
 
+.rowRecovery {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-top: 4px;
+}
+
+.rowRecovery :global(.ant-typography) {
+	line-height: 1.35;
+}
+
 .rowError {
 	margin-top: 6px;
 }
@@ -78,6 +109,12 @@
 	justify-content: flex-end;
 	gap: 8px;
 	flex-wrap: wrap;
+}
+
+.rowActionHint {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
 }
 
 .rowProgress {
@@ -102,8 +139,26 @@
 		flex-direction: column;
 	}
 
+	.rowHeader {
+		row-gap: 8px;
+	}
+
+	.rowHeader .rowTitle {
+		flex: 1 0 100%;
+	}
+
 	.rowActions {
 		width: 100%;
 		justify-content: flex-start;
+	}
+
+	.rowActions :global(.ant-btn) {
+		min-height: 44px;
+	}
+}
+
+@media (max-width: 480px) {
+	.rowActions :global(.ant-btn) {
+		flex: 1 1 96px;
 	}
 }

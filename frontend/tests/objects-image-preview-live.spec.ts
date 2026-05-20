@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
+import { waitForLiveJob } from './support/liveJobs'
 import { gotoObjectsBucketPage, objectsListRow } from './support/ui'
 
 const isLive = process.env.E2E_LIVE === '1'
@@ -26,20 +27,7 @@ function uniqueId() {
 }
 
 async function waitForJob(request: APIRequestContext, profileId: string, jobId: string) {
-	const deadline = Date.now() + 120_000
-	let lastStatus = 'unknown'
-	while (Date.now() < deadline) {
-		const res = await request.get(`/api/v1/jobs/${jobId}`, { headers: apiHeaders(profileId) })
-		if (!res.ok()) throw new Error(`job status request failed (${res.status()})`)
-		const job = (await res.json()) as { status?: string; error?: string | null }
-		lastStatus = job.status ?? 'unknown'
-		if (job.status === 'succeeded') return
-		if (job.status === 'failed' || job.status === 'canceled') {
-			throw new Error(`job ${jobId} ${job.status}${job.error ? `: ${job.error}` : ''}`)
-		}
-		await new Promise((resolve) => setTimeout(resolve, 2000))
-	}
-	throw new Error(`timed out waiting for job ${jobId} (last status: ${lastStatus})`)
+	await waitForLiveJob(request, { headers: apiHeaders(profileId), jobId })
 }
 
 async function uploadObject(request: APIRequestContext, profileId: string, bucket: string, key: string, body: string | Buffer, mimeType: string) {
@@ -128,7 +116,7 @@ test.describe('Live objects image preview', () => {
 
 			const objectRow = objectsListRow(page, objectKey)
 			await expect(objectRow).toBeVisible({ timeout: 60_000 })
-			await objectRow.getByRole('button', { name: 'Object actions' }).click()
+			await objectRow.getByRole('button', { name: /Object actions/ }).click()
 			await page.getByRole('menuitem', { name: /Open large preview/i }).click()
 
 			await expect(page.getByTestId('objects-image-viewer-modal')).toBeVisible({ timeout: 30_000 })

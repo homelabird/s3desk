@@ -5,6 +5,30 @@ import { describe, expect, it, vi } from 'vitest'
 import { ObjectsListContent } from '../ObjectsListContent'
 
 describe('ObjectsListContent', () => {
+	it('announces object loading status for an empty fetching list', () => {
+		render(
+			<ObjectsListContent
+				rows={[]}
+				virtualItems={[]}
+				totalSize={0}
+				hasProfile
+				hasBucket
+				isFetching
+				isFetchingNextPage={false}
+				emptyKind={null}
+				canClearSearch={false}
+				onClearSearch={vi.fn()}
+				viewMode="list"
+				renderPrefixRow={vi.fn()}
+				renderObjectRow={vi.fn()}
+				renderPrefixGridItem={vi.fn()}
+				renderObjectGridItem={vi.fn()}
+			/>,
+		)
+
+		expect(screen.getByRole('status', { name: 'Loading objects' })).toHaveTextContent('Loading objects...')
+	})
+
 	it('renders rows as cards in grid mode', () => {
 		render(
 			<ObjectsListContent
@@ -41,6 +65,7 @@ describe('ObjectsListContent', () => {
 		)
 
 		expect(screen.getByTestId('objects-grid-content')).toBeInTheDocument()
+		expect(screen.getByRole('list', { name: 'Objects card list' })).toBeInTheDocument()
 		expect(screen.getByText('grid-prefix:photos/')).toBeInTheDocument()
 		expect(screen.getByText('grid-object:photos/cat.png')).toBeInTheDocument()
 	})

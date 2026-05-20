@@ -35,6 +35,7 @@ export function useObjectsScreenOverlays({
 		bucket: locationVm.bucket,
 		prefix: locationVm.prefix,
 		isMd: !!paneVm.screens.md,
+		isLg: !!paneVm.screens.lg,
 		bucketOptions: listVm.bucketOptions,
 		bucketsLoading: listVm.bucketsQuery.isFetching,
 		selectedCount: selectionVm.selectedCount,

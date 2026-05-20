@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"s3desk/internal/models"
@@ -19,6 +22,16 @@ type portableImportEntityVerification struct {
 func buildPortableImportEntityVerification(
 	manifestEntities map[string]models.ServerMigrationEntityManifest,
 	entityFiles map[string][]byte,
+	dataDir string,
+) portableImportEntityVerification {
+	return buildPortableImportEntityVerificationWithOptions(manifestEntities, entityFiles, dataDir, store.PortableValidationOptions{})
+}
+
+func buildPortableImportEntityVerificationWithOptions(
+	manifestEntities map[string]models.ServerMigrationEntityManifest,
+	entityFiles map[string][]byte,
+	dataDir string,
+	opts store.PortableValidationOptions,
 ) portableImportEntityVerification {
 	results := make([]models.ServerPortableImportEntityResult, 0, len(portableEntityOrder))
 	entityChecksumsVerified := true
@@ -48,17 +61,44 @@ func buildPortableImportEntityVerification(
 			entityChecksumsVerified = false
 			blockers = append(blockers, fmt.Sprintf("Checksum mismatch for %s.", name))
 		}
+		actualCount, countErr := countPortableEntityRows(data)
+		if countErr != nil {
+			blockers = append(blockers, fmt.Sprintf("Portable bundle data/%s.jsonl is not valid JSONL: %v", name, countErr))
+		} else if actualCount != manifestEntity.Count {
+			blockers = append(blockers, fmt.Sprintf("Portable manifest count mismatch for %s: manifest has %d row(s), bundle has %d row(s).", name, manifestEntity.Count, actualCount))
+		}
 		results = append(results, models.ServerPortableImportEntityResult{
 			Name:             name,
 			ExportedCount:    manifestEntity.Count,
 			ChecksumVerified: checksumVerified,
 		})
 	}
+	if err := store.ValidatePortableEntityFilesWithOptions(dataDir, entityFiles, opts); err != nil {
+		blockers = append(blockers, fmt.Sprintf("Portable bundle entity schema validation failed: %v", err))
+	}
 
 	return portableImportEntityVerification{
 		results:                 results,
 		entityChecksumsVerified: entityChecksumsVerified,
 		blockers:                blockers,
+	}
+}
+
+func countPortableEntityRows(data []byte) (int, error) {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return 0, nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	count := 0
+	for {
+		var raw json.RawMessage
+		if err := decoder.Decode(&raw); err != nil {
+			if err == io.EOF {
+				return count, nil
+			}
+			return 0, err
+		}
+		count++
 	}
 }
 

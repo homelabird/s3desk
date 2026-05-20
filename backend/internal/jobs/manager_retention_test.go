@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -340,7 +341,7 @@ func TestCleanupExpiredUploadSessionsRemovesTrackedRows(t *testing.T) {
 
 	ctx := context.Background()
 	expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
-	session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "prefix/", "direct", "", expiredAt)
+	session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "prefix/", "staging", "", expiredAt)
 	if err != nil {
 		t.Fatalf("create upload session: %v", err)
 	}
@@ -410,5 +411,155 @@ func TestCleanupExpiredUploadSessionsRemovesTrackedRows(t *testing.T) {
 	}
 	if _, err := os.Stat(stagingDir); !os.IsNotExist(err) {
 		t.Fatalf("expected staging dir to be removed, err=%v", err)
+	}
+}
+
+func TestCleanupExpiredUploadSessionsDeletesDirectTempPrefixBeforeRows(t *testing.T) {
+	dataDir := t.TempDir()
+	gormDB, err := db.Open(db.Config{
+		Backend:    db.BackendSQLite,
+		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
+	})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("open sql db: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	st, err := store.New(gormDB, store.Options{})
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	endpoint := "http://localhost:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	forcePathStyle := false
+
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "test",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		ForcePathStyle:        &forcePathStyle,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	manager := NewManager(Config{
+		Store:            st,
+		DataDir:          dataDir,
+		Hub:              ws.NewHub(),
+		Concurrency:      1,
+		UploadSessionTTL: time.Minute,
+	})
+
+	ctx := context.Background()
+	expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "incoming", "direct", "", expiredAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	var rcloneCalls [][]string
+	installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, jobID string, args []string) (*rcloneProcess, error) {
+		if jobID != "upload-session-cleanup-"+session.ID {
+			t.Fatalf("jobID=%q, want upload-session-cleanup-%s", jobID, session.ID)
+		}
+		rcloneCalls = append(rcloneCalls, append([]string(nil), args...))
+		return newTestRcloneProcess("", "", nil), nil
+	})
+
+	manager.cleanupExpiredUploadSessions(ctx)
+
+	if len(rcloneCalls) != 1 {
+		t.Fatalf("rcloneCalls=%v, want one temp cleanup call", rcloneCalls)
+	}
+	wantTarget := "remote:bucket/incoming/.s3desk-upload-temp/" + session.ID + "/"
+	if args := rcloneCalls[0]; len(args) != 2 || args[0] != "delete" || args[1] != wantTarget {
+		t.Fatalf("rclone args=%v, want [delete %s]", args, wantTarget)
+	}
+	if _, ok, err := st.GetUploadSession(ctx, profile.ID, session.ID); err != nil {
+		t.Fatalf("get upload session: %v", err)
+	} else if ok {
+		t.Fatalf("expected upload session to be deleted")
+	}
+}
+
+func TestCleanupExpiredUploadSessionsKeepsDirectSessionWhenTempCleanupFails(t *testing.T) {
+	dataDir := t.TempDir()
+	gormDB, err := db.Open(db.Config{
+		Backend:    db.BackendSQLite,
+		SQLitePath: filepath.Join(dataDir, "s3desk.db"),
+	})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("open sql db: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	st, err := store.New(gormDB, store.Options{})
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+
+	endpoint := "http://localhost:9000"
+	region := "us-east-1"
+	accessKey := "access"
+	secretKey := "secret"
+	forcePathStyle := false
+
+	profile, err := st.CreateProfile(context.Background(), models.ProfileCreateRequest{
+		Provider:              models.ProfileProviderS3Compatible,
+		Name:                  "test",
+		Endpoint:              &endpoint,
+		Region:                &region,
+		AccessKeyID:           &accessKey,
+		SecretAccessKey:       &secretKey,
+		ForcePathStyle:        &forcePathStyle,
+		PreserveLeadingSlash:  false,
+		TLSInsecureSkipVerify: false,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	manager := NewManager(Config{
+		Store:            st,
+		DataDir:          dataDir,
+		Hub:              ws.NewHub(),
+		Concurrency:      1,
+		UploadSessionTTL: time.Minute,
+	})
+
+	ctx := context.Background()
+	expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)
+	session, err := st.CreateUploadSession(ctx, profile.ID, "bucket", "incoming", "direct", "", expiredAt)
+	if err != nil {
+		t.Fatalf("create upload session: %v", err)
+	}
+
+	installJobsStartRcloneHook(t, func(_ context.Context, _ models.ProfileSecrets, _ string, _ []string) (*rcloneProcess, error) {
+		return newTestRcloneProcess("", "delete failed", errors.New("exit status 1")), nil
+	})
+
+	manager.cleanupExpiredUploadSessions(ctx)
+
+	if _, ok, err := st.GetUploadSession(ctx, profile.ID, session.ID); err != nil {
+		t.Fatalf("get upload session: %v", err)
+	} else if !ok {
+		t.Fatalf("expected upload session to remain for retry")
 	}
 }

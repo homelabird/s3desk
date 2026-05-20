@@ -37,7 +37,9 @@ export function useObjectsToolbarProps(args: {
 	activeTransferCount: number
 	onOpenTransfers: () => void
 	dockTree: boolean
+	treeDrawerOpen: boolean
 	dockDetails: boolean
+	detailsDrawerOpen: boolean
 	onOpenTree: () => void
 	onOpenDetails: () => void
 	onNewFolder: () => void
@@ -77,7 +79,9 @@ export function useObjectsToolbarProps(args: {
 		activeTransferCount,
 		onOpenTransfers,
 		dockTree,
+		treeDrawerOpen,
 		dockDetails,
+		detailsDrawerOpen,
 		onOpenTree,
 		onOpenDetails,
 		onNewFolder,
@@ -148,7 +152,9 @@ export function useObjectsToolbarProps(args: {
 			activeTransferCount,
 			onOpenTransfers,
 			dockTree,
+			treeDrawerOpen,
 			dockDetails,
+			detailsDrawerOpen,
 			onOpenTree,
 			onOpenDetails,
 		}),
@@ -163,6 +169,7 @@ export function useObjectsToolbarProps(args: {
 			canGoUp,
 			dockDetails,
 			dockTree,
+			detailsDrawerOpen,
 			isAdvanced,
 			isDesktop,
 			isOffline,
@@ -185,6 +192,7 @@ export function useObjectsToolbarProps(args: {
 			showLabels,
 			showPrimaryActions,
 			topMoreMenu,
+			treeDrawerOpen,
 			uploadDisabledReason,
 			uploadEnabled,
 			canCreateFolder,

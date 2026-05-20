@@ -86,6 +86,23 @@ func TestRunTransferDeletePrefixDeletesMarkerWhenPrefixIsEmpty(t *testing.T) {
 	}
 }
 
+func TestCleanupS3PrefixMarkerRejectsLoopbackEndpointWhenRemoteEnabled(t *testing.T) {
+	_, st, _, _, _, _ := newManagerConsistencyFixture(t)
+	profile := createDeletePrefixTestProfile(t, st, "http://127.0.0.1:9000")
+	secrets, ok, err := st.GetProfileSecrets(context.Background(), profile.ID)
+	if err != nil {
+		t.Fatalf("get profile secrets: %v", err)
+	}
+	if !ok {
+		t.Fatal("profile secrets not found")
+	}
+
+	err = cleanupS3PrefixMarkerIfEmpty(context.Background(), secrets, "bucket-a", "folder/", true)
+	if err == nil || !strings.Contains(err.Error(), "loopback or link-local") {
+		t.Fatalf("cleanupS3PrefixMarkerIfEmpty err=%v, want loopback rejection", err)
+	}
+}
+
 func createDeletePrefixTestProfile(t *testing.T, st *store.Store, endpoint string) models.Profile {
 	t.Helper()
 

@@ -16,11 +16,12 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"s3desk/internal/models"
+	"s3desk/internal/profileendpoint"
 	"s3desk/internal/store"
 )
 
 const corsExposeHeaders = "Retry-After, Content-Disposition, X-Log-Next-Offset, X-Upload-Skipped"
-const corsAllowHeaders = "Authorization, Content-Type, X-Api-Token, X-Profile-Id, X-Upload-Chunk-Index, X-Upload-Chunk-Total, X-Upload-Chunk-Size, X-Upload-File-Size, X-Upload-Relative-Path"
+const corsAllowHeaders = "Authorization, Content-Type, X-Api-Token, X-Profile-Id, X-S3Desk-Backup-Password, X-Upload-Chunk-Index, X-Upload-Chunk-Total, X-Upload-Chunk-Size, X-Upload-File-Size, X-Upload-Relative-Path"
 const defaultContentSecurityPolicy = "base-uri 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
 const defaultPermissionsPolicy = "accelerometer=(), autoplay=(), camera=(), geolocation=(), magnetometer=(), microphone=(), payment=(), usb=(), gyroscope=(), clipboard-read=(), clipboard-write=()"
 
@@ -468,6 +469,10 @@ func (s *server) requireProfile(next http.Handler) http.Handler {
 		}
 		if !ok {
 			writeError(w, http.StatusBadRequest, "profile_not_found", "profile not found", map[string]any{"profileId": profileID})
+			return
+		}
+		if err := profileendpoint.ValidateProfileSecretsEndpoints(secrets, s.cfg.AllowRemote); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_config", "profile endpoint is not allowed by current remote access policy", map[string]any{"error": err.Error()})
 			return
 		}
 

@@ -14,6 +14,7 @@ type DivElementProps = HTMLAttributes<HTMLDivElement> & {
 type Props = {
 	align?: 'start' | 'end'
 	className?: string
+	closeOnTab?: boolean
 	contentClassName?: string
 	contentStyle?: CSSProperties
 	contentProps?: DivElementProps
@@ -94,6 +95,7 @@ export function PopoverSurface(props: Props) {
 		align,
 		children,
 		className,
+		closeOnTab = true,
 		content,
 		contentClassName,
 		contentProps,
@@ -120,11 +122,11 @@ export function PopoverSurface(props: Props) {
 	const toggle = useCallback(() => setOpen(!open, 'trigger'), [open, setOpen])
 	const handlePanelKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
 		contentProps?.onKeyDown?.(event)
-		if (event.defaultPrevented || event.key !== 'Tab') return
+		if (event.defaultPrevented || event.key !== 'Tab' || !closeOnTab) return
 		event.preventDefault()
 		event.stopPropagation()
 		close('outside')
-	}, [close, contentProps])
+	}, [close, closeOnTab, contentProps])
 
 	useOverlayLayer({
 		open,

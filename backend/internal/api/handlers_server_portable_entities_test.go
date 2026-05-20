@@ -30,6 +30,7 @@ func TestBuildPortableImportEntityVerification_ReportsMissingEntityAndChecksumMi
 		map[string][]byte{
 			"profiles": profilesData,
 		},
+		t.TempDir(),
 	)
 
 	if verification.entityChecksumsVerified {
@@ -50,6 +51,83 @@ func TestBuildPortableImportEntityVerification_ReportsMissingEntityAndChecksumMi
 	}
 	if !strings.Contains(blockers, "Portable bundle is missing data/profile_connection_options.jsonl.") {
 		t.Fatalf("expected missing-file blocker, got %v", verification.blockers)
+	}
+}
+
+func TestBuildPortableImportEntityVerification_BlocksManifestCountMismatch(t *testing.T) {
+	t.Parallel()
+
+	profilesData := []byte("{}\n{}\n")
+	sum := sha256.Sum256(profilesData)
+	emptySum := sha256.Sum256([]byte{})
+	manifestEntities := make(map[string]models.ServerMigrationEntityManifest, len(portableEntityOrder))
+	entityFiles := make(map[string][]byte, len(portableEntityOrder))
+	for _, name := range portableEntityOrder {
+		manifestEntities[name] = models.ServerMigrationEntityManifest{
+			Count:  0,
+			SHA256: hex.EncodeToString(emptySum[:]),
+		}
+		entityFiles[name] = nil
+	}
+	manifestEntities["profiles"] = models.ServerMigrationEntityManifest{
+		Count:  1,
+		SHA256: hex.EncodeToString(sum[:]),
+	}
+	entityFiles["profiles"] = profilesData
+
+	verification := buildPortableImportEntityVerification(
+		manifestEntities,
+		entityFiles,
+		t.TempDir(),
+	)
+
+	if !verification.entityChecksumsVerified {
+		t.Fatal("expected checksum verification to pass")
+	}
+	blockers := strings.Join(verification.blockers, "\n")
+	if !strings.Contains(blockers, "Portable manifest count mismatch for profiles: manifest has 1 row(s), bundle has 2 row(s).") {
+		t.Fatalf("expected count mismatch blocker, got %v", verification.blockers)
+	}
+	profilesResult := verification.results[0]
+	if profilesResult.Name != "profiles" || !profilesResult.ChecksumVerified {
+		t.Fatalf("unexpected results: %#v", verification.results)
+	}
+}
+
+func TestBuildPortableImportEntityVerification_BlocksUnknownEntityFields(t *testing.T) {
+	t.Parallel()
+
+	emptySum := sha256.Sum256([]byte{})
+	jobsData := []byte(`{"ID":"01ARZ3NDEKTSV4RRFFQ69G5FAV","ProfileID":"01ARZ3NDEKTSV4RRFFQ69G5FAV","Type":"object_index","Status":"succeeded","PayloadJSON":"{}","CreatedAt":"2026-05-19T00:00:00Z","UnexpectedColumn":"silently ignored"}` + "\n")
+	jobsSum := sha256.Sum256(jobsData)
+	manifestEntities := make(map[string]models.ServerMigrationEntityManifest, len(portableEntityOrder))
+	entityFiles := make(map[string][]byte, len(portableEntityOrder))
+	for _, name := range portableEntityOrder {
+		manifestEntities[name] = models.ServerMigrationEntityManifest{
+			Count:  0,
+			SHA256: hex.EncodeToString(emptySum[:]),
+		}
+		entityFiles[name] = nil
+	}
+	manifestEntities["jobs"] = models.ServerMigrationEntityManifest{
+		Count:  1,
+		SHA256: hex.EncodeToString(jobsSum[:]),
+	}
+	entityFiles["jobs"] = jobsData
+
+	verification := buildPortableImportEntityVerification(
+		manifestEntities,
+		entityFiles,
+		t.TempDir(),
+	)
+
+	if !verification.entityChecksumsVerified {
+		t.Fatal("expected checksum verification to pass")
+	}
+	blockers := strings.Join(verification.blockers, "\n")
+	if !strings.Contains(blockers, "Portable bundle entity schema validation failed: parse jobs") ||
+		!strings.Contains(blockers, "unknown field") {
+		t.Fatalf("expected schema validation blocker, got %v", verification.blockers)
 	}
 }
 

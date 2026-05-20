@@ -2,7 +2,11 @@
 
 ## Summary
 
-- Status snapshot: strict file-level scope 기준 `tracked changes=495` including `deleted=18`, `untracked=365`, `total status entries=860`.
+<!-- release-scope-audit: dynamic-current-scope -->
+
+- Current scope counts and release-unit tables are intentionally generated at check time instead of being rewritten into this dated audit after every dirty-worktree iteration.
+- Current strict scope source of truth: `python3 scripts/report_release_scope.py --fail-on-root-artifacts --fail-on-dependency-scope-warning --fail-on-untracked-directories --fail-on-other-unit --untracked-files all`.
+- Historical reference snapshot before dynamic audit sync: strict file-level scope 기준 `tracked changes=279` including `deleted=0`, `untracked=25`, `total status entries=304`.
 - This is still not a release-clean worktree.
 - Repeatable inventory command: `python3 scripts/report_release_scope.py`.
 - Repeatable staging checklist command: `python3 scripts/report_release_scope.py --format checklist`.
@@ -20,7 +24,7 @@
   - `test-results/`
   - `playwright-report/`
 - Root-local screenshot and exploratory Playwright note patterns are also ignored by policy. Preserve intentional release evidence under `docs/release/evidence/` instead.
-- The remaining untracked files are mostly source, tests, docs, chart config, screenshot baselines, and dependency license snapshots.
+- The remaining untracked files are backend helper/store/test additions, frontend test additions, retained design/project reports under `notes/`, the backend security tool installer script, and release-candidate helper tests.
 
 ## 2026-05-01 Recheck
 
@@ -47,7 +51,7 @@
   - reverse-proxy smoke evidence missing
   - environment preflight rechecked on 2026-05-01 reports all provider and reverse-proxy required variables still missing locally
   - strict evidence audit for `rc1` remains blocked because no provider or reverse-proxy evidence files are present
-- Latest operator checklist: [docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-01.md](/home/homelab/Downloads/project/s3desk/docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-01.md)
+- Latest operator checklist: [docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-01.md](release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-01.md)
   - The checklist now includes concrete `rc1` provider evidence target filenames, the `reverse-proxy-smoke-rc1.md` target, the `rc1` smoke command, and the `rc1` final evidence gate command so release operators do not have to manually substitute `<tag-or-sha>` for the current candidate.
 
 ## 2026-05-01 Release Evidence Gate Recheck
@@ -106,11 +110,11 @@
 
 ## 2026-05-02 Live Evidence Recheck
 
-- Status snapshot after adding the 2026-05-02 release-readiness, release-scope audit, and checklist sync gate tests: strict file-level scope 기준 `tracked changes=495` including `deleted=18`, `untracked=365`, `total status entries=860`.
+- Historical status snapshot after the 2026-05-18 project quality follow-up: strict file-level scope 기준 `tracked changes=279` including `deleted=0`, `untracked=25`, `total status entries=304`.
 - `python3 scripts/check_release_evidence_checklist.py --candidate-id rc1`: passed; the checker resolves the current checklist from `docs/release/evidence/README.md`, and the latest operator checklist contains the generated `rc1` provider evidence targets, reverse-proxy smoke target/command, expected reverse-proxy check outcomes, and final gate commands.
 - `python3 scripts/check_release_evidence_checklist_test.py`: 6 tests passed for README checklist discovery, explicit checklist override, latest-checklist fallback, provider/reverse-proxy target matching, and non-git snapshot skip behavior.
-- `python3 scripts/check_release_scope_audit.py`: passed; the checker verifies the current status snapshot, untracked top-level group table, and release unit candidate table in this audit against `report_release_scope.py --format json --untracked-files all`.
-- `python3 scripts/check_release_scope_audit_test.py`: 6 tests passed for status count drift, untracked group table drift, release unit table drift, outside-git skip, and clean-worktree skip behavior.
+- `python3 scripts/check_release_scope_audit.py`: passed; the checker treats this dated audit as historical when the dynamic scope marker is present and keeps current status enforcement in the strict `report_release_scope.py` gate.
+- `python3 scripts/check_release_scope_audit_test.py`: 9 tests passed for legacy status count drift, untracked group table drift, release unit table drift, dynamic marker behavior, outside-git skip, and clean-worktree skip behavior.
 - `python3 scripts/check_release_readiness_test.py`: 6 tests passed for candidate readiness report composition, evidence blocker summaries, live env scope expansion, Markdown output, and blocked exit status behavior.
 - `python3 scripts/check_release_readiness.py --candidate-id rc1 --skip-release-gate`: blocked as expected; strict release scope passes, strict evidence fails on missing provider/reverse-proxy evidence, and live env preflight fails because the local provider/reverse-proxy variables are unset.
 - `bash ./scripts/check_release_gate.sh`: passed after adding the release-scope audit sync guard, checklist sync guard, and their unit tests to the release gate.
@@ -124,7 +128,7 @@
   - Generated Playwright run metadata `frontend/test-results/.last-run.json` was removed after the recheck.
 - `python3 scripts/check_clean_snapshot.py fast`: last passed before the release-readiness preflight was added after copying 1817 non-ignored tracked/untracked paths into a `.git`-less snapshot; this replay covered openapi, release gate with status-only scope plus scope-audit/checklist-sync checks skipped outside git as intended, workflow fallback validation, helm, gofmt, backend tests, bundle report, frontend openapi/geometry/lint/unit 239 files / 903 tests in 98.53s, build, and third-party notice reproducibility.
 - `python3 scripts/check_clean_snapshot.py full`: passed after copying 1819 non-ignored tracked/untracked paths into a `.git`-less snapshot; this latest replay covered release gate with status-only scope plus scope-audit/checklist-sync checks skipped outside git as intended, workflow fallback validation, helm, gofmt, backend tests/security analysis with reachable vulnerabilities 0, bundle report, frontend openapi/geometry/lint/unit 239 files / 903 tests in 131.57s, build, browser smoke 2 tests, and third-party notice reproducibility.
-- Latest operator checklist: [docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md](/home/homelab/Downloads/project/s3desk/docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md)
+- Latest operator checklist: [docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md](release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md)
 
 ## Must Keep Together
 
@@ -171,46 +175,41 @@ Validation already run:
 
 ## Source/Test/Docs Candidate Sets
 
-The remaining untracked top-level groups currently break down as file-level entries from `python3 scripts/report_release_scope.py --untracked-files all`:
+The table below is a historical reference snapshot. For the current file-level untracked top-level groups, run `python3 scripts/report_release_scope.py --untracked-files all`.
 
 | Group | Untracked Count | Release Scope Guidance |
 |---|---:|---|
-| `frontend/` | 200 | Review as source, tests, scripts, and screenshot baselines. Most are likely intended from frontend quality work. |
-| `backend/` | 127 | Review as backend API/service/test split files. Most are likely intended from backend refactor and release gate fixes. |
-| `third_party/` | 6 | Include with dependency metadata and `THIRD_PARTY_NOTICES.md`. |
-| `scripts/` | 18 | Include if they are release/check tooling changes referenced by docs or workflows. |
-| `docs/` | 12 | Include if they are current audit/report/testing evidence, archive otherwise. |
-| `charts/` | 1 | `charts/s3desk/values-production.yaml`; include if Helm validation depends on it. |
-| `(root)` | 1 | `.golangci.yml`; include with release gate/tooling if the lint policy is intentional. |
+| `backend/` | 9 | Review as backend helper, store, and test additions. |
+| `frontend/` | 6 | Review as frontend source and unit test additions. |
+| `notes/` | 7 | Review as project/frontend design reports and keep indexed from `notes/INDEX.md`. |
+| `scripts/` | 3 | Include with release/check tooling changes referenced by CI. |
 
 ## Release Unit Candidate Summary
 
-`python3 scripts/report_release_scope.py --untracked-files all` now also groups current status entries into candidate review/staging units:
+The table below is a historical reference snapshot. `python3 scripts/report_release_scope.py --untracked-files all` is the current source of truth for candidate review/staging units:
 
 | Unit | Paths | Tracked | Untracked | Deleted | Guidance |
 |---|---:|---:|---:|---:|---|
-| `dependency-notices` | 17 | 11 | 6 | 6 | Keep dependency metadata, generated notices, and license snapshots together. |
-| `release-scope-tooling` | 5 | 1 | 4 | 0 | Review release-scope scripts, reports, and ignore policy together. |
-| `release-gate-ci-deploy` | 45 | 28 | 17 | 0 | Review CI, release gate, workflow, container, compose, and chart changes together. |
-| `backend-api-provider-surface` | 186 | 61 | 125 | 5 | Review backend HTTP/API, provider, auth, realtime, and download-proxy behavior together. |
-| `backend-runtime-store-jobs` | 18 | 16 | 2 | 0 | Review backend app, db, jobs, store, and websocket runtime behavior together. |
-| `backend-other` | 2 | 2 | 0 | 0 | Review remaining backend changes by package. |
-| `frontend-objects` | 220 | 126 | 94 | 0 | Review Objects page source, hooks, and tests together. |
-| `frontend-buckets` | 47 | 28 | 19 | 1 | Review Buckets and governance UI changes together. |
-| `frontend-jobs` | 32 | 29 | 3 | 0 | Review Jobs page source and tests together. |
-| `frontend-profiles` | 6 | 5 | 1 | 0 | Review Profiles page source and tests together. |
-| `frontend-uploads` | 21 | 19 | 2 | 2 | Review Uploads page source and tests together. |
-| `frontend-transfers` | 36 | 16 | 20 | 0 | Review transfer runtime/source changes together. |
-| `frontend-shell-theme` | 15 | 15 | 0 | 0 | Review app shell, routing, theme, and bootstrap changes together. |
-| `frontend-shared-components` | 49 | 34 | 15 | 2 | Review shared component changes together. |
-| `frontend-api-contracts` | 4 | 3 | 1 | 0 | Review frontend API client/query contract changes together. |
-| `frontend-lib` | 27 | 12 | 15 | 0 | Review frontend shared library changes together. |
-| `frontend-e2e` | 85 | 59 | 26 | 2 | Review Playwright specs, snapshots, and browser-lane config together. |
-| `frontend-tooling` | 5 | 1 | 4 | 0 | Review frontend package scripts and tooling changes together. |
-| `frontend-docs` | 8 | 8 | 0 | 0 | Review frontend documentation changes together. |
-| `frontend-other` | 7 | 7 | 0 | 0 | Review remaining frontend changes by nearby owner. |
-| `docs` | 21 | 11 | 10 | 0 | Review repository documentation and release docs together. |
-| `scripts-tooling` | 4 | 3 | 1 | 0 | Review repository scripts together. |
+| `release-scope-tooling` | 3 | 3 | 0 | 0 | Review release-scope scripts, reports, and ignore policy together. |
+| `release-gate-ci-deploy` | 38 | 37 | 1 | 0 | Review CI, release gate, workflow, container, compose, deploy, and chart changes together. |
+| `backend-api-provider-surface` | 48 | 46 | 2 | 0 | Review backend HTTP/API, provider, auth, realtime, and download-proxy behavior together. |
+| `backend-runtime-store-jobs` | 9 | 6 | 3 | 0 | Review backend app, db, jobs, store, and websocket runtime behavior together. |
+| `backend-other` | 4 | 0 | 4 | 0 | Review remaining backend changes by package. |
+| `frontend-objects` | 45 | 45 | 0 | 0 | Review Objects page source, hooks, and tests together. |
+| `frontend-buckets` | 16 | 13 | 3 | 0 | Review Buckets and governance UI changes together. |
+| `frontend-jobs` | 25 | 24 | 1 | 0 | Review Jobs page source and tests together. |
+| `frontend-profiles` | 16 | 16 | 0 | 0 | Review Profiles page source and tests together. |
+| `frontend-uploads` | 2 | 2 | 0 | 0 | Review Uploads page source and tests together. |
+| `frontend-transfers` | 9 | 7 | 2 | 0 | Review transfer runtime/source changes together. |
+| `frontend-shell-theme` | 7 | 7 | 0 | 0 | Review app shell, routing, theme, and bootstrap changes together. |
+| `frontend-shared-components` | 21 | 21 | 0 | 0 | Review shared component changes together. |
+| `frontend-api-contracts` | 4 | 4 | 0 | 0 | Review frontend API client/query contract changes together. |
+| `frontend-lib` | 2 | 2 | 0 | 0 | Review frontend shared library changes together. |
+| `frontend-e2e` | 18 | 18 | 0 | 0 | Review Playwright specs, snapshots, and browser-lane config together. |
+| `frontend-docs` | 1 | 1 | 0 | 0 | Review frontend documentation changes together. |
+| `frontend-other` | 13 | 13 | 0 | 0 | Review remaining frontend changes by nearby owner. |
+| `docs` | 14 | 7 | 7 | 0 | Review repository documentation and release docs together. |
+| `scripts-tooling` | 9 | 7 | 2 | 0 | Review repository scripts together. |
 
 ## Ignored Root Local Evidence Artifacts
 
@@ -245,7 +244,7 @@ The file `process` is zero bytes and should be treated as disposable unless the 
 2. Stage source/test/docs/workflow/chart files by the release unit candidates above rather than all at once.
 3. Run `python3 scripts/report_release_scope.py --fail-on-root-artifacts --fail-on-dependency-scope-warning --fail-on-untracked-directories --fail-on-other-unit --untracked-files all` after final scope selection.
 4. Re-run `./scripts/check.sh full` and `python3 scripts/check_clean_snapshot.py full` after scope selection if the staged release candidate changes.
-5. Run provider live checks and reverse-proxy smoke for provider-facing and proxy/auth changes using [docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md](/home/homelab/Downloads/project/s3desk/docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md).
+5. Run provider live checks and reverse-proxy smoke for provider-facing and proxy/auth changes using [docs/release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md](release/evidence/LIVE_EVIDENCE_CHECKLIST_2026-05-02.md).
 6. Run `python3 scripts/check_release_evidence.py --strict --require-candidate-id --candidate-id <tag-or-sha>` after evidence files are recorded.
 7. Verify the final candidate from a clean checkout or clean CI runner before tagging.
 
