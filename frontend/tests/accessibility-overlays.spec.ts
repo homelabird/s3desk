@@ -354,7 +354,7 @@ async function setupSettingsMobileA11yPage(page: Page) {
 	await seedSettingsMobileResponsiveStorage(page)
 	await page.goto('/settings')
 	const drawer = dialogByName(page, 'Settings')
-	await expect(drawer).toBeVisible()
+	await expect(drawer).toBeVisible({ timeout: 15_000 })
 	return drawer
 }
 

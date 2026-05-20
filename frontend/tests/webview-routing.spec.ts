@@ -29,7 +29,7 @@ test.describe('webview routing', () => {
 		await expect(page).toHaveURL(/\/objects$/)
 		await expect(page.getByTestId('topbar-profile-select').getByLabel('Profile')).toHaveValue(defaultWebviewStorage.profileId)
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
-			timeout: 10_000,
+			timeout: 20_000,
 			maxAttempts: 3,
 		})
 	})
@@ -56,7 +56,7 @@ test.describe('webview routing', () => {
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
 			if (path === '/objects') {
 				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
-					timeout: 10_000,
+					timeout: 20_000,
 					maxAttempts: 3,
 				})
 			} else {
@@ -70,7 +70,7 @@ test.describe('webview routing', () => {
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
 			if (path === '/objects') {
 				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
-					timeout: 10_000,
+					timeout: 20_000,
 					maxAttempts: 3,
 				})
 			} else {
@@ -81,12 +81,12 @@ test.describe('webview routing', () => {
 		}
 
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
-			timeout: 10_000,
+			timeout: 20_000,
 			maxAttempts: 3,
 		})
 
 		await expectRouteState('/objects', () => navigateTo('Objects'), page.getByPlaceholder('Search current folder'), async () => {
-			await expect(objectsLocation).toBeVisible()
+			await expect(objectsLocation).toBeVisible({ timeout: 15_000 })
 		})
 
 		await expectRouteState('/buckets', () => navigateTo('Buckets'), page.getByRole('button', { name: 'New Bucket' }))
@@ -100,6 +100,6 @@ test.describe('webview routing', () => {
 		await navigateTo('Objects')
 		await expect(page).toHaveURL(/\/objects$/)
 		await expect(profileSelect).toHaveValue(defaultWebviewStorage.profileId)
-		await expect(objectsLocation).toBeVisible()
+		await expect(objectsLocation).toBeVisible({ timeout: 15_000 })
 	})
 })

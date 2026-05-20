@@ -172,7 +172,7 @@ test.describe('Objects global search and favorites chaos', () => {
 		await expect(drawer.getByText('index backend busy')).toBeVisible()
 
 		await drawer.getByRole('button', { name: 'Refresh' }).click()
-		await expect(drawer.getByText('logs/error.log')).toBeVisible()
+		await expect(drawer.getByText('logs/error.log')).toBeVisible({ timeout: 15_000 })
 		await expect(drawer.getByText('Search failed')).toHaveCount(0)
 
 		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()

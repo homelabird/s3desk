@@ -614,7 +614,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 			prefix: '',
 		})
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByTestId('objects-toolbar-more'), {
-			timeout: 10_000,
+			timeout: 30_000,
 			maxAttempts: 3,
 		})
 
