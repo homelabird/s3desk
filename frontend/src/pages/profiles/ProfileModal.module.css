@@ -88,6 +88,24 @@
 	flex-wrap: wrap;
 }
 
+.providerChecklistStatusTag {
+	border-color: var(--s3d-color-border) !important;
+	background: var(--s3d-color-bg-secondary) !important;
+	color: var(--s3d-color-text) !important;
+}
+
+.providerChecklistStatusTag[data-status="complete"] {
+	border-color: color-mix(in srgb, var(--s3d-color-success-text) 45%, var(--s3d-color-border)) !important;
+	background: var(--s3d-color-success-bg) !important;
+	color: var(--s3d-color-text) !important;
+}
+
+.providerChecklistStatusTag[data-status="incomplete"] {
+	border-color: var(--s3d-color-warning-border) !important;
+	background: var(--s3d-color-warning-bg) !important;
+	color: var(--s3d-color-text) !important;
+}
+
 .providerChecklistGroups {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -150,7 +150,7 @@ test('upload transfer shows job progress from events', async ({ page }) => {
 	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
 
 	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt', { triggerButtonName: /Transfers/i, timeout: 5000 })
-	await expect(row.getByText(/eta/)).toBeVisible()
+	await expect(row.getByText(/\d+s eta/)).toBeVisible()
 })
 
 test('upload transfer shows failure and allows retry', async ({ page }) => {

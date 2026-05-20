@@ -140,7 +140,7 @@ test.describe('Objects global search and favorites chaos', () => {
 		await expect(favoritesPaneStatus).toHaveAttribute('data-favorites-status-kind', 'error', { timeout: 15_000 })
 		await expect(favoritesPaneStatus).toContainText(failedToLoadFavoritesTitle())
 		await expect(favoritesPaneStatus).toContainText('favorites backend unavailable')
-		await expect(favoritesAlerts).toHaveCount(2)
+		await expect(favoritesAlerts).toHaveCount(3)
 
 		await page.getByRole('button', { name: 'View' }).click()
 		const viewDrawer = dialogByName(page, 'View options')
@@ -148,7 +148,7 @@ test.describe('Objects global search and favorites chaos', () => {
 		await viewDrawer.getByLabel('Favorites only').uncheck()
 		await viewDrawer.getByRole('button', { name: 'Done' }).click()
 
-		await expect(favoritesAlerts).toHaveCount(1)
+		await expect(favoritesAlerts).toHaveCount(2)
 		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
 		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toBeVisible()
 	})

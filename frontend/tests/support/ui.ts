@@ -378,6 +378,7 @@ export async function addUploadSourceFromDevice(
 	await setFilesFromNextChooser(page, files, async () => {
 		await dialog.getByRole('button', { name: options.chooseButtonName ?? 'Choose files' }).click()
 	})
+	await expect(dialog).toHaveCount(0, { timeout: 3_000 })
 	return dialog
 }
 

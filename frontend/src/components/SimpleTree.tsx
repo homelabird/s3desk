@@ -252,7 +252,7 @@ export function SimpleTree(props: Props) {
 							type="button"
 							className={styles.toggleButton}
 							tabIndex={-1}
-							aria-hidden="true"
+							aria-label={`${expanded ? 'Collapse' : 'Expand'} ${accessibleName}`}
 							onClick={(event) => {
 								event.stopPropagation()
 								toggleExpanded(key)
@@ -268,14 +268,23 @@ export function SimpleTree(props: Props) {
 
 					{props.showIcon && node.icon ? <span className={styles.icon} aria-hidden="true">{node.icon}</span> : null}
 
-					<span className={styles.labelButton}>
+					<button
+						type="button"
+						className={styles.labelButton}
+						tabIndex={-1}
+						aria-label={accessibleName}
+						onClick={(event) => {
+							event.stopPropagation()
+							selectTreeItem(key)
+						}}
+					>
 						<span className={styles.title}>{renderTitle(node)}</span>
 						{nodeLoading ? (
 							<span className={styles.loadingSpinner} role="status" aria-live="polite" aria-atomic="true">
 								<span className="sr-only">Loading {accessibleName}</span>
 							</span>
 						) : null}
-					</span>
+					</button>
 				</div>
 
 				{canExpand && expanded ? (

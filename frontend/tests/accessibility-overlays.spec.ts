@@ -657,7 +657,7 @@ test.describe('overlay accessibility scans', () => {
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByText('GCS Controls', { exact: true })).toBeVisible()
-		await expect(sheet.getByText('Locked retention', { exact: true })).toBeVisible()
+		await expect(sheet.getByTestId('bucket-governance-retention').getByText('Locked retention', { exact: true })).toBeVisible()
 		await expect(sheet.getByTestId('bucket-governance-retention').getByText('Locked GCS retention policies are read-only from this controls surface.')).toBeVisible()
 
 		await expectNoA11yViolations(page, sheet)

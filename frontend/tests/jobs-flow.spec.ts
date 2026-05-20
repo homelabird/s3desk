@@ -171,7 +171,7 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 	await commitComboboxValue(page, deleteDrawer, 'Bucket', defaultStorage.bucket)
 	await deleteDrawer.getByLabel('Prefix', { exact: true }).fill('to-delete/')
 	await deleteDrawer.getByRole('button', { name: 'Create' }).click()
-	await expect(page.getByRole('cell', { name: 'job-created' })).toBeVisible()
+	await expect(page.getByRole('cell', { name: 'job-created', exact: true })).toBeVisible()
 
 	const runningRow = jobsTableRow(page, 'job-running')
 	await chooseRowAction(page, runningRow, 'Cancel')
@@ -179,5 +179,5 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 
 	const failedRow = jobsTableRow(page, 'job-failed')
 	await chooseRowAction(page, failedRow, 'Retry')
-	await expect(page.getByRole('cell', { name: 'job-retry-1' })).toBeVisible()
+	await expect(page.getByRole('cell', { name: 'job-retry-1', exact: true })).toBeVisible()
 })

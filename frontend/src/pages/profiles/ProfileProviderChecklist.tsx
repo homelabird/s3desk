@@ -14,16 +14,18 @@ function checklistStatusLabel(status: ProfileChecklistItem['status']): string {
 	return 'Optional'
 }
 
-function checklistStatusColor(status: ProfileChecklistItem['status']): string | undefined {
-	if (status === 'complete') return 'success'
-	if (status === 'incomplete') return 'warning'
-	return undefined
-}
-
 function checklistStatusIcon(status: ProfileChecklistItem['status']) {
 	if (status === 'complete') return <CheckCircleOutlined aria-hidden="true" />
 	if (status === 'incomplete') return <ExclamationCircleOutlined aria-hidden="true" />
 	return <InfoCircleOutlined aria-hidden="true" />
+}
+
+function checklistStatusTag(status: ProfileChecklistItem['status'], label: string) {
+	return (
+		<Tag className={styles.providerChecklistStatusTag} data-status={status}>
+			{label}
+		</Tag>
+	)
 }
 
 export function ProfileProviderChecklist({ checklist }: ProfileProviderChecklistProps) {
@@ -37,9 +39,7 @@ export function ProfileProviderChecklist({ checklist }: ProfileProviderChecklist
 					</Typography.Text>
 				</div>
 				<div className={styles.providerChecklistMeta}>
-					<Tag color={checklist.incompleteCount > 0 ? 'warning' : 'success'}>
-						{checklist.incompleteCount > 0 ? `${checklist.incompleteCount} need input` : 'Ready to save'}
-					</Tag>
+					{checklistStatusTag(checklist.incompleteCount > 0 ? 'incomplete' : 'complete', checklist.incompleteCount > 0 ? `${checklist.incompleteCount} need input` : 'Ready to save')}
 					<Tag>{`${checklist.completeCount} ready`}</Tag>
 				</div>
 			</div>
@@ -57,7 +57,7 @@ export function ProfileProviderChecklist({ checklist }: ProfileProviderChecklist
 											{item.detail}
 										</Typography.Text>
 									</div>
-									<Tag color={checklistStatusColor(item.status)}>{checklistStatusLabel(item.status)}</Tag>
+									{checklistStatusTag(item.status, checklistStatusLabel(item.status))}
 								</div>
 							))}
 						</div>
