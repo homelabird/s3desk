@@ -48,6 +48,7 @@ async function setupApiMocks(page: Page) {
 		lastModified: now,
 	}
 	let favorites = [] as Array<typeof objectItem & { createdAt: string }>
+	let searchRequestCount = 0
 
 	await installApiFixtures(page, [
 		jsonFixture('GET', '/api/v1/meta', metaJson(metaResponse)),
@@ -96,16 +97,27 @@ async function setupApiMocks(page: Page) {
 				return { status: 204 }
 			},
 		},
-		jsonFixture('GET', `/api/v1/buckets/${defaultStorage.bucket}/objects/search`, { items: [objectItem], nextCursor: null }),
+		{
+			method: 'GET',
+			path: `/api/v1/buckets/${defaultStorage.bucket}/objects/search`,
+			handler: () => {
+				searchRequestCount += 1
+				return { json: { items: [objectItem], nextCursor: null } }
+			},
+		},
 		textFixture('GET', '/api/v1/events', 'forbidden', { status: 403, contentType: 'text/plain' }),
 	])
+
+	return {
+		getSearchRequestCount: () => searchRequestCount,
+	}
 }
 
 test('global search and favorites update from objects UI', async ({ page }) => {
 	test.setTimeout(45_000)
 	await page.setViewportSize({ width: 1800, height: 1000 })
 	await seedStorage(page)
-	await setupApiMocks(page)
+	const apiState = await setupApiMocks(page)
 
 	await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
 		timeout: 10_000,
@@ -125,11 +137,14 @@ test('global search and favorites update from objects UI', async ({ page }) => {
 
 	await objectRow.getByRole('button', { name: 'Remove favorite' }).click()
 	await expect(page.getByText(noFavoritesYetTitle())).toBeVisible()
+	await favoritesOnly.click()
+	await expect(objectRow).toBeVisible()
 
 	await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
 	const drawer = dialogByName(page, 'Global Search (Indexed)')
 	await expect(drawer).toBeVisible()
 
 	await drawer.getByPlaceholder('Search query (substring)').fill('alpha')
+	await expect.poll(() => apiState.getSearchRequestCount(), { timeout: 15_000 }).toBeGreaterThan(0)
 	await expect(drawer.getByText('alpha.txt')).toBeVisible({ timeout: 10_000 })
 })
