@@ -11,6 +11,7 @@
 - `Buckets` controller의 overlay/create/delete wiring도 [useBucketsPageFeatureState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/useBucketsPageFeatureState.ts)로 한 단계 더 내려갔습니다.
 - controller return surface도 이제 `currentScopeKey + queries + shell` grouped shape로 줄었고, route shell builder도 grouped `shell`을 그대로 넘기도록 단순화됐습니다.
 - `Buckets` controller의 shell prop mapping과 loading derivation도 [buildBucketsPageControllerState.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/buildBucketsPageControllerState.ts) pure builder로 내려갔고, controller hook의 feature-state passthrough 재조립도 제거돼 하위 state 조립에만 더 집중하게 됐습니다.
+- `Buckets` controller의 shell/list/dialog/loading view-prop 조립도 [buildBucketsPageShellViewProps.ts](/home/homelab/Downloads/project/s3desk/frontend/src/pages/buckets/buildBucketsPageShellViewProps.ts)로 분리돼 controller builder는 `currentScopeKey`, query snapshot, shell 조합만 담당합니다.
 - 현재 남은 우선 작업은 `Buckets` 쪽보다 P2 보안/CI matrix 정리가 더 큽니다.
 
 대상:
