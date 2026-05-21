@@ -470,8 +470,6 @@ func TestExecutePreparedRealtimeTicket_UsesPreparedExecution(t *testing.T) {
 }
 
 func TestExecutePreparedRealtimeTicket_PropagatesIssueFailure(t *testing.T) {
-	t.Parallel()
-
 	previousReader := realtimeTicketRandReader
 	realtimeTicketRandReader = failingRealtimeTicketReader{}
 	t.Cleanup(func() {
@@ -503,8 +501,6 @@ func TestExecutePreparedRealtimeTicket_PropagatesIssueFailure(t *testing.T) {
 }
 
 func TestRealtimeTicketHTTPService_HandleCreateRealtimeTicket_ReturnsIssueFailureDetails(t *testing.T) {
-	t.Parallel()
-
 	previousReader := realtimeTicketRandReader
 	realtimeTicketRandReader = failingRealtimeTicketReader{}
 	t.Cleanup(func() {
