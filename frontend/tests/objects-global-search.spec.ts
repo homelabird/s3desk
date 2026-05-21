@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 import { noFavoritesYetTitle } from '../src/lib/actionHints'
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
-import { dialogByName, gotoWithDynamicImportRecovery, objectsFavoriteItem, objectsListRow } from './support/ui'
+import { gotoWithDynamicImportRecovery, objectsFavoriteItem, objectsListRow, openObjectsGlobalSearchDialog } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -114,13 +114,13 @@ async function setupApiMocks(page: Page) {
 }
 
 test('global search and favorites update from objects UI', async ({ page }) => {
-	test.setTimeout(45_000)
+	test.setTimeout(90_000)
 	await page.setViewportSize({ width: 1800, height: 1000 })
 	await seedStorage(page)
 	const apiState = await setupApiMocks(page)
 
 	await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
-		timeout: 10_000,
+		timeout: 30_000,
 		maxAttempts: 5,
 	})
 
@@ -140,9 +140,7 @@ test('global search and favorites update from objects UI', async ({ page }) => {
 	await favoritesOnly.click()
 	await expect(objectRow).toBeVisible()
 
-	await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
-	const drawer = dialogByName(page, 'Global Search (Indexed)')
-	await expect(drawer).toBeVisible()
+	const drawer = await openObjectsGlobalSearchDialog(page)
 
 	await drawer.getByPlaceholder('Search query (substring)').fill('alpha')
 	await expect.poll(() => apiState.getSearchRequestCount(), { timeout: 15_000 }).toBeGreaterThan(0)

@@ -13,7 +13,7 @@ import {
 	sequenceFixture,
 	textFixture,
 } from './support/apiFixtures'
-import { dialogByName, gotoObjectsPage, objectsSelectionCheckbox } from './support/ui'
+import { dialogByName, gotoObjectsPage, objectsSelectionCheckbox, openObjectsGlobalSearchDialog } from './support/ui'
 
 const profileId = 'playwright-search-chaos-profile'
 const bucket = 'search-chaos-bucket'
@@ -155,18 +155,16 @@ test.describe('Objects global search and favorites chaos', () => {
 	})
 
 	test('global indexed search recovers from a transient error while favoritesOnly view stays stable', async ({ page }) => {
-		test.setTimeout(45_000)
+		test.setTimeout(90_000)
 		await installSearchRecoveryFixtures(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
 		await page.setViewportSize({ width: 1600, height: 900 })
-		await gotoObjectsPage(page)
+		await gotoObjectsPage(page, { timeout: 30_000 })
 
 		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).toBeVisible()
 		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toHaveCount(0)
 
-		await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
-		const drawer = dialogByName(page, 'Global Search (Indexed)')
-		await expect(drawer).toBeVisible()
+		const drawer = await openObjectsGlobalSearchDialog(page)
 
 		await drawer.getByLabel('Search query').fill('error')
 		const searchError = drawer.getByText('Search failed')

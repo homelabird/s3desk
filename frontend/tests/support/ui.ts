@@ -170,22 +170,21 @@ export async function gotoWithDynamicImportRecovery(
 			}
 
 			const locator = ready(page)
-			const attemptTimeout = attempt === maxAttempts - 1 ? timeout : Math.min(timeout, 4_000)
-			const deadline = Date.now() + attemptTimeout
+			const deadline = Date.now() + timeout
 
 			while (Date.now() < deadline) {
 				if (await locator.isVisible().catch(() => false)) {
 					return locator
 				}
 				const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
-				if (recoverableFailure) {
+				if (recoverableFailure && attempt < maxAttempts - 1) {
 					break
 				}
 				await locator.waitFor({ state: 'visible', timeout: Math.min(200, Math.max(1, deadline - Date.now())) }).catch(() => {})
 			}
 
 			const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
-			if (attempt === maxAttempts - 1) {
+			if (!recoverableFailure || attempt === maxAttempts - 1) {
 				await expect(locator).toBeVisible({ timeout: recoverableFailure ? pageReadyWaitMs : Math.min(timeout, 10_000) })
 				return locator
 			}
@@ -197,6 +196,26 @@ export async function gotoWithDynamicImportRecovery(
 	}
 
 	return ready(page)
+}
+
+export async function openObjectsGlobalSearchDialog(
+	page: Page,
+	options: {
+		triggerButtonName?: string | RegExp
+	} = {},
+): Promise<Locator> {
+	const dialogName = 'Global Search (Indexed)'
+	const dialogLocator = dialogByName(page, dialogName)
+	return ensureDialogOpen(page, dialogName, async () => {
+		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Bucket search|Global Search \(Indexed\)/, dialogOpenWaitMs, {
+			stopWhen: () => dialogLocator.isVisible(),
+		})
+		if (await dialogLocator.isVisible().catch(() => false)) {
+			return
+		}
+		await button.scrollIntoViewIfNeeded()
+		await button.click()
+	})
 }
 
 export async function gotoObjectsPage(

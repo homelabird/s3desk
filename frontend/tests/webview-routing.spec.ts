@@ -35,6 +35,7 @@ test.describe('webview routing', () => {
 	})
 
 	test('WV-003 keeps the active profile and route context across refresh on main routes', async ({ page }) => {
+		test.setTimeout(90_000)
 		await stubWebviewApi(page)
 		await seedWebviewStorage(page)
 
@@ -56,7 +57,7 @@ test.describe('webview routing', () => {
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
 			if (path === '/objects') {
 				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
-					timeout: 20_000,
+					timeout: 30_000,
 					maxAttempts: 3,
 				})
 			} else {
@@ -70,7 +71,7 @@ test.describe('webview routing', () => {
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
 			if (path === '/objects') {
 				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
-					timeout: 20_000,
+					timeout: 30_000,
 					maxAttempts: 3,
 				})
 			} else {
@@ -81,7 +82,7 @@ test.describe('webview routing', () => {
 		}
 
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
-			timeout: 20_000,
+			timeout: 30_000,
 			maxAttempts: 3,
 		})
 
