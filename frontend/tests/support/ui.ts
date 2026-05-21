@@ -332,12 +332,15 @@ export async function gotoObjectsUploadPage(
 ): Promise<Locator> {
 	return gotoObjectsPage(page, {
 		...options,
-		ready: (scope) => scope.getByTestId('objects-bucket-picker-desktop'),
+		ready: objectsBucketPickerTrigger,
 	})
 }
 
 export async function selectObjectsBucket(page: Page, name: string): Promise<void> {
-	const picker = page.getByTestId('objects-bucket-picker-desktop')
+	let picker = page.getByTestId('objects-bucket-picker-desktop')
+	if (!(await picker.isVisible({ timeout: 1_000 }).catch(() => false))) {
+		picker = objectsBucketPickerTrigger(page)
+	}
 	await expect(picker).toBeVisible()
 	await picker.click()
 
@@ -360,7 +363,7 @@ export async function gotoObjectsBucketPage(
 		timeout: options.timeout,
 		maxAttempts: options.maxAttempts,
 		retryOnTimeout: options.retryOnTimeout,
-		ready: options.ready ?? ((scope) => scope.getByTestId('objects-bucket-picker-desktop')),
+		ready: options.ready ?? objectsBucketPickerTrigger,
 	})
 	await selectObjectsBucket(page, name)
 }
@@ -720,6 +723,10 @@ export function objectsFavoriteItem(scope: SearchScope, label?: string | RegExp)
 
 export function objectsBucketPickerDesktop(scope: SearchScope): Locator {
 	return scope.locator(OBJECTS_BUCKET_PICKER_DESKTOP_SELECTOR)
+}
+
+export function objectsBucketPickerTrigger(scope: SearchScope): Locator {
+	return scope.getByRole('button', { name: /^Bucket:/ })
 }
 
 export function objectsGlobalSearchTableWrap(scope: SearchScope): Locator {
