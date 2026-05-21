@@ -81,7 +81,7 @@ Mobile responsive coverage should prove task completion on constrained viewports
 
 ## Required Check
 
-- Branch protection and release gate should include `Frontend E2E / Mobile Responsive E2E (Required)`.
+- Branch protection and release gate should include the exact GitHub check name `Mobile Responsive E2E (Required)`.
 - Release approval policy and required check context:
   - [RELEASE_GATE.md](../../docs/RELEASE_GATE.md)
 - Page-specific QA checklists:

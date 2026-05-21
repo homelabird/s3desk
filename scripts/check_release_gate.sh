@@ -49,6 +49,7 @@ RELEASE_READINESS_CHECK_RUNS="${ROOT}/scripts/verify_release_readiness_checks.py
 RELEASE_READINESS_CHECK_RUNS_TEST="${ROOT}/scripts/verify_release_readiness_checks_test.py"
 GITLAB_PUBLISH_DAG_CHECK="${ROOT}/scripts/check_gitlab_publish_dag.py"
 GITLAB_PUBLISH_DAG_CHECK_TEST="${ROOT}/scripts/check_gitlab_publish_dag_test.py"
+GITHUB_WORKFLOW_CHECK_TEST="${ROOT}/scripts/check_github_workflows_test.py"
 GITLAB_PUBLISH_READINESS_CHECK="${ROOT}/scripts/check_gitlab_publish_readiness.sh"
 RELEASE_CANDIDATE_HELPER="${ROOT}/scripts/release_candidate.py"
 RELEASE_CANDIDATE_HELPER_TEST="${ROOT}/scripts/release_candidate_test.py"
@@ -262,6 +263,10 @@ if [[ ! -f "${GITLAB_PUBLISH_DAG_CHECK_TEST}" ]]; then
   echo "[release-gate] scripts/check_gitlab_publish_dag_test.py not found" >&2
   exit 1
 fi
+if [[ ! -f "${GITHUB_WORKFLOW_CHECK_TEST}" ]]; then
+  echo "[release-gate] scripts/check_github_workflows_test.py not found" >&2
+  exit 1
+fi
 if [[ ! -f "${GITLAB_PUBLISH_READINESS_CHECK}" ]]; then
   echo "[release-gate] scripts/check_gitlab_publish_readiness.sh not found" >&2
   exit 1
@@ -319,6 +324,7 @@ python3 "${GO_LICENSE_REPORT_CHECK_TEST}"
 python3 "${RUNTIME_IMAGE_LICENSE_CHECK_TEST}"
 python3 "${RELEASE_METADATA_CHECK_TEST}"
 python3 "${GITLAB_PUBLISH_DAG_CHECK_TEST}"
+python3 "${GITHUB_WORKFLOW_CHECK_TEST}"
 python3 "${GITLAB_PUBLISH_DAG_CHECK}"
 python3 "${RELEASE_EVIDENCE_CHECKLIST_CHECK}" --candidate-id "${LATEST_RELEASE_CANDIDATE}"
 check_shell_script_syntax

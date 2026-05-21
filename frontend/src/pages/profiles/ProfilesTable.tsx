@@ -150,13 +150,14 @@ export function ProfilesTable(props: ProfilesTableProps) {
 			) : (
 				<div className={styles.desktopTable} data-testid="profiles-table-desktop">
 					<table className={styles.table}>
+						<caption className="sr-only">Profiles</caption>
 						<thead>
 							<tr className={styles.headRow}>
-								<th className={`${styles.th} ${styles.thName}`}>Name</th>
-								<th className={`${styles.th} ${styles.thProvider}`}>Provider</th>
-								<th className={styles.th}>Connection</th>
-								<th className={`${styles.th} ${styles.thFlags}`}>Flags</th>
-								<th className={`${styles.th} ${styles.thActions}`}>Actions</th>
+								<th scope="col" className={`${styles.th} ${styles.thName}`}>Name</th>
+								<th scope="col" className={`${styles.th} ${styles.thProvider}`}>Provider</th>
+								<th scope="col" className={styles.th}>Connection</th>
+								<th scope="col" className={`${styles.th} ${styles.thFlags}`}>Flags</th>
+								<th scope="col" className={`${styles.th} ${styles.thActions}`}>Actions</th>
 							</tr>
 						</thead>
 						<tbody>

@@ -78,7 +78,9 @@ function MenuList(props: {
 		>
 			{props.items.map((item, index) => {
 				if (!item) return null
-				if (isDivider(item)) return <div key={`divider-${level}-${index}`} className={styles.divider} />
+				if (isDivider(item)) {
+					return <div key={`divider-${level}-${index}`} role="separator" aria-orientation="horizontal" className={styles.divider} />
+				}
 				if (hasChildren(item)) {
 					return <MenuSubmenu key={String(item.key ?? `submenu-${index}`)} item={item} menu={props.menu} close={props.close} level={level} />
 				}

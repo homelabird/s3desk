@@ -126,10 +126,11 @@ When branch protection is configured for `main`, keep the following check names 
 - `release-gate`
 - `Core Mock E2E`
 - `Mobile Responsive E2E (Required)`
+- `license-audit`
 
 `Bundle Budget` is useful release evidence for frontend bundle-affecting changes, but it is normally an advisory signal rather than a default required check. Review it when entrypoints, chunking, or dependency weight move, even if branch protection does not mark it required.
 
-The `Frontend E2E` workflow should still trigger on every pull request and `main` push so these required checks always materialize. When the browser surface is out of scope, the two Playwright required checks should self-skip inside the job and report success without running the suites.
+The `Frontend E2E` and `License Audit` workflows should still trigger on every pull request and `main` push so these required checks always materialize. When the browser surface is out of scope, the two Playwright required checks should self-skip inside the job and report success without running the suites.
 
 Do not treat a green `bash ./scripts/check_ci_pair.sh` run as equivalent to the required GitHub checks above. It is a local convenience wrapper, not a branch-protection signal and not sufficient release evidence when browser lanes or other gated checks apply.
 
@@ -141,6 +142,7 @@ Use the exact check names when you record release evidence:
   In CI, the core suite is split into two Playwright shards and aggregated back into the required `Core Mock E2E` check name.
 - `cd frontend && npm run test:e2e:visual` mirrors `Visual Regression E2E`.
 - `cd frontend && npm run test:e2e:mobile-responsive` mirrors `Mobile Responsive E2E (Required)`.
+- `bash ./scripts/license-audit.sh` mirrors `license-audit`.
 - `bash ./scripts/check_ci_pair.sh` is only a local convenience wrapper for workflow lint + frontend build + backend test.
 
 For the mobile suite scope, local commands, and operator-facing test entry points, use [frontend/docs/MOBILE_RESPONSIVE_E2E.md](../frontend/docs/MOBILE_RESPONSIVE_E2E.md).

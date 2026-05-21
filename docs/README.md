@@ -24,6 +24,7 @@ Supporting assets that still live under `docs/`:
 Reports and audit indexes:
 
 - [../notes/INDEX.md](../notes/INDEX.md): engineering notes, project quality reports, and frontend design reports
+- [CODEBASE_SUBAGENT_GAP_REPORT_2026-05-21.md](CODEBASE_SUBAGENT_GAP_REPORT_2026-05-21.md): current sub-agent gap audit and applied improvements
 - [CODEBASE_FINAL_QUALITY_REPORT_2026-04-30.md](CODEBASE_FINAL_QUALITY_REPORT_2026-04-30.md): final codebase quality review snapshot
 - [FRONTEND_FINAL_QUALITY_REPORT_2026-04-29.md](FRONTEND_FINAL_QUALITY_REPORT_2026-04-29.md): retained frontend quality snapshot
 - [CODEBASE_SUBAGENT_GAP_REPORT_2026-04-24.md](CODEBASE_SUBAGENT_GAP_REPORT_2026-04-24.md): retained sub-agent gap analysis snapshot

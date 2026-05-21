@@ -95,13 +95,14 @@ export function AzurePolicyStructuredEditor(props: {
       ) : (
         <div className={styles.tableWrap}>
           <table className={`${styles.policyTable} ${styles.azureTable}`}>
+            <caption className="sr-only">Azure stored access policies</caption>
             <thead>
               <tr className={styles.headRow}>
-                <th className={`${styles.th} ${styles.thId}`}>ID</th>
-                <th className={`${styles.th} ${styles.thTime}`}>Start (optional)</th>
-                <th className={`${styles.th} ${styles.thTime}`}>Expiry (optional)</th>
-                <th className={`${styles.th} ${styles.thPermission}`}>Permission</th>
-                <th className={`${styles.th} ${styles.thActions}`}>Actions</th>
+                <th scope="col" className={`${styles.th} ${styles.thId}`}>ID</th>
+                <th scope="col" className={`${styles.th} ${styles.thTime}`}>Start (optional)</th>
+                <th scope="col" className={`${styles.th} ${styles.thTime}`}>Expiry (optional)</th>
+                <th scope="col" className={`${styles.th} ${styles.thPermission}`}>Permission</th>
+                <th scope="col" className={`${styles.th} ${styles.thActions}`}>Actions</th>
               </tr>
             </thead>
             <tbody>

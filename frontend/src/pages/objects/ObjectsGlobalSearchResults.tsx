@@ -151,12 +151,13 @@ export function ObjectsGlobalSearchResults({
 			) : (
 				<div className={tableWrapClass} data-testid="objects-global-search-table-wrap">
 					<table className={tableClass}>
+						<caption className="sr-only">Global object search results</caption>
 						<thead>
 							<tr>
-								<th className={styles.globalSearchTh}>Key</th>
-								<th className={`${styles.globalSearchTh} ${styles.globalSearchThSize}`}>Size</th>
-								<th className={`${styles.globalSearchTh} ${styles.globalSearchThModified}`}>Last modified</th>
-								<th className={`${styles.globalSearchTh} ${styles.globalSearchThActions}`}>Actions</th>
+								<th scope="col" className={styles.globalSearchTh}>Key</th>
+								<th scope="col" className={`${styles.globalSearchTh} ${styles.globalSearchThSize}`}>Size</th>
+								<th scope="col" className={`${styles.globalSearchTh} ${styles.globalSearchThModified}`}>Last modified</th>
+								<th scope="col" className={`${styles.globalSearchTh} ${styles.globalSearchThActions}`}>Actions</th>
 							</tr>
 						</thead>
 						<tbody>

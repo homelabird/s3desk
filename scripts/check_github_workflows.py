@@ -32,6 +32,14 @@ REQUIRED_CANCEL_IN_PROGRESS_WORKFLOWS = {
     "release-gate.yml": "release-gate-",
     "license-audit.yml": "license-audit-",
 }
+DEPRECATED_ACTION_REFS = {
+    "actions/checkout@v4": "actions/checkout@v6",
+    "actions/setup-go@v5": "actions/setup-go@v6",
+    "actions/setup-node@v4": "actions/setup-node@v6",
+    "actions/upload-artifact@v4": "actions/upload-artifact@v7",
+    "azure/setup-helm@v4": "azure/setup-helm@v5",
+    "dorny/paths-filter@v3": "dorny/paths-filter@v4",
+}
 
 
 class WorkflowLoader(yaml.BaseLoader):
@@ -87,6 +95,11 @@ def validate_step(path: Path, job_id: str, step_index: int, step):
     require_mapping(step, context)
     if "run" not in step and "uses" not in step:
         fail(f"{context} must define either 'run' or 'uses'")
+    uses = step.get("uses")
+    if isinstance(uses, str):
+        replacement = DEPRECATED_ACTION_REFS.get(uses.strip().lower())
+        if replacement:
+            fail(f"{context}.uses uses deprecated action ref {uses!r}; use {replacement!r}")
 
 
 def validate_job(path: Path, job_id: str, job):

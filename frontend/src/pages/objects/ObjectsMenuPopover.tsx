@@ -110,7 +110,9 @@ function ObjectsMenuList(props: {
 		>
 			{props.items.map((item, index) => {
 				if (!item) return null
-				if (isDivider(item)) return <div key={`divider-${level}-${index}`} className={styles.toolbarMenuDivider} />
+				if (isDivider(item)) {
+					return <div key={`divider-${level}-${index}`} role="separator" aria-orientation="horizontal" className={styles.toolbarMenuDivider} />
+				}
 				if (hasChildren(item)) {
 					return (
 						<ObjectsMenuSubmenu

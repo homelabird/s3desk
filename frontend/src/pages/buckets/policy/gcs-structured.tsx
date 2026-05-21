@@ -128,11 +128,12 @@ export function GcsPolicyStructuredEditor(props: {
       ) : (
         <div className={styles.tableWrap}>
           <table className={`${styles.policyTable} ${styles.gcsTable}`}>
+            <caption className="sr-only">GCS IAM bindings</caption>
             <thead>
               <tr className={styles.headRow}>
-                <th className={`${styles.th} ${styles.thRole}`}>Role</th>
-                <th className={styles.th}>Members</th>
-                <th className={`${styles.th} ${styles.thActions}`}>Actions</th>
+                <th scope="col" className={`${styles.th} ${styles.thRole}`}>Role</th>
+                <th scope="col" className={styles.th}>Members</th>
+                <th scope="col" className={`${styles.th} ${styles.thActions}`}>Actions</th>
               </tr>
             </thead>
             <tbody>

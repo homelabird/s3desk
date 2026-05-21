@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"s3desk/internal/redact"
 )
 
 type Format string
@@ -229,6 +231,8 @@ func (l *Logger) logWithFields(level, message string, fields map[string]any) {
 	if l == nil {
 		return
 	}
+	message = redact.Diagnostic(message)
+	fields = redactFields(fields)
 	if l.format == FormatText {
 		if len(fields) == 0 {
 			l.text.Printf("[%s] %s", strings.ToUpper(level), message)
@@ -247,7 +251,7 @@ func (l *Logger) logWithFields(level, message string, fields map[string]any) {
 		if v == nil || v == "" {
 			continue
 		}
-		out[k] = v
+		out[k] = redact.DiagnosticDetailValue(k, v)
 	}
 	if _, ok := out["component"]; !ok {
 		out["component"] = "server"
@@ -299,11 +303,22 @@ func mergeFields(logger *Logger, fields map[string]any) map[string]any {
 			if v == nil || v == "" {
 				continue
 			}
-			out[k] = v
+			out[k] = redact.DiagnosticDetailValue(k, v)
 		}
 	}
 	for k, v := range fields {
-		out[k] = v
+		out[k] = redact.DiagnosticDetailValue(k, v)
+	}
+	return out
+}
+
+func redactFields(fields map[string]any) map[string]any {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(fields))
+	for k, v := range fields {
+		out[k] = redact.DiagnosticDetailValue(k, v)
 	}
 	return out
 }
