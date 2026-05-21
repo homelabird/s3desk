@@ -233,6 +233,7 @@ export function useJobsPageControllerState(props: Props) {
     profileId: props.profileId,
     isOffline: props.isOffline,
     jobs,
+    statusFilter: filters.statusFilter,
     searchFilterNormalized: filters.searchFilterNormalized,
     mergedColumnVisibility: columnsVisibility.mergedColumnVisibility,
     activeLogJobId: logDrawerRequest.jobId,

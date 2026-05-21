@@ -123,6 +123,24 @@
 	box-shadow: var(--s3d-shadow-sm, 0 6px 16px rgba(0, 0, 0, 0.12));
 }
 
+.diagnosticsDropdown {
+	padding: 12px;
+	width: min(420px, calc(100vw - 32px));
+	background: var(--s3d-color-bg-secondary, #fff);
+	border: 1px solid var(--s3d-color-border, #d9d9d9);
+	border-radius: var(--s3d-radius-sm, 8px);
+	box-shadow: var(--s3d-shadow-sm, 0 6px 16px rgba(0, 0, 0, 0.12));
+}
+
+.diagnosticsStack {
+	width: 100%;
+}
+
+.diagnosticsHint {
+	display: block;
+	line-height: 1.5;
+}
+
 .columnsDropdownList {
 	width: 100%;
 }

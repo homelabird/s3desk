@@ -31,6 +31,24 @@
 	gap: 8px;
 }
 
+.onboardingDiagnostics {
+	border-top: 1px solid var(--s3d-color-info-border);
+	padding-top: 10px;
+}
+
+.onboardingDiagnosticsSummary {
+	cursor: pointer;
+	color: var(--s3d-color-text-secondary);
+	font-weight: 700;
+}
+
+.onboardingDiagnosticsList {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 10px;
+}
+
 .onboardingActions {
 	display: flex;
 	flex-wrap: wrap;

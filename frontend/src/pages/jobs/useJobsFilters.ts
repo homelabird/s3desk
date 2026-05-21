@@ -4,9 +4,11 @@ import type { JobStatus } from '../../api/types'
 import { legacyProfileScopedStorageKeys, profileScopedStorageKey } from '../../lib/profileScopedStorage'
 import { useLocalStorageState } from '../../lib/useLocalStorageState'
 
+export type JobsStatusFilter = JobStatus | 'all' | 'active'
+
 export type JobsFiltersState = {
-	statusFilter: JobStatus | 'all'
-	setStatusFilter: (next: JobStatus | 'all') => void
+	statusFilter: JobsStatusFilter
+	setStatusFilter: (next: JobsStatusFilter) => void
 	searchFilter: string
 	setSearchFilter: (next: string) => void
 	typeFilter: string
@@ -21,7 +23,7 @@ export type JobsFiltersState = {
 }
 
 export function useJobsFilters(apiToken: string, profileId: string | null): JobsFiltersState {
-	const [statusFilter, setStatusFilter] = useLocalStorageState<JobStatus | 'all'>(
+	const [statusFilter, setStatusFilter] = useLocalStorageState<JobsStatusFilter>(
 		profileScopedStorageKey('jobs', apiToken, profileId, 'statusFilter'),
 		'all',
 		{

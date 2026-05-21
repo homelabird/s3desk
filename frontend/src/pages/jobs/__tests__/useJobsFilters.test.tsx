@@ -120,4 +120,16 @@ describe('useJobsFilters', () => {
 		expect(result.current.statusFilter).toBe('failed')
 		expect(result.current.searchFilter).toBe('alpha')
 	})
+
+	it('persists the virtual active status filter', () => {
+		const { result } = renderHook(() => useJobsFilters('token-a', 'profile-1'))
+
+		act(() => {
+			result.current.setStatusFilter('active')
+		})
+
+		expect(result.current.statusFilter).toBe('active')
+		expect(result.current.filtersDirty).toBe(true)
+		expect(window.localStorage.getItem(profileScopedStorageKey('jobs', 'token-a', 'profile-1', 'statusFilter'))).toBe(JSON.stringify('active'))
+	})
 })

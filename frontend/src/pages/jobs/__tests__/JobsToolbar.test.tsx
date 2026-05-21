@@ -103,6 +103,20 @@ describe('JobsToolbar', () => {
 		expect(screen.getByText('10')).toBeInTheDocument()
 		expect(screen.getByText('15 loaded')).toBeInTheDocument()
 		expect(screen.getByRole('combobox', { name: 'Search jobs' })).toBeInTheDocument()
+		expect(screen.getByRole('combobox', { name: 'Job status filter' })).toBeInTheDocument()
+		expect(screen.queryByRole('combobox', { name: 'Job type filter' })).not.toBeInTheDocument()
+		const diagnosticsButton = screen.getByTestId('jobs-diagnostics-trigger')
+		expect(diagnosticsButton).toHaveAttribute('aria-haspopup', 'dialog')
+		expect(diagnosticsButton).toHaveAttribute('aria-expanded', 'false')
+		expect(diagnosticsButton).toHaveAttribute('aria-controls', 'jobs-diagnostics-popover-panel')
+		fireEvent.click(diagnosticsButton)
+		expect(diagnosticsButton).toHaveAttribute('aria-expanded', 'true')
+		const diagnosticsPopover = screen.getByRole('dialog', { name: 'Job diagnostic filters' })
+		expect(diagnosticsPopover).toHaveAttribute('id', 'jobs-diagnostics-popover-panel')
+		expect(screen.getByRole('combobox', { name: 'Job type filter' })).toBeInTheDocument()
+		expect(screen.getByRole('combobox', { name: 'Job error code filter' })).toBeInTheDocument()
+		fireEvent.click(screen.getByTestId('jobs-health-active'))
+		expect(onStatusFilterChange).toHaveBeenCalledWith('active')
 		fireEvent.click(screen.getByRole('button', { name: 'Show failed jobs' }))
 		expect(onStatusFilterChange).toHaveBeenCalledWith('failed')
 
@@ -138,7 +152,7 @@ describe('JobsToolbar', () => {
 				onOpenCreateUpload={vi.fn()}
 				onOpenCreateDownload={vi.fn()}
 				topActionsMenu={{ items: [] }}
-				statusFilter="running"
+				statusFilter="active"
 				onStatusFilterChange={vi.fn()}
 				searchFilterNormalized=""
 				onSearchFilterChange={vi.fn()}
@@ -182,6 +196,9 @@ describe('JobsToolbar', () => {
 		expect(screen.queryByRole('combobox', { name: 'Job status filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job type filter' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('combobox', { name: 'Job error code filter' })).not.toBeInTheDocument()
+
+		fireEvent.click(trigger)
+		expect(screen.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('active')
 	})
 
 	it('closes the mobile filters sheet when the scope changes', () => {

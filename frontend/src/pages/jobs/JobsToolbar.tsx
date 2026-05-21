@@ -2,7 +2,6 @@ import { CloudUploadOutlined, FilterOutlined, MoreOutlined, ReloadOutlined, Sear
 import { Alert, Button, Checkbox, Grid, Space, Tag, Typography, type MenuProps } from 'antd'
 import { useEffect, useState } from 'react'
 
-import type { JobStatus } from '../../api/types'
 import { uploadsUnsupportedHint } from '../../lib/actionHints'
 import { DatalistInput } from '../../components/DatalistInput'
 import { MenuPopover } from '../../components/MenuPopover'
@@ -13,6 +12,7 @@ import { PageSection } from '../../components/PageSection'
 import { PopoverSurface } from '../../components/PopoverSurface'
 import styles from './JobsToolbar.module.css'
 import type { ColumnKey, ColumnOption, ToggleableColumnKey } from './useJobsColumnsVisibility'
+import type { JobsStatusFilter } from './useJobsFilters'
 
 type TypeSuggestion = {
 	value: string
@@ -38,8 +38,8 @@ export type JobsToolbarProps = {
 	onOpenCreateUpload: () => void
 	onOpenCreateDownload: () => void
 	topActionsMenu: MenuProps
-	statusFilter: JobStatus | 'all'
-	onStatusFilterChange: (next: JobStatus | 'all') => void
+	statusFilter: JobsStatusFilter
+	onStatusFilterChange: (next: JobsStatusFilter) => void
 	searchFilterNormalized: string
 	onSearchFilterChange: (next: string) => void
 	typeFilterNormalized: string
@@ -79,7 +79,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 		() => typeof window !== 'undefined' && window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY).matches,
 	)
 	const healthItems = [
-		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active', filter: 'all' },
+		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active', filter: 'active' },
 		{ key: 'queued', label: 'Queued', value: props.jobsStatusSummary.queued, tone: 'muted', filter: 'queued' },
 		{ key: 'running', label: 'Running', value: props.jobsStatusSummary.running, tone: 'active', filter: 'running' },
 		{ key: 'failed', label: 'Failed', value: props.jobsStatusSummary.failed, tone: 'danger', filter: 'failed' },
@@ -123,27 +123,33 @@ export function JobsToolbar(props: JobsToolbarProps) {
 	const mobileFiltersOpenVisible = mobileFiltersOpen && mobileFiltersScopeKey === props.scopeKey
 	const mobileFiltersSheetId = 'jobs-mobile-filters-sheet-panel'
 	const columnsPopoverId = 'jobs-columns-popover-panel'
+	const diagnosticsPopoverId = 'jobs-diagnostics-popover-panel'
 	const setScopedMobileFiltersOpen = (nextOpen: boolean) => {
 		setMobileFiltersOpen(nextOpen)
 		setMobileFiltersScopeKey(nextOpen ? props.scopeKey : '')
 	}
 
-	const advancedFilterFields = (
+	const diagnosticFiltersDirty =
+		props.typeFilterNormalized.trim().length > 0 || props.errorCodeFilterNormalized.trim().length > 0
+	const statusFilterField = (
+		<NativeSelect
+			value={props.statusFilter}
+			onChange={(next) => props.onStatusFilterChange(next as JobsStatusFilter)}
+			ariaLabel="Job status filter"
+			className={styles.statusFilterControl}
+			options={[
+				{ label: 'All statuses', value: 'all' },
+				{ label: 'Active (queued/running)', value: 'active' },
+				{ label: 'queued', value: 'queued' },
+				{ label: 'running', value: 'running' },
+				{ label: 'succeeded', value: 'succeeded' },
+				{ label: 'failed', value: 'failed' },
+				{ label: 'canceled', value: 'canceled' },
+			]}
+		/>
+	)
+	const diagnosticFilterFields = (
 		<>
-			<NativeSelect
-				value={props.statusFilter}
-				onChange={(next) => props.onStatusFilterChange(next as JobStatus | 'all')}
-				ariaLabel="Job status filter"
-				className={styles.statusFilterControl}
-				options={[
-					{ label: 'All statuses', value: 'all' },
-					{ label: 'queued', value: 'queued' },
-					{ label: 'running', value: 'running' },
-					{ label: 'succeeded', value: 'succeeded' },
-					{ label: 'failed', value: 'failed' },
-					{ label: 'canceled', value: 'canceled' },
-				]}
-			/>
 			<DatalistInput
 				value={props.typeFilterNormalized}
 				onChange={props.onTypeFilterChange}
@@ -162,6 +168,12 @@ export function JobsToolbar(props: JobsToolbarProps) {
 				className={styles.errorCodeFilterControl}
 				options={props.errorCodeSuggestions}
 			/>
+		</>
+	)
+	const advancedFilterFields = (
+		<>
+			{statusFilterField}
+			{diagnosticFilterFields}
 		</>
 	)
 
@@ -351,7 +363,40 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							{advancedFiltersDirty ? 'Filters active' : 'Filters'}
 						</Button>
 					) : (
-						advancedFilterFields
+						<>
+							{statusFilterField}
+							<PopoverSurface
+								key={`diagnostics:${props.scopeKey}`}
+								align="end"
+								contentClassName={styles.diagnosticsDropdown}
+								contentProps={{
+									id: diagnosticsPopoverId,
+									role: 'dialog',
+									'aria-label': 'Job diagnostic filters',
+								}}
+								content={() => (
+									<Space orientation="vertical" size={10} className={styles.diagnosticsStack}>
+										<Typography.Text type="secondary" className={styles.diagnosticsHint}>
+											Narrow loaded jobs by exact type or error code when investigating a specific failure.
+										</Typography.Text>
+										{diagnosticFilterFields}
+									</Space>
+								)}
+							>
+								{({ toggle, open }) => (
+									<Button
+										icon={<FilterOutlined />}
+										onClick={toggle}
+										data-testid="jobs-diagnostics-trigger"
+										aria-haspopup="dialog"
+										aria-expanded={open}
+										aria-controls={diagnosticsPopoverId}
+									>
+										{diagnosticFiltersDirty ? 'Diagnostics active' : 'Diagnostics'}
+									</Button>
+								)}
+							</PopoverSurface>
+						</>
 					)}
 					<Button onClick={props.onResetFilters} disabled={!props.filtersDirty}>
 						Reset filters

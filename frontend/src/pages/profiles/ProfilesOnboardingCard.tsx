@@ -23,6 +23,11 @@ type Props = {
 
 export function ProfilesOnboardingCard(props: Props) {
 	if (!props.visible) return null
+	const diagnosticsNeedAttention =
+		!props.backendConnected ||
+		!(props.transferEngine?.available ?? false) ||
+		!(props.transferEngine?.compatible ?? false) ||
+		(props.apiTokenEnabled && !props.apiToken.trim())
 
 	return (
 		<section className={styles.onboardingCard} aria-label="Getting started">
@@ -30,29 +35,34 @@ export function ProfilesOnboardingCard(props: Props) {
 				<Typography.Title level={5} className={styles.onboardingTitle}>
 					Getting started
 				</Typography.Title>
-				<Typography.Text type="secondary">Quick setup checklist.</Typography.Text>
+				<Typography.Text type="secondary">Create a profile, select it, then open your objects.</Typography.Text>
 			</div>
 			<div className={styles.onboardingChecklist}>
-				<Checkbox checked={props.backendConnected} disabled>
-					Backend connected
-				</Checkbox>
-				<Checkbox checked={props.transferEngine?.available ?? false} disabled>
-					Transfer engine detected (rclone)
-				</Checkbox>
-				<Checkbox checked={props.transferEngine?.compatible ?? false} disabled>
-					Transfer engine compatible
-					{props.transferEngine?.minVersion ? ` (>= ${props.transferEngine.minVersion})` : ''}
-				</Checkbox>
-				<Checkbox checked={props.apiTokenEnabled ? !!props.apiToken.trim() : true} disabled>
-					API token configured{props.apiTokenEnabled ? '' : ' (not required)'}
-				</Checkbox>
 				<Checkbox checked={props.profilesCount > 0} disabled>
-					At least one profile created
+					Create a storage profile
 				</Checkbox>
 				<Checkbox checked={!!props.profileId} disabled>
-					Active profile selected
+					Select the active profile
 				</Checkbox>
 			</div>
+			<details className={styles.onboardingDiagnostics} open={diagnosticsNeedAttention}>
+				<summary className={styles.onboardingDiagnosticsSummary}>System readiness</summary>
+				<div className={styles.onboardingDiagnosticsList}>
+					<Checkbox checked={props.backendConnected} disabled>
+						Backend connected
+					</Checkbox>
+					<Checkbox checked={props.transferEngine?.available ?? false} disabled>
+						Transfer engine detected (rclone)
+					</Checkbox>
+					<Checkbox checked={props.transferEngine?.compatible ?? false} disabled>
+						Transfer engine compatible
+						{props.transferEngine?.minVersion ? ` (>= ${props.transferEngine.minVersion})` : ''}
+					</Checkbox>
+					<Checkbox checked={props.apiTokenEnabled ? !!props.apiToken.trim() : true} disabled>
+						API token configured{props.apiTokenEnabled ? '' : ' (not required)'}
+					</Checkbox>
+				</div>
+			</details>
 			<div className={styles.onboardingActions}>
 				<Button size="small" type="primary" onClick={props.onCreateProfile}>
 					Create profile

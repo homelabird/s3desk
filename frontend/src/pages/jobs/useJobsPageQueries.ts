@@ -7,9 +7,10 @@ import type { JobsPageQueriesAPI } from '../../lib/pageApiScopes'
 import { measurePerf } from '../../lib/perf'
 import { buildProfileCapabilityContext } from '../../lib/profileCapabilityContext'
 import { getBucketsQueryStaleTimeMs } from '../../lib/queryPolicy'
+import type { JobsStatusFilter } from './useJobsFilters'
 
 type JobsPageQueryFilters = {
-	statusFilter: JobStatus | 'all'
+	statusFilter: JobsStatusFilter
 	typeFilterNormalized: string
 	errorCodeFilterNormalized: string
 }
@@ -60,6 +61,11 @@ export function useJobsPageQueries(props: UseJobsPageQueriesArgs) {
 		[bucketsQuery.data],
 	)
 
+	const apiStatusFilter: JobStatus | undefined =
+		props.filters.statusFilter === 'all' || props.filters.statusFilter === 'active'
+			? undefined
+			: props.filters.statusFilter
+
 	const jobsQuery = useInfiniteQuery({
 		queryKey: queryKeys.jobs.list(
 			props.profileId,
@@ -73,7 +79,7 @@ export function useJobsPageQueries(props: UseJobsPageQueriesArgs) {
 		queryFn: ({ pageParam }) =>
 			props.api.jobs.listJobs(props.profileId!, {
 				limit: 50,
-				status: props.filters.statusFilter === 'all' ? undefined : props.filters.statusFilter,
+				status: apiStatusFilter,
 				type: props.filters.typeFilterNormalized || undefined,
 				errorCode: props.filters.errorCodeFilterNormalized || undefined,
 				cursor: pageParam,

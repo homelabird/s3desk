@@ -233,4 +233,52 @@ describe('useJobsPageQueries', () => {
 		expect(result.current.jobs[0]?.id).toBe('job-1')
 		expect(listBuckets).not.toHaveBeenCalled()
 	})
+
+	it('loads all statuses from the API for the virtual active filter', async () => {
+		const listJobs = vi.fn().mockResolvedValue({
+			items: [
+				{
+					id: 'job-active',
+					type: 'transfer_sync_staging_to_s3',
+					status: 'queued',
+					payload: {},
+					createdAt: '2026-01-01T00:00:00Z',
+					updatedAt: '2026-01-01T00:00:00Z',
+				},
+			],
+			nextCursor: undefined,
+		})
+		const api = createMockApiClient({
+			server: { getMeta: async () => buildMeta() },
+			profiles: { listProfiles: async () => [buildProfile({ id: 'profile-1' })] },
+			buckets: { listBuckets: async () => [] },
+			jobs: { listJobs },
+		})
+		const queryClient = new QueryClient({
+			defaultOptions: {
+				queries: { retry: false },
+				mutations: { retry: false },
+			},
+		})
+
+		const { result } = renderHook(
+			() =>
+				useJobsPageQueries({
+					api,
+					apiToken: 'token',
+					profileId: 'profile-1',
+					filters: {
+						statusFilter: 'active',
+						typeFilterNormalized: '',
+						errorCodeFilterNormalized: '',
+					},
+					eventsConnected: true,
+				}),
+			{ wrapper: createWrapper(queryClient) },
+		)
+
+		await waitFor(() => expect(result.current.jobs).toHaveLength(1))
+
+		expect(listJobs).toHaveBeenCalledWith('profile-1', expect.objectContaining({ status: undefined }))
+	})
 })

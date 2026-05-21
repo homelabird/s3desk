@@ -36,6 +36,7 @@ function buildArgs(overrides: Partial<Parameters<typeof useJobsPageTableState>[0
     profileId: 'profile-1' as string | null,
     isOffline: false,
     jobs: baseJobs,
+    statusFilter: 'all' as const,
     searchFilterNormalized: '',
     mergedColumnVisibility: {
       id: true,
@@ -125,6 +126,35 @@ describe('useJobsPageTableState', () => {
     )
 
     expect(setSortState).toHaveBeenCalledWith(null)
+  })
+
+  it('filters active jobs to queued and running statuses', () => {
+    const runningJob = {
+      id: 'job-c',
+      type: 'transfer_sync_staging_to_s3',
+      status: 'running',
+      payload: {},
+      createdAt: '2026-04-11T00:00:00Z',
+    } as unknown as Job
+
+    const { result } = renderHook(() =>
+      useJobsPageTableState(buildArgs({
+        jobs: [...baseJobs, runningJob],
+        statusFilter: 'active',
+        sortState: null,
+      })),
+    )
+
+    expect(result.current.sortedJobs.map((job) => job.id)).toEqual(['job-a', 'job-c'])
+    expect(result.current.jobsStatusSummary).toEqual({
+      total: 2,
+      active: 2,
+      queued: 1,
+      running: 1,
+      succeeded: 0,
+      failed: 0,
+      canceled: 0,
+    })
   })
 
   it('updates table scroll height when the container is attached and resized', () => {

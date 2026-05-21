@@ -6,12 +6,14 @@ import { jobMatchesSearch } from './jobPresentation'
 import { useJobsTableColumns } from './useJobsTableColumns'
 import type { SortState } from './JobsVirtualTable'
 import type { ColumnKey } from './useJobsColumnsVisibility'
+import type { JobsStatusFilter } from './useJobsFilters'
 
 type UseJobsPageTableStateArgs = {
   apiToken: string
   profileId: string | null
   isOffline: boolean
   jobs: Job[]
+  statusFilter: JobsStatusFilter
   searchFilterNormalized: string
   mergedColumnVisibility: Record<ColumnKey, boolean>
   activeLogJobId: string | null
@@ -45,6 +47,7 @@ export function useJobsPageTableState({
   profileId,
   isOffline,
   jobs,
+  statusFilter,
   searchFilterNormalized,
   mergedColumnVisibility,
   activeLogJobId,
@@ -133,9 +136,12 @@ export function useJobsPageTableState({
   }, [jobs])
 
   const filteredJobs = useMemo(() => {
-    if (!searchFilterNormalized) return jobs
-    return jobs.filter((job) => jobMatchesSearch(job, searchFilterNormalized))
-  }, [jobs, searchFilterNormalized])
+    const searchedJobs = searchFilterNormalized
+      ? jobs.filter((job) => jobMatchesSearch(job, searchFilterNormalized))
+      : jobs
+    if (statusFilter !== 'active') return searchedJobs
+    return searchedJobs.filter((job) => job.status === 'queued' || job.status === 'running')
+  }, [jobs, searchFilterNormalized, statusFilter])
 
   const jobsStatusSummary = useMemo(() => {
     const summary = { total: filteredJobs.length, active: 0, queued: 0, running: 0, succeeded: 0, failed: 0, canceled: 0 }

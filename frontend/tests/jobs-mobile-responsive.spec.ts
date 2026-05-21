@@ -34,6 +34,22 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(page.getByTestId('jobs-health-running')).toContainText('1')
 		await expect(page.getByText('job-queued')).toBeVisible()
 		await expect(page.getByText('job-running')).toBeVisible()
+
+		await page.getByTestId('jobs-health-active').click()
+		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toContainText('Filters active')
+		await expect
+			.poll(() =>
+				readProfileScopedLocalStorage(page, {
+					apiToken: 'jobs-mobile-token',
+					name: 'statusFilter',
+					namespace: 'jobs',
+					profileId: 'jobs-mobile-profile',
+				}, 'all'),
+			)
+			.toBe('active')
+		const sheet = await openJobsMobileFilters(page)
+		await expect(sheet.getByRole('combobox', { name: 'Job status filter' })).toHaveValue('active')
+		await closeJobsMobileFilters(sheet)
 	})
 
 	test('top operations groups remain usable at 320px', async ({ page }) => {
