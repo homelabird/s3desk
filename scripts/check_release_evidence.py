@@ -173,6 +173,20 @@ SECRET_PATTERNS = (
     ),
     ("api_token_assignment", re.compile(r"\b(?:DEPLOY_API_TOKEN|S3DESK_API_TOKEN|api[_-]?token)\s*[:=]\s*([^`\s]+)", re.IGNORECASE)),
     (
+        "database_url_with_password",
+        re.compile(
+            r"\b(?:postgres|postgresql|mysql|mariadb)://[^:@/\s`]+:([^@\s`/]+)@",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "password_assignment",
+        re.compile(
+            r"\b(?!(?:PORTABLE_BUNDLE(?:_EXPORT|_IMPORT)?_PASSWORD|S3DESK_BACKUP_PASSWORD)\b)"
+            r"(?:DATABASE_URL|[A-Z0-9_]*PASSWORD[A-Z0-9_]*)\s*[:=]\s*`?([^`\s]+)`?",
+        ),
+    ),
+    (
         "backup_password_assignment",
         re.compile(
             r"\b(?:X-S3Desk-Backup-Password|PORTABLE_BUNDLE(?:_EXPORT|_IMPORT)?_PASSWORD|S3DESK_BACKUP_PASSWORD|(?:portable\s+)?bundle\s+password|backup[_ -]?password)\s*[:=]\s*`?([^`\s]+)`?",
@@ -183,6 +197,8 @@ SECRET_PATTERNS = (
 SECRET_REMEDIATIONS = {
     "api_token_assignment": "Replace API token values with `<redacted>` and keep only the command shape.",
     "backup_password_assignment": "Replace backup password values with `<redacted>` and keep only the command shape.",
+    "database_url_with_password": "Replace database URL credentials with `<redacted>` or omit the URL from release evidence.",
+    "password_assignment": "Replace password assignment values with `<redacted>` and keep only the command shape.",
     "authorization_header": "Replace authorization header values with `<redacted>` and keep only the checked route or status.",
     "cookie_token": "Replace cookie token values with `<redacted>` and keep only the checked route or status.",
     "credential_assignment": "Replace provider credential assignment values with `<redacted>` or move them to local env only.",

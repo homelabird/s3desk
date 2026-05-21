@@ -6,178 +6,183 @@
 
 ## 1. 분석 범위
 
-이번 감사는 다음 역할로 분리했다.
+이번 후속 감사는 다음 역할로 분리했다.
 
-- Backend architecture, API, storage, backup/import
-- Frontend UX, accessibility, state, performance
-- CI, testing, release engineering
-- Security, deployment, supply chain
+- Backend/security: API, storage, portable backup/import, rclone execution boundary
+- Frontend/state/UX: React Query cache, realtime updates, object/job views, accessibility
+- CI/release/deployment: GitHub/GitLab gates, release evidence, workflow trust boundary
+- Test/architecture: coverage gaps, generated artifacts, module boundaries, drift checks
 
-Sub-agent는 코드 수정 없이 부족한 점을 식별했고, 개선은 로컬에서 재현 가능한 고우선순위 항목부터 적용했다.
+Sub-agent는 코드 수정 없이 부족한 점을 식별했고, 개선은 로컬에서 재현 가능하고 회귀 테스트를 붙일 수 있는 고우선순위 항목부터 적용했다.
 
 ## 2. 종합 판정
 
-즉시 무인 원격 악용이 가능한 `P0` 코드 결함은 확인되지 않았다. 다만 GitHub repository 설정에서 `main` branch required status checks가 꺼져 있는 외부 설정 리스크가 확인됐다. 레포 코드만으로 강제할 수 없는 항목이지만, 릴리스 신뢰도 관점에서는 별도 GitHub 설정 변경이 필요하다.
+즉시 원격 코드 실행으로 이어지는 `P0` 코드 결함은 확인되지 않았다. 다만 GitHub repository 설정에서 `main` branch required status checks가 꺼져 있는 외부 설정 리스크가 확인됐다. 이는 repository setting 변경이 필요하므로 코드 커밋만으로 닫을 수 없다.
 
-이번에 코드로 닫은 핵심 항목은 다음이다.
+이번 후속 패스에서 코드로 닫은 핵심 항목은 다음이다.
 
-- portable backup/import 누락 엔티티 `object_index_replacements` 포함
-- rclone 기반 job type 전체에 API create/retry 사전검사 적용
-- portable asset copy의 파일 descriptor 누수 가능성 제거
-- legacy unsigned full/cache restore에 명시 경고 추가
-- `g` navigation chord timeout 회귀 수정
-- logout 시 React Query cache clear
-- 브라우저 영향 backend 변경에 대한 `Frontend E2E` path filter 확장
-- backend architecture, CODEOWNERS, code ownership 문서 추가
+- remote non-loopback 실행 시 weak/missing `API_TOKEN`, missing `ENCRYPTION_KEY`, missing `ALLOWED_HOSTS` startup 차단
+- remote/demo/e2e/portable smoke compose와 문서의 token/key 요구사항 정렬
+- portable replace import가 destination의 queued/running job을 덮어쓰지 못하도록 409 차단
+- portable upload session prefix 검증의 문자열 prefix 우회 방지
+- release evidence secret scanner에 database URL credential과 `*_PASSWORD` 값 탐지 추가
 
-## 3. 주요 부족한 점
+이전 패스에서 이미 닫은 주요 항목은 portable entity 누락, rclone job API preflight 범위, asset copy descriptor 누수, legacy restore 경고, keyboard chord timeout, logout cache clear, browser-facing E2E path filter, ownership 문서화다.
+
+## 3. 신규 부족한 점과 처리 결과
 
 ### P0. GitHub branch protection required checks 비활성화
 
-`gh api repos/homelabird/s3desk/branches/main/protection` 확인 결과 `required_status_checks`가 `null`이다.
+`gh api repos/homelabird/s3desk/branches/main/protection` 확인 결과 `required_status_checks`가 `null`이고 ruleset도 비어 있었다.
 
 영향:
 
-- release gate, required Playwright lane, license audit 실패가 merge를 막지 못할 수 있다.
+- Release Gate, Frontend E2E, License Audit 실패가 merge를 막지 못할 수 있다.
 - 문서와 workflow verifier가 전제하는 보호 정책이 GitHub 서버 설정에서는 보장되지 않는다.
 
-권장 조치:
+처리 상태:
 
-- GitHub branch protection 또는 ruleset에서 required check names를 실제 check-run 이름 기준으로 켠다.
-- 코드 변경이 아니라 repository setting 변경이므로 이번 커밋 범위에서는 수정하지 않았다.
+- 코드로 강제할 수 없는 외부 설정이다.
+- GitHub branch protection 또는 ruleset에서 실제 check-run 이름 기준 required checks와 PR review gate를 켜야 한다.
 
-### P1. portable backup/import 엔티티 누락
+### P1. remote deployment token/key hardening 부족
 
-`object_index_replacements`는 DB schema에 존재하지만 portable export/import table order와 payload 처리에서 빠져 있었다. object indexing 교체 작업 중 backup/import를 수행하면 staged replacement rows가 유실될 수 있었다.
-
-이번 개선:
-
-- `object_index_replacements`를 portable DB table list, entity order, export/import parser, replace delete/import flow에 추가했다.
-- legacy bundle 호환을 위해 해당 엔티티가 없는 기존 portable bundle은 optional entity로 허용한다.
-- archive entry와 legacy missing-entity 검증 테스트를 추가했다.
-
-### P1. rclone job API preflight 범위 부족
-
-기존 API preflight는 `transfer_*`만 검사해 `s3_zip_*`, `s3_delete_objects`, `s3_index_objects` 같은 rclone 실행 job type이 create/retry 단계에서 빠질 수 있었다.
+기존 remote startup guard는 non-loopback bind에서 token 존재와 placeholder만 막고, token 길이와 `ENCRYPTION_KEY` 누락은 강제하지 않았다.
 
 이번 개선:
 
-- `internal/jobs.RequiresRclone`을 추가해 manager dispatch와 API preflight가 같은 job type 목록을 쓰도록 했다.
-- job type 회귀 테스트와 API 테스트 fixture를 정리했다.
+- `validateRemoteAccessConfig`를 분리하고 remote non-loopback bind에서 `API_TOKEN` 최소 32 bytes, non-placeholder, `ENCRYPTION_KEY`, `ALLOWED_HOSTS`를 startup blocker로 강제했다.
+- app 단위 테스트로 missing/weak token, placeholder, missing key, missing hosts, loopback 예외를 고정했다.
+- remote/demo/e2e/portable smoke compose, `.env.example`, runbook, testing 문서를 새 정책에 맞췄다.
 
-### P1. frontend keyboard chord timeout 회귀
+### P1. portable replace import와 실행 중 job 충돌
 
-`useKeyboardShortcuts`의 `g` navigation chord timer가 effect-local 변수에 묶여 timeout 뒤에도 chord가 무기한 armed 상태로 남을 수 있었다.
-
-이번 개선:
-
-- `useRef` 기반 timer/pending state로 변경해 timeout과 cleanup을 안정화했다.
-- fake timer 단위 테스트로 expiry와 정상 chord를 고정했다.
-
-### P1. CI browser-facing path filter 공백
-
-`Frontend E2E`의 `browser_facing` filter가 일부 backend package만 포함해 `models`, `bucketgov`, `config`, provider/client 계층 변경이 browser lane을 건너뛸 수 있었다.
+portable replace import는 destination 전체 테이블을 삭제/교체하므로 queued/running job이 있으면 destination job state와 object state를 중간에 끊을 수 있었다.
 
 이번 개선:
 
-- `.github/workflows/frontend-e2e.yml`에서 `backend/internal/**`, `backend/go.mod`, `backend/go.sum`을 browser-facing 범위에 포함했다.
-- workflow validator가 이 범위를 강제하도록 테스트를 추가했다.
+- import transaction 시작 시 destination의 queued/running job을 집계해 존재하면 `ErrPortableImportActiveJobs`로 중단한다.
+- API 응답은 HTTP `409`와 `portable_import_blocked`로 매핑했다.
+- store 테스트로 active job 차단을 고정했다.
 
-### P1. security/deployment hardening 잔여
+### P1. release evidence secret scanning 공백
 
-남은 리스크:
-
-- remote API token strength가 코드로 강제되지 않는다.
-- remote deployment에서 `ENCRYPTION_KEY` 누락 시 provider credential이 plaintext로 저장될 수 있다.
-- rclone endpoint DNS rebinding/TOCTOU 리스크가 남아 있다.
-- remote Compose hardening과 immutable supply-chain pinning이 더 필요하다.
-
-권장 조치:
-
-- remote mode에서 weak token과 missing encryption key를 fail-closed 또는 startup blocker로 처리한다.
-- rclone endpoint는 실행 직전 재해석 검증, allowlist, 또는 guarded proxy 설계를 검토한다.
-- Compose에는 read-only filesystem, dropped capabilities, no-new-privileges, healthcheck를 기본화한다.
-
-### P2. performance/UX 잔여
-
-남은 리스크:
-
-- Objects grid와 mobile Jobs list가 large result set에서 DOM을 과도하게 늘릴 수 있다.
-- page-level accessibility smoke가 아직 일부 화면에만 보강됐다.
-- grid/sidebar visual drift는 design token 정리 여지가 있다.
+release evidence scanner가 provider/API token과 backup password는 잡지만 `DATABASE_URL=postgres://user:pass@...` 및 일반 `*_PASSWORD` 할당값은 놓칠 수 있었다.
 
 이번 개선:
 
-- Profiles, Buckets, Uploads, Jobs page-level desktop axe smoke를 추가했다.
-- logout/token switch 시 query cache가 남지 않도록 clear 처리했다.
+- database URL userinfo password 탐지와 `DATABASE_URL`/`*_PASSWORD` assignment 탐지를 추가했다.
+- backup password 전용 remediation은 유지하고, DB/password secret 회귀 테스트를 추가했다.
 
-### P2. test/release lane 잔여
+### P2. portable upload prefix boundary 우회
 
-남은 리스크:
+기존 검증은 `strings.HasPrefix(objectKey, session.Prefix)`라서 prefix가 `foo`일 때 `foobar/object.txt`가 통과할 수 있었다.
 
-- release publish가 backend coverage/golangci lane에 직접 의존하지 않는다.
-- GitHub Playwright의 다수 lane이 production bundle 대신 Vite dev server 기준으로 돈다.
-- Go race lane과 live E2E dependency readiness gate가 더 필요하다.
+이번 개선:
+
+- object key가 prefix와 정확히 같거나 `prefix/` 하위일 때만 허용하도록 helper를 추가했다.
+- boundary 단위 테스트를 추가했다.
+
+## 4. 남은 주요 리스크
+
+### P1. rclone endpoint egress/DNS rebinding
+
+rclone 실행 경로는 provider endpoint를 실행 직전 동일한 egress guard로 재검증하지 않는다. API 저장 시점 검증과 실행 시점 DNS 해석 사이에 TOCTOU/DNS rebinding 리스크가 남는다.
 
 권장 조치:
 
-- release publish dependency에 backend coverage/golangci를 명시한다.
-- 핵심 browser lane 중 하나는 production build preview 기준으로 고정한다.
-- `go test -race` smoke와 live E2E readiness waiter를 CI에 추가한다.
+- rclone 실행 직전 endpoint 재해석과 private/link-local 차단을 수행한다.
+- 장기적으로는 guarded proxy 또는 명시 allowlist 기반 egress boundary를 설계한다.
 
-### P2. maintainability/ownership
+### P1. frontend cache coherence
 
-Backend boundary 문서와 CODEOWNERS가 없어 새 job/provider/API 변경의 리뷰 기준이 약했다.
+copy/move/rename job 생성 후 Objects query가 완료 시점에 무효화되지 않아, job은 성공했지만 object 목록은 stale하게 남을 수 있다. 또한 realtime job status handler가 filter가 다른 job query cache까지 패치할 수 있다.
 
-이번 개선:
+권장 조치:
 
-- `.github/CODEOWNERS` 추가
-- `docs/BACKEND_ARCHITECTURE.md` 추가
-- `docs/CODE_OWNERSHIP.md` 추가
-- `docs/README.md`에 새 contributor-facing 문서 링크 추가
+- mutating job 완료 이벤트에서 관련 bucket/object prefix query를 invalidate한다.
+- job realtime cache patch는 query key filter와 status filter를 만족하는 캐시에만 적용한다.
 
-## 4. 이번 개선 파일
+### P1. release/deploy trust boundary
 
-- `.github/CODEOWNERS`
+GitLab release/deploy는 protected tag 설정에 의존하고, GitHub/GitLab CI 일부 dependency/action은 mutable reference 또는 optional checksum에 의존한다. release artifact signing, attestation, SBOM도 아직 기본화되지 않았다.
+
+권장 조치:
+
+- release job을 protected tag와 protected environment로 제한한다.
+- critical actions/images/tooling을 SHA/digest/checksum으로 pinning한다.
+- release artifact에 checksum, signature, provenance, SBOM을 함께 발행한다.
+
+### P1. generated notice drift
+
+`scripts/check.sh`가 notice generator를 실행하면서 `Generated at <latest commit time>` 같은 생성 파일을 더럽힐 수 있다. 비교 로직이 해당 줄을 무시하더라도 작업트리 변동은 남을 수 있다.
+
+권장 조치:
+
+- generator를 temp output 비교 방식으로 바꾸거나 timestamp를 deterministic하게 만든다.
+
+### P2. frontend performance and UX
+
+Objects grid와 mobile Jobs list가 large result set에서 DOM을 선형으로 늘릴 수 있고, keyboard navigation은 prefix row를 자연스럽게 포함하지 못한다. preview thumbnail cache도 full-size blob을 오래 들고 있을 수 있다.
+
+권장 조치:
+
+- object/job list virtualization을 별도 성능 작업으로 진행한다.
+- prefix row keyboard navigation과 thumbnail downscale/cache eviction을 보강한다.
+
+### P2. test/release coverage
+
+minimal CI pair에 OpenAPI drift check가 빠져 있고, production bundle 기준 Playwright lane, Go race smoke, backend coverage hotspot 보강이 남아 있다.
+
+권장 조치:
+
+- `openapi.yml` drift check를 minimal lane에 포함한다.
+- 핵심 browser lane 하나는 Vite dev server가 아니라 production preview로 고정한다.
+- shared backend package에는 targeted unit coverage와 race smoke를 추가한다.
+
+## 5. 이번 후속 개선 파일
+
+- `.env.example`
 - `.github/workflows/frontend-e2e.yml`
-- `backend/internal/api/handlers_jobs*.go`
-- `backend/internal/api/handlers_server_backup*.go`
-- `backend/internal/api/handlers_server_portable*.go`
-- `backend/internal/db/db.go`
-- `backend/internal/jobs/manager_job_types*.go`
+- `backend/cmd/server/main.go`
+- `backend/internal/app/app.go`
+- `backend/internal/app/app_test.go`
+- `backend/internal/api/handlers_server_portable.go`
 - `backend/internal/store/store_portable.go`
-- `docs/BACKEND_ARCHITECTURE.md`
-- `docs/CODE_OWNERSHIP.md`
+- `backend/internal/store/store_portable_test.go`
+- `compose/demo/compose.yml`
+- `compose/remote/caddy.yml`
+- `compose/remote/compose.yml`
+- `compose/test/e2e.yml`
+- `compose/test/portable-smoke.yml`
 - `docs/PORTABLE_BACKUP.md`
-- `docs/README.md`
-- `frontend/src/lib/useKeyboardShortcuts.ts`
-- `frontend/src/lib/__tests__/useKeyboardShortcuts.test.tsx`
-- `frontend/src/useFullAppShellState.ts`
-- `frontend/tests/accessibility-overlays.spec.ts`
-- `scripts/check_github_workflows.py`
-- `scripts/check_github_workflows_test.py`
+- `docs/RUNBOOK.md`
+- `docs/TESTING.md`
+- `docs/ci/e2e_live.env.example`
+- `scripts/check_release_evidence.py`
+- `scripts/check_release_evidence_test.py`
+- `scripts/compose.sh`
+- `scripts/demo/seed-s3desk.py`
+- `scripts/portable/run-failure-smoke.py`
+- `scripts/portable/run-smoke.py`
+- `scripts/portable/seed-source.py`
+- `scripts/run_portable_failure_smoke.sh`
 
-## 5. 검증 상태
+## 6. 검증 상태
 
-현재까지 통과한 검증:
+이번 후속 패스에서 통과한 검증:
 
-- `cd backend && go test ./internal/api -count=1`
-- `cd backend && go test ./internal/jobs ./internal/api ./internal/store ./internal/db`
+- `cd backend && go test ./internal/app ./internal/store ./internal/api`
+- `python3 scripts/check_release_evidence_test.py`
 - `python3 scripts/check_github_workflows_test.py`
 - `bash scripts/check_github_workflows.sh`
 - `bash scripts/check_release_gate.sh`
-- `npm --prefix frontend run test:unit -- src/components/__tests__/PageSection.test.tsx src/lib/__tests__/useKeyboardShortcuts.test.tsx`
-- `npm --prefix frontend run typecheck`
-- `npm --prefix frontend run lint`
-- `cd frontend && npx playwright test tests/accessibility-overlays.spec.ts --project=chromium --grep "Profiles page has no whole-page|Buckets page has no whole-page|Uploads page has no whole-page|Jobs page has no whole-page"`
 - `git diff --check`
 
-Playwright 최초 실행에서 Profiles locator strict-mode 오류와 Uploads/Jobs heading-order 위반을 확인했고, locator와 `PageSection` heading level을 함께 수정한 뒤 재실행해 통과했다.
+## 7. 다음 우선순위
 
-## 6. 다음 작업 우선순위
-
-1. GitHub branch protection/ruleset에서 required status checks를 켠다.
-2. remote token strength와 `ENCRYPTION_KEY` startup blocker를 적용한다.
-3. rclone endpoint DNS rebinding 방어 설계를 진행한다.
-4. Objects grid와 mobile Jobs list virtualization을 별도 성능 작업으로 진행한다.
-5. release publish gate, production Playwright lane, Go race lane을 CI 후속 작업으로 진행한다.
+1. GitHub branch protection/ruleset에서 required status checks와 PR review gate를 켠다.
+2. rclone endpoint 실행 시점 egress guard 설계를 진행한다.
+3. frontend Objects cache invalidation과 filtered Jobs realtime patch를 수정한다.
+4. release artifact signing/provenance/SBOM과 dependency pinning을 강화한다.
+5. generated notice drift와 OpenAPI drift/minimal lane 공백을 닫는다.

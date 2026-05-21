@@ -953,12 +953,12 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         summary = self._summarize_with_evidence(
             entries=[MODULE.StatusEntry(" M", "backend/internal/api/handlers_server_backup.go")],
             evidence_files={
-				"provider-live-minio-2026-04-30.md": self._provider_evidence(
-					"MinIO",
-					command="PORTABLE_BUNDLE_PASSWORD=operator-secret curl -H 'X-S3Desk-Backup-Password: restore-secret' /api/v1/server/backup\nBackup password: operator-secret",
-				),
-			},
-		)
+                "provider-live-minio-2026-04-30.md": self._provider_evidence(
+                    "MinIO",
+                    command="PORTABLE_BUNDLE_PASSWORD=operator-secret curl -H 'X-S3Desk-Backup-Password: restore-secret' /api/v1/server/backup\nBackup password: operator-secret",
+                ),
+            },
+        )
 
         self.assertFalse(summary["ready"])
         rejected_by_path = {
@@ -968,6 +968,26 @@ class ReleaseEvidenceAuditTests(unittest.TestCase):
         self.assertEqual(
             rejected_by_path["docs/release/evidence/provider-live-minio-2026-04-30.md"],
             {"backup_password_assignment"},
+        )
+
+    def test_rejects_database_url_and_password_values_in_evidence(self):
+        summary = self._summarize_with_evidence(
+            entries=[MODULE.StatusEntry(" M", "backend/internal/api/download_proxy.go")],
+            evidence_files={
+                "reverse-proxy-smoke-2026-04-30.md": self._reverse_proxy_evidence(
+                    command="DATABASE_URL=postgres://s3desk:secret-pass@db:5432/s3desk POSTGRES_PASSWORD=plain-secret bash ./scripts/deploy_smoke.sh"
+                ),
+            },
+        )
+
+        self.assertFalse(summary["ready"])
+        rejected_by_path = {
+            item["path"]: {finding["type"] for finding in item["findings"]}
+            for item in summary["rejected_evidence_files"]
+        }
+        self.assertEqual(
+            rejected_by_path["docs/release/evidence/reverse-proxy-smoke-2026-04-30.md"],
+            {"database_url_with_password", "password_assignment"},
         )
 
     def test_unrelated_changes_do_not_require_live_evidence(self):
