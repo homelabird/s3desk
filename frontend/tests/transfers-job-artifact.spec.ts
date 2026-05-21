@@ -4,10 +4,11 @@ import { installMockApi } from './support/apiFixtures'
 import {
 	chooseRowAction,
 	clickTransferRowButton,
+	dialogByName,
 	expectTransferRowButton,
 	expectTransferRowState,
 	gotoJobsPage,
-	openTransfersDownloadRow,
+	transferDownloadRow,
 } from './support/ui'
 
 type StorageSeed = {
@@ -198,7 +199,15 @@ async function queueZipArtifactDownload(page: Page) {
 	await expect(zipRow).toContainText(/zip s3:\/\/test-bucket\/reports\/\*/)
 	await chooseRowAction(page, zipRow, 'Download ZIP')
 
-	const { row } = await openTransfersDownloadRow(page, zipJobLabel, { triggerButtonName: /Transfers/i })
+	const dialog = dialogByName(page, /Transfers/i)
+	await expect(dialog).toBeVisible({ timeout: 15_000 })
+	const downloadsTab = dialog.getByRole('tab', { name: /Downloads/i })
+	await expect(downloadsTab).toBeVisible({ timeout: 15_000 })
+	if ((await downloadsTab.getAttribute('aria-selected')) !== 'true') {
+		await downloadsTab.click()
+	}
+	const row = transferDownloadRow(dialog, zipJobLabel)
+	await expect(row).toBeVisible({ timeout: 15_000 })
 
 	return { row }
 }

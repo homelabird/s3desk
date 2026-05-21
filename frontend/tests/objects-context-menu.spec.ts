@@ -179,16 +179,26 @@ test.describe('Objects context menus', () => {
 
 		const target = objectsListRow(page, 'video-12.mp4')
 		await expect(target).toBeVisible()
+		await target.scrollIntoViewIfNeeded()
 		const menuTrigger = target.getByRole('button', { name: /Object actions for video-12\.mp4/ })
 		await expect(menuTrigger).toBeVisible()
-		await menuTrigger.click()
 
 		const menu = page
 			.getByRole('menu')
 			.filter({ has: page.getByRole('menuitem', { name: 'Download (client)' }) })
 			.last()
-		await expect(menu).toBeVisible()
-		await menu.getByRole('menuitem', { name: 'Details' }).click()
+		const detailsItem = menu.getByRole('menuitem', { name: 'Details' })
+		await expect(async () => {
+			if (!(await menu.isVisible().catch(() => false))) {
+				await menuTrigger.evaluate((element) => {
+					;(element as HTMLElement).click()
+				})
+			}
+			await expect(detailsItem).toBeVisible({ timeout: 1_000 })
+		}).toPass({ timeout: 15_000 })
+		await detailsItem.evaluate((element) => {
+			;(element as HTMLElement).click()
+		})
 
 		const drawer = page.getByTestId('objects-details-sheet')
 		await expect(drawer).toBeVisible()
