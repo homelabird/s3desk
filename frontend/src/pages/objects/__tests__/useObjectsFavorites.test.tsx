@@ -6,11 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMockApiClient } from '../../../test/mockApiClient'
 import { useObjectsFavorites } from '../useObjectsFavorites'
 
-function createWrapper() {
+function createWrapper(options: { queryRetry?: boolean | number } = {}) {
 	const queryClient = new QueryClient({
 		defaultOptions: {
 			queries: {
-				retry: false,
+				retry: options.queryRetry ?? false,
 			},
 			mutations: {
 				retry: false,
@@ -107,6 +107,36 @@ describe('useObjectsFavorites', () => {
 			bucket: 'bucket-a',
 			hydrate: true,
 		})
+	})
+
+	it('surfaces favorite load failures without inheriting global query retries', async () => {
+		const listObjectFavorites = vi.fn().mockRejectedValue(new Error('favorites backend unavailable'))
+		const api = createMockApiClient({
+			objects: {
+				listObjectFavorites,
+				createObjectFavorite: vi.fn(),
+				deleteObjectFavorite: vi.fn(),
+			},
+		})
+		const { Wrapper } = createWrapper({ queryRetry: 3 })
+
+		const { result } = renderHook(
+			() =>
+				useObjectsFavorites({
+					api,
+					profileId: 'profile-1',
+					bucket: 'bucket-a',
+					apiToken: 'token',
+					objectsPages: [],
+					hydrateItems: false,
+				}),
+			{
+				wrapper: Wrapper,
+			},
+		)
+
+		await waitFor(() => expect(result.current.favoritesQuery.isError).toBe(true))
+		expect(listObjectFavorites).toHaveBeenCalledTimes(1)
 	})
 
 	it('does not load or mutate favorites when object capability disables favorites', () => {

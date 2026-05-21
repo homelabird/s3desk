@@ -79,11 +79,13 @@ export function useObjectsFavorites({ api, profileId, bucket, apiToken, objectsP
 	const favoriteSummaryQuery = useQuery({
 		queryKey: favoriteSummaryQueryKey,
 		enabled: enabled && !!profileId && !!bucket,
+		retry: false,
 		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: false }),
 	})
 	const favoriteItemsQuery = useQuery({
 		queryKey: favoriteItemsQueryKey,
 		enabled: enabled && !!profileId && !!bucket && hydrateItems,
+		retry: false,
 		queryFn: () => api.objects.listObjectFavorites({ profileId: profileId!, bucket, hydrate: true }),
 	})
 	const favoritesQuery = hydrateItems ? favoriteItemsQuery : favoriteSummaryQuery
