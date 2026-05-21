@@ -5,6 +5,8 @@ that need to stay close to the codebase.
 
 - [RUNBOOK.md](RUNBOOK.md): deployment, backup, restore, reverse-proxy, and incident operations
 - [TESTING.md](TESTING.md): local checks, focused reproduction script usage (`./scripts/repro_backend_focus.sh`), the minimal CI pair wrapper (`./scripts/check_ci_pair.sh`) including workflow lint but excluding bundle-budget and Playwright lanes, explicit bundle-budget guidance, browser-test lane split and geometry-guard rules, reviewer quick-check guidance, repo-local `actionlint` installation plus workflow lint, and CI-facing test commands
+- [BACKEND_ARCHITECTURE.md](BACKEND_ARCHITECTURE.md): backend package boundaries, handler rules, and extension checklist for job/provider work
+- [CODE_OWNERSHIP.md](CODE_OWNERSHIP.md): reviewer ownership boundaries that mirror `.github/CODEOWNERS`
 - [FRONTEND_STATE_BOUNDARIES.md](FRONTEND_STATE_BOUNDARIES.md): where auth state, API client state, `FullApp` shell state, and page shell/controller/composition layers belong after the provider split
 - [RELEASE_GATE.md](RELEASE_GATE.md): minimum release bar and required evidence
 - [PROVIDERS.md](PROVIDERS.md): provider support matrix and operator-facing capability notes

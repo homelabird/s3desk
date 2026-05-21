@@ -1,0 +1,24 @@
+# Default owner for repository-wide changes.
+* @homelabird
+
+# Runtime and API surface.
+/backend/ @homelabird
+/openapi.yml @homelabird
+
+# Frontend application, design-system, and browser tests.
+/frontend/ @homelabird
+/lighthouserc.js @homelabird
+
+# Deployment, release, and CI policy.
+/.github/ @homelabird
+/charts/ @homelabird
+/compose/ @homelabird
+/deploy/ @homelabird
+/docs/release/ @homelabird
+/k8s/ @homelabird
+/scripts/ @homelabird
+
+# Dependency notices and license evidence.
+/LICENSE* @homelabird
+/THIRD_PARTY_NOTICES.md @homelabird
+/third_party/ @homelabird
