@@ -96,14 +96,14 @@ test.describe('@check-smoke Objects page smoke', () => {
 		await moreButton.click()
 		const enableAdvancedMode = page.getByRole('menuitem', { name: /Advanced mode/i })
 		await expect(enableAdvancedMode).toBeVisible()
-		await expect(page.getByRole('menuitem', { name: /Global search/i })).toHaveCount(0)
+		await expect(page.getByRole('menuitem', { name: /Indexed Search/i })).toHaveCount(0)
 		await enableAdvancedMode.click()
 
 		await expect(moreButton).toBeVisible()
 		await expect(moreButton).toBeEnabled()
 		await moreButton.click()
 		await expect(page.getByRole('menuitem', { name: /Simple mode/i })).toBeVisible()
-		await expect(page.getByRole('menuitem', { name: /Global search/i })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Indexed Search/i })).toBeVisible()
 		await expect
 			.poll(() => page.evaluate(() => window.localStorage.getItem('objectsUIMode')))
 			.toBe(JSON.stringify('advanced'))
