@@ -94,6 +94,38 @@ func TestBuildPortableImportEntityVerification_BlocksManifestCountMismatch(t *te
 	}
 }
 
+func TestBuildPortableImportEntityVerification_AllowsLegacyBundleWithoutIndexReplacements(t *testing.T) {
+	t.Parallel()
+
+	emptySum := sha256.Sum256([]byte{})
+	manifestEntities := make(map[string]models.ServerMigrationEntityManifest, len(portableEntityOrder))
+	entityFiles := make(map[string][]byte, len(portableEntityOrder))
+	for _, name := range portableEntityOrder {
+		if name == "object_index_replacements" {
+			continue
+		}
+		manifestEntities[name] = models.ServerMigrationEntityManifest{
+			Count:  0,
+			SHA256: hex.EncodeToString(emptySum[:]),
+		}
+		entityFiles[name] = nil
+	}
+
+	verification := buildPortableImportEntityVerification(
+		manifestEntities,
+		entityFiles,
+		t.TempDir(),
+	)
+
+	if !verification.entityChecksumsVerified {
+		t.Fatal("expected checksum verification to pass for missing optional entity")
+	}
+	blockers := strings.Join(verification.blockers, "\n")
+	if strings.Contains(blockers, "object_index_replacements") {
+		t.Fatalf("optional object_index_replacements should not block legacy bundles, got %v", verification.blockers)
+	}
+}
+
 func TestBuildPortableImportEntityVerification_BlocksUnknownEntityFields(t *testing.T) {
 	t.Parallel()
 

@@ -196,9 +196,9 @@ func TestBuildJobLogReadResult_AdjustsAfterOffsetPastEnd(t *testing.T) {
 func TestJobReadHTTPService_ExecuteGet_ReturnsLoadedJob(t *testing.T) {
 	t.Parallel()
 
-	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
+	st, _, _, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
-	job := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+	job := createStoredJob(t, st, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
 		"bucket": "test-bucket",
 		"keys":   []any{"a.txt"},
 	})

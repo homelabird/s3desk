@@ -258,6 +258,9 @@ func TestHandleRestoreServerBackup_StagesBundleWithoutOverwritingLiveData(t *tes
 	if resp.Manifest.Format != serverBackupBundleFormat {
 		t.Fatalf("manifest.format=%q, want %q", resp.Manifest.Format, serverBackupBundleFormat)
 	}
+	if !strings.Contains(strings.Join(resp.Warnings, "\n"), "Backup payload checksum is missing") {
+		t.Fatalf("restore warnings=%v, want missing checksum warning", resp.Warnings)
+	}
 
 	if got, err := os.ReadFile(filepath.Join(resp.StagingDir, "thumbnails", "profile-a", "thumb.jpg")); err != nil || string(got) != "jpeg" {
 		t.Fatalf("restored thumbnail=%q err=%v, want jpeg", string(got), err)

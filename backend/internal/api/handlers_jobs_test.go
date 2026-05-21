@@ -101,7 +101,7 @@ func TestJobArtifactDownloadForSucceededZipJob(t *testing.T) {
 	st, _, srv, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
 
-	job := createJob(t, srv, profile.ID, jobs.JobTypeS3ZipPrefix, map[string]any{
+	job := createStoredJob(t, st, profile.ID, jobs.JobTypeS3ZipPrefix, map[string]any{
 		"bucket": "test-bucket",
 		"prefix": "reports/",
 	})
@@ -150,7 +150,7 @@ func TestJobArtifactReturnsNotFoundWhenArchiveMissing(t *testing.T) {
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
 
-	job := createJob(t, srv, profile.ID, jobs.JobTypeS3ZipPrefix, map[string]any{
+	job := createStoredJob(t, st, profile.ID, jobs.JobTypeS3ZipPrefix, map[string]any{
 		"bucket": "test-bucket",
 		"prefix": "reports/",
 	})
@@ -217,6 +217,9 @@ func TestJobCancelLifecycle(t *testing.T) {
 func TestJobCancelQueued(t *testing.T) {
 	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.66.0", nil
+	})
 
 	st, manager, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -285,7 +288,7 @@ func TestJobCancelInvalidStatus(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			job := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+			job := createStoredJob(t, st, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
 				"bucket": "test-bucket",
 				"keys":   []any{"a.txt"},
 			})
@@ -382,7 +385,7 @@ func TestJobRetryInvalidStatus(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			job := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+			job := createStoredJob(t, st, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
 				"bucket": "test-bucket",
 				"keys":   []any{"a.txt"},
 			})
@@ -406,6 +409,9 @@ func TestJobRetryInvalidStatus(t *testing.T) {
 func TestJobCreateQueueFullRollsBackCreatedJob(t *testing.T) {
 	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.66.0", nil
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -452,6 +458,9 @@ func TestJobCreateQueueFullRollsBackCreatedJob(t *testing.T) {
 func TestJobRetryQueueFullRollsBackCreatedJob(t *testing.T) {
 	lockTestEnv(t)
 	t.Setenv("JOB_QUEUE_CAPACITY", "1")
+	installJobsEnsureRcloneHook(t, func(context.Context) (string, string, error) {
+		return "rclone", "rclone v1.66.0", nil
+	})
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
@@ -788,6 +797,18 @@ func createJob(t *testing.T, srv *httptest.Server, profileID, jobType string, pa
 	}
 	var job models.Job
 	decodeJSONResponse(t, res, &job)
+	return job
+}
+
+func createStoredJob(t *testing.T, st *store.Store, profileID, jobType string, payload map[string]any) models.Job {
+	t.Helper()
+	job, err := st.CreateJob(context.Background(), profileID, store.CreateJobInput{
+		Type:    jobType,
+		Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("create stored job: %v", err)
+	}
 	return job
 }
 

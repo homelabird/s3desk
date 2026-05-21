@@ -44,6 +44,7 @@ var portableEntityOrder = []string{
 	"upload_multipart_uploads",
 	"upload_objects",
 	"object_index",
+	"object_index_replacements",
 	"object_favorites",
 }
 
@@ -516,21 +517,37 @@ func copyPortableAssetTree(srcRoot, dstRoot string) error {
 		if err := ensureServerRestoreDiskSpace(filepath.Dir(targetPath), relPath, info.Size()); err != nil {
 			return err
 		}
-		// #nosec G304 -- pathOnDisk is emitted by filepath.WalkDir under srcRoot.
-		srcFile, err := os.Open(pathOnDisk)
-		if err != nil {
-			return err
-		}
-		defer srcFile.Close()
-		// #nosec G304 -- targetPath is derived from dstRoot plus a filepath.Rel result under srcRoot.
-		dstFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
-		if err != nil {
-			return err
-		}
-		defer dstFile.Close()
-		_, err = io.Copy(dstFile, srcFile)
-		return err
+		return copyPortableAssetFile(pathOnDisk, targetPath)
 	})
+}
+
+func copyPortableAssetFile(pathOnDisk string, targetPath string) (err error) {
+	// #nosec G304 -- pathOnDisk is emitted by filepath.WalkDir under the source asset root.
+	srcFile, err := os.Open(pathOnDisk)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		closeErr := srcFile.Close()
+		if err == nil {
+			err = closeErr
+		}
+	}()
+
+	// #nosec G304 -- targetPath is derived from destination root plus a filepath.Rel result under the source asset root.
+	dstFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		closeErr := dstFile.Close()
+		if err == nil {
+			err = closeErr
+		}
+	}()
+
+	_, err = io.Copy(dstFile, srcFile)
+	return err
 }
 
 func portableBackupEncryptionKeyHint(encryptionKey string) string {

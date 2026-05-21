@@ -287,7 +287,7 @@ func (s *server) validateRunnableJobRequest(ctx context.Context, jobType string,
 		}
 	}
 
-	if isTransferJobType(jobType) {
+	if jobs.RequiresRclone(jobType) {
 		if _, _, err := jobs.EnsureRcloneCompatible(ctx); err != nil {
 			return newJobSubmissionValidationError(
 				http.StatusBadRequest,

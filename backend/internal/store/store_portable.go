@@ -39,6 +39,7 @@ type PortableImportCounts struct {
 	UploadMultipartUploads   int
 	UploadObjects            int
 	ObjectIndex              int
+	ObjectIndexReplacements  int
 	ObjectFavorites          int
 }
 
@@ -92,6 +93,12 @@ func (s *Store) ExportPortableEntityFiles(ctx context.Context) (PortableExportBu
 	}
 	files["object_index"] = marshalPortableEntityFile("object_index", objectIndex)
 
+	objectIndexReplacements, err := orderedRows[objectIndexReplacementRow](tx, "replacement_id, profile_id, bucket, object_key")
+	if err != nil {
+		return PortableExportBundle{}, err
+	}
+	files["object_index_replacements"] = marshalPortableEntityFile("object_index_replacements", objectIndexReplacements)
+
 	objectFavorites, err := orderedRows[objectFavoriteRow](tx, "profile_id, bucket, object_key")
 	if err != nil {
 		return PortableExportBundle{}, err
@@ -119,11 +126,13 @@ func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context,
 	uploadMultipartUploads := rows.uploadMultipartUploads
 	uploadObjects := rows.uploadObjects
 	objectIndex := rows.objectIndex
+	objectIndexReplacements := rows.objectIndexReplacements
 	objectFavorites := rows.objectFavorites
 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		deleteTables := []any{
 			&objectFavoriteRow{},
+			&objectIndexReplacementRow{},
 			&objectIndexRow{},
 			&uploadObjectRow{},
 			&uploadMultipartRow{},
@@ -180,6 +189,12 @@ func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context,
 			}
 			counts.ObjectIndex = len(objectIndex)
 		}
+		if len(objectIndexReplacements) > 0 {
+			if err := tx.CreateInBatches(objectIndexReplacements, 250).Error; err != nil {
+				return err
+			}
+			counts.ObjectIndexReplacements = len(objectIndexReplacements)
+		}
 		if len(objectFavorites) > 0 {
 			if err := tx.CreateInBatches(objectFavorites, 250).Error; err != nil {
 				return err
@@ -203,6 +218,7 @@ type portableImportEntityRows struct {
 	uploadMultipartUploads   []uploadMultipartRow
 	uploadObjects            []uploadObjectRow
 	objectIndex              []objectIndexRow
+	objectIndexReplacements  []objectIndexReplacementRow
 	objectFavorites          []objectFavoriteRow
 }
 
@@ -313,6 +329,15 @@ func parseAndValidatePortableEntityFiles(dataDir string, entityFiles map[string]
 	}); err != nil {
 		return rows, err
 	}
+	objectIndexReplacements, err := parsePortableRows[objectIndexReplacementRow](entityFiles["object_index_replacements"])
+	if err != nil {
+		return rows, fmt.Errorf("parse object_index_replacements: %w", err)
+	}
+	if err := validatePortableProfileReferences(profileIDs, "object_index_replacements", objectIndexReplacements, func(row objectIndexReplacementRow) string {
+		return row.ProfileID
+	}); err != nil {
+		return rows, err
+	}
 	objectFavorites, err := parsePortableRows[objectFavoriteRow](entityFiles["object_favorites"])
 	if err != nil {
 		return rows, fmt.Errorf("parse object_favorites: %w", err)
@@ -330,6 +355,7 @@ func parseAndValidatePortableEntityFiles(dataDir string, entityFiles map[string]
 	rows.uploadMultipartUploads = uploadMultipartUploads
 	rows.uploadObjects = uploadObjects
 	rows.objectIndex = objectIndex
+	rows.objectIndexReplacements = objectIndexReplacements
 	rows.objectFavorites = objectFavorites
 	return rows, nil
 }

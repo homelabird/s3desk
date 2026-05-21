@@ -38,6 +38,7 @@ Portable bundles currently carry:
 - `upload_multipart_uploads`
 - `upload_objects`
 - `object_index`
+- `object_index_replacements`
 - `object_favorites`
 - optional thumbnail assets
 

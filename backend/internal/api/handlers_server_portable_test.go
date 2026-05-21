@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -42,6 +43,7 @@ func TestHandleGetServerBackup_PortableArchiveIncludesEntityFiles(t *testing.T) 
 		"data/upload_multipart_uploads.jsonl",
 		"data/upload_objects.jsonl",
 		"data/object_index.jsonl",
+		"data/object_index_replacements.jsonl",
 		"data/object_favorites.jsonl",
 	} {
 		if _, ok := entries[name]; !ok {
@@ -685,6 +687,36 @@ func TestHandleImportPortableBackup_PasswordProtectedBundleImportsWithMatchingPa
 	}
 	if profiles[0].ID != profile.ID {
 		t.Fatalf("imported profile id=%q, want %q", profiles[0].ID, profile.ID)
+	}
+}
+
+func TestCopyPortableAssetTreeCopiesManyFiles(t *testing.T) {
+	t.Parallel()
+
+	srcRoot := filepath.Join(t.TempDir(), "assets")
+	dstRoot := filepath.Join(t.TempDir(), "assets")
+	for i := 0; i < 256; i++ {
+		path := filepath.Join(srcRoot, "thumbnails", "profile-a", "bucket-a", fmt.Sprintf("thumb-%03d.jpg", i))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatalf("mkdir source thumbnail: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(fmt.Sprintf("jpeg-%03d", i)), 0o600); err != nil {
+			t.Fatalf("write source thumbnail: %v", err)
+		}
+	}
+
+	if err := copyPortableAssetTree(srcRoot, dstRoot); err != nil {
+		t.Fatalf("copyPortableAssetTree() error = %v", err)
+	}
+
+	for _, name := range []string{"thumb-000.jpg", "thumb-255.jpg"} {
+		got, err := os.ReadFile(filepath.Join(dstRoot, "thumbnails", "profile-a", "bucket-a", name))
+		if err != nil {
+			t.Fatalf("read copied thumbnail %s: %v", name, err)
+		}
+		if !strings.HasPrefix(string(got), "jpeg-") {
+			t.Fatalf("copied thumbnail %s=%q, want jpeg payload", name, string(got))
+		}
 	}
 }
 

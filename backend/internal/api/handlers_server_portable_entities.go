@@ -40,6 +40,9 @@ func buildPortableImportEntityVerificationWithOptions(
 	for _, name := range portableEntityOrder {
 		manifestEntity, ok := manifestEntities[name]
 		if !ok {
+			if isOptionalPortableEntity(name) {
+				continue
+			}
 			entityChecksumsVerified = false
 			blockers = append(blockers, fmt.Sprintf("Portable manifest is missing entity summary for %s.", name))
 			continue
@@ -84,6 +87,10 @@ func buildPortableImportEntityVerificationWithOptions(
 	}
 }
 
+func isOptionalPortableEntity(name string) bool {
+	return name == "object_index_replacements"
+}
+
 func countPortableEntityRows(data []byte) (int, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
 		return 0, nil
@@ -111,6 +118,7 @@ func applyPortableImportCounts(results []models.ServerPortableImportEntityResult
 		"upload_multipart_uploads":   counts.UploadMultipartUploads,
 		"upload_objects":             counts.UploadObjects,
 		"object_index":               counts.ObjectIndex,
+		"object_index_replacements":  counts.ObjectIndexReplacements,
 		"object_favorites":           counts.ObjectFavorites,
 	}
 	out := append([]models.ServerPortableImportEntityResult(nil), results...)

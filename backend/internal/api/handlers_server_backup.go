@@ -1288,6 +1288,9 @@ func buildServerRestoreHelperCommand(stagingDir string, manifest models.ServerMi
 
 func buildServerRestoreWarnings(manifest models.ServerMigrationManifest, validation models.ServerRestoreValidation, destinationHasEncryptionKey bool) []string {
 	warnings := append([]string{}, manifest.Warnings...)
+	if !validation.PayloadChecksumPresent {
+		warnings = append(warnings, "Backup payload checksum is missing. Only continue with staged restore data from a trusted legacy bundle.")
+	}
 	if manifest.EncryptionEnabled && !destinationHasEncryptionKey {
 		warnings = append(warnings, "This server is currently running without ENCRYPTION_KEY, but the restored data still requires the source ENCRYPTION_KEY when you start from the staged DATA_DIR.")
 	}

@@ -73,7 +73,7 @@ func TestJobDeleteCompletedRemovesPersistedArtifacts(t *testing.T) {
 	st, _, srv, dataDir := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
 
-	job := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+	job := createStoredJob(t, st, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
 		"bucket": "test-bucket",
 		"keys":   []any{"a.txt"},
 	})
@@ -153,7 +153,7 @@ func TestJobDeleteRejectsActiveStatus(t *testing.T) {
 
 	st, _, srv, _ := newTestJobsServer(t, testEncryptionKey(), false)
 	profile := createTestProfile(t, st)
-	job := createJob(t, srv, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
+	job := createStoredJob(t, st, profile.ID, jobs.JobTypeS3DeleteObjects, map[string]any{
 		"bucket": "test-bucket",
 		"keys":   []any{"a.txt"},
 	})

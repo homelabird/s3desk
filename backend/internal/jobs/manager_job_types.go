@@ -28,6 +28,28 @@ func isTransferJobType(jobType string) bool {
 	return strings.HasPrefix(jobType, "transfer_")
 }
 
+func RequiresRclone(jobType string) bool {
+	switch jobType {
+	case JobTypeTransferSyncLocalToS3,
+		JobTypeTransferSyncStagingToS3,
+		JobTypeTransferSyncS3ToLocal,
+		JobTypeTransferDeletePrefix,
+		JobTypeTransferCopyObject,
+		JobTypeTransferMoveObject,
+		JobTypeTransferCopyBatch,
+		JobTypeTransferMoveBatch,
+		JobTypeTransferCopyPrefix,
+		JobTypeTransferMovePrefix,
+		JobTypeS3ZipPrefix,
+		JobTypeS3ZipObjects,
+		JobTypeS3DeleteObjects,
+		JobTypeS3IndexObjects:
+		return true
+	default:
+		return false
+	}
+}
+
 func transferDirectionForJobType(jobType string) string {
 	switch jobType {
 	case JobTypeTransferSyncLocalToS3, JobTypeTransferSyncStagingToS3:

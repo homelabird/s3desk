@@ -46,24 +46,6 @@ func (s *server) handleCancelJob(w http.ResponseWriter, r *http.Request) {
 	newJobMutationHTTPService(s).handleCancelJob(w, r)
 }
 
-func isTransferJobType(jobType string) bool {
-	switch jobType {
-	case jobs.JobTypeTransferSyncLocalToS3,
-		jobs.JobTypeTransferSyncS3ToLocal,
-		jobs.JobTypeTransferSyncStagingToS3,
-		jobs.JobTypeTransferDeletePrefix,
-		jobs.JobTypeTransferCopyObject,
-		jobs.JobTypeTransferMoveObject,
-		jobs.JobTypeTransferCopyBatch,
-		jobs.JobTypeTransferMoveBatch,
-		jobs.JobTypeTransferCopyPrefix,
-		jobs.JobTypeTransferMovePrefix:
-		return true
-	default:
-		return false
-	}
-}
-
 func validateS3ZipPrefixPayload(payload map[string]any) error {
 	bucket, _ := payload["bucket"].(string)
 	prefix, _ := payload["prefix"].(string)
