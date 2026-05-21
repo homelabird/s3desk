@@ -12,6 +12,7 @@ const baseProps = {
 	controlsUnsupportedReason: 'unsupported',
 	deletePending: false,
 	deletingBucket: null,
+	onOpenObjects: vi.fn(),
 	onOpenControls: vi.fn(),
 	onOpenPolicy: vi.fn(),
 	onDelete: vi.fn(),

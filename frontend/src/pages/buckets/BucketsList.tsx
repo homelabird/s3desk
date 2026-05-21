@@ -13,6 +13,7 @@ export type BucketsListProps = {
 	controlsUnsupportedReason: string
 	deletePending: boolean
 	deletingBucket: string | null
+	onOpenObjects: (bucketName: string) => void
 	onOpenControls: (bucketName: string) => void
 	onOpenPolicy: (bucketName: string) => void
 	onDelete: (bucketName: string) => Promise<void>
@@ -55,6 +56,7 @@ export function BucketsList(props: BucketsListProps) {
 									policySupported={props.policySupported}
 									policyUnsupportedReason={props.policyUnsupportedReason}
 									deleteLoading={props.deletePending && props.deletingBucket === row.name}
+									onOpenObjects={props.onOpenObjects}
 									onOpenControls={props.onOpenControls}
 									onOpenPolicy={props.onOpenPolicy}
 									onDelete={props.onDelete}
@@ -105,6 +107,7 @@ export function BucketsList(props: BucketsListProps) {
 											policySupported={props.policySupported}
 											policyUnsupportedReason={props.policyUnsupportedReason}
 											deleteLoading={props.deletePending && props.deletingBucket === row.name}
+											onOpenObjects={props.onOpenObjects}
 											onOpenControls={props.onOpenControls}
 											onOpenPolicy={props.onOpenPolicy}
 											onDelete={props.onDelete}

@@ -13,20 +13,11 @@ import {
 } from './objectsMediaState'
 import type { ObjectPreview } from './objectsTypes'
 
-type ObjectsDetailsThumbnailSectionProps = {
-	canOpenLargePreview: boolean
-	detailsKey: string
-	isImageObject: boolean
-	onOpenLargePreview: () => void
-	thumbnail?: ReactNode
-}
-
 type ObjectsDetailsPreviewSectionProps = {
 	canCancelPreview: boolean
 	canOpenLargePreview: boolean
 	detailsKey: string
 	detailsMeta: ObjectMeta
-	isVideoObject: boolean
 	onCancelPreview: () => void
 	onLoadPreview: () => void
 	onOpenLargePreview: () => void
@@ -34,52 +25,11 @@ type ObjectsDetailsPreviewSectionProps = {
 	previewFallbackThumbnail?: ReactNode
 }
 
-export function ObjectsDetailsThumbnailSection({
-	canOpenLargePreview,
-	detailsKey,
-	isImageObject,
-	onOpenLargePreview,
-	thumbnail,
-}: ObjectsDetailsThumbnailSectionProps) {
-	if (!thumbnail) return null
-
-	return (
-		<div className={styles.detailsSection}>
-			<div className={styles.detailsSectionHeader}>
-				<Typography.Text strong>Thumbnail</Typography.Text>
-				{isImageObject ? (
-					<Button
-						data-testid="objects-details-thumbnail-open-large"
-						size="small"
-						type="text"
-						onClick={onOpenLargePreview}
-						className={styles.detailsSectionActionButton}
-						aria-label="Open large"
-						title="Open large"
-					>
-						Open large
-					</Button>
-				) : null}
-			</div>
-			<div className={styles.detailsMediaCenter}>
-				{canOpenLargePreview ? (
-					<button type="button" className={styles.previewTriggerButton} onClick={onOpenLargePreview} aria-label={`Open large preview for ${detailsKey}`}>
-						{thumbnail}
-					</button>
-				) : (
-					thumbnail
-				)}
-			</div>
-		</div>
-	)
-}
-
 export function ObjectsDetailsPreviewSection({
 	canCancelPreview,
 	canOpenLargePreview,
 	detailsKey,
 	detailsMeta,
-	isVideoObject,
 	onCancelPreview,
 	onLoadPreview,
 	onOpenLargePreview,
@@ -137,7 +87,7 @@ export function ObjectsDetailsPreviewSection({
 
 			<ObjectsDetailsPreviewBody
 				detailsKey={detailsKey}
-				isVideoObject={isVideoObject}
+				canOpenLargePreview={canOpenLargePreview}
 				onOpenLargePreview={onOpenLargePreview}
 				preview={preview}
 				previewFallbackThumbnail={previewFallbackThumbnail}
@@ -147,14 +97,14 @@ export function ObjectsDetailsPreviewSection({
 }
 
 function ObjectsDetailsPreviewBody({
+	canOpenLargePreview,
 	detailsKey,
-	isVideoObject,
 	onOpenLargePreview,
 	preview,
 	previewFallbackThumbnail,
 }: Pick<
 	ObjectsDetailsPreviewSectionProps,
-	'detailsKey' | 'isVideoObject' | 'onOpenLargePreview' | 'preview' | 'previewFallbackThumbnail'
+	'canOpenLargePreview' | 'detailsKey' | 'onOpenLargePreview' | 'preview' | 'previewFallbackThumbnail'
 >) {
 	if (preview?.status === 'loading') {
 		const descriptor = getObjectPreviewDescriptor(preview)
@@ -236,15 +186,22 @@ function ObjectsDetailsPreviewBody({
 			</div>
 		)
 	}
-	if (isVideoObject && previewFallbackThumbnail) {
+	if (previewFallbackThumbnail) {
 		const descriptor = getObjectMediaStateDescriptor('fallback-thumbnail-shown')
-		return (
+		const fallbackFrame = (
 			<div className={styles.previewFrame}>
 				<div className={styles.detailsMediaCenter}>{previewFallbackThumbnail}</div>
 				<Typography.Text type="secondary" className={styles.detailsPreviewCaption}>
 					{descriptor.recoveryHint}
 				</Typography.Text>
 			</div>
+		)
+		return canOpenLargePreview ? (
+			<button type="button" className={styles.previewTriggerButton} onClick={onOpenLargePreview} aria-label={`Open large preview for ${detailsKey}`}>
+				{fallbackFrame}
+			</button>
+		) : (
+			fallbackFrame
 		)
 	}
 	const descriptor = getObjectPreviewDescriptor(null)

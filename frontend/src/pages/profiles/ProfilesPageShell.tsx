@@ -26,7 +26,7 @@ export function ProfilesPageShell(props: ProfilesPageShellProps) {
 			<PageHeader
 				eyebrow="Workspace"
 				title="Profiles"
-				subtitle="Create connection profiles, verify endpoints, and choose the active workspace used across buckets, objects, uploads, and jobs."
+				subtitle="Create connection profiles, verify endpoints, and choose the active workspace used across buckets, objects, and Activity."
 				actions={
 					<Space wrap>
 						<Button onClick={props.onOpenImportModal}>Import YAML</Button>

@@ -21,6 +21,7 @@ vi.mock('../useBucketsPageDeleteFlow', () => ({
 
 describe('useBucketsPageFeatureState', () => {
 	it('composes overlay, create, and delete flows from scoped buckets page state', () => {
+		const navigate = vi.fn()
 		const scopeState = {
 			currentScopeKey: 'token-a:profile-1',
 			latestScopeKeyRef: { current: 'token-a:profile-1' },
@@ -46,7 +47,7 @@ describe('useBucketsPageFeatureState', () => {
 				apiToken: 'token-a',
 				profileId: 'profile-1',
 				queryClient: { invalidateQueries: vi.fn() } as never,
-				navigate: vi.fn(),
+				navigate,
 				scopeState: scopeState as never,
 				selectedProfile: selectedProfile as never,
 				capabilities: capabilities as never,
@@ -87,6 +88,15 @@ describe('useBucketsPageFeatureState', () => {
 			...overlaysState,
 			...createState,
 			...deleteFlow,
+			openObjectsBucket: expect.any(Function),
+		})
+		result.current.openObjectsBucket('primary-bucket')
+		expect(navigate).toHaveBeenCalledWith('/objects', {
+			state: {
+				openBucket: true,
+				bucket: 'primary-bucket',
+				prefix: '',
+			},
 		})
 	})
 })

@@ -13,12 +13,14 @@ describe('BucketActions', () => {
 				policySupported
 				policyUnsupportedReason="unsupported"
 				deleteLoading={false}
+				onOpenObjects={vi.fn()}
 				onOpenControls={vi.fn()}
 				onOpenPolicy={vi.fn()}
 				onDelete={vi.fn()}
 			/>,
 		)
 
+		expect(screen.getByRole('button', { name: 'Open objects for bucket primary-bucket' })).toHaveTextContent('Open')
 		expect(screen.getByRole('button', { name: 'Controls for bucket primary-bucket' })).toHaveTextContent('Controls')
 		expect(screen.getByRole('button', { name: 'Policy for bucket primary-bucket' })).toHaveTextContent('Policy')
 		expect(screen.getByRole('button', { name: 'Delete bucket primary-bucket' })).toHaveTextContent('Delete')
@@ -33,6 +35,7 @@ describe('BucketActions', () => {
 				policySupported={false}
 				policyUnsupportedReason="Policy unsupported"
 				deleteLoading={false}
+				onOpenObjects={vi.fn()}
 				onOpenControls={vi.fn()}
 				onOpenPolicy={vi.fn()}
 				onDelete={vi.fn()}

@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
 
 import type { APIClientShape } from '../../api/client'
@@ -57,11 +58,24 @@ export function useBucketsPageFeatureState({
 		setDeletingBucketState: scopeState.setDeletingBucketState,
 		setBucketNotEmptyDialogState: scopeState.setBucketNotEmptyDialogState,
 	})
+	const openObjectsBucket = useCallback(
+		(bucket: string) => {
+			navigate('/objects', {
+				state: {
+					openBucket: true,
+					bucket,
+					prefix: '',
+				},
+			})
+		},
+		[navigate],
+	)
 
 	return {
 		...overlaysState,
 		...createState,
 		...deleteFlow,
+		openObjectsBucket,
 	}
 }
 

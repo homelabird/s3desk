@@ -282,7 +282,7 @@ test.describe('Objects image preview', () => {
 		await expect(modal).toHaveCount(0)
 	})
 
-	test('video objects defer details thumbnails until the user explicitly loads a larger frame', async ({ page }) => {
+	test('video objects reuse the details preview fallback until the user explicitly loads a larger frame', async ({ page }) => {
 		await stubObjectsImagePreviewApi(page, fixtures)
 		await seedStorage(page)
 		const listThumbnailResponse = page.waitForResponse((response) => {
@@ -302,7 +302,8 @@ test.describe('Objects image preview', () => {
 		})
 		await page.getByRole('menuitem', { name: 'Details' }).click()
 
-		await expect(page.getByTestId('objects-details-thumbnail-open-large')).toHaveCount(0)
+		await expect(page.getByTestId('objects-details-preview-section')).toBeVisible()
+		await expect(page.getByTestId('objects-details-preview-open-large')).toBeVisible()
 		await expect(page.getByText('Use Load preview to fetch a larger thumbnail frame.')).toBeVisible()
 
 		await page.getByTestId('objects-details-preview-load').click()

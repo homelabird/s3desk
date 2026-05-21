@@ -70,6 +70,7 @@ function buildBucketsListProps({
 		controlsUnsupportedReason: featureState.controlsUnsupportedReason,
 		deletePending: featureState.deleteMutation.isPending,
 		deletingBucket: scopeState.deletingBucket,
+		onOpenObjects: featureState.openObjectsBucket,
 		onOpenControls: featureState.openControlsModal,
 		onOpenPolicy: featureState.openPolicyModal,
 		onDelete: featureState.deleteBucket,

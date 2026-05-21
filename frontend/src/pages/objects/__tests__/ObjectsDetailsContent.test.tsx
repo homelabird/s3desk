@@ -117,6 +117,7 @@ describe('ObjectsDetailsContent', () => {
 		expect(screen.getByTestId('objects-details-content')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-details-action-row')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-details-preview-actions')).toBeInTheDocument()
+		expect(screen.queryByText('Thumbnail')).not.toBeInTheDocument()
 
 		for (const name of ['Copy key', 'Download (client)', 'URL', 'Copy', 'Move', 'Delete'] as const) {
 			expect(screen.getByRole('button', { name }).className).toContain(styles.detailsActionButton)
@@ -124,7 +125,6 @@ describe('ObjectsDetailsContent', () => {
 
 		expect(screen.getByTestId('objects-details-preview-open-large').className).toContain(styles.detailsSectionActionButton)
 		expect(screen.getByTestId('objects-details-preview-load').className).toContain(styles.detailsSectionActionButton)
-		expect(screen.getByTestId('objects-details-thumbnail-open-large').className).toContain(styles.detailsSectionActionButton)
 		expect(
 			screen
 				.getAllByText('image/png')

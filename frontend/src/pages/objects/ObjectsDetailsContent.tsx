@@ -1,4 +1,4 @@
-import { Alert, Button, Divider, Empty, Spin, Typography } from 'antd'
+import { Alert, Button, Empty, Spin, Typography } from 'antd'
 import type { ReactNode } from 'react'
 
 import type { ObjectMeta } from '../../api/types'
@@ -9,7 +9,7 @@ import {
 	selectProfileFirstSentenceHint,
 } from '../../lib/actionHints'
 import { ObjectsDetailsActions } from './ObjectsDetailsActions'
-import { ObjectsDetailsThumbnailSection, ObjectsDetailsPreviewSection } from './ObjectsDetailsMediaSections'
+import { ObjectsDetailsPreviewSection } from './ObjectsDetailsMediaSections'
 import { ObjectsDetailsMetadata } from './ObjectsDetailsMetadata'
 import styles from './ObjectsDetails.module.css'
 import { guessPreviewKind } from './objectsListUtils'
@@ -45,9 +45,7 @@ export type ObjectsDetailsContentProps = {
 
 export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 	const previewKind = props.detailsMeta ? guessPreviewKind(props.detailsMeta.contentType, props.detailsMeta.key) : null
-	const isImageObject = previewKind === 'image'
-	const isVideoObject = previewKind === 'video'
-	const canOpenLargePreview = isImageObject || isVideoObject
+	const canOpenLargePreview = previewKind === 'image' || previewKind === 'video'
 	const previewFallbackThumbnail = props.previewThumbnail ?? props.thumbnail
 
 	if (!props.hasProfile) {
@@ -105,20 +103,11 @@ export function ObjectsDetailsContent(props: ObjectsDetailsContentProps) {
 			) : props.detailsMeta ? (
 				<>
 					<ObjectsDetailsMetadata detailsMeta={props.detailsMeta} />
-					<ObjectsDetailsThumbnailSection
-						canOpenLargePreview={canOpenLargePreview}
-						detailsKey={props.detailsKey}
-						isImageObject={isImageObject}
-						onOpenLargePreview={props.onOpenLargePreview}
-						thumbnail={props.thumbnail}
-					/>
-					<Divider className={styles.detailsDivider} />
 					<ObjectsDetailsPreviewSection
 						canCancelPreview={props.canCancelPreview}
 						canOpenLargePreview={canOpenLargePreview}
 						detailsKey={props.detailsKey}
 						detailsMeta={props.detailsMeta}
-						isVideoObject={isVideoObject}
 						onCancelPreview={props.onCancelPreview}
 						onLoadPreview={props.onLoadPreview}
 						onOpenLargePreview={props.onOpenLargePreview}

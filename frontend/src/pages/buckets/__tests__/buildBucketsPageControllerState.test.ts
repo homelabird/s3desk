@@ -43,6 +43,7 @@ describe('buildBucketsPageControllerState', () => {
 			submitCreateBucket: vi.fn(),
 			deleteMutation: { isPending: true },
 			deleteBucket: vi.fn(),
+			openObjectsBucket: vi.fn(),
 			openBucketNotEmptyObjects: vi.fn(),
 			openBucketNotEmptyDeleteJob: vi.fn(),
 		}
@@ -81,6 +82,7 @@ describe('buildBucketsPageControllerState', () => {
 				controlsUnsupportedReason: 'Not supported',
 				deletePending: true,
 				deletingBucket: 'primary-bucket',
+				onOpenObjects: featureState.openObjectsBucket,
 				onOpenControls: featureState.openControlsModal,
 				onOpenPolicy: featureState.openPolicyModal,
 				onDelete: featureState.deleteBucket,
@@ -141,6 +143,7 @@ describe('buildBucketsPageControllerState', () => {
 				submitCreateBucket: vi.fn(),
 				deleteMutation: { isPending: false },
 				deleteBucket: vi.fn(),
+				openObjectsBucket: vi.fn(),
 				openBucketNotEmptyObjects: vi.fn(),
 				openBucketNotEmptyDeleteJob: vi.fn(),
 			} as never,

@@ -1,4 +1,4 @@
-import { DeleteOutlined, FileTextOutlined, SettingOutlined } from '@ant-design/icons'
+import { DeleteOutlined, FileTextOutlined, FolderOpenOutlined, SettingOutlined } from '@ant-design/icons'
 import { Button, Tooltip } from 'antd'
 
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
@@ -11,6 +11,7 @@ type BucketActionsProps = {
 	policySupported: boolean
 	policyUnsupportedReason: string
 	deleteLoading: boolean
+	onOpenObjects: (bucketName: string) => void
 	onOpenControls: (bucketName: string) => void
 	onOpenPolicy: (bucketName: string) => void
 	onDelete: (bucketName: string) => Promise<void>
@@ -21,6 +22,16 @@ export function BucketActions(props: BucketActionsProps) {
 
 	return (
 		<div className={styles.actionGroup}>
+			<Button
+				size="small"
+				type="primary"
+				icon={<FolderOpenOutlined />}
+				aria-label={`Open objects for ${bucketActionContext}`}
+				onClick={() => props.onOpenObjects(props.bucketName)}
+			>
+				Open
+			</Button>
+
 			{props.controlsSupported ? (
 				<Tooltip title="Manage bucket controls">
 					<span>
