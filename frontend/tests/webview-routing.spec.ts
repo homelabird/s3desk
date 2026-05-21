@@ -95,7 +95,7 @@ test.describe('webview routing', () => {
 
 		await expectRouteState('/buckets', () => navigateTo('Buckets'), page.getByRole('button', { name: 'New Bucket' }))
 
-		await expectRouteState('/jobs', () => navigateTo('Activity'), page.getByRole('heading', { name: 'Jobs' }))
+		await expectRouteState('/jobs', () => navigateTo('Activity'), page.getByRole('heading', { name: 'Activity' }))
 
 		await navigateTo('Objects')
 		await expect(page).toHaveURL(/\/objects$/)

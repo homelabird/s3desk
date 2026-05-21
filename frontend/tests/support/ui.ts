@@ -218,10 +218,10 @@ export async function openObjectsGlobalSearchDialog(
 		triggerButtonName?: string | RegExp
 	} = {},
 ): Promise<Locator> {
-	const dialogName = 'Global Search (Indexed)'
+	const dialogName = 'Indexed Search'
 	const dialogLocator = dialogByName(page, dialogName)
 	return ensureDialogOpen(page, dialogName, async () => {
-		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Bucket search|Global Search \(Indexed\)/, dialogOpenWaitMs, {
+		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Indexed Search/, dialogOpenWaitMs, {
 			stopWhen: () => dialogLocator.isVisible(),
 		})
 		if (await dialogLocator.isVisible().catch(() => false)) {
@@ -266,7 +266,7 @@ export async function gotoJobsPage(
 		return gotoWithDynamicImportRecovery(
 			page,
 			'/jobs',
-			options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Jobs' })),
+			options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Activity' })),
 			{
 				timeout: options.timeout,
 				maxAttempts: options.maxAttempts,
@@ -275,7 +275,7 @@ export async function gotoJobsPage(
 		)
 	}
 	await page.goto('/jobs', { waitUntil: 'load' })
-	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Jobs' })))(page)
+	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Activity' })))(page)
 	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
 	return locator
 }
@@ -288,7 +288,7 @@ export async function gotoJobsPageRaw(
 	} = {},
 ): Promise<Locator> {
 	await page.goto('/jobs')
-	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Jobs' })))(page)
+	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Activity' })))(page)
 	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
 	return locator
 }

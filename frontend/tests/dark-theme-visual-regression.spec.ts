@@ -30,8 +30,8 @@ test.describe('Dark theme visual regression @visual', () => {
 	test('Objects global search drawer remains stable in dark mode', async ({ page }) => {
 		await setupDarkObjectsVisualPage(page)
 
-		await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
-		const drawer = dialogByName(page, 'Global Search (Indexed)')
+		await page.getByRole('button', { name: 'Indexed Search' }).click()
+		const drawer = dialogByName(page, 'Indexed Search')
 		await expect(drawer).toBeVisible()
 		await drawer.getByPlaceholder('Search query (substring)').fill('preview')
 		await expect(drawer.getByText('preview.png')).toBeVisible()

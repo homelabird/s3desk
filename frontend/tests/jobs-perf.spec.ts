@@ -183,7 +183,7 @@ test.describe('@perf jobs performance', () => {
 
 		const started = Date.now()
 		await page.goto('/jobs')
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+		await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
 		await expect(page.getByText('200 jobs loaded', { exact: true })).toBeVisible()
 		const elapsed = Date.now() - started
 		test.info().annotations.push({ type: 'perf', description: `jobs_page_render_ms=${elapsed}` })
@@ -195,7 +195,7 @@ test.describe('@perf jobs performance', () => {
 		await setupJobsApiMocks(page, 200)
 
 		await page.goto('/jobs')
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+		await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
 		await expect(page.getByText('200 jobs loaded', { exact: true })).toBeVisible()
 
 		const typeFilter = page.getByRole('combobox', { name: 'Job type filter' })
@@ -218,7 +218,7 @@ test.describe('@perf jobs performance', () => {
 		await setupJobsApiMocks(page, 50, '[info] hello\n[info] world\n')
 
 		await page.goto('/jobs')
-		await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+		await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
 		await expect(page.locator('code', { hasText: 'job-0' })).toBeVisible()
 
 		const jobRow = page.getByRole('row', { name: /job-0/ }).first()

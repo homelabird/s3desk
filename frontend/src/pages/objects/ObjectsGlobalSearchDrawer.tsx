@@ -68,7 +68,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 			onClose={props.onClose}
 			width={drawerWidth}
 			placement="right"
-			title="Global Search (Indexed)"
+			title="Indexed Search"
 			dataTestId="objects-global-search-sheet"
 			compactMobile
 		>
@@ -83,8 +83,8 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							type="info"
 							showIcon
 							icon={<InfoCircleOutlined />}
-							title="Search the whole bucket"
-							description="Use Search for bucket-wide indexed matches, then add Filters to narrow by prefix, extension, size, or modified date."
+							title="Search the object index"
+							description="Search indexed bucket contents, then narrow by prefix, extension, size, or modified date. If no index exists, create one below."
 							className={styles.globalSearchIntro}
 						/>
 					</section>
@@ -117,7 +117,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 								type="info"
 								showIcon
 								title="Index not found"
-								description="Create an s3_index_objects job first, then search again."
+								description="Create an object-index job first, then search again."
 								action={
 									<Button type="primary" size="small" className={styles.globalSearchCompactButton} onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
 										Index bucket

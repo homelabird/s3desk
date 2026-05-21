@@ -228,7 +228,10 @@ describe('useJobsPageControllerState', () => {
       }),
     )
     expect(result.current.presentation.table.isCompact).toBe(true)
-    expect(result.current.presentation.toolbar.topActionsMenu.items?.[0]).toMatchObject({
+    const deleteJobAction = result.current.presentation.toolbar.topActionsMenu.items?.find((item) => {
+      return typeof item === 'object' && item !== null && 'key' in item && item.key === 'new_delete_job'
+    })
+    expect(deleteJobAction).toMatchObject({
       key: 'new_delete_job',
       disabled: true,
     })

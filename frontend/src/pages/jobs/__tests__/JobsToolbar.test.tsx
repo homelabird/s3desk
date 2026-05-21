@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { uploadFilesOrFoldersFromDeviceHint, uploadsUnsupportedHint } from '../../../lib/actionHints'
+import { uploadsUnsupportedHint } from '../../../lib/actionHints'
 import { ensureDomShims } from '../../../test/domShims'
 import type { ColumnKey } from '../useJobsColumnsVisibility'
 import { JobsToolbar } from '../JobsToolbar'
@@ -92,8 +92,10 @@ describe('JobsToolbar', () => {
 			/>,
 		)
 
-		expect(screen.getByRole('heading', { name: 'Launch work' })).toBeInTheDocument()
-		expect(screen.getByRole('heading', { name: 'Troubleshooting' })).toBeInTheDocument()
+		expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument()
+		expect(screen.queryByRole('heading', { name: 'Launch work' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('heading', { name: 'Troubleshooting' })).not.toBeInTheDocument()
+		expect(screen.getByRole('heading', { name: 'Needs attention' })).toBeInTheDocument()
 		expect(screen.getByRole('heading', { name: 'Queue health' })).toBeInTheDocument()
 		expect(screen.getByText('Active')).toBeInTheDocument()
 		expect(screen.getByText('3')).toBeInTheDocument()
@@ -500,7 +502,7 @@ describe('JobsToolbar', () => {
 		expect(screen.getByText(uploadsUnsupportedHint())).toBeInTheDocument()
 	})
 
-	it('uses the shared device-upload tooltip copy when uploads are supported', async () => {
+	it('hides recovery signals when the queue is healthy', () => {
 		setMatchMedia(false)
 		render(
 			<JobsToolbar
@@ -549,7 +551,8 @@ describe('JobsToolbar', () => {
 			/>,
 		)
 
-		fireEvent.mouseEnter(screen.getByText('Upload…').closest('button')!)
-		expect(await screen.findByText(uploadFilesOrFoldersFromDeviceHint())).toBeInTheDocument()
+		expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument()
+		expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument()
+		expect(screen.queryByText('No active troubleshooting warnings.')).not.toBeInTheDocument()
 	})
 })

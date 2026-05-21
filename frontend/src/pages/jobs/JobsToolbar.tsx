@@ -1,9 +1,9 @@
-import { DownloadOutlined, FilterOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
-import { Alert, Button, Checkbox, Grid, Space, Tag, Tooltip, Typography, type MenuProps } from 'antd'
+import { FilterOutlined, MoreOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
+import { Alert, Button, Checkbox, Grid, Space, Tag, Typography, type MenuProps } from 'antd'
 import { useEffect, useState } from 'react'
 
 import type { JobStatus } from '../../api/types'
-import { uploadFilesOrFoldersFromDeviceHint, uploadsUnsupportedHint } from '../../lib/actionHints'
+import { uploadsUnsupportedHint } from '../../lib/actionHints'
 import { DatalistInput } from '../../components/DatalistInput'
 import { MenuPopover } from '../../components/MenuPopover'
 import { NativeSelect } from '../../components/NativeSelect'
@@ -169,45 +169,18 @@ export function JobsToolbar(props: JobsToolbarProps) {
 		<>
 			<PageHeader
 				eyebrow="Operations"
-				title="Jobs"
+				title="Activity"
 				subtitle={
 					props.activeProfileName
-						? `${props.activeProfileName} profile is active. Scan active work, failures, and recovery signals before narrowing the queue.`
-						: 'Scan active work, failures, and recovery signals before narrowing the queue.'
+						? `${props.activeProfileName} profile is active. Review background work, failures, and recent queue history.`
+						: 'Review background work, failures, and recent queue history.'
 				}
-			/>
-
-			<div className={styles.topRegion}>
-				<PageSection
-					title="Launch work"
-					description="Start new background work. Filters and layout controls stay below the live queue state."
-				>
-					<div className={styles.launchActions}>
-						<Tooltip
-							title={
-								!props.uploadSupported
-									? props.uploadDisabledReason ?? uploadsUnsupportedHint()
-									: uploadFilesOrFoldersFromDeviceHint()
-							}
-						>
-							<span>
-								<Button
-									type="primary"
-									icon={<PlusOutlined />}
-									onClick={props.onOpenCreateUpload}
-									disabled={props.isOffline || !props.uploadSupported}
-								>
-									Upload…
-								</Button>
-							</span>
-						</Tooltip>
-						<Tooltip title="Download a folder or prefix from S3 to this device">
-							<span>
-								<Button icon={<DownloadOutlined />} onClick={props.onOpenCreateDownload} disabled={props.isOffline}>
-									Download…
-								</Button>
-							</span>
-						</Tooltip>
+				actions={
+					<Space wrap>
+						<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
+						<Button icon={<ReloadOutlined />} onClick={props.onRefreshJobs} loading={props.jobsRefreshing} disabled={props.isOffline}>
+							Refresh
+						</Button>
 						<MenuPopover menu={props.topActionsMenu} align="end" scopeKey={props.scopeKey}>
 							{({ toggle, open }) => (
 								<Button icon={<MoreOutlined />} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
@@ -215,93 +188,93 @@ export function JobsToolbar(props: JobsToolbarProps) {
 								</Button>
 							)}
 						</MenuPopover>
-					</div>
-				</PageSection>
+					</Space>
+				}
+			/>
 
+			{troubleshootingClean ? null : (
 				<PageSection
-					title="Troubleshooting"
-					description="Realtime, provider support, bucket lookup, and failure recovery signals that may need operator action."
+					title="Needs attention"
+					description="Only active recovery signals are shown here."
 				>
 					<div className={styles.troubleshootingPanel}>
-						<div className={styles.realtimeStatusRow}>
-							<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
-							<Typography.Text type="secondary">
-								{props.eventsConnected
-									? 'Live job updates are connected.'
-									: props.isOffline
-										? 'Network is offline; retry when connectivity returns.'
-										: realtimePaused
-											? 'Auto-retry paused.'
-											: props.eventsRetryCount > 0
-												? `Reconnecting attempt ${props.eventsRetryCount}.`
-												: 'Reconnecting.'}
-							</Typography.Text>
-						</div>
-
-						{troubleshootingClean ? (
-							<Alert type="success" showIcon title="No active troubleshooting warnings." />
-						) : (
-							<div className={styles.alertStack}>
-								{failedJobsAvailable ? (
-									<Alert
-										type="error"
-										showIcon
-										title={`${props.jobsStatusSummary.failed.toLocaleString()} failed job${props.jobsStatusSummary.failed === 1 ? '' : 's'} need review`}
-										description="Filter to failed jobs, open details, then use retry, logs, or delete actions on the affected rows."
-										action={
-											<Button
-												size="small"
-												onClick={() => props.onStatusFilterChange('failed')}
-												disabled={props.statusFilter === 'failed'}
-											>
-												Show failed jobs
-											</Button>
-										}
-									/>
-								) : null}
-								{props.isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
-								{!props.uploadSupported ? (
-									<Alert
-										type="info"
-										showIcon
-										title="Upload actions are disabled for this provider"
-										description={props.uploadDisabledReason ?? uploadsUnsupportedHint()}
-									/>
-								) : null}
-								{props.bucketLookupErrorDescription ? (
-									<Alert
-										type="warning"
-										showIcon
-										title="Bucket lookup unavailable"
-										description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually in Upload, Download, and Delete dialogs.`}
-									/>
-								) : null}
-								{!props.eventsConnected && !props.isOffline ? (
-									<Alert
-										type="warning"
-										showIcon
-										title="Realtime updates disconnected"
-										description={
-											realtimePaused
-												? 'Auto-retry paused. Use Retry realtime to reconnect.'
+						{!props.eventsConnected || props.isOffline ? (
+							<div className={styles.realtimeStatusRow}>
+								<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
+								<Typography.Text type="secondary">
+									{props.eventsConnected
+										? 'Live job updates are connected.'
+										: props.isOffline
+											? 'Network is offline; retry when connectivity returns.'
+											: realtimePaused
+												? 'Auto-retry paused.'
 												: props.eventsRetryCount > 0
-													? `Reconnecting… attempt ${props.eventsRetryCount}`
-													: 'Reconnecting…'
-										}
-										action={
-											realtimePaused ? (
-												<Button size="small" onClick={props.onRetryRealtime}>
-													Retry realtime
-												</Button>
-											) : null
-										}
-									/>
-								) : null}
+													? `Reconnecting attempt ${props.eventsRetryCount}.`
+													: 'Reconnecting.'}
+								</Typography.Text>
 							</div>
-						)}
+						) : null}
+
+						<div className={styles.alertStack}>
+							{failedJobsAvailable ? (
+								<Alert
+									type="error"
+									showIcon
+									title={`${props.jobsStatusSummary.failed.toLocaleString()} failed job${props.jobsStatusSummary.failed === 1 ? '' : 's'} need review`}
+									description="Filter to failed jobs, open details, then use retry, logs, or delete actions on the affected rows."
+									action={
+										<Button
+											size="small"
+											onClick={() => props.onStatusFilterChange('failed')}
+											disabled={props.statusFilter === 'failed'}
+										>
+											Show failed jobs
+										</Button>
+									}
+								/>
+							) : null}
+							{props.isOffline ? <Alert type="warning" showIcon title="Offline: job actions are disabled." /> : null}
+							{!props.uploadSupported ? (
+								<Alert
+									type="info"
+									showIcon
+									title="Upload actions are disabled for this provider"
+									description={props.uploadDisabledReason ?? uploadsUnsupportedHint()}
+								/>
+							) : null}
+							{props.bucketLookupErrorDescription ? (
+								<Alert
+									type="warning"
+									showIcon
+									title="Bucket lookup unavailable"
+									description={`${props.bucketLookupErrorDescription} You can still type a bucket name manually in Upload, Download, and Delete dialogs.`}
+								/>
+							) : null}
+							{!props.eventsConnected && !props.isOffline ? (
+								<Alert
+									type="warning"
+									showIcon
+									title="Realtime updates disconnected"
+									description={
+										realtimePaused
+											? 'Auto-retry paused. Use Retry realtime to reconnect.'
+											: props.eventsRetryCount > 0
+												? `Reconnecting… attempt ${props.eventsRetryCount}`
+												: 'Reconnecting…'
+									}
+									action={
+										realtimePaused ? (
+											<Button size="small" onClick={props.onRetryRealtime}>
+												Retry realtime
+											</Button>
+										) : null
+									}
+								/>
+							) : null}
+						</div>
 					</div>
 				</PageSection>
-			</div>
+			)}
 
 			<PageSection
 				title="Queue health"
@@ -336,7 +309,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 
 			<PageSection
 				title="Filters & layout"
-				description="Search loaded jobs by id, payload, summary, or errors. You can also narrow the queue by status, job type, or error code, then adjust visible columns and refresh the current result set. Use Objects for copy, move, and indexing workflows."
+				description="Search loaded jobs by id, payload, summary, or errors. You can also narrow the queue by status, job type, or error code, then adjust visible columns. Use Objects for copy, move, and indexing workflows."
 				actions={
 					<Typography.Text type="secondary" className={styles.sectionMeta}>
 						{props.jobsCount ? `${props.jobsCount.toLocaleString()} jobs loaded` : 'No jobs loaded yet'}
@@ -419,9 +392,6 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							</Button>
 						)}
 					</PopoverSurface>
-					<Button icon={<ReloadOutlined />} onClick={props.onRefreshJobs} loading={props.jobsRefreshing} disabled={props.isOffline}>
-						Refresh
-					</Button>
 				</div>
 				{useCompactFilters ? (
 					<Typography.Text type="secondary" className={styles.mobileFiltersHint} data-testid="jobs-mobile-filters-hint">

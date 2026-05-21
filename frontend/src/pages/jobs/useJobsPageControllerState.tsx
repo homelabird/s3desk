@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useCallback, useMemo } from 'react'
 
 import type { APIClientShape } from '../../api/client'
@@ -138,24 +138,6 @@ export function useJobsPageControllerState(props: Props) {
     setLogDrawerRequest,
   })
 
-  const topActionsMenu = useMemo<MenuProps>(
-    () => ({
-      items: [
-        {
-          key: 'new_delete_job',
-          icon: <DeleteOutlined />,
-          label: 'New Delete Job',
-          danger: true,
-          disabled: props.isOffline,
-        },
-      ],
-      onClick: ({ key }) => {
-        if (key === 'new_delete_job') openDeleteJobModal()
-      },
-    }),
-    [openDeleteJobModal, props.isOffline],
-  )
-
   const { selectedProfile, uploadSupported, uploadDisabledReason, bucketsQuery, bucketOptions, jobsQuery, jobs } =
     useJobsPageQueries({
       api: props.api,
@@ -169,6 +151,37 @@ export function useJobsPageControllerState(props: Props) {
       eventsConnected,
     })
   const bucketLookupErrorDescription = bucketsQuery.isError ? formatErr(bucketsQuery.error) : null
+  const topActionsMenu = useMemo<MenuProps>(
+    () => ({
+      items: [
+        {
+          key: 'new_upload',
+          icon: <CloudUploadOutlined />,
+          label: 'Upload...',
+          disabled: props.isOffline || !uploadSupported,
+        },
+        {
+          key: 'new_download',
+          icon: <DownloadOutlined />,
+          label: 'Download...',
+          disabled: props.isOffline,
+        },
+        {
+          key: 'new_delete_job',
+          icon: <DeleteOutlined />,
+          label: 'New Delete Job',
+          danger: true,
+          disabled: props.isOffline,
+        },
+      ],
+      onClick: ({ key }) => {
+        if (key === 'new_upload') setCreateOpen(true)
+        if (key === 'new_download') setCreateDownloadOpen(true)
+        if (key === 'new_delete_job') openDeleteJobModal()
+      },
+    }),
+    [openDeleteJobModal, props.isOffline, setCreateDownloadOpen, setCreateOpen, uploadSupported],
+  )
 
   const {
     createDeleteMutation,

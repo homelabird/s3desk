@@ -406,11 +406,11 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByTestId('objects-list-controls-root')).toHaveAttribute('data-compact', 'true')
 		await expect(page.getByTestId('objects-list-controls-compact-footer')).toBeVisible()
 		await expect(page.getByTestId('objects-list-controls-compact-meta')).toContainText('1 folders, 0 files')
-		await expect(page.getByText('Search here, or use Bucket search across the whole bucket.')).toBeVisible()
+		await expect(page.getByText('Search here, or use Indexed Search across the whole bucket.')).toBeVisible()
 
 		await expect(page.getByLabel('Search current folder')).toBeVisible()
 		await expect(page.getByRole('button', { name: /Filters$/ })).toBeVisible()
-		await expect(page.getByRole('button', { name: /Bucket search$/ })).toBeVisible()
+		await expect(page.getByRole('button', { name: /Indexed Search$/ })).toBeVisible()
 
 		const viewMode = page.getByRole('group', { name: 'View mode' })
 		await expect(viewMode.getByRole('button', { name: /List$/ })).toHaveAttribute('aria-pressed', 'true')
@@ -433,9 +433,9 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(status).toBeVisible()
 		await expect(status).toHaveAttribute('data-has-action', 'false')
 		await expect(status).toContainText('Search paused at 3,000 items')
-		await expect(status).toContainText('Use Indexed search above to scan the whole bucket.')
+		await expect(status).toContainText('Use Indexed Search above to scan the whole bucket.')
 
-		const indexedSearchButton = page.getByRole('button', { name: 'Global Search (Indexed)' })
+		const indexedSearchButton = page.getByRole('button', { name: 'Indexed Search' })
 		await expect(indexedSearchButton).toHaveCount(1)
 		await indexedSearchButton.click()
 
@@ -458,7 +458,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		})
 		await openObjectsPage(page)
 
-		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
+		await page.getByRole('button', { name: /Indexed Search/ }).click()
 		const drawer = page.getByTestId('objects-global-search-sheet')
 		await expect(drawer).toBeVisible()
 		await drawer.getByLabel('Search query').fill('alpha')
@@ -491,7 +491,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		})
 		await openObjectsPage(page)
 
-		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
+		await page.getByRole('button', { name: /Indexed Search/ }).click()
 		const drawer = page.getByTestId('objects-global-search-sheet')
 		await expect(drawer).toBeVisible()
 		await drawer.getByLabel('Search query').fill('alpha')

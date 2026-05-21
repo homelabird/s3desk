@@ -119,8 +119,8 @@ test.describe('dark theme accessibility scans', () => {
 		await expectNoA11yViolations(page, page.getByTestId('app-header'))
 		await expectNoA11yViolations(page, page.getByRole('navigation', { name: 'Primary' }))
 
-		await page.getByRole('button', { name: 'Global Search (Indexed)' }).click()
-		const drawer = dialogByName(page, 'Global Search (Indexed)')
+		await page.getByRole('button', { name: 'Indexed Search' }).click()
+		const drawer = dialogByName(page, 'Indexed Search')
 		await expect(drawer).toBeVisible()
 		await drawer.getByPlaceholder('Search query (substring)').fill('preview')
 		await expect(drawer.getByText('preview.png')).toBeVisible()

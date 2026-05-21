@@ -118,9 +118,9 @@ describe('ObjectsListControls', () => {
 		render(<ObjectsListControls {...props} />)
 
 		expect(screen.getByText('Search paused at 500 items')).toBeInTheDocument()
-		expect(screen.getByText('Use Global Search (Indexed) to scan the full bucket.')).toBeInTheDocument()
+		expect(screen.getByText(/Use Indexed Search to scan the full bucket/)).toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: 'Global Search (Indexed)' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Indexed Search' }))
 		expect(props.onOpenGlobalSearch).toHaveBeenCalledTimes(1)
 	})
 
@@ -132,8 +132,8 @@ describe('ObjectsListControls', () => {
 		expect(screen.getByTestId('objects-list-controls-compact-footer')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-list-controls-compact-meta')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()
-		expect(screen.getByRole('button', { name: /Bucket search$/ })).toBeInTheDocument()
-		expect(screen.getByText('Search here, or use Bucket search across the whole bucket.')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: /Indexed Search$/ })).toBeInTheDocument()
+		expect(screen.getByText('Search here, or use Indexed Search across the whole bucket.')).toBeInTheDocument()
 	})
 
 	it('keeps capped search guidance compact on mid-width layouts without duplicating the indexed CTA', () => {
@@ -149,9 +149,9 @@ describe('ObjectsListControls', () => {
 
 		expect(screen.getByTestId('objects-list-controls-status-compact')).toHaveAttribute('data-has-action', 'false')
 		expect(screen.getByText('Search paused at 500 items')).toBeInTheDocument()
-		expect(screen.getByText('Use Indexed search above to scan the whole bucket.')).toBeInTheDocument()
+		expect(screen.getByText('Use Indexed Search above to scan the whole bucket.')).toBeInTheDocument()
 
-		const indexedSearchButtons = screen.getAllByRole('button', { name: 'Global Search (Indexed)' })
+		const indexedSearchButtons = screen.getAllByRole('button', { name: 'Indexed Search' })
 		expect(indexedSearchButtons).toHaveLength(1)
 
 		fireEvent.click(indexedSearchButtons[0]!)

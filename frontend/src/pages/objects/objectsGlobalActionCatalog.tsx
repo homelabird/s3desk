@@ -122,9 +122,9 @@ export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 		},
 		{
 			id: 'global_search',
-			label: 'Global search',
+			label: 'Indexed Search',
 			icon: <SearchOutlined />,
-			keywords: 'index search',
+			keywords: 'index search bucket',
 			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
 			audience: 'advanced',
 			run: () => deps.onOpenGlobalSearch(),

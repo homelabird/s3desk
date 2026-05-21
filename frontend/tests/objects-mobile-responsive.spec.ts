@@ -152,8 +152,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await treeDrawer.getByLabel('Close', { exact: true }).click()
 		await expect(treeDrawer).toHaveCount(0)
 
-		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
-		const searchDrawer = dialogByName(page, 'Global Search (Indexed)')
+		await page.getByRole('button', { name: /Indexed Search/ }).click()
+		const searchDrawer = dialogByName(page, 'Indexed Search')
 		await expect(searchDrawer).toBeVisible()
 		await expect(searchDrawer.getByLabel('Search query')).toBeVisible()
 		await searchDrawer.getByLabel('Close', { exact: true }).click()
@@ -178,8 +178,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await treeDrawer.getByLabel('Close', { exact: true }).click()
 		await expect(treeDrawer).toHaveCount(0)
 
-		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
-		const searchDrawer = dialogByName(page, 'Global Search (Indexed)')
+		await page.getByRole('button', { name: /Indexed Search/ }).click()
+		const searchDrawer = dialogByName(page, 'Indexed Search')
 		await expect(searchDrawer).toBeVisible()
 		await searchDrawer.getByPlaceholder('Search query (substring)').fill('alpha')
 		const resultCard = page.locator(OBJECTS_GLOBAL_SEARCH_RESULT_CARD_SELECTOR).first()
@@ -298,9 +298,9 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await openObjectsMobilePage(page)
 
-		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
+		await page.getByRole('button', { name: /Indexed Search/ }).click()
 
-		const drawer = dialogByName(page, 'Global Search (Indexed)')
+		const drawer = dialogByName(page, 'Indexed Search')
 		await expect(drawer).toBeVisible()
 		await expect(drawer.getByPlaceholder('Search query (substring)')).toBeVisible()
 		await expect(drawer.getByRole('button', { name: /Refresh/ })).toBeVisible()
@@ -311,8 +311,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await drawer.getByLabel('Close', { exact: true }).click()
 		await expect(drawer).toHaveCount(0)
 
-		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
-		const reopenedDrawer = dialogByName(page, 'Global Search (Indexed)')
+		await page.getByRole('button', { name: /Indexed Search/ }).click()
+		const reopenedDrawer = dialogByName(page, 'Indexed Search')
 		await expect(reopenedDrawer).toBeVisible()
 		await expect(reopenedDrawer.getByPlaceholder('Search query (substring)')).toHaveValue('wrap')
 		await expect(reopenedDrawer.getByLabel('Extension filter')).toHaveValue('log')
@@ -322,9 +322,9 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 320, height: 568 })
 		await openObjectsMobilePage(page)
 
-		await page.getByRole('button', { name: /Bucket search|Global Search \(Indexed\)/ }).click()
+		await page.getByRole('button', { name: /Indexed Search/ }).click()
 
-		const drawer = dialogByName(page, 'Global Search (Indexed)')
+		const drawer = dialogByName(page, 'Indexed Search')
 		await expect(drawer).toBeVisible()
 		await drawer.getByPlaceholder('Search query (substring)').fill('alpha')
 

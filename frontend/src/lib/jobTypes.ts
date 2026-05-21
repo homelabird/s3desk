@@ -96,7 +96,7 @@ const JOB_TYPES: JobTypeInfo[] = [
 		type: 's3_index_objects',
 		category: 's3',
 		label: 'Build object index',
-		description: 'Builds or refreshes the object index used by Global Search (Indexed).',
+		description: 'Builds or refreshes the object index used by Indexed Search.',
 	},
 ]
 
