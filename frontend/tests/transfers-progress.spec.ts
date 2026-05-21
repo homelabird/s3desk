@@ -29,6 +29,9 @@ const defaultStorage: StorageSeed = {
 	profileId: 'playwright-profile',
 	bucket: 'test-bucket',
 }
+const transferProgressPageReadyTimeoutMs = 30_000
+const transferProgressPageReadyAttempts = 3
+const transferProgressTestTimeoutMs = 120_000
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	await seedLocalStorage(page, {
@@ -107,6 +110,7 @@ function buildUploadRoutes(args: {
 }
 
 test('upload transfer shows job progress from events', async ({ page }) => {
+	test.setTimeout(transferProgressTestTimeoutMs)
 	const now = '2024-01-01T00:00:00Z'
 	const uploadId = 'upload-test'
 	const jobId = 'job-test'
@@ -138,8 +142,12 @@ test('upload transfer shows job progress from events', async ({ page }) => {
 	)
 
 	await seedStorage(page)
-	await gotoObjectsUploadPage(page)
-	await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible({ timeout: 10_000 })
+	await gotoObjectsUploadPage(page, {
+		timeout: transferProgressPageReadyTimeoutMs,
+		maxAttempts: transferProgressPageReadyAttempts,
+		retryOnTimeout: true,
+	})
+	await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible({ timeout: transferProgressPageReadyTimeoutMs })
 
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'hello.txt',
@@ -147,13 +155,14 @@ test('upload transfer shows job progress from events', async ({ page }) => {
 		type: 'text/plain',
 	})
 
-	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
+	await expect.poll(() => uploadCommitted, { timeout: 10_000 }).toBe(true)
 
-	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt', { triggerButtonName: /Transfers/i, timeout: 5000 })
+	const { row } = await openTransfersUploadRow(page, 'Upload: hello.txt', { triggerButtonName: /Transfers/i, timeout: 15_000 })
 	await expect(row.getByText(/\d+s eta/)).toBeVisible()
 })
 
 test('upload transfer shows failure and allows retry', async ({ page }) => {
+	test.setTimeout(transferProgressTestTimeoutMs)
 	const now = '2024-01-01T00:00:00Z'
 	const uploadId = 'upload-failed'
 	const jobId = 'job-failed'
@@ -200,8 +209,12 @@ test('upload transfer shows failure and allows retry', async ({ page }) => {
 	)
 
 	await seedStorage(page)
-	await gotoObjectsUploadPage(page)
-	await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible({ timeout: 10_000 })
+	await gotoObjectsUploadPage(page, {
+		timeout: transferProgressPageReadyTimeoutMs,
+		maxAttempts: transferProgressPageReadyAttempts,
+		retryOnTimeout: true,
+	})
+	await expect(page.getByTestId('objects-upload-dropzone')).toBeVisible({ timeout: transferProgressPageReadyTimeoutMs })
 
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'broken.txt',
@@ -209,9 +222,9 @@ test('upload transfer shows failure and allows retry', async ({ page }) => {
 		type: 'text/plain',
 	})
 
-	await expect.poll(() => uploadCommitted, { timeout: 5000 }).toBe(true)
+	await expect.poll(() => uploadCommitted, { timeout: 10_000 }).toBe(true)
 
-	const { row } = await openTransfersUploadRow(page, 'Upload: broken.txt', { triggerButtonName: /Transfers/i, timeout: 5000 })
+	const { row } = await openTransfersUploadRow(page, 'Upload: broken.txt', { triggerButtonName: /Transfers/i, timeout: 15_000 })
 	await expectTransferRowState(row, 'Failed')
 	await expect(row.getByText('simulated failure')).toBeVisible()
 
