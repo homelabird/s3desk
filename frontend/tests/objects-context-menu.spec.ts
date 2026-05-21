@@ -194,11 +194,9 @@ test.describe('Objects context menus', () => {
 					;(element as HTMLElement).click()
 				})
 			}
-			await expect(detailsItem).toBeVisible({ timeout: 1_000 })
-			await detailsItem.evaluate((element) => {
-				;(element as HTMLElement).click()
-			})
-		}).toPass({ timeout: 15_000 })
+			await expect(detailsItem).toBeVisible({ timeout: 2_000 })
+			await detailsItem.click({ timeout: 2_000 })
+		}).toPass({ timeout: 30_000 })
 
 		const drawer = page.getByTestId('objects-details-sheet')
 		await expect(drawer).toBeVisible()

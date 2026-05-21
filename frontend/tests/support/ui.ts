@@ -588,7 +588,12 @@ export async function openTransfersDialog(
 		if (await dialogLocator.isVisible().catch(() => false)) {
 			return
 		}
-		await button.click()
+		await button.click({ timeout: 2_000 }).catch(async (error) => {
+			if (await dialogLocator.isVisible().catch(() => false)) {
+				return
+			}
+			throw error
+		})
 	})
 
 	if (options.tabName) {
