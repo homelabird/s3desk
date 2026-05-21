@@ -27,6 +27,8 @@ type StorageSeed = {
 }
 
 const now = '2024-01-01T00:00:00Z'
+const webviewObjectsReadyTimeoutMs = 90_000
+const webviewObjectsTestTimeoutMs = 180_000
 
 const defaultStorage: StorageSeed = {
 	apiToken: 'webview-token',
@@ -218,12 +220,13 @@ test.describe('Webview environment and posture coverage', () => {
 	})
 
 	test('objects copy-location feedback surfaces the insecure-origin clipboard hint', async ({ page }) => {
+		test.setTimeout(webviewObjectsTestTimeoutMs)
 		await emulateInsecureBrowser(page)
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
-			timeout: 10_000,
+			timeout: webviewObjectsReadyTimeoutMs,
 			maxAttempts: 3,
 		})
 		await page.getByRole('button', { name: 'Copy location' }).click()

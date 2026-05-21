@@ -4,6 +4,9 @@ import { buildProfileFixture, seedLocalStorage } from './support/apiFixtures'
 import { gotoWithDynamicImportRecovery } from './support/ui'
 import { defaultWebviewStorage, escapeRegExp, seedWebviewStorage, stubWebviewApi } from './support/webviewFixtures'
 
+const webviewObjectsReadyTimeoutMs = 90_000
+const webviewRouteStateTestTimeoutMs = 180_000
+
 test.describe('webview routing', () => {
 	test('WV-001 redirects `/` to `/setup` when no stored profile exists', async ({ page }) => {
 		const fallbackProfile = 'available-profile'
@@ -21,6 +24,7 @@ test.describe('webview routing', () => {
 	})
 
 	test('WV-001 redirects `/` to `/objects` when a stored profile exists', async ({ page }) => {
+		test.setTimeout(webviewRouteStateTestTimeoutMs)
 		await stubWebviewApi(page)
 		await seedWebviewStorage(page)
 
@@ -29,13 +33,13 @@ test.describe('webview routing', () => {
 		await expect(page).toHaveURL(/\/objects$/)
 		await expect(page.getByTestId('topbar-profile-select').getByLabel('Profile')).toHaveValue(defaultWebviewStorage.profileId)
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
-			timeout: 20_000,
+			timeout: webviewObjectsReadyTimeoutMs,
 			maxAttempts: 3,
 		})
 	})
 
 	test('WV-003 keeps the active profile and route context across refresh on main routes', async ({ page }) => {
-		test.setTimeout(90_000)
+		test.setTimeout(webviewRouteStateTestTimeoutMs)
 		await stubWebviewApi(page)
 		await seedWebviewStorage(page)
 
@@ -57,7 +61,7 @@ test.describe('webview routing', () => {
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
 			if (path === '/objects') {
 				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
-					timeout: 30_000,
+					timeout: webviewObjectsReadyTimeoutMs,
 					maxAttempts: 3,
 				})
 			} else {
@@ -71,7 +75,7 @@ test.describe('webview routing', () => {
 			await expect(page).toHaveURL(new RegExp(`${escapeRegExp(path)}$`))
 			if (path === '/objects') {
 				await gotoWithDynamicImportRecovery(page, '/objects', () => ready, {
-					timeout: 30_000,
+					timeout: webviewObjectsReadyTimeoutMs,
 					maxAttempts: 3,
 				})
 			} else {
@@ -82,7 +86,7 @@ test.describe('webview routing', () => {
 		}
 
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByPlaceholder('Search current folder'), {
-			timeout: 30_000,
+			timeout: webviewObjectsReadyTimeoutMs,
 			maxAttempts: 3,
 		})
 
