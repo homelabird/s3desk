@@ -13,9 +13,6 @@ permissions:
   contents: read
   pull-requests: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 concurrency:
   group: frontend-e2e-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -31,13 +28,13 @@ jobs:
       frontend_bundle_contract: ${{ steps.filter.outputs.frontend_bundle_contract }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Detect frontend and browser-surface change scope
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             browser_facing:
@@ -105,10 +102,10 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -127,7 +124,7 @@ jobs:
 
       - name: Upload bundle report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-bundle-report
           path: |
@@ -283,10 +280,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25.10"
           cache-dependency-path: backend/go.sum
@@ -344,10 +341,10 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -380,7 +377,7 @@ jobs:
 
       - name: Upload check-smoke Playwright artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-check-smoke-results
           path: frontend/test-results-check-smoke
@@ -429,10 +426,10 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -454,7 +451,7 @@ jobs:
 
       - name: Upload core mock Playwright artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-core-mock-results-${{ matrix.artifact_suffix }}
           path: frontend/test-results-core-${{ matrix.artifact_suffix }}
@@ -541,10 +538,10 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -574,7 +571,7 @@ jobs:
 
       - name: Upload visual regression HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-regression-e2e-html-report
           path: frontend/playwright-report-visual
@@ -582,7 +579,7 @@ jobs:
 
       - name: Upload visual regression Playwright results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-regression-e2e-test-results
           path: frontend/test-results-visual
@@ -631,10 +628,10 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -664,7 +661,7 @@ jobs:
 
       - name: Upload mobile responsive HTML report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobile-responsive-e2e-html-report
           path: frontend/playwright-report-mobile-responsive
@@ -672,7 +669,7 @@ jobs:
 
       - name: Upload mobile responsive Playwright results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobile-responsive-e2e-test-results
           path: frontend/test-results-mobile-responsive
@@ -730,10 +727,10 @@ jobs:
       S3DESK_COMPOSE_PROVIDER: docker
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -780,7 +777,7 @@ jobs:
 
       - name: Upload live Playwright artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-live-results
           path: |
