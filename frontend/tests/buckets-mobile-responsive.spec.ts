@@ -4,7 +4,7 @@ import {
 	installProfilesBucketsMobileResponsiveFixtures,
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
-import { gotoBucketsPage } from './support/ui'
+import { clickBucketCardManageAction, gotoBucketsPage } from './support/ui'
 
 const primaryBucket = 'responsive-bucket'
 
@@ -97,22 +97,18 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		})
 
 		const bucketCard = getBucketCard(page, primaryBucket)
-		const policyButton = bucketCard.getByRole('button', { name: /Policy/ })
-		const controlsButton = bucketCard.getByRole('button', { name: /Controls/ })
-		const deleteButton = bucketCard.getByRole('button', { name: /Delete/ })
+		const manageButton = bucketCard.getByRole('button', { name: `Manage bucket ${primaryBucket}` })
 
-		await expectMinTouchHeight(controlsButton)
-		await expectMinTouchHeight(policyButton)
-		await expectMinTouchHeight(deleteButton)
+		await expectMinTouchHeight(manageButton)
 
-		await policyButton.click()
+		await clickBucketCardManageAction(page, bucketCard, primaryBucket, /Advanced policy/)
 		const policySheet = page.getByRole('dialog', { name: `Policy: ${primaryBucket}` })
 		await expect(policySheet).toBeVisible()
 		await expect(policySheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()
 		await policySheet.getByLabel('Close', { exact: true }).click()
 		await expect(policySheet).toHaveCount(0)
 
-		await controlsButton.click()
+		await clickBucketCardManageAction(page, bucketCard, primaryBucket, /Controls/)
 		const controlsSheet = page.getByRole('dialog', { name: `Controls: ${primaryBucket}` })
 		await expect(controlsSheet).toBeVisible()
 		await expect(controlsSheet.getByTestId('bucket-governance-mobile-shell')).toBeVisible()
@@ -131,7 +127,7 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		})
 
 		const bucketCard = getBucketCard(page, primaryBucket)
-		await bucketCard.getByRole('button', { name: 'Delete' }).click()
+		await clickBucketCardManageAction(page, bucketCard, primaryBucket, /Delete bucket/)
 
 		const confirmDialog = page.getByRole('dialog', { name: `Delete bucket "${primaryBucket}"?` })
 		await expect(confirmDialog).toBeVisible()
@@ -173,9 +169,9 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 		const lastCard = getBucketCard(page, lastBucket)
 		await lastCard.scrollIntoViewIfNeeded()
 		await expect(lastCard).toBeVisible()
-		await expect(lastCard.getByRole('button', { name: /Policy/ })).toBeVisible()
+		await expect(lastCard.getByRole('button', { name: `Manage bucket ${lastBucket}` })).toBeVisible()
 
-		await lastCard.getByRole('button', { name: 'Delete' }).click()
+		await clickBucketCardManageAction(page, lastCard, lastBucket, /Delete bucket/)
 
 		const confirmDialog = page.getByRole('dialog', { name: `Delete bucket "${lastBucket}"?` })
 		await expect(confirmDialog).toBeVisible()

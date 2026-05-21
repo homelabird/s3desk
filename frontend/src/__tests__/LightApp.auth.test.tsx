@@ -251,7 +251,8 @@ describe('LightApp auth gate', () => {
 		await waitFor(() => {
 			expect(screen.getByText('No profile selected')).toBeInTheDocument()
 		})
-		expect(screen.getByRole('button', { name: 'buckets' })).toBeDisabled()
+		expect(screen.getByRole('button', { name: 'Open Objects' })).toBeDisabled()
+		expect(screen.getByRole('button', { name: 'Manage Buckets' })).toBeDisabled()
 	})
 
 	it('clears an invalid stored active profile when the current server profile list no longer contains it', async () => {
@@ -273,7 +274,8 @@ describe('LightApp auth gate', () => {
 		await waitFor(() => {
 			expect(screen.getByText('No profile selected')).toBeInTheDocument()
 		})
-		expect(screen.getByRole('button', { name: 'buckets' })).toBeDisabled()
+		expect(screen.getByRole('button', { name: 'Open Objects' })).toBeDisabled()
+		expect(screen.getByRole('button', { name: 'Manage Buckets' })).toBeDisabled()
 		await waitFor(() => {
 			expect(window.localStorage.getItem(serverScopedStorageKey('app', 'token-a', 'profileId'))).toBe('null')
 		})

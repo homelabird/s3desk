@@ -103,7 +103,8 @@ test.describe('@check-smoke Objects page smoke', () => {
 		await expect(moreButton).toBeEnabled()
 		await moreButton.click()
 		await expect(page.getByRole('menuitem', { name: /Simple mode/i })).toBeVisible()
-		await expect(page.getByRole('menuitem', { name: /Indexed Search/i })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Indexed Search/i })).toHaveCount(0)
+		await expect(page.getByRole('button', { name: /Indexed Search/i })).toBeVisible()
 		await expect
 			.poll(() => page.evaluate(() => window.localStorage.getItem('objectsUIMode')))
 			.toBe(JSON.stringify('advanced'))

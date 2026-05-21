@@ -16,7 +16,7 @@ import {
 	installSettingsMobileResponsiveFixtures,
 	seedSettingsMobileResponsiveStorage,
 } from './support/settingsLoginMobileResponsive'
-import { dialogByName, gotoBucketsPage, gotoJobsPage, gotoWithDynamicImportRecovery, objectsListRow } from './support/ui'
+import { clickBucketCardManageAction, dialogByName, gotoBucketsPage, gotoJobsPage, gotoWithDynamicImportRecovery, objectsListRow } from './support/ui'
 
 const bucketName = 'responsive-bucket'
 const jobsProfileId = 'jobs-mobile-profile'
@@ -72,7 +72,7 @@ async function setupDarkBucketGovernanceSheet(page: Page) {
 	await expectDarkThemeApplied(page)
 
 	const bucketCard = page.getByTestId('buckets-list-compact').locator('article').filter({ hasText: bucketName }).first()
-	await bucketCard.getByRole('button', { name: 'Controls' }).click()
+	await clickBucketCardManageAction(page, bucketCard, bucketName, /Controls/)
 
 	const sheet = dialogByName(page, `Controls: ${bucketName}`)
 	await expect(sheet).toBeVisible()

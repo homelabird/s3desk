@@ -33,8 +33,6 @@ function buildProps(
 		favorites: [],
 		favoritesOnly: false,
 		onFavoritesOnlyChange: vi.fn(),
-		openDetailsOnClick: false,
-		onOpenDetailsOnClickChange: vi.fn(),
 		query: '',
 		onQueryChange: vi.fn(),
 		onSelectFavorite: vi.fn(),
@@ -234,5 +232,46 @@ describe('ObjectsFavoritesPane', () => {
 		)
 
 		expect(screen.queryByTestId('objects-favorites-summary')).not.toBeInTheDocument()
+	})
+
+	it('keeps favorites behavior controls hidden until the favorites-only filter is active', () => {
+		const { rerender } = render(
+			<ObjectsFavoritesPane
+				{...buildProps({
+					favoriteCount: 1,
+					favorites: [
+						{
+							key: 'docs/readme.txt',
+							size: 12,
+							lastModified: '2026-03-09T00:00:00Z',
+							createdAt: '2026-03-09T00:00:00Z',
+						},
+					],
+				})}
+			/>,
+		)
+
+		expect(screen.queryByTestId('objects-favorites-controls')).not.toBeInTheDocument()
+
+		rerender(
+			<ObjectsFavoritesPane
+				{...buildProps({
+					favoritesOnly: true,
+					favoriteCount: 1,
+					favorites: [
+						{
+							key: 'docs/readme.txt',
+							size: 12,
+							lastModified: '2026-03-09T00:00:00Z',
+							createdAt: '2026-03-09T00:00:00Z',
+						},
+					],
+				})}
+			/>,
+		)
+
+		expect(screen.getByTestId('objects-favorites-controls')).toBeInTheDocument()
+		expect(screen.getByText('Favorites only')).toBeInTheDocument()
+		expect(screen.queryByText('Open details on click')).not.toBeInTheDocument()
 	})
 })

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installApiFixtures, metaJson, seedLocalStorage } from './support/apiFixtures'
-import { gotoBucketsPage } from './support/ui'
+import { clickBucketCardManageAction, gotoBucketsPage } from './support/ui'
 
 const now = '2026-03-10T00:00:00Z'
 const profileId = 'governance-profile'
@@ -85,7 +85,7 @@ async function openControls(page: Page) {
 	await gotoBucketsPage(page, {
 		ready: (scope) => scope.getByText(bucket),
 	})
-	await page.getByRole('button', { name: /controls/i }).first().click()
+	await clickBucketCardManageAction(page, page.locator('body'), bucket, /Controls/)
 }
 
 test('GCS governance access uses the structured IAM bindings editor', async ({ page }) => {

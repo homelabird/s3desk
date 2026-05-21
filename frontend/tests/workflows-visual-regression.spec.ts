@@ -175,7 +175,7 @@ async function openProviderGovernanceVisualSheet(
 		profiles: [config.profile],
 		bucketGovernance: config.governance,
 	})
-	await bucketCard(page, profilesBucketsVisualBucket).getByRole('button', { name: 'Controls' }).click()
+	await clickBucketManageAction(page, profilesBucketsVisualBucket, /Controls/)
 	const sheet = dialogByName(page, `Controls: ${profilesBucketsVisualBucket}`)
 	await expect(sheet).toBeVisible()
 	await expect(sheet.getByText(config.title, { exact: true })).toBeVisible()
@@ -185,6 +185,11 @@ async function openProviderGovernanceVisualSheet(
 
 function bucketCard(page: Page, bucketName: string) {
 	return page.getByTestId('buckets-list-compact').locator('article').filter({ hasText: bucketName }).first()
+}
+
+async function clickBucketManageAction(page: Page, bucketName: string, actionName: string | RegExp) {
+	await bucketCard(page, bucketName).getByRole('button', { name: `Manage bucket ${bucketName}` }).click()
+	await page.getByRole('menu').last().getByRole('menuitem', { name: actionName }).click()
 }
 
 function profileCard(page: Page, profileName: string) {
@@ -320,7 +325,7 @@ test.describe('Workflow visual regression @visual', () => {
 			},
 		})
 
-		await bucketCard(page, profilesBucketsVisualBucket).getByRole('button', { name: 'Policy' }).click()
+		await clickBucketManageAction(page, profilesBucketsVisualBucket, /Advanced policy/)
 		const sheet = dialogByName(page, `Policy: ${profilesBucketsVisualBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()
@@ -337,7 +342,7 @@ test.describe('Workflow visual regression @visual', () => {
 			},
 		})
 
-		await bucketCard(page, profilesBucketsVisualBucket).getByRole('button', { name: 'Delete' }).click()
+		await clickBucketManageAction(page, profilesBucketsVisualBucket, /Delete bucket/)
 		const confirmDialog = dialogByName(page, `Delete bucket "${profilesBucketsVisualBucket}"?`)
 		await expect(confirmDialog).toBeVisible()
 		await expect(confirmDialog.getByPlaceholder(profilesBucketsVisualBucket)).toBeVisible()

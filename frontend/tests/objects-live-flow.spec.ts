@@ -5,6 +5,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import {
 	addUploadSourceFromDevice,
+	clickBucketCardManageAction,
 	commitComboboxValue,
 	dialogByName,
 	ensureDialogOpen,
@@ -164,7 +165,7 @@ test.describe('Live UI flow', () => {
 
 			await gotoBucketsPage(page)
 			const bucketRow = namedTableRow(page, bucketName)
-			await bucketRow.getByRole('button', { name: 'Delete' }).click()
+			await clickBucketCardManageAction(page, bucketRow, bucketName, /Delete bucket/)
 			const bucketConfirm = dialogByName(page, new RegExp(bucketName))
 			await bucketConfirm.getByPlaceholder(bucketName).fill(bucketName)
 			await bucketConfirm.getByRole('button', { name: 'Delete' }).click()

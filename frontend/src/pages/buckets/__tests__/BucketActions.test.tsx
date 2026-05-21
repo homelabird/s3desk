@@ -1,10 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { BucketActions } from '../BucketActions'
 
 describe('BucketActions', () => {
-	it('labels repeated bucket actions with the bucket name while keeping visible text unchanged', () => {
+	it('keeps bucket opening primary and moves management actions into a scoped menu', async () => {
 		render(
 			<BucketActions
 				bucketName="primary-bucket"
@@ -21,12 +21,18 @@ describe('BucketActions', () => {
 		)
 
 		expect(screen.getByRole('button', { name: 'Open objects for bucket primary-bucket' })).toHaveTextContent('Open')
-		expect(screen.getByRole('button', { name: 'Controls for bucket primary-bucket' })).toHaveTextContent('Controls')
-		expect(screen.getByRole('button', { name: 'Policy for bucket primary-bucket' })).toHaveTextContent('Policy')
-		expect(screen.getByRole('button', { name: 'Delete bucket primary-bucket' })).toHaveTextContent('Delete')
+		expect(screen.queryByRole('button', { name: 'Controls for bucket primary-bucket' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Policy for bucket primary-bucket' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Delete bucket primary-bucket' })).not.toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Manage bucket primary-bucket' }))
+
+		expect(await screen.findByRole('menuitem', { name: /Controls/ })).toBeEnabled()
+		expect(screen.getByRole('menuitem', { name: /Advanced policy/ })).toBeEnabled()
+		expect(screen.getByRole('menuitem', { name: /Delete bucket/ })).toBeEnabled()
 	})
 
-	it('keeps contextual labels on disabled unsupported actions', () => {
+	it('keeps unsupported management actions disabled inside the menu', async () => {
 		render(
 			<BucketActions
 				bucketName="archive-bucket"
@@ -42,7 +48,9 @@ describe('BucketActions', () => {
 			/>,
 		)
 
-		expect(screen.getByRole('button', { name: 'Controls for bucket archive-bucket' })).toBeDisabled()
-		expect(screen.getByRole('button', { name: 'Policy for bucket archive-bucket' })).toBeDisabled()
+		fireEvent.click(screen.getByRole('button', { name: 'Manage bucket archive-bucket' }))
+
+		expect(await screen.findByRole('menuitem', { name: /Controls unavailable/ })).toBeDisabled()
+		expect(screen.getByRole('menuitem', { name: /Policy unavailable/ })).toBeDisabled()
 	})
 })

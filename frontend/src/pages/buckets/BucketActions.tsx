@@ -1,6 +1,7 @@
-import { DeleteOutlined, FileTextOutlined, FolderOpenOutlined, SettingOutlined } from '@ant-design/icons'
-import { Button, Tooltip } from 'antd'
+import { DeleteOutlined, FileTextOutlined, FolderOpenOutlined, MoreOutlined, SettingOutlined } from '@ant-design/icons'
+import { Button, Tooltip, type MenuProps } from 'antd'
 
+import { MenuPopover } from '../../components/MenuPopover'
 import { confirmDangerAction } from '../../lib/confirmDangerAction'
 import styles from '../BucketsPage.module.css'
 
@@ -19,6 +20,43 @@ type BucketActionsProps = {
 
 export function BucketActions(props: BucketActionsProps) {
 	const bucketActionContext = `bucket ${props.bucketName}`
+	const handleDelete = () => {
+		confirmDangerAction({
+			title: `Delete bucket "${props.bucketName}"?`,
+			description: 'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
+			confirmText: props.bucketName,
+			confirmHint: `Type "${props.bucketName}" to confirm`,
+			onConfirm: async () => {
+				await props.onDelete(props.bucketName)
+			},
+		})
+	}
+
+	const manageItems: MenuProps['items'] = [
+		{
+			key: 'controls',
+			icon: <SettingOutlined />,
+			label: props.controlsSupported ? 'Controls' : 'Controls unavailable',
+			disabled: !props.controlsSupported,
+			onClick: () => props.onOpenControls(props.bucketName),
+		},
+		{
+			key: 'policy',
+			icon: <FileTextOutlined />,
+			label: props.policySupported ? 'Advanced policy' : 'Policy unavailable',
+			disabled: !props.policySupported,
+			onClick: () => props.onOpenPolicy(props.bucketName),
+		},
+		{ type: 'divider' },
+		{
+			key: 'delete',
+			icon: <DeleteOutlined />,
+			label: props.deleteLoading ? 'Deleting bucket' : 'Delete bucket',
+			danger: true,
+			disabled: props.deleteLoading,
+			onClick: handleDelete,
+		},
+	]
 
 	return (
 		<div className={styles.actionGroup}>
@@ -32,68 +70,31 @@ export function BucketActions(props: BucketActionsProps) {
 				Open
 			</Button>
 
-			{props.controlsSupported ? (
-				<Tooltip title="Manage bucket controls">
-					<span>
-						<Button
-							size="small"
-							icon={<SettingOutlined />}
-							aria-label={`Controls for ${bucketActionContext}`}
-							onClick={() => {
-								props.onOpenControls(props.bucketName)
-							}}
-						>
-							Controls
-						</Button>
-					</span>
-				</Tooltip>
-			) : (
-				<Tooltip title={props.controlsUnsupportedReason}>
-					<span>
-						<Button size="small" icon={<SettingOutlined />} aria-label={`Controls for ${bucketActionContext}`} disabled>
-							Controls
-						</Button>
-					</span>
-				</Tooltip>
-			)}
-
-			<Tooltip title={props.policySupported ? 'Manage bucket policy' : props.policyUnsupportedReason}>
+			<Tooltip
+				title={
+					props.controlsSupported || props.policySupported
+						? 'Manage bucket controls, policy, and deletion'
+						: `${props.controlsUnsupportedReason || 'Controls unavailable'} ${props.policyUnsupportedReason || 'Policy unavailable'}`
+				}
+			>
 				<span>
-					<Button
-						size="small"
-						icon={<FileTextOutlined />}
-						aria-label={`Policy for ${bucketActionContext}`}
-						disabled={!props.policySupported}
-						onClick={() => {
-							props.onOpenPolicy(props.bucketName)
-						}}
-					>
-						Policy
-					</Button>
+					<MenuPopover menu={{ items: manageItems }} align="end" scopeKey={props.bucketName}>
+						{({ toggle, open }) => (
+							<Button
+								size="small"
+								icon={<MoreOutlined />}
+								aria-label={`Manage ${bucketActionContext}`}
+								aria-haspopup="menu"
+								aria-expanded={open}
+								loading={props.deleteLoading}
+								onClick={toggle}
+							>
+								Manage
+							</Button>
+						)}
+					</MenuPopover>
 				</span>
 			</Tooltip>
-
-			<Button
-				size="small"
-				danger
-				icon={<DeleteOutlined />}
-				loading={props.deleteLoading}
-				aria-label={`Delete ${bucketActionContext}`}
-				onClick={() => {
-					confirmDangerAction({
-						title: `Delete bucket "${props.bucketName}"?`,
-						description:
-							'Only empty buckets can be deleted. If this fails, you can create a delete job to empty it.',
-						confirmText: props.bucketName,
-						confirmHint: `Type "${props.bucketName}" to confirm`,
-						onConfirm: async () => {
-							await props.onDelete(props.bucketName)
-						},
-					})
-				}}
-			>
-				Delete
-			</Button>
 		</div>
 	)
 }

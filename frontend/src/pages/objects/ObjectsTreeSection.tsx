@@ -15,8 +15,6 @@ type ObjectsTreeSectionProps = {
 	onFavoritesSearchChange: (value: string) => void
 	favoritesOnly: boolean
 	onFavoritesOnlyChange: (value: boolean) => void
-	favoritesOpenDetails: boolean
-	onFavoritesOpenDetailsChange: (value: boolean) => void
 	favoritesExpanded: boolean
 	onFavoritesExpandedChange: (expanded: boolean) => void
 	onSelectFavorite: (key: string) => void

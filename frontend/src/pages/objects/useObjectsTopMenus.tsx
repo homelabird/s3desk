@@ -1,4 +1,3 @@
-import { SnippetsOutlined } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { useMemo } from 'react'
 
@@ -17,31 +16,12 @@ type UseObjectsTopMenusArgs = {
 
 export function useObjectsTopMenus({
 	isAdvanced,
-	profileId,
 	bucket,
 	prefix,
 	dockTree,
 	globalActionMap,
 	currentPrefixActionMap,
 }: UseObjectsTopMenusArgs): { topMoreMenu: MenuProps } {
-	const prefixMenuItems = useMemo(
-		() =>
-			compactMenuItems([
-				actionToMenuItem(currentPrefixActionMap.get('copy'), undefined, isAdvanced),
-				{ type: 'divider' as const },
-				actionToMenuItem(currentPrefixActionMap.get('downloadZip'), undefined, isAdvanced),
-				actionToMenuItem(currentPrefixActionMap.get('downloadToDevice'), undefined, isAdvanced),
-				{ type: 'divider' as const },
-				actionToMenuItem(currentPrefixActionMap.get('rename'), undefined, isAdvanced),
-				actionToMenuItem(currentPrefixActionMap.get('copyJob'), undefined, isAdvanced),
-				actionToMenuItem(currentPrefixActionMap.get('moveJob'), undefined, isAdvanced),
-				{ type: 'divider' as const },
-				actionToMenuItem(currentPrefixActionMap.get('delete'), undefined, isAdvanced),
-				actionToMenuItem(currentPrefixActionMap.get('deleteDry'), undefined, isAdvanced),
-			]),
-		[currentPrefixActionMap, isAdvanced],
-	)
-
 	const topMoreMenuItems = useMemo(
 		() =>
 			compactMenuItems([
@@ -61,10 +41,6 @@ export function useObjectsTopMenus({
 							actionToMenuItem(globalActionMap.get('new_folder'), undefined, isAdvanced),
 						]
 					: []),
-				{ type: 'divider' as const },
-				actionToMenuItem(globalActionMap.get('commands'), undefined, isAdvanced),
-				{ type: 'divider' as const },
-				actionToMenuItem(globalActionMap.get('transfers'), undefined, isAdvanced),
 				...(bucket && prefix.trim() && !isAdvanced
 					? [
 							{ type: 'divider' as const },
@@ -72,28 +48,10 @@ export function useObjectsTopMenus({
 							actionToMenuItem(currentPrefixActionMap.get('delete'), undefined, isAdvanced),
 						]
 					: []),
-				...(isAdvanced
-					? [
-							{ type: 'divider' as const },
-							actionToMenuItem(globalActionMap.get('new_tab'), undefined, isAdvanced),
-							actionToMenuItem(globalActionMap.get('global_search'), undefined, isAdvanced),
-							...(prefixMenuItems.length > 0
-								? [
-										{
-											key: 'prefix_actions',
-											label: 'Folder actions',
-											icon: <SnippetsOutlined />,
-											disabled: !profileId || !bucket || !prefix.trim(),
-											children: prefixMenuItems,
-										},
-									]
-								: []),
-						]
-					: []),
 				{ type: 'divider' as const },
 				actionToMenuItem(globalActionMap.get('ui_mode'), undefined, isAdvanced),
 			]),
-		[bucket, currentPrefixActionMap, dockTree, globalActionMap, isAdvanced, prefix, prefixMenuItems, profileId],
+		[bucket, currentPrefixActionMap, dockTree, globalActionMap, isAdvanced, prefix],
 	)
 
 	const topMoreMenu = useMemo<MenuProps>(

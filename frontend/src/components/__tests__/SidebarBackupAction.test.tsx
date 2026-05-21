@@ -116,6 +116,11 @@ function createApi(serverOverrides: Record<string, unknown> = {}) {
 	})
 }
 
+async function openBackupDrawer() {
+	fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+	return screen.findByRole('dialog', { name: 'Backup and restore' })
+}
+
 function deferred<T>() {
 	let resolve!: (value: T) => void
 	let reject!: (reason?: unknown) => void
@@ -166,8 +171,19 @@ describe('SidebarBackupAction', () => {
 		const drawer = await screen.findByRole('dialog', { name: 'Backup and restore' })
 		expect(drawer).toHaveAttribute('id', 'sidebar-backup-drawer-panel')
 		expect(await screen.findByText('Backup export', {}, { timeout: 5_000 })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Export backup' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Stage restore' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Import portable bundle' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Clean staged restores' })).toBeInTheDocument()
+		expect(screen.queryByText('Stage restore bundle')).not.toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Stage restore' }))
 		expect(screen.getByText('Stage restore bundle')).toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
 		expect(screen.getByText('Portable import')).toBeInTheDocument()
+
+		fireEvent.click(screen.getByRole('button', { name: 'Clean staged restores' }))
 		expect(screen.getByText('Staged restores')).toBeInTheDocument()
 	})
 
@@ -254,9 +270,9 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Clean staged restores' }))
 
-		expect(await screen.findByRole('dialog', { name: 'Backup and restore' })).toBeInTheDocument()
 		expect(await screen.findByText('expired-restore')).toBeInTheDocument()
 		expect(screen.getByText('1 stale')).toBeInTheDocument()
 		expect(screen.getByText(/^stale$/)).toBeInTheDocument()
@@ -274,7 +290,8 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
 
 		const importButton = await screen.findByRole('button', { name: 'Run portable import' })
 		expect(importButton).toBeDisabled()
@@ -301,8 +318,8 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
-		fireEvent.click(await screen.findByRole('button', { name: 'Download backup' }))
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Download backup' }))
 
 		await waitFor(() => expect(downloadServerBackup).toHaveBeenCalledWith('full', 'clear', { password: undefined }))
 		await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1))
@@ -323,7 +340,7 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		await openBackupDrawer()
 		fireEvent.click(await screen.findByText('Protect with password'))
 		fireEvent.change(screen.getByPlaceholderText('Backup password'), { target: { value: 'operator-secret' } })
 		fireEvent.change(screen.getByPlaceholderText('Confirm backup password'), { target: { value: 'operator-secret' } })
@@ -365,8 +382,7 @@ describe('SidebarBackupAction', () => {
 			/>,
 		)
 
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
-		await screen.findByRole('dialog', { name: 'Backup and restore' })
+		await openBackupDrawer()
 
 		expect(screen.getByText('Portable export')).toBeInTheDocument()
 		expect(screen.getByRole('radio', { name: 'Full' })).toBeDisabled()
@@ -390,14 +406,16 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		await openBackupDrawer()
 
 		const restoreFile = new File(['backup'], 'server-backup.tar.gz', { type: 'application/gzip' })
+		fireEvent.click(screen.getByRole('button', { name: 'Stage restore' }))
 		fireEvent.change(screen.getByPlaceholderText('Bundle password (optional)'), { target: { value: 'restore-secret' } })
 		fireEvent.change(screen.getByTestId('sidebar-restore-input'), { target: { files: [restoreFile] } })
 		await waitFor(() => expect(restoreServerBackup).toHaveBeenCalledWith(restoreFile, 'restore-secret'))
 
 		const portableFile = new File(['portable'], 'portable-backup.tar.gz', { type: 'application/gzip' })
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
 		fireEvent.change(screen.getByPlaceholderText('Portable bundle password (optional)'), { target: { value: 'portable-secret' } })
 		fireEvent.change(screen.getByTestId('sidebar-portable-preview-input'), { target: { files: [portableFile] } })
 		await waitFor(() => expect(previewPortableImport).toHaveBeenCalledWith(portableFile, 'portable-secret'))
@@ -419,7 +437,8 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
 
 		const previewInput = await screen.findByTestId('sidebar-portable-preview-input')
 		const firstFile = new File(['first'], 'first-portable.tar.gz', { type: 'application/gzip' })
@@ -457,7 +476,8 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Import portable bundle' }))
 
 		fireEvent.change(screen.getByPlaceholderText('Portable bundle password (optional)'), {
 			target: { value: 'portable-secret' },
@@ -500,8 +520,7 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
-		await screen.findByRole('dialog', { name: 'Backup and restore' })
+		await openBackupDrawer()
 		await waitFor(() => expect(listServerRestores).toHaveBeenCalledTimes(1))
 
 		fireEvent.click(screen.getByRole('button', { name: 'Close' }))
@@ -509,8 +528,8 @@ describe('SidebarBackupAction', () => {
 			expect(screen.queryByRole('dialog', { name: 'Backup and restore' })).not.toBeInTheDocument()
 		})
 
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
-		await screen.findByRole('dialog', { name: 'Backup and restore' })
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Clean staged restores' }))
 		await waitFor(() => expect(listServerRestores).toHaveBeenCalledTimes(2))
 
 		await act(async () => {
@@ -546,8 +565,8 @@ describe('SidebarBackupAction', () => {
 		})
 
 		render(<SidebarBackupAction api={api} meta={buildMeta()} />)
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
-		await screen.findByRole('dialog', { name: 'Backup and restore' })
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Stage restore' }))
 
 		const restoreFile = new File(['backup'], 'server-backup.tar.gz', { type: 'application/gzip' })
 		fireEvent.change(screen.getByTestId('sidebar-restore-input'), { target: { files: [restoreFile] } })
@@ -558,8 +577,8 @@ describe('SidebarBackupAction', () => {
 			expect(screen.queryByRole('dialog', { name: 'Backup and restore' })).not.toBeInTheDocument()
 		})
 
-		fireEvent.click(screen.getByRole('button', { name: 'Backup' }))
-		await screen.findByRole('dialog', { name: 'Backup and restore' })
+		await openBackupDrawer()
+		fireEvent.click(screen.getByRole('button', { name: 'Stage restore' }))
 
 		await act(async () => {
 			restoreRequest.resolve(buildRestoreResponse())

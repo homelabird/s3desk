@@ -79,12 +79,12 @@ export function JobsToolbar(props: JobsToolbarProps) {
 		() => typeof window !== 'undefined' && window.matchMedia(MOBILE_FILTERS_MEDIA_QUERY).matches,
 	)
 	const healthItems = [
-		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active' },
-		{ key: 'queued', label: 'Queued', value: props.jobsStatusSummary.queued, tone: 'muted' },
-		{ key: 'running', label: 'Running', value: props.jobsStatusSummary.running, tone: 'active' },
-		{ key: 'failed', label: 'Failed', value: props.jobsStatusSummary.failed, tone: 'danger' },
-		{ key: 'succeeded', label: 'Succeeded', value: props.jobsStatusSummary.succeeded, tone: 'success' },
-		{ key: 'canceled', label: 'Canceled', value: props.jobsStatusSummary.canceled, tone: 'muted' },
+		{ key: 'active', label: 'Active', value: props.jobsStatusSummary.active, tone: 'active', filter: 'all' },
+		{ key: 'queued', label: 'Queued', value: props.jobsStatusSummary.queued, tone: 'muted', filter: 'queued' },
+		{ key: 'running', label: 'Running', value: props.jobsStatusSummary.running, tone: 'active', filter: 'running' },
+		{ key: 'failed', label: 'Failed', value: props.jobsStatusSummary.failed, tone: 'danger', filter: 'failed' },
+		{ key: 'succeeded', label: 'Succeeded', value: props.jobsStatusSummary.succeeded, tone: 'success', filter: 'succeeded' },
+		{ key: 'canceled', label: 'Canceled', value: props.jobsStatusSummary.canceled, tone: 'muted', filter: 'canceled' },
 	] as const
 	const advancedFiltersDirty =
 		props.statusFilter !== 'all' || props.typeFilterNormalized.trim().length > 0 || props.errorCodeFilterNormalized.trim().length > 0
@@ -293,16 +293,19 @@ export function JobsToolbar(props: JobsToolbarProps) {
 			>
 				<div className={styles.healthGrid}>
 					{healthItems.map((item) => (
-						<div
+						<button
 							key={item.key}
+							type="button"
 							data-testid={`jobs-health-${item.key}`}
+							aria-label={`Filter to ${item.label.toLowerCase()} jobs`}
 							className={`${styles.healthCard} ${styles[`healthCard${item.tone[0].toUpperCase()}${item.tone.slice(1)}`]}`}
+							onClick={() => props.onStatusFilterChange(item.filter)}
 						>
 							<Typography.Text type="secondary" className={styles.healthLabel}>
 								{item.label}
 							</Typography.Text>
 							<Typography.Text className={styles.healthValue}>{item.value.toLocaleString()}</Typography.Text>
-						</div>
+						</button>
 					))}
 				</div>
 			</PageSection>

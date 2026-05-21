@@ -24,8 +24,6 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsTreePanel>> 
 		onFavoritesSearchChange: vi.fn(),
 		favoritesOnly: false,
 		onFavoritesOnlyChange: vi.fn(),
-		favoritesOpenDetails: false,
-		onFavoritesOpenDetailsChange: vi.fn(),
 		favoritesExpanded: false,
 		onFavoritesExpandedChange: vi.fn(),
 		onSelectFavorite: vi.fn(),
@@ -179,7 +177,7 @@ describe('ObjectsTreePanel', () => {
 		expect(screen.queryByTestId('objects-favorite-item')).not.toBeInTheDocument()
 	})
 
-	it('renders the favorites controls when pinned items are expanded', () => {
+	it('keeps favorites controls hidden while pinned items are simply expanded', () => {
 		render(
 			<ObjectsTreePanel
 				{...buildProps({
@@ -199,9 +197,8 @@ describe('ObjectsTreePanel', () => {
 			/>,
 		)
 
-		expect(screen.getByTestId('objects-favorites-controls')).toBeInTheDocument()
-		expect(screen.getByText('Favorites only')).toBeInTheDocument()
-		expect(screen.getByText('Open details on click')).toBeInTheDocument()
+		expect(screen.queryByTestId('objects-favorites-controls')).not.toBeInTheDocument()
+		expect(screen.queryByText('Open details on click')).not.toBeInTheDocument()
 	})
 
 	it('uses the shared new-folder shortcut tooltip at the root level', () => {

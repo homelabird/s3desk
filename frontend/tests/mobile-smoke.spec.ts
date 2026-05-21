@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage } from './support/apiFixtures'
 import {
+	clickBucketCardManageAction,
 	closeJobsMobileFilters,
 	gotoBucketsPage,
 	gotoJobsPage,
@@ -168,7 +169,7 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		})
 		const lastBucketCard = page.getByTestId('buckets-list-compact').locator('article').filter({ hasText: lastBucket }).first()
 		await expect(lastBucketCard).toBeVisible()
-		await lastBucketCard.getByRole('button', { name: 'Delete' }).click()
+		await clickBucketCardManageAction(page, lastBucketCard, lastBucket, /Delete bucket/)
 		const confirmDialog = page.getByRole('dialog', { name: `Delete bucket "${lastBucket}"?` })
 		await expect(confirmDialog).toBeVisible()
 		await confirmDialog.getByRole('button', { name: 'Cancel' }).click()

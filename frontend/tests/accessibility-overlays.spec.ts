@@ -23,6 +23,7 @@ import {
 } from './support/settingsLoginMobileResponsive'
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
 import {
+	clickBucketCardManageAction,
 	dialogByName,
 	gotoBucketsPage,
 	gotoJobsPage,
@@ -580,7 +581,7 @@ test.describe('overlay accessibility scans', () => {
 		await page.setViewportSize({ width: 1440, height: 900 })
 		await setupBucketsA11yPage(page)
 
-		await page.getByRole('button', { name: 'Controls' }).first().click()
+		await clickBucketCardManageAction(page, page.locator('body'), bucketsA11yBucket, /Controls/)
 		const dialog = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(dialog).toBeVisible()
 		await expect(dialog.getByText('AWS Controls', { exact: true })).toBeVisible()
@@ -592,7 +593,7 @@ test.describe('overlay accessibility scans', () => {
 		await page.setViewportSize({ width: 1440, height: 900 })
 		await setupBucketsA11yPage(page)
 
-		await page.getByRole('button', { name: 'Policy' }).first().click()
+		await clickBucketCardManageAction(page, page.locator('body'), bucketsA11yBucket, /Advanced policy/)
 		const dialog = dialogByName(page, `Policy: ${bucketsA11yBucket}`)
 		await expect(dialog).toBeVisible()
 		await expect(dialog.getByText('Advanced S3 bucket policy workspace')).toBeVisible()
@@ -605,7 +606,7 @@ test.describe('overlay accessibility scans', () => {
 		await setupBucketsA11yPage(page)
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Controls' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Controls/)
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByTestId('bucket-governance-mobile-shell')).toBeVisible()
@@ -618,7 +619,7 @@ test.describe('overlay accessibility scans', () => {
 		await setupBucketsA11yPage(page)
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Policy' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Advanced policy/)
 		const sheet = dialogByName(page, `Policy: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()
@@ -637,7 +638,7 @@ test.describe('overlay accessibility scans', () => {
 		})
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Delete' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Delete bucket/)
 		const confirmDialog = dialogByName(page, `Delete bucket "${bucketsA11yBucket}"?`)
 		await expect(confirmDialog).toBeVisible()
 		await expect(confirmDialog.getByPlaceholder(bucketsA11yBucket)).toBeVisible()
@@ -671,7 +672,7 @@ test.describe('overlay accessibility scans', () => {
 		await setupGcsBucketsMobileA11yPage(page)
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Controls' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Controls/)
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByText('GCS Controls', { exact: true })).toBeVisible()
@@ -702,7 +703,7 @@ test.describe('overlay accessibility scans', () => {
 		})
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Controls' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Controls/)
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByText('GCS Controls', { exact: true })).toBeVisible()
@@ -716,7 +717,7 @@ test.describe('overlay accessibility scans', () => {
 		await setupAzureBucketsMobileA11yPage(page)
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Controls' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Controls/)
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByText('Azure Controls', { exact: true })).toBeVisible()
@@ -748,7 +749,7 @@ test.describe('overlay accessibility scans', () => {
 		})
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Controls' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Controls/)
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByText('Azure Controls', { exact: true })).toBeVisible()
@@ -762,7 +763,7 @@ test.describe('overlay accessibility scans', () => {
 		await setupOciBucketsMobileA11yPage(page)
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await bucket.getByRole('button', { name: 'Controls' }).click()
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Controls/)
 		const sheet = dialogByName(page, `Controls: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByText('OCI Controls', { exact: true })).toBeVisible()

@@ -53,8 +53,6 @@ function buildProps(overrides: Partial<ComponentProps<typeof ObjectsPagePanes>> 
 			onFavoritesSearchChange: () => {},
 			favoritesOnly: false,
 			onFavoritesOnlyChange: () => {},
-			favoritesOpenDetails: false,
-			onFavoritesOpenDetailsChange: () => {},
 			favoritesExpanded: false,
 			onFavoritesExpandedChange: () => {},
 			onSelectFavorite: () => {},

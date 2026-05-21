@@ -18,8 +18,6 @@ export function buildObjectsTreePaneProps(args: BuildObjectsPagePanesPropsArgs):
 		onFavoritesSearchChange: args.setFavoritesSearch,
 		favoritesOnly: args.favoritesOnly,
 		onFavoritesOnlyChange: args.setFavoritesOnly,
-		favoritesOpenDetails: args.favoritesOpenDetails,
-		onFavoritesOpenDetailsChange: args.setFavoritesOpenDetails,
 		favoritesExpanded: args.favoritesPaneExpanded,
 		onFavoritesExpandedChange: args.setFavoritesPaneExpanded,
 		onSelectFavorite: (key) => args.handleFavoriteSelect(key, false),

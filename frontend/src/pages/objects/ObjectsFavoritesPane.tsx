@@ -33,8 +33,6 @@ type ObjectsFavoritesPaneProps = {
 	favorites: FavoriteObjectItem[]
 	favoritesOnly: boolean
 	onFavoritesOnlyChange: (value: boolean) => void
-	openDetailsOnClick: boolean
-	onOpenDetailsOnClickChange: (value: boolean) => void
 	query: string
 	onQueryChange: (value: string) => void
 	onSelectFavorite: (key: string) => void
@@ -63,7 +61,7 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 	const sorted = [...filtered].sort((a, b) => a.key.localeCompare(b.key))
 	const hasFavorites = favoriteCount > 0
 	const showSearch = hasFavorites || query.length > 0
-	const showBehaviorControls = hasFavorites || props.favoritesOnly
+	const showBehaviorControls = props.favoritesOnly
 	const showLoadingBadge = !disabled && props.isLoading && favoriteCount === 0 && availableFavorites.length === 0
 
 	let status: {
@@ -206,17 +204,6 @@ export function ObjectsFavoritesPane(props: ObjectsFavoritesPaneProps) {
 							/>
 							<Typography.Text type="secondary" className={styles.favoritesControlLabel}>
 								Favorites only
-							</Typography.Text>
-						</div>
-						<div className={styles.favoritesControl}>
-							<ToggleSwitch
-								checked={props.openDetailsOnClick}
-								onChange={props.onOpenDetailsOnClickChange}
-								disabled={disabled}
-								ariaLabel="Open details on click"
-							/>
-							<Typography.Text type="secondary" className={styles.favoritesControlLabel}>
-								Open details on click
 							</Typography.Text>
 						</div>
 					</div>

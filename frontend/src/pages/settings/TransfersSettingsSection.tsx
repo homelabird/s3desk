@@ -107,7 +107,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 		props.setUploadChunkFileConcurrencySetting(draft.uploadChunkFileConcurrency)
 	}
 	const resetDraft = () => setDraft(createTransferTuningDraft(props))
-	const advancedSummary = `Advanced tuning: batch ${draft.uploadBatchConcurrency} x ${draft.uploadBatchBytesMiB} MiB, chunk ${draft.uploadChunkSizeMiB} MiB x ${draft.uploadChunkConcurrency}`
+	const advancedSummary = 'Expert transfer tuning'
 
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
@@ -124,63 +124,6 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 					ariaLabel="Downloads and previews: Use server proxy"
 				/>
 			</FormField>
-			<FormField
-				label="Download task concurrency"
-				htmlFor="transfers-download-task-concurrency"
-				extra="Number of downloads started in parallel. Higher values can improve throughput on fast networks, but use more browser bandwidth and memory."
-			>
-				<NumberField
-					id="transfers-download-task-concurrency"
-					min={MIN_DOWNLOAD_TASK_CONCURRENCY}
-					max={MAX_DOWNLOAD_TASK_CONCURRENCY}
-					value={draft.downloadTaskConcurrency}
-					onChange={(value) =>
-						setDraftNumber(
-							'downloadTaskConcurrency',
-							value,
-							DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
-							MIN_DOWNLOAD_TASK_CONCURRENCY,
-							MAX_DOWNLOAD_TASK_CONCURRENCY,
-						)
-					}
-					className={styles.fullWidth}
-				/>
-			</FormField>
-			<FormField
-				label="Upload task concurrency"
-				htmlFor="transfers-upload-task-concurrency"
-				extra="Number of upload tasks started in parallel. Keep this modest because each task can already upload multiple files and chunks at once."
-			>
-				<NumberField
-					id="transfers-upload-task-concurrency"
-					min={MIN_UPLOAD_TASK_CONCURRENCY}
-					max={MAX_UPLOAD_TASK_CONCURRENCY}
-					value={draft.uploadTaskConcurrency}
-					onChange={(value) =>
-						setDraftNumber(
-							'uploadTaskConcurrency',
-							value,
-							DEFAULT_UPLOAD_TASK_CONCURRENCY,
-							MIN_UPLOAD_TASK_CONCURRENCY,
-							MAX_UPLOAD_TASK_CONCURRENCY,
-						)
-					}
-					className={styles.fullWidth}
-				/>
-			</FormField>
-			<div className={styles.settingsApplyBar}>
-				<Typography.Text type="secondary">
-					{hasPendingTuning ? 'Transfer tuning has unapplied changes.' : 'Transfer tuning matches the saved values.'}
-				</Typography.Text>
-				<Space wrap>
-					<Button type="primary" onClick={applyTuning} disabled={!hasPendingTuning}>
-						Apply transfer tuning
-					</Button>
-					<Button onClick={resetDraft} disabled={!hasPendingTuning}>
-						Cancel tuning changes
-					</Button>
-				</Space>
-			</div>
 
 			<Collapse
 				size="small"
@@ -190,6 +133,9 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 						label: advancedSummary,
 						children: (
 							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+								<Typography.Text type="secondary" className={styles.sectionIntro}>
+									Use these controls only when you are tuning for a known network, provider, or browser limit. The saved defaults are the recommended path for most users.
+								</Typography.Text>
 								<FormField
 									label="Upload auto-tuning"
 									extra="Automatically adjusts batch/chunk settings based on file size."
@@ -198,6 +144,50 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										checked={props.uploadAutoTuneEnabled}
 										onChange={props.setUploadAutoTuneEnabled}
 										ariaLabel="Upload auto-tuning"
+									/>
+								</FormField>
+								<FormField
+									label="Download task concurrency"
+									htmlFor="transfers-download-task-concurrency"
+									extra="Number of downloads started in parallel. Higher values can improve throughput on fast networks, but use more browser bandwidth and memory."
+								>
+									<NumberField
+										id="transfers-download-task-concurrency"
+										min={MIN_DOWNLOAD_TASK_CONCURRENCY}
+										max={MAX_DOWNLOAD_TASK_CONCURRENCY}
+										value={draft.downloadTaskConcurrency}
+										onChange={(value) =>
+											setDraftNumber(
+												'downloadTaskConcurrency',
+												value,
+												DEFAULT_DOWNLOAD_TASK_CONCURRENCY,
+												MIN_DOWNLOAD_TASK_CONCURRENCY,
+												MAX_DOWNLOAD_TASK_CONCURRENCY,
+											)
+										}
+										className={styles.fullWidth}
+									/>
+								</FormField>
+								<FormField
+									label="Upload task concurrency"
+									htmlFor="transfers-upload-task-concurrency"
+									extra="Number of upload tasks started in parallel. Keep this modest because each task can already upload multiple files and chunks at once."
+								>
+									<NumberField
+										id="transfers-upload-task-concurrency"
+										min={MIN_UPLOAD_TASK_CONCURRENCY}
+										max={MAX_UPLOAD_TASK_CONCURRENCY}
+										value={draft.uploadTaskConcurrency}
+										onChange={(value) =>
+											setDraftNumber(
+												'uploadTaskConcurrency',
+												value,
+												DEFAULT_UPLOAD_TASK_CONCURRENCY,
+												MIN_UPLOAD_TASK_CONCURRENCY,
+												MAX_UPLOAD_TASK_CONCURRENCY,
+											)
+										}
+										className={styles.fullWidth}
 									/>
 								</FormField>
 								<FormField
@@ -260,10 +250,9 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 												}))
 											}}
 										>
-											Fast
+											Balanced
 										</Button>
 										<Button
-											type="primary"
 											onClick={() => {
 												setDraft((current) => ({
 													...current,
@@ -275,7 +264,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 												}))
 											}}
 										>
-											Max Throughput
+											High throughput
 										</Button>
 									</Space>
 								</FormField>
@@ -347,6 +336,19 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 										ariaLabel="Resume conversion mode"
 									/>
 								</FormField>
+								<div className={styles.settingsApplyBar}>
+									<Typography.Text type="secondary">
+										{hasPendingTuning ? 'Transfer tuning has unapplied changes.' : 'Transfer tuning matches the saved values.'}
+									</Typography.Text>
+									<Space wrap>
+										<Button type="primary" onClick={applyTuning} disabled={!hasPendingTuning}>
+											Apply transfer tuning
+										</Button>
+										<Button onClick={resetDraft} disabled={!hasPendingTuning}>
+											Cancel tuning changes
+										</Button>
+									</Space>
+								</div>
 							</Space>
 						),
 					},

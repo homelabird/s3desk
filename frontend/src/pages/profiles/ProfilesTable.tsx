@@ -38,14 +38,20 @@ export function ProfilesTable(props: ProfilesTableProps) {
 				disabled: props.isTestPending && props.testingProfileId === row.profile.id,
 			},
 			{
-				key: 'benchmark',
-				label: props.isBenchmarkPending && props.benchmarkingProfileId === row.profile.id ? 'Benchmarking…' : 'Benchmark',
-				disabled: props.isBenchmarkPending && props.benchmarkingProfileId === row.profile.id,
-			},
-			{
-				key: 'yaml',
-				label: props.isExportYamlPending && props.exportingProfileId === row.profile.id ? 'Exporting YAML…' : 'YAML',
-				disabled: props.isExportYamlPending && props.exportingProfileId === row.profile.id,
+				key: 'advanced',
+				label: 'Advanced',
+				children: [
+					{
+						key: 'benchmark',
+						label: props.isBenchmarkPending && props.benchmarkingProfileId === row.profile.id ? 'Benchmarking…' : 'Benchmark',
+						disabled: props.isBenchmarkPending && props.benchmarkingProfileId === row.profile.id,
+					},
+					{
+						key: 'yaml',
+						label: props.isExportYamlPending && props.exportingProfileId === row.profile.id ? 'Exporting YAML…' : 'Export/Edit YAML',
+						disabled: props.isExportYamlPending && props.exportingProfileId === row.profile.id,
+					},
+				],
 			},
 			{ type: 'divider' as const },
 			{

@@ -158,6 +158,21 @@ function mockViewportWidth(width: number) {
     });
 }
 
+async function openFirstBucketManageMenu() {
+  const table = await screen.findByTestId("buckets-table-desktop");
+  const manageButton = (
+    await within(table).findAllByRole("button", { name: /Manage bucket/i })
+  )[0];
+  fireEvent.click(manageButton);
+}
+
+async function clickFirstBucketMenuItem(name: RegExp) {
+  await openFirstBucketManageMenu();
+  const menus = await screen.findAllByRole("menu");
+  const activeMenu = menus[menus.length - 1];
+  fireEvent.click(await within(activeMenu).findByRole("menuitem", { name }));
+}
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
@@ -346,8 +361,12 @@ describe("BucketsPage", () => {
     expect(
       screen.queryByTestId("buckets-table-desktop"),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Policy/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Delete/ })).toBeInTheDocument();
+    const manageButtons = screen.getAllByRole("button", { name: /Manage bucket/ });
+    expect(manageButtons[0]).toBeInTheDocument();
+
+    fireEvent.click(manageButtons[0]);
+    expect(await screen.findByRole("menuitem", { name: /Advanced policy/ })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /Delete bucket/ })).toBeInTheDocument();
   });
 
   it("renders the full bucket table on desktop widths", async () => {
@@ -469,14 +488,7 @@ describe("BucketsPage", () => {
         </QueryClientProvider>,
       );
 
-      const controlsButton = (
-        await within(
-          await screen.findByTestId("buckets-table-desktop"),
-        ).findAllByRole("button", { name: /controls/i })
-      )[0];
-      await act(async () => {
-        fireEvent.click(controlsButton);
-      });
+      await clickFirstBucketMenuItem(/Controls/);
 
       expect(await screen.findByText("AWS Controls")).toBeInTheDocument();
       await waitFor(() =>
@@ -566,12 +578,7 @@ describe("BucketsPage", () => {
       </QueryClientProvider>,
     );
 
-    const controlsButton = (
-      await within(
-        await screen.findByTestId("buckets-table-desktop"),
-      ).findAllByRole("button", { name: /controls/i })
-    )[0];
-    fireEvent.click(controlsButton);
+    await clickFirstBucketMenuItem(/Controls/);
 
     expect(await screen.findByText("GCS Controls")).toBeInTheDocument();
     await waitFor(() =>
@@ -703,12 +710,7 @@ describe("BucketsPage", () => {
       </QueryClientProvider>,
     );
 
-    const deleteButton = (
-      await within(
-        await screen.findByTestId("buckets-table-desktop"),
-      ).findAllByRole("button", { name: /delete/i })
-    )[0];
-    fireEvent.click(deleteButton);
+    await clickFirstBucketMenuItem(/Delete bucket/);
 
     expect(pendingConfirm).toBeDefined();
     expect(deleteBucket).not.toHaveBeenCalled();
@@ -853,12 +855,7 @@ describe("BucketsPage", () => {
       </QueryClientProvider>,
     );
 
-    const deleteButton = (
-      await within(
-        await screen.findByTestId("buckets-table-desktop"),
-      ).findAllByRole("button", { name: /delete/i })
-    )[0];
-    fireEvent.click(deleteButton);
+    await clickFirstBucketMenuItem(/Delete bucket/);
 
     expect(confirmDangerActionMock).toHaveBeenCalledTimes(1);
     expect(
@@ -918,12 +915,7 @@ describe("BucketsPage", () => {
       </QueryClientProvider>,
     );
 
-    const deleteButton = (
-      await within(
-        await screen.findByTestId("buckets-table-desktop"),
-      ).findAllByRole("button", { name: /delete/i })
-    )[0];
-    fireEvent.click(deleteButton);
+    await clickFirstBucketMenuItem(/Delete bucket/);
 
     expect(
       await screen.findByText('Bucket "primary-bucket" isn’t empty'),
@@ -982,12 +974,7 @@ describe("BucketsPage", () => {
       </QueryClientProvider>,
     );
 
-    const deleteButton = (
-      await within(
-        await screen.findByTestId("buckets-table-desktop"),
-      ).findAllByRole("button", { name: /delete/i })
-    )[0];
-    fireEvent.click(deleteButton);
+    await clickFirstBucketMenuItem(/Delete bucket/);
 
     expect(
       await screen.findByText('Bucket "primary-bucket" isn’t empty'),

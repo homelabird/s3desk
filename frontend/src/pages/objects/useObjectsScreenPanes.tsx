@@ -63,8 +63,6 @@ export function useObjectsScreenPanes({
 		setFavoritesSearch: paneVm.setFavoritesSearch,
 		favoritesOnly: listVm.favoritesOnly,
 		setFavoritesOnly: listVm.setFavoritesOnly,
-		favoritesOpenDetails: paneVm.favoritesOpenDetails,
-		setFavoritesOpenDetails: paneVm.setFavoritesOpenDetails,
 		favoritesPaneExpanded: paneVm.favoritesPaneExpanded,
 		setFavoritesPaneExpanded: paneVm.setFavoritesPaneExpanded,
 		handleFavoriteSelect: actions.handleFavoriteSelect,

@@ -24,8 +24,6 @@ export type BuildObjectsPagePanesPropsArgs = {
 	setFavoritesSearch: (value: string) => void
 	favoritesOnly: boolean
 	setFavoritesOnly: (value: boolean) => void
-	favoritesOpenDetails: boolean
-	setFavoritesOpenDetails: (value: boolean) => void
 	favoritesPaneExpanded: boolean
 	setFavoritesPaneExpanded: (value: boolean) => void
 	handleFavoriteSelect: (key: string, closeDrawer: boolean) => void

@@ -23,8 +23,6 @@ type ObjectsTreePanelProps = {
 	onFavoritesSearchChange: (value: string) => void
 	favoritesOnly: boolean
 	onFavoritesOnlyChange: (value: boolean) => void
-	favoritesOpenDetails: boolean
-	onFavoritesOpenDetailsChange: (value: boolean) => void
 	favoritesExpanded: boolean
 	onFavoritesExpandedChange: (expanded: boolean) => void
 	onSelectFavorite: (key: string) => void
@@ -97,8 +95,6 @@ export function ObjectsTreePanel(props: ObjectsTreePanelProps) {
 					favoriteCount={props.favoriteCount}
 					favoritesOnly={props.favoritesOnly}
 					onFavoritesOnlyChange={props.onFavoritesOnlyChange}
-					openDetailsOnClick={props.favoritesOpenDetails}
-					onOpenDetailsOnClickChange={props.onFavoritesOpenDetailsChange}
 					query={props.favoritesSearch}
 					onQueryChange={props.onFavoritesSearchChange}
 					onSelectFavorite={onSelectFavorite}

@@ -1,5 +1,5 @@
-import { Tag, Typography } from 'antd'
-import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { Button, Space, Tag, Typography } from 'antd'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 
 import type { APIClientShape } from '../api/client'
 import type { MetaResponse, ServerRestoreResponse } from '../api/types'
@@ -14,6 +14,8 @@ import { useBackupDrawerState } from './useBackupDrawerState'
 import { useStagedRestoreInventory } from './useStagedRestoreInventory'
 import styles from './SidebarBackupAction.module.css'
 
+type BackupDrawerTask = 'export' | 'restore' | 'portable' | 'cleanup'
+
 export type SidebarBackupDrawerProps = {
 	api: APIClientShape
 	meta?: MetaResponse
@@ -25,6 +27,7 @@ export type SidebarBackupDrawerProps = {
 
 export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 	const restoreResultRef = useRef<Dispatch<SetStateAction<ServerRestoreResponse | null>> | null>(null)
+	const [activeTask, setActiveTask] = useState<BackupDrawerTask>('export')
 
 	const {
 		stagedRestores,
@@ -104,6 +107,7 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 	const handleCloseDrawer = () => {
 		resetBackupDrawerAsyncState()
 		resetStagedRestoreInventoryState()
+		setActiveTask('export')
 		props.onClose()
 	}
 
@@ -137,67 +141,89 @@ export function SidebarBackupDrawer(props: SidebarBackupDrawerProps) {
 			<div className={styles.panel}>
 				<div className={styles.panelHeader}>
 					<Typography.Text type="secondary">
-						Use this drawer for backup export, restore staging, portable migration, and staged restore cleanup.
+						Choose one backup task at a time. Export is the safest default; restore, import, and cleanup stay behind explicit task selection.
 					</Typography.Text>
 				</div>
-				<SidebarBackupExportSection
-					backupScope={backupScope}
-					setBackupScope={setBackupScope}
-					backupScopeAvailability={backupScopeAvailability}
-					backupExportNotice={backupExportNotice}
-					exportSummary={exportSummary}
-					backupProtection={backupProtection}
-					setBackupProtection={setBackupProtection}
-					backupEncryptionAvailable={backupEncryptionAvailable}
-					backupPassword={backupPassword}
-					setBackupPassword={setBackupPassword}
-					backupPasswordConfirm={backupPasswordConfirm}
-					setBackupPasswordConfirm={setBackupPasswordConfirm}
-					protectionSummary={protectionSummary}
-					loadingScope={loadingScope}
-					backupSupported={backupSupported}
-					backupExportCapabilityReason={backupExportCapability.reason}
-					errorMessage={errorMessage}
-					onDownload={handleDownload}
-				/>
-				<SidebarRestoreBundleSection
-					restorePassword={restorePassword}
-					setRestorePassword={setRestorePassword}
-					restoreLoading={restoreLoading}
-					restoreStagingCapabilityEnabled={restoreStagingCapability.enabled}
-					restoreStagingCapabilityReason={restoreStagingCapability.reason || ''}
-					restoreError={restoreError}
-					restoreResult={restoreResult}
-					restoreValidation={restoreValidation}
-					onRestoreFileSelect={handleRestoreFileSelect}
-					onCopy={handleCopy}
-				/>
-				<SidebarPortableImportSection
-					portablePassword={portablePassword}
-					onPortablePasswordChange={handlePortablePasswordChange}
-					portableLoading={portableLoading}
-					portablePreviewReady={portablePreviewReady}
-					portableError={portableError}
-					portableSummary={portableSummary}
-					portableImportResultPresent={!!portableImportResult}
-					onPortablePreviewFileSelect={handlePortablePreviewFileSelect}
-					onPortableImport={handlePortableImport}
-					onCopy={handleCopy}
-				/>
-				<SidebarStagedRestoresSection
-					stagedRestores={stagedRestores}
-					stagedRestoresLoading={stagedRestoresLoading}
-					stagedRestoresError={stagedRestoresError}
-					cleanupRestoresLoading={cleanupRestoresLoading}
-					deleteRestoreId={deleteRestoreId}
-					staleRestoreCount={staleRestoreCount}
-					isRestoreStale={isRestoreStale}
-					formatRestoreAge={formatRestoreAge}
-					onRefresh={() => void refreshStagedRestores()}
-					onDeleteStale={() => void handleDeleteStaleRestores()}
-					onDeleteRestore={handleDeleteRestore}
-					onCopy={handleCopy}
-				/>
+				<Space wrap>
+					<Button type={activeTask === 'export' ? 'primary' : 'default'} onClick={() => setActiveTask('export')}>
+						Export backup
+					</Button>
+					<Button type={activeTask === 'restore' ? 'primary' : 'default'} onClick={() => setActiveTask('restore')}>
+						Stage restore
+					</Button>
+					<Button type={activeTask === 'portable' ? 'primary' : 'default'} onClick={() => setActiveTask('portable')}>
+						Import portable bundle
+					</Button>
+					<Button type={activeTask === 'cleanup' ? 'primary' : 'default'} onClick={() => setActiveTask('cleanup')}>
+						Clean staged restores
+					</Button>
+				</Space>
+				{activeTask === 'export' ? (
+					<SidebarBackupExportSection
+						backupScope={backupScope}
+						setBackupScope={setBackupScope}
+						backupScopeAvailability={backupScopeAvailability}
+						backupExportNotice={backupExportNotice}
+						exportSummary={exportSummary}
+						backupProtection={backupProtection}
+						setBackupProtection={setBackupProtection}
+						backupEncryptionAvailable={backupEncryptionAvailable}
+						backupPassword={backupPassword}
+						setBackupPassword={setBackupPassword}
+						backupPasswordConfirm={backupPasswordConfirm}
+						setBackupPasswordConfirm={setBackupPasswordConfirm}
+						protectionSummary={protectionSummary}
+						loadingScope={loadingScope}
+						backupSupported={backupSupported}
+						backupExportCapabilityReason={backupExportCapability.reason}
+						errorMessage={errorMessage}
+						onDownload={handleDownload}
+					/>
+				) : null}
+				{activeTask === 'restore' ? (
+					<SidebarRestoreBundleSection
+						restorePassword={restorePassword}
+						setRestorePassword={setRestorePassword}
+						restoreLoading={restoreLoading}
+						restoreStagingCapabilityEnabled={restoreStagingCapability.enabled}
+						restoreStagingCapabilityReason={restoreStagingCapability.reason || ''}
+						restoreError={restoreError}
+						restoreResult={restoreResult}
+						restoreValidation={restoreValidation}
+						onRestoreFileSelect={handleRestoreFileSelect}
+						onCopy={handleCopy}
+					/>
+				) : null}
+				{activeTask === 'portable' ? (
+					<SidebarPortableImportSection
+						portablePassword={portablePassword}
+						onPortablePasswordChange={handlePortablePasswordChange}
+						portableLoading={portableLoading}
+						portablePreviewReady={portablePreviewReady}
+						portableError={portableError}
+						portableSummary={portableSummary}
+						portableImportResultPresent={!!portableImportResult}
+						onPortablePreviewFileSelect={handlePortablePreviewFileSelect}
+						onPortableImport={handlePortableImport}
+						onCopy={handleCopy}
+					/>
+				) : null}
+				{activeTask === 'cleanup' ? (
+					<SidebarStagedRestoresSection
+						stagedRestores={stagedRestores}
+						stagedRestoresLoading={stagedRestoresLoading}
+						stagedRestoresError={stagedRestoresError}
+						cleanupRestoresLoading={cleanupRestoresLoading}
+						deleteRestoreId={deleteRestoreId}
+						staleRestoreCount={staleRestoreCount}
+						isRestoreStale={isRestoreStale}
+						formatRestoreAge={formatRestoreAge}
+						onRefresh={() => void refreshStagedRestores()}
+						onDeleteStale={() => void handleDeleteStaleRestores()}
+						onDeleteRestore={handleDeleteRestore}
+						onCopy={handleCopy}
+					/>
+				) : null}
 			</div>
 		</OverlaySheet>
 	)

@@ -525,14 +525,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await search.fill('summary')
 		await expect(objectsFavoriteItem(drawer, 'summary.txt')).toBeVisible()
 
-		const favoritesOnly = drawer.getByRole('switch', { name: 'Favorites only' })
-		const openDetailsOnClick = drawer.getByRole('switch', { name: 'Open details on click' })
-		await expect(favoritesOnly).toHaveAttribute('aria-checked', 'false')
-		await favoritesOnly.click()
-		await expect(favoritesOnly).toHaveAttribute('aria-checked', 'true')
-		await expect(openDetailsOnClick).toHaveAttribute('aria-checked', 'true')
-		await openDetailsOnClick.click()
-		await expect(openDetailsOnClick).toHaveAttribute('aria-checked', 'false')
+		await expect(objectsFavoritesControls(drawer)).toHaveCount(0)
 
 		await search.fill('missing')
 		const status = drawer.getByTestId('objects-favorites-status')

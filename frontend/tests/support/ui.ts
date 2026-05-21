@@ -493,6 +493,16 @@ function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+export async function clickBucketCardManageAction(
+	page: Page,
+	bucketCard: Locator,
+	bucketName: string,
+	actionName: string | RegExp,
+): Promise<void> {
+	await bucketCard.getByRole('button', { name: `Manage bucket ${bucketName}` }).click()
+	await page.getByRole('menu').last().getByRole('menuitem', { name: actionName }).click()
+}
+
 function contextualJobActionName(actionName: string | RegExp): string | RegExp {
 	if (actionName instanceof RegExp) return actionName
 	return new RegExp(`^${escapeRegExp(actionName)}(?: (?:for )?job .+)?$`)

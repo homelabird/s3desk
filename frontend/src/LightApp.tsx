@@ -157,7 +157,7 @@ function ProfilesList(props: {
 		setProfileId(null)
 	}, [profileId, setProfileId, successfulProfiles])
 
-	const openDashboard = (path: '/buckets' | '/objects' | '/uploads' | '/jobs') => {
+	const openDashboard = (path: '/buckets' | '/objects') => {
 		if (!effectiveProfileId) return
 		navigate(path)
 	}
@@ -171,7 +171,7 @@ function ProfilesList(props: {
 						Create profile
 					</Link>
 					<Link to="/profiles?advanced=1" className={`${styles.linkButton} ${styles.linkButtonSecondary}`}>
-						Advanced
+						Advanced profile setup
 					</Link>
 					<Link to="/profiles?settings=1" className={`${styles.linkButton} ${styles.linkButtonSecondary}`}>
 						Settings
@@ -251,17 +251,22 @@ function ProfilesList(props: {
 				<section className={`${styles.section} ${styles.sectionPadded}`}>
 					<div className={styles.sectionHeading}>Open</div>
 					<div className={styles.openButtons}>
-						{(['/buckets', '/objects', '/uploads', '/jobs'] as const).map((path) => (
-							<button
-								key={path}
-								type="button"
-								onClick={() => openDashboard(path)}
-								disabled={!effectiveProfileId}
-								className={`${styles.button} ${styles.buttonSecondary} ${effectiveProfileId ? styles.buttonClickable : styles.openButtonDisabled}`}
-							>
-								{path.slice(1)}
-							</button>
-						))}
+						<button
+							type="button"
+							onClick={() => openDashboard('/objects')}
+							disabled={!effectiveProfileId}
+							className={`${styles.button} ${styles.buttonPrimary} ${effectiveProfileId ? styles.buttonClickable : styles.openButtonDisabled}`}
+						>
+							Open Objects
+						</button>
+						<button
+							type="button"
+							onClick={() => openDashboard('/buckets')}
+							disabled={!effectiveProfileId}
+							className={`${styles.button} ${styles.buttonSecondary} ${effectiveProfileId ? styles.buttonClickable : styles.openButtonDisabled}`}
+						>
+							Manage Buckets
+						</button>
 					</div>
 					{effectiveProfileId ? null : <div className={styles.openHint}>Select a profile first to open the dashboard.</div>}
 				</section>
