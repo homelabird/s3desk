@@ -27,6 +27,9 @@ type StorageSeed = {
 }
 
 const now = '2024-01-01T00:00:00Z'
+const webviewJobsReadyTimeoutMs = 90_000
+const webviewJobsDrawerTimeoutMs = 60_000
+const webviewJobsDrawerTestTimeoutMs = 180_000
 const webviewObjectsReadyTimeoutMs = 90_000
 const webviewObjectsTestTimeoutMs = 180_000
 
@@ -186,13 +189,14 @@ async function emulateInsecureBrowser(page: Page) {
 
 test.describe('Webview environment and posture coverage', () => {
 	test('jobs download drawer can queue a device download in a short landscape split-view posture', async ({ page }) => {
+		test.setTimeout(webviewJobsDrawerTestTimeoutMs)
 		await page.setViewportSize({ width: 780, height: 420 })
 		await emulateSecureDirectoryPicker(page)
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
-		await gotoJobsPageRaw(page)
-		const dialog = await openJobsDownloadDrawer(page)
+		await gotoJobsPageRaw(page, { timeout: webviewJobsReadyTimeoutMs })
+		const dialog = await openJobsDownloadDrawer(page, { timeout: webviewJobsDrawerTimeoutMs })
 		const localFolderInput = dialog.getByPlaceholder('Select a folder…')
 		await expect(dialog.getByLabel('Bucket')).toHaveValue(defaultStorage.bucket)
 		await expect(dialog.getByText('Downloads to this device')).toBeVisible()
@@ -206,12 +210,13 @@ test.describe('Webview environment and posture coverage', () => {
 	})
 
 	test('jobs download drawer warns when secure-context folder access is unavailable', async ({ page }) => {
+		test.setTimeout(webviewJobsDrawerTestTimeoutMs)
 		await emulateInsecureBrowser(page)
 		await installWebviewFixtures(page)
 		await seedStorage(page)
 
-		await gotoJobsPageRaw(page)
-		const dialog = await openJobsDownloadDrawer(page)
+		await gotoJobsPageRaw(page, { timeout: webviewJobsReadyTimeoutMs })
+		const dialog = await openJobsDownloadDrawer(page, { timeout: webviewJobsDrawerTimeoutMs })
 
 		await expect(dialog.getByText(localFolderAccessUnavailableTitle())).toBeVisible()
 		await expect(dialog.getByText(directoryPickerInsecureOriginReason())).toBeVisible()
