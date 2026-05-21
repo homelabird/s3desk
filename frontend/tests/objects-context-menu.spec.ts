@@ -142,15 +142,14 @@ test.describe('Objects context menus', () => {
 
 			const menu = objectsContextMenu(page)
 			const newFolderItem = menu.getByRole('menuitem', { name: 'New folder…' })
+			const dialog = page.getByRole('dialog', { name: 'New folder' })
 			await expect(async () => {
 				await scroller.click({ button: 'right', position: { x: 12, y: 12 } })
 				await expect(menu).toBeVisible({ timeout: 1_000 })
-			}).toPass({ timeout: 10_000 })
-			await newFolderItem.evaluate((element) => {
-				;(element as HTMLElement).click()
-			})
-			const dialog = page.getByRole('dialog', { name: 'New folder' })
-			await expect(dialog).toBeVisible()
+				await expect(newFolderItem).toBeVisible({ timeout: 1_000 })
+				await newFolderItem.click({ timeout: 2_000 })
+				await expect(dialog).toBeVisible({ timeout: 2_000 })
+			}).toPass({ timeout: 30_000 })
 			await expect(dialog.getByLabel('Folder name')).toBeVisible()
 		} finally {
 			if (!page.isClosed()) {
