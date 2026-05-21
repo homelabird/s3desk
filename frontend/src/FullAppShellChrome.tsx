@@ -1,6 +1,5 @@
 import {
 	AppstoreOutlined,
-	CloudUploadOutlined,
 	EllipsisOutlined,
 	FolderOpenOutlined,
 	LogoutOutlined,
@@ -16,13 +15,10 @@ import { Button, Layout } from 'antd'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 
-import type { APIClientShape } from './api/client'
-import type { MetaResponse } from './api/types'
 import { APP_NAVIGATION_DRAWER_ID, APP_SETTINGS_DRAWER_ID } from './appShellIds'
 import { BrandLockup } from './components/BrandLockup'
 import { MenuPopover } from './components/MenuPopover'
 import { OverlaySheet } from './components/OverlaySheet'
-import { SidebarBackupAction } from './components/SidebarBackupAction'
 import { TopBarProfileSelect } from './components/TopBarProfileSelect'
 import { TransfersButton } from './components/TransfersShell'
 import type { ThemeMode } from './themeModeContext'
@@ -42,12 +38,9 @@ const NAV_ITEMS: NavItem[] = [
 	{ key: '/profiles', label: 'Profiles', icon: <ProfileOutlined />, to: '/profiles' },
 	{ key: '/buckets', label: 'Buckets', icon: <AppstoreOutlined />, to: '/buckets' },
 	{ key: '/objects', label: 'Objects', icon: <FolderOpenOutlined />, to: '/objects' },
-	{ key: '/uploads', label: 'Uploads', icon: <CloudUploadOutlined />, to: '/uploads' },
-	{ key: '/jobs', label: 'Jobs', icon: <ToolOutlined />, to: '/jobs' },
+	{ key: '/jobs', label: 'Activity', icon: <ToolOutlined />, to: '/jobs' },
 ]
 export type FullAppShellChromeSession = {
-	api: APIClientShape
-	meta?: MetaResponse
 	apiToken: string
 	profileId: string | null
 	setProfileId: (profileId: string | null) => void
@@ -75,10 +68,7 @@ export type FullAppShellChromeProps = {
 }
 
 function AppNavigation(props: {
-	api: APIClientShape
-	meta?: MetaResponse
 	selectedKey: string
-	shellScopeKey: string
 	onSelect?: () => void
 }) {
 	return (
@@ -102,14 +92,6 @@ function AppNavigation(props: {
 					</Link>
 				))}
 			</nav>
-			<div className={styles.navFooter}>
-				<SidebarBackupAction
-					api={props.api}
-					meta={props.meta}
-					onActionComplete={props.onSelect}
-					scopeKey={props.shellScopeKey}
-				/>
-			</div>
 		</div>
 	)
 }
@@ -121,8 +103,6 @@ export function FullAppShellChrome({
 	children,
 }: FullAppShellChromeProps) {
 	const {
-		api,
-		meta,
 		apiToken,
 		profileId,
 		setProfileId,
@@ -168,10 +148,7 @@ export function FullAppShellChrome({
 						</Link>
 					</div>
 					<AppNavigation
-						api={api}
-						meta={meta}
 						selectedKey={selectedKey}
-						shellScopeKey={shellScopeKey}
 					/>
 				</Sider>
 			) : null}
@@ -298,10 +275,7 @@ export function FullAppShellChrome({
 					</Link>
 				</div>
 				<AppNavigation
-					api={api}
-					meta={meta}
 					selectedKey={selectedKey}
-					shellScopeKey={shellScopeKey}
 					onSelect={closeNav}
 				/>
 			</OverlaySheet>

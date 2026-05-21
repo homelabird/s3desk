@@ -124,6 +124,7 @@ describe('useFullAppController', () => {
 			settings: {
 				open: true,
 				shellScopeKey: 'token-a:profile-1',
+				api,
 				close: closeSettings,
 				apiToken: 'token-a',
 				setApiToken,
@@ -265,8 +266,6 @@ describe('useFullAppController', () => {
 			toggleMode: vi.fn(),
 		}
 		const session: FullAppShellChromeSession = {
-			api,
-			meta: undefined,
 			apiToken: '',
 			profileId: null,
 			setProfileId,
@@ -324,6 +323,7 @@ describe('useFullAppController', () => {
 				settings: {
 					open: false,
 					shellScopeKey: '__no_server__:__no_profile__',
+					api,
 					close: vi.fn(),
 					apiToken: '',
 					setApiToken,

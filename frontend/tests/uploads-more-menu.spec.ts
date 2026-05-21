@@ -72,6 +72,11 @@ test.describe('Uploads header actions', () => {
 		await mockUploadsPageApi(page)
 		await seedStorage(page)
 		await gotoUploadsPage(page)
+		await addUploadSourceFromDevice(page, {
+			name: 'alpha.txt',
+			mimeType: 'text/plain',
+			buffer: Buffer.from('alpha'),
+		})
 
 		const transfersDialog = await openTransfersDialog(page, { triggerButtonName: 'Open Transfers', tabName: /Uploads/i })
 		await expect(transfersDialog.getByRole('tab', { name: /Uploads/i })).toHaveAttribute('aria-selected', 'true')

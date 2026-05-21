@@ -16,6 +16,7 @@ export type UploadsPageShellProps = {
 
 export function UploadsPageShell(props: UploadsPageShellProps) {
 	const { presentation } = props
+	const showSelectionActions = !presentation.header.clearSelectionDisabled
 
 	return (
 		<div className={styles.pageStack}>
@@ -36,10 +37,12 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 								</Button>
 							</span>
 						</Tooltip>
-						<Button onClick={presentation.header.onOpenTransfers}>Open Transfers</Button>
-						<Button onClick={presentation.header.onClearSelection} disabled={presentation.header.clearSelectionDisabled}>
-							Clear selection
-						</Button>
+						{showSelectionActions ? (
+							<>
+								<Button onClick={presentation.header.onOpenTransfers}>Open Transfers</Button>
+								<Button onClick={presentation.header.onClearSelection}>Clear selection</Button>
+							</>
+						) : null}
 					</Space>
 				}
 			/>

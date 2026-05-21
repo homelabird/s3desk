@@ -64,8 +64,6 @@ export function useFullAppShellViewModel({
 
 	const session = useMemo<FullAppShellChromeSession>(
 		() => ({
-			api,
-			meta,
 			apiToken,
 			profileId,
 			setProfileId,
@@ -80,8 +78,6 @@ export function useFullAppShellViewModel({
 			compactHeaderMenu,
 		}),
 		[
-			api,
-			meta,
 			apiToken,
 			profileId,
 			setProfileId,
@@ -101,6 +97,8 @@ export function useFullAppShellViewModel({
 		() => ({
 			open: settingsOpen,
 			shellScopeKey,
+			api,
+			meta,
 			close: closeSettings,
 			apiToken,
 			setApiToken,
@@ -110,6 +108,8 @@ export function useFullAppShellViewModel({
 		[
 			settingsOpen,
 			shellScopeKey,
+			api,
+			meta,
 			closeSettings,
 			apiToken,
 			setApiToken,

@@ -45,8 +45,7 @@ test.describe('webview routing', () => {
 
 		const profileSelect = page.getByTestId('topbar-profile-select').getByLabel('Profile')
 		const objectsLocation = page.getByText(`s3://${defaultWebviewStorage.bucket}/${defaultWebviewStorage.prefix}`, { exact: true })
-		const uploadsBucket = page.getByRole('combobox', { name: 'Bucket' })
-		const navigateTo = async (label: 'Buckets' | 'Objects' | 'Uploads' | 'Jobs') => {
+		const navigateTo = async (label: 'Buckets' | 'Objects' | 'Activity') => {
 			await page.getByRole('link', { name: label }).first().click()
 		}
 
@@ -96,11 +95,7 @@ test.describe('webview routing', () => {
 
 		await expectRouteState('/buckets', () => navigateTo('Buckets'), page.getByRole('button', { name: 'New Bucket' }))
 
-		await expectRouteState('/uploads', () => navigateTo('Uploads'), page.getByRole('heading', { name: 'Uploads' }), async () => {
-			await expect(uploadsBucket).toHaveValue(defaultWebviewStorage.bucket)
-		})
-
-		await expectRouteState('/jobs', () => navigateTo('Jobs'), page.getByRole('heading', { name: 'Jobs' }))
+		await expectRouteState('/jobs', () => navigateTo('Activity'), page.getByRole('heading', { name: 'Jobs' }))
 
 		await navigateTo('Objects')
 		await expect(page).toHaveURL(/\/objects$/)

@@ -2,16 +2,17 @@ import { Alert, Space, Typography } from 'antd'
 
 import type { APIClientShape } from '../../api/client'
 import type { MetaResponse } from '../../api/types'
+import { SidebarBackupAction } from '../../components/SidebarBackupAction'
 
 type ServerSettingsSectionProps = {
 	api: APIClientShape
 	meta: MetaResponse | undefined
-	isFetching: boolean
-	errorMessage: string | null
+	scopeKey?: string
+	isFetching?: boolean
+	errorMessage?: string | null
 }
 
 export function ServerSettingsSection(props: ServerSettingsSectionProps) {
-	void props.api
 	void props.isFetching
 
 	const warnings = Array.isArray(props.meta?.warnings)
@@ -29,14 +30,20 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 					description={<ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
 				/>
 			) : null}
-			<Alert
-				type="info"
-				showIcon
-				title="Backup and restore moved to the sidebar"
-				description="Use the main sidebar Backup action for backup export, restore staging, portable migration, and staged restore inventory. This legacy settings section is kept only for compatibility."
-			/>
+			<Space orientation="vertical" size={8} style={{ width: '100%' }}>
+				<Typography.Text strong>Backup and restore</Typography.Text>
+				<Typography.Text type="secondary">
+					Export server backups, stage restores, import portable bundles, and clean staged restore inventory from this advanced settings area.
+				</Typography.Text>
+				<SidebarBackupAction
+					api={props.api}
+					meta={props.meta}
+					scopeKey={props.scopeKey}
+					variant="surface"
+				/>
+			</Space>
 			<Typography.Text type="secondary">
-				The Operations tab has been removed. Server backup and restore is now managed from the sidebar workflow so operators can stay in the main navigation context.
+				These operations affect the local server state. Keep day-to-day browsing, uploads, and transfers in the main workspace.
 			</Typography.Text>
 		</Space>
 	)

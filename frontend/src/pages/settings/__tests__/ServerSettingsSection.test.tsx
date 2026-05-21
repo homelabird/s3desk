@@ -6,18 +6,17 @@ import type { MetaResponse } from '../../../api/types'
 import { ServerSettingsSection } from '../ServerSettingsSection'
 
 describe('ServerSettingsSection', () => {
-	it('shows the compatibility notice after moving backup tools to the sidebar', () => {
+	it('shows backup tools in the advanced settings surface', () => {
 		render(
 			<ServerSettingsSection
 				api={{} as APIClientShape}
 				meta={undefined}
-				isFetching={false}
-				errorMessage={null}
 			/>,
 		)
 
-		expect(screen.getByText(/Backup and restore moved to the sidebar/i)).toBeInTheDocument()
-		expect(screen.getByText(/The Operations tab has been removed/i)).toBeInTheDocument()
+		expect(screen.getByText('Backup and restore')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Backup' })).toBeInTheDocument()
+		expect(screen.getByText(/These operations affect the local server state/i)).toBeInTheDocument()
 	})
 
 	it('renders operational warnings from the meta response', () => {
@@ -55,8 +54,6 @@ describe('ServerSettingsSection', () => {
 			<ServerSettingsSection
 				api={{} as APIClientShape}
 				meta={meta}
-				isFetching={false}
-				errorMessage={null}
 			/>,
 		)
 

@@ -49,6 +49,7 @@ describe('FullAppOverlaysHost', () => {
 				settings={{
 					open: true,
 					shellScopeKey: 'token-a:profile-1',
+					api: {} as never,
 					close: closeSettings,
 					apiToken: 'token-a',
 					setApiToken: vi.fn(),

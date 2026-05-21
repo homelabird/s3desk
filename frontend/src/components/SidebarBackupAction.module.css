@@ -5,7 +5,7 @@
 .trigger {
 	width: 100%;
 	border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 22%, transparent);
-	border-radius: 16px;
+	border-radius: 8px;
 	background:
 		linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-bg) 92%, transparent), color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, transparent));
 	color: var(--s3d-sidebar-text);
@@ -30,10 +30,24 @@
 	transform: translateY(-1px);
 }
 
+.triggerSurface {
+	background: var(--s3d-color-bg-secondary);
+	color: var(--s3d-color-text);
+}
+
+.triggerSurface .triggerIcon {
+	background: color-mix(in srgb, var(--s3d-color-primary) 12%, transparent);
+	color: var(--s3d-color-primary);
+}
+
+.triggerSurface .triggerSubtitle {
+	color: var(--s3d-color-text-secondary);
+}
+
 .triggerIcon {
 	width: 38px;
 	height: 38px;
-	border-radius: 12px;
+	border-radius: 8px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;

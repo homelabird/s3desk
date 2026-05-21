@@ -1,5 +1,8 @@
 import { Suspense, lazy } from 'react'
 
+import type { APIClientShape } from './api/client'
+import type { MetaResponse } from './api/types'
+
 const SettingsDrawer = lazy(async () => {
 	const m = await import('./components/SettingsDrawer')
 	return { default: m.SettingsDrawer }
@@ -13,6 +16,8 @@ const KeyboardShortcutGuide = lazy(async () => {
 export type FullAppOverlaysHostSettings = {
 	open: boolean
 	shellScopeKey: string
+	api: APIClientShape
+	meta?: MetaResponse
 	close: () => void
 	apiToken: string
 	setApiToken: (token: string) => void
@@ -42,6 +47,9 @@ export function FullAppOverlaysHost({
 						key={`settings:${settings.shellScopeKey}`}
 						open={true}
 						onClose={settings.close}
+						api={settings.api}
+						meta={settings.meta}
+						shellScopeKey={settings.shellScopeKey}
 						apiToken={settings.apiToken}
 						setApiToken={settings.setApiToken}
 						profileId={settings.profileId}

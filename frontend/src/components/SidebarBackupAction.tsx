@@ -13,6 +13,7 @@ type SidebarBackupActionProps = {
 	meta?: MetaResponse
 	onActionComplete?: () => void
 	scopeKey?: string
+	variant?: 'sidebar' | 'surface'
 }
 
 const SidebarBackupDrawer = lazy(() =>
@@ -33,7 +34,9 @@ function SidebarBackupActionSession(props: SidebarBackupActionProps) {
 		<>
 			<button
 				type="button"
-				className={styles.trigger}
+				className={[styles.trigger, props.variant === 'surface' ? styles.triggerSurface : '']
+					.filter(Boolean)
+					.join(' ')}
 				onClick={() => setOpen(true)}
 				aria-label="Backup"
 				aria-expanded={open}

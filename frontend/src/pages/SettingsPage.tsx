@@ -7,6 +7,8 @@ import {
 	RETRY_COUNT_STORAGE_KEY,
 	RETRY_DELAY_STORAGE_KEY,
 } from '../api/client'
+import type { APIClientShape } from '../api/client'
+import type { MetaResponse } from '../api/types'
 import { getApiBaseUrl, stripApiBaseSuffix } from '../api/baseUrl'
 import { AppTabs } from '../components/AppTabs'
 import {
@@ -40,11 +42,15 @@ import {
 	AccessSettingsSection,
 	NetworkSettingsSection,
 	ObjectsSettingsSection,
+	ServerSettingsSection,
 	TransfersSettingsSection,
 } from './settings/settingsLazy'
 import styles from './SettingsPage.module.css'
 
 type Props = {
+	api: APIClientShape
+	meta?: MetaResponse
+	shellScopeKey: string
 	apiToken: string
 	setApiToken: (v: string) => void
 	profileId: string | null
@@ -234,8 +240,8 @@ export function SettingsPage(props: Props) {
 						),
 					},
 					{
-						key: 'browsing',
-						label: 'Browsing',
+						key: 'objects',
+						label: 'Objects',
 						children: (
 							<Suspense fallback={<SettingsSectionFallback />}>
 								<ObjectsSettingsSection
@@ -286,30 +292,33 @@ export function SettingsPage(props: Props) {
 						),
 					},
 					{
-						key: 'diagnostics',
-						label: 'Diagnostics',
+						key: 'advanced',
+						label: 'Advanced',
 						children: (
-							<Suspense fallback={<SettingsSectionFallback />}>
-								<NetworkSettingsSection
-									apiRetryCount={apiRetryCount}
-									setApiRetryCount={setApiRetryCount}
-									apiRetryDelayMs={apiRetryDelayMs}
-									setApiRetryDelayMs={setApiRetryDelayMs}
-									networkLog={networkLog}
-									onClearNetworkLog={() => clearNetworkLog()}
+							<Space orientation="vertical" size="large" className={styles.fullWidth}>
+								<Suspense fallback={<SettingsSectionFallback />}>
+									<ServerSettingsSection
+										api={props.api}
+										meta={props.meta}
+										scopeKey={props.shellScopeKey}
+									/>
+								</Suspense>
+								<Suspense fallback={<SettingsSectionFallback />}>
+									<NetworkSettingsSection
+										apiRetryCount={apiRetryCount}
+										setApiRetryCount={setApiRetryCount}
+										apiRetryDelayMs={apiRetryDelayMs}
+										setApiRetryDelayMs={setApiRetryDelayMs}
+										networkLog={networkLog}
+										onClearNetworkLog={() => clearNetworkLog()}
+									/>
+								</Suspense>
+								<RecoverySettingsSection
+									dismissedDialogCount={dismissedDialogCount}
+									onResetDismissedDialogs={onResetDismissedDialogs}
+									onResetUiState={onResetUiState}
 								/>
-							</Suspense>
-						),
-					},
-					{
-						key: 'recovery',
-						label: 'Recovery',
-						children: (
-							<RecoverySettingsSection
-								dismissedDialogCount={dismissedDialogCount}
-								onResetDismissedDialogs={onResetDismissedDialogs}
-								onResetUiState={onResetUiState}
-							/>
+							</Space>
 						),
 					},
 				]}
