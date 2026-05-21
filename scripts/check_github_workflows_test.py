@@ -31,6 +31,31 @@ def write_workflow(path: pathlib.Path, uses: str) -> None:
     )
 
 
+def write_frontend_e2e_workflow(path: pathlib.Path, filters: str) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                "name: Frontend E2E",
+                '"on": push',
+                "concurrency:",
+                "  group: frontend-e2e-${{ github.ref }}",
+                "  cancel-in-progress: true",
+                "jobs:",
+                "  changes:",
+                "    runs-on: ubuntu-latest",
+                "    steps:",
+                "      - id: filter",
+                "        uses: dorny/paths-filter@v4",
+                "        with:",
+                "          filters: |",
+                *[f"            {line}" for line in filters.splitlines()],
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 class GithubWorkflowValidatorTests(unittest.TestCase):
     def test_rejects_deprecated_action_refs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -48,6 +73,44 @@ class GithubWorkflowValidatorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "workflow.yml"
             write_workflow(path, "actions/checkout@v6")
+
+            MODULE.validate_workflow(path)
+
+    def test_rejects_frontend_e2e_browser_scope_without_backend_internal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "frontend-e2e.yml"
+            write_frontend_e2e_workflow(
+                path,
+                "\n".join(
+                    [
+                        "browser_facing:",
+                        '  - "frontend/src/**"',
+                        '  - "backend/internal/api/**"',
+                    ]
+                ),
+            )
+
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit):
+                MODULE.validate_workflow(path)
+
+        self.assertIn("backend/internal/**", stderr.getvalue())
+
+    def test_allows_frontend_e2e_browser_scope_with_backend_internal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "frontend-e2e.yml"
+            write_frontend_e2e_workflow(
+                path,
+                "\n".join(
+                    [
+                        "browser_facing:",
+                        '  - "frontend/src/**"',
+                        '  - "backend/go.mod"',
+                        '  - "backend/go.sum"',
+                        '  - "backend/internal/**"',
+                    ]
+                ),
+            )
 
             MODULE.validate_workflow(path)
 

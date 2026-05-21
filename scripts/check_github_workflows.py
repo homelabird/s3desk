@@ -32,6 +32,11 @@ REQUIRED_CANCEL_IN_PROGRESS_WORKFLOWS = {
     "release-gate.yml": "release-gate-",
     "license-audit.yml": "license-audit-",
 }
+REQUIRED_FRONTEND_E2E_BROWSER_FACING_PATHS = {
+    "backend/go.mod",
+    "backend/go.sum",
+    "backend/internal/**",
+}
 DEPRECATED_ACTION_REFS = {
     "actions/checkout@v4": "actions/checkout@v6",
     "actions/setup-go@v5": "actions/setup-go@v6",
@@ -131,6 +136,26 @@ def validate_required_concurrency(path: Path, workflow):
         fail(f"{context}.cancel-in-progress must be true")
 
 
+def validate_frontend_e2e_browser_facing_scope(path: Path, workflow):
+    if path.name != "frontend-e2e.yml":
+        return
+    steps = workflow.get("jobs", {}).get("changes", {}).get("steps", [])
+    filters = ""
+    for step in steps:
+        if isinstance(step, dict) and step.get("id") == "filter":
+            with_config = step.get("with", {})
+            if isinstance(with_config, dict):
+                filters = with_config.get("filters", "")
+            break
+    if not isinstance(filters, str) or "browser_facing:" not in filters:
+        fail(f"{path}: changes filter must define a browser_facing scope")
+    missing = sorted(
+        required for required in REQUIRED_FRONTEND_E2E_BROWSER_FACING_PATHS if required not in filters
+    )
+    if missing:
+        fail(f"{path}: browser_facing filter missing required backend scope(s): {', '.join(missing)}")
+
+
 def validate_workflow(path: Path):
     workflow = load_workflow(path)
     require_mapping(workflow, f"{path}")
@@ -153,6 +178,7 @@ def validate_workflow(path: Path):
             fail(f"{path}: job ids must be non-empty strings")
         validate_job(path, job_id, job)
     validate_required_concurrency(path, workflow)
+    validate_frontend_e2e_browser_facing_scope(path, workflow)
 
 
 def main() -> int:
