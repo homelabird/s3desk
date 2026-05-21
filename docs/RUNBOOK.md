@@ -8,7 +8,8 @@ This runbook covers the minimum operational checks for a normal S3Desk deploymen
 - Remote access should always use:
   - `ADDR=0.0.0.0:8080`
   - `ALLOW_REMOTE=true`
-  - `API_TOKEN` with a non-placeholder value
+  - `API_TOKEN` with a non-placeholder value of at least 32 bytes
+  - `ENCRYPTION_KEY` so provider credentials and mTLS material are encrypted at rest
 - `ALLOWED_HOSTS` must include every browser-facing host when `ALLOW_REMOTE=true`
 
 Containerized defaults:
@@ -17,7 +18,7 @@ Containerized defaults:
 - `./scripts/compose.sh dev` is loopback-only and meant for local work
 - `./scripts/compose.sh remote` is the hardened Postgres-backed remote stack
 - `./scripts/compose.sh caddy` adds public HTTPS in front of the remote stack
-- remote stack requires explicit `S3DESK_BIND_ADDRESS`, `API_TOKEN`, and `POSTGRES_PASSWORD`
+- remote stack requires explicit `S3DESK_BIND_ADDRESS`, `API_TOKEN`, `ENCRYPTION_KEY`, and `POSTGRES_PASSWORD`
 
 ## Start and Stop
 
@@ -33,15 +34,16 @@ set -a; . ./.env.local; set +a
 Use [.env.example](../.env.example) as the starting point for remote/Postgres deployments.
 The repository root `.env` is checked in for non-secret compose defaults. Keep
 real deployment secrets in exported environment variables or ignored local files
-such as `.env.local`; do not commit real `API_TOKEN`, `POSTGRES_PASSWORD`, or
-provider credentials.
+such as `.env.local`; do not commit real `API_TOKEN`, `POSTGRES_PASSWORD`,
+`ENCRYPTION_KEY`, or provider credentials.
 
 If you are using `./scripts/compose.sh dev`, keep it local-only.
 
 For remote exposure, require all of the following:
 
 - `ALLOW_REMOTE=true`
-- a non-placeholder `API_TOKEN`
+- a non-placeholder `API_TOKEN` of at least 32 bytes
+- `ENCRYPTION_KEY`
 - explicit review of exposed host/port bindings
 - `ALLOWED_HOSTS` for every browser-facing hostname or IP address
 - an explicit `S3DESK_BIND_ADDRESS` choice in the compose environment
@@ -69,6 +71,7 @@ Required environment:
 - `EXTERNAL_BASE_URL`
 - `ALLOWED_HOSTS`
 - `API_TOKEN`
+- `ENCRYPTION_KEY`
 - `POSTGRES_PASSWORD`
 - `ALLOWED_LOCAL_DIRS`
 

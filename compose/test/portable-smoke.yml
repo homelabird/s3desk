@@ -52,7 +52,7 @@ services:
       ALLOW_REMOTE: "true"
       ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
       ALLOWED_LOCAL_DIRS: "/data"
-      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-s3desk-portable-token-0123456789abcdef012345}
       EXTERNAL_BASE_URL: "http://source:8080"
       DB_BACKEND: "${PORTABLE_SMOKE_SOURCE_DB_BACKEND:-sqlite}"
       DATABASE_URL: "postgres://${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}:${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}@postgres:5432/${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}?sslmode=disable"
@@ -72,7 +72,7 @@ services:
       ALLOW_REMOTE: "true"
       ALLOWED_HOSTS: "127.0.0.1,localhost,source,target"
       ALLOWED_LOCAL_DIRS: "/data"
-      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-s3desk-portable-token-0123456789abcdef012345}
       EXTERNAL_BASE_URL: "http://target:8080"
       DB_BACKEND: "${PORTABLE_SMOKE_TARGET_DB_BACKEND:-postgres}"
       DATABASE_URL: "postgres://${PORTABLE_SMOKE_POSTGRES_USER:-s3desk}:${PORTABLE_SMOKE_POSTGRES_PASSWORD:-portable}@postgres:5432/${PORTABLE_SMOKE_POSTGRES_DB:-s3desk}?sslmode=disable"
@@ -86,7 +86,7 @@ services:
     image: "${PYTHON_IMAGE:-docker.io/library/python:3.12-alpine}"
     entrypoint: ["python3", "/seed-source.py"]
     environment:
-      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-s3desk-portable-token-0123456789abcdef012345}
       SOURCE_API_BASE: http://source:8080/api/v1
       SOURCE_DATA_DIR: /source-data
       FIXTURE_OUT: /artifacts/portable-fixture.json
@@ -108,7 +108,7 @@ services:
     image: "${PYTHON_IMAGE:-docker.io/library/python:3.12-alpine}"
     entrypoint: ["python3", "/run-smoke.py"]
     environment:
-      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-s3desk-portable-token-0123456789abcdef012345}
       SOURCE_API_BASE: http://source:8080/api/v1
       TARGET_API_BASE: http://target:8080/api/v1
       TARGET_DATA_DIR: /target-data
@@ -129,7 +129,7 @@ services:
     image: "${PYTHON_IMAGE:-docker.io/library/python:3.12-alpine}"
     entrypoint: ["python3", "/run-failure-smoke.py"]
     environment:
-      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-portable-token}
+      API_TOKEN: ${PORTABLE_SMOKE_API_TOKEN:-s3desk-portable-token-0123456789abcdef012345}
       SOURCE_API_BASE: http://source:8080/api/v1
       TARGET_API_BASE: http://target:8080/api/v1
       TARGET_DATA_DIR: /target-data

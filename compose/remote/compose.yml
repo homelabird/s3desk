@@ -30,6 +30,7 @@ services:
       ALLOW_REMOTE: "true"
       LOG_ENV: "${LOG_ENV:-production}"
       API_TOKEN: "${API_TOKEN:?set API_TOKEN for remote deployment}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?set ENCRYPTION_KEY for remote deployment}"
       ALLOWED_LOCAL_DIRS: "${ALLOWED_LOCAL_DIRS:?set ALLOWED_LOCAL_DIRS to one or more container paths S3Desk may access}"
       ALLOWED_HOSTS: "${ALLOWED_HOSTS:?set ALLOWED_HOSTS to allowed hostnames for remote deployment}"
       EXTERNAL_BASE_URL: "${EXTERNAL_BASE_URL:-}"

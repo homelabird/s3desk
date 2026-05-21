@@ -75,6 +75,16 @@ require_non_placeholder_secret() {
   fi
 }
 
+require_strong_api_token() {
+  local value
+  value="$(env_or_dotenv_value API_TOKEN)"
+  require_non_placeholder_secret API_TOKEN
+  if ((${#value} < 32)); then
+    echo "API_TOKEN must be at least 32 characters for ${STACK}" >&2
+    exit 1
+  fi
+}
+
 is_placeholder_public_host() {
   local value="${1:-}"
   local normalized
@@ -117,7 +127,8 @@ declare -a COMPOSE_FILES=()
 case "${STACK}" in
   remote|prod)
     COMPOSE_FILES=("compose/remote/compose.yml")
-    require_non_placeholder_secret API_TOKEN
+    require_strong_api_token
+    require_non_placeholder_secret ENCRYPTION_KEY
     require_non_placeholder_secret POSTGRES_PASSWORD
     require_non_empty_setting ALLOWED_LOCAL_DIRS
     require_non_placeholder_public_host ALLOWED_HOSTS
@@ -127,7 +138,8 @@ case "${STACK}" in
     ;;
   caddy|remote-caddy)
     COMPOSE_FILES=("compose/remote/caddy.yml")
-    require_non_placeholder_secret API_TOKEN
+    require_strong_api_token
+    require_non_placeholder_secret ENCRYPTION_KEY
     require_non_placeholder_secret POSTGRES_PASSWORD
     require_non_empty_setting ALLOWED_LOCAL_DIRS
     require_non_placeholder_public_host ALLOWED_HOSTS

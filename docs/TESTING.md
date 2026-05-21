@@ -599,8 +599,11 @@ These scripts verify:
 
 - wrong password on encrypted/password-protected portable bundles
 - destination `ENCRYPTION_KEY` mismatch against the bundle fingerprint
-- missing destination `ENCRYPTION_KEY` preflight blockers
 - partial thumbnail asset copy warnings after successful database import
+
+Remote non-loopback stacks require `ENCRYPTION_KEY` at startup, so missing-key
+portable preflight behavior is covered by focused backend API tests rather than
+the remote compose smoke.
 
 ## Reverse Proxy Smoke
 
@@ -644,7 +647,7 @@ Expected result:
 
 ```bash
 cd frontend
-E2E_LIVE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 E2E_API_TOKEN=change-me npm run test:e2e
+E2E_LIVE=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 E2E_API_TOKEN=s3desk-e2e-token-0123456789abcdef012345 npm run test:e2e
 ```
 
 Live Playwright runs do not start the managed mock Vite server. Set `PLAYWRIGHT_BASE_URL` or `BASE_URL` to the already-running S3Desk UI URL, or run `scripts/run_live_e2e_local.sh` from the repository root to start the local backend/MinIO harness automatically.

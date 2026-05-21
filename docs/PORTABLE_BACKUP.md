@@ -94,8 +94,10 @@ These failure flows cover:
 
 - wrong password
 - destination `ENCRYPTION_KEY` mismatch
-- missing destination `ENCRYPTION_KEY`
 - partial thumbnail copy warnings after successful DB import
+
+Remote non-loopback deployments fail startup when `ENCRYPTION_KEY` is missing;
+the in-product missing-key preflight remains covered by backend API tests.
 
 ## Current Limits
 

@@ -32,7 +32,8 @@ services:
     environment:
       ADDR: "0.0.0.0:8080"
       ALLOW_REMOTE: "true"
-      API_TOKEN: "${E2E_API_TOKEN:-live-e2e-token}"
+      API_TOKEN: "${E2E_API_TOKEN:-s3desk-e2e-token-0123456789abcdef012345}"
+      ENCRYPTION_KEY: "${E2E_ENCRYPTION_KEY:-QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=}"
       ALLOWED_HOSTS: "s3desk"
       ALLOWED_LOCAL_DIRS: "/data"
       RCLONE_RETRY_ATTEMPTS: "3"
@@ -52,7 +53,7 @@ services:
       dockerfile: Dockerfile
     environment:
       BASE_URL: "${E2E_BASE_URL:-http://s3desk:8080}"
-      API_TOKEN: "${E2E_API_TOKEN:-live-e2e-token}"
+      API_TOKEN: "${E2E_API_TOKEN:-s3desk-e2e-token-0123456789abcdef012345}"
       E2E_MINIO_ENDPOINT: "${E2E_MINIO_ENDPOINT:-http://minio:9000}"
       E2E_AZURITE_ENDPOINT: "${E2E_AZURITE_ENDPOINT:-http://azurite:10000/devstoreaccount1}"
       E2E_GCS_ENDPOINT: "${E2E_GCS_ENDPOINT:-http://fake-gcs-server:4443/storage/v1/v1}"

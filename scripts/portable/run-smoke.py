@@ -7,7 +7,7 @@ import urllib.request
 import uuid
 
 
-API_TOKEN = os.environ.get("API_TOKEN", "portable-token")
+API_TOKEN = os.environ.get("API_TOKEN", "s3desk-portable-token-0123456789abcdef012345")
 SOURCE_API_BASE = os.environ.get("SOURCE_API_BASE", "http://source:8080/api/v1").rstrip("/")
 TARGET_API_BASE = os.environ.get("TARGET_API_BASE", "http://target:8080/api/v1").rstrip("/")
 TARGET_DATA_DIR = os.environ.get("TARGET_DATA_DIR", "/target-data")

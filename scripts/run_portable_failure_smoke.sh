@@ -71,11 +71,4 @@ run_failure key_mismatch \
 	-e PORTABLE_BUNDLE_EXPORT_PASSWORD= \
 	-e PORTABLE_BUNDLE_IMPORT_PASSWORD=
 
-PORTABLE_SMOKE_TARGET_ENCRYPTION_KEY=""
-bring_up_and_seed
-run_failure preflight_blocker \
-	-e PORTABLE_BUNDLE_CONFIDENTIALITY=clear \
-	-e PORTABLE_BUNDLE_EXPORT_PASSWORD= \
-	-e PORTABLE_BUNDLE_IMPORT_PASSWORD=
-
 echo "[portable-failure] success"

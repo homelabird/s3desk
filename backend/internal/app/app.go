@@ -34,6 +34,7 @@ const (
 	defaultHTTPMaxHeaderBytes          = 1 << 20
 	defaultHTTPReadTimeout             = 30 * time.Second
 	defaultHTTPIdleTimeout             = 60 * time.Second
+	minRemoteAPITokenBytes             = 32
 )
 
 type dbOpenFunc func() (*gorm.DB, error)
@@ -51,15 +52,8 @@ func Run(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	if cfg.AllowRemote && !isLoopback {
-		switch {
-		case strings.TrimSpace(cfg.APIToken) == "":
-			return fmt.Errorf("API_TOKEN (or --api-token) is required when --allow-remote is enabled and addr is non-loopback (addr=%q)", cfg.Addr)
-		case isPlaceholderAPIToken(cfg.APIToken):
-			return fmt.Errorf("API_TOKEN must not use a placeholder value when remote access is enabled (addr=%q)", cfg.Addr)
-		case len(cfg.AllowedHosts) == 0:
-			return fmt.Errorf("ALLOW_REMOTE is enabled on a non-loopback addr but ALLOWED_HOSTS is empty. Startup fails closed for this configuration (addr=%q)", cfg.Addr)
-		}
+	if err := validateRemoteAccessConfig(cfg, isLoopback); err != nil {
+		return err
 	}
 
 	applySafeDefaults(&cfg)
@@ -463,6 +457,28 @@ func validateAllowedHosts(allowedHosts []string) error {
 		if !isValidAllowedHostName(host) {
 			return fmt.Errorf("ALLOWED_HOSTS contains an invalid value %q: must be a valid IP or domain name", host)
 		}
+	}
+
+	return nil
+}
+
+func validateRemoteAccessConfig(cfg config.Config, listenAddrIsLoopback bool) error {
+	if !cfg.AllowRemote || listenAddrIsLoopback {
+		return nil
+	}
+
+	apiToken := strings.TrimSpace(cfg.APIToken)
+	switch {
+	case apiToken == "":
+		return fmt.Errorf("API_TOKEN (or --api-token) is required when --allow-remote is enabled and addr is non-loopback (addr=%q)", cfg.Addr)
+	case isPlaceholderAPIToken(apiToken):
+		return fmt.Errorf("API_TOKEN must not use a placeholder value when remote access is enabled (addr=%q)", cfg.Addr)
+	case len([]byte(apiToken)) < minRemoteAPITokenBytes:
+		return fmt.Errorf("API_TOKEN must be at least %d bytes when remote access is enabled (addr=%q)", minRemoteAPITokenBytes, cfg.Addr)
+	case strings.TrimSpace(cfg.EncryptionKey) == "":
+		return fmt.Errorf("ENCRYPTION_KEY (or --encryption-key) is required when --allow-remote is enabled and addr is non-loopback (addr=%q)", cfg.Addr)
+	case len(cfg.AllowedHosts) == 0:
+		return fmt.Errorf("ALLOW_REMOTE is enabled on a non-loopback addr but ALLOWED_HOSTS is empty. Startup fails closed for this configuration (addr=%q)", cfg.Addr)
 	}
 
 	return nil

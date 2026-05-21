@@ -122,6 +122,85 @@ func TestIsPlaceholderAPITokenRejectsDocumentedExamples(t *testing.T) {
 	}
 }
 
+func TestValidateRemoteAccessConfigRequiresStrongTokenAndEncryptionKey(t *testing.T) {
+	t.Parallel()
+
+	base := config.Config{
+		Addr:             "0.0.0.0:8080",
+		AllowRemote:      true,
+		APIToken:         strings.Repeat("a", minRemoteAPITokenBytes),
+		EncryptionKey:    "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+		AllowedHosts:     []string{"s3desk.example.com"},
+		AllowedLocalDirs: []string{"/data"},
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantErr string
+	}{
+		{
+			name: "empty token",
+			mutate: func(cfg *config.Config) {
+				cfg.APIToken = ""
+			},
+			wantErr: "API_TOKEN",
+		},
+		{
+			name: "placeholder token",
+			mutate: func(cfg *config.Config) {
+				cfg.APIToken = "change-me"
+			},
+			wantErr: "placeholder",
+		},
+		{
+			name: "short token",
+			mutate: func(cfg *config.Config) {
+				cfg.APIToken = strings.Repeat("a", minRemoteAPITokenBytes-1)
+			},
+			wantErr: "at least 32 bytes",
+		},
+		{
+			name: "missing encryption key",
+			mutate: func(cfg *config.Config) {
+				cfg.EncryptionKey = ""
+			},
+			wantErr: "ENCRYPTION_KEY",
+		},
+		{
+			name: "missing allowed hosts",
+			mutate: func(cfg *config.Config) {
+				cfg.AllowedHosts = nil
+			},
+			wantErr: "ALLOWED_HOSTS",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			tc.mutate(&cfg)
+			err := validateRemoteAccessConfig(cfg, false)
+			if err == nil {
+				t.Fatalf("validateRemoteAccessConfig() error=nil, want %q", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("validateRemoteAccessConfig() error=%q, want to contain %q", err.Error(), tc.wantErr)
+			}
+		})
+	}
+
+	if err := validateRemoteAccessConfig(base, false); err != nil {
+		t.Fatalf("validateRemoteAccessConfig(valid) error=%v", err)
+	}
+	if err := validateRemoteAccessConfig(config.Config{AllowRemote: true}, true); err != nil {
+		t.Fatalf("validateRemoteAccessConfig(loopback) error=%v", err)
+	}
+	if err := validateRemoteAccessConfig(config.Config{AllowRemote: false}, false); err != nil {
+		t.Fatalf("validateRemoteAccessConfig(local) error=%v", err)
+	}
+}
+
 func TestOpenWithRetryRetriesTransientPostgresStartupError(t *testing.T) {
 	attempts := 0
 	sleeps := 0
