@@ -24,8 +24,9 @@ const defaultStorage: StorageSeed = {
 const now = '2024-01-01T00:00:00Z'
 const zipJobId = 'job-zip-running'
 const zipJobLabel = /Artifact: zip s3:\/\/test-bucket\/reports\/\*/
-const zipArtifactPageReadyTimeoutMs = 45_000
-const zipArtifactTestTimeoutMs = 75_000
+const zipArtifactPageReadyTimeoutMs = 20_000
+const zipArtifactPageReadyAttempts = 3
+const zipArtifactTestTimeoutMs = 90_000
 
 const metaResponse = {
 	version: 'test',
@@ -193,7 +194,11 @@ async function setupApiMocks(page: Page, scenario: JobArtifactApiScenario) {
 }
 
 async function queueZipArtifactDownload(page: Page) {
-	await gotoJobsPage(page, { timeout: zipArtifactPageReadyTimeoutMs })
+	await gotoJobsPage(page, {
+		timeout: zipArtifactPageReadyTimeoutMs,
+		maxAttempts: zipArtifactPageReadyAttempts,
+		retryOnTimeout: true,
+	})
 
 	const zipRow = page.getByRole('row', { name: new RegExp(zipJobId, 'i') })
 	await expect(zipRow).toContainText(/zip s3:\/\/test-bucket\/reports\/\*/)

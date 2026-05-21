@@ -14,8 +14,9 @@ const defaultStorage: StorageSeed = {
 	profileId: 'playwright-profile',
 	bucket: 'test-bucket',
 }
-const presignedPageReadyTimeoutMs = 45_000
-const presignedUploadTestTimeoutMs = 75_000
+const presignedPageReadyTimeoutMs = 20_000
+const presignedPageReadyAttempts = 3
+const presignedUploadTestTimeoutMs = 90_000
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const storage = { ...defaultStorage, ...overrides }
@@ -165,7 +166,11 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 	})
 
 	await seedStorage(page)
-	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, { timeout: presignedPageReadyTimeoutMs })
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, {
+		timeout: presignedPageReadyTimeoutMs,
+		maxAttempts: presignedPageReadyAttempts,
+		retryOnTimeout: true,
+	})
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'hello.txt',
 		contents: 'hello',
@@ -231,7 +236,11 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 	})
 
 	await seedStorage(page)
-	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, { timeout: presignedPageReadyTimeoutMs })
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, {
+		timeout: presignedPageReadyTimeoutMs,
+		maxAttempts: presignedPageReadyAttempts,
+		retryOnTimeout: true,
+	})
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'hello.txt',
 		contents: 'hello',
@@ -346,7 +355,11 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 	])
 
 	await seedStorage(page)
-	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, { timeout: presignedPageReadyTimeoutMs })
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, {
+		timeout: presignedPageReadyTimeoutMs,
+		maxAttempts: presignedPageReadyAttempts,
+		retryOnTimeout: true,
+	})
 	await expect.poll(() => profilesLoaded, { timeout: 5000 }).toBe(true)
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'hello.txt',

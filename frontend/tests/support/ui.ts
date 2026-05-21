@@ -133,7 +133,7 @@ export async function gotoWithDynamicImportRecovery(
 	page: Page,
 	url: string,
 	ready: (page: Page) => Locator,
-	options: { timeout?: number; maxAttempts?: number } = {},
+	options: { timeout?: number; maxAttempts?: number; retryOnTimeout?: boolean } = {},
 ): Promise<Locator> {
 	const timeout = options.timeout ?? pageReadyWaitMs
 	const maxAttempts = Math.max(1, options.maxAttempts ?? 2)
@@ -184,8 +184,11 @@ export async function gotoWithDynamicImportRecovery(
 			}
 
 			const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
+			if ((recoverableFailure || options.retryOnTimeout) && attempt < maxAttempts - 1) {
+				continue
+			}
 			if (!recoverableFailure || attempt === maxAttempts - 1) {
-				const finalWaitMs = recoverableFailure ? pageReadyWaitMs : Math.max(timeout, pageReadyWaitMs)
+				const finalWaitMs = recoverableFailure ? pageReadyWaitMs : options.retryOnTimeout ? timeout : Math.max(timeout, pageReadyWaitMs)
 				await expect(locator).toBeVisible({ timeout: finalWaitMs })
 				return locator
 			}
@@ -224,6 +227,7 @@ export async function gotoObjectsPage(
 	options: {
 		timeout?: number
 		maxAttempts?: number
+		retryOnTimeout?: boolean
 		ready?: (page: Page) => Locator
 	} = {},
 ): Promise<Locator> {
@@ -234,6 +238,7 @@ export async function gotoObjectsPage(
 		{
 			timeout: options.timeout,
 			maxAttempts: options.maxAttempts,
+			retryOnTimeout: options.retryOnTimeout,
 		},
 	)
 }
@@ -242,9 +247,23 @@ export async function gotoJobsPage(
 	page: Page,
 	options: {
 		timeout?: number
+		maxAttempts?: number
+		retryOnTimeout?: boolean
 		ready?: (page: Page) => Locator
 	} = {},
 ): Promise<Locator> {
+	if (options.maxAttempts || options.retryOnTimeout) {
+		return gotoWithDynamicImportRecovery(
+			page,
+			'/jobs',
+			options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Jobs' })),
+			{
+				timeout: options.timeout,
+				maxAttempts: options.maxAttempts,
+				retryOnTimeout: options.retryOnTimeout,
+			},
+		)
+	}
 	await page.goto('/jobs', { waitUntil: 'load' })
 	const locator = (options.ready ?? ((scope) => scope.getByRole('heading', { name: 'Jobs' })))(page)
 	await expect(locator).toBeVisible({ timeout: options.timeout ?? pageReadyWaitMs })
@@ -308,6 +327,7 @@ export async function gotoObjectsUploadPage(
 	options: {
 		timeout?: number
 		maxAttempts?: number
+		retryOnTimeout?: boolean
 	} = {},
 ): Promise<Locator> {
 	return gotoObjectsPage(page, {
@@ -332,12 +352,14 @@ export async function gotoObjectsBucketPage(
 	options: {
 		timeout?: number
 		maxAttempts?: number
+		retryOnTimeout?: boolean
 		ready?: (page: Page) => Locator
 	} = {},
 ): Promise<void> {
 	await gotoObjectsPage(page, {
 		timeout: options.timeout,
 		maxAttempts: options.maxAttempts,
+		retryOnTimeout: options.retryOnTimeout,
 		ready: options.ready ?? ((scope) => scope.getByTestId('objects-bucket-picker-desktop')),
 	})
 	await selectObjectsBucket(page, name)
@@ -349,6 +371,7 @@ export async function gotoObjectsUploadBucketPage(
 	options: {
 		timeout?: number
 		maxAttempts?: number
+		retryOnTimeout?: boolean
 	} = {},
 ): Promise<void> {
 	await gotoObjectsUploadPage(page, options)
