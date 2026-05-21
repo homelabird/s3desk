@@ -11,6 +11,7 @@ type Props = {
 	onOpenPicker: () => void
 	isOffline: boolean
 	uploadsSupported: boolean
+	canOpenPicker: boolean
 	queueDisabledReason: string | null
 	selectedFiles: File[]
 	destinationLabel: string
@@ -20,12 +21,13 @@ type Props = {
 export type UploadsSelectionSectionProps = Props
 
 export function UploadsSelectionSection(props: Props) {
-	const { destinationLabel, isOffline, onOpenPicker, queueDisabledReason, selectedFiles, selectionKind, uploadsSupported } = props
+	const { canOpenPicker, destinationLabel, onOpenPicker, queueDisabledReason, selectedFiles, selectionKind } = props
 
 	const selectedFileCount = selectedFiles.length
 	const selectedTotalBytes = selectedFiles.reduce((sum, file) => sum + (file.size || 0), 0)
 	const previewFiles = buildUploadPreviewFiles(selectedFiles)
 	const remainingPreviewCount = Math.max(0, selectedFileCount - previewFiles.length)
+	const hasSelection = selectedFileCount > 0
 	const selectionTypeLabel =
 		selectionKind === 'folder' ? 'Folder' : selectionKind === 'collection' ? 'Mixed roots' : selectionKind === 'files' ? 'Files' : 'Not selected'
 
@@ -38,7 +40,7 @@ export function UploadsSelectionSection(props: Props) {
 				<div className={styles.selectionActions}>
 					<Button
 						icon={<UploadOutlined />}
-						disabled={isOffline || !uploadsSupported}
+						disabled={!canOpenPicker}
 						size="large"
 						onClick={onOpenPicker}
 					>
@@ -49,24 +51,26 @@ export function UploadsSelectionSection(props: Props) {
 					</Typography.Text>
 				</div>
 
-				<div className={styles.summaryGrid} role="status" aria-live="polite" aria-atomic="true">
-					<div className={styles.summaryCard}>
-						<span className={styles.summaryLabel}>Selection</span>
-						<strong className={styles.summaryValue}>{selectedFileCount.toLocaleString()} item(s)</strong>
+				{hasSelection ? (
+					<div className={styles.summaryGrid} role="status" aria-live="polite" aria-atomic="true">
+						<div className={styles.summaryCard}>
+							<span className={styles.summaryLabel}>Selection</span>
+							<strong className={styles.summaryValue}>{selectedFileCount.toLocaleString()} item(s)</strong>
+						</div>
+						<div className={styles.summaryCard}>
+							<span className={styles.summaryLabel}>Total size</span>
+							<strong className={styles.summaryValue}>{formatBytes(selectedTotalBytes)}</strong>
+						</div>
+						<div className={styles.summaryCard}>
+							<span className={styles.summaryLabel}>Destination</span>
+							<strong className={styles.summaryValue}>{destinationLabel}</strong>
+						</div>
+						<div className={styles.summaryCard}>
+							<span className={styles.summaryLabel}>Detected type</span>
+							<strong className={styles.summaryValue}>{selectionTypeLabel}</strong>
+						</div>
 					</div>
-					<div className={styles.summaryCard}>
-						<span className={styles.summaryLabel}>Total size</span>
-						<strong className={styles.summaryValue}>{formatBytes(selectedTotalBytes)}</strong>
-					</div>
-					<div className={styles.summaryCard}>
-						<span className={styles.summaryLabel}>Destination</span>
-						<strong className={styles.summaryValue}>{destinationLabel}</strong>
-					</div>
-					<div className={styles.summaryCard}>
-						<span className={styles.summaryLabel}>Detected type</span>
-						<strong className={styles.summaryValue}>{selectionTypeLabel}</strong>
-					</div>
-				</div>
+				) : null}
 
 				{previewFiles.length > 0 ? (
 					<div className={styles.previewWrap}>

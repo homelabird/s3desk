@@ -44,6 +44,7 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 	}, [props.bucket, props.isOffline, props.uploadsSupported, props.uploadsUnsupportedReason, selectedFileCount])
 
 	const canQueueUpload = !props.isOffline && props.uploadsSupported && !!props.bucket && props.selectedFiles.length > 0
+	const canOpenPicker = !props.isOffline && props.uploadsSupported && !!props.bucket
 	const normalizedPrefix = props.prefix.trim().replace(/^\/+/, '')
 	const destinationLabel = props.bucket ? `s3://${props.bucket}${normalizedPrefix ? `/${normalizedPrefix}` : '/'}` : noBucketSelectedLabel()
 
@@ -90,6 +91,10 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 			uploadsFeedback.uploadsUnsupported(props.uploadsUnsupportedReason)
 			return
 		}
+		if (!props.bucket) {
+			uploadsFeedback.selectBucketFirst()
+			return
+		}
 		props.setUploadSourceOpen(true)
 	}
 
@@ -131,6 +136,7 @@ export function useUploadsPageSelectionActions(props: UseUploadsPageSelectionAct
 		folderSelectionSupport,
 		queueDisabledReason,
 		canQueueUpload,
+		canOpenPicker,
 		destinationLabel,
 		clearSelection,
 		queueUpload,

@@ -192,7 +192,7 @@ describe('ProfilesPage import flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(screen.getByRole('button', { name: 'Import YAML' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Import profile' }))
 		const dialog = await screen.findByRole('dialog', { name: 'Import Profile YAML' })
 		fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Imported Profile' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }))
@@ -244,7 +244,7 @@ describe('ProfilesPage import flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(screen.getByRole('button', { name: 'Import YAML' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Import profile' }))
 		const dialog = await screen.findByRole('dialog', { name: 'Import Profile YAML' })
 		fireEvent.change(within(dialog).getByLabelText('Import profile YAML file'), {
 			target: { files: [new File(['first'], 'first.yaml', { type: 'text/yaml' })] },
@@ -257,7 +257,7 @@ describe('ProfilesPage import flow', () => {
 			expect(screen.queryByRole('dialog', { name: 'Import Profile YAML' })).not.toBeInTheDocument()
 		})
 
-		fireEvent.click(screen.getByRole('button', { name: 'Import YAML' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Import profile' }))
 		const reopenedDialog = await screen.findByRole('dialog', { name: 'Import Profile YAML' })
 		const textarea = within(reopenedDialog).getByRole('textbox')
 		expect(textarea).toHaveValue('')
@@ -298,7 +298,7 @@ describe('ProfilesPage import flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(screen.getByRole('button', { name: 'Import YAML' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Import profile' }))
 		const dialog = await screen.findByRole('dialog', { name: 'Import Profile YAML' })
 		fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Pending Import' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }))
@@ -312,7 +312,7 @@ describe('ProfilesPage import flow', () => {
 			expect(screen.queryByRole('dialog', { name: 'Import Profile YAML' })).not.toBeInTheDocument()
 		})
 
-		fireEvent.click(screen.getByRole('button', { name: 'Import YAML' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Import profile' }))
 		const reopenedDialog = await screen.findByRole('dialog', { name: 'Import Profile YAML' })
 		expect(within(reopenedDialog).getByRole('textbox')).toHaveValue('')
 
@@ -350,7 +350,7 @@ describe('ProfilesPage import flow', () => {
 			</QueryClientProvider>,
 		)
 
-		fireEvent.click(screen.getByRole('button', { name: 'Import YAML' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Import profile' }))
 		const dialog = await screen.findByRole('dialog', { name: 'Import Profile YAML' })
 		fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Imported Profile' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }))

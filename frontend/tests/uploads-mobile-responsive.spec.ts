@@ -17,7 +17,7 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 		const prefixInput = page.getByLabel('Upload prefix (optional)')
 		await prefixInput.fill('photos/mobile')
 
-		await expect(page.locator('strong').filter({ hasText: 's3://uploads-mobile-bucket/photos/mobile' }).first()).toBeVisible()
+		await expect(page.getByText('s3://uploads-mobile-bucket/photos/mobile')).toBeVisible()
 		await expect
 			.poll(() =>
 				readProfileScopedLocalStorage(page, {
@@ -31,7 +31,7 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 
 		await page.reload({ waitUntil: 'load' })
 		await expect(page.getByLabel('Upload prefix (optional)')).toHaveValue('photos/mobile')
-		await expect(page.locator('strong').filter({ hasText: 's3://uploads-mobile-bucket/photos/mobile' }).first()).toBeVisible()
+		await expect(page.getByText('s3://uploads-mobile-bucket/photos/mobile')).toBeVisible()
 	})
 
 	test('upload source sheet opens from the mobile page', async ({ page }) => {

@@ -79,6 +79,7 @@ export function buildUploadsPagePresentationProps(state: UploadsPageState): Uplo
 			onOpenPicker: state.openUploadPicker,
 			isOffline: state.isOffline,
 			uploadsSupported: state.uploadsSupported,
+			canOpenPicker: state.canOpenPicker,
 			queueDisabledReason: state.queueDisabledReason,
 			selectedFiles: state.selectedFiles,
 			destinationLabel: state.destinationLabel,

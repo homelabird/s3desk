@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { offlineUploadsDisabledHint, uploadsUnsupportedHint } from '../../../lib/actionHints'
+import { offlineUploadsDisabledHint, selectBucketFirstHint, uploadsUnsupportedHint } from '../../../lib/actionHints'
 import { transfersStub } from '../../../test/transfersStub'
 import { useUploadsPageSelectionActions } from '../useUploadsPageSelectionActions'
 
@@ -189,5 +189,38 @@ describe('useUploadsPageSelectionActions', () => {
 
 		expect(setUploadSourceOpen).not.toHaveBeenCalled()
 		expect(messageWarningMock).toHaveBeenCalledWith(uploadsUnsupportedHint())
+	})
+
+	it('keeps the upload picker closed until a bucket is selected', () => {
+		const setUploadSourceOpen = vi.fn()
+
+		const { result } = renderHook(() =>
+			useUploadsPageSelectionActions({
+				transfers: createTransfersValue(),
+				isOffline: false,
+				profileId: 'profile-1',
+				uploadsSupported: true,
+				uploadsUnsupportedReason: null,
+				bucket: '',
+				prefix: '',
+				selectedFiles: [],
+				selectedFolderLabel: '',
+				selectedDirectorySelectionMode: undefined,
+				setSelectedFiles: vi.fn(),
+				setSelectedFolderLabel: vi.fn(),
+				setSelectedDirectorySelectionMode: vi.fn(),
+				setUploadSourceOpen,
+				setUploadSourceBusy: vi.fn(),
+			}),
+		)
+
+		expect(result.current.canOpenPicker).toBe(false)
+
+		act(() => {
+			result.current.openUploadPicker()
+		})
+
+		expect(setUploadSourceOpen).not.toHaveBeenCalled()
+		expect(messageInfoMock).toHaveBeenCalledWith(selectBucketFirstHint())
 	})
 })

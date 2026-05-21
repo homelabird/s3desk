@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useCallback, useMemo } from 'react'
 
 import type { APIClientShape } from '../../api/client'
@@ -155,12 +155,6 @@ export function useJobsPageControllerState(props: Props) {
     () => ({
       items: [
         {
-          key: 'new_upload',
-          icon: <CloudUploadOutlined />,
-          label: 'Upload...',
-          disabled: props.isOffline || !uploadSupported,
-        },
-        {
           key: 'new_download',
           icon: <DownloadOutlined />,
           label: 'Download...',
@@ -175,12 +169,11 @@ export function useJobsPageControllerState(props: Props) {
         },
       ],
       onClick: ({ key }) => {
-        if (key === 'new_upload') setCreateOpen(true)
         if (key === 'new_download') setCreateDownloadOpen(true)
         if (key === 'new_delete_job') openDeleteJobModal()
       },
     }),
-    [openDeleteJobModal, props.isOffline, setCreateDownloadOpen, setCreateOpen, uploadSupported],
+    [openDeleteJobModal, props.isOffline, setCreateDownloadOpen],
   )
 
   const {

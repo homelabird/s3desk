@@ -89,6 +89,11 @@
 	font-size: 13px;
 }
 
+.headerActions {
+	display: flex;
+	align-items: center;
+}
+
 .filtersRow {
 	display: flex;
 	align-items: center;
@@ -139,6 +144,10 @@
 }
 
 @media (max-width: 768px) {
+	.headerActions :global(.ant-btn) {
+		min-height: 44px;
+	}
+
 	.realtimeStatusRow :global(.ant-btn) {
 		min-height: 44px;
 	}

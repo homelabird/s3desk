@@ -70,10 +70,10 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await expect(dialog).toHaveCount(0)
 	})
 
-	test('opens and closes the import YAML flow on mobile', async ({ page }) => {
+	test('opens and closes the import profile flow on mobile', async ({ page }) => {
 		await setupProfilesPage(page)
 
-		await page.getByRole('button', { name: 'Import YAML' }).click()
+		await page.getByRole('button', { name: 'Import profile' }).click()
 
 		const dialog = page.getByRole('dialog', { name: 'Import Profile YAML' })
 		await expect(dialog).toBeVisible()

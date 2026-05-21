@@ -298,7 +298,7 @@ test.describe('Workflow visual regression @visual', () => {
 	test('mobile Profiles YAML import dialog remains stable', async ({ page }) => {
 		await setupProfilesVisualPage(page)
 
-		await page.getByRole('button', { name: 'Import YAML' }).click()
+		await page.getByRole('button', { name: 'Import profile' }).click()
 		const dialog = dialogByName(page, 'Import Profile YAML')
 		await expect(dialog).toBeVisible()
 		await expect(dialog.getByRole('textbox', { name: 'Paste YAML' })).toBeVisible()

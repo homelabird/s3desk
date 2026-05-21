@@ -71,7 +71,7 @@ function renderSettingsPage(props?: Partial<ComponentProps<typeof SettingsPage>>
 }
 
 describe('SettingsPage', () => {
-	it('applies a trimmed API token and clears the selected profile', async () => {
+	it('applies a trimmed API token and keeps selected profile management out of settings', async () => {
 		const { setApiToken, setProfileId } = renderSettingsPage()
 
 		fireEvent.change(await screen.findByPlaceholderText('Must match API_TOKEN…', undefined, { timeout: 10_000 }), {
@@ -80,9 +80,9 @@ describe('SettingsPage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
 
 		expect(setApiToken).toHaveBeenCalledWith('next-token')
-
-		fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
-		expect(setProfileId).toHaveBeenCalledWith(null)
+		expect(screen.getByLabelText('Selected Profile')).toHaveValue('profile-1')
+		expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
+		expect(setProfileId).not.toHaveBeenCalled()
 	}, 20_000)
 
 	it('does not apply edited API token on blur', async () => {

@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+	addFilesOrFolderFirstSentenceHint,
 	bucketFieldPlaceholder,
 	failedToLoadBucketsTitle,
 	goToBucketsLabel,
@@ -82,7 +83,8 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 			onOpenPicker,
 			isOffline: false,
 			uploadsSupported: true,
-			queueDisabledReason: selectBucketFirstSentenceHint(),
+			canOpenPicker: true,
+			queueDisabledReason: addFilesOrFolderFirstSentenceHint(),
 			selectedFiles: [],
 			destinationLabel: 's3://primary-bucket/photos/',
 			selectionKind: 'empty',
@@ -152,6 +154,8 @@ describe('UploadsPageShell', () => {
 				...buildPresentation().selection,
 				isOffline: true,
 				uploadsSupported: false,
+				canOpenPicker: false,
+				queueDisabledReason: offlineUploadsDisabledHint(),
 				selectedFiles: [new File(['x'], 'demo.txt')],
 				selectionKind: 'files',
 			},
@@ -176,7 +180,7 @@ describe('UploadsPageShell', () => {
 			expect.objectContaining({
 				isOffline: true,
 				uploadsSupported: false,
-				queueDisabledReason: selectBucketFirstSentenceHint(),
+				queueDisabledReason: offlineUploadsDisabledHint(),
 				selectionKind: 'files',
 			}),
 		)

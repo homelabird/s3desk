@@ -232,7 +232,6 @@ export function SettingsPage(props: Props) {
 									apiToken={props.apiToken}
 									setApiToken={props.setApiToken}
 									profileId={props.profileId}
-									setProfileId={props.setProfileId}
 									apiDocsUrl={apiDocsUrl}
 									openapiUrl={openapiUrl}
 								/>

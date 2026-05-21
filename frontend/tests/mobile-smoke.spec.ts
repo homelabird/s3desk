@@ -209,7 +209,7 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await closeJobsMobileFilters(jobsFiltersSheet)
 		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toContainText('Filters active')
 
-		await page.getByRole('button', { name: 'Upload…' }).first().click()
+		await page.getByRole('button', { name: 'Upload' }).click()
 		const uploadSheet = page.getByRole('dialog')
 		await expect(page.getByRole('heading', { name: 'Upload from device' })).toBeVisible()
 		await uploadSheet.getByLabel('Close', { exact: true }).click()

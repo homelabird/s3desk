@@ -1,4 +1,4 @@
-import { FilterOutlined, MoreOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, FilterOutlined, MoreOutlined, ReloadOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import { Alert, Button, Checkbox, Grid, Space, Tag, Typography, type MenuProps } from 'antd'
 import { useEffect, useState } from 'react'
 
@@ -176,15 +176,23 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						: 'Review background work, failures, and recent queue history.'
 				}
 				actions={
-					<Space wrap>
+					<Space wrap className={styles.headerActions}>
 						<Tag color={props.eventsConnected ? 'success' : 'default'}>{realtimeStatusLabel}</Tag>
 						<Button icon={<ReloadOutlined />} onClick={props.onRefreshJobs} loading={props.jobsRefreshing} disabled={props.isOffline}>
 							Refresh
 						</Button>
+						<Button
+							type="primary"
+							icon={<CloudUploadOutlined />}
+							onClick={props.onOpenCreateUpload}
+							disabled={props.isOffline || !props.uploadSupported}
+						>
+							Upload
+						</Button>
 						<MenuPopover menu={props.topActionsMenu} align="end" scopeKey={props.scopeKey}>
 							{({ toggle, open }) => (
 								<Button icon={<MoreOutlined />} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-									More
+									New job
 								</Button>
 							)}
 						</MenuPopover>

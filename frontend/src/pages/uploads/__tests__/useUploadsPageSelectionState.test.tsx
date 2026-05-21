@@ -30,6 +30,7 @@ const selectionActionsRef = {
 		folderSelectionSupport: { ok: true, mode: 'picker' as const },
 		queueDisabledReason: selectBucketFirstSentenceHint(),
 		canQueueUpload: false,
+		canOpenPicker: true,
 		destinationLabel: 's3://bucket-a/photos/',
 		clearSelection: vi.fn(),
 		queueUpload: vi.fn(),
@@ -101,6 +102,7 @@ describe('useUploadsPageSelectionState', () => {
 			selectedFileCount: 0,
 			selectionKind: 'empty',
 			queueDisabledReason: selectBucketFirstSentenceHint(),
+			canOpenPicker: true,
 			destinationLabel: 's3://bucket-a/photos/',
 		})
 	})

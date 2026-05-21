@@ -338,7 +338,7 @@ describe('JobsToolbar', () => {
 			/>,
 		)
 
-		const moreButton = screen.getByRole('button', { name: /More/i })
+		const moreButton = screen.getByRole('button', { name: /New job/i })
 		expect(moreButton).toHaveAttribute('aria-haspopup', 'menu')
 		expect(moreButton).toHaveAttribute('aria-expanded', 'false')
 

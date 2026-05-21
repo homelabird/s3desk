@@ -10,7 +10,6 @@ type AccessSettingsSectionProps = {
 	apiToken: string
 	setApiToken: (v: string) => void
 	profileId: string | null
-	setProfileId: (v: string | null) => void
 	apiDocsUrl: string
 	openapiUrl: string
 }
@@ -66,13 +65,8 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 					</Typography.Paragraph>
 				</FormField>
 
-				<FormField label="Selected Profile" htmlFor="settings-selected-profile" extra="Used by most pages to scope S3 operations.">
-					<div className={styles.compactFieldRow}>
-						<Input id="settings-selected-profile" value={props.profileId ?? ''} placeholder="(none)…" readOnly />
-						<Button danger onClick={() => props.setProfileId(null)}>
-							Clear
-						</Button>
-					</div>
+				<FormField label="Selected Profile" htmlFor="settings-selected-profile" extra="Change or clear the active profile from the header profile selector or Profiles page.">
+					<Input id="settings-selected-profile" value={props.profileId ?? ''} placeholder="(none)…" readOnly />
 				</FormField>
 			</div>
 

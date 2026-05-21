@@ -40,12 +40,15 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await page.setViewportSize({ width: 320, height: 740 })
 		await gotoJobsPage(page)
 
-		await expect(page.getByRole('heading', { name: 'Launch work' })).toBeVisible()
-		await expect(page.getByRole('heading', { name: 'Troubleshooting' })).toBeVisible()
+		await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible()
 		await expect(page.getByRole('heading', { name: 'Queue health' })).toBeVisible()
 		await expect(page.getByText('Realtime updates disconnected')).toBeVisible()
-		await expectMinTouchHeight(page.getByRole('button', { name: 'Upload…' }))
-		await expectMinTouchHeight(page.getByRole('button', { name: 'Download…' }))
+		await expectMinTouchHeight(page.getByRole('button', { name: 'Upload' }))
+		const newJobButton = page.getByRole('button', { name: 'New job' })
+		await expectMinTouchHeight(newJobButton)
+		await newJobButton.click()
+		await expect(page.getByRole('menuitem', { name: 'Download...' })).toBeVisible()
+		await page.keyboard.press('Escape')
 		await expectMinTouchHeight(page.getByTestId('jobs-mobile-filters-trigger'))
 		await expect
 			.poll(() =>
@@ -98,7 +101,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoJobsPage(page)
 
-		await page.getByRole('button', { name: 'Upload…' }).click()
+		await page.getByRole('button', { name: 'Upload' }).click()
 		const sheet = page.getByRole('dialog', { name: 'Upload from device' })
 		await expect(sheet).toBeVisible()
 		await sheet.getByLabel('Close', { exact: true }).click()

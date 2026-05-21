@@ -29,10 +29,10 @@ export function ProfilesPageShell(props: ProfilesPageShellProps) {
 				subtitle="Create connection profiles, verify endpoints, and choose the active workspace used across buckets, objects, and Activity."
 				actions={
 					<Space wrap>
-						<Button onClick={props.onOpenImportModal}>Import YAML</Button>
 						<Button type="primary" onClick={props.onOpenCreateModal}>
 							New Profile
 						</Button>
+						<Button onClick={props.onOpenImportModal}>Import profile</Button>
 					</Space>
 				}
 			/>

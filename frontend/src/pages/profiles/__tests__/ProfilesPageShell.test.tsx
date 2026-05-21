@@ -120,8 +120,8 @@ describe('ProfilesPageShell', () => {
 		expect(screen.getByTestId('profiles-status')).toBeInTheDocument()
 		expect(screen.queryByTestId('profiles-dialogs')).not.toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: 'Import YAML' }))
 		fireEvent.click(screen.getByRole('button', { name: 'New Profile' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Import profile' }))
 
 		expect(openImportModal).toHaveBeenCalledTimes(1)
 		expect(openCreateModal).toHaveBeenCalledTimes(1)

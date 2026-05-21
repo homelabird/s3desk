@@ -28,6 +28,7 @@ const selectionStateRef = {
 		setUploadSourceOpen: vi.fn(),
 		uploadSourceBusy: false,
 		canQueueUpload: false,
+		canOpenPicker: true,
 		queueDisabledReason: selectBucketFirstSentenceHint(),
 		folderSelectionSupport: { ok: true, mode: 'picker' as const },
 		destinationLabel: 's3://bucket-a/photos/',

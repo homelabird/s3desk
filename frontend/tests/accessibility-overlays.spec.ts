@@ -850,7 +850,7 @@ test.describe('overlay accessibility scans', () => {
 	test('mobile Profiles import YAML dialog has no axe violations', async ({ page }) => {
 		await setupProfilesMobileA11yPage(page)
 
-		await page.getByRole('button', { name: 'Import YAML' }).click()
+		await page.getByRole('button', { name: 'Import profile' }).click()
 		const dialog = dialogByName(page, 'Import Profile YAML')
 		await expect(dialog).toBeVisible()
 		await expect(dialog.getByRole('textbox', { name: 'Paste YAML' })).toBeVisible()
@@ -870,7 +870,7 @@ test.describe('overlay accessibility scans', () => {
 	test('mobile Jobs upload source sheet has no axe violations', async ({ page }) => {
 		await setupJobsMobileA11yPage(page)
 
-		await page.getByRole('button', { name: 'Upload…' }).click()
+		await page.getByRole('button', { name: 'Upload' }).click()
 		const sheet = dialogByName(page, 'Upload from device')
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByRole('button', { name: 'Choose from device…' })).toBeVisible()

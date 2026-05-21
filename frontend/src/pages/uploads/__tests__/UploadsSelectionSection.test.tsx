@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { offlineUploadsDisabledHint, selectBucketFirstSentenceHint } from '../../../lib/actionHints'
+import { addFilesOrFolderFirstSentenceHint, offlineUploadsDisabledHint } from '../../../lib/actionHints'
 import { ensureDomShims } from '../../../test/domShims'
 import { UploadsSelectionSection } from '../UploadsSelectionSection'
 
@@ -25,7 +25,7 @@ function createFile(name: string, size: number, relativePath?: string) {
 }
 
 describe('UploadsSelectionSection', () => {
-	it('renders the empty-state summary and enables picker actions when uploads are allowed', () => {
+	it('keeps the empty selection focused on the picker action when uploads are allowed', () => {
 		const onOpenPicker = vi.fn()
 
 		render(
@@ -33,23 +33,20 @@ describe('UploadsSelectionSection', () => {
 				onOpenPicker={onOpenPicker}
 				isOffline={false}
 				uploadsSupported
-				queueDisabledReason={selectBucketFirstSentenceHint()}
+				canOpenPicker
+				queueDisabledReason={addFilesOrFolderFirstSentenceHint()}
 				selectedFiles={[]}
 				destinationLabel="s3://primary-bucket/"
 				selectionKind="empty"
 			/>,
 		)
 
-		expect(screen.getByText('0 item(s)')).toBeInTheDocument()
-		expect(screen.getByText('0 B')).toBeInTheDocument()
-		expect(screen.getByText('s3://primary-bucket/')).toBeInTheDocument()
-		expect(screen.getByText('Not selected')).toBeInTheDocument()
-		expect(screen.getByText(selectBucketFirstSentenceHint())).toBeInTheDocument()
+		expect(screen.queryByText('0 item(s)')).not.toBeInTheDocument()
+		expect(screen.queryByText('0 B')).not.toBeInTheDocument()
+		expect(screen.queryByText('Not selected')).not.toBeInTheDocument()
+		expect(screen.getByText(addFilesOrFolderFirstSentenceHint())).toBeInTheDocument()
 		expect(screen.getByText('No files or folders selected.')).toBeInTheDocument()
-		expect(screen.getByRole('status')).toHaveTextContent('0 item(s)')
-		expect(screen.getByRole('status')).toHaveTextContent('s3://primary-bucket/')
-		expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
-		expect(screen.getByRole('status')).toHaveAttribute('aria-atomic', 'true')
+		expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
 		fireEvent.click(screen.getByRole('button', { name: /Add from device/i }))
 		expect(onOpenPicker).toHaveBeenCalledTimes(1)
@@ -71,6 +68,7 @@ describe('UploadsSelectionSection', () => {
 				onOpenPicker={vi.fn()}
 				isOffline={false}
 				uploadsSupported
+				canOpenPicker
 				queueDisabledReason={null}
 				selectedFiles={selectedFiles}
 				destinationLabel="s3://primary-bucket/photos"
@@ -98,6 +96,7 @@ describe('UploadsSelectionSection', () => {
 				onOpenPicker={vi.fn()}
 				isOffline
 				uploadsSupported={false}
+				canOpenPicker={false}
 				queueDisabledReason={offlineUploadsDisabledHint()}
 				selectedFiles={[createFile('offline.txt', 512)]}
 				destinationLabel="s3://primary-bucket/"
