@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"s3desk/internal/config"
+	"s3desk/internal/models"
 	"s3desk/internal/ws"
 )
 
@@ -106,5 +107,64 @@ func TestPublicRoutesAllowPrivateRemoteWhenAllowRemoteEnabled(t *testing.T) {
 				t.Fatalf("body=%q, want substring %q", string(body), tc.wantBody)
 			}
 		})
+	}
+}
+
+func TestPublicDownloadProxyRouteAllowsPrivateRemoteCustomPortWhenAllowRemoteEnabled(t *testing.T) {
+	t.Parallel()
+
+	handler := newPublicRoutesHandler(t, true)
+	req := httptest.NewRequest(http.MethodGet, "http://10.1.2.10:9443/download-proxy?profileId=p1&bucket=test-bucket&key=report.txt&expires=bad&sig=test-signature", nil)
+	req.RemoteAddr = "10.1.2.3:1234"
+	req.Header.Set("Forwarded", `for=203.0.113.10;proto=https;host="evil.example:7443"`)
+	req.Header.Set("X-Forwarded-Host", "spoofed.invalid:7443")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("status=%d, want %d body=%s", res.StatusCode, http.StatusBadRequest, string(body))
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "invalid_request" {
+		t.Fatalf("resp.Error.Code=%q, want invalid_request", resp.Error.Code)
+	}
+	if got := resp.Error.Details["expires"]; got != "bad" {
+		t.Fatalf("details.expires=%v, want bad", got)
+	}
+}
+
+func TestPublicDownloadProxyRouteRejectsPublicPeerDespiteForwardedPrivateHeaders(t *testing.T) {
+	t.Parallel()
+
+	handler := newPublicRoutesHandler(t, true)
+	req := httptest.NewRequest(http.MethodGet, "http://10.1.2.10:9443/download-proxy?profileId=p1&bucket=test-bucket&key=report.txt&expires=bad&sig=test-signature", nil)
+	req.RemoteAddr = "203.0.113.10:1234"
+	req.Header.Set("Forwarded", `for=10.1.2.3;proto=https;host="10.1.2.10:9443"`)
+	req.Header.Set("X-Forwarded-For", "10.1.2.3")
+	req.Header.Set("X-Real-IP", "10.1.2.4")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	res := rr.Result()
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("status=%d, want %d body=%s", res.StatusCode, http.StatusForbidden, string(body))
+	}
+
+	var resp models.ErrorResponse
+	decodeJSONResponse(t, res, &resp)
+	if resp.Error.Code != "forbidden" {
+		t.Fatalf("resp.Error.Code=%q, want forbidden", resp.Error.Code)
+	}
+	if resp.Error.Message != "remote address must be localhost or private" {
+		t.Fatalf("resp.Error.Message=%q, want remote address must be localhost or private", resp.Error.Message)
 	}
 }
