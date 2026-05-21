@@ -117,6 +117,7 @@ Use the exact GitHub check names when you describe release evidence or branch-pr
   - local equivalent of the advisory `Bundle Budget` job in `Frontend E2E`
 - `cd frontend && npm run test:e2e:core`
   - local equivalent of the required `Core Mock E2E` check
+  - CI runs the same core suite in two Playwright shards and aggregates the result under `Core Mock E2E`
 - `cd frontend && npm run test:e2e:visual`
   - local equivalent of the `Visual Regression E2E` check
 - `cd frontend && npm run test:e2e:mobile-responsive`
@@ -370,6 +371,7 @@ Mocked frontend Playwright lanes start a managed Vite server on `http://127.0.0.
 - `npm run test:e2e:core`
   - main desktop/mock regression lane
   - excludes `@check-smoke`, `@mobile-responsive`, `@demo`, `@perf`, and `@visual`
+  - CI runs this lane as `--shard=1/2` and `--shard=2/2`, then keeps the required check name as `Core Mock E2E`
 - `npm run test:e2e:visual`
   - dedicated Chromium screenshot-baseline lane for tests tagged `@visual`
   - owns visual-regression specs separately from the core desktop/mock regression lane

@@ -64,6 +64,7 @@ The `Frontend E2E` Actions summaries should surface these lane meanings directly
   - equivalent local command: `npm run test:e2e:smoke`
 - `Core Mock E2E`
   - equivalent local command: `npm run test:e2e:core`
+  - CI shards the same core suite into `1/2` and `2/2`, then aggregates the required `Core Mock E2E` check
 - `Mobile Responsive E2E (Required)`
   - equivalent local command: `npm run test:e2e:mobile-responsive`
 

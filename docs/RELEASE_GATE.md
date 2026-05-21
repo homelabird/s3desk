@@ -138,6 +138,7 @@ Use the exact check names when you record release evidence:
 - `./scripts/check.sh full` mirrors the `Release Gate` workflow job named `release-gate`.
 - `bash ./scripts/check_github_workflows.sh` mirrors the `Workflow Lint` job in `Frontend E2E`.
 - `cd frontend && npm run test:e2e:core` mirrors `Core Mock E2E`.
+  In CI, the core suite is split into two Playwright shards and aggregated back into the required `Core Mock E2E` check name.
 - `cd frontend && npm run test:e2e:visual` mirrors `Visual Regression E2E`.
 - `cd frontend && npm run test:e2e:mobile-responsive` mirrors `Mobile Responsive E2E (Required)`.
 - `bash ./scripts/check_ci_pair.sh` is only a local convenience wrapper for workflow lint + frontend build + backend test.

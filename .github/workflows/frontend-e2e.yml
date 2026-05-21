@@ -13,6 +13,9 @@ permissions:
   contents: read
   pull-requests: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: frontend-e2e-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
@@ -328,14 +331,14 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  mock-e2e:
-    name: Core Mock E2E
+  mock-e2e-smoke:
+    name: Core Mock E2E Smoke
     if: github.event_name != 'schedule'
     needs:
       - changes
       - workflow-lint
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -383,25 +386,94 @@ jobs:
           path: frontend/test-results-check-smoke
           if-no-files-found: ignore
 
+      - name: Write check-smoke summary
+        if: always()
+        run: |
+          {
+            echo "## Core Mock E2E Smoke"
+            echo ""
+            if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+              if [[ "${{ needs.changes.outputs.workflow_lint_scope }}" == "true" ]]; then
+                echo "- Browser Lanes: smoke not applicable (workflow or browser-CI wiring changed, but the browser surface did not)."
+              else
+                echo "- Browser Lanes: smoke not applicable (the browser surface is out of scope)."
+              fi
+              echo "- Required checks still report success when the change scope is outside the frontend browser surface."
+            else
+              echo "- Browser Lanes: smoke executed."
+              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs before Playwright suites."
+              echo "- Boot-gate command: \`npm run test:e2e:smoke\`"
+              echo "- Check-smoke artifact: \`playwright-check-smoke-results\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  mock-e2e-shard:
+    name: Core Mock E2E Shard ${{ matrix.shard }}
+    if: github.event_name != 'schedule' && needs.changes.outputs.browser_facing == 'true'
+    needs:
+      - changes
+      - workflow-lint
+      - mock-e2e-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: "1/2"
+            artifact_suffix: shard-1
+          - shard: "2/2"
+            artifact_suffix: shard-2
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright Chromium for desktop and mobile projects
+        run: npx playwright install --with-deps chromium
+
       - name: Run core mock Playwright suite excluding check-smoke and dedicated mobile responsive specs
-        if: needs.changes.outputs.browser_facing == 'true'
         env:
-          PLAYWRIGHT_OUTPUT_DIR: test-results-core
-          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-core
+          PLAYWRIGHT_OUTPUT_DIR: test-results-core-${{ matrix.artifact_suffix }}
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-core-${{ matrix.artifact_suffix }}
           PLAYWRIGHT_TEST_TIMEOUT_MS: "60000"
           PLAYWRIGHT_EXPECT_TIMEOUT_MS: "15000"
-        run: npm run test:e2e:core -- --workers=2
+        run: npm run test:e2e:core -- --workers=2 --shard=${{ matrix.shard }}
 
       - name: Upload core mock Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-core-mock-results
-          path: frontend/test-results-core
+          name: playwright-core-mock-results-${{ matrix.artifact_suffix }}
+          path: frontend/test-results-core-${{ matrix.artifact_suffix }}
           if-no-files-found: ignore
 
+  mock-e2e:
+    name: Core Mock E2E
+    if: always() && github.event_name != 'schedule'
+    needs:
+      - changes
+      - workflow-lint
+      - mock-e2e-smoke
+      - mock-e2e-shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
       - name: Write core mock summary
         if: always()
+        shell: bash
         run: |
           {
             echo "## Core Mock E2E"
@@ -414,18 +486,43 @@ jobs:
               fi
               echo "- Required checks still report success when the change scope is outside the frontend browser surface."
             else
-              echo "- Browser Lanes: smoke + core executed."
+              echo "- Browser Lanes: smoke + core shards executed."
               echo "- Lane role: browser-facing boot gates plus desktop/mock regression coverage."
               echo "- Workflow lint prerequisite: see the separate \`Workflow Lint\` job."
-              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs before Playwright suites."
+              echo "- Geometry guard: \`npm run check:e2e:geometry\` runs once before the sharded core suite."
               echo "- Boot-gate command: \`npm run test:e2e:smoke\`"
               echo "- Boot-gate scope: login/settings bootstrap and objects route boot."
-              echo "- Core regression command: \`npm run test:e2e:core\`"
+              echo "- Core regression command: \`npm run test:e2e:core -- --workers=2 --shard=<index>/2\`"
               echo "- Core regression scope: excludes \`@check-smoke\`, \`@mobile-responsive\`, \`@demo\`, \`@perf\`, and \`@visual\`."
               echo "- Check-smoke artifact: \`playwright-check-smoke-results\`"
-              echo "- Core artifact: \`playwright-core-mock-results\`"
+              echo "- Core artifacts: \`playwright-core-mock-results-shard-1\`, \`playwright-core-mock-results-shard-2\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+          changes_result="${{ needs.changes.result }}"
+          workflow_lint_result="${{ needs['workflow-lint'].result }}"
+          smoke_result="${{ needs['mock-e2e-smoke'].result }}"
+          shard_result="${{ needs['mock-e2e-shard'].result }}"
+
+          if [[ "${changes_result}" != "success" ]]; then
+            echo "changes job did not complete successfully: ${changes_result}" >&2
+            exit 1
+          fi
+          if [[ "${workflow_lint_result}" != "success" ]]; then
+            echo "workflow lint did not complete successfully: ${workflow_lint_result}" >&2
+            exit 1
+          fi
+          if [[ "${{ needs.changes.outputs.browser_facing }}" != "true" ]]; then
+            exit 0
+          fi
+          if [[ "${smoke_result}" != "success" ]]; then
+            echo "core mock smoke did not complete successfully: ${smoke_result}" >&2
+            exit 1
+          fi
+          if [[ "${shard_result}" != "success" ]]; then
+            echo "core mock shard suite did not complete successfully: ${shard_result}" >&2
+            exit 1
+          fi
 
   visual-regression-e2e:
     name: Visual Regression E2E
