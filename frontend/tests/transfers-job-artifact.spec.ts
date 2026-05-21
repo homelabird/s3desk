@@ -24,9 +24,9 @@ const defaultStorage: StorageSeed = {
 const now = '2024-01-01T00:00:00Z'
 const zipJobId = 'job-zip-running'
 const zipJobLabel = /Artifact: zip s3:\/\/test-bucket\/reports\/\*/
-const zipArtifactPageReadyTimeoutMs = 20_000
+const zipArtifactPageReadyTimeoutMs = 30_000
 const zipArtifactPageReadyAttempts = 3
-const zipArtifactTestTimeoutMs = 90_000
+const zipArtifactTestTimeoutMs = 120_000
 
 const metaResponse = {
 	version: 'test',

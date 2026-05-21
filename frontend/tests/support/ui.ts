@@ -158,6 +158,7 @@ export async function gotoWithDynamicImportRecovery(
 	page.on('requestfailed', onRequestFailed)
 
 	try {
+		let reloadBeforeAttempt = false
 		for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
 			pageErrors = []
 			consoleErrors = []
@@ -165,9 +166,10 @@ export async function gotoWithDynamicImportRecovery(
 
 			if (attempt === 0) {
 				await page.goto(url, { waitUntil: 'domcontentloaded' })
-			} else {
+			} else if (reloadBeforeAttempt) {
 				await page.reload({ waitUntil: 'domcontentloaded' })
 			}
+			reloadBeforeAttempt = false
 
 			const locator = ready(page)
 			const deadline = Date.now() + timeout
@@ -184,11 +186,19 @@ export async function gotoWithDynamicImportRecovery(
 			}
 
 			const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
-			if ((recoverableFailure || options.retryOnTimeout) && attempt < maxAttempts - 1) {
+			if (recoverableFailure && attempt < maxAttempts - 1) {
+				reloadBeforeAttempt = true
+				continue
+			}
+			if (options.retryOnTimeout && attempt < maxAttempts - 1) {
 				continue
 			}
 			if (!recoverableFailure || attempt === maxAttempts - 1) {
-				const finalWaitMs = recoverableFailure ? pageReadyWaitMs : options.retryOnTimeout ? timeout : Math.max(timeout, pageReadyWaitMs)
+				const finalWaitMs = recoverableFailure
+					? pageReadyWaitMs
+					: options.retryOnTimeout
+						? Math.min(1_000, timeout)
+						: Math.max(timeout, pageReadyWaitMs)
 				await expect(locator).toBeVisible({ timeout: finalWaitMs })
 				return locator
 			}

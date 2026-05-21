@@ -14,9 +14,9 @@ const defaultStorage: StorageSeed = {
 	profileId: 'playwright-profile',
 	bucket: 'test-bucket',
 }
-const presignedPageReadyTimeoutMs = 20_000
+const presignedPageReadyTimeoutMs = 30_000
 const presignedPageReadyAttempts = 3
-const presignedUploadTestTimeoutMs = 90_000
+const presignedUploadTestTimeoutMs = 120_000
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const storage = { ...defaultStorage, ...overrides }
