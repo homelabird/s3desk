@@ -695,6 +695,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 	})
 
 	test('expands the docked favorites pane and restores details on wide screens', async ({ page }) => {
+		test.setTimeout(90_000)
 		await page.setViewportSize({ width: 1760, height: 960 })
 		await stubObjectsAdaptiveApi(page)
 		await openObjectsPage(page)

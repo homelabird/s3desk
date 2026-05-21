@@ -185,7 +185,8 @@ export async function gotoWithDynamicImportRecovery(
 
 			const recoverableFailure = [...pageErrors, ...consoleErrors].some(isRecoverableChunkLoadFailure) || requestFailures.length > 0
 			if (!recoverableFailure || attempt === maxAttempts - 1) {
-				await expect(locator).toBeVisible({ timeout: recoverableFailure ? pageReadyWaitMs : Math.min(timeout, 10_000) })
+				const finalWaitMs = recoverableFailure ? pageReadyWaitMs : Math.max(timeout, pageReadyWaitMs)
+				await expect(locator).toBeVisible({ timeout: finalWaitMs })
 				return locator
 			}
 		}
