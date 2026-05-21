@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react'
 
 import { hasOpenOverlayLayer } from '../components/useOverlayLayer'
 import { shouldIgnoreGlobalKeyboardShortcut } from './keyboardShortcuts'
@@ -13,7 +13,8 @@ type GuideOverlayState = {
 
 export function useKeyboardShortcuts(navigate: (path: string) => void, scopeKey = '__global__') {
 	const [guideState, setGuideState] = useState<GuideOverlayState>({ open: false, scopeKey: null })
-	const [pendingG, setPendingG] = useState(false)
+	const pendingGRef = useRef(false)
+	const gTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const guideOpen = guideState.open && guideState.scopeKey === scopeKey
 	const setGuideOpen = useCallback((next: SetStateAction<boolean>) => {
 		setGuideState((prev) => {
@@ -22,10 +23,15 @@ export function useKeyboardShortcuts(navigate: (path: string) => void, scopeKey 
 			return resolved ? { open: true, scopeKey } : { open: false, scopeKey: null }
 		})
 	}, [scopeKey])
+	const clearPendingG = useCallback(() => {
+		pendingGRef.current = false
+		if (gTimerRef.current) {
+			clearTimeout(gTimerRef.current)
+			gTimerRef.current = null
+		}
+	}, [])
 
 	useEffect(() => {
-		let gTimer: ReturnType<typeof setTimeout> | null = null
-
 		const handler = (e: KeyboardEvent) => {
 			if (shouldIgnoreGlobalKeyboardShortcut(e)) return
 
@@ -39,9 +45,8 @@ export function useKeyboardShortcuts(navigate: (path: string) => void, scopeKey 
 				return
 			}
 
-			if (pendingG) {
-				setPendingG(false)
-				if (gTimer) clearTimeout(gTimer)
+			if (pendingGRef.current) {
+				clearPendingG()
 				const routes: Record<string, string> = { p: '/profiles', b: '/buckets', o: '/objects', u: '/uploads', j: '/jobs' }
 				const path = routes[e.key.toLowerCase()]
 				if (path) {
@@ -52,16 +57,17 @@ export function useKeyboardShortcuts(navigate: (path: string) => void, scopeKey 
 			}
 
 			if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
-				setPendingG(true)
-				gTimer = setTimeout(() => setPendingG(false), 1000)
+				pendingGRef.current = true
+				if (gTimerRef.current) clearTimeout(gTimerRef.current)
+				gTimerRef.current = setTimeout(clearPendingG, 1000)
 			}
 		}
 		document.addEventListener('keydown', handler)
 		return () => {
 			document.removeEventListener('keydown', handler)
-			if (gTimer) clearTimeout(gTimer)
+			clearPendingG()
 		}
-	}, [guideOpen, pendingG, navigate, scopeKey])
+	}, [clearPendingG, guideOpen, navigate, scopeKey])
 
 	return { guideOpen, setGuideOpen }
 }

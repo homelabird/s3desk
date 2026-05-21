@@ -243,6 +243,30 @@ async function setupBucketsA11yPage(
 	})
 }
 
+async function setupProfilesDesktopA11yPage(page: Page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	await installProfilesBucketsMobileResponsiveFixtures(page)
+	await seedProfilesBucketsMobileResponsiveStorage(page)
+	await gotoProfilesPage(page)
+	await expect(page.getByTestId('profiles-table-desktop').getByText('Backup Profile')).toBeVisible()
+}
+
+async function setupJobsDesktopA11yPage(page: Page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	await installJobsMobileResponsiveFixtures(page)
+	await seedJobsMobileResponsiveStorage(page)
+	await gotoJobsPage(page)
+	await expect(page.getByText('job-queued')).toBeVisible()
+}
+
+async function setupUploadsDesktopA11yPage(page: Page) {
+	await page.setViewportSize({ width: 1440, height: 900 })
+	await installUploadsMobileResponsiveFixtures(page)
+	await seedUploadsMobileResponsiveStorage(page)
+	await gotoUploadsPage(page)
+	await expect(page.getByLabel('Upload prefix (optional)')).toBeVisible()
+}
+
 async function setupGcsBucketsMobileA11yPage(page: Page) {
 	await page.setViewportSize({ width: 390, height: 844 })
 	await installProfilesBucketsMobileResponsiveFixtures(page, {
@@ -419,6 +443,19 @@ async function seedPersistedTransfer(page: Page) {
 }
 
 test.describe('overlay accessibility scans', () => {
+	test('Profiles page has no whole-page axe violations', async ({ page }) => {
+		await setupProfilesDesktopA11yPage(page)
+
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
+	test('Buckets page has no whole-page axe violations', async ({ page }) => {
+		await page.setViewportSize({ width: 1440, height: 900 })
+		await setupBucketsA11yPage(page)
+
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
 	test('Objects page has no whole-page axe violations', async ({ page }) => {
 		await page.setViewportSize({ width: 1440, height: 900 })
 		await seedObjectsA11yStorage(page)
@@ -429,6 +466,18 @@ test.describe('overlay accessibility scans', () => {
 			maxAttempts: 5,
 		})
 		await expect(objectsListRow(page, 'alpha.png')).toBeVisible()
+
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
+	test('Uploads page has no whole-page axe violations', async ({ page }) => {
+		await setupUploadsDesktopA11yPage(page)
+
+		await expectNoA11yViolations(page, page.locator('body'))
+	})
+
+	test('Jobs page has no whole-page axe violations', async ({ page }) => {
+		await setupJobsDesktopA11yPage(page)
 
 		await expectNoA11yViolations(page, page.locator('body'))
 	})

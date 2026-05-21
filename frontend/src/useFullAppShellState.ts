@@ -1,4 +1,5 @@
 import { LogoutOutlined, SettingOutlined } from '@ant-design/icons'
+import { useQueryClient } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
 import { createElement, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -35,6 +36,7 @@ export function useFullAppShellState({
 	setApiToken,
 }: UseFullAppShellStateArgs) {
 	const navigate = useNavigate()
+	const queryClient = useQueryClient()
 	const [searchParams, setSearchParams] = useSearchParams()
 	const [navState, setNavState] = useState<ScopedOverlayState>({
 		open: false,
@@ -80,6 +82,7 @@ export function useFullAppShellState({
 	}
 
 	const logout = () => {
+		queryClient.clear()
 		setApiToken('')
 		clearProfileSelection()
 	}

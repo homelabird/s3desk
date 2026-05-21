@@ -24,7 +24,7 @@ export function PageSection({ title, description, actions, children, className, 
 				<div className={styles.header}>
 					<div className={styles.copy}>
 						{title ? (
-							<Typography.Title level={4} className={styles.title}>
+							<Typography.Title level={3} className={styles.title}>
 								{title}
 							</Typography.Title>
 						) : null}
