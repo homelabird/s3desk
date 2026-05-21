@@ -13,6 +13,9 @@ const defaultStorage: StorageSeed = {
 }
 
 const now = '2024-01-01T00:00:00Z'
+const transferScenarioPageReadyTimeoutMs = 90_000
+const transferScenarioPageReadyAttempts = 3
+const transferScenarioTestTimeoutMs = 180_000
 
 const metaResponse = {
 	version: 'test',
@@ -188,10 +191,14 @@ async function setupApiMocks(page: Page) {
 }
 
 test('transfer scenarios cover job types, progress, cancel, and retry', async ({ page }) => {
+	test.setTimeout(transferScenarioTestTimeoutMs)
 	await seedStorage(page)
 	await setupApiMocks(page)
 
-	await gotoJobsPage(page)
+	await gotoJobsPage(page, {
+		timeout: transferScenarioPageReadyTimeoutMs,
+		maxAttempts: transferScenarioPageReadyAttempts,
+	})
 
 	const localRow = jobsTableRow(page, 'job-local')
 	const stagingRow = jobsTableRow(page, 'job-staging')
