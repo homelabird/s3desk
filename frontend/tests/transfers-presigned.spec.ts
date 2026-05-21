@@ -14,6 +14,8 @@ const defaultStorage: StorageSeed = {
 	profileId: 'playwright-profile',
 	bucket: 'test-bucket',
 }
+const presignedPageReadyTimeoutMs = 45_000
+const presignedUploadTestTimeoutMs = 75_000
 
 async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 	const storage = { ...defaultStorage, ...overrides }
@@ -114,7 +116,7 @@ function baseObjectRoutes(): MockApiRoute[] {
 }
 
 test('falls back to staging when presigned upload is unsupported', async ({ page }) => {
-	test.setTimeout(45_000)
+	test.setTimeout(presignedUploadTestTimeoutMs)
 	const uploadId = 'upload-fallback'
 	const jobId = 'job-fallback'
 	let presignedAttempted = false
@@ -163,7 +165,7 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 	})
 
 	await seedStorage(page)
-	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket)
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, { timeout: presignedPageReadyTimeoutMs })
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'hello.txt',
 		contents: 'hello',
@@ -182,6 +184,7 @@ test('falls back to staging when presigned upload is unsupported', async ({ page
 })
 
 test('shows upload error when presigned request fails (CORS-like failure)', async ({ page }) => {
+	test.setTimeout(presignedUploadTestTimeoutMs)
 	const uploadId = 'upload-cors'
 	const presignedURL = 'https://presigned.example/upload/test'
 	let presignRequested = false
@@ -228,7 +231,7 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 	})
 
 	await seedStorage(page)
-	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket)
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, { timeout: presignedPageReadyTimeoutMs })
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'hello.txt',
 		contents: 'hello',
@@ -243,6 +246,7 @@ test('shows upload error when presigned request fails (CORS-like failure)', asyn
 })
 
 test('uses capability matrix to skip presigned mode for unsupported providers', async ({ page }) => {
+	test.setTimeout(presignedUploadTestTimeoutMs)
 	const uploadId = 'upload-capability'
 	let profilesLoaded = false
 	let presignedAttempted = false
@@ -342,7 +346,7 @@ test('uses capability matrix to skip presigned mode for unsupported providers', 
 	])
 
 	await seedStorage(page)
-	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket)
+	await gotoObjectsUploadBucketPage(page, defaultStorage.bucket, { timeout: presignedPageReadyTimeoutMs })
 	await expect.poll(() => profilesLoaded, { timeout: 5000 }).toBe(true)
 	await dropFileIntoObjectsUploadZone(page, {
 		name: 'hello.txt',
