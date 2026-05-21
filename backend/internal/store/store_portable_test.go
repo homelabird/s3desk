@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,30 @@ func TestImportPortableEntityFilesReplaceRejectsUploadObjectsOutsideSessionPrefi
 	}
 	if !strings.Contains(err.Error(), `object key "outside/file.bin" is outside upload session prefix "incoming/"`) {
 		t.Fatalf("error=%v, want upload session prefix validation failure", err)
+	}
+}
+
+func TestPortableObjectKeyMatchesUploadPrefixBoundary(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		objectKey string
+		prefix    string
+		want      bool
+	}{
+		{name: "empty prefix allows any key", objectKey: "anything/file.bin", prefix: "", want: true},
+		{name: "exact object key", objectKey: "incoming", prefix: "incoming", want: true},
+		{name: "slash bounded child", objectKey: "incoming/file.bin", prefix: "incoming", want: true},
+		{name: "trailing slash child", objectKey: "incoming/file.bin", prefix: "incoming/", want: true},
+		{name: "sibling prefix rejected", objectKey: "incoming-file.bin", prefix: "incoming", want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := portableObjectKeyMatchesUploadPrefix(tc.objectKey, tc.prefix); got != tc.want {
+				t.Fatalf("portableObjectKeyMatchesUploadPrefix(%q, %q)=%v, want %v", tc.objectKey, tc.prefix, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -568,6 +593,45 @@ func TestImportPortableEntityFilesReplaceRejectsUnknownPortableEntityFields(t *t
 	}
 	if !strings.Contains(err.Error(), "parse jobs") || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("error=%v, want parse jobs unknown field failure", err)
+	}
+
+	got, ok, err := st.GetProfile(ctx, profile.ID)
+	if err != nil {
+		t.Fatalf("get profile after rejected import: %v", err)
+	}
+	if !ok || got.ID != profile.ID {
+		t.Fatalf("profile after rejected import = %+v, ok=%v; want original profile", got, ok)
+	}
+}
+
+func TestImportPortableEntityFilesReplaceRejectsActiveDestinationJobs(t *testing.T) {
+	t.Parallel()
+
+	st := newTestStore(t)
+	profile := createTestProfile(t, st)
+	ctx := context.Background()
+	bundle, err := st.ExportPortableEntityFiles(ctx)
+	if err != nil {
+		t.Fatalf("export portable entities: %v", err)
+	}
+	entityFiles := make(map[string][]byte, len(bundle.EntityFiles))
+	for name, file := range bundle.EntityFiles {
+		entityFiles[name] = file.Data
+	}
+
+	if _, err := st.CreateJob(ctx, profile.ID, CreateJobInput{
+		Type:    "transfer_delete_prefix",
+		Payload: map[string]any{"bucket": "bucket-a", "prefix": "incoming/"},
+	}); err != nil {
+		t.Fatalf("create active destination job: %v", err)
+	}
+
+	_, err = st.ImportPortableEntityFilesReplace(ctx, entityFiles, t.TempDir())
+	if err == nil {
+		t.Fatal("expected active destination job import to fail")
+	}
+	if !errors.Is(err, ErrPortableImportActiveJobs) {
+		t.Fatalf("error=%v, want ErrPortableImportActiveJobs", err)
 	}
 
 	got, ok, err := st.GetProfile(ctx, profile.ID)

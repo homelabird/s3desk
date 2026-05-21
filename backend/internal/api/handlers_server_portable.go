@@ -590,6 +590,9 @@ func writePortableImportError(w http.ResponseWriter, err error) {
 	if errors.As(err, &preflightErr) {
 		writeServerRestorePreflightError(w, "portable_import_blocked", "failed to process portable backup bundle", preflightErr)
 		return
+	} else if errors.Is(err, store.ErrPortableImportActiveJobs) {
+		status = http.StatusConflict
+		code = "portable_import_blocked"
 	} else if strings.Contains(strings.ToLower(err.Error()), "missing encryption_key") || strings.Contains(strings.ToLower(err.Error()), "requires encryption_key") {
 		status = http.StatusConflict
 		code = "portable_import_blocked"

@@ -47,6 +47,8 @@ type PortableValidationOptions struct {
 	AllowRemote bool
 }
 
+var ErrPortableImportActiveJobs = errors.New("portable import cannot replace data while destination jobs are queued or running")
+
 func (s *Store) ExportPortableEntityFiles(ctx context.Context) (PortableExportBundle, error) {
 	tx := s.db.WithContext(ctx)
 	files := map[string]PortableEntityFile{}
@@ -130,6 +132,9 @@ func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context,
 	objectFavorites := rows.objectFavorites
 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := ensureNoActivePortableImportJobs(tx); err != nil {
+			return err
+		}
 		deleteTables := []any{
 			&objectFavoriteRow{},
 			&objectIndexReplacementRow{},
@@ -208,6 +213,19 @@ func (s *Store) ImportPortableEntityFilesReplaceWithOptions(ctx context.Context,
 	}
 
 	return counts, nil
+}
+
+func ensureNoActivePortableImportJobs(tx *gorm.DB) error {
+	var count int64
+	if err := tx.Model(&jobRow{}).
+		Where("status IN ?", []string{string(models.JobStatusQueued), string(models.JobStatusRunning)}).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("%w: %d active job(s)", ErrPortableImportActiveJobs, count)
+	}
+	return nil
 }
 
 type portableImportEntityRows struct {
@@ -604,11 +622,18 @@ func validatePortableUploadRowSessions[T any](
 		if ref.Bucket != session.Bucket {
 			return fmt.Errorf("portable %s row %d bucket %q does not match upload session bucket %q", entity, i+1, ref.Bucket, session.Bucket)
 		}
-		if session.Prefix != "" && !strings.HasPrefix(ref.ObjectKey, session.Prefix) {
+		if !portableObjectKeyMatchesUploadPrefix(ref.ObjectKey, session.Prefix) {
 			return fmt.Errorf("portable %s row %d object key %q is outside upload session prefix %q", entity, i+1, ref.ObjectKey, session.Prefix)
 		}
 	}
 	return nil
+}
+
+func portableObjectKeyMatchesUploadPrefix(objectKey, prefix string) bool {
+	if prefix == "" {
+		return true
+	}
+	return objectKey == prefix || strings.HasPrefix(objectKey, strings.TrimSuffix(prefix, "/")+"/")
 }
 
 func validatePortableJobRows(rows []jobRow) error {
