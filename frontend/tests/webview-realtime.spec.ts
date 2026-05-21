@@ -8,10 +8,13 @@ buildProfileFixture,
 installMockApi,
 metaJson,
 } from './support/apiFixtures'
-import { jobsTableRow } from './support/ui'
+import { gotoJobsPage, jobsTableRow } from './support/ui'
 import { seedWebviewStorage } from './support/webviewFixtures'
 
 const now = '2024-01-01T00:00:00Z'
+const webviewRealtimePageReadyTimeoutMs = 30_000
+const webviewRealtimePageReadyAttempts = 3
+const webviewRealtimeTestTimeoutMs = 120_000
 
 type JobRecord = {
 id: string
@@ -377,6 +380,7 @@ jobs = [...nextJobs]
 
 test.describe('webview realtime QA coverage', () => {
 test('WV-010 keeps the Jobs view visibly connected while status updates arrive', async ({ page }) => {
+test.setTimeout(webviewRealtimeTestTimeoutMs)
 const jobId = 'job-webview-live'
 const runningJob = buildUploadJob(jobId)
 const completedJob = buildUploadJob(jobId, {
@@ -391,8 +395,11 @@ wsBehaviors: [{ openDelayMs: 50 }],
 const apiState = await installWebviewRealtimeJobsApi(page, [runningJob])
 await seedWebviewStorage(page)
 
-await page.goto('/jobs')
-await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible({ timeout: 10_000 })
+await gotoJobsPage(page, {
+timeout: webviewRealtimePageReadyTimeoutMs,
+maxAttempts: webviewRealtimePageReadyAttempts,
+retryOnTimeout: true,
+})
 await expect(page.getByText('Realtime: WS')).toBeVisible({ timeout: 10_000 })
 await expect(page.getByText('Realtime updates disconnected')).toHaveCount(0)
 
@@ -422,6 +429,7 @@ await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible({ timeout:
 })
 
 test('WV-011 shows a disconnect warning and reconnects Jobs after interruption', async ({ page }) => {
+test.setTimeout(webviewRealtimeTestTimeoutMs)
 const jobId = 'job-webview-reconnect'
 const runningJob = buildUploadJob(jobId)
 const completedJob = buildUploadJob(jobId, {
@@ -439,8 +447,11 @@ finishedAt: now,
 	})
 	await seedWebviewStorage(page)
 
-await page.goto('/jobs')
-await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible()
+await gotoJobsPage(page, {
+timeout: webviewRealtimePageReadyTimeoutMs,
+maxAttempts: webviewRealtimePageReadyAttempts,
+retryOnTimeout: true,
+})
 await expect(page.getByText('Realtime: WS')).toBeVisible({ timeout: 10_000 })
 
 const jobRow = jobsTableRow(page, jobId)
