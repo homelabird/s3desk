@@ -52,7 +52,6 @@ import {
   pickBucketToBrowseFoldersAndNestedPrefixesHint,
   starObjectsToKeepThemHereHint,
   tapToChooseBucketHint,
-  tapToSwitchBucketHint,
   uploadFilesOrFoldersHint,
   uploadFilesOrFoldersFromDeviceHint,
   uploadsUnsupportedHint,
@@ -255,10 +254,6 @@ describe("actionHints helpers", () => {
 
   it("builds the go-to-buckets label from the shared wording module", () => {
     expect(goToBucketsLabel()).toBe("Go to Buckets");
-  });
-
-  it("builds the tap-to-switch-bucket hint from the shared wording module", () => {
-    expect(tapToSwitchBucketHint()).toBe("Tap to switch bucket");
   });
 
   it("builds the tap-to-choose-bucket hint from the shared wording module", () => {

@@ -11,7 +11,6 @@ import {
 	searchBucketsPlaceholder,
 	selectBucketTitle,
 	tapToChooseBucketHint,
-	tapToSwitchBucketHint,
 } from '../../../lib/actionHints'
 import { ObjectsBucketPicker } from '../ObjectsBucketPicker'
 
@@ -158,7 +157,7 @@ describe('ObjectsBucketPicker', () => {
 		expect(screen.getByTestId('objects-bucket-picker-mobile-trigger')).toHaveAttribute('aria-expanded', 'false')
 	})
 
-	it('uses shared helper copy for the mobile trigger hint states', () => {
+	it('keeps the selected mobile trigger compact while preserving empty-state hints', () => {
 		const { rerender } = render(
 			<ObjectsBucketPicker
 				scopeKey="token-a:profile-1"
@@ -171,7 +170,8 @@ describe('ObjectsBucketPicker', () => {
 			/>,
 		)
 
-		expect(screen.getByText(tapToSwitchBucketHint())).toBeInTheDocument()
+		expect(screen.getByText('bucket-a')).toBeInTheDocument()
+		expect(screen.queryByText('Tap to switch bucket')).not.toBeInTheDocument()
 
 		rerender(
 			<ObjectsBucketPicker

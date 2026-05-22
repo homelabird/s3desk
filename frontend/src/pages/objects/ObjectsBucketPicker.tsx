@@ -10,7 +10,6 @@ import {
 	searchBucketsPlaceholder,
 	selectBucketTitle,
 	tapToChooseBucketHint,
-	tapToSwitchBucketHint,
 } from '../../lib/actionHints'
 import { ObjectsBucketPickerEntryList } from './ObjectsBucketPickerEntryList'
 import styles from './ObjectsBucketPicker.module.css'
@@ -266,9 +265,11 @@ export function ObjectsBucketPicker({
 					<span className={value ? styles.bucketPickerTriggerValue : styles.bucketPickerTriggerPlaceholder}>
 						{currentBucketLabel}
 					</span>
-					<span className={styles.bucketPickerTriggerHint}>
-						{value ? tapToSwitchBucketHint() : options.length > 0 ? tapToChooseBucketHint() : noBucketsAvailableHint()}
-					</span>
+					{value ? null : (
+						<span className={styles.bucketPickerTriggerHint}>
+							{options.length > 0 ? tapToChooseBucketHint() : noBucketsAvailableHint()}
+						</span>
+					)}
 				</span>
 				<DownOutlined className={styles.bucketPickerTriggerIcon} />
 			</button>

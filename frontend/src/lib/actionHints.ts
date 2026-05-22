@@ -166,10 +166,6 @@ export function goToBucketsLabel(): string {
 	return 'Go to Buckets'
 }
 
-export function tapToSwitchBucketHint(): string {
-	return 'Tap to switch bucket'
-}
-
 export function tapToChooseBucketHint(): string {
 	return 'Tap to choose a bucket'
 }
