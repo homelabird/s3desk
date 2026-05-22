@@ -482,8 +482,8 @@ export async function openCreateDeleteJobDrawer(
 	} = {},
 ): Promise<Locator> {
 	const drawer = await ensureDialogOpen(page, 'Create delete job (S3)', async () => {
-		await page.getByRole('button', { name: options.moreButtonName ?? 'More' }).click()
-		await page.getByRole('menuitem', { name: 'New Delete Job' }).click()
+		await page.getByRole('button', { name: options.moreButtonName ?? 'More job actions' }).click()
+		await page.getByRole('menuitem', { name: 'Delete bucket or prefix...' }).click()
 	})
 	await expect(drawer).toBeVisible({ timeout: options.timeout })
 	return drawer

@@ -5,8 +5,6 @@ import { buildJobsPagePresentationProps } from '../buildJobsPagePresentationProp
 describe('buildJobsPagePresentationProps', () => {
   it('maps toolbar and table props with a shared scope key', () => {
     const onOpenCreateUpload = vi.fn()
-    const onOpenCreateDownload = vi.fn()
-    const onOpenDeleteJob = vi.fn()
     const onRetryRealtime = vi.fn()
     const onLoadMore = vi.fn()
     const onTableContainerRef = vi.fn()
@@ -24,8 +22,6 @@ describe('buildJobsPagePresentationProps', () => {
       eventsRetryThreshold: 3,
       onRetryRealtime,
       onOpenCreateUpload,
-      onOpenCreateDownload,
-      onOpenDeleteJob,
       topActionsMenu: { items: [] },
       statusFilter: 'all',
       onStatusFilterChange: vi.fn(),
@@ -92,10 +88,7 @@ describe('buildJobsPagePresentationProps', () => {
     expect(result.toolbar.scopeKey).toBe('token-a:profile-1')
     expect(result.toolbar.activeProfileName).toBe('Primary')
     expect(result.toolbar.onOpenCreateUpload).toBe(onOpenCreateUpload)
-    expect(result.toolbar.onOpenCreateDownload).toBe(onOpenCreateDownload)
     expect(result.table.onOpenCreateUpload).toBe(onOpenCreateUpload)
-    expect(result.table.onOpenDownloadJob).toBe(onOpenCreateDownload)
-    expect(result.table.onOpenDeleteJob).toBe(onOpenDeleteJob)
     expect(result.table.filtersDirty).toBe(false)
     expect(result.table.eventsConnected).toBe(true)
     expect(result.table.onRetryRealtime).toBe(onRetryRealtime)

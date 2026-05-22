@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 import { ensureDomShims } from '../../../test/domShims'
 import { JobsTableSection } from '../JobsTableSection'
@@ -9,96 +11,60 @@ beforeAll(() => {
 })
 
 describe('JobsTableSection', () => {
-	it('shows contextual help tooltips in empty state actions', () => {
+	function renderJobsTableSection(props: Partial<ComponentProps<typeof JobsTableSection>> = {}) {
 		render(
-			<JobsTableSection
-				bucketsError={null}
-				jobsError={null}
-				sortedJobs={[]}
-				columns={[]}
-				isCompact={false}
-				tableScrollY={300}
-				isLoading={false}
-				isOffline={false}
-				uploadSupported
-				filtersDirty={false}
-				onResetFilters={vi.fn()}
-				eventsConnected
-				onRetryRealtime={vi.fn()}
-				onOpenCreateUpload={vi.fn()}
-				onOpenDownloadJob={vi.fn()}
-				onOpenDeleteJob={vi.fn()}
-				getJobSummary={vi.fn(() => null)}
-				renderJobActions={vi.fn(() => null)}
-				sortState={null}
-				onSortChange={vi.fn()}
-				theme={{ borderColor: '#ddd', bg: '#fff', hoverBg: '#f5f5f5' }}
-				hasNextPage={false}
-				onLoadMore={vi.fn()}
-				isFetchingNextPage={false}
-				onTableContainerRef={vi.fn()}
-			/>,
+			<MemoryRouter>
+				<JobsTableSection
+					bucketsError={null}
+					jobsError={null}
+					sortedJobs={[]}
+					columns={[]}
+					isCompact={false}
+					tableScrollY={300}
+					isLoading={false}
+					isOffline={false}
+					uploadSupported
+					filtersDirty={false}
+					onResetFilters={vi.fn()}
+					eventsConnected
+					onRetryRealtime={vi.fn()}
+					onOpenCreateUpload={vi.fn()}
+					getJobSummary={vi.fn(() => null)}
+					renderJobActions={vi.fn(() => null)}
+					sortState={null}
+					onSortChange={vi.fn()}
+					theme={{ borderColor: '#ddd', bg: '#fff', hoverBg: '#f5f5f5' }}
+					hasNextPage={false}
+					onLoadMore={vi.fn()}
+					isFetchingNextPage={false}
+					onTableContainerRef={vi.fn()}
+					{...props}
+				/>
+			</MemoryRouter>,
 		)
+	}
 
-		expect(screen.getByText('No jobs yet.')).toBeInTheDocument()
-		const triggers = screen.getAllByTestId('help-tooltip-trigger')
-		expect(triggers).toHaveLength(3)
-		expect(triggers[0]?.parentElement).not.toBeNull()
-		expect(triggers[1]?.parentElement).not.toBeNull()
-		expect(triggers[2]?.parentElement).not.toBeNull()
+	it('keeps empty state actions focused on upload and object navigation', () => {
+		const onOpenCreateUpload = vi.fn()
+		renderJobsTableSection({ onOpenCreateUpload })
 
-		fireEvent.mouseEnter(triggers[0].parentElement!)
-		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
-			'Uploads selected files or folders from your device to the bucket',
-		)
-
-		fireEvent.mouseLeave(triggers[0].parentElement!)
-		expect(screen.queryByTestId('help-tooltip-content')).not.toBeInTheDocument()
-		fireEvent.mouseEnter(triggers[1].parentElement!)
-		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
-			'Downloads an S3 bucket or prefix to a folder on your device.',
-		)
-		fireEvent.mouseLeave(triggers[1].parentElement!)
-		expect(screen.queryByTestId('help-tooltip-content')).not.toBeInTheDocument()
-		fireEvent.mouseEnter(triggers[2].parentElement!)
-		expect(screen.getByTestId('help-tooltip-content')).toHaveTextContent(
-			'Queues a background delete job for a bucket or prefix. Use Objects for copy or move jobs.',
-		)
+		expect(screen.getByText('No activity yet.')).toBeInTheDocument()
+		expect(screen.getByText(/Start object-specific work from Objects/)).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('button', { name: 'Upload from device' }))
+		expect(onOpenCreateUpload).toHaveBeenCalledTimes(1)
+		expect(screen.getByRole('link', { name: 'Open objects' })).toHaveAttribute('href', '/objects')
+		expect(screen.queryByRole('button', { name: 'New delete job' })).not.toBeInTheDocument()
 	})
 
 	it('uses filtered empty state actions when filters hide all loaded jobs', () => {
 		const onResetFilters = vi.fn()
-		render(
-			<JobsTableSection
-				bucketsError={null}
-				jobsError={null}
-				sortedJobs={[]}
-				columns={[]}
-				isCompact={false}
-				tableScrollY={300}
-				isLoading={false}
-				isOffline={false}
-				uploadSupported
-				filtersDirty
-				onResetFilters={onResetFilters}
-				eventsConnected={false}
-				onRetryRealtime={vi.fn()}
-				onOpenCreateUpload={vi.fn()}
-				onOpenDownloadJob={vi.fn()}
-				onOpenDeleteJob={vi.fn()}
-				getJobSummary={vi.fn(() => null)}
-				renderJobActions={vi.fn(() => null)}
-				sortState={null}
-				onSortChange={vi.fn()}
-				theme={{ borderColor: '#ddd', bg: '#fff', hoverBg: '#f5f5f5' }}
-				hasNextPage={false}
-				onLoadMore={vi.fn()}
-				isFetchingNextPage={false}
-				onTableContainerRef={vi.fn()}
-			/>,
-		)
+		renderJobsTableSection({
+			filtersDirty: true,
+			onResetFilters,
+			eventsConnected: false,
+		})
 
-		expect(screen.getByText('No jobs match the current filters.')).toBeInTheDocument()
+		expect(screen.getByText('No activity matches the current filters.')).toBeInTheDocument()
 		fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }))
 		expect(onResetFilters).toHaveBeenCalledTimes(1)
 		expect(screen.getByRole('button', { name: 'Retry realtime' })).toBeInTheDocument()

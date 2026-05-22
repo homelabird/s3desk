@@ -167,7 +167,7 @@ test('jobs create, cancel, retry flow', async ({ page }) => {
 	await expect(page.getByText('job-running')).toBeVisible()
 	await expect(page.getByText('job-failed')).toBeVisible()
 
-	const deleteDrawer = await openCreateDeleteJobDrawer(page, { moreButtonName: /More$/ })
+	const deleteDrawer = await openCreateDeleteJobDrawer(page)
 	await commitComboboxValue(page, deleteDrawer, 'Bucket', defaultStorage.bucket)
 	await deleteDrawer.getByLabel('Prefix', { exact: true }).fill('to-delete/')
 	await deleteDrawer.getByRole('button', { name: 'Create' }).click()

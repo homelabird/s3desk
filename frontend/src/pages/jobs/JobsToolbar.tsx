@@ -36,7 +36,6 @@ export type JobsToolbarProps = {
 	eventsRetryThreshold: number
 	onRetryRealtime: () => void
 	onOpenCreateUpload: () => void
-	onOpenCreateDownload: () => void
 	topActionsMenu: MenuProps
 	statusFilter: JobsStatusFilter
 	onStatusFilterChange: (next: JobsStatusFilter) => void
@@ -205,7 +204,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						<MenuPopover menu={props.topActionsMenu} align="end" scopeKey={props.scopeKey}>
 							{({ toggle, open }) => (
 								<Button icon={<MoreOutlined />} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
-									New job
+									More job actions
 								</Button>
 							)}
 						</MenuPopover>

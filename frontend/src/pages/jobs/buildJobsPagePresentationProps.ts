@@ -15,8 +15,6 @@ type Args = {
   eventsRetryThreshold: number
   onRetryRealtime: () => void
   onOpenCreateUpload: () => void
-  onOpenCreateDownload: () => void
-  onOpenDeleteJob: () => void
   topActionsMenu: JobsToolbarProps['topActionsMenu']
   statusFilter: JobsToolbarProps['statusFilter']
   onStatusFilterChange: JobsToolbarProps['onStatusFilterChange']
@@ -73,7 +71,6 @@ export function buildJobsPagePresentationProps(args: Args) {
     eventsRetryThreshold: args.eventsRetryThreshold,
     onRetryRealtime: args.onRetryRealtime,
     onOpenCreateUpload: args.onOpenCreateUpload,
-    onOpenCreateDownload: args.onOpenCreateDownload,
     topActionsMenu: args.topActionsMenu,
     statusFilter: args.statusFilter,
     onStatusFilterChange: args.onStatusFilterChange,
@@ -113,8 +110,6 @@ export function buildJobsPagePresentationProps(args: Args) {
     eventsConnected: args.eventsConnected,
     onRetryRealtime: args.onRetryRealtime,
     onOpenCreateUpload: args.onOpenCreateUpload,
-    onOpenDownloadJob: args.onOpenCreateDownload,
-    onOpenDeleteJob: args.onOpenDeleteJob,
     getJobSummary: args.getJobSummary,
     renderJobActions: args.renderJobActions,
     sortState: args.sortState,

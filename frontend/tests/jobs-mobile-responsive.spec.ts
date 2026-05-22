@@ -60,10 +60,10 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(page.getByRole('heading', { name: 'Queue health' })).toBeVisible()
 		await expect(page.getByText('Realtime updates disconnected')).toBeVisible()
 		await expectMinTouchHeight(page.getByRole('button', { name: 'Upload from device' }))
-		const newJobButton = page.getByRole('button', { name: 'New job' })
+		const newJobButton = page.getByRole('button', { name: 'More job actions' })
 		await expectMinTouchHeight(newJobButton)
 		await newJobButton.click()
-		await expect(page.getByRole('menuitem', { name: 'Download...' })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: 'Download to device...' })).toBeVisible()
 		await page.keyboard.press('Escape')
 		await expectMinTouchHeight(page.getByTestId('jobs-mobile-filters-trigger'))
 		await expect

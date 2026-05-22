@@ -1,7 +1,7 @@
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined } from '@ant-design/icons'
 import { Button, Empty, Space, Typography } from 'antd'
 
-import { HelpTooltip } from '../../components/HelpTooltip'
+import { LinkButton } from '../../components/LinkButton'
 import styles from './JobsTableSection.module.css'
 
 type Props = {
@@ -12,8 +12,6 @@ type Props = {
 	eventsConnected: boolean
 	onRetryRealtime: () => void
 	onOpenCreateUpload: () => void
-	onOpenDownloadJob: () => void
-	onOpenDeleteJob: () => void
 }
 
 export function JobsEmptyState({
@@ -24,15 +22,13 @@ export function JobsEmptyState({
 	eventsConnected,
 	onRetryRealtime,
 	onOpenCreateUpload,
-	onOpenDownloadJob,
-	onOpenDeleteJob,
 }: Props) {
-	const title = filtersDirty ? 'No jobs match the current filters.' : 'No jobs yet.'
+	const title = filtersDirty ? 'No activity matches the current filters.' : 'No activity yet.'
 	const hint = filtersDirty
-		? 'Reset filters to return to the broader queue view, or start a new upload or download job.'
+		? 'Reset filters to return to the broader activity view.'
 		: eventsConnected
-			? 'Upload from this device, queue a download to your device, or create a delete job to start populating the queue.'
-			: 'Realtime is disconnected. Retry realtime or start a new upload or download job to continue.'
+			? 'Activity appears after uploads, downloads, deletes, and other background work. Start object-specific work from Objects, or upload from this device.'
+			: 'Realtime is disconnected. Retry realtime to resume live updates, or upload from this device when you are ready.'
 
 	return (
 		<Empty
@@ -56,18 +52,15 @@ export function JobsEmptyState({
 						Retry realtime
 					</Button>
 				) : null}
-				<Button type={filtersDirty || !eventsConnected ? 'default' : 'primary'} icon={<PlusOutlined />} onClick={onOpenCreateUpload} disabled={isOffline || !uploadSupported}>
-					Upload…
+				<Button
+					type={filtersDirty || !eventsConnected ? 'default' : 'primary'}
+					icon={<CloudUploadOutlined aria-hidden="true" />}
+					onClick={onOpenCreateUpload}
+					disabled={isOffline || !uploadSupported}
+				>
+					Upload from device
 				</Button>
-				<HelpTooltip ariaLabel="Upload help" text="Uploads selected files or folders from your device to the bucket" />
-				<Button onClick={onOpenDownloadJob} disabled={isOffline}>
-					Download…
-				</Button>
-				<HelpTooltip ariaLabel="Download help" text="Downloads an S3 bucket or prefix to a folder on your device." />
-				<Button danger icon={<DeleteOutlined />} onClick={onOpenDeleteJob} disabled={isOffline}>
-					New delete job
-				</Button>
-				<HelpTooltip ariaLabel="Delete job help" text="Queues a background delete job for a bucket or prefix. Use Objects for copy or move jobs." />
+				<LinkButton to="/objects">Open objects</LinkButton>
 			</div>
 		</Empty>
 	)

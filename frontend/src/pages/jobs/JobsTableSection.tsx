@@ -25,8 +25,6 @@ export type JobsTableSectionProps = {
 	eventsConnected: boolean
 	onRetryRealtime: () => void
 	onOpenCreateUpload: () => void
-	onOpenDownloadJob: () => void
-	onOpenDeleteJob: () => void
 	getJobSummary: (job: Job) => string | null
 	renderJobActions: (job: Job) => ReactNode
 	sortState: SortState
@@ -57,8 +55,6 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 		eventsConnected,
 		onRetryRealtime,
 		onOpenCreateUpload,
-		onOpenDownloadJob,
-		onOpenDeleteJob,
 		getJobSummary,
 		renderJobActions,
 		sortState,
@@ -78,8 +74,6 @@ export function JobsTableSection(props: JobsTableSectionProps) {
 			eventsConnected={eventsConnected}
 			onRetryRealtime={onRetryRealtime}
 			onOpenCreateUpload={onOpenCreateUpload}
-			onOpenDownloadJob={onOpenDownloadJob}
-			onOpenDeleteJob={onOpenDeleteJob}
 		/>
 	)
 
