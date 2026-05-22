@@ -593,7 +593,7 @@ test.describe('overlay accessibility scans', () => {
 		await page.setViewportSize({ width: 1440, height: 900 })
 		await setupBucketsA11yPage(page)
 
-		await clickBucketCardManageAction(page, page.locator('body'), bucketsA11yBucket, /Advanced policy/)
+		await clickBucketCardManageAction(page, page.locator('body'), bucketsA11yBucket, /Policy editor/)
 		const dialog = dialogByName(page, `Policy: ${bucketsA11yBucket}`)
 		await expect(dialog).toBeVisible()
 		await expect(dialog.getByText('Advanced S3 bucket policy workspace')).toBeVisible()
@@ -619,7 +619,7 @@ test.describe('overlay accessibility scans', () => {
 		await setupBucketsA11yPage(page)
 
 		const bucket = bucketCard(page, bucketsA11yBucket)
-		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Advanced policy/)
+		await clickBucketCardManageAction(page, bucket, bucketsA11yBucket, /Policy editor/)
 		const sheet = dialogByName(page, `Policy: ${bucketsA11yBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()

@@ -127,11 +127,11 @@ describe('JobsToolbar', () => {
 
 		fireEvent.click(columnsButton)
 		expect(columnsButton).toHaveAttribute('aria-expanded', 'true')
-		const columnsPopover = screen.getByRole('dialog', { name: 'Job columns' })
+		const columnsPopover = screen.getByRole('dialog', { name: 'Job table layout' })
 		expect(columnsPopover).toHaveAttribute('id', 'jobs-columns-popover-panel')
 
 		fireEvent.keyDown(columnsPopover, { key: 'Tab' })
-		expect(screen.getByRole('dialog', { name: 'Job columns' })).toBeInTheDocument()
+		expect(screen.getByRole('dialog', { name: 'Job table layout' })).toBeInTheDocument()
 		expect(columnsButton).toHaveAttribute('aria-expanded', 'true')
 	})
 

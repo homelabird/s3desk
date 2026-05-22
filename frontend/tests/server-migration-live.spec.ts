@@ -27,7 +27,7 @@ test.describe('Live server migration flow', () => {
 		await page.getByRole('button', { name: /Settings/i }).click()
 		const settings = page.getByRole('dialog', { name: 'Settings' })
 		await expect(settings).toBeVisible()
-		await settings.getByRole('tab', { name: 'Advanced' }).click()
+		await settings.getByRole('tab', { name: 'System' }).click()
 		await settings.getByRole('button', { name: 'Backup' }).click()
 		const drawer = page.getByRole('dialog', { name: 'Backup and restore' })
 		await expect(drawer).toBeVisible({ timeout: 30_000 })

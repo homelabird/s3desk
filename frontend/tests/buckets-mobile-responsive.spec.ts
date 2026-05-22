@@ -101,7 +101,7 @@ test.describe('@mobile-responsive Buckets mobile workflows', () => {
 
 		await expectMinTouchHeight(manageButton)
 
-		await clickBucketCardManageAction(page, bucketCard, primaryBucket, /Advanced policy/)
+		await clickBucketCardManageAction(page, bucketCard, primaryBucket, /Policy editor/)
 		const policySheet = page.getByRole('dialog', { name: `Policy: ${primaryBucket}` })
 		await expect(policySheet).toBeVisible()
 		await expect(policySheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()

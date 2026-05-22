@@ -410,7 +410,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 						contentProps={{
 							id: columnsPopoverId,
 							role: 'dialog',
-							'aria-label': 'Job columns',
+							'aria-label': 'Job table layout',
 						}}
 						content={({ close }) => (
 							<Space orientation="vertical" size={4} className={styles.columnsDropdownList}>
@@ -431,7 +431,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 									}}
 									disabled={!props.columnsDirty}
 								>
-									Reset columns
+									Reset table layout
 								</Button>
 							</Space>
 						)}
@@ -445,7 +445,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 								aria-expanded={open}
 								aria-controls={columnsPopoverId}
 							>
-								Columns
+								Table layout
 							</Button>
 						)}
 					</PopoverSurface>

@@ -24,7 +24,7 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 async function getToolbarMoreButton(page: Page) {
 	const byTestId = page.getByTestId('objects-toolbar-more')
 	if (await byTestId.count()) return byTestId.first()
-	return page.getByRole('button', { name: /More|Actions/i }).first()
+	return page.getByRole('button', { name: /Object tools|Tools|Actions/i }).first()
 }
 
 async function stubObjectsSmokeApi(page: Page, overrides?: Partial<StorageSeed>) {

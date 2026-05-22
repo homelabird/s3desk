@@ -28,7 +28,7 @@ describe('BucketActions', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Manage bucket primary-bucket' }))
 
 		expect(await screen.findByRole('menuitem', { name: /Controls/ })).toBeEnabled()
-		expect(screen.getByRole('menuitem', { name: /Advanced policy/ })).toBeEnabled()
+		expect(screen.getByRole('menuitem', { name: /Policy editor/ })).toBeEnabled()
 		expect(screen.getByRole('menuitem', { name: /Delete bucket/ })).toBeEnabled()
 	})
 
@@ -51,6 +51,6 @@ describe('BucketActions', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Manage bucket archive-bucket' }))
 
 		expect(await screen.findByRole('menuitem', { name: /Controls unavailable/ })).toBeDisabled()
-		expect(screen.getByRole('menuitem', { name: /Policy unavailable/ })).toBeDisabled()
+		expect(screen.getByRole('menuitem', { name: /Policy editor unavailable/ })).toBeDisabled()
 	})
 })

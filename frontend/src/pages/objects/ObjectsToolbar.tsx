@@ -164,11 +164,11 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						disabled={!props.hasProfile}
 						onClick={toggle}
 						data-testid="objects-toolbar-more"
-						aria-label="More actions"
+						aria-label="Object tools"
 						aria-haspopup="menu"
 						aria-expanded={open}
 					>
-						{buildMenuButtonLabel(props.isDesktop ? 'More' : 'Actions', props.showLabels)}
+						{buildMenuButtonLabel(props.isDesktop ? 'Tools' : 'Actions', props.showLabels)}
 					</Button>
 				</Badge>
 			)}

@@ -140,7 +140,7 @@ describe('SettingsPage', () => {
 
 		renderSettingsPage()
 
-		fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
+		fireEvent.click(screen.getByRole('tab', { name: 'System' }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Reset saved UI state' }))
 
 		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1))
@@ -169,7 +169,7 @@ describe('SettingsPage', () => {
 	it('stores retry policy only after applying diagnostics tuning', async () => {
 		renderSettingsPage()
 
-		fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
+		fireEvent.click(screen.getByRole('tab', { name: 'System' }))
 		fireEvent.change(await screen.findByLabelText('HTTP retry count'), { target: { value: '4' } })
 		fireEvent.change(screen.getByLabelText('Retry base delay (ms)'), { target: { value: '700' } })
 
@@ -202,7 +202,7 @@ describe('SettingsPage', () => {
 
 		renderSettingsPage({ apiToken: 'token-a' })
 
-		fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
+		fireEvent.click(screen.getByRole('tab', { name: 'System' }))
 		expect(await screen.findByText('2 dialog preference(s) are currently suppressed.')).toBeInTheDocument()
 
 		fireEvent.click(screen.getByRole('button', { name: 'Reset dismissed dialogs' }))

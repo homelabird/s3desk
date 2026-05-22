@@ -292,7 +292,7 @@ export function SettingsPage(props: Props) {
 					},
 					{
 						key: 'advanced',
-						label: 'Advanced',
+						label: 'System',
 						children: (
 							<Space orientation="vertical" size="large" className={styles.fullWidth}>
 								<Suspense fallback={<SettingsSectionFallback />}>

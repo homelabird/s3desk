@@ -386,7 +386,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 
 		await expect(actions.getByRole('button', { name: 'Upload' })).toBeEnabled()
 		await expect(actions.getByRole('button', { name: 'New folder' })).toBeEnabled()
-		await expect(actions.getByRole('button', { name: 'More actions' })).toBeEnabled()
+		await expect(actions.getByRole('button', { name: 'Object tools' })).toBeEnabled()
 
 		await actions.getByRole('button', { name: 'New folder' }).click()
 		const dialog = page.getByRole('dialog', { name: 'New folder' })
@@ -394,7 +394,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await dialog.getByRole('button', { name: 'Cancel' }).click()
 		await expect(dialog).toHaveCount(0)
 
-		await actions.getByRole('button', { name: 'More actions' }).click()
+		await actions.getByRole('button', { name: 'Object tools' }).click()
 		await expect(page.getByRole('menuitem', { name: 'Folders' })).toBeVisible()
 	})
 

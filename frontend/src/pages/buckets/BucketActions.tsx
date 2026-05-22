@@ -43,7 +43,7 @@ export function BucketActions(props: BucketActionsProps) {
 		{
 			key: 'policy',
 			icon: <FileTextOutlined />,
-			label: props.policySupported ? 'Advanced policy' : 'Policy unavailable',
+			label: props.policySupported ? 'Policy editor' : 'Policy editor unavailable',
 			disabled: !props.policySupported,
 			onClick: () => props.onOpenPolicy(props.bucketName),
 		},
@@ -73,8 +73,8 @@ export function BucketActions(props: BucketActionsProps) {
 			<Tooltip
 				title={
 					props.controlsSupported || props.policySupported
-						? 'Manage bucket controls, policy, and deletion'
-						: `${props.controlsUnsupportedReason || 'Controls unavailable'} ${props.policyUnsupportedReason || 'Policy unavailable'}`
+						? 'Manage bucket controls, policy editor, and deletion'
+						: `${props.controlsUnsupportedReason || 'Controls unavailable'} ${props.policyUnsupportedReason || 'Policy editor unavailable'}`
 				}
 			>
 				<span>

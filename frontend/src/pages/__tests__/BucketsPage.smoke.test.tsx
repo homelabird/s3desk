@@ -365,7 +365,7 @@ describe("BucketsPage", () => {
     expect(manageButtons[0]).toBeInTheDocument();
 
     fireEvent.click(manageButtons[0]);
-    expect(await screen.findByRole("menuitem", { name: /Advanced policy/ })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: /Policy editor/ })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Delete bucket/ })).toBeInTheDocument();
   });
 

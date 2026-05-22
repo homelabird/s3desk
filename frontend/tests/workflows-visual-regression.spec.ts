@@ -325,7 +325,7 @@ test.describe('Workflow visual regression @visual', () => {
 			},
 		})
 
-		await clickBucketManageAction(page, profilesBucketsVisualBucket, /Advanced policy/)
+		await clickBucketManageAction(page, profilesBucketsVisualBucket, /Policy editor/)
 		const sheet = dialogByName(page, `Policy: ${profilesBucketsVisualBucket}`)
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByTestId('bucket-policy-mobile-shell')).toBeVisible()

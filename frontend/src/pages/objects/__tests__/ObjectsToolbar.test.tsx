@@ -124,7 +124,7 @@ describe('ObjectsToolbar', () => {
 	it('exposes the toolbar more menu disclosure state', () => {
 		render(<ObjectsToolbar {...buildProps()} />)
 
-		const moreButton = screen.getByRole('button', { name: 'More actions' })
+		const moreButton = screen.getByRole('button', { name: 'Object tools' })
 		expect(moreButton).toHaveAttribute('aria-haspopup', 'menu')
 		expect(moreButton).toHaveAttribute('aria-expanded', 'false')
 	})
