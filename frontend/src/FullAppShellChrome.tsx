@@ -180,14 +180,16 @@ export function FullAppShellChrome({
 							)}
 						</div>
 						<div className={styles.headerActions}>
-							<Button
-								type={isDesktop ? 'link' : 'text'}
-								icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-								onClick={toggleMode}
-								aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-							>
-								{isDesktop ? (mode === 'dark' ? 'Light mode' : 'Dark mode') : null}
-							</Button>
+							{isDesktop ? (
+								<Button
+									type="link"
+									icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+									onClick={toggleMode}
+									aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+								>
+									{mode === 'dark' ? 'Light mode' : 'Dark mode'}
+								</Button>
+							) : null}
 							{isStackedHeader ? null : (
 								<TopBarProfileSelect
 									profileId={profileId}

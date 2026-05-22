@@ -870,7 +870,7 @@ test.describe('overlay accessibility scans', () => {
 	test('mobile Jobs upload source sheet has no axe violations', async ({ page }) => {
 		await setupJobsMobileA11yPage(page)
 
-		await page.getByRole('button', { name: 'Upload' }).click()
+		await page.getByRole('button', { name: 'Upload from device' }).click()
 		const sheet = dialogByName(page, 'Upload from device')
 		await expect(sheet).toBeVisible()
 		await expect(sheet.getByRole('button', { name: 'Choose from device…' })).toBeVisible()

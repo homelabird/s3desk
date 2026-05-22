@@ -200,6 +200,8 @@ describe('useFullAppController', () => {
 		expect(shellArgs.apiToken).toBe('token-a')
 		expect(shellArgs.pathname).toBe('/objects')
 		expect(shellArgs.shellScopeKey).toBe('token-a:profile-1')
+		expect(shellArgs.themeMode).toBe('light')
+		expect(shellArgs.toggleThemeMode).toBe(theme.toggleMode)
 
 		shellArgs.clearProfileSelection()
 		expect(setProfileId).toHaveBeenCalledWith(null)

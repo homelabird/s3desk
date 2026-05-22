@@ -138,8 +138,20 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await moreActionsButton.click()
 		const settingsItem = page.getByRole('menuitem', { name: /Settings/i })
 		await expect(settingsItem).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Dark mode/i })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Logout/i })).toBeVisible()
 
+		await page.getByRole('menuitem', { name: /Dark mode/i }).click()
+		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+
+		await moreActionsButton.click()
+		await page.getByRole('menuitem', { name: /Logout/i }).click()
+		const logoutDialog = page.getByRole('dialog', { name: 'Log out of this session?' })
+		await expect(logoutDialog).toBeVisible()
+		await logoutDialog.getByRole('button', { name: 'Cancel' }).click()
+		await expect(logoutDialog).toHaveCount(0)
+
+		await moreActionsButton.click()
 		await settingsItem.click()
 		const settingsDrawer = page.getByRole('dialog', { name: 'Settings' })
 		await expect(settingsDrawer).toBeVisible()
@@ -209,7 +221,7 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await closeJobsMobileFilters(jobsFiltersSheet)
 		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toContainText('Filters active')
 
-		await page.getByRole('button', { name: 'Upload' }).click()
+		await page.getByRole('button', { name: 'Upload from device' }).click()
 		const uploadSheet = page.getByRole('dialog')
 		await expect(page.getByRole('heading', { name: 'Upload from device' })).toBeVisible()
 		await uploadSheet.getByLabel('Close', { exact: true }).click()

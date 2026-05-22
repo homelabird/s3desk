@@ -1,10 +1,12 @@
-import { LogoutOutlined, SettingOutlined } from '@ant-design/icons'
+import { LogoutOutlined, MoonOutlined, SettingOutlined, SunOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
-import { createElement, useMemo, useState } from 'react'
+import { createElement, useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { confirmDangerAction } from './lib/confirmDangerAction'
 import { useKeyboardShortcuts } from './lib/useKeyboardShortcuts'
+import type { ThemeMode } from './themeModeContext'
 
 type ScopedOverlayState = {
 	open: boolean
@@ -17,6 +19,8 @@ type UseFullAppShellStateArgs = {
 	shellScopeKey: string
 	clearProfileSelection: () => void
 	setApiToken: (token: string) => void
+	themeMode: ThemeMode
+	toggleThemeMode: () => void
 }
 
 function getSelectedNavKey(pathname: string): string {
@@ -34,6 +38,8 @@ export function useFullAppShellState({
 	shellScopeKey,
 	clearProfileSelection,
 	setApiToken,
+	themeMode,
+	toggleThemeMode,
 }: UseFullAppShellStateArgs) {
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
@@ -58,57 +64,83 @@ export function useFullAppShellState({
 		shellScopeKey,
 	)
 
-	const openNav = () => {
+	const openNav = useCallback(() => {
 		setNavState({ open: true, scopeKey: shellScopeKey })
-	}
+	}, [shellScopeKey])
 
-	const closeNav = () => {
+	const closeNav = useCallback(() => {
 		setNavState({ open: false, scopeKey: null })
-	}
+	}, [])
 
-	const openSettings = () => {
+	const openSettings = useCallback(() => {
 		setSettingsState({ open: true, scopeKey: shellScopeKey })
 		const next = new URLSearchParams(searchParams)
 		next.set('settings', '1')
 		setSearchParams(next, { replace: false })
-	}
+	}, [searchParams, setSearchParams, shellScopeKey])
 
-	const closeSettings = () => {
+	const closeSettings = useCallback(() => {
 		setSettingsState({ open: false, scopeKey: null })
 		if (!searchParams.has('settings')) return
 		const next = new URLSearchParams(searchParams)
 		next.delete('settings')
 		setSearchParams(next, { replace: true })
-	}
+	}, [searchParams, setSearchParams])
 
-	const logout = () => {
+	const performLogout = useCallback(() => {
 		queryClient.clear()
 		setApiToken('')
 		clearProfileSelection()
-	}
+	}, [clearProfileSelection, queryClient, setApiToken])
 
-	const compactHeaderMenu: MenuProps = {
-		items: [
-			{ key: 'settings', icon: createElement(SettingOutlined), label: 'Settings' },
-			...(apiToken
-				? [
-						{
-							key: 'logout',
-							icon: createElement(LogoutOutlined),
-							label: 'Logout',
-							danger: true,
-						},
-					]
-				: []),
-		],
-		onClick: ({ key }) => {
-			if (key === 'settings') {
-				openSettings()
-				return
-			}
-			if (key === 'logout') logout()
-		},
-	}
+	const logout = useCallback(() => {
+		confirmDangerAction({
+			title: 'Log out of this session?',
+			description: 'This clears the API token and active profile from this browser session. Saved profiles and objects are not deleted.',
+			confirmText: 'LOGOUT',
+			confirmHint: 'Type "LOGOUT" to confirm',
+			okText: 'Logout',
+			preferenceKey: 'confirm:session-logout',
+			scopeApiToken: apiToken,
+			onConfirm: performLogout,
+		})
+	}, [apiToken, performLogout])
+
+	const compactHeaderMenu: MenuProps = useMemo(
+		() => ({
+			items: [
+				{ key: 'settings', icon: createElement(SettingOutlined), label: 'Settings' },
+				{
+					key: 'theme',
+					icon: createElement(themeMode === 'dark' ? SunOutlined : MoonOutlined),
+					label: themeMode === 'dark' ? 'Light mode' : 'Dark mode',
+				},
+				...(apiToken
+					? [
+							{ type: 'divider' as const },
+							{
+								key: 'logout',
+								icon: createElement(LogoutOutlined),
+								label: 'Logout',
+								danger: true,
+							},
+						]
+					: []),
+			],
+			onClick: ({ key }) => {
+				if (key === 'settings') {
+					openSettings()
+					return
+				}
+				if (key === 'theme') {
+					toggleThemeMode()
+					return
+				}
+				if (key === 'logout') logout()
+			},
+		}),
+		[apiToken, logout, openSettings, themeMode, toggleThemeMode],
+	)
 
 	return {
 		selectedKey,

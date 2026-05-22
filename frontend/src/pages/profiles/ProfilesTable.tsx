@@ -39,7 +39,7 @@ export function ProfilesTable(props: ProfilesTableProps) {
 			},
 			{
 				key: 'advanced',
-				label: 'Advanced',
+				label: 'Diagnostics & export',
 				children: [
 					{
 						key: 'benchmark',

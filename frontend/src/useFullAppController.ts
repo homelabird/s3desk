@@ -91,6 +91,8 @@ export function useFullAppController({
 		shellScopeKey,
 		clearProfileSelection: () => setProfileId(null),
 		setApiToken,
+		themeMode: theme.mode,
+		toggleThemeMode: theme.toggleMode,
 	})
 
 	const shellViewModel = useFullAppShellViewModel({

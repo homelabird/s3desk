@@ -59,7 +59,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible()
 		await expect(page.getByRole('heading', { name: 'Queue health' })).toBeVisible()
 		await expect(page.getByText('Realtime updates disconnected')).toBeVisible()
-		await expectMinTouchHeight(page.getByRole('button', { name: 'Upload' }))
+		await expectMinTouchHeight(page.getByRole('button', { name: 'Upload from device' }))
 		const newJobButton = page.getByRole('button', { name: 'New job' })
 		await expectMinTouchHeight(newJobButton)
 		await newJobButton.click()
@@ -117,7 +117,7 @@ test.describe('@mobile-responsive Jobs mobile workflows', () => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoJobsPage(page)
 
-		await page.getByRole('button', { name: 'Upload' }).click()
+		await page.getByRole('button', { name: 'Upload from device' }).click()
 		const sheet = page.getByRole('dialog', { name: 'Upload from device' })
 		await expect(sheet).toBeVisible()
 		await sheet.getByLabel('Close', { exact: true }).click()

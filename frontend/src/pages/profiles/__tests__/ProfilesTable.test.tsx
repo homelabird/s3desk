@@ -61,6 +61,7 @@ describe('ProfilesTable', () => {
 
 		fireEvent.click(screen.getByRole('button', { name: 'More actions for Primary Profile' }))
 		expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument()
+		expect(screen.getByRole('menuitem', { name: /Diagnostics & export/ })).toBeInTheDocument()
 
 		rerender(
 			<ProfilesTable

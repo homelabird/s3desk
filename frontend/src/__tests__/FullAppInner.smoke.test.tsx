@@ -158,7 +158,18 @@ describe('FullAppInner header', () => {
 
 		expect(moreActionsButton).toHaveAttribute('aria-expanded', 'true')
 		expect(await screen.findByRole('menuitem', { name: /Settings/i })).toBeInTheDocument()
+		expect(screen.getByRole('menuitem', { name: /Dark mode/i })).toBeInTheDocument()
 		expect(screen.getByRole('menuitem', { name: /Logout/i })).toBeInTheDocument()
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole('menuitem', { name: /Logout/i }))
+		})
+
+		expect(await screen.findByRole('dialog', { name: 'Log out of this session?' })).toBeInTheDocument()
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+		})
+		expect(screen.queryByRole('dialog', { name: 'Log out of this session?' })).not.toBeInTheDocument()
 
 		await act(async () => {
 			fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }))

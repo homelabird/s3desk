@@ -131,7 +131,7 @@ export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 		},
 		{
 			id: 'ui_mode',
-			label: deps.isAdvanced ? 'Simple mode' : 'Advanced mode',
+			label: deps.isAdvanced ? 'Switch to simple mode' : 'Switch to advanced mode',
 			icon: <SnippetsOutlined />,
 			keywords: 'simple advanced view mode',
 			enabled: !!deps.profileId,

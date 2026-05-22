@@ -198,6 +198,7 @@ export function JobsToolbar(props: JobsToolbarProps) {
 							icon={<CloudUploadOutlined />}
 							onClick={props.onOpenCreateUpload}
 							disabled={props.isOffline || !props.uploadSupported}
+							aria-label="Upload from device"
 						>
 							Upload
 						</Button>

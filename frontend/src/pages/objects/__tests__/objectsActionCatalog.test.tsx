@@ -5,8 +5,8 @@ import { buildObjectsActionCatalog } from '../objectsActionCatalog'
 function noop() {}
 
 describe('buildObjectsActionCatalog', () => {
-	it('hides link actions when presigned download URLs are unsupported', () => {
-		const catalog = buildObjectsActionCatalog({
+	function buildCatalog(overrides: Partial<Parameters<typeof buildObjectsActionCatalog>[0]> = {}) {
+		return buildObjectsActionCatalog({
 			isAdvanced: true,
 			isOffline: false,
 			profileId: 'profile-1',
@@ -59,9 +59,22 @@ describe('buildObjectsActionCatalog', () => {
 			onCloseTab: noop,
 			onOpenGlobalSearch: noop,
 			onToggleUiMode: noop,
+			...overrides,
 		})
+	}
+
+	it('hides link actions when presigned download URLs are unsupported', () => {
+		const catalog = buildCatalog()
 
 		const objectActions = catalog.getObjectActions('sample.txt')
 		expect(objectActions.some((item) => !('type' in item) && item.id === 'presign')).toBe(false)
+	})
+
+	it('uses explicit labels for switching object workspace complexity', () => {
+		const advancedCatalog = buildCatalog({ isAdvanced: true })
+		const simpleCatalog = buildCatalog({ isAdvanced: false })
+
+		expect(advancedCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Switch to simple mode')
+		expect(simpleCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Switch to advanced mode')
 	})
 })
