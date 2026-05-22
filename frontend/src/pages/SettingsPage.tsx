@@ -75,35 +75,48 @@ function RecoverySettingsSection({
 	onResetDismissedDialogs: () => void
 	onResetUiState: () => void
 }) {
+	const [recoveryToolsOpen, setRecoveryToolsOpen] = useState(false)
+
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				What this affects: browser-stored layout, filters, selections, and dismissed safety dialogs.
+				Use these repair tools only when this browser keeps opening with the wrong layout, filters, or hidden confirmations.
 			</Typography.Text>
-			<div className={styles.recoveryCard}>
-				<Space orientation="vertical" size={8} className={styles.fullWidth}>
-					<Typography.Text strong>Saved UI state</Typography.Text>
-					<Typography.Text type="secondary">
-						Clears saved view, filter, and layout state from this browser. Use it when the UI looks stuck because an old local state was persisted.
-					</Typography.Text>
-					<Button danger onClick={onResetUiState}>
-						Reset saved UI state
-					</Button>
+			<Button
+				className={styles.recoveryDisclosureButton}
+				aria-expanded={recoveryToolsOpen}
+				onClick={() => setRecoveryToolsOpen((open) => !open)}
+			>
+				Browser recovery tools
+			</Button>
+			{recoveryToolsOpen ? (
+				<Space orientation="vertical" size="middle" className={styles.fullWidth}>
+					<div className={styles.recoveryCard}>
+						<Space orientation="vertical" size={8} className={styles.fullWidth}>
+							<Typography.Text strong>Clear saved layout and filters</Typography.Text>
+							<Typography.Text type="secondary">
+								Clears saved view, filter, selection, and layout state from this browser. Your API token and profiles are kept.
+							</Typography.Text>
+							<Button danger onClick={onResetUiState}>
+								Clear saved layout
+							</Button>
+						</Space>
+					</div>
+					<div className={styles.recoveryCard}>
+						<Space orientation="vertical" size={8} className={styles.fullWidth}>
+							<Typography.Text strong>Restore hidden confirmations</Typography.Text>
+							<Typography.Text type="secondary">
+								{dismissedDialogCount > 0
+									? `${dismissedDialogCount} confirmation preference(s) are currently hidden.`
+									: 'No confirmation preferences are currently hidden.'}
+							</Typography.Text>
+							<Button onClick={onResetDismissedDialogs} disabled={dismissedDialogCount === 0}>
+								Restore confirmations
+							</Button>
+						</Space>
+					</div>
 				</Space>
-			</div>
-			<div className={styles.recoveryCard}>
-				<Space orientation="vertical" size={8} className={styles.fullWidth}>
-					<Typography.Text strong>Dismissed dialog confirmations</Typography.Text>
-					<Typography.Text type="secondary">
-						{dismissedDialogCount > 0
-							? `${dismissedDialogCount} dialog preference(s) are currently suppressed.`
-							: 'No dialog preferences are currently suppressed.'}
-					</Typography.Text>
-					<Button onClick={onResetDismissedDialogs} disabled={dismissedDialogCount === 0}>
-						Reset dismissed dialogs
-					</Button>
-				</Space>
-			</div>
+			) : null}
 		</Space>
 	)
 }
@@ -198,15 +211,15 @@ export function SettingsPage(props: Props) {
 
 	const onResetUiState = useCallback(() => {
 		confirmDangerAction({
-			title: 'Reset saved UI state?',
+			title: 'Clear saved layout and filters?',
 			description:
-				'Clears stored view / filter / layout / selection state from your browser (localStorage). Useful when screens look wrong after a lot of navigation. Your API token will be kept.\n\nThe app will reload after reset.',
-			confirmText: 'RESET',
-			confirmHint: 'RESET',
-			okText: 'Reset and reload',
+				'Clears stored view, filter, layout, and selection state from this browser. Your API token and profiles will be kept.\n\nThe app will reload after clearing these browser preferences.',
+			confirmText: 'CLEAR',
+			confirmHint: 'CLEAR',
+			okText: 'Clear and reload',
 			onConfirm: async () => {
 				clearResettableUiState()
-				appFeedback.success('Saved UI state reset. Reloading…')
+				appFeedback.success('Saved layout and filters cleared. Reloading…')
 				reloadPage()
 			},
 		})
@@ -214,7 +227,7 @@ export function SettingsPage(props: Props) {
 
 	const onResetDismissedDialogs = useCallback(() => {
 		clearDismissedDialogs(props.apiToken)
-		appFeedback.success('Dismissed dialog preferences reset.')
+		appFeedback.success('Hidden confirmations restored.')
 	}, [props.apiToken])
 
 	return (
@@ -292,7 +305,7 @@ export function SettingsPage(props: Props) {
 					},
 					{
 						key: 'advanced',
-						label: 'System',
+						label: 'Support',
 						children: (
 							<Space orientation="vertical" size="large" className={styles.fullWidth}>
 								<Suspense fallback={<SettingsSectionFallback />}>

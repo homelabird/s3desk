@@ -33,7 +33,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			<Space orientation="vertical" size={8} style={{ width: '100%' }}>
 				<Typography.Text strong>Backup and restore</Typography.Text>
 				<Typography.Text type="secondary">
-					Export server backups, stage restores, import portable bundles, and clean staged restore inventory from this system settings area.
+					Use these server tools only when moving, restoring, or cleaning up this S3Desk instance.
 				</Typography.Text>
 				<SidebarBackupAction
 					api={props.api}
@@ -43,7 +43,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 				/>
 			</Space>
 			<Typography.Text type="secondary">
-				These operations affect the local server state. Keep day-to-day browsing, uploads, and transfers in the main workspace.
+				They affect local server state. Keep day-to-day browsing, uploads, and transfers in the main workspace.
 			</Typography.Text>
 		</Space>
 	)

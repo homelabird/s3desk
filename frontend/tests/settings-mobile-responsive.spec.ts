@@ -79,7 +79,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await expect(reopenedDrawer.getByPlaceholder('Must match API_TOKEN')).toHaveValue(updatedToken)
 	})
 
-	test('settings tabs can reach system recovery workflow on narrow mobile', async ({ page }) => {
+	test('settings tabs can reach support recovery tools on narrow mobile', async ({ page }) => {
 		await page.setViewportSize({ width: 320, height: 568 })
 		await page.goto('/settings')
 
@@ -89,7 +89,10 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		await drawer.getByRole('tab', { name: 'Access' }).focus()
 		await page.keyboard.press('End')
 
-		await expect(drawer.getByRole('tab', { name: 'System' })).toHaveAttribute('aria-selected', 'true')
-		await expect(drawer.getByRole('button', { name: 'Reset saved UI state' })).toBeVisible()
+		await expect(drawer.getByRole('tab', { name: 'Support' })).toHaveAttribute('aria-selected', 'true')
+		const recoveryTools = drawer.getByRole('button', { name: 'Browser recovery tools' })
+		await expect(recoveryTools).toBeVisible()
+		await recoveryTools.click()
+		await expect(drawer.getByRole('button', { name: 'Clear saved layout' })).toBeVisible()
 	})
 })

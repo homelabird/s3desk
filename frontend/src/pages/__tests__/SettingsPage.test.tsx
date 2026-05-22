@@ -140,8 +140,9 @@ describe('SettingsPage', () => {
 
 		renderSettingsPage()
 
-		fireEvent.click(screen.getByRole('tab', { name: 'System' }))
-		fireEvent.click(await screen.findByRole('button', { name: 'Reset saved UI state' }))
+		fireEvent.click(screen.getByRole('tab', { name: 'Support' }))
+		fireEvent.click(await screen.findByRole('button', { name: 'Browser recovery tools' }))
+		fireEvent.click(await screen.findByRole('button', { name: 'Clear saved layout' }))
 
 		await waitFor(() => expect(confirmDangerActionMock).toHaveBeenCalledTimes(1))
 		await waitFor(() => {
@@ -163,20 +164,20 @@ describe('SettingsPage', () => {
 			expect(window.localStorage.getItem('uploads:profile-1:prefix')).toBeNull()
 			expect(window.localStorage.getItem('jobs:profile-1:bucket')).toBeNull()
 		})
-		expect(successSpy).toHaveBeenCalledWith('Saved UI state reset. Reloading…')
+		expect(successSpy).toHaveBeenCalledWith('Saved layout and filters cleared. Reloading…')
 	})
 
 	it('stores retry policy only after applying diagnostics tuning', async () => {
 		renderSettingsPage()
 
-		fireEvent.click(screen.getByRole('tab', { name: 'System' }))
-		fireEvent.change(await screen.findByLabelText('HTTP retry count'), { target: { value: '4' } })
-		fireEvent.change(screen.getByLabelText('Retry base delay (ms)'), { target: { value: '700' } })
+		fireEvent.click(screen.getByRole('tab', { name: 'Support' }))
+		fireEvent.change(await screen.findByLabelText('Request retry attempts'), { target: { value: '4' } })
+		fireEvent.change(screen.getByLabelText('Delay before retry (ms)'), { target: { value: '700' } })
 
 		expect(window.localStorage.getItem(RETRY_COUNT_STORAGE_KEY)).not.toBe('4')
 		expect(window.localStorage.getItem(RETRY_DELAY_STORAGE_KEY)).not.toBe('700')
 
-		fireEvent.click(screen.getByRole('button', { name: 'Apply retry policy' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Apply retry settings' }))
 
 		await waitFor(() => {
 			expect(window.localStorage.getItem(RETRY_COUNT_STORAGE_KEY)).toBe('4')
@@ -202,16 +203,17 @@ describe('SettingsPage', () => {
 
 		renderSettingsPage({ apiToken: 'token-a' })
 
-		fireEvent.click(screen.getByRole('tab', { name: 'System' }))
-		expect(await screen.findByText('2 dialog preference(s) are currently suppressed.')).toBeInTheDocument()
+		fireEvent.click(screen.getByRole('tab', { name: 'Support' }))
+		fireEvent.click(await screen.findByRole('button', { name: 'Browser recovery tools' }))
+		expect(await screen.findByText('2 confirmation preference(s) are currently hidden.')).toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: 'Reset dismissed dialogs' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Restore confirmations' }))
 
 		await waitFor(() => {
-			expect(screen.getByText('No dialog preferences are currently suppressed.')).toBeInTheDocument()
+			expect(screen.getByText('No confirmation preferences are currently hidden.')).toBeInTheDocument()
 		})
 		expect(countDismissedDialogs('token-a')).toBe(0)
 		expect(countDismissedDialogs('token-b')).toBe(1)
-		expect(successSpy).toHaveBeenCalledWith('Dismissed dialog preferences reset.')
+		expect(successSpy).toHaveBeenCalledWith('Hidden confirmations restored.')
 	})
 })

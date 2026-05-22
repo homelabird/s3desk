@@ -27,6 +27,10 @@
 	background: color-mix(in srgb, var(--s3d-color-danger) 5%, var(--s3d-color-bg-elevated));
 }
 
+.recoveryDisclosureButton {
+	align-self: flex-start;
+}
+
 .sectionFallback {
 	display: flex;
 	align-items: center;

@@ -53,10 +53,10 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				What this affects: API retry behavior and the current browser session's network troubleshooting log.
+				What this affects: how long the app keeps trying after temporary server or network failures.
 			</Typography.Text>
 			<FormField
-				label="HTTP retry count"
+				label="Request retry attempts"
 				htmlFor="settings-http-retry-count"
 				extra="Applies to GET and other idempotent requests."
 			>
@@ -75,7 +75,7 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 				/>
 			</FormField>
 			<FormField
-				label="Retry base delay (ms)"
+				label="Delay before retry (ms)"
 				htmlFor="settings-retry-base-delay-ms"
 				extra={`Exponential backoff, capped at ${RETRY_DELAY_MAX_MS}ms.`}
 			>
@@ -96,14 +96,14 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 			</FormField>
 			<div className={styles.settingsApplyBar}>
 				<Typography.Text type="secondary">
-					{hasPendingRetryPolicy ? 'Retry policy has unapplied changes.' : 'Retry policy matches the saved values.'}
+					{hasPendingRetryPolicy ? 'Retry settings have unapplied changes.' : 'Retry settings are saved.'}
 				</Typography.Text>
 				<Space wrap>
 					<Button type="primary" onClick={applyRetryPolicy} disabled={!hasPendingRetryPolicy}>
-						Apply retry policy
+						Apply retry settings
 					</Button>
 					<Button onClick={resetRetryDraft} disabled={!hasPendingRetryPolicy}>
-						Cancel retry changes
+						Discard changes
 					</Button>
 				</Space>
 			</div>
@@ -112,7 +112,7 @@ export function NetworkSettingsSection(props: NetworkSettingsSectionProps) {
 				items={[
 					{
 						key: 'advanced',
-						label: `Network log (${props.networkLog.length})`,
+						label: `Network troubleshooting log (${props.networkLog.length})`,
 						children: (
 							<FormField
 								label="Network diagnostics"
