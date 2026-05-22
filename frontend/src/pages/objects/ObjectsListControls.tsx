@@ -222,6 +222,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 		) : copyFeedback === 'failed' ? (
 			<span className={styles.listControlsCopyFeedback}>{clipboardFailureHint()}</span>
 		) : null
+	const showInlinePathShortcut = props.isAdvanced && !props.isCompact
 
 	const filterButton = (
 		<Button
@@ -272,16 +273,18 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					>
 						{props.isBookmarked ? <StarFilled /> : <StarOutlined />}
 					</button>
-					<button
-						type="button"
-						className={styles.listControlsIconButton}
-						onClick={props.onOpenPath}
-						disabled={!props.canInteract}
-						aria-label="Go to path"
-						title="Go to path (Ctrl+L)"
-					>
-						<SearchOutlined />
-					</button>
+					{showInlinePathShortcut ? (
+						<button
+							type="button"
+							className={styles.listControlsIconButton}
+							onClick={props.onOpenPath}
+							disabled={!props.canInteract}
+							aria-label="Go to path"
+							title="Go to path (Ctrl+L)"
+						>
+							<SearchOutlined />
+						</button>
+					) : null}
 				</div>
 			</div>
 
