@@ -129,7 +129,7 @@ describe('ObjectsToolbar', () => {
 		expect(moreButton).toHaveAttribute('aria-expanded', 'false')
 	})
 
-	it('exposes mobile drawer disclosure state for folders and details', () => {
+	it('keeps mobile folders in object tools while exposing contextual details', () => {
 		render(
 			<ObjectsToolbar
 				{...buildProps({
@@ -144,10 +144,8 @@ describe('ObjectsToolbar', () => {
 			/>,
 		)
 
-		const foldersButton = screen.getByRole('button', { name: 'Folders' })
-		expect(foldersButton).toHaveAttribute('aria-haspopup', 'dialog')
-		expect(foldersButton).toHaveAttribute('aria-expanded', 'true')
-		expect(foldersButton).toHaveAttribute('aria-controls', 'objects-tree-drawer')
+		expect(screen.queryByRole('button', { name: 'Folders' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Object tools' })).toBeInTheDocument()
 
 		const detailsButton = screen.getByRole('button', { name: 'Details' })
 		expect(detailsButton).toHaveAttribute('aria-haspopup', 'dialog')
@@ -161,6 +159,7 @@ describe('ObjectsToolbar', () => {
 		expect(screen.queryByRole('button', { name: 'Go back' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go forward' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go up' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Folders' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Upload' })).toBeInTheDocument()
 	})

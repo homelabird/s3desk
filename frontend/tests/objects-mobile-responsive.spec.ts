@@ -23,6 +23,21 @@ async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
 	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates public touch-target height contract
 }
 
+async function openFoldersFromObjectTools(page: Page) {
+	const objectToolsButton = page.getByRole('button', { name: 'Object tools' })
+	await expect(objectToolsButton).toBeEnabled()
+	await expect(objectToolsButton).toHaveAttribute('aria-haspopup', 'menu')
+	await objectToolsButton.click()
+	await expect(objectToolsButton).toHaveAttribute('aria-expanded', 'true')
+	const menu = page
+		.getByRole('menu')
+		.filter({ has: page.getByRole('menuitem', { name: 'Folders' }) })
+		.last()
+	await expect(menu).toBeVisible()
+	await menu.getByRole('menuitem', { name: 'Folders' }).click()
+	await expect(objectToolsButton).toHaveAttribute('aria-expanded', 'false')
+}
+
 test.describe('@mobile-responsive Objects mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
 		await installObjectsMobileResponsiveFixtures(page)
@@ -51,8 +66,11 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByRole('button', { name: 'Go up' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Upload' })).toBeEnabled()
 		await expect(page.getByRole('button', { name: 'New folder' })).toBeEnabled()
-		await expect(page.getByRole('button', { name: 'Folders' })).toBeEnabled()
+		await expect(page.getByRole('button', { name: 'Folders' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Details' })).toHaveCount(0)
+		await page.getByRole('button', { name: 'Object tools' }).click()
+		await expect(page.getByRole('menuitem', { name: 'Folders' })).toBeVisible()
+		await page.keyboard.press('Escape')
 	})
 
 	test('opens and dismisses object action menus on mobile rows', async ({ page }) => {
@@ -120,12 +138,8 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await openObjectsMobilePage(page)
 
-		const foldersButton = page.getByRole('button', { name: 'Folders' })
-		await expect(foldersButton).toHaveAttribute('aria-haspopup', 'dialog')
-		await expect(foldersButton).toHaveAttribute('aria-controls', 'objects-tree-drawer')
-		await expect(foldersButton).toHaveAttribute('aria-expanded', 'false')
-		await foldersButton.click()
-		await expect(foldersButton).toHaveAttribute('aria-expanded', 'true')
+		await expect(page.getByRole('button', { name: 'Folders' })).toHaveCount(0)
+		await openFoldersFromObjectTools(page)
 
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
@@ -142,7 +156,6 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await reportsTreeItem.click()
 
 		await expect(drawer).toHaveCount(0)
-		await expect(foldersButton).toHaveAttribute('aria-expanded', 'false')
 		await expect(page.getByText('s3://objects-mobile-bucket/reports/')).toBeVisible()
 		await expect(page.getByRole('button', { name: 'Go back' })).toBeEnabled()
 		await expect(page.getByRole('button', { name: 'Go up' })).toBeEnabled()
@@ -155,7 +168,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 640, height: 844 })
 		await openObjectsMobilePage(page)
 
-		await page.getByRole('button', { name: 'Folders', exact: true }).click()
+		await openFoldersFromObjectTools(page)
 		const treeDrawer = page.getByTestId('objects-tree-sheet')
 		await expect(treeDrawer).toBeVisible()
 		await expect(treeDrawer.getByTestId('objects-folders-pane')).toBeVisible()
@@ -181,7 +194,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 640, height: 844 })
 		await openObjectsMobilePage(page)
 
-		await page.getByRole('button', { name: 'Folders', exact: true }).click()
+		await openFoldersFromObjectTools(page)
 		const treeDrawer = page.getByTestId('objects-tree-sheet')
 		await expect(treeDrawer).toBeVisible()
 		await expect(treeDrawer.getByRole('button', { name: 'Favorites' })).toBeVisible()

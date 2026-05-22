@@ -4,7 +4,6 @@ import {
 	DownloadOutlined,
 	EllipsisOutlined,
 	FolderAddOutlined,
-	FolderOutlined,
 	InfoCircleOutlined,
 	LeftOutlined,
 	RightOutlined,
@@ -28,7 +27,7 @@ import {
 import { ObjectsBucketPicker } from './ObjectsBucketPicker'
 import { ObjectsMenuPopover } from './ObjectsMenuPopover'
 import type { UIAction } from './objectsActions'
-import { OBJECTS_DETAILS_DRAWER_ID, OBJECTS_TREE_DRAWER_ID } from './objectsOverlayIds'
+import { OBJECTS_DETAILS_DRAWER_ID } from './objectsOverlayIds'
 import styles from './ObjectsShell.module.css'
 
 export type ObjectsToolbarProps = {
@@ -308,20 +307,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 								tooltip: deleteDisabledReason,
 							})}
 						</>
-					) : null}
-					{props.isAdvanced && !props.dockTree ? (
-						<Button
-							size="small"
-							icon={<FolderOutlined />}
-							onClick={props.onOpenTree}
-							disabled={!props.hasProfile || props.isOffline}
-							aria-label="Folders"
-							aria-haspopup="dialog"
-							aria-expanded={props.treeDrawerOpen}
-							aria-controls={OBJECTS_TREE_DRAWER_ID}
-						>
-							{props.showLabels ? 'Folders' : null}
-						</Button>
 					) : null}
 					{showMobileDetails ? (
 						<Button
