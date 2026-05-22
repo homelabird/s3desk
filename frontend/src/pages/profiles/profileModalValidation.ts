@@ -179,7 +179,7 @@ export function buildProfileModalViewState(args: {
 				}
 			case 's3_compatible':
 				return {
-					hint: 'Use the full endpoint URL. MinIO and Ceph usually also need Force Path Style in Advanced options.',
+					hint: 'Use the full endpoint URL. MinIO and Ceph usually also need Force Path Style in Compatibility Options.',
 					docsUrl: 'https://rclone.org/s3/',
 				}
 			case 'oci_object_storage':

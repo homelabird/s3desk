@@ -106,7 +106,7 @@ test.describe('Live UI flow', () => {
 			await profileModal.getByLabel('Secret').fill(s3SecretKey)
 			const forcePathSwitch = profileModal.getByRole('switch', { name: 'Force Path Style' })
 			if (!(await forcePathSwitch.isVisible().catch(() => false))) {
-				await profileModal.getByRole('button', { name: /Advanced Options/ }).click()
+				await profileModal.getByRole('button', { name: /Compatibility Options/ }).click()
 			}
 			await setSwitch(profileModal, 'Force Path Style', forcePathStyle)
 			await setSwitch(profileModal, 'TLS Insecure Skip Verify', tlsSkipVerify)

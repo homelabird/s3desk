@@ -218,14 +218,19 @@ describe('ProfilesPage', () => {
 		await screen.findByText('Primary Profile', undefined, { timeout: 5_000 })
 		const moreButtons = await screen.findAllByRole(
 			'button',
-			{ name: 'More actions for Primary Profile' },
+			{ name: 'Profile tools for Primary Profile' },
 			{ timeout: 5_000 },
 		)
 		await act(async () => {
 			fireEvent.click(moreButtons[0]!)
 		})
+		if (actionLabel === 'Benchmark') {
+			await act(async () => {
+				fireEvent.click(await screen.findByRole('menuitem', { name: /Diagnostics & export/ }, { timeout: 5_000 }))
+			})
+		}
 		await act(async () => {
-			fireEvent.click(await screen.findByText(actionLabel, undefined, { timeout: 5_000 }))
+			fireEvent.click(await screen.findByRole('menuitem', { name: actionLabel }, { timeout: 5_000 }))
 		})
 	}
 
@@ -859,7 +864,7 @@ describe('ProfilesPage', () => {
 		)
 
 		fireEvent.click(
-			await screen.findByRole('button', { name: 'More actions for Primary Profile' }, { timeout: 5_000 }),
+			await screen.findByRole('button', { name: 'Profile tools for Primary Profile' }, { timeout: 5_000 }),
 		)
 		fireEvent.click(await screen.findByText('Edit', undefined, { timeout: 5_000 }))
 

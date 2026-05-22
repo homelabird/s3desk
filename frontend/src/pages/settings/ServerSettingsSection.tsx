@@ -33,7 +33,7 @@ export function ServerSettingsSection(props: ServerSettingsSectionProps) {
 			<Space orientation="vertical" size={8} style={{ width: '100%' }}>
 				<Typography.Text strong>Backup and restore</Typography.Text>
 				<Typography.Text type="secondary">
-					Export server backups, stage restores, import portable bundles, and clean staged restore inventory from this advanced settings area.
+					Export server backups, stage restores, import portable bundles, and clean staged restore inventory from this system settings area.
 				</Typography.Text>
 				<SidebarBackupAction
 					api={props.api}

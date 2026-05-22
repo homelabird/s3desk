@@ -102,7 +102,7 @@ describe('SettingsPage', () => {
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
 		fireEvent.click(await screen.findByRole('switch', { name: 'Downloads and previews: Use server proxy' }))
-		fireEvent.click(screen.getByText('Expert transfer tuning'))
+		fireEvent.click(screen.getByText('Transfer performance tuning'))
 		fireEvent.change(await screen.findByLabelText('Download task concurrency'), { target: { value: '5' } })
 		fireEvent.change(screen.getByLabelText('Upload task concurrency'), { target: { value: '3' } })
 

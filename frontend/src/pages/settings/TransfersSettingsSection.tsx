@@ -107,7 +107,7 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 		props.setUploadChunkFileConcurrencySetting(draft.uploadChunkFileConcurrency)
 	}
 	const resetDraft = () => setDraft(createTransferTuningDraft(props))
-	const advancedSummary = 'Expert transfer tuning'
+	const advancedSummary = 'Transfer performance tuning'
 
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>

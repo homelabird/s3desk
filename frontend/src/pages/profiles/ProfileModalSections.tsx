@@ -76,7 +76,7 @@ export function buildProfileModalSectionItems(args: ProfileModalSectionsArgs): C
 		{
 			key: 'advanced',
 			label: renderSectionHeader({
-				title: 'Advanced Options',
+				title: 'Compatibility Options',
 				description: 'Compatibility and transport toggles for unusual environments.',
 				tags: <Tag icon={<SettingOutlined />}>Optional</Tag>,
 			}),

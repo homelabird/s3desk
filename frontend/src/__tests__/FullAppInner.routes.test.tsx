@@ -626,7 +626,7 @@ describe('FullAppInner route remounts', () => {
 
 		expect(screen.getByRole('dialog', { name: 'Navigation' })).toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+		fireEvent.click(screen.getByRole('button', { name: 'App menu' }))
 		fireEvent.click(await screen.findByRole('menuitem', { name: /Settings/i }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Switch API token' }))
 

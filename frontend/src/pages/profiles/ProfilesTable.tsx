@@ -140,12 +140,12 @@ export function ProfilesTable(props: ProfilesTableProps) {
 									{({ toggle, open }) => (
 										<Button
 											icon={<MoreOutlined />}
-											aria-label={`More actions for ${row.profile.name}`}
+											aria-label={`Profile tools for ${row.profile.name}`}
 											aria-haspopup="menu"
 											aria-expanded={open}
 											onClick={toggle}
 										>
-											More
+											Tools
 										</Button>
 									)}
 								</MenuPopover>
@@ -212,12 +212,12 @@ export function ProfilesTable(props: ProfilesTableProps) {
 													<Button
 														size="small"
 														icon={<MoreOutlined />}
-														aria-label={`More actions for ${row.profile.name}`}
+														aria-label={`Profile tools for ${row.profile.name}`}
 														aria-haspopup="menu"
 														aria-expanded={open}
 														onClick={toggle}
 													>
-														More
+														Tools
 													</Button>
 												)}
 											</MenuPopover>

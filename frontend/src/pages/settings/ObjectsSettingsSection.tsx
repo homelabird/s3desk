@@ -64,7 +64,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 				items={[
 					{
 						key: 'advanced',
-						label: 'Advanced',
+						label: 'Cache and indexing',
 						children: (
 							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 								<FormField

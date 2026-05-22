@@ -148,15 +148,15 @@ describe('FullAppInner header', () => {
 		expect(screen.getByRole('combobox', { name: 'Profile' })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
-		const moreActionsButton = screen.getByRole('button', { name: 'More actions' })
-		expect(moreActionsButton).toHaveAttribute('aria-haspopup', 'menu')
-		expect(moreActionsButton).toHaveAttribute('aria-expanded', 'false')
+		const appMenuButton = screen.getByRole('button', { name: 'App menu' })
+		expect(appMenuButton).toHaveAttribute('aria-haspopup', 'menu')
+		expect(appMenuButton).toHaveAttribute('aria-expanded', 'false')
 
 		await act(async () => {
-			fireEvent.click(moreActionsButton)
+			fireEvent.click(appMenuButton)
 		})
 
-		expect(moreActionsButton).toHaveAttribute('aria-expanded', 'true')
+		expect(appMenuButton).toHaveAttribute('aria-expanded', 'true')
 		expect(await screen.findByRole('menuitem', { name: /Settings/i })).toBeInTheDocument()
 		expect(screen.getByRole('menuitem', { name: /Dark mode/i })).toBeInTheDocument()
 		expect(screen.getByRole('menuitem', { name: /Logout/i })).toBeInTheDocument()
@@ -191,7 +191,7 @@ describe('FullAppInner header', () => {
 		expect(screen.getByRole('combobox', { name: 'Profile' })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Transfers' })).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: /Settings/i })).not.toBeInTheDocument()
-		expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'App menu' })).toBeInTheDocument()
 	})
 
 	it('keeps inline settings and logout actions on desktop', async () => {

@@ -171,7 +171,7 @@ function ProfilesList(props: {
 						Create profile
 					</Link>
 					<Link to="/profiles?advanced=1" className={`${styles.linkButton} ${styles.linkButtonSecondary}`}>
-						Advanced profile setup
+						Manual profile setup
 					</Link>
 					<Link to="/profiles?settings=1" className={`${styles.linkButton} ${styles.linkButtonSecondary}`}>
 						Settings

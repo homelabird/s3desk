@@ -75,7 +75,7 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 				items={[
 					{
 						key: 'advanced',
-						label: 'Advanced',
+						label: 'API reference',
 						children: (
 							<Space orientation="vertical" size={4} className={styles.fullWidth}>
 								<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>

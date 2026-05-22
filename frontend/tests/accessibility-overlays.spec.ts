@@ -838,7 +838,7 @@ test.describe('overlay accessibility scans', () => {
 		await setupProfilesMobileA11yPage(page)
 
 		const card = profileCard(page, 'Backup Profile')
-		await card.getByRole('button', { name: 'More actions for Backup Profile' }).click()
+		await card.getByRole('button', { name: 'Profile tools for Backup Profile' }).click()
 		await page.getByRole('menuitem', { name: 'Edit' }).click()
 		const dialog = dialogByName(page, 'Edit Profile')
 		await expect(dialog).toBeVisible()

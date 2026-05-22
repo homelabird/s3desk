@@ -60,7 +60,7 @@ test.describe('@mobile-responsive Profiles mobile workflows', () => {
 		await setupProfilesPage(page)
 
 		const secondaryCard = getProfileCard(page, 'Backup Profile')
-		await secondaryCard.getByRole('button', { name: 'More actions for Backup Profile' }).click()
+		await secondaryCard.getByRole('button', { name: 'Profile tools for Backup Profile' }).click()
 		await page.getByRole('menuitem', { name: 'Edit' }).click()
 
 		const dialog = page.getByRole('dialog', { name: 'Edit Profile' })

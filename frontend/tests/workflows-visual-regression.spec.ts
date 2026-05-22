@@ -286,7 +286,7 @@ test.describe('Workflow visual regression @visual', () => {
 	test('mobile Profiles edit dialog remains stable', async ({ page }) => {
 		await setupProfilesVisualPage(page)
 
-		await profileCard(page, 'Backup Profile').getByRole('button', { name: 'More actions for Backup Profile' }).click()
+		await profileCard(page, 'Backup Profile').getByRole('button', { name: 'Profile tools for Backup Profile' }).click()
 		await page.getByRole('menuitem', { name: 'Edit' }).click()
 		const dialog = dialogByName(page, 'Edit Profile')
 		await expect(dialog).toBeVisible()

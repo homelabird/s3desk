@@ -76,7 +76,7 @@ test('profile edit drawer keeps credentials collapsed by default', async ({ page
 	])
 
 	await page.goto('/profiles?advanced=1')
-	await page.getByRole('button', { name: 'More actions for Existing MinIO' }).click()
+	await page.getByRole('button', { name: 'Profile tools for Existing MinIO' }).click()
 	await page.getByRole('menuitem', { name: 'Edit' }).click()
 
 	const drawer = page.getByRole('dialog', { name: 'Edit Profile' })

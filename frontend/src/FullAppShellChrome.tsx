@@ -224,7 +224,7 @@ export function FullAppShellChrome({
 										<Button
 											type="text"
 											icon={<EllipsisOutlined />}
-											aria-label="More actions"
+											aria-label="App menu"
 											aria-haspopup="menu"
 											aria-expanded={open}
 											onClick={toggle}

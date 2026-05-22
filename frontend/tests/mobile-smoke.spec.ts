@@ -124,7 +124,7 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		const navButton = page.getByRole('button', { name: 'Open navigation' })
 		const profileSelect = page.getByRole('combobox', { name: 'Profile' })
 		const transfersButton = page.getByRole('button', { name: 'Transfers' })
-		const moreActionsButton = page.getByTestId('app-header').getByRole('button', { name: 'More actions' })
+		const appMenuButton = page.getByTestId('app-header').getByRole('button', { name: 'App menu' })
 
 		await expect(navButton).toBeVisible()
 		await expect(profileSelect).toBeVisible()
@@ -133,9 +133,9 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await expectMinTouchTarget(navButton)
 		await expectMinTouchTarget(profileSelect)
 		await expectMinTouchTarget(transfersButton)
-		await expectMinTouchTarget(moreActionsButton)
+		await expectMinTouchTarget(appMenuButton)
 
-		await moreActionsButton.click()
+		await appMenuButton.click()
 		const settingsItem = page.getByRole('menuitem', { name: /Settings/i })
 		await expect(settingsItem).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: /Dark mode/i })).toBeVisible()
@@ -144,14 +144,14 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await page.getByRole('menuitem', { name: /Dark mode/i }).click()
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 
-		await moreActionsButton.click()
+		await appMenuButton.click()
 		await page.getByRole('menuitem', { name: /Logout/i }).click()
 		const logoutDialog = page.getByRole('dialog', { name: 'Log out of this session?' })
 		await expect(logoutDialog).toBeVisible()
 		await logoutDialog.getByRole('button', { name: 'Cancel' }).click()
 		await expect(logoutDialog).toHaveCount(0)
 
-		await moreActionsButton.click()
+		await appMenuButton.click()
 		await settingsItem.click()
 		const settingsDrawer = page.getByRole('dialog', { name: 'Settings' })
 		await expect(settingsDrawer).toBeVisible()

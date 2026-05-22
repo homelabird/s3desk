@@ -20,7 +20,7 @@ async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
 
 async function reopenSettingsFromCompactHeader(drawer: Locator) {
 	const page = drawer.page()
-	await page.getByTestId('app-header').getByRole('button', { name: 'More actions' }).click()
+	await page.getByTestId('app-header').getByRole('button', { name: 'App menu' }).click()
 	await page.getByRole('menuitem', { name: /Settings/i }).click()
 	await expect(drawer).toBeVisible()
 }

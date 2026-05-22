@@ -59,7 +59,7 @@ describe('ProfilesTable', () => {
 	it('hides an uncontrolled row menu when the scope changes', () => {
 		const { rerender } = renderTable('token-a')
 
-		fireEvent.click(screen.getByRole('button', { name: 'More actions for Primary Profile' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Profile tools for Primary Profile' }))
 		expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument()
 		expect(screen.getByRole('menuitem', { name: /Diagnostics & export/ })).toBeInTheDocument()
 
