@@ -129,7 +129,7 @@ describe('ObjectsToolbar', () => {
 		expect(moreButton).toHaveAttribute('aria-expanded', 'false')
 	})
 
-	it('keeps mobile folders in object tools while exposing contextual details', () => {
+	it('keeps mobile folders in more actions while exposing contextual details', () => {
 		render(
 			<ObjectsToolbar
 				{...buildProps({
@@ -146,7 +146,7 @@ describe('ObjectsToolbar', () => {
 
 		expect(screen.queryByRole('button', { name: 'Folders' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument()
-		expect(screen.getByRole('button', { name: 'Object tools' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument()
 
 		const detailsButton = screen.getByRole('button', { name: 'Details' })
 		expect(detailsButton).toHaveAttribute('aria-haspopup', 'dialog')

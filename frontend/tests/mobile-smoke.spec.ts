@@ -52,9 +52,9 @@ async function expectMinTouchTarget(locator: Locator, minSize = 44) {
 	expect(rect.width).toBeGreaterThanOrEqual(minSize)
 }
 
-async function openNewFolderFromObjectTools(page: Page) {
-	const objectToolsButton = page.getByRole('button', { name: 'Object tools' })
-	await objectToolsButton.click()
+async function openNewFolderFromMoreActions(page: Page) {
+	const moreActionsButton = page.getByRole('button', { name: 'More actions' })
+	await moreActionsButton.click()
 	await page.getByRole('menuitem', { name: 'New folder…' }).click()
 }
 
@@ -208,7 +208,7 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await seedStorage(page)
 
 		await openObjectsMobilePage(page)
-		await openNewFolderFromObjectTools(page)
+		await openNewFolderFromMoreActions(page)
 
 		const newFolderDialog = page.getByRole('dialog')
 		await expect(newFolderDialog).toBeVisible()

@@ -23,19 +23,19 @@ async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
 	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates public touch-target height contract
 }
 
-async function openFoldersFromObjectTools(page: Page) {
-	const objectToolsButton = page.getByRole('button', { name: 'Object tools' })
-	await expect(objectToolsButton).toBeEnabled()
-	await expect(objectToolsButton).toHaveAttribute('aria-haspopup', 'menu')
-	await objectToolsButton.click()
-	await expect(objectToolsButton).toHaveAttribute('aria-expanded', 'true')
+async function openFoldersFromMoreActions(page: Page) {
+	const moreActionsButton = page.getByRole('button', { name: 'More actions' })
+	await expect(moreActionsButton).toBeEnabled()
+	await expect(moreActionsButton).toHaveAttribute('aria-haspopup', 'menu')
+	await moreActionsButton.click()
+	await expect(moreActionsButton).toHaveAttribute('aria-expanded', 'true')
 	const menu = page
 		.getByRole('menu')
 		.filter({ has: page.getByRole('menuitem', { name: 'Folders' }) })
 		.last()
 	await expect(menu).toBeVisible()
 	await menu.getByRole('menuitem', { name: 'Folders' }).click()
-	await expect(objectToolsButton).toHaveAttribute('aria-expanded', 'false')
+	await expect(moreActionsButton).toHaveAttribute('aria-expanded', 'false')
 }
 
 test.describe('@mobile-responsive Objects mobile workflows', () => {
@@ -71,7 +71,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByRole('button', { name: 'Go to path' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Bookmark this location' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Details' })).toHaveCount(0)
-		await page.getByRole('button', { name: 'Object tools' }).click()
+		await page.getByRole('button', { name: 'More actions' }).click()
 		const toolsMenu = page
 			.getByRole('menu')
 			.filter({ has: page.getByRole('menuitem', { name: 'New folder…' }) })
@@ -155,7 +155,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await openObjectsMobilePage(page)
 
 		await expect(page.getByRole('button', { name: 'Folders' })).toHaveCount(0)
-		await openFoldersFromObjectTools(page)
+		await openFoldersFromMoreActions(page)
 
 		const drawer = page.getByTestId('objects-tree-sheet')
 		await expect(drawer).toBeVisible()
@@ -184,7 +184,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 640, height: 844 })
 		await openObjectsMobilePage(page)
 
-		await openFoldersFromObjectTools(page)
+		await openFoldersFromMoreActions(page)
 		const treeDrawer = page.getByTestId('objects-tree-sheet')
 		await expect(treeDrawer).toBeVisible()
 		await expect(treeDrawer.getByTestId('objects-folders-pane')).toBeVisible()
@@ -210,7 +210,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await page.setViewportSize({ width: 640, height: 844 })
 		await openObjectsMobilePage(page)
 
-		await openFoldersFromObjectTools(page)
+		await openFoldersFromMoreActions(page)
 		const treeDrawer = page.getByTestId('objects-tree-sheet')
 		await expect(treeDrawer).toBeVisible()
 		await expect(treeDrawer.getByRole('button', { name: 'Favorites' })).toBeVisible()

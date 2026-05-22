@@ -156,6 +156,8 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	const showMobileForward = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoForward
 	const showMobileUp = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoUp
 	const showMobileDetails = props.isAdvanced && !props.dockDetails && props.selectedCount > 0
+	const moreButtonAriaLabel = props.isDesktop ? 'Object tools' : 'More actions'
+	const moreButtonText = props.isDesktop ? 'Tools' : 'More'
 
 	const moreButton = (
 		<ObjectsMenuPopover menu={props.topMoreMenu} align="end" scopeKey={props.bucketPickerScopeKey}>
@@ -167,11 +169,11 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						disabled={!props.hasProfile}
 						onClick={toggle}
 						data-testid="objects-toolbar-more"
-						aria-label="Object tools"
+						aria-label={moreButtonAriaLabel}
 						aria-haspopup="menu"
 						aria-expanded={open}
 					>
-						{buildMenuButtonLabel(props.isDesktop ? 'Tools' : 'Actions', props.showLabels)}
+						{buildMenuButtonLabel(moreButtonText, props.showLabels)}
 					</Button>
 				</Badge>
 			)}
