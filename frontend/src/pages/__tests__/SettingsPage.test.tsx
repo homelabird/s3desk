@@ -101,8 +101,10 @@ describe('SettingsPage', () => {
 		renderSettingsPage()
 
 		fireEvent.click(screen.getByRole('tab', { name: 'Transfers' }))
-		fireEvent.click(await screen.findByRole('switch', { name: 'Downloads and previews: Use server proxy' }))
-		fireEvent.click(screen.getByText('Transfer performance tuning'))
+		expect(await screen.findByText(/automatic download routing and upload tuning/i)).toBeInTheDocument()
+		expect(screen.queryByRole('switch', { name: 'Force server proxy for downloads and previews' })).not.toBeInTheDocument()
+		fireEvent.click(screen.getByText('Advanced transfer options'))
+		fireEvent.click(await screen.findByRole('switch', { name: 'Force server proxy for downloads and previews' }))
 		fireEvent.change(await screen.findByLabelText('Download task concurrency'), { target: { value: '5' } })
 		fireEvent.change(screen.getByLabelText('Upload task concurrency'), { target: { value: '3' } })
 

@@ -18,6 +18,33 @@ async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
 	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates shared switch touch-target height
 }
 
+async function openTransferAdvancedOptions(scope: Locator, advancedOptionsName: string, proxySwitchName: string) {
+	const advancedOptionsLabel = scope.getByText(advancedOptionsName)
+	const proxySwitch = scope.getByRole('switch', { name: proxySwitchName })
+	const isExpanded = async () =>
+		advancedOptionsLabel.evaluate((element) => element.closest('[aria-expanded]')?.getAttribute('aria-expanded') === 'true')
+
+	if (!(await isExpanded())) {
+		await advancedOptionsLabel.click()
+	}
+	await expect.poll(isExpanded).toBe(true)
+	await expect(proxySwitch).toBeVisible()
+	await expect
+		.poll(() =>
+			proxySwitch.evaluate((element) => {
+				let current: HTMLElement | null = element as HTMLElement
+				let visibleOpacity = 1
+				while (current) {
+					const opacity = Number(window.getComputedStyle(current).opacity)
+					if (Number.isFinite(opacity)) visibleOpacity = Math.min(visibleOpacity, opacity)
+					current = current.parentElement
+				}
+				return visibleOpacity
+			}),
+		)
+		.toBeGreaterThan(0.99)
+}
+
 async function reopenSettingsFromCompactHeader(drawer: Locator) {
 	const page = drawer.page()
 	await page.getByTestId('app-header').getByRole('button', { name: 'App menu' }).click()
@@ -32,7 +59,8 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 	})
 
 	test('settings drawer persists transfer preferences across mobile reopen', async ({ page }) => {
-		const proxySwitchName = 'Downloads and previews: Use server proxy'
+		const advancedOptionsName = 'Advanced transfer options'
+		const proxySwitchName = 'Force server proxy for downloads and previews'
 
 		await page.setViewportSize({ width: 390, height: 844 })
 		await page.goto('/settings')
@@ -40,6 +68,8 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		const drawer = dialogByName(page, 'Settings')
 		await expect(drawer).toBeVisible()
 		await drawer.getByRole('tab', { name: 'Transfers' }).click()
+		await expect(drawer.getByText('S3Desk uses automatic download routing and upload tuning by default.')).toBeVisible()
+		await openTransferAdvancedOptions(drawer, advancedOptionsName, proxySwitchName)
 		await expect(drawer.getByText(proxySwitchName)).toBeVisible()
 		await expectMinTouchHeight(drawer.getByRole('switch', { name: proxySwitchName }))
 
@@ -54,6 +84,7 @@ test.describe('@mobile-responsive Settings mobile workflows', () => {
 		const reopenedDrawer = dialogByName(page, 'Settings')
 		await reopenSettingsFromCompactHeader(reopenedDrawer)
 		await reopenedDrawer.getByRole('tab', { name: 'Transfers' }).click()
+		await openTransferAdvancedOptions(reopenedDrawer, advancedOptionsName, proxySwitchName)
 		await expect(reopenedDrawer.getByRole('switch', { name: proxySwitchName })).toHaveAttribute('aria-checked', 'true')
 	})
 

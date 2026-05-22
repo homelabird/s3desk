@@ -107,23 +107,14 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 		props.setUploadChunkFileConcurrencySetting(draft.uploadChunkFileConcurrency)
 	}
 	const resetDraft = () => setDraft(createTransferTuningDraft(props))
-	const advancedSummary = 'Transfer performance tuning'
+	const advancedSummary = 'Advanced transfer options'
 
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				What this affects: download routing, transfer parallelism, upload memory pressure, and resumable upload behavior.
+				S3Desk uses automatic download routing and upload tuning by default. Open advanced options only when
+				troubleshooting a browser, network, or provider limit.
 			</Typography.Text>
-			<FormField
-				label="Downloads and previews: Use server proxy"
-				extra="When enabled, downloads, previews, and 'Link…' always use /download-proxy. When disabled, downloads try presigned URLs first and fall back to the proxy only if CORS blocks the request."
-			>
-				<ToggleSwitch
-					checked={props.downloadLinkProxyEnabled}
-					onChange={props.setDownloadLinkProxyEnabled}
-					ariaLabel="Downloads and previews: Use server proxy"
-				/>
-			</FormField>
 
 			<Collapse
 				size="small"
@@ -134,8 +125,18 @@ export function TransfersSettingsSection(props: TransfersSettingsSectionProps) {
 						children: (
 							<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 								<Typography.Text type="secondary" className={styles.sectionIntro}>
-									Use these controls only when you are tuning for a known network, provider, or browser limit. The saved defaults are the recommended path for most users.
+									Use the defaults unless a download route fails or a known provider limit requires tuning.
 								</Typography.Text>
+								<FormField
+									label="Force server proxy for downloads and previews"
+									extra="Leave this off unless direct downloads fail in this browser. When off, S3Desk tries direct links first and falls back automatically when needed."
+								>
+									<ToggleSwitch
+										checked={props.downloadLinkProxyEnabled}
+										onChange={props.setDownloadLinkProxyEnabled}
+										ariaLabel="Force server proxy for downloads and previews"
+									/>
+								</FormField>
 								<FormField
 									label="Upload auto-tuning"
 									extra="Automatically adjusts batch/chunk settings based on file size."
