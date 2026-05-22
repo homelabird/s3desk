@@ -135,6 +135,7 @@ describe('ObjectsToolbar', () => {
 				{...buildProps({
 					isDesktop: false,
 					showLabels: true,
+					selectedCount: 1,
 					dockTree: false,
 					treeDrawerOpen: true,
 					dockDetails: false,
@@ -154,13 +155,29 @@ describe('ObjectsToolbar', () => {
 		expect(detailsButton).toHaveAttribute('aria-controls', 'objects-details-drawer')
 	})
 
-	it('hides inactive mobile history actions until navigation is available', () => {
+	it('hides inactive mobile history and details actions until context is available', () => {
 		render(<ObjectsToolbar {...buildProps({ isDesktop: false, showLabels: true })} />)
 
 		expect(screen.queryByRole('button', { name: 'Go back' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go forward' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go up' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Upload' })).toBeInTheDocument()
+	})
+
+	it('shows mobile details when objects are selected', () => {
+		render(
+			<ObjectsToolbar
+				{...buildProps({
+					isDesktop: false,
+					showLabels: true,
+					selectedCount: 1,
+					dockDetails: false,
+				})}
+			/>,
+		)
+
+		expect(screen.getByRole('button', { name: 'Details' })).toBeEnabled()
 	})
 
 	it('shows mobile history actions when they can be used', () => {

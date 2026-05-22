@@ -52,7 +52,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByRole('button', { name: 'Upload' })).toBeEnabled()
 		await expect(page.getByRole('button', { name: 'New folder' })).toBeEnabled()
 		await expect(page.getByRole('button', { name: 'Folders' })).toBeEnabled()
-		await expect(page.getByRole('button', { name: 'Details' })).toBeEnabled()
+		await expect(page.getByRole('button', { name: 'Details' })).toHaveCount(0)
 	})
 
 	test('opens and dismisses object action menus on mobile rows', async ({ page }) => {
@@ -107,9 +107,13 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByText('1 selected')).toBeVisible()
 		await expect(selectionBar.getByRole('button', { name: 'Download' })).toBeVisible()
 		await expect(selectionBar.getByRole('button', { name: 'Delete' })).toBeVisible()
+		const detailsButton = page.getByRole('button', { name: 'Details' })
+		await expect(detailsButton).toBeEnabled()
+		await expectMinTouchHeight(detailsButton)
 		await selectionBar.getByRole('button', { name: 'Clear' }).click()
 		await expect(selectionBar).toHaveCount(0)
 		await expect(objectsSelectionCheckbox(page, 'alpha.txt')).not.toBeChecked()
+		await expect(page.getByRole('button', { name: 'Details' })).toHaveCount(0)
 	})
 
 	test('folders drawer opens, navigates to a prefix, and closes on mobile', async ({ page }) => {

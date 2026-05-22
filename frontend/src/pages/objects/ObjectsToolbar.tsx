@@ -156,6 +156,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	const showMobileBack = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoBack
 	const showMobileForward = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoForward
 	const showMobileUp = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoUp
+	const showMobileDetails = props.isAdvanced && !props.dockDetails && props.selectedCount > 0
 
 	const moreButton = (
 		<ObjectsMenuPopover menu={props.topMoreMenu} align="end" scopeKey={props.bucketPickerScopeKey}>
@@ -322,7 +323,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 							{props.showLabels ? 'Folders' : null}
 						</Button>
 					) : null}
-					{props.isAdvanced && !props.dockDetails ? (
+					{showMobileDetails ? (
 						<Button
 							size="small"
 							icon={<InfoCircleOutlined />}
