@@ -86,7 +86,7 @@ describe('ObjectsListControls', () => {
 		fireEvent.change(screen.getByLabelText('Search current folder'), { target: { value: 'poster' } })
 		expect(props.onSearchDraftChange).toHaveBeenCalledWith('poster')
 
-		fireEvent.click(screen.getByRole('button', { name: 'Add bookmark' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Bookmark this location' }))
 		expect(props.onToggleBookmark).toHaveBeenCalledTimes(1)
 
 		fireEvent.click(screen.getByRole('button', { name: 'Go to path' }))
@@ -132,6 +132,7 @@ describe('ObjectsListControls', () => {
 		expect(screen.getByTestId('objects-list-controls-compact-footer')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-list-controls-compact-meta')).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go to path' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Bookmark this location' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Search bucket$/ })).toBeInTheDocument()
 		expect(screen.getByText('Search here, or use Search bucket for the whole bucket.')).toBeInTheDocument()

@@ -223,6 +223,8 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			<span className={styles.listControlsCopyFeedback}>{clipboardFailureHint()}</span>
 		) : null
 	const showInlinePathShortcut = props.isAdvanced && !props.isCompact
+	const showInlineLocationBookmark = !props.isCompact
+	const bookmarkLocationLabel = props.isBookmarked ? 'Remove location bookmark' : 'Bookmark this location'
 
 	const filterButton = (
 		<Button
@@ -263,16 +265,18 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 					</div>
 				</div>
 				<div className={styles.listControlsTopActions}>
-					<button
-						type="button"
-						className={styles.listControlsIconButton}
-						onClick={props.onToggleBookmark}
-						disabled={!props.canInteract}
-						aria-label={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-						title={props.isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-					>
-						{props.isBookmarked ? <StarFilled /> : <StarOutlined />}
-					</button>
+					{showInlineLocationBookmark ? (
+						<button
+							type="button"
+							className={styles.listControlsIconButton}
+							onClick={props.onToggleBookmark}
+							disabled={!props.canInteract}
+							aria-label={bookmarkLocationLabel}
+							title={bookmarkLocationLabel}
+						>
+							{props.isBookmarked ? <StarFilled /> : <StarOutlined />}
+						</button>
+					) : null}
 					{showInlinePathShortcut ? (
 						<button
 							type="button"

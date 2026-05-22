@@ -17,6 +17,7 @@ describe('buildObjectsActionCatalog', () => {
 			uploadSupported: true,
 			selectedCount: 0,
 			clipboardObjects: null,
+			isBookmarked: false,
 			canGoBack: false,
 			canGoForward: false,
 			canGoUp: false,
@@ -50,6 +51,7 @@ describe('buildObjectsActionCatalog', () => {
 			onToggleDetails: noop,
 			onOpenTreeDrawer: noop,
 			onRefresh: noop,
+			onToggleBookmark: noop,
 			onOpenPathModal: noop,
 			onOpenUpload: noop,
 			onOpenNewFolder: noop,
@@ -76,5 +78,17 @@ describe('buildObjectsActionCatalog', () => {
 
 		expect(advancedCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Hide workspace tools')
 		expect(simpleCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Show workspace tools')
+	})
+
+	it('labels the current location bookmark action by state', () => {
+		const unbookmarkedCatalog = buildCatalog({ isBookmarked: false })
+		const bookmarkedCatalog = buildCatalog({ isBookmarked: true })
+
+		expect(unbookmarkedCatalog.globalActionsAll.find((action) => action.id === 'toggle_location_bookmark')?.label).toBe(
+			'Bookmark this location',
+		)
+		expect(bookmarkedCatalog.globalActionsAll.find((action) => action.id === 'toggle_location_bookmark')?.label).toBe(
+			'Remove location bookmark',
+		)
 	})
 })

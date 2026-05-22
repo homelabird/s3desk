@@ -18,6 +18,7 @@ type UseObjectsActionCatalogArgs = {
 	uploadSupported: boolean
 	selectedCount: number
 	clipboardObjects: ClipboardObjects | null
+	isBookmarked: boolean
 	singleSelectedKey: string | null
 	singleSelectedItemSize?: number
 	canGoBack: boolean
@@ -53,6 +54,7 @@ type UseObjectsActionCatalogArgs = {
 	onToggleDetails: () => void
 	onOpenTreeDrawer: () => void
 	onRefresh: () => void
+	onToggleBookmark: () => void
 	onOpenPathModal: () => void
 	onOpenUpload: () => void
 	onOpenNewFolder: (parentPrefixOverride?: string) => void
@@ -75,6 +77,7 @@ export function useObjectsActionCatalog({
 	uploadSupported,
 	selectedCount,
 	clipboardObjects,
+	isBookmarked,
 	singleSelectedKey,
 	singleSelectedItemSize,
 	canGoBack,
@@ -110,6 +113,7 @@ export function useObjectsActionCatalog({
 	onToggleDetails,
 	onOpenTreeDrawer,
 	onRefresh,
+	onToggleBookmark,
 	onOpenPathModal,
 	onOpenUpload,
 	onOpenNewFolder,
@@ -132,6 +136,7 @@ export function useObjectsActionCatalog({
 		uploadSupported,
 		selectedCount,
 		clipboardObjects,
+		isBookmarked,
 		canGoBack,
 		canGoForward,
 		canGoUp,
@@ -165,6 +170,7 @@ export function useObjectsActionCatalog({
 		onToggleDetails,
 		onOpenTreeDrawer,
 		onRefresh,
+		onToggleBookmark,
 		onOpenPathModal,
 		onOpenUpload,
 		onOpenNewFolder,

@@ -19,6 +19,7 @@ export type ObjectsActionDeps = {
 	uploadSupported: boolean
 	selectedCount: number
 	clipboardObjects: ClipboardObjects | null
+	isBookmarked: boolean
 	canGoBack: boolean
 	canGoForward: boolean
 	canGoUp: boolean
@@ -52,6 +53,7 @@ export type ObjectsActionDeps = {
 	onToggleDetails: () => void
 	onOpenTreeDrawer: () => void
 	onRefresh: () => void
+	onToggleBookmark: () => void
 	onOpenPathModal: () => void
 	onOpenUpload: () => void
 	onOpenNewFolder: (parentPrefixOverride?: string) => void

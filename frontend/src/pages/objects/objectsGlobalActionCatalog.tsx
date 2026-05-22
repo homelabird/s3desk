@@ -1,4 +1,4 @@
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, ReloadOutlined, RightOutlined, SearchOutlined, SnippetsOutlined, UpOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, ReloadOutlined, RightOutlined, SearchOutlined, SnippetsOutlined, StarFilled, StarOutlined, UpOutlined } from '@ant-design/icons'
 
 import type { UIAction } from './objectsActions'
 import type { ObjectsActionDeps } from './objectsActionCatalogTypes'
@@ -66,6 +66,15 @@ export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
 			audience: 'advanced',
 			run: () => deps.onOpenPathModal(),
+		},
+		{
+			id: 'toggle_location_bookmark',
+			label: deps.isBookmarked ? 'Remove location bookmark' : 'Bookmark this location',
+			icon: deps.isBookmarked ? <StarFilled /> : <StarOutlined />,
+			keywords: 'bookmark favorite location path prefix',
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			audience: 'advanced',
+			run: () => deps.onToggleBookmark(),
 		},
 		{
 			id: 'upload',
