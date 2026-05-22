@@ -312,9 +312,6 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							<span className={`${styles.listControlsSummaryText} ${styles.listControlsSecondaryText}`}>
 								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
 							</span>
-							<span className={`${styles.listControlsHintText} ${styles.listControlsSecondaryText}`}>
-								Search here, or use Search bucket for the whole bucket.
-							</span>
 						</div>
 					) : null}
 					{searchStatus}

@@ -136,7 +136,7 @@ describe('ObjectsListControls', () => {
 		expect(screen.queryByRole('button', { name: 'Bookmark this location' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Search bucket$/ })).toBeInTheDocument()
-		expect(screen.getByText('Search here, or use Search bucket for the whole bucket.')).toBeInTheDocument()
+		expect(screen.queryByText('Search here, or use Search bucket for the whole bucket.')).not.toBeInTheDocument()
 	})
 
 	it('keeps capped search guidance compact on mid-width layouts without duplicating the indexed CTA', () => {

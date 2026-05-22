@@ -406,7 +406,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByTestId('objects-list-controls-root')).toHaveAttribute('data-compact', 'true')
 		await expect(page.getByTestId('objects-list-controls-compact-footer')).toBeVisible()
 		await expect(page.getByTestId('objects-list-controls-compact-meta')).toContainText('1 folders, 0 files')
-		await expect(page.getByText('Search here, or use Search bucket for the whole bucket.')).toBeVisible()
+		await expect(page.getByText('Search here, or use Search bucket for the whole bucket.')).toHaveCount(0)
 
 		await expect(page.getByLabel('Search current folder')).toBeVisible()
 		await expect(page.getByRole('button', { name: /Filters$/ })).toBeVisible()

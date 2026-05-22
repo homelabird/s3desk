@@ -714,11 +714,6 @@
   justify-self: end;
 }
 
-.listControlsHintText {
-  display: block;
-  line-height: 1.5;
-}
-
 @media (max-width: 768px) {
   .breadcrumbRow {
     align-items: flex-start;
@@ -1017,7 +1012,4 @@
     justify-content: center;
   }
 
-  .listControlsHintText {
-    font-size: 12px;
-  }
 }
