@@ -34,18 +34,33 @@ describe('ProfilesOnboardingCard', () => {
 		renderOnboardingCard()
 
 		expect(screen.getByText('Create a storage profile')).toBeInTheDocument()
-		expect(screen.getByText('Select the active profile')).toBeInTheDocument()
-		const diagnostics = screen.getByText('System readiness').closest('details')
+		expect(screen.getByText('Choose the active profile')).toBeInTheDocument()
+		expect(screen.getByRole('link', { name: 'Open buckets' })).toBeInTheDocument()
+		expect(screen.getByRole('link', { name: 'Open objects' })).toBeInTheDocument()
+		const diagnostics = screen.getByText('Connection checks').closest('details')
 		expect(diagnostics).not.toHaveAttribute('open')
 	})
 
-	it('opens system readiness when an environment prerequisite needs attention', () => {
+	it('opens connection checks when an environment prerequisite needs attention', () => {
 		renderOnboardingCard({
 			transferEngine: { available: false, compatible: false, minVersion: 'v1.66.0' },
 		})
 
-		const diagnostics = screen.getByText('System readiness').closest('details')
+		const diagnostics = screen.getByText('Connection checks need attention').closest('details')
 		expect(diagnostics).toHaveAttribute('open')
-		expect(screen.getByText('Transfer engine detected (rclone)')).toBeInTheDocument()
+		expect(screen.getByText('File transfer helper is available')).toBeInTheDocument()
+		expect(screen.getAllByText('Needs setup')).toHaveLength(2)
+	})
+
+	it('keeps next navigation out of the action row until a profile is selected', () => {
+		renderOnboardingCard({
+			profilesCount: 0,
+			profileId: null,
+		})
+
+		expect(screen.getByRole('button', { name: 'Create profile' })).toBeInTheDocument()
+		expect(screen.getByText('Create a profile to open buckets and objects.')).toBeInTheDocument()
+		expect(screen.queryByRole('link', { name: 'Open buckets' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('link', { name: 'Open objects' })).not.toBeInTheDocument()
 	})
 })

@@ -21,6 +21,20 @@ function getProfileCard(page: Page, name: string) {
 }
 
 test.describe('@mobile-responsive Profiles mobile workflows', () => {
+	test('onboarding guide keeps next navigation hidden before setup is complete', async ({ page }) => {
+		await installProfilesBucketsMobileResponsiveFixtures(page, { profiles: [], buckets: [] })
+		await seedProfilesBucketsMobileResponsiveStorage(page, { profileId: '' })
+		await gotoProfilesPage(page)
+
+		const guide = page.getByRole('region', { name: 'Getting started' })
+		await expect(guide.getByText('Create a storage profile')).toBeVisible()
+		await expect(guide.getByText('Choose the active profile')).toBeVisible()
+		await expect(guide.getByRole('button', { name: 'Create profile' })).toBeVisible()
+		await expect(guide.getByText('Create a profile to open buckets and objects.')).toBeVisible()
+		await expect(guide.getByRole('link', { name: 'Open objects' })).toHaveCount(0)
+		await expect(guide.getByText('Connection checks')).toBeVisible()
+	})
+
 	test('switches the active profile from compact mobile cards', async ({ page }) => {
 		await setupProfilesPage(page)
 

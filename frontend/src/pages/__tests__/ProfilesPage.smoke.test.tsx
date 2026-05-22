@@ -252,7 +252,7 @@ describe('ProfilesPage', () => {
 		expect(screen.getByText('Getting started')).toBeInTheDocument()
 		await screen.findByText('Primary Profile', undefined, { timeout: 5_000 })
 		await act(async () => {
-			fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+			fireEvent.click(screen.getByRole('button', { name: 'Hide guide' }))
 		})
 		await waitFor(() => expect(screen.queryByText('Getting started')).not.toBeInTheDocument())
 	}, 20_000)

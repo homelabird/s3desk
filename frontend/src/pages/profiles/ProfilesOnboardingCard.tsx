@@ -1,4 +1,5 @@
-import { Button, Checkbox, Typography } from 'antd'
+import { CheckCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { Button, Typography } from 'antd'
 
 import { LinkButton } from '../../components/LinkButton'
 import styles from '../ProfilesPage.module.css'
@@ -23,11 +24,37 @@ type Props = {
 
 export function ProfilesOnboardingCard(props: Props) {
 	if (!props.visible) return null
+	const hasProfile = props.profilesCount > 0
+	const hasActiveProfile = !!props.profileId
+	const transferEngineAvailable = props.transferEngine?.available ?? false
+	const transferEngineCompatible = props.transferEngine?.compatible ?? false
+	const apiTokenReady = props.apiTokenEnabled ? !!props.apiToken.trim() : true
 	const diagnosticsNeedAttention =
 		!props.backendConnected ||
-		!(props.transferEngine?.available ?? false) ||
-		!(props.transferEngine?.compatible ?? false) ||
-		(props.apiTokenEnabled && !props.apiToken.trim())
+		!transferEngineAvailable ||
+		!transferEngineCompatible ||
+		!apiTokenReady
+	const setupSteps = [
+		{ label: 'Create a storage profile', complete: hasProfile, pending: 'Next' },
+		{ label: 'Choose the active profile', complete: hasActiveProfile, pending: 'Needed' },
+	]
+	const connectionChecks = [
+		{ label: 'S3Desk server is reachable', complete: props.backendConnected },
+		{ label: 'File transfer helper is available', complete: transferEngineAvailable },
+		{
+			label: props.transferEngine?.minVersion
+				? `File transfer helper supports transfers (${props.transferEngine.minVersion}+ required)`
+				: 'File transfer helper supports transfers',
+			complete: transferEngineCompatible,
+		},
+		{
+			label: props.apiTokenEnabled ? 'API token is entered' : 'API token is not required',
+			complete: apiTokenReady,
+		},
+	]
+	const nextStepCopy = hasProfile
+		? 'Choose a profile to open buckets and objects.'
+		: 'Create a profile to open buckets and objects.'
 
 	return (
 		<section className={styles.onboardingCard} aria-label="Getting started">
@@ -37,44 +64,60 @@ export function ProfilesOnboardingCard(props: Props) {
 				</Typography.Title>
 				<Typography.Text type="secondary">Create a profile, select it, then open your objects.</Typography.Text>
 			</div>
-			<div className={styles.onboardingChecklist}>
-				<Checkbox checked={props.profilesCount > 0} disabled>
-					Create a storage profile
-				</Checkbox>
-				<Checkbox checked={!!props.profileId} disabled>
-					Select the active profile
-				</Checkbox>
-			</div>
+			<ol className={styles.onboardingChecklist} aria-label="Setup progress">
+				{setupSteps.map((step) => (
+					<li key={step.label} className={styles.onboardingStep} data-complete={step.complete ? 'true' : 'false'}>
+						<span className={styles.onboardingStepIcon} aria-hidden="true">
+							{step.complete ? <CheckCircleOutlined /> : <InfoCircleOutlined />}
+						</span>
+						<span className={styles.onboardingStepLabel}>{step.label}</span>
+						<span className={styles.onboardingStepStatus}>{step.complete ? 'Done' : step.pending}</span>
+					</li>
+				))}
+			</ol>
 			<details className={styles.onboardingDiagnostics} open={diagnosticsNeedAttention}>
-				<summary className={styles.onboardingDiagnosticsSummary}>System readiness</summary>
-				<div className={styles.onboardingDiagnosticsList}>
-					<Checkbox checked={props.backendConnected} disabled>
-						Backend connected
-					</Checkbox>
-					<Checkbox checked={props.transferEngine?.available ?? false} disabled>
-						Transfer engine detected (rclone)
-					</Checkbox>
-					<Checkbox checked={props.transferEngine?.compatible ?? false} disabled>
-						Transfer engine compatible
-						{props.transferEngine?.minVersion ? ` (>= ${props.transferEngine.minVersion})` : ''}
-					</Checkbox>
-					<Checkbox checked={props.apiTokenEnabled ? !!props.apiToken.trim() : true} disabled>
-						API token configured{props.apiTokenEnabled ? '' : ' (not required)'}
-					</Checkbox>
-				</div>
+				<summary className={styles.onboardingDiagnosticsSummary}>
+					{diagnosticsNeedAttention ? 'Connection checks need attention' : 'Connection checks'}
+				</summary>
+				<ul className={styles.onboardingDiagnosticsList}>
+					{connectionChecks.map((check) => (
+						<li key={check.label} className={styles.onboardingDiagnosticsItem} data-complete={check.complete ? 'true' : 'false'}>
+							<span className={styles.onboardingDiagnosticsIcon} aria-hidden="true">
+								{check.complete ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+							</span>
+							<span>{check.label}</span>
+							<span className={styles.onboardingDiagnosticsStatus}>
+								{check.complete ? 'Ready' : 'Needs setup'}
+							</span>
+						</li>
+					))}
+				</ul>
 			</details>
 			<div className={styles.onboardingActions}>
-				<Button size="small" type="primary" onClick={props.onCreateProfile}>
-					Create profile
-				</Button>
-				<LinkButton to="/buckets" size="small" disabled={!props.profileId}>
-					Buckets
-				</LinkButton>
-				<LinkButton to="/objects" size="small" disabled={!props.profileId}>
-					Objects
-				</LinkButton>
+				{hasActiveProfile ? (
+					<>
+						<LinkButton to="/objects" size="small" type="primary">
+							Open objects
+						</LinkButton>
+						<LinkButton to="/buckets" size="small">
+							Open buckets
+						</LinkButton>
+						<Button size="small" onClick={props.onCreateProfile}>
+							Create another profile
+						</Button>
+					</>
+				) : (
+					<>
+						<Button size="small" type="primary" onClick={props.onCreateProfile}>
+							{hasProfile ? 'Create another profile' : 'Create profile'}
+						</Button>
+						<Typography.Text type="secondary" className={styles.onboardingNextStep}>
+							{nextStepCopy}
+						</Typography.Text>
+					</>
+				)}
 				<button type="button" className={styles.onboardingDismissButton} onClick={props.onDismiss}>
-					Dismiss
+					Hide guide
 				</button>
 			</div>
 		</section>
