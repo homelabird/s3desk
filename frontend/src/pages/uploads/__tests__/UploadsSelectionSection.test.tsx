@@ -46,9 +46,12 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.queryByText('Not selected')).not.toBeInTheDocument()
 		expect(screen.getByText(addFilesOrFolderFirstSentenceHint())).toBeInTheDocument()
 		expect(screen.getByText('No files or folders selected.')).toBeInTheDocument()
+		expect(screen.getByText('Choose files or a folder to preview what will be uploaded.')).toBeInTheDocument()
 		expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: /Add from device/i }))
+		const addButton = screen.getByRole('button', { name: /Add from device/i })
+		expect(addButton.className).toContain('ant-btn-primary')
+		fireEvent.click(addButton)
 		expect(onOpenPicker).toHaveBeenCalledTimes(1)
 	})
 
@@ -88,6 +91,7 @@ describe('UploadsSelectionSection', () => {
 		expect(screen.getByRole('status')).toHaveTextContent('7.00 KB')
 		expect(screen.getByRole('status')).toHaveTextContent('s3://primary-bucket/photos')
 		expect(screen.getByRole('status')).toHaveTextContent('Folder')
+		expect(screen.getByRole('button', { name: /Add from device/i }).className).not.toContain('ant-btn-primary')
 	})
 
 	it('disables the picker when uploads are unavailable', () => {

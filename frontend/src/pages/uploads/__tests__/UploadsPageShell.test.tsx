@@ -49,7 +49,7 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 
 	return {
 		header: {
-			subtitle: 'Primary Profile profile is active. Choose a bucket, stage files from this device, and queue an upload job.',
+			subtitle: 'Primary Profile profile is active. Choose a bucket and add files or a folder from this device.',
 			queueButtonLabel: 'Queue upload',
 			queueButtonDisabled: true,
 			queueButtonTooltip: selectBucketFirstSentenceHint(),
@@ -105,6 +105,18 @@ function buildPresentation(overrides: Partial<UploadsPagePresentationProps> = {}
 }
 
 describe('UploadsPageShell', () => {
+	it('does not show the disabled queue action before a source is selected', () => {
+		render(
+			<MemoryRouter>
+				<UploadsPageShell presentation={buildPresentation()} />
+			</MemoryRouter>,
+		)
+
+		expect(screen.queryByRole('button', { name: /^Queue upload/ })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Open Transfers' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Clear selection' })).not.toBeInTheDocument()
+	})
+
 	it('wires header actions and renders the empty bucket route hint', () => {
 		const presentation = buildPresentation({
 			header: {

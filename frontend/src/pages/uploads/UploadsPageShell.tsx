@@ -16,7 +16,24 @@ export type UploadsPageShellProps = {
 
 export function UploadsPageShell(props: UploadsPageShellProps) {
 	const { presentation } = props
-	const showSelectionActions = !presentation.header.clearSelectionDisabled
+	const hasSelection = !presentation.header.clearSelectionDisabled
+	const headerActions = hasSelection ? (
+		<Space wrap className={styles.headerActions}>
+			<Tooltip title={presentation.header.queueButtonTooltip}>
+				<span>
+					<Button
+						type="primary"
+						onClick={presentation.header.onQueueUpload}
+						disabled={presentation.header.queueButtonDisabled}
+					>
+						{presentation.header.queueButtonLabel}
+					</Button>
+				</span>
+			</Tooltip>
+			<Button onClick={presentation.header.onOpenTransfers}>Open Transfers</Button>
+			<Button onClick={presentation.header.onClearSelection}>Clear selection</Button>
+		</Space>
+	) : null
 
 	return (
 		<div className={styles.pageStack}>
@@ -24,27 +41,7 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 				eyebrow="Transfer"
 				title="Uploads"
 				subtitle={presentation.header.subtitle}
-				actions={
-					<Space wrap className={styles.headerActions}>
-						<Tooltip title={presentation.header.queueButtonTooltip}>
-							<span>
-								<Button
-									type="primary"
-									onClick={presentation.header.onQueueUpload}
-									disabled={presentation.header.queueButtonDisabled}
-								>
-									{presentation.header.queueButtonLabel}
-								</Button>
-							</span>
-						</Tooltip>
-						{showSelectionActions ? (
-							<>
-								<Button onClick={presentation.header.onOpenTransfers}>Open Transfers</Button>
-								<Button onClick={presentation.header.onClearSelection}>Clear selection</Button>
-							</>
-						) : null}
-					</Space>
-				}
+				actions={headerActions}
 			/>
 
 			{presentation.alerts.showOffline ? <Alert type="warning" showIcon title={offlineUploadsDisabledHint()} /> : null}

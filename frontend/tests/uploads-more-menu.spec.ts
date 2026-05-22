@@ -64,7 +64,7 @@ test.describe('Uploads header actions', () => {
 		await expect(page.getByRole('button', { name: /Queue upload \(1\)/i })).toBeEnabled()
 		await page.getByRole('button', { name: 'Clear selection' }).click()
 
-		await expect(page.getByRole('button', { name: /Queue upload/i })).toBeDisabled()
+		await expect(page.getByRole('button', { name: /^Queue upload/ })).toHaveCount(0)
 		await expect(page.getByText('No files or folders selected.')).toBeVisible()
 	})
 

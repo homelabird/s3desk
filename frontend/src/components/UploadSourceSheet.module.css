@@ -28,6 +28,30 @@
 	justify-content: flex-start;
 }
 
+.secondaryButton:not(:disabled),
+.secondaryButton:not(:disabled) > span,
+.secondaryButton:not(:disabled) :global(.anticon) {
+	color: var(--s3d-color-primary) !important;
+}
+
+.secondaryButton:not(:disabled) {
+	border-color: color-mix(in srgb, var(--s3d-color-primary) 55%, var(--s3d-color-border));
+}
+
+.secondaryButton:not(:disabled):hover,
+.secondaryButton:not(:disabled):hover > span,
+.secondaryButton:not(:disabled):hover :global(.anticon),
+.secondaryButton:not(:disabled):focus-visible,
+.secondaryButton:not(:disabled):focus-visible > span,
+.secondaryButton:not(:disabled):focus-visible :global(.anticon) {
+	color: var(--s3d-color-primary-hover) !important;
+}
+
+.secondaryButton:not(:disabled):hover,
+.secondaryButton:not(:disabled):focus-visible {
+	border-color: var(--s3d-color-primary-hover);
+}
+
 .hint {
 	margin-top: 4px;
 }

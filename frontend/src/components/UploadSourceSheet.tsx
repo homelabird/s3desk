@@ -63,7 +63,7 @@ export function UploadSourceSheet(props: Props) {
 					<Button
 						size="large"
 						icon={<FolderOutlined />}
-						className={styles.button}
+						className={[styles.button, styles.secondaryButton].join(' ')}
 						disabled={props.busy || !props.folderSelectionSupported}
 						onClick={props.onSelectFolder}
 					>

@@ -1,8 +1,12 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
 import { readProfileScopedLocalStorage } from './support/storage'
 import { addUploadSourceFromDevice, dialogByName, gotoUploadsPage, openTransfersUploadRow, queueSelectedUpload } from './support/ui'
+
+async function expectMinTouchHeight(locator: Locator, minHeight = 44) {
+	await expect.poll(() => locator.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(minHeight) // e2e-geometry-allow validates upload primary action touch-target height
+}
 
 test.describe('@mobile-responsive Uploads mobile workflows', () => {
 	test.beforeEach(async ({ page }) => {
@@ -14,6 +18,8 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 		await page.setViewportSize({ width: 390, height: 844 })
 		await gotoUploadsPage(page)
 
+		await expect(page.getByRole('button', { name: /^Queue upload/ })).toHaveCount(0)
+		await expectMinTouchHeight(page.getByRole('button', { name: /Add from device/i }))
 		const prefixInput = page.getByLabel('Upload prefix (optional)')
 		await prefixInput.fill('photos/mobile')
 
@@ -64,7 +70,7 @@ test.describe('@mobile-responsive Uploads mobile workflows', () => {
 		await expect(page.getByRole('button', { name: /Queue upload \(1\)/i })).toBeEnabled()
 		await page.getByRole('button', { name: 'Clear selection' }).click()
 
-		await expect(page.getByRole('button', { name: /Queue upload/i })).toBeDisabled()
+		await expect(page.getByRole('button', { name: /^Queue upload/ })).toHaveCount(0)
 		await expect(page.getByText('No files or folders selected.')).toBeVisible()
 	})
 

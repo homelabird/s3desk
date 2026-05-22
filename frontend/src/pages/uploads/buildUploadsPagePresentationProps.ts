@@ -44,8 +44,12 @@ export function buildUploadsPagePresentationProps(state: UploadsPageState): Uplo
 	return {
 		header: {
 			subtitle: state.selectedProfile
-				? `${state.selectedProfile.name} profile is active. Choose a bucket, stage files from this device, and queue an upload job.`
-				: 'Choose a bucket, stage files from this device, and queue an upload job.',
+				? state.selectedFileCount > 0
+					? `${state.selectedProfile.name} profile is active. Review the destination and queue the selected upload.`
+					: `${state.selectedProfile.name} profile is active. Choose a bucket and add files or a folder from this device.`
+				: state.selectedFileCount > 0
+					? 'Review the destination and queue the selected upload.'
+					: 'Choose a bucket and add files or a folder from this device.',
 			queueButtonLabel: `Queue upload${state.selectedFileCount > 0 ? ` (${state.selectedFileCount})` : ''}`,
 			queueButtonDisabled: !state.canQueueUpload,
 			queueButtonTooltip: state.queueDisabledReason ?? 'Queue selected files as an upload job',

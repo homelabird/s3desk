@@ -393,7 +393,9 @@ describe("UploadsPage", () => {
     expect(
       screen.getAllByText("Uploads are disabled by backend policy."),
     ).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Queue upload" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /^Queue upload/ }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Add from device/i }),
     ).toBeDisabled();

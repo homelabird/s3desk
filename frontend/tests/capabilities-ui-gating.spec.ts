@@ -85,7 +85,7 @@ test('uploads page disables upload controls when provider capability blocks uplo
 
 	await expect(page.getByText('Uploads are not available for this provider')).toBeVisible()
 	await expect(page.getByRole('button', { name: 'Add from device…' })).toBeDisabled()
-	await expect(page.getByRole('button', { name: /Queue upload/i })).toBeDisabled()
+	await expect(page.getByRole('button', { name: /^Queue upload/ })).toHaveCount(0)
 })
 
 test('objects page disables upload button when provider capability blocks uploads', async ({ page }) => {

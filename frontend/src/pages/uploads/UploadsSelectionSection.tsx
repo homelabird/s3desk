@@ -33,8 +33,8 @@ export function UploadsSelectionSection(props: Props) {
 
 	return (
 		<PageSection
-				title="Selection"
-				description="Add files or folders from this device. Relative paths preserve folder structure."
+			title="Selection"
+			description="Add files or folders from this device. Folder structure is preserved."
 		>
 			<div className={styles.selectionStack}>
 				<div className={styles.selectionActions}>
@@ -42,6 +42,7 @@ export function UploadsSelectionSection(props: Props) {
 						icon={<UploadOutlined />}
 						disabled={!canOpenPicker}
 						size="large"
+						type={hasSelection ? 'default' : 'primary'}
 						onClick={onOpenPicker}
 					>
 						Add from device…
@@ -90,7 +91,7 @@ export function UploadsSelectionSection(props: Props) {
 					<div className={styles.emptyPreview}>
 						<Typography.Text strong>No files or folders selected.</Typography.Text>
 						<Typography.Text type="secondary">
-							Choose files or a folder to preview the queued upload contents.
+							Choose files or a folder to preview what will be uploaded.
 						</Typography.Text>
 					</div>
 				)}
