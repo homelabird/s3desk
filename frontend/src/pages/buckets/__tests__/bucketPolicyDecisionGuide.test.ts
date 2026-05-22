@@ -6,10 +6,10 @@ import {
 } from "../bucketPolicyDecisionGuide";
 
 describe("bucketPolicyDecisionGuide", () => {
-  it("separates routine controls from advanced S3 policy editing", () => {
+  it("separates routine controls from S3 policy editing", () => {
     const guide = getBucketPolicyDecisionGuide("s3");
 
-    expect(guide.workspaceTitle).toBe("Advanced S3 bucket policy workspace");
+    expect(guide.workspaceTitle).toBe("S3 policy editor workspace");
     expect(guide.recommendedTitle).toBe("Recommended: Controls first");
     expect(guide.recommendedItems).toContain(
       "Versioning, default encryption, and lifecycle rules",
@@ -26,7 +26,7 @@ describe("bucketPolicyDecisionGuide", () => {
   it("calls out etag-sensitive GCS IAM editing", () => {
     const guide = getBucketPolicyDecisionGuide("gcs");
 
-    expect(guide.advancedTitle).toBe("Advanced: IAM policy");
+    expect(guide.advancedTitle).toBe("Policy editor: IAM document");
     expect(guide.advancedItems).toContain("ETag-sensitive IAM edits");
     expect(guide.riskBadges).toContainEqual({
       label: "ETag-sensitive",
@@ -38,7 +38,7 @@ describe("bucketPolicyDecisionGuide", () => {
     const guide = getBucketGovernanceDecisionGuide("oci_object_storage");
 
     expect(guide.recommendedTitle).toBe("Recommended: Typed controls");
-    expect(guide.advancedTitle).toBe("Advanced: Provider effects");
+    expect(guide.advancedTitle).toBe("Provider effects to review");
     expect(guide.riskBadges).toContainEqual({
       label: "PAR URLs",
       tone: "warning",

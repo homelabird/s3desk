@@ -596,7 +596,7 @@ test.describe('overlay accessibility scans', () => {
 		await clickBucketCardManageAction(page, page.locator('body'), bucketsA11yBucket, /Policy editor/)
 		const dialog = dialogByName(page, `Policy: ${bucketsA11yBucket}`)
 		await expect(dialog).toBeVisible()
-		await expect(dialog.getByText('Advanced S3 bucket policy workspace')).toBeVisible()
+		await expect(dialog.getByText('S3 policy editor workspace')).toBeVisible()
 
 		await expectNoA11yViolations(page, dialog)
 	})

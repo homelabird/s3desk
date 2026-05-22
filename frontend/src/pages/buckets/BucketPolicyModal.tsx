@@ -310,7 +310,7 @@ function BucketPolicyEditor(props: {
       return {
         title: "Prefer Controls for operational S3 settings",
         description:
-          "Use Controls for Block Public Access, Object Ownership, Versioning, Encryption, and Lifecycle. Keep raw policy editing here for advanced statements and cross-account access.",
+          "Use Controls for Block Public Access, Object Ownership, Versioning, Encryption, and Lifecycle. Keep raw policy editing here for custom statements and cross-account access.",
       };
     }
     if (props.provider === "gcp_gcs") {

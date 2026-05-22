@@ -215,7 +215,7 @@ function ProfileModalSession(props: {
 						<div className={styles.heroCopy}>
 							<Typography.Text className={styles.heroEyebrow}>Profiles</Typography.Text>
 							<Typography.Text className={styles.heroDescription}>
-								Configure connection details first, then open the advanced sections only if this provider needs them.
+								Configure connection details first, then open compatibility or security sections only if this provider needs them.
 							</Typography.Text>
 						</div>
 						<div className={styles.heroMeta}>

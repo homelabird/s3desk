@@ -319,7 +319,7 @@ describe("BucketGovernanceModal", () => {
       within(decisionHeader).getByText("Recommended: Typed controls"),
     ).toBeInTheDocument();
     expect(
-      within(decisionHeader).getByText("Advanced: Raw policy"),
+      within(decisionHeader).getByText("Policy editor: Raw policy"),
     ).toBeInTheDocument();
     const publicExposureSection = await screen.findByTestId(
       "bucket-governance-public-exposure",
@@ -623,7 +623,7 @@ describe("BucketGovernanceModal", () => {
     SLOW_GOVERNANCE_TIMEOUT_MS,
   );
 
-  it("opens advanced policy from the AWS controls surface", async () => {
+  it("opens the policy editor from the AWS controls surface", async () => {
     const api = createApi("aws_s3");
     const onOpenAdvancedPolicy = vi.fn();
 

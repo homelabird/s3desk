@@ -352,7 +352,7 @@ export function AdvancedPolicySection(props: {
     >
       <details className={styles.advancedDisclosure}>
         <summary className={styles.advancedDisclosureSummary}>
-          Advanced / raw policy
+          Raw policy editor
         </summary>
         <div className={styles.advancedDisclosureBody}>
           <div className={styles.sectionHeader}>
@@ -376,7 +376,7 @@ export function AdvancedPolicySection(props: {
                 ? "Editable raw policy"
                 : "Read-only raw policy"}
             </Tag>
-            <Tag color="gold">Advanced</Tag>
+            <Tag color="gold">Raw policy</Tag>
             <Tag>
               {props.advancedPolicy.rawPolicy
                 ? "Policy document detected"

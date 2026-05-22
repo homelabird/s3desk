@@ -8,8 +8,10 @@ import FullAppInner from './FullAppInner'
 import { getAppTheme } from './theme'
 import { useThemeMode } from './useThemeMode'
 
+const enableQueryDevtools = import.meta.env.DEV && import.meta.env.VITE_ENABLE_QUERY_DEVTOOLS === 'true'
+
 const Devtools =
-	import.meta.env.DEV
+	enableQueryDevtools
 		? lazy(async () => {
 				const m = await import('@tanstack/react-query-devtools')
 				return { default: m.ReactQueryDevtools }

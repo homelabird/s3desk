@@ -87,7 +87,7 @@ export function BucketPolicyContentTabs(props: {
               {props.policyKind !== "s3" ? (
                 <details className={styles.disclosure}>
                   <summary className={styles.disclosureSummary}>
-                    Advanced editor tools
+                    Editor tools
                   </summary>
                   <div className={styles.disclosureBody}>
                     <Space align="center" wrap className={styles.controlRow}>
@@ -188,7 +188,7 @@ export function BucketPolicyContentTabs(props: {
                     <Alert
                       type="warning"
                       showIcon
-                      title="Advanced editing area"
+                      title="Raw JSON editing area"
                       description="Use raw JSON when the structured editor does not cover the policy you need. Review the diff before saving."
                     />
                     <Space orientation="vertical" size="small" className={styles.fullWidth}>

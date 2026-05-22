@@ -318,7 +318,7 @@ describe("BucketPolicyModal", () => {
       await screen.findByTestId("bucket-policy-decision-header"),
     ).toBeInTheDocument();
     expect(screen.getByText("Recommended: Controls first")).toBeInTheDocument();
-    expect(screen.getByText("Advanced: Policy JSON")).toBeInTheDocument();
+    expect(screen.getByText("Policy editor: JSON statements")).toBeInTheDocument();
     expect(screen.getAllByText("Delete policy").length).toBeGreaterThan(0);
   });
 

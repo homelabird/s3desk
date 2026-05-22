@@ -23,7 +23,7 @@ type ObjectsSelectionBarContentProps = {
 }
 
 export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProps) {
-	const [moreActionsOpen, setMoreActionsOpen] = useState(false)
+	const [selectionToolsOpen, setSelectionToolsOpen] = useState(false)
 	const selectionMenuActions = trimActionDividers(props.selectionMenuActions)
 	const menuActions: UIActionOrDivider[] = props.singleSelectedKey
 		? trimActionDividers(
@@ -85,18 +85,18 @@ export function ObjectsSelectionBarContent(props: ObjectsSelectionBarContentProp
 					<Dropdown
 						trigger={['click']}
 						menu={buildActionMenu(menuActions, props.isAdvanced)}
-						open={moreActionsOpen}
-						onOpenChange={setMoreActionsOpen}
+						open={selectionToolsOpen}
+						onOpenChange={setSelectionToolsOpen}
 					>
 						<Button
 							size="small"
 							className={`${styles.selectionBarButton} ${styles.selectionBarMoreButton}`}
 							icon={<EllipsisOutlined />}
-							aria-label="More selection actions"
+							aria-label="Selection tools"
 							aria-haspopup="menu"
-							aria-expanded={moreActionsOpen}
+							aria-expanded={selectionToolsOpen}
 						>
-							More
+							Tools
 						</Button>
 					</Dropdown>
 				) : null}

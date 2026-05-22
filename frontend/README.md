@@ -22,6 +22,8 @@ Vite proxies `/api/*` (including `/api/v1`) to the backend in dev. See `vite.con
   - Examples:
     - `https://api.example.com/api/v1`
     - `http://127.0.0.1:8080/api/v1`
+- `VITE_ENABLE_QUERY_DEVTOOLS=true` (optional): Show TanStack Query Devtools during local development.
+  - Default: hidden
 
 Note: Vite env vars are baked at build time.
 
