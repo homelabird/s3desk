@@ -80,6 +80,16 @@ describe('buildObjectsActionCatalog', () => {
 		expect(simpleCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Show workspace tools')
 	})
 
+	it('keeps details unavailable until there is object context or an open details panel', () => {
+		const idleCatalog = buildCatalog({ selectedCount: 0, detailsVisible: false })
+		const selectedCatalog = buildCatalog({ selectedCount: 1, detailsVisible: false })
+		const visibleCatalog = buildCatalog({ selectedCount: 0, detailsVisible: true })
+
+		expect(idleCatalog.globalActionsAll.find((action) => action.id === 'toggle_details')?.enabled).toBe(false)
+		expect(selectedCatalog.globalActionsAll.find((action) => action.id === 'toggle_details')?.enabled).toBe(true)
+		expect(visibleCatalog.globalActionsAll.find((action) => action.id === 'toggle_details')?.enabled).toBe(true)
+	})
+
 	it('labels the current location bookmark action by state', () => {
 		const unbookmarkedCatalog = buildCatalog({ isBookmarked: false })
 		const bookmarkedCatalog = buildCatalog({ isBookmarked: true })

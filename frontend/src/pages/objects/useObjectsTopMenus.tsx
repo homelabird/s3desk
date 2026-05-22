@@ -22,14 +22,11 @@ export function useObjectsTopMenus({
 	globalActionMap,
 	currentPrefixActionMap,
 }: UseObjectsTopMenusArgs): { topMoreMenu: MenuProps } {
+	const toggleDetailsAction = globalActionMap.get('toggle_details')
 	const topMoreMenuItems = useMemo(
 		() =>
 			compactMenuItems([
-				actionToMenuItem(globalActionMap.get('nav_back'), undefined, isAdvanced),
-				actionToMenuItem(globalActionMap.get('nav_forward'), undefined, isAdvanced),
-				actionToMenuItem(globalActionMap.get('nav_up'), undefined, isAdvanced),
-				{ type: 'divider' as const },
-				actionToMenuItem(globalActionMap.get('toggle_details'), undefined, isAdvanced),
+				toggleDetailsAction?.enabled ? actionToMenuItem(toggleDetailsAction, undefined, isAdvanced) : null,
 				...(dockTree ? [] : [actionToMenuItem(globalActionMap.get('open_folders'), undefined, isAdvanced)]),
 				{ type: 'divider' as const },
 				actionToMenuItem(globalActionMap.get('refresh'), undefined, isAdvanced),
@@ -53,7 +50,7 @@ export function useObjectsTopMenus({
 				{ type: 'divider' as const },
 				actionToMenuItem(globalActionMap.get('ui_mode'), undefined, isAdvanced),
 			]),
-		[bucket, currentPrefixActionMap, dockTree, globalActionMap, isAdvanced, prefix],
+		[bucket, currentPrefixActionMap, dockTree, globalActionMap, isAdvanced, prefix, toggleDetailsAction],
 	)
 
 	const topMoreMenu = useMemo<MenuProps>(

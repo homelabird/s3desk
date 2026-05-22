@@ -38,7 +38,7 @@ export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 			label: deps.detailsVisible ? 'Hide details' : 'Show details',
 			icon: <InfoCircleOutlined />,
 			keywords: 'details preview panel',
-			enabled: !!deps.profileId && !deps.isOffline,
+			enabled: !!deps.profileId && !deps.isOffline && (deps.selectedCount > 0 || deps.detailsVisible),
 			audience: 'advanced',
 			run: () => deps.onToggleDetails(),
 		},
