@@ -14,6 +14,7 @@ import styles from './ObjectsListView.module.css'
 import type { ObjectSort, ObjectsViewMode } from './objectsTypes'
 import { clipboardFailureHint, copyToClipboard } from '../../lib/clipboard'
 import { NativeSelect } from '../../components/NativeSelect'
+import { buildS3Location } from './objectsLocationUtils'
 
 type BreadcrumbItem = {
 	title: ReactNode
@@ -52,12 +53,6 @@ type ObjectsListControlsProps = {
 }
 
 type CopyFeedback = 'copied' | 'failed' | null
-
-function buildS3Location(bucket: string, prefix: string): string {
-	if (!bucket) return ''
-	const normalizedPrefix = (prefix ?? '').replace(/^\/+/, '')
-	return normalizedPrefix ? `s3://${bucket}/${normalizedPrefix}` : `s3://${bucket}/`
-}
 
 function renderBreadcrumb(items: BreadcrumbItem[]) {
 	if (!items.length) return null
@@ -224,6 +219,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 		) : null
 	const showInlinePathShortcut = props.isAdvanced && !props.isCompact
 	const showInlineLocationBookmark = !props.isCompact
+	const showInlineCopyLocation = !props.isCompact
 	const bookmarkLocationLabel = props.isBookmarked ? 'Remove location bookmark' : 'Bookmark this location'
 
 	const filterButton = (
@@ -248,16 +244,18 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 								<span className={styles.listControlsLocationCode} title={location}>
 									{location}
 								</span>
-								<button
-									type="button"
-									className={styles.listControlsIconButton}
-									onClick={copyLocation}
-									disabled={!props.canInteract}
-									aria-label="Copy location"
-									title="Copy location"
-								>
-									<CopyOutlined />
-								</button>
+								{showInlineCopyLocation ? (
+									<button
+										type="button"
+										className={styles.listControlsIconButton}
+										onClick={copyLocation}
+										disabled={!props.canInteract}
+										aria-label="Copy location"
+										title="Copy location"
+									>
+										<CopyOutlined />
+									</button>
+								) : null}
 								{locationFeedback}
 							</div>
 						) : null}

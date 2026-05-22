@@ -34,6 +34,7 @@ export function useObjectsTopMenus({
 				{ type: 'divider' as const },
 				actionToMenuItem(globalActionMap.get('refresh'), undefined, isAdvanced),
 				actionToMenuItem(globalActionMap.get('go_to_path'), undefined, isAdvanced),
+				actionToMenuItem(globalActionMap.get('copy_location'), undefined, isAdvanced),
 				actionToMenuItem(globalActionMap.get('toggle_location_bookmark'), undefined, isAdvanced),
 				...(isAdvanced
 					? [

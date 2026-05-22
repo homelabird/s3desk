@@ -131,6 +131,7 @@ describe('ObjectsListControls', () => {
 
 		expect(screen.getByTestId('objects-list-controls-compact-footer')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-list-controls-compact-meta')).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Copy location' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go to path' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Bookmark this location' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()

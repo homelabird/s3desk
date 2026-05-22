@@ -1,7 +1,8 @@
-import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, ReloadOutlined, RightOutlined, SearchOutlined, SnippetsOutlined, StarFilled, StarOutlined, UpOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, FolderAddOutlined, FolderOutlined, InfoCircleOutlined, LeftOutlined, ReloadOutlined, RightOutlined, SearchOutlined, SnippetsOutlined, StarFilled, StarOutlined, UpOutlined } from '@ant-design/icons'
 
 import type { UIAction } from './objectsActions'
 import type { ObjectsActionDeps } from './objectsActionCatalogTypes'
+import { buildS3Location } from './objectsLocationUtils'
 
 export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 	return [
@@ -66,6 +67,15 @@ export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
 			audience: 'advanced',
 			run: () => deps.onOpenPathModal(),
+		},
+		{
+			id: 'copy_location',
+			label: 'Copy location',
+			icon: <CopyOutlined />,
+			keywords: 'copy s3 uri address path prefix location',
+			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline,
+			audience: 'advanced',
+			run: () => deps.onCopy(buildS3Location(deps.bucket, deps.prefix)),
 		},
 		{
 			id: 'toggle_location_bookmark',

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { buildObjectsActionCatalog } from '../objectsActionCatalog'
 
@@ -90,5 +90,14 @@ describe('buildObjectsActionCatalog', () => {
 		expect(bookmarkedCatalog.globalActionsAll.find((action) => action.id === 'toggle_location_bookmark')?.label).toBe(
 			'Remove location bookmark',
 		)
+	})
+
+	it('copies the current bucket location from the global location action', () => {
+		const onCopy = vi.fn()
+		const catalog = buildCatalog({ bucket: 'bucket-1', prefix: 'reports/2026/', onCopy })
+
+		catalog.globalActionsAll.find((action) => action.id === 'copy_location')?.run()
+
+		expect(onCopy).toHaveBeenCalledWith('s3://bucket-1/reports/2026/')
 	})
 })
