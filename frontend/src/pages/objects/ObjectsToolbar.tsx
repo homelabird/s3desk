@@ -153,6 +153,9 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 		</Button>,
 		props.canCreateFolder ? newFolderShortcutHint() : createFolderTooltipText,
 	)
+	const showMobileBack = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoBack
+	const showMobileForward = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoForward
+	const showMobileUp = props.isAdvanced && props.hasProfile && !props.isOffline && props.canGoUp
 
 	const moreButton = (
 		<ObjectsMenuPopover menu={props.topMoreMenu} align="end" scopeKey={props.bucketPickerScopeKey}>
@@ -258,31 +261,34 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 				<Space wrap size={[8, 8]} className={`${styles.toolbarGroup} ${styles.toolbarTopActions}`} data-testid="objects-toolbar-mobile-actions">
 					{props.isAdvanced ? (
 						<>
-							<Button
-								size="small"
-								icon={<LeftOutlined />}
-								disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
-								onClick={props.onGoBack}
-								aria-label="Go back"
-								title="Back"
-							/>
-							<Button
-								size="small"
-								icon={<RightOutlined />}
-								disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
-								onClick={props.onGoForward}
-								aria-label="Go forward"
-								title="Forward"
-							/>
-							<Button
-								size="small"
-								icon={<UpOutlined />}
-								disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
-								onClick={props.onGoUp}
-								aria-label="Go up"
-							>
-								{buildMenuButtonLabel('Up', props.showLabels)}
-							</Button>
+							{showMobileBack ? (
+								<Button
+									size="small"
+									icon={<LeftOutlined />}
+									onClick={props.onGoBack}
+									aria-label="Go back"
+									title="Back"
+								/>
+							) : null}
+							{showMobileForward ? (
+								<Button
+									size="small"
+									icon={<RightOutlined />}
+									onClick={props.onGoForward}
+									aria-label="Go forward"
+									title="Forward"
+								/>
+							) : null}
+							{showMobileUp ? (
+								<Button
+									size="small"
+									icon={<UpOutlined />}
+									onClick={props.onGoUp}
+									aria-label="Go up"
+								>
+									{buildMenuButtonLabel('Up', props.showLabels)}
+								</Button>
+							) : null}
 						</>
 					) : null}
 					{uploadButtonMobile}

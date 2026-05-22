@@ -153,4 +153,31 @@ describe('ObjectsToolbar', () => {
 		expect(detailsButton).toHaveAttribute('aria-expanded', 'false')
 		expect(detailsButton).toHaveAttribute('aria-controls', 'objects-details-drawer')
 	})
+
+	it('hides inactive mobile history actions until navigation is available', () => {
+		render(<ObjectsToolbar {...buildProps({ isDesktop: false, showLabels: true })} />)
+
+		expect(screen.queryByRole('button', { name: 'Go back' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Go forward' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Go up' })).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Upload' })).toBeInTheDocument()
+	})
+
+	it('shows mobile history actions when they can be used', () => {
+		render(
+			<ObjectsToolbar
+				{...buildProps({
+					isDesktop: false,
+					showLabels: true,
+					canGoBack: true,
+					canGoForward: true,
+					canGoUp: true,
+				})}
+			/>,
+		)
+
+		expect(screen.getByRole('button', { name: 'Go back' })).toBeEnabled()
+		expect(screen.getByRole('button', { name: 'Go forward' })).toBeEnabled()
+		expect(screen.getByRole('button', { name: 'Go up' })).toBeEnabled()
+	})
 })

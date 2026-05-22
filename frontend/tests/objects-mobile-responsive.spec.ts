@@ -46,8 +46,9 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await openObjectsMobilePage(page)
 
 		await expect(page.getByTestId('objects-toolbar-mobile-top-row')).toBeVisible()
-		await expect(page.getByRole('button', { name: 'Go back' })).toBeDisabled()
-		await expect(page.getByRole('button', { name: 'Go forward' })).toBeDisabled()
+		await expect(page.getByRole('button', { name: 'Go back' })).toHaveCount(0)
+		await expect(page.getByRole('button', { name: 'Go forward' })).toHaveCount(0)
+		await expect(page.getByRole('button', { name: 'Go up' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Upload' })).toBeEnabled()
 		await expect(page.getByRole('button', { name: 'New folder' })).toBeEnabled()
 		await expect(page.getByRole('button', { name: 'Folders' })).toBeEnabled()
@@ -139,6 +140,11 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(drawer).toHaveCount(0)
 		await expect(foldersButton).toHaveAttribute('aria-expanded', 'false')
 		await expect(page.getByText('s3://objects-mobile-bucket/reports/')).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Go back' })).toBeEnabled()
+		await expect(page.getByRole('button', { name: 'Go up' })).toBeEnabled()
+		await page.getByRole('button', { name: 'Go back' }).click()
+		await expect(page.getByText('s3://objects-mobile-bucket/')).toBeVisible()
+		await expect(page.getByRole('button', { name: 'Go forward' })).toBeEnabled()
 	})
 
 	test('opens and closes core overlay drawers at mid-width mobile sizes', async ({ page }) => {
