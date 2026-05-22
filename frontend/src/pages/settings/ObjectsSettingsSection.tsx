@@ -33,7 +33,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
 			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				What this affects: object list browsing cost, thumbnail behavior, and Indexed Search prefix indexing.
+				What this affects: object list browsing cost, thumbnail behavior, and Search bucket indexing.
 			</Typography.Text>
 			<FormField label="Show image thumbnails" extra="Controls thumbnails in the object list and details panel.">
 				<ToggleSwitch
@@ -90,7 +90,7 @@ export function ObjectsSettingsSection(props: ObjectsSettingsSectionProps) {
 								</FormField>
 								<FormField
 									label="Auto index current prefix"
-									extra="When Indexed Search is used, build/refresh the index for the current prefix automatically."
+									extra="When Search bucket is used, build/refresh the index for the current prefix automatically."
 								>
 									<ToggleSwitch
 										checked={props.objectsAutoIndexEnabled}

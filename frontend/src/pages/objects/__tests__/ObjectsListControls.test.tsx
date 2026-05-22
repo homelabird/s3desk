@@ -106,7 +106,7 @@ describe('ObjectsListControls', () => {
 		expect(onViewModeChange).toHaveBeenCalledWith('grid')
 	})
 
-	it('shows capped search guidance and routes users to indexed search', () => {
+	it('shows capped search guidance and routes users to all-folder search', () => {
 		const props = buildProps({
 			isAdvanced: false,
 			search: 'clip',
@@ -118,9 +118,9 @@ describe('ObjectsListControls', () => {
 		render(<ObjectsListControls {...props} />)
 
 		expect(screen.getByText('Search paused at 500 items')).toBeInTheDocument()
-		expect(screen.getByText(/Use Indexed Search to scan the full bucket/)).toBeInTheDocument()
+		expect(screen.getByText(/Use Search bucket to scan the full bucket/)).toBeInTheDocument()
 
-		fireEvent.click(screen.getByRole('button', { name: 'Indexed Search' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Search bucket' }))
 		expect(props.onOpenGlobalSearch).toHaveBeenCalledTimes(1)
 	})
 
@@ -132,8 +132,8 @@ describe('ObjectsListControls', () => {
 		expect(screen.getByTestId('objects-list-controls-compact-footer')).toBeInTheDocument()
 		expect(screen.getByTestId('objects-list-controls-compact-meta')).toBeInTheDocument()
 		expect(screen.getByRole('button', { name: /Filters$/ })).toBeInTheDocument()
-		expect(screen.getByRole('button', { name: /Indexed Search$/ })).toBeInTheDocument()
-		expect(screen.getByText('Search here, or use Indexed Search across the whole bucket.')).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: /Search bucket$/ })).toBeInTheDocument()
+		expect(screen.getByText('Search here, or use Search bucket for the whole bucket.')).toBeInTheDocument()
 	})
 
 	it('keeps capped search guidance compact on mid-width layouts without duplicating the indexed CTA', () => {
@@ -149,12 +149,12 @@ describe('ObjectsListControls', () => {
 
 		expect(screen.getByTestId('objects-list-controls-status-compact')).toHaveAttribute('data-has-action', 'false')
 		expect(screen.getByText('Search paused at 500 items')).toBeInTheDocument()
-		expect(screen.getByText('Use Indexed Search above to scan the whole bucket.')).toBeInTheDocument()
+		expect(screen.getByText('Use Search bucket above to scan the whole bucket.')).toBeInTheDocument()
 
-		const indexedSearchButtons = screen.getAllByRole('button', { name: 'Indexed Search' })
-		expect(indexedSearchButtons).toHaveLength(1)
+		const globalSearchButtons = screen.getAllByRole('button', { name: 'Search bucket' })
+		expect(globalSearchButtons).toHaveLength(1)
 
-		fireEvent.click(indexedSearchButtons[0]!)
+		fireEvent.click(globalSearchButtons[0]!)
 		expect(props.onOpenGlobalSearch).toHaveBeenCalledTimes(1)
 	})
 })

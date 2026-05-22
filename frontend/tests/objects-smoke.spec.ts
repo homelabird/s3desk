@@ -76,7 +76,7 @@ async function stubObjectsSmokeApi(page: Page, overrides?: Partial<StorageSeed>)
 }
 
 test.describe('@check-smoke Objects page smoke', () => {
-	test('boots in simple mode and persists advanced-mode toggle to local storage', async ({ page }) => {
+	test('boots in focused mode and persists workspace tools toggle to local storage', async ({ page }) => {
 		await stubObjectsSmokeApi(page, { objectsUIMode: 'simple' })
 		await seedStorage(page, { objectsUIMode: 'simple' })
 		await gotoWithDynamicImportRecovery(page, '/objects', (scope) => scope.getByTestId('objects-list-controls-root'), {
@@ -94,17 +94,17 @@ test.describe('@check-smoke Objects page smoke', () => {
 		await expect(moreButton).toBeVisible()
 		await expect(moreButton).toBeEnabled()
 		await moreButton.click()
-		const enableAdvancedMode = page.getByRole('menuitem', { name: /Advanced mode/i })
-		await expect(enableAdvancedMode).toBeVisible()
-		await expect(page.getByRole('menuitem', { name: /Indexed Search/i })).toHaveCount(0)
-		await enableAdvancedMode.click()
+		const showWorkspaceTools = page.getByRole('menuitem', { name: /Show workspace tools/i })
+		await expect(showWorkspaceTools).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Search bucket/i })).toHaveCount(0)
+		await showWorkspaceTools.click()
 
 		await expect(moreButton).toBeVisible()
 		await expect(moreButton).toBeEnabled()
 		await moreButton.click()
-		await expect(page.getByRole('menuitem', { name: /Simple mode/i })).toBeVisible()
-		await expect(page.getByRole('menuitem', { name: /Indexed Search/i })).toHaveCount(0)
-		await expect(page.getByRole('button', { name: /Indexed Search/i })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Hide workspace tools/i })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: /Search bucket/i })).toHaveCount(0)
+		await expect(page.getByRole('button', { name: /Search bucket/i })).toBeVisible()
 		await expect
 			.poll(() => page.evaluate(() => window.localStorage.getItem('objectsUIMode')))
 			.toBe(JSON.stringify('advanced'))

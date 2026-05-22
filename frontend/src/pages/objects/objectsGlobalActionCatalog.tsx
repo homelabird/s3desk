@@ -122,7 +122,7 @@ export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 		},
 		{
 			id: 'global_search',
-			label: 'Indexed Search',
+			label: 'Search bucket',
 			icon: <SearchOutlined />,
 			keywords: 'index search bucket',
 			enabled: !!deps.profileId && !!deps.bucket && !deps.isOffline && deps.objectCrudSupported,
@@ -131,7 +131,7 @@ export function buildGlobalActions(deps: ObjectsActionDeps): UIAction[] {
 		},
 		{
 			id: 'ui_mode',
-			label: deps.isAdvanced ? 'Switch to simple mode' : 'Switch to advanced mode',
+			label: deps.isAdvanced ? 'Hide workspace tools' : 'Show workspace tools',
 			icon: <SnippetsOutlined />,
 			keywords: 'simple advanced view mode',
 			enabled: !!deps.profileId,

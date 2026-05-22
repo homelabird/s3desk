@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 import { noFavoritesYetTitle } from '../src/lib/actionHints'
 import { installApiFixtures, jsonFixture, metaJson, seedLocalStorage, textFixture } from './support/apiFixtures'
-import { gotoWithDynamicImportRecovery, objectsFavoriteItem, objectsListRow, openObjectsGlobalSearchDialog } from './support/ui'
+import { dialogByName, gotoWithDynamicImportRecovery, objectsFavoriteItem, objectsListRow, openObjectsGlobalSearchDialog } from './support/ui'
 
 type StorageSeed = {
 	apiToken: string
@@ -39,6 +39,26 @@ async function seedStorage(page: Page, overrides?: Partial<StorageSeed>) {
 		objectsFavoritesPaneExpanded: true,
 		objectsAutoIndexEnabled: false,
 	})
+}
+
+async function toggleFavoritesOnly(page: Page) {
+	const inlineFavoritesOnly = page.getByRole('switch', { name: 'Favorites only' }).first()
+	if (await inlineFavoritesOnly.isVisible().catch(() => false)) {
+		await inlineFavoritesOnly.click()
+		return
+	}
+	const inlineFavoritesOnlyCheckbox = page.getByRole('checkbox', { name: 'Favorites only' }).first()
+	if (await inlineFavoritesOnlyCheckbox.isVisible().catch(() => false)) {
+		await inlineFavoritesOnlyCheckbox.click()
+		return
+	}
+
+	await page.getByRole('button', { name: /View|Filters/ }).click()
+	const drawer = dialogByName(page, 'View options')
+	await expect(drawer).toBeVisible()
+	await drawer.getByRole('checkbox', { name: 'Favorites only' }).click()
+	await drawer.getByRole('button', { name: 'Done' }).click()
+	await expect(drawer).toHaveCount(0)
 }
 
 async function setupApiMocks(page: Page) {
@@ -131,18 +151,17 @@ test('global search and favorites update from objects UI', async ({ page }) => {
 	await expect(objectRow.getByRole('button', { name: 'Remove favorite' })).toBeVisible()
 	await expect(objectsFavoriteItem(page, 'alpha.txt')).toBeVisible()
 
-	const favoritesOnly = page.getByRole('switch', { name: 'Favorites only' }).first()
-	await favoritesOnly.click()
+	await toggleFavoritesOnly(page)
 	await expect(objectRow).toBeVisible()
 
 	await objectRow.getByRole('button', { name: 'Remove favorite' }).click()
 	await expect(page.getByText(noFavoritesYetTitle())).toBeVisible()
-	await favoritesOnly.click()
+	await toggleFavoritesOnly(page)
 	await expect(objectRow).toBeVisible()
 
 	const drawer = await openObjectsGlobalSearchDialog(page)
 
-	await drawer.getByPlaceholder('Search query (substring)').fill('alpha')
+	await drawer.getByPlaceholder('Search files or folders').fill('alpha')
 	await expect.poll(() => apiState.getSearchRequestCount(), { timeout: 15_000 }).toBeGreaterThan(0)
 	await expect(drawer.getByText('alpha.txt')).toBeVisible({ timeout: 10_000 })
 })

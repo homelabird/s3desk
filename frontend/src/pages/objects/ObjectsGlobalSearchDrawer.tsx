@@ -68,7 +68,7 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 			onClose={props.onClose}
 			width={drawerWidth}
 			placement="right"
-			title="Indexed Search"
+			title="Search bucket"
 			dataTestId="objects-global-search-sheet"
 			compactMobile
 		>
@@ -83,8 +83,8 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							type="info"
 							showIcon
 							icon={<InfoCircleOutlined />}
-							title="Search the object index"
-							description="Search indexed bucket contents, then narrow by prefix, extension, size, or modified date. If no index exists, create one below."
+							title="Search across this bucket"
+							description="Find objects outside the current folder, then narrow by folder, file type, size, or modified date. If search has not been prepared yet, build the index below."
 							className={styles.globalSearchIntro}
 						/>
 					</section>
@@ -116,11 +116,11 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 							<Alert
 								type="info"
 								showIcon
-								title="Index not found"
-								description="Create an object-index job first, then search again."
+								title="Search index needed"
+								description="Build the search index first, then search again."
 								action={
 									<Button type="primary" size="small" className={styles.globalSearchCompactButton} onClick={props.onCreateIndexJob} loading={props.isCreatingIndexJob}>
-										Index bucket
+										Build index
 									</Button>
 								}
 							/>

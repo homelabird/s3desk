@@ -27,10 +27,10 @@ test.describe('Objects visual regression @visual', () => {
 	test('global search drawer action layout remains stable', async ({ page }) => {
 		await setupObjectsVisualPage(page, { width: 1440, height: 900 })
 
-		await page.getByRole('button', { name: 'Indexed Search' }).click()
-		const drawer = dialogByName(page, 'Indexed Search')
+		await page.getByRole('button', { name: 'Search bucket' }).click()
+		const drawer = dialogByName(page, 'Search bucket')
 		await expect(drawer).toBeVisible()
-		await drawer.getByPlaceholder('Search query (substring)').fill('preview')
+		await drawer.getByPlaceholder('Search files or folders').fill('preview')
 		await expect(drawer.getByText('preview.png')).toBeVisible()
 		await expect(drawer.getByTestId('objects-global-search-actions')).toBeVisible()
 

@@ -138,10 +138,10 @@ test.describe('profile-scoped storage migration', () => {
 		await gotoObjectsPage(page)
 
 		await expect(objectsListRow(page, 'alpha.txt')).toBeVisible()
-		await page.getByRole('button', { name: /Indexed Search/ }).click()
-		const drawer = dialogByName(page, 'Indexed Search')
+		await page.getByRole('button', { name: /Search bucket/ }).click()
+		const drawer = dialogByName(page, 'Search bucket')
 		await expect(drawer).toBeVisible()
-		await expect(drawer.getByPlaceholder('Search query (substring)')).toHaveValue('alpha')
+		await expect(drawer.getByPlaceholder('Search files or folders')).toHaveValue('alpha')
 		await expect(drawer.getByLabel('Extension filter')).toHaveValue('txt')
 		await expectProfileStorageValueMigrated(page, {
 			apiToken: 'objects-mobile-token',

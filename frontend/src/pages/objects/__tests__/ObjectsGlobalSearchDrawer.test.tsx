@@ -79,9 +79,9 @@ describe('ObjectsGlobalSearchDrawer', () => {
 			expect(screen.getByTestId('objects-global-search-index-card')).toBeInTheDocument()
 			expect(screen.getByTestId('objects-global-search-index-toggle')).toBeInTheDocument()
 
-			const toggle = screen.getByRole('button', { name: /Index management/i })
+			const toggle = screen.getByRole('button', { name: /Search index setup/i })
 			fireEvent.click(toggle)
-			expect(screen.queryByLabelText('Index prefix')).not.toBeInTheDocument()
+			expect(screen.queryByLabelText('Index folder path')).not.toBeInTheDocument()
 
 			rerender(
 				<ObjectsGlobalSearchDrawer
@@ -90,8 +90,8 @@ describe('ObjectsGlobalSearchDrawer', () => {
 				/>,
 			)
 
-			expect(screen.getByLabelText('Index prefix')).toBeInTheDocument()
-			expect(screen.getByRole('button', { name: /Index management/i })).toHaveAttribute('aria-expanded', 'true')
+			expect(screen.getByLabelText('Index folder path')).toBeInTheDocument()
+			expect(screen.getByRole('button', { name: /Search index setup/i })).toHaveAttribute('aria-expanded', 'true')
 		} finally {
 			consoleErrorSpy.mockRestore()
 			consoleWarnSpy.mockRestore()

@@ -406,11 +406,11 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(page.getByTestId('objects-list-controls-root')).toHaveAttribute('data-compact', 'true')
 		await expect(page.getByTestId('objects-list-controls-compact-footer')).toBeVisible()
 		await expect(page.getByTestId('objects-list-controls-compact-meta')).toContainText('1 folders, 0 files')
-		await expect(page.getByText('Search here, or use Indexed Search across the whole bucket.')).toBeVisible()
+		await expect(page.getByText('Search here, or use Search bucket for the whole bucket.')).toBeVisible()
 
 		await expect(page.getByLabel('Search current folder')).toBeVisible()
 		await expect(page.getByRole('button', { name: /Filters$/ })).toBeVisible()
-		await expect(page.getByRole('button', { name: /Indexed Search$/ })).toBeVisible()
+		await expect(page.getByRole('button', { name: /Search bucket$/ })).toBeVisible()
 
 		const viewMode = page.getByRole('group', { name: 'View mode' })
 		await expect(viewMode.getByRole('button', { name: /List$/ })).toHaveAttribute('aria-pressed', 'true')
@@ -418,7 +418,7 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(viewMode.getByRole('button', { name: /Grid$/ })).toHaveAttribute('aria-pressed', 'true')
 	})
 
-	test('shows capped local search guidance and opens indexed search on mid-width desktops', async ({ page }) => {
+	test('shows capped local search guidance and opens bucket search on mid-width desktops', async ({ page }) => {
 		await page.setViewportSize({ width: 1040, height: 900 })
 		await stubObjectsAdaptiveApi(page, {
 			rootObjects: {
@@ -433,15 +433,15 @@ test.describe('Objects adaptive desktop workflows', () => {
 		await expect(status).toBeVisible()
 		await expect(status).toHaveAttribute('data-has-action', 'false')
 		await expect(status).toContainText('Search paused at 3,000 items')
-		await expect(status).toContainText('Use Indexed Search above to scan the whole bucket.')
+		await expect(status).toContainText('Use Search bucket above to scan the whole bucket.')
 
-		const indexedSearchButton = page.getByRole('button', { name: 'Indexed Search' })
-		await expect(indexedSearchButton).toHaveCount(1)
-		await indexedSearchButton.click()
+		const globalSearchButton = page.getByRole('button', { name: 'Search bucket' })
+		await expect(globalSearchButton).toHaveCount(1)
+		await globalSearchButton.click()
 
 		const drawer = page.getByTestId('objects-global-search-sheet')
 		await expect(drawer).toBeVisible()
-		await expect(drawer.getByLabel('Search query')).toBeVisible()
+		await expect(drawer.getByLabel('Search files or folders')).toBeVisible()
 	})
 
 	test('uses global search table actions on mid-width desktops', async ({ page }) => {
@@ -458,10 +458,10 @@ test.describe('Objects adaptive desktop workflows', () => {
 		})
 		await openObjectsPage(page)
 
-		await page.getByRole('button', { name: /Indexed Search/ }).click()
+		await page.getByRole('button', { name: /Search bucket/ }).click()
 		const drawer = page.getByTestId('objects-global-search-sheet')
 		await expect(drawer).toBeVisible()
-		await drawer.getByLabel('Search query').fill('alpha')
+		await drawer.getByLabel('Search files or folders').fill('alpha')
 		await expect(objectsGlobalSearchTableWrap(drawer)).toBeVisible()
 
 		const row = objectsGlobalSearchTableWrap(drawer).locator('tbody tr').filter({ hasText: 'alpha-findings-summary.txt' }).first()
@@ -491,10 +491,10 @@ test.describe('Objects adaptive desktop workflows', () => {
 		})
 		await openObjectsPage(page)
 
-		await page.getByRole('button', { name: /Indexed Search/ }).click()
+		await page.getByRole('button', { name: /Search bucket/ }).click()
 		const drawer = page.getByTestId('objects-global-search-sheet')
 		await expect(drawer).toBeVisible()
-		await drawer.getByLabel('Search query').fill('alpha')
+		await drawer.getByLabel('Search files or folders').fill('alpha')
 
 		const results = drawer.getByTestId('objects-global-search-results')
 		await expect(results).toBeVisible()

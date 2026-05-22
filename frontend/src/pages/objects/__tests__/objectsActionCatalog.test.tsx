@@ -70,11 +70,11 @@ describe('buildObjectsActionCatalog', () => {
 		expect(objectActions.some((item) => !('type' in item) && item.id === 'presign')).toBe(false)
 	})
 
-	it('uses explicit labels for switching object workspace complexity', () => {
+	it('uses task-focused labels for switching object workspace tools', () => {
 		const advancedCatalog = buildCatalog({ isAdvanced: true })
 		const simpleCatalog = buildCatalog({ isAdvanced: false })
 
-		expect(advancedCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Switch to simple mode')
-		expect(simpleCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Switch to advanced mode')
+		expect(advancedCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Hide workspace tools')
+		expect(simpleCatalog.globalActionsAll.find((action) => action.id === 'ui_mode')?.label).toBe('Show workspace tools')
 	})
 })

@@ -154,7 +154,7 @@ test.describe('Objects global search and favorites chaos', () => {
 		await expect(objectsSelectionCheckbox(page, 'beta.txt')).toBeVisible()
 	})
 
-	test('global indexed search recovers from a transient error while favoritesOnly view stays stable', async ({ page }) => {
+	test('all-folder search recovers from a transient error while favoritesOnly view stays stable', async ({ page }) => {
 		test.setTimeout(90_000)
 		await installSearchRecoveryFixtures(page)
 		await seedStorage(page, { objectsFavoritesOnly: true })
@@ -166,7 +166,7 @@ test.describe('Objects global search and favorites chaos', () => {
 
 		const drawer = await openObjectsGlobalSearchDialog(page)
 
-		await drawer.getByLabel('Search query').fill('error')
+		await drawer.getByLabel('Search files or folders').fill('error')
 		const searchError = drawer.getByText('Search failed')
 		await expect(searchError).toBeVisible({ timeout: 15_000 })
 		await expect(drawer.getByText('index backend busy')).toBeVisible()

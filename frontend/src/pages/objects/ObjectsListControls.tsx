@@ -81,7 +81,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 	const searchTrimmed = props.search.trim()
 	const searchCapped = !!searchTrimmed && props.hasNextPage && props.rawTotalCount >= props.searchAutoScanCap
 	const compactUsesInlineIndexedCta = props.isCompact && searchCapped && !props.isAdvanced
-	const indexedSearchLabel = 'Indexed Search'
+	const globalSearchLabel = 'Search bucket'
 
 	useEffect(() => {
 		if (!copyFeedback) return
@@ -101,9 +101,9 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 			icon={<SearchOutlined />}
 			disabled={!props.canInteract}
 			onClick={props.onOpenGlobalSearch}
-			aria-label={indexedSearchLabel}
+			aria-label={globalSearchLabel}
 		>
-			{indexedSearchLabel}
+			{globalSearchLabel}
 		</Button>
 	) : null
 
@@ -123,8 +123,8 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 							</strong>
 							<span className={`${styles.listControlsStatusCompactHint} ${styles.listControlsSecondaryText}`}>
 								{props.isAdvanced
-									? 'Use Indexed Search above to scan the whole bucket.'
-									: 'Use Indexed Search to scan the whole bucket.'}
+									? 'Use Search bucket above to scan the whole bucket.'
+									: 'Use Search bucket to scan the whole bucket.'}
 							</span>
 						</div>
 						{compactUsesInlineIndexedCta ? (
@@ -134,10 +134,10 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 								icon={<SearchOutlined />}
 								disabled={!props.canInteract}
 								onClick={props.onOpenGlobalSearch}
-								aria-label={indexedSearchLabel}
+								aria-label={globalSearchLabel}
 								className={styles.listControlsStatusCompactAction}
 							>
-								Indexed Search
+								{globalSearchLabel}
 							</Button>
 						) : null}
 					</div>
@@ -147,10 +147,10 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 						type="info"
 						showIcon
 						title={`Search paused at ${props.searchAutoScanCap.toLocaleString()} items`}
-						description="Use Indexed Search to scan the full bucket. Create an object index when prompted."
+						description="Use Search bucket to scan the full bucket. Build the search index when prompted."
 						action={
 							<Button size="small" type="primary" disabled={!props.canInteract} onClick={props.onOpenGlobalSearch}>
-								Indexed Search
+								{globalSearchLabel}
 							</Button>
 						}
 						className={styles.listControlsStatusAlert}
@@ -308,7 +308,7 @@ export function ObjectsListControls(props: ObjectsListControlsProps) {
 								{props.visiblePrefixCount} folders, {props.visibleFileCount} files
 							</span>
 							<span className={`${styles.listControlsHintText} ${styles.listControlsSecondaryText}`}>
-								Search here, or use Indexed Search across the whole bucket.
+								Search here, or use Search bucket for the whole bucket.
 							</span>
 						</div>
 					) : null}

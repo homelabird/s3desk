@@ -119,10 +119,10 @@ test.describe('dark theme accessibility scans', () => {
 		await expectNoA11yViolations(page, page.getByTestId('app-header'))
 		await expectNoA11yViolations(page, page.getByRole('navigation', { name: 'Primary' }))
 
-		await page.getByRole('button', { name: 'Indexed Search' }).click()
-		const drawer = dialogByName(page, 'Indexed Search')
+		await page.getByRole('button', { name: 'Search bucket' }).click()
+		const drawer = dialogByName(page, 'Search bucket')
 		await expect(drawer).toBeVisible()
-		await drawer.getByPlaceholder('Search query (substring)').fill('preview')
+		await drawer.getByPlaceholder('Search files or folders').fill('preview')
 		await expect(drawer.getByText('preview.png')).toBeVisible()
 
 		await expectNoA11yViolations(page, drawer)

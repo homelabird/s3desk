@@ -218,10 +218,10 @@ export async function openObjectsGlobalSearchDialog(
 		triggerButtonName?: string | RegExp
 	} = {},
 ): Promise<Locator> {
-	const dialogName = 'Indexed Search'
+	const dialogName = 'Search bucket'
 	const dialogLocator = dialogByName(page, dialogName)
 	return ensureDialogOpen(page, dialogName, async () => {
-		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Indexed Search/, dialogOpenWaitMs, {
+		const button = await findVisibleEnabledButton(page, options.triggerButtonName ?? /Search bucket/, dialogOpenWaitMs, {
 			stopWhen: () => dialogLocator.isVisible(),
 		})
 		if (await dialogLocator.isVisible().catch(() => false)) {

@@ -509,10 +509,10 @@ test.describe('overlay accessibility scans', () => {
 		})
 		await expect(objectsListRow(page, 'alpha.png')).toBeVisible()
 
-		await page.getByRole('button', { name: 'Indexed Search' }).click()
-		const drawer = dialogByName(page, 'Indexed Search')
+		await page.getByRole('button', { name: 'Search bucket' }).click()
+		const drawer = dialogByName(page, 'Search bucket')
 		await expect(drawer).toBeVisible()
-		await drawer.getByPlaceholder('Search query (substring)').fill('alpha')
+		await drawer.getByPlaceholder('Search files or folders').fill('alpha')
 		await expect(drawer.getByText('alpha.png')).toBeVisible()
 
 		await expectNoA11yViolations(page, drawer)
@@ -541,10 +541,10 @@ test.describe('overlay accessibility scans', () => {
 	test('mobile Objects global search drawer has no axe violations', async ({ page }) => {
 		await setupObjectsMobileA11yPage(page)
 
-		await page.getByRole('button', { name: /Indexed Search/ }).click()
-		const drawer = dialogByName(page, 'Indexed Search')
+		await page.getByRole('button', { name: /Search bucket/ }).click()
+		const drawer = dialogByName(page, 'Search bucket')
 		await expect(drawer).toBeVisible()
-		await drawer.getByPlaceholder('Search query (substring)').fill('preview')
+		await drawer.getByPlaceholder('Search files or folders').fill('preview')
 		await expect(drawer.getByText('preview.png')).toBeVisible()
 
 		await expectNoA11yViolations(page, drawer)

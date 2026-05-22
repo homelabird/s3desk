@@ -44,7 +44,7 @@ export function ObjectsGlobalSearchIndexPanel({
 				aria-expanded={open}
 				data-testid="objects-global-search-index-toggle"
 			>
-				<span className={styles.globalSearchSectionTitle}>Index management</span>
+				<span className={styles.globalSearchSectionTitle}>Search index setup</span>
 				<DownOutlined className={`${styles.globalSearchIndexIcon} ${open ? styles.globalSearchIndexIconOpen : ''}`} />
 			</button>
 			{open ? (
@@ -56,8 +56,8 @@ export function ObjectsGlobalSearchIndexPanel({
 						<Input
 							size={buttonSize}
 							allowClear
-							placeholder="Index prefix (optional)…"
-							aria-label="Index prefix"
+							placeholder="Index folder path (optional)…"
+							aria-label="Index folder path"
 							className={inputFieldClass}
 							value={indexPrefix}
 							onChange={(event) => onIndexPrefixChange(event.target.value)}
@@ -70,9 +70,9 @@ export function ObjectsGlobalSearchIndexPanel({
 								type="checkbox"
 								checked={indexFullReindex}
 								onChange={(event) => onIndexFullReindexChange(event.currentTarget.checked)}
-								aria-label="Full reindex"
+								aria-label="Rebuild from scratch"
 							/>
-							<span>Full reindex</span>
+							<span>Rebuild from scratch</span>
 						</label>
 						<Button
 							type="primary"
@@ -81,7 +81,7 @@ export function ObjectsGlobalSearchIndexPanel({
 							onClick={onCreateIndexJob}
 							loading={isCreatingIndexJob}
 						>
-							Create index job
+							Build search index
 						</Button>
 					</div>
 				</div>

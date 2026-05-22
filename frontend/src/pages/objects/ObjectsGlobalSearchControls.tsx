@@ -92,8 +92,8 @@ export function ObjectsGlobalSearchControls({
 						size={buttonSize}
 						allowClear
 						prefix={<SearchOutlined />}
-						placeholder="Search query (substring)…"
-						aria-label="Search query"
+						placeholder="Search files or folders…"
+						aria-label="Search files or folders"
 						className={inputFieldClass}
 						value={queryDraft}
 						onChange={(event) => onQueryDraftChange(event.target.value)}
@@ -101,8 +101,8 @@ export function ObjectsGlobalSearchControls({
 					<Input
 						size={buttonSize}
 						allowClear
-						placeholder="Prefix filter (optional)…"
-						aria-label="Prefix filter"
+						placeholder="Folder path (optional)…"
+						aria-label="Folder path filter"
 						className={prefixFieldClass}
 						value={prefixFilter}
 						onChange={(event) => onPrefixFilterChange(event.target.value)}
@@ -141,7 +141,7 @@ export function ObjectsGlobalSearchControls({
 					<Input
 						size={buttonSize}
 						allowClear
-						placeholder="Ext (e.g. log)…"
+						placeholder="File type (e.g. log)…"
 						aria-label="Extension filter"
 						className={extFieldClass}
 						value={extFilter}
