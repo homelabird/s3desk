@@ -36,11 +36,11 @@ export function useObjectsTopMenus({
 				actionToMenuItem(globalActionMap.get('go_to_path'), undefined, isAdvanced),
 				actionToMenuItem(globalActionMap.get('copy_location'), undefined, isAdvanced),
 				actionToMenuItem(globalActionMap.get('toggle_location_bookmark'), undefined, isAdvanced),
+				actionToMenuItem(globalActionMap.get('new_folder'), undefined, isAdvanced),
 				...(isAdvanced
 					? [
 							actionToMenuItem(globalActionMap.get('upload_files'), undefined, isAdvanced),
 							actionToMenuItem(globalActionMap.get('upload_folder'), undefined, isAdvanced),
-							actionToMenuItem(globalActionMap.get('new_folder'), undefined, isAdvanced),
 						]
 					: []),
 				...(bucket && prefix.trim() && !isAdvanced

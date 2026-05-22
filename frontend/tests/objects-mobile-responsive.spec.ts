@@ -65,7 +65,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByRole('button', { name: 'Go forward' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Go up' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Upload' })).toBeEnabled()
-		await expect(page.getByRole('button', { name: 'New folder' })).toBeEnabled()
+		await expect(page.getByRole('button', { name: 'New folder' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Folders' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Copy location' })).toHaveCount(0)
 		await expect(page.getByRole('button', { name: 'Go to path' })).toHaveCount(0)
@@ -76,6 +76,7 @@ test.describe('@mobile-responsive Objects mobile workflows', () => {
 		await expect(page.getByRole('menuitem', { name: /Go to path/ })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: 'Copy location' })).toBeVisible()
 		await expect(page.getByRole('menuitem', { name: 'Bookmark this location' })).toBeVisible()
+		await expect(page.getByRole('menuitem', { name: 'New folder…' })).toBeVisible()
 		await page.keyboard.press('Escape')
 	})
 

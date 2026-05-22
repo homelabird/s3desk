@@ -52,6 +52,12 @@ async function expectMinTouchTarget(locator: Locator, minSize = 44) {
 	expect(rect.width).toBeGreaterThanOrEqual(minSize)
 }
 
+async function openNewFolderFromObjectTools(page: Page) {
+	const objectToolsButton = page.getByRole('button', { name: 'Object tools' })
+	await objectToolsButton.click()
+	await page.getByRole('menuitem', { name: 'New folder…' }).click()
+}
+
 async function stubCoreApi(page: Page, overrides?: StubCoreApiOptions) {
 	const seed = { ...defaultStorage, ...overrides }
 	const now = '2024-01-01T00:00:00Z'
@@ -202,7 +208,7 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await seedStorage(page)
 
 		await openObjectsMobilePage(page)
-		await page.getByRole('button', { name: 'New folder' }).click()
+		await openNewFolderFromObjectTools(page)
 
 		const newFolderDialog = page.getByRole('dialog')
 		await expect(newFolderDialog).toBeVisible()
@@ -221,7 +227,7 @@ test.describe('@mobile-responsive mobile smoke', () => {
 		await closeJobsMobileFilters(jobsFiltersSheet)
 		await expect(page.getByTestId('jobs-mobile-filters-trigger')).toContainText('Filters active')
 
-		await page.getByRole('button', { name: 'Upload from device' }).click()
+		await page.getByRole('button', { name: 'Upload from device' }).first().click()
 		const uploadSheet = page.getByRole('dialog')
 		await expect(page.getByRole('heading', { name: 'Upload from device' })).toBeVisible()
 		await uploadSheet.getByLabel('Close', { exact: true }).click()

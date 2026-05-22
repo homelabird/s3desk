@@ -145,6 +145,7 @@ describe('ObjectsToolbar', () => {
 		)
 
 		expect(screen.queryByRole('button', { name: 'Folders' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Object tools' })).toBeInTheDocument()
 
 		const detailsButton = screen.getByRole('button', { name: 'Details' })
@@ -160,6 +161,7 @@ describe('ObjectsToolbar', () => {
 		expect(screen.queryByRole('button', { name: 'Go forward' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Go up' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Folders' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument()
 		expect(screen.getByRole('button', { name: 'Upload' })).toBeInTheDocument()
 	})

@@ -292,7 +292,6 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 						</>
 					) : null}
 					{uploadButtonMobile}
-					{newFolderButton}
 					{showSelectionPrimaryActions ? (
 						<>
 							{renderPrimaryActionButton(props.primaryDownloadAction, {
