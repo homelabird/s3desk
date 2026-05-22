@@ -1,4 +1,3 @@
-import { InfoCircleOutlined } from '@ant-design/icons'
 import { Alert, Button } from 'antd'
 
 import type { ObjectItem } from '../../api/types'
@@ -78,38 +77,27 @@ export function ObjectsGlobalSearchDrawer(props: ObjectsGlobalSearchDrawerProps)
 				<Alert type="warning" showIcon title={selectBucketFirstHint()} />
 			) : (
 				<div className={styles.globalSearchContent} data-testid="objects-global-search-content">
-					<section className={styles.globalSearchSection}>
-						<Alert
-							type="info"
-							showIcon
-							icon={<InfoCircleOutlined />}
-							title="Search across this bucket"
-							description="Find objects outside the current folder, then narrow by folder, file type, size, or modified date. If search has not been prepared yet, build the index below."
-							className={styles.globalSearchIntro}
-						/>
-					</section>
-
-						<ObjectsGlobalSearchControls
-							extFilter={props.extFilter}
-							isMd={props.isMd}
-							isRefreshing={props.isRefreshing}
-							limit={props.limit}
-							maxSizeBytes={props.maxSizeBytes}
-							minSizeBytes={props.minSizeBytes}
-							modifiedAfterMs={props.modifiedAfterMs}
-							modifiedBeforeMs={props.modifiedBeforeMs}
-							onExtFilterChange={props.onExtFilterChange}
-							onLimitChange={props.onLimitChange}
-							onMaxSizeBytesChange={props.onMaxSizeBytesChange}
-							onMinSizeBytesChange={props.onMinSizeBytesChange}
-							onModifiedRangeChange={props.onModifiedRangeChange}
-							onPrefixFilterChange={props.onPrefixFilterChange}
-							onQueryDraftChange={props.onQueryDraftChange}
-							onRefresh={props.onRefresh}
-							onReset={props.onReset}
-							prefixFilter={props.prefixFilter}
-							queryDraft={props.queryDraft}
-						/>
+					<ObjectsGlobalSearchControls
+						extFilter={props.extFilter}
+						isMd={props.isMd}
+						isRefreshing={props.isRefreshing}
+						limit={props.limit}
+						maxSizeBytes={props.maxSizeBytes}
+						minSizeBytes={props.minSizeBytes}
+						modifiedAfterMs={props.modifiedAfterMs}
+						modifiedBeforeMs={props.modifiedBeforeMs}
+						onExtFilterChange={props.onExtFilterChange}
+						onLimitChange={props.onLimitChange}
+						onMaxSizeBytesChange={props.onMaxSizeBytesChange}
+						onMinSizeBytesChange={props.onMinSizeBytesChange}
+						onModifiedRangeChange={props.onModifiedRangeChange}
+						onPrefixFilterChange={props.onPrefixFilterChange}
+						onQueryDraftChange={props.onQueryDraftChange}
+						onRefresh={props.onRefresh}
+						onReset={props.onReset}
+						prefixFilter={props.prefixFilter}
+						queryDraft={props.queryDraft}
+					/>
 
 					{props.isError ? (
 						props.isNotIndexed ? (

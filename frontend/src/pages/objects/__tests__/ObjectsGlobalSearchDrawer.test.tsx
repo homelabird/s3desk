@@ -76,6 +76,8 @@ describe('ObjectsGlobalSearchDrawer', () => {
 			const { rerender } = render(<ObjectsGlobalSearchDrawer {...buildProps()} />)
 			expect(screen.getByTestId('objects-global-search-sheet')).toBeInTheDocument()
 			expect(screen.getByTestId('objects-global-search-content')).toBeInTheDocument()
+			expect(screen.queryByText('Search across this bucket')).not.toBeInTheDocument()
+			expect(screen.queryByText(/Find objects outside the current folder/)).not.toBeInTheDocument()
 			expect(screen.getByTestId('objects-global-search-index-card')).toBeInTheDocument()
 			expect(screen.getByTestId('objects-global-search-index-toggle')).toBeInTheDocument()
 

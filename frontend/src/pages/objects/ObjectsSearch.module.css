@@ -30,10 +30,6 @@
   gap: var(--objects-search-section-gap);
 }
 
-.globalSearchIntro {
-  margin-bottom: 0;
-}
-
 .globalSearchSectionTitle {
   font-size: 14px;
   font-weight: 700;
@@ -81,6 +77,17 @@
 
 .globalSearchCompactButton {
   min-height: 32px;
+}
+
+.globalSearchCompactButton:global(.ant-btn-default) {
+  color: var(--s3d-color-text);
+}
+
+.globalSearchCompactButton:global(.ant-btn-default:not(:disabled):not(.ant-btn-disabled):hover),
+.globalSearchCompactButton:global(.ant-btn-default:not(:disabled):not(.ant-btn-disabled):focus-visible),
+.globalSearchCompactButton:global(.ant-btn-default:not(:disabled):not(.ant-btn-disabled):active) {
+  color: var(--s3d-color-text);
+  border-color: var(--s3d-color-focus);
 }
 
 .globalSearchInputMd {
