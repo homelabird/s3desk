@@ -24,10 +24,10 @@
 .contextMenuPanel {
   min-width: 220px;
   max-width: min(360px, var(--popover-available-width, calc(100vw - 32px)));
-  border: 1px solid var(--s3d-color-border);
+  border: 1px solid var(--s3d-color-border-strong);
   border-radius: 14px;
-  background: var(--s3d-color-bg);
-  box-shadow: var(--s3d-shadow-md);
+  background: var(--s3d-color-bg-elevated);
+  box-shadow: var(--s3d-shadow-lg);
   padding: 8px;
 }
 
@@ -82,7 +82,7 @@
 .toolbarMenuItem:hover,
 .toolbarMenuItem:focus-visible {
   border-color: var(--s3d-color-focus);
-  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, transparent);
+  background: color-mix(in srgb, var(--s3d-color-primary-bg) 62%, var(--s3d-color-bg-card));
   box-shadow: var(--s3d-shadow-sm);
   outline: none;
 }

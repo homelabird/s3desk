@@ -1,14 +1,30 @@
 .header {
+	position: relative;
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: 20px;
 	flex-wrap: wrap;
 	padding: 20px 24px;
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
-	background: var(--s3d-color-bg-card);
-	box-shadow: none;
+	border: 1px solid var(--s3d-color-border-strong);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-gradient-page-header);
+	box-shadow: var(--s3d-shadow-sm);
+	overflow: hidden;
+}
+
+.header::before {
+	content: '';
+	position: absolute;
+	inset: 0 0 auto;
+	height: 4px;
+	background: linear-gradient(90deg, var(--s3d-color-primary), var(--s3d-color-warning-border));
+}
+
+.copy,
+.actions {
+	position: relative;
+	z-index: 1;
 }
 
 .copy {
@@ -17,7 +33,13 @@
 }
 
 .eyebrow {
+	display: inline-flex;
+	width: fit-content;
 	margin-bottom: 10px;
+	padding: 3px 8px;
+	border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 22%, var(--s3d-color-border));
+	border-radius: 999px;
+	background: var(--s3d-color-primary-bg);
 	font-size: 11px;
 	font-weight: 800;
 	letter-spacing: 0.14em;

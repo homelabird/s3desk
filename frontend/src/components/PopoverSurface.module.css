@@ -17,10 +17,10 @@
 			calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))
 		)
 	);
-	border: 1px solid var(--s3d-color-border);
+	border: 1px solid var(--s3d-color-border-strong);
 	border-radius: 14px;
-	background: var(--s3d-color-bg);
-	box-shadow: var(--s3d-shadow-md);
+	background: var(--s3d-color-bg-elevated);
+	box-shadow: var(--s3d-shadow-lg);
 	padding: 8px;
 	pointer-events: auto;
 }

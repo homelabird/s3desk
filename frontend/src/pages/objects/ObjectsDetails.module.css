@@ -14,8 +14,8 @@
 }
 
 .previewFrame {
-  border: 1px solid var(--s3d-color-border);
-  border-radius: 8px;
+  border: 1px solid var(--s3d-color-border-strong);
+  border-radius: var(--s3d-radius-lg);
   padding: 8px;
   background: var(--s3d-color-bg-code);
 }
@@ -141,8 +141,8 @@
 }
 
 .detailsCodePreview {
-  border: 1px solid var(--s3d-color-border);
-  border-radius: 8px;
+  border: 1px solid var(--s3d-color-border-strong);
+  border-radius: var(--s3d-radius-lg);
   padding: 8px;
   background: var(--s3d-color-bg-code);
   max-height: 360px;

@@ -21,7 +21,7 @@
 .panel {
 	display: flex;
 	flex-direction: column;
-	background: var(--s3d-color-bg);
+	background: var(--s3d-gradient-surface);
 	box-shadow: var(--s3d-shadow-lg);
 	min-width: 0;
 }
@@ -55,6 +55,7 @@
 	gap: 10px;
 	padding: 18px 20px 14px;
 	border-bottom: 1px solid var(--s3d-color-border);
+	background: var(--s3d-gradient-section);
 	min-width: 0;
 }
 
@@ -130,6 +131,7 @@
 	flex-wrap: wrap;
 	padding: 14px 20px calc(18px + env(safe-area-inset-bottom));
 	border-top: 1px solid var(--s3d-color-border);
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, transparent);
 }
 
 .panelBottom .body {

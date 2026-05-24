@@ -26,6 +26,10 @@
 	user-select: none;
 }
 
+.trigger:hover {
+	color: var(--s3d-color-primary);
+}
+
 .trigger:focus-visible {
 	outline: 2px solid var(--s3d-color-focus);
 	outline-offset: 2px;
@@ -40,6 +44,7 @@
 	height: 24px;
 	border: 1px solid var(--s3d-color-tooltip-border);
 	border-radius: 50%;
+	background: var(--s3d-color-bg-elevated);
 	box-sizing: border-box;
 	font-size: 10px;
 	font-weight: 700;

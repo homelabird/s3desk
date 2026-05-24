@@ -107,3 +107,32 @@
 	height: 48px;
 	border-radius: 16px;
 }
+
+@media (max-width: 480px) {
+	.hero {
+		width: 100%;
+		justify-content: center;
+		gap: 12px;
+	}
+
+	.hero .mediaWrap {
+		width: 64px;
+		height: 64px;
+		border-radius: 20px;
+	}
+
+	.hero .title {
+		font-size: 2.35rem;
+		line-height: 1;
+	}
+
+	.hero .subtitle {
+		letter-spacing: 0.1em;
+	}
+}
+
+@media (max-width: 360px) {
+	.hero .title {
+		font-size: 2.05rem;
+	}
+}

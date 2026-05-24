@@ -15,7 +15,7 @@
   flex: 1 1 auto;
   font-size: 11px;
   line-height: 1.2;
-  opacity: 0.82;
+  color: var(--s3d-color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -73,7 +73,7 @@
   flex-direction: column;
   gap: 1px;
   border: 1px solid transparent;
-  background: transparent;
+  background: color-mix(in srgb, var(--s3d-color-bg-card) 82%, transparent);
   border-radius: 20px;
   padding: 6px 10px;
   text-align: left;
@@ -82,7 +82,8 @@
 }
 
 .favoritesItem:hover {
-  background: var(--s3d-color-bg-tertiary);
+  background: color-mix(in srgb, var(--s3d-color-primary-bg) 48%, var(--s3d-color-bg-card));
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 24%, var(--s3d-color-border));
 }
 
 .favoritesItem:disabled {

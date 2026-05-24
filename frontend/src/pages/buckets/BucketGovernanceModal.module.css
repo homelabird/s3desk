@@ -20,10 +20,10 @@
 
 .summaryCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 18px;
-	background: var(--s3d-color-bg-card);
-	box-shadow: none;
+	background: var(--s3d-gradient-surface);
+	box-shadow: var(--s3d-shadow-sm);
 }
 
 .decisionHeader {
@@ -32,9 +32,9 @@
 	gap: 14px;
 	padding: 16px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
-	background: var(--s3d-color-bg);
-	box-shadow: none;
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-gradient-page-header);
+	box-shadow: var(--s3d-shadow-sm);
 }
 
 .decisionHeaderTop {
@@ -101,17 +101,20 @@
 	min-width: 0;
 	padding: 12px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
-	background: var(--s3d-color-bg-secondary);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-color-bg-card);
 }
 
 .decisionRoutePrimary {
 	border-color: color-mix(in srgb, var(--s3d-color-primary) 45%, var(--s3d-color-border));
-	background: color-mix(in srgb, var(--s3d-color-primary) 5%, var(--s3d-color-bg));
+	background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
+	box-shadow: inset 4px 0 0 var(--s3d-color-primary);
 }
 
 .decisionRouteAdvanced {
-	background: color-mix(in srgb, var(--s3d-color-warning) 5%, var(--s3d-color-bg));
+	border-color: color-mix(in srgb, var(--s3d-color-warning-border) 42%, var(--s3d-color-border));
+	background: linear-gradient(90deg, var(--s3d-color-warning-bg), var(--s3d-color-bg-card));
+	box-shadow: inset 4px 0 0 var(--s3d-color-warning-border);
 }
 
 .decisionRouteList {
@@ -151,10 +154,10 @@
 
 .sectionCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 16px;
-	background: var(--s3d-color-bg);
-	box-shadow: none;
+	background: var(--s3d-gradient-surface);
+	box-shadow: var(--s3d-shadow-sm);
 }
 
 .sectionWide {
@@ -197,9 +200,9 @@
 
 .editorCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 12px;
-	background: color-mix(in srgb, var(--s3d-color-primary) 3%, var(--s3d-color-bg));
+	background: color-mix(in srgb, var(--s3d-color-primary-bg) 38%, var(--s3d-color-bg-card));
 }
 
 .editorCardHeader {
@@ -228,8 +231,8 @@
 	gap: 8px;
 	padding: 8px 10px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
-	background: var(--s3d-color-bg);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-color-bg-card);
 }
 
 .toggleList {
@@ -259,9 +262,9 @@
 
 .advancedDisclosure {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 12px 14px;
-	background: color-mix(in srgb, var(--s3d-color-primary) 3%, var(--s3d-color-bg));
+	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, var(--s3d-color-bg-card));
 }
 
 .advancedDisclosureSummary {

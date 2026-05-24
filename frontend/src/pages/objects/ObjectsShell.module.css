@@ -138,7 +138,7 @@
   flex-direction: column;
   width: min(100%, 100vw);
   max-height: calc(100dvh - 32px);
-  background: var(--s3d-color-bg);
+  background: var(--s3d-gradient-surface);
   color: inherit;
   box-shadow: var(--s3d-shadow-md);
   overflow: hidden;
@@ -343,7 +343,7 @@
     var(--objects-pane-header-block-padding, 8px)
     var(--objects-pane-header-inline-padding, 12px);
   border-bottom: 1px solid var(--s3d-color-border);
-  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 80%, transparent);
+  background: var(--s3d-gradient-section);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -391,7 +391,8 @@
 }
 
 .inlineAlertInfo {
-  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, white 22%);
+  background: color-mix(in srgb, var(--s3d-color-info-bg) 82%, var(--s3d-color-bg-card) 18%);
+  border-color: var(--s3d-color-info-border);
 }
 
 .inlineAlertWarning {
@@ -420,7 +421,7 @@
 .detailsCollapsed {
   align-items: center;
   justify-content: center;
-  background: var(--s3d-color-bg-secondary);
+  background: var(--s3d-gradient-section);
 }
 
 .detailsCollapsedButton {

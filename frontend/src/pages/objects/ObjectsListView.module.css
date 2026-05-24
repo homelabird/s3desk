@@ -18,7 +18,7 @@
 }
 
 .dropZoneCard {
-  border: 1px solid var(--s3d-color-border);
+  border: 1px solid var(--s3d-color-border-strong);
   border-radius: var(--s3d-radius-sm);
   overflow: hidden;
   position: relative;
@@ -27,14 +27,15 @@
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
+  background: var(--s3d-gradient-surface);
   box-shadow: var(--s3d-shadow-sm);
   transition: box-shadow var(--s3d-transition-normal);
 }
 
 .selectionBar {
   padding: 8px 12px;
-  border-bottom: 1px solid var(--s3d-color-border);
-  background: var(--s3d-color-primary-light);
+  border-bottom: 1px solid color-mix(in srgb, var(--s3d-color-primary) 28%, var(--s3d-color-border));
+  background: linear-gradient(90deg, var(--s3d-color-primary-bg), color-mix(in srgb, var(--s3d-color-primary-light) 78%, var(--s3d-color-bg-card)));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -80,7 +81,7 @@
 .listHeaderRow {
   padding: 8px 12px;
   border-bottom: 1px solid var(--s3d-color-border);
-  background: var(--s3d-color-bg-secondary);
+  background: var(--s3d-gradient-section);
   min-width: 0;
   overflow: hidden;
 }
@@ -143,17 +144,22 @@
   width: 100%;
   min-height: var(--objects-row-min-height, auto);
   padding: 6px 12px;
-  border-bottom: 1px solid var(--s3d-color-border);
+  border-bottom: 1px solid var(--s3d-color-border-soft);
   transform: translateY(var(--objects-row-offset, 0px));
   transition: background var(--s3d-transition-fast);
 }
 
 .listRowSelected {
-  background: var(--s3d-color-primary-light);
+  background: linear-gradient(90deg, var(--s3d-color-primary-bg), color-mix(in srgb, var(--s3d-color-primary-light) 56%, transparent));
+  box-shadow: inset 3px 0 0 var(--s3d-color-primary);
 }
 
 .listRowInteractive {
   min-width: 0;
+}
+
+.listRowInteractive:hover {
+  background: color-mix(in srgb, var(--s3d-color-primary-bg) 54%, transparent);
 }
 
 .listRowDropTarget {

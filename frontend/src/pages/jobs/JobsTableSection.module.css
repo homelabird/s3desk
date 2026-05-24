@@ -41,6 +41,7 @@
 	gap: 16px;
 	padding: 18px;
 	border-top: 1px solid var(--s3d-color-border-soft);
+	background: color-mix(in srgb, var(--s3d-color-bg-card) 92%, transparent);
 }
 
 .mobileCard:first-child {
@@ -50,6 +51,10 @@
 .mobileCardFailed {
 	border-left: 4px solid var(--s3d-color-error);
 	background: color-mix(in srgb, var(--s3d-color-error-bg) 55%, var(--s3d-color-bg));
+}
+
+.mobileCard:hover {
+	background: color-mix(in srgb, var(--s3d-color-primary-bg) 42%, var(--s3d-color-bg-card));
 }
 
 .mobileCardTop {

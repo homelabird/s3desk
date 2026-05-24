@@ -1,5 +1,8 @@
 .root {
-	width: min(100%, 520px);
+	width: 100%;
+	max-width: 520px;
+	min-width: 0;
+	margin-inline: auto;
 }
 
 .brand {
@@ -11,10 +14,10 @@
 	flex-direction: column;
 	gap: 12px;
 	padding: 18px;
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
-	background: var(--s3d-color-bg-elevated);
-	box-shadow: none;
+	border: 1px solid var(--s3d-color-border-strong);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-gradient-surface);
+	box-shadow: var(--s3d-shadow-md);
 }
 
 .form {

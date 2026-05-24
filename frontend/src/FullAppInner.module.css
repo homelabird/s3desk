@@ -44,15 +44,16 @@
 
 .navLink:hover,
 .navLink:focus-visible {
-	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, transparent);
-	border-color: var(--s3d-color-focus);
+	background: var(--s3d-sidebar-hover);
+	border-color: color-mix(in srgb, var(--s3d-color-focus) 42%, var(--s3d-color-border));
 	box-shadow: var(--s3d-shadow-sm);
 	outline: none;
 }
 
 .navLinkActive {
-	background: color-mix(in srgb, var(--s3d-color-primary-bg) 84%, transparent);
-	border-color: color-mix(in srgb, var(--s3d-color-primary) 26%, var(--s3d-color-border));
+	background: var(--s3d-sidebar-active);
+	border-color: color-mix(in srgb, var(--s3d-color-primary) 46%, var(--s3d-color-border));
+	color: var(--s3d-sidebar-active-text);
 	font-weight: 700;
 }
 
@@ -101,6 +102,7 @@
 	min-height: 100dvh;
 	height: 100dvh;
 	overflow: hidden;
+	background: var(--s3d-gradient-page);
 }
 
 .appShell {
@@ -112,6 +114,7 @@
 
 .desktopSider {
 	background: var(--s3d-gradient-sider);
+	border-right: 1px solid color-mix(in srgb, var(--s3d-color-border-strong) 42%, transparent);
 }
 
 .desktopSider :global(.ant-layout-sider-children) {
@@ -143,13 +146,14 @@
 
 .header {
 	background: var(--s3d-color-bg-glass);
-	border-bottom: 1px solid var(--s3d-color-border);
+	border-bottom: 1px solid var(--s3d-color-border-strong);
 	min-height: 56px;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	gap: 10px;
 	backdrop-filter: blur(12px);
+	box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 
 .headerCompact {
@@ -267,7 +271,7 @@
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	background: var(--s3d-color-bg-page);
+	background: var(--s3d-gradient-page);
 }
 
 .contentPadMd {

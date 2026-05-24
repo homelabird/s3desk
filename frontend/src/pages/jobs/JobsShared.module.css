@@ -51,8 +51,9 @@
 	flex-wrap: wrap;
 	padding: 12px;
 	border: 1px solid var(--s3d-color-border);
-	border-radius: 12px;
-	background: var(--s3d-color-bg-secondary);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-gradient-section);
+	box-shadow: var(--s3d-shadow-sm);
 }
 
 .checkboxField {
@@ -69,8 +70,9 @@
 }
 
 .uploadTableShell {
-	border: 1px solid var(--jobs-upload-table-border, var(--s3d-color-border));
-	border-radius: var(--jobs-upload-table-radius, 12px);
+	border: 1px solid var(--jobs-upload-table-border, var(--s3d-color-border-strong));
+	border-radius: var(--jobs-upload-table-radius, var(--s3d-radius-lg));
+	background: var(--s3d-color-bg-card);
 	overflow-x: auto;
 	overflow-y: hidden;
 	-webkit-overflow-scrolling: touch;
@@ -95,7 +97,7 @@
 
 .uploadTableHeadCell {
 	text-align: left;
-	background: var(--jobs-upload-table-bg, var(--s3d-color-bg-secondary));
+	background: var(--jobs-upload-table-bg, var(--s3d-gradient-section));
 	font-weight: 600;
 }
 

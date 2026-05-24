@@ -7,6 +7,7 @@
 	display: block;
 	font-weight: 700;
 	margin-bottom: 6px;
+	color: var(--s3d-color-text);
 }
 
 .requiredMark {
@@ -17,7 +18,7 @@
 .extra {
 	margin-top: 6px;
 	font-size: 12px;
-	opacity: 0.75;
+	color: var(--s3d-color-text-secondary);
 	line-height: 1.35;
 }
 
@@ -26,4 +27,5 @@
 	font-size: 12px;
 	line-height: 1.35;
 	color: var(--s3d-color-error-dark);
+	font-weight: 600;
 }

@@ -36,6 +36,27 @@ test.describe('Dark theme visual regression @visual', () => {
 		await drawer.getByPlaceholder('Search files or folders').fill('preview')
 		await expect(drawer.getByText('preview.png')).toBeVisible()
 		await expect(drawer.getByTestId('objects-global-search-actions')).toBeVisible()
+		await expect(drawer.getByText('reports/mobile/a-very-long-object-key').first()).toBeVisible()
+
+		const longKeyMetrics = await drawer.getByTestId('objects-global-search-table-wrap')
+			.locator('tbody tr', { hasText: 'reports/mobile/a-very-long-object-key' })
+			.first()
+			.evaluate((row) => {
+				const cells = row.querySelectorAll('td')
+				const keyCell = cells.item(0)
+				const nextCell = cells.item(1)
+				const keyText = keyCell.querySelector('code')
+				const keyCellBox = keyCell.getBoundingClientRect()
+				const nextCellBox = nextCell.getBoundingClientRect()
+				const keyTextBox = keyText?.getBoundingClientRect()
+				return {
+					keyCellRight: keyCellBox.right,
+					keyTextRight: keyTextBox?.right ?? 0,
+					nextCellLeft: nextCellBox.left,
+				}
+			})
+		expect(longKeyMetrics.keyTextRight).toBeLessThanOrEqual(longKeyMetrics.keyCellRight + 1)
+		expect(longKeyMetrics.keyCellRight).toBeLessThanOrEqual(longKeyMetrics.nextCellLeft + 1)
 
 		await expect(drawer).toHaveScreenshot('objects-dark-global-search-drawer.png', visualScreenshotOptions)
 	})

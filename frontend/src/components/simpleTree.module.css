@@ -28,6 +28,7 @@
 
 .rowSelected {
   background: var(--s3d-sidebar-active, var(--s3d-color-primary-bg));
+  box-shadow: inset 3px 0 0 var(--s3d-color-primary);
 }
 
 .row:focus-visible {
@@ -115,17 +116,18 @@
   gap: 2px;
   padding: 6px 8px;
   border: 1px solid var(--s3d-color-border);
-  border-radius: 10px;
+  border-radius: var(--s3d-radius-lg);
   min-width: 0;
 }
 
 .statusBlockMuted {
-  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 84%, transparent);
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 84%, var(--s3d-color-bg-card));
 }
 
 .statusBlockError {
   background: color-mix(in srgb, var(--s3d-color-danger-bg) 80%, var(--s3d-color-bg-card) 20%);
   border-color: color-mix(in srgb, var(--s3d-color-danger) 20%, var(--s3d-color-border));
+  box-shadow: inset 3px 0 0 var(--s3d-color-danger);
 }
 
 .statusTitle {

@@ -44,7 +44,7 @@
 .item:hover,
 .item:focus-visible {
 	border-color: var(--s3d-color-focus);
-	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 72%, transparent);
+	background: color-mix(in srgb, var(--s3d-color-primary-bg) 62%, var(--s3d-color-bg-card));
 	box-shadow: var(--s3d-shadow-sm);
 	outline: none;
 }

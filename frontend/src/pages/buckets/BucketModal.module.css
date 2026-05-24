@@ -6,9 +6,10 @@
 
 .secureDefaultsCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 18px;
-	background: var(--s3d-color-bg-secondary);
+	background: var(--s3d-gradient-section);
+	box-shadow: var(--s3d-shadow-sm);
 }
 
 .secureDefaultsHeader {
@@ -33,10 +34,10 @@
 
 .settingCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 14px;
-	background: var(--s3d-color-bg);
-	box-shadow: none;
+	background: var(--s3d-color-bg-card);
+	box-shadow: inset 3px 0 0 color-mix(in srgb, var(--s3d-color-primary) 38%, var(--s3d-color-border));
 }
 
 .settingHeader {
@@ -67,9 +68,10 @@
 
 .structuredCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 14px;
-	background: var(--s3d-color-bg-secondary);
+	background: var(--s3d-gradient-surface);
+	box-shadow: var(--s3d-shadow-sm);
 }
 
 .structuredCardHeader {

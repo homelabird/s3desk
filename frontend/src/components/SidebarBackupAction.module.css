@@ -5,7 +5,7 @@
 .trigger {
 	width: 100%;
 	border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 22%, transparent);
-	border-radius: 8px;
+	border-radius: var(--s3d-radius-lg);
 	background:
 		linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-bg) 92%, transparent), color-mix(in srgb, var(--s3d-color-bg-secondary) 78%, transparent));
 	color: var(--s3d-sidebar-text);
@@ -31,7 +31,7 @@
 }
 
 .triggerSurface {
-	background: var(--s3d-color-bg-secondary);
+	background: var(--s3d-gradient-section);
 	color: var(--s3d-color-text);
 }
 
@@ -93,9 +93,10 @@
 	flex-direction: column;
 	gap: 8px;
 	padding: 14px;
-	border-radius: 16px;
-	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 84%, transparent);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-gradient-surface);
 	border: 1px solid var(--s3d-color-border);
+	box-shadow: var(--s3d-shadow-sm);
 }
 
 .sectionHeader {
@@ -132,8 +133,8 @@
 	flex-direction: column;
 	gap: 6px;
 	padding: 10px;
-	border-radius: 12px;
-	background: color-mix(in srgb, var(--s3d-color-bg) 80%, transparent);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-color-bg-card);
 	border: 1px solid var(--s3d-color-border);
 }
 
@@ -160,8 +161,8 @@
 	flex-direction: column;
 	gap: 6px;
 	padding: 10px;
-	border-radius: 12px;
-	background: color-mix(in srgb, var(--s3d-color-bg) 86%, transparent);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-color-bg-card);
 	border: 1px solid var(--s3d-color-border);
 }
 

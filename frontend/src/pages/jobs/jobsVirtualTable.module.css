@@ -18,7 +18,7 @@
 	top: 0;
 	z-index: 3;
 	background: var(--s3d-gradient-section);
-	border-bottom: 1px solid var(--jvt-border);
+	border-bottom: 1px solid var(--s3d-color-border);
 	text-align: left;
 	padding: 14px 18px;
 	font-size: 12px;
@@ -30,7 +30,7 @@
 
 .cell {
 	padding: 14px 18px;
-	border-bottom: 1px solid var(--jvt-border);
+	border-bottom: 1px solid var(--s3d-color-border-soft);
 	vertical-align: middle;
 }
 
@@ -53,7 +53,7 @@
 
 .sortIndicator {
 	font-size: 12px;
-	opacity: 0.8;
+	color: var(--s3d-color-text-secondary);
 }
 
 .visuallyHidden {
@@ -71,15 +71,15 @@
 .stickyRightHeader {
 	right: 0;
 	z-index: 4;
-	box-shadow: -1px 0 0 var(--jvt-border);
+	box-shadow: -1px 0 0 var(--s3d-color-border);
 }
 
 .stickyRightCell {
 	position: sticky;
 	right: 0;
 	z-index: 2;
-	background: var(--jvt-bg);
-	box-shadow: -1px 0 0 var(--jvt-border);
+	background: var(--s3d-color-bg-card);
+	box-shadow: -1px 0 0 var(--s3d-color-border);
 }
 
 .loadingState,

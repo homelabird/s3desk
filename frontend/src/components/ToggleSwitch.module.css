@@ -29,8 +29,8 @@
 	left: 2px;
 	width: 40px;
 	height: 26px;
-	border: 1px solid color-mix(in srgb, var(--s3d-color-border) 82%, var(--s3d-color-primary) 18%);
-	background: color-mix(in srgb, var(--s3d-color-bg-secondary) 88%, transparent);
+	border: 1px solid var(--s3d-color-border-input);
+	background: var(--s3d-color-bg-tertiary);
 	transform: translateY(-50%);
 	transition:
 		background var(--s3d-transition-fast),
@@ -49,8 +49,8 @@
 }
 
 .checked::before {
-	background: color-mix(in srgb, var(--s3d-color-primary) 88%, white 12%);
-	border-color: color-mix(in srgb, var(--s3d-color-primary) 72%, var(--s3d-color-border));
+	background: color-mix(in srgb, var(--s3d-color-primary) 82%, var(--s3d-color-bg-card));
+	border-color: var(--s3d-color-primary);
 }
 
 .checked::after {
@@ -70,6 +70,6 @@
 }
 
 .label {
-	color: var(--s3d-color-text-secondary);
+	color: var(--s3d-color-text);
 	font-size: 0.92rem;
 }

@@ -22,6 +22,10 @@
 .actions {
 	display: grid;
 	gap: 12px;
+	padding: 12px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-gradient-section);
 }
 
 .button {
@@ -36,6 +40,8 @@
 
 .secondaryButton:not(:disabled) {
 	border-color: color-mix(in srgb, var(--s3d-color-primary) 55%, var(--s3d-color-border));
+	background: var(--s3d-color-bg-card) !important;
+	box-shadow: inset 3px 0 0 color-mix(in srgb, var(--s3d-color-primary) 52%, var(--s3d-color-border));
 }
 
 .secondaryButton:not(:disabled):hover,

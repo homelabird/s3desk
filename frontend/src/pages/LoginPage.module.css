@@ -18,6 +18,7 @@
 
 @media (max-width: 768px) {
 	.shell {
+		flex-direction: column;
 		align-items: stretch;
 		justify-content: flex-start;
 		padding: 18px 16px 24px;

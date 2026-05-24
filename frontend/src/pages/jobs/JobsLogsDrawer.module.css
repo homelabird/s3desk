@@ -30,9 +30,9 @@
 .logViewport {
 	max-height: 75dvh;
 	overflow: auto;
-	border: 1px solid var(--s3d-color-border-soft);
-	border-radius: 14px;
-	background: color-mix(in srgb, var(--s3d-color-bg-elevated) 90%, transparent);
+	border: 1px solid var(--s3d-color-border-strong);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-color-bg-code);
 }
 
 .logEmpty {
@@ -68,11 +68,13 @@
 }
 
 .logRowError {
-	background: color-mix(in srgb, var(--s3d-color-error-bg) 82%, transparent);
+	background: color-mix(in srgb, var(--s3d-color-error-bg) 82%, var(--s3d-color-bg-card));
+	box-shadow: inset 3px 0 0 var(--s3d-color-error);
 }
 
 .logRowWarn {
-	background: color-mix(in srgb, var(--s3d-color-warning-bg, #fff7e6) 72%, transparent);
+	background: color-mix(in srgb, var(--s3d-color-warning-bg, #fff7e6) 72%, var(--s3d-color-bg-card));
+	box-shadow: inset 3px 0 0 var(--s3d-color-warning-border);
 }
 
 .logIndex,

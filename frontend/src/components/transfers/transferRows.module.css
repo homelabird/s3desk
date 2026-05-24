@@ -1,8 +1,8 @@
 .rowCard {
 	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
+	border-radius: var(--s3d-radius-lg);
 	padding: 12px;
-	background: var(--s3d-color-bg-card);
+	background: var(--s3d-gradient-surface);
 	box-shadow: var(--s3d-shadow-sm);
 	display: flex;
 	flex-direction: column;
@@ -32,9 +32,9 @@
 	height: 56px;
 	flex: 0 0 auto;
 	overflow: hidden;
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-sm);
-	background: var(--s3d-color-bg-elevated);
+	border: 1px solid var(--s3d-color-border-strong);
+	border-radius: var(--s3d-radius-lg);
+	background: var(--s3d-color-bg-code);
 }
 
 .rowPreviewImage {

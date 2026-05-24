@@ -154,7 +154,7 @@ export function ObjectsGlobalSearchResults({
 						<caption className="sr-only">Global object search results</caption>
 						<thead>
 							<tr>
-								<th scope="col" className={styles.globalSearchTh}>Key</th>
+								<th scope="col" className={`${styles.globalSearchTh} ${styles.globalSearchThKey}`}>Key</th>
 								<th scope="col" className={`${styles.globalSearchTh} ${styles.globalSearchThSize}`}>Size</th>
 								<th scope="col" className={`${styles.globalSearchTh} ${styles.globalSearchThModified}`}>Last modified</th>
 								<th scope="col" className={`${styles.globalSearchTh} ${styles.globalSearchThActions}`}>Actions</th>
@@ -163,7 +163,7 @@ export function ObjectsGlobalSearchResults({
 						<tbody>
 							{items.map((row) => (
 								<tr key={row.key}>
-									<td className={styles.globalSearchTd}>
+									<td className={`${styles.globalSearchTd} ${styles.globalSearchTdKey}`}>
 										<code title={row.key} className={keyTextClass}>
 											{row.key}
 										</code>

@@ -16,6 +16,7 @@
 .gridCardKindLabel {
   font-size: 12px;
   line-height: 1.2;
+  color: var(--s3d-color-text-secondary);
 }
 
 .listThumbnailDeferredHint {
@@ -25,9 +26,9 @@
   width: 40px;
   height: 40px;
   border: 1px dashed var(--s3d-color-border-strong);
-  border-radius: 6px;
+  border-radius: var(--s3d-radius-sm);
   background: color-mix(in srgb, var(--s3d-color-surface) 94%, var(--s3d-color-primary) 6%);
-  color: var(--s3d-color-text-secondary);
+  color: var(--s3d-color-text);
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -72,7 +73,7 @@
   border: 1px solid var(--s3d-color-border);
   border-radius: 14px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-bg-elevated) 92%, white 8%) 0%, var(--s3d-color-bg-elevated) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-bg-elevated) 94%, var(--s3d-color-primary) 6%) 0%, var(--s3d-color-bg-elevated) 100%);
   box-shadow: var(--s3d-shadow-sm);
   transition:
     border-color var(--s3d-transition-fast),
@@ -95,6 +96,7 @@
   border-color: color-mix(in srgb, var(--s3d-color-primary) 65%, var(--s3d-color-border) 35%);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-light) 55%, var(--s3d-color-bg-elevated) 45%) 0%, var(--s3d-color-bg-elevated) 100%);
+  box-shadow: inset 0 3px 0 var(--s3d-color-primary), var(--s3d-shadow-md);
 }
 
 .gridCardDropActive {

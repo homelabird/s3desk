@@ -135,8 +135,8 @@
 
 .globalSearchIndexCard {
   border: 1px solid var(--s3d-color-border);
-  border-radius: 12px;
-  background: var(--s3d-color-bg-secondary);
+  border-radius: var(--s3d-radius-lg);
+  background: var(--s3d-gradient-section);
 }
 
 .globalSearchIndexToggle {
@@ -192,8 +192,9 @@
   gap: calc(var(--objects-search-card-gap) - 4px);
   padding: var(--objects-search-result-card-padding);
   border: 1px solid var(--s3d-color-border);
-  border-radius: 10px;
-  background: var(--s3d-color-bg-secondary);
+  border-radius: var(--s3d-radius-lg);
+  background: var(--s3d-color-bg-card);
+  box-shadow: var(--s3d-shadow-sm);
 }
 
 .globalSearchResultKey {
@@ -265,8 +266,9 @@
 }
 
 .globalSearchTableWrap {
-  border: 1px solid var(--s3d-color-border);
-  border-radius: 8px;
+  border: 1px solid var(--s3d-color-border-strong);
+  border-radius: var(--s3d-radius-lg);
+  background: var(--s3d-color-bg-card);
   overflow: auto;
 }
 
@@ -292,13 +294,17 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--s3d-color-bg-code);
+  background: var(--s3d-gradient-section);
   text-align: left;
   padding: var(--objects-search-table-cell-block-padding) var(--objects-search-table-cell-inline-padding);
   border-bottom: 1px solid var(--s3d-color-border);
   font-size: 13px;
   line-height: 1.25;
   vertical-align: middle;
+}
+
+.globalSearchThKey {
+  width: auto;
 }
 
 .globalSearchThSize {
@@ -321,6 +327,12 @@
   vertical-align: middle;
 }
 
+.globalSearchTdKey {
+  max-width: 0;
+  overflow: hidden;
+  vertical-align: top;
+}
+
 .globalSearchActionRow {
   display: flex;
   gap: var(--objects-search-table-action-gap);
@@ -337,7 +349,10 @@
 }
 
 .globalSearchKeyText {
-  display: inline-block;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -345,11 +360,18 @@
 }
 
 .globalSearchKeyTextMd {
-  max-width: 520px;
+  display: -webkit-box;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .globalSearchKeyTextSm {
-  max-width: 260px;
+  max-width: min(100%, 260px);
 }
 
 .globalSearchDateText {

@@ -7,6 +7,8 @@
   padding: 10px;
   text-align: center;
   color: var(--s3d-color-text-secondary);
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-sm);
   overflow: hidden;
 }
 
@@ -14,8 +16,8 @@
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--s3d-color-bg-secondary) 82%, transparent),
-      color-mix(in srgb, var(--s3d-color-bg-disabled) 88%, transparent)
+      color-mix(in srgb, var(--s3d-color-bg-secondary) 86%, var(--s3d-color-bg-card)),
+      color-mix(in srgb, var(--s3d-color-bg-disabled) 90%, var(--s3d-color-bg-card))
     );
 }
 
@@ -37,8 +39,8 @@
   min-height: 24px;
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--s3d-color-border) 82%, transparent);
-  background: color-mix(in srgb, var(--s3d-color-bg-elevated) 92%, transparent);
+  border: 1px solid var(--s3d-color-border);
+  background: var(--s3d-color-bg-elevated);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -49,6 +51,7 @@
   max-width: 100%;
   font-size: 12px;
   line-height: 1.35;
+  color: var(--s3d-color-text);
 }
 
 .listThumbnailFrame {

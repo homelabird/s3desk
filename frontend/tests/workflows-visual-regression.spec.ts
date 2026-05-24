@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { installJobsMobileResponsiveFixtures, seedJobsMobileResponsiveStorage } from './support/jobsMobileResponsive'
 import {
@@ -11,7 +11,9 @@ import {
 	seedProfilesBucketsMobileResponsiveStorage,
 } from './support/profilesBucketsMobileResponsive'
 import {
+	installLoginMobileResponsiveFixtures,
 	installSettingsMobileResponsiveFixtures,
+	seedLoginMobileResponsiveStorage,
 	seedSettingsMobileResponsiveStorage,
 } from './support/settingsLoginMobileResponsive'
 import { installUploadsMobileResponsiveFixtures, seedUploadsMobileResponsiveStorage } from './support/uploadsMobileResponsive'
@@ -147,6 +149,16 @@ async function setupSettingsVisualPage(page: Page) {
 	return drawer
 }
 
+async function setupLoginVisualPage(page: Page) {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await seedLoginMobileResponsiveStorage(page, '')
+	await installLoginMobileResponsiveFixtures(page, ['valid-token'])
+	await gotoProfilesPage(page, {
+		ready: (scope) => scope.getByRole('heading', { name: 'S3Desk' }),
+	})
+	await expect(page.getByPlaceholder('API_TOKEN')).toBeVisible()
+}
+
 async function setupProfilesVisualPage(page: Page) {
 	await page.setViewportSize({ width: 390, height: 844 })
 	await installProfilesBucketsMobileResponsiveFixtures(page)
@@ -194,6 +206,14 @@ async function clickBucketManageAction(page: Page, bucketName: string, actionNam
 
 function profileCard(page: Page, profileName: string) {
 	return page.getByTestId('profiles-list-compact').locator('article').filter({ hasText: profileName }).first()
+}
+
+async function expectWithinViewport(page: Page, locator: Locator) {
+	const box = await locator.boundingBox()
+	expect(box).not.toBeNull()
+	const viewportWidth = page.viewportSize()?.width ?? 0
+	expect(box!.x).toBeGreaterThanOrEqual(0)
+	expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth + 1)
 }
 
 async function seedPersistedTransfers(page: Page) {
@@ -283,6 +303,23 @@ async function seedPersistedTransfers(page: Page) {
 }
 
 test.describe('Workflow visual regression @visual', () => {
+	test('mobile Login token panel remains stable', async ({ page }) => {
+		await setupLoginVisualPage(page)
+		const horizontalMetrics = await page.evaluate(() => ({
+			clientWidth: document.documentElement.clientWidth,
+			scrollWidth: document.documentElement.scrollWidth,
+			scrollX: window.scrollX,
+		}))
+		expect(horizontalMetrics.scrollX).toBe(0)
+		expect(horizontalMetrics.scrollWidth).toBeLessThanOrEqual(horizontalMetrics.clientWidth)
+		await expectWithinViewport(page, page.getByRole('button', { name: /Dark mode|Light mode/ }))
+		await expectWithinViewport(page, page.getByRole('heading', { name: 'S3Desk' }))
+		await expectWithinViewport(page, page.getByPlaceholder('API_TOKEN'))
+		await expectWithinViewport(page, page.getByRole('button', { name: 'Login' }))
+
+		await expect(page).toHaveScreenshot('login-mobile-token-panel.png', visualScreenshotOptions)
+	})
+
 	test('mobile Profiles edit dialog remains stable', async ({ page }) => {
 		await setupProfilesVisualPage(page)
 

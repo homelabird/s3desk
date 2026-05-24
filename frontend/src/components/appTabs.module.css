@@ -64,7 +64,7 @@
   padding: 10px 12px;
   border-bottom: 2px solid transparent;
   border-radius: 0;
-  color: var(--s3d-color-text);
+  color: var(--s3d-color-text-secondary);
 }
 
 .tabButtonLineActive {
@@ -74,17 +74,23 @@
 }
 
 .tabButtonCard {
-  border: 1px solid transparent;
+  border: 1px solid var(--s3d-color-border-soft);
   border-bottom: none;
-  background: transparent;
+  background: color-mix(in srgb, var(--s3d-color-bg-secondary) 62%, transparent);
   padding: 6px 10px;
-  color: var(--s3d-color-text);
+  color: var(--s3d-color-text-secondary);
 }
 
 .tabButtonCardActive {
-  border-color: var(--s3d-color-border-strong);
-  background: var(--s3d-color-bg);
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 46%, var(--s3d-color-border));
+  background: linear-gradient(180deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
+  color: var(--s3d-color-primary);
   font-weight: 700;
+}
+
+.tabButton:hover:not(:disabled) {
+  color: var(--s3d-color-primary);
+  background: color-mix(in srgb, var(--s3d-color-primary-bg) 58%, transparent);
 }
 
 .tabButtonDisabled {
@@ -122,7 +128,7 @@
 .addButton {
   margin-left: auto;
   border: 1px solid var(--s3d-color-border-strong);
-  background: var(--s3d-color-bg);
+  background: var(--s3d-color-bg-elevated);
   color: var(--s3d-color-text);
   border-radius: var(--s3d-radius-sm);
   padding: 6px 10px;

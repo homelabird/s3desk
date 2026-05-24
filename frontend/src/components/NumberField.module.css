@@ -2,15 +2,30 @@
 	width: 100%;
 	height: 32px;
 	padding: 4px 10px;
-	border-radius: 6px;
+	border-radius: var(--s3d-radius-sm);
 	border: 1px solid var(--s3d-color-border-input);
 	background: var(--s3d-color-bg-input);
 	color: inherit;
 	font-size: 14px;
 	line-height: 1.5715;
+	transition:
+		border-color var(--s3d-transition-fast),
+		box-shadow var(--s3d-transition-fast),
+		background var(--s3d-transition-fast);
+}
+
+.input:hover:not(:disabled) {
+	border-color: var(--s3d-color-focus);
+}
+
+.input:focus-visible {
+	outline: none;
+	border-color: var(--s3d-color-focus);
+	box-shadow: 0 0 0 3px var(--s3d-color-focus-ring);
 }
 
 .input:disabled {
 	background: var(--s3d-color-bg-disabled);
+	color: var(--s3d-color-text-muted);
 	cursor: not-allowed;
 }
