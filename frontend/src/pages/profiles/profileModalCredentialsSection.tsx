@@ -11,6 +11,11 @@ import {
 
 export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 	const { values, errors, editMode, setField, viewState } = args
+	const ociCredentialOverrideCount = countConfiguredValues([
+		values.ociAuthProvider && values.ociAuthProvider !== 'user_principal_auth' ? values.ociAuthProvider : '',
+		values.ociConfigFile,
+		values.ociConfigProfile,
+	])
 
 	return (
 		<div className={styles.sectionBody}>
@@ -155,7 +160,7 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 					{renderAdvancedFieldDisclosure({
 						title: 'OCI credential overrides',
 						description: 'Only for a custom auth provider or config path.',
-						configuredCount: countConfiguredValues([values.ociAuthProvider, values.ociConfigFile, values.ociConfigProfile]),
+						configuredCount: ociCredentialOverrideCount,
 						children: (
 							<div className={styles.formGrid}>
 								<FormField label="Auth Provider" htmlFor="profile-oci-auth-provider">

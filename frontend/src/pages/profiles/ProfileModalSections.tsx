@@ -85,17 +85,19 @@ export function buildProfileModalSections(args: ProfileModalSectionsArgs): {
 	return {
 		basic: {
 			title: 'Connection',
+			description: 'Provider, endpoint, and region.',
 			content: buildBasicConnectionSection(sectionArgs),
 		},
 		credentials: {
 			title: 'Credentials',
+			description: 'Only the auth material this provider needs.',
 			content: buildCredentialsSection(sectionArgs),
 		},
 		optionalSections: [
 			{
 				key: 'advanced',
 				title: 'Options',
-				description: 'Path style, emulator, key handling.',
+				description: 'Compatibility toggles and provider-specific overrides.',
 				configuredCount: advancedConfiguredCount,
 				content: buildAdvancedSection(sectionArgs),
 			},

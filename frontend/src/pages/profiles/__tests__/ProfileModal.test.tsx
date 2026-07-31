@@ -116,4 +116,18 @@ describe('ProfileModal', () => {
 			expect(summary).toHaveTextContent('1 configured')
 		}
 	})
+
+	it('does not count the default OCI auth provider as a configured override', () => {
+		renderProfileModal({
+			initialValues: {
+				provider: 'oci_object_storage',
+				region: 'us-ashburn-1',
+				ociAuthProvider: 'user_principal_auth',
+			},
+		})
+
+		const summary = screen.getByText('OCI credential overrides').closest('summary')
+		expect(summary).not.toBeNull()
+		expect(summary).toHaveTextContent('Off')
+	})
 })
