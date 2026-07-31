@@ -49,7 +49,7 @@ describe('ProfilesOnboardingCard', () => {
 		const diagnostics = screen.getByText('Connection checks need attention').closest('details')
 		expect(diagnostics).toHaveAttribute('open')
 		expect(screen.getByText('File transfer helper is available')).toBeInTheDocument()
-		expect(screen.getAllByText('Needs setup')).toHaveLength(2)
+		expect(screen.getAllByText('Needs attention')).toHaveLength(2)
 	})
 
 	it('keeps next navigation out of the action row until a profile is selected', () => {

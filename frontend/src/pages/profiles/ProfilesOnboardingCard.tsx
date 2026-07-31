@@ -34,7 +34,7 @@ export function ProfilesOnboardingCard(props: Props) {
 		!transferEngineAvailable ||
 		!transferEngineCompatible ||
 		!apiTokenReady
-	const setupSteps = [
+	const onboardingSteps = [
 		{ label: 'Create a storage profile', complete: hasProfile, pending: 'Next' },
 		{ label: 'Choose the active profile', complete: hasActiveProfile, pending: 'Needed' },
 	]
@@ -64,8 +64,8 @@ export function ProfilesOnboardingCard(props: Props) {
 				</Typography.Title>
 				<Typography.Text type="secondary">Create a profile, select it, then open your objects.</Typography.Text>
 			</div>
-			<ol className={styles.onboardingChecklist} aria-label="Setup progress">
-				{setupSteps.map((step) => (
+			<ol className={styles.onboardingChecklist} aria-label="Profile onboarding progress">
+				{onboardingSteps.map((step) => (
 					<li key={step.label} className={styles.onboardingStep} data-complete={step.complete ? 'true' : 'false'}>
 						<span className={styles.onboardingStepIcon} aria-hidden="true">
 							{step.complete ? <CheckCircleOutlined /> : <InfoCircleOutlined />}
@@ -87,7 +87,7 @@ export function ProfilesOnboardingCard(props: Props) {
 							</span>
 							<span>{check.label}</span>
 							<span className={styles.onboardingDiagnosticsStatus}>
-								{check.complete ? 'Ready' : 'Needs setup'}
+								{check.complete ? 'Ready' : 'Needs attention'}
 							</span>
 						</li>
 					))}
