@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 
-import { SetupCallout } from '../components/SetupCallout'
+import { ProfileRequiredCallout } from '../components/ProfileRequiredCallout'
 
 const UploadsPageExperience = lazy(() =>
 	import('./uploads/UploadsPageExperience').then((module) => ({
@@ -15,7 +15,7 @@ type Props = {
 
 export function UploadsPage(props: Props) {
 	if (!props.profileId) {
-		return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to upload files" />
+		return <ProfileRequiredCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to upload files" />
 	}
 
 	return (

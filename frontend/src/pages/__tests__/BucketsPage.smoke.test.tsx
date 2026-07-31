@@ -195,7 +195,7 @@ function RouterStateProbe() {
 }
 
 describe("BucketsPage", () => {
-  it("navigates to setup from setup callout", () => {
+  it("navigates to profiles from the profile-required callout", () => {
     const client = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -219,7 +219,7 @@ describe("BucketsPage", () => {
     expect(
       screen.getByText("Select a profile to view buckets"),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
+    fireEvent.click(screen.getByRole("link", { name: "Profiles" }));
     expect(screen.getByText("Profiles Route")).toBeInTheDocument();
   });
 

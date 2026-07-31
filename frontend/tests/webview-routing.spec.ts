@@ -8,7 +8,7 @@ const webviewObjectsReadyTimeoutMs = 90_000
 const webviewRouteStateTestTimeoutMs = 180_000
 
 test.describe('webview routing', () => {
-	test('WV-001 redirects `/` to `/setup` when no stored profile exists', async ({ page }) => {
+	test('WV-001 redirects `/` to `/profiles` when no stored profile exists', async ({ page }) => {
 		const fallbackProfile = 'available-profile'
 		await stubWebviewApi(page, {
 			profiles: [buildProfileFixture({ id: fallbackProfile, name: 'Available Profile' })],
@@ -17,10 +17,10 @@ test.describe('webview routing', () => {
 
 		await page.goto('/')
 
-		await expect(page).toHaveURL(/\/setup$/)
-		await expect(page.getByText('Choose a profile')).toBeVisible()
-		await expect(page.getByRole('button', { name: /Available Profile.*available-profile/i })).toBeVisible()
-		await expect(page.getByText('No profile selected')).toBeVisible()
+		await expect(page).toHaveURL(/\/profiles$/)
+		await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
+		await expect(page.getByRole('button', { name: 'New Profile' })).toBeVisible()
+		await expect(page.getByText('Available Profile')).toBeVisible()
 	})
 
 	test('WV-001 redirects `/` to `/objects` when a stored profile exists', async ({ page }) => {

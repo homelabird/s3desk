@@ -14,7 +14,7 @@ vi.mock('../BucketsPageShell', () => ({
 }))
 
 describe('BucketsPageRouteShell', () => {
-	it('renders the setup callout when no profile is selected', () => {
+	it('renders the profile-required callout when no profile is selected', () => {
 		render(
 			<MemoryRouter>
 				<BucketsPageRouteShell

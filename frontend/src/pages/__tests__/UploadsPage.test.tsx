@@ -176,13 +176,13 @@ describe("UploadsPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Loading uploads...");
   });
 
-  it("navigates to profiles from the setup callout", () => {
+  it("navigates to profiles from the profile-required callout", () => {
     renderUploadsPage({ apiToken: "", profileId: null });
 
     expect(
       screen.getByText("Select a profile to upload files"),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
+    fireEvent.click(screen.getByRole("link", { name: "Profiles" }));
     expect(screen.getByText("Profiles Route")).toBeInTheDocument();
   });
 

@@ -34,7 +34,7 @@ export function UploadsSelectionSection(props: Props) {
 	return (
 		<PageSection
 			title="Selection"
-			description="Add files or folders from this device. Folder structure is preserved."
+			description="Start here. Add files or folders from this device, then review the destination below."
 		>
 			<div className={styles.selectionStack}>
 				<div className={styles.selectionActions}>
@@ -47,10 +47,10 @@ export function UploadsSelectionSection(props: Props) {
 					>
 						Add from device…
 					</Button>
-					<Typography.Text type="secondary" className={styles.selectionHint}>
-						{queueDisabledReason ?? 'Ready to queue this selection.'}
-					</Typography.Text>
 				</div>
+				<Typography.Text type="secondary" className={styles.selectionHint}>
+					{queueDisabledReason ?? 'Ready to queue this selection.'}
+				</Typography.Text>
 
 				{hasSelection ? (
 					<div className={styles.summaryGrid} role="status" aria-live="polite" aria-atomic="true">

@@ -71,9 +71,11 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 
 			{presentation.targetSource.show ? (
 				<>
+					<UploadsSelectionSection {...presentation.selection} />
+
 					<PageSection
 						title="Target & source"
-						description="Choose the bucket and optional prefix, then add files or a folder from this device."
+						description="Choose where this selection will be uploaded. Bucket is required before queueing."
 						actions={
 							<Typography.Text type="secondary" className={styles.destinationLabel}>
 								{presentation.targetSource.destinationLabel}
@@ -107,8 +109,6 @@ export function UploadsPageShell(props: UploadsPageShellProps) {
 							</label>
 						</div>
 					</PageSection>
-
-					<UploadsSelectionSection {...presentation.selection} />
 				</>
 			) : null}
 			<UploadSourceSheet {...presentation.uploadSourceSheet} />

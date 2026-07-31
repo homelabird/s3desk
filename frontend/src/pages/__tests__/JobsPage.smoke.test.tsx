@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("JobsPage", () => {
-  it("navigates to profiles from setup callout", () => {
+  it("navigates to profiles from the profile-required callout", () => {
     const client = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -47,7 +47,7 @@ describe("JobsPage", () => {
     expect(
       screen.getByText("Select a profile to view jobs"),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "Setup" }));
+    fireEvent.click(screen.getByRole("link", { name: "Profiles" }));
     expect(screen.getByText("Profiles Route")).toBeInTheDocument();
   });
 });

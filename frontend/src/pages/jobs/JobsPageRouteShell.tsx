@@ -1,4 +1,4 @@
-import { SetupCallout } from '../../components/SetupCallout'
+import { ProfileRequiredCallout } from '../../components/ProfileRequiredCallout'
 import { JobsPageShell, type JobsPageShellProps } from './JobsPageShell'
 
 export type JobsPageRouteShellProps = {
@@ -9,7 +9,7 @@ export type JobsPageRouteShellProps = {
 
 export function JobsPageRouteShell(props: JobsPageRouteShellProps) {
   if (!props.profileId) {
-    return <SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view jobs" />
+    return <ProfileRequiredCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to view jobs" />
   }
 
   return (

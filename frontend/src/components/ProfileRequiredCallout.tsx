@@ -10,7 +10,7 @@ type Props = {
   description?: string;
 };
 
-export function SetupCallout(props: Props) {
+export function ProfileRequiredCallout(props: Props) {
   const location = useLocation();
   const screens = Grid.useBreakpoint();
 
@@ -45,7 +45,7 @@ export function SetupCallout(props: Props) {
       action={
         <Space orientation={actionDirection} size="small">
           <LinkButton to="/profiles" size="small">
-            Setup
+            Profiles
           </LinkButton>
           {showSettings ? (
             <LinkButton to={settingsHref} size="small">

@@ -14,7 +14,7 @@ vi.mock('../JobsPageShell', () => ({
 }))
 
 describe('JobsPageRouteShell', () => {
-  it('renders the setup callout when no profile is selected', () => {
+  it('renders the profile-required callout when no profile is selected', () => {
     render(
       <MemoryRouter>
         <JobsPageRouteShell
