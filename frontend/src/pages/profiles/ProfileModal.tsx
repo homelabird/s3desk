@@ -180,10 +180,6 @@ function ProfileModalSession(props: {
 			}}
 		>
 			<div className={styles.formShell}>
-				<section className={styles.modalIntro} aria-label="Profile setup guidance">
-					<strong className={styles.modalIntroTitle}>Required fields first.</strong>
-					<span className={styles.modalIntroText}>Fill Connection and Credentials first. Open Options or TLS only if this provider needs them.</span>
-				</section>
 				<section className={styles.staticSectionCard}>
 					<div className={styles.staticSectionHeader}>
 						{renderSectionHeader({ title: sections.basic.title })}
@@ -216,10 +212,10 @@ function ProfileModalSession(props: {
 											<span className={styles.disclosureSummaryTitle}>{section.title}</span>
 											<span className={styles.disclosureCountBadge}>{statusLabel}</span>
 										</span>
-										{section.description ? <span className={styles.disclosureSummaryDescription}>{section.description}</span> : null}
 									</span>
 								</summary>
 								<div className={styles.disclosureBody}>
+									{section.description ? <p className={styles.disclosureBodyNote}>{section.description}</p> : null}
 									{section.content}
 								</div>
 							</details>

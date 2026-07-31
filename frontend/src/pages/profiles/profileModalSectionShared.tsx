@@ -60,10 +60,10 @@ export function renderAdvancedFieldDisclosure({
 						<span className={styles.disclosureSummaryTitle}>{title}</span>
 						<span className={styles.disclosureCountBadge}>{statusLabel}</span>
 					</span>
-					<span className={styles.disclosureSummaryDescription}>{description}</span>
 				</span>
 			</summary>
 			<div className={styles.disclosureBody}>
+				<p className={styles.disclosureBodyNote}>{description}</p>
 				{children}
 			</div>
 		</details>
