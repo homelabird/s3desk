@@ -48,10 +48,14 @@ function ApiTokenField(props: { apiToken: string; inputId: string; setApiToken: 
 export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 	return (
 		<Space orientation="vertical" size="middle" className={styles.fullWidth}>
-			<Typography.Text type="secondary" className={styles.sectionIntro}>
-				What this affects: browser access to this S3Desk server, the active storage profile, and API reference links.
-			</Typography.Text>
-			<div>
+			<div className={styles.accessCard}>
+				<div className={styles.accessCardHeader}>
+					<Typography.Text strong>Recommended first</Typography.Text>
+					<Typography.Text type="secondary">Set the browser API token and confirm the active profile before using the rest of the app.</Typography.Text>
+				</div>
+				<Typography.Text type="secondary" className={styles.sectionIntro}>
+					What this affects: browser access to this S3Desk server, the active storage profile, and API reference links.
+				</Typography.Text>
 				<FormField label="Backend API Token (X-Api-Token)" htmlFor="settings-api-token">
 					<ApiTokenField
 						key={props.apiToken}
@@ -70,28 +74,34 @@ export function AccessSettingsSection(props: AccessSettingsSectionProps) {
 				</FormField>
 			</div>
 
-			<Collapse
-				size="small"
-				items={[
-					{
-						key: 'advanced',
-						label: 'API reference',
-						children: (
-							<Space orientation="vertical" size={4} className={styles.fullWidth}>
-								<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
-								<Space wrap>
-									<Button type="link" href={props.apiDocsUrl} target="_blank" rel="noopener noreferrer">
-										Open API Docs (new tab)
-									</Button>
-									<Button type="link" href={props.openapiUrl} target="_blank" rel="noopener noreferrer">
-										OpenAPI YAML (new tab)
-									</Button>
+			<div className={styles.accessReferenceCard}>
+				<div className={styles.accessCardHeader}>
+					<Typography.Text strong>Reference only</Typography.Text>
+					<Typography.Text type="secondary">Use these links when you need schema or endpoint details. They are not part of the main setup flow.</Typography.Text>
+				</div>
+				<Collapse
+					size="small"
+					items={[
+						{
+							key: 'advanced',
+							label: 'API reference',
+							children: (
+								<Space orientation="vertical" size={4} className={styles.fullWidth}>
+									<Typography.Text type="secondary">OpenAPI 3.0 spec and interactive docs.</Typography.Text>
+									<Space wrap>
+										<Button type="link" href={props.apiDocsUrl} target="_blank" rel="noopener noreferrer">
+											Open API Docs (new tab)
+										</Button>
+										<Button type="link" href={props.openapiUrl} target="_blank" rel="noopener noreferrer">
+											OpenAPI YAML (new tab)
+										</Button>
+									</Space>
 								</Space>
-							</Space>
-						),
-					},
-				]}
-			/>
+							),
+						},
+					]}
+				/>
+			</div>
 		</Space>
 	)
 }

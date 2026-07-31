@@ -27,7 +27,7 @@ function getSelectedNavKey(pathname: string): string {
 	if (pathname.startsWith('/profiles')) return '/profiles'
 	if (pathname.startsWith('/buckets')) return '/buckets'
 	if (pathname.startsWith('/objects')) return '/objects'
-	if (pathname.startsWith('/uploads')) return '/objects'
+	if (pathname.startsWith('/uploads')) return '/uploads'
 	if (pathname.startsWith('/jobs')) return '/jobs'
 	return '/profiles'
 }
