@@ -1,5 +1,4 @@
-import { LinkOutlined, SettingOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
-import { Tag, Typography, type CollapseProps } from 'antd'
+import { Typography } from 'antd'
 import type { ReactNode } from 'react'
 
 import { ToggleSwitch } from '../../components/ToggleSwitch'
@@ -21,16 +20,45 @@ type ProfileModalSectionsArgs = {
 	viewState: ProfileModalViewState
 }
 
-export function buildProfileModalSectionItems(args: ProfileModalSectionsArgs): CollapseProps['items'] {
-	const renderSectionHeader = (props: { title: string; description: string; tags?: ReactNode }) => (
+type BuiltSection = {
+	key?: 'advanced' | 'security'
+	title: string
+	description?: string
+	configuredCount?: number
+	content: ReactNode
+}
+
+function hasValue(value: string | null | undefined) {
+	return Boolean(value && value.trim())
+}
+
+export function renderSectionHeader(props: { title: string; description?: string; meta?: string }) {
+	return (
 		<div className={styles.sectionHeader}>
 			<div className={styles.sectionText}>
 				<Typography.Text className={styles.sectionTitle}>{props.title}</Typography.Text>
-				<Typography.Text className={styles.sectionDescription}>{props.description}</Typography.Text>
+				{props.description ? <Typography.Text className={styles.sectionDescription}>{props.description}</Typography.Text> : null}
 			</div>
-			{props.tags ? <div className={styles.sectionMeta}>{props.tags}</div> : null}
+			{props.meta ? <Typography.Text className={styles.sectionMetaText}>{props.meta}</Typography.Text> : null}
 		</div>
 	)
+}
+
+export function buildProfileModalSections(args: ProfileModalSectionsArgs): {
+	basic: BuiltSection
+	credentials: BuiltSection
+	optionalSections: BuiltSection[]
+} {
+	const advancedConfiguredCount = [
+		args.values.forcePathStyle,
+		args.values.azureUseEmulator,
+		args.values.preserveLeadingSlash,
+	].filter(Boolean).length
+	const securityConfiguredCount = [
+		args.values.tlsInsecureSkipVerify,
+		args.viewState.showTLSFields || args.viewState.tlsAction === 'enable',
+		hasValue(args.values.tlsCaCertPem),
+	].filter(Boolean).length
 
 	const renderSwitchCard = (props: {
 		title: string
@@ -54,42 +82,30 @@ export function buildProfileModalSectionItems(args: ProfileModalSectionsArgs): C
 		renderSwitchCard,
 	}
 
-	return [
-		{
-			key: 'basic',
-			label: renderSectionHeader({
-				title: 'Basic Connection',
-				description: 'Provider, display name, and the main endpoint or region values.',
-				tags: <Tag icon={<LinkOutlined />}>{args.viewState.providerLabel}</Tag>,
-			}),
-			children: buildBasicConnectionSection(sectionArgs),
+	return {
+		basic: {
+			title: 'Connection',
+			content: buildBasicConnectionSection(sectionArgs),
 		},
-		{
-			key: 'credentials',
-			label: renderSectionHeader({
-				title: 'Credentials',
-				description: 'Secrets and auth material used to sign requests.',
-				tags: args.editMode ? <Tag color="default">Collapsed by default</Tag> : <Tag color="blue">Required on create</Tag>,
-			}),
-			children: buildCredentialsSection(sectionArgs),
+		credentials: {
+			title: 'Credentials',
+			content: buildCredentialsSection(sectionArgs),
 		},
-		{
-			key: 'advanced',
-			label: renderSectionHeader({
-				title: 'Compatibility Options',
-				description: 'Compatibility and transport toggles for unusual environments.',
-				tags: <Tag icon={<SettingOutlined />}>Optional</Tag>,
-			}),
-			children: buildAdvancedSection(sectionArgs),
-		},
-		{
-			key: 'security',
-			label: renderSectionHeader({
-				title: 'Security & TLS',
-				description: 'mTLS certificate material and connection trust settings.',
-				tags: <Tag icon={<SafetyCertificateOutlined />}>{args.viewState.tlsStatusLabel}</Tag>,
-			}),
-			children: buildSecuritySection(sectionArgs),
-		},
-	]
+		optionalSections: [
+			{
+				key: 'advanced',
+				title: 'Options',
+				description: 'Path style, emulator, key handling.',
+				configuredCount: advancedConfiguredCount,
+				content: buildAdvancedSection(sectionArgs),
+			},
+			{
+				key: 'security',
+				title: 'TLS',
+				description: 'mTLS and TLS verification.',
+				configuredCount: securityConfiguredCount,
+				content: buildSecuritySection(sectionArgs),
+			},
+		],
+	}
 }

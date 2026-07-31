@@ -1,4 +1,4 @@
-import { Alert, Input, Typography } from 'antd'
+import { Input, Typography } from 'antd'
 
 import { FormField } from '../../components/FormField'
 import { NativeSelect } from '../../components/NativeSelect'
@@ -6,32 +6,45 @@ import styles from './ProfileModal.module.css'
 import type { ProfileFormValues } from './profileTypes'
 import {
 	countConfiguredValues,
-	getConnectionSummary,
 	profileFieldA11y,
 	renderAdvancedFieldDisclosure,
 	type ProfileModalSectionContentArgs,
 } from './profileModalSectionShared'
 
+const PROVIDER_OPTIONS: Array<{ label: string; value: ProfileFormValues['provider'] }> = [
+	{ label: 'S3 Compatible', value: 's3_compatible' },
+	{ label: 'AWS S3', value: 'aws_s3' },
+	{ label: 'OCI Object Storage', value: 'oci_object_storage' },
+	{ label: 'Azure Blob', value: 'azure_blob' },
+	{ label: 'Google Cloud Storage', value: 'gcp_gcs' },
+]
+
 export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs) {
 	const { values, errors, editMode, setField, viewState } = args
+	const providerLabel = PROVIDER_OPTIONS.find((option) => option.value === values.provider)?.label ?? values.provider
+	const browserEndpointNote = editMode
+		? 'Only when browser uploads use a different host than the server.'
+		: 'Only when browser uploads need a different host.'
 
 	return (
 		<div className={styles.sectionBody}>
 			<div className={styles.formGrid}>
 				<FormField label="Provider" htmlFor="profile-provider" required error={errors.provider}>
-					<NativeSelect
-						{...profileFieldA11y('profile-provider', errors.provider)}
-						disabled={!!editMode}
-						value={values.provider}
-						onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
-						options={[
-							{ label: 'S3 Compatible (MinIO/Ceph/Custom)', value: 's3_compatible' },
-							{ label: 'AWS S3', value: 'aws_s3' },
-							{ label: 'Oracle OCI Object Storage (Native)', value: 'oci_object_storage' },
-							{ label: 'Azure Blob Storage', value: 'azure_blob' },
-							{ label: 'Google Cloud Storage (GCS)', value: 'gcp_gcs' },
-						]}
-					/>
+					{editMode ? (
+						<Input
+							id="profile-provider"
+							value={providerLabel}
+							readOnly
+							className={styles.readOnlyField}
+						/>
+					) : (
+						<NativeSelect
+							{...profileFieldA11y('profile-provider', errors.provider)}
+							value={values.provider}
+							onChange={(v) => setField('provider', v as ProfileFormValues['provider'])}
+							options={PROVIDER_OPTIONS}
+						/>
+					)}
 				</FormField>
 
 				<FormField label="Name" htmlFor="profile-name" required error={errors.name}>
@@ -44,18 +57,6 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 					/>
 				</FormField>
 			</div>
-
-			{viewState.providerGuide ? (
-				<div className={styles.providerGuide}>
-					<Typography.Text strong>Provider setup hint</Typography.Text>
-					<Typography.Text type="secondary">{viewState.providerGuide.hint}</Typography.Text>
-					<Typography.Link href={viewState.providerGuide.docsUrl} target="_blank" rel="noopener noreferrer">
-						Open provider setup docs
-					</Typography.Link>
-				</div>
-			) : null}
-
-			<Alert type="info" showIcon title="Connection fields" description={getConnectionSummary(viewState)} />
 
 			{viewState.isS3Provider ? (
 				<>
@@ -88,25 +89,24 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 						</FormField>
 					</div>
 					{renderAdvancedFieldDisclosure({
-						title: 'Browser-only endpoint override',
-						description: 'Only set this when the browser must use a different hostname than the server for presigned uploads.',
+						title: 'Browser endpoint',
+						description: 'Only for a different browser host.',
 						configuredCount: countConfiguredValues([values.publicEndpoint]),
 						children: (
 							<>
 								<div className={styles.formGrid}>
-									<FormField label="Public Endpoint URL (optional)" htmlFor="profile-public-endpoint" error={errors.publicEndpoint}>
+									<FormField label="Browser Endpoint (optional)" htmlFor="profile-public-endpoint" error={errors.publicEndpoint}>
 										<Input
 											{...profileFieldA11y('profile-public-endpoint', errors.publicEndpoint)}
 											value={values.publicEndpoint}
 											onChange={(e) => setField('publicEndpoint', e.target.value)}
-											placeholder="http://127.0.0.1:9000"
+											placeholder="https://storage.example.com"
 											autoComplete="off"
 										/>
 									</FormField>
 								</div>
 								<Typography.Text type="secondary" className={styles.sectionNote}>
-									Use Public Endpoint when the server reaches storage through an internal hostname like <Typography.Text code>minio:9000</Typography.Text>,
-									but the browser must use a different host like <Typography.Text code>127.0.0.1:9000</Typography.Text> for presigned uploads.
+									{browserEndpointNote}
 								</Typography.Text>
 							</>
 						),
@@ -144,7 +144,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 					</div>
 					{renderAdvancedFieldDisclosure({
 						title: 'OCI endpoint override',
-						description: 'Leave this closed unless you need to override the default regional endpoint.',
+						description: 'Only to override the regional endpoint.',
 						configuredCount: countConfiguredValues([values.ociEndpoint]),
 						children: (
 							<div className={styles.formGrid}>
@@ -165,7 +165,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 			{viewState.isAzure ? (
 				<>
 					<div className={styles.formGrid}>
-						<FormField label="Storage Account Name" htmlFor="profile-azure-account-name" required error={errors.azureAccountName}>
+						<FormField label="Account Name" htmlFor="profile-azure-account-name" required error={errors.azureAccountName}>
 							<Input
 								{...profileFieldA11y('profile-azure-account-name', errors.azureAccountName)}
 								value={values.azureAccountName}
@@ -176,7 +176,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 					</div>
 					{renderAdvancedFieldDisclosure({
 						title: 'Azure connection overrides',
-						description: 'Open this only for Azurite, custom endpoints, or management-plane features.',
+						description: 'Only for Azurite, custom endpoints, or ARM features.',
 						configuredCount: countConfiguredValues([
 							values.azureEndpoint,
 							values.azureSubscriptionId,
@@ -197,7 +197,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 									</FormField>
 								</div>
 								<div className={styles.formGrid}>
-									<FormField label="Subscription ID (optional)" htmlFor="profile-azure-subscription-id" error={errors.azureSubscriptionId}>
+									<FormField label="Subscription ID" htmlFor="profile-azure-subscription-id" error={errors.azureSubscriptionId}>
 										<Input
 											{...profileFieldA11y('profile-azure-subscription-id', errors.azureSubscriptionId)}
 											value={values.azureSubscriptionId}
@@ -205,7 +205,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 											placeholder="00000000-0000-0000-0000-000000000000"
 										/>
 									</FormField>
-									<FormField label="Resource Group (optional)" htmlFor="profile-azure-resource-group" error={errors.azureResourceGroup}>
+									<FormField label="Resource Group" htmlFor="profile-azure-resource-group" error={errors.azureResourceGroup}>
 										<Input
 											{...profileFieldA11y('profile-azure-resource-group', errors.azureResourceGroup)}
 											value={values.azureResourceGroup}
@@ -215,7 +215,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 									</FormField>
 								</div>
 								<div className={styles.formGrid}>
-									<FormField label="Tenant ID (optional)" htmlFor="profile-azure-tenant-id" error={errors.azureTenantId}>
+									<FormField label="Tenant ID" htmlFor="profile-azure-tenant-id" error={errors.azureTenantId}>
 										<Input
 											{...profileFieldA11y('profile-azure-tenant-id', errors.azureTenantId)}
 											value={values.azureTenantId}
@@ -223,7 +223,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 											placeholder="00000000-0000-0000-0000-000000000000"
 										/>
 									</FormField>
-									<FormField label="Client ID (optional)" htmlFor="profile-azure-client-id" error={errors.azureClientId}>
+									<FormField label="Client ID" htmlFor="profile-azure-client-id" error={errors.azureClientId}>
 										<Input
 											{...profileFieldA11y('profile-azure-client-id', errors.azureClientId)}
 											value={values.azureClientId}
@@ -232,12 +232,9 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 										/>
 									</FormField>
 								</div>
-								<Alert
-									type="info"
-									showIcon
-									message="Azure ARM fields are optional for basic blob access"
-									description="Fill Subscription ID, Resource Group, Tenant ID, Client ID, and Client Secret together when you want management-plane features such as container immutability editing."
-								/>
+								<Typography.Text type="secondary" className={styles.sectionNote}>
+									<Typography.Text strong>Azure ARM fields are optional.</Typography.Text> Fill them together only for ARM features like immutability edits.
+								</Typography.Text>
 							</>
 						),
 					})}
@@ -258,7 +255,7 @@ export function buildBasicConnectionSection(args: ProfileModalSectionContentArgs
 					</div>
 					{renderAdvancedFieldDisclosure({
 						title: 'GCS endpoint override',
-						description: 'Only open this when you are targeting a non-default endpoint.',
+						description: 'Only for a non-default endpoint.',
 						configuredCount: countConfiguredValues([values.gcpEndpoint]),
 						children: (
 							<div className={styles.formGrid}>

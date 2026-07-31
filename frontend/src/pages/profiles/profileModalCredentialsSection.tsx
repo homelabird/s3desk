@@ -1,10 +1,9 @@
-import { Alert, Checkbox, Input, Typography } from 'antd'
+import { Checkbox, Input, Typography } from 'antd'
 
 import { FormField } from '../../components/FormField'
 import styles from './ProfileModal.module.css'
 import {
 	countConfiguredValues,
-	getCredentialsSummary,
 	profileFieldA11y,
 	renderAdvancedFieldDisclosure,
 	type ProfileModalSectionContentArgs,
@@ -15,10 +14,11 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 
 	return (
 		<div className={styles.sectionBody}>
-			<Typography.Text type="secondary" className={styles.sectionNote}>
-				{editMode ? 'Leave credential fields blank to keep the existing stored values.' : 'Enter the auth material required by this provider.'}
-			</Typography.Text>
-			<Alert type="info" showIcon title="Credential fields" description={getCredentialsSummary(viewState, editMode)} />
+			{editMode ? (
+				<Typography.Text type="secondary" className={styles.sectionNote}>
+					Leave blank to keep stored credentials.
+				</Typography.Text>
+			) : null}
 
 			{viewState.isS3Provider ? (
 				<>
@@ -41,33 +41,49 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 						</FormField>
 					</div>
 
-					{renderAdvancedFieldDisclosure({
-						title: 'Temporary credential extras',
-						description: 'Open this only when the provider issued a session token on top of the access key and secret.',
-						configuredCount: countConfiguredValues([values.sessionToken]),
-						children: (
-							<>
-								<div className={styles.formGrid}>
-									<FormField label="Session Token (optional)" htmlFor="profile-session-token">
+					{editMode
+						? renderAdvancedFieldDisclosure({
+								title: 'Session token',
+								description: 'Only when issued.',
+								configuredCount: countConfiguredValues([values.sessionToken]),
+								children: (
+									<>
+										<div className={styles.formGrid}>
+											<FormField label="Session Token" htmlFor="profile-session-token">
+												<Input.Password
+													id="profile-session-token"
+													value={values.sessionToken ?? ''}
+													onChange={(e) => setField('sessionToken', e.target.value)}
+													autoComplete="off"
+													disabled={!!editMode && !!values.clearSessionToken}
+												/>
+											</FormField>
+										</div>
+										{editMode ? (
+											<div className={styles.checkboxRow}>
+												<Checkbox checked={!!values.clearSessionToken} onChange={(e) => setField('clearSessionToken', e.target.checked)}>
+													Clear existing session token
+												</Checkbox>
+											</div>
+										) : null}
+									</>
+								),
+							})
+						: renderAdvancedFieldDisclosure({
+								title: 'Session token',
+								description: 'Only for temporary credentials.',
+								configuredCount: countConfiguredValues([values.sessionToken]),
+								children: (
+									<FormField label="Session Token" htmlFor="profile-session-token">
 										<Input.Password
 											id="profile-session-token"
 											value={values.sessionToken ?? ''}
 											onChange={(e) => setField('sessionToken', e.target.value)}
 											autoComplete="off"
-											disabled={!!editMode && !!values.clearSessionToken}
 										/>
 									</FormField>
-								</div>
-								{editMode ? (
-									<div className={styles.checkboxRow}>
-										<Checkbox checked={!!values.clearSessionToken} onChange={(e) => setField('clearSessionToken', e.target.checked)}>
-											Clear existing session token
-										</Checkbox>
-									</div>
-								) : null}
-							</>
-						),
-					})}
+								),
+							})}
 				</>
 			) : null}
 
@@ -85,7 +101,7 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 					</div>
 					{renderAdvancedFieldDisclosure({
 						title: 'Azure management-plane secret',
-						description: 'Only open this when you are also filling the Azure ARM fields for management-plane features.',
+						description: 'Only with Azure ARM fields.',
 						configuredCount: countConfiguredValues([values.azureClientSecret]),
 						children: (
 							<div className={styles.formGrid}>
@@ -117,22 +133,17 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 
 					{values.gcpAnonymous ? (
 						<Typography.Text type="secondary" className={styles.sectionNote}>
-							Anonymous mode only works when the endpoint allows unauthenticated access. Project Number is still required.
+							Only when the endpoint allows public access. Project Number is still required.
 						</Typography.Text>
 					) : (
-						<FormField label="Service Account JSON" htmlFor="profile-gcp-service-account-json" required={!editMode} error={errors.gcpServiceAccountJson}>
+						<FormField label="Service Account Key" htmlFor="profile-gcp-service-account-json" required={!editMode} error={errors.gcpServiceAccountJson}>
 							<Input.TextArea
 								{...profileFieldA11y('profile-gcp-service-account-json', errors.gcpServiceAccountJson)}
+								className={styles.compactTextArea}
 								value={values.gcpServiceAccountJson}
 								onChange={(e) => setField('gcpServiceAccountJson', e.target.value)}
-								autoSize={{ minRows: 8, maxRows: 14 }}
-								placeholder={`{
-  "type": "service_account_json",
-  "project_id": "example-project",
-  "private_key_id": "...",
-  "private_key": "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n",
-  "client_email": "example@project.iam.gserviceaccount.com"
-}`}
+								autoSize={{ minRows: 6, maxRows: 12 }}
+								placeholder="Paste the service account JSON key."
 							/>
 						</FormField>
 					)}
@@ -143,11 +154,11 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 				<>
 					{renderAdvancedFieldDisclosure({
 						title: 'OCI credential overrides',
-						description: 'Open this only when you need a non-default auth provider or config path.',
+						description: 'Only for a custom auth provider or config path.',
 						configuredCount: countConfiguredValues([values.ociAuthProvider, values.ociConfigFile, values.ociConfigProfile]),
 						children: (
 							<div className={styles.formGrid}>
-								<FormField label="Auth Provider (optional)" htmlFor="profile-oci-auth-provider">
+								<FormField label="Auth Provider" htmlFor="profile-oci-auth-provider">
 									<Input
 										id="profile-oci-auth-provider"
 										value={values.ociAuthProvider}
@@ -155,7 +166,7 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 										placeholder="user_principal_auth / instance_principal / api_key / resource_principal"
 									/>
 								</FormField>
-								<FormField label="OCI Config File (optional)" htmlFor="profile-oci-config-file">
+								<FormField label="Config File" htmlFor="profile-oci-config-file">
 									<Input
 										id="profile-oci-config-file"
 										value={values.ociConfigFile}
@@ -163,7 +174,7 @@ export function buildCredentialsSection(args: ProfileModalSectionContentArgs) {
 										placeholder="/home/user/.oci/config"
 									/>
 								</FormField>
-								<FormField label="OCI Config Profile (optional)" htmlFor="profile-oci-config-profile">
+								<FormField label="Config Profile" htmlFor="profile-oci-config-profile">
 									<Input
 										id="profile-oci-config-profile"
 										value={values.ociConfigProfile}

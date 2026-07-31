@@ -108,8 +108,8 @@ export const FIELD_SECTION_MAP: Partial<Record<keyof ProfileFormValues, SectionK
 	ociConfigProfile: 'credentials',
 	forcePathStyle: 'advanced',
 	preserveLeadingSlash: 'advanced',
-	tlsInsecureSkipVerify: 'advanced',
 	azureUseEmulator: 'advanced',
+	tlsInsecureSkipVerify: 'security',
 	tlsEnabled: 'security',
 	tlsAction: 'security',
 	tlsClientCertPem: 'security',
@@ -132,7 +132,6 @@ export type ProfileModalViewState = {
 	isAws: boolean
 	isAzure: boolean
 	isGcp: boolean
-	providerGuide: { hint: string; docsUrl: string } | null
 	tlsUnavailable: boolean
 	tlsDisabledReason: string
 	tlsStatusLabel: string
@@ -170,38 +169,6 @@ export function buildProfileModalViewState(args: {
 	const tlsAction = (args.values.tlsAction ?? 'keep') as TLSAction
 	const showTLSFields = !tlsUnavailable && (args.editMode ? tlsAction === 'enable' : !!args.values.tlsEnabled)
 
-	const providerGuide = (() => {
-		switch (provider) {
-			case 'aws_s3':
-				return {
-					hint: 'Use your AWS region. Leave endpoint blank unless you need a custom gateway.',
-					docsUrl: 'https://rclone.org/s3/#amazon-s3',
-				}
-			case 's3_compatible':
-				return {
-					hint: 'Use the full endpoint URL. MinIO and Ceph usually also need Force Path Style in Compatibility Options.',
-					docsUrl: 'https://rclone.org/s3/',
-				}
-			case 'oci_object_storage':
-				return {
-					hint: 'Use the native OCI backend when you want namespace and compartment-aware access.',
-					docsUrl: 'https://rclone.org/oracleobjectstorage/',
-				}
-			case 'azure_blob':
-				return {
-					hint: 'Storage account name is required. Add Azure ARM app credentials when you want management-plane features such as container immutability editing.',
-					docsUrl: 'https://rclone.org/azureblob/',
-				}
-			case 'gcp_gcs':
-				return {
-					hint: 'Service Account JSON is the standard path unless you intentionally need anonymous access. Project Number is still required for bucket operations.',
-					docsUrl: 'https://rclone.org/googlecloudstorage/',
-				}
-			default:
-				return null
-		}
-	})()
-
 	return {
 		providerLabel,
 		isS3Provider,
@@ -209,7 +176,6 @@ export function buildProfileModalViewState(args: {
 		isAws,
 		isAzure,
 		isGcp,
-		providerGuide,
 		tlsUnavailable,
 		tlsDisabledReason,
 		tlsStatusLabel,

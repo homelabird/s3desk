@@ -1,8 +1,9 @@
-import { Button, Checkbox, Input, Space, Typography } from 'antd'
+import { Button, Checkbox, Input, Typography } from 'antd'
 import { useId, useState, type ReactNode } from 'react'
 
 import { DialogModal } from '../components/DialogModal'
 import { appFeedback } from './appFeedback'
+import styles from './ConfirmDangerDialog.module.css'
 import { setDialogDismissed } from './dialogPreferences'
 
 type Props = {
@@ -50,26 +51,26 @@ export function ConfirmDangerDialog(props: Props) {
 			open
 			onClose={props.onClose}
 			title={props.title}
-			width={520}
+			width="min(92vw, 500px)"
 			closeDisabled={submitting}
 			initialFocusSelector={confirmInputSelector}
 			footer={
-				<>
+				<div className={styles.actions}>
 					<Button onClick={props.onClose} disabled={submitting}>
 						Cancel
 					</Button>
 					<Button type="primary" danger loading={submitting} onClick={() => void handleConfirm()}>
 						{props.okText ?? 'Delete'}
 					</Button>
-				</>
+				</div>
 			}
 		>
-			<Space orientation="vertical" style={{ width: '100%' }}>
-				{props.description ? <div>{props.description}</div> : null}
-				{props.details ? <Typography.Text type="secondary">{props.details}</Typography.Text> : null}
-				<Space orientation="vertical" size={4} style={{ width: '100%' }}>
+			<div className={styles.content}>
+				{props.description ? <div className={styles.description}>{props.description}</div> : null}
+				{props.details ? <div className={styles.details}>{props.details}</div> : null}
+				<div className={styles.confirmBlock}>
 					<label htmlFor={confirmInputId}>
-						<Typography.Text type="secondary">{confirmHint}</Typography.Text>
+						<Typography.Text className={styles.confirmHint}>{confirmHint}</Typography.Text>
 					</label>
 					<Input
 						id={confirmInputId}
@@ -80,13 +81,13 @@ export function ConfirmDangerDialog(props: Props) {
 						value={currentValue}
 						onChange={(event) => setCurrentValue(event.target.value)}
 					/>
-				</Space>
+				</div>
 				{props.dialogPreferenceKey ? (
 					<Checkbox checked={dismissNextTime} disabled={submitting} onChange={(event) => setDismissNextTime(event.target.checked)}>
 						Do not show this confirmation again. You can re-enable it from Settings.
 					</Checkbox>
 				) : null}
-			</Space>
+			</div>
 		</DialogModal>
 	)
 }

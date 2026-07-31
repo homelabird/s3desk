@@ -368,14 +368,14 @@ function buildPrivateEndpointGroup(args: BuildProfileProviderChecklistArgs): Pro
 		id: 'private-endpoints',
 		title: 'Optional for private/self-signed endpoints',
 		items: [
-			optionalItem({
-				id: 'tls-trust',
-				title: 'Custom TLS trust settings',
-				fields: tlsFields,
-				section: 'advanced',
-				configured: values.tlsInsecureSkipVerify || mtlsConfigured || hasValue(values.tlsCaCertPem),
-				complete: !hasFieldError(errors, tlsFields),
-				optionalDetail: 'Only needed for private HTTPS endpoints, self-signed certificates, or mTLS.',
+				optionalItem({
+					id: 'tls-trust',
+					title: 'Custom TLS trust settings',
+					fields: tlsFields,
+					section: 'security',
+					configured: values.tlsInsecureSkipVerify || mtlsConfigured || hasValue(values.tlsCaCertPem),
+					complete: !hasFieldError(errors, tlsFields),
+					optionalDetail: 'Only needed for private HTTPS endpoints, self-signed certificates, or mTLS.',
 				configuredDetail: 'TLS trust or mTLS settings are configured.',
 				incompleteDetail: 'Fix the highlighted TLS or custom endpoint fields.',
 				errors,

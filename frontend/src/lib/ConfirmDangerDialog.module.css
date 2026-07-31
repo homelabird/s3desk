@@ -1,0 +1,64 @@
+.content {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.description {
+	font-size: 15px;
+	line-height: 1.45;
+	color: var(--s3d-color-text);
+}
+
+.details {
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--s3d-color-text-secondary);
+}
+
+.confirmBlock {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.confirmHint {
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--s3d-color-text-secondary);
+}
+
+.actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	width: 100%;
+}
+
+.actions :global(.ant-btn) {
+	min-width: 0;
+}
+
+@media (max-width: 768px) {
+	.content {
+		gap: 12px;
+	}
+
+	.description {
+		font-size: 14px;
+	}
+
+	.details,
+	.confirmHint {
+		font-size: 12px;
+	}
+
+	.actions {
+		width: 100%;
+	}
+
+	.actions :global(.ant-btn) {
+		flex: 1 1 0;
+	}
+}

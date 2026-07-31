@@ -1,22 +1,19 @@
-import { LockOutlined } from '@ant-design/icons'
-import { Button, Collapse, Grid, Tag, Typography } from 'antd'
+import { Button, Grid } from 'antd'
 import { useCallback, useMemo, useState } from 'react'
 
 import type { ProfileTLSStatus } from '../../api/types'
+import { DialogModal } from '../../components/DialogModal'
 import { OverlaySheet } from '../../components/OverlaySheet'
 import { ConfirmDangerDialog } from '../../lib/ConfirmDangerDialog'
 import { runIfActionIdle } from '../../lib/pendingActionGuard'
 import styles from './ProfileModal.module.css'
-import { ProfileProviderChecklist } from './ProfileProviderChecklist'
-import { buildProfileProviderChecklist } from './profileModalChecklist'
-import { buildProfileModalSectionItems } from './ProfileModalSections'
+import { buildProfileModalSections, renderSectionHeader } from './ProfileModalSections'
+import { formatConfiguredStateLabel } from './profileModalSectionShared'
 import type { ProfileFormValues, TLSCapability } from './profileTypes'
 import {
 	buildProfileModalViewState,
 	type FieldErrors,
 	FIELD_SECTION_MAP,
-	DEFAULT_CREATE_SECTIONS,
-	DEFAULT_EDIT_SECTIONS,
 	type SectionKey,
 	validateProfileFormValues,
 } from './profileModalValidation'
@@ -65,7 +62,7 @@ function ProfileModalSession(props: {
 		() => ({
 			provider: 's3_compatible',
 			name: '',
-			endpoint: 'http://127.0.0.1:9000',
+			endpoint: '',
 			publicEndpoint: '',
 			region: 'us-east-1',
 			accessKeyId: '',
@@ -106,7 +103,7 @@ function ProfileModalSession(props: {
 	const screens = Grid.useBreakpoint()
 	const [values, setValues] = useState<ProfileFormValues>(() => ({ ...defaults, ...(props.initialValues ?? {}) }))
 	const [errors, setErrors] = useState<FieldErrors>({})
-	const [openSections, setOpenSections] = useState<SectionKey[]>(props.editMode ? DEFAULT_EDIT_SECTIONS : DEFAULT_CREATE_SECTIONS)
+	const [openSections, setOpenSections] = useState<SectionKey[]>([])
 	const [showTLSInsecureConfirm, setShowTLSInsecureConfirm] = useState(false)
 
 	const viewState = buildProfileModalViewState({
@@ -168,86 +165,111 @@ function ProfileModalSession(props: {
 	}, [isBusy, props.onCancel])
 	const mobileSheetHeight = 'calc(100dvh - env(safe-area-inset-top))'
 
-	const sectionItems = buildProfileModalSectionItems({
+	const sections = buildProfileModalSections({
 		values,
 		errors,
 		editMode: props.editMode,
 		setField,
 		viewState,
 	})
-	const providerChecklist = buildProfileProviderChecklist({
-		values,
-		errors,
-		editMode: props.editMode,
-		viewState,
-	})
+	const modalBody = (
+		<form
+			onSubmit={(event) => {
+				event.preventDefault()
+				void validateAndSubmit()
+			}}
+		>
+			<div className={styles.formShell}>
+				<section className={styles.staticSectionCard}>
+					<div className={styles.staticSectionHeader}>
+						{renderSectionHeader({ title: sections.basic.title })}
+					</div>
+					<div className={styles.staticSectionBody}>{sections.basic.content}</div>
+				</section>
+				<section className={styles.staticSectionCard}>
+					<div className={styles.staticSectionHeader}>
+						{renderSectionHeader({ title: sections.credentials.title })}
+					</div>
+					<div className={styles.staticSectionBody}>{sections.credentials.content}</div>
+				</section>
+				<div className={styles.optionalSections}>
+					{sections.optionalSections.map((section) => {
+						const key = section.key as SectionKey
+						const statusLabel = formatConfiguredStateLabel(section.configuredCount)
+						return (
+							<details
+								key={key}
+								className={`${styles.disclosure} ${styles.optionalSection}`}
+								open={openSections.includes(key)}
+								onToggle={(event) => {
+									const nextOpen = event.currentTarget.open
+									setOpenSections((prev) => (nextOpen ? Array.from(new Set([...prev, key])) : prev.filter((value) => value !== key)))
+								}}
+							>
+								<summary className={styles.disclosureSummary}>
+									<span className={styles.disclosureSummaryCopy}>
+										<span className={styles.disclosureSummaryHeader}>
+											<span className={styles.disclosureSummaryTitle}>{section.title}</span>
+											<span className={styles.disclosureCountBadge}>{statusLabel}</span>
+										</span>
+										{section.description ? <span className={styles.disclosureSummaryDescription}>{section.description}</span> : null}
+									</span>
+								</summary>
+								<div className={styles.disclosureBody}>
+									{section.content}
+								</div>
+							</details>
+						)
+					})}
+				</div>
+			</div>
+		</form>
+	)
+	const modalFooter = (
+		<div className={styles.drawerFooter}>
+			<div className={styles.drawerFooterActions}>
+				<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
+				<Button type="primary" loading={props.loading} disabled={isBusy} onClick={() => void validateAndSubmit()}>
+					{props.okText}
+				</Button>
+			</div>
+		</div>
+	)
 
 	return (
-		<OverlaySheet
-			open={props.open}
-			onClose={handleCancel}
-			title={props.title}
-			placement={sheetPlacement}
-			width={screens.md ? 'min(92vw, 980px)' : undefined}
-			height={!screens.md ? mobileSheetHeight : undefined}
-			footer={
-				<div className={styles.drawerFooter}>
-					<Typography.Text type="secondary" className={styles.drawerFooterHint}>
-						After saving, use Test on the saved profile row to verify access.
-					</Typography.Text>
-					<div className={styles.drawerFooterActions}>
-						<Button onClick={handleCancel} disabled={isBusy}>Cancel</Button>
-						<Button type="primary" loading={props.loading} disabled={isBusy} onClick={() => void validateAndSubmit()}>
-							{props.okText}
-						</Button>
-					</div>
-				</div>
-			}
-		>
-			<form
-				onSubmit={(event) => {
-					event.preventDefault()
-					void validateAndSubmit()
-				}}
-			>
-				<div className={styles.formShell}>
-					<div className={styles.hero}>
-						<div className={styles.heroCopy}>
-							<Typography.Text className={styles.heroEyebrow}>Profiles</Typography.Text>
-							<Typography.Text className={styles.heroDescription}>
-								Configure connection details first, then open compatibility or security sections only if this provider needs them.
-							</Typography.Text>
-						</div>
-						<div className={styles.heroMeta}>
-							<Tag>{viewState.providerLabel}</Tag>
-							<Tag
-								icon={<LockOutlined />}
-								color={props.editMode ? undefined : 'blue'}
-								className={props.editMode ? styles.editModeTag : undefined}
-							>
-								{props.editMode ? 'Editing existing profile' : 'Creating new profile'}
-							</Tag>
-						</div>
-					</div>
-
-					<ProfileProviderChecklist checklist={providerChecklist} />
-
-					<Collapse
-						className={styles.sections}
-						activeKey={openSections}
-						onChange={(keys) => {
-							const next = Array.isArray(keys) ? keys.map((key) => String(key) as SectionKey) : [String(keys) as SectionKey]
-							setOpenSections(next)
-						}}
-						items={sectionItems}
-					/>
-				</div>
-			</form>
+		<>
+			{screens.md ? (
+				<DialogModal
+					open={props.open}
+					onClose={handleCancel}
+					title={props.title}
+					width="min(92vw, 820px)"
+					panelClassName={styles.profileDialog}
+					bodyClassName={styles.profileDialogBody}
+					footerClassName={styles.profileDialogFooter}
+					footer={modalFooter}
+				>
+					{modalBody}
+				</DialogModal>
+			) : (
+				<OverlaySheet
+					open={props.open}
+					onClose={handleCancel}
+					title={props.title}
+					placement={sheetPlacement}
+					width={undefined}
+					height={mobileSheetHeight}
+					panelClassName={styles.profileSheet}
+					footer={modalFooter}
+				>
+					{modalBody}
+				</OverlaySheet>
+			)}
 			{showTLSInsecureConfirm ? (
 				<ConfirmDangerDialog
 					title="Disable certificate verification?"
 					description="This turns off HTTPS certificate checks for the profile."
-					details="Use it only for custom private endpoints with self-signed certificates. Public endpoints and default cloud endpoints are rejected."
+					details="Only for private self-signed endpoints you control."
 					confirmText="INSECURE"
 					confirmHint='Type "INSECURE" to enable this setting'
 					okText="Enable anyway"
@@ -255,6 +277,6 @@ function ProfileModalSession(props: {
 					onClose={() => setShowTLSInsecureConfirm(false)}
 				/>
 			) : null}
-		</OverlaySheet>
+		</>
 	)
 }
