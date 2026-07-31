@@ -84,10 +84,37 @@ function buildMenuButtonLabel(label: string, showLabels: boolean) {
 	return showLabels ? label : null
 }
 
+type DesktopToolbarLayoutProps = {
+	bucketPicker: ReactNode
+	navButtons: ReactNode
+	primaryActions: ReactNode
+	selectionActions: ReactNode
+	utilityActions: ReactNode
+	showSecondaryRow: boolean
+}
+
+function DesktopToolbarLayout(props: DesktopToolbarLayoutProps) {
+	return (
+		<div className={styles.toolbarDesktopStack} data-testid="objects-toolbar-desktop-stack">
+			<div className={styles.toolbarDesktopPrimaryRow} data-testid="objects-toolbar-desktop-primary-row">
+				<div className={styles.toolbarGroup}>{props.bucketPicker}</div>
+				<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopPrimaryActions}`}>{props.primaryActions}</div>
+			</div>
+			{props.showSecondaryRow ? (
+				<div className={styles.toolbarDesktopSecondaryRow} data-testid="objects-toolbar-desktop-secondary-row">
+					<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopNavGroup}`}>{props.navButtons}</div>
+					<div className={`${styles.toolbarGroup} ${styles.toolbarDesktopUtilityGroup}`}>
+						{props.selectionActions}
+						{props.utilityActions}
+					</div>
+				</div>
+			) : null}
+		</div>
+	)
+}
+
 export function ObjectsToolbar(props: ObjectsToolbarProps) {
-	const compactDesktopActions = props.isDesktop && !props.showLabels
-	const actionButtonSize = compactDesktopActions ? 'small' : props.isDesktop ? 'middle' : 'small'
-	const desktopActionGroupSize: [number, number] = compactDesktopActions ? [8, 8] : [10, 10]
+	const actionButtonSize = props.isDesktop && props.showLabels ? 'middle' : 'small'
 	const canUseBucket = props.hasProfile && !props.isOffline
 	const canUpload = props.hasProfile && !!props.bucket && !props.isOffline && props.uploadEnabled
 	const uploadTooltipText = !props.hasProfile
@@ -158,6 +185,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 	const showMobileDetails = props.isAdvanced && !props.dockDetails && props.selectedCount > 0
 	const moreButtonAriaLabel = props.isDesktop ? 'Object tools' : 'More actions'
 	const moreButtonText = props.isDesktop ? 'Tools' : 'More'
+	const navButtonSize = 'small'
 
 	const moreButton = (
 		<ObjectsMenuPopover menu={props.topMoreMenu} align="end" scopeKey={props.bucketPickerScopeKey}>
@@ -195,65 +223,68 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 		/>
 	)
 
-	if (props.isDesktop) {
-		return (
-			<div className={styles.toolbarRow} data-testid="objects-toolbar-desktop-row">
-				<Space wrap size={[10, 10]} className={styles.toolbarGroup} data-testid="objects-toolbar-desktop-nav">
-					{props.isAdvanced ? (
-						<>
-							<Button
-								icon={<LeftOutlined />}
-								disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
-								onClick={props.onGoBack}
-								aria-label="Go back"
-								title="Back"
-							/>
-							<Button
-								icon={<RightOutlined />}
-								disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
-								onClick={props.onGoForward}
-								aria-label="Go forward"
-								title="Forward"
-							/>
-							<Button
-								icon={<UpOutlined />}
-								disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
-								onClick={props.onGoUp}
-								aria-label="Go up"
-								title="Up"
-							/>
-						</>
-					) : null}
-					{bucketPicker}
-				</Space>
+	const selectionActions = showSelectionPrimaryActions ? (
+		<>
+			{renderPrimaryActionButton(props.primaryDownloadAction, {
+				icon: <DownloadOutlined />,
+				fallbackLabel: 'Download',
+				tooltip: downloadDisabledReason,
+			})}
+			{renderPrimaryActionButton(props.primaryDeleteAction, {
+				icon: <DeleteOutlined />,
+				fallbackLabel: 'Delete',
+				danger: true,
+				tooltip: deleteDisabledReason,
+			})}
+		</>
+	) : null
 
-				<Space
-					wrap
-					size={desktopActionGroupSize}
-					className={`${styles.toolbarGroup} ${styles.toolbarGroupRight}`}
-					data-testid="objects-toolbar-desktop-actions"
-					data-compact={compactDesktopActions ? 'true' : 'false'}
-				>
-					{uploadButtonDesktop}
-					{newFolderButton}
-					{showSelectionPrimaryActions ? (
-						<>
-							{renderPrimaryActionButton(props.primaryDownloadAction, {
-								icon: <DownloadOutlined />,
-								fallbackLabel: 'Download',
-								tooltip: downloadDisabledReason,
-							})}
-							{renderPrimaryActionButton(props.primaryDeleteAction, {
-								icon: <DeleteOutlined />,
-								fallbackLabel: 'Delete',
-								danger: true,
-								tooltip: deleteDisabledReason,
-							})}
-						</>
-					) : null}
-					{moreButton}
-				</Space>
-			</div>
+	if (props.isDesktop) {
+		const navButtons = props.isAdvanced ? (
+			<>
+				<Button
+					size={navButtonSize}
+					icon={<LeftOutlined />}
+					disabled={!props.hasProfile || props.isOffline || !props.canGoBack}
+					onClick={props.onGoBack}
+					aria-label="Go back"
+					title="Back"
+				/>
+				<Button
+					size={navButtonSize}
+					icon={<RightOutlined />}
+					disabled={!props.hasProfile || props.isOffline || !props.canGoForward}
+					onClick={props.onGoForward}
+					aria-label="Go forward"
+					title="Forward"
+				/>
+				<Button
+					size={navButtonSize}
+					icon={<UpOutlined />}
+					disabled={!props.hasProfile || props.isOffline || !props.canGoUp}
+					onClick={props.onGoUp}
+					aria-label="Go up"
+					title="Up"
+				/>
+			</>
+		) : null
+		const primaryActions = (
+			<>
+				{uploadButtonDesktop}
+				{newFolderButton}
+			</>
+		)
+		const utilityActions = moreButton
+
+		return (
+			<DesktopToolbarLayout
+				bucketPicker={bucketPicker}
+				navButtons={navButtons}
+				primaryActions={primaryActions}
+				selectionActions={selectionActions}
+				utilityActions={utilityActions}
+				showSecondaryRow={Boolean(props.isAdvanced || showSelectionPrimaryActions || props.hasProfile)}
+			/>
 		)
 	}
 
@@ -295,19 +326,7 @@ export function ObjectsToolbar(props: ObjectsToolbarProps) {
 					) : null}
 					{uploadButtonMobile}
 					{showSelectionPrimaryActions ? (
-						<>
-							{renderPrimaryActionButton(props.primaryDownloadAction, {
-								icon: <DownloadOutlined />,
-								fallbackLabel: 'Download',
-								tooltip: downloadDisabledReason,
-							})}
-							{renderPrimaryActionButton(props.primaryDeleteAction, {
-								icon: <DeleteOutlined />,
-								fallbackLabel: 'Delete',
-								danger: true,
-								tooltip: deleteDisabledReason,
-							})}
-						</>
+						selectionActions
 					) : null}
 					{showMobileDetails ? (
 						<Button

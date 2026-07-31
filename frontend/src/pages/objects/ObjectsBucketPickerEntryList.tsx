@@ -63,22 +63,31 @@ export function ObjectsBucketPickerEntryList({
 	return (
 		<>
 			{currentEntry ? (
-				<div className={styles.bucketPickerSection}>
-					<div className={styles.bucketPickerSectionLabel}>Current</div>
+				<div className={`${styles.bucketPickerSection} ${styles.bucketPickerSectionCurrent}`}>
+					<div className={styles.bucketPickerSectionHeader}>
+						<div className={styles.bucketPickerSectionLabel}>Current</div>
+						<div className={styles.bucketPickerSectionHint}>The bucket this workspace is using now</div>
+					</div>
 					{renderButton(currentEntry, 'current', true)}
 				</div>
 			) : null}
 
 			{recentEntries.length > 0 ? (
 				<div className={styles.bucketPickerSection}>
-					<div className={styles.bucketPickerSectionLabel}>Recent</div>
+					<div className={styles.bucketPickerSectionHeader}>
+						<div className={styles.bucketPickerSectionLabel}>Recent</div>
+						<div className={styles.bucketPickerSectionHint}>Buckets opened recently for faster switching</div>
+					</div>
 					<div className={styles.bucketPickerList}>{recentEntries.map((entry) => renderButton(entry, 'recent'))}</div>
 				</div>
 			) : null}
 
 			{allEntries.length > 0 ? (
 				<div className={styles.bucketPickerSection}>
-					<div className={styles.bucketPickerSectionLabel}>All buckets</div>
+					<div className={styles.bucketPickerSectionHeader}>
+						<div className={styles.bucketPickerSectionLabel}>All buckets</div>
+						<div className={styles.bucketPickerSectionHint}>Browse the full bucket list</div>
+					</div>
 					<div className={styles.bucketPickerList}>{allEntries.map((entry) => renderButton(entry, 'all'))}</div>
 				</div>
 			) : null}

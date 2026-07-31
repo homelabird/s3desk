@@ -22,7 +22,7 @@ type ObjectsGlobalSearchResultsProps = {
 }
 
 function ObjectsGlobalSearchResultActions({
-	compact,
+	variant,
 	onCopyKey,
 	onDownloadKey,
 	onOpenDetails,
@@ -32,46 +32,48 @@ function ObjectsGlobalSearchResultActions({
 	ObjectsGlobalSearchResultsProps,
 	'onCopyKey' | 'onDownloadKey' | 'onOpenDetails' | 'onOpenPrefixForKey'
 > & {
-	compact: boolean
+	variant: 'card' | 'table'
 	row: ObjectItem
 }) {
+	const isCard = variant === 'card'
+
 	return (
 		<div
-			className={compact ? styles.globalSearchResultActions : styles.globalSearchActionRow}
-			data-global-search-table-action-row={compact ? undefined : 'true'}
+			className={isCard ? styles.globalSearchResultActions : styles.globalSearchTableActionRow}
+			data-global-search-table-action-row={isCard ? undefined : 'true'}
 		>
-				<Button
-					size="small"
-					className={compact ? styles.globalSearchResultPrimaryButton : undefined}
-					aria-label={`Open ${row.key}`}
-					title={`Open ${row.key}`}
-					onClick={() => onOpenPrefixForKey(row.key)}
-				>
-					Open
-				</Button>
 			<Button
 				size="small"
-				className={compact ? styles.globalSearchResultIconButton : undefined}
+				className={isCard ? styles.globalSearchResultPrimaryButton : styles.globalSearchTablePrimaryButton}
+				aria-label={`Open ${row.key}`}
+				title={`Open ${row.key}`}
+				onClick={() => onOpenPrefixForKey(row.key)}
+			>
+				Open
+			</Button>
+			<Button
+				size="small"
+				className={isCard ? styles.globalSearchResultIconButton : styles.globalSearchTableIconButton}
 				icon={<CopyOutlined />}
 				aria-label={`Copy key ${row.key}`}
 				onClick={() => onCopyKey(row.key)}
 			/>
 			<Button
 				size="small"
-				className={compact ? styles.globalSearchResultIconButton : undefined}
+				className={isCard ? styles.globalSearchResultIconButton : styles.globalSearchTableIconButton}
 				icon={<DownloadOutlined />}
 				aria-label={`Download ${row.key}`}
 				onClick={() => onDownloadKey(row.key, row.size)}
 			/>
-				<Button
-					size="small"
-					className={compact ? styles.globalSearchResultSecondaryButton : undefined}
-					icon={<InfoCircleOutlined />}
-					aria-label={`Open details for ${row.key}`}
-					title={`Open details for ${row.key}`}
-					onClick={() => onOpenDetails(row.key)}
-				>
-					{compact ? 'Details' : null}
+			<Button
+				size="small"
+				className={isCard ? styles.globalSearchResultSecondaryButton : styles.globalSearchTableIconButton}
+				icon={<InfoCircleOutlined />}
+				aria-label={`Open details for ${row.key}`}
+				title={`Open details for ${row.key}`}
+				onClick={() => onOpenDetails(row.key)}
+			>
+				{isCard ? 'Details' : null}
 			</Button>
 		</div>
 	)
@@ -138,7 +140,7 @@ export function ObjectsGlobalSearchResults({
 								</span>
 							</div>
 							<ObjectsGlobalSearchResultActions
-								compact
+								variant="card"
 								row={row}
 								onCopyKey={onCopyKey}
 								onDownloadKey={onDownloadKey}
@@ -182,12 +184,12 @@ export function ObjectsGlobalSearchResults({
 											<span className={styles.globalSearchMuted}>-</span>
 										)}
 									</td>
-									<td className={styles.globalSearchTd}>
-										<ObjectsGlobalSearchResultActions
-											compact={false}
-											row={row}
-											onCopyKey={onCopyKey}
-											onDownloadKey={onDownloadKey}
+										<td className={`${styles.globalSearchTd} ${styles.globalSearchTdActions}`}>
+											<ObjectsGlobalSearchResultActions
+												variant="table"
+												row={row}
+												onCopyKey={onCopyKey}
+												onDownloadKey={onDownloadKey}
 											onOpenDetails={onOpenDetails}
 											onOpenPrefixForKey={onOpenPrefixForKey}
 										/>

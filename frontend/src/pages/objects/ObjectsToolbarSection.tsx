@@ -3,7 +3,7 @@ import { Alert, Typography } from 'antd'
 import type { ObjectsToolbarProps } from './ObjectsToolbar'
 import { ObjectsToolbar } from './ObjectsToolbar'
 import { AppTabs } from '../../components/AppTabs'
-import { SetupCallout } from '../../components/SetupCallout'
+import { ProfileRequiredCallout } from '../../components/ProfileRequiredCallout'
 import { failedToLoadBucketsTitle } from '../../lib/actionHints'
 import styles from './ObjectsShell.module.css'
 
@@ -47,7 +47,7 @@ export function ObjectsToolbarSection(props: ObjectsToolbarSectionProps) {
 
 	return (
 		<div className={styles.toolbarSectionStack} data-testid="objects-toolbar-section" data-has-tabs={hasTabs ? 'true' : 'false'}>
-			<SetupCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to start browsing" />
+			<ProfileRequiredCallout apiToken={props.apiToken} profileId={props.profileId} message="Select a profile to start browsing" />
 			{props.bucketsErrorMessage ? (
 				<Alert
 					type="error"

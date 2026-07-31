@@ -89,7 +89,6 @@ export function ObjectsOverlaySheet(props: ObjectsOverlaySheetProps) {
 
 	const resolvedBodyClassName = [
 		styles.objectsOverlayBody,
-		compactMobile ? styles.objectsOverlayBodyCompactMobile : '',
 		bodyClassName ?? '',
 	]
 		.filter(Boolean)

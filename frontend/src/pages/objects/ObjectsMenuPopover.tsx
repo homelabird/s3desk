@@ -206,7 +206,7 @@ export function ObjectsMenuPopover(props: ObjectsMenuPopoverProps) {
 		<PopoverSurface
 			align={align}
 			className={`${styles.toolbarMenuRoot} ${className ?? ''}`.trim()}
-			contentClassName={`${styles.toolbarMenuPopover} ${align === 'end' ? styles.toolbarMenuPopoverEnd : ''} ${menuClassName ?? ''}`.trim()}
+			contentClassName={`${styles.toolbarMenuPopover} ${menuClassName ?? ''}`.trim()}
 			rootProps={menuRootDataAttrs}
 			contentProps={menuRootDataAttrs}
 			getViewportRect={getAppContentViewportRect}
