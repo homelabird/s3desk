@@ -17,6 +17,9 @@ type Props = {
 	dataTestId?: string
 	closeDisabled?: boolean
 	initialFocusSelector?: string
+	panelClassName?: string
+	bodyClassName?: string
+	footerClassName?: string
 	children: ReactNode
 }
 
@@ -31,6 +34,9 @@ export function DialogModal(props: Props) {
 		dataTestId,
 		closeDisabled = false,
 		initialFocusSelector,
+		panelClassName,
+		bodyClassName,
+		footerClassName,
 		children,
 	} = props
 	const titleId = useId()
@@ -65,7 +71,7 @@ export function DialogModal(props: Props) {
 				aria-modal="true"
 				aria-labelledby={titleId}
 				tabIndex={-1}
-				className={styles.panel}
+				className={[styles.panel, panelClassName ?? ''].filter(Boolean).join(' ')}
 				style={panelStyle}
 				data-testid={dataTestId}
 				onMouseDown={(event) => event.stopPropagation()}
@@ -89,8 +95,8 @@ export function DialogModal(props: Props) {
 						<CloseOutlined />
 					</button>
 				</div>
-				<div className={styles.body}>{children}</div>
-				{footer ? <div className={styles.footer}>{footer}</div> : null}
+				<div className={[styles.body, bodyClassName ?? ''].filter(Boolean).join(' ')}>{children}</div>
+				{footer ? <div className={[styles.footer, footerClassName ?? ''].filter(Boolean).join(' ')}>{footer}</div> : null}
 			</div>
 		</div>,
 		document.body,
