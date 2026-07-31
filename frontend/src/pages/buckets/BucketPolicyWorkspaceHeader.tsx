@@ -54,6 +54,7 @@ export function BucketPolicyWorkspaceHeader(props: {
           className={`${styles.decisionRoute} ${styles.decisionRoutePrimary}`}
           data-testid="bucket-policy-recommended-route"
         >
+          <Tag className={styles.routeTagPrimary}>Recommended path</Tag>
           <Typography.Text strong>{guide.recommendedTitle}</Typography.Text>
           <Typography.Text type="secondary">
             {guide.recommendedDescription}
@@ -68,6 +69,7 @@ export function BucketPolicyWorkspaceHeader(props: {
           className={`${styles.decisionRoute} ${styles.decisionRouteAdvanced}`}
           data-testid="bucket-policy-advanced-route"
         >
+          <Tag className={styles.routeTagAdvanced}>Advanced path</Tag>
           <Typography.Text strong>{guide.advancedTitle}</Typography.Text>
           <Typography.Text type="secondary">
             {guide.advancedDescription}

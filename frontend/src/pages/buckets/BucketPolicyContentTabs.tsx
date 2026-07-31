@@ -85,11 +85,17 @@ export function BucketPolicyContentTabs(props: {
               )}
 
               {props.policyKind !== "s3" ? (
-                <details className={styles.disclosure}>
+                <details className={`${styles.disclosure} ${styles.advancedEditorCard}`}>
                   <summary className={styles.disclosureSummary}>
                     Editor tools
                   </summary>
                   <div className={styles.disclosureBody}>
+                    <Alert
+                      type="info"
+                      showIcon
+                      title="Advanced editing route"
+                      description="Use presets, switch editor modes, or move to raw JSON only when the recommended Controls path is not enough."
+                    />
                     <Space align="center" wrap className={styles.controlRow}>
                       <Typography.Text type="secondary">Editor:</Typography.Text>
                       <NativeSelect
@@ -149,26 +155,29 @@ export function BucketPolicyContentTabs(props: {
               ) : null}
 
               {props.policyKind === "s3" ? (
-                <Space align="center" wrap className={styles.controlRow}>
-                  <Typography.Text type="secondary">Template:</Typography.Text>
-                  <NativeSelect
-                    value={props.selectedPresetKey ?? ""}
-                    onChange={(value) => {
-                      if (!value) {
-                        props.setSelectedPresetKey(undefined);
-                        return;
-                      }
-                      props.applyPolicyPreset(String(value));
-                    }}
-                    ariaLabel="Template preset"
-                    className={styles.presetSelect}
-                    placeholder="Load provider preset"
-                    options={props.policyPresets.map((item) => ({
-                      value: item.key,
-                      label: item.label,
-                    }))}
-                  />
-                </Space>
+                <div className={styles.advancedInlineCard}>
+                  <Typography.Text strong>Advanced template route</Typography.Text>
+                  <Space align="center" wrap className={styles.controlRow}>
+                    <Typography.Text type="secondary">Template:</Typography.Text>
+                    <NativeSelect
+                      value={props.selectedPresetKey ?? ""}
+                      onChange={(value) => {
+                        if (!value) {
+                          props.setSelectedPresetKey(undefined);
+                          return;
+                        }
+                        props.applyPolicyPreset(String(value));
+                      }}
+                      ariaLabel="Template preset"
+                      className={styles.presetSelect}
+                      placeholder="Load provider preset"
+                      options={props.policyPresets.map((item) => ({
+                        value: item.key,
+                        label: item.label,
+                      }))}
+                    />
+                  </Space>
+                </div>
               ) : null}
 
               {props.policyKind === "s3" && props.selectedPresetDescription ? (
@@ -182,14 +191,14 @@ export function BucketPolicyContentTabs(props: {
                 : null}
 
               {props.editorMode === "json" || props.policyKind === "s3" ? (
-                <details className={styles.disclosure} open={props.policyKind === "s3"}>
+                <details className={`${styles.disclosure} ${styles.rawJsonCard}`} open={props.policyKind === "s3"}>
                   <summary className={styles.disclosureSummary}>Raw JSON editor</summary>
                   <div className={styles.disclosureBody}>
                     <Alert
-                      type="warning"
-                      showIcon
-                      title="Raw JSON editing area"
-                      description="Use raw JSON when the structured editor does not cover the policy you need. Review the diff before saving."
+                        type="warning"
+                        showIcon
+                        title="Raw JSON editing area"
+                        description="Use raw JSON only for custom statements or provider-specific cases the guided editors do not represent. Review Diff before Save."
                     />
                     <Space orientation="vertical" size="small" className={styles.fullWidth}>
                       <FormField

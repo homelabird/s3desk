@@ -21,7 +21,12 @@ export function BucketPolicyFooterActions(props: {
   return (
     <div className={styles.footerActions}>
       <div className={styles.footerDangerZone}>
-        <Typography.Text type="secondary">Danger zone</Typography.Text>
+        <div className={styles.footerDangerCopy}>
+          <Typography.Text strong>Danger zone</Typography.Text>
+          <Typography.Text type="secondary">
+            Remove or reset the current policy only when you intend to revoke this path.
+          </Typography.Text>
+        </div>
         <Tooltip title={props.deleteDisabledReason || null}>
           <span>
             <Button
