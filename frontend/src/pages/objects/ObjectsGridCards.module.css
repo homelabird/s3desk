@@ -1,8 +1,12 @@
-.gridCardPreviewFrame {
+.gridCardPreviewFrame,
+.gridCardMediaPlaceholder {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
+}
+
+.gridCardPreviewFrame {
   min-height: 148px;
 }
 
@@ -19,22 +23,6 @@
   color: var(--s3d-color-text-secondary);
 }
 
-.listThumbnailDeferredHint {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 1px dashed var(--s3d-color-border-strong);
-  border-radius: var(--s3d-radius-sm);
-  background: color-mix(in srgb, var(--s3d-color-surface) 94%, var(--s3d-color-primary) 6%);
-  color: var(--s3d-color-text);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  flex: 0 0 auto;
-}
-
 .gridContent {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -43,17 +31,19 @@
   padding: 12px;
 }
 
-.gridFooter {
-  grid-column: 1 / -1;
+.gridFooter,
+.gridFooterCell {
   display: flex;
   justify-content: center;
+}
+
+.gridFooter {
+  grid-column: 1 / -1;
   padding: 6px 0 2px;
 }
 
 .gridFooterCell {
   width: 100%;
-  display: flex;
-  justify-content: center;
 }
 
 .gridCardShell {
@@ -85,11 +75,6 @@
   border-color: color-mix(in srgb, var(--s3d-color-primary) 45%, var(--s3d-color-border) 55%);
   box-shadow: var(--s3d-shadow-md);
   transform: translateY(-1px);
-}
-
-.gridCard:focus-visible {
-  outline: 2px solid var(--s3d-color-focus);
-  outline-offset: 2px;
 }
 
 .gridCardSelected {
@@ -156,41 +141,10 @@
 }
 
 .gridCardMediaPlaceholder {
-  width: 100%;
   min-height: 148px;
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 8px;
   color: var(--s3d-color-text-secondary);
-}
-
-.gridCardPreviewButton {
-  border: none;
-  padding: 0;
-  margin: 0;
-  background: transparent;
-  cursor: zoom-in;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-}
-
-.gridCardPreviewButton:focus-visible {
-  outline: 2px solid var(--s3d-color-focus);
-  outline-offset: 2px;
-}
-
-.gridCardDeferredPreviewButton {
-  border-radius: 12px;
-}
-
-.gridCardDeferredPreviewButton .gridCardMediaPlaceholder {
-  border: 1px dashed var(--s3d-color-border-strong);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--s3d-color-surface) 92%, var(--s3d-color-primary-light) 8%);
 }
 
 .gridCardFolderIcon,
@@ -202,7 +156,8 @@
   color: var(--s3d-color-primary);
 }
 
-.gridCardBody {
+.gridCardBody,
+.gridCardBodyButton {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -210,10 +165,6 @@
 }
 
 .gridCardBodyButton {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -223,13 +174,13 @@
   cursor: pointer;
 }
 
+.gridCard:focus-visible,
 .gridCardBodyButton:focus-visible {
   outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
 }
 
 .gridCardTitle {
-  display: block;
   min-width: 0;
   font-weight: 600;
   line-height: 1.35;
@@ -281,7 +232,6 @@
   .gridContent {
     grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
     gap: 8px;
-    padding: 8px;
   }
 
   .gridCard {
@@ -290,17 +240,13 @@
     border-radius: 12px;
   }
 
-  .gridCardTopRow {
+  .gridCardTopRow,
+  .gridCardMediaPlaceholder {
     gap: 6px;
   }
 
   .gridCardTopActions {
     gap: 2px;
-  }
-
-  .gridCardIconButton {
-    min-width: 44px;
-    min-height: 44px;
   }
 
   .gridCardMedia {
@@ -312,10 +258,6 @@
   .gridCardPreviewFrame,
   .gridCardMediaPlaceholder {
     min-height: 100px;
-  }
-
-  .gridCardMediaPlaceholder {
-    gap: 6px;
   }
 
   .gridCardFolderIcon,
@@ -343,8 +285,6 @@
   }
 
   .gridCardPreviewActionButton {
-    min-width: 44px;
-    min-height: 44px;
     padding-inline: 6px !important;
   }
 

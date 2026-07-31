@@ -5,17 +5,14 @@
   min-width: 0;
 }
 
-.bucketPickerDesktopTrigger {
-  width: 100%;
-  min-width: 0;
-  min-height: 40px;
+.bucketPickerDesktopTrigger,
+.bucketPickerTrigger {
   border: 1px solid var(--s3d-color-border-input);
   border-radius: 10px;
   background: var(--s3d-color-bg-input);
   color: inherit;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
   gap: 12px;
   padding: 10px 12px;
   text-align: left;
@@ -26,14 +23,24 @@
     background var(--s3d-transition-fast);
 }
 
+.bucketPickerDesktopTrigger {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  justify-content: flex-start;
+}
+
 .bucketPickerDesktopTrigger:hover:not(:disabled),
-.bucketPickerDesktopTrigger:focus-visible {
+.bucketPickerDesktopTrigger:focus-visible,
+.bucketPickerTrigger:hover:not(:disabled),
+.bucketPickerTrigger:focus-visible {
   border-color: var(--s3d-color-focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 18%, transparent);
   outline: none;
 }
 
-.bucketPickerDesktopTrigger:disabled {
+.bucketPickerDesktopTrigger:disabled,
+.bucketPickerTrigger:disabled {
   cursor: not-allowed;
   opacity: 0.68;
   background: var(--s3d-color-bg-disabled);
@@ -47,15 +54,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 1.35;
 }
 
-.bucketPickerDesktopValue {
+.bucketPickerDesktopValue,
+.bucketPickerTriggerValue {
   font-weight: 600;
 }
 
-.bucketPickerDesktopPlaceholder {
+.bucketPickerDesktopPlaceholder,
+.bucketPickerTriggerPlaceholder {
   color: var(--s3d-color-text-secondary);
 }
 
@@ -70,14 +77,18 @@
   transform: rotate(180deg);
 }
 
+.bucketPickerDesktopPopover,
+.bucketPickerDesktopBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .bucketPickerDesktopPopover {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
   z-index: 30;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   border: 1px solid var(--s3d-color-border-strong);
   border-radius: var(--s3d-radius-lg);
   background: var(--s3d-color-bg-elevated);
@@ -104,8 +115,6 @@
 }
 
 .bucketPickerDesktopBody {
-  display: flex;
-  flex-direction: column;
   gap: 14px;
   overflow: auto;
   padding-right: 2px;
@@ -171,7 +180,8 @@
   outline: none;
 }
 
-.bucketPickerOption {
+.bucketPickerOption,
+.bucketPickerRowContent {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -226,34 +236,7 @@
 
 .bucketPickerTrigger {
   min-height: 48px;
-  border: 1px solid var(--s3d-color-border-input);
-  border-radius: 10px;
-  background: var(--s3d-color-bg-input);
-  color: inherit;
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color var(--s3d-transition-fast),
-    box-shadow var(--s3d-transition-fast),
-    background var(--s3d-transition-fast);
-}
-
-.bucketPickerTrigger:hover:not(:disabled),
-.bucketPickerTrigger:focus-visible {
-  border-color: var(--s3d-color-focus);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--s3d-color-focus) 18%, transparent);
-  outline: none;
-}
-
-.bucketPickerTrigger:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
-  background: var(--s3d-color-bg-disabled);
 }
 
 .bucketPickerTriggerText {
@@ -263,22 +246,21 @@
   gap: 2px;
 }
 
+.bucketPickerDesktopValue,
+.bucketPickerDesktopPlaceholder,
 .bucketPickerTriggerValue,
 .bucketPickerTriggerPlaceholder {
   font-size: 14px;
   line-height: 1.35;
 }
 
-.bucketPickerTriggerValue {
-  font-weight: 600;
-}
-
-.bucketPickerTriggerPlaceholder {
-  color: var(--s3d-color-text-secondary);
+.bucketPickerTriggerHint,
+.bucketPickerSectionLabel,
+.bucketPickerSectionHint {
+  font-size: 12px;
 }
 
 .bucketPickerTriggerHint {
-  font-size: 12px;
   line-height: 1.3;
   color: var(--s3d-color-text-secondary);
 }
@@ -293,12 +275,31 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--s3d-color-border) 78%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--s3d-color-bg-card) 92%, var(--s3d-color-bg-elevated));
+}
+
+.bucketPickerSectionCurrent {
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 26%, var(--s3d-color-border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-bg) 72%, var(--s3d-color-bg-card)), var(--s3d-color-bg-card));
+}
+
+.bucketPickerSectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .bucketPickerSectionLabel {
-  font-size: 12px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  color: var(--s3d-color-text-secondary);
+}
+
+.bucketPickerSectionHint {
+  line-height: 1.4;
   color: var(--s3d-color-text-secondary);
 }
 
@@ -335,14 +336,6 @@
   border-color: color-mix(in srgb, var(--s3d-color-focus) 62%, var(--s3d-color-border));
   background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
   box-shadow: inset 3px 0 0 var(--s3d-color-primary);
-}
-
-.bucketPickerRowContent {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
 }
 
 .bucketPickerCurrentIcon {

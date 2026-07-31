@@ -1,10 +1,41 @@
-.fullWidth {
+.fullWidth,
+.compactFieldRow {
 	width: 100%;
 }
 
 .sectionIntro {
 	display: block;
 	line-height: 1.45;
+}
+
+.accessCard,
+.accessReferenceCard,
+.recoveryCard {
+	width: 100%;
+	padding: 12px;
+}
+
+.accessCard,
+.accessReferenceCard {
+	border-radius: var(--s3d-radius-lg);
+	box-shadow: var(--s3d-shadow-sm);
+}
+
+.accessCardHeader {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 10px;
+}
+
+.accessCard {
+	border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 24%, var(--s3d-color-border));
+	background: linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-primary-bg) 58%, var(--s3d-color-bg-card)), var(--s3d-color-bg-card));
+}
+
+.accessReferenceCard {
+	border: 1px solid var(--s3d-color-border);
+	background: var(--s3d-gradient-section);
 }
 
 .settingsApplyBar {
@@ -21,8 +52,6 @@
 }
 
 .recoveryCard {
-	width: 100%;
-	padding: 12px;
 	border: 1px solid color-mix(in srgb, var(--s3d-color-danger) 34%, var(--s3d-color-border));
 	border-left-width: 4px;
 	border-radius: var(--s3d-radius-lg);
@@ -66,16 +95,6 @@
 	margin-top: 8px;
 }
 
-.centerRow {
-	display: flex;
-	justify-content: center;
-	padding: 12px;
-}
-
-.marginBottom12 {
-	margin-bottom: 12px;
-}
-
 .marginBottom0 {
 	margin-bottom: 0;
 }
@@ -89,20 +108,10 @@
 	overflow: auto;
 }
 
-.codeWrap {
-	word-break: break-all;
-}
-
-.tightList {
-	margin: 4px 0 0;
-	padding-left: 18px;
-}
-
 .compactFieldRow {
 	display: flex;
 	align-items: stretch;
 	gap: 8px;
-	width: 100%;
 }
 
 .compactFieldRow > :first-child {
@@ -115,15 +124,17 @@
 		align-items: stretch;
 	}
 
-	.settingsApplyBar > * {
-		width: 100%;
-	}
-
 	.compactFieldRow {
 		flex-direction: column;
 	}
 
+	.settingsApplyBar > *,
 	.compactFieldRow > * {
 		width: 100%;
+	}
+
+	.accessCard,
+	.accessReferenceCard {
+		padding: 10px;
 	}
 }

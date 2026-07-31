@@ -4,7 +4,9 @@
 	gap: 16px;
 }
 
-.surfaceBody {
+.surfaceBody,
+.mobileList,
+.mobileCard {
 	display: flex;
 	flex-direction: column;
 }
@@ -30,14 +32,7 @@
 	justify-content: center;
 }
 
-.mobileList {
-	display: flex;
-	flex-direction: column;
-}
-
 .mobileCard {
-	display: flex;
-	flex-direction: column;
 	gap: 16px;
 	padding: 18px;
 	border-top: 1px solid var(--s3d-color-border-soft);
@@ -68,7 +63,8 @@
 	min-width: 0;
 }
 
-.mobileTitleRow {
+.mobileTitleRow,
+.mobileActionRow {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -123,13 +119,6 @@
 	overflow-wrap: anywhere;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 4;
-}
-
-.mobileActionRow {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
 }
 
 .mobileInlineActions {

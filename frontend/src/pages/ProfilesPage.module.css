@@ -27,16 +27,21 @@
 	margin: 0;
 }
 
-.onboardingChecklist {
+.onboardingChecklist,
+.onboardingDiagnosticsList {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
 	padding: 0;
-	margin: 0;
 	list-style: none;
 }
 
-.onboardingStep {
+.onboardingChecklist {
+	margin: 0;
+}
+
+.onboardingStep,
+.onboardingDiagnosticsItem {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
@@ -45,7 +50,8 @@
 	color: var(--s3d-color-text);
 }
 
-.onboardingStepIcon {
+.onboardingStepIcon,
+.onboardingDiagnosticsIcon {
 	display: inline-flex;
 	color: var(--s3d-color-primary);
 }
@@ -54,12 +60,17 @@
 	color: var(--s3d-color-text-secondary);
 }
 
-.onboardingStepLabel {
+.onboardingStepLabel,
+.mobileCardCopy,
+.mobileId,
+.mobileMetaValue,
+.mobileMetaSecondary {
 	min-width: 0;
 	overflow-wrap: anywhere;
 }
 
-.onboardingStepStatus {
+.onboardingStepStatus,
+.onboardingDiagnosticsStatus {
 	font-size: 12px;
 	font-weight: 700;
 	color: var(--s3d-color-text-secondary);
@@ -77,37 +88,12 @@
 }
 
 .onboardingDiagnosticsList {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 0;
 	margin-top: 10px;
 	margin-bottom: 0;
-	list-style: none;
-}
-
-.onboardingDiagnosticsItem {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto;
-	align-items: center;
-	gap: 10px;
-	min-width: 0;
-	color: var(--s3d-color-text);
-}
-
-.onboardingDiagnosticsIcon {
-	display: inline-flex;
-	color: var(--s3d-color-primary);
 }
 
 .onboardingDiagnosticsItem[data-complete='false'] .onboardingDiagnosticsIcon {
 	color: var(--s3d-color-warning-text);
-}
-
-.onboardingDiagnosticsStatus {
-	font-size: 12px;
-	font-weight: 700;
-	color: var(--s3d-color-text-secondary);
 }
 
 .onboardingActions {
@@ -189,10 +175,6 @@
 	width: 180px;
 }
 
-.thFlags {
-	width: 240px;
-}
-
 .thActions {
 	width: 220px;
 }
@@ -223,41 +205,38 @@
 	gap: 8px;
 }
 
-.statusBadge {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 4px 10px;
-	border-radius: 999px;
-	background: var(--s3d-color-success-bg);
-	color: var(--s3d-color-success-text);
-	font-size: 12px;
-	font-weight: 700;
-}
-
-.warningBadge {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 4px 10px;
-	border-radius: 999px;
-	border: 1px solid var(--s3d-color-warning-border);
-	background: var(--s3d-color-warning-bg);
-	color: var(--s3d-color-warning-text);
-	font-size: 12px;
-	font-weight: 700;
-}
-
+.statusBadge,
+.warningBadge,
 .providerBadge {
 	display: inline-flex;
 	align-items: center;
-	padding: 6px 10px;
-	border: 1px solid var(--s3d-color-info-border);
 	border-radius: 999px;
-	background: var(--s3d-color-primary-bg);
-	color: var(--s3d-color-primary);
 	font-size: 12px;
 	font-weight: 700;
+}
+
+.statusBadge,
+.warningBadge {
+	gap: 6px;
+	padding: 4px 10px;
+}
+
+.statusBadge {
+	background: var(--s3d-color-success-bg);
+	color: var(--s3d-color-success-text);
+}
+
+.warningBadge {
+	border: 1px solid var(--s3d-color-warning-border);
+	background: var(--s3d-color-warning-bg);
+	color: var(--s3d-color-warning-text);
+}
+
+.providerBadge {
+	padding: 6px 10px;
+	border: 1px solid var(--s3d-color-info-border);
+	background: var(--s3d-color-primary-bg);
+	color: var(--s3d-color-primary);
 }
 
 .connectionStack {
@@ -306,14 +285,13 @@
 	padding: 24px;
 }
 
-.mobileList {
+.mobileList,
+.mobileCard {
 	display: flex;
 	flex-direction: column;
 }
 
 .mobileCard {
-	display: flex;
-	flex-direction: column;
 	gap: 14px;
 	padding: 18px;
 	border-top: 1px solid var(--s3d-color-border-soft);
@@ -337,11 +315,6 @@
 	min-width: 0;
 }
 
-.mobileCardCopy {
-	min-width: 0;
-	overflow-wrap: anywhere;
-}
-
 .mobileTitleRow {
 	display: flex;
 	flex-wrap: wrap;
@@ -351,11 +324,13 @@
 	overflow-wrap: anywhere;
 }
 
+.mobileId,
+.mobileMetaSecondary {
+	margin-top: 4px;
+}
+
 .mobileId {
 	display: block;
-	margin-top: 4px;
-	min-width: 0;
-	overflow-wrap: anywhere;
 }
 
 .mobileMetaGrid {
@@ -408,15 +383,10 @@
 	font-size: 14px;
 	line-height: 1.55;
 	color: var(--s3d-color-text);
-	min-width: 0;
-	overflow-wrap: anywhere;
 }
 
 .mobileMetaSecondary {
-	margin-top: 4px;
 	color: var(--s3d-color-text-secondary);
-	min-width: 0;
-	overflow-wrap: anywhere;
 }
 
 .mobileActionRow {
@@ -430,18 +400,12 @@
 		min-width: 840px;
 	}
 
-	.thName {
-		width: 200px;
-	}
-
 	.thProvider {
 		width: 150px;
 	}
 
-	.thFlags {
-		width: 200px;
-	}
-
+	.thName,
+	.thFlags,
 	.thActions {
 		width: 200px;
 	}
@@ -502,10 +466,5 @@
 	.mobileMetaValue {
 		font-size: 13px;
 		line-height: 1.45;
-	}
-
-	.mobileMetaSecondary,
-	.mobileId {
-		overflow-wrap: anywhere;
 	}
 }

@@ -36,9 +36,13 @@
   outline-offset: 2px;
 }
 
-.toggleButton {
+.toggleButton,
+.toggleSpacer {
   width: 20px;
   height: 20px;
+}
+
+.toggleButton {
   border: none;
   background: transparent;
   border-radius: 6px;
@@ -63,8 +67,6 @@
 }
 
 .toggleSpacer {
-  width: 20px;
-  height: 20px;
   display: inline-block;
 }
 
@@ -193,32 +195,9 @@
   }
 }
 
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 768px) {
   .row {
     min-height: 44px;
-    gap: 4px;
-    padding: 2px 4px;
-    border-radius: 12px;
-  }
-
-  .toggleButton,
-  .toggleSpacer {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .labelButton {
-    min-height: 44px;
-    padding: 6px 4px;
-  }
-}
-
-@media (max-width: 768px) {
-  .row {
-    min-height: 44px;
-    gap: 4px;
     padding: 2px 4px;
     border-radius: 12px;
   }

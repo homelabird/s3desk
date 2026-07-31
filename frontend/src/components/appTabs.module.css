@@ -34,12 +34,12 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.tabListLine {
+.tabListLine,
+.tabListCard {
   border-bottom: 1px solid var(--s3d-color-border);
 }
 
 .tabListCard {
-  border-bottom: 1px solid var(--s3d-color-border);
   padding: 4px 4px 0;
 }
 
@@ -98,11 +98,6 @@
   opacity: 0.65;
 }
 
-.tabButton:focus-visible {
-  outline: 2px solid var(--s3d-color-focus);
-  outline-offset: 2px;
-}
-
 .closeButton {
   border: none;
   background: transparent;
@@ -118,11 +113,6 @@
 .closeButton:hover {
   color: var(--s3d-color-text);
   background: var(--s3d-color-bg-tertiary);
-}
-
-.closeButton:focus-visible {
-  outline: 2px solid var(--s3d-color-focus);
-  outline-offset: 2px;
 }
 
 .addButton {
@@ -141,6 +131,8 @@
   color: var(--s3d-color-focus);
 }
 
+.tabButton:focus-visible,
+.closeButton:focus-visible,
 .addButton:focus-visible {
   outline: 2px solid var(--s3d-color-focus);
   outline-offset: 2px;
@@ -154,22 +146,12 @@
   padding: 6px 10px;
 }
 
-.sizeSmall .tabButtonCard {
-  padding: 5px 8px;
-}
-
+.sizeSmall .tabButtonCard,
 .sizeSmall .addButton {
   padding: 5px 8px;
 }
 
-.sizeLarge .tabButtonLine {
-  padding: 12px 14px;
-}
-
-.sizeLarge .tabButtonCard {
-  padding: 8px 12px;
-}
-
+.sizeLarge .tabButtonCard,
 .sizeLarge .addButton {
   padding: 8px 12px;
 }
@@ -227,21 +209,14 @@
   .tabButtonLine,
   .tabButtonCard,
   .addButton,
-  .closeButton,
   .sizeSmall .tabButtonLine,
   .sizeSmall .tabButtonCard,
-  .sizeSmall .closeButton,
   .sizeSmall .addButton {
     min-height: 44px;
   }
 
-  .closeButton,
-  .sizeSmall .closeButton {
-    min-width: 44px;
-    padding: 0;
-  }
-
-  .tabButtonLine {
+  .tabButtonLine,
+  .sizeLarge .tabButtonLine {
     padding: 12px 14px;
   }
 
@@ -267,22 +242,18 @@
     scroll-padding-inline: 8px;
   }
 
-  .tabButtonLine,
-  .sizeSmall .tabButtonLine {
+  .tabButtonLine {
     padding: 10px;
   }
 
   .tabButtonCard,
   .addButton,
-  .closeButton,
-  .sizeSmall .tabButtonCard,
-  .sizeSmall .closeButton,
-  .sizeSmall .addButton {
+  .closeButton {
     padding: 8px 10px;
   }
 }
 
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 640px) {
   .closeButton,
   .sizeSmall .closeButton {
     min-width: 44px;

@@ -1,29 +1,15 @@
-.toolbarSplitButton {
-  display: inline-flex;
-  align-items: stretch;
-}
-
-.toolbarSplitToggle {
-  min-width: 40px;
-  padding-inline: 10px;
-}
-
 .toolbarMenuRoot {
   position: relative;
   display: inline-flex;
 }
 
-.toolbarMenuPopover {
-  min-width: 220px;
-  max-width: min(360px, var(--popover-available-width, calc(100vw - 32px)));
-}
-
-.toolbarMenuPopoverEnd {
-}
-
+.toolbarMenuPopover,
 .contextMenuPanel {
   min-width: 220px;
   max-width: min(360px, var(--popover-available-width, calc(100vw - 32px)));
+}
+
+.contextMenuPanel {
   border: 1px solid var(--s3d-color-border-strong);
   border-radius: 14px;
   background: var(--s3d-color-bg-elevated);
@@ -37,7 +23,8 @@
 }
 
 .toolbarMenu,
-.toolbarSubmenu {
+.toolbarSubmenu,
+.toolbarMenuSection {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -47,12 +34,6 @@
   margin-top: 6px;
   padding-left: 12px;
   border-left: 1px solid var(--s3d-color-border);
-}
-
-.toolbarMenuSection {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .toolbarMenuDivider {
@@ -119,15 +100,14 @@
   transform: rotate(180deg);
 }
 
-.layoutListPane {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-}
-
+.layoutListPane,
 .pane {
   min-width: 0;
   min-height: 0;
+}
+
+.layoutListPane {
+  display: flex;
 }
 
 .panelCard {
@@ -189,20 +169,12 @@
 
 @media (max-width: 767px) {
   .panelCard {
-    --objects-pane-header-inline-padding: 10px;
-    --objects-pane-header-block-padding: 7px;
-    --objects-pane-body-inline-padding: 6px;
     --objects-pane-body-top-padding: 6px;
-    --objects-pane-body-bottom-padding: 6px;
   }
 }
 
 @media (max-width: 479px) {
   .panelCard {
     --objects-pane-header-inline-padding: 8px;
-    --objects-pane-header-block-padding: 7px;
-    --objects-pane-body-inline-padding: 6px;
-    --objects-pane-body-top-padding: 5px;
-    --objects-pane-body-bottom-padding: 6px;
   }
 }

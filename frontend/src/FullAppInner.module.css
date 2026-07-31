@@ -5,25 +5,11 @@
 	min-height: 0;
 }
 
-.menuLink {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	width: 100%;
-	color: inherit;
-	text-decoration: none;
-}
-
 .navList {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
 	gap: 6px;
-	padding: 0 12px 16px;
-}
-
-.navFooter {
-	margin-top: auto;
 	padding: 0 12px 16px;
 }
 
@@ -94,10 +80,6 @@
 	max-width: 100%;
 }
 
-.noMarginTop {
-	margin-top: 0;
-}
-
 .appLayout {
 	min-height: 100dvh;
 	height: 100dvh;
@@ -127,23 +109,6 @@
 	padding: 20px 16px 12px;
 }
 
-.brandTitle {
-	margin: 0;
-	letter-spacing: 0;
-}
-
-.brandTitleDesktop {
-	color: var(--s3d-sidebar-text);
-}
-
-.brandSubtitle {
-	font-size: 12px;
-}
-
-.brandSubtitleDesktop {
-	color: var(--s3d-sidebar-text-secondary);
-}
-
 .header {
 	background: var(--s3d-color-bg-glass);
 	border-bottom: 1px solid var(--s3d-color-border-strong);
@@ -160,17 +125,23 @@
 	padding-block: 8px;
 }
 
-.headerStacked {
+.headerStacked,
+.headerActions,
+.headerProfileRow {
 	gap: 8px;
 }
 
-.headerTopRow {
+.headerTopRow,
+.headerProfileRow {
 	width: 100%;
 	display: flex;
 	align-items: center;
+	min-width: 0;
+}
+
+.headerTopRow {
 	justify-content: space-between;
 	gap: 12px;
-	min-width: 0;
 }
 
 .headerLeading {
@@ -185,39 +156,31 @@
 	min-width: 0;
 }
 
-.mobileBrandButton {
-	border: none;
-	padding: 0;
-	margin: 0;
-	min-width: 0;
-	background: transparent;
-	color: inherit;
-	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	border-radius: 10px;
-}
-
-.mobileBrandButton:focus-visible {
-	outline: 2px solid var(--s3d-color-focus);
-	outline-offset: 2px;
-}
-
+.mobileBrandButton,
 .desktopBrandButton {
 	border: none;
 	padding: 0;
 	margin: 0;
-	width: 100%;
 	background: transparent;
 	color: inherit;
 	cursor: pointer;
 	display: inline-flex;
 	align-items: center;
+}
+
+.mobileBrandButton {
+	min-width: 0;
+	border-radius: 10px;
+}
+
+.desktopBrandButton {
+	width: 100%;
 	justify-content: flex-start;
 	text-align: left;
 	border-radius: 12px;
 }
 
+.mobileBrandButton:focus-visible,
 .desktopBrandButton:focus-visible {
 	outline: 2px solid var(--s3d-color-focus);
 	outline-offset: 2px;
@@ -233,26 +196,12 @@
 	padding-block: 10px;
 }
 
-.mobileBrand {
-	font-size: 16px;
-	letter-spacing: 0;
-}
-
 .headerActions {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	gap: 8px;
 	min-width: 0;
 	flex: 0 1 auto;
-}
-
-.headerProfileRow {
-	width: 100%;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
 }
 
 .headerProfileSelect {
@@ -312,29 +261,50 @@
 	padding-top: 12px;
 }
 
-@media (max-width: 992px) {
-	.headerActions {
-		gap: 8px;
-	}
-}
-
 @media (max-width: 768px) {
-	.mobileBrandButton {
-		min-height: 44px;
+	.header {
+		gap: 8px;
 	}
 
-	.headerTopRow {
-		gap: 8px;
+	.headerPadSm {
+		padding-inline: 10px;
+		padding-block: 8px;
 	}
 
 	.headerActions {
 		flex-shrink: 0;
 	}
 
+	.headerTopRow,
+	.headerProfileRow {
+		gap: 6px;
+	}
+
+	.contentPadSm {
+		padding: 10px;
+	}
+
+	.mobileBrandButton,
+	.headerLeading :global(.ant-btn),
+	.headerActions :global(.ant-btn),
+	.headerProfileRow :global(.ant-btn) {
+		min-height: 44px;
+	}
+
 	.headerLeading :global(.ant-btn),
 	.headerActions :global(.ant-btn),
 	.headerProfileRow :global(.ant-btn) {
 		min-width: 44px;
-		min-height: 44px;
+	}
+}
+
+@media (max-width: 480px) {
+	.headerPadSm {
+		padding-inline: 8px;
+		padding-block: 7px;
+	}
+
+	.contentPadSm {
+		padding: 8px;
 	}
 }

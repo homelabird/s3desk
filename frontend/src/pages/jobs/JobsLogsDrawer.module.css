@@ -1,23 +1,18 @@
-.drawerExtra {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
-	min-width: 0;
-}
-
-.drawerExtraGroup {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	flex-wrap: wrap;
-	min-width: 0;
-}
-
+.drawerExtra,
+.drawerExtraGroup,
 .toolbar {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
+}
+
+.drawerExtra,
+.drawerExtraGroup {
+	align-items: center;
+	min-width: 0;
+}
+
+.toolbar {
 	width: 100%;
 	margin-bottom: 8px;
 }
@@ -40,16 +35,19 @@
 	padding: 16px;
 }
 
+.logList,
+.logVirtualRow {
+	width: 100%;
+}
+
 .logList {
 	position: relative;
-	width: 100%;
 }
 
 .logVirtualRow {
 	position: absolute;
 	top: 0;
 	left: 0;
-	width: 100%;
 	box-sizing: border-box;
 }
 

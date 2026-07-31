@@ -1,5 +1,6 @@
 .menu,
-.submenu {
+.submenu,
+.section {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
@@ -9,12 +10,6 @@
 	margin-top: 6px;
 	padding-left: 12px;
 	border-left: 1px solid var(--s3d-color-border);
-}
-
-.section {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
 }
 
 .divider {
@@ -59,8 +54,12 @@
 	color: var(--s3d-color-danger);
 }
 
-.itemIcon {
+.itemIcon,
+.itemChevron {
 	flex: 0 0 auto;
+}
+
+.itemIcon {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -72,7 +71,6 @@
 }
 
 .itemChevron {
-	flex: 0 0 auto;
 	color: var(--s3d-color-text-secondary);
 	transition: transform var(--s3d-transition-fast);
 }

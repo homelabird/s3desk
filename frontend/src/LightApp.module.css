@@ -1,27 +1,14 @@
+.panelSmall,
+.panelLarge {
+	max-width: 100%;
+}
+
 .panelSmall {
 	width: 620px;
-	max-width: 100%;
 }
 
 .panelLarge {
 	width: 920px;
-	max-width: 100%;
-}
-
-.brandTitle {
-	margin: 0;
-	font-size: 3rem;
-	line-height: 1;
-	letter-spacing: 0;
-}
-
-.brandSubtitle {
-	margin-top: 8px;
-	font-size: 12px;
-	font-weight: 800;
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-	color: var(--s3d-color-text-secondary);
 }
 
 .spacer16 {
@@ -55,11 +42,6 @@
 	line-height: 1.55;
 }
 
-.metaText {
-	font-size: 13px;
-	color: var(--s3d-color-text-secondary);
-}
-
 .rowGap6 {
 	margin-top: 6px;
 }
@@ -72,7 +54,8 @@
 	margin-top: 10px;
 }
 
-.rowGap12 {
+.rowGap12,
+.openButtons {
 	margin-top: 12px;
 }
 
@@ -83,7 +66,6 @@
 	color: var(--s3d-color-text-secondary);
 }
 
-.buttonRow,
 .headerActions,
 .openButtons,
 .topRightActions {
@@ -177,7 +159,8 @@
 	letter-spacing: 0;
 }
 
-.sectionSubtle {
+.sectionSubtle,
+.profileSubtitle {
 	font-size: 13px;
 	color: var(--s3d-color-text-secondary);
 	min-width: 0;
@@ -235,13 +218,23 @@
 
 .profileSubtitle {
 	margin-top: 6px;
-	font-size: 13px;
-	color: var(--s3d-color-text-secondary);
-	min-width: 0;
-	overflow-wrap: anywhere;
 }
 
-.profileMeta {
+.profileSelectedMark {
+	margin-left: 8px;
+	font-weight: 800;
+	color: var(--s3d-color-primary);
+}
+
+.openButtonDisabled {
+	background: var(--s3d-color-bg-disabled);
+	cursor: not-allowed;
+	opacity: 0.65;
+	box-shadow: none;
+}
+
+.profileMeta,
+.openHint {
 	margin-top: 10px;
 	font-size: 12px;
 	color: var(--s3d-color-text-secondary);
@@ -252,29 +245,6 @@
 .profileMeta code,
 .sectionSubtle code {
 	overflow-wrap: anywhere;
-}
-
-.profileSelectedMark {
-	margin-left: 8px;
-	font-weight: 800;
-	color: var(--s3d-color-primary);
-}
-
-.openButtons {
-	margin-top: 12px;
-}
-
-.openButtonDisabled {
-	background: var(--s3d-color-bg-disabled);
-	cursor: not-allowed;
-	opacity: 0.65;
-	box-shadow: none;
-}
-
-.openHint {
-	margin-top: 10px;
-	font-size: 12px;
-	color: var(--s3d-color-text-secondary);
 }
 
 .centerShell {
@@ -326,20 +296,10 @@
 	}
 
 	.panelSmall,
-	.loadingCard {
+	.loadingCard,
+	.panelLarge,
+	.centerShell > main {
 		width: 100%;
-	}
-
-		.panelLarge {
-			width: 100%;
-		}
-
-		.centerShell > main {
-			width: 100%;
-		}
-
-		.brandTitle {
-			font-size: 2.2rem;
 	}
 
 	.card,

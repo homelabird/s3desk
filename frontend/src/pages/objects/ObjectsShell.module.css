@@ -6,7 +6,8 @@
   min-height: 0;
 }
 
-.pageHeader {
+.pageHeader,
+.treeStack {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -22,10 +23,11 @@
   margin: 0;
 }
 
-.toolbarSectionStack {
+.toolbarSectionStack,
+.toolbarDesktopStack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -34,7 +36,12 @@
   min-width: 0;
 }
 
-.toolbarRow {
+.toolbarDesktopStack {
+  width: 100%;
+}
+
+.toolbarDesktopPrimaryRow,
+.toolbarDesktopSecondaryRow {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -44,6 +51,11 @@
   flex-wrap: wrap;
 }
 
+.toolbarDesktopSecondaryRow {
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--s3d-color-border) 82%, transparent);
+}
+
 .toolbarColumn {
   display: flex;
   flex-direction: column;
@@ -51,23 +63,29 @@
   gap: 8px;
 }
 
-.toolbarGroup {
+.toolbarGroup,
+.toolbarTopActions {
   min-width: 0;
   flex: 1 1 auto;
 }
 
-.toolbarGroupRight {
+.toolbarDesktopPrimaryActions,
+.toolbarDesktopNavGroup,
+.toolbarDesktopUtilityGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbarDesktopPrimaryActions,
+.toolbarDesktopUtilityGroup {
   justify-content: flex-end;
 }
 
 .toolbarTopRow {
   width: 100%;
   justify-content: space-between;
-}
-
-.toolbarTopActions {
-  min-width: 0;
-  flex: 1 1 auto;
 }
 
 .toolbarBucketDesktop {
@@ -94,7 +112,8 @@
   background: var(--s3d-color-scrim);
 }
 
-.objectsOverlayBackdropPassthrough {
+.objectsOverlayBackdropPassthrough,
+:global(body[data-objects-image-viewer-open='true']) .objectsOverlayBackdrop[data-objects-overlay-sheet='details'] .objectsOverlayPanel {
   pointer-events: none;
 }
 
@@ -119,10 +138,6 @@
 
 :global(body[data-objects-image-viewer-open='true']) .objectsOverlayBackdrop[data-objects-overlay-sheet='details'] {
   opacity: 0;
-  pointer-events: none;
-}
-
-:global(body[data-objects-image-viewer-open='true']) .objectsOverlayBackdrop[data-objects-overlay-sheet='details'] .objectsOverlayPanel {
   pointer-events: none;
 }
 
@@ -233,12 +248,6 @@
   gap: var(--objects-overlay-body-gap);
 }
 
-.objectsOverlayHeaderCompactMobile {
-}
-
-.objectsOverlayBodyCompactMobile {
-}
-
 .objectsSheetBody {
   padding-bottom: 12px;
 }
@@ -267,15 +276,7 @@
   min-height: 0;
 }
 
-.layoutTreePane,
-.layoutDetailsPane {
-  display: none;
-}
-
 .treeStack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   width: 100%;
   min-height: 0;
 }
@@ -318,6 +319,8 @@
   flex: 1;
 }
 
+.layoutTreePane,
+.layoutDetailsPane,
 .layoutTreeHandle,
 .layoutDetailsHandle {
   display: none;
@@ -459,24 +462,18 @@
     gap: 10px;
   }
 
-  .pageHeader {
+  .pageHeader,
+  .toolbarSectionStack,
+  .toolbarTopRow {
     gap: 8px;
   }
 
-  .toolbarSectionStack {
-    gap: 8px;
-  }
-
-  .toolbarRow {
-    gap: 10px;
+  .toolbarDesktopStack {
+    gap: 6px;
   }
 
   .toolbarColumn {
     gap: 5px;
-  }
-
-  .toolbarTopRow {
-    gap: 8px;
   }
 
   .toolbarTopRow :global(.ant-btn),
@@ -528,17 +525,18 @@
     padding-block: 6px;
   }
 
-  .treeStack {
-    gap: 8px;
-  }
 }
 
 @media (max-width: 480px) {
-  .page {
+  .page,
+  .toolbarTopRow,
+  .treeStack {
     gap: 6px;
   }
 
-  .pageHeader {
+  .pageHeader,
+  .toolbarSectionStack,
+  .toolbarDesktopStack {
     gap: 5px;
   }
 
@@ -547,16 +545,8 @@
     line-height: 1.12 !important;
   }
 
-  .toolbarSectionStack {
-    gap: 5px;
-  }
-
   .toolbarColumn {
     gap: 3px;
-  }
-
-  .toolbarTopRow {
-    gap: 6px;
   }
 
   .objectsOverlayPanel[data-compact-mobile='true'] {
@@ -573,14 +563,6 @@
     gap: 10px;
   }
 
-  .treeStack {
-    gap: 6px;
-  }
-
-  .treeCompactActionButton {
-    min-width: 44px;
-    min-height: 44px;
-  }
 }
 
 @media (max-width: 1100px) {
@@ -588,7 +570,8 @@
     gap: 8px;
   }
 
-  .toolbarRow {
+  .toolbarDesktopPrimaryRow,
+  .toolbarDesktopSecondaryRow {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
@@ -599,7 +582,10 @@
     justify-content: space-between;
   }
 
-  .toolbarGroupRight {
+  .toolbarDesktopPrimaryActions,
+  .toolbarDesktopNavGroup,
+  .toolbarDesktopUtilityGroup {
+    width: 100%;
     justify-content: flex-start;
   }
 }

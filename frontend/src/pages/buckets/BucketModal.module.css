@@ -19,7 +19,8 @@
 	gap: 16px;
 }
 
-.secureDefaultsCopy {
+.secureDefaultsCopy,
+.structuredField {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
@@ -32,10 +33,14 @@
 	margin-top: 16px;
 }
 
-.settingCard {
+.settingCard,
+.structuredCard {
 	border: 1px solid var(--s3d-color-border);
 	border-radius: var(--s3d-radius-lg);
 	padding: 14px;
+}
+
+.settingCard {
 	background: var(--s3d-color-bg-card);
 	box-shadow: inset 3px 0 0 color-mix(in srgb, var(--s3d-color-primary) 38%, var(--s3d-color-border));
 }
@@ -67,9 +72,6 @@
 }
 
 .structuredCard {
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-lg);
-	padding: 14px;
 	background: var(--s3d-gradient-surface);
 	box-shadow: var(--s3d-shadow-sm);
 }
@@ -89,14 +91,15 @@
 }
 
 .structuredField {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
 	min-width: 0;
 }
 
-.structuredFieldLabel {
+.structuredFieldLabel,
+.inlineHint {
 	font-size: 12px;
+}
+
+.structuredFieldLabel {
 	font-weight: 700;
 	letter-spacing: 0.03em;
 }
@@ -107,13 +110,8 @@
 }
 
 .inlineHint {
-	font-size: 12px;
 	line-height: 1.5;
 	color: var(--s3d-color-text-secondary);
-}
-
-.jsonArea {
-	font-family: var(--s3d-font-mono, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace);
 }
 
 .providerDefaultsHint {
@@ -125,10 +123,7 @@
 }
 
 @media (max-width: 640px) {
-	.secureDefaultsGrid {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
+	.secureDefaultsGrid,
 	.structuredFieldGrid {
 		grid-template-columns: minmax(0, 1fr);
 	}

@@ -83,7 +83,6 @@
 
 .compact .title {
 	font-size: 1rem;
-	letter-spacing: 0;
 }
 
 .sidebar .title {
@@ -112,27 +111,26 @@
 	.hero {
 		width: 100%;
 		justify-content: center;
-		gap: 12px;
+		gap: 10px;
 	}
 
 	.hero .mediaWrap {
-		width: 64px;
-		height: 64px;
-		border-radius: 20px;
+		width: 56px;
+		height: 56px;
 	}
 
 	.hero .title {
-		font-size: 2.35rem;
-		line-height: 1;
+		font-size: 2rem;
+		line-height: 0.98;
 	}
 
 	.hero .subtitle {
-		letter-spacing: 0.1em;
+		letter-spacing: 0.08em;
 	}
 }
 
 @media (max-width: 360px) {
 	.hero .title {
-		font-size: 2.05rem;
+		font-size: 1.8rem;
 	}
 }

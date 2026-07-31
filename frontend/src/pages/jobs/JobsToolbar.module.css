@@ -1,4 +1,6 @@
-.troubleshootingPanel {
+.troubleshootingPanel,
+.alertStack,
+.mobileFiltersStack {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
@@ -14,12 +16,6 @@
 	border-radius: var(--s3d-radius-lg);
 	background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
 	box-shadow: var(--s3d-shadow-sm);
-}
-
-.alertStack {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
 }
 
 .healthGrid {
@@ -116,33 +112,31 @@
 	max-width: 100%;
 }
 
-.columnsDropdown {
-	padding: 8px;
-	width: 220px;
+.columnsDropdown,
+.diagnosticsDropdown {
 	background: var(--s3d-color-bg-elevated, #fff);
 	border: 1px solid var(--s3d-color-border-strong, #d9d9d9);
 	border-radius: var(--s3d-radius-lg, 16px);
 	box-shadow: var(--s3d-shadow-md, 0 6px 16px rgba(0, 0, 0, 0.12));
+}
+
+.columnsDropdown {
+	padding: 8px;
+	width: 220px;
 }
 
 .diagnosticsDropdown {
 	padding: 12px;
 	width: min(420px, calc(100vw - 32px));
-	background: var(--s3d-color-bg-elevated, #fff);
-	border: 1px solid var(--s3d-color-border-strong, #d9d9d9);
-	border-radius: var(--s3d-radius-lg, 16px);
-	box-shadow: var(--s3d-shadow-md, 0 6px 16px rgba(0, 0, 0, 0.12));
 }
 
-.diagnosticsStack {
-	width: 100%;
-}
-
-.diagnosticsHint {
+.diagnosticsHint,
+.mobileFiltersHint {
 	display: block;
 	line-height: 1.5;
 }
 
+.diagnosticsStack,
 .columnsDropdownList {
 	width: 100%;
 }
@@ -151,23 +145,12 @@
 	padding-top: 12px;
 }
 
-.mobileFiltersStack {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
 .mobileFiltersHint {
-	display: block;
 	margin-top: 10px;
-	line-height: 1.5;
 }
 
 @media (max-width: 768px) {
-	.headerActions :global(.ant-btn) {
-		min-height: 44px;
-	}
-
+	.headerActions :global(.ant-btn),
 	.realtimeStatusRow :global(.ant-btn) {
 		min-height: 44px;
 	}
@@ -187,12 +170,8 @@
 		order: -1;
 	}
 
-	.searchFilterControl,
 	.mobileFiltersTrigger {
 		width: 100%;
-	}
-
-	.mobileFiltersTrigger {
 		justify-content: center;
 	}
 

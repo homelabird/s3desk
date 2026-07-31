@@ -15,11 +15,15 @@
   flex-wrap: wrap;
 }
 
-.imageViewerMetaStats {
+.imageViewerMetaStats,
+.imageViewerFooterGroup {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.imageViewerMetaStats {
   min-width: 0;
 }
 
@@ -46,13 +50,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
-}
-
-.imageViewerFooterGroup {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -110,25 +107,24 @@
   pointer-events: none;
 }
 
-.imageViewerLoadingOverlay {
-  position: absolute;
-  inset: 0;
+.imageViewerLoadingOverlay,
+.imageViewerLoadingState {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
+}
+
+.imageViewerLoadingOverlay {
+  position: absolute;
+  inset: 0;
   background: color-mix(in srgb, var(--s3d-color-bg-elevated) 84%, transparent);
   backdrop-filter: blur(4px);
 }
 
 .imageViewerLoadingState {
   min-height: 360px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
 }
 
 .imageViewerStateStack {
@@ -232,7 +228,6 @@
   }
 
   .imageViewerToolbarButton {
-    min-height: 44px;
     padding-inline: 10px !important;
   }
 }

@@ -48,10 +48,7 @@
 	color: var(--s3d-color-text-secondary);
 }
 
-.thCreated {
-	width: 240px;
-}
-
+.thCreated,
 .thActions {
 	width: 240px;
 }
@@ -74,25 +71,24 @@
 	background: color-mix(in srgb, var(--s3d-color-primary-bg) 72%, transparent);
 }
 
-.bucketName {
-	font-size: 16px;
-}
-
-.actionGroup {
+.actionGroup,
+.mobileActionRow {
 	display: flex;
-	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
 }
 
-.mobileList {
+.actionGroup {
+	align-items: center;
+}
+
+.mobileList,
+.mobileCard {
 	display: flex;
 	flex-direction: column;
 }
 
 .mobileCard {
-	display: flex;
-	flex-direction: column;
 	gap: 14px;
 	padding: 18px;
 	border-top: 1px solid var(--s3d-color-border-soft);
@@ -107,6 +103,7 @@
 	border-top: none;
 }
 
+.bucketName,
 .mobileCardTitle {
 	font-size: 16px;
 }
@@ -131,12 +128,6 @@
 	line-height: 1.55;
 	color: var(--s3d-color-text);
 	overflow-wrap: anywhere;
-}
-
-.mobileActionRow {
-	display: flex;
-	gap: 8px;
-	flex-wrap: wrap;
 }
 
 @media (max-width: 640px) {

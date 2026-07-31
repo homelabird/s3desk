@@ -6,14 +6,18 @@
 }
 
 .brand {
-	margin-bottom: 16px;
+	margin-bottom: 12px;
+}
+
+.card,
+.form {
+	display: flex;
+	flex-direction: column;
 }
 
 .card {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	padding: 18px;
+	gap: 10px;
+	padding: 16px;
 	border: 1px solid var(--s3d-color-border-strong);
 	border-radius: var(--s3d-radius-lg);
 	background: var(--s3d-gradient-surface);
@@ -21,8 +25,6 @@
 }
 
 .form {
-	display: flex;
-	flex-direction: column;
 	gap: 12px;
 }
 
@@ -38,8 +40,12 @@
 }
 
 @media (max-width: 480px) {
+	.brand {
+		margin-bottom: 10px;
+	}
+
 	.card {
-		padding: 16px;
+		padding: 14px;
 	}
 
 	.actions {

@@ -1,11 +1,14 @@
-.alertStack {
+.alertStack,
+.sheetBody {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	margin-bottom: 12px;
 }
 
-.alertBlock {
+.alertStack,
+.alertBlock,
+.detailsHint,
+.summaryDescriptions {
 	margin-bottom: 12px;
 }
 
@@ -15,19 +18,11 @@
 	gap: 8px;
 }
 
-.partialKeyNote {
-	display: block;
-}
-
 .partialKeyActions {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
-}
-
-.detailsHint {
-	margin-bottom: 12px;
 }
 
 .detailsSummary {
@@ -69,10 +64,6 @@
 	padding: 16px;
 }
 
-.summaryDescriptions {
-	margin-bottom: 12px;
-}
-
 .sampleKeysBlock {
 	display: flex;
 	flex-direction: column;
@@ -80,14 +71,9 @@
 	margin-bottom: 12px;
 }
 
+.partialKeyNote,
 .summaryNote {
 	display: block;
-}
-
-.sheetBody {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
 }
 
 .sheetActions {

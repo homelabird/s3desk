@@ -12,12 +12,12 @@
   --objects-search-result-card-padding: 10px;
   --objects-search-table-cell-block-padding: 10px;
   --objects-search-table-cell-inline-padding: 12px;
-  --objects-search-table-modified-width: 220px;
-  --objects-search-table-actions-width: 260px;
-  --objects-search-table-action-gap: 8px;
+  --objects-search-table-modified-width: 180px;
+  --objects-search-table-actions-width: 164px;
+  --objects-search-table-action-gap: 6px;
   --objects-search-table-button-min-height: 32px;
-  --objects-search-table-button-padding-inline: 12px;
-  --objects-search-table-button-font-size: 14px;
+  --objects-search-table-button-padding-inline: 10px;
+  --objects-search-table-button-font-size: 13px;
   display: flex;
   flex-direction: column;
   gap: var(--objects-search-content-gap);
@@ -58,25 +58,19 @@
   max-width: 100%;
 }
 
-.drawerCompactField {
-  min-height: 32px;
-}
-
+.drawerCompactField,
 .drawerCompactField:global(.ant-input-affix-wrapper) {
   min-height: 32px;
   align-items: center;
 }
 
-.drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
+.drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input),
+.globalSearchCompactButton {
   min-height: 32px;
 }
 
 .drawerActions {
   justify-content: flex-end;
-}
-
-.globalSearchCompactButton {
-  min-height: 32px;
 }
 
 .globalSearchCompactButton:global(.ant-btn-default) {
@@ -102,10 +96,7 @@
   width: 140px;
 }
 
-.globalSearchExtMd {
-  width: 160px;
-}
-
+.globalSearchExtMd,
 .globalSearchSizeMd {
   width: 160px;
 }
@@ -308,7 +299,7 @@
 }
 
 .globalSearchThSize {
-  width: 120px;
+  width: 96px;
 }
 
 .globalSearchThModified {
@@ -327,25 +318,40 @@
   vertical-align: middle;
 }
 
-.globalSearchTdKey {
-  max-width: 0;
-  overflow: hidden;
+.globalSearchTdKey,
+.globalSearchTdActions {
   vertical-align: top;
 }
 
-.globalSearchActionRow {
-  display: flex;
-  gap: var(--objects-search-table-action-gap);
-  flex-wrap: nowrap;
-  align-items: center;
+.globalSearchTdKey {
+  max-width: 0;
+  overflow: hidden;
 }
 
-.globalSearchActionRow :global(.ant-btn.ant-btn-sm) {
+.globalSearchTableActionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 32px);
+  gap: var(--objects-search-table-action-gap);
+  align-items: start;
+}
+
+.globalSearchTableActionRow :global(.ant-btn.ant-btn-sm) {
   height: var(--objects-search-table-button-min-height) !important;
   min-height: var(--objects-search-table-button-min-height) !important;
   padding-inline: var(--objects-search-table-button-padding-inline) !important;
   font-size: var(--objects-search-table-button-font-size) !important;
   line-height: 1.1;
+}
+
+.globalSearchTablePrimaryButton {
+  min-width: 0;
+  width: 100%;
+}
+
+.globalSearchTableIconButton {
+  min-width: 32px;
+  width: 32px;
+  padding-inline: 0 !important;
 }
 
 .globalSearchKeyText {
@@ -364,10 +370,10 @@
   max-width: 100%;
   white-space: normal;
   overflow-wrap: anywhere;
-  word-break: break-all;
+  word-break: break-word;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
 .globalSearchKeyTextSm {
@@ -394,8 +400,8 @@
 @media (max-width: 900px) {
   .globalSearchContent {
     --objects-search-table-cell-inline-padding: 8px;
-    --objects-search-table-modified-width: 156px;
-    --objects-search-table-actions-width: 196px;
+    --objects-search-table-modified-width: 148px;
+    --objects-search-table-actions-width: 148px;
     --objects-search-table-action-gap: 4px;
     --objects-search-table-button-padding-inline: 8px;
     --objects-search-table-button-font-size: 12px;
@@ -408,44 +414,22 @@
   .globalSearchThSize {
     width: 84px;
   }
-
-  .globalSearchKeyTextMd {
-    max-width: 100%;
-  }
 }
 
 @media (max-width: 767px) {
   .globalSearchResultIconButton,
   .globalSearchResultPrimaryButton,
-  .globalSearchResultSecondaryButton,
-  .globalSearchCompactButton {
+  .globalSearchResultSecondaryButton {
     min-height: 44px;
-  }
-
-  .globalSearchResultIconButton {
-    min-width: 44px;
-    width: 44px;
   }
 }
 
 @media (max-width: 360px) {
-  .globalSearchContent {
-    --objects-search-content-gap: 8px;
-    --objects-search-section-gap: 6px;
-    --objects-search-field-gap: 6px;
-    --objects-search-card-inline-padding: 8px;
-    --objects-search-card-block-padding: 8px;
-    --objects-search-card-gap: 8px;
-    --objects-search-result-card-padding: 8px;
-  }
-
-  .globalSearchButtonRow,
-  .globalSearchActionRow {
+  .globalSearchTableActionRow {
     width: 100%;
   }
 
-  .globalSearchButtonRow :global(.ant-btn),
-  .globalSearchActionRow :global(.ant-btn) {
+  .globalSearchTableActionRow :global(.ant-btn) {
     width: 100%;
     justify-content: center;
   }
@@ -459,24 +443,18 @@
   .globalSearchContent {
     --objects-search-table-cell-block-padding: 6px;
     --objects-search-table-cell-inline-padding: 10px;
-    --objects-search-table-modified-width: 184px;
-    --objects-search-table-actions-width: 228px;
-    --objects-search-table-action-gap: 6px;
+    --objects-search-table-modified-width: 168px;
+    --objects-search-table-actions-width: 152px;
     --objects-search-table-button-min-height: 28px;
     --objects-search-table-button-padding-inline: 9px;
-    --objects-search-table-button-font-size: 13px;
   }
 
   .globalSearchTableMd {
-    min-width: 840px;
+    min-width: 760px;
   }
 
   .globalSearchKeyTextMd {
-    max-width: 420px;
-  }
-
-  .globalSearchActionRow {
-    align-items: center;
+    max-width: none;
   }
 }
 
@@ -514,11 +492,14 @@
   }
 
   .globalSearchButtonRow,
-  .globalSearchActionRow,
-  .drawerActions {
+  .globalSearchTableActionRow,
+  .drawerActions,
+  .globalSearchResultCard {
     gap: 6px;
   }
-  .globalSearchCheckboxRow {
+  .globalSearchCheckboxRow,
+  .drawerCompactField:global(.ant-input-affix-wrapper),
+  .drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
     min-height: 44px;
   }
 
@@ -535,17 +516,8 @@
     padding: 3px 8px;
   }
 
-  .drawerCompactField:global(.ant-input-affix-wrapper),
-  .drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
-    min-height: 44px;
-  }
-
   .globalSearchResultsMeta {
     font-size: 12px;
-  }
-
-  .globalSearchResultCard {
-    gap: 6px;
   }
 
   .globalSearchResultMeta {
@@ -585,14 +557,12 @@
 @media (max-width: 640px) {
   .globalSearchFieldRow,
   .globalSearchButtonRow,
-  .globalSearchActionRow,
   .drawerActions {
     width: 100%;
   }
 
   .globalSearchFieldRow > *,
   .globalSearchButtonRow > *,
-  .globalSearchActionRow > *,
   .drawerActions > * {
     flex: 1 1 100%;
     width: 100%;
@@ -600,7 +570,6 @@
   }
 
   .globalSearchButtonRow :global(.ant-btn),
-  .globalSearchActionRow :global(.ant-btn),
   .drawerActions :global(.ant-btn) {
     width: 100%;
     justify-content: center;
@@ -615,36 +584,29 @@
     --objects-search-card-inline-padding: 8px;
     --objects-search-card-block-padding: 8px;
     --objects-search-card-gap: 8px;
-    --objects-search-result-card-padding: 8px;
   }
 
   .globalSearchButtonRow,
-  .globalSearchActionRow,
-  .drawerActions {
+  .globalSearchTableActionRow,
+  .drawerActions,
+  .globalSearchResultActions {
     gap: 4px;
   }
 
   .globalSearchCheckboxRow {
-    min-height: 44px;
     padding: 0 2px;
-    font-size: 12px;
   }
 
+  .globalSearchCheckboxRow,
   .drawerCompactField,
   .globalSearchNumberInput,
   .globalSearchDateInput,
   .globalSearchCompactButton {
-    min-height: 44px;
     font-size: 12px;
   }
 
   .globalSearchCompactButton {
     padding-inline: 8px !important;
-  }
-
-  .drawerCompactField:global(.ant-input-affix-wrapper),
-  .drawerCompactField:global(.ant-input-affix-wrapper) :global(.ant-input) {
-    min-height: 44px;
   }
 
   .globalSearchTh,
@@ -670,16 +632,6 @@
   .globalSearchResultMeta {
     gap: 4px 8px;
     font-size: 10px;
-  }
-
-  .globalSearchResultActions {
-    gap: 4px;
-  }
-
-  .globalSearchResultPrimaryButton,
-  .globalSearchResultSecondaryButton,
-  .globalSearchResultIconButton {
-    min-height: 44px !important;
   }
 
   .globalSearchResultIconButton {

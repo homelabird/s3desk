@@ -81,10 +81,6 @@
 }
 
 @media (max-width: 640px) {
-	.section {
-		border-radius: var(--s3d-radius-sm);
-	}
-
 	.header {
 		gap: 12px;
 		padding: 16px 16px 12px;

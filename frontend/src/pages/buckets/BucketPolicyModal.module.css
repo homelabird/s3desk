@@ -1,9 +1,7 @@
-.fullWidth {
-  width: 100%;
-}
-
+.fullWidth,
 .desktopShell,
-.mobileShell {
+.mobileShell,
+.controlRow {
   width: 100%;
 }
 
@@ -25,7 +23,9 @@
   gap: 14px;
 }
 
-.decisionHeaderCopy {
+.decisionHeaderCopy,
+.structuredField,
+.awsShortcutCopy {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -69,21 +69,44 @@
   background: var(--s3d-color-danger-bg);
 }
 
-.decisionRouteGrid {
+.decisionRouteGrid,
+.structuredFieldGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.decisionRoute {
+.decisionRoute,
+.validationActionRow {
   display: flex;
+  padding: 12px;
+  border-radius: var(--s3d-radius-lg);
+}
+
+.decisionRoute {
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  padding: 12px;
   border: 1px solid var(--s3d-color-border);
-  border-radius: var(--s3d-radius-lg);
   background: var(--s3d-color-bg-card);
+}
+
+.routeTagPrimary,
+.routeTagAdvanced {
+  width: fit-content;
+  margin-inline-end: 0 !important;
+}
+
+.routeTagPrimary {
+  color: var(--s3d-color-primary) !important;
+  border-color: color-mix(in srgb, var(--s3d-color-primary) 38%, var(--s3d-color-border)) !important;
+  background: var(--s3d-color-primary-bg) !important;
+}
+
+.routeTagAdvanced {
+  color: var(--s3d-color-warning-text) !important;
+  border-color: var(--s3d-color-warning-border) !important;
+  background: var(--s3d-color-warning-bg) !important;
 }
 
 .decisionRoutePrimary {
@@ -179,10 +202,25 @@
   gap: 12px;
 }
 
+.footerDangerZone,
+.footerPrimaryActions {
+  padding: 10px 12px;
+  border-radius: var(--s3d-radius-lg);
+}
+
 .footerDangerZone {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--s3d-color-danger) 34%, var(--s3d-color-border));
+  background: color-mix(in srgb, var(--s3d-color-danger) 5%, var(--s3d-color-bg-elevated));
+}
+
+.footerDangerCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -191,10 +229,8 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.controlRow {
-  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 26%, var(--s3d-color-border));
+  background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
 }
 
 .checkboxLabel {
@@ -205,11 +241,33 @@
   cursor: pointer;
 }
 
-.disclosure {
-  border: 1px solid var(--s3d-color-border);
+.disclosure,
+.advancedInlineCard {
   border-radius: var(--s3d-radius-lg);
   padding: 12px 14px;
+}
+
+.disclosure {
+  border: 1px solid var(--s3d-color-border);
   background: var(--s3d-gradient-section);
+}
+
+.advancedEditorCard {
+  border-color: color-mix(in srgb, var(--s3d-color-warning-border) 48%, var(--s3d-color-border));
+  background: linear-gradient(180deg, var(--s3d-color-warning-bg), var(--s3d-color-bg-card));
+}
+
+.advancedInlineCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--s3d-color-warning-border) 44%, var(--s3d-color-border));
+  background: linear-gradient(180deg, var(--s3d-color-warning-bg), var(--s3d-color-bg-card));
+}
+
+.rawJsonCard {
+  border-color: color-mix(in srgb, var(--s3d-color-error-border) 36%, var(--s3d-color-border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--s3d-color-danger-bg) 72%, var(--s3d-color-bg-card)), var(--s3d-color-bg-card));
 }
 
 .disclosureSummary {
@@ -217,10 +275,14 @@
   font-weight: 700;
 }
 
-.disclosureBody {
+.disclosureBody,
+.structuredCardList {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.disclosureBody {
   margin-top: 12px;
 }
 
@@ -240,13 +302,10 @@
 }
 
 .validationActionRow {
-  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px;
   border: 1px solid color-mix(in srgb, var(--s3d-color-primary) 40%, var(--s3d-color-border));
-  border-radius: var(--s3d-radius-lg);
   background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
   box-shadow: inset 4px 0 0 var(--s3d-color-primary);
 }
@@ -258,18 +317,16 @@
   min-width: 0;
 }
 
-.structuredCardList {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.structuredCard,
+.awsShortcutBanner {
+  border: 1px solid var(--s3d-color-border);
+  border-radius: var(--s3d-radius-lg);
+  box-shadow: var(--s3d-shadow-sm);
 }
 
 .structuredCard {
-  border: 1px solid var(--s3d-color-border);
-  border-radius: var(--s3d-radius-lg);
   padding: 14px;
   background: var(--s3d-gradient-surface);
-  box-shadow: var(--s3d-shadow-sm);
 }
 
 .structuredCardHeader {
@@ -278,19 +335,6 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
-}
-
-.structuredFieldGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.structuredField {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
 }
 
 .structuredFieldLabel {
@@ -305,17 +349,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px;
-  border: 1px solid var(--s3d-color-border);
-  border-radius: var(--s3d-radius-lg);
   background: linear-gradient(90deg, var(--s3d-color-primary-bg), var(--s3d-color-bg-card));
-  box-shadow: var(--s3d-shadow-sm);
-}
-
-.awsShortcutCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
 }
 
 @media (max-width: 992px) {
@@ -341,12 +375,9 @@
 }
 
 @media (max-width: 768px) {
-  .decisionRouteGrid {
+  .decisionRouteGrid,
+  .structuredFieldGrid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .decisionHeaderTop {
-    flex-direction: column;
   }
 
   .decisionBadgeRow {
@@ -371,15 +402,13 @@
     min-width: 240px;
   }
 
+  .decisionHeaderTop,
   .awsShortcutBanner {
     flex-direction: column;
   }
 
-  .publicAccessSelect {
-    width: 100%;
-  }
-
-  .validationActionRow {
+  .validationActionRow,
+  .footerActions {
     flex-direction: column;
     align-items: stretch;
   }
@@ -389,13 +418,9 @@
     width: 100%;
   }
 
+  .publicAccessSelect,
   .editorModeGroup {
     width: 100%;
-  }
-
-  .footerActions {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .footerDangerZone {
@@ -410,10 +435,6 @@
 
   .footerPrimaryActions > * {
     flex: 1 1 0;
-  }
-
-  .structuredFieldGrid {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .structuredCardHeader {

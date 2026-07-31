@@ -89,7 +89,6 @@
 	.header {
 		gap: 12px;
 		padding: 16px;
-		border-radius: var(--s3d-radius-sm);
 	}
 
 	.eyebrow {

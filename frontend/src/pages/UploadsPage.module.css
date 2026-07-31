@@ -4,7 +4,7 @@
 	margin: 0 auto;
 	display: flex;
 	flex-direction: column;
-	gap: 24px;
+	gap: 20px;
 }
 
 .headerActions {
@@ -14,11 +14,15 @@
 	flex-wrap: wrap;
 }
 
+.destinationLabel,
+.previewName {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 .destinationLabel {
 	display: block;
-	min-width: 0;
 	max-width: 100%;
-	overflow-wrap: anywhere;
 	word-break: break-word;
 }
 
@@ -29,7 +33,8 @@
 	align-items: stretch;
 }
 
-.fieldBlock {
+.fieldBlock,
+.summaryCard {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
@@ -49,34 +54,10 @@
 	max-width: 100%;
 }
 
-.modeCard {
-	display: flex;
-	flex-direction: column;
-	justify-content: space-between;
-	gap: 16px;
-	padding: 18px;
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-lg);
-	background: var(--s3d-gradient-section);
-	box-shadow: var(--s3d-shadow-sm);
-}
-
-.modeHint {
-	margin: 8px 0 0;
-	color: var(--s3d-color-text-secondary);
-}
-
-.switchRow {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-}
-
 .selectionStack {
 	display: flex;
 	flex-direction: column;
-	gap: 20px;
+	gap: 16px;
 }
 
 .selectionActions {
@@ -87,20 +68,21 @@
 }
 
 .selectionHint {
-	max-width: 520px;
-	line-height: 1.6;
+	max-width: 640px;
+	line-height: 1.5;
+}
+
+.summaryGrid,
+.previewWrap {
+	gap: 12px;
 }
 
 .summaryGrid {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 14px;
 }
 
 .summaryCard {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
 	padding: 16px 18px;
 	border: 1px solid var(--s3d-color-border);
 	border-radius: var(--s3d-radius-lg);
@@ -126,7 +108,6 @@
 .previewWrap {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
 }
 
 .previewList {
@@ -153,10 +134,8 @@
 }
 
 .previewName {
-	min-width: 0;
 	font-weight: 600;
 	line-height: 1.55;
-	overflow-wrap: anywhere;
 }
 
 .previewMeta {
@@ -187,10 +166,9 @@
 
 @media (max-width: 768px) {
 	.pageStack {
-		gap: 20px;
+		gap: 18px;
 	}
 
-	.modeCard,
 	.summaryCard,
 	.emptyPreview {
 		border-radius: var(--s3d-radius-sm);
@@ -231,27 +209,19 @@
 	}
 
 	.selectionStack {
-		gap: 16px;
+		gap: 14px;
 	}
 
 	.selectionActions {
-		flex-direction: column;
-		align-items: stretch;
 		gap: 10px;
 	}
 
 	.selectionActions :global(.ant-btn) {
-		width: 100%;
-		justify-content: center;
+		min-width: 0;
 	}
 
 	.selectionHint {
 		max-width: none;
-		line-height: 1.5;
-	}
-
-	.summaryGrid {
-		gap: 12px;
 	}
 
 	.summaryCard {

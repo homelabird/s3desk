@@ -21,11 +21,15 @@
   text-overflow: ellipsis;
 }
 
-.favoritesPane {
+.favoritesPane,
+.favoritesList {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   min-height: 0;
+}
+
+.favoritesPane {
+  gap: 6px;
 }
 
 .favoritesControls {
@@ -49,23 +53,8 @@
 }
 
 .favoritesList {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
-  min-height: 0;
   overflow: auto;
-}
-
-.favoritesEmptyState {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 2px 2px 4px;
-}
-
-.favoritesEmptyHint {
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 .favoritesItem {
@@ -103,24 +92,23 @@
   font-size: 11px;
 }
 
-.favoritesItemName {
+.favoritesItemName,
+.favoritesItemPath {
   display: block;
   min-width: 0;
-  font-size: 13px;
-  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.favoritesItemName {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
 .favoritesItemPath {
-  display: block;
   font-size: 11px;
   line-height: 1.15;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 @media (max-width: 1200px) {
@@ -155,10 +143,6 @@
     font-size: 13px;
   }
 
-  .favoritesList {
-    gap: 3px;
-  }
-
   .favoritesItem {
     min-height: 44px;
     padding: 5px 9px;
@@ -167,7 +151,8 @@
 }
 
 @media (max-width: 480px) {
-  .favoritesTitle {
+  .favoritesTitle,
+  .favoritesControl {
     gap: 5px;
   }
 
@@ -179,20 +164,11 @@
     gap: 3px 6px;
   }
 
-  .favoritesControl {
-    gap: 5px;
-  }
-
   .favoritesControlLabel {
     font-size: 12px;
   }
 
   .favoritesItem {
     padding: 5px 8px;
-    border-radius: 16px;
-  }
-
-  .favoritesItemPath {
-    font-size: 11px;
   }
 }

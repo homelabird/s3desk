@@ -18,12 +18,16 @@
 	color: var(--s3d-color-bg) !important;
 }
 
-.summaryCard {
+.summaryCard,
+.sectionCard {
 	border: 1px solid var(--s3d-color-border);
 	border-radius: var(--s3d-radius-lg);
-	padding: 18px;
 	background: var(--s3d-gradient-surface);
 	box-shadow: var(--s3d-shadow-sm);
+}
+
+.summaryCard {
+	padding: 18px;
 }
 
 .decisionHeader {
@@ -37,17 +41,22 @@
 	box-shadow: var(--s3d-shadow-sm);
 }
 
-.decisionHeaderTop {
+.decisionHeaderTop,
+.summaryHeader {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: 14px;
 }
 
-.decisionHeaderCopy {
+.decisionHeaderCopy,
+.summaryCopy {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+}
+
+.decisionHeaderCopy {
 	min-width: 0;
 }
 
@@ -94,14 +103,18 @@
 	gap: 12px;
 }
 
+.decisionRoute,
+.editorCard {
+	padding: 12px;
+	border: 1px solid var(--s3d-color-border);
+	border-radius: var(--s3d-radius-lg);
+}
+
 .decisionRoute {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 	min-width: 0;
-	padding: 12px;
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-lg);
 	background: var(--s3d-color-bg-card);
 }
 
@@ -127,19 +140,6 @@
 	margin-top: 4px;
 }
 
-.summaryHeader {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 14px;
-}
-
-.summaryCopy {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
 .tagRow {
 	display: flex;
 	flex-wrap: wrap;
@@ -153,18 +153,16 @@
 }
 
 .sectionCard {
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-lg);
 	padding: 16px;
-	background: var(--s3d-gradient-surface);
-	box-shadow: var(--s3d-shadow-sm);
 }
 
 .sectionWide {
 	grid-column: 1 / -1;
 }
 
-.sectionHeader {
+.sectionHeader,
+.editorCardHeader,
+.toggleRow {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
@@ -179,7 +177,8 @@
 	gap: 8px;
 }
 
-.sectionCopy {
+.sectionCopy,
+.toggleCopy {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
@@ -192,24 +191,15 @@
 	margin-top: 14px;
 }
 
-.editorList {
+.editorList,
+.toggleList {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
 }
 
 .editorCard {
-	border: 1px solid var(--s3d-color-border);
-	border-radius: var(--s3d-radius-lg);
-	padding: 12px;
 	background: color-mix(in srgb, var(--s3d-color-primary-bg) 38%, var(--s3d-color-bg-card));
-}
-
-.editorCardHeader {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
 }
 
 .editorCardGrid {
@@ -233,25 +223,6 @@
 	border: 1px solid var(--s3d-color-border);
 	border-radius: var(--s3d-radius-lg);
 	background: var(--s3d-color-bg-card);
-}
-
-.toggleList {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
-.toggleRow {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.toggleCopy {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
 }
 
 .warningStack {
@@ -290,14 +261,8 @@
 }
 
 @media (max-width: 820px) {
-	.decisionRouteGrid {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.grid {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
+	.decisionRouteGrid,
+	.grid,
 	.editorCardGrid,
 	.permissionGrid {
 		grid-template-columns: minmax(0, 1fr);
