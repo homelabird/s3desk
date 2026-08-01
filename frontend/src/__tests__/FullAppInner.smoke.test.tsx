@@ -213,6 +213,19 @@ describe('FullAppInner header', () => {
 		expect(screen.getByRole('button', { name: /Logout/i })).toBeInTheDocument()
 		expect(screen.getByRole('link', { name: 'Open objects workspace' })).toHaveAttribute('href', '/objects')
 
+		const sider = document.querySelector('.ant-layout-sider')
+		expect(sider).toHaveClass('ant-layout-sider-light')
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }))
+		})
+		expect(sider).toHaveClass('ant-layout-sider-dark')
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }))
+		})
+		expect(sider).toHaveClass('ant-layout-sider-light')
+
 		await act(async () => {
 			fireEvent.click(settingsButton)
 		})

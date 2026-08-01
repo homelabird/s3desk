@@ -136,7 +136,7 @@ export function FullAppShellChrome({
 				Skip to content
 			</a>
 			{isDesktop ? (
-				<Sider width={220} className={styles.desktopSider}>
+				<Sider width={220} theme={theme.mode} className={styles.desktopSider}>
 					<div className={styles.brandBlock}>
 						<Link
 							to={profileId ? '/objects' : '/profiles'}
